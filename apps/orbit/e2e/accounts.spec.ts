@@ -658,7 +658,7 @@ test.describe("with a fund behind the caller", () => {
     expect(created.group_id).toBe(groupId);
     expect(created.is_shared).toBe(true);
 
-    expect(await placementOf(page, name, fundName)).toBe("fund");
+    await expect.poll(async () => await placementOf(page, name, fundName)).toBe("fund");
 
     await dropAccount(created.id);
   });
@@ -705,7 +705,10 @@ test.describe("with a fund behind the caller", () => {
     const account = await seedAccount({ openingCents: 300_000 });
 
     await page.goto("/es/settings/accounts");
-    expect(await placementOf(page, account.name, fundName)).toBe("personal");
+    // `goto` resolves before the list streams in, and the read is a snapshot.
+    await expect
+      .poll(async () => await placementOf(page, account.name, fundName))
+      .toBe("personal");
 
     const dialog = await confirmThroughMenu(
       page,
