@@ -1181,6 +1181,12 @@ Taken by the user the same day, on the critic's three questions and two from the
 - **On paper, a time goal with no rhythm says its months' tasks on the left-out line:** «sin monto · 1 tarea» (RP-73 on paper).
 - **«sin monto» may wrap at 1024 on `/meses`** rather than push the row's chevron out: the «one line» rule gives way there.
 - **«hs» reads as hours,** in the template and in the rhythm's «otra» field: «8 hs».
+- **Approved the same day:** board `UnidadUnaVez` as drawn (`/metas`, the goal, `/meses`, a month, `/mes`, Hoy, `/exportar`);
+  board `ReporteImpresoTareasFuera` option A — one line per group of months by task count («noviembre de 2026 y enero de 2027:
+  sin monto · 1 tarea», «diciembre de 2026: sin monto»), the month with «de» in that sentence; option B is discarded.
+- **`/metas` on the phone shows the month's figure** in each goal's row, unit once («30 de 60 búsquedas»). Board to draw.
+- **The shared month (first and last) reaches every reader** — Hoy, `/mes`, a connected AI — **and the plan fills it with its
+  share** («A este ritmo terminas el…» moves later for a goal opened mid-month). RP-74; RP-71 retired for RP-75.
 - Decided by the orchestrator, from rules already taken: a goal that has ended has no month «en curso», no «ESTE MES» and no
   «faltan N días»; `/meses` does not ask a goal with a rhythm to plan a month; every month in the rhythm's preview carries its
   year; one «mover el final» link for open and ended goals.
