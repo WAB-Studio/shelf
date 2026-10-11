@@ -6,7 +6,6 @@ import { getTranslations } from "next-intl/server";
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
 import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
-import { owedAt } from "@/lib/plan/carry";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
