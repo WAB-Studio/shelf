@@ -375,3 +375,19 @@ test("get_goal reads an ended goal's months as closed and an open goal's as they
   assert.equal(open.months.find((row) => row.month === currentMonth)?.current, true);
   assert.equal(open.months.find((row) => row.month === nextMonth)?.past, false);
 });
+
+test("get_report reads an ended goal's months as closed and an open goal's as they stand", async () => {
+  type Months = { month: string; current: boolean; past: boolean }[];
+  const result = await call("get_report", {});
+  const goals = (result.structuredContent as { goals: { id: string; endedOn: string | null; months: Months }[] }).goals;
+  const ended = goals.filter((goal) => goal.endedOn !== null);
+  assert.ok(ended.length > 0);
+  for (const goal of ended) {
+    assert.ok(goal.months.length > 0);
+    assert.equal(goal.months.some((row) => row.current), false);
+    assert.ok(goal.months.every((row) => row.past));
+  }
+  const open = goals.find((goal) => goal.id === subjectGoal)!;
+  assert.equal(open.months.find((row) => row.month === currentMonth)?.current, true);
+  assert.equal(open.months.find((row) => row.month === nextMonth)?.past, false);
+});

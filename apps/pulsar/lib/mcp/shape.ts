@@ -371,7 +371,7 @@ export function shapeReport(report: Report) {
             hasAmount: child.hasAmount,
           })),
         })),
-        months: goal.months.map((row) => ({
+        months: settledMonths(goal.months, goal.endedOn !== null).map((row) => ({
           month: monthKey(row.month),
           planned: amountOrNull(row.planned, unit),
           reached: amountOf(row.reached, unit),
