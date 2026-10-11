@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
@@ -109,6 +109,25 @@ function withAmount(draft: ImportDraft, path: string, amount: number): ImportDra
   return next;
 }
 
+// Two cards side by side need 1280px beside the source column; from 1024 to
+// there, each goal's card takes the full width of its column.
+const WIDE = "(min-width: 1280px)";
+const watchWide = (notify: () => void) => {
+  const query = window.matchMedia(WIDE);
+  query.addEventListener("change", notify);
+  return () => query.removeEventListener("change", notify);
+};
+
+function GoalCards({ wide, children }: { wide: boolean; children: ReactNode }) {
+  return wide ? (
+    <PanelGrid>{children}</PanelGrid>
+  ) : (
+    <Flex direction="column" gap="6">
+      {children}
+    </Flex>
+  );
+}
+
 type Editing = { path: string; title: string; unit: string; amount: number; schema: "month" | "task" | "rhythm" };
 
 /**
@@ -133,6 +152,11 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   // The names the draft is first measured against; a server refresh never re-reads it.
   const [startNames] = useState(openGoalNames);
   const confirmed = useRef(false);
+  const wide = useSyncExternalStore(
+    watchWide,
+    () => window.matchMedia(WIDE).matches,
+    () => true,
+  );
 
   // The tab's storage is only there once mounted; the server paints no draft.
   useEffect(() => {
@@ -178,14 +202,16 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   if (!loaded || !stored || !draft || !work || !sent) return <Page width="full" />;
 
-  const monthWord = (month: string, long = false) =>
-    format.dateTime(civilDateToDate(`${month}-01`), long ? { month: "long", year: "numeric", timeZone: "UTC" } : { month: "long", timeZone: "UTC" });
+  // «octubre 2026»: the platform's own long form says «octubre de 2026».
+  const monthWord = (month: string, long = false) => {
+    const name = format.dateTime(civilDateToDate(`${month}-01`), { month: "long", timeZone: "UTC" });
+    return long ? `${name} ${month.slice(0, 4)}` : name;
+  };
   const dayLabel = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const phaseSpan = (startsOn: string, endsOn: string) => {
-    if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return shortMonth(startsOn);
-    const crossesYear = startsOn.slice(0, 4) !== endsOn.slice(0, 4);
-    const year = (date: string) => (crossesYear ? ` ${date.slice(0, 4)}` : "");
-    return `${shortMonth(startsOn)}${year(startsOn)}–${shortMonth(endsOn)}${year(endsOn)}`;
+    const short = (date: string) => `${shortMonth(date)} ${date.slice(0, 4)}`;
+    if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return short(startsOn);
+    return `${short(startsOn)}–${short(endsOn)}`;
   };
   // The board's form for a day inside the year: no year.
   const dayAndMonth = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", timeZone: "UTC" });
@@ -271,7 +297,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   function reasonOf(key: string, values: Record<string, string> = {}): string {
     switch (key) {
       case "import.errors.monthBeforeStart":
-        return t("import.review.blocked.monthBeforeStart", { first: monthWord(values.first) });
+        return t("import.review.blocked.monthBeforeStart", { first: monthWord(values.first, true) });
       case "import.errors.monthAfterEnd":
         return t("import.review.blocked.monthAfterEnd", {
           last: dayLabel(values.last),
@@ -387,7 +413,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         </Section>
       ) : null}
 
-      <PanelGrid>
+      <GoalCards wide={wide}>
       {work.goals.map((goal, g) => {
         const at = goalPath(g);
         if (refused.has(`${at}.horizon`)) return null;
@@ -428,15 +454,14 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                 ) : null}
                 <Text as="p" variant="sentence" tone="muted">
                   {t.rich("import.review.goalSpan", {
-                    from: dayAndMonth(today),
-                    to: dayLabel(lastDay),
+                    from: dayLabel(today),
                     ...fig,
                   })}
                 </Text>
                 <CheckRow
                   checked={goalOn}
                   onCheckedChange={(value) => toggle(at, value)}
-                  name={t("import.review.horizonUntil", { date: dayLabel(dayBefore(goal.horizon)) })}
+                  name={t("import.review.horizonUntil", { date: dayLabel(lastDay) })}
                   meta={t("import.review.horizon")}
                 />
                 {goal.measure ? (
@@ -509,7 +534,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                         checked={goalOn && on(path)}
                         disabled={!goalOn}
                         onCheckedChange={(value) => toggle(path, value)}
-                        name={monthWord(entry.month)}
+                        name={monthWord(entry.month, true)}
                         meta={planned ? t("import.review.inLieuOfRhythm") : undefined}
                         {...amountProps(path, monthWord(entry.month), unit ?? "", entry.amount, "month")}
                       />
@@ -557,10 +582,10 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                               planned
                                 ? t("import.review.toPlan")
                                 : task.children.length > 0
-                                ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
+                                ? t("import.review.sumOfMarked", { month: monthWord(task.month, true) })
                                 : strays.has(path)
-                                  ? `${monthWord(task.month)} · ${t(messageKey(strays.get(path)!))}`
-                                  : monthWord(task.month)
+                                  ? `${monthWord(task.month, true)} · ${t(messageKey(strays.get(path)!))}`
+                                  : monthWord(task.month, true)
                             }
                             metaMore={
                               planned && task.children.length > 0
@@ -595,7 +620,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
           </Panel>
         );
       })}
-      </PanelGrid>
+      </GoalCards>
 
       {failure ? <Notice>{failure}</Notice> : null}
 

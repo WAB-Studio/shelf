@@ -103,7 +103,7 @@ test.describe("the review says the cut (RP-37)", () => {
       expect(noteBox.y).toBeLessThan(confirm.y);
       // The span line opens on today.
       await expect(
-        page.locator("p").filter({ hasText: `Desde el ${today} de ${todayInZone().slice(0, 4)} hasta el` }),
+        page.locator("p").filter({ hasText: `Desde el ${today} de ${todayInZone().slice(0, 4)}` }),
       ).toBeVisible();
     });
   });

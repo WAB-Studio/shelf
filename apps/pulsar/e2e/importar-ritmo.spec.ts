@@ -11,7 +11,8 @@ const RHYTHM_NAME = "Ritmo al mes";
 const RHYTHM_LINE = "las tareas van al plan";
 const rhythmButton = (page: Page, amount: string) => page.getByRole("button", { name: `Cambiar el ritmo, ${amount} al mes`, exact: true });
 const rhythmBox = (page: Page) => page.getByRole("checkbox", { name: new RegExp(RHYTHM_NAME) });
-const monthName = (by: number) => new Date(Date.UTC(shift(by).year, Number(shift(by).month) - 1, 1)).toLocaleDateString("es", { month: "long", year: "numeric", timeZone: "UTC" });
+const monthName = (by: number) =>
+  `${new Date(Date.UTC(shift(by).year, Number(shift(by).month) - 1, 1)).toLocaleDateString("es", { month: "long", timeZone: "UTC" })} ${shift(by).year}`;
 const SOURCE_LINE = "ritmo: 12 h";
 
 function shift(by: number) {

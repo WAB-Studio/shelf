@@ -18,10 +18,10 @@ function monthsFromToday() {
   return { previous: shift(-1), first: shift(0), second: shift(1), horizon: `${year + 1}-${String(month).padStart(2, "0")}-01` };
 }
 
-const word = (month: string, withYear = false) =>
-  new Intl.DateTimeFormat("es", withYear ? { month: "long", year: "numeric", timeZone: "UTC" } : { month: "long", timeZone: "UTC" }).format(
-    civilDateToDate(`${month}-01`),
-  );
+const word = (month: string, withYear = false) => {
+  const name = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" }).format(civilDateToDate(`${month}-01`));
+  return withYear ? `${name} ${month.slice(0, 4)}` : name;
+};
 
 // The catalogue's example, its dates moved to the person's own now so the
 // months stay inside the goal's span whatever day the suite runs.
@@ -163,7 +163,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(refused).toBeDisabled();
       await expect(refused).not.toBeChecked();
       await expect(
-        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first)), { exact: true }),
+        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first, true)), { exact: true }),
       ).toBeVisible();
       // The warnings stand above the goal.
       const above = (await title.boundingBox())!.y;
@@ -201,7 +201,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(page.getByText(`hasta el ${dayWord(last)}`, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.review.blocked.monthAfterEnd.replace("{last}", dayWord(last)), { exact: true })).toBeVisible();
       await expect(
-        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first)), { exact: true }),
+        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first, true)), { exact: true }),
       ).toBeVisible();
     });
   });
