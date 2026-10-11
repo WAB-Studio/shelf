@@ -1192,6 +1192,9 @@ Taken by the user the same day, on the critic's three questions and two from the
 - **Taken by the user later the same day:** the line «Ritmo X al mes» always says the whole rhythm the person set
   («Ritmo 10 h al mes»), never the first or last month's share; only the month's figures carry the share. On `/metas` on the
   phone, a goal that counts tasks keeps «octubre · 1 de 3 tareas» under its name, though `MetasConCifra` does not draw it.
+- **A first-month share that rounds to 0 draws no figure on Hoy** (taken by the user the same day): a 20 km rhythm opened on
+  the 31st reads on Hoy as a month with no amount, never «ESTE MES 0 de 0 kilómetros». The goal, «Por mes», `/exportar` and
+  paper keep the 0, as RP-74 rounds it.
 - Decided by the orchestrator, from rules already taken: a goal that has ended has no month «en curso», no «ESTE MES» and no
   «faltan N días»; `/meses` does not ask a goal with a rhythm to plan a month; every month in the rhythm's preview carries its
   year; one «mover el final» link for open and ended goals.
