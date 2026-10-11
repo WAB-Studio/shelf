@@ -6,7 +6,6 @@ import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
 import { amountOf } from "@/lib/plan/roadmap";
 import { nextMonth } from "@/lib/plan/months";
-import { monthDetail } from "@/lib/plan/month-detail";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
@@ -104,7 +103,17 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
       key: row.month,
       href: hrefOf(row.month),
       cells: [yearLabel(row.month), started ? row.reached : null, amount],
-      detail: monthDetail(state, tasks),
+      // The state over the task count, never joined by a «·» that a narrow row would leave hanging.
+      detail:
+        state && tasks ? (
+          <>
+            {state}
+            <br />
+            {tasks}
+          </>
+        ) : (
+          (state ?? tasks)
+        ),
       note: amount,
     };
   });
@@ -120,7 +129,8 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
       ]}
       rows={rows}
       figures={[1]}
-      unit={unit}
+      // A unit that is not time rides in each row's note («0 de 60 búsquedas»), once.
+      unit={timed ? unit : undefined}
       current={currentIndex === -1 ? undefined : currentIndex}
       open={openIndex === -1 ? undefined : openIndex}
     />
