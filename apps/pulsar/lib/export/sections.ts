@@ -29,12 +29,10 @@ export function keepsHeadWithTable(months: GoalReport["months"]): boolean {
   return rows >= HEAD_WITH_TABLE_ROWS && rows < HEAD_WITH_TABLE_MAX_ROWS;
 }
 
-// A month that has not started and has no planned amount prints nothing; a
-// past or current month always prints, and a planned 0 is still an amount (RP-70).
-// A goal that measures nothing prints a month that has started or holds a task (RP-71).
+// A month that has not started prints only with a planned amount (a planned 0
+// counts, RP-70) or a task (RP-71, RP-75); a past or current month always prints.
 export function printsOnPaper(month: GoalReport["months"][number]): boolean {
-  if (month.tasks !== undefined) return month.past || month.current || month.tasks.total > 0;
-  return month.past || month.current || month.planned !== null;
+  return month.past || month.current || month.planned !== null || (month.tasks?.total ?? 0) > 0;
 }
 
 // A whole table this tall is what a head left at a page foot leaves alone on
