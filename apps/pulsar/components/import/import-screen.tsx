@@ -143,11 +143,14 @@ export function ImportScreen() {
   const [showTemplate, setShowTemplate] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  // A file's list is its own text, which the box never held; only the box's list is re-read as it changes.
-  const [fromFile, setFromFile] = useState(false);
+  // The file whose text the box holds, named under it while its list stands.
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const reread = failure?.kind === "templateLine" ? parseTemplate(text) : null;
+  // The list goes when the text stops being the template; the notice says why.
+  const notTemplate = reread !== null && !reread.matched && text.trim() !== "";
   const shown: Failure | null = (() => {
-    if (failure?.kind !== "templateLine" || fromFile) return failure;
-    const r = parseTemplate(text);
+    if (failure?.kind !== "templateLine") return failure;
+    const r = reread!;
     if (!r.matched || !("error" in r)) return null;
     const written = text.split("\n");
     return { kind: "templateLine", cut: r.cut, lines: r.errors.map((e) => ({ ...e, text: written[e.line - 1] ?? "" })) };
@@ -174,7 +177,7 @@ export function ImportScreen() {
   async function send(form: FormData, source: string, saved: string | null, fileName: string | null = null) {
     setBusy(true);
     setFailure(null);
-    setFromFile(fileName !== null);
+    setFileNote(null);
     try {
       const response = await fetch("/importar/leer", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as {
@@ -192,6 +195,11 @@ export function ImportScreen() {
       }
       if (body?.error === "import.errors.templateLine" && body.errors?.length) {
         const written = source.split("\n");
+        // A text file's own text is the box's, read again as any pasted one.
+        if (fileName !== null && source !== "") {
+          setTyped(source);
+          setFileNote(fileName);
+        }
         fail({
           kind: "templateLine",
           cut: body.cut === true,
@@ -296,6 +304,12 @@ export function ImportScreen() {
             }}
           />
 
+          {listed && fileNote ? (
+            <Text as="p" variant="sentence" tone="muted">
+              {t("import.fileNote", { name: fileNote })}
+            </Text>
+          ) : null}
+
           <FilePick
             label={t("import.upload")}
             hint={t("import.uploadHint")}
@@ -310,6 +324,8 @@ export function ImportScreen() {
           </Text>
 
           {placed?.place === "below" ? notice : null}
+
+          {notTemplate ? <Notice role="note">{t("import.notTemplate")}</Notice> : null}
 
           <Button block onClick={readText} disabled={busy} aria-busy={busy || undefined}>
             {busy ? t("import.reading") : retry ? t("import.retry") : t("import.read")}
