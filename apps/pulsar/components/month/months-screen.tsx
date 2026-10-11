@@ -4,7 +4,6 @@ import { getTranslations } from "next-intl/server";
 
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
-import { amountOf } from "@/lib/plan/roadmap";
 import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
@@ -75,7 +74,7 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
   const rows: TableRow[] = goal.months.map((row) => {
     const started = row.past || row.current;
     const share = row.past ? planShare(goal.plan, row.month) : null;
-    const own = amountOf(row.month, goal.plan);
+    const own = row.planned;
     const figure = own === null ? null : formatQuantity(own, unit, words);
     const said = figure === null ? t("month.months.noAmount") : started ? t("month.months.of", { planned: figure }) : figure;
     const amount = <Text tone="secondary">{said}</Text>;
@@ -115,8 +114,9 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
   return (
     <Table
       narrow
-      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») keeps its line.
+      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») keeps its line but at 1024.
       wrapNote={!timed}
+      wrapNoteInRail={timed}
       caption={caption}
       columns={[
         t("month.months.columns.month"),
@@ -203,6 +203,7 @@ export async function MonthsScreen({
           month={planned.month.slice(0, 7)}
           monthName={monthLabel(planned.month)}
           amount={planned.planned}
+          stored={goal.budgets.some((budget) => budget.month.slice(0, 7) === planned.month.slice(0, 7))}
           closeHref={returnPath}
         />
       ) : null}
