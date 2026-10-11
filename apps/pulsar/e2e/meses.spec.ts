@@ -98,7 +98,8 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     // The whole row is the one link, named with its year; the state sits under the name, never in the note.
     await expect(last.getByRole("link")).toHaveCount(1);
     await expect(last).toContainText(`${label(lastMonth)} ${lastMonth.slice(0, 4)}`);
-    await expect(last.locator("span").filter({ hasText: new RegExp(`^${carried(66)}$`) })).toHaveCount(1);
+    // A time goal with no rhythm counts the month's tasks (RP-73): the state is the first of the detail's two lines.
+    await expect(last.locator("span").filter({ hasText: new RegExp(`^${carried(66)}\\s*\\d+\\stareas?$`) })).toHaveCount(1);
     // A closed month's amount is text, never a door to the sheet.
     await expect(last.getByText("de 10 h", { exact: true })).toBeVisible();
     await expect(page.locator("main a[href*=planear]:visible")).toHaveCount(0);
@@ -538,7 +539,8 @@ test("an ended goal and an archived one refuse the sheet on this month and a com
 
         await page.goto(`/metas/${goalId}/meses/${seg(month)}`);
         await expect(page.locator("main")).toHaveCount(1);
-        await expect(page.getByText("de 5 h", { exact: true }).locator("visible=true")).toHaveCount(1);
+        // A month that has not begun says its amount alone, beside «planeado»; this one is «de 5 h» after what was reached.
+        await expect(page.getByText(month === thisMonth ? "de 5 h" : "5 h", { exact: true }).locator("visible=true")).toHaveCount(1);
         await expect(page.locator("main a[href*=planear]:visible")).toHaveCount(0);
       }
     }

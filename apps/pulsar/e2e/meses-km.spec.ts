@@ -69,7 +69,7 @@ async function open(browser: import("@playwright/test").Browser, baseURL: string
 }
 
 for (const width of [360, 1440]) {
-  test(`km goal, this month with two tasks: the row reads «en curso · 2 tareas» at ${width} (RP-69)`, async ({
+  test(`km goal, this month with two tasks: the row names «en curso» and «2 tareas», no dangling «·», at ${width} (RP-73)`, async ({
     person,
     browser,
     baseURL,
@@ -83,14 +83,16 @@ for (const width of [360, 1440]) {
     const context = await open(browser, baseURL, person.sessionFile);
     try {
       const row = await rows(await context.newPage(), goalId, width);
-      await expect(row(thisMonth)).toContainText("en curso · 2 tareas");
+      await expect(row(thisMonth)).toContainText("en curso");
+      await expect(row(thisMonth)).toContainText("2 tareas");
+      expect(await row(thisMonth).innerText()).not.toContain("·");
     } finally {
       await context.close();
     }
   });
 }
 
-test("km goal, next month with one task and an amount reads «planeado · 1 tarea», and this month, empty, does not borrow it (RP-69)", async ({
+test("km goal, next month with one task and an amount names «planeado» and «1 tarea», and this month, empty, does not borrow it (RP-73)", async ({
   person,
   browser,
   baseURL,
@@ -104,7 +106,9 @@ test("km goal, next month with one task and an amount reads «planeado · 1 tare
   const context = await open(browser, baseURL, person.sessionFile);
   try {
     const row = await rows(await context.newPage(), goalId, 360);
-    await expect(row(followingMonth)).toContainText("planeado · 1 tarea");
+    await expect(row(followingMonth)).toContainText("planeado");
+    await expect(row(followingMonth)).toContainText("1 tarea");
+    expect(await row(followingMonth).innerText()).not.toContain("·");
     await expect(row(followingMonth)).not.toContainText("1 tareas");
     await expect(row(thisMonth)).toContainText("en curso");
     await expect(row(thisMonth)).not.toContainText("tarea");
@@ -132,7 +136,8 @@ test("km goal: a task left undone from a past month counts in the current month,
     await expect(page.getByText(`Vieja ${stamp}`).first()).toBeVisible();
     await expect(page.getByText(`Propia ${stamp}`).first()).toBeVisible();
     const row = await rows(page, goalId, 360);
-    await expect(row(thisMonth)).toContainText("en curso · 2 tareas");
+    await expect(row(thisMonth)).toContainText("en curso");
+    await expect(row(thisMonth)).toContainText("2 tareas");
   } finally {
     await context.close();
   }
@@ -184,7 +189,7 @@ test("km goal, empty month: the list does not say its tasks add time, and says w
   }
 });
 
-test("minutes goal: no «Por mes» row says «tarea», and its empty month still says its tasks add time (RP-69, RP-32)", async ({
+test("minutes goal with no rhythm: only the month holding tasks says «2 tareas», and its empty month still says its tasks add time (RP-73, RP-32)", async ({
   person,
   browser,
   baseURL,
@@ -199,10 +204,11 @@ test("minutes goal: no «Por mes» row says «tarea», and its empty month still
   try {
     const page = await context.newPage();
     const row = await rows(page, goalId, 360);
-    for (const month of [lastMonth, thisMonth, followingMonth]) {
+    for (const month of [lastMonth, thisMonth]) {
       await expect(row(month), month).toBeVisible();
       await expect(row(month), month).not.toContainText("tarea");
     }
+    await expect(row(followingMonth)).toContainText("2 tareas");
     await expect(row(thisMonth)).toContainText("en curso");
     await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
     await expect(page.getByText(/suman su tiempo a la meta/).first()).toBeAttached();

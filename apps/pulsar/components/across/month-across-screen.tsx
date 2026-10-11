@@ -10,7 +10,8 @@ import { owedAt } from "@/lib/plan/carry";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
-import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { timeWordsOf } from "@/lib/units/time-words";
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -25,12 +26,7 @@ function sum(values: number[]): number {
 export async function MonthAcrossScreen() {
   const across = await loadMonthAcross();
   const t = await getTranslations();
-  const units = await getTranslations("units");
-  const words: TimeWords = {
-    h: (h) => units("h", { h }),
-    min: (min) => units("min", { min }),
-    join: (h, min) => units("join", { h, min }),
-  };
+  const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const monthNames = t.raw("day.monthLong") as string[];
   const weekdayNames = t.raw("day.weekdayLong") as string[];
   const monthName = (month: string) => monthNames[Number(month.slice(5, 7)) - 1];
