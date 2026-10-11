@@ -302,6 +302,34 @@ for (const [screen, path] of [
   });
 }
 
+// A stored unit reads through the catalogue only when it is one plain word the catalogue has, whatever its case;
+// anything else prints as typed.
+const MEASURE_LINE_CASES = [
+  ["Searches", "mide en búsquedas", "a unit stored with a capital reads in the catalogue's word"],
+  ["repeticiones", "mide en repeticiones", "a word the catalogue lacks prints as typed"],
+  ["searches.length", "mide en searches.length", "a unit with a dot is never looked up in the catalogue"],
+] as const;
+for (const [screen, path] of [
+  ["the goal", ""],
+  ["its weekly review", "/revision"],
+] as const) {
+  for (const [unit, line, why] of MEASURE_LINE_CASES) {
+    test(`${screen}: «${unit}» reads «${line}» (${why})`, async ({ person, browser, db }) => {
+      const goalId = await seedGoal(db, person.id, `Unidad ${Date.now()}`, plusDays(60), 0);
+      await db`update goals.goals set measure_name = 'cosas', measure_unit = ${unit} where id = ${goalId}`;
+      const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+      try {
+        const page = await context.newPage();
+        await visit(page, `/metas/${goalId}${path}`);
+        await expect(page.getByText(line, { exact: true })).toBeVisible();
+        await expect(page.getByText(/units\.words/)).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    });
+  }
+}
+
 test("the /metas row agrees «búsqueda» with a figure of 1", async ({ person, browser, db }) => {
   const name = `Concuerda ${Date.now()}`;
   await seedSearches(db, person.id, name);
@@ -321,7 +349,7 @@ test("the import review ends the measure row in «búsquedas» for a unit writte
     "",
     "# Leer en inglés",
     `horizonte: ${plusDays(120)}`,
-    "medida: búsquedas · searches",
+    "medida: Consultas al diccionario · searches",
   ].join("\n");
   const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
   try {
@@ -330,8 +358,10 @@ test("the import review ends the measure row in «búsquedas» for a unit writte
     await page.getByLabel(importMessages.textLabel).fill(text);
     await page.getByRole("button", { name: "Leer el plan" }).click();
     await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
-    const row = page.getByText("búsquedas", { exact: true }).locator("visible=true");
-    await expect(row.first()).toBeVisible();
+    // The measure row alone: its name is not the unit, so only its end can say «búsquedas».
+    const row = page.locator("label").filter({ hasText: "Consultas al diccionario" }).locator("visible=true");
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveText(/Consultas al diccionario\s*medida\s*búsquedas$/);
     await expect(page.getByText("searches", { exact: true })).toHaveCount(0);
   } finally {
     await context.close();
