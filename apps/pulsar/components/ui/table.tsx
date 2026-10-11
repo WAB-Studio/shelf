@@ -79,8 +79,9 @@ type TableProps = {
   // Like `wrapNote` for a `narrow` table, but only from 1024 to 1279px, where the
   // list's column is narrowest: a note that fits keeps its line at every other width.
   wrapNoteInRail?: boolean;
-  // Off `narrow`, a note that never splits («de 7 h 15 min»): beside the label when it
-  // fits whole, else dropped whole under it. Never breaks inside, never leaves its row.
+  // A note that never splits («de 7 h 15 min»): beside the label when it fits whole,
+  // else dropped whole under it. Never breaks inside, never leaves its row. On a `narrow`
+  // linked row the chevron rides the row's end and the anchor wraps.
   wholeNote?: boolean;
   // Folds the whole table under a link-card with this text, closed
   // (`ReportePlegado.dc.html`'s «Ver las 9 semanas»). Paper never prints it.
