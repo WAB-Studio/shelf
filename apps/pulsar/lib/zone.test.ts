@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   civilDateInZone,
   civilDateShort,
+  civilDateWithYear,
   civilDayMonthShort,
   clockOverride,
   timeInZone,
@@ -93,4 +94,9 @@ test("todayInZone reads PULSAR_CLOCK from the process, and the real day without 
       else process.env[key] = value;
     }
   }
+});
+
+test("civilDateWithYear: every date carries its full four-digit year", () => {
+  assert.equal(civilDateWithYear("2026-12-13"), "13 de diciembre de 2026");
+  assert.equal(civilDateWithYear("2027-01-05"), "5 de enero de 2027");
 });

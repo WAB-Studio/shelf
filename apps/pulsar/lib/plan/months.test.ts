@@ -9,6 +9,7 @@ import {
   monthsOfSpan,
   plannedOf,
   reachedByMonth,
+  settledMonths,
   toDate,
 } from "./months";
 import { weekPlanned } from "./week-planned";
@@ -246,4 +247,23 @@ test("weekPlanned: Reto's week of 5 to 7 October keeps its share of the whole mo
     weekPlanned({ weekStart: "2026-10-05", weekEnd: "2026-10-11", budgets: [], openedOn: reto.openedOn, horizon: reto.horizon, rhythm: 600 }),
     58,
   );
+});
+
+test("settledMonths: an ended goal has no month «en curso»; all read as closed", () => {
+  const rows = [
+    { month: "2026-09-01", current: false, past: true },
+    { month: "2026-10-01", current: true, past: false },
+  ];
+  assert.deepEqual(settledMonths(rows, true), [
+    { month: "2026-09-01", current: false, past: true },
+    { month: "2026-10-01", current: false, past: true },
+  ]);
+});
+
+test("settledMonths: a goal still running keeps its rows as they are", () => {
+  const rows = [
+    { month: "2026-09-01", current: false, past: true },
+    { month: "2026-10-01", current: true, past: false },
+  ];
+  assert.deepEqual(settledMonths(rows, false), rows);
 });
