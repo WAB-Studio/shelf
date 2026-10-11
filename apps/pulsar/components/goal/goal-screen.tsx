@@ -103,10 +103,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const t = await getTranslations();
   const today = todayInZone();
   const endDay = dayBefore(goal.horizon);
-  const endLabel =
-    endDay.slice(0, 4) === today.slice(0, 4)
-      ? civilDayMonthShort(endDay)
-      : `${civilDayMonthShort(endDay)} ${endDay.slice(0, 4)}`;
+  const endLabel = `${civilDayMonthShort(endDay)} ${endDay.slice(0, 4)}`;
   const openedOn = civilDateInZone(new Date(goal.createdAt));
   const totalWeeks = horizonWeeks(openedOn, goal.horizon);
   const currentPhase = phaseOn(goal.phases, today);
@@ -125,7 +122,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       horizon={goal.horizon}
       weeks={sheetWeeks}
       phases={goal.phases}
-      solid={ended}
+      reopening={ended}
     />
   );
 
@@ -144,7 +141,10 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const month = goal.month;
   const figureUnit = goal.measureUnit ?? undefined;
   const monthName = (t.raw("day.monthLong") as string[])[Number(today.slice(5, 7)) - 1];
-  const daysLeft = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate() - Number(today.slice(8, 10));
+  // Days to the month's end, or to the goal's own last day when that comes first.
+  const monthEnd = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  const lastDay = endDay < monthEnd ? endDay : monthEnd;
+  const daysLeft = Math.round((Date.parse(`${lastDay}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
   const planned = month?.planned ?? null;
   const percent = month && planned ? Math.floor((month.reached * 100) / planned) : 0;
   // A goal with no measure has no amount to read, but its months and their
@@ -173,7 +173,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const monthOwn = goal.plan.rhythm !== null && goal.plan.budgets.some((budget) => budget.month === monthKey);
   const planItems = planMonthList(goal.plan, monthKey);
   const planDone = planItems.filter((item) => item.done).length;
-  // The end carries its year only when it is not this one, as `endLabel` does.
+    // The end carries its year only when it is not this one, as `endLabel` did.
   const planEndLabel = planEnd
     ? `${Number(planEnd.slice(8, 10))} de ${monthNames[Number(planEnd.slice(5, 7)) - 1]}${
         planEnd.slice(0, 4) === today.slice(0, 4) ? "" : ` de ${planEnd.slice(0, 4)}`
@@ -264,7 +264,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               </Text>
             ) : paceLine ? null : (
               <Text as="p" variant="sentence" tone="muted">
-                {t("goal.detail.monthProgress", { percent, days: daysLeft })}
+                {ended ? t("goal.detail.monthProgressEnded", { percent }) : t("goal.detail.monthProgress", { percent, days: daysLeft })}
               </Text>
             )}
           </>

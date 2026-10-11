@@ -114,6 +114,11 @@ export function monthRows(input: {
   }));
 }
 
+// After a goal's end nothing of it is «en curso»: its last month reads as closed.
+export function settledMonths<T extends { current: boolean; past: boolean }>(rows: T[], ended: boolean): T[] {
+  return ended ? rows.map((row) => ({ ...row, current: false, past: true })) : rows;
+}
+
 // The sum through the current month; a month with no amount plans 0.
 export function toDate(rows: MonthRow[]): { planned: number; reached: number } {
   return rows

@@ -17,7 +17,6 @@
     "measureSince": "en total, desde el <fig>{date}</fig>",
     "measureSinceYear": "{date} de {year}",
     "moveHorizon": "mover el final",
-    "moveHorizonEnded": "Mover el final",
     "commitmentsCount": "{count, plural, =0 {} one {{word} compromiso} other {{word} compromisos}}",
     "phasesCount": "{count, plural, =0 {} one {{word} fase} other {{word} fases}}",
     "phaseSpan": "semanas <fig>{start}–{end}</fig>",
@@ -36,6 +35,7 @@
     "monthInLieu": "en lugar del ritmo",
     "monthPlanLink": "Planear {month}",
     "monthProgress": "llevas {percent} % · faltan {days, plural, one {# día} other {# días}}",
+    "monthProgressEnded": "llevas {percent} %",
     "monthPace": "día {day} ·",
     "monthPaceUnder": ", bajo el {threshold} %",
     "monthDeclaredOnly": "solo lo que dijiste tú"

@@ -177,3 +177,63 @@ test("822 · a goal with neither rhythm nor amounts still asks to plan on /meses
     await drop(db, personId);
   }
 });
+
+test("821 · the month card of an ended goal keeps «llevas N %» and nothing after it", async ({ page, db, personId }) => {
+  const goalId = await seedGoal(db, personId, {
+    name: `Terminada ${Date.now()}`,
+    horizon: endedOn,
+    budgetMonth: thisMonth,
+  });
+  try {
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(/^terminó el /)).toBeVisible();
+    await expect(page.getByText(/^llevas \d+ %$/)).toBeVisible();
+  } finally {
+    await drop(db, personId);
+  }
+});
+
+test("821 · /meses at 1280 of an ended goal shows no «ESTE MES» beside the list", async ({ page, db, personId }) => {
+  const goalId = await seedGoal(db, personId, {
+    name: `Terminada ${Date.now()}`,
+    horizon: endedOn,
+    budgetMonth: endedMonthStart,
+  });
+  try {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/metas/${goalId}/meses`);
+    await expect(page.getByRole("heading", { name: month.months.title })).toBeVisible();
+    const text = await mainText(page);
+    expect(text).toContain(NAMES[Number(endedMonth.slice(5, 7)) - 1]);
+    expect(text).not.toMatch(/en curso/i);
+    expect(text).not.toMatch(/este mes/i);
+  } finally {
+    await drop(db, personId);
+  }
+});
+
+test("824 · «mover el final» of an ended goal is the lowercase link of an open one", async ({ page, db, personId }) => {
+  const goalId = await seedGoal(db, personId, {
+    name: `Terminada ${Date.now()}`,
+    horizon: endedOn,
+    budgetMonth: endedMonthStart,
+  });
+  try {
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByRole("button", { name: "mover el final", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toHaveCount(0);
+  } finally {
+    await drop(db, personId);
+  }
+});
+
+test("824 · the goal screen dates its end with the year even in this year", async ({ page, db, personId }) => {
+  const year = today.slice(0, 4);
+  const goalId = await seedGoal(db, personId, { name: `Este año ${Date.now()}`, horizon: `${year}-12-31` });
+  try {
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(new RegExp(`semanas · hasta el 30 dic ${year}$`))).toBeVisible();
+  } finally {
+    await drop(db, personId);
+  }
+});
