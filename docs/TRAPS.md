@@ -3129,4 +3129,20 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - Pulsar's server, its seeds and the specs read the real clock; there is no `faketime`. Three specs skip their week branch
   on a Sunday or a Monday, so every mutation on «hasta el miércoles», «del sábado al martes» or «en curso» survives that day.
 - Measured 2026-10-11, the train 7 mutator: W5, W6, M1, M2, M4–M6, M8 and M9 lived, all on the week line, run on a Sunday.
-- Read a survivor's date before calling it a gap. Run the week mutations on Tuesday to Saturday, or pin the clock first.
+- Read a survivor's date before calling it a gap. Run the week mutations on Tuesday to Saturday, or pin the clock with
+  `PULSAR_CLOCK` (next entry).
+
+## A mutation that only bites on some days: run it under PULSAR_CLOCK
+- `PULSAR_CLOCK=YYYY-MM-DD` pins «today» for pulsar's server (`todayInZone`), the browser (a `pulsar-clock` meta the
+  signed-in layout draws), the specs and `seed-goal.ts`. Export it once for the server and the spec run alike:
+  `export HARNESS_LANE=6 PULSAR_CLOCK=2026-10-21; PORT=3205 scripts/supabase-local.sh exec npm run start -w apps/pulsar`,
+  then `PULSAR_BASE_URL=http://localhost:3205 scripts/supabase-local.sh exec npm run check:e2e -w apps/pulsar -- --project=mobile <spec>`.
+- It is honoured only beside a loopback `DATABASE_URL` and never with `VERCEL`; anywhere else `next.config.ts` refuses to
+  build or boot and `todayInZone` throws. A bare `next start` in a lane reads `.env.local`, the remote, and refuses.
+- SQL stays on the real clock: `created_at`/`archived_at`/`retired_at` defaults, token expiry, `model_calls.day` and the
+  `one_offs` policy and triggers that refuse editing a past one-off (`day > now() at time zone …`). A clock ahead of today
+  lets the database edit what the app calls past; a clock behind refuses what the app calls future.
+- Specs that compute a day from `new Date()` instead of `todayInZone()` stay on the real clock under it.
+- Measured 2026-10-11, module 841: under `2026-10-21` the pace line drew; `hoy-unidad-una-vez.spec.ts` went green, and red
+  with `bare` dropped from its Figure. `meta-unidad-una-vez.spec.ts:43` is red under it with or without the mutant: its
+  `innerText` puts a line break after the Figure's unit span (a flex item), so «búsquedas , bajo» never matches.
