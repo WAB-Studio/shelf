@@ -1189,6 +1189,9 @@ Taken by the user the same day, on the critic's three questions and two from the
   `MetasConCifra` approved the same day.
 - **The shared month (first and last) reaches every reader** — Hoy, `/mes`, a connected AI — **and the plan fills it with its
   share** («A este ritmo terminas el…» moves later for a goal opened mid-month). RP-74; RP-71 retired for RP-75.
+- **Taken by the user later the same day:** the line «Ritmo X al mes» always says the whole rhythm the person set
+  («Ritmo 10 h al mes»), never the first or last month's share; only the month's figures carry the share. On `/metas` on the
+  phone, a goal that counts tasks keeps «octubre · 1 de 3 tareas» under its name, though `MetasConCifra` does not draw it.
 - Decided by the orchestrator, from rules already taken: a goal that has ended has no month «en curso», no «ESTE MES» and no
   «faltan N días»; `/meses` does not ask a goal with a rhythm to plan a month; every month in the rhythm's preview carries its
   year; one «mover el final» link for open and ended goals.
