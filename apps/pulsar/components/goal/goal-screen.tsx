@@ -12,6 +12,7 @@ import {
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
+import { showsPaceLine } from "@/lib/plan/pace-line";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import { loadGoal } from "@/lib/queries/goal";
@@ -226,7 +227,12 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     </Panel>
   ) : null;
   // Under 60 % from the 20th the pace line holds reached «de» planned itself.
-  const paceLine = planned !== null && planned > 0 && Boolean(month?.underPace) && goal.evidence !== "unreadable";
+  const paceLine = showsPaceLine({
+    planned,
+    underPace: Boolean(month?.underPace),
+    unreadable: goal.evidence === "unreadable",
+    ended,
+  });
   const monthBlock =
     goal.measureUnit && month ? (
       <Section label={monthName}>
