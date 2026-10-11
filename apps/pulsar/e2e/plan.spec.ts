@@ -186,19 +186,31 @@ for (const width of [390, 1440]) {
       return { horizon: nextMonth(m2), tasks: [["A", 480], ["B", 480], ["C", 480], ["D", 240], ["E", 300]] as [string, number][] };
     }
 
+    // Three months of tasks from this month on: the plan ends soonest, in this year until Q4's last month.
+    test("the day the plan ends carries its year even when it falls in the current year", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 480, m1);
+      await seedTasks(db, personId, goalId, [["A", 480], ["B", 480], ["C", 480]]);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await expect(page.getByText(/^Al \d{1,2} de \p{L}+ de \d{4}, donde termina el plan\.$/u)).toBeVisible();
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
     test("a goal past its end shows both offers, the past-end tasks and no danger colour", async ({ page, db, personId }) => {
       const late = await seedLate();
       const goalId = await seedGoal(db, personId, 480, late.horizon);
       await seedTasks(db, personId, goalId, late.tasks);
       try {
         await page.goto(`/metas/${goalId}/plan`);
-        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, \d+ semanas? después de tu final, el \d{1,2} de \p{L}+\.$/u)).toBeVisible();
+        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, \d+ semanas? después de tu final, el \d{1,2} de \p{L}+ de \d{4}\.$/u)).toBeVisible();
         await expect(page.getByRole("button", { name: "Subir el ritmo" })).toBeVisible();
         await expect(page.getByText("Con 11 h al mes llegas a tiempo.")).toBeVisible();
         await expect(page.getByRole("button", { name: "Mover el final" })).toBeVisible();
         for (const row of ["Subir el ritmo", "Mover el final"]) await expectCard(page.getByRole("button", { name: row }));
-        await expect(page.getByText(/^Al \d{1,2} de \p{L}+, donde termina el plan\.$/u)).toBeVisible();
-        expect(await page.getByText(/^Al \d{1,2} de \p{L}+, donde termina el plan\./u).locator("> span").evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
+        await expect(page.getByText(/^Al \d{1,2} de \p{L}+ de \d{4}, donde termina el plan\.$/u)).toBeVisible();
+        expect(await page.getByText(/^Al \d{1,2} de \p{L}+ de \d{4}, donde termina el plan\./u).locator("> span").evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
         await expect(page.getByText("O quita tareas del plan: cada una que sale adelanta el final.")).toBeVisible();
         const past = section(page, "después de tu final");
         await expect(past.getByText("2 tareas · 9 h", { exact: true })).toBeVisible();
@@ -272,7 +284,7 @@ for (const width of [390, 1440]) {
         await page.getByRole("button", { name: "Subir el ritmo" }).click();
         const sheet = page.getByRole("dialog");
         await expect(sheet.getByRole("heading", { name: "¿Cuántas horas al mes?" })).toBeVisible();
-        await expect(sheet.getByText(/^Con 11 h al mes terminas el .*, a tiempo\./)).toBeVisible();
+        await expect(sheet.getByText(/^Con 11 h al mes terminas el \d{1,2} de \p{L}+ de \d{4}, a tiempo\./u)).toBeVisible();
       } finally {
         await drop(db, personId, goalId);
       }
@@ -289,7 +301,7 @@ for (const width of [390, 1440]) {
         await page.getByRole("button", { name: roadmap.moverFinal.title }).click();
         const sheet = page.getByRole("dialog");
         await expect(sheet.getByRole("heading", { name: roadmap.moverFinal.title })).toBeVisible();
-        await expect(sheet).toContainText(/^Mover el finalDel \d{1,2} de \p{L}+( de \d{4})? al \d{1,2} de \p{L}+( de \d{4})?, donde termina el plan\./u);
+        await expect(sheet).toContainText(/^Mover el finalDel \d{1,2} de \p{L}+ de \d{4} al \d{1,2} de \p{L}+ de \d{4}, donde termina el plan\./u);
         await expect(sheet.getByRole("button", { name: roadmap.moverFinal.move })).toBeEnabled();
         // The two dates are DM Mono; the words around them are not.
         const body = sheet.locator("p").first();
@@ -373,7 +385,7 @@ for (const width of [390, 1440]) {
 }
 
 // RP-53, `RoadmapMoverFinalHoja`: the sheet names the goal's last day and the day the plan
-// ends, the year only off this year; a refusal does not outlive the sheet.
+// ends, each with its year; a refusal does not outlive the sheet.
 test("«Mover el final» names the goal's last day and the plan's end, and a reopened sheet forgets a past failure (RP-53)", async ({ page, db, personId }) => {
   const year = Number(thisYear);
   // The goal ends on 31 Dec of this year; the plan, two months past it.
@@ -387,7 +399,7 @@ test("«Mover el final» names the goal's last day and the plan's end, and a reo
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByRole("heading", { name: roadmap.moverFinal.title })).toBeVisible();
     await expect(sheet).toContainText(
-      new RegExp(`^Mover el finalDel 31 de diciembre al \\d{1,2} de \\p{L}+ de ${year + 1}, donde termina el plan\\.`, "u"),
+      new RegExp(`^Mover el finalDel 31 de diciembre de ${year} al \\d{1,2} de \\p{L}+ de ${year + 1}, donde termina el plan\\.`, "u"),
     );
 
     await drop(db, personId, goalId);

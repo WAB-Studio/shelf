@@ -12,7 +12,7 @@ import { Figure, useTimeWords } from "@/components/ui/figure";
 import { dayBefore } from "@/lib/day/weeks";
 import type { PlanInput } from "@/lib/plan/roadmap";
 import { formatQuantity } from "@/lib/units/time";
-import { civilDateLabel } from "@/lib/zone";
+import { civilDateWithYear } from "@/lib/zone";
 
 /**
  * `RoadmapPasaElFinal`'s two offers (RP-53): raise the rhythm to the one that
@@ -62,7 +62,7 @@ export function PlanEnd({
         rule={false}
         name={t("roadmap.pasaElFinal.moveEnd")}
         meta={t.rich("roadmap.pasaElFinal.moveEndHint", {
-          date: civilDateLabel(planEnd),
+          date: civilDateWithYear(planEnd),
           fig: (chunks) => <Figure variant="meta" value={chunks} />,
         })}
         metaVariant="sentence"

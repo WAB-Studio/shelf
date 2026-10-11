@@ -80,6 +80,11 @@ export function civilDateLabel(day: string, weekday = false): string {
   }).format(civilDateToDate(day));
 }
 
+// "13 de diciembre de 2026": the year always comes from the day itself.
+export function civilDateWithYear(day: string): string {
+  return `${civilDateLabel(day)} de ${day.slice(0, 4)}`;
+}
+
 // "martes 22 sep": weekday, day and the month's first three letters, no
 // punctuation. The month is cut from its long name because ICU's own short
 // form is "sept" for September.
