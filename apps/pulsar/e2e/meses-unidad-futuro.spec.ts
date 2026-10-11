@@ -201,17 +201,32 @@ test("the month page of a searches goal says «0 de 60 búsquedas» now and «pl
   }
 });
 
-test("/mes lists a searches goal as «0 búsquedas de 67 búsquedas», never «searches»", async ({ person, browser, baseURL, db }) => {
-  const goalId = await seedGoal(db, person, { name: "Global búsquedas", unit: SEARCHES, budgets: [[thisMonth, 67]] });
+test("/mes says the unit once: «0 de 67 búsquedas», «15 de 40 km»; no amount keeps «0 min», never «searches»", async ({ person, browser, baseURL, db }) => {
+  const searches = await seedGoal(db, person, { name: "Global búsquedas", unit: SEARCHES, budgets: [[thisMonth, 67]] });
+  const km = await seedGoal(db, person, { name: "Correr", unit: KM, budgets: [[thisMonth, 40]], fact: [today, 15] });
+  const minutes = await seedGoal(db, person, { name: "Portafolio", unit: MINUTES });
+  await seedTask(db, person, minutes, "Pulir casos", thisMonth, 30);
+  const bare = await seedGoal(db, person, { name: "Sin monto búsquedas", unit: SEARCHES });
+  await seedTask(db, person, bare, "Revisar listas", thisMonth, 5);
   const { page, close } = await visit(browser, baseURL, person, "/mes", 360);
   try {
     const main = page.locator("main").first();
     // The figure and its «de <monto>» sit in two boxes: the page's own gap is the space between them.
-    await expect(main).toContainText(/0\s*búsquedas\s*de\s*67\s*búsquedas/);
-    expect(flat(await main.innerText())).not.toMatch(/searches/i);
+    await expect(main).toContainText(/0\s*de\s*67\s*búsquedas/);
+    await expect(main).toContainText(/15\s*de\s*40\s*km/);
+    const text = flat(await main.innerText());
+    expect(text).not.toMatch(/0 búsquedas de 67/);
+    expect(text).not.toMatch(/15 km de 40/);
+    expect(text).not.toMatch(/searches/i);
+    const portfolio = flat(await page.locator("section", { hasText: "Portafolio" }).first().innerText());
+    expect(portfolio).toContain("0 min");
+    expect(portfolio).toContain("sin monto este mes");
+    // A figure with no «de» keeps its unit.
+    const unamounted = flat(await page.locator("section", { hasText: "Sin monto búsquedas" }).first().innerText());
+    expect(unamounted).toContain("0 búsquedas");
   } finally {
     await close();
-    await drop(db, person, goalId);
+    for (const id of [searches, km, minutes, bare]) await drop(db, person, id);
   }
 });
 
