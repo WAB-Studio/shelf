@@ -22,6 +22,12 @@
   padding-inline-start: 4px;
 }
 
+/* `breakUnit`: inline text, so the spacer's space is where the line may break. */
+.breaks {
+  display: inline;
+  white-space: normal;
+}
+
 .measure {
   font-size: var(--pulsar-text-measure-size);
   font-weight: var(--pulsar-text-measure-weight);

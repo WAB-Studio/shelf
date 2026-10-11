@@ -423,6 +423,7 @@ function GoalPart({
           day.setUTCMonth(day.getUTCMonth() + 1);
           return monthOnly.format(day);
         };
+        const timed = isTimeUnit(unit as string);
         const rows: TableRow[] = goal.months.map((month) => {
           const started = month.current || month.past;
           const share = month.carried;
@@ -451,12 +452,19 @@ function GoalPart({
           );
           // A started month's state sits in `detail`; its note only says the plan.
           const phoneNote = started ? (
-            plannedFigure ? (
+            plannedFigure === null ? undefined : timed ? (
               <>
                 <Text variant="sentence">{t("of", { planned: "" })}</Text>
                 {plannedFigure}
               </>
-            ) : undefined
+            ) : (
+              <>
+                {/* The note's own mono face, so «de» shares the figure's line box; a no-break
+                    space, so it never stays behind when the unit drops a line. */}
+                {`${t("of", { planned: "" }).trimEnd()}\u00a0`}
+                <Figure variant="meta" value={month.planned} unit={unit as string} breakUnit />
+              </>
+            )
           ) : (
             status
           );
@@ -523,6 +531,8 @@ function GoalPart({
                 nowrapLabel
                 stackInCard
                 wrapDetail
+                // «de 60 búsquedas» may drop its unit or the whole note a line; a time note keeps its line.
+                wrapNote={!timed}
                 current={current === -1 ? undefined : current}
                 afterPrintOnly
                 after={

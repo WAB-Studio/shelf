@@ -70,6 +70,8 @@ type TableProps = {
   fitDetail?: boolean;
   // Lets a `narrow` table's note wrap at a word when it does not fit beside the
   // chevron («0 de 60 / búsquedas» in the 320px list); a note that fits keeps its line.
+  // Off `narrow`, an unlinked row's note drops under the label and figure when
+  // even its narrowest form does not fit beside them.
   wrapNote?: boolean;
   // Folds the whole table under a link-card with this text, closed
   // (`ReportePlegado.dc.html`'s «Ver las 9 semanas»). Paper never prints it.
