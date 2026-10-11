@@ -51,7 +51,7 @@ export async function MonthAcrossScreen() {
         .filter((task) => task.doneOn !== null && task.doneOn.slice(0, 7) === seg)
         .map((task) => task.estimate ?? 0),
     );
-    const ownPlanned = sum(own.map((entry) => owedAt(entry.task, entry.children, "0000-01-01")));
+    const ownPlanned = sum(own.map((entry) => entry.part));
 
     // With the dictionary unreadable, a goal with no amount to measure draws
     // its header and meta alone (`MesTodasSinEvidencia`).
