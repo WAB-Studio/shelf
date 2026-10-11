@@ -564,3 +564,25 @@ test("loadReport: a task fixed to last month and done this month is not carried 
   const entry = report.goals.find((goal) => goal.id === goalId)!;
   assert.deepEqual(entry.carried.map((item) => item.name), ["RP-49 arrastrada: pendiente"]);
 });
+
+test("loadReport: the week's planned figure takes the goal's rhythm where the month has no amount (RP-58)", async () => {
+  // 2026-04-06 is a Monday: the first week is seven days of a 30-day month.
+  const opened = "2026-04-06T12:00:00Z";
+  const withRhythm = await seedGoal("RP-58 fixture: ritmo", { horizon: "2026-07-01", createdAt: opened, unit: "minutos" });
+  const withAmount = await seedGoal("RP-58 fixture: monto", { horizon: "2026-07-01", createdAt: opened, unit: "minutos" });
+  const bare = await seedGoal("RP-58 fixture: sin ritmo", { horizon: "2026-07-01", createdAt: opened, unit: "minutos" });
+  // Horizon 04-09 ended on Wednesday 04-08, inside the week asked about on Saturday 04-11.
+  const ended = await seedGoal("RP-58 fixture: terminada", { horizon: "2026-04-09", createdAt: opened, unit: "minutos" });
+  const user = await ownerId();
+  await sql`update goals.goals set rhythm = 720 where id in (${withRhythm}, ${withAmount}, ${ended})`;
+  await sql`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${user}, ${withAmount}, '2026-04-01', 600)`;
+
+  const report = await loadReport("2026-04-11");
+  const planned = (id: string) => report.goals.find((goal) => goal.id === id)!.weekPlanned;
+  assert.equal(planned(withRhythm), Math.floor((7 * 720) / 30));
+  assert.equal(planned(withAmount), Math.floor((7 * 600) / 30));
+  assert.equal(planned(bare), null);
+  assert.equal(planned(ended), null);
+});

@@ -262,6 +262,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
               budgets: row.budgets,
               openedOn,
               horizon: row.goal.horizon,
+              rhythm: row.goal.rhythm ?? null,
             })
           : null;
       })(),
