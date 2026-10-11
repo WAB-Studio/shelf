@@ -17,6 +17,7 @@ const horizon = nextMonth(nextMonth(nextMonth(thisMonth)));
 
 type Unit = { measure: string; unit: string };
 const SEARCHES: Unit = { measure: "búsquedas", unit: "searches" };
+const KM: Unit = { measure: "kilómetros", unit: "km" };
 const MINUTES: Unit = { measure: "minutos", unit: "minutos" };
 
 async function seedGoal(db: postgres.Sql, person: Person, unit: Unit, budget: number, done: number | null): Promise<void> {
@@ -48,6 +49,9 @@ type Measure = {
   noteHeight: number;
   lineHeight: number;
   noteText: string;
+  noteTop: number;
+  labelTop: number;
+  labelBottom: number;
   deTop: number | null;
   figureTop: number | null;
   scrollWidth: number;
@@ -90,7 +94,11 @@ async function measure(page: Page, figure: string): Promise<Measure> {
       }
       return null;
     };
+    const label = li.querySelector<HTMLElement>("[class*=stackLabel]")!;
     return {
+      noteTop: rect(note).top,
+      labelTop: rect(label).top,
+      labelBottom: rect(label).bottom,
       rowRight: rect(li).right,
       rowLeft: rect(li).left,
       cardRight: rect(card).right,
@@ -137,3 +145,25 @@ for (const width of [360, 1024]) {
     expect(m.noteHeight, "one line").toBeLessThan(m.lineHeight * 1.5);
   });
 }
+
+// A short unit at a tight width: «de» is never left at the end of a line apart from «40».
+for (const width of [360, 270, 260, 250]) {
+  test(`/exportar at ${width}: «20 de 40 km» keeps «de» on the line of «40»`, async ({ browser, baseURL, db, person }) => {
+    await seedGoal(db, person, KM, 40, 20);
+    const { page, close } = await open(browser, baseURL, person, width);
+    const m = await measure(page, "40").finally(close);
+    expect(m.noteText).toMatch(/de\s*40\s*km$/);
+    expect(m.deTop, "«de» is a text of its own in the note").not.toBeNull();
+    expect(m.figureTop, "«40» is found in the note").not.toBeNull();
+    expect(m.deTop, "«de» stands on the line of «40»").toBe(m.figureTop);
+  });
+}
+
+// At 360 the unit word drops under «de 60» but the note stays beside the label: the row does not grow a line.
+test("/exportar at 360: «de 60 búsquedas» sits beside the label, not on a line of its own below", async ({ browser, baseURL, db, person }) => {
+  await seedGoal(db, person, SEARCHES, 60, 30);
+  const { page, close } = await open(browser, baseURL, person, 360);
+  const m = await measure(page, "60").finally(close);
+  expect(m.noteTop, "the note starts on the label's line").toBeLessThan(m.labelBottom - 1);
+  expect(m.noteTop, "the note does not start below the label's top line").toBeLessThan(m.labelTop + m.lineHeight);
+});
