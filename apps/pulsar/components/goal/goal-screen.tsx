@@ -231,13 +231,13 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         {paceLine ? (
           <Text as="p" variant="sentence">
             {t("goal.detail.monthPace", { day: Number(today.slice(8, 10)) })}{" "}
-            <Figure value={month.reached} unit={figureUnit} variant="meta" />{" "}
+            <Figure value={month.reached} unit={figureUnit} variant="meta" bare />{" "}
             {t("day.monthLine.of")} <Figure value={planned as number} unit={figureUnit} variant="meta" />
             {t("goal.detail.monthPaceUnder", { threshold: 60 })}
           </Text>
         ) : (
           <Text as="p" variant="sentence" tone="muted">
-            <Figure value={month.reached} unit={figureUnit} variant="measure" />{" "}
+            <Figure value={month.reached} unit={figureUnit} variant="measure" bare={planned !== null} />{" "}
             {planned !== null ? (
               <>
                 {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />

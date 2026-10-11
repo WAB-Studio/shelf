@@ -267,7 +267,7 @@ for (const width of [360, 390, 1440]) {
   });
 }
 
-test("km goal: the month block reads «34 km de 120 km», unit on both figures (RP-69)", async ({
+test("km goal: the month block reads «34 de 120 km», its unit once at the end (RP-69, 829)", async ({
   person,
   browser,
   baseURL,
@@ -289,7 +289,8 @@ test("km goal: the month block reads «34 km de 120 km», unit on both figures (
     const block = page.locator("main section", { hasText: /de\s+120/ }).first();
     await expect(block).toBeVisible();
     const text = (await block.innerText()).replace(/\s+/g, " ");
-    expect(text).toMatch(/34 km de 120 km/);
+    expect(text).toMatch(/34 de 120 km/);
+    expect(text).not.toMatch(/34 km de/);
   } finally {
     await context.close();
   }
