@@ -53,8 +53,8 @@ async function seedGoal(
   return goal.id;
 }
 
-async function drop(db: postgres.Sql, personId: string) {
-  await db`delete from goals.goals where user_id = ${personId}`;
+async function drop(db: postgres.Sql, personId: string, goalId: string) {
+  await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
 }
 
 const mainText = async (page: import("@playwright/test").Page) => {
@@ -73,7 +73,7 @@ test("821 · the month card of an ended goal has no «faltan»", async ({ page, 
     await expect(page.getByText(/^terminó el /)).toBeVisible();
     expect(await mainText(page)).not.toMatch(/faltan|falta \d/i);
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -82,10 +82,12 @@ test("821 · an open goal ending before the month's end counts «faltan» to its
   db,
   personId,
 }) => {
-  // Wednesday of next week, or the month's end when that lies beyond it.
+  // The horizon is the day after the goal's last day: «faltan» counts to that
+  // last day, or to the month's end when it lies beyond it.
   const dow = (civilDateToDate(today).getUTCDay() + 6) % 7;
   const midNextWeek = plusDays(today, 7 - dow + 2);
-  const last = midNextWeek < monthEnd ? midNextWeek : monthEnd;
+  const lastDay = plusDays(midNextWeek, -1);
+  const last = lastDay < monthEnd ? lastDay : monthEnd;
   const days = (Date.parse(`${last}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000;
   const goalId = await seedGoal(db, personId, {
     name: `Abierta ${Date.now()}`,
@@ -97,7 +99,7 @@ test("821 · an open goal ending before the month's end counts «faltan» to its
     const line = days === 1 ? "faltan 1 día" : `faltan ${days} días`;
     await expect(page.getByText(new RegExp(`llevas \\d+ % · ${line}$`))).toBeVisible();
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -115,7 +117,7 @@ test("821 · /meses of an ended goal shows no «en curso» and no «ESTE MES»",
     expect(text).not.toMatch(/en curso/i);
     expect(text).not.toMatch(/este mes/i);
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -138,7 +140,7 @@ test("821 · the month page of an ended goal reads «cerrado», says it takes no
     expect(text).not.toMatch(/este mes/i);
     expect(text).not.toMatch(/^tareas$/im);
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -159,7 +161,7 @@ test("822 · a goal with a rhythm and no month amount does not ask to plan on /m
     await expect(page.getByRole("link", { name: /^Planear /i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Planear /i })).toHaveCount(0);
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -174,7 +176,7 @@ test("822 · a goal with neither rhythm nor amounts still asks to plan on /meses
     await expect(page.getByText(/Ningún mes tiene monto/)).toBeVisible();
     await expect(page.getByRole("link", { name: `Planear ${name}`, exact: true })).toBeVisible();
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -189,7 +191,7 @@ test("821 · the month card of an ended goal keeps «llevas N %» and nothing af
     await expect(page.getByText(/^terminó el /)).toBeVisible();
     await expect(page.getByText(/^llevas \d+ %$/)).toBeVisible();
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -208,7 +210,7 @@ test("821 · /meses at 1280 of an ended goal shows no «ESTE MES» beside the li
     expect(text).not.toMatch(/en curso/i);
     expect(text).not.toMatch(/este mes/i);
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -223,7 +225,7 @@ test("824 · «mover el final» of an ended goal is the lowercase link of an ope
     await expect(page.getByRole("button", { name: "mover el final", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toHaveCount(0);
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
 
@@ -234,6 +236,6 @@ test("824 · the goal screen dates its end with the year even in this year", asy
     await page.goto(`/metas/${goalId}`);
     await expect(page.getByText(new RegExp(`semanas · hasta el 30 dic ${year}$`))).toBeVisible();
   } finally {
-    await drop(db, personId);
+    await drop(db, personId, goalId);
   }
 });
