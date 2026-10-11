@@ -95,14 +95,14 @@
 }
 
 /* Beside a list's own chevron the note is a short phrase («sin monto»): it
-   keeps its line, and the label never gives up its 100px. */
+   keeps its line, and the label never gives up its 112px. */
 .narrow .stackNote {
   white-space: nowrap;
 }
 
 /* The label holds its width so every figure after it starts on one edge. */
 .narrow .stackLabel {
-  flex: 0 0 100px;
+  flex: 0 0 112px;
   min-inline-size: 0;
 }
 
@@ -215,11 +215,18 @@
   white-space: nowrap;
 }
 
+/* The lead cell's own line is the label's, so its first baseline sits where
+   the label's does even where paper drops a row's baseline alignment: the
+   measure's size rides `.leadValue`, never the cell. */
 .lead {
   font-family: var(--font-mono);
+  font-size: var(--pulsar-text-meta-size);
+  letter-spacing: var(--pulsar-text-measure-tracking);
+}
+
+.leadValue {
   font-size: var(--pulsar-text-measure-size);
   font-weight: var(--pulsar-text-measure-weight);
-  letter-spacing: var(--pulsar-text-measure-tracking);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   color: var(--pulsar-ink);

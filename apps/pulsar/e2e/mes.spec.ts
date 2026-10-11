@@ -119,7 +119,7 @@ test("this month lists the carried parent first, then its own task; marking the 
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByRole("link", { name: `Volver a Meta mes ${stamp}` })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-    const title = label(thisMonth).charAt(0).toUpperCase() + label(thisMonth).slice(1);
+    const title = `${label(thisMonth).charAt(0).toUpperCase() + label(thisMonth).slice(1)} ${thisMonth.slice(0, 4)}`;
     await expect(page.getByText(title, { exact: true })).toBeVisible();
     await expect(page.getByText("este mes", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "de 12 h", exact: true })).toBeVisible();

@@ -82,7 +82,7 @@
     "estimateDroppedNotTime": "se crea sin cifra: esta meta no mide tiempo"
   },
   "errors": {
-    "estimateNotTime": "Una meta que no mide tiempo no lleva cifra en sus tareas.",
+    "estimateNotTime": "Quita la cifra de esta línea: esta meta no mide tiempo.",
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "tooBig": "El archivo pesa más de 4 MB. Pega su texto en la caja.",
     "tooBigNamed": "«{file}» pesa {size} y el tope es 4 MB. Pega su texto en la caja.",

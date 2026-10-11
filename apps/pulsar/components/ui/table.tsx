@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 
 import { isTimeUnit, type TimeWords } from "@/lib/units/time";
 
@@ -193,6 +193,8 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
                     <Link href={row.href} className={styles.cellLink}>
                       {row.cells[column]}
                     </Link>
+                  ) : column === lead && !isValidElement(row.cells[column]) ? (
+                    <span className={styles.leadValue}>{figureCell(row.cells[column], unit, words)}</span>
                   ) : figures.includes(column) ? (
                     figureCell(row.cells[column], unit, words)
                   ) : (

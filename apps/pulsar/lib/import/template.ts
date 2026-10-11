@@ -133,6 +133,24 @@ export function parseTemplate(text: string): TemplateResult {
   let brokenTask = false;
   let brokenChild = false;
 
+  // The topmost broken head line of the goals read so far, judged by the schema.
+  const schemaHead = (): Spot | null => {
+    const parsed = importDraftSchema.safeParse({ goals });
+    if (parsed.success) return null;
+    let top: Spot | null = null;
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.map(String);
+      const spot = HEAD_FIELDS.has(path[2]) ? spots.get(path.slice(0, 3).join(".")) : undefined;
+      if (spot && (top === null || spot.line < top.line)) top = spot;
+    }
+    return top;
+  };
+  // An inline cut yields to a head line the schema saw, which always sits above it.
+  const stop = (line: number, expected: string): TemplateResult => {
+    const above = schemaHead();
+    return above ? cut(above.line, above.expected) : cut(line, expected);
+  };
+
   for (let i = first + 1; i < lines.length; i++) {
     const line = lines[i];
     const n = i + 1;
@@ -144,7 +162,7 @@ export function parseTemplate(text: string): TemplateResult {
     const at = `goals.${g}`;
 
     if (line.startsWith("# ")) {
-      if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
+      if (needsHorizon) return stop(needsHorizon.line, FORMS.horizon);
       const name = line.slice(2).trim();
       goals.push({ name, horizon: "", measure: null, rhythm: null, phases: [], months: [], commitments: [], tasks: [] });
       spots.set(`goals.${g + 1}`, { line: n, expected: FORMS.goal });
@@ -158,7 +176,7 @@ export function parseTemplate(text: string): TemplateResult {
       noteOwner = null;
       continue;
     }
-    if (!goal) return cut(n, FORMS.goal);
+    if (!goal) return stop(n, FORMS.goal);
 
     if (line.startsWith("ritmo:")) {
       const minutes = goal.measure !== null && isTimeUnit(goal.measure.unit) ? /^ritmo: (.+)$/.exec(line) : null;
@@ -169,7 +187,7 @@ export function parseTemplate(text: string): TemplateResult {
             ? FORMS.rhythmUnit
             : followsMeasure && section === null ? FORMS.rhythmAmount : FORMS.rhythmPlace;
         // Only a `ritmo:` among the head lines cuts; one under a section is a stray line like any other.
-        if (section === null) return cut(n, expected);
+        if (section === null) return stop(n, expected);
         report(n, expected);
         continue;
       }
@@ -208,13 +226,13 @@ export function parseTemplate(text: string): TemplateResult {
         afterMeasure = true;
         continue;
       }
-      if (line.startsWith("medida:")) return cut(n, FORMS.measure);
-      if (line.startsWith("horizonte:")) return cut(n, FORMS.horizon);
+      if (line.startsWith("medida:")) return stop(n, FORMS.measure);
+      if (line.startsWith("horizonte:")) return stop(n, FORMS.horizon);
     }
 
     if (line.startsWith("## ")) {
       const next = SECTIONS[line as keyof typeof SECTIONS];
-      if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
+      if (needsHorizon) return stop(needsHorizon.line, FORMS.horizon);
       lastTask = null;
       noteOwner = null;
       brokenTask = false;
@@ -231,7 +249,7 @@ export function parseTemplate(text: string): TemplateResult {
     }
     if (skipping) continue;
     if (section === null) {
-      if (needsHorizon) return cut(n, FORMS.horizon);
+      if (needsHorizon) return stop(n, FORMS.horizon);
       report(n, FORMS.section);
       continue;
     }
@@ -353,7 +371,7 @@ export function parseTemplate(text: string): TemplateResult {
     }
   }
 
-  if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
+  if (needsHorizon) return stop(needsHorizon.line, FORMS.horizon);
   if (goals.length === 0) return cut(first + 2, FORMS.goal);
 
   const parsed = importDraftSchema.safeParse({ goals });
