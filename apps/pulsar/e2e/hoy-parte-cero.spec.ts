@@ -146,4 +146,36 @@ test.describe("Hoy, a goal opened late in a month", () => {
       await db`delete from goals.goals where id = ${id} and user_id = ${person.id}`;
     }
   });
+
+  test("a month budget of 0 the person typed keeps its line on Hoy: «0 de 0 kilómetros»", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const name = `Correr ${stamp}`;
+    // A rhythm with a share, so only the typed budget makes the planned amount 0.
+    const id = await seedGoal(db, person.id, name, "kilómetros", shareRhythm);
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${id}, ${`${month}-01`}::date, 0)
+    `;
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 360, height: 740 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/");
+      await expect(page.locator("main")).toHaveCount(1);
+      const block = page.locator("section").filter({ hasText: "este mes" }).locator("visible=true");
+      await expect(block).toContainText(name);
+      await expect(block).toContainText(/0\s*de\s*0\s*kil/);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${id} and user_id = ${person.id}`;
+    }
+  });
 });
