@@ -1181,6 +1181,8 @@ Taken by the user the same day, on the critic's three questions and two from the
 - **On paper, a time goal with no rhythm says its months' tasks on the left-out line:** «sin monto · 1 tarea» (RP-73 on paper).
 - **«sin monto» may wrap at 1024 on `/meses`** rather than push the row's chevron out: the «one line» rule gives way there.
 - **«hs» reads as hours,** in the template and in the rhythm's «otra» field: «8 hs».
+- **Text the «otra» field cannot read says how to write it,** not the range: «8 hss» → «Escríbelo como 8 h, 1 h 30 min o
+  90 min.» Text it reads but out of 1 min–744 h keeps the range error. Decided by the orchestrator 2026-10-11 (module 853).
 - **Approved the same day:** board `UnidadUnaVez` as drawn (`/metas`, the goal, `/meses`, a month, `/mes`, Hoy, `/exportar`);
   board `ReporteImpresoTareasFuera` option A — one line per group of months by task count («noviembre de 2026 y enero de 2027:
   sin monto · 1 tarea», «diciembre de 2026: sin monto»), the month with «de» in that sentence; option B is discarded.
