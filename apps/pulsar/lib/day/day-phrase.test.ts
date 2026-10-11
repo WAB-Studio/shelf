@@ -17,9 +17,9 @@ const catalogue: Record<string, string> = {
   "day.oneOffs.carriedFrom": "del {weekday} {day}",
   "day.oneOffs.carriedFromFar": "del {weekday} {day} de {month}",
   "day.past.startedOn": "{goal} empezó el {weekday} {day}",
-  "day.ended.yesterday": "{goal} terminó ayer ·",
-  "day.ended.on": "{goal} terminó el {weekday} {day} ·",
-  "day.ended.onFar": "{goal} terminó el {weekday} {day} de {month} ·",
+  "day.ended.yesterday": "{goal} terminó ayer",
+  "day.ended.on": "{goal} terminó el {weekday} {day}",
+  "day.ended.onFar": "{goal} terminó el {weekday} {day} de {month}",
   "day.past.startedOnFar": "{goal} empezó el {weekday} {day} de {month}",
 };
 function translate(key: string, values: Record<string, string | number>): string {
