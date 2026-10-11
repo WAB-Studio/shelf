@@ -21,7 +21,7 @@ import { releasedPlan } from "@/lib/plan/first-rhythm";
 import { openMonthsOf, rhythmToMeet } from "@/lib/plan/roadmap-read";
 import { loadGoal } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
-import { civilDateLabel, civilDateToDate, dateToCivilDate } from "@/lib/zone";
+import { civilDateToDate, civilDateWithYear, dateToCivilDate } from "@/lib/zone";
 
 // «20 de marzo de 2027»: the lead names the year the plan ends in.
 const dateFormat = new Intl.DateTimeFormat("es-CO", {
@@ -79,7 +79,7 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
       lead = t("roadmap.pasaElFinal.finish", {
         date: dateLabel(roadmap.end),
         weeks: Math.ceil(-days / 7),
-        end: civilDateLabel(roadmap.lastDay),
+        end: civilDateWithYear(roadmap.lastDay),
       });
     }
   }

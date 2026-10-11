@@ -7,13 +7,7 @@ import { useTranslations } from "next-intl";
 import { moveHorizon } from "@/app/actions/plan";
 import { Button, Notice, Sheet, SheetActions } from "@/components/ui";
 import { Figure } from "@/components/ui/figure";
-import { civilDateLabel, todayInZone } from "@/lib/zone";
-
-// The year shows only when it is not the current one.
-function dateOf(day: string): string {
-  const year = day.slice(0, 4);
-  return year === todayInZone().slice(0, 4) ? civilDateLabel(day) : `${civilDateLabel(day)} de ${year}`;
-}
+import { civilDateWithYear } from "@/lib/zone";
 
 /**
  * `RoadmapMoverFinalHoja`: «Mover el final» names both ends and asks before
@@ -69,8 +63,8 @@ export function MoveEndSheet({
       onOpenChange={close}
       title={t("roadmap.moverFinal.title")}
       description={t.rich("roadmap.moverFinal.body", {
-        from: dateOf(from),
-        to: dateOf(to),
+        from: civilDateWithYear(from),
+        to: civilDateWithYear(to),
         fig: (chunks) => <Figure variant="meta" value={chunks} />,
       })}
     >

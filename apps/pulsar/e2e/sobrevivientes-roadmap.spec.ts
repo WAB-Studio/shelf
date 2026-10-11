@@ -222,7 +222,7 @@ test("r01: a rhythm that ends on the goal's last day reads «a tiempo», not wee
     await page.goto(`/metas/${goalId}/plan`);
     await page.getByRole("button", { name: "Ritmo 12 h al mes" }).click();
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText(/^Con 12 h al mes terminas el \d{1,2} de \p{L}+, a tiempo\./u)).toBeVisible();
+    await expect(sheet.getByText(/^Con 12 h al mes terminas el \d{1,2} de \p{L}+ de \d{4}, a tiempo\./u)).toBeVisible();
     await expect(sheet.getByText(/después de tu final/)).toHaveCount(0);
   } finally {
     await drop(db, personId, goalId);
@@ -237,7 +237,7 @@ test("r02: ten or eleven days late read «2 semanas», weeks rounded up", async 
     await page.getByRole("button", { name: "Ritmo 16 h al mes" }).click();
     const sheet = page.getByRole("dialog");
     await sheet.getByRole("radio", { name: "8 h" }).click();
-    await expect(sheet.getByText(/^Con 8 h al mes terminas el \d{1,2} de \p{L}+, 2 semanas después de tu final\./u)).toBeVisible();
+    await expect(sheet.getByText(/^Con 8 h al mes terminas el \d{1,2} de \p{L}+ de \d{4}, 2 semanas después de tu final\./u)).toBeVisible();
   } finally {
     await drop(db, personId, goalId);
   }
