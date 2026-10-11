@@ -287,6 +287,11 @@ test("ritmo: reads a time amount into minutes, in every format", () => {
   assert.equal(rhythmOf("min", "90 min"), 90);
 });
 
+test("836 hs: «hs» reads as hours in ritmo: and in a month", () => {
+  assert.equal(rhythmOf("minutos", "8 hs"), 480);
+  assert.equal(draftOf(`${HEAD}## Meses\n- 2026-12 · 12 hs\n`).months[0].amount, 720);
+});
+
 test("a template without ritmo: reads as before, rhythm null", () => {
   const result = parseTemplate(`${RHYTHM_HEAD}medida: horas · minutos\n`);
   assert.ok(result.matched && "draft" in result);

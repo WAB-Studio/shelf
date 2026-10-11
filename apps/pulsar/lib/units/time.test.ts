@@ -113,6 +113,13 @@ test("«hr» and «hrs» are hours, in any case, spaced or not", () => {
   assert.equal(parseTime("2 hrs 30 min"), 150);
 });
 
-test("only «hr» and «hrs» are new", () => {
-  for (const text of ["8 hs", "8 hx", "8 hrss"]) assert.equal(parseTime(text), null, text);
+test("«hs» is hours too, in any case, with a fraction or minutes", () => {
+  assert.equal(parseTime("8 hs"), 480);
+  assert.equal(parseTime("8HS"), 480);
+  assert.equal(parseTime("1,5 hs"), 90);
+  assert.equal(parseTime("2 hs 30 min"), 150);
+});
+
+test("nothing else after «h» is an hour word", () => {
+  for (const text of ["8 hss", "8 hx", "8 hrss"]) assert.equal(parseTime(text), null, text);
 });
