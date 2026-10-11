@@ -340,6 +340,7 @@ for (const width of [360, 1024]) {
       const count = await lineTop(current, /2[\s ]tareas/);
       expect(state, "«en curso» drawn").toBeGreaterThanOrEqual(0);
       expect(count, "«2 tareas» drawn").toBeGreaterThan(state);
+      await expect(current.locator("br"), "two lines, one break").toHaveCount(1);
       const text = flat(await current.innerText());
       expect(text).not.toContain("·");
       expect(text).toContain("sin monto");
@@ -364,6 +365,8 @@ test("«Por mes» of a time goal with a rhythm does not count tasks: the plan co
     const current = monthRow(page, thisMonth);
     await expect(current).toContainText("en curso");
     expect(flat(await current.innerText())).not.toContain("tarea");
+    // One line under the label is no line break: a `<br>` with nothing after it draws an empty second line.
+    await expect(current.locator("br")).toHaveCount(0);
   } finally {
     await close();
     await drop(db, person, goalId);

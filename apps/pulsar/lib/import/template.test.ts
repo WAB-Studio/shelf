@@ -816,3 +816,24 @@ test("818: a month token with trailing characters gets the generic form error, n
   const taskGeneric = errorOf(`${HEAD}## Tareas\n- octubre · 2 h · X\n`).expected;
   assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-130 · 2 h · X\n`).expected, taskGeneric);
 });
+// 807: a cut names the highest broken header, whichever reading (line or schema) saw it.
+// Each text has a goal whose name is over the limit on line 3; whatever else breaks sits lower.
+const LONG = "a".repeat(GOAL_NAME_MAX + 1);
+const HIGHEST = [{ line: 3, expected: "import.errors.form.goalLong" }];
+const highestCases: Record<string, string> = {
+  "a later goal that is also broken, with a broken measure": `${V1}\n# ${LONG}\nhorizonte: 2027-10-01\n# ${LONG}\nhorizonte: 2027-10-01\nmedida: km\n`,
+  "a goal opened with no horizon above it": `${V1}\n# ${LONG}\n# B\nhorizonte: 2027-10-01\n`,
+  "a bad rhythm among the head lines": `${V1}\n# ${LONG}\nhorizonte: 2027-10-01\nmedida: d · h\nritmo: bad\n`,
+  "a horizon that is not a date": `${V1}\n# ${LONG}\nhorizonte: a b\n`,
+  "a section with the horizon still missing": `${V1}\n# ${LONG}\n## Meses\n- 2026-10 · 8 h\n`,
+  "a loose line before any section, horizon missing": `${V1}\n# ${LONG}\nlinea suelta\n`,
+  "the end of the text, horizon missing": `${V1}\n# ${LONG}\n`,
+};
+for (const [what, text] of Object.entries(highestCases)) {
+  test(`807 cut: a name over the limit on line 3 is the one named, over ${what}`, () => {
+    const result = parseTemplate(text);
+    assert.ok(result.matched && "errors" in result);
+    assert.equal(result.cut, true);
+    assert.deepEqual(result.errors, HIGHEST);
+  });
+}
