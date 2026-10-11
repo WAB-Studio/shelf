@@ -449,17 +449,16 @@ function GoalPart({
           ) : (
             ""
           );
-          const phoneNote = (
-            <>
-              {started && plannedFigure ? (
-                <>
-                  <Text variant="sentence">{t("of", { planned: "" })}</Text>
-                  {plannedFigure}
-                  {" · "}
-                </>
-              ) : null}
-              {status}
-            </>
+          // A started month's state sits in `detail`; its note only says the plan.
+          const phoneNote = started ? (
+            plannedFigure ? (
+              <>
+                <Text variant="sentence">{t("of", { planned: "" })}</Text>
+                {plannedFigure}
+              </>
+            ) : undefined
+          ) : (
+            status
           );
           return {
             key: month.month,
