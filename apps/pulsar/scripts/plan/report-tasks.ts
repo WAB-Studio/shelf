@@ -197,3 +197,35 @@ test("loadReport: a task with no estimate says no part, beside one cut by the mo
     assert.equal(item.part, null, name);
   }
 });
+
+test("loadReport: a time goal with no rhythm counts each month's tasks; with a rhythm or another unit it does not (RP-73)", async () => {
+  const plan = await import("@/app/actions/plan");
+  const horizon = `${monthFrom(today, 4)}-01`;
+  async function goal(name: string, unit: string, rhythm: number | null) {
+    const made = await plan.createGoal({ name, horizon });
+    if (!made.ok) throw new Error(`createGoal: ${made.error}`);
+    goalIds.push(made.goalId);
+    await sql`update goals.goals set measure_unit = ${unit}, measure_name = 'Medida', rhythm = ${rhythm}
+              where id = ${made.goalId}`;
+    for (const [offset, count] of [[0, 2], [1, 1], [3, 1]] as const) {
+      for (let n = 0; n < count; n++) {
+        await sql`
+          insert into goals.one_offs (user_id, goal_id, name, in_plan, planned_month, position)
+          values (${userId}, ${made.goalId}, ${`RP-73 ${name} ${offset}.${n}`}, true,
+                  ${`${monthFrom(today, offset)}-01`}, ${4000000 + offset * 10 + n})`;
+      }
+    }
+    return made.goalId;
+  }
+  const portfolio = await goal("RP-73 Portafolio", "minutos", null);
+  const english = await goal("RP-73 Inglés", "minutos", 20);
+  const bike = await goal("RP-73 Bici", "km", null);
+  const report = await loadReport(today);
+  const months = (id: string) => report.goals.find((entry) => entry.id === id)?.months ?? [];
+  assert.deepEqual(
+    months(portfolio).slice(0, 4).map((row) => row.tasks),
+    [{ done: 0, total: 2 }, { done: 0, total: 1 }, { done: 0, total: 0 }, { done: 0, total: 1 }],
+  );
+  assert.ok(months(english).length > 0 && months(english).every((row) => !("tasks" in row)), "rhythm: no tasks");
+  assert.ok(months(bike).length > 0 && months(bike).every((row) => !("tasks" in row)), "other unit: no tasks");
+});

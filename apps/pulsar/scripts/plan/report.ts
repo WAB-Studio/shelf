@@ -308,8 +308,8 @@ test("loadReport: a goal's month and to-date figures are what loadGoal reads", a
     assert.equal(entry.unit, loaded.measureUnit);
     assert.deepEqual(entry.toDate, toDate(loaded.months));
     assert.deepEqual(
-      entry.months.map((row) => ({ ...row, carried: null })),
-      loaded.months.map((row) => ({ ...row, carried: null })),
+      entry.months.map((row) => ({ ...row, tasks: undefined, carried: null })),
+      loaded.months.map((row) => ({ ...row, tasks: undefined, carried: null })),
     );
     assert.deepEqual(entry.weeks, loaded.weeks);
   }

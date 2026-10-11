@@ -21,6 +21,7 @@ import {
 } from "@/lib/queries/goal";
 import { toPhase, type PhaseRow } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
+import { isTimeUnit } from "@/lib/units/time";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 
 // One row per open goal, each carrying what `queryGoalRow` (`goal.ts`) reads
@@ -198,7 +199,9 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
     const current = phaseOn(phases, today);
     const planInput = planInputOf(row, today);
     const monthItems = planMonthList(planInput, thisMonth);
-    const unmeasured = row.goal.measure_unit === null;
+    // A time goal with no rhythm has no amount to read a month by, so it reads tasks.
+    const unit = row.goal.measure_unit;
+    const countsTasks = unit === null || (isTimeUnit(unit) && (row.goal.rhythm ?? null) === null);
 
     return {
       id: row.goal.id,
@@ -245,7 +248,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         }),
       months: figures.months.map((row) => {
         const share = row.past ? planShare(planInput, row.month) : null;
-        const items = unmeasured ? planMonthList(planInput, row.month) : null;
+        const items = countsTasks ? planMonthList(planInput, row.month) : null;
         return {
           ...row,
           carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
