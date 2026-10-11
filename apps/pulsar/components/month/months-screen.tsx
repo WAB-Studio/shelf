@@ -24,6 +24,20 @@ function yearLabel(month: string): string {
   return `${monthLabel(month)} ${month.slice(0, 4)}`;
 }
 
+// The 320px list keeps a note on one line; a unit word as long as «búsquedas» would push the chevron out, so it drops under its number.
+const LONG_UNIT = 8;
+function breakLongUnit(said: string) {
+  const at = said.lastIndexOf(" ");
+  if (at === -1 || said.length - at - 1 < LONG_UNIT) return said;
+  return (
+    <>
+      {said.slice(0, at)}
+      <br />
+      {said.slice(at + 1)}
+    </>
+  );
+}
+
 /**
  * `MesesFilas.dc.html` (RP-32): one whole-row link per month of the goal's
  * span from `loadGoal`'s own `months`, the month open beside the list marked.
@@ -76,15 +90,8 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
     const share = row.past ? planShare(goal.plan, row.month) : null;
     const own = amountOf(row.month, goal.plan);
     const figure = own === null ? null : formatQuantity(own, unit, words);
-    const amount = (
-      <Text tone="secondary">
-        {figure === null
-          ? t("month.months.noAmount")
-          : started
-            ? t("month.months.of", { planned: figure })
-            : figure}
-      </Text>
-    );
+    const said = figure === null ? t("month.months.noAmount") : started ? t("month.months.of", { planned: figure }) : figure;
+    const amount = <Text tone="secondary">{breakLongUnit(said)}</Text>;
     const state = row.current
       ? t("month.months.current")
       : share && share.carried > 0

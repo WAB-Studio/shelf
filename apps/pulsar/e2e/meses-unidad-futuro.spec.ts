@@ -185,6 +185,7 @@ test("the month page of a searches goal says «0 búsquedas de 60 búsquedas» n
   });
   const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/meses/${seg(thisMonth)}`, 360);
   try {
+    await expect(page.locator("main").first()).toContainText("de 60 búsquedas");
     const now = flat(await page.locator("main").first().innerText());
     expect(now).toContain("0 búsquedas de 60 búsquedas");
     expect(now).not.toMatch(/searches/i);
@@ -255,7 +256,7 @@ test("a future month of an archived goal: the amount is text, not a link", async
   try {
     expect(await amountBlock(page, "planeado")).toBe("planeado 60 km");
     await expect(page.getByRole("link", { name: "60 km", exact: true })).toHaveCount(0);
-    await expect(page.getByText("60 km", { exact: true })).toBeVisible();
+    await expect(page.getByText("60 km", { exact: true }).locator("visible=true").first()).toBeVisible();
   } finally {
     await close();
     await drop(db, person, goalId);
