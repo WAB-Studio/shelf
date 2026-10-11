@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { type Translator } from "@/i18n/translator";
+import { type MessageKey, type Translator } from "@/i18n/translator";
 
 import {
   ArchiveGoalAction,
@@ -161,6 +161,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     min: (min) => units("min", { min }),
     join: (h, min) => units("join", { h, min }),
   };
+  // The catalogue's word for a stored unit; a unit it lacks prints as typed.
+  const unitWord = (unit: string) => {
+    const key = `units.words.${unit.trim().toLowerCase()}` as MessageKey;
+    return /^\p{L}+$/u.test(unit.trim()) && t.has(key) ? t(key, { count: 2 }) : unit;
+  };
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const monthNames = t.raw("day.monthLong") as string[];
   const planEnd = goal.roadmap.end;
@@ -314,7 +319,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           <Text as="p" variant="sentence" tone="muted">
             {isTimeUnit(goal.measureUnit)
               ? t("goal.detail.measuresTime")
-              : t("goal.detail.measures", { unit: goal.measureUnit })}
+              : t("goal.detail.measures", { unit: unitWord(goal.measureUnit) })}
           </Text>
           {phoneActs}
 

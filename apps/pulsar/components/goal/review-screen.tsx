@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import type { MessageKey } from "@/i18n/translator";
 import { shortMonth } from "@/lib/dates/short-month";
 import { loadGoal } from "@/lib/queries/goal";
 import { isTimeUnit } from "@/lib/units/time";
@@ -30,6 +31,11 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
   const t = await getTranslations();
 
   const back = { href: `/metas/${goal.id}`, place: goal.name };
+  // The catalogue's word for a stored unit; a unit it lacks prints as typed.
+  const unitWord = (unit: string) => {
+    const key = `units.words.${unit.trim().toLowerCase()}` as MessageKey;
+    return /^\p{L}+$/u.test(unit.trim()) && t.has(key) ? t(key, { count: 2 }) : unit;
+  };
 
   // §0.3, 3: a goal whose first quantity commitment has not landed yet has
   // nothing to sum and nothing to place in a week (RP-14's own rule, carried
@@ -74,7 +80,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
       <Text as="p" variant="sentence">
         {isTimeUnit(goal.measureUnit)
           ? t("goal.review.measureTime")
-          : t("goal.review.measure", { unit: goal.measureUnit })}
+          : t("goal.review.measure", { unit: unitWord(goal.measureUnit) })}
       </Text>
       <Table
         caption={t("goal.review.caption")}

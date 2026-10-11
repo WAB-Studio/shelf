@@ -3124,3 +3124,9 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - Orbit's table holds one stray row from 2026-09-11 (a renumbered migration), so its count runs one above the journal.
 - Measured 2026-10-10: the handoff named orbit 0050; 0049 was also unapplied in production. Both went in with the deploy.
 - `npm run db:migrate` against the remote is refused by the auto-mode classifier: the user runs it with `!`.
+
+## A mutation on the week line survives on a Sunday
+- Pulsar's server, its seeds and the specs read the real clock; there is no `faketime`. Three specs skip their week branch
+  on a Sunday or a Monday, so every mutation on «hasta el miércoles», «del sábado al martes» or «en curso» survives that day.
+- Measured 2026-10-11, the train 7 mutator: W5, W6, M1, M2, M4–M6, M8 and M9 lived, all on the week line, run on a Sunday.
+- Read a survivor's date before calling it a gap. Run the week mutations on Tuesday to Saturday, or pin the clock first.

@@ -95,9 +95,9 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(last).toContainText("1 h 40 min");
     await expect(last).toContainText("de 10 h");
     await expect(last).toContainText(carried(66));
-    // The whole row is the one link; no year, and the state sits under the name, never in the note.
+    // The whole row is the one link, named with its year; the state sits under the name, never in the note.
     await expect(last.getByRole("link")).toHaveCount(1);
-    await expect(last).not.toContainText(lastMonth.slice(0, 4));
+    await expect(last).toContainText(`${label(lastMonth)} ${lastMonth.slice(0, 4)}`);
     await expect(last.locator("span").filter({ hasText: new RegExp(`^${carried(66)}$`) })).toHaveCount(1);
     // A closed month's amount is text, never a door to the sheet.
     await expect(last.getByText("de 10 h", { exact: true })).toBeVisible();

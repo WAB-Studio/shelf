@@ -445,7 +445,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                     onCheckedChange={(value) => toggle(at, value)}
                     name={goal.measure.name}
                     meta={t("import.review.measure")}
-                    trailing={isTimeUnit(goal.measure.unit) ? t("import.review.measureTime") : goal.measure.unit}
+                    trailing={isTimeUnit(goal.measure.unit) ? t("import.review.measureTime") : (words.unit?.(goal.measure.unit, 2) ?? goal.measure.unit)}
                   />
                 ) : null}
                 {goal.measure && goal.rhythm !== null && isTimeUnit(goal.measure.unit) ? (

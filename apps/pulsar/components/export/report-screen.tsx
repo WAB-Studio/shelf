@@ -478,6 +478,22 @@ function GoalPart({
         const current = goal.months.findIndex((m) => m.current);
         const week = goal.weeks.find((w) => w.current);
         const weekPlanned = goal.weekPlanned ?? null;
+        // A week the goal does not fill says from or to which day it counts.
+        const weekDayOf = (day: string) => (civilDateToDate(day).getUTCDay() + 6) % 7;
+        const weekNames = t.raw("weekDays") as string[];
+        // `endsOn` runs to Sunday; the goal's last day cuts it.
+        const weekLast = week ? (week.endsOn < dayBefore(goal.horizon) ? week.endsOn : dayBefore(goal.horizon)) : null;
+        const weekEdges =
+          week && weekLast
+            ? {
+                edges:
+                  week.startsOn === weekLast
+                    ? "day"
+                    : ["whole", "from", "to", "both"][(weekDayOf(week.startsOn) > 0 ? 1 : 0) + (weekDayOf(weekLast) < 6 ? 2 : 0)],
+                from: weekNames[weekDayOf(week.startsOn)],
+                to: weekNames[weekDayOf(weekLast)],
+              }
+            : null;
         const weekRows: TableRow[] = goal.weeks.map((w) => ({
           key: `week-${w.index}`,
           cells: [
@@ -526,10 +542,12 @@ function GoalPart({
                     <Text as="p" variant="sentence">
                       {weekPlanned === null
                         ? t.rich("thisWeekDone", {
+                            ...weekEdges!,
                             done: week.total,
                             fig: () => <Figure variant="meta" value={week.total} unit={unit as string} />,
                           })
                         : t.rich("thisWeek", {
+                            ...weekEdges!,
                             done: week.total,
                             planned: weekPlanned,
                             fig: () => <Figure variant="meta" value={week.total} unit={unit as string} />,

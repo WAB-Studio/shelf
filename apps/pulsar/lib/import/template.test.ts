@@ -465,7 +465,7 @@ test("RP-72 row 1: every unreadable line comes back at once, in the text's order
   assert.deepEqual(found.map(said), [
     "Esa unidad no es km. Escribe el monto en km, como «- AAAA-MM · 8 km».",
     "Esa unidad no es km. Escribe la cantidad en km, como «- nombre · cadencia · 8 km».",
-    "Una meta que no mide tiempo no lleva cifra en sus tareas.",
+    "Quita la cifra de esta línea: esta meta no mide tiempo.",
   ]);
 });
 
@@ -653,3 +653,68 @@ test("803 name: 121 characters answer the long-name sentence on the goal's line,
   const ok = parseTemplate(`pulsar · plantilla 1\n# ${"a".repeat(GOAL_NAME_MAX)}\nhorizonte: 2026-12-17\n`);
   assert.ok(ok.matched && "draft" in ok, JSON.stringify(ok));
 });
+
+// Module 807. Two broken headers cut at the topmost, whichever reader sees it; a stray figure says what to remove.
+const V1 = "pulsar · plantilla 1\n";
+
+test("807 cut: a bad horizon above a broken «medida:» wins over the inline cut below it", () => {
+  const result = cutOf(`${V1}\n# A\nhorizonte: 2027-13-45\nmedida: km\n\n## Meses\n- 2026-11x · 8 h\n`);
+  assert.equal(result.cut, true);
+  assert.deepEqual(result.errors, [{ line: 4, expected: "import.errors.form.horizon" }]);
+});
+
+test("807 cut: a long name in goal 1 wins over a broken «medida:» in goal 2", () => {
+  const result = cutOf(`${V1}\n# ${"a".repeat(121)}\nhorizonte: 2027-10-01\n\n# B\nhorizonte: 2027-10-01\nmedida: km\n`);
+  assert.equal(result.cut, true);
+  assert.deepEqual(result.errors, [{ line: 3, expected: "import.errors.form.goalLong" }]);
+});
+
+test("807 cut: a broken «medida:» above a long name in goal 2 stays the cut", () => {
+  const result = cutOf(`${V1}\n# A\nhorizonte: 2027-10-01\nmedida: km\n\n# ${"b".repeat(121)}\nhorizonte: 2027-10-01\n`);
+  assert.equal(result.cut, true);
+  assert.deepEqual(result.errors, [{ line: 5, expected: "import.errors.form.measure" }]);
+});
+
+test("807 cut: a single broken header is one error and nothing under it is judged", () => {
+  const result = cutOf(`${V1}\n# A\nhorizonte: 2027-10-01\nmedida: km\n## Meses\n- x\n## Tareas\n- y\n`);
+  assert.equal(result.cut, true);
+  assert.equal(result.errors.length, 1);
+  assert.equal(result.errors[0].line, 5);
+});
+
+test("807 cut: with no broken header every error comes at once and the reading does not cut", () => {
+  const result = cutOf(`${V1}\n# A\nhorizonte: 2027-10-01\nmedida: d · km\n## Meses\n- x\n## Tareas\n- y\n`);
+  assert.equal(result.cut, false);
+  assert.deepEqual(result.errors.map((e) => e.line), [7, 9]);
+});
+
+test("807 stray figure: a task and a sub-task with a figure in a km goal say what to remove", () => {
+  const head = `${V1}\n# A\nhorizonte: 2027-10-01\nmedida: d · km\n## Tareas\n`;
+  const task = mistakesOf(`${head}- 2026-10 · 3 · Correr\n`);
+  assert.deepEqual(task, [{ line: 7, expected: "import.errors.estimateNotTime" }]);
+  assert.equal(said(task[0]), "Quita la cifra de esta línea: esta meta no mide tiempo.");
+  const child = mistakesOf(`${head}- 2026-10 · Madre\n  - 3 · Hija\n`);
+  assert.deepEqual(child, [{ line: 8, expected: "import.errors.estimateNotTime" }]);
+});
+
+// 807: a cut names the highest broken header, whichever reading (line or schema) saw it.
+// Each text has a goal whose name is over the limit on line 3; whatever else breaks sits lower.
+const LONG = "a".repeat(GOAL_NAME_MAX + 1);
+const HIGHEST = [{ line: 3, expected: "import.errors.form.goalLong" }];
+const highestCases: Record<string, string> = {
+  "a later goal that is also broken, with a broken measure": `${V1}\n# ${LONG}\nhorizonte: 2027-10-01\n# ${LONG}\nhorizonte: 2027-10-01\nmedida: km\n`,
+  "a goal opened with no horizon above it": `${V1}\n# ${LONG}\n# B\nhorizonte: 2027-10-01\n`,
+  "a bad rhythm among the head lines": `${V1}\n# ${LONG}\nhorizonte: 2027-10-01\nmedida: d · h\nritmo: bad\n`,
+  "a horizon that is not a date": `${V1}\n# ${LONG}\nhorizonte: a b\n`,
+  "a section with the horizon still missing": `${V1}\n# ${LONG}\n## Meses\n- 2026-10 · 8 h\n`,
+  "a loose line before any section, horizon missing": `${V1}\n# ${LONG}\nlinea suelta\n`,
+  "the end of the text, horizon missing": `${V1}\n# ${LONG}\n`,
+};
+for (const [what, text] of Object.entries(highestCases)) {
+  test(`807 cut: a name over the limit on line 3 is the one named, over ${what}`, () => {
+    const result = parseTemplate(text);
+    assert.ok(result.matched && "errors" in result);
+    assert.equal(result.cut, true);
+    assert.deepEqual(result.errors, HIGHEST);
+  });
+}
