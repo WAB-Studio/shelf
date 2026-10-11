@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createTranslator } from "next-intl";
+
+import unitsCatalogue from "../../messages/es/units.json";
 
 import { formatFigureValue } from "./format-figure";
 
@@ -75,4 +80,34 @@ test("a time unit with no words to print it in reads as a plain number", () => {
 
 test("a string value in a time unit passes through untouched", () => {
   assert.equal(formatFigureValue("12 h 30 min", "minutos", words), "12 h 30 min");
+});
+
+// `Figure` itself, rendered over the real `units` catalogue. Its hooks are
+// answered by the bare translator: the provider's context does not
+// cross tsx's CJS/ESM line. The CSS module is stubbed: node cannot load it.
+mock.module("./figure.module.css", { defaultExport: {} });
+mock.module("next-intl", {
+  namedExports: {
+    useTranslations: (namespace?: string) =>
+      createTranslator({ locale: "es", timeZone: "UTC", messages: { units: unitsCatalogue }, namespace } as never),
+  },
+});
+
+async function drawn(props: { value: number; unit?: string; bare?: boolean }): Promise<string> {
+  const { Figure } = await import("./figure");
+  const html = renderToStaticMarkup(createElement(Figure, props));
+  return html.replace(/<[^>]+>/g, "").replace(/\u00a0|&nbsp;|&#xA0;/g, " ");
+}
+
+test("bare: a word unit is not drawn, not even its space — 30 búsquedas reads «30»", async () => {
+  assert.equal(await drawn({ value: 30, unit: "búsquedas", bare: true }), "30");
+});
+
+test("bare: a time keeps its own words — 120 min still reads «2 h» (RP-35)", async () => {
+  assert.equal(await drawn({ value: 120, unit: "min", bare: true }), "2 h");
+  assert.equal(await drawn({ value: 90, unit: "minutos", bare: true }), "1 h 30 min");
+});
+
+test("without bare a figure still carries its word — «30 búsquedas»", async () => {
+  assert.equal(await drawn({ value: 30, unit: "búsquedas" }), "30 búsquedas");
 });
