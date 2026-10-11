@@ -110,6 +110,33 @@
   white-space: normal;
 }
 
+/* The label column takes its longest date line, never under 112px: every row
+   is a subgrid of the stack's three tracks, so one row's range widens them all.
+   The row's 4px inset rides the first track, hence 116. */
+.fitDetail .stack {
+  display: grid;
+  grid-template-columns: minmax(116px, max-content) max-content minmax(min-content, 1fr);
+  column-gap: 12px;
+}
+
+.fitDetail .stackRow {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fitDetail .stackFigure {
+  grid-column: 2;
+}
+
+.fitDetail .stackNote {
+  grid-column: 3;
+}
+
+.fitDetail .detailWide {
+  white-space: nowrap;
+}
+
 /* The wide face, `RevisionEscritorio.dc.html`. */
 .wide {
   display: none;

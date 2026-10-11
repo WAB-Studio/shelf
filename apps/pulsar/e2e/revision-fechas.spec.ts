@@ -10,10 +10,10 @@ function dayAfter(day: string, days: number): string {
   return dateToCivilDate(date);
 }
 
-const format = new Intl.DateTimeFormat("es", { day: "numeric", month: "short", timeZone: "UTC" });
+const format = new Intl.DateTimeFormat("es", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 function range(from: string, to: string): string {
-  // ICU writes «sept» and spaces a cross-month dash; the screen writes «sep» and «28 sep–4 oct» (RP-17).
+  // ICU writes «sept» and spaces a cross-month dash; the screen writes «sep» and «28 sep–4 oct 2026» (RP-17).
   return format.formatRange(civilDateToDate(from), civilDateToDate(to)).replaceAll("sept", "sep").replace(/\s+–\s+/, "–");
 }
 

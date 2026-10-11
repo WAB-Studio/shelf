@@ -2,18 +2,10 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import type { MessageKey } from "@/i18n/translator";
-import { shortMonth } from "@/lib/dates/short-month";
+import { civilSpan } from "@/lib/export/sections";
 import { loadGoal } from "@/lib/queries/goal";
 import { isTimeUnit } from "@/lib/units/time";
 import { Page, ScreenHeader, Section, Table, Text, type TableRow } from "@/components/ui";
-
-// «21–27 sep», «31 ago–6 sep».
-function weekSpan(startsOn: string, endsOn: string): string {
-  const startDay = Number(startsOn.slice(8, 10));
-  const endDay = Number(endsOn.slice(8, 10));
-  if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return `${startDay}–${endDay} ${shortMonth(endsOn)}`;
-  return `${startDay} ${shortMonth(startsOn)}–${endDay} ${shortMonth(endsOn)}`;
-}
 
 /**
  * `RevisionAncha.dc.html` (RP-17): the goal's own
@@ -68,7 +60,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
       key: String(week.index),
       cells: [t("goal.review.weekLabel", { n: week.index }), week.total, phase, note],
       note: note || undefined,
-      detail: weekSpan(week.startsOn, week.endsOn),
+      detail: civilSpan(week.startsOn, week.endsOn),
     };
   });
 
@@ -89,6 +81,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
         figures={[1]}
         unit={goal.measureUnit}
         current={currentIndex === -1 ? undefined : currentIndex}
+        fitDetail
       />
     </Page>
   );
