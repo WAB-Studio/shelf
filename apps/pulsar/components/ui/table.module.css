@@ -111,12 +111,6 @@
   white-space: normal;
 }
 
-@media (min-width: 1024px) and (max-width: 1279px) {
-  .narrow.wrapNoteInRail .stackNote {
-    white-space: normal;
-  }
-}
-
 /* Off `narrow`, a note too long for what the label and figure leave drops under
    them whole, on its own line at the end; one that fits beside them in two lines
    stays there. Linked rows keep their note beside the chevron. */

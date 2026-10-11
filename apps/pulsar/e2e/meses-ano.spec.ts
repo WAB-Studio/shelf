@@ -190,10 +190,19 @@ for (const width of [360, 1024]) {
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     // The tap target: the row's link, without the rule drawn under the row.
-    const heights = await rowsOf(page).evaluateAll((items) =>
-      items.map((item) => Math.round(item.querySelector("a")!.getBoundingClientRect().height)),
+    // A note too long to fit beside its month drops whole under it (843): that row alone is taller, by one line.
+    const rows = await rowsOf(page).evaluateAll((items) =>
+      items.map((item) => {
+        const link = item.querySelector("a")!;
+        const label = link.querySelector<HTMLElement>('[class*="stackLabel"]')!.getBoundingClientRect();
+        const note = link.querySelector<HTMLElement>('[class*="stackNote"]')?.getBoundingClientRect();
+        return { height: Math.round(link.getBoundingClientRect().height), dropped: note ? note.top >= label.bottom - 1 : false };
+      }),
     );
-    expect(heights).toEqual(Array(16).fill(56));
+    for (const row of rows) {
+      if (row.dropped) expect(row.height).toBeLessThanOrEqual(80);
+      else expect(row.height).toBe(56);
+    }
 
     // Lines the label's own text occupies: one per row, whatever the month.
     const lines = await rowsOf(page).evaluateAll((items) =>
