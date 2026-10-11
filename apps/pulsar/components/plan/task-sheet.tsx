@@ -25,6 +25,7 @@ import { messageKey, type MessageKey } from "@/i18n/translator";
 import { monthName } from "@/lib/plan/month-name";
 import { isTimeUnit, splitMinutes } from "@/lib/units/time";
 import { createOneOffSchema, editTaskSchema } from "@/lib/validation/one-off";
+import { todayInZone } from "@/lib/zone";
 
 const WHOLE = /^\d+$/;
 
@@ -95,7 +96,7 @@ export function TaskSheet({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const timed = isTimeUnit(unit);
-  const thisYear = String(new Date().getFullYear());
+  const thisYear = todayInZone().slice(0, 4);
 
   const initial = estimate !== null && timed
     ? { hours: String(splitMinutes(estimate).h), minutes: String(splitMinutes(estimate).min) }

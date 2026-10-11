@@ -10,8 +10,40 @@ export function civilDateInZone(instant: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(instant);
 }
 
+// The day every reader calls «today». `PULSAR_CLOCK` pins it on a test
+// server; the browser reads the pin from the `pulsar-clock` meta the signed-in
+// layout draws, so a client component agrees with the page that drew it.
 export function todayInZone(): string {
-  return civilDateInZone(new Date());
+  const pinned =
+    typeof window === "undefined"
+      ? clockOverride(process.env)
+      : (document.querySelector(`meta[name="${CLOCK_META}"]`)?.getAttribute("content") ?? null);
+  return pinned ?? civilDateInZone(new Date());
+}
+
+export const CLOCK_META = "pulsar-clock";
+
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+// `PULSAR_CLOCK=YYYY-MM-DD`, honoured only beside a loopback `DATABASE_URL`:
+// `scripts/supabase-local.sh exec` and CI's local stack set one, production
+// never can. Not `HARNESS_LANE` (lane 1 leaves it unset) and not `NODE_ENV`
+// (`next start` is `production` too). Anywhere else it throws, never ignores.
+export function clockOverride(env: Record<string, string | undefined>): string | null {
+  const pinned = env.PULSAR_CLOCK?.trim();
+  if (!pinned) return null;
+  if (!isCivilDate(pinned)) throw new Error(`PULSAR_CLOCK must be a real YYYY-MM-DD, not "${pinned}"`);
+
+  let host: string | null = null;
+  try {
+    host = env.DATABASE_URL ? new URL(env.DATABASE_URL).hostname : null;
+  } catch {
+    host = null;
+  }
+  if (env.VERCEL || !host || !LOOPBACK.has(host)) {
+    throw new Error("PULSAR_CLOCK is test-only: set it only beside the local stack's DATABASE_URL, never on Vercel");
+  }
+  return pinned;
 }
 
 // Rejects a shape match that names no real day, such as "2026-02-31".

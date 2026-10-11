@@ -14,6 +14,7 @@ import { type MessageKey } from "@/i18n/translator";
 import { monthName } from "@/lib/plan/month-name";
 import { useTimeWords } from "@/components/ui/figure";
 import { formatQuantity } from "@/lib/units/time";
+import { todayInZone } from "@/lib/zone";
 
 export type TaskRowProps = {
   oneOffId: string;
@@ -91,7 +92,7 @@ export function TaskRow({
     });
   }
 
-  const thisYear = String(new Date().getFullYear());
+  const thisYear = todayInZone().slice(0, 4);
   const words = useTimeWords();
   const say = (n: number) => (sheet.unit ? formatQuantity(n, sheet.unit, words) : String(n));
   const partLine = part

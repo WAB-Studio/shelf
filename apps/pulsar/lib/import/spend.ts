@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { modelCalls } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
-import { todayInZone } from "@/lib/zone";
+import { TIME_ZONE } from "@/lib/zone";
 
 export const MODEL_CALLS_DAILY_CAP = 10;
 
@@ -14,7 +14,8 @@ export type ModelCallOutcome = "ok" | "failed" | "invalid" | "empty";
  * Claims one model call before it is made (RNP-13): the row lands only while
  * the person's count for the zone's today is under the cap, `null` otherwise.
  * One statement, so the count and the insert share a round trip. Two claims
- * racing at nine may both land: a person's own double tap, accepted.
+ * racing at nine may both land: a person's own double tap, accepted. The day
+ * is the column default's, the real one even under `PULSAR_CLOCK`.
  */
 export async function claimModelCall(
   model: string,
@@ -29,7 +30,7 @@ export async function claimModelCall(
       select ${person.id}::uuid, ${model}, ${source}
       where (
         select count(*) from goals.model_calls
-        where user_id = ${person.id}::uuid and day = ${todayInZone()}::date
+        where user_id = ${person.id}::uuid and day = (now() at time zone ${TIME_ZONE})::date
       ) < ${MODEL_CALLS_DAILY_CAP}
       returning id
     `),

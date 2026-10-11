@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { BottomNav } from "@/components/ui";
 import { listGoals } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
-import { civilDateShort, todayInZone } from "@/lib/zone";
+import { CLOCK_META, civilDateShort, clockOverride, todayInZone } from "@/lib/zone";
 
 /**
  * The signed-in shell: the day, `/metas/**` and nothing else — `/entrar` and
@@ -26,8 +26,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     getTranslations("day.theme"),
   ]);
 
+  // Only a pinned test clock draws it; React hoists it into `<head>`.
+  const pinned = clockOverride(process.env);
+
   return (
     <>
+      {pinned ? <meta name={CLOCK_META} content={pinned} /> : null}
       {children}
       {person ? (
         <BottomNav
