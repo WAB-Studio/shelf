@@ -47,10 +47,10 @@ test("startedOn inside this week drops the month, after it names it, the goal as
 });
 
 test("endedPhrase: yesterday is «ayer», two days back names the day, a far date names the month", () => {
-  assert.equal(endedPhrase(translate, "Azúcar", "2026-09-29", TODAY, names), "Azúcar terminó ayer ·");
-  assert.equal(endedPhrase(translate, "Azúcar", "2026-09-28", TODAY, names), "Azúcar terminó el lunes 28 ·");
+  assert.equal(endedPhrase(translate, "Azúcar", "2026-09-29", TODAY, names), "Azúcar terminó ayer");
+  assert.equal(endedPhrase(translate, "Azúcar", "2026-09-28", TODAY, names), "Azúcar terminó el lunes 28");
   assert.equal(
     endedPhrase(translate, "Azúcar", "2026-09-27", TODAY, names),
-    "Azúcar terminó el domingo 27 de septiembre ·",
+    "Azúcar terminó el domingo 27 de septiembre",
   );
 });
