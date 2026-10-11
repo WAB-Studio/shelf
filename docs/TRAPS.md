@@ -3130,3 +3130,19 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
   on a Sunday or a Monday, so every mutation on «hasta el miércoles», «del sábado al martes» or «en curso» survives that day.
 - Measured 2026-10-11, the train 7 mutator: W5, W6, M1, M2, M4–M6, M8 and M9 lived, all on the week line, run on a Sunday.
 - Read a survivor's date before calling it a gap. Run the week mutations on Tuesday to Saturday, or pin the clock first.
+
+## A lane's fault server on another lane's port
+- `PULSAR_FAULT_BASE_URL` names a port; a worker that picks :320<m> for it squats lane m's port, and lane m's worker kills it.
+- Measured 2026-10-11: lane 4 ran its fault server on :3205 (lane 6's); lane 6's `fuser -k 3205/tcp` killed it mid-run.
+- Run a lane's fault server on :321<n-1> (lane 4 → :3213). Say it in every dispatch that may need one.
+
+## A words-only change breaks a unit stub
+- `messages/es/*.json` is copied into unit tests' stubs (`lib/day/day-phrase.test.ts`). An e2e-only verification misses it.
+- Measured 2026-10-11: 824 dropped a «·» from `day.ended.*`, ran only e2e, and left `check:unit` red; the merge caught it.
+- Run `check:unit` on every module that edits `messages/`, words-only included.
+
+## A query that adds a field can change what paper prints
+- `printsOnPaper` (`lib/export/sections.ts`) reads `month.tasks !== undefined` as «measures nothing».
+- Measured 2026-10-11: 834 gave a time goal with no rhythm a task count; its months with an amount stopped printing, and 136
+  PDF specs went red in CI. Its own `check:*` were green: no check reads paper.
+- Run `papel-*` and `exportar*` on any change to `lib/queries/report.ts`.
