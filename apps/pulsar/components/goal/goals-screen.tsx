@@ -90,7 +90,12 @@ export async function GoalsScreen({
     return (
       <>
         {monthName(month.month)} ·{" "}
-        <Figure value={month.reached} unit={unit} variant="meta" />
+        <Figure
+          value={month.reached}
+          unit={unit}
+          variant="meta"
+          bare={month.planned !== null}
+        />
         {month.planned === null ? null : (
           <>
             {" "}
@@ -125,6 +130,7 @@ export async function GoalsScreen({
                         name={goal.name}
                         meta={t("goal.list.untilShort", { date: lastDay(goal) })}
                         metaVariant="sentence"
+                        narrowMetaAbove={monthMeta(goal)}
                         wideMeta={monthMeta(goal)}
                         wideTrailing={
                           goal.month ? (

@@ -51,6 +51,9 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // carries the goal's month and its last day (`MetasCentroEscritorio`).
   wideMeta?: ReactNode;
   wideTrailing?: ReactNode;
+  // Under 1024px a line of its own between the name and `meta`, in the same
+  // face as `meta`; from 1024px it is gone, `wideMeta` says it there.
+  narrowMetaAbove?: ReactNode;
   // Up to two lines of free text under the name and its meta, line breaks
   // kept, clipped with an ellipsis (`TareaNotaGuardada`).
   preview?: string | null;
@@ -76,6 +79,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     href,
     wideMeta,
     wideTrailing,
+    narrowMetaAbove,
     preview,
     end,
     card,
@@ -103,6 +107,11 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
         <Text as="span" variant="name" tone={quiet ? "muted" : undefined}>
           {name}
         </Text>
+        {narrowMetaAbove ? (
+          <Text as="span" variant={metaVariant} className={styles.narrowOnly}>
+            {narrowMetaAbove}
+          </Text>
+        ) : null}
         {meta ? (
           <Text as="span" variant={metaVariant} className={wideMeta ? styles.narrowOnly : undefined}>
             {meta}
