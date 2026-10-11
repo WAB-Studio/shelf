@@ -13,7 +13,7 @@ const NOTHING = messages.notices.estimateDropped;
 const [year, month] = todayInZone().split("-").map(Number);
 const first = `${year}-${String(month).padStart(2, "0")}`;
 const horizon = `${year + 1}-${String(month).padStart(2, "0")}-01`;
-const monthWord = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("es", { month: "long", timeZone: "UTC" });
+const monthWord = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("es", { month: "long", timeZone: "UTC" }) + ` ${year}`;
 
 // The template refuses a figure on a task of a goal that is not measured in time (RP-72), so
 // this draft reaches the review as the model's would: through the tab's storage.

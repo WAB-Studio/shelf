@@ -18,10 +18,10 @@ function monthsFromToday() {
   return { previous: shift(-1), first: shift(0), second: shift(1), horizon: `${year + 1}-${String(month).padStart(2, "0")}-01` };
 }
 
-const word = (month: string, withYear = false) =>
-  new Intl.DateTimeFormat("es", withYear ? { month: "long", year: "numeric", timeZone: "UTC" } : { month: "long", timeZone: "UTC" }).format(
-    civilDateToDate(`${month}-01`),
-  );
+const word = (month: string, withYear = false) => {
+  const name = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" }).format(civilDateToDate(`${month}-01`));
+  return withYear ? `${name} ${month.slice(0, 4)}` : name;
+};
 
 // The catalogue's example, its dates moved to the person's own now so the
 // months stay inside the goal's span whatever day the suite runs.
@@ -97,7 +97,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(box(page, /Sesiones 1–4/)).toBeChecked();
       // The template carries a rhythm, so the month only orders the plan: the line is the sum alone.
       await expect(page.getByText("la suma de lo marcado", { exact: true })).toBeVisible();
-      await expect(page.getByText(`${word(first)} · la suma de lo marcado`, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(`${word(first, true)} · la suma de lo marcado`, { exact: true })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Crear 1 meta" })).toBeVisible();
       await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveCount(0);
     });
@@ -163,7 +163,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(refused).toBeDisabled();
       await expect(refused).not.toBeChecked();
       await expect(
-        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first)), { exact: true }),
+        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first, true)), { exact: true }),
       ).toBeVisible();
       // The warnings stand above the goal.
       const above = (await title.boundingBox())!.y;
@@ -201,7 +201,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(page.getByText(`hasta el ${dayWord(last)}`, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.review.blocked.monthAfterEnd.replace("{last}", dayWord(last)), { exact: true })).toBeVisible();
       await expect(
-        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first)), { exact: true }),
+        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first, true)), { exact: true }),
       ).toBeVisible();
     });
   });
@@ -215,7 +215,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       const task = box(page, /Comprar tenis/);
       await expect(task).toBeChecked();
       await expect(task).toBeEnabled();
-      await expect(page.getByText(`${word(first)} · ${messages.notices.estimateDropped}`, { exact: true })).toBeVisible();
+      await expect(page.getByText(`${word(first, true)} · ${messages.notices.estimateDropped}`, { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: /^Cambiar el monto de Comprar tenis/ })).toHaveCount(0);
 
       await page.getByRole("button", { name: "Crear 1 meta" }).click();

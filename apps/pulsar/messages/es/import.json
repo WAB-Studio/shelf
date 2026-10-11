@@ -29,7 +29,7 @@
     "eyebrowTemplate": "importar · leído con la plantilla, sin IA",
     "title": "Revisa antes de crear",
     "hint": "desmarca lo que no quieras; toca un monto para cambiarlo",
-    "goalSpan": "Desde el <fig>{from}</fig> hasta el <fig>{to}</fig>",
+    "goalSpan": "Desde el <fig>{from}</fig>",
     "cutPhase": "La fase «{aim}» empieza en la semana 1, el <fig>{date}</fig>: tu plan la ponía antes de abrir la meta.",
     "droppedPhase": "La fase «{aim}» termina antes de abrirla y no se crea.",
     "horizon": "horizonte",
