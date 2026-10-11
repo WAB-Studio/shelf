@@ -21,7 +21,7 @@ import type {
   MetasMonth,
   MetasOpenGoal,
 } from "@/lib/queries/goal";
-import { civilDateInZone, civilDayMonthShort, todayInZone } from "@/lib/zone";
+import { civilDateInZone, civilDayMonthShort } from "@/lib/zone";
 
 /**
  * `MetasCentro`, `MetasCentroEscritorio` and `MetasVacio` (RP-11, RP-24, RP-27,
@@ -64,11 +64,9 @@ export async function GoalsScreen({
     );
   }
 
-  const thisYear = todayInZone().slice(0, 4);
   const lastDay = (goal: GoalSummary) => {
     const day = dayBefore(goal.horizon);
-    const date = civilDayMonthShort(day);
-    return day.slice(0, 4) === thisYear ? date : `${date} ${day.slice(0, 4)}`;
+    return `${civilDayMonthShort(day)} ${day.slice(0, 4)}`;
   };
   const archivedLine = (goal: GoalSummary) =>
     goal.archivedAt

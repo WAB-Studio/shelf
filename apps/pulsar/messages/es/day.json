@@ -27,9 +27,9 @@
     "caption": "esta semana"
   },
   "ended": {
-    "yesterday": "{goal} terminó ayer ·",
-    "on": "{goal} terminó el {weekday} {day} ·",
-    "onFar": "{goal} terminó el {weekday} {day} de {month} ·",
+    "yesterday": "{goal} terminó ayer",
+    "on": "{goal} terminó el {weekday} {day}",
+    "onFar": "{goal} terminó el {weekday} {day} de {month}",
     "see": "ver",
     "seeLabel": "Abrir {goal}"
   },
