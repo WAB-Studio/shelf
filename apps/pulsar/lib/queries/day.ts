@@ -529,6 +529,8 @@ function monthLineOf(
       budget: budget ? { month, amount: budget.amount } : null,
       reached: reachedByMonth({ unit, facts, evidence }).get(month) ?? 0,
       rhythm: goal.rhythm,
+      openedOn: civilDateInZone(new Date(goal.created_at)),
+      horizon: goal.horizon,
     });
   }
   return lines;

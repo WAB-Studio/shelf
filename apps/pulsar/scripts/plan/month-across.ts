@@ -346,7 +346,9 @@ test("loadMonthAcross: the same four statements with one goal", async () => {
 test("loadMonthAcross: a split task lists with its part, and the line carries the rhythm", async () => {
   const month = await loadMonthAcross(today);
   const f = month.goals.find((goal) => goal.id === fId)!;
-  assert.equal(f.line?.planned, 10);
+  // F opened today: its month plans the share of 10 its days from today take (RP-74).
+  const length = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate();
+  assert.equal(f.line?.planned, Math.floor((10 * (length - Number(today.slice(8, 10)) + 1)) / length));
   assert.deepEqual(
     f.items.map((item) => [item.task.name, item.part, item.hours, item.from, item.to, item.fixed]),
     [["RP-50 fixture: partida", 10, 15, null, nextMonthOf(monthStart), false]],

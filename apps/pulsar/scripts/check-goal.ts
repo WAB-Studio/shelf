@@ -1565,6 +1565,50 @@ async function runPlanRoadmapCheck(): Promise<void> {
   }
 }
 
+// RP-74: «Reto de lectura», 16 September to 7 October 2026 at 600 a month,
+// plans 300 in September and 135 in October in `loadGoal` and in /metas.
+async function runSharedMonthsCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { loadGoal, listGoalsForMetas } = await import("@/lib/queries/goal");
+
+  const goal = await createGoal({ name: "check-goal.ts probe — 825 Reto", horizon: "2030-01-01" });
+  if (!goal.ok) throw new Error(`runSharedMonthsCheck: createGoal failed: ${goal.error}`);
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    const commitment = await addCommitment({
+      goalId: goal.goalId,
+      name: "check-goal.ts probe — 825 Reto medida",
+      cadenceKind: "daily",
+      satisfaction: "quantity",
+      targetQuantity: 1,
+      unit: "min",
+    });
+    if (!commitment.ok) throw new Error(`runSharedMonthsCheck: addCommitment failed: ${commitment.error}`);
+    await migrationDb`
+      update goals.goals set created_at = ${new Date("2026-09-16T12:00:00-05:00")}, horizon = '2026-10-08', rhythm = 600
+      where id = ${goal.goalId}`;
+
+    const view = await loadGoal(goal.goalId, "2026-10-07");
+    assert(
+      "RP-74: the goal's months plan the share of the rhythm its days take, 300 and 135",
+      JSON.stringify(view?.months.map((row) => row.planned)) === "[300,135]" && view?.month?.planned === 135,
+      `months=${JSON.stringify(view?.months.map((row) => [row.month, row.planned]))} month=${JSON.stringify(view?.month)}`,
+    );
+    const metas = async (today: string) =>
+      (await listGoalsForMetas(today)).open.find((entry) => entry.id === goal.goalId)?.month as { planned?: number | null } | null | undefined;
+    const first = await metas("2026-09-20");
+    const last = await metas("2026-10-07");
+    assert(
+      "RP-74: /metas plans the share in the first month and in the last",
+      first?.planned === 300 && last?.planned === 135,
+      `first=${JSON.stringify(first)} last=${JSON.stringify(last)}`,
+    );
+  } finally {
+    await migrationDb`delete from goals.goals where id = ${goal.goalId}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -1671,6 +1715,7 @@ async function runMain(): Promise<void> {
   );
 
   await runCommitmentUnitCheck();
+  await runSharedMonthsCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
