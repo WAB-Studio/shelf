@@ -13,7 +13,6 @@ import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
 import { planHrefFrom } from "@/lib/plan/return-to";
-import { amountOf } from "@/lib/plan/roadmap";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import { loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
@@ -169,7 +168,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const monthNames = t.raw("day.monthLong") as string[];
   const planEnd = goal.roadmap.end;
-  const planAmount = amountOf(monthKey, goal.plan);
+  // The row says the whole rhythm; only the month's figures carry its share.
+  const planAmount = goal.plan.rhythm;
   const monthOwn = goal.plan.rhythm !== null && goal.plan.budgets.some((budget) => budget.month === monthKey);
   const planItems = planMonthList(goal.plan, monthKey);
   const planDone = planItems.filter((item) => item.done).length;

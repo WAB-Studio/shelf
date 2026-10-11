@@ -446,6 +446,9 @@ test("a goal opened mid-month ends later than one opened on the 1st: this month 
     await expect(page.getByText(new RegExp(`^A este ritmo terminas el ${spoken(whole)}, `, "u"))).toBeVisible();
     await page.goto(`/metas/${opened.id}/plan`);
     await expect(page.getByText(new RegExp(`^A este ritmo terminas el ${spoken(late)}, `, "u"))).toBeVisible();
+    // The goal's plan row says the whole rhythm the person set, never this month's share.
+    await page.goto(`/metas/${opened.id}`);
+    await expect(page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 10 h al mes/u })).toBeVisible();
   } finally {
     await drop(db, personId, onFirst);
     await drop(db, personId, opened.id);

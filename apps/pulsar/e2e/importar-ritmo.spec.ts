@@ -15,15 +15,6 @@ const monthName = (by: number) =>
   `${new Date(Date.UTC(shift(by).year, Number(shift(by).month) - 1, 1)).toLocaleDateString("es", { month: "long", timeZone: "UTC" })} ${shift(by).year}`;
 const SOURCE_LINE = "ritmo: 12 h";
 
-// A goal opened today plans this month floor(rhythm × days left / days in month), spoken «6 h 46 min».
-function spokenShare(rhythm: number): string {
-  const today = todayInZone();
-  const length = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate();
-  const share = Math.floor((rhythm * (length - Number(today.slice(8, 10)) + 1)) / length);
-  const [h, min] = [Math.floor(share / 60), share % 60];
-  return min === 0 ? `${h} h` : h === 0 ? `${min} min` : `${h} h ${min} min`;
-}
-
 function shift(by: number) {
   const [year, month] = todayInZone().split("-").map(Number);
   const index = year * 12 + (month - 1) + by;
@@ -272,8 +263,8 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
             expect(task.planned_month).toBeNull();
           }
           await page.getByRole("link", { name: /IA aplicada/ }).first().click();
-          // Imported today: this month's line reads the share of 10 h its days from today take (RP-74).
-          await expect(page.getByRole("link", { name: new RegExp(`^A este ritmo terminas el .* Ritmo ${spokenShare(600)} al mes`) })).toBeVisible();
+          // Imported today: the line still says the whole rhythm, never the share of this month.
+          await expect(page.getByRole("link", { name: new RegExp(`^A este ritmo terminas el .* Ritmo 10 h al mes`) })).toBeVisible();
         } finally {
           await db`delete from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
         }
