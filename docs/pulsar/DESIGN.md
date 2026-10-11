@@ -1169,6 +1169,22 @@ Taken by the user the same evening. No board: they move a page break and name a 
 - **Taken by the orchestrator, no question:** tapping an error scrolls the page so the box and its line are on screen,
   also with the keyboard up (the approved «scrolls it into view» meant the screen, not only the box).
 
+## Decisions of 2026-10-11, after the train-8 critic
+
+Taken by the user the same day, on the critic's three questions and two from the workers. Boards still to draw: the
+«unit once» screens and the paper line.
+
+- **A goal's first and last month plan their share of the rhythm, by the goal's days, as the week does:** a goal from 16 sep to
+  7 oct with 10 h a month plans about 7 h 15 min, not 20 h. On the goal's card, `/meses`, `/exportar` and paper.
+- **«The unit once, at the end» reaches every figure followed by «de»:** «30 de 60 búsquedas» on `/metas`, the goal's card,
+  `/meses`, `/mes`, `/exportar` and the week line. A figure with no «de» keeps its unit: «45 búsquedas · sin monto».
+- **On paper, a time goal with no rhythm says its months' tasks on the left-out line:** «sin monto · 1 tarea» (RP-73 on paper).
+- **«sin monto» may wrap at 1024 on `/meses`** rather than push the row's chevron out: the «one line» rule gives way there.
+- **«hs» reads as hours,** in the template and in the rhythm's «otra» field: «8 hs».
+- Decided by the orchestrator, from rules already taken: a goal that has ended has no month «en curso», no «ESTE MES» and no
+  «faltan N días»; `/meses` does not ask a goal with a rhythm to plan a month; every month in the rhythm's preview carries its
+  year; one «mover el final» link for open and ended goals.
+
 ## Decisions of 2026-10-11, after the train-7 critic
 
 Taken by the user the same day, on the critic's questions and two of the planner's.
