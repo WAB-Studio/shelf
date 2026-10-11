@@ -303,7 +303,7 @@ test.describe("the error list is always what the box has now (board ImportarErro
     });
   });
 
-  test("a list read from an uploaded file does not change when typing in the box", async ({ person, browser, baseURL }) => {
+  test("a list read from an uploaded file is the box's list: the file's text is in the box and typing re-reads it, with no request", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await open(page);
       await boxOf(page).fill("Quiero correr más este año.");
@@ -311,16 +311,15 @@ test.describe("the error list is always what the box has now (board ImportarErro
       await page.getByLabel(messages.upload).setInputFiles({ name: "plan.md", mimeType: "text/markdown", buffer: Buffer.from(fileText) });
       const alert = alertOf(page);
       await expect(alert.getByText(count(3), { exact: true })).toBeVisible();
-      const before = await rowTexts(page);
-      expect(before).toHaveLength(3);
-      expect(before.join("|")).toContain(`«${MONTH_BAD}»`);
+      await expect(boxOf(page)).toHaveValue(fileText);
+      expect(await rowTexts(page)).toHaveLength(3);
 
       const hits = watchRoute(page);
-      for (const next of [FIXED, plan({ series: SERIES_OK }), ""]) {
-        await boxOf(page).fill(next);
-        await expect(alert.getByText(count(3), { exact: true })).toBeVisible();
-        expect(await rowTexts(page)).toEqual(before);
-      }
+      await boxOf(page).fill(plan({ series: SERIES_OK }));
+      await expect(alert.getByText(count(2), { exact: true })).toBeVisible();
+      await expect(rowsOf(alert)).toHaveCount(2);
+      await boxOf(page).fill(FIXED);
+      await expect(alertOf(page)).toHaveCount(0);
       expect(hits).toEqual([]);
     });
   });
