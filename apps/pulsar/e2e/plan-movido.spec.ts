@@ -172,7 +172,7 @@ for (const [width, kind] of [[390, "days"], [390, "weeks"], [1440, "days"], [144
       const hours = (minutes: number) => `${minutes / 60} h`;
       return (
         `${closedName[0].toUpperCase()}${closedName.slice(1)} cerró con ${hours(done)} de ${hours(rhythm)}. ` +
-        `Lo que faltó pasó a ${nextName}${tail} Ahora terminas el ${end.getUTCDate()} de ${MONTHS[end.getUTCMonth()]}.`
+        `Lo que faltó pasó a ${nextName}${tail} Ahora terminas el ${end.getUTCDate()} de ${MONTHS[end.getUTCMonth()]} de ${end.getUTCFullYear()}.`
       );
     };
     const dayCount = moved!.movedDays;
@@ -289,7 +289,7 @@ for (const width of [360, 390, 1440]) {
     const weekCount = Math.max(1, Math.round(weeks!.movedDays / 7));
     const endOf = (notice: NonNullable<typeof days>) => {
       const end = civilDateToDate(notice.end);
-      return `${end.getUTCDate()} de ${MONTHS[end.getUTCMonth()]}`;
+      return `${end.getUTCDate()} de ${MONTHS[end.getUTCMonth()]} de ${end.getUTCFullYear()}`;
     };
 
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });

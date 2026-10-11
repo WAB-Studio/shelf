@@ -557,6 +557,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         nextMonthName: monthNames[Number(notice.closedMonth.slice(5, 7)) % 12],
         endDay: end.getUTCDate(),
         endMonthName: monthNames[end.getUTCMonth()],
+        endYear: end.getUTCFullYear(),
       });
     }
   }
