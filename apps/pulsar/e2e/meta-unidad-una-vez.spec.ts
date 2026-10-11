@@ -36,7 +36,7 @@ async function monthText(page: import("@playwright/test").Page, goalId: string, 
   await page.setViewportSize({ width, height: 800 });
   await page.goto(`/metas/${goalId}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  return (await page.locator("main").first().innerText()).replace(/\s+/g, " ");
+  return ((await page.locator("main").first().textContent()) ?? "").replace(/\s+/g, " ");
 }
 
 for (const width of [360, 1280]) {
