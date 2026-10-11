@@ -179,3 +179,46 @@ test("measureByWeek: evidence on a week's last day counts in that week, not the 
     [7, 4],
   );
 });
+
+// RP-17: a finished goal has no current week, and its last week closes on
+// the goal's last day. `horizon` is the first day after the goal.
+const ENDED = {
+  openedOn: "2026-09-16", // Wednesday
+  horizon: "2026-10-08", // last day Wednesday 2026-10-07
+  unit: "min",
+  evidence: [],
+  phases: [],
+};
+
+test("measureByWeek: the last week of an ended goal closes on the goal's last day", () => {
+  const weeks = measureByWeek({ ...ENDED, today: "2026-10-11", facts: [] });
+  assert.equal(weeks[weeks.length - 1].endsOn, "2026-10-07");
+});
+
+test("measureByWeek: no week is current once the goal has ended", () => {
+  const weeks = measureByWeek({ ...ENDED, today: "2026-10-11", facts: [] });
+  assert.equal(weeks[weeks.length - 1].current, false);
+  assert.equal(weeks.some((week) => week.current), false);
+});
+
+test("measureByWeek: the goal's last day still reads as the current week", () => {
+  const weeks = measureByWeek({ ...ENDED, today: "2026-10-07", facts: [] });
+  const last = weeks[weeks.length - 1];
+  assert.equal(last.current, true);
+  assert.equal(last.endsOn, "2026-10-07");
+});
+
+test("measureByWeek: an earlier week of an ended goal keeps its Sunday", () => {
+  const weeks = measureByWeek({ ...ENDED, today: "2026-10-11", facts: [] });
+  assert.equal(weeks[0].endsOn, "2026-09-20");
+  assert.equal(weeks[1].endsOn, "2026-09-27");
+});
+
+test("measureByWeek: a fact after the goal's last day adds nothing to the last week", () => {
+  const weeks = measureByWeek({
+    ...ENDED,
+    today: "2026-10-11",
+    facts: [fact("2026-10-07", 4, "min"), fact("2026-10-09", 30, "min")],
+  });
+  assert.equal(weeks[weeks.length - 1].total, 4);
+});
