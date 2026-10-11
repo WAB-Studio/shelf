@@ -542,8 +542,10 @@ function GoalPart({
                 nowrapLabel
                 stackInCard
                 wrapDetail
-                // «de 60 búsquedas» may drop its unit or the whole note a line; a time note keeps its line.
+                // «de 60 búsquedas» may break at a word; a time note never splits: it stays
+                // beside the label when it fits, else drops whole under it.
                 wrapNote={!timed}
+                wholeNote={timed}
                 current={current === -1 ? undefined : current}
                 afterPrintOnly
                 after={
