@@ -64,7 +64,7 @@
 .unit {
   font-size: var(--pulsar-text-unit-size);
   font-weight: 400;
-  color: var(--pulsar-quiet);
+  color: var(--pulsar-muted);
 }
 
 /* The dates under «semana N»: two lines in one label, 3px apart. */
@@ -247,7 +247,7 @@
   margin-inline-start: 8px;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--pulsar-quiet);
+  color: var(--pulsar-muted);
 }
 
 .labelWidth {

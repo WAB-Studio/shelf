@@ -46,5 +46,5 @@
 .unit {
   font-size: var(--pulsar-text-unit-size);
   font-weight: 400;
-  color: var(--pulsar-quiet);
+  color: var(--pulsar-muted);
 }
