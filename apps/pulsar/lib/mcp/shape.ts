@@ -3,7 +3,7 @@ import { createTranslator } from "next-intl";
 import type { Cadence, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import type { Report } from "@/lib/export/report";
 import { monthOfTask } from "@/lib/plan/carry";
-import type { MonthLine } from "@/lib/plan/months";
+import { settledMonths, type MonthLine } from "@/lib/plan/months";
 import type { PlanItem, PlanTask, Roadmap } from "@/lib/plan/roadmap";
 import { planShare } from "@/lib/plan/roadmap-read";
 import { civilDateInZone } from "@/lib/zone";
@@ -205,7 +205,7 @@ export function shapeGoal(view: GoalView) {
     rhythm: amountOrNull(view.rhythm, unit),
     // The day the plan's last task fills, null while it cannot say.
     end: view.roadmap.end,
-    months: view.months.map((row) => {
+    months: settledMonths(view.months, view.endedOn !== null).map((row) => {
       // The screen reads a share for a finished month alone.
       const share = row.past ? planShare(view.plan, firstOf(row.month)) : null;
       return {
