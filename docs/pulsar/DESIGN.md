@@ -1169,6 +1169,42 @@ Taken by the user the same evening. No board: they move a page break and name a 
 - **Taken by the orchestrator, no question:** tapping an error scrolls the page so the box and its line are on screen,
   also with the keyboard up (the approved «scrolls it into view» meant the screen, not only the box).
 
+## Decisions of 2026-10-11, after the train-7 critic
+
+Taken by the user the same day, on the critic's questions and two of the planner's.
+
+- **Every figure's unit goes through the `units.words` catalogue on screen**, as «mide en» already did: «0 búsquedas de 60
+  búsquedas», never «searches». On `/meses`, the month, the weekly review, `/exportar` and `/mes`.
+- **A goal's last week ends on its last day and is not «en curso» once the goal has ended:** «5–7 oct», on the weekly review and
+  the report alike.
+- **The week line's planned figure takes its share of the rhythm** when the month has no amount of its own, as it does of a
+  month amount: «Esta semana: 0 min de 2 h 42 min.» (RP-58 as written.)
+- **A `.md` read with template errors puts its text into the box.** The live list and a row's tap work as for pasted text; the
+  file's name moves to a note. This revokes «A list read from a file does not re-read» of 2026-10-10.
+- **«Always the year» reaches the import's review** (each task's month, the start date; the horizon is said once) **and the
+  weekly review's ranges** («5–11 oct 2026»).
+- **When a text with a list stops being a template, the box says so** and says the plan will be read by the AI, before «Leer el
+  plan». A new phrase, on a board.
+- **«Por mes» counts the tasks of a goal measured in time with no rhythm** (RP-69 retired, RP-73). With a rhythm, the plan
+  still counts them.
+- **A goal's first rhythm keeps returning its fixed tasks to the plan** (RP-50 stands). The rhythm's preview says the end the
+  click really leaves.
+
+- **Boards approved 2026-10-11:** `MesesFuturoYTareas`, `RevisionConAño`, `ImportarArchivoYAviso`, `ImportarRevisionConAño`.
+  - A row of «Por mes» in a unit other than time says its unit once, at the end: «0 de 60 búsquedas», «20 de 40 km».
+  - A future month with an amount says «planeado» and the amount alone, a link while the goal is open: no «0 km», no «de».
+  - A row that names its tasks breaks its label in two lines with no dangling «·»: «en curso» over «2 tareas». The km goal's
+    «planeado · 1 tarea» follows.
+  - The weekly review's range sits on one line under the week («5–11 oct 2026»); a range across a year pushes its figure right
+    rather than wrap every row.
+  - The import's review: the goal's line says «Desde el 11 de octubre de 2026»; the end date lives in the horizon's row alone.
+    Months read «octubre 2026», phases carry the year at both ends.
+  - Words: «Leído de plan.md. Corrige aquí y vuelve a leer.» under the box while a file's list stands; «Ya no es la plantilla: la
+    primera línea no empieza por «pulsar ·». «Leer el plan» lo mandará a la IA.» With the AI closed there is no second notice:
+    the screen cannot know before the press, and «La lectura con IA no está disponible ahora…» answers it.
+  - Not drawn: dark faces (the token table says what dark is); the import's review at 1024 with two goals, broken today
+    (columns at ~80 px, text broken letter by letter) — 820 lays it out as at 1280.
+
 ## Decisions of 2026-10-10, after the train-6 findings
 
 Taken by the user the same evening, on six questions. Boards `MesesConAño` and `ImportarErroresVivos` were drawn and approved before their modules.
