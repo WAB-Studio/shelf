@@ -248,6 +248,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         {t("day.allEnded.body", {
           goal: lastEnded.name,
           date: dateLabel(shiftCivilDay(lastEnded.horizon, -1), t),
+          year: shiftCivilDay(lastEnded.horizon, -1).slice(0, 4),
         })}
       </Text>
       <Button asChild block>

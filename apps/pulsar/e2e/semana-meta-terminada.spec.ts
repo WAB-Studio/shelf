@@ -27,8 +27,10 @@ const NAME_DRAWS = 1;
 
 // ICU's Spanish, never the catalogue's list the screen reads.
 function dayWords(day: string): string {
-  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(civilDateToDate(day));
-  return `${weekday} ${Number(day.slice(8, 10))}`;
+  const parts = new Intl.DateTimeFormat("es", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+    .formatToParts(civilDateToDate(day));
+  const part = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${part("weekday")} ${part("day")} de ${part("month")} de ${part("year")}`;
 }
 
 async function seedGoal(db: postgres.Sql, personId: string, name: string, horizon: string) {

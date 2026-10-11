@@ -50,11 +50,12 @@ test("an ended goal reads «terminó el» and yesterday, offers both acts and ne
       weekday: "long",
       day: "numeric",
       month: "long",
+      year: "numeric",
       timeZone: "UTC",
     }).formatToParts(new Date(`${dayBefore(todayInZone())}T12:00:00Z`));
     const part = (type: string) => yesterday.find((p) => p.type === type)!.value;
     await expect(
-      page.getByText(`terminó el ${part("weekday")} ${part("day")} de ${part("month")}`, { exact: true }),
+      page.getByText(`terminó el ${part("weekday")} ${part("day")} de ${part("month")} de ${part("year")}`, { exact: true }),
     ).toBeVisible();
     await expect(page.getByText(/semanas? · hasta el /)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "mover el final", exact: true })).toBeVisible();

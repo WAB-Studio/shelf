@@ -25,7 +25,7 @@
     "rename": "Renombrar",
     "archive": "Archivar esta meta",
     "archiveShort": "Archivar",
-    "endedOn": "terminó el {weekday} {day} de {month}",
+    "endedOn": "terminó el {weekday} {day} de {month} de {year}",
     "endHeading": "el final",
     "reopen": "Reabrir",
     "reviewLink": "Ver por semana",

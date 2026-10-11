@@ -69,13 +69,13 @@ test("one open, one ended and one archived goal list each under its heading, in 
     expect(at(ended)).toBeLessThan(at("Archivadas"));
     expect(at("Archivadas")).toBeLessThan(at(archived));
     await expect(archivadas).toBeVisible();
-    const endedRow = page.getByRole("link", { name: `${ended} terminó el 13 sep`, exact: true });
+    const endedRow = page.getByRole("link", { name: `${ended} terminó el 13 sep 2026`, exact: true });
     await expect(endedRow).toBeVisible();
 
     // The annotation is the row's second line, under the name and inside the row.
     const rowBox = await endedRow.boundingBox();
     const nameBox = await endedRow.getByText(ended, { exact: true }).boundingBox();
-    const noteBox = await endedRow.getByText("terminó el 13 sep").boundingBox();
+    const noteBox = await endedRow.getByText("terminó el 13 sep 2026").boundingBox();
     expect(rowBox && nameBox && noteBox).toBeTruthy();
     expect(noteBox!.y).toBeGreaterThanOrEqual(nameBox!.y + nameBox!.height);
     expect(noteBox!.y + noteBox!.height).toBeLessThanOrEqual(rowBox!.y + rowBox!.height);

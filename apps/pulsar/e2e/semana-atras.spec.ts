@@ -126,7 +126,7 @@ test("‹ four times lands on the week holding the fact, done and read-only; ›
     // The goal archived two weeks ago governed this week: it stays, dated.
     await expect(
       page
-        .getByText(new RegExp(`^${ARCHIVED_GOAL} · semana \\d+ de \\d+ · archivada el \\d+ \\w+$`, "i"))
+        .getByText(new RegExp(`^${ARCHIVED_GOAL} · semana \\d+ de \\d+ · archivada el \\d+ \\w+ \\d{4}$`, "i"))
         .locator("visible=true"),
     ).toHaveCount(1);
     await expect(page.getByRole("link", { name: /^Abrir el/ })).toHaveCount(0);

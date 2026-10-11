@@ -90,8 +90,8 @@ for (const width of [360, 390, 1280, 1440]) {
       await expect(addAnother).toHaveAttribute("href", "/metas/nueva");
       await expect(group.getByRole("link", { name: "Abrir otra meta" })).toHaveCount(0);
 
-      await expect(page.getByRole("link", { name: `${endedName} terminó el 13 sep` })).toBeVisible();
-      await expect(page.getByRole("link", { name: new RegExp(`^${archivedName} archivada el \\d+ \\w+$`) })).toBeVisible();
+      await expect(page.getByRole("link", { name: `${endedName} terminó el 13 sep 2026` })).toBeVisible();
+      await expect(page.getByRole("link", { name: new RegExp(`^${archivedName} archivada el \\d+ \\w+ \\d{4}$`) })).toBeVisible();
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
