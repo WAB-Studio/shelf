@@ -8,6 +8,7 @@ import { setRhythm } from "@/app/actions/roadmap";
 import { Button, Chip, ChipRow, Field, SheetActions, Text } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import { daysBetween } from "@/lib/day/weeks";
+import { releasedPlan } from "@/lib/plan/first-rhythm";
 import { fillPlan, type PlanInput } from "@/lib/plan/roadmap";
 import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
@@ -68,7 +69,9 @@ export function RhythmForm({
   }
 
   const checked = setRhythmSchema.safeParse({ goalId, amount: amount ?? Number.NaN });
-  const filled = checked.success ? fillPlan({ ...plan, rhythm: amount }) : null;
+  // The first rhythm sends the fixed tasks back, so the end is read from what is left.
+  const base = sheet ? plan : releasedPlan(plan).plan;
+  const filled = checked.success ? fillPlan({ ...base, rhythm: amount }) : null;
   const end = filled?.end ?? null;
   // A task split across months sits in each of them: count it once.
   const hoursOf = new Map<string, number>();
@@ -96,7 +99,7 @@ export function RhythmForm({
       hint = t("roadmap.sinRitmo.preview", {
         hours: formatQuantity(amount, unit, words),
         total: formatQuantity(total, unit, words),
-        month: monthName(monthOf(end), String(new Date().getFullYear())),
+        month: monthName(monthOf(end), plan.today.slice(0, 4)),
       });
     }
   }
