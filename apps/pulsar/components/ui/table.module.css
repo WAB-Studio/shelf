@@ -111,12 +111,6 @@
   white-space: normal;
 }
 
-@media (min-width: 1024px) and (max-width: 1279px) {
-  .narrow.wrapNoteInRail .stackNote {
-    white-space: normal;
-  }
-}
-
 /* Off `narrow`, a note too long for what the label and figure leave drops under
    them whole, on its own line at the end; one that fits beside them in two lines
    stays there. Linked rows keep their note beside the chevron. */
@@ -137,6 +131,26 @@
 .wholeNote .stackRow > .stackNote {
   flex: 0 1 auto;
   white-space: nowrap;
+}
+
+.narrow.wholeNote .rowLink {
+  position: relative;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  padding-inline-end: 32px;
+}
+
+.narrow.wholeNote .rowLink > .stackNote {
+  flex: 0 1 auto;
+}
+
+/* The chevron rides the row's end, centred, so a note dropped under the month
+   never carries it out of the row. */
+.narrow.wholeNote .chevron {
+  position: absolute;
+  inset-inline-end: 4px;
+  inset-block-start: 50%;
+  translate: 0 -50%;
 }
 
 .wrapDetail .detail,

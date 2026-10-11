@@ -114,9 +114,9 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
   return (
     <Table
       narrow
-      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») keeps its line but at 1024.
+      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») never splits and drops whole under its month when it does not fit.
       wrapNote={!timed}
-      wrapNoteInRail={timed}
+      wholeNote={timed}
       caption={caption}
       columns={[
         t("month.months.columns.month"),
