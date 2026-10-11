@@ -19,7 +19,6 @@ import { estimateFacts, type Task } from "@/lib/plan/carry";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planMoved, type PlanNotice } from "@/lib/plan/roadmap-read";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
-import { screenPlanned } from "@/lib/plan/screen-planned";
 import { phasePositions } from "@/lib/day/row-phrases";
 import { dayBefore } from "@/lib/day/weeks";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
@@ -500,14 +499,16 @@ function estimateFactsOf(
 // Every goal with a measure: this month's amount, what was reached in it and
 // whether it runs under pace (RP-28, RP-29), over the month's facts by their
 // own `goal_id` and evidence in the goal's unit.
+export type DayMonthLine = MonthLine & { ownBudget: boolean };
+
 function monthLineOf(
   goals: GoalRow[],
   row: GoalsQueryRow,
   evidenceOutcome: EvidenceOutcome,
   day: string,
-): Record<string, MonthLine> {
+): Record<string, DayMonthLine> {
   const month = monthOf(day);
-  const lines: Record<string, MonthLine> = {};
+  const lines: Record<string, DayMonthLine> = {};
   for (const goal of goals) {
     const unit = goal.measure_unit;
     if (!unit) continue;
@@ -533,9 +534,9 @@ function monthLineOf(
       openedOn: civilDateInZone(new Date(goal.created_at)),
       horizon: goal.horizon,
     });
-    // A share of the rhythm that rounds to 0 reads on Hoy as a month with no
-    // amount; a budget of 0 the person typed stays. The goal keeps its 0.
-    lines[goal.id] = { ...line, planned: screenPlanned(line.planned, budget !== undefined) };
+    // The 0 stays for the AI; Hoy reads a share that rounds to 0 as a month
+    // with no amount, unless the 0 is a budget the person typed.
+    lines[goal.id] = { ...line, ownBudget: budget !== undefined };
   }
   return lines;
 }
@@ -710,7 +711,7 @@ export async function loadDay(day: string): Promise<{
   // `day` itself, most recent first: what Hoy's «terminó ayer» line names.
   endedThisWeek: EndedGoal[];
   weekMeasure: Record<string, number>;
-  monthLine: Record<string, MonthLine>;
+  monthLine: Record<string, DayMonthLine>;
   // Each open goal's next undone leaf of the month, carried first; read on
   // today alone, `{}` on any other day.
   monthTask: Record<string, MonthTask | null>;

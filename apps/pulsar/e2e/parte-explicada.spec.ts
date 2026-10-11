@@ -254,3 +254,62 @@ test("360 · a share that rounds to 0 draws no line: there is no figure to expla
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });
+
+// A token as the browser computes it, read off a probe so it is the colour a
+// `Text` of that tone resolves to and not a hex nobody parsed.
+const tokenColor = (page: Page, token: string) =>
+  page.evaluate((name) => {
+    const probe = document.body.appendChild(document.createElement("span"));
+    probe.style.color = `var(${name})`;
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    return resolved;
+  }, token);
+
+test("360 · the part line on the goal's month block reads muted: unlike the ink title, like a muted line and the muted token", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  test.skip(dayOfMonth === 1, "opened on the 1st the month is whole: no share to explain");
+  const goalId = await seed(db, person, { name: "Parte tenue meta", openedOn: today, horizon: horizonFar });
+  const { context, page } = await open(browser, baseURL!, person, 360, `/metas/${goalId}`);
+  try {
+    const line = visible(page, firstLine, true);
+    await expect(line).toHaveCount(1);
+    const lineColor = await color(line);
+    const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
+    expect(lineColor).not.toBe(await color(ink));
+    expect(lineColor).not.toBe(await tokenColor(page, "--pulsar-ink"));
+    const reference = dayOfMonth >= 20 ? visible(page, /^en total, desde el/) : visible(page, /^(llevas \d+ %|día \d+ ·)/);
+    expect(lineColor).toBe(await color(reference));
+    expect(lineColor).toBe(await tokenColor(page, "--pulsar-muted"));
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
+test("360 · the part line in «Este mes» of the month's page reads muted: unlike the ink title, like the muted token", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  test.skip(dayOfMonth === 1, "opened on the 1st the month is whole: no share to explain");
+  const goalId = await seed(db, person, { name: "Parte tenue mes", openedOn: today, horizon: horizonFar });
+  const { context, page } = await open(browser, baseURL!, person, 360, `/metas/${goalId}/meses/${monthOf(today).slice(0, 7)}`);
+  try {
+    const line = visible(page, firstLine, true);
+    await expect(line).toHaveCount(1);
+    const lineColor = await color(line);
+    const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
+    expect(lineColor).not.toBe(await color(ink));
+    expect(lineColor).not.toBe(await tokenColor(page, "--pulsar-ink"));
+    expect(lineColor).toBe(await tokenColor(page, "--pulsar-muted"));
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});

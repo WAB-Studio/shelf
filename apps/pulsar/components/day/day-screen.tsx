@@ -19,6 +19,8 @@ import { EmptyDay } from "./empty-day";
 import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
 import type { SourceKey } from "@/i18n/translator";
+import { screenPlanned } from "@/lib/plan/screen-planned";
+import type { DayMonthLine } from "@/lib/queries/day";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { NewOneOff } from "./new-one-off";
 import { MonthTaskLine } from "./month-task-line";
@@ -38,6 +40,11 @@ export function shiftCivilDay(day: string, days: number): string {
 // day before it, and its own screen draws no step back from it.
 export function oldestPastDay(today: string): string {
   return shiftCivilDay(today, -PAST_DAY_LIMIT);
+}
+
+// RP-76: the query keeps the 0; the screen reads it as a month with no amount.
+function screenPlannedOf(line: DayMonthLine | undefined): number | null {
+  return line === undefined ? null : screenPlanned(line.planned, line.ownBudget);
 }
 
 // Monday first, as `day.weekdayLong` lists them; `getUTCDay` is 0 for Sunday.
@@ -387,7 +394,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   // tasks draws its line measured or not.
   const monthGoals = goals.filter(
     (goal) =>
-      (goal.measureUnit !== null && loaded.monthLine[goal.id]?.planned != null) ||
+      (goal.measureUnit !== null && screenPlannedOf(loaded.monthLine[goal.id]) !== null) ||
       loaded.monthTaskCounts[goal.id] !== undefined,
   );
 
@@ -395,7 +402,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   // «de» planned, and from the 20th the pace in ink, never an alarm.
   const monthLines = (goal: (typeof goals)[number]) => {
     const line = loaded.monthLine[goal.id];
-    const planned = line?.planned ?? null;
+    const planned = screenPlannedOf(line);
     const counts = loaded.monthTaskCounts[goal.id];
     const task = loaded.monthTask[goal.id];
     return (
