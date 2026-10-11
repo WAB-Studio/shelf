@@ -24,7 +24,8 @@ export type DismissPlanNoticeResult = { ok: true } | { ok: false; error: Message
 /**
  * Sets or changes a goal's rhythm (RP-52) in one statement. The CTEs read one
  * snapshot, so `g.rhythm` is the old value: it fills every closed month of the
- * span that has no amount (the plan those months were lived against), and
+ * span that has no amount with its share of it (`plannedOf`, RP-74: the plan
+ * those months were lived against), the integer division its floor, and
  * only the first rhythm (old null) sends the goal's undone top-level plan
  * tasks back to the plan. A task is done when it has a fact, or when it has
  * children and each of them has one. The guard trigger already leaves a
@@ -68,10 +69,11 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
       ),
       ins as (
         insert into month_budgets (user_id, goal_id, month, amount)
-        select ${person.id}, ok.id, m::date, ok.rhythm
+        select ${person.id}, ok.id, d.first,
+               ok.rhythm * (least(ok.horizon, d.next) - greatest(ok.opened, d.first)) / (d.next - d.first)
         from ok, generate_series(
           date_trunc('month', ok.opened), date_trunc('month', ${today}::date) - interval '1 month', interval '1 month'
-        ) m
+        ) m, lateral (select m::date as first, (m + interval '1 month')::date as next) d
         where ok.rhythm is not null
         on conflict (goal_id, month) do nothing
         returning 1

@@ -199,9 +199,11 @@ before(async () => {
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
     values (${owner.user_id}, ${cId}, 'RP-43 fixture: arrastrada', ${`${lastMonth}-01`})`;
 
-  // F plans at 10 a month: its 15-unit task splits, its 4-unit task waits for next month.
+  // F plans at 10 a month: its 15-unit task splits, its 4-unit task waits for next month. Opened on
+  // the 1st, Bogotá's midnight, so this month plans the whole 10 (RP-74) whatever the run date.
   const f = await goal("RP-50 fixture: F", "minutos");
   fId = f.goalId;
+  await sql`update goals.goals set created_at = ${`${monthStart}T00:00:00-05:00`} where id = ${fId}`;
   const rhythm = await (await import("@/app/actions/roadmap")).setRhythm({ goalId: fId, amount: 10 });
   if (!rhythm.ok) throw new Error(`setRhythm: ${rhythm.error}`);
   await sql`
@@ -346,9 +348,7 @@ test("loadMonthAcross: the same four statements with one goal", async () => {
 test("loadMonthAcross: a split task lists with its part, and the line carries the rhythm", async () => {
   const month = await loadMonthAcross(today);
   const f = month.goals.find((goal) => goal.id === fId)!;
-  // F opened today: its month plans the share of 10 its days from today take (RP-74).
-  const length = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate();
-  assert.equal(f.line?.planned, Math.floor((10 * (length - Number(today.slice(8, 10)) + 1)) / length));
+  assert.equal(f.line?.planned, 10);
   assert.deepEqual(
     f.items.map((item) => [item.task.name, item.part, item.hours, item.from, item.to, item.fixed]),
     [["RP-50 fixture: partida", 10, 15, null, nextMonthOf(monthStart), false]],

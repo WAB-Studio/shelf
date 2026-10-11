@@ -170,7 +170,9 @@ test("loadReport: a task with no estimate says no part, beside one cut by the mo
   if (!made.ok) throw new Error(`createGoal: ${made.error}`);
   goalIds.push(made.goalId);
   const goalId = made.goalId;
-  await sql`update goals.goals set measure_unit = 'minutos', measure_name = 'Tiempo', rhythm = 20 where id = ${goalId}`;
+  // Opened on the 1st, Bogotá's midnight: this month plans the whole 20 (RP-74) whatever the run date.
+  await sql`update goals.goals set measure_unit = 'minutos', measure_name = 'Tiempo', rhythm = 20,
+    created_at = ${`${today.slice(0, 7)}-01T00:00:00-05:00`} where id = ${goalId}`;
   async function task(name: string, position: number, extra: { parent?: string; estimate?: number; month?: boolean } = {}) {
     const [row] = await sql<{ id: string }[]>`
       insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate, in_plan, planned_month, position)
