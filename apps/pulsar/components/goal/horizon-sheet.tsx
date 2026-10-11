@@ -23,8 +23,8 @@ export type MoveHorizonActionProps = {
   horizon: string;
   weeks: number;
   phases: { name: string; endsOn: string | null }[];
-  // An ended goal offers the move as its main act.
-  solid?: boolean;
+  // An ended goal opens the sheet on the count that ends this Sunday.
+  reopening?: boolean;
 };
 
 /**
@@ -40,7 +40,7 @@ export function MoveHorizonAction({
   horizon: storedHorizon,
   weeks,
   phases,
-  solid = false,
+  reopening = false,
 }: MoveHorizonActionProps) {
   const t = useTranslations();
   const router = useRouter();
@@ -60,7 +60,7 @@ export function MoveHorizonAction({
   const typed = weeksSchema.safeParse(value);
   // The opening count stands for the stored horizon itself, never for the
   // week's edge that count would write.
-  const untouched = !solid && typed.success && typed.data === weeks;
+  const untouched = !reopening && typed.success && typed.data === weeks;
 
   function refusalText(key: MessageKey, count: number): string {
     return t(key, {
@@ -132,15 +132,9 @@ export function MoveHorizonAction({
 
   return (
     <>
-      {solid ? (
-        <Button block onClick={openSheet}>
-          {t("goal.detail.moveHorizonEnded")}
-        </Button>
-      ) : (
-        <Button variant="ghost" tone="accent" tap={44} onClick={openSheet}>
-          {t("goal.detail.moveHorizon")}
-        </Button>
-      )}
+      <Button variant="ghost" tone="accent" tap={44} onClick={openSheet}>
+        {t("goal.detail.moveHorizon")}
+      </Button>
       <Sheet open={open} onOpenChange={setOpen} label={name} title={t("goal.horizon.title")}>
         <Field
           label={t("goal.horizon.weeksLabel", { date: civilDateLabel(openedOn) })}

@@ -199,14 +199,14 @@ test("g10: a month page sums the parts its tasks hold, not their whole size", as
   }
 });
 
-test("g02: the plan's end on the goal carries its year only when it is not this one", async ({ page, db, personId }) => {
+test("g02: the plan's end on the goal always carries its year, this one included", async ({ page, db, personId }) => {
   const soon = await seedGoal(db, personId, 480, farHorizon);
   await seedTasks(db, personId, soon, [{ name: "Corta", estimate: 60 }]);
   const late = await seedGoal(db, personId, 60, farHorizon);
   await seedTasks(db, personId, late, [{ name: "Larga", estimate: 840 }]);
   try {
     await page.goto(`/metas/${soon}`);
-    await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+$/u)).toBeVisible();
+    await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}$/u)).toBeVisible();
     await page.goto(`/metas/${late}`);
     await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}$/u)).toBeVisible();
   } finally {

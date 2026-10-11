@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
 import { amountOf } from "@/lib/plan/roadmap";
-import { nextMonth } from "@/lib/plan/months";
+import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
@@ -30,7 +30,8 @@ function yearLabel(month: string): string {
  * The phone's stack is drawn at every width: the list lives in a 320px column
  * from 1024. A month's amount is set from its own page, never from the row.
  */
-export async function MonthsList({ goal, open }: { goal: GoalView; open: string }) {
+export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open: string }) {
+  const goal = { ...loaded, months: settledMonths(loaded.months, loaded.endedOn !== null) };
   const t = await getTranslations();
   const hrefOf = (month: string) => `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
   const caption = t("month.months.caption", { count: goal.months.length });
@@ -148,13 +149,14 @@ export async function MonthsScreen({
   planning: string | null;
   returnPath: string;
 }) {
-  const goal = await loadGoal(goalId);
-  if (!goal) notFound();
+  const loaded = await loadGoal(goalId);
+  if (!loaded) notFound();
+  const goal = { ...loaded, months: settledMonths(loaded.months, loaded.endedOn !== null) };
 
   const t = await getTranslations();
   const open = goal.archivedAt === null && goal.endedOn === null;
   const target = goal.months.find((row) => row.current) ?? goal.months[0];
-  const empty = Boolean(goal.measureUnit && goal.measureName) && goal.budgets.length === 0;
+  const empty = Boolean(goal.measureUnit && goal.measureName) && goal.budgets.length === 0 && goal.rhythm === null;
   const planHref = (month: string) => `/metas/${goal.id}/meses?planear=${month.slice(0, 7)}`;
 
   const unit = goal.measureUnit;

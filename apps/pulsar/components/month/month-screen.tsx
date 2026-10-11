@@ -8,7 +8,7 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
 import type { Task } from "@/lib/plan/carry";
 import type { PlanItem } from "@/lib/plan/roadmap";
-import { nextMonth } from "@/lib/plan/months";
+import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
@@ -272,7 +272,7 @@ export async function MonthDetail({
         </Section>
       ) : null}
 
-      {own.length > 0 || (empty && (!open || closed)) ? (
+      {own.length > 0 ? (
         <Section
           as="div"
           label={
@@ -308,8 +308,9 @@ export async function MonthDetail({
  * month open.
  */
 export async function MonthScreen({ goalId, month }: { goalId: string; month: string }) {
-  const goal = await loadGoal(goalId);
-  if (!goal) notFound();
+  const loaded = await loadGoal(goalId);
+  if (!loaded) notFound();
+  const goal = { ...loaded, months: settledMonths(loaded.months, loaded.endedOn !== null) };
   const mes = `${month}-01`;
   if (!goal.months.some((entry) => entry.month === mes)) notFound();
 
