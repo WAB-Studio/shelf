@@ -1195,6 +1195,13 @@ Taken by the user the same day, on the critic's three questions and two from the
 - **A first-month share that rounds to 0 draws no figure on Hoy** (taken by the user the same day): a 20 km rhythm opened on
   the 31st reads on Hoy as a month with no amount, never «ESTE MES 0 de 0 kilómetros». The goal, «Por mes», `/exportar` and
   paper keep the 0, as RP-74 rounds it.
+- **After the train-9 critic, taken by the user the same day:**
+  - The goal's card and the month page say why a first or last month plans a share, in one muted line:
+    «desde el 7: 8 h 03 min de tus 10 h». Not on `/metas`, Hoy or the other readers. A new phrase: on a board first.
+  - On `/meses` a time note that does not fit beside its month drops whole under it, as on paper (`wholeNote`). It never
+    splits («de / 8 h / 03 / min») and never pushes the chevron out of its row, at any width.
+  - Every screen reads a share that rounds to 0 as «sin monto», never «0 min de 0 min»; only paper keeps the 0
+    (RP-76, retiring RP-74). This widens the Hoy-only rule above.
 - Decided by the orchestrator, from rules already taken: a goal that has ended has no month «en curso», no «ESTE MES» and no
   «faltan N días»; `/meses` does not ask a goal with a rhythm to plan a month; every month in the rhythm's preview carries its
   year; one «mover el final» link for open and ended goals.
