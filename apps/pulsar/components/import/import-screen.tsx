@@ -6,6 +6,7 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { readSource, saveDraft } from "@/lib/import/draft-store";
 import type { ImportDraft } from "@/lib/import/draft";
+import { parseTemplate } from "@/lib/import/template";
 import { Button, CodeBlock, FilePick, Flex, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
@@ -142,13 +143,22 @@ export function ImportScreen() {
   const [showTemplate, setShowTemplate] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const listed = failure?.kind === "templateLine";
+  // A file's list is its own text, which the box never held; only the box's list is re-read as it changes.
+  const [fromFile, setFromFile] = useState(false);
+  const shown: Failure | null = (() => {
+    if (failure?.kind !== "templateLine" || fromFile) return failure;
+    const r = parseTemplate(text);
+    if (!r.matched || !("error" in r)) return null;
+    const written = text.split("\n");
+    return { kind: "templateLine", cut: r.cut, lines: r.errors.map((e) => ({ ...e, text: written[e.line - 1] ?? "" })) };
+  })();
+  const listed = shown?.kind === "templateLine";
   // A reading with errors hands focus to the list; the key is the failure, which is new on every reading.
   useEffect(() => {
     if (failure?.kind === "templateLine") alertBox.current?.focus();
   }, [failure]);
 
-  const placed = failure ? placement(failure) : null;
+  const placed = shown ? placement(shown) : null;
   // The key and the cap shut the model; the template still reads.
   const modelShut =
     failure?.kind === "key" && (failure.key === "import.errors.noKey" || failure.key === "import.errors.cap");
@@ -164,6 +174,7 @@ export function ImportScreen() {
   async function send(form: FormData, source: string, saved: string | null, fileName: string | null = null) {
     setBusy(true);
     setFailure(null);
+    setFromFile(fileName !== null);
     try {
       const response = await fetch("/importar/leer", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as {
@@ -236,19 +247,19 @@ export function ImportScreen() {
       .catch(() => setCopied(false));
   }
 
-  const notice = failure ? (
-    failure.kind === "templateLine" ? (
+  const notice = shown ? (
+    shown.kind === "templateLine" ? (
       <Notice
         ref={alertBox}
         focusable
-        title={t("import.errors.templateCount", { count: failure.lines.length })}
-        aside={failure.cut ? t("import.errors.templateCut") : undefined}
+        title={t("import.errors.templateCount", { count: shown.lines.length })}
+        aside={shown.cut ? t("import.errors.templateCut") : undefined}
         current={pressed}
         onRow={(index) => {
           setPressed(index);
-          if (box.current) selectLine(box.current, failure.lines[index].line);
+          if (box.current) selectLine(box.current, shown.lines[index].line);
         }}
-        rows={failure.lines.map((e) =>
+        rows={shown.lines.map((e) =>
           t("import.errors.templateLine", {
             line: e.line,
             text: e.text,
@@ -257,7 +268,7 @@ export function ImportScreen() {
         )}
       />
     ) : (
-      <Notice>{t(failure.key, failure.values)}</Notice>
+      <Notice>{t(shown.key, shown.values)}</Notice>
     )
   ) : null;
 
@@ -279,7 +290,10 @@ export function ImportScreen() {
             value={text}
             disabled={busy}
             invalid={listed}
-            onChange={(event) => setTyped(event.target.value)}
+            onChange={(event) => {
+              setTyped(event.target.value);
+              setPressed(null);
+            }}
           />
 
           <FilePick
