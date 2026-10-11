@@ -230,6 +230,34 @@ test("/mes says the unit once: «0 de 67 búsquedas», «15 de 40 km»; no amoun
   }
 });
 
+test("the month page of a time goal says «2 h de 8 h», the time keeps «h», never «2 de 8 h»", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Inglés", unit: MINUTES, budgets: [[thisMonth, 480]], fact: [today, 120] });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/meses/${seg(thisMonth)}`, 360);
+  try {
+    const block = await amountBlock(page, "este mes");
+    expect(block).toContain("2 h de 8 h");
+    expect(block).not.toMatch(/\b2 de 8 h/);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("/mes says «2 h de 8 h» for a time goal, the time keeps «h», never «2 de 8 h»", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Inglés", unit: MINUTES, budgets: [[thisMonth, 480]], fact: [today, 120] });
+  const { page, close } = await visit(browser, baseURL, person, "/mes", 360);
+  try {
+    const section = page.locator("section", { hasText: "Inglés" }).first();
+    await expect(section).toContainText(/2\s*h\s*de\s*8\s*h/);
+    const text = flat(await section.innerText());
+    expect(text).toMatch(/2 h de 8 h/);
+    expect(text).not.toMatch(/\b2 de 8 h/);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
 // ---- a month that has not begun ---------------------------------------------------------------------------------
 
 test("a future month of a km goal with an amount: «planeado» and «60 km» alone, the amount a link to the sheet", async ({
