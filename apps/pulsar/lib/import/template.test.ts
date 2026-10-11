@@ -697,6 +697,120 @@ test("807 stray figure: a task and a sub-task with a figure in a km goal say wha
   assert.deepEqual(child, [{ line: 8, expected: "import.errors.estimateNotTime" }]);
 });
 
+const MONTH_REAL = "import.errors.form.monthReal";
+
+test("818 month real: a task in month 13 says the month does not exist, on its own line", () => {
+  assert.deepEqual(errorOf(`${HEAD}## Tareas\n- 2027-13 · 2 h · Simulacro\n`), { line: 7, expected: MONTH_REAL });
+});
+
+test("818 month real: a month in month 13 says the month does not exist", () => {
+  assert.deepEqual(errorOf(`${HEAD}## Meses\n- 2026-13 · 20 h\n`), { line: 7, expected: MONTH_REAL });
+});
+
+test("818 month real: month 00 says it too, not only months past 12", () => {
+  assert.equal(errorOf(`${HEAD}## Meses\n- 2026-00 · 20 h\n`).expected, MONTH_REAL);
+  assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-00 · 2 h · X\n`).expected, MONTH_REAL);
+});
+
+test("818 month real: a line with no month shape keeps the generic task form", () => {
+  assert.equal(errorOf(`${HEAD}## Tareas\n- octubre · 2 h · X\n`).expected, "import.errors.form.task");
+  assert.equal(errorOf(`${HEAD}## Meses\n- 2026-10 · 1 h\n- octubre · 20 h\n`).expected, "import.errors.form.month");
+});
+
+test("818 hrs: «8 hrs» in an hours goal reads as 480 minutes", () => {
+  assert.equal(draftOf(`${HEAD}## Meses\n- 2026-12 · 8 hrs\n`).months[0].amount, 480);
+});
+
+test("818 message: the key exists in the catalogue", () => {
+  assert.equal(
+    catalogue.errors.form.monthReal,
+    "Ese mes no existe: el mes va de 01 a 12, como «2026-10».",
+  );
+});
+
+const CRITIC_PLAN = [
+  "pulsar · plantilla 1",
+  "",
+  "# Inglés B2+ laboral",
+  "horizonte: 2028-02-01",
+  "medida: horas de estudio · horas",
+  "",
+  "## Meses",
+  "- 2026-10 · 10 h",
+  "- 2026-11 · 12 h",
+  "- 2026-12 · 8 hrs",
+  "- 2027-01 · 12 h",
+  "",
+  "## Compromisos",
+  "- Shadowing · cada día · 15 min",
+  "- Clase con tutor · martes y jueves · 1 h",
+  "",
+  "## Tareas",
+  "- 2026-10 · 4 h · Grabar audio de referencia",
+  "- 2026-11 · Elegir tutor",
+  "  - 1 h · Comparar tres perfiles",
+  "- 2027-13 · 2 h · Simulacro de entrevista",
+  "- 2027-10 · 3 h · Preparar historias STAR",
+  "",
+  "# Correr 10K",
+  "horizonte: 2027-04-01",
+  "medida: distancia · km",
+  "",
+  "## Meses",
+  "- 2026-10 · 40",
+  "- 2026-11 · 60",
+  "- 2026-12 · 70",
+  "",
+  "## Compromisos",
+  "- Trote suave · lunes, miércoles y viernes · 5",
+  "",
+  "## Tareas",
+  "- 2026-11 · 5 · Comprar zapatillas",
+  "- 2027-01 · Carrera de prueba 5K",
+].join("\n") + "\n";
+
+test("818 critic plan: the line of 2027-13 says the month does not exist, and no generic month or task form is said", () => {
+  const found = mistakesOf(CRITIC_PLAN);
+  const lines = CRITIC_PLAN.split("\n");
+  const real = found.filter((e) => e.expected === MONTH_REAL);
+  assert.equal(real.length, 1);
+  assert.equal(lines[real[0].line - 1], "- 2027-13 · 2 h · Simulacro de entrevista");
+  // The km goal's «5 · Comprar zapatillas» is the 807 stray figure, a real second mistake.
+  assert.deepEqual(found.filter((e) => e !== real[0]).map((e) => e.expected), ["import.errors.estimateNotTime"]);
+});
+
+test("818: only months 00 and 13+ get «ese mes no existe»; December with another fault names that fault", () => {
+  const monthReal = errorOf(`${HEAD}## Meses\n- 2026-13 · 20 h\n`).expected;
+  for (const line of ["- 2026-12 · 20 km", "- 2026-12 · abc", "- 2026-12 · 20"]) {
+    const found = errorOf(`${HEAD}## Meses\n${line}\n`);
+    assert.equal(found.line, 7, line);
+    assert.notEqual(found.expected, monthReal, line);
+  }
+  // A well-formed December that the schema refuses for another reason (an amount past the budget's cap).
+  const repeated = errorOf(`${HEAD}## Meses\n- 2026-12 · 20000 h\n`);
+  assert.equal(repeated.line, 7);
+  assert.notEqual(repeated.expected, monthReal);
+  for (const month of ["2026-00", "2026-13", "2026-99"]) {
+    assert.equal(errorOf(`${HEAD}## Meses\n- ${month} · 20 h\n`).expected, monthReal, month);
+  }
+});
+
+test("818: a plain valid December line parses", () => {
+  const result = parseTemplate(`${HEAD}## Meses\n- 2026-12 · 8 hrs\n`);
+  assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+});
+
+test("818: a month token with trailing characters gets the generic form error, never «ese mes no existe»", () => {
+  const monthReal = errorOf(`${HEAD}## Meses\n- 2026-13 · 20 h\n`).expected;
+  const generic = errorOf(`${HEAD}## Meses\n- octubre · 20 h\n`).expected;
+  for (const month of ["2026-130", "2026-1x", "2026-001", "2026-13x"]) {
+    const found = errorOf(`${HEAD}## Meses\n- ${month} · 20 h\n`);
+    assert.equal(found.expected, generic, month);
+    assert.notEqual(found.expected, monthReal, month);
+  }
+  const taskGeneric = errorOf(`${HEAD}## Tareas\n- octubre · 2 h · X\n`).expected;
+  assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-130 · 2 h · X\n`).expected, taskGeneric);
+});
 // 807: a cut names the highest broken header, whichever reading (line or schema) saw it.
 // Each text has a goal whose name is over the limit on line 3; whatever else breaks sits lower.
 const LONG = "a".repeat(GOAL_NAME_MAX + 1);

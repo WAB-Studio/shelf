@@ -6,10 +6,10 @@ import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
 import { amountOf } from "@/lib/plan/roadmap";
 import { nextMonth } from "@/lib/plan/months";
-import { monthDetail } from "@/lib/plan/month-detail";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
-import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { timeWordsOf } from "@/lib/units/time-words";
 import { Button, ListDetail, Page, ScreenHeader, Table, Text, type TableRow } from "@/components/ui";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
@@ -69,27 +69,15 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
 
   const unit = goal.measureUnit;
   const timed = isTimeUnit(unit);
-  const units = await getTranslations("units");
-  const words: TimeWords = {
-    h: (h) => units("h", { h }),
-    min: (min) => units("min", { min }),
-    join: (h, min) => units("join", { h, min }),
-  };
+  const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
 
   const rows: TableRow[] = goal.months.map((row) => {
     const started = row.past || row.current;
     const share = row.past ? planShare(goal.plan, row.month) : null;
     const own = amountOf(row.month, goal.plan);
     const figure = own === null ? null : formatQuantity(own, unit, words);
-    const amount = (
-      <Text tone="secondary">
-        {figure === null
-          ? t("month.months.noAmount")
-          : started
-            ? t("month.months.of", { planned: figure })
-            : figure}
-      </Text>
-    );
+    const said = figure === null ? t("month.months.noAmount") : started ? t("month.months.of", { planned: figure }) : figure;
+    const amount = <Text tone="secondary">{said}</Text>;
     const state = row.current
       ? t("month.months.current")
       : share && share.carried > 0
@@ -101,14 +89,24 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
           ? t("month.months.planned")
           : null;
 
-    const count = timed ? 0 : planMonthList(goal.plan, row.month).length;
+    const count = timed && goal.plan.rhythm !== null ? 0 : planMonthList(goal.plan, row.month).length;
     const tasks = count === 0 ? null : t("month.months.tasksCount", { count });
 
     return {
       key: row.month,
       href: hrefOf(row.month),
       cells: [yearLabel(row.month), started ? row.reached : null, amount],
-      detail: monthDetail(state, tasks),
+      // The state over the task count, never joined by a «·» that a narrow row would leave hanging.
+      detail:
+        state && tasks ? (
+          <>
+            {state}
+            <br />
+            {tasks}
+          </>
+        ) : (
+          (state ?? tasks)
+        ),
       note: amount,
     };
   });
@@ -116,6 +114,8 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
   return (
     <Table
       narrow
+      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») keeps its line.
+      wrapNote={!timed}
       caption={caption}
       columns={[
         t("month.months.columns.month"),
@@ -124,7 +124,8 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
       ]}
       rows={rows}
       figures={[1]}
-      unit={unit}
+      // A unit that is not time rides in each row's note («0 de 60 búsquedas»), once.
+      unit={timed ? unit : undefined}
       current={currentIndex === -1 ? undefined : currentIndex}
       open={openIndex === -1 ? undefined : openIndex}
     />

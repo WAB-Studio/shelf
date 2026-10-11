@@ -217,3 +217,62 @@ test("a week over two 31-day months sums to the exact whole minute, not one shor
   });
   assert.equal(threeAndFour, 3);
 });
+
+// RP-58: a month with no amount of its own takes the goal's rhythm.
+
+test("rhythm: a month with no amount takes the rhythm, 720 over a 31-day week is 162", () => {
+  const planned = weekPlanned({
+    ...OCT_WEEK,
+    budgets: [],
+    rhythm: 720,
+    openedOn: FAR_PAST,
+    horizon: FAR_FUTURE,
+  });
+  assert.equal(planned, 162);
+});
+
+test("rhythm: a month's own amount wins over the rhythm", () => {
+  const planned = weekPlanned({
+    ...OCT_WEEK,
+    budgets: [{ month: "2026-10-01", amount: 600 }],
+    rhythm: 720,
+    openedOn: FAR_PAST,
+    horizon: FAR_FUTURE,
+  });
+  assert.equal(planned, Math.floor((7 * 600) / 31));
+  assert.equal(planned, 135);
+});
+
+test("rhythm: across two months the rhythm fills the one with no amount, the amount the other", () => {
+  const planned = weekPlanned({
+    ...ACROSS_WEEK,
+    budgets: [{ month: "2026-10-01", amount: 600 }],
+    rhythm: 720,
+    openedOn: FAR_PAST,
+    horizon: FAR_FUTURE,
+  });
+  // 3 September days at 720/30, 4 October days at 600/31.
+  assert.equal(planned, Math.floor((3 * 720) / 30 + (4 * 600) / 31));
+  assert.equal(planned, 149);
+});
+
+test("rhythm: neither an amount nor a rhythm is null", () => {
+  assert.equal(
+    weekPlanned({ ...OCT_WEEK, budgets: [], rhythm: null, openedOn: FAR_PAST, horizon: FAR_FUTURE }),
+    null,
+  );
+});
+
+test("rhythm: a rhythm of 0 is null, not 0", () => {
+  assert.equal(
+    weekPlanned({ ...OCT_WEEK, budgets: [], rhythm: 0, openedOn: FAR_PAST, horizon: FAR_FUTURE }),
+    null,
+  );
+});
+
+test("rhythm: days before the opening or from the horizon on take no rhythm", () => {
+  const base = { ...OCT_WEEK, budgets: [], rhythm: 720 };
+  assert.equal(weekPlanned({ ...base, openedOn: "2026-10-08", horizon: FAR_FUTURE }), Math.floor((4 * 720) / 31));
+  assert.equal(weekPlanned({ ...base, openedOn: FAR_PAST, horizon: "2026-10-07" }), Math.floor((2 * 720) / 31));
+  assert.equal(weekPlanned({ ...base, openedOn: "2026-10-12", horizon: FAR_FUTURE }), null);
+});

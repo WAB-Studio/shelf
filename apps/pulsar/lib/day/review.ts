@@ -50,14 +50,14 @@ export function measureByWeek(args: {
 
   const rows: ReviewWeek[] = [];
   for (let index = 1; index <= lastIndex; index++) {
-    const { startsOn, endsOn } = weekSpan(openedOn, index, index);
+    const { startsOn, endsOn } = weekSpan(openedOn, index, index, horizon);
     rows.push({
       index,
       startsOn,
       endsOn,
       total: totalInSpan(unit, facts, evidence, startsOn, endsOn),
       phaseName: phaseOn(phases, startsOn)?.name ?? null,
-      current: index === todayWeek,
+      current: index === todayWeek && today < horizon,
     });
   }
   return rows;

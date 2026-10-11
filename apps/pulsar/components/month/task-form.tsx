@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { createOneOff } from "@/app/actions/one-offs";
-import { isTimeUnit, formatQuantity, type TimeWords } from "@/lib/units/time";
+import { useTimeWords } from "@/components/ui/figure";
+import { isTimeUnit, formatQuantity } from "@/lib/units/time";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { Button, Chip, Field, Flex, Page, ScreenHeader, Text } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -39,7 +40,6 @@ export type TaskFormProps = {
  */
 export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: TaskFormProps) {
   const t = useTranslations();
-  const units = useTranslations("units");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -67,11 +67,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
     return Number(h) * 60 + Number(min);
   }
 
-  const words: TimeWords = {
-    h: (h) => units("h", { h }),
-    min: (min) => units("min", { min }),
-    join: (h, min) => units("join", { h, min }),
-  };
+  const words = useTimeWords();
   const typed = typedAmount();
   const sumLine =
     parent && unit

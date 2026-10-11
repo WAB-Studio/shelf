@@ -76,7 +76,7 @@ for (const width of [360, 1440]) {
         const row = monthRow(page, by);
         const line = row.getByText(IN_LIEU, { exact: true });
         await expect(line).toBeVisible();
-        const [name, meta] = [(await row.getByText(word(by), { exact: true }).boundingBox())!, (await line.boundingBox())!];
+        const [name, meta] = [(await row.getByText(`${word(by)} ${at(by).slice(0, 4)}`, { exact: true }).boundingBox())!, (await line.boundingBox())!];
         expect(meta.y).toBeGreaterThan(name.y);
         expect(meta.y - name.y).toBeLessThan(40);
         expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);

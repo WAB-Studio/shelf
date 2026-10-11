@@ -39,6 +39,8 @@ type Measured = {
   figureText: string;
   plannedText: string | null;
   figureBottom: number;
+  figureFont: number;
+  measureFont: number;
   detailText: string | null;
   detailTop: number | null;
   rowHeight: number;
@@ -80,6 +82,12 @@ async function measure(page: Page, table: string | null, label: string): Promise
         range.selectNodeContents(node);
         return range.getBoundingClientRect();
       };
+      // The measure's size from the token itself, resolved by a probe: the lead figure is set in it, never in the cell's meta size.
+      const sizer = document.createElement("span");
+      sizer.style.fontSize = "var(--pulsar-text-measure-size)";
+      document.body.appendChild(sizer);
+      const measureFont = parseFloat(getComputedStyle(sizer).fontSize);
+      sizer.remove();
       const labelNodes = textNodes(cells[0]);
       const figureNodes = textNodes(cells[1]);
       const plannedNodes = cells[2] ? textNodes(cells[2]) : [];
@@ -91,6 +99,8 @@ async function measure(page: Page, table: string | null, label: string): Promise
         basePlanned: plannedNodes[0] ? baseline(plannedNodes[0]) : null,
         figureText: (figureNodes[0].textContent ?? "").trim(),
         plannedText: plannedNodes[0] ? (plannedNodes[0].textContent ?? "").trim() : null,
+        figureFont: parseFloat(getComputedStyle(figureNodes[0].parentElement!).fontSize),
+        measureFont,
         figureBottom: Math.max(...figureNodes.map((n) => rect(n).bottom)),
         detailText: detail ? (detail.textContent ?? "").trim() : null,
         detailTop: detail ? rect(detail).top : null,
@@ -347,6 +357,8 @@ test.describe("screen at 1440: the same on the wide face (RP-71)", () => {
       const m = await measure(page, null, "semana 1");
       expect(m.detailText, "the week's dates").toMatch(/\d/);
       figuresOnFirstLine(m, "goal review week 1");
+      expect(m.figureFont, `week 1's figure «${m.figureText}» is set at ${m.figureFont}px, the measure size is ${m.measureFont}px`)
+        .toBeCloseTo(m.measureFont, 0);
       expect(m.detailTop!, "dates under the figure").toBeGreaterThan(m.figureBottom - TOLERANCE);
     } finally {
       await context.close();

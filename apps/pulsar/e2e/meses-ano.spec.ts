@@ -222,17 +222,19 @@ test_("a future month in time with no amount: «sin monto planeado» alone, no o
   expect(text).toBe("sin monto planeado");
 });
 
-test_("a future month in time with the goal's rhythm: «planeado», «0 min» and «de 12 h» stay (RP-50)", async ({ person, page, db }) => {
+test_("a future month in time with the goal's rhythm: «planeado» and «12 h» alone, no «0 min», no «de» (RP-50, RP-28)", async ({
+  person,
+  page,
+  db,
+}) => {
   const goalId = await seedGoal(db, person.id, `Meta futuro con ritmo ${Date.now()}`, { rhythm: 720 });
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto(`/metas/${goalId}/meses/${seg(span[2])}`);
-  const phrase = page.getByRole("link", { name: "de 12 h", exact: true });
-  await expect(phrase).toBeVisible();
-  const text = squash(await phrase.locator("xpath=../..").innerText());
-  expect(text).toContain("planeado");
-  expect(text).toContain("0 min");
-  expect(text).toContain("de 12 h");
-  expect(text).not.toContain("sin monto");
+  await expect(page.getByRole("link", { name: "12 h", exact: true })).toBeVisible();
+  // The block runs from its label to the «Tareas» section that follows.
+  const main = squash(await page.locator("main").first().innerText());
+  const from = main.indexOf("planeado");
+  expect(main.slice(from, main.indexOf("tareas", from)).trim()).toBe("planeado 12 h");
 });
 
 test_("the current month in time with no amount keeps «este mes», its figure and «sin monto planeado» (RP-32)", async ({
