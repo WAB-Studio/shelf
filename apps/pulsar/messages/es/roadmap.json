@@ -76,6 +76,7 @@
   },
   "errors": {
     "rhythmRange": "El ritmo va de 1 min a 744 h al mes.",
+    "rhythmFormat": "Escríbelo como 8 h, 1 h 30 min o 90 min.",
     "rhythmNotTime": "El plan es para metas que miden tiempo.",
     "rhythmNoMeasure": "Esta meta no tiene medida, así que no tiene ritmo.",
     "monthOutsideSpan": "Ese mes queda fuera de la meta.",

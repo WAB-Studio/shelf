@@ -106,6 +106,11 @@ export function RhythmForm({
 
   async function handleSave() {
     if (pending) return;
+    // Text that reads as nothing is a format problem, not a range one.
+    if (typed.trim() !== "" && parseTyped(typed) === null) {
+      setError(t("roadmap.errors.rhythmFormat"));
+      return;
+    }
     if (!checked.success) {
       setError(t(messageKey(checked.error.issues[0].message)));
       return;

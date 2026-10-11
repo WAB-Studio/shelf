@@ -273,14 +273,14 @@ test("the rhythm sheet of a goal with a rhythm keeps its fixed tasks: its end is
   }
 });
 
-test("«abc» draws no hint and the button answers with the schema's refusal", async ({ page, db, personId }) => {
+test("«abc» draws no hint and the button says how to write a rhythm", async ({ page, db, personId }) => {
   const { goalId } = await seedGoal(db, personId);
   try {
     await visit(page, `/metas/${goalId}/plan`);
     await page.getByPlaceholder("otra").fill("abc");
     await expect(page.getByText(/terminan en /)).toHaveCount(0);
     await page.getByRole("button", { name: "Armar el plan" }).click();
-    await expect(page.getByText("El ritmo va de 1 min a 744 h al mes.")).toBeVisible();
+    await expect(page.getByText("Escríbelo como 8 h, 1 h 30 min o 90 min.")).toBeVisible();
     const [row] = await db<{ rhythm: number | null }[]>`select rhythm from goals.goals where id = ${goalId}`;
     expect(row.rhythm).toBeNull();
   } finally {
