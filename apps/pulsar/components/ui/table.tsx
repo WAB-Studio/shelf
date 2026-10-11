@@ -120,7 +120,9 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
       {lead === undefined ? null : (
         <span className={styles.stackFigure}>
           {figureCell(figure, unit, words)}
-          {unitWord && !isEmpty(figure) ? <span className={styles.unit}>{unitWord}</span> : null}
+          {unitWord && !isEmpty(figure) ? (
+            <span className={styles.unit}>{words.unit?.(unitWord, typeof figure === "number" ? figure : 2) ?? unitWord}</span>
+          ) : null}
         </span>
       )}
       {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
@@ -172,7 +174,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
               <th key={column} scope="col" className={join(styles.header, widthClass(column))}>
                 {header}
                 {column === lead && unitWord ? (
-                  <span className={styles.headerUnit}>{unitWord}</span>
+                  <span className={styles.headerUnit}>{words.unit?.(unitWord, 2) ?? unitWord}</span>
                 ) : null}
               </th>
             ))}
