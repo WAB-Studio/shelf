@@ -167,3 +167,17 @@ test("/exportar at 360: «de 60 búsquedas» sits beside the label, not on a lin
   expect(m.noteTop, "the note starts on the label's line").toBeLessThan(m.labelBottom - 1);
   expect(m.noteTop, "the note does not start below the label's top line").toBeLessThan(m.labelTop + m.lineHeight);
 });
+
+// A time note («de 7 h 15 min») stays beside its month's label: only a unit word («búsquedas») may drop a line, and the
+// note of a time goal never drops whole under the label, which would grow the row. 320 and 1024 are the widths where
+// that figure is too wide for the room beside the label.
+for (const width of [300, 320, 1024]) {
+  test(`/exportar at ${width}: a long time note «de 7 h 15 min» stays on the label's line`, async ({ browser, baseURL, db, person }) => {
+    await seedGoal(db, person, MINUTES, 435, 90);
+    const { page, close } = await open(browser, baseURL, person, width);
+    const m = await measure(page, "7").finally(close);
+    expect(m.noteText).toBe("de 7 h 15 min");
+    expect(m.noteTop, "the note starts on the label's line").toBeLessThan(m.labelBottom - 1);
+    expect(m.noteTop, "the note does not start below the label's top line").toBeLessThan(m.labelTop + m.lineHeight);
+  });
+}
