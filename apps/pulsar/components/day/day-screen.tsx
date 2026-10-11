@@ -42,12 +42,12 @@ export function oldestPastDay(today: string): string {
   return shiftCivilDay(today, -PAST_DAY_LIMIT);
 }
 
-// Monday first, as `day.weekdayLong` lists them; `getUTCDay` is 0 for Sunday.
 // RP-76: the query keeps the 0; the screen reads it as a month with no amount.
 function screenPlannedOf(line: DayMonthLine | undefined): number | null {
   return line === undefined ? null : screenPlanned(line.planned, line.ownBudget);
 }
 
+// Monday first, as `day.weekdayLong` lists them; `getUTCDay` is 0 for Sunday.
 function weekdayOf(day: string, t: Translator): string {
   const names = t.raw("day.weekdayLong") as string[];
   return names[(civilDateToDate(day).getUTCDay() + 6) % 7];
