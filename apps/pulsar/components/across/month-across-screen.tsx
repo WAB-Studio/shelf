@@ -6,7 +6,6 @@ import { getTranslations } from "next-intl/server";
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
 import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
-import { owedAt } from "@/lib/plan/carry";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
@@ -51,7 +50,7 @@ export async function MonthAcrossScreen() {
         .filter((task) => task.doneOn !== null && task.doneOn.slice(0, 7) === seg)
         .map((task) => task.estimate ?? 0),
     );
-    const ownPlanned = sum(own.map((entry) => owedAt(entry.task, entry.children, "0000-01-01")));
+    const ownPlanned = sum(own.map((entry) => entry.part));
 
     // With the dictionary unreadable, a goal with no amount to measure draws
     // its header and meta alone (`MesTodasSinEvidencia`).
