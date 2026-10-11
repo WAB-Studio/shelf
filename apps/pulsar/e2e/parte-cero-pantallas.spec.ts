@@ -273,3 +273,25 @@ for (const unit of UNITS) {
     }
   });
 }
+
+for (const unit of UNITS) {
+  test(`/mes keeps «de 0» for a month budget of 0 the person typed, ${unit.label} goal`, async ({ person, browser, baseURL, db }) => {
+    const name = `Tecleado mes ${unit.token} ${Date.now()}`;
+    const id = await seedGoal(db, person, name, unit, length);
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${id}, ${`${month}-01`}::date, 0)`;
+    try {
+      const view = await open(browser, baseURL, person, "/mes", name);
+      try {
+        const line = segment.mes(view.text, name);
+        expect(line).toMatch(ZERO_OF_ZERO);
+        expect(line).not.toMatch(/sin monto|nada planeado/i);
+      } finally {
+        await view.close();
+      }
+    } finally {
+      await db`delete from goals.goals where id = ${id} and user_id = ${person.id}`;
+    }
+  });
+}
