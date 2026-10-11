@@ -24,6 +24,9 @@ export type TableRow = {
   // The phone's one figure when it is not the wide face's cell: the wide
   // «10 h de 12 h» reads «10 h» there, its «de 12 h» going in the note.
   phoneFigure?: ReactNode;
+  // Drops the unit word after the phone's figure, for a row whose note carries
+  // it after «de» (`UnidadUnaVez`'s «34 / de 60 búsquedas»): the unit once.
+  phoneBare?: boolean;
   // A second line under the row label, on both faces: the week's dates.
   detail?: ReactNode;
   // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
@@ -129,7 +132,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
       {lead === undefined ? null : (
         <span className={styles.stackFigure}>
           {figureCell(figure, unit, words)}
-          {unitWord && !isEmpty(figure) ? (
+          {unitWord && !isEmpty(figure) && !row.phoneBare ? (
             <span className={styles.unit}>{words.unit?.(unitWord, typeof figure === "number" ? figure : 2) ?? unitWord}</span>
           ) : null}
         </span>

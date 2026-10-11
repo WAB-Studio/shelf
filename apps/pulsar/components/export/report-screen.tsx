@@ -85,7 +85,7 @@ function MonthFigures({
   return (
     <Section label={t("sections.month", { month })}>
       <Flex direction="column" gap="1">
-        <Figure value={goal.thisMonth.reached} unit={unit} />
+        <Figure value={goal.thisMonth.reached} unit={unit} bare={goal.thisMonth.planned !== null} />
         {goal.thisMonth.planned !== null ? (
           <Text variant="sentence">
             {t("of", { planned: "" })}
@@ -250,7 +250,7 @@ function GoalPart({
           {unit !== null ? (
             <Section label={t("sections.atEnd")}>
               <Flex direction="column" gap="1">
-                <Figure value={goal.toDate.reached} unit={unit} />
+                <Figure value={goal.toDate.reached} unit={unit} bare={goal.toDate.planned > 0} />
                 {goal.toDate.planned > 0 ? (
                   <Text variant="sentence">
                     {t("of", { planned: "" })}
@@ -290,7 +290,7 @@ function GoalPart({
         return (
           <Section label={t("sections.toDate")}>
             <Flex direction="column" gap="1">
-              <Figure value={goal.toDate.reached} unit={unit as string} />
+              <Figure value={goal.toDate.reached} unit={unit as string} bare={goal.toDate.planned > 0} />
               {goal.toDate.planned > 0 ? (
                 <Text variant="sentence">
                   {t("of", { planned: "" })}
@@ -473,6 +473,7 @@ function GoalPart({
             cells: [monthLabel(month.month), done, plannedFigure],
             detail: started ? status : undefined,
             phoneFigure: started ? month.reached : null,
+            phoneBare: month.planned !== null,
             note: phoneNote,
             printed: printsOnPaper(month),
           };
@@ -559,7 +560,7 @@ function GoalPart({
                             ...weekEdges!,
                             done: week.total,
                             planned: weekPlanned,
-                            fig: () => <Figure variant="meta" value={week.total} unit={unit as string} />,
+                            fig: () => <Figure variant="meta" value={week.total} unit={unit as string} bare />,
                             plan: () => <Figure variant="meta" value={weekPlanned} unit={unit as string} />,
                           })}
                     </Text>
