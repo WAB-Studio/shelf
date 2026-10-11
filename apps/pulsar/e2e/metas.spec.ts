@@ -22,8 +22,7 @@ function lastDay(horizon: string): string {
   const date = civilDateToDate(horizon);
   date.setUTCDate(date.getUTCDate() - 1);
   const day = dateToCivilDate(date);
-  const label = `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]}`;
-  return day.slice(0, 4) === todayInZone().slice(0, 4) ? label : `${label} ${day.slice(0, 4)}`;
+  return `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
 }
 
 async function seedGoal(

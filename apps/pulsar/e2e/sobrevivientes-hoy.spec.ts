@@ -54,9 +54,9 @@ test("two goals ended this week draw one «terminó ayer · ver» line each", as
     await page.goto("/");
     await settled(page);
     await expect(page.getByText(openName).first()).toBeVisible();
-    await expect(page.getByText(`${first} terminó ayer ·`)).toHaveCount(drawn ? 1 : 0);
-    await expect(page.getByText(`${second} terminó ayer ·`)).toHaveCount(drawn ? 1 : 0);
-    await expect(page.getByText(/ terminó ayer ·/)).toHaveCount(drawn ? 2 : 0);
+    await expect(page.getByText(`${first} terminó ayer`)).toHaveCount(drawn ? 1 : 0);
+    await expect(page.getByText(`${second} terminó ayer`)).toHaveCount(drawn ? 1 : 0);
+    await expect(page.getByText(/ terminó ayer/)).toHaveCount(drawn ? 2 : 0);
     for (const name of [first, second]) {
       await expect(page.getByRole("link", { name: `Abrir ${name}`, exact: true })).toHaveCount(drawn ? 1 : 0);
       await expect(page.getByRole("link", { name: `Abrir ${name}` }).filter({ hasText: /^ver$/ })).toHaveCount(drawn ? 1 : 0);

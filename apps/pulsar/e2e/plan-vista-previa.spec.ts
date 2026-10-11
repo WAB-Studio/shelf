@@ -22,10 +22,10 @@ function monthAfter(count: number): string {
   return month;
 }
 
-// «octubre», or «octubre de 2027» when it is not the year the person is in.
+// «octubre de 2026»: the year always.
 function spoken(month: string): string {
   const name = monthFormat.format(new Date(`${month.slice(0, 7)}-01T12:00:00Z`));
-  return month.slice(0, 4) === thisYear ? name : `${name} de ${month.slice(0, 4)}`;
+  return `${name} de ${month.slice(0, 4)}`;
 }
 
 const horizon = `${Number(thisYear) + 3}-12-01`;
@@ -109,7 +109,7 @@ async function leadMonth(page: Page): Promise<string> {
   const text = (await lead.textContent()) ?? "";
   const match = /terminas el \d{1,2} de (\p{L}+) de (\d{4})/u.exec(text);
   expect(match, text).not.toBeNull();
-  return match![2] === thisYear ? match![1] : `${match![1]} de ${match![2]}`;
+  return `${match![1]} de ${match![2]}`;
 }
 
 async function choose(page: Page, option: string) {
