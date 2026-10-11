@@ -250,7 +250,7 @@ function GoalPart({
 
   if (goal.endedOn !== null) {
     return (
-      <PrintBlock>
+      <PrintBlock whole>
         <Flex direction="column" gap="6">
           <Flex direction="column" gap="3">
             <Text asChild variant="name" rule>
