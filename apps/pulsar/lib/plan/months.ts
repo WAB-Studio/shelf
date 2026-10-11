@@ -94,6 +94,25 @@ export function plannedOf(
   return Math.floor((rhythm * days) / length);
 }
 
+// The days of a month the goal fills when that is not the whole month, for the
+// line that explains the share (RP-76). A month with its own amount, no rhythm,
+// or a share that rounds to 0 has nothing to explain.
+export function partOf(
+  month: string,
+  input: { budgets: MonthBudget[]; rhythm?: number | null; openedOn: string; horizon: string },
+): { kind: "from" | "to" | "between"; from: number; to: number; share: number; rhythm: number } | null {
+  const rhythm = input.rhythm ?? null;
+  if (rhythm === null || input.budgets.some((budget) => budget.month === month)) return null;
+  const length = daysInMonth(month);
+  const lastOfGoal = dayBefore(input.horizon);
+  const from = monthOf(input.openedOn) === month ? Number(input.openedOn.slice(8, 10)) : 1;
+  const to = monthOf(lastOfGoal) === month ? Number(lastOfGoal.slice(8, 10)) : length;
+  if (from === 1 && to === length) return null;
+  const share = plannedOf(month, input);
+  if (!share) return null;
+  return { kind: from > 1 && to < length ? "between" : from > 1 ? "from" : "to", from, to, share, rhythm };
+}
+
 // Under 60 % is `reached * 5 < planned * 3`: integers only, so 432 of 720
 // sits exactly on the line and is not under it. RP-29 states it.
 function underSixty(reached: number, planned: number): boolean {

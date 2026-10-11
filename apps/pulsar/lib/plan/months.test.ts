@@ -7,6 +7,7 @@ import {
   monthOf,
   monthRows,
   monthsOfSpan,
+  partOf,
   plannedOf,
   reachedByMonth,
   settledMonths,
@@ -266,4 +267,16 @@ test("settledMonths: a goal still running keeps its rows as they are", () => {
     { month: "2026-10-01", current: true, past: false },
   ];
   assert.deepEqual(settledMonths(rows, false), rows);
+});
+
+test("partOf: names the days a first, a last and a one-month goal fill; a whole month none", () => {
+  const base = { budgets: [], rhythm: 600 };
+  const first = { ...base, openedOn: "2026-09-16", horizon: "2026-10-08" };
+  assert.deepEqual(partOf("2026-09-01", first), { kind: "from", from: 16, to: 30, share: 300, rhythm: 600 });
+  assert.deepEqual(partOf("2026-10-01", first), { kind: "to", from: 1, to: 7, share: 135, rhythm: 600 });
+  const both = { ...base, openedOn: "2026-10-07", horizon: "2026-10-21" };
+  assert.deepEqual(partOf("2026-10-01", both), { kind: "between", from: 7, to: 20, share: 270, rhythm: 600 });
+  assert.equal(partOf("2026-10-01", { ...base, openedOn: "2026-10-01", horizon: "2026-12-01" }), null);
+  assert.equal(partOf("2026-10-01", { ...first, budgets: [{ month: "2026-10-01", amount: 60 }] }), null);
+  assert.equal(partOf("2026-10-01", { ...first, rhythm: null }), null);
 });

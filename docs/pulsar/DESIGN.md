@@ -1203,6 +1203,7 @@ Taken by the user the same day, on the critic's three questions and two from the
     splits («de / 8 h / 03 / min») and never pushes the chevron out of its row, at any width.
   - Every screen reads a share that rounds to 0 as «sin monto», never «0 min de 0 min»; only paper keeps the 0
     (RP-76, retiring RP-74). This widens the Hoy-only rule above.
+- Decided by the orchestrator 2026-10-11, for `ParteExplicada` wording the board did not draw: a last month that ends before the month's end reads «hasta el 7: 2 h 15 min de tus 10 h»; a goal opened and ended in the same month reads «del 7 al 20: … de tus 10 h».
 - Decided by the orchestrator, from rules already taken: a goal that has ended has no month «en curso», no «ESTE MES» and no
   «faltan N días»; `/meses` does not ask a goal with a rhythm to plan a month; every month in the rhythm's preview carries its
   year; one «mover el final» link for open and ended goals.

@@ -8,7 +8,7 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
 import type { Task } from "@/lib/plan/carry";
 import type { PlanItem } from "@/lib/plan/roadmap";
-import { nextMonth, settledMonths } from "@/lib/plan/months";
+import { nextMonth, partOf, settledMonths } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
@@ -86,6 +86,7 @@ export async function MonthDetail({
   const items = planMonthList(goal.plan, mes);
   const carried = items.filter((item) => item.carriedFrom !== null);
   const own = items.filter((item) => item.carriedFrom === null);
+  const part = partOf(mes, goal.plan);
   const share = closed ? planShare(goal.plan, mes) : null;
 
   const doneInMonth = sum(
@@ -239,6 +240,11 @@ export async function MonthDetail({
               <Text tone="secondary">{planned}</Text>
             )}
           </Flex>
+          {part ? (
+            <Text as="p" variant="sentence" tone="muted">
+              {t.rich("goal.detail.monthPart", { ...part, share: say(part.share), rhythm: say(part.rhythm), ...fig })}
+            </Text>
+          ) : null}
           {note ? (
             <Text as="p" variant="sentence">
               {note}

@@ -204,3 +204,27 @@ test("360 · a last month that stops before the month's end reads «hasta el N: 
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });
+
+test("360 · a goal opened and ended inside one month reads «del N al M: …» on its month page", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Fixed days of a month next year, so the test reads the same on any day.
+  const y = year + 1;
+  const share = shareOf(14, daysIn(y, 3));
+  const goalId = await seed(db, person, { name: "Parte dentro", openedOn: `${y}-03-07`, horizon: `${y}-03-21` });
+  const { context, page } = await open(browser, baseURL!, person, 360, `/metas/${goalId}/meses/${y}-03`);
+  try {
+    const line = visible(page, `del 7 al 20: ${say(share)} de tus 10 h`, true);
+    await expect(line).toHaveCount(1);
+    const figures = await line.locator("[class*='figure-module'][class*='__figure']").allTextContents();
+    expect(figures).toEqual([say(share), "10 h"]);
+    const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
+    expect(await color(line)).not.toBe(await color(ink));
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});

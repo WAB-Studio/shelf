@@ -33,6 +33,7 @@
     "monthTasks": "{done} de {total} {total, plural, one {tarea hecha} other {tareas hechas}}",
     "monthNoPlan": "sin monto planeado",
     "monthInLieu": "en lugar del ritmo",
+    "monthPart": "{kind, select, from {desde el {from}} to {hasta el {to}} other {del {from} al {to}}}: <fig>{share}</fig> de tus <fig>{rhythm}</fig>",
     "monthPlanLink": "Planear {month}",
     "monthProgress": "llevas {percent} % · faltan {days, plural, one {# día} other {# días}}",
     "monthProgressEnded": "llevas {percent} %",
