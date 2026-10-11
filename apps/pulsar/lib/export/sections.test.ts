@@ -120,35 +120,43 @@ function row(patch: Partial<MonthRow>): MonthRow {
 }
 
 test("RP-70 printsOnPaper: a past month prints with no amount", () => {
-  assert.equal(printsOnPaper(row({ past: true, planned: null, reached: 0 })), true);
+  assert.equal(printsOnPaper(row({ past: true, planned: null, reached: 0 }), "horas"), true);
 });
 
 test("RP-70 printsOnPaper: the current month prints with no amount", () => {
-  assert.equal(printsOnPaper(row({ current: true, planned: null })), true);
+  assert.equal(printsOnPaper(row({ current: true, planned: null }), "horas"), true);
 });
 
 test("RP-70 printsOnPaper: a future month with an amount prints", () => {
-  assert.equal(printsOnPaper(row({ planned: 1200 })), true);
+  assert.equal(printsOnPaper(row({ planned: 1200 }), "horas"), true);
 });
 
 test("RP-70 printsOnPaper: a future month planned at 0 prints, zero is an amount", () => {
-  assert.equal(printsOnPaper(row({ planned: 0 })), true);
+  assert.equal(printsOnPaper(row({ planned: 0 }), "horas"), true);
 });
 
 test("RP-70 printsOnPaper: a future month with no amount does not print", () => {
-  assert.equal(printsOnPaper(row({ past: false, current: false, planned: null })), false);
+  assert.equal(printsOnPaper(row({ past: false, current: false, planned: null }), "horas"), false);
 });
 
 test("RP-75 printsOnPaper: a future month with tasks defined and an amount prints, even with no task", () => {
-  assert.equal(printsOnPaper(row({ planned: 1200, tasks: { done: 0, total: 0 } })), true);
+  assert.equal(printsOnPaper(row({ planned: 1200, tasks: { done: 0, total: 0 } }), "horas"), true);
 });
 
 test("RP-75 printsOnPaper: a future month with tasks defined, planned 0 and no task prints", () => {
-  assert.equal(printsOnPaper(row({ planned: 0, tasks: { done: 0, total: 0 } })), true);
+  assert.equal(printsOnPaper(row({ planned: 0, tasks: { done: 0, total: 0 } }), "horas"), true);
 });
 
 test("RP-75 printsOnPaper: a future month with tasks defined, no amount and no task does not print", () => {
-  assert.equal(printsOnPaper(row({ planned: null, tasks: { done: 0, total: 0 } })), false);
+  assert.equal(printsOnPaper(row({ planned: null, tasks: { done: 0, total: 0 } }), "horas"), false);
+});
+
+test("RP-75 printsOnPaper: a time goal's future month with a task and no amount does not print", () => {
+  assert.equal(printsOnPaper(row({ planned: null, tasks: { done: 0, total: 1 } }), "horas"), false);
+});
+
+test("RP-71 printsOnPaper: a goal that measures nothing prints a future month that holds a task", () => {
+  assert.equal(printsOnPaper(row({ planned: null, tasks: { done: 0, total: 1 } }), null), true);
 });
 
 test("RP-71 goalSections: a goal with no unit and only future months without tasks prints no months", () => {
@@ -161,17 +169,17 @@ test("RP-71 goalSections: a goal with no unit and only future months without tas
 test("803 keepsHeadWithTable: 8 to 19 printed rows keep the head with the table; 7 and 20 do not", () => {
   const rows = (count: number) =>
     Array.from({ length: count }, (_, i) => ({ month: `2026-${String(i % 12 + 1).padStart(2, "0")}-01`, planned: 10, reached: 0, current: false, past: false, carried: null }));
-  assert.deepEqual([7, 8, 14, 15, 19, 20].map((count) => keepsHeadWithTable(rows(count))), [false, true, true, true, true, false]);
+  assert.deepEqual([7, 8, 14, 15, 19, 20].map((count) => keepsHeadWithTable(rows(count), "horas")), [false, true, true, true, true, false]);
 });
 
 test("803 keepsHeadWithTable: months that print nothing do not count", () => {
   const silent = { month: "2027-01-01", planned: null, reached: 0, current: false, past: false, carried: null };
   const planned = { ...silent, planned: 10 };
-  assert.equal(keepsHeadWithTable([...Array(7).fill(planned), ...Array(5).fill(silent)]), false);
+  assert.equal(keepsHeadWithTable([...Array(7).fill(planned), ...Array(5).fill(silent)], "horas"), false);
 });
 
 test("803 isLongTable: 14 printed rows stay whole, 15 flow", () => {
   const rows = (count: number) =>
     Array.from({ length: count }, (_, i) => ({ month: `2026-${String(i % 12 + 1).padStart(2, "0")}-01`, planned: 10, reached: 0, current: false, past: false, carried: null }));
-  assert.deepEqual([14, 15].map((count) => isLongTable(rows(count))), [false, true]);
+  assert.deepEqual([14, 15].map((count) => isLongTable(rows(count), "horas")), [false, true]);
 });
