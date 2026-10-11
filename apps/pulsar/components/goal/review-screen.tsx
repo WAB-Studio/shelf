@@ -81,6 +81,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
         figures={[1]}
         unit={goal.measureUnit}
         current={currentIndex === -1 ? undefined : currentIndex}
+        fitDetail
       />
     </Page>
   );
