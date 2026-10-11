@@ -115,10 +115,7 @@ function fits(m: Measure) {
 }
 
 for (const width of [360, 1024]) {
-  for (const [done, shown] of [
-    [null, "0"],
-    [30, "30"],
-  ] as const) {
+  for (const done of [null, 30]) {
     test(`/exportar at ${width}: «${done ?? 0} de 60 búsquedas» fits its row and keeps «de» with the number`, async ({ browser, baseURL, db, person }) => {
       await seedGoal(db, person, SEARCHES, 60, done);
       const { page, close } = await open(browser, baseURL, person, width);
