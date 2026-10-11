@@ -40,6 +40,8 @@ export type GoalReport = {
   measureFed: boolean;
   thisMonth: { planned: number | null; reached: number; underPace: boolean };
   toDate: { planned: number; reached: number };
+  // Months whose amount the person typed: paper prints every planned 0, the screen only these (RP-76).
+  ownMonths?: string[];
   phases: { aim: string; startsOn: string; endsOn: string; current: boolean }[];
   tasks: ReportTask[];
   carried: CarriedReport[];

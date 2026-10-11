@@ -14,6 +14,7 @@ import {
 } from "@/lib/export/sections";
 import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { civilDateToDate } from "@/lib/zone";
 import {
@@ -74,26 +75,40 @@ function MonthFigures({
   goal,
   declaredOnly,
   month,
+  thisMonthKey,
   t,
 }: {
   goal: GoalReport;
   declaredOnly: boolean;
   month: string;
+  thisMonthKey: string;
   t: Translator<"export">;
 }) {
   const unit = goal.unit as string;
+  const paper = goal.thisMonth.planned;
+  const screen = screenPlanned(paper, (goal.ownMonths ?? []).includes(thisMonthKey));
+  const figures = (planned: number | null) => (
+    <Flex direction="column" gap="1">
+      <Figure value={goal.thisMonth.reached} unit={unit} bare={planned !== null} />
+      {planned !== null ? (
+        <Text variant="sentence">
+          {t("of", { planned: "" })}
+          <Figure variant="meta" value={planned} unit={unit} />
+        </Text>
+      ) : null}
+      {declaredOnly ? <Text variant="sentence">{t("declaredOnly")}</Text> : null}
+    </Flex>
+  );
   return (
     <Section label={t("sections.month", { month })}>
-      <Flex direction="column" gap="1">
-        <Figure value={goal.thisMonth.reached} unit={unit} bare={goal.thisMonth.planned !== null} />
-        {goal.thisMonth.planned !== null ? (
-          <Text variant="sentence">
-            {t("of", { planned: "" })}
-            <Figure variant="meta" value={goal.thisMonth.planned} unit={unit} />
-          </Text>
-        ) : null}
-        {declaredOnly ? <Text variant="sentence">{t("declaredOnly")}</Text> : null}
-      </Flex>
+      {screen === paper ? (
+        figures(paper)
+      ) : (
+        <>
+          <PrintHidden>{figures(screen)}</PrintHidden>
+          <PrintOnly>{figures(paper)}</PrintOnly>
+        </>
+      )}
     </Section>
   );
 }
@@ -285,7 +300,7 @@ function GoalPart({
   const render = (section: GoalSection) => {
     switch (section) {
       case "month":
-        return <MonthFigures goal={goal} declaredOnly={declaredOnly && goal.measureFed} month={thisMonth} t={t} />;
+        return <MonthFigures goal={goal} declaredOnly={declaredOnly && goal.measureFed} month={thisMonth} thisMonthKey={`${today.slice(0, 7)}-01`} t={t} />;
       case "toDate":
         return (
           <Section label={t("sections.toDate")}>
@@ -427,54 +442,63 @@ function GoalPart({
         const rows: TableRow[] = goal.months.map((month) => {
           const started = month.current || month.past;
           const share = month.carried;
-          const plannedFigure =
-            month.planned === null ? null : (
-              <Figure variant="meta" value={month.planned} unit={unit as string} />
-            );
+          const screenAmount = screenPlanned(month.planned, (goal.ownMonths ?? []).includes(month.month));
+          const figureOf = (amount: number | null) =>
+            amount === null ? null : <Figure variant="meta" value={amount} unit={unit as string} />;
+          const plannedFigure = figureOf(screenAmount);
+          // A share that rounds to 0 is blank on screen and still printed (RP-76).
+          const paperOnly = screenAmount !== month.planned;
           const done = started ? (
             <Figure variant="meta" value={month.reached} unit={unit as string} />
           ) : null;
-          const status = month.current ? (
-            <Text wrap="nowrap">{t("current")}</Text>
-          ) : started ? (
-            <>
-              <Text wrap="nowrap">{t("closed")}</Text>
-              {share !== null
-                ? ` · ${t("carriedTo", { percent: share, month: nextMonth(month.month) })}`
-                : null}
-            </>
-          ) : plannedFigure ? (
-            <>
-              {plannedFigure} <Text wrap="nowrap">{t("planned")}</Text>
-            </>
-          ) : (
-            ""
-          );
-          // A started month's state sits in `detail`; its note only says the plan.
-          const phoneNote = started ? (
-            plannedFigure === null ? undefined : timed ? (
+          const statusOf = (figure: ReactNode) =>
+            month.current ? (
+              <Text wrap="nowrap">{t("current")}</Text>
+            ) : started ? (
+              <>
+                <Text wrap="nowrap">{t("closed")}</Text>
+                {share !== null
+                  ? ` · ${t("carriedTo", { percent: share, month: nextMonth(month.month) })}`
+                  : null}
+              </>
+            ) : figure ? (
+              <>
+                {figure} <Text wrap="nowrap">{t("planned")}</Text>
+              </>
+            ) : (
+              ""
+            );
+          const status = statusOf(plannedFigure);
+          const noteOf = (amount: number | null) =>
+            amount === null ? undefined : timed ? (
               <>
                 <Text variant="sentence">{t("of", { planned: "" })}</Text>
-                {plannedFigure}
+                {figureOf(amount)}
               </>
             ) : (
               <>
                 {/* The note's own mono face, so «de» shares the figure's line box; a no-break
                     space, so it never stays behind when the unit drops a line. */}
                 {`${t("of", { planned: "" }).trimEnd()}\u00a0`}
-                <Figure variant="meta" value={month.planned} unit={unit as string} breakUnit />
+                <Figure variant="meta" value={amount} unit={unit as string} breakUnit />
               </>
-            )
-          ) : (
-            status
-          );
+            );
+          // A started month's state sits in `detail`; its note only says the plan.
+          const phoneNote = started ? noteOf(screenAmount) : status;
+          const paperNote = paperOnly ? (
+            <PrintOnly>{started ? noteOf(month.planned) : statusOf(figureOf(month.planned))}</PrintOnly>
+          ) : undefined;
           return {
             key: month.month,
-            cells: [monthLabel(month.month), done, plannedFigure],
+            cells: [
+              monthLabel(month.month),
+              done,
+              paperOnly ? <PrintOnly>{figureOf(month.planned)}</PrintOnly> : plannedFigure,
+            ],
             detail: started ? status : undefined,
             phoneFigure: started ? month.reached : null,
-            phoneBare: month.planned !== null,
-            note: phoneNote,
+            phoneBare: screenAmount !== null,
+            note: paperNote ?? phoneNote,
             printed: printsOnPaper(month, goal.unit),
           };
         });

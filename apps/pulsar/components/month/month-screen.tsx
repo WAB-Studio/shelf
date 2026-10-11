@@ -11,6 +11,7 @@ import type { PlanItem } from "@/lib/plan/roadmap";
 import { nextMonth, partOf, settledMonths } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
@@ -80,6 +81,7 @@ export async function MonthDetail({
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
+  const rowPlanned = screenPlanned(row.planned, goal.plan.budgets.some((budget) => budget.month === mes));
   const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
 
@@ -103,11 +105,11 @@ export async function MonthDetail({
   // «planeado» and the amount alone, or «sin monto planeado» alone.
   const bareFuture = !closed && !row.current;
   const planned =
-    row.planned === null
+    rowPlanned === null
       ? t("month.noPlan")
       : bareFuture
-        ? say(row.planned)
-        : t("month.months.of", { planned: say(row.planned) });
+        ? say(rowPlanned)
+        : t("month.months.of", { planned: say(rowPlanned) });
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
   let note: ReactNode = null;
   if (closed) {
@@ -229,9 +231,9 @@ export async function MonthDetail({
         </Text>
       ) : null}
       {unit ? (
-        <Section label={bareFuture && row.planned === null ? undefined : label} as="div">
+        <Section label={bareFuture && rowPlanned === null ? undefined : label} as="div">
           <Flex align="baseline" gap="2">
-            {bareFuture ? null : <Figure value={row.reached} unit={unit} bare={row.planned !== null} />}
+            {bareFuture ? null : <Figure value={row.reached} unit={unit} bare={rowPlanned !== null} />}
             {open && !closed ? (
               <TextLink href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>
                 {planned}

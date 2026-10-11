@@ -32,11 +32,11 @@ const firstLine = `desde el ${dayOfMonth}: ${say(firstShare)} de tus 10 h`;
 async function seed(
   db: postgres.Sql,
   person: Person,
-  input: { name: string; openedOn: string | null; horizon: string },
+  input: { name: string; openedOn: string | null; horizon: string; rhythm?: number },
 ) {
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-    values (${person.id}, ${input.name}, ${input.horizon}::date, 'minutos', 'minutos', ${RHYTHM},
+    values (${person.id}, ${input.name}, ${input.horizon}::date, 'minutos', 'minutos', ${input.rhythm ?? RHYTHM},
       ${input.openedOn ? db`${input.openedOn}::date::timestamp at time zone 'America/Bogota'` : db`now() - interval '70 days'`})
     returning id
   `;
@@ -225,6 +225,32 @@ test("360 · a goal opened and ended inside one month reads «del N al M: …» 
     expect(await color(line)).not.toBe(await color(ink));
   } finally {
     await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
+test("360 · a share that rounds to 0 draws no line: there is no figure to explain", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  // The largest rhythm whose share of the days left in the month is still 0.
+  const dim = daysIn(year, monthIndex);
+  const rhythm = Math.ceil(dim / (dim - dayOfMonth + 1)) - 1;
+  test.skip(dayOfMonth === 1 || rhythm < 1, "no rhythm plans a 0 share");
+  const goalId = await seed(db, person, { name: "Parte cero", openedOn: today, horizon: horizonFar, rhythm });
+  try {
+    for (const path of [`/metas/${goalId}`, `/metas/${goalId}/meses/${monthOf(today).slice(0, 7)}`]) {
+      const { context, page } = await open(browser, baseURL!, person, 360, path);
+      try {
+        await expect(visible(page, /sin monto planeado/)).toHaveCount(1);
+        await expect(page.getByText(/^desde el \d+:|^hasta el \d+:|^del \d+ al \d+:/)).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    }
+  } finally {
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });

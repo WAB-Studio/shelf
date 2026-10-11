@@ -19,6 +19,7 @@ import { estimateFacts, type Task } from "@/lib/plan/carry";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planMoved, type PlanNotice } from "@/lib/plan/roadmap-read";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { phasePositions } from "@/lib/day/row-phrases";
 import { dayBefore } from "@/lib/day/weeks";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
@@ -534,7 +535,7 @@ function monthLineOf(
     });
     // A share of the rhythm that rounds to 0 reads on Hoy as a month with no
     // amount; a budget of 0 the person typed stays. The goal keeps its 0.
-    lines[goal.id] = !budget && line.planned === 0 ? { ...line, planned: null } : line;
+    lines[goal.id] = { ...line, planned: screenPlanned(line.planned, budget !== undefined) };
   }
   return lines;
 }

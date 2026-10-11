@@ -6,6 +6,7 @@ import type { EvidenceDay } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import { estimateFacts, type MonthItem } from "@/lib/plan/carry";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import {
@@ -168,15 +169,17 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       for (const amount of reachedByMonth({ unit, facts: [...declared, ...doneTasks], evidence }).values()) {
         reached += amount;
       }
-      line = monthLine({
+      const budget = row.budgets.find((entry) => entry.month === month) ?? null;
+      const raw = monthLine({
         month,
         today,
-        budget: row.budgets.find((budget) => budget.month === month) ?? null,
+        budget,
         reached,
         rhythm: plan.rhythm,
         openedOn: plan.openedOn,
         horizon: plan.horizon,
       });
+      line = { ...raw, planned: screenPlanned(raw.planned, budget !== null) };
     }
 
     return {

@@ -13,8 +13,10 @@ import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
 import { partOf } from "@/lib/plan/months";
+import { showsPaceLine } from "@/lib/plan/pace-line";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { planMonthList } from "@/lib/plan/roadmap-read";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
@@ -147,7 +149,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const monthEnd = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).toISOString().slice(0, 10);
   const lastDay = endDay < monthEnd ? endDay : monthEnd;
   const daysLeft = Math.round((Date.parse(`${lastDay}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
-  const planned = month?.planned ?? null;
+  const planned = screenPlanned(month?.planned ?? null, goal.plan.budgets.some((budget) => budget.month === `${today.slice(0, 7)}-01`));
   const percent = month && planned ? Math.floor((month.reached * 100) / planned) : 0;
   // A goal with no measure has no amount to read, but its months and their
   // tasks stay reachable (`MetaSinMedida.dc.html`).
@@ -227,8 +229,13 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     </Panel>
   ) : null;
   // Under 60 % from the 20th the pace line holds reached «de» planned itself.
-  const paceLine = planned !== null && planned > 0 && Boolean(month?.underPace) && goal.evidence !== "unreadable";
   const part = partOf(monthKey, goal.plan);
+  const paceLine = showsPaceLine({
+    planned,
+    underPace: Boolean(month?.underPace),
+    unreadable: goal.evidence === "unreadable",
+    ended,
+  });
   const monthBlock =
     goal.measureUnit && month ? (
       <Section label={monthName}>

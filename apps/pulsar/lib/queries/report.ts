@@ -217,6 +217,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         underPace: figures.month?.underPace ?? false,
       },
       toDate: toDate(figures.months),
+      ownMonths: row.budgets.map((budget) => budget.month),
       phases: phases.map((phase) => ({
         aim: phase.name,
         startsOn: phase.startsOn,
