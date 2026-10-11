@@ -188,10 +188,10 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
         // The block keeps saying it holds only what the person declared, never naming the source.
         await expect(page.getByText(/^solo lo que dijiste tú/).locator("visible=true")).toHaveCount(1);
         await expect(page.getByText(/^solo lo que dijiste tú/).locator("visible=true")).not.toContainText(/diccionario|lectura/i);
-        // Both figures of the month carry the unit (no-break space), as the total does.
+        // The month says its unit once, at the end (no-break space), as the total does.
         const month = page.getByText(/^solo lo que dijiste tú/).locator("visible=true").locator("xpath=..");
         await expect(month).toHaveCount(1);
-        await expect(month.locator("p").filter({ hasText: /^5\s.*de 12/ })).toHaveJSProperty("textContent", "5\u00a0páginas de 12\u00a0páginas");
+        await expect(month.locator("p").filter({ hasText: /^5 de 12/ })).toHaveJSProperty("textContent", "5 de 12\u00a0páginas");
         await expect(page.getByText(/llevas \d+ %|bajo el 60 %/).locator("visible=true")).toHaveCount(0);
         await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toBeVisible();
       }

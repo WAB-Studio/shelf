@@ -1184,7 +1184,9 @@ Taken by the user the same day, on the critic's three questions and two from the
 - **Approved the same day:** board `UnidadUnaVez` as drawn (`/metas`, the goal, `/meses`, a month, `/mes`, Hoy, `/exportar`);
   board `ReporteImpresoTareasFuera` option A — one line per group of months by task count («noviembre de 2026 y enero de 2027:
   sin monto · 1 tarea», «diciembre de 2026: sin monto»), the month with «de» in that sentence; option B is discarded.
-- **`/metas` on the phone shows the month's figure** in each goal's row, unit once («30 de 60 búsquedas»). Board to draw.
+- **`/metas` on the phone shows the month's figure** in each goal's row, unit once, under the name and above «hasta el …»:
+  «octubre · 30 de 60 búsquedas»; no amount keeps its unit («octubre · 18 búsquedas»); no measure, no figure. Board
+  `MetasConCifra` approved the same day.
 - **The shared month (first and last) reaches every reader** — Hoy, `/mes`, a connected AI — **and the plan fills it with its
   share** («A este ritmo terminas el…» moves later for a goal opened mid-month). RP-74; RP-71 retired for RP-75.
 - Decided by the orchestrator, from rules already taken: a goal that has ended has no month «en curso», no «ESTE MES» and no
