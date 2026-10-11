@@ -696,3 +696,85 @@ test("807 stray figure: a task and a sub-task with a figure in a km goal say wha
   const child = mistakesOf(`${head}- 2026-10 · Madre\n  - 3 · Hija\n`);
   assert.deepEqual(child, [{ line: 8, expected: "import.errors.estimateNotTime" }]);
 });
+
+const MONTH_REAL = "import.errors.form.monthReal";
+
+test("818 month real: a task in month 13 says the month does not exist, on its own line", () => {
+  assert.deepEqual(errorOf(`${HEAD}## Tareas\n- 2027-13 · 2 h · Simulacro\n`), { line: 7, expected: MONTH_REAL });
+});
+
+test("818 month real: a month in month 13 says the month does not exist", () => {
+  assert.deepEqual(errorOf(`${HEAD}## Meses\n- 2026-13 · 20 h\n`), { line: 7, expected: MONTH_REAL });
+});
+
+test("818 month real: month 00 says it too, not only months past 12", () => {
+  assert.equal(errorOf(`${HEAD}## Meses\n- 2026-00 · 20 h\n`).expected, MONTH_REAL);
+  assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-00 · 2 h · X\n`).expected, MONTH_REAL);
+});
+
+test("818 month real: a line with no month shape keeps the generic task form", () => {
+  assert.equal(errorOf(`${HEAD}## Tareas\n- octubre · 2 h · X\n`).expected, "import.errors.form.task");
+  assert.equal(errorOf(`${HEAD}## Meses\n- 2026-10 · 1 h\n- octubre · 20 h\n`).expected, "import.errors.form.month");
+});
+
+test("818 hrs: «8 hrs» in an hours goal reads as 480 minutes", () => {
+  assert.equal(draftOf(`${HEAD}## Meses\n- 2026-12 · 8 hrs\n`).months[0].amount, 480);
+});
+
+test("818 message: the key exists in the catalogue", () => {
+  assert.equal(
+    catalogue.errors.form.monthReal,
+    "Ese mes no existe: el mes va de 01 a 12, como «2026-10».",
+  );
+});
+
+const CRITIC_PLAN = [
+  "pulsar · plantilla 1",
+  "",
+  "# Inglés B2+ laboral",
+  "horizonte: 2028-02-01",
+  "medida: horas de estudio · horas",
+  "",
+  "## Meses",
+  "- 2026-10 · 10 h",
+  "- 2026-11 · 12 h",
+  "- 2026-12 · 8 hrs",
+  "- 2027-01 · 12 h",
+  "",
+  "## Compromisos",
+  "- Shadowing · cada día · 15 min",
+  "- Clase con tutor · martes y jueves · 1 h",
+  "",
+  "## Tareas",
+  "- 2026-10 · 4 h · Grabar audio de referencia",
+  "- 2026-11 · Elegir tutor",
+  "  - 1 h · Comparar tres perfiles",
+  "- 2027-13 · 2 h · Simulacro de entrevista",
+  "- 2027-10 · 3 h · Preparar historias STAR",
+  "",
+  "# Correr 10K",
+  "horizonte: 2027-04-01",
+  "medida: distancia · km",
+  "",
+  "## Meses",
+  "- 2026-10 · 40",
+  "- 2026-11 · 60",
+  "- 2026-12 · 70",
+  "",
+  "## Compromisos",
+  "- Trote suave · lunes, miércoles y viernes · 5",
+  "",
+  "## Tareas",
+  "- 2026-11 · 5 · Comprar zapatillas",
+  "- 2027-01 · Carrera de prueba 5K",
+].join("\n") + "\n";
+
+test("818 critic plan: the line of 2027-13 says the month does not exist, and no generic month or task form is said", () => {
+  const found = mistakesOf(CRITIC_PLAN);
+  const lines = CRITIC_PLAN.split("\n");
+  const real = found.filter((e) => e.expected === MONTH_REAL);
+  assert.equal(real.length, 1);
+  assert.equal(lines[real[0].line - 1], "- 2027-13 · 2 h · Simulacro de entrevista");
+  // The km goal's «5 · Comprar zapatillas» is the 807 stray figure, a real second mistake.
+  assert.deepEqual(found.filter((e) => e !== real[0]).map((e) => e.expected), ["import.errors.estimateNotTime"]);
+});
