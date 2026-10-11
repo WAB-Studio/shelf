@@ -3159,7 +3159,10 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - Run `check:unit` on every module that edits `messages/`, words-only included.
 
 ## A query that adds a field can change what paper prints
-- `printsOnPaper` (`lib/export/sections.ts`) reads `month.tasks !== undefined` as «measures nothing».
+- `printsOnPaper(month, unit)` (`lib/export/sections.ts`): a not-started month prints on a planned amount (0 counts); a
+  task makes it print only for a goal that measures nothing (`unit` null, RP-71). A time goal with no rhythm carries
+  `month.tasks` too, and its tasked months stay out and ride the left-out line (RP-75).
 - Measured 2026-10-11: 834 gave a time goal with no rhythm a task count; its months with an amount stopped printing, and 136
-  PDF specs went red in CI. Its own `check:*` were green: no check reads paper.
+  PDF specs went red in CI. The first fix counted tasks for every goal and left 835's line with nothing to name.
+  Never read `month.tasks !== undefined` as «measures nothing»: read `unit === null`.
 - Run `papel-*` and `exportar*` on any change to `lib/queries/report.ts`.

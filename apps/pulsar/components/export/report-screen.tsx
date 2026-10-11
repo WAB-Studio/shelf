@@ -387,10 +387,10 @@ function GoalPart({
                     : t("tasksToDo", { count: tasks.total }),
                 month.current ? t("current") : started ? t("closed") : t("upcoming"),
               ],
-              printed: printsOnPaper(month),
+              printed: printsOnPaper(month, goal.unit),
             };
           });
-          const out = goal.months.filter((m) => !printsOnPaper(m));
+          const out = goal.months.filter((m) => !printsOnPaper(m, goal.unit));
           return (
             <Section
               label={t("byMonth", { goal: goal.name })}
@@ -475,14 +475,24 @@ function GoalPart({
             phoneFigure: started ? month.reached : null,
             phoneBare: month.planned !== null,
             note: phoneNote,
-            printed: printsOnPaper(month),
+            printed: printsOnPaper(month, goal.unit),
           };
         });
-        const out = goal.months.filter((m) => !printsOnPaper(m));
+        const out = goal.months.filter((m) => !printsOnPaper(m, goal.unit));
         const outNames = format.list(
           out.map((m) => monthYear.format(civilDateToDate(m.month))),
           { type: "conjunction" },
         );
+        // A time goal with no rhythm counts tasks per month: the line groups the months by that count.
+        const outGroups = out.some((m) => m.tasks !== undefined)
+          ? out.reduce<{ total: number; months: typeof out }[]>((groups, m) => {
+              const total = m.tasks?.total ?? 0;
+              const group = groups.find((g) => g.total === total);
+              if (group) group.months.push(m);
+              else groups.push({ total, months: [m] });
+              return groups;
+            }, [])
+          : null;
         const current = goal.months.findIndex((m) => m.current);
         const week = goal.weeks.find((w) => w.current);
         const weekPlanned = goal.weekPlanned ?? null;
@@ -538,9 +548,25 @@ function GoalPart({
                 afterPrintOnly
                 after={
                   out.length > 0 ? (
-                    <Text as="p" variant="line">
-                      {t("monthsOut", { months: outNames })}
-                    </Text>
+                    outGroups ? (
+                      <>
+                        {outGroups.map((group) => (
+                          <Text as="p" variant="line" key={group.total}>
+                            {t("monthsOutCount", {
+                              months: format.list(
+                                group.months.map((m) => monthYear.format(civilDateToDate(m.month))),
+                                { type: "conjunction" },
+                              ),
+                              count: group.total,
+                            })}
+                          </Text>
+                        ))}
+                      </>
+                    ) : (
+                      <Text as="p" variant="line">
+                        {t("monthsOut", { months: outNames })}
+                      </Text>
+                    )
                   ) : undefined
                 }
               />
@@ -586,7 +612,7 @@ function GoalPart({
 
   const spans = (section: GoalSection) => (section !== "month" && section !== "toDate" ? "all" : undefined);
   return (
-    <PrintGoal whole={keepsHeadWithTable(goal.months)}>
+    <PrintGoal whole={keepsHeadWithTable(goal.months, goal.unit)}>
       <PrintBlock span="lead">
         <Flex direction="column" gap="3">
           <Text asChild variant="name" rule>
@@ -598,7 +624,7 @@ function GoalPart({
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
-        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(goal.months)} only={section === "months" && unit === null}>
+        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(goal.months, goal.unit)} only={section === "months" && unit === null}>
           {render(section)}
         </PrintBlock>
       ))}

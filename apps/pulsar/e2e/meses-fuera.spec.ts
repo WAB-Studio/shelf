@@ -33,12 +33,15 @@ type Spec = {
   to: number;
   // offset -> amount; an offset absent has no budget row.
   budgets: Record<number, number>;
+  // offset -> tasks planned in that month.
+  tasks?: Record<number, number>;
+  rhythm?: number;
 };
 
 async function seed(db: postgres.Sql, person: Person, spec: Spec): Promise<string> {
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
-    values (${person.id}, ${spec.name}, ${startOf(spec.to + 1)}::date, ${spec.measure}, ${spec.unit},
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${person.id}, ${spec.name}, ${startOf(spec.to + 1)}::date, ${spec.measure}, ${spec.unit}, ${spec.rhythm ?? null},
             (${startOf(spec.from)}::date + interval '14 days' + interval '12 hours')::timestamptz)
     returning id
   `;
@@ -47,6 +50,14 @@ async function seed(db: postgres.Sql, person: Person, spec: Spec): Promise<strin
       insert into goals.month_budgets (user_id, goal_id, month, amount)
       values (${person.id}, ${goal.id}, ${startOf(Number(offset))}::date, ${amount})
     `;
+  }
+  for (const [key, count] of Object.entries(spec.tasks ?? {})) {
+    for (let n = 1; n <= count; n++) {
+      await db`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month)
+        values (${person.id}, ${goal.id}, ${`Tarea ${key} ${n}`}, ${startOf(Number(key))}::date)
+      `;
+    }
   }
   return goal.id;
 }
@@ -84,6 +95,12 @@ function sectionOf(file: string, name: string): string {
 
 // A month named in the line reads «mes,», «mes y» or «mes:» — its table row always carries the year after it.
 const named = (section: string, offset: number) => new RegExp(`${nameOf(offset)}(?:,| y |:)`).test(section);
+
+const listed = (items: string[]) =>
+  items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+
+// A time goal with no rhythm: its tasks are what a not-started month holds (RP-75, board ReporteImpresoTareasFuera).
+const TIMED = { measure: "Práctica", unit: "minutos" };
 
 const countOf = (text: string) => /(\d+) mes(?:es)?\b/.exec(text)?.[0];
 
@@ -309,6 +326,114 @@ test.describe("the paper names the months it leaves out (RP-71)", () => {
     } finally {
       await context.close();
       for (const goalId of ids) await remove(db, person, goalId);
+    }
+  });
+});
+
+test.describe("a time goal with no rhythm says its left-out months' tasks (835, RP-75)", () => {
+  test("months with tasks group by count: «nov y ene: sin monto · 1 tarea», «dic: sin monto» alone", async ({
+    person, browser, baseURL, db,
+  }) => {
+    const name = `Portafolio ${Date.now()}`;
+    const id = await seed(db, person, { name, ...TIMED, from: 0, to: 3, budgets: {}, tasks: { 1: 1, 3: 1 } });
+    const { context, page } = await open(browser, baseURL!, person, A4);
+    try {
+      await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
+      const section = sectionOf(await printed(page, "tareas"), name);
+      expect(section).toContain(`${yearName(1)} y ${yearName(3)}: sin monto · 1 tarea`);
+      expect(section).toContain(`${yearName(2)}: sin monto`);
+      expect(section).not.toContain(`${yearName(2)}: sin monto ·`);
+      expect(section).not.toContain("0 tareas");
+      // The months with a task are in the line, never printed as table rows.
+      expect(section).not.toContain(labelOf(1));
+    } finally {
+      await context.close();
+      await remove(db, person, id);
+    }
+  });
+
+  test("two tasks read «2 tareas», in their own group", async ({ person, browser, baseURL, db }) => {
+    const name = `Portafolio dos ${Date.now()}`;
+    const id = await seed(db, person, { name, ...TIMED, from: 0, to: 2, budgets: {}, tasks: { 1: 2, 2: 1 } });
+    const { context, page } = await open(browser, baseURL!, person, A4);
+    try {
+      await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
+      const section = sectionOf(await printed(page, "dos-tareas"), name);
+      expect(section).toContain(`${yearName(1)}: sin monto · 2 tareas`);
+      expect(section).toContain(`${yearName(2)}: sin monto · 1 tarea`);
+    } finally {
+      await context.close();
+      await remove(db, person, id);
+    }
+  });
+
+  test("13 months out, one with a task: the line sits whole on the table's page", async ({
+    person, browser, baseURL, db,
+  }) => {
+    const name = `Certificacion ${Date.now()}`;
+    const id = await seed(db, person, { name, ...TIMED, from: 0, to: 13, budgets: {}, tasks: { 5: 1 } });
+    const { context, page } = await open(browser, baseURL!, person, A4);
+    try {
+      await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
+      const file = await printed(page, "certificacion");
+      const bare = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13].map(yearName);
+      const lines = [`${listed(bare)}: sin monto`, `${yearName(5)}: sin monto · 1 tarea`];
+      const pages = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" })
+        .split("\f")
+        .map((text) => text.replace(/\s+/g, " ").toLowerCase());
+      const head = pages.findIndex((text) => text.includes(`${name} · por mes`.toLowerCase()));
+      expect(head, "the goal's table in the PDF").toBeGreaterThanOrEqual(0);
+      for (const line of lines) expect(pages[head], line).toContain(line);
+    } finally {
+      await context.close();
+      await remove(db, person, id);
+    }
+  });
+
+  test("a goal with a rhythm names no task: every month has an amount, so no line", async ({
+    person, browser, baseURL, db,
+  }) => {
+    const name = `Ingles ${Date.now()}`;
+    const id = await seed(db, person, { name, ...TIMED, from: 0, to: 2, budgets: {}, rhythm: 600, tasks: { 1: 1 } });
+    const { context, page } = await open(browser, baseURL!, person, A4);
+    try {
+      await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
+      const section = sectionOf(await printed(page, "ritmo"), name);
+      expect(section).not.toContain("tarea");
+      expect(section).not.toContain("sin monto");
+      expect(section).toContain(labelOf(1));
+    } finally {
+      await context.close();
+      await remove(db, person, id);
+    }
+  });
+
+  test("another unit keeps «…: sin monto» and names no task", async ({ person, browser, baseURL, db }) => {
+    const name = `Correr tareas ${Date.now()}`;
+    const id = await seed(db, person, { name, measure: "km", unit: "km", from: 0, to: 2, budgets: { 0: 40 }, tasks: { 1: 1 } });
+    const { context, page } = await open(browser, baseURL!, person, A4);
+    try {
+      await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
+      const section = sectionOf(await printed(page, "km-tareas"), name);
+      expect(section).toContain(`${yearName(1)} y ${yearName(2)}: sin monto`);
+      expect(section).not.toContain("sin monto ·");
+      expect(section).not.toContain("tarea ");
+    } finally {
+      await context.close();
+      await remove(db, person, id);
+    }
+  });
+
+  test("on screen the line does not exist", async ({ person, browser, baseURL, db }) => {
+    const name = `Portafolio pantalla ${Date.now()}`;
+    const id = await seed(db, person, { name, ...TIMED, from: 0, to: 3, budgets: {}, tasks: { 1: 1, 3: 1 } });
+    const { context, page } = await open(browser, baseURL!, person, { width: 1440, height: 900 });
+    try {
+      await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(/: sin monto/).locator("visible=true")).toHaveCount(0);
+    } finally {
+      await context.close();
+      await remove(db, person, id);
     }
   });
 });
