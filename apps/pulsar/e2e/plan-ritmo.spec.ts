@@ -211,6 +211,45 @@ for (const width of [390, 1440]) {
       }
     });
 
+    // Every month the sheet's preview names carries its year, this year's too.
+    test("the sheet's on-time preview names the year of the end", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 720);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByRole("button", { name: "Ritmo 12 h al mes" }).click();
+        const sheet = page.getByRole("dialog");
+        await sheet.getByRole("radio", { name: "20 h" }).click();
+        const month = monthOf(today);
+        const name = monthFormat.format(new Date(`${month}T12:00:00Z`));
+        await expect(
+          sheet.getByText(new RegExp(`^Con 20 h al mes terminas el \\d{1,2} de ${name} de ${month.slice(0, 4)}, a tiempo\\.`)),
+        ).toBeVisible();
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("the sheet's late preview names the year of the end", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 720);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByRole("button", { name: "Ritmo 12 h al mes" }).click();
+        const sheet = page.getByRole("dialog");
+        // 20 h at 1 h a month ends 19 months out, past a horizon a year away.
+        await sheet.getByPlaceholder("otra").fill("1");
+        let end = monthOf(today);
+        for (let i = 0; i < 19; i++) end = nextMonth(end);
+        const name = monthFormat.format(new Date(`${end}T12:00:00Z`));
+        await expect(
+          sheet.getByText(
+            new RegExp(`^Con 1 h al mes terminas el \\d{1,2} de ${name} de ${end.slice(0, 4)}, \\d+ semanas después de tu final\\.`),
+          ),
+        ).toBeVisible();
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
     test("the selected chip is a soft fill, not the solid of the primary button", async ({ page, db, personId }) => {
       const goalId = await seedGoal(db, personId, null);
       try {
