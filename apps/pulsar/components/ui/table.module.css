@@ -105,6 +105,12 @@
   white-space: normal;
 }
 
+/* A note naming a long unit («0 de 60 búsquedas») breaks at a word instead
+   of pushing the chevron out; one that fits stays on its line. */
+.narrow.wrapNote .stackNote {
+  white-space: normal;
+}
+
 .wrapDetail .detail,
 .wrapDetail .detailWide {
   white-space: normal;
