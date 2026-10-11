@@ -69,7 +69,8 @@ Dark, the same design inverted:
 - The accent is a different hex per face, not one colour at two opacities. `#1C6E5A` has too little
   contrast on the dark ground; `#4FBEA0` has too little on the light one.
 - **muted is the smallest text colour there is.** `quiet` never carries a word a person must read:
-  it draws strokes, empty marks and the units beside a figure.
+  it draws strokes and empty marks. The unit beside a figure, in a `Figure` or a table cell or header,
+  is muted on both faces: in quiet it read 2.96:1 dark and 3.11:1 light. Decided by the user 2026-10-11.
 - Text on the accent is `#FFFFFF` on the light face and `#0F1317` on the dark one.
 
 ## Type
@@ -80,7 +81,7 @@ Dark, the same design inverted:
   goal or a group, never a state.
 - Set a screen title at 27 px / 600 / `-0.02em` on the phone, 38–44 px / 600–700 / `-0.03em` wide.
 - Set a commitment name at 16 px / 500. Its metadata line is mono 12 in muted.
-- Set the measure at 26 px mono / 500, with its unit beside it at mono 11 in quiet.
+- Set the measure at 26 px mono / 500, with its unit beside it at mono 11 in muted.
 - Set a sheet's title at 21 px / 600 / `-0.02em`, and the line under it at 15 px / 1.6 in ink
   secondary. Both are what `HoyCantidad.dc.html` and `CompromisoRetirar.dc.html` already draw;
   written down 2026-09-22, when a primitive reached for 19 px and 14 px because no role here
