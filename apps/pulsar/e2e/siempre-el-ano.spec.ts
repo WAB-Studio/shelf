@@ -22,8 +22,10 @@ function shift(day: string, by: number): string {
 
 // ICU's Spanish, never the catalogue's list the screen reads.
 function dayWords(day: string): string {
-  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(civilDateToDate(day));
-  return `${weekday} ${Number(day.slice(8, 10))}`;
+  const parts = new Intl.DateTimeFormat("es", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+    .formatToParts(civilDateToDate(day));
+  const part = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${part("weekday")} ${part("day")} de ${part("month")} de ${part("year")}`;
 }
 
 async function seedOpen(db: postgres.Sql, personId: string, name: string, horizon: string) {
@@ -126,6 +128,56 @@ test("Semana's «terminó» line ends at the words, with no separator before «v
   const openId = await seedOpen(db, personId, `Abierta ${Date.now()}`, shift(today, 60));
   const endedId = await seedEnded(db, personId, name, lastDay);
   try {
+    await open(page, "/semana");
+    await expect(page.getByText(`terminó el ${dayWords(lastDay)}`, { exact: true }).filter({ visible: true })).toHaveCount(1);
+  } finally {
+    await drop(db, [openId, endedId]);
+  }
+});
+
+async function seedDated(db: postgres.Sql, personId: string, name: string, createdAt: string, horizon: string) {
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, ${name}, ${horizon}::date, ${new Date(`${createdAt}T17:00:00Z`)}) returning id
+  `;
+  return goal.id;
+}
+
+test("a goal's page names the year it was opened and the year it ended", async ({ page, db, personId }) => {
+  const old = await seedDated(db, personId, `Viejo reto ${Date.now()}`, "2025-10-20", "2025-11-21");
+  const long = await seedDated(db, personId, `Año largo ${Date.now()}`, "2025-12-24", "2028-01-01");
+  try {
+    await open(page, `/metas/${old}`);
+    await expect(page.getByText("meta · abierta el 20 de octubre de 2025", { exact: true })).toBeVisible();
+    await expect(page.getByText("terminó el jueves 20 de noviembre de 2025", { exact: true })).toBeVisible();
+    await open(page, `/metas/${long}`);
+    await expect(page.getByText("meta · abierta el 24 de diciembre de 2025", { exact: true })).toBeVisible();
+  } finally {
+    await drop(db, [old, long]);
+  }
+});
+
+test("/metas names the year of an ended goal's last day", async ({ page, db, personId }) => {
+  const name = `Viejo reto ${Date.now()}`;
+  const id = await seedDated(db, personId, name, "2025-10-20", "2025-11-21");
+  try {
+    await open(page, "/metas");
+    await expect(page.getByRole("link", { name: new RegExp(`^${name}`) })).toContainText("terminó el 20 nov 2025");
+  } finally {
+    await drop(db, [id]);
+  }
+});
+
+test("Hoy's and Semana's «terminó» line names the month and the year", async ({ page, db, personId }) => {
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  test.skip(weekday === 1 || weekday === 2, "lunes y martes dos días atrás cae en la semana pasada");
+  const name = `Meta fin ${Date.now()}`;
+  const lastDay = shift(today, -2);
+  const openId = await seedOpen(db, personId, `Abierta ${Date.now()}`, shift(today, 60));
+  const endedId = await seedEnded(db, personId, name, lastDay);
+  try {
+    await open(page, "/");
+    await expect(page.getByText(`${name} terminó el ${dayWords(lastDay)}`, { exact: true })).toHaveCount(1);
     await open(page, "/semana");
     await expect(page.getByText(`terminó el ${dayWords(lastDay)}`, { exact: true }).filter({ visible: true })).toHaveCount(1);
   } finally {

@@ -28,14 +28,13 @@
   },
   "ended": {
     "yesterday": "{goal} terminó ayer",
-    "on": "{goal} terminó el {weekday} {day}",
-    "onFar": "{goal} terminó el {weekday} {day} de {month}",
+    "on": "{goal} terminó el {weekday} {day} de {month} de {year}",
     "see": "ver",
     "seeLabel": "Abrir {goal}"
   },
   "allEnded": {
     "title": "Hoy no pide nada.",
-    "body": "{goal} terminó el {date}. Puedes moverle el final o abrir otra.",
+    "body": "{goal} terminó el {date} de {year}. Puedes moverle el final o abrir otra.",
     "toGoals": "Ver las metas",
     "newGoal": "Abrir otra meta"
   },

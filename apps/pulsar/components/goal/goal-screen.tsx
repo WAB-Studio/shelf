@@ -47,13 +47,14 @@ import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { MoveHorizonAction } from "./horizon-sheet";
 import { RenameGoalAction } from "./rename-sheet";
 
-// "22 de septiembre": the day a goal was opened or archived, in the person's
+// "22 de septiembre de 2026": the day a goal was opened or archived, in the person's
 // own zone (RNP-06) and in words, never a locale this design does not
 // otherwise use.
 function longDateLabel(instant: string): string {
   return new Intl.DateTimeFormat("es-CO", {
     day: "numeric",
     month: "long",
+    year: "numeric",
     timeZone: TIME_ZONE,
   }).format(new Date(instant));
 }
@@ -68,6 +69,7 @@ function endedOnWords(endedOn: string, t: Translator): string {
     weekday: weekdays[words.weekday],
     day: words.day,
     month: months[words.month ?? 0],
+    year: endedOn.slice(0, 4),
   });
 }
 

@@ -179,7 +179,7 @@ for (const [width, height] of WIDTHS) {
       try {
         await withPage({ person, browser, baseURL }, async (page) => {
           await page.goto(`/metas/${goalId}`);
-          await expect(page.getByText("terminó el viernes 31 de julio")).toBeVisible();
+          await expect(page.getByText("terminó el viernes 31 de julio de 2026")).toBeVisible();
           await expect(page.getByText(/semanas? · hasta el /)).toHaveCount(0);
           await expect(page.getByRole("button", { name: "mover el final" })).toHaveCount(0);
         });
