@@ -2398,6 +2398,7 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runGoallessDaylessCheck();
   await runEvidenceInfoAndFirstGoalDayCheck();
   await runWeekAcrossMonthEvidenceCheck();
+  await runSharedMonthLineCheck();
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the
@@ -3263,3 +3264,55 @@ void (async () => {
     process.exit(1);
   }
 })();
+
+// RP-74: a goal from 5 to 20 October 2010 at 620 a month plans 320 on Hoy,
+// and the pace line on the 20th reads that share: 191 is under 60 %, 192 not.
+async function runSharedMonthLineCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runSharedMonthLineCheck: no verified session");
+  const userId = person.id;
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId: string | null = null;
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${userId}, 'shared month-line probe', '2010-10-21'::date, 'searches', 'searches', 620,
+              '2010-10-05T12:00:00-05:00'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${userId}, ${goalId}, 'shared month-line quantity', 'daily', 'quantity', 10, 'searches',
+              '2010-10-05T12:00:00-05:00'::timestamptz)
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${userId}, ${goalId}, ${commitment.id}, '2010-10-06'::date, 191)
+    `;
+    const under = (await loadDay("2010-10-20")).monthLine[goalId];
+    assert(
+      "RP-74: Hoy's month line plans the share, 320 of 620, and 191 of it on the 20th is under pace",
+      under?.planned === 320 && under.reached === 191 && under.underPace === true,
+      `monthLine = ${JSON.stringify(under)}`,
+    );
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${userId}, ${goalId}, ${commitment.id}, '2010-10-07'::date, 1)
+    `;
+    const on = (await loadDay("2010-10-20")).monthLine[goalId];
+    assert(
+      "RP-74: 192 of the 320 share sits on the line and is not under pace",
+      on?.planned === 320 && on.reached === 192 && on.underPace === false,
+      `monthLine = ${JSON.stringify(on)}`,
+    );
+  } finally {
+    if (goalId) await db`delete from goals.goals where id = ${goalId}`;
+    await db.end();
+  }
+}

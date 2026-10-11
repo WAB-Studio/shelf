@@ -29,6 +29,7 @@ import {
   monthLine,
   monthOf,
   monthRows,
+  plannedOf,
   reachedByMonth,
   type MonthBudget,
   type MonthRow,
@@ -432,6 +433,8 @@ export function goalFigures(input: {
             budget: budgets.find((budget) => budget.month === monthOf(today)) ?? null,
             reached: thisMonth.reached,
             rhythm,
+            openedOn,
+            horizon: goal.horizon,
           }),
         };
 
@@ -670,7 +673,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
       facts: [...declared, ...doneTasks],
       evidence: evidenceDaysFor(unit, row.measure_sources, evidenceOutcome.bySourceKey),
     }).get(month) ?? 0;
-    const planned = row.budgets.find((budget) => budget.month === month)?.amount ?? rhythm;
+    const planned = plannedOf(month, plan);
     if (planned === null && reached === 0) return null;
     return { kind: "amount", month, planned, reached };
   };

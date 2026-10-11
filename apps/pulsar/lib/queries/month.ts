@@ -173,7 +173,9 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
         today,
         budget: row.budgets.find((budget) => budget.month === month) ?? null,
         reached,
-        rhythm: row.goal.rhythm ?? null,
+        rhythm: plan.rhythm,
+        openedOn: plan.openedOn,
+        horizon: plan.horizon,
       });
     }
 
