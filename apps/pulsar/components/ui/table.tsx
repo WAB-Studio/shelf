@@ -73,6 +73,9 @@ type TableProps = {
   // Off `narrow`, an unlinked row's note drops under the label and figure when
   // even its narrowest form does not fit beside them.
   wrapNote?: boolean;
+  // Like `wrapNote` for a `narrow` table, but only from 1024 to 1279px, where the
+  // list's column is narrowest: a note that fits keeps its line at every other width.
+  wrapNoteInRail?: boolean;
   // Folds the whole table under a link-card with this text, closed
   // (`ReportePlegado.dc.html`'s «Ver las 9 semanas»). Paper never prints it.
   fold?: string;
@@ -94,7 +97,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, fold, after, afterPrintOnly }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, wrapNoteInRail, fold, after, afterPrintOnly }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -230,7 +233,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     </>
   );
 
-  const className = join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined, wrapDetail ? styles.wrapDetail : undefined, fitDetail ? styles.fitDetail : undefined, wrapNote ? styles.wrapNote : undefined);
+  const className = join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined, wrapDetail ? styles.wrapDetail : undefined, fitDetail ? styles.fitDetail : undefined, wrapNote ? styles.wrapNote : undefined, wrapNoteInRail ? styles.wrapNoteInRail : undefined);
   if (fold === undefined) return <div className={className}>{faces}</div>;
   return (
     <details className={join(className, styles.fold)}>
