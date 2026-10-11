@@ -169,7 +169,7 @@ test("«Por mes» at 360, a km goal: «20 de 40 km», the unit once at the end",
   }
 });
 
-test("the month page of a searches goal says «0 búsquedas de 60 búsquedas» now and «planeado» with «80 búsquedas» ahead, never «searches»", async ({
+test("the month page of a searches goal says «0 de 60 búsquedas» now and «planeado» with «80 búsquedas» ahead, never «searches»", async ({
   person,
   browser,
   baseURL,
@@ -187,7 +187,8 @@ test("the month page of a searches goal says «0 búsquedas de 60 búsquedas» n
   try {
     await expect(page.locator("main").first()).toContainText("de 60 búsquedas");
     const now = flat(await page.locator("main").first().innerText());
-    expect(now).toContain("0 búsquedas de 60 búsquedas");
+    expect(now).toContain("0 de 60 búsquedas");
+    expect(now).not.toContain("0 búsquedas de 60 búsquedas");
     expect(now).not.toMatch(/searches/i);
 
     await page.goto(`/metas/${goalId}/meses/${seg(nextOne)}`);
@@ -200,14 +201,57 @@ test("the month page of a searches goal says «0 búsquedas de 60 búsquedas» n
   }
 });
 
-test("/mes lists a searches goal as «0 búsquedas de 67 búsquedas», never «searches»", async ({ person, browser, baseURL, db }) => {
-  const goalId = await seedGoal(db, person, { name: "Global búsquedas", unit: SEARCHES, budgets: [[thisMonth, 67]] });
+test("/mes says the unit once: «0 de 67 búsquedas», «15 de 40 km»; no amount keeps «0 min», never «searches»", async ({ person, browser, baseURL, db }) => {
+  const searches = await seedGoal(db, person, { name: "Global búsquedas", unit: SEARCHES, budgets: [[thisMonth, 67]] });
+  const km = await seedGoal(db, person, { name: "Correr", unit: KM, budgets: [[thisMonth, 40]], fact: [today, 15] });
+  const minutes = await seedGoal(db, person, { name: "Portafolio", unit: MINUTES });
+  await seedTask(db, person, minutes, "Pulir casos", thisMonth, 30);
+  const bare = await seedGoal(db, person, { name: "Sin monto búsquedas", unit: SEARCHES });
+  await seedTask(db, person, bare, "Revisar listas", thisMonth, 5);
   const { page, close } = await visit(browser, baseURL, person, "/mes", 360);
   try {
     const main = page.locator("main").first();
     // The figure and its «de <monto>» sit in two boxes: the page's own gap is the space between them.
-    await expect(main).toContainText(/0\s*búsquedas\s*de\s*67\s*búsquedas/);
-    expect(flat(await main.innerText())).not.toMatch(/searches/i);
+    await expect(main).toContainText(/0\s*de\s*67\s*búsquedas/);
+    await expect(main).toContainText(/15\s*de\s*40\s*km/);
+    const text = flat(await main.innerText());
+    expect(text).not.toMatch(/0 búsquedas de 67/);
+    expect(text).not.toMatch(/15 km de 40/);
+    expect(text).not.toMatch(/searches/i);
+    const portfolio = flat(await page.locator("section", { hasText: "Portafolio" }).first().innerText());
+    expect(portfolio).toContain("0 min");
+    expect(portfolio).toContain("sin monto este mes");
+    // A figure with no «de» keeps its unit.
+    const unamounted = flat(await page.locator("section", { hasText: "Sin monto búsquedas" }).first().innerText());
+    expect(unamounted).toContain("0 búsquedas");
+  } finally {
+    await close();
+    for (const id of [searches, km, minutes, bare]) await drop(db, person, id);
+  }
+});
+
+test("the month page of a time goal says «2 h de 8 h», the time keeps «h», never «2 de 8 h»", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Inglés", unit: MINUTES, budgets: [[thisMonth, 480]], fact: [today, 120] });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/meses/${seg(thisMonth)}`, 360);
+  try {
+    const block = await amountBlock(page, "este mes");
+    expect(block).toContain("2 h de 8 h");
+    expect(block).not.toMatch(/\b2 de 8 h/);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("/mes says «2 h de 8 h» for a time goal, the time keeps «h», never «2 de 8 h»", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Inglés", unit: MINUTES, budgets: [[thisMonth, 480]], fact: [today, 120] });
+  const { page, close } = await visit(browser, baseURL, person, "/mes", 360);
+  try {
+    const section = page.locator("section", { hasText: "Inglés" }).first();
+    await expect(section).toContainText(/2\s*h\s*de\s*8\s*h/);
+    const text = flat(await section.innerText());
+    expect(text).toMatch(/2 h de 8 h/);
+    expect(text).not.toMatch(/\b2 de 8 h/);
   } finally {
     await close();
     await drop(db, person, goalId);
@@ -297,7 +341,7 @@ test("a future month with no amount says «sin monto planeado» alone", async ({
   }
 });
 
-test("the month in progress and the closed month keep their figure and «de <monto>»", async ({ person, browser, baseURL, db }) => {
+test("the month in progress and the closed month say «20 de 40 km» and «0 de 10 km», the unit once", async ({ person, browser, baseURL, db }) => {
   const goalId = await seedGoal(db, person, {
     name: "Actual y pasado",
     unit: KM,
@@ -309,10 +353,24 @@ test("the month in progress and the closed month keep their figure and «de <mon
   });
   const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/meses/${seg(thisMonth)}`, 360);
   try {
-    expect(await amountBlock(page, "este mes")).toBe("este mes 20 km de 40 km");
+    expect(await amountBlock(page, "este mes")).toBe("este mes 20 de 40 km");
     await page.goto(`/metas/${goalId}/meses/${seg(lastMonth)}`);
     const closed = await amountBlock(page, "cerrado");
-    expect(closed).toMatch(/^cerrado 0 km de 10 km/);
+    expect(closed).toMatch(/^cerrado 0 de 10 km/);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("the month in progress with no amount keeps its unit: «este mes 20 km» and «sin monto planeado»", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Actual sin monto", unit: KM, fact: [today, 20] });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/meses/${seg(thisMonth)}`, 360);
+  try {
+    const block = await amountBlock(page, "este mes");
+    expect(block).toContain("20 km");
+    expect(block).toContain("sin monto planeado");
+    expect(block).not.toContain(" de ");
   } finally {
     await close();
     await drop(db, person, goalId);
