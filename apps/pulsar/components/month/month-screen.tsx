@@ -12,7 +12,8 @@ import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
-import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { timeWordsOf } from "@/lib/units/time-words";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 
@@ -71,12 +72,7 @@ export async function MonthDetail({
   if (!row) notFound();
 
   const t = await getTranslations();
-  const units = await getTranslations("units");
-  const words: TimeWords = {
-    h: (h) => units("h", { h }),
-    min: (min) => units("min", { min }),
-    join: (h, min) => units("join", { h, min }),
-  };
+  const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const name = monthLabel(mes);
   const unit = goal.measureUnit;
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
@@ -102,11 +98,15 @@ export async function MonthDetail({
     (task) => task.estimate ?? 0,
   );
 
+  // A month that has not begun has nothing reached to show beside its amount:
+  // «planeado» and the amount alone, or «sin monto planeado» alone.
+  const bareFuture = !closed && !row.current;
   const planned =
-    row.planned === null ? t("month.noPlan") : t("month.months.of", { planned: say(row.planned) });
-  // A future month with no amount has nothing reached to show beside
-  // «planeado»: the one phrase stands alone.
-  const bareFuture = row.planned === null && !closed && !row.current;
+    row.planned === null
+      ? t("month.noPlan")
+      : bareFuture
+        ? say(row.planned)
+        : t("month.months.of", { planned: say(row.planned) });
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
   let note: ReactNode = null;
   if (closed) {
@@ -228,7 +228,7 @@ export async function MonthDetail({
         </Text>
       ) : null}
       {unit ? (
-        <Section label={bareFuture ? undefined : label} as="div">
+        <Section label={bareFuture && row.planned === null ? undefined : label} as="div">
           <Flex align="baseline" gap="2">
             {bareFuture ? null : <Figure value={row.reached} unit={unit} />}
             {open && !closed ? (
