@@ -523,7 +523,7 @@ function monthLineOf(
       evidenceOutcome.bySourceKey,
     );
     const budget = row.month_budgets.find((b) => b.goal_id === goal.id && b.month === month);
-    lines[goal.id] = monthLine({
+    const line = monthLine({
       month,
       today: day,
       budget: budget ? { month, amount: budget.amount } : null,
@@ -532,6 +532,9 @@ function monthLineOf(
       openedOn: civilDateInZone(new Date(goal.created_at)),
       horizon: goal.horizon,
     });
+    // A share of the rhythm that rounds to 0 reads on Hoy as a month with no
+    // amount; a budget of 0 the person typed stays. The goal keeps its 0.
+    lines[goal.id] = !budget && line.planned === 0 ? { ...line, planned: null } : line;
   }
   return lines;
 }
