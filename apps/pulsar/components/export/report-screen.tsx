@@ -473,6 +473,7 @@ function GoalPart({
             cells: [monthLabel(month.month), done, plannedFigure],
             detail: started ? status : undefined,
             phoneFigure: started ? month.reached : null,
+            phoneBare: month.planned !== null,
             note: phoneNote,
             printed: printsOnPaper(month),
           };
