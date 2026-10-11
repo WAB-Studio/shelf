@@ -129,6 +129,16 @@
   flex: 1 1 0;
 }
 
+.wholeNote .stackRow {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.wholeNote .stackRow > .stackNote {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
 .wrapDetail .detail,
 .wrapDetail .detailWide {
   white-space: normal;
