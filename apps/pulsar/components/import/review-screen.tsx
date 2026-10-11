@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
@@ -109,25 +109,6 @@ function withAmount(draft: ImportDraft, path: string, amount: number): ImportDra
   return next;
 }
 
-// Two cards side by side need 1280px beside the source column; from 1024 to
-// there, each goal's card takes the full width of its column.
-const WIDE = "(min-width: 1280px)";
-const watchWide = (notify: () => void) => {
-  const query = window.matchMedia(WIDE);
-  query.addEventListener("change", notify);
-  return () => query.removeEventListener("change", notify);
-};
-
-function GoalCards({ wide, children }: { wide: boolean; children: ReactNode }) {
-  return wide ? (
-    <PanelGrid>{children}</PanelGrid>
-  ) : (
-    <Flex direction="column" gap="6">
-      {children}
-    </Flex>
-  );
-}
-
 type Editing = { path: string; title: string; unit: string; amount: number; schema: "month" | "task" | "rhythm" };
 
 /**
@@ -152,11 +133,6 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   // The names the draft is first measured against; a server refresh never re-reads it.
   const [startNames] = useState(openGoalNames);
   const confirmed = useRef(false);
-  const wide = useSyncExternalStore(
-    watchWide,
-    () => window.matchMedia(WIDE).matches,
-    () => true,
-  );
 
   // The tab's storage is only there once mounted; the server paints no draft.
   useEffect(() => {
@@ -413,7 +389,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         </Section>
       ) : null}
 
-      <GoalCards wide={wide}>
+      <PanelGrid from="wide">
       {work.goals.map((goal, g) => {
         const at = goalPath(g);
         if (refused.has(`${at}.horizon`)) return null;
@@ -620,7 +596,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
           </Panel>
         );
       })}
-      </GoalCards>
+      </PanelGrid>
 
       {failure ? <Notice>{failure}</Notice> : null}
 

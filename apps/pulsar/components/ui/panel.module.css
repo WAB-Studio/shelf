@@ -66,6 +66,13 @@
   }
 }
 
+/* `from="wide"`: from 1024 to 1279px the cards stay the parent's own items. */
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .grid.fromWide {
+    display: contents;
+  }
+}
+
 /* `print="plain"`: on paper a panel is its content, no card. `PanelGrid`'s
    `print="stack"` lays the panels in one full-width column. */
 @media print {
