@@ -210,7 +210,8 @@ test("fix_task fixes through the door, get_month reads it fixed and its part, un
     goal_id: goalId, name: "leer", cadence_kind: "daily", satisfaction: "quantity", target_quantity: 30, unit: "minutos",
   });
   assert.equal(commitment.isError, false, JSON.stringify(commitment.body));
-  await admin`update goals.goals set rhythm = 600 where id = ${goalId}`;
+  // Opened on the 1st, Bogotá's midnight: this month plans the whole 600 (RP-74) whatever the run date.
+  await admin`update goals.goals set rhythm = 600, created_at = ${`${current}-01T00:00:00-05:00`} where id = ${goalId}`;
 
   const big = await tool(key, "create_task", { name: "tesis", goal_id: goalId, estimate: 900, in_plan: true });
   assert.equal(big.isError, false, JSON.stringify(big.body));

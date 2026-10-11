@@ -25,10 +25,11 @@ const farHorizon = `${Number(thisYear) + 2}-01-01`;
 type Db = postgres.Sql;
 type Seed = { name: string; estimate: number | null; fixed?: string; done?: boolean; parent?: string };
 
-async function seedGoal(db: Db, personId: string, rhythm: number | null, horizon: string, createdAgo = "3 days") {
+// Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
+async function seedGoal(db: Db, personId: string, rhythm: number | null, horizon: string) {
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-    values (${personId}, ${`Meta sobreviviente ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, now() - ${createdAgo}::interval)
+    values (${personId}, ${`Meta sobreviviente ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, ${`${m0}T00:00:00-05:00`}::timestamptz)
     returning id
   `;
   return goal.id;

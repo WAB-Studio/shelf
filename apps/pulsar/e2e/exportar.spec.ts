@@ -1384,9 +1384,10 @@ test.describe("a task split across months", () => {
       tutor: `Tutor ${stamp}`,
       long: `Construir un harness de evals ${stamp}`,
     };
+    // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-      values (${person.id}, ${`IA aplicada ${stamp}`}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      values (${person.id}, ${`IA aplicada ${stamp}`}, ${plusDays(150)}, 'minutos', 'minutos', 720, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
       returning id
     `;
     await db`
@@ -2009,9 +2010,10 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
       openChild: `Sesiones 1–4 ${stamp}`,
       split: `Dataset dorado ${stamp}`,
     };
+    // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-      values (${person.id}, ${names.goal}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      values (${person.id}, ${names.goal}, ${plusDays(150)}, 'minutos', 'minutos', 720, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
       returning id
     `;
     await db`
@@ -2407,9 +2409,10 @@ test.describe("what closes a task's row on the report (RP-49)", () => {
     const goalName = `Meta padre partido ${stamp}`;
     const filler = `Relleno ${stamp}`;
     const parentName = `Padre partido ${stamp}`;
+    // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-      values (${person.id}, ${goalName}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      values (${person.id}, ${goalName}, ${plusDays(150)}, 'minutos', 'minutos', 720, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
       returning id
     `;
     await db`

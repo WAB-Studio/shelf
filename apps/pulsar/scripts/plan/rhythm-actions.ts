@@ -9,6 +9,7 @@ import { after, before, test } from "node:test";
 import postgres from "postgres";
 
 import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type Person } from "../mcp/lib/people";
+import { plannedOf } from "@/lib/plan/months";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
 
 const admin = adminSql();
@@ -54,8 +55,10 @@ function monthFrom(day: string, delta: number): string {
   return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
 }
 
+const horizonOf = () => `${monthFrom(today, 3)}-01`;
+
 async function goal(person: Person, name: string, measured: boolean, unit = "minutos"): Promise<string> {
-  const horizon = `${monthFrom(today, 3)}-01`;
+  const horizon = horizonOf();
   const created = await as(person, () => plan.createGoal({ name, horizon }));
   if (!created.ok) throw new Error(`createGoal: ${created.error}`);
   if (measured) {
@@ -141,12 +144,12 @@ test("setRhythm: a rhythm lands and revalidates the goal as a layout and Hoy", a
   assert.deepEqual(revalidated, [{ path: `/metas/${goalId}`, type: "layout" }, { path: "/", type: undefined }]);
 });
 
-test("setRhythm: changing it writes the old one into closed months with no amount and leaves the others", async () => {
+test("setRhythm: changing it writes the old one's share into closed months with no amount and leaves the others", async () => {
   const goalId = await goal(owner, "cambio", true);
   goalIds.push(goalId);
   await openedTwoMonthsAgo(goalId);
-  const first = await as(owner, () => roadmap.setRhythm({ goalId, amount: 720 }));
-  assert.deepEqual(first, { ok: true });
+  const set = await as(owner, () => roadmap.setRhythm({ goalId, amount: 720 }));
+  assert.deepEqual(set, { ok: true });
   // The first rhythm has no old one to write.
   assert.deepEqual(await budgets(goalId), []);
 
@@ -155,8 +158,12 @@ test("setRhythm: changing it writes the old one into closed months with no amoun
   const changed = await as(owner, () => roadmap.setRhythm({ goalId, amount: 840 }));
   assert.deepEqual(changed, { ok: true });
   assert.equal(await rhythmOf(goalId), 840);
+  // Opened on the 15th: the first month keeps the share it was lived against (RP-74).
+  const first = `${monthFrom(today, -2)}-01`;
+  const share = plannedOf(first, { budgets: [], rhythm: 720, openedOn: `${monthFrom(today, -2)}-15`, horizon: horizonOf() });
+  assert.ok(share !== null && share < 720);
   assert.deepEqual(await budgets(goalId), [
-    { month: `${monthFrom(today, -2)}-01`, amount: 720 },
+    { month: first, amount: share },
     { month: `${monthFrom(today, -1)}-01`, amount: 55 },
   ]);
   // The open month and the ones after it stay untouched.
@@ -388,4 +395,16 @@ test("setRhythm: the first rhythm returns a pinned mother to the plan and leaves
   assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount: 600 })), { ok: true });
   assert.equal(await monthOfTask(mother), null);
   assert.deepEqual(await rowOf(), before);
+});
+
+test("setRhythm: a change freezes a whole closed month at the old rhythm and a first month opened on the 1st whole", async () => {
+  const goalId = await goal(owner, "mes entero", true);
+  goalIds.push(goalId);
+  await admin`update goals.goals set created_at = ${`${monthFrom(today, -2)}-01T12:00:00Z`} where id = ${goalId}`;
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount: 600 })), { ok: true });
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount: 900 })), { ok: true });
+  assert.deepEqual(await budgets(goalId), [
+    { month: `${monthFrom(today, -2)}-01`, amount: 600 },
+    { month: `${monthFrom(today, -1)}-01`, amount: 600 },
+  ]);
 });

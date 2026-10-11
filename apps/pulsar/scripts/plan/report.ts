@@ -224,7 +224,8 @@ before(async () => {
   // A goal with a rhythm and no month on its tasks: the plan places them.
   const rhythm = await goal("RP-49 fixture: ritmo", "minutos");
   rhythmGoalId = rhythm.goalId;
-  await sql`update goals.goals set rhythm = 20 where id = ${rhythmGoalId}`;
+  // Opened on the 1st, Bogotá's midnight: this month plans the whole 20 (RP-74) whatever the run date.
+  await sql`update goals.goals set rhythm = 20, created_at = ${`${thisMonth}-01T00:00:00-05:00`} where id = ${rhythmGoalId}`;
   for (const [position, name, estimate] of [
     [1, "RP-49 ritmo: primera", 8],
     [2, "RP-49 ritmo: segunda", 8],

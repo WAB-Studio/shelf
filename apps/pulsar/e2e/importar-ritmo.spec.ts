@@ -263,7 +263,8 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
             expect(task.planned_month).toBeNull();
           }
           await page.getByRole("link", { name: /IA aplicada/ }).first().click();
-          await expect(page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 10 h al mes/ })).toBeVisible();
+          // Imported today: the line still says the whole rhythm, never the share of this month.
+          await expect(page.getByRole("link", { name: new RegExp(`^A este ritmo terminas el .* Ritmo 10 h al mes`) })).toBeVisible();
         } finally {
           await db`delete from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
         }

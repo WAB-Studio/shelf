@@ -22,9 +22,10 @@ const named = (month: string) =>
 type Db = import("postgres").Sql;
 
 async function seed(db: Db, personId: string, stamp: number) {
+  // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-    values (${personId}, ${`Meta partes ${stamp}`}, ${horizon}::date, 'minutos', 'minutos', 600, now() - interval '3 days')
+    values (${personId}, ${`Meta partes ${stamp}`}, ${horizon}::date, 'minutos', 'minutos', 600, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
     returning id
   `;
   await db`

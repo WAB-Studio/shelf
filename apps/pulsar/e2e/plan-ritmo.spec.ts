@@ -27,10 +27,11 @@ async function expectCard(row: Locator) {
   expect(box).toEqual({ border: "1px", radius: "10px" });
 }
 
+// Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
 async function seedGoal(db: postgres.Sql, personId: string, rhythm: number | null) {
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${`Meta ritmo ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm})
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${personId}, ${`Meta ritmo ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, ${`${monthOf(today)}T00:00:00-05:00`}::timestamptz)
     returning id
   `;
   for (let index = 1; index <= 5; index++) {

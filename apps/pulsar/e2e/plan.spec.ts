@@ -40,10 +40,11 @@ async function expectCard(row: Locator) {
 
 type Db = postgres.Sql;
 
+// Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
 async function seedGoal(db: Db, personId: string, rhythm: number | null, horizon: string) {
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${`Meta plan ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm})
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${personId}, ${`Meta plan ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, ${`${m0}T00:00:00-05:00`}::timestamptz)
     returning id
   `;
   return goal.id;
@@ -416,5 +417,40 @@ test("«Mover el final» names the goal's last day and the plan's end, and a reo
     await expect(page.getByRole("dialog").getByRole("alert")).toHaveCount(0);
   } finally {
     await drop(db, personId, goalId);
+  }
+});
+
+// RP-74: a goal opened today plans this month only the share its days take, so 10 h of tasks at 10 h a month runs
+// into next month; opened on the 1st it ends on this month's last day. Figures by hand, never from `fillPlan`.
+// On the 1st both goals open the same day and the two ends are one.
+test("a goal opened mid-month ends later than one opened on the 1st: this month plans its share (RP-74)", async ({ page, db, personId }) => {
+  const daysIn = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const spoken = (day: string) => `${Number(day.slice(8, 10))} de ${NAMES[Number(day.slice(5, 7)) - 1]} de ${day.slice(0, 4)}`;
+  const length = daysIn(m0);
+  const share = Math.floor((600 * (length - Number(today.slice(8, 10)) + 1)) / length);
+  const whole = `${m0.slice(0, 8)}${length}`;
+  const late =
+    share === 600 ? whole : `${m1.slice(0, 8)}${String(Math.floor((daysIn(m1) * (600 - share) + 599) / 600)).padStart(2, "0")}`;
+  const horizon = `${Number(thisYear) + 2}-01-01`;
+
+  const onFirst = await seedGoal(db, personId, 600, horizon);
+  await seedTasks(db, personId, onFirst, [["Diez horas", 600]]);
+  const [opened] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
+    values (${personId}, ${`Meta plan hoy ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', 600)
+    returning id
+  `;
+  await seedTasks(db, personId, opened.id, [["Diez horas", 600]]);
+  try {
+    await page.goto(`/metas/${onFirst}/plan`);
+    await expect(page.getByText(new RegExp(`^A este ritmo terminas el ${spoken(whole)}, `, "u"))).toBeVisible();
+    await page.goto(`/metas/${opened.id}/plan`);
+    await expect(page.getByText(new RegExp(`^A este ritmo terminas el ${spoken(late)}, `, "u"))).toBeVisible();
+    // The goal's plan row says the whole rhythm the person set, never this month's share.
+    await page.goto(`/metas/${opened.id}`);
+    await expect(page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 10 h al mes/u })).toBeVisible();
+  } finally {
+    await drop(db, personId, onFirst);
+    await drop(db, personId, opened.id);
   }
 });

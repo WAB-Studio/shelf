@@ -64,9 +64,10 @@ async function open(page: Page, path: string) {
 }
 
 test("the first rhythm's preview names the year even when it is this one", async ({ page, db, personId }) => {
+  // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${`Meta año ${Date.now()}`}, ${`${year + 1}-${today.slice(5, 7)}-01`}::date, 'minutos', 'minutos', null)
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${personId}, ${`Meta año ${Date.now()}`}, ${`${year + 1}-${today.slice(5, 7)}-01`}::date, 'minutos', 'minutos', null, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
     returning id
   `;
   for (let index = 1; index <= 5; index++) {

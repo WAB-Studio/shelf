@@ -144,9 +144,10 @@ test("an override of 0 is skipped", () => {
 
 test("amountOf: the month's own amount, 0 included, else the rhythm, else null", () => {
   const budgets = [{ month: NOV, amount: 0 }];
-  assert.equal(amountOf(NOV, { budgets, rhythm: 12 }), 0);
-  assert.equal(amountOf(OCT, { budgets, rhythm: 12 }), 12);
-  assert.equal(amountOf(OCT, { budgets, rhythm: null }), null);
+  const span = { openedOn: "2026-08-01", horizon: "2027-07-01" };
+  assert.equal(amountOf(NOV, { budgets, rhythm: 12, ...span }), 0);
+  assert.equal(amountOf(OCT, { budgets, rhythm: 12, ...span }), 12);
+  assert.equal(amountOf(OCT, { budgets, rhythm: null, ...span }), null);
 });
 
 test("a 0-hour task takes the cursor's month and no room", () => {
@@ -418,4 +419,61 @@ test("a fixed task with no hours in a month of amount 0 ends on the month's last
     budgets: [{ month: NOV, amount: 0 }],
   });
   assert.equal(partIn(roadmap, NOV, "empty").endsOn, "2026-11-30");
+});
+
+// RP-74: the spec's own goal, 16 September to 7 October at 10 h a month.
+const SHORT = { budgets: [], rhythm: 600, openedOn: "2026-09-16", horizon: "2026-10-08" };
+
+test("amountOf: a goal's first month plans its share, 15 of 30 days of 600 is 300", () => {
+  assert.equal(amountOf(SEP, SHORT), 300);
+});
+
+test("amountOf: a goal's last month plans its share, 7 of 31 days of 600 is 135", () => {
+  assert.equal(amountOf(OCT, SHORT), 135);
+});
+
+test("amountOf: a first or last month with its own amount takes it whole", () => {
+  const budgets = [
+    { month: SEP, amount: 50 },
+    { month: OCT, amount: 70 },
+  ];
+  assert.equal(amountOf(SEP, { ...SHORT, budgets }), 50);
+  assert.equal(amountOf(OCT, { ...SHORT, budgets }), 70);
+});
+
+test("amountOf: the months past the goal's end keep the whole rhythm, or their own amount", () => {
+  assert.equal(amountOf(NOV, SHORT), 600);
+  assert.equal(amountOf("2036-10-01", SHORT), 600);
+  assert.equal(amountOf(DEC, { ...SHORT, budgets: [{ month: DEC, amount: 40 }] }), 40);
+});
+
+test("a goal opened on the 16th fills its first month with its share and runs the rest into the next", () => {
+  // October: floor(600 × 16 / 31) = 309; November: 291 of 600 over 30 days ends on ceil(14.55) = the 15th.
+  const roadmap = plan([task("a", { estimate: 600 })], { rhythm: 600, openedOn: "2026-10-16", today: "2026-10-16" });
+  assert.deepEqual(parts(roadmap, "a"), [
+    [OCT, 309],
+    [NOV, 291],
+  ]);
+  assert.equal(roadmap.months[0].amount, 309);
+  assert.equal(roadmap.end, "2026-11-15");
+});
+
+test("an item in a goal's first month ends over the goal's days, not the month's", () => {
+  // 150 of 309 over the 16 days from the 16th: the 16th + ceil(16 × 150 / 309) − 1 = the 23rd.
+  const roadmap = plan([task("a", { estimate: 150 })], { rhythm: 600, openedOn: "2026-10-16", today: "2026-10-16" });
+  assert.equal(roadmap.end, "2026-10-23");
+});
+
+test("a goal ending on 15 December fills December's share and runs past its end at the whole rhythm", () => {
+  // December: floor(600 × 15 / 31) = 290; January takes the other 310 of its 600, ending ceil(31 × 310 / 600) = the 17th.
+  const roadmap = plan([task("a", { estimate: 1800 })], { rhythm: 600, horizon: "2026-12-16" });
+  assert.deepEqual(parts(roadmap, "a"), [
+    [OCT, 600],
+    [NOV, 600],
+    [DEC, 290],
+    [JAN, 310],
+  ]);
+  assert.equal(roadmap.months.find((m) => m.month === JAN)?.amount, 600);
+  assert.equal(roadmap.end, "2027-01-17");
+  assert.equal(partIn(roadmap, JAN, "a").pastEnd, true);
 });
