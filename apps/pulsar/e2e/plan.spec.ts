@@ -186,13 +186,16 @@ for (const width of [390, 1440]) {
       return { horizon: nextMonth(m2), tasks: [["A", 480], ["B", 480], ["C", 480], ["D", 240], ["E", 300]] as [string, number][] };
     }
 
-    // Three months of tasks from this month on: the plan ends soonest, in this year until Q4's last month.
+    // One 8 h task per month left in the year, from this month on, runs the plan to December of this year.
+    // In December the plan would end in January, so the same-year case cannot be drawn.
     test("the day the plan ends carries its year even when it falls in the current year", async ({ page, db, personId }) => {
+      const month = Number(today.slice(5, 7));
+      test.skip(month === 12, "in December the plan ends in January: no same-year end to draw");
       const goalId = await seedGoal(db, personId, 480, m1);
-      await seedTasks(db, personId, goalId, [["A", 480], ["B", 480], ["C", 480]]);
+      await seedTasks(db, personId, goalId, Array.from({ length: Math.max(13 - month, 2) }, (_, i): [string, number] => [`Tarea ${i + 1}`, 480]));
       try {
         await page.goto(`/metas/${goalId}/plan`);
-        await expect(page.getByText(/^Al \d{1,2} de \p{L}+ de \d{4}, donde termina el plan\.$/u)).toBeVisible();
+        await expect(page.getByText(new RegExp(`^Al \\d{1,2} de \\p{L}+ de ${thisYear}, donde termina el plan\\.$`, "u"))).toBeVisible();
       } finally {
         await drop(db, personId, goalId);
       }
