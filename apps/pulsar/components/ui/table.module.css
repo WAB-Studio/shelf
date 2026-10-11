@@ -111,6 +111,18 @@
   white-space: normal;
 }
 
+/* Off `narrow`, a note too long for what the label and figure leave drops under
+   them whole, on its own line at the end; one that fits beside them in two lines
+   stays there. Linked rows keep their note beside the chevron. */
+.wrapNote .stackRow {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.wrapNote .stackRow > .stackNote {
+  flex: 1 1 0;
+}
+
 .wrapDetail .detail,
 .wrapDetail .detailWide {
   white-space: normal;

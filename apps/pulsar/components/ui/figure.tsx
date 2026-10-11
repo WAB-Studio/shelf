@@ -49,21 +49,27 @@ export function Figure({
   unit,
   variant = "measure",
   bare = false,
+  breakUnit,
 }: {
   value: ReactNode;
   unit?: string;
   variant?: "measure" | "meta";
   bare?: boolean;
+  // Lets a word unit drop under its figure when the line runs out («de 60 /
+  // búsquedas»): the figure flows as text, so a no-break space before it keeps
+  // it with the word it follows. A time keeps its line.
+  breakUnit?: boolean;
 }) {
   const words = useTimeWords();
   const size = variant === "meta" ? styles.meta : styles.measure;
   const formatted = formatFigureValue(value, unit, words);
   const wordUnit = unit && !bare && !isTimeFigure(formatted) ? unit : null;
+  const breaks = Boolean(breakUnit && wordUnit);
   return (
-    <span className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""}`}>
+    <span className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""}`}>
       {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted}
       {/* A no-break space for copy and a screen reader to hear «20 páginas»; it draws no width, the spacer's padding does. */}
-      {wordUnit ? <span className={styles.space}>{"\u00a0"}</span> : null}
+      {wordUnit ? <span className={styles.space}>{breaks ? " " : "\u00a0"}</span> : null}
       {wordUnit ? (
         <span className={styles.unit}>{typeof value === "number" ? (words.unit?.(wordUnit, value) ?? wordUnit) : wordUnit}</span>
       ) : null}
