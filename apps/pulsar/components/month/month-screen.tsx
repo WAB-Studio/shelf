@@ -20,6 +20,10 @@ function monthLabel(month: string): string {
   return monthFormat.format(new Date(`${month.slice(0, 7)}-01T12:00:00Z`));
 }
 
+function yearLabel(month: string): string {
+  return `${monthLabel(month)} ${month.slice(0, 4)}`;
+}
+
 function capitalised(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -100,9 +104,9 @@ export async function MonthDetail({
 
   const planned =
     row.planned === null ? t("month.noPlan") : t("month.months.of", { planned: say(row.planned) });
-  // A future month of a goal not measured in time has nothing reached to
-  // show beside «planeado» while it has no amount: the one phrase stands alone.
-  const bareFuture = row.planned === null && !closed && !row.current && !isTimeUnit(unit);
+  // A future month with no amount has nothing reached to show beside
+  // «planeado»: the one phrase stands alone.
+  const bareFuture = row.planned === null && !closed && !row.current;
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
   let note: ReactNode = null;
   if (closed) {
@@ -220,7 +224,7 @@ export async function MonthDetail({
     <Flex direction="column" gap={{ initial: "6", md: "7" }} maxWidth="720px">
       {heading ? (
         <Text asChild variant="title">
-          <h2>{capitalised(name)}</h2>
+          <h2>{capitalised(yearLabel(mes))}</h2>
         </Text>
       ) : null}
       {unit ? (
@@ -313,7 +317,7 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
   return (
     <Page width="full">
       <ScreenHeader
-        title={capitalised(monthLabel(mes))}
+        title={capitalised(yearLabel(mes))}
         back={{ href: `/metas/${goal.id}`, place: goal.name }}
         eyebrow={<TextLink href={`/metas/${goal.id}/meses`}>{t("month.list.allMonths")}</TextLink>}
       />

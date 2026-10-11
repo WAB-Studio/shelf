@@ -234,7 +234,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
       await expect(items).toHaveCount(5);
       for (const offset of [-1, 0, 1]) {
         const text = (await items.nth(offset + 1).textContent()) ?? "";
-        counts.push(Number(/(\d+)\s+tareas?/.exec(text)![1]));
+        counts.push(Number(/(\d+)\s+tareas?/.exec(text.replace(/\d{4}/, ""))![1]));
       }
     } finally {
       await screen.context.close();

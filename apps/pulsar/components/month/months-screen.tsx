@@ -19,6 +19,11 @@ function monthLabel(month: string): string {
   return monthFormat.format(new Date(`${month}T12:00:00Z`));
 }
 
+// «octubre 2026»: the row's own name, told apart from its namesake a year on.
+function yearLabel(month: string): string {
+  return `${monthLabel(month)} ${month.slice(0, 4)}`;
+}
+
 /**
  * `MesesFilas.dc.html` (RP-32): one whole-row link per month of the goal's
  * span from `loadGoal`'s own `months`, the month open beside the list marked.
@@ -45,7 +50,7 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
       return {
         key: row.month,
         href: hrefOf(row.month),
-        cells: [monthLabel(row.month), tasks],
+        cells: [yearLabel(row.month), tasks],
         detail: row.current ? t("month.months.current") : null,
         note: tasks,
       };
@@ -102,7 +107,7 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
     return {
       key: row.month,
       href: hrefOf(row.month),
-      cells: [monthLabel(row.month), started ? row.reached : null, amount],
+      cells: [yearLabel(row.month), started ? row.reached : null, amount],
       detail: monthDetail(state, tasks),
       note: amount,
     };

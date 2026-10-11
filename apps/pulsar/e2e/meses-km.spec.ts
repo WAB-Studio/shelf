@@ -451,7 +451,7 @@ test("km goal, a closed month with no amount: the block keeps «cerrado» and wh
   }
 });
 
-test("minutes goal, a future month with no amount: the block keeps its «0 min» (RP-69)", async ({
+test("minutes goal, a future month with no amount: the block is «sin monto planeado» alone (RP-69, RP-32)", async ({
   person,
   browser,
   baseURL,
@@ -465,7 +465,7 @@ test("minutes goal, a future month with no amount: the block keeps its «0 min»
     const page = await context.newPage();
     const text = await monthText(page, goalId, followingMonth);
     await expect(page.locator("main").first()).toContainText("sin monto planeado");
-    expect(await text()).toMatch(/0 min/);
+    expect(await text()).not.toMatch(/0 min/);
   } finally {
     await context.close();
   }
