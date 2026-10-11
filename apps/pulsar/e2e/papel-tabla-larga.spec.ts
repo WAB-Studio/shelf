@@ -180,7 +180,7 @@ test.describe("the paper report: a «por mes» table of 15 rows or more starts w
     });
   });
 
-  test("a 46-month table repeats its head (POR MES / HECHO / PLANEADO) at the top of every page it continues on", async ({
+  test("a 46-month table repeats its head (MES / HECHO / PLANEADO) at the top of every page it continues on", async ({
     person, browser, baseURL, db,
   }) => {
     await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 46, measured: true, tag: "m46c" }, (w) => {
@@ -189,7 +189,8 @@ test.describe("the paper report: a «por mes» table of 15 rows or more starts w
       for (const page of later) {
         const first = Math.min(...w.rows.filter((row) => row.page === page).map((row) => row.at));
         const above = w.pages[page].slice(0, first).join(" ");
-        expect(above, `page ${page + 1} opens its rows with the head`).toMatch(new RegExp(spaced("hecho")));
+        expect(above, `page ${page + 1} opens its rows with the head`).toMatch(new RegExp(`${spaced("mes")} ?${spaced("hecho")} ?${spaced("planeado")}`, "i"));
+        expect(above, `page ${page + 1} head does not say «por mes»`).not.toMatch(new RegExp(`${spaced("por")} ?${spaced("mes")}`, "i"));
         expect(first, `page ${page + 1}: the head is the first thing above the rows`).toBeLessThanOrEqual(3);
       }
       expect(w.labelPage, "and the table begins on the goal's own page").toBe(w.namePage);
@@ -251,8 +252,8 @@ test.describe("the paper report: a «por mes» table of 15 rows or more starts w
       expect(later.length, "the table continues on a later page").toBeGreaterThan(0);
       for (const page of later) {
         const first = Math.min(...w.rows.filter((row) => row.page === page).map((row) => row.at));
-        expect(w.pages[page].slice(0, first).join(" "), `page ${page + 1} repeats its head (POR MES / TAREAS / ESTADO)`).toMatch(
-          new RegExp(spaced("tareas")),
+        expect(w.pages[page].slice(0, first).join(" "), `page ${page + 1} repeats its head (MES / TAREAS / ESTADO)`).toMatch(
+          new RegExp(`${spaced("mes")} ?${spaced("tareas")} ?${spaced("estado")}`, "i"),
         );
       }
       const last = w.rows[21];

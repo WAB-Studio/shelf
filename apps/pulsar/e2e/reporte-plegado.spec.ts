@@ -84,7 +84,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
         // The label and the table the board draws.
         await expect(main.getByText(`${seeded.name} · por mes`, { exact: true })).toBeVisible();
         if (width === 1280) {
-          await expect(main.locator("table thead").first().locator("th")).toHaveText(["por mes", "hecho", "planeado"]);
+          await expect(main.locator("table thead").first().locator("th")).toHaveText(["mes", "hecho", "planeado"]);
         }
         await expect(main.getByText("por semana", { exact: true })).toBeVisible();
         await expect(main.getByText(/^Esta semana: .*\.$/)).toBeVisible();
@@ -490,9 +490,166 @@ test.describe("the report's week says what was planned for it (RP-58)", () => {
   });
 });
 
+// The week names its days when the goal does not fill it: it opened after Monday, ends before Sunday, or both.
+// The seeded goal opens on this week's Tuesday and ends today, so each test skips the weekdays that cannot show its edge.
+async function seedPartial(
+  db: postgres.Sql,
+  person: Person,
+  edges: { opens: boolean; ends: boolean },
+  measure: { unit: string; amount: number | null; fact: number } = { unit: "minutos", amount: 720, fact: 90 },
+) {
+  const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const today = todayInZone();
+  const name = `Meta parcial ${stamp}`;
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${name}, ${plusDays(edges.ends ? 1 : 90)}, ${measure.unit}, ${measure.unit},
+      now() - make_interval(days => ${edges.opens ? weekday - 1 : 70}))
+    returning id
+  `;
+  if (measure.amount !== null) {
+    for (const offset of [-1, 0, 1]) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${firstOfMonth(today, offset)}::date, ${measure.amount})
+      `;
+    }
+  }
+  const [commitment] = await db<{ id: string }[]>`
+    insert into goals.commitments
+      (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+    values (${person.id}, ${goal.id}, ${`Sesión ${stamp}`}, 'daily', 'quantity', 1, ${measure.unit}, now() - interval '70 days')
+    returning id
+  `;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${person.id}, ${goal.id}, ${commitment.id}, ${today}::date, ${measure.fact})
+  `;
+  return { goalId: goal.id, name };
+}
+
+async function weekLine(browser: Browser, baseURL: string, person: Person, name: string) {
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL,
+    viewport: { width: 390, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    const main = page.getByRole("main");
+    await expect(main.getByText(name, { exact: true })).toBeVisible();
+    const line = main.getByText(/^Esta semana/).locator("visible=true");
+    await expect(line).toHaveCount(1);
+    return ((await line.textContent()) ?? "").replace(/\s+/g, " ").trim();
+  } finally {
+    await context.close();
+  }
+}
+
+test.describe("the report's week names the days the goal does not fill", () => {
+  test("a goal opened this week after Monday reads «Esta semana, desde el <día>: X de Y.»", async ({
+    person, browser, baseURL, db,
+  }) => {
+    test.skip(weekday < 1, "on Monday the goal opens on the week's first day");
+    const seeded = await seedPartial(db, person, { opens: true, ends: false });
+    try {
+      const text = await weekLine(browser, baseURL!, person, seeded.name);
+      expect(text).toMatch(/^Esta semana, desde el martes: 1 h 30 min de (\d+ h( \d+ min)?|\d+ min)\.$/);
+    } finally {
+      await remove(db, person, [seeded.goalId]);
+    }
+  });
+
+  test("a goal that fills the week reads «Esta semana: X de Y.» with no day named", async ({
+    person, browser, baseURL, db,
+  }) => {
+    const seeded = await seedWeek(db, person, 720);
+    try {
+      const text = await weekLine(browser, baseURL!, person, seeded.name);
+      expect(text).toMatch(/^Esta semana: 1 h 30 min de .+\.$/);
+      expect(text).not.toMatch(/desde|hasta| al /);
+    } finally {
+      await remove(db, person, [seeded.goalId]);
+    }
+  });
+
+  test("a goal ending this week before Sunday reads «Esta semana, hasta el <día>: X de Y.»", async ({
+    person, browser, baseURL, db,
+  }) => {
+    test.skip(weekday >= 6, "on Sunday the goal's last day is the week's last");
+    const seeded = await seedPartial(db, person, { opens: false, ends: true });
+    try {
+      const text = await weekLine(browser, baseURL!, person, seeded.name);
+      expect(text).toMatch(new RegExp(`^Esta semana, hasta el ${DAY_NAMES[weekday]}: 1 h 30 min de .+\\.$`));
+    } finally {
+      await remove(db, person, [seeded.goalId]);
+    }
+  });
+
+  test("a goal that opens and ends inside the week reads «Esta semana, del martes al <día>: X de Y.»", async ({
+    person, browser, baseURL, db,
+  }) => {
+    test.skip(weekday < 1 || weekday >= 6, "needs a Tuesday-to-Saturday today");
+    const seeded = await seedPartial(db, person, { opens: true, ends: true });
+    try {
+      const text = await weekLine(browser, baseURL!, person, seeded.name);
+      expect(text).toMatch(new RegExp(`^Esta semana, del martes al ${DAY_NAMES[weekday]}: 1 h 30 min de .+\\.$`));
+    } finally {
+      await remove(db, person, [seeded.goalId]);
+    }
+  });
+
+  test("a goal that opens and ends the same day reads «Esta semana, el <día>: X de Y.», never «del … al …»", async ({
+    person, browser, baseURL, db,
+  }) => {
+    const seeded = await seedWeek(db, person, 720, { openedDaysAgo: 0, horizonInDays: 1 });
+    try {
+      const text = await weekLine(browser, baseURL!, person, seeded.name);
+      expect(text).toMatch(new RegExp(`^Esta semana, el ${DAY_NAMES[weekday]}: 1 h 30 min de .+\\.$`));
+    } finally {
+      await remove(db, person, [seeded.goalId]);
+    }
+  });
+
+  test("a partial week with no planned amount reads «Esta semana, desde el <día>: 34 km.»", async ({
+    person, browser, baseURL, db,
+  }) => {
+    test.skip(weekday < 1, "on Monday the goal opens on the week's first day");
+    const seeded = await seedPartial(db, person, { opens: true, ends: false }, { unit: "km", amount: null, fact: 34 });
+    try {
+      const text = await weekLine(browser, baseURL!, person, seeded.name);
+      expect(text).toBe("Esta semana, desde el martes: 34 km.");
+    } finally {
+      await remove(db, person, [seeded.goalId]);
+    }
+  });
+
+  test("on paper the report prints no «Esta semana»", async ({ person, browser, baseURL, db }) => {
+    const seeded = await seedWeek(db, person, 720);
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 794, height: 1123 } });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      const file = resolve(process.cwd(), "private/export-pdf", `804-week-${seeded.goalId}.pdf`);
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+      const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ");
+      expect(flat).toContain(seeded.name);
+      expect(flat).not.toContain("Esta semana");
+    } finally {
+      await context.close();
+      await remove(db, person, [seeded.goalId]);
+    }
+  });
+});
+
 // The week's planned figure stops at the goal's last day (RP-58), not at Sunday.
 // Saturday and Sunday cannot show the difference.
 const weekday = (civilDateToDate(todayInZone()).getUTCDay() + 6) % 7;
+const DAY_NAMES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
 test("a goal ending this week counts its planned figure up to its last day, not to Sunday (RP-58)", async ({
   person,
@@ -515,10 +672,10 @@ test("a goal ending this week counts its planned figure up to its last day, not 
     const amounts = Object.fromEntries(seeded.months.map((month) => [month, 720]));
     const planned = plannedByRule(amounts, seeded.openedOn, seeded.horizon);
     expect(planned).toBeLessThan(plannedByRule(amounts, seeded.openedOn, "9999-12-31"));
-    const line = main.getByText(/^Esta semana: /).locator("visible=true");
+    const line = main.getByText(/^Esta semana, hasta el /).locator("visible=true");
     await expect(line).toHaveCount(1);
     const text = ((await line.textContent()) ?? "").replace(/\s+/g, " ").trim();
-    expect(text).toBe(`Esta semana: 1 h 30 min de ${minutesText(planned)}.`);
+    expect(text).toBe(`Esta semana, hasta el ${DAY_NAMES[weekday]}: 1 h 30 min de ${minutesText(planned)}.`);
   } finally {
     await context.close();
     await remove(db, person, [seeded.goalId]);
@@ -542,7 +699,7 @@ test("a goal of one week still reads «Esta semana» and holds its weeks table (
     await page.goto("/exportar");
     const main = page.getByRole("main");
     await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
-    await expect(main.getByText(/^Esta semana: /).locator("visible=true")).toHaveCount(1);
+    await expect(main.getByText(/^Esta semana/).locator("visible=true")).toHaveCount(1);
     await expect(main.getByText("por semana", { exact: true })).toBeVisible();
     await expect(main.getByText("Ver la semana", { exact: true })).toBeVisible();
   } finally {

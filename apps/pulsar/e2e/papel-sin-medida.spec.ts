@@ -189,7 +189,8 @@ test.describe("the paper report prints the months of a goal that measures nothin
     try {
       await waitFor(page, name);
       const section = sectionOf(await printed(page, "tabla"), name);
-      expect(section).toMatch(new RegExp(`${spaced("tareas")} ?${spaced("estado")}`));
+      expect(section).toMatch(new RegExp(`${spaced("mes")} ?${spaced("tareas")} ?${spaced("estado")}`, "i"));
+      expect(section).not.toMatch(new RegExp(`${spaced("por")} ?${spaced("mes")} ?${spaced("tareas")}`, "i"));
       expect(section).not.toMatch(header("hecho"));
       expect(section).toContain(`${labelOf(-1)} 3 de 3 hechas cerrado`);
       expect(section).toContain(`${labelOf(0)} 2 de 4 hechas en curso`);

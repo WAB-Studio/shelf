@@ -1169,6 +1169,25 @@ Taken by the user the same evening. No board: they move a page break and name a 
 - **Taken by the orchestrator, no question:** tapping an error scrolls the page so the box and its line are on screen,
   also with the keyboard up (the approved «scrolls it into view» meant the screen, not only the box).
 
+## Decisions of 2026-10-10, after the train-6 findings
+
+Taken by the user the same evening, on six questions. Boards `MesesConAño` and `ImportarErroresVivos` were drawn and approved before their modules.
+
+- **The months table's first column reads «mes»**, on screen and on paper, with a measure and without. The label above it
+  already says «<goal> · por mes». Replaces «por mes | hecho | planeado» of 2026-10-09.
+- **The report's week names its days when the goal does not fill it:** «Esta semana, desde el sábado: 34 km de 2 km.», «Esta
+  semana, hasta el miércoles: …», «Esta semana, del sábado al martes: …». The figures stay RP-58's; a goal that opens and ends the same day says «Esta semana, el sábado: …».
+- **«Por mes» and a month's title carry the year, always:** «octubre 2026», «Diciembre 2026». Sentences that name a month
+  beside its title («Planear octubre», «¿Cuánto en octubre?», «de octubre») keep the month alone.
+- **The import's error list follows the box.** After a reading with errors, every change to the text re-reads the template in
+  the browser, with no request: a fixed line leaves the list, a new broken one joins it in its place, the cut's line goes when
+  the header is fixed, and the list goes at zero. A list read from a file does not re-read.
+- **The template keeps refusing a task's figure in a goal that does not measure time**, and says what to remove: «Quita la
+  cifra de esta línea: esta meta no mide tiempo.» The AI reading still drops it with «se crea sin cifra».
+- **Not reopened:** the goal says «mide en km», the paper «mide distancia, en km» (1b above stands).
+- **Board `MesesConAño` approved, option B:** the narrow table's label column grows from 100 to 112 px, so «septiembre 2027» fits on one line; no row of «Por mes» wraps at 360 or in the 320 column at 1024.
+- **Board `ImportarErroresVivos` approved as drawn:** four states (read; a fixed line leaves and the count drops; a fixed cut header drops the notice and shows the lines below; zero errors drops the list and the box's mark). No new phrase.
+
 ## Decisions of 2026-10-10, after the train-4 critic
 
 Taken by the user the same evening, on the critic's four questions.

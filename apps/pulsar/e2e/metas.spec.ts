@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type postgres from "postgres";
 
+import importMessages from "../messages/es/import.json";
 import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
@@ -261,9 +262,78 @@ test("/metas at 1440: a goal's figure folds in the evidence its source recorded 
     const page = await context.newPage();
     await page.goto("/metas");
     const row = page.locator("main").locator("a", { hasText: name });
-    await expect(row).toContainText(new RegExp(`${monthName}\\s+·\\s+3\\s*searches\\s+de\\s+10\\s*searches`));
+    await expect(row).toContainText(new RegExp(`${monthName}\\s+·\\s+3\\s*búsquedas\\s+de\\s+10\\s*búsquedas`));
   } finally {
     await context.close();
     await db`delete from reading.lookups where user_id = ${person.id} and device_id = ${deviceId}`;
+  }
+});
+
+// The unit a goal was stored with reads in the catalogue's words wherever the goal says what it measures.
+async function seedSearches(db: postgres.Sql, personId: string, name: string): Promise<string> {
+  const goalId = await seedGoal(db, personId, name, plusDays(60), 0);
+  await db`update goals.goals set measure_name = 'búsquedas', measure_unit = 'searches' where id = ${goalId}`;
+  const month = `${todayInZone().slice(0, 7)}-01`;
+  await db`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${personId}, ${goalId}, ${month}::date, 10)`;
+  const [commitment] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+    values (${personId}, ${goalId}, 'buscar', 'daily', 'quantity', 1, 'searches', now() - interval '20 days')
+    returning id
+  `;
+  await db`insert into goals.facts (user_id, goal_id, commitment_id, day, quantity) values (${personId}, ${goalId}, ${commitment.id}, ${todayInZone()}::date, 1)`;
+  return goalId;
+}
+
+for (const [screen, path] of [
+  ["the goal", ""],
+  ["its weekly review", "/revision"],
+] as const) {
+  test(`${screen} says «mide en búsquedas» for a goal stored in «searches»`, async ({ person, browser, db }) => {
+    const goalId = await seedSearches(db, person.id, `Palabras ${Date.now()}`);
+    const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+    try {
+      const page = await context.newPage();
+      await visit(page, `/metas/${goalId}${path}`);
+      await expect(page.getByText("mide en búsquedas", { exact: true })).toBeVisible();
+      await expect(page.getByText(/mide en searches/)).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test("the /metas row agrees «búsqueda» with a figure of 1", async ({ person, browser, db }) => {
+  const name = `Concuerda ${Date.now()}`;
+  await seedSearches(db, person.id, name);
+  const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await visit(page, "/metas");
+    await expect(page.locator("main").locator("a", { hasText: name })).toContainText(/1\s*búsqueda\s+de\s+10\s*búsquedas/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the import review ends the measure row in «búsquedas» for a unit written «searches»", async ({ person, browser }) => {
+  const text = [
+    "pulsar · plantilla 1",
+    "",
+    "# Leer en inglés",
+    `horizonte: ${plusDays(120)}`,
+    "medida: búsquedas · searches",
+  ].join("\n");
+  const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await page.goto("/metas/importar");
+    await page.getByLabel(importMessages.textLabel).fill(text);
+    await page.getByRole("button", { name: "Leer el plan" }).click();
+    await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+    const row = page.getByText("búsquedas", { exact: true }).locator("visible=true");
+    await expect(row.first()).toBeVisible();
+    await expect(page.getByText("searches", { exact: true })).toHaveCount(0);
+  } finally {
+    await context.close();
   }
 });
