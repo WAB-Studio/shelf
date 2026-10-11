@@ -10,6 +10,8 @@
   "uploadHint": "PDF, texto o imagen · hasta 4 MB",
   "privacy": "Lo que pegues o subas se envía a OpenAI para leerlo. Un plan escrito en la plantilla se lee aquí, sin IA.",
   "read": "Leer el plan",
+  "fileNote": "Leído de {name}. Corrige aquí y vuelve a leer.",
+  "notTemplate": "Ya no es la plantilla: la primera línea no empieza por «pulsar ·». «Leer el plan» lo mandará a la IA.",
   "size": "{value} MB",
   "reading": "Leyendo el plan…",
   "slow": "Puede tardar un minuto.",
