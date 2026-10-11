@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 
 import { isTimeUnit, type TimeWords } from "@/lib/units/time";
 
@@ -24,6 +24,9 @@ export type TableRow = {
   // The phone's one figure when it is not the wide face's cell: the wide
   // «10 h de 12 h» reads «10 h» there, its «de 12 h» going in the note.
   phoneFigure?: ReactNode;
+  // Drops the unit word after the phone's figure, for a row whose note carries
+  // it after «de» (`UnidadUnaVez`'s «34 / de 60 búsquedas»): the unit once.
+  phoneBare?: boolean;
   // A second line under the row label, on both faces: the week's dates.
   detail?: ReactNode;
   // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
@@ -64,6 +67,19 @@ type TableProps = {
   stackInCard?: boolean;
   // Lets a row's `detail` wrap, for a state line longer than its label column.
   wrapDetail?: boolean;
+  // Grows the label column to its longest `detail`, one width on every row of
+  // both faces, rather than hold 112px (`RevisionConAño.dc.html`'s «28 sep–4 oct
+  // 2026»). Unlinked rows only: a linked row's anchor is not on the phone's grid.
+  fitDetail?: boolean;
+  // Lets a `narrow` table's note wrap at a word when it does not fit beside the
+  // chevron («0 de 60 / búsquedas» in the 320px list); a note that fits keeps its line.
+  // Off `narrow`, an unlinked row's note drops under the label and figure when
+  // even its narrowest form does not fit beside them.
+  wrapNote?: boolean;
+  // A note that never splits («de 7 h 15 min»): beside the label when it fits whole,
+  // else dropped whole under it. Never breaks inside, never leaves its row. On a `narrow`
+  // linked row the chevron rides the row's end and the anchor wraps.
+  wholeNote?: boolean;
   // Folds the whole table under a link-card with this text, closed
   // (`ReportePlegado.dc.html`'s «Ver las 9 semanas»). Paper never prints it.
   fold?: string;
@@ -85,7 +101,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fold, after, afterPrintOnly }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, wholeNote, fold, after, afterPrintOnly }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -120,7 +136,9 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
       {lead === undefined ? null : (
         <span className={styles.stackFigure}>
           {figureCell(figure, unit, words)}
-          {unitWord && !isEmpty(figure) ? <span className={styles.unit}>{unitWord}</span> : null}
+          {unitWord && !isEmpty(figure) && !row.phoneBare ? (
+            <span className={styles.unit}>{words.unit?.(unitWord, typeof figure === "number" ? figure : 2) ?? unitWord}</span>
+          ) : null}
         </span>
       )}
       {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
@@ -172,7 +190,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
               <th key={column} scope="col" className={join(styles.header, widthClass(column))}>
                 {header}
                 {column === lead && unitWord ? (
-                  <span className={styles.headerUnit}>{unitWord}</span>
+                  <span className={styles.headerUnit}>{words.unit?.(unitWord, 2) ?? unitWord}</span>
                 ) : null}
               </th>
             ))}
@@ -193,6 +211,8 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
                     <Link href={row.href} className={styles.cellLink}>
                       {row.cells[column]}
                     </Link>
+                  ) : column === lead && !isValidElement(row.cells[column]) ? (
+                    <span className={styles.leadValue}>{figureCell(row.cells[column], unit, words)}</span>
                   ) : figures.includes(column) ? (
                     figureCell(row.cells[column], unit, words)
                   ) : (
@@ -217,7 +237,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     </>
   );
 
-  const className = join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined, wrapDetail ? styles.wrapDetail : undefined);
+  const className = join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined, wrapDetail ? styles.wrapDetail : undefined, fitDetail ? styles.fitDetail : undefined, wrapNote ? styles.wrapNote : undefined, wholeNote ? styles.wholeNote : undefined);
   if (fold === undefined) return <div className={className}>{faces}</div>;
   return (
     <details className={join(className, styles.fold)}>

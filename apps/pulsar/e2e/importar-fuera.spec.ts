@@ -202,7 +202,7 @@ test.describe("the create bar says what stays out (RP-37)", () => {
       ].join("\n"),
     );
     await review({ person, browser, baseURL }, text, async (_page, bar) => {
-      await expect(lineOf(bar)).toHaveText("Sin «marzo de 2020»: no se puede crear.");
+      await expect(lineOf(bar)).toHaveText("Sin «marzo 2020»: no se puede crear.");
     });
   });
 

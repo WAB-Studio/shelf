@@ -12,7 +12,9 @@ import { TaskSheet } from "@/components/plan/task-sheet";
 import { Flex, IconButton, Mark, Row, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 import { monthName } from "@/lib/plan/month-name";
-import { formatQuantity, type TimeWords } from "@/lib/units/time";
+import { useTimeWords } from "@/components/ui/figure";
+import { formatQuantity } from "@/lib/units/time";
+import { todayInZone } from "@/lib/zone";
 
 export type TaskRowProps = {
   oneOffId: string;
@@ -73,7 +75,6 @@ export function TaskRow({
   sheet,
 }: TaskRowProps) {
   const t = useTranslations();
-  const units = useTranslations("units");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
@@ -91,12 +92,8 @@ export function TaskRow({
     });
   }
 
-  const thisYear = String(new Date().getFullYear());
-  const words: TimeWords = {
-    h: (h) => units("h", { h }),
-    min: (min) => units("min", { min }),
-    join: (h, min) => units("join", { h, min }),
-  };
+  const thisYear = todayInZone().slice(0, 4);
+  const words = useTimeWords();
   const say = (n: number) => (sheet.unit ? formatQuantity(n, sheet.unit, words) : String(n));
   const partLine = part
     ? part.from !== null && part.to !== null

@@ -6,11 +6,11 @@ import { getTranslations } from "next-intl/server";
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
 import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
-import { owedAt } from "@/lib/plan/carry";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
-import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { timeWordsOf } from "@/lib/units/time-words";
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -25,12 +25,7 @@ function sum(values: number[]): number {
 export async function MonthAcrossScreen() {
   const across = await loadMonthAcross();
   const t = await getTranslations();
-  const units = await getTranslations("units");
-  const words: TimeWords = {
-    h: (h) => units("h", { h }),
-    min: (min) => units("min", { min }),
-    join: (h, min) => units("join", { h, min }),
-  };
+  const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const monthNames = t.raw("day.monthLong") as string[];
   const weekdayNames = t.raw("day.weekdayLong") as string[];
   const monthName = (month: string) => monthNames[Number(month.slice(5, 7)) - 1];
@@ -55,7 +50,7 @@ export async function MonthAcrossScreen() {
         .filter((task) => task.doneOn !== null && task.doneOn.slice(0, 7) === seg)
         .map((task) => task.estimate ?? 0),
     );
-    const ownPlanned = sum(own.map((entry) => owedAt(entry.task, entry.children, "0000-01-01")));
+    const ownPlanned = sum(own.map((entry) => entry.part));
 
     // With the dictionary unreadable, a goal with no amount to measure draws
     // its header and meta alone (`MesTodasSinEvidencia`).
@@ -187,7 +182,7 @@ export async function MonthAcrossScreen() {
           </Text>
           {goal.line ? (
             <Flex align="baseline" gap="2">
-              <Figure value={goal.line.reached} unit={unit ?? undefined} />
+              <Figure value={goal.line.reached} unit={unit ?? undefined} bare={goal.line.planned !== null} />
               {goal.line.planned !== null ? (
                 <Text variant="sentence">
                   {t.rich("month.months.ofFigure", { planned: say(goal.line.planned), ...fig })}

@@ -584,7 +584,7 @@ deskTest("an ended or archived goal is «no existe» on «fases/nueva» and on �
 
 deskTest("an archived goal's overline says it is archived, and an open one still says it was opened", async ({ browser, baseURL, desk }) => {
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.closedSession } as World, 1280, 800);
-  const on = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", timeZone: "America/Bogota" }).format(new Date());
+  const on = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota" }).format(new Date());
   try {
     await page.goto(`/metas/${desk.archivedId}`);
     await expect(page.getByText(`meta · archivada el ${on}`, { exact: true })).toBeVisible();

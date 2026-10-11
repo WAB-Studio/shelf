@@ -8,7 +8,7 @@
 # this transcript was 7.03 bytes a token, and it drifts with how much of a turn
 # is tool output. Only a transcript with no usage line falls back to bytes.
 #
-# Threshold: HANDOFF_TOKENS, default 300000. Fires once. Never blocks.
+# Threshold: HANDOFF_TOKENS, default 500000. Fires once. Never blocks.
 
 input=$(cat)
 
@@ -16,7 +16,7 @@ python3 - "$input" <<'PY'
 import json, os, sys
 from pathlib import Path
 
-LIMIT = int(os.environ.get("HANDOFF_TOKENS", "300000"))
+LIMIT = int(os.environ.get("HANDOFF_TOKENS", "500000"))
 
 try:
     d = json.loads(sys.argv[1])

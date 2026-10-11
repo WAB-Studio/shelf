@@ -189,7 +189,8 @@ test.describe("the paper report prints the months of a goal that measures nothin
     try {
       await waitFor(page, name);
       const section = sectionOf(await printed(page, "tabla"), name);
-      expect(section).toMatch(new RegExp(`${spaced("tareas")} ?${spaced("estado")}`));
+      expect(section).toMatch(new RegExp(`${spaced("mes")} ?${spaced("tareas")} ?${spaced("estado")}`, "i"));
+      expect(section).not.toMatch(new RegExp(`${spaced("por")} ?${spaced("mes")} ?${spaced("tareas")}`, "i"));
       expect(section).not.toMatch(header("hecho"));
       expect(section).toContain(`${labelOf(-1)} 3 de 3 hechas cerrado`);
       expect(section).toContain(`${labelOf(0)} 2 de 4 hechas en curso`);
@@ -234,7 +235,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
       await expect(items).toHaveCount(5);
       for (const offset of [-1, 0, 1]) {
         const text = (await items.nth(offset + 1).textContent()) ?? "";
-        counts.push(Number(/(\d+)\s+tareas?/.exec(text)![1]));
+        counts.push(Number(/(\d+)\s+tareas?/.exec(text.replace(/\d{4}/, ""))![1]));
       }
     } finally {
       await screen.context.close();

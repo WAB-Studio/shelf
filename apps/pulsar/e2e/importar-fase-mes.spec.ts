@@ -31,7 +31,7 @@ test.describe("the review's phase span (RP-37)", () => {
       await review(page, plan("2026-11-02 a 2026-11-29"));
       const row = page.getByRole("checkbox", { name: /Evals y harness/ });
       await expect(row).toBeVisible();
-      const label = short("2026-11-02", false);
+      const label = short("2026-11-02", true);
       await expect(page.getByText(label, { exact: true })).toBeVisible();
       await expect(page.getByText(`${label}–${label}`)).toHaveCount(0);
     } finally {

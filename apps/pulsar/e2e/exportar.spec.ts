@@ -27,6 +27,15 @@ import exportMessages from "../messages/es/export.json";
 const A4_PAGES = 5;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
+// The page as the PDF the person prints, its words on one line.
+async function paperText(page: import("@playwright/test").Page, tag: string): Promise<string> {
+  await page.emulateMedia({ media: "print" });
+  const file = resolve(process.cwd(), "private/export-pdf", `804-${tag}.pdf`);
+  mkdirSync(resolve(process.cwd(), "private/export-pdf"), { recursive: true });
+  writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+  return execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ");
+}
+
 function plusDays(days: number): string {
   const date = civilDateToDate(todayInZone());
   date.setUTCDate(date.getUTCDate() + days);
@@ -526,7 +535,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       }
     });
 
-    test(`at ${width} the goal a down source feeds reads «mide búsquedas, en searches · hasta el … · solo lo que dijiste tú» and says it under its figure`, async ({ person, browser, db }) => {
+    test(`at ${width} the goal a down source feeds reads «mide en búsquedas · hasta el … · solo lo que dijiste tú» and says it under its figure`, async ({ person, browser, db }) => {
       needFault();
       const seeded = await seedDown(db, person);
       const { context, page } = await openDown(browser, person, width);
@@ -534,9 +543,12 @@ test.describe("the report page (RP-49, RP-35)", () => {
         await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
         const panel = panelOf(page, seeded.fedName);
         await expect(
-          panel.getByText(new RegExp(`^mide búsquedas, en searches · hasta el ${DATE} · solo lo que dijiste tú$`)),
+          panel.getByText(new RegExp(`^mide en búsquedas · hasta el ${DATE} · solo lo que dijiste tú$`)),
         ).toBeVisible();
         await expect(panel.getByText("solo lo que dijiste tú", { exact: true })).toHaveCount(1);
+        const flat = await paperText(page, `down-${seeded.fed.id}`);
+        expect(flat).toMatch(new RegExp(`mide en búsquedas · hasta el ${DATE} · solo lo que dijiste tú`));
+        expect(flat).not.toContain("en searches");
       } finally {
         await context.close();
         await db`delete from goals.goals where id in (${seeded.fed.id}, ${seeded.plain.id}) and user_id = ${person.id}`;
@@ -745,7 +757,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
         .locator("table", { hasText: "planeado" })
         .first()
         .locator("thead th");
-      await expect(headers).toHaveText(["por mes", "hecho", "planeado"]);
+      await expect(headers).toHaveText(["mes", "hecho", "planeado"]);
       const closed = wide
         .locator("table tbody tr", { hasText: /\d+ % pasó a \p{L}+/u })
         .first();
@@ -907,7 +919,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
       for (const name of names) {
         const table = main
           .locator("section", { has: page.getByText(`${name} · por mes`, { exact: true }) })
-          .locator("table", { has: page.locator("thead th", { hasText: /^por mes$/ }) })
+          .locator("table", { has: page.locator("thead th", { hasText: /^mes$/ }) })
           .first();
         // The state sits on a second line of the same cell: the label is its first words.
         const labels = (await table.locator("tbody tr:not([data-row='months-out']) td:first-child").allTextContents()).map(
@@ -1335,8 +1347,12 @@ test.describe("a readable source", () => {
       const date = String.raw`\d{1,2} de [a-záéíóú]+( de \d{4})?`;
       const panelOf = (name: string) =>
         page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
-      await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide búsquedas, en searches · hasta el ${date}$`))).toBeVisible();
+      await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide en búsquedas · hasta el ${date}$`))).toBeVisible();
       await expect(panelOf(`Corrida ${stamp}`).getByText(new RegExp(`^mide en km · hasta el ${date}$`))).toBeVisible();
+      const flat = await paperText(page, `readable-${goals[0]}`);
+      expect(flat).toMatch(new RegExp(`mide en búsquedas · hasta el ${date}`));
+      expect(flat).not.toContain("en searches");
+      expect(flat).toMatch(new RegExp(`mide en km · hasta el ${date}`));
       const body = (await page.locator("main").textContent()) ?? "";
       expect(body).not.toMatch(/diccionario|alimentada|solo lo que dijiste tú|No pudimos leer/i);
     } finally {
@@ -1368,9 +1384,10 @@ test.describe("a task split across months", () => {
       tutor: `Tutor ${stamp}`,
       long: `Construir un harness de evals ${stamp}`,
     };
+    // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-      values (${person.id}, ${`IA aplicada ${stamp}`}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      values (${person.id}, ${`IA aplicada ${stamp}`}, ${plusDays(150)}, 'minutos', 'minutos', 720, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
       returning id
     `;
     await db`
@@ -1907,7 +1924,7 @@ test.describe("the report's last day, its ink and its share (RP-49)", () => {
 });
 
 // `ReporteTareaPendiente` and `ReporteImpresoCompacto` (RP-49, RP-32): every open task says it is pending,
-// with its amount; the month table reads «por mes | hecho | planeado»; the state of a closed or current
+// with its amount; the month table reads «mes | hecho | planeado»; the state of a closed or current
 // month sits under the month's name. Paper is the app's own A4 (`@page`), never the test's.
 test.describe("the report's pending tasks and its month table (RP-49, RP-32)", () => {
   const monthName = (day: string) =>
@@ -1993,9 +2010,10 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
       openChild: `Sesiones 1–4 ${stamp}`,
       split: `Dataset dorado ${stamp}`,
     };
+    // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-      values (${person.id}, ${names.goal}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      values (${person.id}, ${names.goal}, ${plusDays(150)}, 'minutos', 'minutos', 720, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
       returning id
     `;
     await db`
@@ -2141,7 +2159,7 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
   // Rows by role, not by position: the closed one names where its share went, the current one is `data-current`.
   async function expectMonthRows(page: import("@playwright/test").Page, goal: string) {
     const table = monthsTable(page, goal);
-    await expect(table.locator("thead th")).toHaveText(["por mes", "hecho", "planeado"]);
+    await expect(table.locator("thead th")).toHaveText(["mes", "hecho", "planeado"]);
     const closed = table.locator("tbody tr", { hasText: /\d+ % pasó a/ });
     await expect(closed).toHaveCount(1);
     const cells = (row: import("@playwright/test").Locator) => row.locator("td");
@@ -2165,7 +2183,7 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
     await expect(cells(future).nth(2)).toHaveText("20 h");
   }
 
-  test("at 1440 the month table reads «por mes | hecho | planeado», the state under the month's name, the plan in its own column", async ({
+  test("at 1440 the month table reads «mes | hecho | planeado», the state under the month's name, the plan in its own column", async ({
     person,
     browser,
     baseURL,
@@ -2219,7 +2237,7 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
     }
   });
 
-  test("on paper the month table reads «por mes | hecho | planeado» with the same rows, and the PDF says so", async ({
+  test("on paper the month table reads «mes | hecho | planeado» with the same rows, and the PDF says so", async ({
     person,
     browser,
     baseURL,
@@ -2241,7 +2259,8 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
       mkdirSync(resolve(process.cwd(), "private/export-pdf"), { recursive: true });
       writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
       const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ");
-      expect(flat).toMatch(/por mes hecho planeado/i);
+      expect(flat).toMatch(/mes hecho planeado/i);
+      expect(flat).not.toMatch(/por mes hecho/i);
       expect(flat).not.toMatch(/hecho estado/i);
       expect(flat).toContain(`25 % pasó a ${monthName(firstOfMonth(0))}`);
     } finally {
@@ -2250,7 +2269,7 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
     }
   });
 
-  test("a goal in km keeps its unit in the header: «por mes | hecho km | planeado»", async ({
+  test("a goal in km keeps its unit in the header: «mes | hecho km | planeado»", async ({
     person,
     browser,
     baseURL,
@@ -2276,7 +2295,7 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
       const page = await context.newPage();
       await page.goto("/exportar");
       await expect(page.getByText(`${name} · por mes`, { exact: true })).toBeVisible();
-      await expect(monthsTable(page, name).locator("thead th")).toHaveText(["por mes", /^hecho\s?km$/, "planeado"]);
+      await expect(monthsTable(page, name).locator("thead th")).toHaveText(["mes", /^hecho\s?km$/, "planeado"]);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
@@ -2390,9 +2409,10 @@ test.describe("what closes a task's row on the report (RP-49)", () => {
     const goalName = `Meta padre partido ${stamp}`;
     const filler = `Relleno ${stamp}`;
     const parentName = `Padre partido ${stamp}`;
+    // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-      values (${person.id}, ${goalName}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      values (${person.id}, ${goalName}, ${plusDays(150)}, 'minutos', 'minutos', 720, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
       returning id
     `;
     await db`

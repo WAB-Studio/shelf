@@ -16,7 +16,7 @@ export function goalSections(goal: GoalReport): Section[] {
   if (measured) sections.push("month", "toDate");
   if (goal.phases.length > 0) sections.push("phases");
   if (goal.tasks.length > 0) sections.push("tasks");
-  if (measured || goal.months.some((month) => month.tasks !== undefined && printsOnPaper(month))) {
+  if (measured || goal.months.some((month) => month.tasks !== undefined && printsOnPaper(month, goal.unit))) {
     sections.push("months");
   }
   return sections;
@@ -24,17 +24,17 @@ export function goalSections(goal: GoalReport): Section[] {
 
 // A goal's head stays with its table when the table is tall and still short enough for the goal to fit a page.
 // A goal taller than a page still breaks, where the printer finds room.
-export function keepsHeadWithTable(months: GoalReport["months"]): boolean {
-  const rows = months.filter(printsOnPaper).length;
+export function keepsHeadWithTable(months: GoalReport["months"], unit: string | null): boolean {
+  const rows = months.filter((month) => printsOnPaper(month, unit)).length;
   return rows >= HEAD_WITH_TABLE_ROWS && rows < HEAD_WITH_TABLE_MAX_ROWS;
 }
 
-// A month that has not started and has no planned amount prints nothing; a
-// past or current month always prints, and a planned 0 is still an amount (RP-70).
-// A goal that measures nothing prints a month that has started or holds a task (RP-71).
-export function printsOnPaper(month: GoalReport["months"][number]): boolean {
-  if (month.tasks !== undefined) return month.past || month.current || month.tasks.total > 0;
-  return month.past || month.current || month.planned !== null;
+// A month that has not started prints only with a planned amount (a planned 0
+// counts, RP-70); a goal that measures nothing (`unit` null) prints one with a
+// task too (RP-71). A past or current month always prints.
+export function printsOnPaper(month: GoalReport["months"][number], unit: string | null): boolean {
+  const held = unit === null && (month.tasks?.total ?? 0) > 0;
+  return month.past || month.current || month.planned !== null || held;
 }
 
 // A whole table this tall is what a head left at a page foot leaves alone on
@@ -48,8 +48,8 @@ export const HEAD_WITH_TABLE_MAX_ROWS = 20;
 // instead of keeping to one (`ReporteImpresoTablaLarga.dc.html`).
 export const LONG_TABLE_ROWS = 15;
 
-export function isLongTable(months: GoalReport["months"]): boolean {
-  return months.filter(printsOnPaper).length >= LONG_TABLE_ROWS;
+export function isLongTable(months: GoalReport["months"], unit: string | null): boolean {
+  return months.filter((month) => printsOnPaper(month, unit)).length >= LONG_TABLE_ROWS;
 }
 
 // A week as one month holds it: the whole week, or its days in that month.

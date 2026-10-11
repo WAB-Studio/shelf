@@ -25,10 +25,11 @@ const farHorizon = `${Number(thisYear) + 2}-01-01`;
 type Db = postgres.Sql;
 type Seed = { name: string; estimate: number | null; fixed?: string; done?: boolean; parent?: string };
 
-async function seedGoal(db: Db, personId: string, rhythm: number | null, horizon: string, createdAgo = "3 days") {
+// Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
+async function seedGoal(db: Db, personId: string, rhythm: number | null, horizon: string) {
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-    values (${personId}, ${`Meta sobreviviente ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, now() - ${createdAgo}::interval)
+    values (${personId}, ${`Meta sobreviviente ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, ${`${m0}T00:00:00-05:00`}::timestamptz)
     returning id
   `;
   return goal.id;
@@ -199,14 +200,14 @@ test("g10: a month page sums the parts its tasks hold, not their whole size", as
   }
 });
 
-test("g02: the plan's end on the goal carries its year only when it is not this one", async ({ page, db, personId }) => {
+test("g02: the plan's end on the goal always carries its year, this one included", async ({ page, db, personId }) => {
   const soon = await seedGoal(db, personId, 480, farHorizon);
   await seedTasks(db, personId, soon, [{ name: "Corta", estimate: 60 }]);
   const late = await seedGoal(db, personId, 60, farHorizon);
   await seedTasks(db, personId, late, [{ name: "Larga", estimate: 840 }]);
   try {
     await page.goto(`/metas/${soon}`);
-    await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+$/u)).toBeVisible();
+    await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}$/u)).toBeVisible();
     await page.goto(`/metas/${late}`);
     await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}$/u)).toBeVisible();
   } finally {
@@ -222,7 +223,7 @@ test("r01: a rhythm that ends on the goal's last day reads «a tiempo», not wee
     await page.goto(`/metas/${goalId}/plan`);
     await page.getByRole("button", { name: "Ritmo 12 h al mes" }).click();
     const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText(/^Con 12 h al mes terminas el \d{1,2} de \p{L}+, a tiempo\./u)).toBeVisible();
+    await expect(sheet.getByText(/^Con 12 h al mes terminas el \d{1,2} de \p{L}+ de \d{4}, a tiempo\./u)).toBeVisible();
     await expect(sheet.getByText(/después de tu final/)).toHaveCount(0);
   } finally {
     await drop(db, personId, goalId);
@@ -237,7 +238,7 @@ test("r02: ten or eleven days late read «2 semanas», weeks rounded up", async 
     await page.getByRole("button", { name: "Ritmo 16 h al mes" }).click();
     const sheet = page.getByRole("dialog");
     await sheet.getByRole("radio", { name: "8 h" }).click();
-    await expect(sheet.getByText(/^Con 8 h al mes terminas el \d{1,2} de \p{L}+, 2 semanas después de tu final\./u)).toBeVisible();
+    await expect(sheet.getByText(/^Con 8 h al mes terminas el \d{1,2} de \p{L}+ de \d{4}, 2 semanas después de tu final\./u)).toBeVisible();
   } finally {
     await drop(db, personId, goalId);
   }

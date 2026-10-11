@@ -45,7 +45,16 @@ export function Panel({
 
 // Cards side by side from 1024px, tops aligned, two columns at every width;
 // below, the children stay the parent's own items.
+// `from="wide"`: side by side only from 1280px, for cards that share the
+// screen with another column; below, one full-width card under the other.
 // `print="stack"`: on paper one full-width column.
-export function PanelGrid({ children, print }: { children: ReactNode; print?: "stack" }) {
-  return <div className={print === "stack" ? `${styles.grid} ${styles.printStack}` : styles.grid}>{children}</div>;
+export function PanelGrid({ children, from, print }: { children: ReactNode; from?: "wide"; print?: "stack" }) {
+  const className = [
+    styles.grid,
+    from === "wide" ? styles.fromWide : undefined,
+    print === "stack" ? styles.printStack : undefined,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return <div className={className}>{children}</div>;
 }

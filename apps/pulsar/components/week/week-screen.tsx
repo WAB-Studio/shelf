@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
 import { Face, Flex, Page, ScreenHeader, SectionLabel, TextLink } from "@/components/ui";
-import { dayPhrase } from "@/lib/day/day-phrase";
+import { endedOnPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref } from "@/lib/day/week-href";
 import { weekSteps } from "@/lib/day/week-param";
 import { loadWeek, type GoalSummary } from "@/lib/queries/week";
@@ -98,10 +98,10 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
   function endedNote(goal: GoalSummary) {
     const lastDay = endedLastDay(goal.horizon, today);
     if (lastDay === null) return null;
-    const text = dayPhrase((key, values) => t(key, values), "day.ended.on", lastDay, today, {
+    const text = endedOnPhrase((key, values) => t(key, values), "", lastDay, {
       weekdays: t.raw("day.weekdayLong") as string[],
       months: t.raw("day.monthLong") as string[],
-    }, { goal: "" });
+    });
     return (
       <EndedLine
         text={text.trim()}

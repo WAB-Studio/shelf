@@ -178,14 +178,16 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   if (!loaded || !stored || !draft || !work || !sent) return <Page width="full" />;
 
-  const monthWord = (month: string, long = false) =>
-    format.dateTime(civilDateToDate(`${month}-01`), long ? { month: "long", year: "numeric", timeZone: "UTC" } : { month: "long", timeZone: "UTC" });
+  // «octubre 2026»: the platform's own long form says «octubre de 2026».
+  const monthWord = (month: string, long = false) => {
+    const name = format.dateTime(civilDateToDate(`${month}-01`), { month: "long", timeZone: "UTC" });
+    return long ? `${name} ${month.slice(0, 4)}` : name;
+  };
   const dayLabel = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const phaseSpan = (startsOn: string, endsOn: string) => {
-    if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return shortMonth(startsOn);
-    const crossesYear = startsOn.slice(0, 4) !== endsOn.slice(0, 4);
-    const year = (date: string) => (crossesYear ? ` ${date.slice(0, 4)}` : "");
-    return `${shortMonth(startsOn)}${year(startsOn)}–${shortMonth(endsOn)}${year(endsOn)}`;
+    const short = (date: string) => `${shortMonth(date)} ${date.slice(0, 4)}`;
+    if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return short(startsOn);
+    return `${short(startsOn)}–${short(endsOn)}`;
   };
   // The board's form for a day inside the year: no year.
   const dayAndMonth = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", timeZone: "UTC" });
@@ -271,7 +273,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   function reasonOf(key: string, values: Record<string, string> = {}): string {
     switch (key) {
       case "import.errors.monthBeforeStart":
-        return t("import.review.blocked.monthBeforeStart", { first: monthWord(values.first) });
+        return t("import.review.blocked.monthBeforeStart", { first: monthWord(values.first, true) });
       case "import.errors.monthAfterEnd":
         return t("import.review.blocked.monthAfterEnd", {
           last: dayLabel(values.last),
@@ -387,7 +389,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         </Section>
       ) : null}
 
-      <PanelGrid>
+      <PanelGrid from="wide">
       {work.goals.map((goal, g) => {
         const at = goalPath(g);
         if (refused.has(`${at}.horizon`)) return null;
@@ -428,15 +430,14 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                 ) : null}
                 <Text as="p" variant="sentence" tone="muted">
                   {t.rich("import.review.goalSpan", {
-                    from: dayAndMonth(today),
-                    to: dayLabel(lastDay),
+                    from: dayLabel(today),
                     ...fig,
                   })}
                 </Text>
                 <CheckRow
                   checked={goalOn}
                   onCheckedChange={(value) => toggle(at, value)}
-                  name={t("import.review.horizonUntil", { date: dayLabel(dayBefore(goal.horizon)) })}
+                  name={t("import.review.horizonUntil", { date: dayLabel(lastDay) })}
                   meta={t("import.review.horizon")}
                 />
                 {goal.measure ? (
@@ -445,7 +446,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                     onCheckedChange={(value) => toggle(at, value)}
                     name={goal.measure.name}
                     meta={t("import.review.measure")}
-                    trailing={isTimeUnit(goal.measure.unit) ? t("import.review.measureTime") : goal.measure.unit}
+                    trailing={isTimeUnit(goal.measure.unit) ? t("import.review.measureTime") : (words.unit?.(goal.measure.unit, 2) ?? goal.measure.unit)}
                   />
                 ) : null}
                 {goal.measure && goal.rhythm !== null && isTimeUnit(goal.measure.unit) ? (
@@ -509,7 +510,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                         checked={goalOn && on(path)}
                         disabled={!goalOn}
                         onCheckedChange={(value) => toggle(path, value)}
-                        name={monthWord(entry.month)}
+                        name={monthWord(entry.month, true)}
                         meta={planned ? t("import.review.inLieuOfRhythm") : undefined}
                         {...amountProps(path, monthWord(entry.month), unit ?? "", entry.amount, "month")}
                       />
@@ -557,10 +558,10 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                               planned
                                 ? t("import.review.toPlan")
                                 : task.children.length > 0
-                                ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
+                                ? t("import.review.sumOfMarked", { month: monthWord(task.month, true) })
                                 : strays.has(path)
-                                  ? `${monthWord(task.month)} · ${t(messageKey(strays.get(path)!))}`
-                                  : monthWord(task.month)
+                                  ? `${monthWord(task.month, true)} · ${t(messageKey(strays.get(path)!))}`
+                                  : monthWord(task.month, true)
                             }
                             metaMore={
                               planned && task.children.length > 0

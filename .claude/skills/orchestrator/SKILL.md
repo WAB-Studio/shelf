@@ -32,8 +32,9 @@ Subagents: `planner` takes a slice and returns a plan. `worker` takes an assignm
 3. For a module that draws or changes a screen, dispatch the `tester` first, on the module's branch: it writes the
    Done table's tests from the contract, red. Then the `worker` makes them green. Words-only and pure-function modules
    go straight to the worker. Decided by the user 2026-10-06.
-   Dispatch one agent per lane, all in one message. Wait for the reports.
-4. Read each report. Resolve its `Unresolved`. Collect its `Deferred`.
+   Dispatch one agent per lane, all in one message.
+4. Take each report the moment it lands. Never wait for the batch: a lane that finished gets its next agent
+   while the others still run. Resolve its `Unresolved`. Collect its `Deferred`.
 5. Put any `Questions` to the user. Re-dispatch that assignment with the answers.
 6. Dispatch a `validator` per finished branch. On `FAIL`, re-dispatch that worker with its `Fixes`. On `PASS`, mark the plan's modules done and merge the branch.
 7. Repeat with the assignments the merged ones unblocked.
@@ -49,6 +50,9 @@ Subagents: `planner` takes a slice and returns a plan. `worker` takes an assignm
 - Never put two workers on one lane, and never two on one file.
 - Cap the suites running at once at five.
 - Serialize only what a dependency forces. Nothing else.
+- Never hold work behind a judge. Run the `validator`, `mutator` and `critic` beside the next module's worker,
+  and cut the next train from the branch of the one in review. Decided by the user 2026-10-11: «esperar a los
+  agentes multiplica el tiempo».
 
 ## What a dispatch costs
 

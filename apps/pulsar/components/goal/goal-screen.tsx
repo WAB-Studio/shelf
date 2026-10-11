@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { type Translator } from "@/i18n/translator";
+import { type MessageKey, type Translator } from "@/i18n/translator";
 
 import {
   ArchiveGoalAction,
@@ -12,9 +12,11 @@ import {
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
+import { partOf } from "@/lib/plan/months";
+import { showsPaceLine } from "@/lib/plan/pace-line";
 import { planHrefFrom } from "@/lib/plan/return-to";
-import { amountOf } from "@/lib/plan/roadmap";
 import { planMonthList } from "@/lib/plan/roadmap-read";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
@@ -48,13 +50,14 @@ import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { MoveHorizonAction } from "./horizon-sheet";
 import { RenameGoalAction } from "./rename-sheet";
 
-// "22 de septiembre": the day a goal was opened or archived, in the person's
+// "22 de septiembre de 2026": the day a goal was opened or archived, in the person's
 // own zone (RNP-06) and in words, never a locale this design does not
 // otherwise use.
 function longDateLabel(instant: string): string {
   return new Intl.DateTimeFormat("es-CO", {
     day: "numeric",
     month: "long",
+    year: "numeric",
     timeZone: TIME_ZONE,
   }).format(new Date(instant));
 }
@@ -69,6 +72,7 @@ function endedOnWords(endedOn: string, t: Translator): string {
     weekday: weekdays[words.weekday],
     day: words.day,
     month: months[words.month ?? 0],
+    year: endedOn.slice(0, 4),
   });
 }
 
@@ -103,10 +107,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const t = await getTranslations();
   const today = todayInZone();
   const endDay = dayBefore(goal.horizon);
-  const endLabel =
-    endDay.slice(0, 4) === today.slice(0, 4)
-      ? civilDayMonthShort(endDay)
-      : `${civilDayMonthShort(endDay)} ${endDay.slice(0, 4)}`;
+  const endLabel = `${civilDayMonthShort(endDay)} ${endDay.slice(0, 4)}`;
   const openedOn = civilDateInZone(new Date(goal.createdAt));
   const totalWeeks = horizonWeeks(openedOn, goal.horizon);
   const currentPhase = phaseOn(goal.phases, today);
@@ -125,7 +126,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       horizon={goal.horizon}
       weeks={sheetWeeks}
       phases={goal.phases}
-      solid={ended}
+      reopening={ended}
     />
   );
 
@@ -144,8 +145,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const month = goal.month;
   const figureUnit = goal.measureUnit ?? undefined;
   const monthName = (t.raw("day.monthLong") as string[])[Number(today.slice(5, 7)) - 1];
-  const daysLeft = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate() - Number(today.slice(8, 10));
-  const planned = month?.planned ?? null;
+  // Days to the month's end, or to the goal's own last day when that comes first.
+  const monthEnd = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  const lastDay = endDay < monthEnd ? endDay : monthEnd;
+  const daysLeft = Math.round((Date.parse(`${lastDay}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  const planned = screenPlanned(month?.planned ?? null, goal.plan.budgets.some((budget) => budget.month === `${today.slice(0, 7)}-01`));
   const percent = month && planned ? Math.floor((month.reached * 100) / planned) : 0;
   // A goal with no measure has no amount to read, but its months and their
   // tasks stay reachable (`MetaSinMedida.dc.html`).
@@ -161,18 +165,21 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     min: (min) => units("min", { min }),
     join: (h, min) => units("join", { h, min }),
   };
+  // The catalogue's word for a stored unit; a unit it lacks prints as typed.
+  const unitWord = (unit: string) => {
+    const key = `units.words.${unit.trim().toLowerCase()}` as MessageKey;
+    return /^\p{L}+$/u.test(unit.trim()) && t.has(key) ? t(key, { count: 2 }) : unit;
+  };
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const monthNames = t.raw("day.monthLong") as string[];
   const planEnd = goal.roadmap.end;
-  const planAmount = amountOf(monthKey, goal.plan);
+  // The row says the whole rhythm; only the month's figures carry its share.
+  const planAmount = goal.plan.rhythm;
   const monthOwn = goal.plan.rhythm !== null && goal.plan.budgets.some((budget) => budget.month === monthKey);
   const planItems = planMonthList(goal.plan, monthKey);
   const planDone = planItems.filter((item) => item.done).length;
-  // The end carries its year only when it is not this one, as `endLabel` does.
   const planEndLabel = planEnd
-    ? `${Number(planEnd.slice(8, 10))} de ${monthNames[Number(planEnd.slice(5, 7)) - 1]}${
-        planEnd.slice(0, 4) === today.slice(0, 4) ? "" : ` de ${planEnd.slice(0, 4)}`
-      }`
+    ? `${Number(planEnd.slice(8, 10))} de ${monthNames[Number(planEnd.slice(5, 7)) - 1]} de ${planEnd.slice(0, 4)}`
     : null;
   // A goal with no measure keeps its plan; one measured in something else has none.
   const measuresOther = goal.measureUnit !== null && !isTimeUnit(goal.measureUnit);
@@ -222,20 +229,26 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     </Panel>
   ) : null;
   // Under 60 % from the 20th the pace line holds reached «de» planned itself.
-  const paceLine = planned !== null && planned > 0 && Boolean(month?.underPace) && goal.evidence !== "unreadable";
+  const part = partOf(monthKey, goal.plan);
+  const paceLine = showsPaceLine({
+    planned,
+    underPace: Boolean(month?.underPace),
+    unreadable: goal.evidence === "unreadable",
+    ended,
+  });
   const monthBlock =
     goal.measureUnit && month ? (
       <Section label={monthName}>
         {paceLine ? (
           <Text as="p" variant="sentence">
             {t("goal.detail.monthPace", { day: Number(today.slice(8, 10)) })}{" "}
-            <Figure value={month.reached} unit={figureUnit} variant="meta" />{" "}
+            <Figure value={month.reached} unit={figureUnit} variant="meta" bare />{" "}
             {t("day.monthLine.of")} <Figure value={planned as number} unit={figureUnit} variant="meta" />
             {t("goal.detail.monthPaceUnder", { threshold: 60 })}
           </Text>
         ) : (
           <Text as="p" variant="sentence" tone="muted">
-            <Figure value={month.reached} unit={figureUnit} variant="measure" />{" "}
+            <Figure value={month.reached} unit={figureUnit} variant="measure" bare={planned !== null} />{" "}
             {planned !== null ? (
               <>
                 {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />
@@ -245,6 +258,16 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             )}
           </Text>
         )}
+        {part ? (
+          <Text as="p" variant="sentence" tone="muted">
+            {t.rich("goal.detail.monthPart", {
+              ...part,
+              share: formatQuantity(part.share, goal.measureUnit ?? "", words),
+              rhythm: formatQuantity(part.rhythm, goal.measureUnit ?? "", words),
+              ...fig,
+            })}
+          </Text>
+        ) : null}
         {monthOwn ? (
           <Text as="p" variant="sentence" tone="muted">
             {t("goal.detail.monthInLieu")}
@@ -259,7 +282,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               </Text>
             ) : paceLine ? null : (
               <Text as="p" variant="sentence" tone="muted">
-                {t("goal.detail.monthProgress", { percent, days: daysLeft })}
+                {ended ? t("goal.detail.monthProgressEnded", { percent }) : t("goal.detail.monthProgress", { percent, days: daysLeft })}
               </Text>
             )}
           </>
@@ -314,7 +337,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           <Text as="p" variant="sentence" tone="muted">
             {isTimeUnit(goal.measureUnit)
               ? t("goal.detail.measuresTime")
-              : t("goal.detail.measures", { unit: goal.measureUnit })}
+              : t("goal.detail.measures", { unit: unitWord(goal.measureUnit) })}
           </Text>
           {phoneActs}
 

@@ -43,7 +43,8 @@
 }
 
 .stackLabel {
-  flex: 0 0 100px;
+  flex: 0 0 112px;
+  min-inline-size: 0;
   font-size: var(--pulsar-text-meta-size);
   color: var(--pulsar-muted);
 }
@@ -95,24 +96,93 @@
 }
 
 /* Beside a list's own chevron the note is a short phrase («sin monto»): it
-   keeps its line, and the label never gives up its 100px. */
+   keeps its line, and the label never gives up its 112px. */
 .narrow .stackNote {
   white-space: nowrap;
-}
-
-/* The label holds its width so every figure after it starts on one edge. */
-.narrow .stackLabel {
-  flex: 0 0 100px;
-  min-inline-size: 0;
 }
 
 .narrow .detail {
   white-space: normal;
 }
 
+/* A note naming a long unit («0 de 60 búsquedas») breaks at a word instead
+   of pushing the chevron out; one that fits stays on its line. */
+.narrow.wrapNote .stackNote {
+  white-space: normal;
+}
+
+/* Off `narrow`, a note too long for what the label and figure leave drops under
+   them whole, on its own line at the end; one that fits beside them in two lines
+   stays there. Linked rows keep their note beside the chevron. */
+.wrapNote .stackRow {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.wrapNote .stackRow > .stackNote {
+  flex: 1 1 0;
+}
+
+.wholeNote .stackRow {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.wholeNote .stackRow > .stackNote {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
+.narrow.wholeNote .rowLink {
+  position: relative;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  padding-inline-end: 32px;
+}
+
+.narrow.wholeNote .rowLink > .stackNote {
+  flex: 0 1 auto;
+}
+
+/* The chevron rides the row's end, centred, so a note dropped under the month
+   never carries it out of the row. */
+.narrow.wholeNote .chevron {
+  position: absolute;
+  inset-inline-end: 4px;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+}
+
 .wrapDetail .detail,
 .wrapDetail .detailWide {
   white-space: normal;
+}
+
+/* The label column takes its longest date line, never under 112px: every row
+   is a subgrid of the stack's three tracks, so one row's range widens them all.
+   The row's 4px inset rides the first track, hence 116. */
+.fitDetail .stack {
+  display: grid;
+  grid-template-columns: minmax(116px, max-content) max-content minmax(min-content, 1fr);
+  column-gap: 12px;
+}
+
+.fitDetail .stackRow {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fitDetail .stackFigure {
+  grid-column: 2;
+}
+
+.fitDetail .stackNote {
+  grid-column: 3;
+}
+
+.fitDetail .detailWide {
+  white-space: nowrap;
 }
 
 /* The wide face, `RevisionEscritorio.dc.html`. */
@@ -215,11 +285,18 @@
   white-space: nowrap;
 }
 
+/* The lead cell's own line is the label's, so its first baseline sits where
+   the label's does even where paper drops a row's baseline alignment: the
+   measure's size rides `.leadValue`, never the cell. */
 .lead {
   font-family: var(--font-mono);
+  font-size: var(--pulsar-text-meta-size);
+  letter-spacing: var(--pulsar-text-measure-tracking);
+}
+
+.leadValue {
   font-size: var(--pulsar-text-measure-size);
   font-weight: var(--pulsar-text-measure-weight);
-  letter-spacing: var(--pulsar-text-measure-tracking);
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   color: var(--pulsar-ink);

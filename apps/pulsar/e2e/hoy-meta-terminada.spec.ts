@@ -27,8 +27,10 @@ const EARLY_WEEK_TWO_DAYS = "lunes y martes dos días atrás cae en la semana pa
 
 // ICU's Spanish, never the catalogue's list the screen reads.
 function dayWords(day: string): string {
-  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(civilDateToDate(day));
-  return `${weekday} ${Number(day.slice(8, 10))}`;
+  const parts = new Intl.DateTimeFormat("es", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+    .formatToParts(civilDateToDate(day));
+  const part = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${part("weekday")} ${part("day")} de ${part("month")} de ${part("year")}`;
 }
 
 // The last day is `lastDay`, so the horizon is the day after.
@@ -90,7 +92,7 @@ test("a goal that ended yesterday reads «terminó ayer · ver»", async ({ brow
     await seedEnded(db, personId, name, shift(today, -1));
     await open(page);
     await expect(page.getByText(openName).first()).toBeVisible();
-    await expect(page.getByText(`${name} terminó ayer ·`)).toHaveCount(1);
+    await expect(page.getByText(`${name} terminó ayer`)).toHaveCount(1);
     await expect(page.getByText(/terminó el /)).toHaveCount(0);
   });
 });
@@ -104,7 +106,7 @@ test("a goal that ended two days ago this week names the day", async ({ browser,
     await seedEnded(db, personId, name, shift(today, -2));
     await open(page);
     await expect(page.getByText(openName).first()).toBeVisible();
-    await expect(page.getByText(`${name} terminó el ${dayWords(shift(today, -2))} ·`)).toHaveCount(1);
+    await expect(page.getByText(`${name} terminó el ${dayWords(shift(today, -2))}`)).toHaveCount(1);
     await expect(page.getByText(/terminó ayer/)).toHaveCount(0);
   });
 });
@@ -150,7 +152,7 @@ test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser
     await seedEnded(db, personId, name, shift(today, -1));
     await page.setViewportSize({ width: 1280, height: 800 });
     await open(page);
-    const line = page.getByText(`${name} terminó ayer ·`);
+    const line = page.getByText(`${name} terminó ayer`);
     await expect(line).toHaveCount(1);
     const box = async (locator: Locator) => (await locator.boundingBox())!;
     const t = await box(page.getByRole("main").getByText("Hoy", { exact: true }));
@@ -177,10 +179,10 @@ test("several goals ended this week read one line each, in plan order (RP-47)", 
     await expect(page.getByText(openName).first()).toBeVisible();
     // Tuesday draws only the newer one, Wednesday on both.
     const expected = [
-      ...(inThisWeek(2) ? [`${older} terminó el ${dayWords(shift(today, -2))} ·`] : []),
-      ...(inThisWeek(1) ? [`${newer} terminó ayer ·`] : []),
+      ...(inThisWeek(2) ? [`${older} terminó el ${dayWords(shift(today, -2))}`] : []),
+      ...(inThisWeek(1) ? [`${newer} terminó ayer`] : []),
     ];
-    const lines = page.getByText(/ terminó (ayer|el) /);
+    const lines = page.getByText(/ terminó (ayer|el )/);
     await expect(lines).toHaveCount(expected.length);
     const texts = await lines.allTextContents();
     // Seeded older first, so plan order puts it above the more recent one.

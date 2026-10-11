@@ -1,18 +1,11 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { shortMonth } from "@/lib/dates/short-month";
+import type { MessageKey } from "@/i18n/translator";
+import { civilSpan } from "@/lib/export/sections";
 import { loadGoal } from "@/lib/queries/goal";
 import { isTimeUnit } from "@/lib/units/time";
 import { Page, ScreenHeader, Section, Table, Text, type TableRow } from "@/components/ui";
-
-// «21–27 sep», «31 ago–6 sep».
-function weekSpan(startsOn: string, endsOn: string): string {
-  const startDay = Number(startsOn.slice(8, 10));
-  const endDay = Number(endsOn.slice(8, 10));
-  if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return `${startDay}–${endDay} ${shortMonth(endsOn)}`;
-  return `${startDay} ${shortMonth(startsOn)}–${endDay} ${shortMonth(endsOn)}`;
-}
 
 /**
  * `RevisionAncha.dc.html` (RP-17): the goal's own
@@ -30,6 +23,11 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
   const t = await getTranslations();
 
   const back = { href: `/metas/${goal.id}`, place: goal.name };
+  // The catalogue's word for a stored unit; a unit it lacks prints as typed.
+  const unitWord = (unit: string) => {
+    const key = `units.words.${unit.trim().toLowerCase()}` as MessageKey;
+    return /^\p{L}+$/u.test(unit.trim()) && t.has(key) ? t(key, { count: 2 }) : unit;
+  };
 
   // §0.3, 3: a goal whose first quantity commitment has not landed yet has
   // nothing to sum and nothing to place in a week (RP-14's own rule, carried
@@ -62,7 +60,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
       key: String(week.index),
       cells: [t("goal.review.weekLabel", { n: week.index }), week.total, phase, note],
       note: note || undefined,
-      detail: weekSpan(week.startsOn, week.endsOn),
+      detail: civilSpan(week.startsOn, week.endsOn),
     };
   });
 
@@ -74,7 +72,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
       <Text as="p" variant="sentence">
         {isTimeUnit(goal.measureUnit)
           ? t("goal.review.measureTime")
-          : t("goal.review.measure", { unit: goal.measureUnit })}
+          : t("goal.review.measure", { unit: unitWord(goal.measureUnit) })}
       </Text>
       <Table
         caption={t("goal.review.caption")}
@@ -83,6 +81,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
         figures={[1]}
         unit={goal.measureUnit}
         current={currentIndex === -1 ? undefined : currentIndex}
+        fitDetail
       />
     </Page>
   );

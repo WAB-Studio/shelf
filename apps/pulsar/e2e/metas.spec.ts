@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type postgres from "postgres";
 
+import importMessages from "../messages/es/import.json";
 import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
@@ -21,8 +22,7 @@ function lastDay(horizon: string): string {
   const date = civilDateToDate(horizon);
   date.setUTCDate(date.getUTCDate() - 1);
   const day = dateToCivilDate(date);
-  const label = `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]}`;
-  return day.slice(0, 4) === todayInZone().slice(0, 4) ? label : `${label} ${day.slice(0, 4)}`;
+  return `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
 }
 
 async function seedGoal(
@@ -90,8 +90,8 @@ for (const width of [360, 390, 1280, 1440]) {
       await expect(addAnother).toHaveAttribute("href", "/metas/nueva");
       await expect(group.getByRole("link", { name: "Abrir otra meta" })).toHaveCount(0);
 
-      await expect(page.getByRole("link", { name: `${endedName} terminó el 13 sep` })).toBeVisible();
-      await expect(page.getByRole("link", { name: new RegExp(`^${archivedName} archivada el \\d+ \\w+$`) })).toBeVisible();
+      await expect(page.getByRole("link", { name: `${endedName} terminó el 13 sep 2026` })).toBeVisible();
+      await expect(page.getByRole("link", { name: new RegExp(`^${archivedName} archivada el \\d+ \\w+ \\d{4}$`) })).toBeVisible();
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
@@ -136,7 +136,7 @@ const MONTH_LONG = [
 ];
 
 for (const width of [390, 1440]) {
-  test(`/metas at ${width}: the desktop row carries the goal's month and figure; the phone keeps its last day and puts the plan before «Archivadas»`, async ({
+  test(`/metas at ${width}: both rows carry the goal's month and figure, the phone one above its last day, and the plan sits before «Archivadas»`, async ({
     person,
     browser,
     db,
@@ -198,13 +198,13 @@ for (const width of [390, 1440]) {
       const taskedRow = main.locator("a", { hasText: taskedName });
 
       if (width >= 1024) {
-        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`)).toBeVisible();
-        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`)).toBeVisible();
+        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`).locator("visible=true")).toBeVisible();
+        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`).locator("visible=true")).toBeVisible();
         await expect(measuredRow.getByText(`hasta el ${lastDay(horizon)}`).last()).toBeVisible();
       } else {
         await expect(measuredRow.getByText(`hasta el ${lastDay(horizon)}`).first()).toBeVisible();
-        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`)).toBeHidden();
-        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`)).toBeHidden();
+        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`).locator("visible=true")).toBeVisible();
+        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`).locator("visible=true")).toBeVisible();
 
         const y = async (locator: ReturnType<typeof page.getByText>) => (await locator.boundingBox())!.y;
         const addAnother = await y(page.getByRole("link", { name: "Abrir otra meta" }));
@@ -261,9 +261,108 @@ test("/metas at 1440: a goal's figure folds in the evidence its source recorded 
     const page = await context.newPage();
     await page.goto("/metas");
     const row = page.locator("main").locator("a", { hasText: name });
-    await expect(row).toContainText(new RegExp(`${monthName}\\s+·\\s+3\\s*searches\\s+de\\s+10\\s*searches`));
+    await expect(row).toContainText(new RegExp(`${monthName}\\s+·\\s+3\\s+de\\s+10\\s*búsquedas`));
   } finally {
     await context.close();
     await db`delete from reading.lookups where user_id = ${person.id} and device_id = ${deviceId}`;
+  }
+});
+
+// The unit a goal was stored with reads in the catalogue's words wherever the goal says what it measures.
+async function seedSearches(db: postgres.Sql, personId: string, name: string): Promise<string> {
+  const goalId = await seedGoal(db, personId, name, plusDays(60), 0);
+  await db`update goals.goals set measure_name = 'búsquedas', measure_unit = 'searches' where id = ${goalId}`;
+  const month = `${todayInZone().slice(0, 7)}-01`;
+  await db`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${personId}, ${goalId}, ${month}::date, 10)`;
+  const [commitment] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+    values (${personId}, ${goalId}, 'buscar', 'daily', 'quantity', 1, 'searches', now() - interval '20 days')
+    returning id
+  `;
+  await db`insert into goals.facts (user_id, goal_id, commitment_id, day, quantity) values (${personId}, ${goalId}, ${commitment.id}, ${todayInZone()}::date, 1)`;
+  return goalId;
+}
+
+for (const [screen, path] of [
+  ["the goal", ""],
+  ["its weekly review", "/revision"],
+] as const) {
+  test(`${screen} says «mide en búsquedas» for a goal stored in «searches»`, async ({ person, browser, db }) => {
+    const goalId = await seedSearches(db, person.id, `Palabras ${Date.now()}`);
+    const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+    try {
+      const page = await context.newPage();
+      await visit(page, `/metas/${goalId}${path}`);
+      await expect(page.getByText("mide en búsquedas", { exact: true })).toBeVisible();
+      await expect(page.getByText(/mide en searches/)).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+// A stored unit reads through the catalogue only when it is one plain word the catalogue has, whatever its case;
+// anything else prints as typed.
+const MEASURE_LINE_CASES = [
+  ["Searches", "mide en búsquedas", "a unit stored with a capital reads in the catalogue's word"],
+  ["repeticiones", "mide en repeticiones", "a word the catalogue lacks prints as typed"],
+  ["searches.length", "mide en searches.length", "a unit with a dot is never looked up in the catalogue"],
+] as const;
+for (const [screen, path] of [
+  ["the goal", ""],
+  ["its weekly review", "/revision"],
+] as const) {
+  for (const [unit, line, why] of MEASURE_LINE_CASES) {
+    test(`${screen}: «${unit}» reads «${line}» (${why})`, async ({ person, browser, db }) => {
+      const goalId = await seedGoal(db, person.id, `Unidad ${Date.now()}`, plusDays(60), 0);
+      await db`update goals.goals set measure_name = 'cosas', measure_unit = ${unit} where id = ${goalId}`;
+      const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+      try {
+        const page = await context.newPage();
+        await visit(page, `/metas/${goalId}${path}`);
+        await expect(page.getByText(line, { exact: true })).toBeVisible();
+        await expect(page.getByText(/units\.words/)).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    });
+  }
+}
+
+test("the /metas row says the unit once after a figure of 1, «1 de 10 búsquedas»", async ({ person, browser, db }) => {
+  const name = `Concuerda ${Date.now()}`;
+  await seedSearches(db, person.id, name);
+  const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await visit(page, "/metas");
+    await expect(page.locator("main").locator("a", { hasText: name })).toContainText(/octubre\s+·\s+1\s+de\s+10\s*búsquedas/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the import review ends the measure row in «búsquedas» for a unit written «searches»", async ({ person, browser }) => {
+  const text = [
+    "pulsar · plantilla 1",
+    "",
+    "# Leer en inglés",
+    `horizonte: ${plusDays(120)}`,
+    "medida: Consultas al diccionario · searches",
+  ].join("\n");
+  const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await page.goto("/metas/importar");
+    await page.getByLabel(importMessages.textLabel).fill(text);
+    await page.getByRole("button", { name: "Leer el plan" }).click();
+    await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+    // The measure row alone: its name is not the unit, so only its end can say «búsquedas».
+    const row = page.locator("label").filter({ hasText: "Consultas al diccionario" }).locator("visible=true");
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveText(/Consultas al diccionario\s*medida\s*búsquedas$/);
+    await expect(page.getByText("searches", { exact: true })).toHaveCount(0);
+  } finally {
+    await context.close();
   }
 });

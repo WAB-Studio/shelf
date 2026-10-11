@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createTranslator } from "next-intl";
+
+import unitsCatalogue from "../../messages/es/units.json";
 
 import { formatFigureValue } from "./format-figure";
 
@@ -75,4 +80,58 @@ test("a time unit with no words to print it in reads as a plain number", () => {
 
 test("a string value in a time unit passes through untouched", () => {
   assert.equal(formatFigureValue("12 h 30 min", "minutos", words), "12 h 30 min");
+});
+
+// `Figure` itself, rendered over the real `units` catalogue. Its hooks are
+// answered by the bare translator: the provider's context does not
+// cross tsx's CJS/ESM line. The CSS module is stubbed: node cannot load it.
+mock.module("./figure.module.css", { defaultExport: Object.fromEntries(["figure", "measure", "meta", "worded", "breaks", "space", "unit"].map((name) => [name, name])) });
+mock.module("next-intl", {
+  namedExports: {
+    useTranslations: (namespace?: string) =>
+      createTranslator({ locale: "es", timeZone: "UTC", messages: { units: unitsCatalogue }, namespace } as never),
+  },
+});
+
+async function markup(props: { value: number; unit?: string; breakUnit?: boolean }): Promise<string> {
+  const { Figure } = await import("./figure");
+  return renderToStaticMarkup(createElement(Figure, props));
+}
+
+async function drawn(props: { value: number; unit?: string; bare?: boolean }): Promise<string> {
+  const { Figure } = await import("./figure");
+  const html = renderToStaticMarkup(createElement(Figure, props));
+  return html.replace(/<[^>]+>/g, "").replace(/\u00a0|&nbsp;|&#xA0;/g, " ");
+}
+
+test("bare: a word unit is not drawn, not even its space — 30 búsquedas reads «30»", async () => {
+  assert.equal(await drawn({ value: 30, unit: "búsquedas", bare: true }), "30");
+});
+
+test("bare: a time keeps its own words — 120 min still reads «2 h» (RP-35)", async () => {
+  assert.equal(await drawn({ value: 120, unit: "min", bare: true }), "2 h");
+  assert.equal(await drawn({ value: 90, unit: "minutos", bare: true }), "1 h 30 min");
+});
+
+test("without bare a figure still carries its word — «30 búsquedas»", async () => {
+  assert.equal(await drawn({ value: 30, unit: "búsquedas" }), "30 búsquedas");
+});
+
+// `breakUnit` lets a word unit drop under its figure; a time keeps its line.
+test("breakUnit: a time figure keeps its unit on its line — 135 min draws «2 h 15 min» with no breaking class", async () => {
+  const html = await markup({ value: 135, unit: "minutos", breakUnit: true });
+  assert.equal(html.replace(/<[^>]+>/g, ""), "2 h 15 min");
+  assert.doesNotMatch(html, /breaks/);
+});
+
+test("breakUnit: a word unit may drop under its figure — the breaking class and a breakable space", async () => {
+  const html = await markup({ value: 30, unit: "búsquedas", breakUnit: true });
+  assert.match(html, /class="[^"]*\bbreaks\b/);
+  assert.match(html, /<span class="space"> <\/span>/);
+});
+
+test("without breakUnit a word unit never breaks from its figure", async () => {
+  const html = await markup({ value: 30, unit: "búsquedas" });
+  assert.doesNotMatch(html, /breaks/);
+  assert.match(html, /<span class="space">(\u00a0|&nbsp;|&#xA0;)<\/span>/);
 });

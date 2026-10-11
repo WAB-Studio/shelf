@@ -191,7 +191,8 @@ test("planShare: a task created today and fixed to a closed month counts in that
 });
 
 test("planMoved: a goal opened in the closed month still reads its notice", () => {
-  const notice = planMoved({ ...input(septemberHalf(), { openedOn: "2026-09-15" }), seen: null });
+  // Opened on the 2nd: September plans 11 of 12 (RP-74), so the plan still moves.
+  const notice = planMoved({ ...input(septemberHalf(), { openedOn: "2026-09-02" }), seen: null });
   assert.equal(notice?.closedMonth, SEP);
 });
 

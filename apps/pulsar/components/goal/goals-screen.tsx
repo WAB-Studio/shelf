@@ -21,7 +21,7 @@ import type {
   MetasMonth,
   MetasOpenGoal,
 } from "@/lib/queries/goal";
-import { civilDateInZone, civilDayMonthShort, todayInZone } from "@/lib/zone";
+import { civilDateInZone, civilDayMonthShort } from "@/lib/zone";
 
 /**
  * `MetasCentro`, `MetasCentroEscritorio` and `MetasVacio` (RP-11, RP-24, RP-27,
@@ -64,18 +64,15 @@ export async function GoalsScreen({
     );
   }
 
-  const thisYear = todayInZone().slice(0, 4);
   const lastDay = (goal: GoalSummary) => {
     const day = dayBefore(goal.horizon);
-    const date = civilDayMonthShort(day);
-    return day.slice(0, 4) === thisYear ? date : `${date} ${day.slice(0, 4)}`;
+    return `${civilDayMonthShort(day)} ${day.slice(0, 4)}`;
   };
-  const archivedLine = (goal: GoalSummary) =>
-    goal.archivedAt
-      ? t("goal.list.archivedOnShort", {
-          date: civilDayMonthShort(civilDateInZone(new Date(goal.archivedAt))),
-        })
-      : undefined;
+  const archivedLine = (goal: GoalSummary) => {
+    if (!goal.archivedAt) return undefined;
+    const day = civilDateInZone(new Date(goal.archivedAt));
+    return t("goal.list.archivedOnShort", { date: `${civilDayMonthShort(day)} ${day.slice(0, 4)}` });
+  };
   const monthName = (month: string) =>
     (t.raw("day.monthLong") as string[])[Number(month.slice(5, 7)) - 1];
   const monthMeta = (goal: MetasOpenGoal) => {
@@ -92,7 +89,12 @@ export async function GoalsScreen({
     return (
       <>
         {monthName(month.month)} ·{" "}
-        <Figure value={month.reached} unit={unit} variant="meta" />
+        <Figure
+          value={month.reached}
+          unit={unit}
+          variant="meta"
+          bare={month.planned !== null}
+        />
         {month.planned === null ? null : (
           <>
             {" "}
@@ -127,6 +129,7 @@ export async function GoalsScreen({
                         name={goal.name}
                         meta={t("goal.list.untilShort", { date: lastDay(goal) })}
                         metaVariant="sentence"
+                        narrowMetaAbove={monthMeta(goal)}
                         wideMeta={monthMeta(goal)}
                         wideTrailing={
                           goal.month ? (
@@ -160,7 +163,7 @@ export async function GoalsScreen({
                       href={`/metas/${goal.id}`}
                       name={goal.name}
                       meta={t("goal.list.endedOnShort", {
-                        date: civilDayMonthShort(dayBefore(goal.horizon)),
+                        date: lastDay(goal),
                       })}
                       metaVariant="sentence"
                       trailing={chevron}

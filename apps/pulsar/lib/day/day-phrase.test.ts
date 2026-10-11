@@ -17,9 +17,8 @@ const catalogue: Record<string, string> = {
   "day.oneOffs.carriedFrom": "del {weekday} {day}",
   "day.oneOffs.carriedFromFar": "del {weekday} {day} de {month}",
   "day.past.startedOn": "{goal} empezó el {weekday} {day}",
-  "day.ended.yesterday": "{goal} terminó ayer ·",
-  "day.ended.on": "{goal} terminó el {weekday} {day} ·",
-  "day.ended.onFar": "{goal} terminó el {weekday} {day} de {month} ·",
+  "day.ended.yesterday": "{goal} terminó ayer",
+  "day.ended.on": "{goal} terminó el {weekday} {day} de {month} de {year}",
   "day.past.startedOnFar": "{goal} empezó el {weekday} {day} de {month}",
 };
 function translate(key: string, values: Record<string, string | number>): string {
@@ -46,11 +45,11 @@ test("startedOn inside this week drops the month, after it names it, the goal as
   );
 });
 
-test("endedPhrase: yesterday is «ayer», two days back names the day, a far date names the month", () => {
-  assert.equal(endedPhrase(translate, "Azúcar", "2026-09-29", TODAY, names), "Azúcar terminó ayer ·");
-  assert.equal(endedPhrase(translate, "Azúcar", "2026-09-28", TODAY, names), "Azúcar terminó el lunes 28 ·");
+test("endedPhrase: yesterday is «ayer», two days back names the day, every date names its month and year", () => {
+  assert.equal(endedPhrase(translate, "Azúcar", "2026-09-29", TODAY, names), "Azúcar terminó ayer");
+  assert.equal(endedPhrase(translate, "Azúcar", "2026-09-28", TODAY, names), "Azúcar terminó el lunes 28 de septiembre de 2026");
   assert.equal(
     endedPhrase(translate, "Azúcar", "2026-09-27", TODAY, names),
-    "Azúcar terminó el domingo 27 de septiembre ·",
+    "Azúcar terminó el domingo 27 de septiembre de 2026",
   );
 });

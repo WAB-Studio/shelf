@@ -42,24 +42,34 @@ export function TimeParts({ time, unitClass }: { time: TimeFigure; unitClass: st
 // log's substance, so they are set in mono and their unit sits beside them in
 // quiet. `measure` is the 26px figure; `meta` the 12px one inside a row. A
 // time (RP-35) carries its own «h» and «min», so its unit word is not drawn.
+// `bare` drops a word unit for a caller that says it once elsewhere; a time
+// keeps its «h» and «min», which are part of the figure.
 export function Figure({
   value,
   unit,
   variant = "measure",
+  bare = false,
+  breakUnit,
 }: {
   value: ReactNode;
   unit?: string;
   variant?: "measure" | "meta";
+  bare?: boolean;
+  // Lets a word unit drop under its figure when the line runs out («de 60 /
+  // búsquedas»): the figure flows as text, so a no-break space before it keeps
+  // it with the word it follows. A time keeps its line.
+  breakUnit?: boolean;
 }) {
   const words = useTimeWords();
   const size = variant === "meta" ? styles.meta : styles.measure;
   const formatted = formatFigureValue(value, unit, words);
-  const wordUnit = unit && !isTimeFigure(formatted) ? unit : null;
+  const wordUnit = unit && !bare && !isTimeFigure(formatted) ? unit : null;
+  const breaks = Boolean(breakUnit && wordUnit);
   return (
-    <span className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""}`}>
+    <span className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""}`}>
       {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted}
       {/* A no-break space for copy and a screen reader to hear «20 páginas»; it draws no width, the spacer's padding does. */}
-      {wordUnit ? <span className={styles.space}>{"\u00a0"}</span> : null}
+      {wordUnit ? <span className={styles.space}>{breaks ? " " : "\u00a0"}</span> : null}
       {wordUnit ? (
         <span className={styles.unit}>{typeof value === "number" ? (words.unit?.(wordUnit, value) ?? wordUnit) : wordUnit}</span>
       ) : null}

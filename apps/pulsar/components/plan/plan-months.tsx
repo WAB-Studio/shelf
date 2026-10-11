@@ -11,6 +11,7 @@ import type { PlanItem, PlanMonth } from "@/lib/plan/roadmap";
 import { doneIn, openMonthsOf, planMonthList, planMonthOf } from "@/lib/plan/roadmap-read";
 import type { GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
+import { todayInZone } from "@/lib/zone";
 
 // Months drawn whole before the rest collapse: this one and the next.
 const WHOLE = 2;
@@ -32,7 +33,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
   // A section header's figure stays with its unit: a non-breaking space in plain text.
   const glue = (text: string) => text.replace(/ /g, "\u00a0");
-  const thisYear = String(new Date().getFullYear());
+  const thisYear = todayInZone().slice(0, 4);
   const { roadmap } = goal;
   const lastMonth = monthOf(roadmap.lastDay);
 

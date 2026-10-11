@@ -27,8 +27,10 @@ const NAME_DRAWS = 1;
 
 // ICU's Spanish, never the catalogue's list the screen reads.
 function dayWords(day: string): string {
-  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(civilDateToDate(day));
-  return `${weekday} ${Number(day.slice(8, 10))}`;
+  const parts = new Intl.DateTimeFormat("es", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+    .formatToParts(civilDateToDate(day));
+  const part = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${part("weekday")} ${part("day")} de ${part("month")} de ${part("year")}`;
 }
 
 async function seedGoal(db: postgres.Sql, personId: string, name: string, horizon: string) {
@@ -90,7 +92,7 @@ for (const width of [360, 1280]) {
       await open(page);
       // Beside it, the open goal always draws: an absent line is not an empty page.
       await expect(page.getByText(openName).filter({ visible: true }).first()).toBeVisible();
-      await expect(page.getByText(`terminó el ${dayWords(lastDay)} ·`).filter({ visible: true })).toHaveCount(
+      await expect(page.getByText(`terminó el ${dayWords(lastDay)}`).filter({ visible: true })).toHaveCount(
         1,
       );
       await expect(page.getByText(/terminó ayer/)).toHaveCount(0);
@@ -124,7 +126,7 @@ for (const width of [360, 1280]) {
       await open(page);
       await expect(page.getByText(openName).filter({ visible: true }).first()).toBeVisible();
       await expect(
-        page.getByText(`terminó el ${dayWords(shift(today, -1))} ·`).filter({ visible: true }),
+        page.getByText(`terminó el ${dayWords(shift(today, -1))}`).filter({ visible: true }),
       ).toHaveCount(1);
       const link = page.getByRole("link", { name: `Abrir ${name}` }).filter({ visible: true });
       await expect(link.filter({ hasText: "ver" })).toHaveCount(1);
@@ -185,7 +187,7 @@ test("at 360 a goal ended this week with no commitment still reads «terminó el
     await db`delete from goals.commitments where goal_id = ${id}`;
     await open(page);
     await expect(page.getByText(openName).filter({ visible: true }).first()).toBeVisible();
-    await expect(page.getByText(`terminó el ${dayWords(shift(today, -1))} ·`).filter({ visible: true })).toHaveCount(
+    await expect(page.getByText(`terminó el ${dayWords(shift(today, -1))}`).filter({ visible: true })).toHaveCount(
       1,
     );
     const link = page.getByRole("link", { name: `Abrir ${name}` }).filter({ visible: true });

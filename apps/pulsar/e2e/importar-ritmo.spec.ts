@@ -11,7 +11,8 @@ const RHYTHM_NAME = "Ritmo al mes";
 const RHYTHM_LINE = "las tareas van al plan";
 const rhythmButton = (page: Page, amount: string) => page.getByRole("button", { name: `Cambiar el ritmo, ${amount} al mes`, exact: true });
 const rhythmBox = (page: Page) => page.getByRole("checkbox", { name: new RegExp(RHYTHM_NAME) });
-const monthName = (by: number) => new Date(Date.UTC(shift(by).year, Number(shift(by).month) - 1, 1)).toLocaleDateString("es", { month: "long", timeZone: "UTC" });
+const monthName = (by: number) =>
+  `${new Date(Date.UTC(shift(by).year, Number(shift(by).month) - 1, 1)).toLocaleDateString("es", { month: "long", timeZone: "UTC" })} ${shift(by).year}`;
 const SOURCE_LINE = "ritmo: 12 h";
 
 function shift(by: number) {
@@ -262,7 +263,8 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
             expect(task.planned_month).toBeNull();
           }
           await page.getByRole("link", { name: /IA aplicada/ }).first().click();
-          await expect(page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 10 h al mes/ })).toBeVisible();
+          // Imported today: the line still says the whole rhythm, never the share of this month.
+          await expect(page.getByRole("link", { name: new RegExp(`^A este ritmo terminas el .* Ritmo 10 h al mes`) })).toBeVisible();
         } finally {
           await db`delete from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
         }

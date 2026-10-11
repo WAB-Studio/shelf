@@ -17,10 +17,11 @@ import {
   TextLink,
 } from "@/components/ui";
 import { daysBetween } from "@/lib/day/weeks";
+import { releasedPlan } from "@/lib/plan/first-rhythm";
 import { openMonthsOf, rhythmToMeet } from "@/lib/plan/roadmap-read";
 import { loadGoal } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
-import { civilDateLabel, civilDateToDate, dateToCivilDate } from "@/lib/zone";
+import { civilDateToDate, civilDateWithYear, dateToCivilDate } from "@/lib/zone";
 
 // «20 de marzo de 2027»: the lead names the year the plan ends in.
 const dateFormat = new Intl.DateTimeFormat("es-CO", {
@@ -78,7 +79,7 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
       lead = t("roadmap.pasaElFinal.finish", {
         date: dateLabel(roadmap.end),
         weeks: Math.ceil(-days / 7),
-        end: civilDateLabel(roadmap.lastDay),
+        end: civilDateWithYear(roadmap.lastDay),
       });
     }
   }
@@ -86,10 +87,7 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
   if (!unit) lead = t("roadmap.plan.noMeasure");
 
   // Undone top-level tasks fixed to a month: what a first rhythm sends back.
-  const releases = plan.tasks.filter(
-    (task) =>
-      task.parentId === null && task.plannedMonth !== null && task.doneOn === null,
-  ).length;
+  const releases = releasedPlan(plan).released;
   const totalHours = roadmap.unplaced.reduce((sum, item) => sum + item.hours, 0);
 
   return (

@@ -87,8 +87,8 @@ test.describe("mixed lines are Archivo with figures in mono (RP-38, RP-43, RP-53
     db,
   }) => {
     await db`
-      insert into goals.access_tokens (user_id, kind, name, token_hash, hint)
-      values (${person.id}, 'personal', 'mi pc', ${Buffer.from(`mi-pc-${Math.random()}`)}, 'abcd')`;
+      insert into goals.access_tokens (user_id, kind, name, token_hash, hint, created_at)
+      values (${person.id}, 'personal', 'mi pc', ${Buffer.from(`mi-pc-${Math.random()}`)}, 'abcd', ${`${today}T12:00:00Z`})`;
     for (const [width, height] of WIDTHS) {
       const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height } });
       try {

@@ -38,7 +38,7 @@ export function dayPhrase(
 }
 
 // Hoy's «terminó» line for a goal whose last day was `lastDay`: «ayer» the day
-// after, the named day later, with its month once it falls outside the week.
+// after, the named day with its month and year later.
 export function endedPhrase(
   translate: Translate,
   goal: string,
@@ -49,5 +49,18 @@ export function endedPhrase(
   const date = civilDateToDate(today);
   date.setUTCDate(date.getUTCDate() - 1);
   if (lastDay === dateToCivilDate(date)) return translate("day.ended.yesterday", { goal });
-  return dayPhrase(translate, "day.ended.on", lastDay, today, names, { goal });
+  return endedOnPhrase(translate, goal, lastDay, names);
+}
+
+// «Azúcar terminó el lunes 28 de septiembre de 2026»: the month and the year
+// always, a week away or not.
+export function endedOnPhrase(translate: Translate, goal: string, lastDay: string, names: DayNames): string {
+  const words = dayWords(lastDay, "1970-01-01");
+  return translate("day.ended.on", {
+    goal,
+    weekday: names.weekdays[words.weekday],
+    day: words.day,
+    month: names.months[words.month ?? 0],
+    year: lastDay.slice(0, 4),
+  });
 }

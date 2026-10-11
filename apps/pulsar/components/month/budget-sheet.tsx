@@ -25,6 +25,7 @@ export function BudgetSheet({
   month,
   monthName,
   amount,
+  stored = true,
   closeHref,
 }: {
   goalId: string;
@@ -34,6 +35,8 @@ export function BudgetSheet({
   month: string;
   monthName: string;
   amount: number | null;
+  // False when `amount` is a share of the rhythm: there is no stored budget to remove.
+  stored?: boolean;
   closeHref: string;
 }) {
   const t = useTranslations();
@@ -151,7 +154,7 @@ export function BudgetSheet({
         <Button block onClick={handleSave} disabled={pending}>
           {t("month.plan.save")}
         </Button>
-        {amount !== null ? (
+        {amount !== null && stored ? (
           <Button block variant="ghost" onClick={handleRemove} disabled={pending}>
             {t("month.plan.remove", { month: monthName })}
           </Button>

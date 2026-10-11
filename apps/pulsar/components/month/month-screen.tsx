@@ -8,16 +8,22 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
 import type { Task } from "@/lib/plan/carry";
 import type { PlanItem } from "@/lib/plan/roadmap";
-import { nextMonth } from "@/lib/plan/months";
+import { nextMonth, partOf, settledMonths } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
-import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { timeWordsOf } from "@/lib/units/time-words";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 
 function monthLabel(month: string): string {
   return monthFormat.format(new Date(`${month.slice(0, 7)}-01T12:00:00Z`));
+}
+
+function yearLabel(month: string): string {
+  return `${monthLabel(month)} ${month.slice(0, 4)}`;
 }
 
 function capitalised(text: string): string {
@@ -67,12 +73,7 @@ export async function MonthDetail({
   if (!row) notFound();
 
   const t = await getTranslations();
-  const units = await getTranslations("units");
-  const words: TimeWords = {
-    h: (h) => units("h", { h }),
-    min: (min) => units("min", { min }),
-    join: (h, min) => units("join", { h, min }),
-  };
+  const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const name = monthLabel(mes);
   const unit = goal.measureUnit;
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
@@ -80,12 +81,14 @@ export async function MonthDetail({
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
+  const rowPlanned = screenPlanned(row.planned, goal.plan.budgets.some((budget) => budget.month === mes));
   const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
 
   const items = planMonthList(goal.plan, mes);
   const carried = items.filter((item) => item.carriedFrom !== null);
   const own = items.filter((item) => item.carriedFrom === null);
+  const part = partOf(mes, goal.plan);
   const share = closed ? planShare(goal.plan, mes) : null;
 
   const doneInMonth = sum(
@@ -98,11 +101,15 @@ export async function MonthDetail({
     (task) => task.estimate ?? 0,
   );
 
+  // A month that has not begun has nothing reached to show beside its amount:
+  // «planeado» and the amount alone, or «sin monto planeado» alone.
+  const bareFuture = !closed && !row.current;
   const planned =
-    row.planned === null ? t("month.noPlan") : t("month.months.of", { planned: say(row.planned) });
-  // A future month of a goal not measured in time has nothing reached to
-  // show beside «planeado» while it has no amount: the one phrase stands alone.
-  const bareFuture = row.planned === null && !closed && !row.current && !isTimeUnit(unit);
+    rowPlanned === null
+      ? t("month.noPlan")
+      : bareFuture
+        ? say(rowPlanned)
+        : t("month.months.of", { planned: say(rowPlanned) });
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
   let note: ReactNode = null;
   if (closed) {
@@ -220,13 +227,13 @@ export async function MonthDetail({
     <Flex direction="column" gap={{ initial: "6", md: "7" }} maxWidth="720px">
       {heading ? (
         <Text asChild variant="title">
-          <h2>{capitalised(name)}</h2>
+          <h2>{capitalised(yearLabel(mes))}</h2>
         </Text>
       ) : null}
       {unit ? (
-        <Section label={bareFuture ? undefined : label} as="div">
+        <Section label={bareFuture && rowPlanned === null ? undefined : label} as="div">
           <Flex align="baseline" gap="2">
-            {bareFuture ? null : <Figure value={row.reached} unit={unit} />}
+            {bareFuture ? null : <Figure value={row.reached} unit={unit} bare={rowPlanned !== null} />}
             {open && !closed ? (
               <TextLink href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>
                 {planned}
@@ -235,6 +242,11 @@ export async function MonthDetail({
               <Text tone="secondary">{planned}</Text>
             )}
           </Flex>
+          {part ? (
+            <Text as="p" variant="sentence" tone="muted">
+              {t.rich("goal.detail.monthPart", { ...part, share: say(part.share), rhythm: say(part.rhythm), ...fig })}
+            </Text>
+          ) : null}
           {note ? (
             <Text as="p" variant="sentence">
               {note}
@@ -268,7 +280,7 @@ export async function MonthDetail({
         </Section>
       ) : null}
 
-      {own.length > 0 || (empty && (!open || closed)) ? (
+      {own.length > 0 ? (
         <Section
           as="div"
           label={
@@ -304,8 +316,9 @@ export async function MonthDetail({
  * month open.
  */
 export async function MonthScreen({ goalId, month }: { goalId: string; month: string }) {
-  const goal = await loadGoal(goalId);
-  if (!goal) notFound();
+  const loaded = await loadGoal(goalId);
+  if (!loaded) notFound();
+  const goal = { ...loaded, months: settledMonths(loaded.months, loaded.endedOn !== null) };
   const mes = `${month}-01`;
   if (!goal.months.some((entry) => entry.month === mes)) notFound();
 
@@ -313,7 +326,7 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
   return (
     <Page width="full">
       <ScreenHeader
-        title={capitalised(monthLabel(mes))}
+        title={capitalised(yearLabel(mes))}
         back={{ href: `/metas/${goal.id}`, place: goal.name }}
         eyebrow={<TextLink href={`/metas/${goal.id}/meses`}>{t("month.list.allMonths")}</TextLink>}
       />

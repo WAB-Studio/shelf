@@ -30,7 +30,7 @@
     "body": "{month} cerró con {done} de {amount}. Lo que faltó pasó a {next} y el resto se corrió detrás. Ahora terminas el {date}.",
     "seePlan": "Ver el plan",
     "dismiss": "Entendido",
-    "endDate": "{day} de {month}",
+    "endDate": "{day} de {month} de {year}",
     "titleDays": "Tu plan de {goal} se movió {days, plural, one {# día} other {# días}}",
     "bodyShort": "{month} cerró con {done} de {amount}. Lo que faltó pasó a {next}. Ahora terminas el {date}."
   },

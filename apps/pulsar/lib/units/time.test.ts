@@ -104,3 +104,22 @@ test("reading is untouched: an hour word is still not a stored time unit", () =>
   assert.equal(isTimeUnit("horas"), false);
   assert.equal(isTimeUnit("h"), false);
 });
+
+test("«hr» and «hrs» are hours, in any case, spaced or not", () => {
+  assert.equal(parseTime("8 hrs"), 480);
+  assert.equal(parseTime("8hrs"), 480);
+  assert.equal(parseTime("8 HRS"), 480);
+  assert.equal(parseTime("1,5 hr"), 90);
+  assert.equal(parseTime("2 hrs 30 min"), 150);
+});
+
+test("«hs» is hours too, in any case, with a fraction or minutes", () => {
+  assert.equal(parseTime("8 hs"), 480);
+  assert.equal(parseTime("8HS"), 480);
+  assert.equal(parseTime("1,5 hs"), 90);
+  assert.equal(parseTime("2 hs 30 min"), 150);
+});
+
+test("nothing else after «h» is an hour word", () => {
+  for (const text of ["8 hss", "8 hx", "8 hrss"]) assert.equal(parseTime(text), null, text);
+});

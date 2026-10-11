@@ -83,7 +83,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const [dead, stale] = await Promise.all([run(deadRuns()), run(staleFinishedRuns())]);
+  // In series, never `Promise.all`: two parameterless statements queued on this
+  // one pooled connection never answer on the remote (`docs/TRAPS.md`).
+  const dead = await run(deadRuns());
+  const stale = await run(staleFinishedRuns());
   if (dead.length === 0 && stale.length === 0) {
     console.log(
       "nothing dead — no harness.runs row is finished_at null with a stale heartbeat, none finished over 7 days ago",
@@ -94,10 +97,8 @@ async function main(): Promise<void> {
 
   const deadIds = dead.map((r) => r.id);
   const staleIds = stale.map((r) => r.id);
-  const [identities, clients] = await Promise.all([
-    run(ephemeralIdentitiesUnder(deadIds)),
-    run(oauthClientsUnder([...deadIds, ...staleIds])),
-  ]);
+  const identities = await run(ephemeralIdentitiesUnder(deadIds));
+  const clients = await run(oauthClientsUnder([...deadIds, ...staleIds]));
 
   console.log(`${dryRun ? "PLAN" : "REAPING"}  ${dead.length} dead run(s):`);
   for (const r of dead) {

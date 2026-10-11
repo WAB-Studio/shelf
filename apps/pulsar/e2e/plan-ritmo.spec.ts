@@ -14,8 +14,9 @@ const today = todayInZone();
 const horizon = `${Number(today.slice(0, 4)) + 1}-${today.slice(5, 7)}-01`;
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 // Five tasks of 4 h: 20 h, so 12 h a month ends next month and 20 h this one.
-const THIS_MONTH = monthFormat.format(new Date(`${monthOf(today)}T12:00:00Z`));
-const NEXT_MONTH = monthFormat.format(new Date(`${nextMonth(monthOf(today))}T12:00:00Z`));
+const spokenMonth = (month: string) => `${monthFormat.format(new Date(`${month}T12:00:00Z`))} de ${month.slice(0, 4)}`;
+const THIS_MONTH = spokenMonth(monthOf(today));
+const NEXT_MONTH = spokenMonth(nextMonth(monthOf(today)));
 
 // A white bordered card: 1px line, radius 10 (`Row card`), never `Panel bordered`.
 async function expectCard(row: Locator) {
@@ -26,10 +27,11 @@ async function expectCard(row: Locator) {
   expect(box).toEqual({ border: "1px", radius: "10px" });
 }
 
+// Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
 async function seedGoal(db: postgres.Sql, personId: string, rhythm: number | null) {
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${`Meta ritmo ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm})
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${personId}, ${`Meta ritmo ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, ${`${monthOf(today)}T00:00:00-05:00`}::timestamptz)
     returning id
   `;
   for (let index = 1; index <= 5; index++) {
@@ -108,7 +110,7 @@ for (const width of [390, 1440]) {
       }
     });
 
-    test("the hint counts a split task once and names the year when it is not this one", async ({ page, db, personId }) => {
+    test("the hint counts a split task once and names the year", async ({ page, db, personId }) => {
       const goalId = await seedGoal(db, personId, null);
       await db`update goals.one_offs set estimate = 270 where goal_id = ${goalId} and name in ('Tarea 1', 'Tarea 2', 'Tarea 3')`;
       await db`delete from goals.one_offs where goal_id = ${goalId} and name in ('Tarea 4', 'Tarea 5')`;
@@ -117,7 +119,7 @@ for (const width of [390, 1440]) {
         await page.getByPlaceholder("otra").fill("1");
         let end = monthOf(today);
         for (let i = 0; i < 13; i++) end = nextMonth(end);
-        const spoken = `${monthFormat.format(new Date(`${end}T12:00:00Z`))}${end.slice(0, 4) === today.slice(0, 4) ? "" : ` de ${end.slice(0, 4)}`}`;
+        const spoken = spokenMonth(end);
         await expect(page.getByText(`Con 1 h al mes, tus 13 h 30 min de tareas terminan en ${spoken}.`, { exact: false })).toBeVisible();
       } finally {
         await drop(db, personId, goalId);
@@ -204,6 +206,45 @@ for (const width of [390, 1440]) {
         await expect(page.getByText("Ritmo 20 h al mes")).toBeVisible();
         await expect(planned(page)).not.toHaveText(before);
         expect(await rhythmOf(db, goalId)).toBe(1200);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    // Every month the sheet's preview names carries its year, this year's too.
+    test("the sheet's on-time preview names the year of the end", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 720);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByRole("button", { name: "Ritmo 12 h al mes" }).click();
+        const sheet = page.getByRole("dialog");
+        await sheet.getByRole("radio", { name: "20 h" }).click();
+        const month = monthOf(today);
+        const name = monthFormat.format(new Date(`${month}T12:00:00Z`));
+        await expect(
+          sheet.getByText(new RegExp(`^Con 20 h al mes terminas el \\d{1,2} de ${name} de ${month.slice(0, 4)}, a tiempo\\.`)),
+        ).toBeVisible();
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("the sheet's late preview names the year of the end", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 720);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByRole("button", { name: "Ritmo 12 h al mes" }).click();
+        const sheet = page.getByRole("dialog");
+        // 20 h at 1 h a month ends 19 months out, past a horizon a year away.
+        await sheet.getByPlaceholder("otra").fill("1");
+        let end = monthOf(today);
+        for (let i = 0; i < 19; i++) end = nextMonth(end);
+        const name = monthFormat.format(new Date(`${end}T12:00:00Z`));
+        await expect(
+          sheet.getByText(
+            new RegExp(`^Con 1 h al mes terminas el \\d{1,2} de ${name} de ${end.slice(0, 4)}, \\d+ semanas después de tu final\\.`),
+          ),
+        ).toBeVisible();
       } finally {
         await drop(db, personId, goalId);
       }
