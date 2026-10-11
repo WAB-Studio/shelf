@@ -778,3 +778,36 @@ test("818 critic plan: the line of 2027-13 says the month does not exist, and no
   // The km goal's «5 · Comprar zapatillas» is the 807 stray figure, a real second mistake.
   assert.deepEqual(found.filter((e) => e !== real[0]).map((e) => e.expected), ["import.errors.estimateNotTime"]);
 });
+
+test("818: only months 00 and 13+ get «ese mes no existe»; December with another fault names that fault", () => {
+  const monthReal = errorOf(`${HEAD}## Meses\n- 2026-13 · 20 h\n`).expected;
+  for (const line of ["- 2026-12 · 20 km", "- 2026-12 · abc", "- 2026-12 · 20"]) {
+    const found = errorOf(`${HEAD}## Meses\n${line}\n`);
+    assert.equal(found.line, 7, line);
+    assert.notEqual(found.expected, monthReal, line);
+  }
+  // A well-formed December that the schema refuses for another reason (an amount past the budget's cap).
+  const repeated = errorOf(`${HEAD}## Meses\n- 2026-12 · 20000 h\n`);
+  assert.equal(repeated.line, 7);
+  assert.notEqual(repeated.expected, monthReal);
+  for (const month of ["2026-00", "2026-13", "2026-99"]) {
+    assert.equal(errorOf(`${HEAD}## Meses\n- ${month} · 20 h\n`).expected, monthReal, month);
+  }
+});
+
+test("818: a plain valid December line parses", () => {
+  const result = parseTemplate(`${HEAD}## Meses\n- 2026-12 · 8 hrs\n`);
+  assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+});
+
+test("818: a month token with trailing characters gets the generic form error, never «ese mes no existe»", () => {
+  const monthReal = errorOf(`${HEAD}## Meses\n- 2026-13 · 20 h\n`).expected;
+  const generic = errorOf(`${HEAD}## Meses\n- octubre · 20 h\n`).expected;
+  for (const month of ["2026-130", "2026-1x", "2026-001", "2026-13x"]) {
+    const found = errorOf(`${HEAD}## Meses\n- ${month} · 20 h\n`);
+    assert.equal(found.expected, generic, month);
+    assert.notEqual(found.expected, monthReal, month);
+  }
+  const taskGeneric = errorOf(`${HEAD}## Tareas\n- octubre · 2 h · X\n`).expected;
+  assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-130 · 2 h · X\n`).expected, taskGeneric);
+});

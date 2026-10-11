@@ -242,4 +242,28 @@ test.describe("a file's template errors are corrected in the box (board Importar
       }
     });
   });
+  test("a second reading that fails with template errors drops the first file's note", async ({ person, browser, baseURL }) => {
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await upload(page);
+      await expect(page.getByText(FILE_NOTE, { exact: true })).toBeVisible();
+      await boxOf(page).fill(plan({ series: SERIES_OK }));
+      await expect(listOf(page).getByText(count(2), { exact: true })).toBeVisible();
+      const answered = page.waitForResponse("**/importar/leer");
+      await page.getByRole("button", { name: "Leer el plan" }).click();
+      await answered;
+      await expect(listOf(page).getByText(count(2), { exact: true })).toBeVisible();
+      await expect(page.getByText(FILE_NOTE, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(/Leído de/)).toHaveCount(0);
+    });
+  });
+
+  test("emptying the box entirely after a template failure shows neither the list nor the no-longer-template notice", async ({ person, browser, baseURL }) => {
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await upload(page);
+      await boxOf(page).fill("");
+      await expect(page.getByText("líneas por corregir")).toHaveCount(0);
+      await expect(page.getByText(NOT_TEMPLATE, { exact: true })).toHaveCount(0);
+      await expect(boxOf(page)).not.toHaveAttribute("aria-invalid", "true");
+    });
+  });
 });
