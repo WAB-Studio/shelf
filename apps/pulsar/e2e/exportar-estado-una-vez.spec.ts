@@ -84,7 +84,7 @@ test.describe("a month row says its state once (RP-71)", () => {
         await expect(current).toHaveCount(1);
         const [text] = await rowText(current);
         expect(count(text, "en curso"), text).toBe(1);
-        if (width < 700) expect(text).toContain("de 10 h");
+        if (width < 1440) expect(text).toContain("de 10 h");
       } finally {
         await context.close();
         await db`delete from goals.goals where id = ${months.goalId} and user_id = ${person.id}`;
@@ -148,10 +148,14 @@ test.describe("an ended goal's report does not say this week (RP-17, RP-58)", ()
     }) => {
       const stamp = Date.now();
       const name = `Meta terminada ${stamp}`;
-      // Horizon today: the goal ended, its last day is yesterday.
+      // Ended earlier this week: horizon the day before today (its last day two days ago, still this week);
+      // on a Monday or Tuesday that day falls last week, so the horizon is today and the last day yesterday.
+      const weekday = (civilDateToDate(todayInZone()).getUTCDay() + 6) % 7;
+      const horizon = weekday >= 2 ? dayBefore(todayInZone()) : todayInZone();
+      const lastDay = dayBefore(horizon);
       const [goal] = await db<{ id: string }[]>`
         insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
-        values (${person.id}, ${name}, ${todayInZone()}, 'horas de estudio', 'minutos', now() - interval '40 days')
+        values (${person.id}, ${name}, ${horizon}, 'horas de estudio', 'minutos', now() - interval '40 days')
         returning id
       `;
       await db`
@@ -166,7 +170,7 @@ test.describe("an ended goal's report does not say this week (RP-17, RP-58)", ()
       `;
       await db`
         insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
-        values (${person.id}, ${goal.id}, ${commitment.id}, ${dayBefore(todayInZone())}::date, 90)
+        values (${person.id}, ${goal.id}, ${commitment.id}, ${lastDay}::date, 90)
       `;
       const context = await browser.newContext({
         storageState: person.sessionFile,
@@ -178,7 +182,7 @@ test.describe("an ended goal's report does not say this week (RP-17, RP-58)", ()
         await page.goto("/exportar");
         const dayName = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
         await expect(
-          page.getByText(`terminada el ${dayName.format(civilDateToDate(dayBefore(todayInZone())))}`, { exact: true }),
+          page.getByText(`terminada el ${dayName.format(civilDateToDate(lastDay))}`, { exact: true }),
         ).toBeVisible();
         // The goal's own block: the nearest ancestor of its heading that holds its end line.
         const whole = await page.getByRole("main").evaluate((main, goalName) => {
