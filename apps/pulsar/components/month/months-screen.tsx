@@ -6,6 +6,7 @@ import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
 import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
@@ -74,7 +75,7 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
   const rows: TableRow[] = goal.months.map((row) => {
     const started = row.past || row.current;
     const share = row.past ? planShare(goal.plan, row.month) : null;
-    const own = row.planned;
+    const own = screenPlanned(row.planned, goal.plan.budgets.some((budget) => budget.month === row.month));
     const figure = own === null ? null : formatQuantity(own, unit, words);
     const said = figure === null ? t("month.months.noAmount") : started ? t("month.months.of", { planned: figure }) : figure;
     const amount = <Text tone="secondary">{said}</Text>;
@@ -85,7 +86,7 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
             percent: Math.floor((share.carried * 100) / share.planned),
             month: monthLabel(nextMonth(row.month)),
           })
-        : row.planned !== null && !started
+        : own !== null && !started
           ? t("month.months.planned")
           : null;
 

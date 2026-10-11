@@ -4,7 +4,7 @@ import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
 // RP-74 + the 2026-10-11 decision: a first-month share that rounds to 0 draws no
-// figure on Hoy (it reads as a month with no amount); the goal keeps its 0.
+// figure on Hoy (it reads as a month with no amount); RP-76 gives the goal's page the same words.
 // Goals open today, so the share is floor(rhythm × daysLeft / monthLength) with
 // daysLeft counting today. The rhythms are chosen from today's numbers: the
 // largest one that rounds to 0, and one whose share is exactly daysLeft.
@@ -92,7 +92,7 @@ test.describe("Hoy, a goal opened late in a month", () => {
     }
   });
 
-  test("the goal's own page keeps the 0 of a rounded-down share (RP-74)", async ({ person, browser, baseURL, db }) => {
+  test("the goal's own page reads a rounded-down share as «sin monto planeado» (RP-76)", async ({ person, browser, baseURL, db }) => {
     test.skip(noZeroShare, "the 1st: no rhythm of 1 or more has a share that rounds to 0");
     const stamp = Date.now();
     const id = await seedGoal(db, person.id, `Correr ${stamp}`, "kilómetros", zeroRhythm);
@@ -105,8 +105,8 @@ test.describe("Hoy, a goal opened late in a month", () => {
       const page = await context.newPage();
       await page.goto(`/metas/${id}`);
       await expect(page.locator("main")).toHaveCount(1);
-      // The month's own figure on the goal page, as RP-74 rounds it.
-      await expect(page.locator("main")).toContainText(new RegExp(`${monthName}\\s*0\\s*de\\s*0\\s*kilómetros`, "i"));
+      await expect(page.locator("main")).toContainText(new RegExp(`${monthName}\\s*0\\s*kilómetros\\s*sin monto planeado`, "i"));
+      await expect(page.locator("main")).not.toContainText(/0\s*de\s*0\s*kilómetros/i);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${id} and user_id = ${person.id}`;
