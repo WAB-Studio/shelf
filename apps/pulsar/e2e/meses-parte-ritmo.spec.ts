@@ -116,3 +116,32 @@ test("planning a split month opens the sheet on its part, not on the whole rhyth
     await db`delete from goals.goals where id = ${goalId}`;
   }
 });
+
+test("the sheet offers to remove an amount only when the month stores one, never for a share of the rhythm (826, RP-74)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const derived = await seedGoal(db, personId, { unit: "minutos", name: "Parte", rhythm: RHYTHM, endsOn: openHorizon });
+  const stored = await seedGoal(db, personId, {
+    unit: "minutos",
+    name: "Propio",
+    rhythm: RHYTHM,
+    endsOn: openHorizon,
+    budgets: [[followingMonth, 90]],
+  });
+  const remove = (sheet: ReturnType<typeof page.getByRole>) =>
+    sheet.getByRole("button", { name: `quitar el monto de ${label(followingMonth)}` });
+  try {
+    await page.goto(`/metas/${derived}/meses?planear=${seg(followingMonth)}`);
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByLabel("minutos", { exact: true })).toBeVisible();
+    await expect(remove(sheet)).toHaveCount(0);
+
+    await page.goto(`/metas/${stored}/meses?planear=${seg(followingMonth)}`);
+    await expect(sheet.getByLabel("minutos", { exact: true })).toHaveValue("30");
+    await expect(remove(sheet)).toBeVisible();
+  } finally {
+    await db`delete from goals.goals where id in (${derived}, ${stored})`;
+  }
+});
