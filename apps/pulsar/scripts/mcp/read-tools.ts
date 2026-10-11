@@ -378,15 +378,20 @@ test("get_goal reads an ended goal's months as closed and an open goal's as they
 
 test("get_report reads an ended goal's months as closed and an open goal's as they stand", async () => {
   type Months = { month: string; current: boolean; past: boolean }[];
+  let endedGoal = "";
+  await session.actAs(asResolved(subject), async () => {
+    const made = await plan.createGoal({ name: "terminada en el reporte", horizon: dayFrom(120) });
+    if (!made.ok) throw new Error(`createGoal ended: ${made.error}`);
+    endedGoal = made.goalId;
+  });
+  await admin`update goals.goals set horizon = ${dayFrom(0)} where id = ${endedGoal}`;
   const result = await call("get_report", {});
   const goals = (result.structuredContent as { goals: { id: string; endedOn: string | null; months: Months }[] }).goals;
-  const ended = goals.filter((goal) => goal.endedOn !== null);
-  assert.ok(ended.length > 0);
-  for (const goal of ended) {
-    assert.ok(goal.months.length > 0);
-    assert.equal(goal.months.some((row) => row.current), false);
-    assert.ok(goal.months.every((row) => row.past));
-  }
+  const ended = goals.find((goal) => goal.id === endedGoal)!;
+  assert.notEqual(ended.endedOn, null);
+  assert.ok(ended.months.length > 0);
+  assert.equal(ended.months.some((row) => row.current), false);
+  assert.ok(ended.months.every((row) => row.past));
   const open = goals.find((goal) => goal.id === subjectGoal)!;
   assert.equal(open.months.find((row) => row.month === currentMonth)?.current, true);
   assert.equal(open.months.find((row) => row.month === nextMonth)?.past, false);
