@@ -99,6 +99,7 @@
       "section": "Las secciones son «## Fases», «## Meses», «## Compromisos» y «## Tareas».",
       "phase": "Una fase va como «- AAAA-MM-DD a AAAA-MM-DD · objetivo».",
       "month": "Un mes va como «- AAAA-MM · monto».",
+      "monthReal": "Ese mes no existe: el mes va de 01 a 12, como «2026-10».",
       "monthUnit": "Esa unidad no es {unit}. Escribe el monto en {unit}, como «- AAAA-MM · 8 {unit}».",
       "monthTime": "Esa unidad no es de tiempo. Escribe el monto en horas o minutos, como «- AAAA-MM · 12 h».",
       "monthWhole": "El monto va en números enteros, sin decimales. Escríbelo como «- AAAA-MM · 8 {unit}».",

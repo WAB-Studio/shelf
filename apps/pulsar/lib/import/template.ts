@@ -33,6 +33,7 @@ const FORMS = {
   section: "import.errors.form.section",
   phase: "import.errors.form.phase",
   month: "import.errors.form.month",
+  monthReal: "import.errors.form.monthReal",
   monthUnit: "import.errors.form.monthUnit",
   monthTime: "import.errors.form.monthTime",
   monthWhole: "import.errors.form.monthWhole",
@@ -44,6 +45,12 @@ const FORMS = {
   child: "import.errors.form.child",
   note: "import.errors.form.note",
 } as const;
+
+// A month-shaped «AAAA-MM» whose month is not 01 to 12 gets its own sentence, not the form's.
+const formOfMonth = (month: string, form: string) => {
+  const shaped = /^\d{4}-(\d{2})$/.exec(month);
+  return shaped && (Number(shaped[1]) < 1 || Number(shaped[1]) > 12) ? FORMS.monthReal : form;
+};
 
 const SECTIONS = { "## Fases": "phases", "## Meses": "months", "## Compromisos": "commitments", "## Tareas": "tasks" } as const;
 type Section = (typeof SECTIONS)[keyof typeof SECTIONS];
@@ -315,7 +322,7 @@ export function parseTemplate(text: string): TemplateResult {
         continue;
       }
       goal.months.push({ month: parts[0], amount });
-      spot("months", FORMS.month);
+      spot("months", formOfMonth(parts[0], FORMS.month));
     } else if (section === "commitments") {
       const cadence = parts.length === 3 ? parseCadence(parts[1]) : null;
       if (cadence === null) {
@@ -367,7 +374,7 @@ export function parseTemplate(text: string): TemplateResult {
       lastTask = task;
       noteOwner = { depth: 2, into: task };
       lastTaskPath = `${at}.tasks.${goal.tasks.length - 1}`;
-      spot("tasks", FORMS.task);
+      spot("tasks", formOfMonth(parts[0], FORMS.task));
     }
   }
 
