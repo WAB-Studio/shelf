@@ -8,9 +8,10 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
 import type { Task } from "@/lib/plan/carry";
 import type { PlanItem } from "@/lib/plan/roadmap";
-import { nextMonth } from "@/lib/plan/months";
+import { nextMonth, partOf, settledMonths } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
@@ -80,12 +81,14 @@ export async function MonthDetail({
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
+  const rowPlanned = screenPlanned(row.planned, goal.plan.budgets.some((budget) => budget.month === mes));
   const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
 
   const items = planMonthList(goal.plan, mes);
   const carried = items.filter((item) => item.carriedFrom !== null);
   const own = items.filter((item) => item.carriedFrom === null);
+  const part = partOf(mes, goal.plan);
   const share = closed ? planShare(goal.plan, mes) : null;
 
   const doneInMonth = sum(
@@ -102,11 +105,11 @@ export async function MonthDetail({
   // «planeado» and the amount alone, or «sin monto planeado» alone.
   const bareFuture = !closed && !row.current;
   const planned =
-    row.planned === null
+    rowPlanned === null
       ? t("month.noPlan")
       : bareFuture
-        ? say(row.planned)
-        : t("month.months.of", { planned: say(row.planned) });
+        ? say(rowPlanned)
+        : t("month.months.of", { planned: say(rowPlanned) });
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
   let note: ReactNode = null;
   if (closed) {
@@ -228,9 +231,9 @@ export async function MonthDetail({
         </Text>
       ) : null}
       {unit ? (
-        <Section label={bareFuture && row.planned === null ? undefined : label} as="div">
+        <Section label={bareFuture && rowPlanned === null ? undefined : label} as="div">
           <Flex align="baseline" gap="2">
-            {bareFuture ? null : <Figure value={row.reached} unit={unit} />}
+            {bareFuture ? null : <Figure value={row.reached} unit={unit} bare={rowPlanned !== null} />}
             {open && !closed ? (
               <TextLink href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>
                 {planned}
@@ -239,6 +242,11 @@ export async function MonthDetail({
               <Text tone="secondary">{planned}</Text>
             )}
           </Flex>
+          {part ? (
+            <Text as="p" variant="sentence" tone="muted">
+              {t.rich("goal.detail.monthPart", { ...part, share: say(part.share), rhythm: say(part.rhythm), ...fig })}
+            </Text>
+          ) : null}
           {note ? (
             <Text as="p" variant="sentence">
               {note}
@@ -272,7 +280,7 @@ export async function MonthDetail({
         </Section>
       ) : null}
 
-      {own.length > 0 || (empty && (!open || closed)) ? (
+      {own.length > 0 ? (
         <Section
           as="div"
           label={
@@ -308,8 +316,9 @@ export async function MonthDetail({
  * month open.
  */
 export async function MonthScreen({ goalId, month }: { goalId: string; month: string }) {
-  const goal = await loadGoal(goalId);
-  if (!goal) notFound();
+  const loaded = await loadGoal(goalId);
+  if (!loaded) notFound();
+  const goal = { ...loaded, months: settledMonths(loaded.months, loaded.endedOn !== null) };
   const mes = `${month}-01`;
   if (!goal.months.some((entry) => entry.month === mes)) notFound();
 

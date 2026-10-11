@@ -1,6 +1,6 @@
 import { daysBetween, dayBefore } from "@/lib/day/weeks";
 import { monthOfTask, type Task } from "./carry";
-import { monthOf, nextMonth, type MonthBudget } from "./months";
+import { monthOf, nextMonth, plannedOf, type MonthBudget } from "./months";
 
 export type PlanTask = Task & {
   inPlan: boolean;
@@ -45,8 +45,16 @@ export type Roadmap = {
 // Filling stops this many months past the current one.
 const WINDOW = 120;
 
-export function amountOf(month: string, input: Pick<PlanInput, "budgets" | "rhythm">): number | null {
-  return input.budgets.find((budget) => budget.month === month)?.amount ?? input.rhythm ?? null;
+// The month's planned amount (RP-74); past the goal's last month the plan
+// still projects, at the whole rhythm.
+export function amountOf(
+  month: string,
+  input: Pick<PlanInput, "budgets" | "rhythm" | "openedOn" | "horizon">,
+): number | null {
+  if (month > monthOf(dayBefore(input.horizon))) {
+    return input.budgets.find((budget) => budget.month === month)?.amount ?? input.rhythm ?? null;
+  }
+  return plannedOf(month, input);
 }
 
 type Entry = {
@@ -75,11 +83,21 @@ function sum(tasks: PlanTask[]): number {
   return tasks.reduce((total, task) => total + (task.estimate ?? 0), 0);
 }
 
-// The day `filled` of `amount` reaches through the month, integers only.
-function endDay(month: string, filled: number, amount: number): string {
+// The days of `month` its amount spreads over: the goal's own in it, or the
+// whole month outside the goal.
+function spanOf(month: string, openedOn: string, lastDay: string): [number, number] {
   const days = daysBetween(month, nextMonth(month));
+  if (month > lastDay || monthOf(openedOn) > month) return [1, days];
+  const first = monthOf(openedOn) === month ? Number(openedOn.slice(8, 10)) : 1;
+  const last = monthOf(lastDay) === month ? Number(lastDay.slice(8, 10)) : days;
+  return [first, last];
+}
+
+// The day `filled` of `amount` reaches through the month's span, integers only.
+function endDay(month: string, filled: number, amount: number, [first, last]: [number, number]): string {
+  const days = last - first + 1;
   const day =
-    amount <= 0 ? days : Math.min(days, Math.max(1, Math.floor((days * filled + amount - 1) / amount)));
+    amount <= 0 ? last : first - 1 + Math.min(days, Math.max(1, Math.floor((days * filled + amount - 1) / amount)));
   return `${month.slice(0, 8)}${String(day).padStart(2, "0")}`;
 }
 
@@ -150,7 +168,8 @@ export function fillPlan(input: PlanInput): Roadmap {
   const rows: Row[] = [];
   const unplaced: PlanItem[] = [];
   const ends: string[] = [];
-  const endOf = (month: string, filled: number) => endDay(month, filled, amounts(month) ?? 0);
+  const endOf = (month: string, filled: number) =>
+    endDay(month, filled, amounts(month) ?? 0, spanOf(month, input.openedOn, lastDay));
   const pastEndOf = (day: string | null) => day !== null && day > lastDay;
 
   // Done items sit whole in their fixed month, else in their done day's month.

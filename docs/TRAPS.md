@@ -3129,4 +3129,40 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - Pulsar's server, its seeds and the specs read the real clock; there is no `faketime`. Three specs skip their week branch
   on a Sunday or a Monday, so every mutation on «hasta el miércoles», «del sábado al martes» or «en curso» survives that day.
 - Measured 2026-10-11, the train 7 mutator: W5, W6, M1, M2, M4–M6, M8 and M9 lived, all on the week line, run on a Sunday.
-- Read a survivor's date before calling it a gap. Run the week mutations on Tuesday to Saturday, or pin the clock first.
+- Read a survivor's date before calling it a gap. Run the week mutations on Tuesday to Saturday, or pin the clock with
+  `PULSAR_CLOCK` (next entry).
+
+## A mutation that only bites on some days: run it under PULSAR_CLOCK
+- `PULSAR_CLOCK=YYYY-MM-DD` pins «today» for pulsar's server (`todayInZone`), the browser (a `pulsar-clock` meta the
+  signed-in layout draws), the specs and `seed-goal.ts`. Export it once for the server and the spec run alike:
+  `export HARNESS_LANE=6 PULSAR_CLOCK=2026-10-21; PORT=3205 scripts/supabase-local.sh exec npm run start -w apps/pulsar`,
+  then `PULSAR_BASE_URL=http://localhost:3205 scripts/supabase-local.sh exec npm run check:e2e -w apps/pulsar -- --project=mobile <spec>`.
+- It is honoured only beside a loopback `DATABASE_URL` and never with `VERCEL`; anywhere else `next.config.ts` refuses to
+  build or boot and `todayInZone` throws. A bare `next start` in a lane reads `.env.local`, the remote, and refuses.
+- SQL stays on the real clock: `created_at`/`archived_at`/`retired_at` defaults, token expiry, `model_calls.day` and the
+  `one_offs` policy and triggers that refuse editing a past one-off (`day > now() at time zone …`). A clock ahead of today
+  lets the database edit what the app calls past; a clock behind refuses what the app calls future.
+- Specs that compute a day from `new Date()` instead of `todayInZone()` stay on the real clock under it.
+- Measured 2026-10-11, module 841: under `2026-10-21` the pace line drew; `hoy-unidad-una-vez.spec.ts` went green, and red
+  with `bare` dropped from its Figure. `meta-unidad-una-vez.spec.ts:43` is red under it with or without the mutant: its
+  `innerText` puts a line break after the Figure's unit span (a flex item), so «búsquedas , bajo» never matches. Read
+  `textContent` in a spec that matches across a Figure.
+
+## A lane's fault server on another lane's port
+- `PULSAR_FAULT_BASE_URL` names a port; a worker that picks :320<m> for it squats lane m's port, and lane m's worker kills it.
+- Measured 2026-10-11: lane 4 ran its fault server on :3205 (lane 6's); lane 6's `fuser -k 3205/tcp` killed it mid-run.
+- Run a lane's fault server on :321<n-1> (lane 4 → :3213). Say it in every dispatch that may need one.
+
+## A words-only change breaks a unit stub
+- `messages/es/*.json` is copied into unit tests' stubs (`lib/day/day-phrase.test.ts`). An e2e-only verification misses it.
+- Measured 2026-10-11: 824 dropped a «·» from `day.ended.*`, ran only e2e, and left `check:unit` red; the merge caught it.
+- Run `check:unit` on every module that edits `messages/`, words-only included.
+
+## A query that adds a field can change what paper prints
+- `printsOnPaper(month, unit)` (`lib/export/sections.ts`): a not-started month prints on a planned amount (0 counts); a
+  task makes it print only for a goal that measures nothing (`unit` null, RP-71). A time goal with no rhythm carries
+  `month.tasks` too, and its tasked months stay out and ride the left-out line (RP-75).
+- Measured 2026-10-11: 834 gave a time goal with no rhythm a task count; its months with an amount stopped printing, and 136
+  PDF specs went red in CI. The first fix counted tasks for every goal and left 835's line with nothing to name.
+  Never read `month.tasks !== undefined` as «measures nothing»: read `unit === null`.
+- Run `papel-*` and `exportar*` on any change to `lib/queries/report.ts`.

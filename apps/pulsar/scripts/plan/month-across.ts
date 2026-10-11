@@ -199,9 +199,11 @@ before(async () => {
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
     values (${owner.user_id}, ${cId}, 'RP-43 fixture: arrastrada', ${`${lastMonth}-01`})`;
 
-  // F plans at 10 a month: its 15-unit task splits, its 4-unit task waits for next month.
+  // F plans at 10 a month: its 15-unit task splits, its 4-unit task waits for next month. Opened on
+  // the 1st, Bogotá's midnight, so this month plans the whole 10 (RP-74) whatever the run date.
   const f = await goal("RP-50 fixture: F", "minutos");
   fId = f.goalId;
+  await sql`update goals.goals set created_at = ${`${monthStart}T00:00:00-05:00`} where id = ${fId}`;
   const rhythm = await (await import("@/app/actions/roadmap")).setRhythm({ goalId: fId, amount: 10 });
   if (!rhythm.ok) throw new Error(`setRhythm: ${rhythm.error}`);
   await sql`

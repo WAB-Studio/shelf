@@ -10,11 +10,11 @@ import { useTimeWords } from "@/components/ui/figure";
 import { daysBetween } from "@/lib/day/weeks";
 import { releasedPlan } from "@/lib/plan/first-rhythm";
 import { fillPlan, type PlanInput } from "@/lib/plan/roadmap";
-import { monthName } from "@/lib/plan/month-name";
+import { monthNameWithYear } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import { formatQuantity, isTimeUnit, parseTime } from "@/lib/units/time";
 import { setRhythmSchema } from "@/lib/validation/rhythm";
-import { civilDateLabel } from "@/lib/zone";
+import { civilDateWithYear } from "@/lib/zone";
 import { messageKey } from "@/i18n/translator";
 
 // Minutes a month: the three offers a time measure shows.
@@ -88,18 +88,18 @@ export function RhythmForm({
         late > 0
           ? t("roadmap.ritmo.previewLate", {
               hours: formatQuantity(amount, unit, words),
-              date: civilDateLabel(end),
+              date: civilDateWithYear(end),
               weeks: Math.ceil(late / 7),
             })
           : t("roadmap.ritmo.preview", {
               hours: formatQuantity(amount, unit, words),
-              date: civilDateLabel(end),
+              date: civilDateWithYear(end),
             });
     } else {
       hint = t("roadmap.sinRitmo.preview", {
         hours: formatQuantity(amount, unit, words),
         total: formatQuantity(total, unit, words),
-        month: monthName(monthOf(end), plan.today.slice(0, 4)),
+        month: monthNameWithYear(monthOf(end)),
       });
     }
   }

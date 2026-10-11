@@ -25,6 +25,12 @@ const PAST_KEY: Partial<Record<FlexibleKey, MessageKey>> = {
  * day before its commitment was written; each such day reads «no pedía».
  * `past` is a week already over: its counts say «esa semana».
  */
+// «13 sep 2026»: the year always, even in this one.
+function archivedDay(instant: string): string {
+  const day = civilDateInZone(new Date(instant));
+  return `${civilDayMonthShort(day)} ${day.slice(0, 4)}`;
+}
+
 export function WeekTableFace({
   week,
   today,
@@ -125,7 +131,7 @@ export function WeekTableFace({
       key: goal.id,
       // An archive since keeps the weeks the goal governed (RP-24).
       label: goal.archivedAt
-        ? t("week.archivedOn", { label, date: civilDayMonthShort(civilDateInZone(new Date(goal.archivedAt))) })
+        ? t("week.archivedOn", { label, date: archivedDay(goal.archivedAt) })
         : label,
       note: past ? null : endedNote(goal),
       rows: [...commitmentRows(goal.id), ...oneOffRows(goal.id)],

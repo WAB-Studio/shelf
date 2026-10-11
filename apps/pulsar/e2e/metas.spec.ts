@@ -22,8 +22,7 @@ function lastDay(horizon: string): string {
   const date = civilDateToDate(horizon);
   date.setUTCDate(date.getUTCDate() - 1);
   const day = dateToCivilDate(date);
-  const label = `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]}`;
-  return day.slice(0, 4) === todayInZone().slice(0, 4) ? label : `${label} ${day.slice(0, 4)}`;
+  return `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
 }
 
 async function seedGoal(
@@ -91,8 +90,8 @@ for (const width of [360, 390, 1280, 1440]) {
       await expect(addAnother).toHaveAttribute("href", "/metas/nueva");
       await expect(group.getByRole("link", { name: "Abrir otra meta" })).toHaveCount(0);
 
-      await expect(page.getByRole("link", { name: `${endedName} terminó el 13 sep` })).toBeVisible();
-      await expect(page.getByRole("link", { name: new RegExp(`^${archivedName} archivada el \\d+ \\w+$`) })).toBeVisible();
+      await expect(page.getByRole("link", { name: `${endedName} terminó el 13 sep 2026` })).toBeVisible();
+      await expect(page.getByRole("link", { name: new RegExp(`^${archivedName} archivada el \\d+ \\w+ \\d{4}$`) })).toBeVisible();
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
@@ -137,7 +136,7 @@ const MONTH_LONG = [
 ];
 
 for (const width of [390, 1440]) {
-  test(`/metas at ${width}: the desktop row carries the goal's month and figure; the phone keeps its last day and puts the plan before «Archivadas»`, async ({
+  test(`/metas at ${width}: both rows carry the goal's month and figure, the phone one above its last day, and the plan sits before «Archivadas»`, async ({
     person,
     browser,
     db,
@@ -199,13 +198,13 @@ for (const width of [390, 1440]) {
       const taskedRow = main.locator("a", { hasText: taskedName });
 
       if (width >= 1024) {
-        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`)).toBeVisible();
-        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`)).toBeVisible();
+        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`).locator("visible=true")).toBeVisible();
+        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`).locator("visible=true")).toBeVisible();
         await expect(measuredRow.getByText(`hasta el ${lastDay(horizon)}`).last()).toBeVisible();
       } else {
         await expect(measuredRow.getByText(`hasta el ${lastDay(horizon)}`).first()).toBeVisible();
-        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`)).toBeHidden();
-        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`)).toBeHidden();
+        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`).locator("visible=true")).toBeVisible();
+        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`).locator("visible=true")).toBeVisible();
 
         const y = async (locator: ReturnType<typeof page.getByText>) => (await locator.boundingBox())!.y;
         const addAnother = await y(page.getByRole("link", { name: "Abrir otra meta" }));
@@ -262,7 +261,7 @@ test("/metas at 1440: a goal's figure folds in the evidence its source recorded 
     const page = await context.newPage();
     await page.goto("/metas");
     const row = page.locator("main").locator("a", { hasText: name });
-    await expect(row).toContainText(new RegExp(`${monthName}\\s+·\\s+3\\s*búsquedas\\s+de\\s+10\\s*búsquedas`));
+    await expect(row).toContainText(new RegExp(`${monthName}\\s+·\\s+3\\s+de\\s+10\\s*búsquedas`));
   } finally {
     await context.close();
     await db`delete from reading.lookups where user_id = ${person.id} and device_id = ${deviceId}`;
@@ -330,14 +329,14 @@ for (const [screen, path] of [
   }
 }
 
-test("the /metas row agrees «búsqueda» with a figure of 1", async ({ person, browser, db }) => {
+test("the /metas row says the unit once after a figure of 1, «1 de 10 búsquedas»", async ({ person, browser, db }) => {
   const name = `Concuerda ${Date.now()}`;
   await seedSearches(db, person.id, name);
   const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
   try {
     const page = await context.newPage();
     await visit(page, "/metas");
-    await expect(page.locator("main").locator("a", { hasText: name })).toContainText(/1\s*búsqueda\s+de\s+10\s*búsquedas/);
+    await expect(page.locator("main").locator("a", { hasText: name })).toContainText(/octubre\s+·\s+1\s+de\s+10\s*búsquedas/);
   } finally {
     await context.close();
   }

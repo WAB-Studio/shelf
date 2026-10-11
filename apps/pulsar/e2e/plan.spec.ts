@@ -40,10 +40,11 @@ async function expectCard(row: Locator) {
 
 type Db = postgres.Sql;
 
+// Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
 async function seedGoal(db: Db, personId: string, rhythm: number | null, horizon: string) {
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${`Meta plan ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm})
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${personId}, ${`Meta plan ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, ${`${m0}T00:00:00-05:00`}::timestamptz)
     returning id
   `;
   return goal.id;
@@ -186,19 +187,34 @@ for (const width of [390, 1440]) {
       return { horizon: nextMonth(m2), tasks: [["A", 480], ["B", 480], ["C", 480], ["D", 240], ["E", 300]] as [string, number][] };
     }
 
+    // One 8 h task per month left in the year, from this month on, runs the plan to December of this year.
+    // In December the plan would end in January, so the same-year case cannot be drawn.
+    test("the day the plan ends carries its year even when it falls in the current year", async ({ page, db, personId }) => {
+      const month = Number(today.slice(5, 7));
+      test.skip(month === 12, "in December the plan ends in January: no same-year end to draw");
+      const goalId = await seedGoal(db, personId, 480, m1);
+      await seedTasks(db, personId, goalId, Array.from({ length: Math.max(13 - month, 2) }, (_, i): [string, number] => [`Tarea ${i + 1}`, 480]));
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await expect(page.getByText(new RegExp(`^Al \\d{1,2} de \\p{L}+ de ${thisYear}, donde termina el plan\\.$`, "u"))).toBeVisible();
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
     test("a goal past its end shows both offers, the past-end tasks and no danger colour", async ({ page, db, personId }) => {
       const late = await seedLate();
       const goalId = await seedGoal(db, personId, 480, late.horizon);
       await seedTasks(db, personId, goalId, late.tasks);
       try {
         await page.goto(`/metas/${goalId}/plan`);
-        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, \d+ semanas? después de tu final, el \d{1,2} de \p{L}+\.$/u)).toBeVisible();
+        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, \d+ semanas? después de tu final, el \d{1,2} de \p{L}+ de \d{4}\.$/u)).toBeVisible();
         await expect(page.getByRole("button", { name: "Subir el ritmo" })).toBeVisible();
         await expect(page.getByText("Con 11 h al mes llegas a tiempo.")).toBeVisible();
         await expect(page.getByRole("button", { name: "Mover el final" })).toBeVisible();
         for (const row of ["Subir el ritmo", "Mover el final"]) await expectCard(page.getByRole("button", { name: row }));
-        await expect(page.getByText(/^Al \d{1,2} de \p{L}+, donde termina el plan\.$/u)).toBeVisible();
-        expect(await page.getByText(/^Al \d{1,2} de \p{L}+, donde termina el plan\./u).locator("> span").evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
+        await expect(page.getByText(/^Al \d{1,2} de \p{L}+ de \d{4}, donde termina el plan\.$/u)).toBeVisible();
+        expect(await page.getByText(/^Al \d{1,2} de \p{L}+ de \d{4}, donde termina el plan\./u).locator("> span").evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
         await expect(page.getByText("O quita tareas del plan: cada una que sale adelanta el final.")).toBeVisible();
         const past = section(page, "después de tu final");
         await expect(past.getByText("2 tareas · 9 h", { exact: true })).toBeVisible();
@@ -272,7 +288,7 @@ for (const width of [390, 1440]) {
         await page.getByRole("button", { name: "Subir el ritmo" }).click();
         const sheet = page.getByRole("dialog");
         await expect(sheet.getByRole("heading", { name: "¿Cuántas horas al mes?" })).toBeVisible();
-        await expect(sheet.getByText(/^Con 11 h al mes terminas el .*, a tiempo\./)).toBeVisible();
+        await expect(sheet.getByText(/^Con 11 h al mes terminas el \d{1,2} de \p{L}+ de \d{4}, a tiempo\./u)).toBeVisible();
       } finally {
         await drop(db, personId, goalId);
       }
@@ -289,7 +305,7 @@ for (const width of [390, 1440]) {
         await page.getByRole("button", { name: roadmap.moverFinal.title }).click();
         const sheet = page.getByRole("dialog");
         await expect(sheet.getByRole("heading", { name: roadmap.moverFinal.title })).toBeVisible();
-        await expect(sheet).toContainText(/^Mover el finalDel \d{1,2} de \p{L}+( de \d{4})? al \d{1,2} de \p{L}+( de \d{4})?, donde termina el plan\./u);
+        await expect(sheet).toContainText(/^Mover el finalDel \d{1,2} de \p{L}+ de \d{4} al \d{1,2} de \p{L}+ de \d{4}, donde termina el plan\./u);
         await expect(sheet.getByRole("button", { name: roadmap.moverFinal.move })).toBeEnabled();
         // The two dates are DM Mono; the words around them are not.
         const body = sheet.locator("p").first();
@@ -373,7 +389,7 @@ for (const width of [390, 1440]) {
 }
 
 // RP-53, `RoadmapMoverFinalHoja`: the sheet names the goal's last day and the day the plan
-// ends, the year only off this year; a refusal does not outlive the sheet.
+// ends, each with its year; a refusal does not outlive the sheet.
 test("«Mover el final» names the goal's last day and the plan's end, and a reopened sheet forgets a past failure (RP-53)", async ({ page, db, personId }) => {
   const year = Number(thisYear);
   // The goal ends on 31 Dec of this year; the plan, two months past it.
@@ -387,7 +403,7 @@ test("«Mover el final» names the goal's last day and the plan's end, and a reo
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByRole("heading", { name: roadmap.moverFinal.title })).toBeVisible();
     await expect(sheet).toContainText(
-      new RegExp(`^Mover el finalDel 31 de diciembre al \\d{1,2} de \\p{L}+ de ${year + 1}, donde termina el plan\\.`, "u"),
+      new RegExp(`^Mover el finalDel 31 de diciembre de ${year} al \\d{1,2} de \\p{L}+ de ${year + 1}, donde termina el plan\\.`, "u"),
     );
 
     await drop(db, personId, goalId);
@@ -401,5 +417,40 @@ test("«Mover el final» names the goal's last day and the plan's end, and a reo
     await expect(page.getByRole("dialog").getByRole("alert")).toHaveCount(0);
   } finally {
     await drop(db, personId, goalId);
+  }
+});
+
+// RP-74: a goal opened today plans this month only the share its days take, so 10 h of tasks at 10 h a month runs
+// into next month; opened on the 1st it ends on this month's last day. Figures by hand, never from `fillPlan`.
+// On the 1st both goals open the same day and the two ends are one.
+test("a goal opened mid-month ends later than one opened on the 1st: this month plans its share (RP-74)", async ({ page, db, personId }) => {
+  const daysIn = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const spoken = (day: string) => `${Number(day.slice(8, 10))} de ${NAMES[Number(day.slice(5, 7)) - 1]} de ${day.slice(0, 4)}`;
+  const length = daysIn(m0);
+  const share = Math.floor((600 * (length - Number(today.slice(8, 10)) + 1)) / length);
+  const whole = `${m0.slice(0, 8)}${length}`;
+  const late =
+    share === 600 ? whole : `${m1.slice(0, 8)}${String(Math.floor((daysIn(m1) * (600 - share) + 599) / 600)).padStart(2, "0")}`;
+  const horizon = `${Number(thisYear) + 2}-01-01`;
+
+  const onFirst = await seedGoal(db, personId, 600, horizon);
+  await seedTasks(db, personId, onFirst, [["Diez horas", 600]]);
+  const [opened] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
+    values (${personId}, ${`Meta plan hoy ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', 600)
+    returning id
+  `;
+  await seedTasks(db, personId, opened.id, [["Diez horas", 600]]);
+  try {
+    await page.goto(`/metas/${onFirst}/plan`);
+    await expect(page.getByText(new RegExp(`^A este ritmo terminas el ${spoken(whole)}, `, "u"))).toBeVisible();
+    await page.goto(`/metas/${opened.id}/plan`);
+    await expect(page.getByText(new RegExp(`^A este ritmo terminas el ${spoken(late)}, `, "u"))).toBeVisible();
+    // The goal's plan row says the whole rhythm the person set, never this month's share.
+    await page.goto(`/metas/${opened.id}`);
+    await expect(page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 10 h al mes/u })).toBeVisible();
+  } finally {
+    await drop(db, personId, onFirst);
+    await drop(db, personId, opened.id);
   }
 });

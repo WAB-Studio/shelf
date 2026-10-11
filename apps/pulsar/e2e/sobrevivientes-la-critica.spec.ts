@@ -234,8 +234,8 @@ test("the goal screen reads its last day, the Sunday before the horizon (RP-11)"
   try {
     await page.goto(`/metas/${goalId}`);
     const sunday = shiftDay(horizonAfterWeeks(openedOn, 12), -1);
-    await expect(page.getByText(`12 semanas · hasta el ${shortEnd(sunday)}`, { exact: true })).toBeVisible();
-    expect(shortEnd(sunday)).not.toMatch(/\d{4}$/);
+    const dated = /\d{4}$/.test(shortEnd(sunday)) ? shortEnd(sunday) : `${shortEnd(sunday)} ${sunday.slice(0, 4)}`;
+    await expect(page.getByText(`12 semanas · hasta el ${dated}`, { exact: true })).toBeVisible();
   } finally {
     await dropGoal(db, personId, goalId);
   }

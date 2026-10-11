@@ -22,10 +22,10 @@ function monthAfter(count: number): string {
   return month;
 }
 
-// «octubre», or «octubre de 2027» when it is not the year the person is in.
+// «octubre de 2026»: the year always.
 function spoken(month: string): string {
   const name = monthFormat.format(new Date(`${month.slice(0, 7)}-01T12:00:00Z`));
-  return month.slice(0, 4) === thisYear ? name : `${name} de ${month.slice(0, 4)}`;
+  return `${name} de ${month.slice(0, 4)}`;
 }
 
 const horizon = `${Number(thisYear) + 3}-12-01`;
@@ -35,10 +35,11 @@ type Seed = { goalId: string; fixed: string[]; doneParent: string };
 // 4 pending fixed tasks of 1 h (one in the same month next year), 3 loose of
 // 2 h: 10 h in all. A fixed parent with two sub-tasks, both with a fact, is
 // done and stays where it is.
+// Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
 async function seedGoal(db: postgres.Sql, personId: string, rhythm: number | null = null): Promise<Seed> {
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${`Meta vista previa ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm})
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${personId}, ${`Meta vista previa ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm}, ${`${monthOf(today)}T00:00:00-05:00`}::timestamptz)
     returning id
   `;
   const months = [monthAfter(2), monthAfter(3), monthAfter(1), monthAfter(12)];
@@ -109,7 +110,7 @@ async function leadMonth(page: Page): Promise<string> {
   const text = (await lead.textContent()) ?? "";
   const match = /terminas el \d{1,2} de (\p{L}+) de (\d{4})/u.exec(text);
   expect(match, text).not.toBeNull();
-  return match![2] === thisYear ? match![1] : `${match![1]} de ${match![2]}`;
+  return `${match![1]} de ${match![2]}`;
 }
 
 async function choose(page: Page, option: string) {

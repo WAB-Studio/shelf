@@ -52,7 +52,7 @@ export function formatQuantity(n: number, unit: string, words: TimeWords): strin
 
 const NUMBER = String.raw`(\d+(?:[.,]\d+)?)`;
 const PATTERN = new RegExp(
-  String.raw`^(?:${NUMBER}\s*h(?:oras?|rs?)?(?:\s*(\d+)\s*(?:min|mins|minutos?))?|(\d+)\s*(?:min|mins|minutos?))$`,
+  String.raw`^(?:${NUMBER}\s*h(?:oras?|rs?|s)?(?:\s*(\d+)\s*(?:min|mins|minutos?))?|(\d+)\s*(?:min|mins|minutos?))$`,
   "i",
 );
 

@@ -133,7 +133,7 @@ test("with every goal ended and none open and a suelta due, Hoy names the goal a
     await expect(page.getByText("Hoy no pide nada.")).toHaveCount(0);
     const yesterday = plusDays(-1);
     await expect(
-      page.getByText(`Inglés Crítico terminó el ${words(yesterday, true)}. Puedes moverle el final o abrir otra.`),
+      page.getByText(`Inglés Crítico terminó el ${words(yesterday, true)} de ${yesterday.slice(0, 4)}. Puedes moverle el final o abrir otra.`),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "Ver las metas" })).toHaveAttribute("href", "/metas");
     await expect(page.getByRole("link", { name: "Abrir otra meta" })).toHaveAttribute("href", "/metas/nueva");

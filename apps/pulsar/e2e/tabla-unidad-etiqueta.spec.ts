@@ -114,7 +114,7 @@ test("exportar at 360, the month in progress: «0 búsquedas», the unit once, n
     const text = flat(await current.innerText());
     expect(text).toContain("0 búsquedas");
     expect(text).not.toMatch(/searches/i);
-    expect(text.match(/búsquedas/g)).toHaveLength(2); // the figure's «0 búsquedas» and the plan's «de 60 búsquedas»
+    expect(text.match(/búsquedas/g)).toHaveLength(1); // «de 60 búsquedas»: the unit once, at the end
   } finally {
     await close();
     await drop(db, person, goalId);

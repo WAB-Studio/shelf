@@ -50,14 +50,15 @@ test("an ended goal reads «terminó el» and yesterday, offers both acts and ne
       weekday: "long",
       day: "numeric",
       month: "long",
+      year: "numeric",
       timeZone: "UTC",
     }).formatToParts(new Date(`${dayBefore(todayInZone())}T12:00:00Z`));
     const part = (type: string) => yesterday.find((p) => p.type === type)!.value;
     await expect(
-      page.getByText(`terminó el ${part("weekday")} ${part("day")} de ${part("month")}`, { exact: true }),
+      page.getByText(`terminó el ${part("weekday")} ${part("day")} de ${part("month")} de ${part("year")}`, { exact: true }),
     ).toBeVisible();
     await expect(page.getByText(/semanas? · hasta el /)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "mover el final", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Archivar", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Añadir una fase" })).toHaveCount(0);
@@ -75,7 +76,7 @@ test("moving the end of an ended goal opens on a count that ends this Sunday and
   const { goalId, openedOn } = await seedEnded(db, personId, `Meta mover ${Date.now()}`);
   try {
     await page.goto(`/metas/${goalId}`);
-    await page.getByRole("button", { name: "Mover el final", exact: true }).click();
+    await page.getByRole("button", { name: "mover el final", exact: true }).click();
     const sheet = page.getByRole("dialog");
     const field = sheet.getByLabel(/^semanas, contando la del /i);
     const weeks = weekIndexOf(openedOn, todayInZone());

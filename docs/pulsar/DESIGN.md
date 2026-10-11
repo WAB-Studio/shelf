@@ -1181,6 +1181,29 @@ Taken by the user the same day, on the critic's three questions and two from the
 - **On paper, a time goal with no rhythm says its months' tasks on the left-out line:** «sin monto · 1 tarea» (RP-73 on paper).
 - **«sin monto» may wrap at 1024 on `/meses`** rather than push the row's chevron out: the «one line» rule gives way there.
 - **«hs» reads as hours,** in the template and in the rhythm's «otra» field: «8 hs».
+- **Approved the same day:** board `UnidadUnaVez` as drawn (`/metas`, the goal, `/meses`, a month, `/mes`, Hoy, `/exportar`);
+  board `ReporteImpresoTareasFuera` option A — one line per group of months by task count («noviembre de 2026 y enero de 2027:
+  sin monto · 1 tarea», «diciembre de 2026: sin monto»), the month with «de» in that sentence; option B is discarded.
+- **`/metas` on the phone shows the month's figure** in each goal's row, unit once, under the name and above «hasta el …»:
+  «octubre · 30 de 60 búsquedas»; no amount keeps its unit («octubre · 18 búsquedas»); no measure, no figure. Board
+  `MetasConCifra` approved the same day.
+- **The shared month (first and last) reaches every reader** — Hoy, `/mes`, a connected AI — **and the plan fills it with its
+  share** («A este ritmo terminas el…» moves later for a goal opened mid-month). RP-74; RP-71 retired for RP-75.
+- **Taken by the user later the same day:** the line «Ritmo X al mes» always says the whole rhythm the person set
+  («Ritmo 10 h al mes»), never the first or last month's share; only the month's figures carry the share. On `/metas` on the
+  phone, a goal that counts tasks keeps «octubre · 1 de 3 tareas» under its name, though `MetasConCifra` does not draw it.
+- **A first-month share that rounds to 0 draws no figure on Hoy** (taken by the user the same day): a 20 km rhythm opened on
+  the 31st reads on Hoy as a month with no amount, never «ESTE MES 0 de 0 kilómetros». The goal, «Por mes», `/exportar` and
+  paper keep the 0, as RP-74 rounds it.
+- **After the train-9 critic, taken by the user the same day:**
+  - The goal's card and the month page say why a first or last month plans a share, in one muted line:
+    «desde el 7: 8 h 03 min de tus 10 h». Not on `/metas`, Hoy or the other readers. A new phrase: on a board first.
+    Board `ParteExplicada` (goal 360/1280, month page 360/1280, a whole month with no line) approved the same day.
+  - On `/meses` a time note that does not fit beside its month drops whole under it, as on paper (`wholeNote`). It never
+    splits («de / 8 h / 03 / min») and never pushes the chevron out of its row, at any width.
+  - Every screen reads a share that rounds to 0 as «sin monto», never «0 min de 0 min»; only paper keeps the 0
+    (RP-76, retiring RP-74). This widens the Hoy-only rule above.
+- Decided by the orchestrator 2026-10-11, for `ParteExplicada` wording the board did not draw: a last month that ends before the month's end reads «hasta el 7: 2 h 15 min de tus 10 h»; a goal opened and ended in the same month reads «del 7 al 20: … de tus 10 h».
 - Decided by the orchestrator, from rules already taken: a goal that has ended has no month «en curso», no «ESTE MES» and no
   «faltan N días»; `/meses` does not ask a goal with a rhythm to plan a month; every month in the rhythm's preview carries its
   year; one «mover el final» link for open and ended goals.

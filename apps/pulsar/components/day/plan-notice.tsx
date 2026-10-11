@@ -26,6 +26,7 @@ function PlanNotice({
   nextMonthName,
   endDay,
   endMonthName,
+  endYear,
 }: {
   goalId: string;
   goalName: string;
@@ -35,6 +36,7 @@ function PlanNotice({
   nextMonthName: string;
   endDay: number;
   endMonthName: string;
+  endYear: number;
 }) {
   const t = useTranslations();
   const words = useTimeWords();
@@ -48,7 +50,7 @@ function PlanNotice({
     done: formatQuantity(notice.closedDone, unit, words),
     amount: formatQuantity(notice.closedAmount, unit, words),
     next: nextMonthName,
-    date: t("roadmap.hoyMovido.endDate", { day: endDay, month: endMonthName }),
+    date: t("roadmap.hoyMovido.endDate", { day: endDay, month: endMonthName, year: endYear }),
   };
 
   function handleDismiss() {
@@ -98,6 +100,7 @@ export type PlanNoticeItem = {
   nextMonthName: string;
   endDay: number;
   endMonthName: string;
+  endYear: number;
 };
 
 /**
@@ -141,7 +144,7 @@ export function PlanNotices({ notices }: { notices: PlanNoticeItem[] }) {
         </Text>
         {notices.map((item) => {
           const { short, weeks } = movedSpan(item.notice.movedDays);
-          const date = t("roadmap.hoyMovido.endDate", { day: item.endDay, month: item.endMonthName });
+          const date = t("roadmap.hoyMovido.endDate", { day: item.endDay, month: item.endMonthName, year: item.endYear });
           return (
             <Flex key={item.goalId} direction="column" gap="3">
               <Separator />

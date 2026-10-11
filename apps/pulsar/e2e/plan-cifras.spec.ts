@@ -27,9 +27,10 @@ for (const width of [390, 1440]) {
     test.use({ viewport: { width, height: 900 } });
 
     test("the current month counts the tasks done, not the hours nor the measure's reached; the next reads the hours planned", async ({ page, db, personId }) => {
+      // Opened on the 1st, Bogotá's midnight: this month plans its whole rhythm (RP-74) whatever the run date.
       const [goal] = await db<{ id: string }[]>`
-        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-        values (${personId}, ${`Meta cifras ${Date.now()}`}, ${`${Number(thisYear) + 1}-${today.slice(5, 7)}-01`}::date, 'minutos', 'minutos', 720)
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+        values (${personId}, ${`Meta cifras ${Date.now()}`}, ${`${Number(thisYear) + 1}-${today.slice(5, 7)}-01`}::date, 'minutos', 'minutos', 720, date_trunc('month', now() at time zone 'America/Bogota') at time zone 'America/Bogota')
         returning id
       `;
       const goalId = goal.id;

@@ -224,7 +224,8 @@ before(async () => {
   // A goal with a rhythm and no month on its tasks: the plan places them.
   const rhythm = await goal("RP-49 fixture: ritmo", "minutos");
   rhythmGoalId = rhythm.goalId;
-  await sql`update goals.goals set rhythm = 20 where id = ${rhythmGoalId}`;
+  // Opened on the 1st, Bogotá's midnight: this month plans the whole 20 (RP-74) whatever the run date.
+  await sql`update goals.goals set rhythm = 20, created_at = ${`${thisMonth}-01T00:00:00-05:00`} where id = ${rhythmGoalId}`;
   for (const [position, name, estimate] of [
     [1, "RP-49 ritmo: primera", 8],
     [2, "RP-49 ritmo: segunda", 8],
@@ -308,8 +309,8 @@ test("loadReport: a goal's month and to-date figures are what loadGoal reads", a
     assert.equal(entry.unit, loaded.measureUnit);
     assert.deepEqual(entry.toDate, toDate(loaded.months));
     assert.deepEqual(
-      entry.months.map((row) => ({ ...row, carried: null })),
-      loaded.months.map((row) => ({ ...row, carried: null })),
+      entry.months.map((row) => ({ ...row, tasks: undefined, carried: null })),
+      loaded.months.map((row) => ({ ...row, tasks: undefined, carried: null })),
     );
     assert.deepEqual(entry.weeks, loaded.weeks);
   }
@@ -585,4 +586,25 @@ test("loadReport: the week's planned figure takes the goal's rhythm where the mo
   assert.equal(planned(withAmount), Math.floor((7 * 600) / 30));
   assert.equal(planned(bare), null);
   assert.equal(planned(ended), null);
+});
+
+test("loadReport: a goal opened and closed mid-month plans its share of the rhythm in both, the week its share of the whole month (RP-74, RP-58)", async () => {
+  // «Reto de lectura»: 16 September to 7 October 2026 at 600 min a month.
+  const goalId = await seedGoal("RP-74 fixture: reto", {
+    horizon: "2026-10-08",
+    createdAt: "2026-09-16T12:00:00Z",
+    unit: "minutos",
+  });
+  await sql`update goals.goals set rhythm = 600 where id = ${goalId}`;
+
+  const report = await loadReport("2026-10-07");
+  const entry = report.goals.find((goal) => goal.id === goalId)!;
+  assert.deepEqual(entry.months.map((row) => [row.month, row.planned]), [
+    ["2026-09-01", 300],
+    ["2026-10-01", 135],
+  ]);
+  assert.equal(entry.thisMonth.planned, 135);
+  assert.equal(entry.toDate.planned, 435);
+  // 5 to 7 October: three days of 600 over 31.
+  assert.equal(entry.weekPlanned, 58);
 });

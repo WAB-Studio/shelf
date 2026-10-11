@@ -4,9 +4,9 @@ import { getTranslations } from "next-intl/server";
 
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
-import { amountOf } from "@/lib/plan/roadmap";
-import { nextMonth } from "@/lib/plan/months";
+import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
+import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
@@ -30,7 +30,8 @@ function yearLabel(month: string): string {
  * The phone's stack is drawn at every width: the list lives in a 320px column
  * from 1024. A month's amount is set from its own page, never from the row.
  */
-export async function MonthsList({ goal, open }: { goal: GoalView; open: string }) {
+export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open: string }) {
+  const goal = { ...loaded, months: settledMonths(loaded.months, loaded.endedOn !== null) };
   const t = await getTranslations();
   const hrefOf = (month: string) => `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
   const caption = t("month.months.caption", { count: goal.months.length });
@@ -74,7 +75,7 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
   const rows: TableRow[] = goal.months.map((row) => {
     const started = row.past || row.current;
     const share = row.past ? planShare(goal.plan, row.month) : null;
-    const own = amountOf(row.month, goal.plan);
+    const own = screenPlanned(row.planned, goal.plan.budgets.some((budget) => budget.month === row.month));
     const figure = own === null ? null : formatQuantity(own, unit, words);
     const said = figure === null ? t("month.months.noAmount") : started ? t("month.months.of", { planned: figure }) : figure;
     const amount = <Text tone="secondary">{said}</Text>;
@@ -85,7 +86,7 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
             percent: Math.floor((share.carried * 100) / share.planned),
             month: monthLabel(nextMonth(row.month)),
           })
-        : row.planned !== null && !started
+        : own !== null && !started
           ? t("month.months.planned")
           : null;
 
@@ -114,8 +115,9 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
   return (
     <Table
       narrow
-      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») keeps its line.
+      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») never splits and drops whole under its month when it does not fit.
       wrapNote={!timed}
+      wholeNote={timed}
       caption={caption}
       columns={[
         t("month.months.columns.month"),
@@ -148,13 +150,14 @@ export async function MonthsScreen({
   planning: string | null;
   returnPath: string;
 }) {
-  const goal = await loadGoal(goalId);
-  if (!goal) notFound();
+  const loaded = await loadGoal(goalId);
+  if (!loaded) notFound();
+  const goal = { ...loaded, months: settledMonths(loaded.months, loaded.endedOn !== null) };
 
   const t = await getTranslations();
   const open = goal.archivedAt === null && goal.endedOn === null;
   const target = goal.months.find((row) => row.current) ?? goal.months[0];
-  const empty = Boolean(goal.measureUnit && goal.measureName) && goal.budgets.length === 0;
+  const empty = Boolean(goal.measureUnit && goal.measureName) && goal.budgets.length === 0 && goal.rhythm === null;
   const planHref = (month: string) => `/metas/${goal.id}/meses?planear=${month.slice(0, 7)}`;
 
   const unit = goal.measureUnit;
@@ -201,6 +204,7 @@ export async function MonthsScreen({
           month={planned.month.slice(0, 7)}
           monthName={monthLabel(planned.month)}
           amount={planned.planned}
+          stored={goal.budgets.some((budget) => budget.month.slice(0, 7) === planned.month.slice(0, 7))}
           closeHref={returnPath}
         />
       ) : null}

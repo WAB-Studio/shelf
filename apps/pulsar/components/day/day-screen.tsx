@@ -248,6 +248,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         {t("day.allEnded.body", {
           goal: lastEnded.name,
           date: dateLabel(shiftCivilDay(lastEnded.horizon, -1), t),
+          year: shiftCivilDay(lastEnded.horizon, -1).slice(0, 4),
         })}
       </Text>
       <Button asChild block>
@@ -420,15 +421,16 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             )}
           </Flex>
         ) : line.underPace ? (
+          // The unit is said once, after «de».
           <Text as="p" variant="sentence">
             {t("day.monthLine.pace", { day: Number(day.slice(8, 10)) })}{" "}
-            <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />{" "}
+            <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" bare />{" "}
             {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
             {t("day.monthLine.paceUnder", { threshold: 60 })}
           </Text>
         ) : (
           <Flex align="baseline" gap="2" wrap="wrap">
-            <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
+            <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" bare />
             <Text variant="sentence">
               {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
             </Text>
@@ -557,6 +559,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         nextMonthName: monthNames[Number(notice.closedMonth.slice(5, 7)) % 12],
         endDay: end.getUTCDate(),
         endMonthName: monthNames[end.getUTCMonth()],
+        endYear: end.getUTCFullYear(),
       });
     }
   }
