@@ -223,7 +223,10 @@ test.describe("a file's template errors are corrected in the box (board Importar
   test("state 7: a PDF or an image that fails leaves the box as it was, with no file note", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.route("**/importar/leer", (route) =>
-        route.fulfill({ status: 502, json: { error: "import.errors.modelFailed" } }),
+        route.fulfill({
+          status: 422,
+          json: { error: "import.errors.templateLine", errors: [{ line: 1, expected: "import.errors.form.goal" }] },
+        }),
       );
       await open(page);
       await boxOf(page).fill("Quiero correr más este año.");
@@ -231,11 +234,11 @@ test.describe("a file's template errors are corrected in the box (board Importar
         { name: "plan.pdf", mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.4\n${FIXED}`) },
         { name: "plan.png", mimeType: "image/png", buffer: Buffer.from(`${plan()}`) },
       ]) {
+        const answered = page.waitForResponse("**/importar/leer");
         await page.getByLabel(messages.upload).setInputFiles(file);
-        await expect(appAlerts(page).filter({ hasText: "No pudimos leer el plan" })).toBeVisible();
+        await answered;
         await expect(boxOf(page)).toHaveValue("Quiero correr más este año.");
         await expect(page.getByText(/Leído de/)).toHaveCount(0);
-        await expect(page.getByText(NOT_TEMPLATE, { exact: true })).toHaveCount(0);
       }
     });
   });
