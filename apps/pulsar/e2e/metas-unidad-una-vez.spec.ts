@@ -162,6 +162,30 @@ for (const width of [360, 1280]) {
       await context.close();
     }
   });
+
+  test(`/metas at ${width}: one search with no amount says it in the singular, «${monthName} · 1 búsqueda»`, async ({
+    person,
+    browser,
+    db,
+  }) => {
+    const name = `Una sola ${Date.now()}`;
+    const goal = await seedGoal(db, person.id, name, "searches");
+    await seedReached(db, person.id, goal, "searches", 1);
+
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      viewport: { width, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas");
+      const row = (await page.locator("main a", { hasText: name }).innerText()).replace(/\s+/g, " ");
+      expect(row).toContain(`${monthName} · 1 búsqueda`);
+      expect(row).not.toContain("1 búsquedas");
+    } finally {
+      await context.close();
+    }
+  });
 }
 
 test("/metas at 360: the month figure sits under the name and above «hasta el …»; ended and archived rows and a goal with no measure draw none", async ({
