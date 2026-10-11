@@ -2,6 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
+import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
@@ -289,5 +290,76 @@ test("revision at 360: «semana 1» with its dates under it is a 112px label and
   } finally {
     await close();
     await drop(db, person, goalId);
+  }
+});
+
+test("the review's sentence names the measure in the catalogue's plural: «mide en búsquedas»", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Frase plural", unit: SEARCHES });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/revision`, 360);
+  try {
+    const main = page.getByRole("main").first();
+    await expect(main).toContainText("mide en");
+    expect(flat(await main.innerText())).toMatch(/mide en búsquedas(?!\p{L})/u);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("a unit typed capitalised («Searches») still reads the catalogue's word in the review's sentence", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Frase mayúscula", unit: { measure: "búsquedas", unit: "Searches" } });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/revision`, 360);
+  try {
+    const main = page.getByRole("main").first();
+    await expect(main).toContainText("mide en");
+    const text = flat(await main.innerText());
+    expect(text).toMatch(/mide en búsquedas(?!\p{L})/u);
+    expect(text).not.toMatch(/searches/i);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+// A closed month that carried a task over says «cerrado · N % pasó a <mes>» under its label: a line that does not
+// break, whose width must never widen the 112px label.
+test("exportar at 360: a closed month with «cerrado · N % pasó a …» under it keeps its label 112px and the figures where they were", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const lastMonth = monthOf(dayBefore(thisMonth));
+  const horizon = nextMonth(nextMonth(nextMonth(thisMonth)));
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${`Cerrado arrastre ${Date.now()}`}, ${horizon}::date, 'Práctica', 'minutos',
+            (${lastMonth}::date + interval '14 days' + interval '12 hours')::timestamptz)
+    returning id`;
+  for (const month of [lastMonth, thisMonth]) {
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${goal.id}, ${month}::date, 600)`;
+  }
+  await db`
+    insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+    values (${person.id}, ${goal.id}, ${`Pendiente ${Date.now()}`}, 110, ${lastMonth}::date)`;
+  const { page, close } = await visit(browser, baseURL, person, "/exportar", 360);
+  try {
+    const closed = row(page, /cerrado/);
+    await expect(closed).toBeVisible();
+    expect(flat(await closed.innerText())).toMatch(/pasó a/);
+    const label = closed.locator(":scope > span").first();
+    expect((await label.boundingBox())!.width).toBeCloseTo(112, 0);
+    const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scroll).toBeLessThanOrEqual(360);
+  } finally {
+    await close();
+    await drop(db, person, goal.id);
   }
 });
