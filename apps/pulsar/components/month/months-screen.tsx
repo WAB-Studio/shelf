@@ -24,20 +24,6 @@ function yearLabel(month: string): string {
   return `${monthLabel(month)} ${month.slice(0, 4)}`;
 }
 
-// The 320px list keeps a note on one line; a unit word as long as «búsquedas» would push the chevron out, so it drops under its number.
-const LONG_UNIT = 8;
-function breakLongUnit(said: string) {
-  const at = said.lastIndexOf(" ");
-  if (at === -1 || said.length - at - 1 < LONG_UNIT) return said;
-  return (
-    <>
-      {said.slice(0, at)}
-      <br />
-      {said.slice(at + 1)}
-    </>
-  );
-}
-
 /**
  * `MesesFilas.dc.html` (RP-32): one whole-row link per month of the goal's
  * span from `loadGoal`'s own `months`, the month open beside the list marked.
@@ -91,7 +77,7 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
     const own = amountOf(row.month, goal.plan);
     const figure = own === null ? null : formatQuantity(own, unit, words);
     const said = figure === null ? t("month.months.noAmount") : started ? t("month.months.of", { planned: figure }) : figure;
-    const amount = <Text tone="secondary">{breakLongUnit(said)}</Text>;
+    const amount = <Text tone="secondary">{said}</Text>;
     const state = row.current
       ? t("month.months.current")
       : share && share.carried > 0
@@ -128,6 +114,8 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
   return (
     <Table
       narrow
+      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») keeps its line.
+      wrapNote={!timed}
       caption={caption}
       columns={[
         t("month.months.columns.month"),

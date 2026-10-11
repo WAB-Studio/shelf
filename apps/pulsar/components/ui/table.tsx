@@ -68,6 +68,9 @@ type TableProps = {
   // both faces, rather than hold 112px (`RevisionConAño.dc.html`'s «28 sep–4 oct
   // 2026»). Unlinked rows only: a linked row's anchor is not on the phone's grid.
   fitDetail?: boolean;
+  // Lets a `narrow` table's note wrap at a word when it does not fit beside the
+  // chevron («0 de 60 / búsquedas» in the 320px list); a note that fits keeps its line.
+  wrapNote?: boolean;
   // Folds the whole table under a link-card with this text, closed
   // (`ReportePlegado.dc.html`'s «Ver las 9 semanas»). Paper never prints it.
   fold?: string;
@@ -89,7 +92,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, fold, after, afterPrintOnly }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, fold, after, afterPrintOnly }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -225,7 +228,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     </>
   );
 
-  const className = join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined, wrapDetail ? styles.wrapDetail : undefined, fitDetail ? styles.fitDetail : undefined);
+  const className = join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined, wrapDetail ? styles.wrapDetail : undefined, fitDetail ? styles.fitDetail : undefined, wrapNote ? styles.wrapNote : undefined);
   if (fold === undefined) return <div className={className}>{faces}</div>;
   return (
     <details className={join(className, styles.fold)}>
