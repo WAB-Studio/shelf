@@ -1,0 +1,335 @@
+import type { Browser, Page } from "@playwright/test";
+import type postgres from "postgres";
+
+import { test, expect, type Person } from "./fixtures";
+import { monthOf, nextMonth } from "@/lib/plan/months";
+import { todayInZone } from "@/lib/zone";
+
+// Module 813 (RP-71, RP-32, RP-17, RP-35), `MesesFuturoYTareas` 6a and `MesesConAño` option B: no `Table` prints a
+// unit the catalogue translates («searches»), a unit other than time is said once, and the phone's label column is
+// 112px in every table so a month with its year never breaks in two lines.
+
+const thisMonth = monthOf(todayInZone());
+const today = todayInZone();
+
+type Db = postgres.Sql;
+type Unit = { measure: string; unit: string };
+const SEARCHES: Unit = { measure: "búsquedas", unit: "searches" };
+const KM: Unit = { measure: "km", unit: "km" };
+const MINUTES: Unit = { measure: "minutos", unit: "minutos" };
+
+const NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const monthName = (month: string) => NAMES[Number(month.slice(5, 7)) - 1];
+const flat = (text: string) => text.replace(/\s+/g, " ").trim();
+
+async function seedGoal(
+  db: Db,
+  person: Person,
+  options: { name: string; unit: Unit; months?: number; amount?: number | null; fact?: number },
+): Promise<string> {
+  const months = options.months ?? 2;
+  let horizon = thisMonth;
+  const starts: string[] = [];
+  for (let i = 0; i < months; i += 1) {
+    starts.push(horizon);
+    horizon = nextMonth(horizon);
+  }
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${`${options.name} ${Date.now()}`}, ${horizon}::date, ${options.unit.measure}, ${options.unit.unit},
+            now() - interval '10 days')
+    returning id`;
+  if (options.amount !== null && options.amount !== undefined) {
+    for (const month of starts) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${month}::date, ${options.amount})`;
+    }
+  }
+  if (options.fact !== undefined) {
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${goal.id}, 'Ronda', 'daily', 'quantity', 5, ${options.unit.unit}, now() - interval '10 days')
+      returning id`;
+    await db`
+      insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
+      values (${person.id}, ${commitment.id}, ${goal.id}, ${today}::date, ${options.fact})`;
+  }
+  return goal.id;
+}
+
+async function visit(
+  browser: Browser,
+  baseURL: string | undefined,
+  person: Person,
+  path: string,
+  width: number,
+): Promise<{ page: Page; close: () => Promise<void> }> {
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  const page = await context.newPage();
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto(path);
+  return { page, close: () => context.close() };
+}
+
+// A visible row of the phone's stack whose text starts with `start`.
+const row = (page: Page, start: RegExp | string) =>
+  page.locator("ol > li:visible").filter({ hasText: start }).first();
+
+async function drop(db: Db, person: Person, goalId: string) {
+  await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
+}
+
+test("revision at 360, a searches goal: «semana 1» ends in «0 búsquedas» and no table says «searches»", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Revisión búsquedas", unit: SEARCHES });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/revision`, 360);
+  try {
+    await expect(row(page, "semana 1")).toBeVisible();
+    expect(flat(await row(page, "semana 1").innerText())).toMatch(/0 búsquedas$/);
+    expect(await page.getByRole("main").first().innerText()).not.toMatch(/searches/i);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("exportar at 360, the month in progress: «0 búsquedas», the unit once, never «searches»", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Exportar búsquedas", unit: SEARCHES, amount: 60 });
+  const { page, close } = await visit(browser, baseURL, person, "/exportar", 360);
+  try {
+    const current = row(page, /en curso/);
+    await expect(current).toBeVisible();
+    const text = flat(await current.innerText());
+    expect(text).toContain("0 búsquedas");
+    expect(text).not.toMatch(/searches/i);
+    expect(text.match(/búsquedas/g)).toHaveLength(2); // the figure's «0 búsquedas» and the plan's «de 60 búsquedas»
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("a week with 1 reads «1 búsqueda» in the singular", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Singular", unit: SEARCHES, fact: 1 });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/revision`, 360);
+  try {
+    const week = row(page, "semana 2");
+    await expect(week).toBeVisible();
+    expect(flat(await week.innerText())).toMatch(/1 búsqueda(?!s)/);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("revision at 1440: the total column's header says «búsquedas», not «searches»", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Cabecera búsquedas", unit: SEARCHES });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/revision`, 1440);
+  try {
+    const header = page.locator("thead th:visible").filter({ hasText: "total" });
+    await expect(header).toHaveCount(1);
+    await expect(header).toContainText("búsquedas");
+    await expect(header).not.toContainText("searches");
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("exportar at 1440: the «hecho» header of a searches goal says «búsquedas»", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Hecho búsquedas", unit: SEARCHES, amount: 60 });
+  const { page, close } = await visit(browser, baseURL, person, "/exportar", 1440);
+  try {
+    const header = page.locator("thead th:visible").filter({ hasText: "hecho" });
+    await expect(header).toHaveCount(1);
+    await expect(header).toContainText("búsquedas");
+    await expect(header).not.toContainText("searches");
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("a free unit (km) stays as typed: «6 km» beside the figure and «km» in the header", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Meta km", unit: KM, fact: 6 });
+  const path = `/metas/${goalId}/revision`;
+  const phone = await visit(browser, baseURL, person, path, 360);
+  try {
+    const week = row(phone.page, "semana 2");
+    await expect(week).toBeVisible();
+    expect(flat(await week.innerText())).toMatch(/\b6 km\b/);
+  } finally {
+    await phone.close();
+  }
+  const wide = await visit(browser, baseURL, person, path, 1440);
+  try {
+    const header = wide.page.locator("thead th:visible").filter({ hasText: "total" });
+    await expect(header).toContainText("km");
+    await expect(header).not.toContainText("kilómetro");
+  } finally {
+    await wide.close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("a goal in minutes reads «4 h 30 min» with no unit word after it", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Meta tiempo", unit: MINUTES, fact: 270 });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/revision`, 360);
+  try {
+    const week = row(page, "semana 2");
+    await expect(week).toBeVisible();
+    const text = flat(await week.innerText());
+    expect(text).toMatch(/4 h 30 min/);
+    expect(text).not.toMatch(/minutos/);
+    expect(text).not.toMatch(/4 h 30 min \S*[a-zA-Záéíóú]{4,}/);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("a month not reached draws «—» alone: no unit word beside the dash", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedGoal(db, person, { name: "Guion", unit: SEARCHES, amount: 60 });
+  const { page, close } = await visit(browser, baseURL, person, "/exportar", 360);
+  try {
+    const future = row(page, new RegExp(`^${monthName(nextMonth(thisMonth))} `));
+    await expect(future).toBeVisible();
+    const figure = future.locator(":scope > span").nth(1);
+    expect(flat(await figure.innerText())).toBe("—");
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+for (const width of [360, 1024]) {
+  test(`exportar at ${width}: each of 16 month labels is one line, 112px wide, and the page does not overflow`, async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const goalId = await seedGoal(db, person, { name: "Inglés B2+ laboral", unit: MINUTES, months: 16, amount: 720 });
+    const { page, close } = await visit(browser, baseURL, person, "/exportar", width);
+    try {
+      const labels = page.locator("ol > li:visible > span:first-child");
+      await expect(labels.first()).toBeVisible();
+      const boxes = await labels.evaluateAll((nodes) =>
+        nodes
+          .map((node) => {
+            const style = getComputedStyle(node);
+            const line = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
+            return {
+              text: (node.firstChild?.textContent ?? "").trim(),
+              width: node.getBoundingClientRect().width,
+              // The month's own words: the current row's «en curso» under it is not part of the line.
+              height: (() => {
+                const range = document.createRange();
+                range.selectNodeContents(node.firstChild!);
+                return range.getBoundingClientRect().height;
+              })(),
+              line,
+            };
+          })
+          .filter((box) => /^[a-záéíóú]+ 20\d\d$/.test(box.text)),
+      );
+      expect(boxes.length, "month labels drawn").toBe(16);
+      for (const box of boxes) expect(box.height, `«${box.text}» height`).toBeLessThanOrEqual(box.line * 1.5);
+      for (const box of boxes) expect(box.width, `«${box.text}» width`).toBeCloseTo(112, 0);
+      const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(scroll).toBeLessThanOrEqual(width);
+    } finally {
+      await close();
+      await drop(db, person, goalId);
+    }
+  });
+}
+
+test("revision at 360: «semana 1» with its dates under it is a 112px label and the page does not overflow", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Revisión etiqueta", unit: SEARCHES });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/revision`, 360);
+  try {
+    const week = row(page, "semana 1");
+    await expect(week).toBeVisible();
+    const label = week.locator(":scope > span").first();
+    expect((await label.boundingBox())!.width).toBeCloseTo(112, 0);
+    const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scroll).toBeLessThanOrEqual(360);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("«Por mes» at 360, a searches goal: «0 de 60 búsquedas», the unit once at the end, no overflow (6a)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Por mes búsquedas", unit: SEARCHES, amount: 60 });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/meses`, 360);
+  try {
+    const current = row(page, /en curso/);
+    await expect(current).toBeVisible();
+    const text = flat(await current.innerText());
+    expect(text).toContain("0 de 60 búsquedas");
+    expect(text).not.toMatch(/searches/i);
+    expect(text.match(/búsquedas/g)).toHaveLength(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
+
+test("«Por mes» at 360, a km goal: «20 de 40 km», the unit once at the end", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person, { name: "Por mes km", unit: KM, amount: 40, fact: 20 });
+  const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/meses`, 360);
+  try {
+    const current = row(page, /en curso/);
+    await expect(current).toBeVisible();
+    const text = flat(await current.innerText());
+    expect(text).toContain("20 de 40 km");
+    expect(text.match(/km/g)).toHaveLength(1);
+  } finally {
+    await close();
+    await drop(db, person, goalId);
+  }
+});
