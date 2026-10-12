@@ -15,6 +15,9 @@ export type ArchiveGoalActionProps = {
   block?: boolean;
   // «Archivar» beside another control; the foot of the phone face says the whole act.
   short?: boolean;
+  // The open goals under this one, named in the sheet; they go with it (RP-83).
+  branchCount?: number;
+  branchNames?: string[];
 };
 
 /**
@@ -31,12 +34,15 @@ export function ArchiveGoalAction({
   variant = "outline",
   block = true,
   short = false,
+  branchCount = 0,
+  branchNames = [],
 }: ArchiveGoalActionProps) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<MessageKey | null>(null);
+  const withBranch = branchCount > 0;
 
   async function handleArchive() {
     if (pending) return;
@@ -62,8 +68,15 @@ export function ArchiveGoalAction({
         open={open}
         onOpenChange={setOpen}
         label={name}
-        title={t("plan.archiveSheet.title")}
-        description={t("plan.archiveSheet.description")}
+        title={t(withBranch ? "tree.archive.title" : "plan.archiveSheet.title")}
+        description={
+          withBranch
+            ? t("tree.archive.withInside", {
+                count: branchCount,
+                names: branchNames.map((branch) => `«${branch}»`).join(", "),
+              })
+            : t("plan.archiveSheet.description")
+        }
       >
         {error ? (
           <Text as="p" tone="muted" variant="sentence">
@@ -72,10 +85,10 @@ export function ArchiveGoalAction({
         ) : null}
         <SheetActions>
           <Button block onClick={handleArchive} disabled={pending}>
-            {t("plan.archiveSheet.confirm")}
+            {withBranch ? t("tree.archive.confirm", { count: branchCount }) : t("plan.archiveSheet.confirm")}
           </Button>
           <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-            {t("plan.archiveSheet.cancel")}
+            {withBranch ? t("tree.archive.cancel") : t("plan.archiveSheet.cancel")}
           </Button>
         </SheetActions>
       </Sheet>
@@ -92,7 +105,7 @@ export function ReopenGoalButton({ goalId }: { goalId: string }) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<MessageKey | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleReopen() {
     if (pending) return;
@@ -102,7 +115,7 @@ export function ReopenGoalButton({ goalId }: { goalId: string }) {
     const result = await reopenGoal({ goalId });
     setPending(false);
     if (result.ok) router.refresh();
-    else setError(result.error);
+    else setError(t(result.error, { name: "values" in result ? (result.values?.name ?? "") : "" }));
   }
 
   return (
@@ -112,7 +125,7 @@ export function ReopenGoalButton({ goalId }: { goalId: string }) {
       </Button>
       {error ? (
         <Text as="p" tone="muted" variant="sentence">
-          {t(error)}
+          {error}
         </Text>
       ) : null}
     </>

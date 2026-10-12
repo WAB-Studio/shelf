@@ -260,6 +260,8 @@ export type GoalView = {
     unit: string | null;
     inUnit: boolean;
     month: { planned: number | null; reached: number } | null;
+    // The first month from now on that the goal plans an amount in: «El plan» of a goal holding goals.
+    firstPlanned: { month: string; planned: number } | null;
     endedOn: string | null;
     archivedAt: string | null;
   }[];
@@ -750,6 +752,13 @@ export async function loadGoal(
     const n = tree.byId.get(id)!;
     const f = n.archivedAt === null ? (up.get(id)?.months ?? own.get(id)?.months)?.get(thisMonth) : undefined;
     const unit = unitOf(n);
+    let firstPlanned: { month: string; planned: number } | null = null;
+    if (n.archivedAt === null) {
+      for (const [m, fig] of up.get(id)?.months ?? own.get(id)?.months ?? []) {
+        if (m < thisMonth || fig.planned === null || fig.planned <= 0) continue;
+        if (firstPlanned === null || m < firstPlanned.month) firstPlanned = { month: m, planned: fig.planned };
+      }
+    }
     return {
       id: n.id,
       name: n.name,
@@ -757,6 +766,7 @@ export async function loadGoal(
       unit,
       inUnit: unit !== null && unit === measureUnit,
       month: unit === null || !f ? null : { planned: f.planned, reached: f.reached },
+      firstPlanned,
       endedOn: n.horizon <= today ? dayBefore(n.horizon) : null,
       archivedAt: n.archivedAt,
     };

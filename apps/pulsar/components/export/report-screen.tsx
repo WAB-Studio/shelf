@@ -29,6 +29,7 @@ import {
   PrintHidden,
   PrintOnly,
   PrintPage,
+  Row,
   ScreenHeader,
   Section,
   SectionLabel,
@@ -172,6 +173,7 @@ function TaskLine({
   note,
   trailing,
   indented,
+  of,
   t,
 }: {
   name: string;
@@ -181,6 +183,8 @@ function TaskLine({
   note: string | null;
   trailing: ReactNode;
   indented?: boolean;
+  // The goal a task of a group comes from, on the name's own line.
+  of?: string;
   t: Translator<"export">;
 }) {
   return (
@@ -189,6 +193,11 @@ function TaskLine({
       <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
         <Text as="p" tone={done ? "muted" : "ink"}>
           {name}
+          {of !== undefined ? (
+            <Text variant="meta" tone="muted">
+              {` · ${of}`}
+            </Text>
+          ) : null}
         </Text>
         {meta ? (
           <Text as="p" variant="sentence">
@@ -234,15 +243,50 @@ function MeasureLine({
   return measure === null ? t(`${key}Unnamed`, { unit: unitWords, date }) : t(key, { measure, unit: unitWords, date });
 }
 
+// One line per goal inside a general: its month and amount, then its last day.
+function InsideRow({
+  goal,
+  level,
+  today,
+  t,
+}: {
+  goal: GoalReport;
+  level: 1 | 2;
+  today: string;
+  t: Translator<"export">;
+}) {
+  const words = useTimeWords();
+  const until = dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
+  const planned =
+    goal.endedOn === null && goal.unit !== null
+      ? screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${today.slice(0, 7)}-01`))
+      : null;
+  const meta =
+    goal.endedOn !== null
+      ? t("ended", { date: dateWithYear.format(civilDateToDate(goal.endedOn)) })
+      : planned !== null
+        ? t("insideRow", {
+            month: monthOnly.format(civilDateToDate(today)),
+            done: formatQuantity(goal.thisMonth.reached, goal.unit as string, words),
+            planned: formatQuantity(planned, goal.unit as string, words),
+            date: until,
+          })
+        : t("insideRowNoAmount", { date: until });
+  return <Row name={goal.name} meta={meta} href={`/metas/${goal.id}`} level={level} />;
+}
+
 function GoalPart({
   goal,
   declaredOnly,
   today,
+  inside,
   t,
 }: {
   goal: GoalReport;
   declaredOnly: boolean;
   today: string;
+  // The goals under a general, in preorder: the screen lists one line each.
+  inside?: GoalReport[];
   t: Translator<"export">;
 }) {
   const unit = goal.unit;
@@ -280,7 +324,14 @@ function GoalPart({
     );
   }
 
-  const sections = goalSections(goal);
+  const held = inside !== undefined && inside.length > 0;
+  // The screen lists every task of the group naming its goal; paper keeps each goal's own.
+  const groupTasks = held
+    ? [goal, ...inside].flatMap((member) => member.tasks.map((task) => ({ task, of: member.name })))
+    : [];
+  const sections: (GoalSection | "inside")[] = goalSections(goal);
+  if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
+  if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
   const until = dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
   const thisMonth = monthOnly.format(civilDateToDate(today));
 
@@ -297,8 +348,22 @@ function GoalPart({
       />
     );
 
-  const render = (section: GoalSection) => {
+  const render = (section: GoalSection | "inside") => {
     switch (section) {
+      case "inside":
+        return (
+          <Section label={t("inside", { count: inside!.length })}>
+            {inside!.map((member) => (
+              <InsideRow
+                key={member.id}
+                goal={member}
+                level={member.parentId === goal.id ? 1 : 2}
+                today={today}
+                t={t}
+              />
+            ))}
+          </Section>
+        );
       case "month":
         return <MonthFigures goal={goal} declaredOnly={declaredOnly && goal.measureFed} month={thisMonth} thisMonthKey={`${today.slice(0, 7)}-01`} t={t} />;
       case "toDate":
@@ -330,14 +395,15 @@ function GoalPart({
             ))}
           </Section>
         );
-      case "tasks":
-        return (
+      case "tasks": {
+        const list = (items: { task: ReportTask; of?: string }[]) => (
           <Section label={t("sections.tasks", { month: thisMonth })}>
-            {goal.tasks.map((task, index) => (
+            {items.map(({ task, of }, index) => (
               <Flex key={`${task.name}-${task.from ?? ""}-${index}`} direction="column">
                 {index > 0 ? <Separator /> : null}
                 <TaskLine
                   name={task.name}
+                  of={of}
                   done={task.done}
                   meta={
                     task.from !== null
@@ -386,6 +452,14 @@ function GoalPart({
             ))}
           </Section>
         );
+        if (!held) return list(goal.tasks.map((task) => ({ task })));
+        return (
+          <>
+            <PrintHidden>{list(groupTasks)}</PrintHidden>
+            {goal.tasks.length > 0 ? <PrintOnly>{list(goal.tasks.map((task) => ({ task })))}</PrintOnly> : null}
+          </>
+        );
+      }
       case "months": {
         if (unit === null) {
           const rows: TableRow[] = goal.months.map((month) => {
@@ -662,7 +736,7 @@ function GoalPart({
     }
   };
 
-  const spans = (section: GoalSection) => (section !== "month" && section !== "toDate" ? "all" : undefined);
+  const spans = (section: GoalSection | "inside") => (section !== "month" && section !== "toDate" ? "all" : undefined);
   return (
     <PrintGoal whole={keepsHeadWithTable(goal.months, goal.unit)}>
       <PrintBlock span="lead">
@@ -673,6 +747,13 @@ function GoalPart({
           <Text as="p" variant="sentence">
             {measureLine}
           </Text>
+          {goal.note ? (
+            <PrintOnly>
+              <Text as="p" tone="secondary" note>
+                {goal.note}
+              </Text>
+            </PrintOnly>
+          ) : null}
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
@@ -712,15 +793,24 @@ export async function ReportScreen({ report }: { report: Report }) {
   }
 
   const declaredOnly = report.evidence === "unreadable";
-  const goals = [
-    ...report.goals.filter((goal) => goal.endedOn === null),
-    ...report.goals.filter((goal) => goal.endedOn !== null),
+  const byId = new Map(report.goals.map((goal) => [goal.id, goal]));
+  // One entry per general (or lone goal); a report without `groups` stands every goal alone.
+  const all = (report.groups ?? report.goals.map((goal) => ({ rootId: goal.id, goalIds: [goal.id] }))).flatMap((group) => {
+    const [root, ...rest] = group.goalIds.flatMap((id) => byId.get(id) ?? []);
+    return root ? [{ root, inside: rest }] : [];
+  });
+  const groups = [
+    ...all.filter((group) => group.root.endedOn === null),
+    ...all.filter((group) => group.root.endedOn !== null),
   ];
-  const ended = report.goals.length - goals.filter((goal) => goal.endedOn === null).length;
-  const count =
-    ended > 0
-      ? `${t("goalCount", { total: report.goals.length })} · ${t("endedCount", { ended })}`
-      : t("goalCount", { total: report.goals.length });
+  const ended = groups.filter((group) => group.root.endedOn !== null).length;
+  const holders = groups.filter((group) => group.inside.length > 0);
+  const total = t("goalCount", { total: groups.length });
+  const counted =
+    holders.length > 0
+      ? `${total} · ${t("insideCount", { holders: holders.length, inside: holders.reduce((sum, group) => sum + group.inside.length, 0) })}`
+      : total;
+  const count = ended > 0 ? `${counted} · ${t("endedCount", { ended })}` : counted;
 
   return (
     <Page width="full" print="full">
@@ -760,9 +850,16 @@ export async function ReportScreen({ report }: { report: Report }) {
           ) : null}
         </Flex>
         <PanelGrid print="stack">
-          {goals.map((goal) => (
-            <Panel key={goal.id} print="plain">
-              <GoalPart goal={goal} declaredOnly={declaredOnly} today={report.today} t={t} />
+          {groups.map(({ root, inside }) => (
+            <Panel key={root.id} print="plain">
+              <GoalPart goal={root} declaredOnly={declaredOnly} today={report.today} inside={inside} t={t} />
+              {inside.map((member) => (
+                <PrintOnly key={member.id}>
+                  <Flex direction="column" pl={member.parentId === root.id ? "5" : "7"}>
+                    <GoalPart goal={member} declaredOnly={declaredOnly} today={report.today} t={t} />
+                  </Flex>
+                </PrintOnly>
+              ))}
             </Panel>
           ))}
         </PanelGrid>

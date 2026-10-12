@@ -79,5 +79,28 @@
   "day": {
     "month": "{month} · {done} de {goal}",
     "phase": "fase {number} de {total} · {name}"
+  },
+  "holder": {
+    "monthsSentence": "Cada mes suma el de sus metas.",
+    "planSentence": "Este plan no tiene ritmo propio. Cada mes suma el de sus metas.",
+    "rhythmLabel": "El ritmo de sus metas",
+    "tasksLabel": "Sus tareas · {month} {year}",
+    "inMonth": "{hours} en {month}",
+    "startsIn": "empieza en {month} · {hours}"
+  },
+  "note": {
+    "fold": "Nota",
+    "add": "Agregar una nota",
+    "change": "Cambiar la nota",
+    "eyebrow": "nota",
+    "label": "nota",
+    "placeholder": "Lo que quieras recordar de esta meta",
+    "count": "{count} de {max}",
+    "tooLong": "Es muy larga. Escribe máximo {max} caracteres.",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "cancel": "Cancelar",
+    "remove": "quitar la nota",
+    "failed": "No se pudo guardar. Tu texto sigue aquí; inténtalo otra vez."
   }
 }

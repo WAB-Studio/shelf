@@ -150,3 +150,22 @@ test("a general with goals under it: loadGoal is still four statements and the p
   goalId = general.id;
   assert.equal(await pageStatements(), 6);
 });
+
+// «El plan» of a general draws each goal's first amount from this one load, not from a `loadGoal` per goal.
+test("a general's children carry their first planned month from the one load (four statements)", async () => {
+  const [general] = await admin<{ id: string }[]>`
+    select id from goals.goals where user_id = ${subject.id} and name = 'statements general'`;
+  const [large] = await admin<{ id: string }[]>`
+    select id from goals.goals where user_id = ${subject.id} and name = 'statements large 2'`;
+  const month = new Date(Date.now() + 31 * 86_400_000).toISOString().slice(0, 7) + "-01";
+  await admin`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${subject.id}, ${large.id}, ${month}::date, 120)`;
+
+  let view: Awaited<ReturnType<typeof goalQueries.loadGoal>> = null;
+  const count = await statementsOf(async () => {
+    view = await goalQueries.loadGoal(general.id);
+  });
+  assert.equal(count, 4);
+  const kid = view!.children.find((child) => child.id === large.id);
+  assert.deepEqual(kid?.firstPlanned, { month, planned: 120 });
+  assert.equal(view!.children.find((child) => child.name === "statements large 1")?.firstPlanned, null);
+});
