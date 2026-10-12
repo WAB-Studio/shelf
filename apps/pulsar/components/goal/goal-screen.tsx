@@ -47,6 +47,7 @@ import {
 
 import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
+import { CreateInsideAction } from "./create-inside-sheet";
 import { MoveHorizonAction } from "./horizon-sheet";
 import { RenameGoalAction } from "./rename-sheet";
 
@@ -473,6 +474,15 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <Face on="phone">
           <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
         </Face>
+      )}
+
+      {archived || ended || goal.level === "small" ? null : (
+        <CreateInsideAction
+          goalId={goal.id}
+          name={goal.name}
+          horizon={goal.horizon}
+          kind={goal.level === "large" ? "small" : "big"}
+        />
       )}
 
       <Split before={before} main={main} after={after} aside={380} afterBelow />
