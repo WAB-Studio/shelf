@@ -318,6 +318,7 @@ test("a month page of a holder offers no amount sheet and keeps its own task in 
     expect(await mainText(page)).not.toMatch(/planear/i);
 
     await page.goto(`/metas/${holder}/meses/${seg(thisMonth)}`);
+    await expect(page.locator("main")).toHaveCount(1);
     await expect(page.locator("main")).toBeVisible();
     await expect(page.locator("a[href*=planear]")).toHaveCount(0);
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -325,6 +326,7 @@ test("a month page of a holder offers no amount sheet and keeps its own task in 
 
     // The sheet's own address, typed by hand, opens nothing either.
     await page.goto(`/metas/${holder}/meses/${seg(oneAhead)}?planear=${seg(oneAhead)}`);
+    await expect(page.locator("main")).toHaveCount(1);
     await expect(page.locator("main")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
   } finally {
