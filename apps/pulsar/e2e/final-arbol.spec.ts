@@ -190,6 +190,9 @@ test("a goal that ended up in the way after the page loaded: saving shows the se
     expect(dateWords(dayBefore(tree.at(18))).test(await sentence.innerText())).toBe(true);
     expect(calls).toHaveLength(1);
     expect(await horizonOf(db, tree.G)).toBe(tree.at(30));
+    await expect(page.getByRole("dialog").getByText(belowEndsLater(tree.names.g2))).toBeVisible();
+    await sheet.getByRole("button", { name: "Dejarlo como está" }).click();
+    await expect(sheet).toBeHidden();
     await expectTitle(page, tree.names.G);
   } finally {
     await context.close();
