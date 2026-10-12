@@ -78,7 +78,7 @@ test("a two-level branch under a large goal is too deep; a lone goal fits", () =
   // Kills: ignoring the moved branch's height.
   assert.deepEqual(moveRefusal(tree(), "G", "L", TODAY), { code: "tooDeep" });
   assert.deepEqual(moveRefusal(tree(), "g1", "L", TODAY), { code: "tooDeep" });
-  assert.equal(moveRefusal(tree(), "R", "L", TODAY), null);
+  assert.equal(moveRefusal(tree(), "R3", "L", TODAY), null);
   assert.equal(moveRefusal(tree(), "g1", "X", TODAY), null);
 });
 
@@ -104,6 +104,8 @@ test("moving to the top is never refused", () => {
 test("a horizon before a goal inside is refused naming the one ending latest", () => {
   // Kills: returning the first child instead of the latest.
   assert.deepEqual(horizonTreeRefusal(tree(), "G", "2026-12-10"), { code: "belowEndsLater", below: ref("g2") });
+  // g1 and g2 both exceed; g1 comes first in tree order, g2 ends latest.
+  assert.deepEqual(horizonTreeRefusal(tree(), "G", "2026-11-15"), { code: "belowEndsLater", below: ref("g2") });
   assert.equal(horizonTreeRefusal(tree(), "G", "2026-12-15"), null);
   assert.equal(horizonTreeRefusal(tree(), "R", "2026-01-01"), null);
 });
