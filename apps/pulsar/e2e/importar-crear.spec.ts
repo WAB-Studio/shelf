@@ -22,11 +22,27 @@ import {
 // nothing is written before «Crear». The boards are `ImportarCreando` and `ImportarCrearFallo`.
 
 test.describe("«Crear» writes the tree the person left (RP-90, RP-95)", () => {
+  test("under a rhythm the tasks are written into the plan, with no month (RP-67)", async ({ person, browser, baseURL, db }) => {
+    // Kills: writing the task's month for a goal that has a rhythm.
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toReview(page, planText());
+      await createButton(page).click();
+      await expect(page).toHaveURL(/\/metas$/);
+      const tasks = await db`select name, in_plan, planned_month::text as month from goals.one_offs where user_id = ${person.id} and parent_id is null`;
+      expect(tasks.length).toBeGreaterThan(0);
+      for (const task of tasks) {
+        expect(task.in_plan).toBe(true);
+        expect(task.month).toBeNull();
+      }
+    });
+  });
+
   test("three levels go to /metas with their parents and notes; a sub-task left out and a month changed are not what was written", async ({ person, browser, baseURL, db }) => {
     // Kills: creating without `parent`, dropping a note, or writing what the person unmarked.
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      // No `ritmo:` line: under a rhythm the tasks go to the plan and carry no month (RP-67).
+      await toReview(page, planText({ rhythm: false }));
       await page.getByRole("button", { name: "2 sub-tareas" }).click();
       await page.getByRole("checkbox", { name: new RegExp(`^${SUB_B}`) }).uncheck();
       expect(await db`select 1 from goals.goals where user_id = ${person.id}`).toHaveLength(0);

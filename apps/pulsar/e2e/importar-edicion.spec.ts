@@ -16,7 +16,8 @@ test.describe("changing a part from the end of its row (RP-89)", () => {
     // Kills: ignoring the month, the amount or the name the sheet saved.
     const { first, second } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      // No `ritmo:` line: under a rhythm the tasks go to the plan and carry no month (RP-67).
+      await toReview(page, planText({ rhythm: false }));
       await amountOf(page, TASK_B).click();
       await expect(sheet(page).getByText(messages.review.edit.titleOf.task, { exact: true })).toBeVisible();
       await expect(sheet(page).getByText(SMALL, { exact: true })).toBeVisible();

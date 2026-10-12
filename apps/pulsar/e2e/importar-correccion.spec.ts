@@ -154,7 +154,9 @@ test.describe("a name cut to 120, a week rule broken, a line with no place (RP-9
       await expect(page.getByText(messages.review.correction.nameShortened.why, { exact: true })).toBeVisible();
       const before = await countOf(page);
 
-      await page.getByRole("button", { name: messages.review.correction.decline }).first().click();
+      // The name correction's own block: the one whose «decía» holds the long name.
+      const block = page.locator("div").filter({ has: page.getByText(LONG, { exact: true }) }).filter({ has: page.getByRole("button", { name: messages.review.correction.decline }) }).last();
+      await block.getByRole("button", { name: messages.review.correction.decline }).click();
       await expect(page.getByText("Se queda fuera: con 120 caracteres o menos no cabía.", { exact: true })).toBeVisible();
       await expect.poll(async () => (await countOf(page)).out).toBe(before.out + 1);
       const blocked = page.getByText(messages.review.blocked.title, { exact: true }).locator("xpath=..");

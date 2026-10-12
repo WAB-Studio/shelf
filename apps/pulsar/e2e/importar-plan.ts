@@ -45,7 +45,7 @@ export const WEEK_NOTE = "Tres cosas pendientes en esta semana.";
 
 // Three levels, a phase, two months (the first one's amount disagrees with its tasks: 10 h said,
 // 5 h + 4 h written), a commitment, a week that is a task with two sub-tasks and a note, two tasks.
-export function planText(): string {
+export function planText({ rhythm = true }: { rhythm?: boolean } = {}): string {
   const { first, second } = months();
   return [
     "pulsar · plantilla 2",
@@ -63,7 +63,7 @@ export function planText(): string {
     `horizonte: ${plus(300)}`,
     `dentro de: ${BIG}`,
     "medida: horas de estudio · minutos",
-    "ritmo: 20 h",
+    ...(rhythm ? ["ritmo: 20 h"] : []),
     "",
     "## Fases",
     `- ${second}-01 a ${second}-28 · ${PHASE}`,
