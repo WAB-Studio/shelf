@@ -926,14 +926,14 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
           (label) => /^[a-zñ]+ \d{4}/.exec(label.trim())![0],
         );
         expect(labels.length, `${name}: months on screen`).toBeGreaterThanOrEqual(4);
-        // RP-70: a month with no state and no planned amount is on screen only.
+        // RP-70: a month with no state and no planned amount is on screen only; RP-77 says «sin monto» there.
         const rows = table.locator("tbody tr:not([data-row='months-out'])");
         const kept: string[] = [];
         for (const [row, month] of labels.entries()) {
           const cells = rows.nth(row).locator("td");
           const state = (await cells.nth(0).innerText()).trim().replace(/^[a-zñ]+ \d{4}/, "").trim();
           const planned = (await cells.nth(2).innerText()).trim();
-          if (state !== "" || planned !== "") kept.push(month);
+          if (state !== "" || (planned !== "" && planned.toLowerCase() !== "sin monto")) kept.push(month);
         }
         onScreen.push(kept);
       }
