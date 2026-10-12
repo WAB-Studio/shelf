@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { readFileSync } from "node:fs";
-import { parseTemplate } from "./template";
+import { parseTemplateV1 as parseTemplate } from "./template";
 import { draftRefusals, importDraftJsonSchema, importDraftSchema, inMinutes, phaseCuts, phaseDrops, strayEstimates, withCutPhases, withoutStrayEstimates, type ImportDraftV1 } from "./draft";
 
 import { decide, draftRefusals as refusalsOf, draftV2Schema, normalize, rawDraftJsonSchema, rawDraftSchema, type DraftGoal, type ImportDraft, type RawGoal, type RawTask, type Source } from "./draft";

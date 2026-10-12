@@ -6,7 +6,7 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { readSourceV1 as readSource, saveDraftV1 as saveDraft } from "@/lib/import/draft-store";
 import type { ImportDraftV1 } from "@/lib/import/draft";
-import { parseTemplate } from "@/lib/import/template";
+import { parseTemplateV1 as parseTemplate } from "@/lib/import/template";
 import { Button, CodeBlock, FilePick, Flex, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 

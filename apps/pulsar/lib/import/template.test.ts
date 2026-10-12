@@ -622,14 +622,14 @@ test("801 cut: after a sound header every broken line is still listed at once", 
 });
 
 test("801 first line: «pulsar ·» with another version is refused on line 1, matched, with no draft", () => {
-  for (const first of ["pulsar · plantilla 2", "pulsar · plantilla 10", "pulsar · plantilla 1 bis", "pulsar · plantilla"]) {
+  for (const first of ["pulsar · plantilla 3", "pulsar · plantilla 10", "pulsar · plantilla 1 bis", "pulsar · plantilla"]) {
     const found = mistakesOf(`${first}\n\n# Correr 10K\nhorizonte: 2026-12-17\nmedida: distancia · km\n`);
     assert.deepEqual(found.map((m) => m.line), [1], first);
   }
 });
 
 test("801 first line: the refusal names the first line and the header the plantilla wants", () => {
-  const [only] = mistakesOf("pulsar · plantilla 2\n# A\nhorizonte: 2027-10-01\n");
+  const [only] = mistakesOf("pulsar · plantilla 3\n# A\nhorizonte: 2027-10-01\n");
   assert.equal(said(only), "La primera línea va como «pulsar · plantilla 1».");
 });
 
@@ -905,19 +905,19 @@ test("880 three levels: a general, a big goal inside it and a small one inside t
 
 test("880 dentro de: a name that is not before it, or comes only later, is insideUnknown on its line", () => {
   const later = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de: B\n# B\nhorizonte: 2027-10-01\n`);
-  assert.deepEqual(later.errors.map((e) => [e.line, e.expected]), [[4, "import.errors.form.insideUnknown"]]);
+  assert.deepEqual(later.errors.map((e) => [e.line, e.expected]), [[4, "insideUnknown"]]);
   const none = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de: Nadie\n`);
-  assert.deepEqual(none.errors.map((e) => [e.line, e.expected]), [[4, "import.errors.form.insideUnknown"]]);
+  assert.deepEqual(none.errors.map((e) => [e.line, e.expected]), [[4, "insideUnknown"]]);
 });
 
 test("880 dentro de: a fourth layer is insideTooDeep on its line", () => {
   const text = `${H2}# A\nhorizonte: 2027-10-01\n# B\nhorizonte: 2027-10-01\ndentro de: A\n# C\nhorizonte: 2027-10-01\ndentro de: B\n# D\nhorizonte: 2027-10-01\ndentro de: C\n`;
-  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[12, "import.errors.form.insideTooDeep"]]);
+  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[12, "insideTooDeep"]]);
 });
 
 test("880 names: a goal name repeated is goalNameRepeated on the second «# » line", () => {
   const text = `${H2}# Inglés\nhorizonte: 2027-10-01\n# Inglés\nhorizonte: 2027-10-01\n`;
-  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[4, "import.errors.form.goalNameRepeated"]]);
+  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[4, "goalNameRepeated"]]);
 });
 
 test("880 goal note: nota: lines after medida: are the goal's note, with their lines in noteSrc", () => {
@@ -934,7 +934,7 @@ test("880 goal note: all blank is no note; over the ceiling is goalNote on the f
   const head = `${H2}# A\nhorizonte: 2027-10-01\n`;
   assert.equal(read2(`${head}nota: ${"x".repeat(GOAL_NOTE_MAX)}\n`).goals[0].note?.length, GOAL_NOTE_MAX);
   const over = errors2(`${head}nota: ${"x".repeat(GOAL_NOTE_MAX + 1)}\nnota: y\n`);
-  assert.deepEqual(over.errors.map((e) => [e.line, e.expected]), [[4, "import.errors.form.goalNote"]]);
+  assert.deepEqual(over.errors.map((e) => [e.line, e.expected]), [[4, "goalNote"]]);
 });
 
 test("880 goal note: nota: with no indent under a section is the note form, never the goal's note", () => {

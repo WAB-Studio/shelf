@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { MODEL_NAME, fileRoute, modelAvailable, readPlan, type PlanInput } from "@/lib/import/model";
 import { claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
-import { parseTemplate } from "@/lib/import/template";
+import { parseTemplateV1 as parseTemplate } from "@/lib/import/template";
 import { getPerson } from "@/lib/session";
 
 // Unmeasured: `readPlan` aborts at 120 s and no real call has been made, so

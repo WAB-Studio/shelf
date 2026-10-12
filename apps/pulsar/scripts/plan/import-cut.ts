@@ -73,7 +73,7 @@ function installStubs(cookies: StoredCookie[]): void {
 
 let confirmImport: typeof import("@/app/actions/import").confirmImport;
 let todayInZone: typeof import("@/lib/zone").todayInZone;
-let parseTemplate: typeof import("@/lib/import/template").parseTemplate;
+let parseTemplate: typeof import("@/lib/import/template").parseTemplateV1;
 type Draft = import("@/lib/import/draft").ImportDraftV1;
 
 const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
@@ -146,7 +146,7 @@ async function phasesOf(goalId: string) {
 before(async () => {
   installStubs(loadCookies());
   ({ confirmImport } = await import("@/app/actions/import"));
-  ({ parseTemplate } = await import("@/lib/import/template"));
+  ({ parseTemplateV1: parseTemplate } = await import("@/lib/import/template"));
   ({ todayInZone } = await import("@/lib/zone"));
   TODAY = todayInZone();
   HORIZON = `${shiftDay(TODAY, 400).slice(0, 7)}-01`;
