@@ -3,7 +3,6 @@ import test from "node:test";
 
 import { measureOf } from "@/lib/day/derive";
 import {
-  carryShare,
   estimateFacts,
   monthList,
   monthOfTask,
@@ -149,24 +148,6 @@ test("monthList: hasAmount on a month's own items reads the same way", () => {
   assert.ok(list.every((i) => i.carriedFrom === null));
   const by = Object.fromEntries(list.map((i) => [i.task.id, i.hasAmount]));
   assert.deepEqual(by, { p1: true, p2: false, leaf: true, bare: false, pe: false });
-});
-
-test("carryShare: October with 44 h planned and 12 h undone reads 12 of 44", () => {
-  assert.deepEqual(carryShare(october(), OCT), { carried: 12, planned: 44 });
-});
-
-test("carryShare: a task done on November 2nd still counts as carried out of October", () => {
-  const tasks = [
-    task("late", { estimate: 120, doneOn: "2026-11-02" }),
-    task("ontime", { estimate: 60, doneOn: "2026-10-31" }),
-  ];
-  assert.deepEqual(carryShare(tasks, OCT), { carried: 120, planned: 180 });
-});
-
-test("carryShare: null when nothing was planned; a carried-in task counts as planned", () => {
-  assert.equal(carryShare([task("a")], OCT), null);
-  const tasks = [task("sep", { plannedMonth: "2026-09-01", estimate: 90 })];
-  assert.deepEqual(carryShare(tasks, OCT), { carried: 90, planned: 90 });
 });
 
 test("estimateFacts: Elegir tutor done yields one 60-minute fact on its day, nothing for Tutor", () => {

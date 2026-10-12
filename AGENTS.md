@@ -36,6 +36,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   costs, and your pick. Decide everything else and report it. Decided by the user 2026-09-27,
   after seven questions in one message, five of them unreadable without the session behind them.
 - Never close a slice on a report of greens alone. A slice with no criticism in it was not reviewed.
+- Fix the slice's list before it starts. What a critic or a validator finds after that goes to the handoff as
+  pending, never into a new train in the same session. A module that ends red leaves the train for the next session.
+  Decided by the user 2026-10-11, after trains 9, 10 and 11 each grew out of the last one's findings and «unas horas»
+  never came.
 - Keep plans in `private/`.
 - Use the credential the user hands you. Configure with it and move on.
 - Never tell the user to rotate, revoke or replace a credential. Decided by the user 2026-09-10.

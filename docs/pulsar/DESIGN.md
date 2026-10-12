@@ -69,7 +69,8 @@ Dark, the same design inverted:
 - The accent is a different hex per face, not one colour at two opacities. `#1C6E5A` has too little
   contrast on the dark ground; `#4FBEA0` has too little on the light one.
 - **muted is the smallest text colour there is.** `quiet` never carries a word a person must read:
-  it draws strokes, empty marks and the units beside a figure.
+  it draws strokes and empty marks. The unit beside a figure, in a `Figure` or a table cell or header,
+  is muted on both faces: in quiet it read 2.96:1 dark and 3.11:1 light. Decided by the user 2026-10-11.
 - Text on the accent is `#FFFFFF` on the light face and `#0F1317` on the dark one.
 
 ## Type
@@ -80,7 +81,7 @@ Dark, the same design inverted:
   goal or a group, never a state.
 - Set a screen title at 27 px / 600 / `-0.02em` on the phone, 38–44 px / 600–700 / `-0.03em` wide.
 - Set a commitment name at 16 px / 500. Its metadata line is mono 12 in muted.
-- Set the measure at 26 px mono / 500, with its unit beside it at mono 11 in quiet.
+- Set the measure at 26 px mono / 500, with its unit beside it at mono 11 in muted.
 - Set a sheet's title at 21 px / 600 / `-0.02em`, and the line under it at 15 px / 1.6 in ink
   secondary. Both are what `HoyCantidad.dc.html` and `CompromisoRetirar.dc.html` already draw;
   written down 2026-09-22, when a primitive reached for 19 px and 14 px because no role here
@@ -1180,7 +1181,20 @@ Taken by the user the same day, on the critic's three questions and two from the
   `/meses`, `/mes`, `/exportar` and the week line. A figure with no «de» keeps its unit: «45 búsquedas · sin monto».
 - **On paper, a time goal with no rhythm says its months' tasks on the left-out line:** «sin monto · 1 tarea» (RP-73 on paper).
 - **«sin monto» may wrap at 1024 on `/meses`** rather than push the row's chevron out: the «one line» rule gives way there.
+- **`/exportar` on screen says «sin monto» on a month not yet begun with no amount,** for every goal, in the planned
+  column; a goal measured in time with no rhythm names each month's tasks under its state, like `/meses` («en curso» /
+  «2 tareas»; «1 tarea» alone in a future month), never «0 tareas» and never a trailing «·». Correr (km) and a goal with a
+  rhythm count no tasks. A started month with no amount keeps its done figure alone (844). The printed row carries its tasks;
+  the left-out line does not change. Board `ReporteFilasSinMonto` approved by the user 2026-10-11 (option B, RP-77).
 - **«hs» reads as hours,** in the template and in the rhythm's «otra» field: «8 hs».
+- **Text the «otra» field cannot read says how to write it,** not the range: «8 hss» → «Escríbelo como 8 h, 1 h 30 min o
+  90 min.» Text it reads but out of 1 min–744 h keeps the range error. Decided by the orchestrator 2026-10-11 (module 853).
+- **No rhythm notice names an end when no pending task has an estimate.** First rhythm: «Con 8 h al mes. Ninguna tarea
+  tiene estimación todavía: van a octubre de 2026 hasta que les pongas una.» The sheet: «Con 12 h al mes. Ninguna tarea
+  pendiente tiene estimación: van a octubre de 2026 hasta que les pongas una. Los meses que ya cerraron no cambian.» The lead
+  of `/plan`: «Ninguna tarea pendiente tiene estimación: van a octubre de 2026 hasta que les pongas una.» The month is the
+  first the plan places them in, with its year. One estimated task keeps today's notice. Board `RitmoSinEstimacion`
+  approved by the user 2026-10-11 (module 854).
 - **Approved the same day:** board `UnidadUnaVez` as drawn (`/metas`, the goal, `/meses`, a month, `/mes`, Hoy, `/exportar`);
   board `ReporteImpresoTareasFuera` option A — one line per group of months by task count («noviembre de 2026 y enero de 2027:
   sin monto · 1 tarea», «diciembre de 2026: sin monto»), the month with «de» in that sentence; option B is discarded.

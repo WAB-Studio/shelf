@@ -250,7 +250,7 @@ function GoalPart({
 
   if (goal.endedOn !== null) {
     return (
-      <PrintBlock>
+      <PrintBlock whole>
         <Flex direction="column" gap="6">
           <Flex direction="column" gap="3">
             <Text asChild variant="name" rule>
@@ -468,7 +468,18 @@ function GoalPart({
             ) : (
               ""
             );
-          const status = statusOf(plannedFigure);
+          const noAmount = <Text tone="secondary">{t("noAmount")}</Text>;
+          const status = statusOf(plannedFigure) || noAmount;
+          const taskCount = month.tasks?.total ?? 0;
+          const tasksLine = taskCount > 0 ? t("tasksCount", { count: taskCount }) : null;
+          const stack = (top: ReactNode, bottom: ReactNode) =>
+            top && bottom ? (
+              <>
+                {top}
+                <br />
+                {bottom}
+              </>
+            ) : (top || bottom || undefined);
           const noteOf = (amount: number | null) =>
             amount === null ? undefined : timed ? (
               <>
@@ -493,12 +504,27 @@ function GoalPart({
             cells: [
               monthLabel(month.month),
               done,
-              paperOnly ? <PrintOnly>{figureOf(month.planned)}</PrintOnly> : plannedFigure,
+              paperOnly ? (
+                <>
+                  <PrintOnly>{figureOf(month.planned)}</PrintOnly>
+                  {started ? null : <PrintHidden>{noAmount}</PrintHidden>}
+                </>
+              ) : (
+                (plannedFigure ?? (started ? null : noAmount))
+              ),
             ],
-            detail: started ? status : undefined,
+            detail: stack(started ? status : null, tasksLine),
             phoneFigure: started ? month.reached : null,
             phoneBare: screenAmount !== null,
-            note: paperNote ?? phoneNote,
+            note:
+              paperNote && !started ? (
+                <>
+                  {paperNote}
+                  <PrintHidden>{noAmount}</PrintHidden>
+                </>
+              ) : (
+                (paperNote ?? phoneNote)
+              ),
             printed: printsOnPaper(month, goal.unit),
           };
         });
