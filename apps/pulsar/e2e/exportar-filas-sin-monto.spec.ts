@@ -280,11 +280,11 @@ test.describe("/exportar rows say «sin monto» and the month's tasks (RP-77)", 
     test(`nothing leaves its row and the page does not scroll sideways at ${width}`, async ({ person, browser, baseURL, db }) => {
       const stamp = Date.now();
       const name = `Portafolio ${stamp}`;
-      // A time note that must stay whole beside its tasks: «de 125 h 15 min».
+      // A time note that must stay whole beside its tasks: «de 9999 h 59 min».
       const long = `Intensivo ${stamp}`;
       const ids = [
         await seed(db, person, portafolio(name)),
-        await seed(db, person, { name: long, ...TIMED, last: 2, budgets: { 0: 7515, 1: 7515 }, tasks: { 0: 2, 1: 1 } }),
+        await seed(db, person, { name: long, ...TIMED, last: 2, budgets: { 0: 599999, 1: 599999 }, tasks: { 0: 2, 1: 1 } }),
       ];
       const { context, page } = await open(browser, baseURL!, person, name, width);
       try {
