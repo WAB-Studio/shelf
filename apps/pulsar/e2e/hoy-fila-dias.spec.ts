@@ -106,11 +106,12 @@ test("at 360, Semana names its days in three letters and does not overflow", asy
   });
   try {
     const page = await context.newPage();
-    await page.goto("/semana");
+    // Today is never a link (RP-06): on a Monday this week has no past day, so read last week's.
+    await page.goto(isoWeekday === 1 ? `/semana?semana=${plusDays(-7)}` : "/semana");
     await expect(page.locator("main")).toHaveCount(1);
     // The week's header names each day in three letters, never an initial.
     const dayLinks = page.getByRole("link", { name: /^Abrir el / });
-    // Days to come are not links yet: at least today's is.
+    // Today and the days to come are not links: the week holds at least one past day.
     await expect(dayLinks.first()).toBeVisible();
     const labels = (await dayLinks.allTextContents()).map((label) => label.replace(/\s*\d+.*$/, "").trim());
     expect(labels.length).toBeGreaterThan(0);

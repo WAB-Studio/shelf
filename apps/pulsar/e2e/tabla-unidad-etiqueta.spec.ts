@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { test, expect, type Person } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { civilDateToDate, todayInZone, weekOf } from "@/lib/zone";
 
 // Module 813 (RP-71, RP-32, RP-17, RP-35), `MesesFuturoYTareas` 6a and `MesesConAño` option B: no `Table` prints a
 // unit the catalogue translates («searches»), a unit other than time is said once, and the phone's label column is
@@ -12,6 +12,9 @@ import { todayInZone } from "@/lib/zone";
 
 const thisMonth = monthOf(todayInZone());
 const today = todayInZone();
+// Opened on last week's Monday, so today always falls in «semana 2», whatever weekday today is.
+const openedAt = civilDateToDate(weekOf(today)[0]);
+openedAt.setUTCDate(openedAt.getUTCDate() - 7);
 
 type Db = postgres.Sql;
 type Unit = { measure: string; unit: string };
@@ -38,7 +41,7 @@ async function seedGoal(
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
     values (${person.id}, ${`${options.name} ${Date.now()}`}, ${horizon}::date, ${options.unit.measure}, ${options.unit.unit},
-            now() - interval '10 days')
+            ${openedAt})
     returning id`;
   if (options.amount !== null && options.amount !== undefined) {
     for (const month of starts) {
@@ -51,7 +54,7 @@ async function seedGoal(
     const [commitment] = await db<{ id: string }[]>`
       insert into goals.commitments
         (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
-      values (${person.id}, ${goal.id}, 'Ronda', 'daily', 'quantity', 5, ${options.unit.unit}, now() - interval '10 days')
+      values (${person.id}, ${goal.id}, 'Ronda', 'daily', 'quantity', 5, ${options.unit.unit}, ${openedAt})
       returning id`;
     await db`
       insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
