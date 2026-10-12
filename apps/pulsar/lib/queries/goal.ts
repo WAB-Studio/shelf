@@ -29,6 +29,7 @@ import {
   monthLine,
   monthOf,
   monthRows,
+  monthsOfSpan,
   plannedOf,
   reachedByMonth,
   type MonthBudget,
@@ -36,6 +37,18 @@ import {
 } from "@/lib/plan/months";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { sourceKey, type SourceKey } from "@/i18n/translator";
+import {
+  branchOf,
+  buildTree,
+  rollUp,
+  spanStart,
+  type GoalMonths,
+  type Level,
+  type MonthFigure,
+  type RolledUp,
+  type TreeNode,
+  type TreeRow,
+} from "@/lib/goals/tree";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts` and
@@ -58,7 +71,12 @@ export type GoalRow = {
   // in on `to_jsonb(g)`.
   rhythm?: number | null;
   plan_seen?: string | null;
+  // Both ride in on `to_jsonb(g)`; `listGoalsForMetas` names them.
+  parent_id?: string | null;
+  note?: string | null;
 };
+
+export type GoalRef = { id: string; name: string; horizon: string };
 
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
 // `evidence_sources`. `source_key` feeds `evidenceMeasureTotal` below, the
@@ -91,7 +109,49 @@ type GoalQueryRow = {
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
+  // Every goal the person has, for the tree around this one.
+  tree: TreeSqlRow[];
+  // The non-archived goals under this one, at any depth, each with what the
+  // statement above reads for the goal itself.
+  branch: BranchEntry[];
 };
+
+type TreeSqlRow = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  position: number;
+  created_at: string;
+  horizon: string;
+  archived_at: string | null;
+  measure_unit: string | null;
+};
+
+type BranchEntry = {
+  goal: GoalRow;
+  commitments: CommitmentRow[];
+  facts: FactRow[];
+  budgets: { month: string; amount: number }[];
+  tasks: TaskRow[];
+};
+
+function toTreeRow(row: TreeSqlRow): TreeRow {
+  return {
+    id: row.id,
+    parentId: row.parent_id,
+    position: row.position,
+    createdAt: row.created_at,
+    name: row.name,
+    horizon: row.horizon,
+    archivedAt: row.archived_at,
+    measureUnit: row.measure_unit,
+  };
+}
+
+const TREE_COLUMNS = sql`jsonb_build_object(
+  'id', g.id, 'name', g.name, 'parent_id', g.parent_id, 'position', g.position,
+  'created_at', g.created_at, 'horizon', g.horizon, 'archived_at', g.archived_at,
+  'measure_unit', g.measure_unit)`;
 
 // A one-off of the goal; `done_on` is the day of its own fact, null while
 // undone.
@@ -185,6 +245,32 @@ export type GoalView = {
   // What the plan reads: the tasks, the amounts and the span, as of `today`.
   plan: PlanInput;
   roadmap: Roadmap;
+  note: string | null;
+  // The goal above and the ones above that, the top one first.
+  parent: GoalRef | null;
+  ancestors: GoalRef[];
+  // Null for a goal with no goal above and none under it.
+  level: Level | null;
+  holdsGoals: boolean;
+  // The goals directly under, in order; `month` is the current one.
+  children: {
+    id: string;
+    name: string;
+    level: Level;
+    unit: string | null;
+    inUnit: boolean;
+    month: { planned: number | null; reached: number } | null;
+    endedOn: string | null;
+    archivedAt: string | null;
+  }[];
+  // Goals under it measured in another unit, which add nothing to its sums.
+  outOfUnit: { id: string; name: string; unit: string }[];
+  // Non-archived goals anywhere under it (RP-83).
+  branchOpenCount: number;
+  // The goal under it that ends last, the ceiling of its own end (RP-79).
+  latestBelow: GoalRef | null;
+  above: GoalRef | null;
+  tree: TreeNode[];
 };
 
 // A one-off as the plan reads it. A row without `created_at` counts as made
@@ -216,9 +302,10 @@ export type GoalSummary = {
 };
 
 /**
- * One statement, six subqueries: the goal row scoped by id, and every phase,
+ * One statement, eight subqueries: the goal row scoped by id, and every phase,
  * commitment, fact, month budget, one-off that name it — unfiltered by `retired_at` or by day, so
- * a goal's screen reads its whole history in the one round trip. RLS alone
+ * a goal's screen reads its whole history in the one round trip — then the
+ * person's whole tree and the same rows for each non-archived goal under it. RLS alone
  * narrows every row to the caller's own (RNP-05); `goalId` alone would let a
  * caller read a goal id they merely guessed, so `goal` still comes back
  * `null` when it is not theirs.
@@ -253,7 +340,45 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                  'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id limit 1)
                ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
-         where o.goal_id = ${goalId}) as tasks
+         where o.goal_id = ${goalId}) as tasks,
+      (select coalesce(json_agg(${TREE_COLUMNS}), '[]'::json)
+         from "goals"."goals" g) as tree,
+      (with recursive down(id, n) as (
+           select g.id, 1 from "goals"."goals" g where g.parent_id = ${goalId}
+           union all
+           select g.id, down.n + 1 from "goals"."goals" g
+             join down on g.parent_id = down.id where down.n < 3
+         )
+       select coalesce(json_agg(jsonb_build_object(
+                'goal', to_jsonb(d),
+                'commitments', (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
+                                    'source_key', s.key,
+                                    'source_unit', s.unit,
+                                    'source_label_key', s.label_key
+                                  ) order by c.position, c.created_at, c.id), '[]'::json)
+                                  from "goals"."commitments" c
+                                  left join "goals"."evidence_sources" s on s.id = c.source_id
+                                  where c.goal_id = d.id),
+                'facts', (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
+                                    'commitment_unit', c.unit
+                                  )), '[]'::json)
+                                  from "goals"."facts" f
+                                  left join "goals"."commitments" c on c.id = f.commitment_id
+                                  where f.goal_id = d.id),
+                'budgets', (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
+                                                     order by b.month), '[]'::json)
+                                  from "goals"."month_budgets" b
+                                  where b.goal_id = d.id),
+                'tasks', (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
+                                    'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id),
+                                    'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id limit 1)
+                                  ) order by o.position, o.created_at, o.id), '[]'::json)
+                                  from "goals"."one_offs" o
+                                  where o.goal_id = d.id)
+              ) order by down.n, d.position, d.created_at, d.id), '[]'::json)
+         from down
+         join "goals"."goals" d on d.id = down.id
+        where d.archived_at is null) as branch
   `);
 
   return row;
@@ -307,11 +432,19 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
  */
 function goalSpan(goalId: string): { from: SQL; to: SQL } {
   return {
-    // A civil day, the same conversion `civilDateInZone` applies in JS
-    // elsewhere in this file, done here in SQL instead so the bound never
-    // leaves the statement that needs it.
-    from: sql`(select (g.created_at at time zone ${TIME_ZONE})::date
-                 from "goals"."goals" g where g.id = ${goalId})`,
+    // The earliest civil day of the goal's non-archived branch (`spanStart`,
+    // `lib/goals/tree.ts`): the goal's own, alone. The table is named once, in
+    // `t`, so the recursion walks a copy rather than reading it twice.
+    from: sql`(with recursive t as (
+                 select id, parent_id, created_at, archived_at from "goals"."goals"
+               ), b(id, n) as (
+                 select id, 0 from t where id = ${goalId}
+                 union all
+                 select t.id, b.n + 1 from t join b on t.parent_id = b.id where b.n < 3
+               )
+               select (coalesce(min(t.created_at) filter (where t.archived_at is null), min(t.created_at))
+                         at time zone ${TIME_ZONE})::date
+                 from t join b on b.id = t.id)`,
     // `horizon` is the first day after the goal (RP-11), already a civil date:
     // the span ends the day before it.
     to: sql`(select g.horizon - 1 from "goals"."goals" g where g.id = ${goalId})`,
@@ -378,6 +511,9 @@ export function goalFigures(input: {
   tasks: TaskRow[];
   evidence: Record<string, EvidenceDay[]> | null;
   today: string;
+  // The day week 1 opens when it is not the goal's own: a goal holding goals
+  // opens with its earliest one.
+  openedOn?: string;
 }): {
   tasks: PlanTask[];
   plan: PlanInput;
@@ -399,7 +535,7 @@ export function goalFigures(input: {
   // (`(g.created_at at time zone TIME_ZONE)::date`), read here in JS off the
   // one row this statement already carries: week 1 opens the day the goal
   // was created, never a second query.
-  const openedOn = civilDateInZone(new Date(goal.created_at));
+  const openedOn = input.openedOn ?? civilDateInZone(new Date(goal.created_at));
   const tasks = input.tasks.map((task) => toPlanTask(task, openedOn));
   const rhythm = goal.rhythm ?? null;
   const plan: PlanInput = { rhythm, budgets, tasks, openedOn, horizon: goal.horizon, today };
@@ -500,20 +636,130 @@ export async function loadGoal(
 
   if (!row.goal) return null;
 
+  const evidence = evidenceOutcome.status === "read" ? evidenceOutcome.bySourceKey : null;
   const phases = row.phases.map(toPhase);
   const dayCounts = factDayCounts(row.facts);
   const commitments = row.commitments.map((commitment) =>
     toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0),
   );
-  const { tasks, plan, measureTotal, months, month: currentMonth, weeks } = goalFigures({
-    goal: row.goal,
-    phases,
-    commitments: row.commitments,
-    facts: row.facts,
-    budgets: row.budgets,
-    tasks: row.tasks,
-    evidence: evidenceOutcome.status === "read" ? evidenceOutcome.bySourceKey : null,
-    today,
+
+  const tree = buildTree(row.tree.map(toTreeRow));
+  const node = tree.byId.get(row.goal.id);
+  const openKids = (id: string): TreeNode[] =>
+    (tree.byId.get(id)?.children ?? []).map((c) => tree.byId.get(c)!).filter((c) => c.archivedAt === null);
+  const holdsGoals = openKids(row.goal.id).length > 0;
+
+  let figures: ReturnType<typeof goalFigures>;
+  let rolled: RolledUp | null = null;
+  const own = new Map<string, GoalMonths>();
+  let up = new Map<string, RolledUp>();
+  const spanFrom = holdsGoals ? spanStart(tree, row.goal.id) : civilDateInZone(new Date(row.goal.created_at));
+
+  if (holdsGoals) {
+    // A goal holding goals plans through the goals under it: its stored rhythm
+    // and month amounts stay unread (RP-80).
+    const figuresOf = (entry: BranchEntry, from: string, days: Record<string, EvidenceDay[]> | null) => {
+      const holds = openKids(entry.goal.id).length > 0;
+      return goalFigures({
+        goal: holds ? { ...entry.goal, rhythm: null } : entry.goal,
+        phases: entry.goal.id === row.goal!.id ? phases : [],
+        commitments: entry.commitments,
+        facts: entry.facts,
+        budgets: holds ? [] : entry.budgets,
+        tasks: entry.tasks,
+        evidence: days,
+        today,
+        openedOn: from,
+      });
+    };
+    const within = (from: string, to: string): Record<string, EvidenceDay[]> | null =>
+      evidence === null
+        ? null
+        : Object.fromEntries(
+            Object.entries(evidence).map(([key, days]) => [key, days.filter((d) => d.day >= from && d.day <= to)]),
+          );
+    const holder: BranchEntry = {
+      goal: row.goal,
+      commitments: row.commitments,
+      facts: row.facts,
+      budgets: row.budgets,
+      tasks: row.tasks,
+    };
+    figures = figuresOf(holder, spanFrom, evidence);
+    own.set(row.goal.id, { unit: row.goal.measure_unit, months: monthFigures(figures.months, []) });
+    for (const entry of row.branch) {
+      const from = spanStart(tree, entry.goal.id);
+      const f = figuresOf(entry, from, within(from, dayBefore(entry.goal.horizon)));
+      own.set(entry.goal.id, { unit: entry.goal.measure_unit, months: monthFigures(f.months, []) });
+    }
+    up = rollUp(tree, own);
+    rolled = up.get(row.goal.id) ?? null;
+  } else {
+    figures = goalFigures({
+      goal: row.goal,
+      phases,
+      commitments: row.commitments,
+      facts: row.facts,
+      budgets: row.budgets,
+      tasks: row.tasks,
+      evidence,
+      today,
+    });
+  }
+
+  const thisMonth = monthOf(today);
+  let months = figures.months;
+  let month = figures.month;
+  let measureTotal = figures.measureTotal;
+  let measureUnit = row.goal.measure_unit;
+  if (rolled) {
+    measureUnit = rolled.unit;
+    months = monthsOfSpan(spanFrom, row.goal.horizon).map((m) => ({
+      month: m,
+      planned: rolled.months.get(m)?.planned ?? null,
+      reached: rolled.months.get(m)?.reached ?? 0,
+      current: m === thisMonth,
+      past: m < thisMonth,
+    }));
+    measureTotal = months.reduce((total, entry) => total + entry.reached, 0);
+    const current = months.find((entry) => entry.current);
+    month =
+      measureUnit === null || !current
+        ? null
+        : {
+            month: current.month,
+            ...monthLine({
+              month: current.month,
+              today,
+              budget: current.planned === null ? null : { month: current.month, amount: current.planned },
+              reached: current.reached,
+              openedOn: spanFrom,
+              horizon: row.goal.horizon,
+            }),
+          };
+  }
+
+  const ref = (n: TreeNode): GoalRef => ({ id: n.id, name: n.name, horizon: n.horizon });
+  const parent = node?.parentId ? tree.byId.get(node.parentId) : undefined;
+  const below = node ? branchOf(tree, node.id).slice(1).map((id) => tree.byId.get(id)!) : [];
+  let latest: TreeNode | null = null;
+  for (const n of below) if (latest === null || n.horizon > latest.horizon) latest = n;
+  const unitOf = (n: TreeNode): string | null => up.get(n.id)?.unit ?? n.measureUnit;
+
+  const children = (node?.children ?? []).map((id) => {
+    const n = tree.byId.get(id)!;
+    const f = n.archivedAt === null ? (up.get(id)?.months ?? own.get(id)?.months)?.get(thisMonth) : undefined;
+    const unit = unitOf(n);
+    return {
+      id: n.id,
+      name: n.name,
+      level: n.level as Level,
+      unit,
+      inUnit: unit !== null && unit === measureUnit,
+      month: unit === null || !f ? null : { planned: f.planned, reached: f.reached },
+      endedOn: n.horizon <= today ? dayBefore(n.horizon) : null,
+      archivedAt: n.archivedAt,
+    };
   });
 
   return {
@@ -523,21 +769,80 @@ export async function loadGoal(
     endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
     createdAt: row.goal.created_at,
     measureName: row.goal.measure_name,
-    measureUnit: row.goal.measure_unit,
+    measureUnit,
     archivedAt: row.goal.archived_at,
     measureTotal,
     phases,
     commitments,
-    weeks,
+    weeks: figures.weeks,
     evidence: evidenceOutcome.status,
-    month: currentMonth,
+    month,
     months,
-    budgets: row.budgets,
-    tasks,
-    rhythm: row.goal.rhythm ?? null,
+    budgets: holdsGoals ? [] : row.budgets,
+    tasks: figures.tasks,
+    rhythm: holdsGoals ? null : (row.goal.rhythm ?? null),
     planSeen: row.goal.plan_seen ?? null,
-    plan,
-    roadmap: fillPlan(plan),
+    plan: figures.plan,
+    roadmap: holdsGoals
+      ? { state: "noRhythm", months: [], unplaced: [], end: null, lastDay: dayBefore(row.goal.horizon) }
+      : fillPlan(figures.plan),
+    note: row.goal.note ?? null,
+    parent: parent ? ref(parent) : null,
+    ancestors: (node?.ancestors ?? []).map((id) => ref(tree.byId.get(id)!)).reverse(),
+    level: node?.level ?? null,
+    holdsGoals,
+    children,
+    outOfUnit: rolled?.outOfUnit ?? [],
+    branchOpenCount: below.filter((n) => n.archivedAt === null).length,
+    latestBelow: latest ? ref(latest) : null,
+    above: parent ? ref(parent) : null,
+    tree: tree.order,
+  };
+}
+
+// A month list as `rollUp` reads it: the amounts a goal's own rows plan.
+function monthFigures(rows: MonthRow[], budgets: MonthBudget[]): Map<string, MonthFigure> {
+  return new Map(
+    rows.map((r) => [
+      r.month,
+      { planned: r.planned, reached: r.reached, ownBudget: budgets.some((b) => b.month === r.month) },
+    ]),
+  );
+}
+
+export type GoalPlace = {
+  goal: GoalRef;
+  level: Level | null;
+  openedOn: string;
+  archivedAt: string | null;
+  tree: TreeNode[];
+};
+
+/**
+ * Where a goal sits, for the screen that opens a goal inside it: the goal and
+ * the person's whole tree, in one transaction and one statement.
+ */
+export async function loadGoalPlace(goalId: string): Promise<GoalPlace | null> {
+  if (!z.uuid().safeParse(goalId).success) return null;
+
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{ goal: (GoalRef & { created_at: string; archived_at: string | null }) | null; tree: TreeSqlRow[] }>(sql`
+      select
+        (select jsonb_build_object('id', g.id, 'name', g.name, 'horizon', g.horizon,
+                                   'created_at', g.created_at, 'archived_at', g.archived_at)
+           from "goals"."goals" g where g.id = ${goalId}) as goal,
+        (select coalesce(json_agg(${TREE_COLUMNS}), '[]'::json) from "goals"."goals" g) as tree
+    `),
+  );
+  if (!row.goal) return null;
+
+  const tree = buildTree(row.tree.map(toTreeRow));
+  return {
+    goal: { id: row.goal.id, name: row.goal.name, horizon: row.goal.horizon },
+    level: tree.byId.get(row.goal.id)?.level ?? null,
+    openedOn: civilDateInZone(new Date(row.goal.created_at)),
+    archivedAt: row.goal.archived_at,
+    tree: tree.order,
   };
 }
 
@@ -588,10 +893,18 @@ export type MetasMonth =
   | { kind: "amount"; month: string; planned: number | null; reached: number }
   | { kind: "tasks"; month: string; done: number; total: number };
 
-export type MetasOpenGoal = GoalSummary & { month: MetasMonth | null };
+// Where a goal sits in the tree, on every row `/metas` lists.
+export type MetasSummary = GoalSummary & { parentId: string | null; level: Level | null };
+
+// `outOfUnit` is the goals under it in another unit, which add nothing to its month.
+export type MetasOpenGoal = MetasSummary & {
+  month: MetasMonth | null;
+  outOfUnit: { id: string; name: string; unit: string }[];
+};
 
 type MetasRow = GoalRow & {
   created_at: string;
+  position: number;
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
@@ -607,8 +920,8 @@ type MetasRow = GoalRow & {
  */
 export async function listGoalsForMetas(today: string = todayInZone()): Promise<{
   open: MetasOpenGoal[];
-  ended: GoalSummary[];
-  archived: GoalSummary[];
+  ended: MetasSummary[];
+  archived: MetasSummary[];
 }> {
   const month = monthOf(today);
   const person = await getPerson();
@@ -617,7 +930,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
     withGoalsDb((tx) =>
       tx.execute<MetasRow>(sql`
         select g.id, g.name, g.horizon, g.measure_name, g.measure_unit, g.archived_at,
-          g.rhythm, g.created_at,
+          g.rhythm, g.created_at, g.parent_id, g.note, g.position,
           (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                      'commitment_unit', c.unit
                    )), '[]'::json)
@@ -647,24 +960,38 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
     readEvidenceOutcome(person.id, month, today),
   ]);
 
-  const toMonth = (row: MetasRow): MetasMonth | null => {
-    const unit = row.measure_unit;
+  const tree = buildTree(
+    rows.map((row) =>
+      toTreeRow({
+        id: row.id,
+        name: row.name,
+        parent_id: row.parent_id ?? null,
+        position: row.position,
+        created_at: row.created_at,
+        horizon: row.horizon,
+        archived_at: row.archived_at,
+        measure_unit: row.measure_unit,
+      }),
+    ),
+  );
+  const holds = (id: string): boolean =>
+    (tree.byId.get(id)?.children ?? []).some((c) => tree.byId.get(c)!.archivedAt === null);
+
+  // A goal holding goals plans through the ones under it: its stored rhythm
+  // and month amounts stay unread (RP-80).
+  const planOfRow = (row: MetasRow, tasks: PlanTask[], openedOn: string): PlanInput => ({
+    rhythm: holds(row.id) ? null : (row.rhythm ?? null),
+    budgets: holds(row.id) ? [] : row.budgets,
+    tasks,
+    openedOn,
+    horizon: row.horizon,
+    today,
+  });
+
+  const figureOf = (row: MetasRow, unit: string): { planned: number | null; reached: number } => {
     const openedOn = civilDateInZone(new Date(row.created_at));
     const tasks = row.tasks.map((task) => toPlanTask(task, openedOn));
-    const rhythm = row.rhythm ?? null;
-    const plan: PlanInput = {
-      rhythm,
-      budgets: row.budgets,
-      tasks,
-      openedOn,
-      horizon: row.horizon,
-      today,
-    };
-    if (unit === null) {
-      const items = planMonthList(plan, month);
-      if (items.length === 0) return null;
-      return { kind: "tasks", month, done: items.filter((item) => item.done).length, total: items.length };
-    }
+    const plan = planOfRow(row, tasks, openedOn);
     const declared = row.facts
       .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
       .map(toDeclaredFact);
@@ -674,19 +1001,61 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
       facts: [...declared, ...doneTasks],
       evidence: evidenceDaysFor(unit, row.measure_sources, evidenceOutcome.bySourceKey),
     }).get(month) ?? 0;
-    const planned = screenPlanned(plannedOf(month, plan), row.budgets.some((budget) => budget.month === month));
-    if (planned === null && reached === 0) return null;
-    return { kind: "amount", month, planned, reached };
+    const planned = screenPlanned(plannedOf(month, plan), plan.budgets.some((budget) => budget.month === month));
+    return { planned, reached };
   };
 
+  const own = new Map<string, GoalMonths>();
+  for (const row of rows) {
+    if (row.archived_at !== null || row.measure_unit === null) continue;
+    const { planned, reached } = figureOf(row, row.measure_unit);
+    own.set(row.id, {
+      unit: row.measure_unit,
+      months: new Map([[month, { planned, reached, ownBudget: false }]]),
+    });
+  }
+  const rolled = rollUp(tree, own);
+
+  const amountOf = (planned: number | null, reached: number): MetasMonth | null =>
+    planned === null && reached === 0 ? null : { kind: "amount", month, planned, reached };
+
+  const toMonth = (row: MetasRow): MetasMonth | null => {
+    const sums = holds(row.id) ? rolled.get(row.id) : undefined;
+    if (sums && sums.unit !== null) {
+      const f = sums.months.get(month);
+      return amountOf(f?.planned ?? null, f?.reached ?? 0);
+    }
+    const unit = row.measure_unit;
+    if (unit === null) {
+      const openedOn = civilDateInZone(new Date(row.created_at));
+      const tasks = row.tasks.map((task) => toPlanTask(task, openedOn));
+      const items = planMonthList(planOfRow(row, tasks, openedOn), month);
+      if (items.length === 0) return null;
+      return { kind: "tasks", month, done: items.filter((item) => item.done).length, total: items.length };
+    }
+    const { planned, reached } = figureOf(row, unit);
+    return amountOf(planned, reached);
+  };
+
+  const placed = (row: MetasRow): MetasSummary => ({
+    ...toGoalSummary(row),
+    parentId: row.parent_id ?? null,
+    level: tree.byId.get(row.id)?.level ?? null,
+  });
+
   // Archived wins over ended: the check runs first.
-  const archived = rows.filter((row) => row.archived_at !== null).map(toGoalSummary);
-  const live = rows.filter((row) => row.archived_at === null);
+  const archived = rows.filter((row) => row.archived_at !== null).map(placed);
+  const live = new Map(rows.filter((row) => row.archived_at === null).map((row) => [row.id, row]));
   return {
-    open: live
-      .filter((row) => row.horizon > today)
-      .map((row) => ({ ...toGoalSummary(row), month: toMonth(row) })),
-    ended: live.filter((row) => row.horizon <= today).map(toGoalSummary),
+    open: tree.order
+      .map((n) => live.get(n.id))
+      .filter((row): row is MetasRow => row !== undefined && row.horizon > today)
+      .map((row) => ({
+        ...placed(row),
+        month: toMonth(row),
+        outOfUnit: holds(row.id) ? (rolled.get(row.id)?.outOfUnit ?? []) : [],
+      })),
+    ended: [...live.values()].filter((row) => row.horizon <= today).map(placed),
     archived,
   };
 }

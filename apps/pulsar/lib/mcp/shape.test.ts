@@ -88,6 +88,17 @@ function goalView(unit: string | null): GoalView {
     planSeen: null,
     plan,
     roadmap: fillPlan(plan),
+    note: null,
+    parent: null,
+    ancestors: [],
+    level: null,
+    holdsGoals: false,
+    children: [],
+    outOfUnit: [],
+    branchOpenCount: 0,
+    latestBelow: null,
+    above: null,
+    tree: [],
   };
 }
 

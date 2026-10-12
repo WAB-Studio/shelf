@@ -124,3 +124,29 @@ test("loadGoal alone is four statements and the rail alone is two", async () => 
   assert.equal(await statementsOf(() => goalQueries.loadGoal(goalId)), 4);
   assert.equal(await statementsOf(() => goalQueries.listGoals()), 2);
 });
+
+// A general with two large goals and a small one under the first: one load
+// reads the whole branch, so the count does not move (RNP-12).
+test("a general with goals under it: loadGoal is still four statements and the page six", async () => {
+  const horizon = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
+  const [general] = await admin<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, position)
+    values (${subject.id}, 'statements general', ${horizon}, 'Medida', 'min', 910) returning id`;
+  const kids: string[] = [];
+  for (const [name, position, parent] of [
+    ["statements large 1", 1, general.id],
+    ["statements large 2", 2, general.id],
+  ] as const) {
+    const [kid] = await admin<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, position, parent_id)
+      values (${subject.id}, ${name}, ${horizon}, 'Medida', 'min', ${position}, ${parent}) returning id`;
+    kids.push(kid.id);
+  }
+  await admin`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, position, parent_id)
+    values (${subject.id}, 'statements small', ${horizon}, 'Medida', 'min', 1, ${kids[0]})`;
+
+  assert.equal(await statementsOf(() => goalQueries.loadGoal(general.id)), 4);
+  goalId = general.id;
+  assert.equal(await pageStatements(), 6);
+});
