@@ -75,8 +75,8 @@ function installStubs(cookies: StoredCookie[]): void {
 }
 
 let confirmImport: typeof import("@/app/actions/import").confirmImport;
-let parseTemplate: typeof import("@/lib/import/template").parseTemplateV1;
-type Draft = import("@/lib/import/draft").ImportDraftV1;
+let parseTemplate: typeof import("@/lib/import/template").parseTemplate;
+type Draft = import("@/lib/import/draft").ImportDraft;
 
 const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
   prepare: false,
@@ -133,7 +133,7 @@ let imported: { ids: string[]; statements: number };
 before(async () => {
   installStubs(loadCookies());
   ({ confirmImport } = await import("@/app/actions/import"));
-  ({ parseTemplateV1: parseTemplate } = await import("@/lib/import/template"));
+  ({ parseTemplate: parseTemplate } = await import("@/lib/import/template"));
   const { getPerson } = await import("@/lib/session");
   const person = await getPerson();
   if (!person) throw new Error("no settled session — mint-session.ts's cookie did not verify");

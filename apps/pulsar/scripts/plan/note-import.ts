@@ -63,7 +63,7 @@ function installStubs(cookies: StoredCookie[]): void {
 }
 
 let confirmImport: typeof import("@/app/actions/import").confirmImport;
-let parseTemplate: typeof import("@/lib/import/template").parseTemplateV1;
+let parseTemplate: typeof import("@/lib/import/template").parseTemplate;
 
 const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
   prepare: false,
@@ -77,6 +77,11 @@ const goalIds: string[] = [];
 const DOC = readFileSync(resolve(process.cwd(), "../../docs/pulsar/PLANTILLA.md"), "utf8");
 const EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
 
+// The example is a tree of three goals; a fixture renames all three, references included.
+function renamed(suffix: string): string {
+  return EXAMPLE.replace(/Carrera en IA|IA aplicada/g, (name) => `${name} ${suffix}`).replace(/# Evals y harness/, `# Evals y harness ${suffix}`).replace(/dentro de: Evals y harness/g, `dentro de: Evals y harness ${suffix}`);
+}
+
 function draftOf(text: string) {
   const parsed = parseTemplate(text);
   if (!parsed.matched || "error" in parsed) throw new Error(`the template did not parse: ${JSON.stringify(parsed)}`);
@@ -86,7 +91,7 @@ function draftOf(text: string) {
 before(async () => {
   installStubs(loadCookies());
   ({ confirmImport } = await import("@/app/actions/import"));
-  ({ parseTemplateV1: parseTemplate } = await import("@/lib/import/template"));
+  ({ parseTemplate: parseTemplate } = await import("@/lib/import/template"));
   const { getPerson } = await import("@/lib/session");
   if (!(await getPerson())) throw new Error("no settled session — mint-session.ts's cookie did not verify");
 });
@@ -97,13 +102,19 @@ after(async () => {
   await sql.end();
 });
 
-test("confirmImport: the example's notes land on the task and the sub-task; the rest stay empty", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-45 fixture: notas"));
+test("confirmImport: the example's notes land on the goals, the task and the sub-task; the rest stay empty", async () => {
+  const draft = draftOf(renamed("RP-45 fixture: notas"));
   const result = await confirmImport(draft);
   assert.ok(result.ok, JSON.stringify(result));
   goalIds.push(...result.goalIds);
+  const goalNotes = await sql<{ note: string | null }[]>`select note from goals.goals where id in ${sql(result.goalIds)} order by position`;
+  assert.deepEqual(goalNotes.map((g) => g.note), [
+    "Lo que busco en dos años.\nUn ritmo que pueda sostener.",
+    null,
+    "Empezar por lo que ya sé medir.",
+  ]);
   const rows = await sql<{ name: string; note: string | null }[]>`
-    select name, note from goals.one_offs where goal_id = ${result.goalIds[0]} order by name`;
+    select name, note from goals.one_offs where goal_id = ${result.goalIds[2]} order by name`;
   assert.deepEqual(rows.map((r) => [r.name, r.note]), [
     ["Elegir tutor", "Comparar tres perfiles."],
     ["Leer AI Engineering cap. 1–4", null],
@@ -113,13 +124,13 @@ test("confirmImport: the example's notes land on the task and the sub-task; the 
 });
 
 test("confirmImport: a forged draft with a note over 2000 characters is refused with the note's key and writes nothing", async () => {
-  const name = "RP-45 fixture: nota larga";
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
-  draft.goals[0].tasks[1].children[0].note = "x".repeat(2001);
+  const name = "Evals y harness RP-45 fixture: nota larga";
+  const draft = draftOf(renamed("RP-45 fixture: nota larga"));
+  draft.goals[2].tasks[1].children[0].note = "x".repeat(2001);
   assert.deepEqual(await confirmImport(draft), {
     ok: false,
     error: "day.errors.oneOffNoteTooLong",
-    at: "goals.0.tasks.1.children.0.note",
+    at: "goals.2.tasks.1.children.0.note",
   });
   const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from goals.goals where name = ${name}`;
   assert.equal(count, 0);

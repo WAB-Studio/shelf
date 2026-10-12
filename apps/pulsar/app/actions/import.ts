@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { sql, type SQL } from "drizzle-orm";
 
 import { commitments, goals, monthBudgets, oneOffs, phases } from "@/db/schema";
-import { draftRefusals, importDraftSchema, inMinutes, strayEstimates, withCutPhases } from "@/lib/import/draft";
+import { draftRefusals, draftV2Schema, strayEstimates, withCutPhases } from "@/lib/import/draft";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { isTimeUnit } from "@/lib/units/time";
 import { monthStart } from "@/lib/validation/budget";
@@ -36,20 +36,23 @@ function weekdaysSql(days: number[] | null): SQL {
 }
 
 /**
- * Writes a reviewed import draft (RP-37). The draft is judged again here
- * with the schema and the refusals the model's answer already passed: the
- * client is not trusted, and a refusal left over is a forged or stale draft.
+ * Writes a reviewed import draft (RP-37, RP-88, RP-95): a tree of goals up to three levels deep,
+ * with the notes of goals and tasks. The draft is judged again here with the schema and the
+ * refusals the reading already passed: the client is not trusted, and a refusal left over is a
+ * forged or stale draft. A correction nobody touched arrives accepted; this judges what it gets.
  *
- * One transaction, and a bounded number of statements whatever the draft
- * holds: ids are minted here so parents and children link without a
- * `returning` chain, and each table takes one multi-row insert. Raw SQL
- * naming the granted columns only (docs/TRAPS.md, "Drizzle's insert builder
- * names every column"); `goals` takes its INSERT grant and its measure
- * columns' UPDATE grant as two statements for the same reason. The same
- * update arms the rhythm (RP-63): `plan_seen` as `setRhythm`'s first rhythm.
+ * One transaction, and a bounded number of statements whatever the draft holds: ids are minted
+ * here so parents and children link without a `returning` chain, and each table takes one
+ * multi-row insert. The goals take one per layer, at most three: the policy and the trigger of
+ * `parent_id` read the table as it stood before the statement, so a parent in the same insert is
+ * not yet there (0018). Raw SQL naming the granted columns only (docs/TRAPS.md, "Drizzle's insert
+ * builder names every column"); `goals` takes its INSERT grant and its measure columns' UPDATE
+ * grant as two statements for the same reason. The same update arms the rhythm (RP-63):
+ * `plan_seen` as `setRhythm`'s first rhythm. A goal that holds goals has no rhythm (refused above),
+ * so its tasks are written fixed to their month, as `fixHolderTasks` leaves them.
  */
 export async function confirmImport(input: unknown): Promise<ConfirmImportResult> {
-  const parsed = importDraftSchema.safeParse(input);
+  const parsed = draftV2Schema.safeParse(input);
   if (!parsed.success) {
     const [issue] = parsed.error.issues;
     // A zod default message (an unknown field, a wrong type) is no catalogue key.
@@ -58,9 +61,9 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   }
   // RP-37: a phase that starts before the goal opens begins today, one wholly
   // before it is dropped, so the refusals and the rows see the cut draft.
-  // RP-65: a draft in hours is judged, and written, in minutes.
+  // A version 2 draft is in minutes already (RP-65).
   const today = todayInZone();
-  const draft = withCutPhases(inMinutes(parsed.data), today);
+  const draft = withCutPhases(parsed.data, today);
 
   const [refusal] = draftRefusals(draft, today);
   if (refusal) return { ok: false, error: messageKey(refusal.key), at: refusal.path };
@@ -76,7 +79,10 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   const person = await getPerson();
   if (!person) return { ok: false, error: "import.errors.signedOut" };
 
-  const goalRows: SQL[] = [];
+  // The refusals above leave every parent earlier than its child, and none deeper than three.
+  const indexOfKey = new Map<string, number>();
+  const layerOf: number[] = [];
+  const layers: SQL[][] = [[], [], []];
   const measureRows: SQL[] = [];
   const phaseRows: SQL[] = [];
   const budgetRows: SQL[] = [];
@@ -99,9 +105,16 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
 
   for (const goal of draft.goals) {
     const goalId = randomUUID();
+    const parentAt = goal.parent === null ? undefined : indexOfKey.get(goal.parent);
+    const parentId = parentAt === undefined ? null : goalIds[parentAt];
+    const layer = parentAt === undefined ? 0 : layerOf[parentAt] + 1;
+    if (!indexOfKey.has(goal.key)) indexOfKey.set(goal.key, goalIds.length);
     goalIds.push(goalId);
+    layerOf.push(layer);
     goalIndex += 1;
-    goalRows.push(sql`${goalId}::uuid, ${person.id}::uuid, ${goal.name}, ${goal.horizon}::date, ${basePosition(goals)} + ${goalIndex}::integer`);
+    layers[layer].push(
+      sql`${goalId}::uuid, ${person.id}::uuid, ${goal.name}, ${goal.horizon}::date, ${parentId}::uuid, ${goal.note}::text, ${basePosition(goals)} + ${goalIndex}::integer`,
+    );
     if (goal.measure !== null) {
       measureRows.push(sql`${goalId}::uuid, ${goal.measure.name}, ${goal.measure.unit}, ${goal.rhythm}::integer`);
     }
@@ -137,9 +150,13 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   }
 
   await withGoalsDb(async (tx) => {
-    await tx.execute(sql`
-      insert into ${goals} (id, user_id, name, horizon, position) values ${rows(goalRows)}
-    `);
+    // One statement per layer, parents first.
+    for (const layer of layers) {
+      if (layer.length === 0) continue;
+      await tx.execute(sql`
+        insert into ${goals} (id, user_id, name, horizon, parent_id, note, position) values ${rows(layer)}
+      `);
+    }
     if (measureRows.length > 0) {
       await tx.execute(sql`
         update ${goals} set measure_name = m.name, measure_unit = m.unit, rhythm = m.rhythm,

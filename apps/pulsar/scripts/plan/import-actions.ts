@@ -78,8 +78,9 @@ function installStubs(cookies: StoredCookie[]): void {
 
 let confirmImport: typeof import("@/app/actions/import").confirmImport;
 let todayInZone: typeof import("@/lib/zone").todayInZone;
-let parseTemplate: typeof import("@/lib/import/template").parseTemplateV1;
-type Draft = import("@/lib/import/draft").ImportDraftV1;
+let parseTemplate: typeof import("@/lib/import/template").parseTemplate;
+type Draft = import("@/lib/import/draft").ImportDraft;
+type DraftGoal = import("@/lib/import/draft").DraftGoal;
 
 const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
   prepare: false,
@@ -140,6 +141,11 @@ medida: horas de estudio · minutos
   - 1 h · Elegir tutor
   - 6 h · Sesiones 1–4
 `;
+}
+
+// A task of version 2 with only what a fixture names.
+function task(name: string, month: string, estimate: number | null, children: DraftGoal["tasks"][number]["children"] = []): DraftGoal["tasks"][number] {
+  return { name, month, estimate, note: null, noteSrc: [], src: [], week: null, rule: null, children };
 }
 
 function draftOf(text: string): Draft {
@@ -221,7 +227,7 @@ async function countGoals(name: string): Promise<number> {
 before(async () => {
   installStubs(loadCookies());
   ({ confirmImport } = await import("@/app/actions/import"));
-  ({ parseTemplateV1: parseTemplate } = await import("@/lib/import/template"));
+  ({ parseTemplate } = await import("@/lib/import/template"));
   ({ todayInZone } = await import("@/lib/zone"));
   TODAY = todayInZone();
   M0 = TODAY.slice(0, 7);
@@ -336,11 +342,11 @@ test("confirmImport: a goal whose end already passed is refused whole", async ()
 
 test("confirmImport: a draft with an extra unknown field is refused by the schema", async () => {
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# RP-37 fixture: campo extra ${RUN}`));
-  const forged = { goals: [{ ...draft.goals[0], admin: true }] };
+  const forged = { ...draft, goals: [{ ...draft.goals[0], admin: true }] };
   const result = await confirmImport(forged);
   assert.deepEqual(result, { ok: false, error: "import.errors.draftInvalid", at: "goals.0" });
   assert.equal(await countGoals(`RP-37 fixture: campo extra ${RUN}`), 0);
-  assert.deepEqual(await confirmImport({ goals: [] }), { ok: false, error: "import.errors.empty", at: "goals" });
+  assert.deepEqual(await confirmImport({ version: 2, goals: [] }), { ok: false, error: "import.errors.empty", at: "goals" });
 });
 
 test("confirmImport: a parent task with its own estimate is refused at the parent and writes nothing", async () => {
@@ -517,24 +523,24 @@ test("confirmImport: without a rhythm the parents keep the month they were writt
   assert.ok(parents.length > 0 && parents.every((p) => p.planned_month === `${M0}-01` && p.in_plan));
 });
 
-test("confirmImport: a draft measured in hours arrives in minutes", async () => {
-  const name = "RP-65 fixture: horas";
+test("confirmImport: a draft is written in the minutes it carries", async () => {
+  const name = "RP-65 fixture: minutos";
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   const [first] = draft.goals;
   draft.goals[0] = {
     ...first,
-    measure: { name: "estudio", unit: "horas" },
-    months: [{ month: M0, amount: 12 }],
+    measure: { name: "estudio", unit: "minutos" },
+    months: [{ month: M0, amount: 720, src: [] }],
     commitments: [],
-    tasks: [{ name: "Leer", month: M0, estimate: 3, children: [] }],
+    tasks: [task("Leer", M0, 180)],
   };
   const { goalIds: [goalId] } = await confirmed(draft);
   const [goal] = await sql`select measure_unit from goals.goals where id = ${goalId}`;
   assert.equal(goal.measure_unit, "minutos");
   const [month] = await sql`select amount from goals.month_budgets where goal_id = ${goalId}`;
   assert.equal(month.amount, 720);
-  const [task] = await sql`select estimate from goals.one_offs where goal_id = ${goalId}`;
-  assert.equal(task.estimate, 180);
+  const [written] = await sql`select estimate from goals.one_offs where goal_id = ${goalId}`;
+  assert.equal(written.estimate, 180);
 });
 
 test("confirmImport: a forged figure in a goal not measured in time is refused whole and writes nothing", async () => {
@@ -546,7 +552,7 @@ test("confirmImport: a forged figure in a goal not measured in time is refused w
     measure: { name: "distancia", unit: "km" },
     months: [],
     commitments: [],
-    tasks: [{ name: "Correr", month: M0, estimate: 5, children: [] }],
+    tasks: [task("Correr", M0, 5)],
   };
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.estimateNotTime", at: "goals.0.tasks.0" });
   assert.equal(await countGoals(name), 0);
@@ -555,4 +561,154 @@ test("confirmImport: a forged figure in a goal not measured in time is refused w
 test("confirmImport: a rhythm does not raise the statements", async () => {
   const { statements } = await confirmed(draftOf(withRhythm(EXAMPLE, "RP-67 fixture: sentencias")));
   assert.equal(statements, measured.one);
+});
+
+// ---- Module 885: a draft of goals inside goals.
+
+// A goal of version 2 that holds nothing but its name, its end and its place in the tree.
+function bare(key: string, parent: string | null, name: string, horizon: string, over: Partial<DraftGoal> = {}): DraftGoal {
+  return {
+    key,
+    parent,
+    name: `${name} ${RUN}`,
+    horizon,
+    measure: null,
+    rhythm: null,
+    note: null,
+    noteSrc: [],
+    src: [],
+    phases: [],
+    months: [],
+    commitments: [],
+    rules: [],
+    tasks: [],
+    ...over,
+  };
+}
+
+// A leaf with a section of every kind, to count statements against the example's.
+function full(key: string, parent: string | null, name: string, over: Partial<DraftGoal> = {}): DraftGoal {
+  return bare(key, parent, name, `${M6}-01`, {
+    measure: { name: "horas de estudio", unit: "minutos" },
+    phases: [{ aim: "Primera", startsOn: TODAY, endsOn: shiftDay(`${M3}-01`, -1), src: [] }],
+    months: [{ month: M0, amount: 720, src: [] }],
+    commitments: [
+      { name: "Repaso", cadenceKind: "daily", cadenceWeekdays: null, cadenceN: null, satisfaction: "tap", targetQuantity: null, unit: null, src: [] },
+    ],
+    tasks: [task("Leer", M0, 240), task("Tutor", M1, null, [{ name: "Elegir", estimate: 60, note: null, noteSrc: [], src: [], rule: null }])],
+    ...over,
+  });
+}
+
+const tree = (goals: DraftGoal[]): Draft => ({ version: 2, goals });
+
+// Rows as the person reads them: the `authenticated` role under their own claims.
+async function asPerson<T>(read: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
+  const claims = JSON.stringify({ sub: personId, role: "authenticated" });
+  return sql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true),
+                    set_config('search_path', 'goals, public', true),
+                    set_config('role', 'authenticated', true)`;
+    return read(tx);
+  }) as Promise<T>;
+}
+
+test("confirmImport: three layers — general, grande, pequeña — each reads its parent as the person", async () => {
+  const draft = tree([
+    bare("a", null, "RP-79 general", `${M14}-01`),
+    bare("b", "a", "RP-79 grande", `${M12}-01`),
+    bare("c", "b", "RP-79 pequeña", `${M6}-01`),
+  ]);
+  const { goalIds: ids } = await confirmed(draft);
+  assert.equal(ids.length, 3);
+  const read = await asPerson((tx) => tx<{ id: string; parent_id: string | null }[]>`
+    select id, parent_id from goals.goals where id in ${tx(ids)}`);
+  const parentOf = new Map(read.map((row) => [row.id, row.parent_id]));
+  assert.deepEqual([...ids].map((id) => parentOf.get(id)), [null, ids[0], ids[1]]);
+});
+
+test("confirmImport: the goal's note and the notes of its tasks read back as the draft held them", async () => {
+  const goalNote = "Lo que busco.\n\nUn ritmo que pueda sostener.";
+  const leaf = full("n", null, "RP-95 notas", {
+    note: goalNote,
+    tasks: [
+      { ...task("Leer", M0, 240), note: "Capítulos 1 a 4\ncon calma" },
+      { ...task("Tutor", M1, null, [{ name: "Elegir", estimate: 60, note: "Comparar tres perfiles.", noteSrc: [], src: [], rule: null }]), note: "Preguntar por la tarifa." },
+    ],
+  });
+  const { goalIds: [goalId] } = await confirmed(tree([leaf]));
+  const [goal] = await sql`select note from goals.goals where id = ${goalId}`;
+  assert.equal(goal.note, goalNote);
+  const notes = await sql<{ name: string; note: string | null }[]>`
+    select name, note from goals.one_offs where goal_id = ${goalId} order by name`;
+  assert.deepEqual(notes.map((n) => [n.name, n.note]), [
+    ["Elegir", "Comparar tres perfiles."],
+    ["Leer", "Capítulos 1 a 4\ncon calma"],
+    ["Tutor", "Preguntar por la tarifa."],
+  ]);
+});
+
+test("confirmImport: a goal that holds goals keeps its tasks fixed to their month, with no rhythm and no amounts", async () => {
+  const holder = bare("h", null, "RP-80 contenedora", `${M12}-01`, {
+    measure: { name: "horas de estudio", unit: "minutos" },
+    tasks: [task("Primera", M0, 60), task("Segunda", M2, null)],
+  });
+  const { goalIds: [holderId, leafId] } = await confirmed(tree([holder, full("l", "h", "RP-80 hoja")]));
+  const [row] = await sql`select rhythm, plan_seen from goals.goals where id = ${holderId}`;
+  assert.deepEqual({ ...row }, { rhythm: null, plan_seen: null });
+  const budgets = await sql`select 1 from goals.month_budgets where goal_id = ${holderId}`;
+  assert.equal(budgets.length, 0);
+  const tasks = await sql`
+    select name, planned_month::text as planned_month, in_plan from goals.one_offs where goal_id = ${holderId} order by name`;
+  assert.deepEqual(tasks.map((t) => ({ ...t })), [
+    { name: "Primera", planned_month: `${M0}-01`, in_plan: true },
+    { name: "Segunda", planned_month: `${M2}-01`, in_plan: true },
+  ]);
+  const [leaf] = await sql`select parent_id from goals.goals where id = ${leafId}`;
+  assert.equal(leaf.parent_id, holderId);
+});
+
+test("confirmImport: a rhythm or amounts on a goal that holds goals are refused and nothing is written", async () => {
+  const holder = (over: Partial<DraftGoal>) => tree([bare("h", null, "RP-80 forjada", `${M12}-01`, { measure: { name: "estudio", unit: "minutos" }, ...over }), full("l", "h", "RP-80 hoja forjada")]);
+  assert.deepEqual(await confirmImport(holder({ rhythm: 720 })), { ok: false, error: "tree.errors.holderNoRhythm", at: "goals.0.rhythm" });
+  assert.deepEqual(await confirmImport(holder({ months: [{ month: M0, amount: 60, src: [] }] })), {
+    ok: false,
+    error: "tree.errors.holderNoBudget",
+    at: "goals.0.months.0",
+  });
+  assert.equal(await countGoals(`RP-80 forjada ${RUN}`), 0);
+});
+
+test("confirmImport: three layers and four goals pay the statements of one layer plus two", async () => {
+  const draft = tree([
+    bare("a", null, "RP-83 general", `${M14}-01`, { measure: { name: "horas de estudio", unit: "minutos" } }),
+    bare("b", "a", "RP-83 grande", `${M12}-01`, { measure: { name: "horas de estudio", unit: "minutos" } }),
+    full("c", "b", "RP-83 pequeña uno"),
+    full("d", "b", "RP-83 pequeña dos"),
+  ]);
+  const { goalIds: ids, statements } = await confirmed(draft);
+  assert.equal(ids.length, 4);
+  assert.equal(statements, measured.one! + 2);
+  const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from goals.goals where id in ${sql(ids)} and parent_id is not null`;
+  assert.equal(count, 3);
+});
+
+test("confirmImport: a forged fourth layer is refused with tree.errors.tooDeep and nothing is written", async () => {
+  const draft = tree([
+    bare("a", null, "RP-79 cuarta a", `${M14}-01`),
+    bare("b", "a", "RP-79 cuarta b", `${M12}-01`),
+    bare("c", "b", "RP-79 cuarta c", `${M6}-01`),
+    bare("d", "c", "RP-79 cuarta d", `${M3}-01`),
+  ]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "tree.errors.tooDeep", at: "goals.3.parent" });
+  assert.equal(await countGoals(`RP-79 cuarta a ${RUN}`), 0);
+});
+
+test("confirmImport: a goal ending after the one above it is refused, and so is a parent that comes later", async () => {
+  const late = tree([bare("a", null, "RP-79 fin", `${M6}-01`), bare("b", "a", "RP-79 fin hijo", `${M12}-01`)]);
+  const refusal = await confirmImport(late);
+  assert.ok(!refusal.ok && refusal.error === "tree.errors.endPastAbove" && refusal.at === "goals.1.horizon", JSON.stringify(refusal));
+  const reversed = tree([bare("b", "a", "RP-79 orden hijo", `${M6}-01`), bare("a", null, "RP-79 orden", `${M12}-01`)]);
+  assert.deepEqual(await confirmImport(reversed), { ok: false, error: "tree.errors.notFound", at: "goals.0.parent" });
+  assert.equal(await countGoals(`RP-79 fin ${RUN}`), 0);
 });
