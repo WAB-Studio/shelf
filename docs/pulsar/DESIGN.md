@@ -1362,3 +1362,25 @@ Three answers of the user, 2026-10-09.
   time only; every other unit keeps «mide en {unidad}».
 - **The empty month of a goal that does not measure time promises no time** (orchestrator, 2026-10-09, 723).
 - **Built without a board, for the user's review at the end:** 720, 721 and 723 (see «The boards that do not exist»).
+
+## Decisions of 2026-10-12, the hierarchy boards
+
+- **The boards of the goal hierarchy are approved** (RP-78–RP-85, RP-95). Drawn 2026-10-12 as captures of the real app with a
+  throwaway patch and a sample plan, approved by the user the same day: «si». Page «Metas y una meta»: `JerarquiaArbol`,
+  `JerarquiaMetaGeneral`, `JerarquiaMetaGrande`, `JerarquiaMetaPequena`, `JerarquiaCrearDentro`, `JerarquiaMover`,
+  `JerarquiaArchivar`, `JerarquiaFinRechazado`, `JerarquiaOtraUnidad`; page «Hoy»: `JerarquiaHoy`. Words and structure per
+  board: `private/tableros-jerarquia/NOTAS.md`; the patch: `private/tableros-jerarquia/jerarquia.patch`.
+- **Every row of one tree level shares one left edge.** A row without a fold chevron reserves its width; at 360 the general goal
+  sits at 52 px, a large goal at 72 and a small goal at 92.
+- **Moving a goal picks one destination** from a single-choice list; a destination that cannot take it stays listed, dimmed,
+  with its reason. `CheckRow` gains a `radio` prop for it.
+- **A level is a position, not a kind**: a goal is large because it sits under a general one.
+- **A month a holder's goals do not cover reads «sin monto».**
+- **A general goal keeps its own commitments** in the commitments section it always had.
+- **A Hoy line names only the goal it comes from**, never the chain. Groups that ask something today come first; inside, the
+  tree's order.
+- **Reopening a goal reopens what was archived with it**, not every goal of the branch; a goal under an archived one cannot be
+  reopened alone. An archived goal adds nothing to the goal above.
+- **Boards that do not exist yet**, to be drawn before their modules: a goal's note written and edited, «Por mes» and «El plan»
+  of a goal that holds goals, «Mes» grouped by general goal, the report and paper grouped by general goal. The dark face of the
+  hierarchy boards is not drawn: it is the token table's.
