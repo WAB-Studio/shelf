@@ -18,6 +18,8 @@ import {
 } from "@/components/ui";
 import { daysBetween } from "@/lib/day/weeks";
 import { releasedPlan } from "@/lib/plan/first-rhythm";
+import { monthNameWithYear } from "@/lib/plan/month-name";
+import { monthOf } from "@/lib/plan/months";
 import { openMonthsOf, rhythmToMeet } from "@/lib/plan/roadmap-read";
 import { loadGoal } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
@@ -72,7 +74,10 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
   let late = false;
   if (unit && roadmap.state === "planned" && roadmap.end !== null) {
     const days = daysBetween(roadmap.end, roadmap.lastDay);
-    if (days > 0) lead = t("roadmap.plan.finish", { date: dateLabel(roadmap.end), days });
+    const pending = [...roadmap.months.flatMap((m) => m.items), ...roadmap.unplaced].filter((item) => !item.done);
+    if (pending.length > 0 && pending.every((item) => item.hours === 0)) {
+      lead = t("roadmap.plan.noEstimate", { month: monthNameWithYear(roadmap.months[0]?.month ?? monthOf(roadmap.end)) });
+    } else if (days > 0) lead = t("roadmap.plan.finish", { date: dateLabel(roadmap.end), days });
     else if (days === 0) lead = t("roadmap.plan.finishOnEnd", { date: dateLabel(roadmap.end) });
     else {
       late = true;

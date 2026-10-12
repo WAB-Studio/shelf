@@ -4,6 +4,7 @@
     "monthDone": "<fig>{done}</fig> de <fig>{total}</fig> {total, plural, one {tarea hecha} other {tareas hechas}}",
     "monthPlanned": "<fig>{filled}</fig> planeadas de <fig>{amount}</fig>",
     "finish": "A este ritmo terminas el {date}, {days, plural, one {# día} other {# días}} antes de tu final.",
+    "noEstimate": "Ninguna tarea pendiente tiene estimación: van a {month} hasta que les pongas una.",
     "finishOnEnd": "A este ritmo terminas el {date}, el día de tu final.",
     "rhythm": "Ritmo {hours} al mes",
     "change": "Cambiar",
@@ -49,6 +50,7 @@
     "hoursPerMonth": "Horas al mes",
     "other": "otra",
     "preview": "Con {hours} al mes, tus {total} de tareas terminan en {month}. Puedes cambiar un mes puntual después.",
+    "previewNoEstimate": "Con {hours} al mes. Ninguna tarea tiene estimación todavía: van a {month} hasta que les pongas una.",
     "build": "Armar el plan",
     "noMonthYet": "tareas, sin mes todavía",
     "line": "{count} · {hours}",
@@ -107,6 +109,7 @@
     "eyebrow": "ritmo · {goal}",
     "title": "¿Cuántas horas al mes?",
     "preview": "Con {hours} al mes terminas el {date}, a tiempo. Los meses que ya cerraron no cambian.",
+    "previewNoEstimate": "Con {hours} al mes. Ninguna tarea pendiente tiene estimación: van a {month} hasta que les pongas una. Los meses que ya cerraron no cambian.",
     "previewLate": "Con {hours} al mes terminas el {date}, {weeks, plural, one {# semana} other {# semanas}} después de tu final. Los meses que ya cerraron no cambian.",
     "save": "Guardar el ritmo",
     "cancel": "Cancelar"

@@ -75,7 +75,9 @@ export function RhythmForm({
   const end = filled?.end ?? null;
   // A task split across months sits in each of them: count it once.
   const hoursOf = new Map<string, number>();
+  let pendingTasks = 0;
   for (const item of filled ? [...filled.months.flatMap((month) => month.items), ...filled.unplaced] : []) {
+    if (!hoursOf.has(item.task.id) && !item.done) pendingTasks++;
     hoursOf.set(item.task.id, item.hours);
   }
   const total = [...hoursOf.values()].reduce((sum, hours) => sum + hours, 0);
@@ -83,7 +85,15 @@ export function RhythmForm({
   let hint: string | null = null;
   if (amount !== null && end !== null && filled) {
     const late = daysBetween(filled.lastDay, end);
-    if (sheet) {
+    // Tasks with no estimate take no room: the end that comes out is not theirs.
+    const unestimated = total === 0 && pendingTasks > 0;
+    const firstMonth = filled.months[0]?.month ?? monthOf(end);
+    if (unestimated) {
+      hint = t(sheet ? "roadmap.ritmo.previewNoEstimate" : "roadmap.sinRitmo.previewNoEstimate", {
+        hours: formatQuantity(amount, unit, words),
+        month: monthNameWithYear(firstMonth),
+      });
+    } else if (sheet) {
       hint =
         late > 0
           ? t("roadmap.ritmo.previewLate", {
