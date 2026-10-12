@@ -127,28 +127,6 @@ export function monthList(tasks: Task[], month: string, today: string): MonthIte
   }));
 }
 
-// What a finished month planned and what it left undone (RP-32). Integers
-// only: the screen floors `carried * 100 / planned`.
-export function carryShare(
-  tasks: Task[],
-  month: string,
-): { carried: number; planned: number } | null {
-  const after = nextMonth(month);
-  let planned = 0;
-  let carried = 0;
-  for (const item of carriedIn(tasks, month)) {
-    planned += item.owes;
-    carried += owedAt(item.task, item.children, after);
-  }
-  for (const task of tasks) {
-    if (task.parentId !== null || monthOfTask(task) !== month) continue;
-    const children = childrenOf(tasks, task);
-    planned += owedAt(task, children, "0000-01-01");
-    carried += owedAt(task, children, after);
-  }
-  return planned === 0 ? null : { carried, planned };
-}
-
 // A done leaf's estimate as the quantity it declared (RP-65). A parent adds
 // nothing: its leaves already did. Only time counts: a figure in a goal
 // measured in km or pages would count the same distance twice.
