@@ -278,25 +278,44 @@ test.describe("/exportar rows say «sin monto» and the month's tasks (RP-77)", 
 
   for (const width of [360, 1024, 1440]) {
     test(`nothing leaves its row and the page does not scroll sideways at ${width}`, async ({ person, browser, baseURL, db }) => {
-      const name = `Portafolio ${Date.now()}`;
-      const id = await seed(db, person, portafolio(name));
+      const stamp = Date.now();
+      const name = `Portafolio ${stamp}`;
+      // A time note that must stay whole beside its tasks: «de 125 h 15 min».
+      const long = `Intensivo ${stamp}`;
+      const ids = [
+        await seed(db, person, portafolio(name)),
+        await seed(db, person, { name: long, ...TIMED, last: 2, budgets: { 0: 7515, 1: 7515 }, tasks: { 0: 2, 1: 1 } }),
+      ];
       const { context, page } = await open(browser, baseURL!, person, name, width);
       try {
-        const section = sectionOf(page, name);
-        for (const offset of [0, 1, 2, 3]) {
-          const spill = await rowOf(section, offset).evaluate((row) => {
-            const box = row.getBoundingClientRect();
-            return [...row.querySelectorAll("*")]
-              .filter((el) => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().right > box.right + 1)
-              .map((el) => el.className || el.tagName);
+        for (const [goal, offsets] of [[name, [0, 1, 2, 3]], [long, [0, 1]]] as const) {
+          const section = sectionOf(page, goal);
+          for (const offset of offsets) {
+            const spill = await rowOf(section, offset).evaluate((row) => {
+              const box = row.getBoundingClientRect();
+              return [...row.querySelectorAll("*")]
+                .filter((el) => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().right > box.right + 1)
+                .map((el) => el.className || el.tagName);
+            });
+            expect(spill, `${goal} month +${offset} spills`).toEqual([]);
+          }
+        }
+        // A time note never splits: its text sits on one line, whatever the label beside it holds.
+        for (const offset of [0, 1]) {
+          const lines = await rowOf(sectionOf(page, long), offset).evaluate((row) => {
+            const note = [...row.children].at(-1);
+            if (!note || row.tagName !== "LI") return 1;
+            const range = document.createRange();
+            range.selectNodeContents(note);
+            return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
           });
-          expect(spill, `month +${offset} spills`).toEqual([]);
+          expect(lines, `${long} month +${offset} note lines`).toBe(1);
         }
         const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         expect(wide, "sideways scroll").toBeLessThanOrEqual(0);
       } finally {
         await context.close();
-        await remove(db, person, [id]);
+        await remove(db, person, ids);
       }
     });
   }
