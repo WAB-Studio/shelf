@@ -91,27 +91,34 @@ const remove = (db: postgres.Sql, person: Person, ids: string[]) =>
   db`delete from goals.goals where id = any(${ids}::uuid[]) and user_id = ${person.id}`;
 
 test.describe("the paper report: an ended goal is never cut between pages", () => {
-  // k tasks before «Sprint» move the cut through its whole block, a row at a time.
+  // k tasks before three ended goals move the cut through their blocks, a row at a time. Three blocks
+  // in a row give three chances per page of a cut landing inside one of them.
   const SWEEP = Array.from({ length: 33 }, (_, i) => i);
   for (const k of SWEEP) {
-    test(`with ${k} tasks before it, the ended goal's name, «terminada el» and «al terminar» share one page`, async ({
+    test(`with ${k} tasks before them, each ended goal's name, «terminada el» and «al terminar» share one page`, async ({
       person, browser, baseURL, db,
     }) => {
       const stamp = Date.now();
-      const sprint = `Sprint ${stamp}`;
-      const ids = [await seedEnded(db, person, sprint, true), await seedOpen(db, person, `Abierta ${stamp}`, k)];
+      const names = ["A", "B", "C"].map((letter) => `Sprint${letter} ${stamp}`);
+      const ids: string[] = [];
+      for (const name of names) ids.push(await seedEnded(db, person, name, true));
+      ids.push(await seedOpen(db, person, `Abierta ${stamp}`, k));
       const { context, page } = await open(browser, baseURL!, person);
       try {
-        await expect(page.getByRole("main").getByText(sprint, { exact: true }).first()).toBeVisible();
+        await expect(page.getByRole("main").getByText(names[0], { exact: true }).first()).toBeVisible();
         const pages = pagesOf(await printed(page, `k${k}`));
-        const holders = pages.filter((p) => p.includes(sprint.toLowerCase()));
-        expect(holders, "the name is printed on exactly one page").toHaveLength(1);
-        const flat = holders[0];
-        const from = flat.indexOf(sprint.toLowerCase());
-        const tail = flat.slice(from);
-        expect(tail, `«terminada el» on the page of ${sprint}`).toContain("terminada el");
-        expect(tail, `«al terminar» on the page of ${sprint}`).toContain("al terminar");
-        expect(pages.filter((p) => p.includes("al terminar")), "«al terminar» printed once").toHaveLength(1);
+        for (const [i, name] of names.entries()) {
+          const lower = name.toLowerCase();
+          const holders = pages.filter((p) => p.includes(lower));
+          expect(holders, `${name} is printed on exactly one page`).toHaveLength(1);
+          const flat = holders[0];
+          const from = flat.indexOf(lower);
+          const next = i + 1 < names.length ? flat.indexOf(names[i + 1].toLowerCase(), from) : -1;
+          const own = flat.slice(from, next === -1 ? undefined : next);
+          expect(own, `«terminada el» on the page of ${name}`).toContain("terminada el");
+          expect(own, `«al terminar» on the page of ${name}`).toContain("al terminar");
+        }
+        expect(pages.join(" ").split("al terminar").length - 1, "«al terminar» printed once per goal").toBe(3);
       } finally {
         await context.close();
         await remove(db, person, ids);
