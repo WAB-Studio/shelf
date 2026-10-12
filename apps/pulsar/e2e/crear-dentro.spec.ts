@@ -83,7 +83,7 @@ test("from a large goal, «Agregar meta pequeña» opens the sheet and saving la
     await sheet.getByLabel(WEEKS_LABEL).fill("8");
     await sheet.getByRole("button", { name: "Abrirla", exact: true }).click();
 
-    await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
+    await page.waitForURL((url) => /\/metas\/[0-9a-f-]{36}$/.test(url.pathname) && !url.pathname.endsWith(largeId));
     const rows = await named(db, person.id, name);
     expect(rows).toHaveLength(1);
     expect(page.url()).toMatch(new RegExp(`/metas/${rows[0].id}$`));
@@ -124,7 +124,7 @@ test("while saving, «Abrirla» cannot fire a second time (RP-82)", async ({ per
     await confirm.dispatchEvent("click");
     await confirm.dispatchEvent("click");
 
-    await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
+    await page.waitForURL((url) => /\/metas\/[0-9a-f-]{36}$/.test(url.pathname) && !url.pathname.endsWith(largeId));
     expect(calls).toHaveLength(1);
     expect(await named(db, person.id, name)).toHaveLength(1);
   } finally {
