@@ -134,6 +134,8 @@ export async function GoalsScreen({
       depth,
       slot: depth > 0 || count > 0,
       holds: count > 0,
+      foldLabel: t("tree.list.foldNamed", { name: goal.name }),
+      unfoldLabel: t("tree.list.unfoldNamed", { name: goal.name }),
       name: goal.name,
       meta: until,
       narrowMetaAbove: monthMeta(goal),
@@ -157,11 +159,7 @@ export async function GoalsScreen({
                     role="group"
                     aria-label={t("goal.list.openTitle")}
                   >
-                    <GoalBranch
-                      goals={branch}
-                      foldLabel={t("tree.list.fold")}
-                      unfoldLabel={t("tree.list.unfold")}
-                    />
+                    <GoalBranch goals={branch} />
                   </Flex>
                   <Button asChild variant="outline" block>
                     <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>

@@ -12,6 +12,9 @@ export type BranchGoal = {
   // Its level of the tree draws arrows, so it keeps the arrow's slot.
   slot: boolean;
   holds: boolean;
+  // The arrow's accessible name, each carrying the goal's own name.
+  foldLabel: string;
+  unfoldLabel: string;
   name: string;
   meta: ReactNode;
   narrowMetaAbove?: ReactNode;
@@ -24,15 +27,7 @@ export type BranchGoal = {
  * this screen alone — nothing is stored and no request leaves — so a reload
  * draws every branch open again.
  */
-export function GoalBranch({
-  goals,
-  foldLabel,
-  unfoldLabel,
-}: {
-  goals: BranchGoal[];
-  foldLabel: string;
-  unfoldLabel: string;
-}) {
+export function GoalBranch({ goals }: { goals: BranchGoal[] }) {
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const parentOf = new Map(goals.map((goal) => [goal.id, goal.parentId]));
   const hidden = (goal: BranchGoal) => {
@@ -61,7 +56,7 @@ export function GoalBranch({
           foldSlot={goal.slot}
           fold={
             goal.holds
-              ? { expanded, label: expanded ? foldLabel : unfoldLabel, onToggle: () => toggle(goal.id) }
+              ? { expanded, label: expanded ? goal.foldLabel : goal.unfoldLabel, onToggle: () => toggle(goal.id) }
               : undefined
           }
           name={goal.name}
