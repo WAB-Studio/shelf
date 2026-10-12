@@ -17,7 +17,12 @@ import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type 
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
 
 const admin = adminSql();
-const door = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1 });
+const wire: string[] = [];
+const door = postgres(process.env.DATABASE_URL!, {
+  prepare: false,
+  max: 1,
+  debug: (_connection: number, query: string) => void wire.push(query),
+});
 (globalThis as unknown as { sql: unknown }).sql = door;
 
 type ReaderTx = { execute: (query: SQL) => Promise<Array<{ f: string; t: string }>> };
@@ -445,6 +450,14 @@ test("loadGoalPlace names the goal, its level, its opening day and its tree", as
   assert.equal(place.archivedAt, null);
   assert.equal(place.openedOn, addDays(today, -10));
   assert.ok(place.tree.some((n) => n.id === ids.p));
+});
+
+test("loadGoalPlace costs 2 statements: the settle and one read", async () => {
+  wire.length = 0;
+  const place = await as(owner, () => goalQueries.loadGoalPlace(ids.X));
+  assert.ok(place);
+  const statements = wire.filter((query) => !/^\s*(begin|commit)\s*$/i.test(query));
+  assert.equal(statements.length, 2, statements.map((s) => s.slice(0, 90).replace(/\s+/g, " ")).join(" | "));
 });
 
 // Written down from the loaders as they stood before the tree, over the plant
