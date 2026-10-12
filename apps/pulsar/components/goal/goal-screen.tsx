@@ -33,6 +33,7 @@ import {
   Figure,
   Flex,
   Mark,
+  Notice,
   Page,
   Panel,
   Progress,
@@ -119,6 +120,21 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const sheetWeeks = ended
     ? Math.max(totalWeeks, weekIndex(openedOn, today))
     : totalWeeks;
+  const holds = goal.holdsGoals;
+  const insideAction =
+    archived || ended || goal.level === "small" ? null : (
+      <CreateInsideAction
+        goalId={goal.id}
+        name={goal.name}
+        horizon={goal.horizon}
+        kind={goal.level === "large" ? "small" : "big"}
+      />
+    );
+  // The open goals under this one, in plan order: what archiving it takes along.
+  const branchNames = goal.tree
+    .filter((node) => node.archivedAt === null && node.ancestors.includes(goal.id))
+    .map((node) => node.name);
+  const archiveBranch = { branchCount: goal.branchOpenCount, branchNames };
   const moveAction = (
     <MoveHorizonAction
       goalId={goal.id}
@@ -128,6 +144,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       weeks={sheetWeeks}
       phases={goal.phases}
       reopening={ended}
+      above={goal.above}
+      latestBelow={goal.latestBelow}
     />
   );
 
@@ -135,7 +153,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     <Face on="phone">
       <Section as="div">
         {moveAction}
-        <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
+        <ArchiveGoalAction goalId={goal.id} name={goal.name} short {...archiveBranch} />
       </Section>
     </Face>
   ) : null;
@@ -154,7 +172,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const percent = month && planned ? Math.floor((month.reached * 100) / planned) : 0;
   // A goal with no measure has no amount to read, but its months and their
   // tasks stay reachable (`MetaSinMedida.dc.html`).
-  const bareMonth = !goal.measureUnit && goal.months.some((row) => row.current);
+  const bareMonth = !holds && !goal.measureUnit && goal.months.some((row) => row.current);
   const monthKey = `${today.slice(0, 7)}-01`;
   const own = planMonthList(goal.plan, monthKey).filter((item) => item.carriedFrom === null);
   // An archived goal that holds no task this month has nothing to say of it;
@@ -185,7 +203,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   // A goal with no measure keeps its plan; one measured in something else has none.
   const measuresOther = goal.measureUnit !== null && !isTimeUnit(goal.measureUnit);
   const planSection =
-    goal.roadmap.state === "empty" || measuresOther ? null : (
+    holds || goal.roadmap.state === "empty" || measuresOther ? null : (
       <Section label={t("roadmap.meta.planLabel")}>
         <Row
           href={`/metas/${goal.id}/plan`}
@@ -231,7 +249,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   ) : null;
   // Under 60 % from the 20th the pace line holds reached «de» planned itself.
   const part = partOf(monthKey, goal.plan);
-  const paceLine = showsPaceLine({
+  const paceLine = !holds && showsPaceLine({
     planned,
     underPace: Boolean(month?.underPace),
     unreadable: goal.evidence === "unreadable",
@@ -255,7 +273,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
                 {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />
               </>
             ) : (
-              t("goal.detail.monthNoPlan")
+              t(holds ? "tree.goal.noAmount" : "goal.detail.monthNoPlan")
             )}
           </Text>
         )}
@@ -283,7 +301,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               </Text>
             ) : paceLine ? null : (
               <Text as="p" variant="sentence" tone="muted">
-                {ended ? t("goal.detail.monthProgressEnded", { percent }) : t("goal.detail.monthProgress", { percent, days: daysLeft })}
+                {holds
+                  ? t("tree.goal.monthSum", { percent })
+                  : ended
+                    ? t("goal.detail.monthProgressEnded", { percent })
+                    : t("goal.detail.monthProgress", { percent, days: daysLeft })}
               </Text>
             )}
           </>
@@ -293,7 +315,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             {t("goal.detail.monthTasks", { done: planDone, total: planItems.length })}
           </Text>
         ) : null}
-        {planned === null && !archived && !ended ? (
+        {planned === null && !holds && !archived && !ended ? (
           <Button asChild variant="outline">
             <Link href={planHrefFrom(goal.id, today.slice(0, 7), `/metas/${goal.id}`)}>
               {t("goal.detail.monthPlanLink", { month: monthName })}
@@ -303,9 +325,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       </Section>
     ) : null;
 
-  const before = (
-    <>
-      {planSection}
+  const endPanel = (
       <Panel>
         <Face on="desktop">
           <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>
@@ -332,8 +352,19 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         )}
         {ended ? <Face on="desktop">{moveAction}</Face> : null}
       </Panel>
+  );
 
-      {goal.measureUnit ? (
+  const notices = goal.outOfUnit.filter(
+    (other) => (goal.children.find((child) => child.id === other.id)?.month?.planned ?? 0) > 0,
+  );
+  const noticeLines = notices.map((other) => (
+    <Notice key={other.id} role="note">
+      {t("tree.goal.otherUnit", { name: other.name, unit: unitWord(other.unit) })}
+    </Notice>
+  ));
+
+  const measurePanel = (
+      goal.measureUnit ? (
         <Panel>
           <Text as="p" variant="sentence" tone="muted">
             {isTimeUnit(goal.measureUnit)
@@ -360,6 +391,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </Text>
 
           {monthBlock}
+          {noticeLines}
 
           <Section as="div">
             <Flex wrap="wrap" gap="4">
@@ -382,7 +414,67 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             <Section as="div">{monthsLink}</Section>
           ) : null}
         </>
-      )}
+      )
+  );
+
+  // `JerarquiaMetaGeneral`: the goals directly under, each with its month and its last day.
+  const openChildren = goal.children.filter((child) => child.archivedAt === null);
+  const openBelow = (id: string) =>
+    (goal.tree.find((node) => node.id === id)?.children ?? []).filter(
+      (kid) => goal.tree.find((node) => node.id === kid)?.archivedAt === null,
+    ).length;
+  const dayLabel = (day: string) => `${civilDayMonthShort(day)} ${day.slice(0, 4)}`;
+  const childMonth = (child: (typeof openChildren)[number]) => {
+    if (!child.month || child.month.planned === null) return undefined;
+    const unit = child.unit ?? undefined;
+    return (
+      <>
+        {monthName} · <Figure value={child.month.reached} unit={unit} variant="meta" bare />{" "}
+        {t("day.monthLine.of")} <Figure value={child.month.planned} unit={unit} variant="meta" />
+      </>
+    );
+  };
+  const insidePanel =
+    holds && openChildren.length > 0 ? (
+      <Panel>
+        <Section label={t("tree.goal.inside")}>
+          <Flex direction="column">
+            {openChildren.map((child) => {
+              const node = goal.tree.find((entry) => entry.id === child.id);
+              const last = dayLabel(dayBefore(node?.horizon ?? goal.horizon));
+              const count = openBelow(child.id);
+              const until =
+                count > 0 ? t("tree.list.untilInside", { date: last, count }) : t("tree.list.until", { date: last });
+              return (
+                <Row
+                  key={child.id}
+                  href={`/metas/${child.id}`}
+                  name={child.name}
+                  narrowMetaAbove={childMonth(child)}
+                  meta={until}
+                  wideMeta={childMonth(child)}
+                  wideTrailing={childMonth(child) ? <Text variant="meta">{until}</Text> : undefined}
+                  trailing={<ChevronRight size={16} strokeWidth={1.5} aria-hidden />}
+                />
+              );
+            })}
+          </Flex>
+          {insideAction}
+        </Section>
+      </Panel>
+    ) : null;
+
+  const before = holds ? (
+    <>
+      {measurePanel}
+      {insidePanel}
+      {endPanel}
+    </>
+  ) : (
+    <>
+      {planSection}
+      {endPanel}
+      {measurePanel}
     </>
   );
 
@@ -453,18 +545,29 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     <Page width="full">
       <ScreenHeader
         title={goal.name}
-        back={{ href: "/metas", place: t("common.nav.goals") }}
+        back={
+          goal.parent
+            ? { href: `/metas/${goal.parent.id}`, place: goal.parent.name }
+            : { href: "/metas", place: t("common.nav.goals") }
+        }
         metaVariant="sentence"
-        meta={t.rich(archived ? "goal.detail.archivedOverline" : "goal.detail.overline", {
-          date: longDateLabel(goal.archivedAt ?? goal.createdAt),
-          ...fig,
-        })}
+        meta={
+          goal.level && !archived
+            ? t("tree.goal.levelUntil", {
+                level: t(`tree.levels.${goal.level === "large" ? "grande" : goal.level === "small" ? "pequena" : "general"}`),
+                date: endLabel,
+              })
+            : t.rich(archived ? "goal.detail.archivedOverline" : "goal.detail.overline", {
+                date: longDateLabel(goal.archivedAt ?? goal.createdAt),
+                ...fig,
+              })
+        }
         actions={
           archived ? null : (
             <Face on="desktop">
               <Flex gap="3">
                 <RenameGoalAction goalId={goal.id} name={goal.name} />
-                <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short />
+                <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short {...archiveBranch} />
               </Flex>
             </Face>
           )
@@ -476,14 +579,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         </Face>
       )}
 
-      {archived || ended || goal.level === "small" ? null : (
-        <CreateInsideAction
-          goalId={goal.id}
-          name={goal.name}
-          horizon={goal.horizon}
-          kind={goal.level === "large" ? "small" : "big"}
-        />
-      )}
+      {holds ? null : insideAction}
 
       <Split before={before} main={main} after={after} aside={380} afterBelow />
 
@@ -491,7 +587,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <ReopenGoalButton goalId={goal.id} />
       ) : ended ? null : (
         <Face on="phone">
-          <ArchiveGoalAction goalId={goal.id} name={goal.name} />
+          <ArchiveGoalAction goalId={goal.id} name={goal.name} {...archiveBranch} />
         </Face>
       )}
     </Page>
