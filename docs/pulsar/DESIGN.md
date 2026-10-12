@@ -1183,6 +1183,12 @@ Taken by the user the same day, on the critic's three questions and two from the
 - **«hs» reads as hours,** in the template and in the rhythm's «otra» field: «8 hs».
 - **Text the «otra» field cannot read says how to write it,** not the range: «8 hss» → «Escríbelo como 8 h, 1 h 30 min o
   90 min.» Text it reads but out of 1 min–744 h keeps the range error. Decided by the orchestrator 2026-10-11 (module 853).
+- **No rhythm notice names an end when no pending task has an estimate.** First rhythm: «Con 8 h al mes. Ninguna tarea
+  tiene estimación todavía: van a octubre de 2026 hasta que les pongas una.» The sheet: «Con 12 h al mes. Ninguna tarea
+  pendiente tiene estimación: van a octubre de 2026 hasta que les pongas una. Los meses que ya cerraron no cambian.» The lead
+  of `/plan`: «Ninguna tarea pendiente tiene estimación: van a octubre de 2026 hasta que les pongas una.» The month is the
+  first the plan places them in, with its year. One estimated task keeps today's notice. Board `RitmoSinEstimacion`
+  approved by the user 2026-10-11 (module 854).
 - **Approved the same day:** board `UnidadUnaVez` as drawn (`/metas`, the goal, `/meses`, a month, `/mes`, Hoy, `/exportar`);
   board `ReporteImpresoTareasFuera` option A — one line per group of months by task count («noviembre de 2026 y enero de 2027:
   sin monto · 1 tarea», «diciembre de 2026: sin monto»), the month with «de» in that sentence; option B is discarded.
