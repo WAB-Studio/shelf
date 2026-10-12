@@ -118,7 +118,12 @@ async function placementOf(
     return scope.includes(accounts.ownerPersonal) ? "personal" : null;
   }
 
-  const text = await band(page).innerText();
+  // The shell's `loading.tsx` stands two boxes of its own under `main > div` until
+  // the list streams in; until one band remains there is nothing to read yet.
+  const shown = band(page);
+  if ((await shown.count()) !== 1) return null;
+
+  const text = await shown.innerText();
   const at = text.indexOf(name);
   if (at < 0) return null;
 
