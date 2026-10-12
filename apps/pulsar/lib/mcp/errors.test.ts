@@ -66,5 +66,5 @@ test("a tree refusal carries the goal's name and the day in its sentence", () =>
     "Pasa del final de «Leer más», el 30 sep 2027.",
   );
   assert.equal(errorOf("tree.errors.aboveArchived", { name: "Leer más" }).message, "«Leer más» está archivada. Reábrela primero.");
-  assert.equal(errorOf("tree.errors.noteTooLong").message, "La nota pasa de 20 000 caracteres.");
+  assert.equal(errorOf("tree.errors.noteTooLong").message, "La nota pasa de 100 000 caracteres.");
 });

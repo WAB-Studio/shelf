@@ -2825,8 +2825,8 @@ async function checkGoalTree0018(): Promise<void> {
       const notes: [string, string, boolean][] = [
         ["P241", "", false],
         ["P242", "  \n ", false],
-        ["P243", "a".repeat(20000), true],
-        ["P244", "a".repeat(20001), false],
+        ["P243", "a".repeat(100000), true],
+        ["P244", "a".repeat(100001), false],
       ];
       for (const [label, note, admitted] of notes) {
         const r = await attemptShape(tx, (sp) => sp`update goals.goals set note = ${note} where id = ${lone.id}`);

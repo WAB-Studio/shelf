@@ -1402,8 +1402,8 @@ Three answers of the user, 2026-10-09.
 - **The second batch is approved** (RP-80, RP-84, RP-95), 2026-10-12, by the user: «apruebo los tableros». Page «Metas y una
   meta»: `JerarquiaNota`, `JerarquiaPorMes`; page «Mes»: `JerarquiaMes`; page «Exportar»: `JerarquiaInforme`. Words and
   structure: `private/tableros-jerarquia/NOTAS.md` §10–13.
-- **A goal's note is the task note's sheet with other words**: placeholder «Lo que quieras recordar de esta meta», cap 20 000,
-  the count from 18 000. Emptying it and saving removes it; it is never stored empty. It sits between the end line and «Archivar
+- **A goal's note is the task note's sheet with other words**: placeholder «Lo que quieras recordar de esta meta», cap 100 000,
+  the count from 90 000. Emptying it and saving removes it; it is never stored empty. It sits between the end line and «Archivar
   esta meta», folded; with no note, «Agregar una nota» (outline, full width) stands in its place.
 - **A goal that holds goals has no rhythm of its own.** «El plan» replaces «Horas al mes», the chips and «Armar el plan» with
   «Este plan no tiene ritmo propio. Cada mes suma el de sus metas.» and one row per goal inside; its own tasks stay, by month.

@@ -16,7 +16,7 @@
     "holderNoRhythm": "Una meta con metas dentro no tiene ritmo propio.",
     "holderNoBudget": "Una meta con metas dentro no tiene monto propio.",
     "holderTaskFixed": "Sus tareas siguen fijas a su mes.",
-    "noteTooLong": "La nota pasa de 20 000 caracteres."
+    "noteTooLong": "La nota pasa de 100 000 caracteres."
   },
   "list": {
     "open": "Abiertas",

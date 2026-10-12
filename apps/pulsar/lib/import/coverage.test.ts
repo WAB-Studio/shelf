@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { coverage } from "./coverage";
 import { normalize, type DraftGoal, type DraftTask, type ImportDraft, type RawGoal, type Source } from "./draft";
+import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
 const task = (over: Partial<DraftTask> = {}): DraftTask => ({
   name: "Leer",
@@ -87,22 +88,22 @@ test("a goal unmarked takes its sub-goal, its tasks and their notes out with it"
 });
 
 test("lines beyond the note's ceiling are out as noteFull", () => {
-  const lines = Array.from({ length: 201 }, (_, i) => `${"x".repeat(98)}${String(i % 100).padStart(2, "0")}`);
-  lines.push("y"); // 202 lines, 20 000+ characters joined
+  const lines = Array.from({ length: 1001 }, (_, i) => `${"x".repeat(98)}${String(i % 100).padStart(2, "0")}`);
+  lines.push("y"); // 1002 lines, 100 000+ characters joined
   const raw: RawGoal = {
     key: "g1", parent: null, name: "Meta", horizon: "2027-10-01", measure: null, rate: null,
-    noteSrc: [{ from: 1, to: 202 }], noteText: null, src: [], phases: [], months: [], commitments: [], rules: [], tasks: [],
+    noteSrc: [{ from: 1, to: 1002 }], noteText: null, src: [], phases: [], months: [], commitments: [], rules: [], tasks: [],
   };
   const src = source(lines);
   const { draft: d } = normalize({ goals: [raw] }, src);
-  assert.equal((d.goals[0].note ?? "").length <= 20000, true);
+  assert.equal((d.goals[0].note ?? "").length <= GOAL_NOTE_MAX, true);
   const c = coverage(d, src, none, none);
-  assert.equal(c.total, 202);
-  assert.equal(c.notes + c.out, 202);
+  assert.equal(c.total, 1002);
+  assert.equal(c.notes + c.out, 1002);
   assert.equal(c.out > 0, true);
   assert.equal(c.outLines.every((l) => l.reason === "noteFull"), true);
-  assert.equal(c.outLines.at(-1)?.line, 202);
-  assert.equal(c.outLines[0].line, 202 - c.out + 1);
+  assert.equal(c.outLines.at(-1)?.line, 1002);
+  assert.equal(c.outLines[0].line, 1002 - c.out + 1);
 });
 
 test("a note that fits leaves nothing out", () => {

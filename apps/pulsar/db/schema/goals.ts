@@ -66,7 +66,7 @@ export const goals = goalsSchema.table(
     check("goals_not_own_parent", sql`${t.parentId} <> ${t.id}`),
     check(
       "goals_note_shape",
-      sql`${t.note} is null or (char_length(${t.note}) between 1 and 20000 and ${t.note} ~ '\\S')`,
+      sql`${t.note} is null or (char_length(${t.note}) between 1 and 100000 and ${t.note} ~ '\\S')`,
     ),
     index("goals_parent_id_idx").on(t.parentId),
     // `auth.uid()` bare, never `authUid`'s `(select auth.uid())`: the insert and update checks read

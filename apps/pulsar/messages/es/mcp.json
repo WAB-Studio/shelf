@@ -21,7 +21,7 @@
     "unfix_task": "Devuelve al plan una tarea fijada a un mes: el plan vuelve a darle su mes y las demás se acomodan. Una tarea hecha no se cambia. No cambia el ritmo de la meta. Nunca borra.",
     "create_goal": "Abre una meta nueva con su nombre y su plazo; mide lo que mida su primer compromiso con cantidad. Con parent_id la abre dentro de otra meta: caben tres niveles y su plazo no pasa del de la de arriba. Nunca borra.",
     "move_goal": "Mueve una meta bajo otra (parent_id) o la deja arriba, sin meta encima (parent_id nulo), con las metas que tiene dentro. Se rechaza lo que cierra un ciclo, pasa de tres niveles o termina después que la de arriba. Una meta con metas dentro no tiene ritmo ni monto propios. Nunca borra ni archiva.",
-    "set_goal_note": "Escribe la nota de una meta, o la reemplaza por una nueva: texto plano de hasta 20 000 caracteres, con saltos de línea. Nunca la vacía: una nota en blanco se rechaza. Nunca borra.",
+    "set_goal_note": "Escribe la nota de una meta, o la reemplaza por una nueva: texto plano de hasta 100 000 caracteres, con saltos de línea. Nunca la vacía: una nota en blanco se rechaza. Nunca borra.",
     "retire_commitment": "Retira un compromiso: deja de preguntar desde hoy y los días ya hechos quedan hechos. Para cambiarlo, retíralo y agrega otro. Nunca borra."
   },
   "errors": {

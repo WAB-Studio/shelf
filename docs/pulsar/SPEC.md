@@ -107,7 +107,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [ ] **RP-83** — Archiving a goal archives every goal inside it, and opening it again opens them; before archiving, the person sees how many they are. Nothing is deleted (RP-24). Decided by the user 2026-10-12.
 - [ ] **RP-84** — Hoy, «Mes», the report, the export and paper group by general goal, in the tree's order; a line that comes from a large or a small goal names that goal. Decided by the user 2026-10-12.
 - [ ] **RP-85** — An AI connected to a person's log (RP-39, RP-56) reads the tree — each goal names the one above it and the ones under it — and creates a goal inside another and moves a goal under another through the same acts, with the same refusals, as the screen. Decided by the user 2026-10-12.
-- [ ] **RP-95** — A goal holds an optional note, as a task does (RP-88): plain text of at most 20000 characters, line breaks kept, never stored empty. Its screen shows it folded; a connected AI reads and writes it. An import puts there what the plan says about the goal that is not a part of it — its rules, its gates, its context. Decided by the user 2026-10-12: «que no pierda nada de la nota ni nada».
+- [ ] **RP-95** — A goal holds an optional note, as a task does (RP-88): plain text of at most 100000 characters, line breaks kept, never stored empty. Its screen shows it folded; a connected AI reads and writes it. An import puts there what the plan says about the goal that is not a part of it — its rules, its gates, its context. Decided by the user 2026-10-12: «que no pierda nada de la nota ni nada».
 
 #### The thing that happens once
 

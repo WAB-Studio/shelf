@@ -269,7 +269,7 @@ test("set_goal_note and get_goal.note round-trip, line breaks included, and a bl
   assert.equal((await read(g1)).note, note);
   await refused("set_goal_note", { goal_id: g1, note: "  \n " }, "mcp.errors.noteEmpty", mcp.errors.noteEmpty);
   assert.equal((await read(g1)).note, note);
-  await refused("set_goal_note", { goal_id: g1, note: "x".repeat(20001) }, "tree.errors.noteTooLong", tree.errors.noteTooLong);
+  await refused("set_goal_note", { goal_id: g1, note: "x".repeat(100001) }, "tree.errors.noteTooLong", tree.errors.noteTooLong);
   assert.equal((await read(g1)).note, note);
 });
 

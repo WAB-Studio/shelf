@@ -125,14 +125,14 @@ test("moveGoalSchema: parentId is a uuid or null, never absent", () => {
   assert.equal(moveGoalSchema.safeParse({ goalId: GOAL_ID }).success, false);
 });
 
-test("setGoalNoteSchema: trims, turns blank into null, refuses past 20000", () => {
+test("setGoalNoteSchema: trims, turns blank into null, refuses past 100000", () => {
   const parse = (note: string) => setGoalNoteSchema.safeParse({ goalId: GOAL_ID, note });
   const lines = parse("  uno\ndos\ntres \n");
   assert.equal(lines.success && lines.data.note, "uno\ndos\ntres");
   const blank = parse("  \n ");
   assert.equal(blank.success && blank.data.note, null);
-  assert.equal(parse("x".repeat(20000)).success, true);
-  const long = parse("x".repeat(20001));
+  assert.equal(parse("x".repeat(100000)).success, true);
+  const long = parse("x".repeat(100001));
   assert.equal(long.success, false);
   assert.equal(!long.success && long.error.issues[0].message, "tree.errors.noteTooLong");
 });

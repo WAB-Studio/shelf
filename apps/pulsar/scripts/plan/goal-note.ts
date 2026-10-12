@@ -128,10 +128,10 @@ test("setGoalNote: a blank note clears it to null, never an empty string", async
 });
 
 test("setGoalNote: 20000 characters are kept, 20001 are noteTooLong and the note stays", async () => {
-  assert.deepEqual(await plan.setGoalNote({ goalId, note: "x".repeat(20000) }), { ok: true });
-  assert.equal((await rowOf(goalId)).note?.length, 20000);
-  assert.deepEqual(await plan.setGoalNote({ goalId, note: "y".repeat(20001) }), { ok: false, error: "tree.errors.noteTooLong" });
-  assert.equal((await rowOf(goalId)).note?.length, 20000);
+  assert.deepEqual(await plan.setGoalNote({ goalId, note: "x".repeat(100000) }), { ok: true });
+  assert.equal((await rowOf(goalId)).note?.length, 100000);
+  assert.deepEqual(await plan.setGoalNote({ goalId, note: "y".repeat(100001) }), { ok: false, error: "tree.errors.noteTooLong" });
+  assert.equal((await rowOf(goalId)).note?.length, 100000);
 });
 
 test("setGoalNote: another person's goal is not found and keeps its note", async () => {

@@ -1,0 +1,2 @@
+ALTER TABLE "goals"."goals" DROP CONSTRAINT "goals_note_shape";--> statement-breakpoint
+ALTER TABLE "goals"."goals" ADD CONSTRAINT "goals_note_shape" CHECK ("goals"."goals"."note" is null or (char_length("goals"."goals"."note") between 1 and 100000 and "goals"."goals"."note" ~ '\S'));

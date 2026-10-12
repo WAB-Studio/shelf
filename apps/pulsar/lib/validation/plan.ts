@@ -211,7 +211,7 @@ export const moveGoalSchema = z.object({
 
 export type MoveGoalInput = z.infer<typeof moveGoalSchema>;
 
-export const GOAL_NOTE_MAX = 20000;
+export const GOAL_NOTE_MAX = 100000;
 
 // RP-95: plain text; blank is no note. Mirrors `goals_note_shape`.
 export const setGoalNoteSchema = z.object({
