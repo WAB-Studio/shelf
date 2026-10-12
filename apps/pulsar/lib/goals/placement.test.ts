@@ -140,3 +140,15 @@ test("moveTargets marks the goal's own branch a cycle, deep goals too deep, and 
   assert.equal(by.get("G"), null);
   assert.deepEqual(by.get("A"), { code: "aboveClosed", above: ref("A") });
 });
+
+test("moving an archived or an ended goal is refused as closed", () => {
+  // Kills: removing the isClosed(goal) check from moveRefusal.
+  assert.deepEqual(moveRefusal(tree(), "A", "X", TODAY), { code: "closed" });
+  assert.deepEqual(moveRefusal(tree(), "E", "X", TODAY), { code: "closed" });
+});
+
+test("a closed goal moved under a closed goal is refused as closed, not aboveClosed", () => {
+  // Kills: checking aboveClosed before closed.
+  assert.deepEqual(moveRefusal(tree(), "A", "E", TODAY), { code: "closed" });
+  assert.deepEqual(moveRefusal(tree(), "E", "A", TODAY), { code: "closed" });
+});
