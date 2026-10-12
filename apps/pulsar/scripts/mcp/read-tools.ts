@@ -68,8 +68,9 @@ function monthFrom(day: string, delta: number): string {
   return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
 }
 
+// Counted from the zone's today: from 19:00 in Bogotá the UTC date is already tomorrow.
 function dayFrom(delta: number): string {
-  return new Date(Date.now() + delta * 86_400_000).toISOString().slice(0, 10);
+  return new Date(Date.parse(`${todayInZone()}T00:00:00Z`) + delta * 86_400_000).toISOString().slice(0, 10);
 }
 
 const TYPE_FETCH =

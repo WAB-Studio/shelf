@@ -3166,3 +3166,10 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
   PDF specs went red in CI. The first fix counted tasks for every goal and left 835's line with nothing to name.
   Never read `month.tasks !== undefined` as «measures nothing»: read `unit === null`.
 - Run `papel-*` and `exportar*` on any change to `lib/queries/report.ts`.
+
+## A check that counts days in UTC goes red every night
+- From 19:00 in Bogotá the UTC date is already tomorrow. `new Date(Date.now() + …).toISOString().slice(0, 10)` then names a
+  day the app, which counts in the zone (`todayInZone()`), has not reached.
+- Measured 2026-10-11: CI at 22:52 Bogotá set a goal's horizon to «today» in UTC, the app read it as tomorrow, and
+  `check:mcp` `read-tools.ts` went 2 red on a train that never touched it. Locally the same hour: 16/2 before, 18/0 after.
+- Count a check's days from `todayInZone()`, never from `Date.now()`.
