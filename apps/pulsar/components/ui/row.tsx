@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { Text } from "./text";
@@ -62,6 +63,15 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   end?: ReactNode;
   // A link row drawn as a white bordered card, not a ruled line.
   card?: boolean;
+  // How deep the row sits in a tree of goals: 0 at the top, 2 at most. The
+  // row and its hairline start that many 20px steps in (`JerarquiaArbol`).
+  level?: 0 | 1 | 2;
+  // A 20px slot before the name, kept on every row of a tree level so the
+  // level shares one left edge. Empty unless `fold` fills it.
+  foldSlot?: boolean;
+  // Fills the slot with the fold arrow: a button beside the row's link, never
+  // inside it. `label` names the act it does next.
+  fold?: { expanded: boolean; label: string; onToggle: () => void };
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
@@ -83,6 +93,9 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     preview,
     end,
     card,
+    level = 0,
+    foldSlot,
+    fold,
     className,
     type = "button",
     disabled,
@@ -95,7 +108,8 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     styles.row,
     rule ? undefined : styles.flush,
     card ? styles.card : undefined,
-    onLeadingClick || end ? styles.split : undefined,
+    level === 1 ? styles.level1 : level === 2 ? styles.level2 : undefined,
+    onLeadingClick || end || (href && (fold || foldSlot)) ? styles.split : undefined,
     className,
   ]
     .filter(Boolean)
@@ -132,6 +146,31 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
     </span>
   );
+
+  if (href && (fold || foldSlot)) {
+    const Arrow = fold?.expanded ? ChevronDown : ChevronRight;
+    return (
+      <div className={merged}>
+        {fold ? (
+          <button
+            type="button"
+            className={styles.foldButton}
+            onClick={fold.onToggle}
+            aria-expanded={fold.expanded}
+            aria-label={fold.label}
+          >
+            <Arrow size={16} strokeWidth={1.5} aria-hidden />
+          </button>
+        ) : (
+          <span className={styles.foldSlot} />
+        )}
+        <Link href={href} className={styles.bodyButton}>
+          {leading ? <span className={styles.leading}>{leading}</span> : null}
+          {body}
+        </Link>
+      </div>
+    );
+  }
 
   if (href) {
     return (
