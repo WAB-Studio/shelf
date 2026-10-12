@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
   const claim = await claimModelCall(MODEL_NAME, file ? "file" : "paste");
   if (!claim) return fail(429, "import.errors.cap");
 
-  const reading = await readPlan(input).catch(() => ({ status: "failed" as const, usage: undefined }));
+  const reading = await readPlan(input, () => {}).catch(() => ({ status: "failed" as const, usage: undefined }));
 
   // A type the model never saw has no outcome of its own: it settles as failed.
   const outcome: ModelCallOutcome = reading.status === "unreadableType" ? "failed" : reading.status;
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
   switch (reading.status) {
     case "ok":
-      return reply(200, { via: "model", draft: reading.draft });
+      return reply(200, { via: "model", draft: reading.raw });
     case "empty":
       return fail(422, "import.errors.empty");
     case "invalid":
