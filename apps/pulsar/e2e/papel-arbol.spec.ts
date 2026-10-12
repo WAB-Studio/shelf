@@ -156,6 +156,9 @@ test.describe("the paper report groups by general goal (RP-84, RP-95, RP-77)", (
       const at = [t.general, t.big1, t.small, t.big2].map((name) => labelLine(lines, name));
       expect(at.every((i) => i >= 0), `a table for each of G, g1, p, g2: ${JSON.stringify(at)}`).toBe(true);
       expect([...at].sort((a, b) => a - b), "G, g1, p, g2").toEqual(at);
+      const inside = lines.findIndex((l) => l.startsWith("metas dentro · 4"));
+      expect(inside, "the general lists the 4 goals inside it, before the first of them is printed").toBeGreaterThanOrEqual(0);
+      expect(inside).toBeLessThan(at[1]);
     } finally {
       await clear(db, person);
     }

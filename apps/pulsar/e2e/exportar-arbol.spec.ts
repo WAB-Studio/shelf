@@ -163,6 +163,7 @@ test.describe("/exportar groups by general goal (RP-84)", () => {
     try {
       const text = flat(await card(page, n.general, n.loose));
       const dentro = text.indexOf("metas dentro");
+      expect(dentro, "«METAS DENTRO» in the general's card").toBeGreaterThanOrEqual(0);
       const rows = text.slice(dentro);
       expect(rows).toContain(
         `${n.big1.toLowerCase()} ${nameOf(0)} · 8 h 30 min de 20 h · hasta el ${lastDay(3)}`,
@@ -210,6 +211,7 @@ test.describe("/exportar groups by general goal (RP-84)", () => {
       expect(from, "«ESTE MES» in the general's card").toBeGreaterThanOrEqual(0);
       const section = text.slice(from, text.indexOf("hasta hoy", from));
       expect(section).toContain("12 h 30 min de 37 h");
+      expect(text, "the sum sits in the card that holds the goals it sums").toContain("metas dentro · 4");
       expect(text, "the stored 999 min of the holder is never read").not.toContain("16 h 39 min");
       expect(text).toContain(`mide en horas y minutos · hasta el ${lastDay(12)}`);
     } finally {
