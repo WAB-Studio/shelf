@@ -3,17 +3,57 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { draftRefusals, importDraftJsonSchema } from "./draft";
-import { parseTemplate } from "./template";
-import { GOAL_NAME_MAX } from "@/lib/validation/plan";
+import { coverage } from "./coverage";
+import { parseTemplate as parseV2, parseTemplateV1 as parseTemplate, templateSource } from "./template";
+import { GOAL_NAME_MAX, GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
 const EXAMPLE: string = catalogue.template.example;
 
-test("PLANTILLA.md's example is the catalogue's, byte for byte", () => {
+const EXAMPLE2 = `pulsar · plantilla 2
+
+# Carrera en IA
+horizonte: 2028-10-01
+nota: Lo que busco en dos años.
+nota: Un ritmo que pueda sostener.
+
+# IA aplicada
+horizonte: 2027-10-01
+dentro de: Carrera en IA
+
+# Evals y harness
+horizonte: 2027-03-01
+dentro de: IA aplicada
+medida: horas de estudio · minutos
+ritmo: 12 h
+nota: Empezar por lo que ya sé medir.
+
+## Fases
+- 2026-10-01 a 2026-12-31 · Evals y harness
+
+## Meses
+- 2026-10 · 12 h
+- 2026-11 · 20 h
+
+## Compromisos
+- Tema técnico · martes y jueves · 2 h
+- Inglés pasivo · cada día · toque
+
+## Tareas
+- 2026-10 · 4 h · Leer AI Engineering cap. 1–4
+- 2026-10 · Tutor
+  nota: Preguntar por la tarifa por hora.
+  nota: Pedir una clase de prueba antes de pagar.
+  - 1 h · Elegir tutor
+    nota: Comparar tres perfiles.
+  - 6 h · Sesiones 1–4`;
+
+// The v1 tests below read through the v1 projection of the v2 reader: same text, same content as before.
+test("PLANTILLA.md's example is the fixture's, byte for byte", () => {
   const doc = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
   const fenced = /```\n([\s\S]*?)\n```/.exec(doc);
   assert.ok(fenced);
-  assert.equal(fenced[1], EXAMPLE);
+  assert.equal(fenced[1], EXAMPLE2);
 });
 
 test("the example reads into the draft it describes, minutes and all", () => {
@@ -227,11 +267,11 @@ const DOC_EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
 test("PLANTILLA.md's example, read from the file, carries the task's two-line note and the sub-task's", () => {
   const result = parseTemplate(DOC_EXAMPLE);
   assert.ok(result.matched && "draft" in result, JSON.stringify(result));
-  const [, tutor] = result.draft.goals[0].tasks;
+  const [, tutor] = result.draft.goals[2].tasks;
   assert.equal(tutor.note, "Preguntar por la tarifa por hora.\nPedir una clase de prueba antes de pagar.");
   assert.equal(tutor.children[0].note, "Comparar tres perfiles.");
   assert.equal("note" in tutor.children[1], false);
-  assert.equal("note" in result.draft.goals[0].tasks[0], false);
+  assert.equal("note" in result.draft.goals[2].tasks[0], false);
 });
 
 test("a note repeats its line; a bare nota: is a blank line; the whole is trimmed; all blank is no note", () => {
@@ -319,7 +359,7 @@ test("PLANTILLA.md's example, read from the file, carries ritmo: 12 h", () => {
   assert.ok(fenced && fenced[1].includes("\nritmo: 12 h\n"));
   const result = parseTemplate(fenced[1]);
   assert.ok(result.matched && "draft" in result);
-  assert.equal(result.draft.goals[0].rhythm, 720);
+  assert.equal(result.draft.goals[2].rhythm, 720);
 });
 
 test("a line out of form names its cause by a catalogue key, never by Spanish typed in lib/", () => {
@@ -837,3 +877,139 @@ for (const [what, text] of Object.entries(highestCases)) {
     assert.deepEqual(result.errors, HIGHEST);
   });
 }
+
+// ---- Version 2: three levels, the goal's note, the lines each part came from.
+
+const H2 = "pulsar · plantilla 2\n";
+const read2 = (text: string) => {
+  const result = parseV2(text);
+  assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+  return result.draft;
+};
+const errors2 = (text: string) => {
+  const result = parseV2(text);
+  assert.ok(result.matched && "errors" in result, JSON.stringify(result));
+  return result;
+};
+
+test("880 three levels: a general, a big goal inside it and a small one inside that", () => {
+  const draft = read2(EXAMPLE2);
+  assert.equal(draft.version, 2);
+  const [general, big, small] = draft.goals;
+  assert.equal(general.parent, null);
+  assert.equal(big.parent, general.key);
+  assert.equal(small.parent, big.key);
+  assert.equal(new Set(draft.goals.map((g) => g.key)).size, 3);
+  assert.deepEqual(draftRefusals(draft, "2026-10-01"), []);
+});
+
+test("880 dentro de: a name that is not before it, or comes only later, is insideUnknown on its line", () => {
+  const later = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de: B\n# B\nhorizonte: 2027-10-01\n`);
+  assert.deepEqual(later.errors.map((e) => [e.line, e.expected]), [[4, "import.errors.form.insideUnknown"]]);
+  const none = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de: Nadie\n`);
+  assert.deepEqual(none.errors.map((e) => [e.line, e.expected]), [[4, "import.errors.form.insideUnknown"]]);
+});
+
+test("880 dentro de: a fourth layer is insideTooDeep on its line", () => {
+  const text = `${H2}# A\nhorizonte: 2027-10-01\n# B\nhorizonte: 2027-10-01\ndentro de: A\n# C\nhorizonte: 2027-10-01\ndentro de: B\n# D\nhorizonte: 2027-10-01\ndentro de: C\n`;
+  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[12, "import.errors.form.insideTooDeep"]]);
+});
+
+test("880 names: a goal name repeated is goalNameRepeated on the second «# » line", () => {
+  const text = `${H2}# Inglés\nhorizonte: 2027-10-01\n# Inglés\nhorizonte: 2027-10-01\n`;
+  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[4, "import.errors.form.goalNameRepeated"]]);
+});
+
+test("880 goal note: nota: lines after medida: are the goal's note, with their lines in noteSrc", () => {
+  const draft = read2(`${H2}# A\nhorizonte: 2027-10-01\nmedida: m · km\nnota: uno\nnota:\nnota: tres\n\n## Tareas\n- 2026-10 · T\n`);
+  const [goal] = draft.goals;
+  assert.equal(goal.note, "uno\n\ntres");
+  assert.deepEqual(goal.noteSrc, [{ from: 5, to: 7 }]);
+  assert.equal(goal.tasks[0].note, null);
+  assert.deepEqual(goal.tasks[0].noteSrc, []);
+});
+
+test("880 goal note: all blank is no note; over the ceiling is goalNote on the first nota: line", () => {
+  assert.equal(read2(`${H2}# A\nhorizonte: 2027-10-01\nnota:\nnota:\n`).goals[0].note, null);
+  const head = `${H2}# A\nhorizonte: 2027-10-01\n`;
+  assert.equal(read2(`${head}nota: ${"x".repeat(GOAL_NOTE_MAX)}\n`).goals[0].note?.length, GOAL_NOTE_MAX);
+  const over = errors2(`${head}nota: ${"x".repeat(GOAL_NOTE_MAX + 1)}\nnota: y\n`);
+  assert.deepEqual(over.errors.map((e) => [e.line, e.expected]), [[4, "import.errors.form.goalNote"]]);
+});
+
+test("880 goal note: nota: with no indent under a section is the note form, never the goal's note", () => {
+  const result = errors2(`${H2}# A\nhorizonte: 2027-10-01\n## Tareas\nnota: suelta\n- 2026-10 · T\n`);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[5, "import.errors.form.note"]]);
+});
+
+test("880 plantilla 1: reads into v2 as one layer, no goal note, same content; its extras stay stray lines", () => {
+  const draft = read2("pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\n## Tareas\n- 2026-10 · T\n");
+  assert.equal(draft.version, 2);
+  assert.equal(draft.goals[0].parent, null);
+  assert.equal(draft.goals[0].note, null);
+  assert.deepEqual(draft.goals[0].tasks.map((t) => [t.name, t.estimate, t.note]), [["T", null, null]]);
+  const v1extra = errors2("pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\ndentro de: B\n");
+  assert.equal(v1extra.errors[0].line, 4);
+  assert.equal(v1extra.errors[0].expected, "import.errors.form.section");
+});
+
+test("880 RP-72: three broken lines come back as three errors in order; a broken header answers alone, cut", () => {
+  const text = `${H2}# A\nhorizonte: 2027-10-01\n## Meses\n- mal\n## Fases\n- peor\n## Tareas\n- fatal\n`;
+  const result = errors2(text);
+  assert.equal(result.cut, false);
+  assert.deepEqual(result.errors.map((e) => e.line), [5, 7, 9]);
+  const cut = errors2(`${H2}# A\nhorizonte: 2027-10-01\nmedida: sin unidad\n## Meses\n- mal\n`);
+  assert.equal(cut.cut, true);
+  assert.deepEqual(cut.errors.map((e) => e.line), [4]);
+  const header = errors2("pulsar · plantilla 3\n# A\n");
+  assert.equal(header.cut, true);
+  assert.deepEqual(header.errors, [{ line: 1, expected: "import.errors.form.firstLine" }]);
+});
+
+test("880 origin: each part carries its own line, a sub-task its own, a note its nota: lines", () => {
+  const lines = EXAMPLE2.split("\n");
+  const at = (text: string) => lines.findIndex((l) => l === text) + 1;
+  const small = read2(EXAMPLE2).goals[2];
+  const [read, tutor] = small.tasks;
+  assert.deepEqual(read.src, [{ from: at("- 2026-10 · 4 h · Leer AI Engineering cap. 1–4"), to: at("- 2026-10 · 4 h · Leer AI Engineering cap. 1–4") }]);
+  const tutorLine = at("- 2026-10 · Tutor");
+  assert.deepEqual(tutor.src, [{ from: tutorLine, to: tutorLine }]);
+  assert.deepEqual(tutor.noteSrc, [{ from: tutorLine + 1, to: tutorLine + 2 }]);
+  assert.deepEqual(tutor.children[0].src, [{ from: tutorLine + 3, to: tutorLine + 3 }]);
+  assert.deepEqual(tutor.children[0].noteSrc, [{ from: tutorLine + 4, to: tutorLine + 4 }]);
+  assert.deepEqual(tutor.children[1].src, [{ from: tutorLine + 5, to: tutorLine + 5 }]);
+  const phase = at("- 2026-10-01 a 2026-12-31 · Evals y harness");
+  assert.deepEqual(small.phases[0].src, [{ from: phase, to: phase }]);
+  assert.deepEqual(small.months.map((m) => m.src), [[{ from: at("- 2026-10 · 12 h"), to: at("- 2026-10 · 12 h") }], [{ from: at("- 2026-11 · 20 h"), to: at("- 2026-11 · 20 h") }]]);
+});
+
+test("880 coverage: every line with text of the example is plan or note, none out", () => {
+  const source = templateSource(EXAMPLE2);
+  assert.equal(source.kind, "lines");
+  const draft = read2(EXAMPLE2);
+  const report = coverage(draft, source, new Set(), new Set());
+  assert.deepEqual(report.outLines, []);
+  assert.equal(report.out, 0);
+  assert.equal(report.total, EXAMPLE2.split("\n").filter((l) => l.trim() !== "").length);
+  assert.equal(report.notes > 0, true);
+});
+
+test("880 coverage: the header line and the section headers are counted too", () => {
+  const text = `${H2}# A\nhorizonte: 2027-10-01\n## Fases\n- 2026-10-01 a 2026-12-31 · x\n`;
+  const report = coverage(read2(text), templateSource(text), new Set(), new Set());
+  assert.equal(report.out, 0);
+  assert.equal(report.plan, 5);
+});
+
+test("880 limit: 40 goals read, the 41st is an error on its own line", () => {
+  const goals = (n: number) => Array.from({ length: n }, (_, i) => `# Meta ${i}\nhorizonte: 2027-10-01\n`).join("");
+  assert.equal(read2(`${H2}${goals(40)}`).goals.length, 40);
+  const over = errors2(`${H2}${goals(41)}`);
+  assert.deepEqual(over.errors.map((e) => e.line), [2 + 40 * 2]);
+});
+
+test("880 limit: plantilla 1 keeps its 12", () => {
+  const goals = (n: number) => Array.from({ length: n }, (_, i) => `# Meta ${i}\nhorizonte: 2027-10-01\n`).join("");
+  assert.equal(parseV2(`pulsar · plantilla 1\n${goals(12)}`).matched && "draft" in parseV2(`pulsar · plantilla 1\n${goals(12)}`), true);
+  assert.deepEqual(errors2(`pulsar · plantilla 1\n${goals(13)}`).errors.map((e) => e.line), [2 + 12 * 2]);
+});
