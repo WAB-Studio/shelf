@@ -46,7 +46,6 @@
     "topHint": "queda como una meta suelta",
     "underGeneral": "queda como meta grande",
     "underBig": "queda como meta pequeña",
-    "startsLater": "Empieza el {start}, y «{name}» arranca antes ({end}).",
     "confirm": "Moverla",
     "cancel": "Dejarla donde está"
   },
