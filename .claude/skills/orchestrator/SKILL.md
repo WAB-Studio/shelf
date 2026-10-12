@@ -36,7 +36,7 @@ Subagents: `planner` takes a slice and returns a plan. `worker` takes an assignm
 4. Take each report the moment it lands. Never wait for the batch: a lane that finished gets its next agent
    while the others still run. Resolve its `Unresolved`. Collect its `Deferred`.
 5. Put any `Questions` to the user. Re-dispatch that assignment with the answers.
-6. Dispatch a `validator` per finished branch. On `FAIL`, re-dispatch that worker with its `Fixes`. On `PASS`, mark the plan's modules done and merge the branch.
+6. Merge each finished branch into its train and mark its modules done. When every module of a train has landed, dispatch one `validator` and one `mutator` over the train, together. On `FAIL` or a survivor, re-dispatch the module's worker with the `Fixes`. Decided by the user 2026-10-12.
 7. Repeat with the assignments the merged ones unblocked.
 8. Run `npm run typecheck` (tsgo) and `npm run lint` (eslint cache).
 9. Tick the slice's RF codes in `docs/SPEC.md`.
