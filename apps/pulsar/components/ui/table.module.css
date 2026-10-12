@@ -242,7 +242,7 @@
 }
 
 /* The measure's unit beside its name, the way the phone sets it beside the
-   figure: quiet, and not folded to capitals. */
+   figure: muted, and not folded to capitals. */
 .headerUnit {
   margin-inline-start: 8px;
   letter-spacing: 0;
