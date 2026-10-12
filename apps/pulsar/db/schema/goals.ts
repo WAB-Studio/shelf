@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { check, date, integer, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  type AnyPgColumn,
+  check,
+  date,
+  index,
+  integer,
+  pgPolicy,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { goalsSchema } from "./_schema";
@@ -32,6 +42,12 @@ export const goals = goalsSchema.table(
     rhythm: integer(),
     // The month whose shift notice the person dismissed (RP-53), a first-of-month date.
     planSeen: date(),
+    // The goal above (RP-78), three levels at most. No cascade: a goal that holds goals is never deleted
+    // under them. The `goals.goals_guard_tree` trigger refuses a cycle, a fourth level and a horizon past
+    // the parent's (RP-79), and a rhythm set on a goal that holds goals (RP-80).
+    parentId: uuid().references((): AnyPgColumn => goals.id),
+    // Plain text a person writes and changes at any time (RP-95); null when empty, never "".
+    note: text(),
   },
   (t) => [
     // A measure with no unit is not a measure. Both null or both set.
@@ -47,16 +63,27 @@ export const goals = goalsSchema.table(
       "goals_plan_seen_first_day",
       sql`${t.planSeen} is null or ${t.planSeen} = date_trunc('month', ${t.planSeen})::date`,
     ),
-    // `authUid` is `(select auth.uid())`: evaluated once per query, not once per row.
+    check("goals_not_own_parent", sql`${t.parentId} <> ${t.id}`),
+    check(
+      "goals_note_shape",
+      sql`${t.note} is null or (char_length(${t.note}) between 1 and 20000 and ${t.note} ~ '\\S')`,
+    ),
+    index("goals_parent_id_idx").on(t.parentId),
+    // `auth.uid()` bare, never `authUid`'s `(select auth.uid())`: the insert and update checks read
+    // this table again, and Postgres refuses as infinite recursion (42P17) a self-read whose select
+    // policy holds a subquery. The other policies keep `authUid`, evaluated once per query.
     pgPolicy("goals_select_self", {
       for: "select",
       to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId}`,
+      using: sql`auth.uid() = ${t.userId}`,
     }),
     pgPolicy("goals_insert_self", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`${authUid} = ${t.userId}`,
+      // The FK alone would take another person's goal as the parent; under RLS `p` sees only the caller's.
+      withCheck: sql`${authUid} = ${t.userId} and (${t.parentId} is null or exists (
+        select 1 from "goals"."goals" p where p.id = ${t.parentId}
+      ))`,
     }),
     // The grant narrows this to the measure pair; `using` alone would let a
     // caller hand their goal to someone else's id.
@@ -64,7 +91,9 @@ export const goals = goalsSchema.table(
       for: "update",
       to: authenticatedRole,
       using: sql`${authUid} = ${t.userId}`,
-      withCheck: sql`${authUid} = ${t.userId}`,
+      withCheck: sql`${authUid} = ${t.userId} and (${t.parentId} is null or exists (
+        select 1 from "goals"."goals" p where p.id = ${t.parentId}
+      ))`,
     }),
   ],
 );

@@ -897,9 +897,11 @@ async function checkGoalRenameArchiveGrant(): Promise<void> {
   const updatable = columns.map((row) => row.column_name).sort();
   assert(
     "P49",
-    updatable.length === 7 &&
+    updatable.length === 9 &&
       updatable.join(",") ===
-        ["archived_at", "horizon", "measure_name", "measure_unit", "name", "plan_seen", "rhythm"].sort().join(","),
+        ["archived_at", "horizon", "measure_name", "measure_unit", "name", "note", "parent_id", "plan_seen", "rhythm"]
+          .sort()
+          .join(","),
     `columns of goals.goals updatable by authenticated = ${updatable.join(", ") || "none"}`,
   );
 
@@ -2606,6 +2608,295 @@ async function checkConnectionHost0016(): Promise<void> {
   await sql.end();
 }
 
+// The driver's constraint name, which a trigger's `RAISE ... CONSTRAINT` fills as a CHECK does.
+function pgConstraint(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("constraint_name" in error)) return undefined;
+  const { constraint_name: name } = error as { constraint_name: unknown };
+  return typeof name === "string" ? name : undefined;
+}
+
+async function attemptShape(
+  tx: postgres.TransactionSql,
+  fn: (sp: postgres.TransactionSql) => Promise<{ count: number }>,
+): Promise<{ count: number; code?: string; constraint?: string; detail?: string }> {
+  let count = 0;
+  let code: string | undefined;
+  let constraint: string | undefined;
+  let detail: string | undefined;
+  await tx.savepoint(async (sp) => {
+    count = (await fn(sp)).count;
+  }).catch((error: unknown) => {
+    code = pgCode(error);
+    constraint = pgConstraint(error);
+    detail = (error as { detail?: string }).detail;
+  });
+  return { count, code, constraint, detail };
+}
+
+function shape(r: { count: number; code?: string; constraint?: string }): string {
+  return `sqlstate = ${r.code ?? "none"}, constraint = ${r.constraint ?? "none"}, rows = ${r.count}`;
+}
+
+// RP-78–RP-80, RP-95: `0018`'s `parent_id`, `note` and the tree's guards, driven as `authenticated`
+// (a superuser passes a column nobody granted). `GOAL_TREE_MUTANT_SQL` runs privileged at the top of
+// each transaction, so a mutant lives and dies inside its rollback.
+async function checkGoalTree0018(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.GOAL_TREE_MUTANT_SQL;
+  if (mutant) console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      if (mutant) await tx.unsafe(mutant);
+      const [theirs] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2027-12-31') returning id`;
+
+      await enterUserContext(tx, subject);
+      const general = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id, note)
+          values (${subject}, 'general', '2027-12-31', null, 'reglas') returning id`,
+      );
+      const large = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id, note)
+          values (${subject}, 'grande', '2027-06-30', ${general.rows[0]?.id ?? null}, null) returning id`,
+      );
+      assert(
+        "P223",
+        general.code === undefined && large.code === undefined && general.rows.length === 1 && large.rows.length === 1,
+        `insert naming parent_id and note, sqlstate = ${general.code ?? large.code ?? "none"}, rows = ${general.rows.length + large.rows.length}`,
+      );
+      const G = general.rows[0]?.id ?? randomUUID();
+      const L = large.rows[0]?.id ?? randomUUID();
+
+      const [small] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'pequeña', '2027-03-31') returning id`;
+      const S = small.id;
+      const moveSmall = await attemptShape(
+        tx,
+        (sp) => sp`update goals.goals set parent_id = ${L}, note = 'bajo la grande' where id = ${S}`,
+      );
+      assert("P224", moveSmall.code === undefined && moveSmall.count === 1, `update parent_id and note, ${shape(moveSmall)}`);
+
+      const underTheirs = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'bajo ajena', '2027-01-31', ${theirs.id})`,
+      );
+      assert("P225", underTheirs.code === "42501", `insert under another person's goal, ${shape(underTheirs)}`);
+
+      const [lone] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'suelta', '2027-01-31') returning id`;
+      const moveUnderTheirs = await attemptShape(
+        tx,
+        (sp) => sp`update goals.goals set parent_id = ${theirs.id} where id = ${lone.id}`,
+      );
+      assert("P226", moveUnderTheirs.code === "42501", `update under another person's goal, ${shape(moveUnderTheirs)}`);
+
+      const cycle = await attemptShape(tx, (sp) => sp`update goals.goals set parent_id = ${S} where id = ${G}`);
+      assert(
+        "P227",
+        cycle.code === "23514" && cycle.constraint === "goals_tree_cycle",
+        `a goal under its granddaughter, ${shape(cycle)}`,
+      );
+
+      const ownParent = await attemptShape(tx, (sp) => sp`update goals.goals set parent_id = ${lone.id} where id = ${lone.id}`);
+      assert(
+        "P228",
+        ownParent.code === "23514" && ownParent.constraint === "goals_not_own_parent",
+        `a goal as its own parent, ${shape(ownParent)}`,
+      );
+
+      const fourth = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'cuarta', '2027-01-31', ${S})`,
+      );
+      assert(
+        "P229",
+        fourth.code === "23514" && fourth.constraint === "goals_tree_depth",
+        `a goal under a small goal, ${shape(fourth)}`,
+      );
+
+      const [branch] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'rama', '2027-03-31') returning id`;
+      await tx`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'hoja', '2027-02-28', ${branch.id})`;
+      const branchUnderLarge = await attemptShape(tx, (sp) => sp`update goals.goals set parent_id = ${L} where id = ${branch.id}`);
+      assert(
+        "P230",
+        branchUnderLarge.code === "23514" && branchUnderLarge.constraint === "goals_tree_depth",
+        `a two-level branch under a large goal, ${shape(branchUnderLarge)}`,
+      );
+      const branchUnderGeneral = await attemptShape(tx, (sp) => sp`update goals.goals set parent_id = ${G} where id = ${branch.id}`);
+      assert(
+        "P231",
+        branchUnderGeneral.code === undefined && branchUnderGeneral.count === 1,
+        `a two-level branch under a general goal, ${shape(branchUnderGeneral)}`,
+      );
+
+      const shorten = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = '2027-03-30' where id = ${L}`);
+      assert(
+        "P232",
+        shorten.code === "23514" && shorten.constraint === "goals_tree_end" && shorten.detail === S,
+        `the goal above ends before one of its goals, ${shape(shorten)}, detail = ${shorten.detail ?? "none"}`,
+      );
+
+      const dayPast = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'un día más', '2027-07-01', ${L})`,
+      );
+      assert(
+        "P233",
+        dayPast.code === "23514" && dayPast.constraint === "goals_tree_end",
+        `a goal ending a day after the goal above, ${shape(dayPast)}`,
+      );
+      const sameDay = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'mismo día', '2027-06-30', ${L})`,
+      );
+      assert("P234", sameDay.code === undefined && sameDay.count === 1, `a goal ending the day the goal above ends, ${shape(sameDay)}`);
+
+      await tx`update goals.goals set measure_name = 'horas', measure_unit = 'h' where id = ${G}`;
+      const holderRhythm = await attemptShape(tx, (sp) => sp`update goals.goals set rhythm = 10 where id = ${G}`);
+      assert(
+        "P235",
+        holderRhythm.code === "23514" && holderRhythm.constraint === "goals_tree_rhythm",
+        `a rhythm on a goal that holds goals, ${shape(holderRhythm)}`,
+      );
+      const holderMonth = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${subject}, ${G}, '2026-11-01', 10)`,
+      );
+      assert(
+        "P236",
+        holderMonth.code === "23514" && holderMonth.constraint === "month_budgets_holder",
+        `a month amount on a goal that holds goals, ${shape(holderMonth)}`,
+      );
+
+      // P2 = B: a goal with a rhythm and a month amount still takes goals; the amount then stops moving.
+      const [planned] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'con plan', '2027-12-31') returning id`;
+      await tx`update goals.goals set measure_name = 'horas', measure_unit = 'h' where id = ${planned.id}`;
+      const loneRhythm = await attemptShape(tx, (sp) => sp`update goals.goals set rhythm = 5 where id = ${planned.id}`);
+      const loneMonth = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${subject}, ${planned.id}, '2026-11-01', 5)`,
+      );
+      assert(
+        "P237",
+        loneRhythm.count === 1 && loneMonth.count === 1 && !loneRhythm.code && !loneMonth.code,
+        `a lone goal takes a rhythm and a month amount, rhythm ${shape(loneRhythm)}, month ${shape(loneMonth)}`,
+      );
+      const gathered = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'reunida', '2027-06-30', ${planned.id})`,
+      );
+      assert("P238", gathered.code === undefined && gathered.count === 1, `a goal with a plan receives a goal, ${shape(gathered)}`);
+      const keptAmount = await attemptShape(
+        tx,
+        (sp) => sp`update goals.month_budgets set amount = 6 where goal_id = ${planned.id}`,
+      );
+      assert(
+        "P239",
+        keptAmount.code === "23514" && keptAmount.constraint === "month_budgets_holder",
+        `the stored month amount of a goal that now holds goals, ${shape(keptAmount)}`,
+      );
+
+      const [archivedHolder] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'con archivada', '2027-12-31') returning id`;
+      await tx`update goals.goals set measure_name = 'horas', measure_unit = 'h' where id = ${archivedHolder.id}`;
+      const [archivedChild] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'archivada', '2027-06-30', ${archivedHolder.id}) returning id`;
+      await tx`update goals.goals set archived_at = now() where id = ${archivedChild.id}`;
+      const archivedRhythm = await attemptShape(tx, (sp) => sp`update goals.goals set rhythm = 3 where id = ${archivedHolder.id}`);
+      const archivedMonth = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${subject}, ${archivedHolder.id}, '2026-11-01', 3)`,
+      );
+      assert(
+        "P240",
+        archivedRhythm.count === 1 && archivedMonth.count === 1 && !archivedRhythm.code && !archivedMonth.code,
+        `a goal holding only archived goals plans, rhythm ${shape(archivedRhythm)}, month ${shape(archivedMonth)}`,
+      );
+
+      const notes: [string, string, boolean][] = [
+        ["P241", "", false],
+        ["P242", "  \n ", false],
+        ["P243", "a".repeat(20000), true],
+        ["P244", "a".repeat(20001), false],
+      ];
+      for (const [label, note, admitted] of notes) {
+        const r = await attemptShape(tx, (sp) => sp`update goals.goals set note = ${note} where id = ${lone.id}`);
+        assert(
+          label,
+          admitted ? r.code === undefined && r.count === 1 : r.code === "23514" && r.constraint === "goals_note_shape",
+          `note of ${note.length} chars (${note.trim() === "" ? "blank" : "text"}), ${shape(r)}`,
+        );
+      }
+
+      await enterUserContext(tx, intruder);
+      const foreign = await attemptShape(tx, (sp) => sp`update goals.goals set note = 'ajena', parent_id = null where id = ${S}`);
+      const [after] = await tx<{ n: number }[]>`select count(*)::int as n from goals.goals where id = ${S}`;
+      assert(
+        "P245",
+        foreign.code === undefined && foreign.count === 0 && after.n === 0,
+        `another person writes my goal's note and parent, ${shape(foreign)}, visible = ${after.n}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // Privileged, with no person settled: RLS would hide the intruder's rows from a walk that forgot `user_id`.
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      if (mutant) await tx.unsafe(mutant);
+      const [general] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'general', '2027-12-31') returning id`;
+      const [large] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'grande', '2027-06-30', ${general.id}) returning id`;
+      const [mine] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+        values (${subject}, 'mía', '2027-03-31', 'horas', 'h') returning id`;
+      // Planted with triggers off: a shape no person can write, which a walk that forgot `user_id` would read.
+      await tx`set local session_replication_role = replica`;
+      await tx`insert into goals.goals (user_id, name, horizon, parent_id, position) values (${intruder}, 'ajena debajo', '2028-12-31', ${mine.id}, 40)`;
+      await tx`set local session_replication_role = origin`;
+      const [early] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena arriba', '2026-01-31') returning id`;
+
+      const depth = await attemptShape(tx, (sp) => sp`update goals.goals set parent_id = ${large.id} where id = ${mine.id}`);
+      assert("P246", depth.code === undefined && depth.count === 1, `another person's goal below mine adds no level, ${shape(depth)}`);
+      const end = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = '2027-03-30' where id = ${mine.id}`);
+      assert("P247", end.code === undefined && end.count === 1, `another person's goal below mine stops no horizon, ${shape(end)}`);
+      const rhythm = await attemptShape(tx, (sp) => sp`update goals.goals set rhythm = 4 where id = ${mine.id}`);
+      assert("P248", rhythm.code === undefined && rhythm.count === 1, `another person's goal below mine stops no rhythm, ${shape(rhythm)}`);
+      const month = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${subject}, ${mine.id}, '2026-11-01', 4)`,
+      );
+      assert("P249", month.code === undefined && month.count === 1, `another person's goal below mine stops no month amount, ${shape(month)}`);
+      const above = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'bajo ajena', '2027-12-31', ${early.id})`,
+      );
+      assert("P250", above.code === undefined && above.count === 1, `another person's goal above stops no horizon, ${shape(above)}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -2636,6 +2927,7 @@ async function main(): Promise<void> {
   await checkRoadmapSchema();
   await checkAuditoria0015();
   await checkConnectionHost0016();
+  await checkGoalTree0018();
 
   if (failed) process.exit(1);
 }
