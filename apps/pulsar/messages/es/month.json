@@ -100,6 +100,9 @@
     "notFound": "Eso ya no existe. Recarga la página.",
     "signedOut": "Tu sesión terminó. Entra otra vez."
   },
+  "group": {
+    "line": "{goal} · {amount}"
+  },
   "across": {
     "mark": "Marcar hecha: {name}",
     "noAmount": "en {month} · sin monto este mes",
