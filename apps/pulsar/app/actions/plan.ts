@@ -129,22 +129,35 @@ const TREE_CONSTRAINTS: Record<string, MessageKey> = {
   month_budgets_holder: "tree.errors.holderNoBudget",
 };
 
-function constraintOf(error: unknown): string | undefined {
+function causeField(error: unknown, field: "constraint_name" | "detail"): string | undefined {
   let current: unknown = error;
   for (let hop = 0; hop < 5 && typeof current === "object" && current !== null; hop++) {
-    const name = (current as { constraint_name?: unknown }).constraint_name;
-    if (typeof name === "string") return name;
+    const value = (current as Record<string, unknown>)[field];
+    if (typeof value === "string") return value;
     current = (current as { cause?: unknown }).cause;
   }
   return undefined;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 // A 23514 of the tree's triggers that slipped past the pure refusals (another door wrote in
-// between), said by the constraint it broke. `name` is the goal known to be involved.
-function treeConstraintRefusal(error: unknown, name: string): TreeRefusal | null {
+// between), said by the constraint it broke. The trigger puts the goal it names in DETAIL; the
+// failed transaction is gone, so that goal is read back in a fresh one.
+async function treeConstraintRefusal(error: unknown): Promise<TreeRefusal | null> {
   if (pgCode(error) !== "23514") return null;
-  const key = TREE_CONSTRAINTS[constraintOf(error) ?? ""];
-  return key ? { ok: false, error: key, values: { name } } : null;
+  const constraint = causeField(error, "constraint_name") ?? "";
+  const key = TREE_CONSTRAINTS[constraint];
+  if (!key) return null;
+  const detail = causeField(error, "detail");
+  const [named] = detail && UUID.test(detail)
+    ? await withGoalsDb((tx) =>
+        tx.execute<{ name: string; horizon: string }>(sql`select name, horizon::text as horizon from ${goals} where id = ${detail}`),
+      )
+    : [];
+  if (!named) return { ok: false, error: key };
+  const date = constraint === "goals_tree_end" ? { date: dayBefore(named.horizon) } : {};
+  return { ok: false, error: key, values: { name: named.name, ...date } };
 }
 
 // RP-82/RP-95: every screen that draws the tree, and the page of each goal the act touched.
@@ -271,14 +284,12 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
 
   // Inside another goal: the lock is taken before the tree is read, in its own statement, so the
   // read sees what the previous holder committed (docs/TRAPS.md, advisory lock and snapshot).
-  let aboveName = "";
   try {
     const outcome = await withGoalsDb(async (tx): Promise<TreeRefusal | { goalId: string }> => {
       await tx.execute(personLock(person.id));
       const { tree } = await readTree(tx);
       const above = tree.byId.get(parentId);
       if (!above) return { ok: false, error: "tree.errors.notFound" };
-      aboveName = above.name;
       const refusal = createInsideRefusal(tree, parentId, horizon, todayInZone());
       if (refusal) return refused(refusal);
 
@@ -296,7 +307,7 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
     revalidateTreeScreens([outcome.goalId, parentId]);
     return { ok: true, goalId: outcome.goalId };
   } catch (error) {
-    const translated = treeConstraintRefusal(error, aboveName);
+    const translated = await treeConstraintRefusal(error);
     if (translated) return translated;
     throw error;
   }
@@ -644,14 +655,12 @@ export async function moveGoal(input: MoveGoalInput): Promise<MoveGoalResult> {
 
   const { goalId, parentId } = parsed.data;
 
-  let aboveName = "";
   try {
     const outcome = await withGoalsDb(async (tx): Promise<TreeRefusal | { touched: string[] }> => {
       await tx.execute(personLock(person.id));
       const { tree } = await readTree(tx);
       const goal = tree.byId.get(goalId);
       if (!goal || (parentId !== null && !tree.byId.has(parentId))) return { ok: false, error: "tree.errors.notFound" };
-      aboveName = parentId === null ? "" : tree.byId.get(parentId)!.name;
 
       const refusal = moveRefusal(tree, goalId, parentId, todayInZone());
       if (refusal) return refused(refusal);
@@ -666,7 +675,7 @@ export async function moveGoal(input: MoveGoalInput): Promise<MoveGoalResult> {
     revalidateTreeScreens(outcome.touched);
     return { ok: true };
   } catch (error) {
-    const translated = treeConstraintRefusal(error, aboveName);
+    const translated = await treeConstraintRefusal(error);
     if (translated) return translated;
     throw error;
   }
@@ -746,7 +755,7 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
     if (refusal) return refusal;
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
-    const translated = treeConstraintRefusal(error, "");
+    const translated = await treeConstraintRefusal(error);
     if (translated) return translated;
     throw error;
   }

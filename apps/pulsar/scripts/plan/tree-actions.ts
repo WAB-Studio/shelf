@@ -211,13 +211,23 @@ test("moveGoal into its own branch is a cycle and nothing changes", async () => 
   assert.deepEqual([await rowOf(G), await rowOf(p)], before);
 });
 
-test("moveGoal of another person's goal or under one is not found", async () => {
+test("moveGoal of another person's goal, or under one, is not found and nothing of theirs or mine moves", async () => {
+  const lane = laneNumber();
+  const [member] = await sql<{ id: string }[]>`
+    select id from auth.users where email = ${`harness-member${lane === 1 ? "" : `-${lane}`}@example.invalid`}`;
+  if (!member) throw new Error("no lane identities — run harness:token for this lane");
   const mine = await mk("867 ajena mía", 5);
-  assert.deepEqual(await plan.moveGoal({ goalId: "00000000-0000-4000-8000-000000000000", parentId: mine }), {
-    ok: false,
-    error: "tree.errors.notFound",
-  });
-  assert.equal((await rowOf(mine)).parent_id, null);
+  const [foreign] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${member.id}, '867 ajena de otra', ${horizonAt(5)}) returning id`;
+  try {
+    const notFound = { ok: false, error: "tree.errors.notFound" };
+    assert.deepEqual(await plan.moveGoal({ goalId: foreign.id, parentId: mine }), notFound);
+    assert.deepEqual(await plan.moveGoal({ goalId: mine, parentId: foreign.id }), notFound);
+    assert.equal((await rowOf(mine)).parent_id, null);
+    assert.equal((await rowOf(foreign.id)).parent_id, null);
+  } finally {
+    await sql`delete from goals.goals where id = ${foreign.id} and user_id = ${member.id}`;
+  }
 });
 
 test("two moves that together would make four levels: one is refused, the tree stays at three", async () => {
@@ -325,8 +335,10 @@ test("a goal with a stored rhythm that receives a goal has its planned tasks fix
   const tasks = await sql<{ id: string }[]>`
     insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, created_at)
     values (${userId}, ${h.id}, '867 tarea 1', 1000, true, ${opened}), (${userId}, ${h.id}, '867 tarea 2', 1000, true, ${opened}) returning id`;
-  const result = await plan.createGoal({ name: "867 ritmo hija", horizon: horizonAt(6), parentId: h.id });
+  const { result, calls } = await counted(() => plan.createGoal({ name: "867 ritmo hija", horizon: horizonAt(6), parentId: h.id }));
   assert.equal(result.ok, true);
+  // Settle, lock, tree, insert, then the plan's read and the one write that fixes.
+  assert.equal(calls.length, 6, calls.join(" | "));
   const rows = await sql<{ name: string; planned_month: string | null; in_plan: boolean }[]>`
     select name, planned_month::text as planned_month, in_plan from goals.one_offs where id in ${sql(tasks.map((t) => t.id))} order by name`;
   assert.deepEqual(rows.map((row) => ({ ...row })), [
@@ -335,4 +347,43 @@ test("a goal with a stored rhythm that receives a goal has its planned tasks fix
   ]);
   const [{ rhythm }] = await sql<{ rhythm: number }[]>`select rhythm from goals.goals where id = ${h.id}`;
   assert.equal(rhythm, 1000);
+});
+
+test("a tree trigger's 23514 reached through a race names the goal that blocks, with its last day", async () => {
+  const G = await mk("867 gatillo G", 7);
+  const holder = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let locked!: () => void;
+  const taken = new Promise<void>((resolve) => (locked = resolve));
+  // The row lock stops moveHorizon's UPDATE after its pure checks passed; a child ending later
+  // is committed meanwhile, so only the trigger can refuse.
+  const held = holder.begin(async (tx) => {
+    await tx`select id from goals.goals where id = ${G} for no key update`;
+    locked();
+    await gate;
+  });
+  await taken;
+  const pending = plan.moveHorizon({ goalId: G, horizon: horizonAt(3) });
+  let waiting = 0;
+  try {
+    for (let i = 0; i < 100 && waiting < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      [{ waiting }] = await sql<{ waiting: number }[]>`
+        select count(*)::int as waiting from pg_locks where locktype = 'transactionid' and not granted`;
+    }
+    await mk("867 gatillo hija", 5, G);
+  } finally {
+    release();
+    await held;
+    await holder.end();
+  }
+  assert.ok(waiting >= 1, "the horizon move waits on the goal's row");
+  const [y, m] = monthFrom(today, 5).split("-").map(Number);
+  assert.deepEqual(await pending, {
+    ok: false,
+    error: "tree.errors.endPastAbove",
+    values: { name: "867 gatillo hija", date: new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10) },
+  });
+  assert.equal((await rowOf(G)).horizon, horizonAt(7));
 });
