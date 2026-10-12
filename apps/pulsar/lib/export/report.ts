@@ -1,4 +1,5 @@
 import type { ReviewWeek } from "@/lib/day/types";
+import type { Level } from "@/lib/goals/tree";
 import type { MonthRow } from "@/lib/plan/months";
 
 export type CarriedReport = {
@@ -53,10 +54,23 @@ export type GoalReport = {
   // A week crossing two months, cut at the month's edge: each part holds the
   // week's days that fall in `month` (the first of it), so a month's parts add up to it.
   weekSplits: WeekSplit[];
+  // The tree's place (RP-84); absent on a hand-built report, where each goal stands alone.
+  parentId?: string | null;
+  level?: Level | null;
+  rootId?: string;
+  rootName?: string;
+  // The goal above, for «de X».
+  aboveName?: string | null;
+  holdsGoals?: boolean;
+  // Goals under it that measure in another unit and add nothing to its figures.
+  outOfUnit?: { id: string; name: string; unit: string }[];
 };
 
 export type Report = {
   today: string;
   evidence: "read" | "unreadable";
+  // In the tree's order: each goal after the one above it.
   goals: GoalReport[];
+  // One entry per general (or lone goal), `goalIds` in preorder.
+  groups?: { rootId: string; goalIds: string[] }[];
 };
