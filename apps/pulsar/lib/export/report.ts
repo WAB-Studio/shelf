@@ -37,6 +37,8 @@ export type GoalReport = {
   unit: string | null;
   // The word the person gave the measure; «mide {measureName}» reads it, never the unit.
   measureName: string | null;
+  // The goal's own note, printed whole on paper (RP-84).
+  note?: string | null;
   // A source feeds the measure (RP-14): an evidence commitment in the goal's unit.
   measureFed: boolean;
   thisMonth: { planned: number | null; reached: number; underPace: boolean };
