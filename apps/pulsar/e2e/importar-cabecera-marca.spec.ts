@@ -146,13 +146,13 @@ test.describe("a broken header cuts the reading (board ImportarCabeceraRota)", (
 });
 
 test.describe("a wrong first line is refused on the screen (board ImportarPrimeraLinea)", () => {
-  test("«pulsar · plantilla 2»: one row on line 1 and the grey cut line", async ({ person, browser, baseURL }) => {
+  test("«pulsar · plantilla 3»: one row on line 1 and the grey cut line", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, SIZES[0].viewport, async (page) => {
-      await paste(page, plan(HEAD).replace("pulsar · plantilla 1", "pulsar · plantilla 2"));
+      await paste(page, plan(HEAD).replace("pulsar · plantilla 1", "pulsar · plantilla 3"));
       const alert = alertOf(page);
       await expect(alert.getByText("1 línea por corregir", { exact: true })).toBeVisible();
       const whole = (await alert.textContent()) ?? "";
-      expect(whole).toContain(`Línea 1: «pulsar · plantilla 2». ${FIRST_LINE_SENTENCE}`);
+      expect(whole).toContain(`Línea 1: «pulsar · plantilla 3». ${FIRST_LINE_SENTENCE}`);
       expect(whole.match(/Línea \d+:/g)).toHaveLength(1);
       await expect(alert.getByText(CUT_LINE, { exact: true })).toBeVisible();
       await expect(page).toHaveURL(/\/metas\/importar$/);

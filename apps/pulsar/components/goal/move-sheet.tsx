@@ -113,7 +113,7 @@ export function MoveGoalAction({ goalId, name, tree: nodes, today }: MoveGoalAct
               <CheckRow
                 key={target.id}
                 radio="destination"
-                indent={node.depth > 0}
+                depth={node.depth > 0 ? 1 : 0}
                 checked={choice === target.id}
                 onCheckedChange={() => setChoice(target.id)}
                 disabled={pending || target.refusal !== null}

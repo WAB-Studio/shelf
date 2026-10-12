@@ -4,6 +4,7 @@ import messages from "../messages/es/import.json";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 import { dayBefore } from "../lib/day/weeks";
 import { civilDateToDate, todayInZone } from "../lib/zone";
+import { movedExample } from "./importar-plan";
 
 // Against the ordinary server, which holds no model key (`OPENAI_API_KEY=""`):
 // the draft comes from the template path, so no model is ever called
@@ -24,14 +25,10 @@ const word = (month: string, withYear = false) => {
 };
 
 // The catalogue's example, its dates moved to the person's own now so the
-// months stay inside the goal's span whatever day the suite runs.
+// months stay inside the goals' spans whatever day the suite runs.
 function template(extraMonth?: string): string {
-  const { first, second, horizon } = monthsFromToday();
-  let text = messages.template.example
-    .replace("2027-10-01", horizon)
-    .replace("2026-10-01 a 2026-12-31", `${first}-01 a ${first}-28`)
-    .replaceAll("2026-10", first)
-    .replaceAll("2026-11", second);
+  const { second } = monthsFromToday();
+  let text = movedExample();
   if (extraMonth) text = text.replace(`- ${second} · 20 h`, `- ${second} · 20 h\n- ${extraMonth} · 8 h`);
   return text;
 }
@@ -66,8 +63,8 @@ async function asPerson(
   }
 }
 
-const dayWord = (date: string) =>
-  new Intl.DateTimeFormat("es", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(civilDateToDate(date));
+const ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const dayWord = (date: string) => `${Number(date.slice(8, 10))} ${ABBR[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
 
 // A goal that measures nothing: its month amount and its task's time cannot be kept.
 function noMeasureTemplate(): string {
@@ -79,6 +76,11 @@ function noMeasureTemplate(): string {
 const backName = `Volver a ${messages.review.place}`;
 
 const box = (page: Page, name: string | RegExp) => page.getByRole("checkbox", { name });
+// A row is the box around its checkbox; sub-tasks and notes live in it or right after it.
+const rowOf = (page: Page, name: RegExp) => page.locator("div").filter({ has: page.getByRole("checkbox", { name }) }).last();
+const openSubTasks = (page: Page) => page.getByRole("button", { name: /\d+ sub-tareas?/ }).first().click();
+// The first month says 12 h and its tasks add up to 11 h: the check proposes the sum, and the row shows it.
+const SUM = "11 h";
 
 test.describe("the review of an imported plan (RP-37, RP-35)", () => {
   test("it reads the goal, its amounts, its commitments and the tutor task with its two sub-tasks", async ({ person, browser, baseURL }) => {
@@ -87,18 +89,20 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await toReview(page, template());
 
       await expect(page.getByText(messages.review.eyebrowTemplate, { exact: true })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "IA aplicada" })).toBeVisible();
-      await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}` })).toHaveText("12 h");
+      await expect(box(page, /^IA aplicada/)).toBeChecked();
+      await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}` })).toHaveText(SUM);
       await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(second)}` })).toHaveText("20 h");
       await expect(box(page, /Tema técnico/)).toBeChecked();
       await expect(box(page, /Inglés pasivo/)).toBeChecked();
       await expect(box(page, /^Tutor/)).toBeChecked();
-      await expect(box(page, /Elegir tutor/)).toBeChecked();
-      await expect(box(page, /Sesiones 1–4/)).toBeChecked();
-      // The template carries a rhythm, so the month only orders the plan: the line is the sum alone.
-      await expect(page.getByText("la suma de lo marcado", { exact: true })).toBeVisible();
-      await expect(page.getByText(`${word(first, true)} · la suma de lo marcado`, { exact: true })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Crear 1 meta" })).toBeVisible();
+      await openSubTasks(page);
+      await expect(box(page, /^Elegir tutor/)).toBeChecked();
+      await expect(box(page, /^Sesiones 1–4/)).toBeChecked();
+      // The parent's figure is the sum of its sub-tasks, in mono, with no button of its own.
+      await expect(rowOf(page, /^Tutor/).locator("label")).toContainText("7 h");
+      await expect(page.getByRole("button", { name: /^Cambiar el monto de Tutor/ })).toHaveCount(0);
+      // One goal per «meta»: the general one, the big one and the small one.
+      await expect(page.getByRole("button", { name: "Crear 3 metas" })).toBeVisible();
       await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveCount(0);
     });
   });
@@ -109,7 +113,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       expect(text).toContain("domingo, miércoles y lunes");
       await toReview(page, text);
 
-      await expect(box(page, /Tema técnico/)).toHaveAccessibleName("Tema técnico lunes, miércoles y domingo 2 h");
+      await expect(box(page, /Tema técnico/)).toHaveAccessibleName("Tema técnico compromiso · lunes, miércoles y domingo 2 h");
     });
   });
 
@@ -118,9 +122,10 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, template());
 
-      await box(page, /Sesiones 1–4/).uncheck();
+      await openSubTasks(page);
+      await box(page, /^Sesiones 1–4/).uncheck();
       // The parent's figure is the sum of what stays marked.
-      await expect(page.locator("label", { hasText: "la suma de lo marcado" })).toContainText("1 h");
+      await expect(rowOf(page, /^Tutor/).locator("label")).toContainText("1 h");
 
       await page.getByRole("button", { name: `Cambiar el monto de ${word(first)}` }).click();
       await page.getByRole("spinbutton", { name: "horas" }).fill("10");
@@ -128,14 +133,14 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await page.getByRole("button", { name: "Guardar" }).click();
       await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}` })).toHaveText("10 h");
 
-      await page.getByRole("button", { name: "Crear 1 meta" }).click();
+      await page.getByRole("button", { name: "Crear 3 metas" }).click();
       await expect(page).toHaveURL(/\/metas$/);
       await expect(page.getByText("IA aplicada").first()).toBeVisible();
       // The revalidated page has painted: the review's refresh is over, and the person never goes back to the import.
       await expect(page.getByRole("link", { name: /IA aplicada/ }).first()).toBeVisible();
       await expect(page).toHaveURL(/\/metas$/);
 
-      const goals = await db`select id from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+      const goals = await db`select id from goals.goals where user_id = ${person.id} and name = 'Evals y harness'`;
       expect(goals).toHaveLength(1);
       const budgets = await db`
         select to_char(month, 'YYYY-MM') as month, amount from goals.month_budgets
@@ -156,22 +161,22 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, template(previous));
 
-      const title = page.getByRole("heading", { name: messages.review.blocked.title });
+      const title = page.getByText(messages.review.blocked.title, { exact: true });
       await expect(title).toBeVisible();
       await expect(page.getByText(messages.review.blocked.hint, { exact: true })).toBeVisible();
-      const refused = page.getByRole("checkbox", { name: new RegExp(word(previous, true)) });
+      const refused = page.getByRole("checkbox", { name: new RegExp(`^${word(previous)}`, "i") });
       await expect(refused).toBeDisabled();
       await expect(refused).not.toBeChecked();
       await expect(
         page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first, true)), { exact: true }),
       ).toBeVisible();
-      // The warnings stand above the goal.
+      // The list stands after the tree, not above it.
       const above = (await title.boundingBox())!.y;
-      expect(above).toBeLessThan((await page.getByRole("heading", { name: "IA aplicada" }).boundingBox())!.y);
+      expect(above).toBeGreaterThan((await box(page, /^IA aplicada/).boundingBox())!.y);
 
-      await page.getByRole("button", { name: "Crear 1 meta" }).click();
+      await page.getByRole("button", { name: "Crear 3 metas" }).click();
       await expect(page).toHaveURL(/\/metas$/);
-      const goals = await db`select id from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+      const goals = await db`select id from goals.goals where user_id = ${person.id} and name = 'Evals y harness'`;
       const budgets = await db`
         select to_char(month, 'YYYY-MM') as month from goals.month_budgets
         where user_id = ${person.id} and goal_id = ${goals[0].id} order by month`;
@@ -184,7 +189,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await toReview(page, template());
       await page.reload();
       await settled(page);
-      await expect(page.getByRole("heading", { name: "IA aplicada" })).toBeVisible();
+      await expect(box(page, /^IA aplicada/)).toBeVisible();
     });
     await asPerson({ person, browser, baseURL }, async (fresh) => {
       await fresh.goto("/metas/importar/revisar");
@@ -198,7 +203,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, template(horizon.slice(0, 7)).replace("- " + horizon.slice(0, 7) + " · 8 h", `- ${horizon.slice(0, 7)} · 8 h\n- ${previous} · 5 h`));
 
-      await expect(page.getByText(`hasta el ${dayWord(last)}`, { exact: true })).toBeVisible();
+      await expect(page.getByText(`meta grande · hasta el ${dayWord(last)}`, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.review.blocked.monthAfterEnd.replace("{last}", dayWord(last)), { exact: true })).toBeVisible();
       await expect(
         page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first, true)), { exact: true }),
@@ -211,11 +216,12 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, noMeasureTemplate());
 
+      // The month's amount is refused and listed; the task stays, its time falling for the true reason.
       await expect(page.getByText(messages.review.blocked.amountNoMeasure, { exact: true })).toBeVisible();
-      const task = box(page, /Comprar tenis/);
+      const task = box(page, /^Comprar tenis/);
       await expect(task).toBeChecked();
       await expect(task).toBeEnabled();
-      await expect(page.getByText(`${word(first, true)} · ${messages.notices.estimateDropped}`, { exact: true })).toBeVisible();
+      await expect(page.getByText(`tarea · ${word(first)} · ${messages.notices.estimateDropped}`, { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: /^Cambiar el monto de Comprar tenis/ })).toHaveCount(0);
 
       await page.getByRole("button", { name: "Crear 1 meta" }).click();
@@ -230,7 +236,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     const { first } = monthsFromToday();
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, template());
-      await page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(first)}`) }).click();
+      await page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(first)}`, "i") }).click();
       await page.getByRole("spinbutton", { name: "horas" }).fill("10");
       await page.getByRole("spinbutton", { name: "minutos" }).fill("0");
       await page.getByRole("button", { name: "Guardar" }).click();
@@ -238,11 +244,13 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await settled(page);
       await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 10 h` })).toHaveText("10 h");
 
-      await box(page, /Sesiones 1–4/).uncheck();
+      await openSubTasks(page);
+      await box(page, /^Sesiones 1–4/).uncheck();
       await page.reload();
       await settled(page);
-      await expect(box(page, /Sesiones 1–4/)).not.toBeChecked();
-      await expect(box(page, /Elegir tutor/)).toBeChecked();
+      await openSubTasks(page);
+      await expect(box(page, /^Sesiones 1–4/)).not.toBeChecked();
+      await expect(box(page, /^Elegir tutor/)).toBeChecked();
       await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 10 h` })).toHaveText("10 h");
 
       await page.getByRole("link", { name: backName, exact: true }).click();
@@ -255,7 +263,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     const { first } = monthsFromToday();
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, template());
-      await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 12 h` })).toHaveCount(1);
+      await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, ${SUM}` })).toHaveCount(1);
       await expect(page.getByRole("link", { name: backName, exact: true })).toBeVisible();
       // RP-63: the goal's rhythm row is the one checkbox that says «12 h», as «12 h al mes»; no month's amount is.
       const rhythm = messages.review.rhythmOf.replace("{amount}", "12 h");
@@ -276,14 +284,14 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await toReview(page, template());
 
       await expect(page.getByRole("note").filter({ hasText: messages.review.repeated })).toBeVisible();
+      // The goal and the one inside it start out; the general goal above stays in.
+      await expect(box(page, /^IA aplicada/)).not.toBeChecked();
       await expect(box(page, /Tema técnico/)).not.toBeChecked();
-      await expect(box(page, /Elegir tutor/)).not.toBeChecked();
-      const none = page.getByRole("button", { name: "Crear 0 metas" });
-      await expect(none).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Crear 1 meta" })).toBeEnabled();
 
-      await box(page, new RegExp(`^${messages.review.horizonUntil.replace("{date}", ".*")}`)).check();
+      await box(page, /^IA aplicada/).check();
       await expect(page.getByRole("note")).toHaveCount(1);
-      await page.getByRole("button", { name: "Crear 1 meta" }).click();
+      await page.getByRole("button", { name: "Crear 3 metas" }).click();
       await expect(page).toHaveURL(/\/metas$/);
       const goals = await db`select 1 from goals.goals where user_id = ${person.id} and name = 'IA aplicada' and archived_at is null`;
       expect(goals).toHaveLength(2);
@@ -312,12 +320,13 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
           for (const amount of amounts) expect((await amount.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 
           // The confirm stays in the viewport while the list scrolls.
-          const at = (await page.getByRole("button", { name: "Crear 1 meta" }).boundingBox())!;
+          const at = (await page.getByRole("button", { name: "Crear 3 metas" }).boundingBox())!;
           expect(at.y + at.height).toBeLessThanOrEqual(800);
-          // A sub-task sits 32px in.
+          // A sub-task sits one level, 16px, in.
+          await openSubTasks(page);
           const parent = (await box(page, /^Tutor/).boundingBox())!;
-          const child = (await box(page, /Elegir tutor/).boundingBox())!;
-          expect(child.x - parent.x).toBeGreaterThanOrEqual(28);
+          const child = (await box(page, /^Elegir tutor/).boundingBox())!;
+          expect(Math.abs(child.x - parent.x - 16)).toBeLessThanOrEqual(1);
         },
         { width, height: 800 },
       );
@@ -342,7 +351,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
             await expect(source).toHaveValue(text);
             await expect(page.getByRole("link", { name: messages.review.change, exact: true })).toBeVisible();
             const left = (await source.boundingBox())!;
-            const right = (await page.getByRole("heading", { name: "IA aplicada" }).boundingBox())!;
+            const right = (await box(page, /^IA aplicada/).boundingBox())!;
             expect(left.x + left.width).toBeLessThanOrEqual(right.x);
             expect(Math.abs(left.y - right.y)).toBeLessThan(400);
           } else {
@@ -355,17 +364,17 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     });
   }
 
-  test("at 1440 two goals' cards sit side by side, and a file import shows its name where the text would be", async ({ person, browser, baseURL }) => {
+  test("at 1440 the goals are one tree in one card, and a file import shows its name where the text would be", async ({ person, browser, baseURL }) => {
     const { horizon } = monthsFromToday();
     const two = `${template()}\n\n# Trámites\nhorizonte: ${horizon}\n\n## Compromisos\n- Pagar la luz · cada día · toque`;
     await asPerson(
       { person, browser, baseURL },
       async (page) => {
         await toReview(page, two);
-        const first = (await page.getByRole("region", { name: "IA aplicada" }).boundingBox())!;
-        const second = (await page.getByRole("region", { name: "Trámites" }).boundingBox())!;
-        expect(Math.abs(first.y - second.y)).toBeLessThan(2);
-        expect(second.x).toBeGreaterThan(first.x + first.width - 1);
+        const card = page.getByRole("region", { name: messages.review.title });
+        await expect(card).toHaveCount(1);
+        await expect(card.getByRole("checkbox", { name: /^IA aplicada/ })).toBeVisible();
+        await expect(card.getByRole("checkbox", { name: /^Trámites/ })).toBeVisible();
 
         await page.goto("/metas/importar");
         await page.getByLabel(messages.upload).setInputFiles({ name: "mi-plan.txt", mimeType: "text/plain", buffer: Buffer.from(template()) });

@@ -79,15 +79,14 @@ test.describe("the review says the cut (RP-37)", () => {
     baseURL,
   }) => {
     await review({ person, browser, baseURL }, async (page) => {
-      const note = page.locator("p").filter({ hasText: "La fase «" });
-      await expect(note).toHaveCount(1);
+      // The cut hangs under its phase, the drop under its goal.
+      const notes = page.locator("p").filter({ hasText: "La fase «" });
+      await expect(notes).toHaveCount(2);
       const today = dayAndMonth(todayInZone());
-      await expect(note).toContainText(
-        `La fase «${CUT}» empieza en la semana 1, el ${today}`,
-      );
-      await expect(note).toContainText(
-        `La fase «${DROPPED}» termina antes de abrirla y no se crea.`,
-      );
+      const cut = notes.filter({ hasText: `La fase «${CUT}» empieza en la semana 1, el ${today}` });
+      const drop = notes.filter({ hasText: `La fase «${DROPPED}» termina antes de abrirla y no se crea.` });
+      await expect(cut).toHaveCount(1);
+      await expect(drop).toHaveCount(1);
       // The dropped phase is no row; the cut one is.
       await expect(
         page.getByRole("checkbox", { name: new RegExp(DROPPED) }),
@@ -96,15 +95,11 @@ test.describe("the review says the cut (RP-37)", () => {
         page.getByRole("checkbox", { name: new RegExp(CUT) }),
       ).toBeVisible();
       // The line comes before the confirm.
-      const noteBox = (await note.boundingBox())!;
+      const noteBox = (await drop.boundingBox())!;
       const confirm = (await page
         .getByRole("button", { name: "Crear 1 meta" })
         .boundingBox())!;
       expect(noteBox.y).toBeLessThan(confirm.y);
-      // The span line opens on today.
-      await expect(
-        page.locator("p").filter({ hasText: `Desde el ${today} de ${todayInZone().slice(0, 4)}` }),
-      ).toBeVisible();
     });
   });
 
@@ -117,7 +112,7 @@ test.describe("the review says the cut (RP-37)", () => {
       { person, browser, baseURL },
       async (page) => {
         const card = (await page
-          .getByRole("region", { name: "Fases recortadas" })
+          .getByRole("region", { name: messages.review.title })
           .boundingBox())!;
         const bar = await page
           .getByRole("button", { name: "Crear 1 meta" })
@@ -130,7 +125,7 @@ test.describe("the review says the cut (RP-37)", () => {
     );
   });
 
-  test("at 1440 with two goals the confirm bar spans both cards", async ({
+  test("at 1440 with two goals the tree is still one card and the confirm bar stands its width", async ({
     person,
     browser,
     baseURL,
@@ -138,29 +133,23 @@ test.describe("the review says the cut (RP-37)", () => {
     await review(
       { person, browser, baseURL },
       async (page) => {
-        const first = (await page
-          .getByRole("region", { name: "Fases recortadas" })
-          .boundingBox())!;
-        const second = (await page
-          .getByRole("region", { name: "Segunda meta" })
-          .boundingBox())!;
+        await expect(page.getByRole("region", { name: messages.review.title })).toHaveCount(1);
+        const card = (await page.getByRole("region", { name: messages.review.title }).boundingBox())!;
         const bar = (await page
           .getByRole("button", { name: "Crear 2 metas" })
           .evaluate((button) => {
             const box = button.parentElement!.getBoundingClientRect();
             return { x: box.x, width: box.width };
           }))!;
-        const left = Math.min(first.x, second.x);
-        const right = Math.max(first.x + first.width, second.x + second.width);
-        expect(Math.abs(bar.x - left)).toBeLessThanOrEqual(1);
-        expect(Math.abs(bar.x + bar.width - right)).toBeLessThanOrEqual(1);
+        expect(Math.abs(bar.x - card.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(bar.width - card.width)).toBeLessThanOrEqual(1);
       },
       1440,
       ["Fases recortadas", "Segunda meta"],
     );
   });
 
-  test("with two goals each card names its own cut and drop notes, never the other goal's", async ({
+  test("with two goals the cut and drop notes name only the goal that has them, never the other's phase", async ({
     person,
     browser,
     baseURL,
@@ -180,13 +169,12 @@ test.describe("the review says the cut (RP-37)", () => {
     await review(
       { person, browser, baseURL },
       async (page) => {
-        const first = page.getByRole("region", { name: "Fases recortadas" });
-        const second = page.getByRole("region", { name: "Segunda meta" });
-        await expect(first).toContainText(`La fase «${CUT}» empieza en la semana 1`);
-        await expect(first).toContainText(`La fase «${DROPPED}» termina antes de abrirla`);
-        await expect(second).toContainText("Fase tranquila");
-        await expect(second).not.toContainText("La fase «");
-        await expect(page.locator("p").filter({ hasText: "La fase «" })).toHaveCount(1);
+        await expect(page.getByRole("checkbox", { name: /^Fase tranquila/ })).toBeVisible();
+        const notes = page.locator("p").filter({ hasText: "La fase «" });
+        await expect(notes).toHaveCount(2);
+        await expect(notes.filter({ hasText: CUT })).toHaveCount(1);
+        await expect(notes.filter({ hasText: DROPPED })).toHaveCount(1);
+        await expect(notes.filter({ hasText: "Fase tranquila" })).toHaveCount(0);
       },
       1280,
       undefined,

@@ -20,6 +20,9 @@ export type StoredDraft = {
   notices: Notice[];
   source: Source;
   sourceName: string | null;
+  // The text as the person wrote it, for the box and the review's left column; `source.lines`
+  // is the reader's own cut (a template's note lines lose their prefix).
+  text?: string | null;
   unmarked: string[] | null;
   declined: string[];
 };
@@ -33,8 +36,9 @@ export function saveDraft(input: {
   notices: Notice[];
   source: Source;
   sourceName?: string | null;
+  text?: string | null;
 }): void {
-  write({ version: 2, ...input, sourceName: input.sourceName ?? null, unmarked: null, declined: [] });
+  write({ version: 2, ...input, sourceName: input.sourceName ?? null, text: input.text ?? null, unmarked: null, declined: [] });
 }
 
 // Rewrites the draft, the unmarked paths and the declined corrections; the rest stays.
@@ -69,12 +73,26 @@ export function readDraft(): StoredDraft | null {
       notices: records<Notice>(parsed.notices),
       source: { kind: source.kind, lines: source.lines === null ? null : strings(source.lines) },
       sourceName: typeof parsed.sourceName === "string" ? parsed.sourceName : null,
+      text: typeof parsed.text === "string" ? parsed.text : parsed.text === null ? null : undefined,
       unmarked: Array.isArray(parsed.unmarked) ? strings(parsed.unmarked) : null,
       declined: strings(parsed.declined),
     };
   } catch {
     return null;
   }
+}
+
+// The text the person wrote: kept whole when the draft was read from one; `null` for a file
+// (the name stands in); a draft stored without it falls back to the reader's own lines.
+export function storedText(stored: StoredDraft): string | null {
+  if (stored.text !== undefined) return stored.text;
+  return stored.source.kind === "lines" && stored.source.lines !== null ? stored.source.lines.join("\n") : null;
+}
+
+// What the box holds when the person comes back to it.
+export function readText(): string | null {
+  const stored = readDraft();
+  return stored ? storedText(stored) : null;
 }
 
 export function clearDraft(): void {

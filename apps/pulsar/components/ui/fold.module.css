@@ -35,3 +35,24 @@
 .chevron {
   transform: rotate(-90deg);
 }
+
+/* The rows of a tree start 4px plus 16px a level in; the chevron leads at that edge. */
+.depth0 {
+  padding-inline-start: 4px;
+}
+
+.depth1 {
+  padding-inline-start: 20px;
+}
+
+.depth2 {
+  padding-inline-start: 36px;
+}
+
+.depth3 {
+  padding-inline-start: 52px;
+}
+
+.depth4 {
+  padding-inline-start: 68px;
+}

@@ -4,10 +4,12 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { readSourceV1 as readSource, saveDraftV1 as saveDraft } from "@/lib/import/draft-store";
-import type { ImportDraftV1 } from "@/lib/import/draft";
-import { parseTemplateV1 as parseTemplate } from "@/lib/import/template";
-import { Button, CodeBlock, FilePick, Flex, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
+import type { Correction, ImportDraft, Notice as DraftNotice, Source } from "@/lib/import/draft";
+import { readText as readStoredText, saveDraft } from "@/lib/import/draft-store";
+import { formKey } from "@/lib/import/reason-key";
+import { parseTemplate, type FormCode } from "@/lib/import/template";
+import type { WorkbookError } from "@/lib/import/workbook";
+import { Button, CodeBlock, FilePick, Flex, Mark, MarkList, Notice, Page, ScreenHeader, Section, Text, TextArea, type MarkState } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -24,10 +26,24 @@ const KNOWN_ERRORS = new Set([
   "import.errors.empty",
   "import.errors.modelFailed",
   "import.errors.modelInvalid",
+  "import.errors.workbookNotTemplate",
 ]);
 
+// What a read that was not a failure answers: the draft, what the check proposes and says, and the lines it came from.
+type Reading = {
+  via: "template" | "workbook" | "model";
+  draft: ImportDraft;
+  corrections: Correction[];
+  notices: DraftNotice[];
+  source: Source;
+};
+
+type Step = "find" | "arrange" | "check";
+const STEPS: Step[] = ["find", "arrange", "check"];
+
 type Failure =
-  | { kind: "templateLine"; cut: boolean; lines: { line: number; expected: string; unit?: string; text: string }[] }
+  | { kind: "templateLine"; cut: boolean; lines: { line: number; expected: FormCode; unit?: string; text: string }[] }
+  | { kind: "workbookRows"; rows: WorkbookError[] }
   | { kind: "key"; key: MessageKey; values?: Record<string, string> };
 
 const subscribeNothing = () => () => {};
@@ -88,10 +104,13 @@ function selectLine(area: HTMLTextAreaElement, n: number) {
 // What each failure draws: where its box sits and what it offers next.
 function placement(failure: Failure) {
   if (failure.kind === "templateLine") return { place: "below", template: true } as const;
+  if (failure.kind === "workbookRows") return { place: "upload", template: true } as const;
   switch (failure.key) {
     case "import.errors.noKey":
     case "import.errors.cap":
       return { place: "top", template: true } as const;
+    case "import.errors.workbookNotTemplate":
+      return { place: "upload", template: true } as const;
     case "import.errors.blank":
     case "import.errors.empty":
     case "import.errors.modelFailed":
@@ -113,7 +132,7 @@ export function ImportScreen() {
   const router = useRouter();
   // Storage is the client's: the server snapshot is the empty box, and the
   // stored text shows once hydrated. What the person types wins from then on.
-  const stored = useSyncExternalStore(subscribeNothing, () => readSource() ?? "", () => "");
+  const stored = useSyncExternalStore(subscribeNothing, () => readStoredText() ?? "", () => "");
   const [typed, setTyped] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const alertBox = useRef<HTMLDivElement>(null);
@@ -142,9 +161,14 @@ export function ImportScreen() {
   const [failure, setFailure] = useState<Failure | null>(null);
   const [showTemplate, setShowTemplate] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [instructionCopied, setInstructionCopied] = useState(false);
+  // The step a model read has reached; `null` for any read that asks no model.
+  const [step, setStep] = useState<Step | null>(null);
 
   // The file whose text the box holds, named under it while its list stands.
   const [fileNote, setFileNote] = useState<string | null>(null);
+  // A workbook's own note: its name, and whether it was not the template.
+  const [bookNote, setBookNote] = useState<{ name: string; alien: boolean } | null>(null);
   const reread = failure?.kind === "templateLine" ? parseTemplate(text) : null;
   // The list goes when the text stops being the template; the notice says why.
   const notTemplate = reread !== null && !reread.matched && text.trim() !== "";
@@ -162,6 +186,15 @@ export function ImportScreen() {
   }, [failure]);
 
   const placed = shown ? placement(shown) : null;
+  const alien = shown?.kind === "key" && shown.key === "import.errors.workbookNotTemplate";
+  // The template's workbook: a file the server hands over, so a plain link.
+  const download = (variant: "outline" | "ghost", block = false) => (
+    <Button asChild block={block} variant={variant} tone={variant === "ghost" ? "accent" : undefined}>
+      <a href="/importar/plantilla.xlsx" download>
+        {t("import.entry.workbook")}
+      </a>
+    </Button>
+  );
   // The key and the cap shut the model; the template still reads.
   const modelShut =
     failure?.kind === "key" && (failure.key === "import.errors.noKey" || failure.key === "import.errors.cap");
@@ -178,22 +211,39 @@ export function ImportScreen() {
     setBusy(true);
     setFailure(null);
     setFileNote(null);
+    setBookNote(null);
+    setStep(null);
+    const reading = (done: Reading) => {
+      saveDraft({ ...done, sourceName: fileName, text: saved });
+      router.push("/metas/importar/revisar");
+    };
     try {
       const response = await fetch("/importar/leer", { method: "POST", body: form });
-      const body = (await response.json().catch(() => null)) as {
-        error?: string;
-        cut?: boolean;
-        errors?: { line: number; expected: string; unit?: string }[];
-        via?: "template" | "model";
-        draft?: ImportDraftV1;
-      } | null;
-
-      if (response.ok && body?.draft && body.via) {
-        saveDraft({ via: body.via, draft: body.draft, source: saved, sourceName: fileName });
-        router.push("/metas/importar/revisar");
+      if (response.headers.get("content-type")?.includes("application/x-ndjson") && response.body) {
+        setStep("find");
+        await followStream(response.body, reading);
         return;
       }
-      if (body?.error === "import.errors.templateLine" && body.errors?.length) {
+      const body = (await response.json().catch(() => null)) as
+        | (Partial<Reading> & {
+            error?: string;
+            cut?: boolean;
+            errors?: { line: number; expected: FormCode; unit?: string }[];
+            rows?: WorkbookError[];
+          })
+        | null;
+
+      if (response.ok && body?.draft && body.via && body.source) {
+        reading({ via: body.via, draft: body.draft, corrections: body.corrections ?? [], notices: body.notices ?? [], source: body.source });
+        return;
+      }
+      if (body?.error === "import.errors.workbookRows" && body.rows?.length) {
+        setBookNote({ name: fileName ?? "", alien: false });
+        fail({ kind: "workbookRows", rows: body.rows });
+      } else if (body?.error === "import.errors.workbookNotTemplate") {
+        setBookNote({ name: fileName ?? "", alien: true });
+        fail({ kind: "key", key: "import.errors.workbookNotTemplate" });
+      } else if (body?.error === "import.errors.templateLine" && body.errors?.length) {
         const written = source.split("\n");
         // A text file's own text is the box's, read again as any pasted one.
         if (fileName !== null && source !== "") {
@@ -214,7 +264,42 @@ export function ImportScreen() {
       fail({ kind: "key", key: "import.errors.modelFailed" });
     } finally {
       setBusy(false);
+      setStep(null);
     }
+  }
+
+  // The model's answer, a JSON object a line: the step it is on, then the draft or the error.
+  async function followStream(body: ReadableStream<Uint8Array>, reading: (done: Reading) => void) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let ended = false;
+    const handle = (line: string) => {
+      if (line.trim() === "") return;
+      const message = JSON.parse(line) as { step?: Step; error?: string; done?: Reading };
+      if (message.step && STEPS.includes(message.step)) setStep(message.step);
+      else if (message.done) {
+        ended = true;
+        reading(message.done);
+      } else if (message.error) {
+        ended = true;
+        fail({ kind: "key", key: KNOWN_ERRORS.has(message.error) ? messageKey(message.error) : "import.errors.modelFailed" });
+      }
+    };
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        lines.forEach(handle);
+      }
+      handle(buffer);
+    } catch {
+      // A stream cut short reads as the model failing, below.
+    }
+    if (!ended) fail({ kind: "key", key: "import.errors.modelFailed" });
   }
 
   function readText() {
@@ -255,6 +340,13 @@ export function ImportScreen() {
       .catch(() => setCopied(false));
   }
 
+  function copyInstruction() {
+    void navigator.clipboard
+      .writeText(t("import.entry.instruction"))
+      .then(() => setInstructionCopied(true))
+      .catch(() => setInstructionCopied(false));
+  }
+
   const notice = shown ? (
     shown.kind === "templateLine" ? (
       <Notice
@@ -271,8 +363,16 @@ export function ImportScreen() {
           t("import.errors.templateLine", {
             line: e.line,
             text: e.text,
-            expected: t(messageKey(e.expected), { unit: e.unit ?? "" }),
+            expected: t(formKey[e.expected], { unit: e.unit ?? "" }),
           }),
+        )}
+      />
+    ) : shown.kind === "workbookRows" ? (
+      <Notice
+        title={t("import.errors.workbookRows", { count: shown.rows.length })}
+        aside={shown.rows[0].row === 1 ? t("import.errors.workbookCut") : undefined}
+        rows={shown.rows.map((e) =>
+          t("import.errors.workbookRow", { sheet: e.sheet, row: e.row, expected: t(formKey[e.expected], { unit: "" }) }),
         )}
       />
     ) : (
@@ -317,7 +417,15 @@ export function ImportScreen() {
             onPick={(file) => void readFile(file)}
           />
 
+          {bookNote ? (
+            <Text as="p" variant="sentence" tone="muted">
+              {t(bookNote.alien ? "import.fileNoteAlien" : "import.fileNoteBook", { name: bookNote.name })}
+            </Text>
+          ) : null}
+
           {placed?.place === "upload" ? notice : null}
+
+          {alien ? download("outline", true) : null}
 
           <Text as="p" variant="sentence" tone="muted">
             {t("import.privacy")}
@@ -337,26 +445,69 @@ export function ImportScreen() {
           ) : null}
         </Flex>
 
-        {placed?.template && !showTemplate ? (
-          <Flex>
+        {step !== null ? (
+          <Section label={t("import.steps.label")}>
+            <MarkList
+              mark=""
+              items={STEPS.map((name, index) => {
+                const reached = STEPS.indexOf(step);
+                const state: MarkState = index < reached ? "declared" : index === reached ? "partial" : "empty";
+                return {
+                  key: name,
+                  node: (
+                    <Flex gap="3" align="start">
+                      <Mark state={state} />
+                      <Flex direction="column">
+                        <Text as="span" variant="name" tone={state === "empty" ? "muted" : "ink"}>
+                          {t(`import.steps.${name}.name` as const)}
+                        </Text>
+                        <Text as="span" variant="sentence" tone="muted">
+                          {t(`import.steps.${name}.hint` as const)}
+                        </Text>
+                      </Flex>
+                    </Flex>
+                  ),
+                };
+              })}
+            />
+          </Section>
+        ) : null}
+
+        {step === null && placed?.template && !showTemplate ? (
+          <Flex gap="3" wrap="wrap">
             <Button variant="ghost" tone="accent" onClick={() => setShowTemplate(true)}>
               {t("import.template.show")}
             </Button>
+            {shown?.kind === "workbookRows" ? download("ghost") : null}
           </Flex>
         ) : null}
 
-        {showTemplate ? (
-          <Section label={t("import.template.label")}>
-            <Text as="p" variant="sentence" tone="muted">
-              {t("import.template.note")}
-            </Text>
-            <CodeBlock>{t("import.template.example")}</CodeBlock>
-            <Flex>
-              <Button variant="ghost" tone="accent" onClick={copyTemplate}>
-                {copied ? t("import.template.copied") : t("import.template.copy")}
-              </Button>
-            </Flex>
-          </Section>
+        {step === null && showTemplate ? (
+          <>
+            <Section label={t("import.template.label")}>
+              <Text as="p" variant="sentence" tone="muted">
+                {t("import.template.note")}
+              </Text>
+              <CodeBlock>{t("import.template.example")}</CodeBlock>
+              <Flex gap="3" wrap="wrap">
+                <Button variant="ghost" tone="accent" onClick={copyTemplate}>
+                  {copied ? t("import.template.copied") : t("import.template.copy")}
+                </Button>
+                {download("outline")}
+              </Flex>
+            </Section>
+            <Section label={t("import.entry.otherAiLabel")}>
+              <Text as="p" variant="sentence" tone="muted">
+                {t("import.entry.otherAiNote")}
+              </Text>
+              <CodeBlock>{t("import.entry.instruction")}</CodeBlock>
+              <Flex>
+                <Button variant="ghost" tone="accent" onClick={copyInstruction}>
+                  {instructionCopied ? t("import.entry.instructionCopied") : t("import.entry.copyInstruction")}
+                </Button>
+              </Flex>
+            </Section>
+          </>
         ) : null}
       </Flex>
     </Page>

@@ -2,7 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { check } from "../lib/import/check";
-import { normalize, type RawDraft, type Source } from "../lib/import/draft";
+import { normalize, type RawDraft, type RawGoal, type RawTask, type Source } from "../lib/import/draft";
 import type { StoredDraft } from "../lib/import/draft-store";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 import { expect, settled } from "./fixtures";
@@ -238,3 +238,47 @@ export async function countOf(page: Page, unit: "líneas" | "filas" | "partes" =
   return { total: Number(total), plan: Number(plan), notes: Number(notes), out: Number(out), text };
 }
 
+
+// A draft the way a model's reading would hand it over, for the specs that seed the review: the
+// parts a spec cares about, every other field at rest.
+export function rawGoal(name: string, over: Partial<RawGoal> = {}): RawGoal {
+  return {
+    key: name.toLowerCase().replace(/\W+/g, "-"),
+    parent: null,
+    name,
+    horizon: plus(400),
+    measure: null,
+    rate: null,
+    noteSrc: [],
+    noteText: null,
+    src: [],
+    phases: [],
+    months: [],
+    commitments: [],
+    rules: [],
+    tasks: [],
+    ...over,
+  };
+}
+
+export function rawTask(name: string, over: Partial<RawTask> = {}): RawTask {
+  return { name, month: months().first, estimate: null, week: null, rule: null, noteSrc: [], noteText: null, src: [], children: [], ...over };
+}
+
+// Parts with no lines: nothing to count against, so a spec reads the tree alone.
+export const seedOf = (goals: RawGoal[], over: Partial<Seed> = {}): Seed => ({ raw: { goals }, source: { kind: "parts", lines: null }, ...over });
+
+// The template's example with its dates moved to the person's own now, so its months stay
+// inside its goals' spans whatever day the suite runs; the goals' ends keep their order.
+export function movedExample(): string {
+  const { first, second } = months();
+  const [year] = first.split("-").map(Number);
+  const mm = first.slice(5);
+  return messages.template.example
+    .replace("2026-10-01 a 2026-12-31", `${first}-01 a ${first}-28`)
+    .replaceAll("2026-10", first)
+    .replaceAll("2026-11", second)
+    .replace("2028-10-01", `${year + 2}-${mm}-01`)
+    .replace("2027-10-01", `${year + 1}-${mm}-01`)
+    .replace("2027-03-01", `${year + 1}-${mm}-01`);
+}

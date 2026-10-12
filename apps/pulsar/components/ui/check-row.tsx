@@ -1,4 +1,6 @@
-import type { ChangeEvent, ReactNode } from "react";
+"use client";
+
+import { useState, type ChangeEvent, type ReactNode } from "react";
 
 import { Text } from "./text";
 import styles from "./check-row.module.css";
@@ -21,7 +23,9 @@ export function CheckRow({
   amount,
   amountLabel,
   onAmount,
-  indent,
+  depth = 0,
+  below,
+  foldedNote,
   radio,
 }: {
   checked: boolean;
@@ -44,13 +48,19 @@ export function CheckRow({
   amount?: ReactNode;
   amountLabel?: string;
   onAmount?: () => void;
-  // A sub-task sits 32px in.
-  indent?: boolean;
+  // How deep the row sits in a tree: 16px in for each level, five levels at most.
+  depth?: 0 | 1 | 2 | 3 | 4;
+  // A block under the row, aligned to the name and outside the label: what the row's
+  // own words are not (a correction to accept, a notice).
+  below?: ReactNode;
+  // A note kept shut behind a button that names it, read whole once opened.
+  foldedNote?: { label: string; text: string };
   // A native radio of the named group instead of a checkbox: the row picks one of a list.
   radio?: string;
 }) {
+  const [noteOpen, setNoteOpen] = useState(false);
   return (
-    <div className={indent ? `${styles.row} ${styles.indent}` : styles.row}>
+    <div className={`${styles.row} ${styles[`depth${depth}`]}`}>
       <label className={styles.label}>
         <input
           type={radio ? "radio" : "checkbox"}
@@ -96,6 +106,17 @@ export function CheckRow({
         >
           {amount}
         </button>
+      ) : null}
+      {foldedNote || below ? (
+        <div className={styles.below}>
+          {foldedNote ? (
+            <button type="button" className={styles.noteButton} aria-expanded={noteOpen} onClick={() => setNoteOpen(!noteOpen)}>
+              {foldedNote.label}
+            </button>
+          ) : null}
+          {foldedNote && noteOpen ? <span className={styles.note}>{foldedNote.text}</span> : null}
+          {below}
+        </div>
       ) : null}
     </div>
   );

@@ -94,7 +94,7 @@ export function edit(draft: ImportDraft, path: string, change: { name: string } 
 }
 
 // Accents count: «Inglés» and «Ingles» differ, but one «é» composed or decomposed is the same.
-const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+export const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
 
 const WRITTEN = new Set<ReviewNode["kind"]>(["goal", "group", "phase", "month", "commitment", "task", "subTask"]);
 
@@ -183,6 +183,9 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
   );
   return {
     nodes,
+    work,
+    unmarked,
+    refused,
     createCount,
     nothingWritable: !nodes.some((n) => WRITTEN.has(n.kind) && n.markable),
     coverage: coverage(work, stored.source, unmarked, refused),

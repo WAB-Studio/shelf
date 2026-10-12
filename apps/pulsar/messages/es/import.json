@@ -118,7 +118,8 @@
       "subtask": "sub-tarea",
       "note": "nota · {count, plural, one {# línea} other {# líneas}}",
       "subTasks": "{count, plural, one {# sub-tarea} other {# sub-tareas}}",
-      "editName": "Cambiar el nombre de {name}"
+      "editName": "Cambiar el nombre de {name}",
+      "goal": "meta"
     },
     "count": {
       "lines": "{total, plural, one {# línea} other {# líneas}}: {plan} en el plan, {notes} en notas, {out} fuera",
@@ -258,7 +259,8 @@
     "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez.",
     "workbookRows": "{count, plural, one {# fila por corregir} other {# filas por corregir}}",
     "workbookRow": "{sheet}, fila {row}: {expected}",
-    "workbookNotTemplate": "Ese Excel no es la plantilla. Descárgala, escribe tu plan en ella y súbela."
+    "workbookNotTemplate": "Ese Excel no es la plantilla. Descárgala, escribe tu plan en ella y súbela.",
+    "workbookCut": "Arréglalas en el libro y vuelve a subirlo: las filas de abajo no se pudieron leer."
   },
   "fileNoteBook": "Leído de {name}. Corrige el libro y vuelve a subirlo.",
   "fileNoteAlien": "Leído de {name}.",

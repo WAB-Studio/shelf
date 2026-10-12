@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
 
 import type { DraftGoal, ImportDraft, ImportDraftV1 } from "./draft";
-import { clearDraft, readDraft, readDraftV1, readSourceV1, saveDraft, saveDraftV1, saveReview, saveReviewV1 } from "./draft-store";
+import { clearDraft, readDraft, readDraftV1, readSourceV1, readText, saveDraft, saveDraftV1, saveReview, saveReviewV1 } from "./draft-store";
 
 const memory = new Map<string, string>();
 (globalThis as { sessionStorage?: unknown }).sessionStorage = {
@@ -193,4 +193,17 @@ test("v2: saveReview does nothing when nothing is stored, and a v1 save is no v2
   saveDraftV1({ via: "template", draft: { goals: [] } as ImportDraftV1, source: "t" });
   assert.equal(readDraft(), null);
   assert.equal(readSourceV1(), null);
+});
+
+test("v2: the box gets back the text as written; a file leaves it empty; a draft stored with no text falls back to its lines", () => {
+  saveDraft({ ...base, text: "- Cuentas\n  nota: x" });
+  assert.equal(readText(), "- Cuentas\n  nota: x");
+  saveDraft({ ...base, sourceName: "plan.txt", text: null });
+  assert.equal(readText(), null);
+  saveDraft(base);
+  const stored = JSON.parse(memory.get("pulsar.import-draft") ?? "{}") as Record<string, unknown>;
+  delete stored.text;
+  memory.set("pulsar.import-draft", JSON.stringify(stored));
+  assert.equal(readText(), "a\nb\nc");
+  assert.equal(readDraft()?.text, undefined);
 });
