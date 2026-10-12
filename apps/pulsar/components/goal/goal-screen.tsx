@@ -50,6 +50,8 @@ import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { CreateInsideAction } from "./create-inside-sheet";
 import { MoveHorizonAction } from "./horizon-sheet";
+import { GoalNote } from "./goal-note-sheet";
+import { MoveGoalAction } from "./move-sheet";
 import { RenameGoalAction } from "./rename-sheet";
 
 // "22 de septiembre de 2026": the day a goal was opened or archived, in the person's
@@ -582,6 +584,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       {holds ? null : insideAction}
 
       <Split before={before} main={main} after={after} aside={380} afterBelow />
+
+      {archived || ended ? null : (
+        <MoveGoalAction goalId={goal.id} name={goal.name} tree={goal.tree} today={today} />
+      )}
+      <GoalNote goalId={goal.id} name={goal.name} note={goal.note} />
 
       {archived ? (
         <ReopenGoalButton goalId={goal.id} />

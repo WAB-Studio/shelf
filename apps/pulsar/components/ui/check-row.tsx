@@ -22,6 +22,7 @@ export function CheckRow({
   amountLabel,
   onAmount,
   indent,
+  radio,
 }: {
   checked: boolean;
   onCheckedChange?: (checked: boolean) => void;
@@ -45,12 +46,15 @@ export function CheckRow({
   onAmount?: () => void;
   // A sub-task sits 32px in.
   indent?: boolean;
+  // A native radio of the named group instead of a checkbox: the row picks one of a list.
+  radio?: string;
 }) {
   return (
     <div className={indent ? `${styles.row} ${styles.indent}` : styles.row}>
       <label className={styles.label}>
         <input
-          type="checkbox"
+          type={radio ? "radio" : "checkbox"}
+          name={radio}
           className={styles.box}
           checked={checked}
           disabled={disabled}
