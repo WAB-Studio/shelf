@@ -231,6 +231,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   day: this checkout's `main` had sat at the 2026-09-10 merge for nine days, 81 commits behind, and
   a session reported `integracion` as 93 commits ahead of `main` when it was 14.
 - Delete a branch the day its PR merges. Report it.
+- Delete a train's module branches, local and remote, the moment the train's PR reads `MERGED`. They never
+  get a PR of their own, so the rule above never fires for them. Measured 2026-10-12: 98 branches alive, ~95
+  of them module branches already inside a merged train; one held a fix that never landed.
+- Leave `delete_branch_on_merge` on in the repo. It deletes the PR's own branch; a module branch is still yours.
 - Delete it only after `gh pr view <n> --json state` reads `MERGED`. Never chain the delete after `gh pr merge` in one
   command: on 2026-10-09 a merge refused on a conflict still deleted #526's branch, and GitHub closed the PR.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.
