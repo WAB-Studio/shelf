@@ -81,7 +81,7 @@ test("from a large goal, «Agregar meta pequeña» opens the sheet and saving la
     const name = `Leer cap. 3 ${stamp}`;
     await sheet.getByLabel("nombre").fill(name);
     await sheet.getByLabel(WEEKS_LABEL).fill("8");
-    await sheet.getByRole("button", { name: "Abrirla" }).click();
+    await sheet.getByRole("button", { name: "Abrirla", exact: true }).click();
 
     await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
     const rows = await named(db, person.id, name);
@@ -117,7 +117,7 @@ test("while saving, «Abrirla» cannot fire a second time (RP-82)", async ({ per
       await route.continue();
     });
     const calls = countActionPosts(page);
-    const confirm = sheet.getByRole("button", { name: "Abrirla" });
+    const confirm = sheet.getByRole("button", { name: "Abrirla", exact: true });
     await confirm.click();
     await expect.poll(() => calls.length).toBe(1);
     // A tap on a button that is still firing: a disabled button swallows it.
@@ -153,7 +153,7 @@ test("weeks past the upper goal's end are refused on the client, naming it, with
     const weeks = sheet.getByLabel(WEEKS_LABEL);
 
     await weeks.fill(String(ROOM_WEEKS));
-    await expect(sheet.getByRole("button", { name: "Abrirla" })).toBeEnabled();
+    await expect(sheet.getByRole("button", { name: "Abrirla", exact: true })).toBeEnabled();
     await expect(sheet.getByText(/^termina el /)).toBeVisible();
 
     await weeks.fill(String(ROOM_WEEKS + 1));
@@ -162,7 +162,7 @@ test("weeks past the upper goal's end are refused on the client, naming it, with
       sheet.getByText(new RegExp(`^Pasa del final de «${largeName}», el .+ Hasta ${ROOM_WEEKS} semanas\\.$`)),
     ).toBeVisible();
     await expect(sheet.getByText(/^termina el /)).toHaveCount(0);
-    const confirm = sheet.getByRole("button", { name: "Abrirla" });
+    const confirm = sheet.getByRole("button", { name: "Abrirla", exact: true });
     await expect(confirm).toBeDisabled();
     await confirm.dispatchEvent("click");
 
@@ -195,7 +195,7 @@ test("the upper goal archived while the sheet is open: saving says so under the 
     await sheet.getByLabel(WEEKS_LABEL).fill("4");
 
     await db`update goals.goals set archived_at = now() where id = ${largeId}`;
-    await sheet.getByRole("button", { name: "Abrirla" }).click();
+    await sheet.getByRole("button", { name: "Abrirla", exact: true }).click();
 
     await expect(sheet.getByText(`«${largeName}» está archivada o terminada.`)).toBeVisible();
     await expect(sheet).toBeVisible();
