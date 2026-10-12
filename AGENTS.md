@@ -31,6 +31,12 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   mutations took more than half of each module's time (one `next build` per mutation).
 - The `mutator` breaks the lines the train changed and reports what no suite noticed, with one build for all its
   mutations. A survivor is a regression that ships in silence.
+- Cut a slice into modules by layer, not by function: all its loaders in one module, the screens of one area in
+  one module. About eight modules a slice, never seventeen. Split only what shares no file and needs no other
+  module's result. Decided by the user 2026-10-12: every handoff between agents cost 5 to 15 minutes.
+- Have every agent write its full report to a file under the lane's `private/reportes/` and return three lines:
+  green or red, the commit, and what blocks. Open the file only to decide something. Decided by the user
+  2026-10-12: reading every report in full drained the window at 500k with work still running.
 - Run two slices at once when the second depends only on what the first already landed. Decided by the user
   2026-10-12: the import slice starts beside the hierarchy's last screens.
 - Dispatch the `test-critic` on a suite, never on a branch. It says what a green run really promises:
