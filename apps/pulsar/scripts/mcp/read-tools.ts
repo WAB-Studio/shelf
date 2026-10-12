@@ -326,9 +326,9 @@ async function registry(): Promise<Map<string, Registered>> {
   return seen;
 }
 
-test("the registry holds twenty tools: six read and fourteen write, each with its annotations", async () => {
+test("the registry holds twenty-two tools: six read and sixteen write, each with its annotations", async () => {
   const seen = await registry();
-  assert.equal(seen.size, 20);
+  assert.equal(seen.size, 22);
   const reads = new Set(handlers.keys());
   assert.equal(reads.size, 6);
   for (const [name, config] of seen) {
@@ -337,7 +337,7 @@ test("the registry holds twenty tools: six read and fourteen write, each with it
       : { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
     assert.deepEqual(config.annotations, expected, name);
   }
-  assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 14);
+  assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 16);
 });
 
 test("get_month refuses the month 2026-00 and never answers data", async () => {
