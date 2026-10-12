@@ -1382,6 +1382,16 @@ Three answers of the user, 2026-10-09.
   tree's order.
 - **Reopening a goal reopens what was archived with it**, not every goal of the branch; a goal under an archived one cannot be
   reopened alone. An archived goal adds nothing to the goal above.
-- **Boards that do not exist yet**, to be drawn before their modules: a goal's note written and edited, «Por mes» and «El plan»
-  of a goal that holds goals, «Mes» grouped by general goal, the report and paper grouped by general goal. The dark face of the
-  hierarchy boards is not drawn: it is the token table's.
+- **The second batch is approved** (RP-80, RP-84, RP-95), 2026-10-12, by the user: «apruebo los tableros». Page «Metas y una
+  meta»: `JerarquiaNota`, `JerarquiaPorMes`; page «Mes»: `JerarquiaMes`; page «Exportar»: `JerarquiaInforme`. Words and
+  structure: `private/tableros-jerarquia/NOTAS.md` §10–13.
+- **A goal's note is the task note's sheet with other words**: placeholder «Lo que quieras recordar de esta meta», cap 20 000,
+  the count from 18 000. Emptying it and saving removes it; it is never stored empty. It sits between the end line and «Archivar
+  esta meta», folded; with no note, «Agregar una nota» (outline, full width) stands in its place.
+- **A goal that holds goals has no rhythm of its own.** «El plan» replaces «Horas al mes», the chips and «Armar el plan» with
+  «Este plan no tiene ritmo propio. Cada mes suma el de sus metas.» and one row per goal inside; its own tasks stay, by month.
+- **The report and the paper group by general goal**, the loose goal as its own group. Superseding `JerarquiaInforme` where it
+  differs: the paper prints the goal's note whole and every goal inside whole (its months, its phases), with no page cap. The
+  screen keeps the board's one line per goal inside.
+- **Boards that do not exist**: the dark face of every hierarchy board (the token table's); «Por mes» and «Mes» grouped at 1280
+  (the list and the card they always had); the paper's note (drawn by no board; it prints as the screen's text, whole).
