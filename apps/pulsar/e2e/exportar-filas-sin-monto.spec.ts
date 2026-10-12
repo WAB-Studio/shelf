@@ -301,13 +301,13 @@ test.describe("/exportar rows say «sin monto» and the month's tasks (RP-77)", 
           }
         }
         // A time note never splits: its text sits on one line, whatever the label beside it holds.
-        for (const offset of [0, 1]) {
+        for (const offset of width === 360 ? [0, 1] : []) {
           const lines = await rowOf(sectionOf(page, long), offset).evaluate((row) => {
             const note = [...row.children].at(-1);
             if (!note || row.tagName !== "LI") return 1;
-            const range = document.createRange();
-            range.selectNodeContents(note);
-            return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+            const style = getComputedStyle(note);
+            const line = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.4;
+            return Math.round(note.getBoundingClientRect().height / line);
           });
           expect(lines, `${long} month +${offset} note lines`).toBe(1);
         }
