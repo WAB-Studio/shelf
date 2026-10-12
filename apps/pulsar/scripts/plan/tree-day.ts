@@ -200,8 +200,11 @@ test("a goal that ended this week still counts in the sum above it", async () =>
   const day = await as(ended, () => queries.loadDay(sunday));
   assert.deepEqual(day.goals.map((goal) => goal.id).sort(), [ids.E, ids.e2].sort());
   assert.deepEqual(day.groups.map((group) => named(group.goalIds)), [["E", "e2"]]);
-  // Its fact rides in the statement; its month budget does not (the statement joins open goals only).
-  assert.equal(day.monthLine[ids.E]?.reached, 10);
+  assert.deepEqual(
+    { planned: day.monthLine[ids.E]?.planned, reached: day.monthLine[ids.E]?.reached },
+    { planned: 30, reached: 10 },
+  );
+  assert.equal(ids.e1 in day.monthLine, false);
 });
 
 test("a goal with goals under it carries no plan notice", async () => {

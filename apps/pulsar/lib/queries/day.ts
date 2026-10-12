@@ -204,8 +204,9 @@ export type EndedGoal = { id: string; name: string; lastDay: string };
  * `DayScreen` only ever groups a row under a goal it finds here. `commitments`
  * and `one_offs` do not join to the goal, so a row of an archived goal still
  * rides along, but nothing loops over either outside the per-goal grouping and
- * it never draws. `month_budgets`, `goal_tasks` and `scheduled_count` join
- * only open goals (`openGoal`). `goals.length === 0` is also what decides the
+ * it never draws. `goal_tasks` and `scheduled_count` join
+ * only open goals (`openGoal`); `month_budgets` also keeps a goal that ended this
+ * week, for the sum of the general above it. `goals.length === 0` is also what decides the
  * day's own empty state (`empty-day.tsx`), so an all-archived person needs no
  * second check.
  */
@@ -253,7 +254,8 @@ async function queryGoalsRow(
          where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
          from "goals"."month_budgets" b
-         join "goals"."goals" g on g.id = b.goal_id and ${openGoal("g", day)}
+         join "goals"."goals" g on g.id = b.goal_id
+           and g.archived_at is null and g.horizon > ${weekStart}::date
          where b.month >= (date_trunc('month', ${day}::date) - interval '1 month')::date) as month_budgets,
       (select coalesce(json_agg(to_jsonb(o) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
