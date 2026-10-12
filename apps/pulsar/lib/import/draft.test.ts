@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readFileSync } from "node:fs";
-import { parseTemplate } from "./template";
-import { draftRefusals, importDraftJsonSchema, importDraftSchema, inMinutes, phaseCuts, phaseDrops, strayEstimates, withCutPhases, withoutStrayEstimates, type ImportDraft } from "./draft";
+import { parseTemplateV1 as parseTemplate } from "./template";
+import { draftRefusals, importDraftJsonSchema, importDraftSchema, inMinutes, phaseCuts, phaseDrops, strayEstimates, withCutPhases, withoutStrayEstimates, type ImportDraftV1 } from "./draft";
+
+import { decide, draftRefusals as refusalsOf, draftV2Schema, normalize, rawDraftJsonSchema, rawDraftSchema, type DraftGoal, type ImportDraft, type RawGoal, type RawTask, type Source } from "./draft";
 
 const TODAY = "2026-10-15";
 
-function goal(over: Partial<ImportDraft["goals"][number]> = {}): ImportDraft["goals"][number] {
+function goal(over: Partial<ImportDraftV1["goals"][number]> = {}): ImportDraftV1["goals"][number] {
   return {
     name: "IA aplicada",
     horizon: "2027-10-01",
@@ -23,7 +24,7 @@ function goal(over: Partial<ImportDraft["goals"][number]> = {}): ImportDraft["go
   };
 }
 
-const draft = (...goals: ImportDraft["goals"]): ImportDraft => ({ goals });
+const draft = (...goals: ImportDraftV1["goals"]): ImportDraftV1 => ({ goals });
 
 function errorsOf(input: unknown): string[] {
   const parsed = importDraftSchema.safeParse(input);
@@ -158,14 +159,13 @@ test("draftRefusals: each goal is judged on its own and paths name it", () => {
   assert.equal(refusals.length > 0, true);
 });
 
-const exampleDraft = (): ImportDraft => {
-  const example = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8")).template.example;
-  const result = parseTemplate(example);
+const exampleDraft = (): ImportDraftV1 => {
+  const result = parseTemplate("pulsar · plantilla 1\n\n# IA aplicada\nhorizonte: 2027-10-01\nmedida: horas de estudio · minutos\nritmo: 12 h\n\n## Fases\n- 2026-10-01 a 2026-12-31 · Evals y harness\n\n## Meses\n- 2026-10 · 12 h\n- 2026-11 · 20 h\n\n## Compromisos\n- Tema técnico · martes y jueves · 2 h\n- Inglés pasivo · cada día · toque\n\n## Tareas\n- 2026-10 · 4 h · Leer AI Engineering cap. 1–4\n- 2026-10 · Tutor\n  nota: Preguntar por la tarifa por hora.\n  nota: Pedir una clase de prueba antes de pagar.\n  - 1 h · Elegir tutor\n    nota: Comparar tres perfiles.\n  - 6 h · Sesiones 1–4");
   assert.ok(result.matched && "draft" in result);
   return result.draft;
 };
 
-test("draftRefusals: the catalogue's example, a month after October, refuses October's month and both its tasks", () => {
+test("draftRefusals: the first template's example, a month after October, refuses October's month and both its tasks", () => {
   assert.deepEqual(draftRefusals(exampleDraft(), "2026-11-15"), [
     { path: "goals.0.months.0", key: "import.errors.monthBeforeStart", values: { first: "2026-11" } },
     { path: "goals.0.tasks.0", key: "import.errors.monthBeforeStart", values: { first: "2026-11" } },
@@ -173,7 +173,7 @@ test("draftRefusals: the catalogue's example, a month after October, refuses Oct
   ]);
 });
 
-test("draftRefusals: the catalogue's example, the day before October ends, refuses nothing", () => {
+test("draftRefusals: the first template's example, the day before October ends, refuses nothing", () => {
   assert.deepEqual(draftRefusals(exampleDraft(), "2026-09-30"), []);
 });
 
@@ -189,7 +189,7 @@ test("importDraftSchema: an unknown key inside a measure is refused", () => {
 });
 
 test("importDraftSchema: issues of a nested phase and commitment carry no goalId segment", () => {
-  const paths = (g: ImportDraft["goals"][number]) => {
+  const paths = (g: ImportDraftV1["goals"][number]) => {
     const parsed = importDraftSchema.safeParse(draft(g));
     return parsed.success ? [] : parsed.error.issues.map((i) => i.path);
   };
@@ -381,4 +381,241 @@ test("strayEstimates: a figure in a goal not measured in time is dropped with it
   assert.equal(kept.goals[0].tasks[0].estimate, null);
   assert.deepEqual(strayEstimates(kept), []);
   assert.equal(strayEstimates(draft(unmeasured()))[0].key, "import.notices.estimateDropped");
+});
+
+// ---- version 2: normalize, decide, the tree's refusals
+
+const rawTask = (over: Partial<RawTask> = {}): RawTask => ({
+  name: "Leer",
+  month: "2026-10",
+  estimate: null,
+  week: null,
+  rule: null,
+  noteSrc: [],
+  noteText: null,
+  src: [],
+  children: [],
+  ...over,
+});
+const rawGoal = (over: Partial<RawGoal> = {}): RawGoal => ({
+  key: "g1",
+  parent: null,
+  name: "IA aplicada",
+  horizon: "2027-10-01",
+  measure: { name: "horas", unit: "horas" },
+  rate: null,
+  noteSrc: [],
+  noteText: null,
+  src: [],
+  phases: [],
+  months: [],
+  commitments: [],
+  rules: [],
+  tasks: [],
+  ...over,
+});
+const NO_LINES: Source = { kind: "lines", lines: [] };
+const run = (goals: RawGoal[], source: Source = NO_LINES) => normalize({ goals }, source);
+const codes = (goals: RawGoal[]) => run(goals).corrections.map((c) => c.code);
+const commitment = (over: Record<string, unknown> = {}) => ({
+  name: "Correr",
+  cadenceKind: "times_per_week" as const,
+  cadenceWeekdays: null,
+  cadenceN: 3,
+  satisfaction: "tap" as const,
+  targetQuantity: null,
+  unit: null,
+  src: [],
+  ...over,
+});
+const tree = (...goals: Partial<DraftGoal>[]): ImportDraft => ({
+  version: 2,
+  goals: goals.map((over, i) => ({
+    key: `g${i + 1}`,
+    parent: null,
+    name: `Meta ${i + 1}`,
+    horizon: "2027-10-01",
+    measure: { name: "horas", unit: "minutos" },
+    rhythm: null,
+    note: null,
+    noteSrc: [],
+    src: [],
+    phases: [],
+    months: [],
+    commitments: [],
+    rules: [],
+    tasks: [],
+    ...over,
+  })),
+});
+const refusalKeys = (draft: ImportDraft) => refusalsOf(draft, TODAY).map((r) => `${r.path} ${r.key}`);
+
+test("v2 schemas: a normalized draft parses, the raw answer parses, the JSON schema is strict", () => {
+  const { draft } = run([rawGoal({ tasks: [rawTask({ estimate: 2 })] })]);
+  assert.equal(draftV2Schema.safeParse(draft).success, true);
+  assert.equal(rawDraftSchema.safeParse({ goals: [rawGoal()] }).success, true);
+  assert.equal(draftV2Schema.safeParse({ ...draft, version: 1 }).success, false);
+  assert.equal((rawDraftJsonSchema as { additionalProperties?: unknown }).additionalProperties, false);
+});
+
+test("three levels: general, large and small pass; a fourth is tooDeep on that goal", () => {
+  const three = tree({}, { parent: "g1" }, { parent: "g2" });
+  assert.deepEqual(refusalKeys(three), []);
+  const four = tree({}, { parent: "g1" }, { parent: "g2" }, { parent: "g3" });
+  assert.deepEqual(refusalKeys(four), ["goals.3.parent tree.errors.tooDeep"]);
+});
+
+test("a parent that does not exist or comes later is notFound", () => {
+  assert.deepEqual(refusalKeys(tree({ parent: "g9" })), ["goals.0.parent tree.errors.notFound"]);
+  assert.deepEqual(refusalKeys(tree({ parent: "g2" }, {})), ["goals.0.parent tree.errors.notFound"]);
+});
+
+test("a long name ends on a whole word, the whole name opens the note", () => {
+  const full = "abcdefgh ".repeat(17).trim();
+  const { draft, corrections } = run([rawGoal({ tasks: [rawTask({ name: full })] })]);
+  const task = draft.goals[0].tasks[0];
+  assert.equal(task.name.length, 116);
+  assert.equal(full.startsWith(task.name) && full[task.name.length] === " ", true);
+  assert.equal(task.note?.startsWith(full), true);
+  const c = corrections.find((x) => x.code === "nameShortened");
+  assert.equal(c?.at, "goals.0.tasks.0");
+  assert.equal(c?.said, full);
+});
+
+test("a goal name and a sub-task name are shortened the same way", () => {
+  const full = "abcdefgh ".repeat(17).trim();
+  const { draft } = run([rawGoal({ name: full, tasks: [rawTask({ children: [{ name: full, estimate: null, rule: null, noteSrc: [], noteText: null, src: [] }] })] })]);
+  assert.equal(draft.goals[0].name.length, 116);
+  assert.equal(draft.goals[0].note?.startsWith(full), true);
+  assert.equal(draft.goals[0].tasks[0].children[0].name.length, 116);
+});
+
+test("a parent's hours equal to its sub-tasks' are dropped", () => {
+  const child = (estimate: number) => ({ name: "c", estimate, rule: null, noteSrc: [], noteText: null, src: [] });
+  const { draft, corrections } = run([rawGoal({ tasks: [rawTask({ estimate: 9, children: [child(4), child(5)] })] })]);
+  assert.equal(draft.goals[0].tasks[0].estimate, null);
+  assert.deepEqual(corrections.map((c) => c.code), ["parentEstimateDropped"]);
+});
+
+test("a parent's hours that differ from its sub-tasks' say both figures", () => {
+  const child = (estimate: number) => ({ name: "c", estimate, rule: null, noteSrc: [], noteText: null, src: [] });
+  const { draft, corrections } = run([rawGoal({ tasks: [rawTask({ estimate: 9, children: [child(4), child(3)] })] })]);
+  assert.equal(draft.goals[0].tasks[0].estimate, null);
+  assert.deepEqual(corrections.map((c) => c.code), ["parentEstimateDiffers"]);
+  assert.equal(corrections[0].values?.parent, "9");
+  assert.equal(corrections[0].values?.children, "7");
+});
+
+test("a cadence outside RP-12 goes to its ceiling", () => {
+  const goal = (c: Record<string, unknown>) => rawGoal({ commitments: [commitment(c)] });
+  const week = run([goal({ cadenceN: 9 })]);
+  assert.equal(week.draft.goals[0].commitments[0].cadenceN, 7);
+  assert.deepEqual(week.corrections.map((c) => c.code), ["cadenceClamped"]);
+  assert.equal(run([goal({ cadenceKind: "times_per_month", cadenceN: 40 })]).draft.goals[0].commitments[0].cadenceN, 31);
+  assert.equal(run([goal({ cadenceKind: "every_n_days", cadenceN: 400 })]).draft.goals[0].commitments[0].cadenceN, 365);
+  assert.deepEqual(codes([goal({ cadenceN: 7 })]), []);
+});
+
+test("a weekly rate becomes a monthly rhythm in whole minutes, 52 weeks over 12 months", () => {
+  const { draft, corrections } = run([rawGoal({ rate: { amount: 10, unit: "hours", per: "week" } })]);
+  assert.equal(draft.goals[0].rhythm, 2600);
+  assert.equal(corrections[0].code, "rateToRhythm");
+  assert.equal(corrections[0].said, "10 h por semana");
+  assert.equal(run([rawGoal({ rate: { amount: 7, unit: "hours", per: "week" } })]).draft.goals[0].rhythm, 1820);
+  const monthly = run([rawGoal({ rate: { amount: 30, unit: "hours", per: "month" } })]);
+  assert.equal(monthly.draft.goals[0].rhythm, 1800);
+  assert.deepEqual(monthly.corrections, []);
+});
+
+test("a goal with goals inside moves its rhythm and its month amounts to its note", () => {
+  const { draft, corrections } = run([
+    rawGoal({ rate: { amount: 10, unit: "hours", per: "week" }, months: [{ month: "2026-10", amount: 20, src: [] }, { month: "2026-11", amount: 10, src: [] }] }),
+    rawGoal({ key: "g2", parent: "g1" }),
+  ]);
+  const general = draft.goals[0];
+  assert.equal(general.rhythm, null);
+  assert.deepEqual(general.months, []);
+  assert.deepEqual(corrections.map((c) => c.code), ["holderRhythmToNote", "holderMonthsToNote"]);
+  assert.equal(general.note?.includes("2600"), true);
+  assert.equal(general.note?.includes("2026-10"), true);
+  assert.equal(general.note?.includes("1200"), true);
+});
+
+test("a child ending after the goal above ends with it; declined, it stays and is refused", () => {
+  const { draft, corrections } = run([rawGoal({ horizon: "2027-06-01" }), rawGoal({ key: "g2", parent: "g1", horizon: "2027-10-01" })]);
+  assert.equal(draft.goals[1].horizon, "2027-06-01");
+  assert.deepEqual(corrections.map((c) => c.code), ["endWithinAbove"]);
+  assert.deepEqual(refusalKeys(draft), []);
+  const back = decide(draft, corrections, new Set([corrections[0].id]));
+  assert.equal(back.goals[1].horizon, "2027-10-01");
+  assert.deepEqual(refusalKeys(back), ["goals.1.horizon tree.errors.endPastAbove"]);
+});
+
+test("a plan counting hours with no measure is measured in hours, kept in minutes", () => {
+  const { draft, corrections } = run([
+    rawGoal({ measure: null, months: [{ month: "2026-10", amount: 10, src: [] }], tasks: [rawTask({ estimate: 2 })] }),
+  ]);
+  assert.deepEqual(draft.goals[0].measure, { name: "horas", unit: "minutos" });
+  assert.equal(draft.goals[0].months[0].amount, 600);
+  assert.equal(draft.goals[0].tasks[0].estimate, 120);
+  assert.deepEqual(corrections.map((c) => c.code), ["measureInHours"]);
+  const named = run([rawGoal({ months: [{ month: "2026-10", amount: 10, src: [] }] })]);
+  assert.equal(named.draft.goals[0].months[0].amount, 600);
+  assert.deepEqual(named.corrections, []);
+});
+
+test("the note is the source's own lines, never the answer's text", () => {
+  const lines = ["l1", "l2", "l3", "l4", "l5", "l6"];
+  const { draft } = run(
+    [rawGoal({ noteSrc: [{ from: 3, to: 5 }], noteText: "inventado", tasks: [rawTask({ noteSrc: [{ from: 1, to: 2 }], noteText: "otro" })] })],
+    { kind: "lines", lines },
+  );
+  assert.equal(draft.goals[0].note, "l3\nl4\nl5");
+  assert.equal(draft.goals[0].tasks[0].note, "l1\nl2");
+});
+
+test("from parts the note is the answer's text", () => {
+  const { draft } = run([rawGoal({ noteText: "texto del modelo" })], { kind: "parts", lines: null });
+  assert.equal(draft.goals[0].note, "texto del modelo");
+  assert.equal(run([rawGoal({ noteText: "x" })], { kind: "rows", lines: ["a"] }).draft.goals[0].note, null);
+});
+
+test("a note over its ceiling keeps whole lines up to it, never more", () => {
+  const lines = Array.from({ length: 30 }, (_, i) => `${"x".repeat(98)}${String(i).padStart(2, "0")}`);
+  const { draft } = run([rawGoal({ tasks: [rawTask({ noteSrc: [{ from: 1, to: 30 }] })] })], { kind: "lines", lines });
+  const note = draft.goals[0].tasks[0].note ?? "";
+  assert.equal(note.length <= 2000, true);
+  assert.equal(note, lines.slice(0, 19).join("\n"));
+});
+
+test("a rejected nameShortened leaves the part out: the full name is back and refused", () => {
+  const full = "abcdefgh ".repeat(17).trim();
+  const { draft, corrections } = run([rawGoal({ tasks: [rawTask({ name: full })] })]);
+  const back = decide(draft, corrections, new Set([corrections[0].id]));
+  assert.equal(back.goals[0].tasks[0].name, full);
+  assert.equal(back.goals[0].tasks[0].note, null);
+  assert.deepEqual(refusalKeys(back), ["goals.0.tasks.0 day.errors.oneOffNameTooLong"]);
+  assert.deepEqual(refusalKeys(decide(draft, corrections, new Set())), []);
+});
+
+test("decide undoes each normalize correction it is told to decline", () => {
+  const child = (estimate: number) => ({ name: "c", estimate, rule: null, noteSrc: [], noteText: null, src: [] });
+  const { draft, corrections } = run([
+    rawGoal({
+      rate: { amount: 10, unit: "hours", per: "week" },
+      commitments: [commitment({ cadenceN: 9 })],
+      tasks: [rawTask({ estimate: 9, children: [child(4), child(3)] })],
+    }),
+    rawGoal({ key: "g2", parent: "g1" }),
+  ]);
+  const all = decide(draft, corrections, new Set(corrections.map((c) => c.id)));
+  assert.equal(all.goals[0].commitments[0].cadenceN, 9);
+  assert.equal(all.goals[0].tasks[0].estimate, 540);
+  assert.equal(all.goals[0].rhythm, 2600);
+  assert.equal(all.goals[0].note, null);
+  assert.deepEqual(refusalKeys(all).sort(), [
+    "goals.0.commitments.0 plan.errors.timesPerWeekInvalid",
+    "goals.0.rhythm tree.errors.holderNoRhythm",
+    "goals.0.tasks.0 import.errors.parentWithAmount",
+  ]);
 });

@@ -234,7 +234,7 @@ export async function MonthDetail({
         <Section label={bareFuture && rowPlanned === null ? undefined : label} as="div">
           <Flex align="baseline" gap="2">
             {bareFuture ? null : <Figure value={row.reached} unit={unit} bare={rowPlanned !== null} />}
-            {open && !closed ? (
+            {open && !closed && !goal.holdsGoals ? (
               <TextLink href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>
                 {planned}
               </TextLink>

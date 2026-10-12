@@ -39,6 +39,9 @@ Per file, apply one at a time:
 
 Prefer the line that decides something a person can see: a cap, a refusal, a fallback, a sort.
 
+Stop at 30 minutes and about 40 mutations a train. Pick them by what a wrong line would cost in production:
+money, a delete, a permission, what is stored, a refusal. List what you left unmutated in the report.
+
 # Cost
 
 Count minutes before you start. Voyager's whole suite is about 6 minutes, orbit's 17. **Run the

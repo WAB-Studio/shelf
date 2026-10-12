@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addCommitmentSchema, addPhaseSchema, archiveGoalSchema, phasesOverlap, renameGoalSchema, reopenGoalSchema } from "./plan";
+import {
+  addCommitmentSchema,
+  addPhaseSchema,
+  archiveGoalSchema,
+  createGoalSchema,
+  moveGoalSchema,
+  phasesOverlap,
+  renameGoalSchema,
+  reopenGoalSchema,
+  setGoalNoteSchema,
+} from "./plan";
 
 const GOAL_ID = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d";
 
@@ -101,3 +111,28 @@ for (const [kind, max, key] of CADENCE_BOUNDS) {
     }
   });
 }
+
+test("createGoalSchema: parentId is optional and must be a uuid", () => {
+  const base = { name: "Dentro", horizon: "2027-01-01" };
+  assert.equal(createGoalSchema.safeParse(base).success, true);
+  assert.equal(createGoalSchema.safeParse({ ...base, parentId: GOAL_ID }).success, true);
+  assert.equal(createGoalSchema.safeParse({ ...base, parentId: "nope" }).success, false);
+});
+
+test("moveGoalSchema: parentId is a uuid or null, never absent", () => {
+  assert.equal(moveGoalSchema.safeParse({ goalId: GOAL_ID, parentId: null }).success, true);
+  assert.equal(moveGoalSchema.safeParse({ goalId: GOAL_ID, parentId: GOAL_ID }).success, true);
+  assert.equal(moveGoalSchema.safeParse({ goalId: GOAL_ID }).success, false);
+});
+
+test("setGoalNoteSchema: trims, turns blank into null, refuses past 100000", () => {
+  const parse = (note: string) => setGoalNoteSchema.safeParse({ goalId: GOAL_ID, note });
+  const lines = parse("  uno\ndos\ntres \n");
+  assert.equal(lines.success && lines.data.note, "uno\ndos\ntres");
+  const blank = parse("  \n ");
+  assert.equal(blank.success && blank.data.note, null);
+  assert.equal(parse("x".repeat(100000)).success, true);
+  const long = parse("x".repeat(100001));
+  assert.equal(long.success, false);
+  assert.equal(!long.success && long.error.issues[0].message, "tree.errors.noteTooLong");
+});

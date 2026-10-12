@@ -223,6 +223,23 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 10».
 | `ImportarTope.dc.html` | ten AI reads today: tomorrow again; the template still reads |
 | `ImportarFormato.dc.html` | a file over 4 MB or of a kind not read: paste its text |
 
+- **The import in three steps is approved** (RP-86–RP-90, RP-95–RP-98), 2026-10-12, by the user: «Apruebo todos». Page
+  «Importar», row «La importación en tres pasos»: `ImportarEntrada`, `ImportarPasos` (1–3), `ImportarArbol` (1 at 360 and
+  1280, 2 a PDF, 3 notes open), `ImportarCorreccion` (1–2), `ImportarCambiar`, `ImportarFuera`, `ImportarNadaQueCrear`,
+  `ImportarCreando`, `ImportarCrearFallo`, `ImportarExcelFilas`, `ImportarExcelAjeno`. Words and structure:
+  `private/tableros-importacion/NOTAS.md` «# Importación». `ImportarLeyendo`, `ImportarRevisar`, `ImportarRevisarAvisos`
+  and `ImportarRevisarNota` are superseded and go to «Archivo»; `ImportarVacio`, `ImportarFallo`, `ImportarSinClave`,
+  `ImportarTope`, `ImportarFormato` and `ImportarPlantillaError` stay.
+- **A part's name, amount or month changes from the button at the row's end**: its amount, or a pencil when it has none.
+  It opens one sheet with only the fields that part has. Decided by the user 2026-10-12.
+- **A correction nobody touches counts as accepted.** The tree shows it applied; «Aceptar» confirms it, «Dejar como
+  estaba» undoes it, and «Crear» never waits on one. Decided by the user 2026-10-12.
+- **A goal that holds goals keeps the plan's phases; a plan's weeks are tasks with their sub-tasks.** Decided by the user
+  2026-10-12.
+- **The review tree needs primitive variants**: `CheckRow` gains `depth` (0–4, 16 px a level), `below` and `foldedNote`;
+  `Fold` gains `depth`.
+- **Boards that do not exist for the import**: the dark face (the token table's); 1280 except the tree (the 640 column does
+  not change); a workbook's count in rows; the «nota llena» line (it reads as one more «Sin lugar en el plan» row).
 - **The upload hint reads «PDF, texto o imagen · hasta 4 MB», without «Word».** The boards say «PDF, Word, texto o
   imagen»; the model's file part takes PDF alone and a `.docx` answers `unreadableType` (module 151). Decided by the
   coordinator 2026-10-01: the hint never promises a kind the route refuses.
@@ -1362,3 +1379,36 @@ Three answers of the user, 2026-10-09.
   time only; every other unit keeps «mide en {unidad}».
 - **The empty month of a goal that does not measure time promises no time** (orchestrator, 2026-10-09, 723).
 - **Built without a board, for the user's review at the end:** 720, 721 and 723 (see «The boards that do not exist»).
+
+## Decisions of 2026-10-12, the hierarchy boards
+
+- **The boards of the goal hierarchy are approved** (RP-78–RP-85, RP-95). Drawn 2026-10-12 as captures of the real app with a
+  throwaway patch and a sample plan, approved by the user the same day: «si». Page «Metas y una meta»: `JerarquiaArbol`,
+  `JerarquiaMetaGeneral`, `JerarquiaMetaGrande`, `JerarquiaMetaPequena`, `JerarquiaCrearDentro`, `JerarquiaMover`,
+  `JerarquiaArchivar`, `JerarquiaFinRechazado`, `JerarquiaOtraUnidad`; page «Hoy»: `JerarquiaHoy`. Words and structure per
+  board: `private/tableros-jerarquia/NOTAS.md`; the patch: `private/tableros-jerarquia/jerarquia.patch`.
+- **Every row of one tree level shares one left edge.** A row without a fold chevron reserves its width; at 360 the general goal
+  sits at 52 px, a large goal at 72 and a small goal at 92.
+- **Moving a goal picks one destination** from a single-choice list; a destination that cannot take it stays listed, dimmed,
+  with its reason. `CheckRow` gains a `radio` prop for it. The board's «Empieza el …, y «…» arranca antes» is superseded by
+  P1 = B: no destination is refused for its start, since a goal that holds goals starts with its earliest goal.
+- **A level is a position, not a kind**: a goal is large because it sits under a general one.
+- **A month a holder's goals do not cover reads «sin monto».**
+- **A general goal keeps its own commitments** in the commitments section it always had.
+- **A Hoy line names only the goal it comes from**, never the chain. Groups that ask something today come first; inside, the
+  tree's order.
+- **Reopening a goal reopens what was archived with it**, not every goal of the branch; a goal under an archived one cannot be
+  reopened alone. An archived goal adds nothing to the goal above.
+- **The second batch is approved** (RP-80, RP-84, RP-95), 2026-10-12, by the user: «apruebo los tableros». Page «Metas y una
+  meta»: `JerarquiaNota`, `JerarquiaPorMes`; page «Mes»: `JerarquiaMes`; page «Exportar»: `JerarquiaInforme`. Words and
+  structure: `private/tableros-jerarquia/NOTAS.md` §10–13.
+- **A goal's note is the task note's sheet with other words**: placeholder «Lo que quieras recordar de esta meta», cap 100 000,
+  the count from 90 000. Emptying it and saving removes it; it is never stored empty. It sits between the end line and «Archivar
+  esta meta», folded; with no note, «Agregar una nota» (outline, full width) stands in its place.
+- **A goal that holds goals has no rhythm of its own.** «El plan» replaces «Horas al mes», the chips and «Armar el plan» with
+  «Este plan no tiene ritmo propio. Cada mes suma el de sus metas.» and one row per goal inside; its own tasks stay, by month.
+- **The report and the paper group by general goal**, the loose goal as its own group. Superseding `JerarquiaInforme` where it
+  differs: the paper prints the goal's note whole and every goal inside whole (its months, its phases), with no page cap. The
+  screen keeps the board's one line per goal inside.
+- **Boards that do not exist**: the dark face of every hierarchy board (the token table's); «Por mes» and «Mes» grouped at 1280
+  (the list and the card they always had); the paper's note (drawn by no board; it prints as the screen's text, whole).

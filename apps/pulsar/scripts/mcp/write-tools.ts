@@ -273,7 +273,7 @@ after(async () => {
   }
 });
 
-test("exactly the fourteen write tools are registered, and none of the never-registered", () => {
+test("exactly the sixteen write tools are registered, and none of the never-registered", () => {
   assert.deepEqual([...handlers.keys()].sort(), [
     "add_commitment",
     "add_phase",
@@ -282,10 +282,12 @@ test("exactly the fourteen write tools are registered, and none of the never-reg
     "create_task",
     "declare_fact",
     "fix_task",
+    "move_goal",
     "move_horizon",
     "rename_goal",
     "retire_commitment",
     "schedule_task",
+    "set_goal_note",
     "set_month_amount",
     "set_task_note",
     "unfix_task",
@@ -628,4 +630,18 @@ test("create_task in a goal measured in km with no month pins the task to the cu
   const task = await succeeds("create_task", { name: "carrera larga", goal_id: opened });
   const [row] = await door`select planned_month::text as planned_month from goals.one_offs where id = ${task.oneOffId as string}`;
   assert.equal(row.planned_month, `${currentMonth}-01`);
+});
+
+test("move_horizon before a goal inside is refused with that goal's name and its last day in the sentence (RP-56)", async () => {
+  const above = await freshGoal();
+  const inside = await as(subject, () => acts.plan.createGoal({ name: "la de dentro", horizon: dayFrom(100), parentId: above }));
+  if (!inside.ok) throw new Error(`createGoal inside: ${inside.error}`);
+  const last = new Date(`${dayFrom(100)}T00:00:00Z`);
+  last.setUTCDate(last.getUTCDate() - 1);
+  const label = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", timeZone: "UTC" }).formatToParts(last);
+  const part = (type: string) => label.find((p) => p.type === type)!.value;
+  const sentence = `«la de dentro» termina el ${part("day")} ${part("month").slice(0, 3)} ${last.getUTCFullYear()}, después de ese día. Mueve primero su final.`;
+  await refused("move_horizon", { goal_id: above, horizon: dayFrom(90) }, "tree.errors.belowEndsLater", sentence);
+  const [row] = await door`select horizon::text as horizon from goals.goals where id = ${above}`;
+  assert.equal(row.horizon, dayFrom(120));
 });

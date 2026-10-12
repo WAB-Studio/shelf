@@ -50,7 +50,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
   )}]::text[]`;
 
   const rows = await withGoalsDb((tx) =>
-    tx.execute<{ measured: boolean; timed: boolean; open: boolean }>(sql`
+    tx.execute<{ measured: boolean; timed: boolean; open: boolean; holder: boolean }>(sql`
       with g as (
         select id, rhythm, measure_unit, horizon, archived_at,
                (created_at at time zone ${TIME_ZONE})::date as opened
@@ -59,6 +59,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
       ok as (
         select * from g
         where lower(trim(measure_unit)) = any(${timeUnits}) and archived_at is null and horizon > ${today}::date
+          and not exists (select 1 from goals c where c.parent_id = g.id and c.archived_at is null)
       ),
       upd as (
         update goals set rhythm = ${amount},
@@ -94,7 +95,8 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
       )
       select measure_unit is not null as measured,
              coalesce(lower(trim(measure_unit)) = any(${timeUnits}), false) as timed,
-             archived_at is null and horizon > ${today}::date as open
+             archived_at is null and horizon > ${today}::date as open,
+             exists (select 1 from goals c where c.parent_id = g.id and c.archived_at is null) as holder
       from g
     `),
   );
@@ -102,6 +104,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
   const goal = rows[0];
   if (!goal) return { ok: false, error: "month.errors.notFound" };
   if (!goal.open) return { ok: false, error: "month.errors.closed" };
+  if (goal.holder) return { ok: false, error: "tree.errors.holderNoRhythm" };
   if (!goal.measured) return { ok: false, error: "roadmap.errors.rhythmNoMeasure" };
   if (!goal.timed) return { ok: false, error: "roadmap.errors.rhythmNotTime" };
 

@@ -133,7 +133,7 @@ let imported: { ids: string[]; statements: number };
 before(async () => {
   installStubs(loadCookies());
   ({ confirmImport } = await import("@/app/actions/import"));
-  ({ parseTemplate } = await import("@/lib/import/template"));
+  ({ parseTemplate: parseTemplate } = await import("@/lib/import/template"));
   const { getPerson } = await import("@/lib/session");
   const person = await getPerson();
   if (!person) throw new Error("no settled session — mint-session.ts's cookie did not verify");

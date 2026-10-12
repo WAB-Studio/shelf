@@ -4,11 +4,13 @@ import messages from "../messages/es/import.json";
 import roadmap from "../messages/es/roadmap.json";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 import { todayInZone } from "../lib/zone";
+import { movedExample } from "./importar-plan";
 
 // RP-63: the review says each goal's rhythm before the person confirms (board `ImportarRevisarRitmo`).
 // RP-67: the row is «Ritmo al mes · las tareas van al plan» with an amount button (board `ImportarRitmoPlan`).
 const RHYTHM_NAME = "Ritmo al mes";
-const RHYTHM_LINE = "las tareas van al plan";
+const RHYTHM_LINE = "ritmo · las tareas van al plan";
+const GOAL = "Evals y harness";
 const rhythmButton = (page: Page, amount: string) => page.getByRole("button", { name: `Cambiar el ritmo, ${amount} al mes`, exact: true });
 const rhythmBox = (page: Page) => page.getByRole("checkbox", { name: new RegExp(RHYTHM_NAME) });
 const monthName = (by: number) =>
@@ -22,16 +24,9 @@ function shift(by: number) {
 }
 
 // The catalogue's own example, its dates moved to the person's now so the
-// months stay inside the goal's span whatever day the suite runs.
+// months stay inside the goals' spans whatever day the suite runs.
 function template(rhythm: string | null = "12 h"): string {
-  const first = `${shift(0).year}-${shift(0).month}`;
-  const second = `${shift(1).year}-${shift(1).month}`;
-  const horizon = `${shift(0).year + 1}-${shift(0).month}-01`;
-  const text = messages.template.example
-    .replace("2027-10-01", horizon)
-    .replace("2026-10-01 a 2026-12-31", `${first}-01 a ${first}-28`)
-    .replaceAll("2026-10", first)
-    .replaceAll("2026-11", second);
+  const text = movedExample();
   if (!text.includes(SOURCE_LINE)) throw new Error("the template example carries no `ritmo:` line");
   return rhythm === null ? text.replace(`\n${SOURCE_LINE}`, "") : text.replace(SOURCE_LINE, `ritmo: ${rhythm}`);
 }
@@ -65,26 +60,29 @@ async function asPerson(
   }
 }
 
-const goalCard = (page: Page, name: string) => page.getByRole("region", { name });
+const box = (page: Page, name: RegExp) => page.getByRole("checkbox", { name });
+const rowOf = (page: Page, name: RegExp) => page.locator("div").filter({ has: page.getByRole("checkbox", { name }) }).last();
+const monthLower = (by: number) => monthName(by).replace(/ \d+$/, "");
+const wipe = (db: import("postgres").Sql, id: string) =>
+  db`delete from goals.goals where user_id = ${id} and name in ('Carrera en IA', 'IA aplicada', 'Evals y harness', 'Correr 10K')`;
 
 test.describe("the review says the rhythm before creating (RP-63, RP-35)", () => {
   for (const width of [390, 1440]) {
-    test(`@${width}: the template's rhythm is a row «Ritmo al mes» with a «12 h» button and the board's line, after the measure row`, async ({ person, browser, baseURL }) => {
+    test(`@${width}: the template's rhythm is a row «Ritmo al mes» with a «12 h» button and the board's line, under its goal`, async ({ person, browser, baseURL }) => {
       await asPerson({ person, browser, baseURL }, { width, height: 900 }, async (page) => {
         await toReview(page, template());
-        const card = goalCard(page, "IA aplicada");
 
-        const main = card.getByText(RHYTHM_NAME, { exact: true });
-        const meta = card.getByText(RHYTHM_LINE, { exact: true });
+        const main = page.getByText(RHYTHM_NAME, { exact: true });
+        const meta = page.getByText(RHYTHM_LINE, { exact: true });
         await expect(main).toBeVisible();
         await expect(meta).toBeVisible();
         // The meta line sits under its main line, in the same row.
         const [mainBox, metaBox] = [(await main.boundingBox())!, (await meta.boundingBox())!];
         expect(metaBox.y).toBeGreaterThan(mainBox.y);
         expect(metaBox.y - mainBox.y).toBeLessThan(40);
-        // And the row follows the measure row.
-        const measure = (await card.getByText("horas de estudio", { exact: true }).boundingBox())!;
-        expect(mainBox.y).toBeGreaterThan(measure.y);
+        // And the row follows its goal's own row.
+        const goal = (await box(page, new RegExp(`^${GOAL} meta`)).boundingBox())!;
+        expect(mainBox.y).toBeGreaterThan(goal.y);
         // Like the other rows of the board, it is a marked checkbox.
         await expect(rhythmBox(page)).toBeChecked();
         await expect(rhythmButton(page, "12 h")).toHaveText("12 h");
@@ -95,17 +93,16 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
   test("a rhythm with minutes reads in hours and minutes, not as 90 min or 1.5 h", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
       await toReview(page, template("1 h 30 min"));
-      const card = goalCard(page, "IA aplicada");
       await expect(rhythmButton(page, "1 h 30 min")).toHaveText("1 h 30 min");
-      await expect(card.getByText(RHYTHM_LINE, { exact: true })).toBeVisible();
-      await expect(card.getByText(/90 min|1[.,]5 h/)).toHaveCount(0);
+      await expect(page.getByText(RHYTHM_LINE, { exact: true })).toBeVisible();
+      await expect(page.getByText(/90 min|1[.,]5 h/)).toHaveCount(0);
     });
   });
 
   test("a template without ritmo: paints no rhythm row, and no «0 h al mes»", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
       await toReview(page, template(null));
-      await expect(goalCard(page, "IA aplicada")).toBeVisible();
+      await expect(box(page, /^IA aplicada/)).toBeVisible();
       await expect(page.getByText(RHYTHM_LINE, { exact: true })).toHaveCount(0);
       await expect(page.getByText(/ al mes$/)).toHaveCount(0);
       await expect(page.getByRole("button", { name: /^Cambiar el ritmo/ })).toHaveCount(0);
@@ -117,11 +114,9 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
   test("a goal in km beside a timed one has no rhythm row: only the goal that carries it says it", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 1200 }, async (page) => {
       await toReview(page, withKmGoal());
-      await expect(page.getByRole("button", { name: "Crear 2 metas" })).toBeVisible();
-      await expect(goalCard(page, "IA aplicada").getByText(RHYTHM_LINE, { exact: true })).toHaveCount(1);
-      const km = goalCard(page, "Correr 10K");
-      await expect(km.getByText("distancia", { exact: true })).toBeVisible();
-      await expect(km.getByText(RHYTHM_LINE, { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Crear 4 metas" })).toBeVisible();
+      await expect(box(page, /^Correr 10K/)).toBeVisible();
+      await expect(rowOf(page, /^Correr 10K/).getByText(RHYTHM_LINE, { exact: true })).toHaveCount(0);
       await expect(page.getByText(RHYTHM_LINE, { exact: true })).toHaveCount(1);
     });
   });
@@ -130,17 +125,17 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
       try {
         await toReview(page, template());
-        await page.getByRole("button", { name: "Crear 1 meta" }).click();
+        await page.getByRole("button", { name: "Crear 3 metas" }).click();
         await expect(page).toHaveURL(/\/metas$/);
-        await page.getByRole("link", { name: /IA aplicada/ }).first().click();
+        await page.getByRole("link", { name: /Evals y harness/ }).first().click();
         await expect(page.getByText("el plan", { exact: true })).toBeVisible();
         const plan = page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 12 h al mes/ });
         await expect(plan).toBeVisible();
         await expect(plan).toHaveAttribute("href", /\/metas\/[^/]+\/plan$/);
-        const [goal] = await db`select rhythm from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+        const [goal] = await db`select rhythm from goals.goals where user_id = ${person.id} and name = ${GOAL}`;
         expect(goal.rhythm).toBe(720);
       } finally {
-        await db`delete from goals.goals where user_id = ${person.id} and name in ('IA aplicada', 'Correr 10K')`;
+        await wipe(db, person.id);
       }
     });
   });
@@ -152,15 +147,15 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
         const box = rhythmBox(page);
         await box.click();
         await expect(box).not.toBeChecked();
-        await page.getByRole("button", { name: "Crear 1 meta" }).click();
+        await page.getByRole("button", { name: "Crear 3 metas" }).click();
         await expect(page).toHaveURL(/\/metas$/);
-        await page.getByRole("link", { name: /IA aplicada/ }).first().click();
+        await page.getByRole("link", { name: /Evals y harness/ }).first().click();
         await expect(page.getByRole("link", { name: "Armar el plan" })).toBeVisible();
         await expect(page.getByRole("link", { name: /A este ritmo terminas/ })).toHaveCount(0);
-        const [goal] = await db`select rhythm from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+        const [goal] = await db`select rhythm from goals.goals where user_id = ${person.id} and name = ${GOAL}`;
         expect(goal.rhythm).toBeNull();
       } finally {
-        await db`delete from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+        await wipe(db, person.id);
       }
     });
   });
@@ -193,14 +188,14 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
           await gate;
           await route.continue();
         });
-        await page.getByRole("button", { name: "Crear 1 meta" }).click();
+        await page.getByRole("button", { name: "Crear 3 metas" }).click();
         await expect(page.getByRole("button", { name: messages.review.creating })).toHaveAttribute("aria-busy", "true");
         release();
         await expect(page).toHaveURL(/\/metas$/);
-        const goals = await db`select 1 from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+        const goals = await db`select 1 from goals.goals where user_id = ${person.id} and name = ${GOAL}`;
         expect(goals).toHaveLength(1);
       } finally {
-        await db`delete from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+        await wipe(db, person.id);
       }
     });
   });
@@ -241,7 +236,7 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
           await toReview(page, template().replace(`\n- ${shift(0).year}-${shift(0).month} · 12 h`, ""));
           await rhythmButton(page, "12 h").click();
           await expect(page.getByRole("heading", { name: "Cambiar el ritmo" })).toBeVisible();
-          await expect(page.getByText("ritmo al mes · IA aplicada", { exact: true })).toBeVisible();
+          await expect(page.getByText("ritmo al mes · Evals y harness", { exact: true })).toBeVisible();
           await page.getByRole("spinbutton", { name: "horas" }).fill("10");
           await page.getByRole("spinbutton", { name: "minutos" }).fill("0");
           await page.getByRole("button", { name: "Guardar" }).click();
@@ -249,9 +244,9 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
           await expect(rhythmButton(page, "10 h")).toHaveText("10 h");
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-          await page.getByRole("button", { name: "Crear 1 meta" }).click();
+          await page.getByRole("button", { name: "Crear 3 metas" }).click();
           await expect(page).toHaveURL(/\/metas$/);
-          const [goal] = await db`select id, rhythm from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+          const [goal] = await db`select id, rhythm from goals.goals where user_id = ${person.id} and name = ${GOAL}`;
           expect(goal.rhythm).toBe(600);
           // The tasks are the plan's to place: in the plan, no fixed month.
           const tasks = await db`
@@ -262,11 +257,11 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
             expect(task.in_plan).toBe(true);
             expect(task.planned_month).toBeNull();
           }
-          await page.getByRole("link", { name: /IA aplicada/ }).first().click();
+          await page.getByRole("link", { name: /Evals y harness/ }).first().click();
           // Imported today: the line still says the whole rhythm, never the share of this month.
           await expect(page.getByRole("link", { name: new RegExp(`^A este ritmo terminas el .* Ritmo 10 h al mes`) })).toBeVisible();
         } finally {
-          await db`delete from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+          await wipe(db, person.id);
         }
       });
     });
@@ -298,42 +293,36 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
   });
 
   for (const width of [360, 1440]) {
-    test(`@${width}: with ritmo each task row says «va al plan», no month; a parent adds «la suma de lo marcado», no month`, async ({ person, browser, baseURL }) => {
+    test(`@${width}: with ritmo each task row says «tarea» and its month; a parent adds its sub-tasks' sum; none says «va al plan»`, async ({ person, browser, baseURL }) => {
       await asPerson({ person, browser, baseURL }, { width, height: 1200 }, async (page) => {
         await toReview(page, template());
-        const card = goalCard(page, "IA aplicada");
-        const row = (task: string) => card.locator("label").filter({ hasText: task }).first();
-        for (const task of ["Leer AI Engineering cap. 1–4", "Tutor"]) {
-          await expect(row(task).getByText("va al plan", { exact: true })).toBeVisible();
-          // The month only orders the plan: no row promises it.
-          await expect(row(task).getByText(/desde|octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre/i)).toHaveCount(0);
+        const row = (task: RegExp) => rowOf(page, task).locator("label");
+        for (const task of [/^Leer AI Engineering cap. 1–4/, /^Tutor/]) {
+          await expect(row(task)).toContainText(`tarea · ${monthLower(0)}`);
         }
-        await expect(row("Tutor").getByText("la suma de lo marcado", { exact: true })).toBeVisible();
-        await expect(row("Leer AI Engineering cap. 1–4").getByText("la suma de lo marcado")).toHaveCount(0);
-        // The sentence is whole, not «<month> · la suma de lo marcado».
-        await expect(card.getByText(new RegExp(`${monthName(0)} · la suma de lo marcado`))).toHaveCount(0);
+        await expect(row(/^Tutor/)).toContainText("7 h");
+        await expect(page.getByText(/va al plan/)).toHaveCount(0);
+        await expect(page.getByText(/la suma de lo marcado/)).toHaveCount(0);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       });
     });
   }
 
-  test("without ritmo the parent keeps «<month> · la suma de lo marcado» and the leaf its month", async ({ person, browser, baseURL }) => {
+  test("without ritmo there is no rhythm row, and the task rows say the same", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 1200 }, async (page) => {
       await toReview(page, template(null));
-      const card = goalCard(page, "IA aplicada");
-      await expect(card.getByText(`${monthName(0)} · la suma de lo marcado`, { exact: true })).toBeVisible();
-      await expect(card.locator("label").filter({ hasText: "Leer AI Engineering" }).first().getByText(monthName(0), { exact: true })).toBeVisible();
+      await expect(page.getByText(RHYTHM_NAME, { exact: true })).toHaveCount(0);
+      await expect(rowOf(page, /^Leer AI Engineering/).locator("label")).toContainText(`tarea · ${monthLower(0)}`);
     });
   });
 
-  test("unchecking the rhythm fixes the tasks to their month again: no «va al plan»", async ({ person, browser, baseURL }) => {
+  test("unchecking the rhythm leaves the task rows as they were: each says its month, none says «va al plan»", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 1200 }, async (page) => {
       await toReview(page, template());
-      const card = goalCard(page, "IA aplicada");
       await rhythmBox(page).click();
       await expect(rhythmBox(page)).not.toBeChecked();
-      await expect(card.locator("label").filter({ hasText: "Leer AI Engineering" }).first().getByText(monthName(0), { exact: true })).toBeVisible();
-      await expect(card.getByText(/va al plan/)).toHaveCount(0);
+      await expect(rowOf(page, /^Leer AI Engineering/).locator("label")).toContainText(`tarea · ${monthLower(0)}`);
+      await expect(page.getByText(/va al plan/)).toHaveCount(0);
     });
   });
 });

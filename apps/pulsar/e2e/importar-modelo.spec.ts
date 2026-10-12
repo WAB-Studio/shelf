@@ -41,7 +41,7 @@ test.describe("the import screen against a stubbed model (RP-37, RNP-13)", () =>
       await page.getByRole("button", { name: "Leer el plan" }).click();
       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
 
-      await expect(page.getByRole("checkbox", { name: /Tema técnico/ })).toHaveAccessibleName(/Tema técnico lunes, miércoles y domingo/);
+      await expect(page.getByRole("checkbox", { name: /Tema técnico/ })).toHaveAccessibleName(/Tema técnico.*lunes, miércoles y domingo/);
     } finally {
       await context.close();
     }

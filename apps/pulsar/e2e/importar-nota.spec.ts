@@ -2,7 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
-import { todayInZone } from "../lib/zone";
+import { movedExample } from "./importar-plan";
 
 // The review draws a template task's and sub-task's note, whole and read-only
 // (RP-45); the template path needs no model key. Board `ImportarRevisarNota`.
@@ -10,16 +10,7 @@ import { todayInZone } from "../lib/zone";
 const TUTOR_NOTE = ["Preguntar por la tarifa por hora.", "Pedir una clase de prueba antes de pagar."];
 const CHILD_NOTE = "Comparar tres perfiles.";
 
-function template(): string {
-  const [year, month] = todayInZone().split("-").map(Number);
-  const first = `${year}-${String(month).padStart(2, "0")}`;
-  const second = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
-  return messages.template.example
-    .replace("2027-10-01", `${year + 1}-${String(month).padStart(2, "0")}-01`)
-    .replace("2026-10-01 a 2026-12-31", `${first}-01 a ${first}-28`)
-    .replaceAll("2026-10", first)
-    .replaceAll("2026-11", second);
-}
+const template = movedExample;
 
 type Fixtures = { person: { id: string; sessionFile: string }; browser: Browser; baseURL: string | undefined };
 async function asPerson({ person, browser, baseURL }: Fixtures, run: (page: Page) => Promise<void>) {
@@ -50,15 +41,23 @@ test.describe("the review shows each task's note (RP-45)", () => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page);
 
-      const tutorNote = page.locator("label").filter({ hasText: /^Tutor/ }).getByText("Preguntar por la tarifa", { exact: false });
+      // A note stays shut behind the button that names it; its row is the box around its checkbox.
+      const rowOf = (name: RegExp) => page.locator("div").filter({ has: page.getByRole("checkbox", { name }) }).last();
+      const tutor = rowOf(/^Tutor/);
+      await expect(page.getByText("Preguntar por la tarifa")).toHaveCount(0);
+      await tutor.getByRole("button", { name: "nota · 2 líneas" }).click();
+      const tutorNote = tutor.getByText("Preguntar por la tarifa", { exact: false });
       await expect(tutorNote).toBeVisible();
       await expect(tutorNote).toHaveText(TUTOR_NOTE.join("\n"));
       await expect(tutorNote).toHaveCSS("white-space", /pre-line/);
       await expect(tutorNote).toHaveCSS("font-size", "13px");
-      const childNote = page.getByText(CHILD_NOTE, { exact: true });
-      await expect(childNote).toBeVisible();
       // Whole: two lines of text, not clipped to one.
       expect((await tutorNote.boundingBox())!.height).toBeGreaterThan(2 * 13);
+
+      await page.getByRole("button", { name: "2 sub-tareas" }).click();
+      await rowOf(/^Elegir tutor/).getByRole("button", { name: "nota · 1 línea" }).click();
+      const childNote = page.getByText(CHILD_NOTE, { exact: true });
+      await expect(childNote).toBeVisible();
       // Read-only: no field holds a note.
       await expect(page.getByRole("textbox", { name: /nota/i })).toHaveCount(0);
 
@@ -66,7 +65,7 @@ test.describe("the review shows each task's note (RP-45)", () => {
       await expect(tutorNote).toBeVisible();
       await expect(childNote).toBeVisible();
 
-      await page.getByRole("button", { name: "Crear 1 meta" }).click();
+      await page.getByRole("button", { name: "Crear 3 metas" }).click();
       await expect(page).toHaveURL(/\/metas$/);
       await expect(page.getByRole("link", { name: /IA aplicada/ }).first()).toBeVisible();
 

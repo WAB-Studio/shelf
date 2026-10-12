@@ -25,9 +25,23 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   plan's Done table red; the worker makes it green. Decided by the user 2026-10-06, after four modules in
   one evening went worker → validator → worker over clauses nobody had tested. Except a module that only
   changes words on an existing line: see `## Verification`.
-- Dispatch the `mutator` before closing a slice, once the validator is green. It breaks the lines the
-  branch itself changed and reports what no suite noticed. A survivor is a regression that ships in
-  silence.
+- Judge per train, never per module. When a train's modules have all landed on its branch, dispatch one
+  `validator` and one `mutator` over the whole train, side by side. A worker proves its module with its own
+  tests and checks and runs no mutations. Decided by the user 2026-10-12: per-module judging and per-test
+  mutations took more than half of each module's time (one `next build` per mutation).
+- The `mutator` breaks the lines the train changed and reports what no suite noticed, with one build for all its
+  mutations. A survivor is a regression that ships in silence.
+- Give the `mutator` 30 minutes a train: about 40 mutations, on the lines that cost most in production (money, a
+  delete, a permission, what is stored, a refusal). Never block the train's PR on it; its survivors go to the handoff.
+  Decided by the user 2026-10-12: tren i1's mutator ran ~430 mutations in ~3 h and held the PR for nothing.
+- Cut a slice into modules by layer, not by function: all its loaders in one module, the screens of one area in
+  one module. About eight modules a slice, never seventeen. Split only what shares no file and needs no other
+  module's result. Decided by the user 2026-10-12: every handoff between agents cost 5 to 15 minutes.
+- Have every agent write its full report to a file under the lane's `private/reportes/` and return three lines:
+  green or red, the commit, and what blocks. Open the file only to decide something. Decided by the user
+  2026-10-12: reading every report in full drained the window at 500k with work still running.
+- Run two slices at once when the second depends only on what the first already landed. Decided by the user
+  2026-10-12: the import slice starts beside the hierarchy's last screens.
 - Dispatch the `test-critic` on a suite, never on a branch. It says what a green run really promises:
   which assertions cannot fail, which surfaces nobody drives, and which facts are paid for twice.
   `mutator` judges the lines a branch changed; only this one judges the suite as a whole.
@@ -282,7 +296,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Give a module that only changes words on a line that already exists one agent for tests and code:
   it writes the Done table red first, then makes it green. Keep the separate `tester` for any new
   form. Decided by the user 2026-10-10.
-- Run a mutation against the one test that kills it (`spec:line` or `-g`), never the module's suite.
+- The `mutator` runs each mutation against the one test that kills it (`spec:line` or `-g`), never the suite.
   Wait for the server to answer, never a fixed `sleep`. Run the suite once, over the final code.
   Measured 2026-10-10: module 702 spent ~36 s of each ~50 s mutation cycle on 59 tests and 8 s asleep.
 - Drive pulsar's mutations against `next build` + `next start`, never `next dev`, never `rm -rf .next`.

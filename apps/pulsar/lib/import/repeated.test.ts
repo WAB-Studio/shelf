@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ImportDraft } from "./draft";
+import type { ImportDraftV1 } from "./draft";
 import { repeatedGoals } from "./repeated";
 
-function draftOf(...names: string[]): ImportDraft {
+function draftOf(...names: string[]): ImportDraftV1 {
   return {
     goals: names.map((name) => ({
       name,

@@ -14,9 +14,11 @@ import {
   addCommitment,
   addPhase,
   createGoal,
+  moveGoal,
   moveHorizon,
   renameGoal,
   retireCommitment,
+  setGoalNote,
 } from "@/app/actions/plan";
 import { pgCode } from "@/lib/db-error";
 import { errorOf } from "@/lib/mcp/errors";
@@ -25,11 +27,11 @@ import { actAs } from "@/lib/session";
 
 import mcp from "../../../messages/es/mcp.json";
 
-type ActResult = { ok: true } | { ok: true; [key: string]: unknown } | { ok: false; error: string };
+type ActResult = { ok: true } | { ok: true; [key: string]: unknown } | { ok: false; error: string; values?: { name?: string; date?: string } };
 
 function answer(result: ActResult): CallToolResult {
   if (!result.ok) {
-    return { content: [{ type: "text", text: JSON.stringify(errorOf(result.error)) }], isError: true };
+    return { content: [{ type: "text", text: JSON.stringify(errorOf(result.error, result.values)) }], isError: true };
   }
   const value = result as Record<string, unknown>;
   return { content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value };
@@ -173,8 +175,19 @@ export function registerWriteTools(server: McpServer): void {
     fixTask({ oneOffId: input.oneOffId, month: null } as Parameters<typeof fixTask>[0]),
   );
 
-  tool("create_goal", { name: text, horizon: day }, (input) =>
+  tool("create_goal", { name: text, horizon: day, parent_id: id.optional() }, (input) =>
     createGoal(input as Parameters<typeof createGoal>[0]),
+  );
+
+  tool("move_goal", { goal_id: id, parent_id: id.nullable() }, (input) =>
+    moveGoal(input as Parameters<typeof moveGoal>[0]),
+  );
+
+  // A blank note would empty the goal's: the person empties, the AI never does.
+  tool("set_goal_note", { goal_id: id, note: text }, (input) =>
+    typeof input.note !== "string" || input.note.trim() === ""
+      ? Promise.resolve({ ok: false, error: "mcp.errors.noteEmpty" })
+      : setGoalNote(input as Parameters<typeof setGoalNote>[0]),
   );
 
   tool("retire_commitment", { commitment_id: id }, (input) =>

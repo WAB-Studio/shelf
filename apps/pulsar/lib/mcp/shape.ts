@@ -9,7 +9,7 @@ import { planShare } from "@/lib/plan/roadmap-read";
 import { civilDateInZone } from "@/lib/zone";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import type { loadDay } from "@/lib/queries/day";
-import type { GoalView, GoalSummary } from "@/lib/queries/goal";
+import type { GoalView, MetasSummary } from "@/lib/queries/goal";
 import type { DaylessOneOff, ScheduledOneOff } from "@/lib/queries/one-offs";
 
 import units from "../../messages/es/units.json";
@@ -164,13 +164,21 @@ function shapeLine(line: MonthLine & { month?: string }, unit: string | null) {
   };
 }
 
-export function shapeGoalList(list: { open: GoalSummary[]; ended: GoalSummary[]; archived: GoalSummary[] }) {
-  const one = (goal: GoalSummary) => ({
+export function shapeGoalList(list: { open: MetasSummary[]; ended: MetasSummary[]; archived: MetasSummary[] }) {
+  // The goals directly under each, in the order the list holds them.
+  const childIds = new Map<string, string[]>();
+  for (const goal of [...list.open, ...list.ended, ...list.archived]) {
+    if (goal.parentId !== null) childIds.set(goal.parentId, [...(childIds.get(goal.parentId) ?? []), goal.id]);
+  }
+  const one = (goal: MetasSummary) => ({
     id: goal.id,
     name: goal.name,
     horizon: goal.horizon,
     measure: shapeMeasure(goal.measureName, goal.measureUnit),
     archivedAt: goal.archivedAt,
+    parentId: goal.parentId,
+    level: goal.level,
+    childIds: childIds.get(goal.id) ?? [],
   });
   return { open: list.open.map(one), ended: list.ended.map(one), archived: list.archived.map(one) };
 }
@@ -201,7 +209,7 @@ export function shapeGoal(view: GoalView) {
       daysDone: commitment.factDayCount,
       evidenceSource: commitment.sourceLabelKey,
     })),
-    // The goal's units per month (RP-50); the AI reads it, never sets it (RP-56).
+    // The goal's units per month (RP-50); the AI reads it, never sets it (RP-56). Null for a goal that holds goals.
     rhythm: amountOrNull(view.rhythm, unit),
     // The day the plan's last task fills, null while it cannot say.
     end: view.roadmap.end,
@@ -220,6 +228,20 @@ export function shapeGoal(view: GoalView) {
     }),
     tasks: taskTree(view.tasks, unit, placementOf(view.roadmap)),
     weeks: view.weeks.map((week) => shapeWeek(week, unit)),
+    parent: view.parent === null ? null : { id: view.parent.id, name: view.parent.name },
+    children: view.children.map((child) => ({
+      id: child.id,
+      name: child.name,
+      level: child.level,
+      thisMonth:
+        child.month === null
+          ? null
+          : { planned: amountOrNull(child.month.planned, child.unit), reached: amountOf(child.month.reached, child.unit) },
+    })),
+    level: view.level,
+    holdsGoals: view.holdsGoals,
+    note: view.note,
+    outOfUnit: view.outOfUnit.map((other) => ({ id: other.id, name: other.name, unit: other.unit })),
   };
 }
 

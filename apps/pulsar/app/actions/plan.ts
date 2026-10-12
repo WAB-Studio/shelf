@@ -4,44 +4,64 @@ import { revalidatePath } from "next/cache";
 
 import { and, eq, isNull, max, sql } from "drizzle-orm";
 
-import { commitments, evidenceSources, goals, phases } from "@/db/schema";
+import { commitments, evidenceSources, goals, oneOffs, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
 import { isHourUnit, isTimeUnit, storedMeasure } from "@/lib/units/time";
-import { getPerson, withGoalsDb } from "@/lib/session";
+import { buildTree, branchOf, type Tree, type TreeRow } from "@/lib/goals/tree";
+import {
+  createInsideRefusal,
+  horizonTreeRefusal,
+  moveRefusal,
+  type PlacementRefusal,
+} from "@/lib/goals/placement";
+import { refusalKey, refusalName } from "@/lib/goals/refusal-key";
+import { dayBefore } from "@/lib/day/weeks";
+import { fillPlan, type PlanTask } from "@/lib/plan/roadmap";
+import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
 import { isClosed } from "@/lib/validation/closed";
 import { horizonRefusal, moveHorizonSchema, type MoveHorizonInput } from "@/lib/validation/horizon";
-import { todayInZone } from "@/lib/zone";
+import { civilDateInZone, todayInZone } from "@/lib/zone";
 import {
   addCommitmentSchema,
   addPhaseSchema,
   archiveGoalSchema,
   createGoalSchema,
+  moveGoalSchema,
   phasesOverlap,
   phaseWithinHorizon,
   renameGoalSchema,
   reopenGoalSchema,
   retireCommitmentSchema,
+  setGoalNoteSchema,
   type AddCommitmentInput,
   type AddPhaseInput,
   type ArchiveGoalInput,
   type CreateGoalInput,
+  type MoveGoalInput,
   type RenameGoalInput,
   type ReopenGoalInput,
   type RetireCommitmentInput,
+  type SetGoalNoteInput,
 } from "@/lib/validation/plan";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
 
-export type CreateGoalResult = { ok: true; goalId: string } | { ok: false; error: MessageKey };
+// A refusal of the goal tree names the goal that causes it (`values.name`), and the last day of
+// that goal where the words speak of a day.
+export type TreeRefusal = { ok: false; error: MessageKey; values?: { name: string; date?: string } };
+
+export type CreateGoalResult = { ok: true; goalId: string } | TreeRefusal;
+export type MoveGoalResult = { ok: true } | TreeRefusal;
+export type SetGoalNoteResult = { ok: true } | { ok: false; error: MessageKey };
 export type AddPhaseResult = { ok: true; phaseId: string } | { ok: false; error: MessageKey };
 export type AddCommitmentResult =
   | { ok: true; commitmentId: string }
   | { ok: false; error: MessageKey };
 export type RetireCommitmentResult = { ok: true } | { ok: false; error: MessageKey };
 export type RenameGoalResult = { ok: true } | { ok: false; error: MessageKey };
-export type ArchiveGoalResult = { ok: true } | { ok: false; error: MessageKey };
-export type ReopenGoalResult = { ok: true } | { ok: false; error: MessageKey };
-export type MoveHorizonResult = { ok: true } | { ok: false; error: MessageKey };
+export type ArchiveGoalResult = { ok: true; archived: number } | { ok: false; error: MessageKey };
+export type ReopenGoalResult = { ok: true; reopened: number } | TreeRefusal;
+export type MoveHorizonResult = { ok: true } | TreeRefusal;
 
 // Never a bare array parameter — drizzle expands a JS array inside a `sql`
 // template into a parenthesised comma list, not a Postgres array literal
@@ -54,6 +74,180 @@ function weekdaysArraySql(days: number[]) {
     sql`, `,
   )}]::smallint[]`;
 }
+
+const INSTANT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
+
+type RawTreeRow = {
+  id: string;
+  parent_id: string | null;
+  position: number;
+  created_at: string;
+  name: string;
+  horizon: string;
+  archived_at: string | null;
+  measure_unit: string | null;
+  rhythm: number | null;
+};
+
+// Every goal of the person in one statement; RLS narrows it. `rhythms` rides along because the
+// tree's rows carry none.
+async function readTree(tx: Transaction): Promise<{ tree: Tree; rhythms: Map<string, number | null> }> {
+  const rows = await tx.execute<RawTreeRow>(sql`
+    select id, parent_id, position, name, horizon::text as horizon, measure_unit, rhythm,
+           to_char(created_at at time zone 'UTC', ${sql.raw(INSTANT)}) as created_at,
+           to_char(archived_at at time zone 'UTC', ${sql.raw(INSTANT)}) as archived_at
+    from ${goals}
+  `);
+  const list = Array.from(rows);
+  const treeRows: TreeRow[] = list.map((row) => ({
+    id: row.id,
+    parentId: row.parent_id,
+    position: row.position,
+    createdAt: row.created_at,
+    name: row.name,
+    horizon: row.horizon,
+    archivedAt: row.archived_at,
+    measureUnit: row.measure_unit,
+  }));
+  return { tree: buildTree(treeRows), rhythms: new Map(list.map((row) => [row.id, row.rhythm])) };
+}
+
+function refused(refusal: PlacementRefusal): TreeRefusal {
+  const error = refusalKey(refusal.code);
+  const name = refusalName(refusal);
+  if (name === null) return { ok: false, error };
+  if (refusal.code === "endPastAbove") return { ok: false, error, values: { name, date: dayBefore(refusal.above.horizon) } };
+  if (refusal.code === "belowEndsLater") return { ok: false, error, values: { name, date: dayBefore(refusal.below.horizon) } };
+  return { ok: false, error, values: { name } };
+}
+
+const TREE_CONSTRAINTS: Record<string, MessageKey> = {
+  goals_tree_cycle: "tree.errors.cycle",
+  goals_tree_depth: "tree.errors.tooDeep",
+  goals_tree_end: "tree.errors.endPastAbove",
+  goals_tree_rhythm: "tree.errors.holderNoRhythm",
+  month_budgets_holder: "tree.errors.holderNoBudget",
+};
+
+function causeField(error: unknown, field: "constraint_name" | "detail"): string | undefined {
+  let current: unknown = error;
+  for (let hop = 0; hop < 5 && typeof current === "object" && current !== null; hop++) {
+    const value = (current as Record<string, unknown>)[field];
+    if (typeof value === "string") return value;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+// A 23514 of the tree's triggers that slipped past the pure refusals (another door wrote in
+// between), said by the constraint it broke. The trigger puts the goal it names in DETAIL; the
+// failed transaction is gone, so that goal is read back in a fresh one.
+async function treeConstraintRefusal(error: unknown): Promise<TreeRefusal | null> {
+  if (pgCode(error) !== "23514") return null;
+  const constraint = causeField(error, "constraint_name") ?? "";
+  const key = TREE_CONSTRAINTS[constraint];
+  if (!key) return null;
+  const detail = causeField(error, "detail");
+  const [named] = detail && UUID.test(detail)
+    ? await withGoalsDb((tx) =>
+        tx.execute<{ name: string; horizon: string }>(sql`select name, horizon::text as horizon from ${goals} where id = ${detail}`),
+      )
+    : [];
+  if (!named) return { ok: false, error: key };
+  const date = constraint === "goals_tree_end" ? { date: dayBefore(named.horizon) } : {};
+  return { ok: false, error: key, values: { name: named.name, ...date } };
+}
+
+// RP-82/RP-95: every screen that draws the tree, and the page of each goal the act touched.
+function revalidateTreeScreens(ids: Iterable<string>): void {
+  for (const path of ["/", "/semana", "/metas", "/mes", "/exportar"]) revalidatePath(path);
+  for (const id of new Set(ids)) revalidatePath(`/metas/${id}`);
+}
+
+// A goal that starts holding goals stops placing its tasks by its rhythm (RP-80): the ones the
+// plan had put in a month are fixed to it, in one statement. Reads and writes outside the
+// tree's own statements, and only when the goal had a rhythm and no goal inside.
+async function fixHolderTasks(tx: Transaction, goalId: string): Promise<void> {
+  const [row] = await tx.execute<{
+    created_at: string;
+    horizon: string;
+    rhythm: number | null;
+    budgets: { month: string; amount: number }[];
+    tasks: {
+      id: string;
+      parent_id: string | null;
+      name: string;
+      planned_month: string | null;
+      day: string | null;
+      estimate: number | null;
+      done_on: string | null;
+      note: string | null;
+      in_plan: boolean;
+      position: number;
+      created_at: string;
+    }[];
+  }>(sql`
+    select g.created_at, g.horizon::text as horizon, g.rhythm,
+      (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)), '[]'::json)
+         from "goals"."month_budgets" b where b.goal_id = g.id) as budgets,
+      (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
+                 'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
+               )), '[]'::json)
+         from "goals"."one_offs" o where o.goal_id = g.id) as tasks
+    from ${goals} g where g.id = ${goalId}
+  `);
+  if (!row || row.rhythm === null) return;
+
+  const openedOn = civilDateInZone(new Date(row.created_at));
+  const tasks: PlanTask[] = row.tasks.map((task) => ({
+    id: task.id,
+    parentId: task.parent_id,
+    name: task.name,
+    plannedMonth: task.planned_month,
+    day: task.day,
+    estimate: task.estimate,
+    doneOn: task.done_on,
+    note: task.note,
+    inPlan: task.in_plan,
+    position: task.position,
+    createdOn: civilDateInZone(new Date(task.created_at)),
+  }));
+  const roadmap = fillPlan({
+    rhythm: row.rhythm,
+    budgets: row.budgets,
+    tasks,
+    openedOn,
+    horizon: row.horizon,
+    today: todayInZone(),
+  });
+
+  const fixed = new Map<string, string>();
+  for (const month of roadmap.months) {
+    for (const item of month.items) {
+      if (item.fixed || item.done || item.carriedFrom !== null || fixed.has(item.task.id)) continue;
+      fixed.set(item.task.id, month.month);
+    }
+  }
+  if (fixed.size === 0) return;
+
+  const payload = JSON.stringify([...fixed].map(([id, month]) => ({ id, month })));
+  await tx.execute(sql`
+    update ${oneOffs} o set planned_month = v.month::date
+    from jsonb_to_recordset(${payload}::jsonb) as v(id uuid, month text)
+    where o.id = v.id and o.goal_id = ${goalId} and o.parent_id is null and o.planned_month is null
+  `);
+}
+
+// Whether `aboveId` holds no open goal yet, so the next one makes it a holder.
+function becomesHolder(tree: Tree, aboveId: string): boolean {
+  const above = tree.byId.get(aboveId);
+  return !!above && above.children.every((id) => tree.byId.get(id)!.archivedAt !== null);
+}
+
+const personLock = (personId: string) =>
+  sql`select pg_advisory_xact_lock(hashtextextended(${personId}::text, 1))`;
 
 /**
  * Opens a goal with a name and a horizon alone (§0.3, 3; RP-11). The measure
@@ -71,20 +265,52 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
-  const { name, horizon } = parsed.data;
+  const { name, horizon, parentId } = parsed.data;
 
-  const goalId = await withGoalsDb(async (tx) => {
-    const [inserted] = await tx.execute<{ id: string }>(sql`
-      insert into ${goals} (user_id, name, horizon)
-      values (${person.id}, ${name}, ${horizon})
-      returning id
-    `);
+  if (parentId === undefined) {
+    const goalId = await withGoalsDb(async (tx) => {
+      const [inserted] = await tx.execute<{ id: string }>(sql`
+        insert into ${goals} (user_id, name, horizon)
+        values (${person.id}, ${name}, ${horizon})
+        returning id
+      `);
 
-    return inserted.id;
-  });
+      return inserted.id;
+    });
 
-  revalidatePath("/");
-  return { ok: true, goalId };
+    revalidatePath("/");
+    return { ok: true, goalId };
+  }
+
+  // Inside another goal: the lock is taken before the tree is read, in its own statement, so the
+  // read sees what the previous holder committed (docs/TRAPS.md, advisory lock and snapshot).
+  try {
+    const outcome = await withGoalsDb(async (tx): Promise<TreeRefusal | { goalId: string }> => {
+      await tx.execute(personLock(person.id));
+      const { tree } = await readTree(tx);
+      const above = tree.byId.get(parentId);
+      if (!above) return { ok: false, error: "tree.errors.notFound" };
+      const refusal = createInsideRefusal(tree, parentId, horizon, todayInZone());
+      if (refusal) return refused(refusal);
+
+      const holder = becomesHolder(tree, parentId);
+      const [inserted] = await tx.execute<{ id: string }>(sql`
+        insert into ${goals} (user_id, name, horizon, parent_id)
+        values (${person.id}, ${name}, ${horizon}, ${parentId})
+        returning id
+      `);
+      if (holder) await fixHolderTasks(tx, parentId);
+      return { goalId: inserted.id };
+    });
+
+    if ("ok" in outcome) return outcome;
+    revalidateTreeScreens([outcome.goalId, parentId]);
+    return { ok: true, goalId: outcome.goalId };
+  } catch (error) {
+    const translated = await treeConstraintRefusal(error);
+    if (translated) return translated;
+    throw error;
+  }
 }
 
 /**
@@ -326,13 +552,19 @@ export async function renameGoal(input: RenameGoalInput): Promise<RenameGoalResu
   return { ok: true };
 }
 
+// A goal and everything below it, walked from `parent_id`.
+const branchCte = (goalId: string, personId: string) => sql`
+  branch as (
+    select id from ${goals} where id = ${goalId} and user_id = ${personId}
+    union all
+    select g.id from ${goals} g join branch b on g.parent_id = b.id where g.user_id = ${personId}
+  )`;
+
 /**
- * Archives a goal (RP-24). One UPDATE of `archived_at` alone — nothing here
- * is deleted: `goals.facts`, `goals.phases` and `goals.commitments` all keep
- * every row they had. Archiving only takes the goal out of `loadDay`'s and
- * `loadWeek`'s own "open goals" queries (`lib/queries/day.ts`, `lib/queries/
- * week.ts`) and off `listGoals`'s own list — `listGoalsForMetas` (`lib/
- * queries/goal.ts`) is what still finds it, under "Archivadas".
+ * Archives a goal and every goal still open below it (RP-24, RP-82) in one statement: the
+ * branch is walked from `parent_id` and stamped with one `now()`, so reopening can tell what
+ * went with it. Nothing is deleted — facts, phases and commitments keep every row.
+ * `archived` counts the goals this call archived; a goal already archived adds none.
  */
 export async function archiveGoal(input: ArchiveGoalInput): Promise<ArchiveGoalResult> {
   const parsed = archiveGoalSchema.safeParse(input);
@@ -341,25 +573,30 @@ export async function archiveGoal(input: ArchiveGoalInput): Promise<ArchiveGoalR
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
-  const archived = await withGoalsDb((tx) =>
-    tx
-      .update(goals)
-      .set({ archivedAt: sql`now()` })
-      .where(and(eq(goals.id, parsed.data.goalId), eq(goals.userId, person.id)))
-      .returning({ id: goals.id }),
+  const { goalId } = parsed.data;
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{ found: boolean; ids: string[] | null }>(sql`
+      with recursive ${branchCte(goalId, person.id)},
+      upd as (
+        update ${goals} set archived_at = now()
+        where id in (select id from branch) and archived_at is null
+        returning id
+      )
+      select exists (select 1 from branch) as found, (select array_agg(id) from upd) as ids
+    `),
   );
 
-  if (archived.length === 0) return { ok: false, error: "plan.errors.notFound" };
+  if (!row.found) return { ok: false, error: "plan.errors.notFound" };
 
-  revalidateGoalScreens(parsed.data.goalId);
-  return { ok: true };
+  const ids = row.ids ?? [];
+  revalidateTreeScreens([goalId, ...ids]);
+  return { ok: true, archived: ids.length };
 }
 
 /**
- * Reopens an archived goal (RP-24): the same UPDATE as `archiveGoal`, with
- * `archived_at` set back to null. No sheet asks first (`docs/pulsar/
- * DESIGN.md` "Decisions taken here") — the same way undoing a tap needs
- * none (RP-05).
+ * Reopens an archived goal (RP-24) and the goals of its branch archived at the same instant
+ * as it, never one archived on its own before (P5 = B), in one statement. A goal under an
+ * archived one is refused with that goal's name: it stays archived with its branch.
  */
 export async function reopenGoal(input: ReopenGoalInput): Promise<ReopenGoalResult> {
   const parsed = reopenGoalSchema.safeParse(input);
@@ -368,17 +605,104 @@ export async function reopenGoal(input: ReopenGoalInput): Promise<ReopenGoalResu
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
-  const reopened = await withGoalsDb((tx) =>
+  const { goalId } = parsed.data;
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{ found: boolean; ids: string[] | null; blocker: string | null }>(sql`
+      with recursive ${branchCte(goalId, person.id)},
+      up as (
+        select g.id, g.parent_id, g.name, g.archived_at, 1 as n
+        from ${goals} g
+        where g.id = (select parent_id from ${goals} where id = ${goalId}) and g.user_id = ${person.id}
+        union all
+        select g.id, g.parent_id, g.name, g.archived_at, up.n + 1
+        from ${goals} g join up on g.id = up.parent_id
+        where g.user_id = ${person.id} and up.n < 8
+      ),
+      blocker as (select name from up where archived_at is not null order by n limit 1),
+      upd as (
+        update ${goals} set archived_at = null
+        where not exists (select 1 from blocker)
+          and id in (select id from branch)
+          and archived_at is not null
+          and archived_at = (select archived_at from ${goals} where id = ${goalId})
+        returning id
+      )
+      select exists (select 1 from branch) as found,
+             (select array_agg(id) from upd) as ids,
+             (select name from blocker) as blocker
+    `),
+  );
+
+  if (!row.found) return { ok: false, error: "plan.errors.notFound" };
+  if (row.blocker !== null) return { ok: false, error: refusalKey("aboveArchived"), values: { name: row.blocker } };
+
+  const ids = row.ids ?? [];
+  revalidateTreeScreens([goalId, ...ids]);
+  return { ok: true, reopened: ids.length };
+}
+
+/**
+ * Moves a goal under another, or to the top with a null parent (RP-79). The lock is the
+ * person's, so two moves that together would make a fourth level are judged one after the
+ * other; the tree is read after it, in its own statement. Only `parent_id` is written.
+ */
+export async function moveGoal(input: MoveGoalInput): Promise<MoveGoalResult> {
+  const parsed = moveGoalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const { goalId, parentId } = parsed.data;
+
+  try {
+    const outcome = await withGoalsDb(async (tx): Promise<TreeRefusal | { touched: string[] }> => {
+      await tx.execute(personLock(person.id));
+      const { tree } = await readTree(tx);
+      const goal = tree.byId.get(goalId);
+      if (!goal || (parentId !== null && !tree.byId.has(parentId))) return { ok: false, error: "tree.errors.notFound" };
+
+      const refusal = moveRefusal(tree, goalId, parentId, todayInZone());
+      if (refusal) return refused(refusal);
+
+      const holder = parentId !== null && becomesHolder(tree, parentId);
+      await tx.execute(sql`update ${goals} set parent_id = ${parentId} where id = ${goalId} and user_id = ${person.id}`);
+      if (holder) await fixHolderTasks(tx, parentId);
+      return { touched: [...branchOf(tree, goalId), ...(goal.parentId ? [goal.parentId] : []), ...(parentId ? [parentId] : [])] };
+    });
+
+    if ("ok" in outcome) return outcome;
+    revalidateTreeScreens(outcome.touched);
+    return { ok: true };
+  } catch (error) {
+    const translated = await treeConstraintRefusal(error);
+    if (translated) return translated;
+    throw error;
+  }
+}
+
+/**
+ * Writes a goal's note (RP-95): trimmed, null when blank. One UPDATE of `note` alone, scoped
+ * by `(id, userId)`; a foreign id matches nothing and reads as a missing goal.
+ */
+export async function setGoalNote(input: SetGoalNoteInput): Promise<SetGoalNoteResult> {
+  const parsed = setGoalNoteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const written = await withGoalsDb((tx) =>
     tx
       .update(goals)
-      .set({ archivedAt: null })
+      .set({ note: parsed.data.note })
       .where(and(eq(goals.id, parsed.data.goalId), eq(goals.userId, person.id)))
       .returning({ id: goals.id }),
   );
 
-  if (reopened.length === 0) return { ok: false, error: "plan.errors.notFound" };
+  if (written.length === 0) return { ok: false, error: "plan.errors.notFound" };
 
-  revalidateGoalScreens(parsed.data.goalId);
+  revalidateTreeScreens([parsed.data.goalId]);
   return { ok: true };
 }
 
@@ -397,9 +721,11 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
 
   const { goalId, horizon } = parsed.data;
 
+  let touched: string[] = [];
   try {
-    await withGoalsDb(async (tx) => {
-      const [goal] = await tx.select({ id: goals.id }).from(goals).where(eq(goals.id, goalId));
+    const refusal = await withGoalsDb(async (tx): Promise<TreeRefusal | null> => {
+      const { tree } = await readTree(tx);
+      const goal = tree.byId.get(goalId);
       if (!goal) throw new NamedError("plan.errors.notFound");
 
       const [last] = await tx
@@ -407,26 +733,35 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
         .from(phases)
         .where(eq(phases.goalId, goalId));
 
-      const refusal = horizonRefusal({
+      const phaseRefusal = horizonRefusal({
         horizon,
         today: todayInZone(),
         lastPhaseEndsOn: last?.endsOn ?? null,
       });
-      if (refusal) throw new NamedError(refusal);
+      if (phaseRefusal) throw new NamedError(phaseRefusal);
 
+      const treeRefusal = horizonTreeRefusal(tree, goalId, horizon);
+      if (treeRefusal) return refused(treeRefusal);
+
+      touched = [...branchOf(tree, goalId), ...(goal.parentId ? [goal.parentId] : [])];
       const moved = await tx
         .update(goals)
         .set({ horizon })
         .where(and(eq(goals.id, goalId), eq(goals.userId, person.id)))
         .returning({ id: goals.id });
       if (moved.length === 0) throw new NamedError("plan.errors.notFound");
+      return null;
     });
+    if (refusal) return refusal;
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
+    const translated = await treeConstraintRefusal(error);
+    if (translated) return translated;
     throw error;
   }
 
   revalidateGoalScreens(goalId);
+  revalidateTreeScreens(touched);
   revalidatePath(`/metas/${goalId}/revision`);
   return { ok: true };
 }
