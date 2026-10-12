@@ -4,6 +4,17 @@ import { sql } from "drizzle-orm";
 
 import type { EvidenceDay } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import {
+  branchOf,
+  buildTree,
+  rollUp,
+  rootOf,
+  type GoalMonths,
+  type Level,
+  type RolledUp,
+  type Tree,
+  type TreeRow,
+} from "@/lib/goals/tree";
 import { estimateFacts, type MonthItem } from "@/lib/plan/carry";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { screenPlanned } from "@/lib/plan/screen-planned";
@@ -29,7 +40,17 @@ export type MonthAcrossGoal = {
   items: MonthAcrossItem[];
   open: boolean;
   // What the goal's tasks are placed from; the task sheet reads their plan month off it.
+  // A goal that holds goals has no rhythm and no budgets of its own (RP-80).
   plan: PlanInput;
+  // The goal above and the general at the top, for «de X»; the tree's place (RP-84).
+  parentId: string | null;
+  level: Level | null;
+  rootId: string;
+  rootName: string;
+  aboveName: string | null;
+  holdsGoals: boolean;
+  // Goals under it that measure in another unit and add nothing to its line.
+  outOfUnit: { id: string; name: string; unit: string }[];
 };
 
 // The screen's `MonthItem` plus what the plan says of the task: its part of
@@ -41,11 +62,14 @@ export type MonthAcross = {
   month: string;
   today: string;
   evidence: "read" | "unreadable";
+  // In the tree's order: each goal after the one above it.
   goals: MonthAcrossGoal[];
+  // One entry per general (or lone goal); `goalIds` in preorder, drawn goals only.
+  groups: { rootId: string; goalIds: string[] }[];
 };
 
 type Row = {
-  goal: GoalRow;
+  goal: GoalRow & { parent_id: string | null; position: number };
   commitments: CommitmentRow[];
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
@@ -57,7 +81,8 @@ type PlanTaskRow = TaskRow & { in_plan: boolean; created_at: string; position: n
 
 // One statement over every goal open today. Facts are bounded in SQL to the
 // month so a past month never reaches the process; tasks and budgets are not,
-// since the plan fills from every task through every month of the goal. RLS narrows it to the caller (RNP-05).
+// since the plan fills from every task through every month of the goal. A goal that ended under
+// an open goal is read too, for its part of the month's sum. RLS narrows it to the caller (RNP-05).
 async function queryRows(tx: Transaction, month: string, today: string): Promise<Row[]> {
   const rows = await tx.execute<Row>(sql`
     select
@@ -89,8 +114,14 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
          from "goals"."one_offs" o where o.goal_id = g.id) as tasks
     from "goals"."goals" g
     where g.archived_at is null
-      and g.horizon > ${today}::date
       and (g.created_at at time zone ${TIME_ZONE})::date <= ${today}::date
+      and (g.horizon > ${today}::date
+        or exists (
+          select 1 from "goals"."goals" a
+          where a.archived_at is null
+            and a.horizon > ${today}::date
+            and a.id in (g.parent_id, (select pp.parent_id from "goals"."goals" pp where pp.id = g.parent_id))
+        ))
     order by g.position, g.created_at, g.id
   `);
   return [...rows];
@@ -130,7 +161,10 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
     ),
   ]);
 
-  const goals = rows.map((row): MonthAcrossGoal => {
+  const tree = buildTree(rows.map(treeRowOf));
+  const holders = new Set(tree.order.filter((node) => node.children.length > 0).map((node) => node.id));
+
+  const built = rows.map((row) => {
     const tasks: PlanTask[] = row.tasks.map((task) => ({
       id: task.id,
       parentId: task.parent_id,
@@ -145,9 +179,10 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       createdOn: civilDateInZone(new Date(task.created_at)),
       position: task.position,
     }));
+    const holds = holders.has(row.goal.id);
     const plan: PlanInput = {
-      rhythm: row.goal.rhythm ?? null,
-      budgets: row.budgets,
+      rhythm: holds ? null : (row.goal.rhythm ?? null),
+      budgets: holds ? [] : row.budgets,
       tasks,
       openedOn: civilDateInZone(new Date(row.goal.created_at)),
       horizon: row.goal.horizon,
@@ -169,7 +204,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       for (const amount of reachedByMonth({ unit, facts: [...declared, ...doneTasks], evidence }).values()) {
         reached += amount;
       }
-      const budget = row.budgets.find((entry) => entry.month === month) ?? null;
+      const budget = holds ? null : (row.budgets.find((entry) => entry.month === month) ?? null);
       const raw = monthLine({
         month,
         today,
@@ -182,35 +217,108 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       line = { ...raw, planned: screenPlanned(raw.planned, budget !== null) };
     }
 
-    return {
-      id: row.goal.id,
-      name: row.goal.name,
-      unit,
-      line,
-      items: planMonthList(plan, month).map(
-        (item): MonthAcrossItem => ({
-          task: item.task,
-          children: item.children,
-          carriedFrom: item.carriedFrom,
-          owes: item.part,
-          hasAmount:
-            item.children.length === 0
-              ? item.task.estimate !== null
-              : item.children.some((child) => child.estimate !== null),
-          done: item.done,
-          hours: item.hours,
-          part: item.part,
-          from: item.from,
-          to: item.to,
-          fixed: item.fixed,
-          endsOn: item.endsOn,
-          pastEnd: item.pastEnd,
-        }),
-      ),
-      open: true,
-      plan,
-    };
+    const items = planMonthList(plan, month).map(
+      (item): MonthAcrossItem => ({
+        task: item.task,
+        children: item.children,
+        carriedFrom: item.carriedFrom,
+        owes: item.part,
+        hasAmount:
+          item.children.length === 0
+            ? item.task.estimate !== null
+            : item.children.some((child) => child.estimate !== null),
+        done: item.done,
+        hours: item.hours,
+        part: item.part,
+        from: item.from,
+        to: item.to,
+        fixed: item.fixed,
+        endsOn: item.endsOn,
+        pastEnd: item.pastEnd,
+      }),
+    );
+    return { row, unit, line, items, plan };
   });
 
-  return { month, today, evidence: outcome.status === "read" ? "read" : "unreadable", goals };
+  // Each goal's own month figure feeds the sum of the one above it (RP-80).
+  const own = new Map<string, GoalMonths>();
+  for (const { row, unit, line } of built) {
+    if (unit === null || line === null) continue;
+    own.set(row.goal.id, {
+      unit,
+      months: new Map([[month, { planned: line.planned, reached: line.reached, ownBudget: false }]]),
+    });
+  }
+  const rolled = rollUp(tree, own);
+
+  const open = (row: Row): boolean => row.goal.horizon > today;
+  const goals = built.filter(({ row }) => open(row)).map(({ row, unit, line, items, plan }): MonthAcrossGoal => {
+    const id = row.goal.id;
+    const sum = rolled.get(id);
+    return {
+      id,
+      name: row.goal.name,
+      unit: sum ? sum.unit : unit,
+      line: sum ? lineOfSum(sum, month, today, plan) : line,
+      items,
+      open: true,
+      plan,
+      ...placeOf(tree, id),
+      holdsGoals: sum !== undefined,
+      outOfUnit: sum?.outOfUnit ?? [],
+    };
+  });
+  const order = new Map(tree.order.map((node, index) => [node.id, index]));
+  goals.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+
+  const drawn = new Set(goals.map((goal) => goal.id));
+  const groups = tree.order
+    .filter((node) => node.depth === 0)
+    .map((node) => ({ rootId: node.id, goalIds: branchOf(tree, node.id).filter((id) => drawn.has(id)) }))
+    .filter((group) => group.goalIds.length > 0);
+
+  return { month, today, evidence: outcome.status === "read" ? "read" : "unreadable", goals, groups };
+}
+
+function treeRowOf(row: Row): TreeRow {
+  return {
+    id: row.goal.id,
+    parentId: row.goal.parent_id,
+    position: row.goal.position,
+    createdAt: row.goal.created_at,
+    name: row.goal.name,
+    horizon: row.goal.horizon,
+    archivedAt: row.goal.archived_at,
+    measureUnit: row.goal.measure_unit,
+  };
+}
+
+// Where a goal sits: the goal above it and the general at the top, by name.
+export function placeOf(tree: Tree, id: string) {
+  const node = tree.byId.get(id)!;
+  const rootId = rootOf(tree, id);
+  return {
+    parentId: node.ancestors[0] ?? null,
+    level: node.level,
+    rootId,
+    rootName: tree.byId.get(rootId)!.name,
+    aboveName: node.ancestors[0] ? tree.byId.get(node.ancestors[0])!.name : null,
+  };
+}
+
+// A holder's line: the sums of its goals' this month, with its own pace.
+function lineOfSum(sum: RolledUp, month: string, today: string, plan: PlanInput): MonthLine | null {
+  if (sum.unit === null) return null;
+  const figure = sum.months.get(month);
+  const planned = figure?.planned ?? null;
+  const reached = figure?.reached ?? 0;
+  const { underPace } = monthLine({
+    month,
+    today,
+    budget: planned === null ? null : { month, amount: planned },
+    reached,
+    openedOn: plan.openedOn,
+    horizon: plan.horizon,
+  });
+  return { planned, reached, underPace };
 }
