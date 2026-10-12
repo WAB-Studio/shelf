@@ -287,8 +287,9 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     },
     evidence: "unreadable",
     goals: [
-      { id: ID(10), name: "Leer más", horizon: "2027-01-01", openedOn: "2026-08-15", measureName: "Lectura", measureUnit: "minutos" },
+      { id: ID(10), name: "Leer más", horizon: "2027-01-01", openedOn: "2026-08-15", measureName: "Lectura", measureUnit: "minutos", parentId: null, level: null, rootId: ID(10) },
     ],
+    groups: [{ rootId: ID(10), goalIds: [ID(10)] }],
     oneOffs: [
       { id: ID(20), goalId: ID(10), name: "Pedir el libro", note: "Pedir en la biblioteca\nantes del viernes", day: "2026-10-03" },
       { id: ID(21), goalId: null, name: "Llamar", note: null, day: "2026-10-05" },

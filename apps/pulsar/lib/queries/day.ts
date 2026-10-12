@@ -35,6 +35,7 @@ import {
 import { sourceKey, type SourceKey } from "@/i18n/translator";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
+import { branchOf, buildTree, rollUp, rootOf, type GoalMonths, type Level, type Tree } from "@/lib/goals/tree";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -62,6 +63,8 @@ type GoalRow = {
   measure_unit: string | null;
   rhythm: number | null;
   plan_seen: string | null;
+  parent_id: string | null;
+  position: number;
 };
 
 // `source_key` and `source_unit` ride in from the join to `evidence_sources`;
@@ -368,9 +371,16 @@ export type GoalSummary = {
   openedOn: string;
   measureName: string | null;
   measureUnit: string | null;
+  parentId: string | null;
+  // Null for a goal that stands alone: only one with goals under it is a general.
+  level: Level | null;
+  rootId: string;
 };
 
-function toGoalSummary(row: GoalRow): GoalSummary {
+// One general with the goals under it, or a goal on its own: ids in preorder.
+export type DayGroup = { rootId: string; goalIds: string[] };
+
+function toGoalSummary(row: GoalRow, tree: Tree): GoalSummary {
   return {
     id: row.id,
     name: row.name,
@@ -378,7 +388,64 @@ function toGoalSummary(row: GoalRow): GoalSummary {
     openedOn: civilDateInZone(new Date(row.created_at)),
     measureName: row.measure_name,
     measureUnit: row.measure_unit,
+    parentId: tree.byId.has(row.parent_id ?? "") ? row.parent_id : null,
+    level: tree.byId.get(row.id)?.level ?? null,
+    rootId: rootOf(tree, row.id),
   };
+}
+
+function treeOf(goals: GoalRow[]): Tree {
+  return buildTree(
+    goals.map((goal) => ({
+      id: goal.id,
+      parentId: goal.parent_id,
+      position: goal.position,
+      createdAt: goal.created_at,
+      name: goal.name,
+      horizon: goal.horizon,
+      archivedAt: null,
+      measureUnit: goal.measure_unit,
+    })),
+  );
+}
+
+// A goal with goals under it has no figures of its own: its line is the sum of
+// theirs (RP-80), its own reached amount added (RP-78).
+function rolledMonthLines(
+  all: GoalRow[],
+  tree: Tree,
+  lines: Record<string, DayMonthLine>,
+  day: string,
+): Record<string, DayMonthLine> {
+  const month = monthOf(day);
+  const own = new Map<string, GoalMonths>();
+  for (const [id, line] of Object.entries(lines)) {
+    own.set(id, {
+      unit: tree.byId.get(id)?.measureUnit ?? null,
+      months: new Map([[month, { planned: line.planned, reached: line.reached, ownBudget: line.ownBudget }]]),
+    });
+  }
+  const rolled = rollUp(tree, own);
+  const out = { ...lines };
+  for (const goal of all) {
+    const up = rolled.get(goal.id);
+    if (!up) continue;
+    delete out[goal.id];
+    if (up.unit === null) continue;
+    const figure = up.months.get(month) ?? { planned: null, reached: 0 };
+    const planned = figure.planned;
+    const line = monthLine({
+      month,
+      today: day,
+      budget: planned === null ? null : { month, amount: planned },
+      reached: figure.reached,
+      rhythm: null,
+      openedOn: civilDateInZone(new Date(goal.created_at)),
+      horizon: goal.horizon,
+    });
+    out[goal.id] = { ...line, planned, ownBudget: false };
+  }
+  return out;
 }
 
 // A one-off still owed (RP-19, RP-20): `goalId` is null for one that belongs
@@ -701,6 +768,9 @@ export async function loadDay(day: string): Promise<{
   view: DayView;
   evidence: "read" | "unreadable";
   goals: GoalSummary[];
+  // The goals in tree order, a group per general or per goal on its own; the
+  // screen decides which group goes first.
+  groups: DayGroup[];
   oneOffs: OneOffSummary[];
   doneOneOffs: DoneOneOffSummary[];
   daylessCount: number;
@@ -770,6 +840,19 @@ export async function loadDay(day: string): Promise<{
   );
   const evidence = toEvidenceByCommitment(row.commitments, dayEvidence);
   const goals = row.goals.filter((goal) => goal.horizon > day);
+  // The tree spans every goal the statement returns: one that ended this week
+  // still counts in the sum of the general above it.
+  const tree = treeOf(row.goals);
+  const visible = new Set(goals.map((goal) => goal.id));
+  const holders = new Set(tree.order.filter((node) => node.children.length > 0).map((node) => node.id));
+  const groups: DayGroup[] = tree.order
+    .filter((node) => node.depth === 0 && visible.has(node.id))
+    .map((node) => ({ rootId: node.id, goalIds: branchOf(tree, node.id).filter((id) => visible.has(id)) }));
+  const monthLines = Object.fromEntries(
+    Object.entries(
+      rolledMonthLines(row.goals, tree, monthLineOf(row.goals, row, evidenceOutcome, day), day),
+    ).filter(([id]) => visible.has(id)),
+  );
 
   const monthItems = isToday ? monthItemsOf(goals, row, day) : null;
 
@@ -790,7 +873,8 @@ export async function loadDay(day: string): Promise<{
     view,
     periodDone,
     evidence: evidenceOutcome.status,
-    goals: goals.map(toGoalSummary),
+    goals: goals.map((goal) => toGoalSummary(goal, tree)),
+    groups,
     oneOffs: row.one_offs.map(toOneOffSummary),
     doneOneOffs: row.done_one_offs.map((o) => ({
       id: o.id,
@@ -809,10 +893,10 @@ export async function loadDay(day: string): Promise<{
       lastDay: dayBefore(goal.horizon),
     })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
-    monthLine: monthLineOf(goals, row, evidenceOutcome, day),
+    monthLine: monthLines,
     monthTask: monthItems ? monthTaskOf(goals, monthItems) : {},
     monthTaskCounts: monthItems ? monthTaskCountsOf(monthItems) : {},
-    planNotice: isToday ? planNoticeOf(goals, row, day) : {},
+    planNotice: isToday ? planNoticeOf(goals.filter((goal) => !holders.has(goal.id)), row, day) : {},
     commitments: row.commitments.map(toCommitmentInfo),
     firstGoalDay: row.first_goal_at ? civilDateInZone(new Date(row.first_goal_at)) : null,
     phases: inEffect.map(toPhaseInfo),
