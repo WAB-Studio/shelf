@@ -194,3 +194,16 @@ for (const face of FACES) {
     }
   });
 }
+
+test("dark at 1280: the «km» in the /exportar header reads at 4.5:1 or more against its ground", async ({ person, browser, baseURL, db }) => {
+  await seedGoal(db, person, "km", 40, 20);
+  const { page, close } = await open(browser, baseURL, person, "/exportar", 1280, "dark");
+  try {
+    const units = await seen(page, "table", "headerUnit");
+    expect(units.length, "header units on screen").toBeGreaterThan(0);
+    expect(units.map((u) => u.text)).toContain("km");
+    for (const unit of units) expect(unit.ratio, `header «${unit.text}»`).toBeGreaterThanOrEqual(4.5);
+  } finally {
+    await close();
+  }
+});
