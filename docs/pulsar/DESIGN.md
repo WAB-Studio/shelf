@@ -1181,6 +1181,11 @@ Taken by the user the same day, on the critic's three questions and two from the
   `/meses`, `/mes`, `/exportar` and the week line. A figure with no «de» keeps its unit: «45 búsquedas · sin monto».
 - **On paper, a time goal with no rhythm says its months' tasks on the left-out line:** «sin monto · 1 tarea» (RP-73 on paper).
 - **«sin monto» may wrap at 1024 on `/meses`** rather than push the row's chevron out: the «one line» rule gives way there.
+- **`/exportar` on screen says «sin monto» on a month not yet begun with no amount,** for every goal, in the planned
+  column; a goal measured in time with no rhythm names each month's tasks under its state, like `/meses` («en curso» /
+  «2 tareas»; «1 tarea» alone in a future month), never «0 tareas» and never a trailing «·». Correr (km) and a goal with a
+  rhythm count no tasks. A started month with no amount keeps its done figure alone (844). The printed row carries its tasks;
+  the left-out line does not change. Board `ReporteFilasSinMonto` approved by the user 2026-10-11 (option B, RP-77).
 - **«hs» reads as hours,** in the template and in the rhythm's «otra» field: «8 hs».
 - **Approved the same day:** board `UnidadUnaVez` as drawn (`/metas`, the goal, `/meses`, a month, `/mes`, Hoy, `/exportar`);
   board `ReporteImpresoTareasFuera` option A — one line per group of months by task count («noviembre de 2026 y enero de 2027:
