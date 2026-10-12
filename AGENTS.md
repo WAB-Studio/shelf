@@ -31,6 +31,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   mutations took more than half of each module's time (one `next build` per mutation).
 - The `mutator` breaks the lines the train changed and reports what no suite noticed, with one build for all its
   mutations. A survivor is a regression that ships in silence.
+- Give the `mutator` 30 minutes a train: about 40 mutations, on the lines that cost most in production (money, a
+  delete, a permission, what is stored, a refusal). Never block the train's PR on it; its survivors go to the handoff.
+  Decided by the user 2026-10-12: tren i1's mutator ran ~430 mutations in ~3 h and held the PR for nothing.
 - Cut a slice into modules by layer, not by function: all its loaders in one module, the screens of one area in
   one module. About eight modules a slice, never seventeen. Split only what shares no file and needs no other
   module's result. Decided by the user 2026-10-12: every handoff between agents cost 5 to 15 minutes.
