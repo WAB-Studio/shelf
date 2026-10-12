@@ -79,5 +79,13 @@
   "day": {
     "month": "{month} · {done} de {goal}",
     "phase": "fase {number} de {total} · {name}"
+  },
+  "holder": {
+    "monthsSentence": "Cada mes suma el de sus metas.",
+    "planSentence": "Este plan no tiene ritmo propio. Cada mes suma el de sus metas.",
+    "rhythmLabel": "El ritmo de sus metas",
+    "tasksLabel": "Sus tareas · {month} {year}",
+    "inMonth": "{hours} en {month}",
+    "startsIn": "empieza en {month} · {hours}"
   }
 }
