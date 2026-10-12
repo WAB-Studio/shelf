@@ -59,6 +59,11 @@ export async function setMonthBudget(input: SetMonthBudgetInput): Promise<SetMon
         .where(eq(goals.id, goalId));
       if (!goal) throw new NamedError("month.errors.notFound");
       if (isClosed(goal)) throw new NamedError("month.errors.closed");
+      // RP-80: a goal holding goals reads its months from the ones inside.
+      const [holder] = await tx.execute<{ holds: boolean }>(sql`
+        select exists (select 1 from ${goals} c where c.parent_id = ${goalId} and c.archived_at is null) as holds
+      `);
+      if (holder.holds) throw new NamedError("tree.errors.holderNoBudget");
       if (goal.measureUnit === null) throw new NamedError("month.errors.noMeasure");
 
       if (month < todayInZone().slice(0, 7)) throw new NamedError("month.errors.monthClosed");
