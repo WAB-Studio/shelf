@@ -4,6 +4,7 @@ import type postgres from "postgres";
 import { test, expect, type Person } from "./fixtures";
 import {
   MONTH_LONG,
+  monthStart,
   indexOf,
   isoWeekday,
   open,
@@ -189,11 +190,15 @@ for (const width of [360, 1280]) {
       const general = await seedGoal(db, person.id, names.general);
       // A holder keeps a stored month no screen may read.
       await seedBudget(db, person.id, general, 999);
+      // The large holds goals too: its own 1200 is stored and unread (RP-80), so the
+      // 1200 of the sum sits on a second small goal.
       const large = await seedGoal(db, person.id, names.large, general);
-      await seedBudget(db, person.id, large, 1200);
+      await seedBudget(db, person.id, large, 700);
       const small = await seedGoal(db, person.id, names.small, large);
       await seedBudget(db, person.id, small, 1020);
       await seedReached(db, person.id, small, 750);
+      const other = await seedGoal(db, person.id, `Otra chica ${stamp}`, large);
+      await seedBudget(db, person.id, other, 1200);
       await seedCommitment(db, person.id, small, names.row);
       const { context, page } = await pageAt(browser, person, width);
       try {
@@ -208,8 +213,72 @@ for (const width of [360, 1280]) {
         const first = await topOfRow(page, names.row);
         expect(label).toBeLessThan(lineTop);
         expect(lineTop).toBeLessThan(first);
+        // The general's own line, before the name any inner goal puts above its line.
+        expect(lineTop).toBeLessThan(await topOf(page, names.large));
         // The 999 minutes stored on the holder are nowhere.
         await expect(page.getByText(/16 h 39 min/)).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("a large or small goal's month tasks and month line stand under its own name in the general's block (RP-84, RP-80)", async ({
+      person,
+      browser,
+      db,
+    }) => {
+      const stamp = Date.now();
+      const names = {
+        general: `General mes ${stamp}`,
+        large: `Grande mes ${stamp}`,
+        small: `Chica mes ${stamp}`,
+        other: `Otra mes ${stamp}`,
+        row: `Fila mes ${stamp}`,
+        smallTask: `Tarea de la chica ${stamp}`,
+        otherTask: `Tarea de la otra ${stamp}`,
+      };
+      const general = await seedGoal(db, person.id, names.general);
+      const large = await seedGoal(db, person.id, names.large, general);
+      const small = await seedGoal(db, person.id, names.small, large);
+      const other = await seedGoal(db, person.id, names.other, large);
+      await seedBudget(db, person.id, small, 600);
+      await seedBudget(db, person.id, other, 300);
+      await seedReached(db, person.id, small, 150);
+      await seedReached(db, person.id, other, 60);
+      await seedCommitment(db, person.id, small, names.row);
+      for (const [goal, name, estimate] of [
+        [small, names.smallTask, 90],
+        [other, names.otherTask, 45],
+      ] as const) {
+        await db`
+          insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+          values (${person.id}, ${goal}, ${name}, ${monthStart}::date, ${estimate})
+        `;
+      }
+      const { context, page } = await pageAt(browser, person, width);
+      try {
+        await open(page);
+        const month = MONTH_LONG[Number(today.slice(5, 7)) - 1];
+        const smallLine = page.getByText(new RegExp(`${month}\\s*·\\s*2 h 30 min\\s+de\\s+10 h`)).locator("visible=true").first();
+        const otherLine = page.getByText(new RegExp(`${month}\\s*·\\s*1 h\\s+de\\s+5 h`)).locator("visible=true").first();
+        await expect(smallLine).toBeVisible();
+        await expect(otherLine).toBeVisible();
+        // Each goal's name stands alone above its own line and its own task.
+        await expect.poll(() => standalone(page, names.small)).toBe(1);
+        await expect.poll(() => standalone(page, names.other)).toBe(1);
+        const smallName = await topOf(page, names.small);
+        const otherName = await topOf(page, names.other);
+        const smallTask = await indexOf(page.getByText(names.smallTask).locator("visible=true").first());
+        const otherTask = await indexOf(page.getByText(names.otherTask).locator("visible=true").first());
+        const smallAt = await indexOf(smallLine);
+        const otherAt = await indexOf(otherLine);
+        expect(smallName).toBeLessThan(smallAt);
+        expect(smallAt).toBeLessThan(smallTask);
+        expect(smallTask).toBeLessThan(otherName);
+        expect(otherName).toBeLessThan(otherAt);
+        expect(otherAt).toBeLessThan(otherTask);
+        // The general's own line is the sum of both.
+        await expect(page.getByText(new RegExp(`${month}\\s*·\\s*3 h 30 min\\s+de\\s+15 h`)).locator("visible=true").first()).toBeVisible();
       } finally {
         await context.close();
       }
