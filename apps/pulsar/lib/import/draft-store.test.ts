@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
 
-import type { ImportDraft } from "./draft";
-import { clearDraft, readDraft, readSource, saveDraft, saveReview } from "./draft-store";
+import type { DraftGoal, ImportDraft, ImportDraftV1 } from "./draft";
+import { clearDraft, readDraft, readDraftV1, readSourceV1, saveDraft, saveDraftV1, saveReview, saveReviewV1 } from "./draft-store";
 
 const memory = new Map<string, string>();
 (globalThis as { sessionStorage?: unknown }).sessionStorage = {
@@ -11,7 +11,7 @@ const memory = new Map<string, string>();
   removeItem: (k: string) => void memory.delete(k),
 };
 
-const draft = (amount = 720): ImportDraft => ({
+const draft = (amount = 720): ImportDraftV1 => ({
   goals: [
     {
       name: "IA aplicada",
@@ -29,84 +29,168 @@ const draft = (amount = 720): ImportDraft => ({
 beforeEach(() => memory.clear());
 
 test("a text save reads back its text, unmarked null", () => {
-  saveDraft({ via: "template", draft: draft(), source: "texto" });
-  assert.equal(readSource(), "texto");
-  assert.equal(readDraft()?.unmarked, null);
+  saveDraftV1({ via: "template", draft: draft(), source: "texto" });
+  assert.equal(readSourceV1(), "texto");
+  assert.equal(readDraftV1()?.unmarked, null);
 });
 
 test("a file save reads source null", () => {
-  saveDraft({ via: "model", draft: draft() });
-  assert.equal(readDraft()?.source, null);
-  assert.equal(readSource(), null);
+  saveDraftV1({ via: "model", draft: draft() });
+  assert.equal(readDraftV1()?.source, null);
+  assert.equal(readSourceV1(), null);
 });
 
 test("saveReview keeps amounts, unmarked paths and the source", () => {
-  saveDraft({ via: "template", draft: draft(), source: "texto" });
-  saveReview(draft(900), ["goals.0", "goals.0.tasks.1"]);
-  const read = readDraft();
+  saveDraftV1({ via: "template", draft: draft(), source: "texto" });
+  saveReviewV1(draft(900), ["goals.0", "goals.0.tasks.1"]);
+  const read = readDraftV1();
   assert.equal(read?.draft.goals[0].months[0].amount, 900);
   assert.deepEqual(read?.unmarked, ["goals.0", "goals.0.tasks.1"]);
   assert.equal(read?.source, "texto");
   assert.equal(read?.via, "template");
-  assert.equal(readSource(), "texto");
+  assert.equal(readSourceV1(), "texto");
 });
 
 test("saveReview with [] reads [], never null", () => {
-  saveDraft({ via: "template", draft: draft(), source: "t" });
-  saveReview(draft(), []);
-  assert.deepEqual(readDraft()?.unmarked, []);
+  saveDraftV1({ via: "template", draft: draft(), source: "t" });
+  saveReviewV1(draft(), []);
+  assert.deepEqual(readDraftV1()?.unmarked, []);
 });
 
 test("saveReview does nothing when nothing is stored", () => {
-  saveReview(draft(), ["a"]);
+  saveReviewV1(draft(), ["a"]);
   assert.equal(memory.size, 0);
 });
 
 test("the older shape reads the defaults", () => {
   memory.set("pulsar.import-draft", JSON.stringify({ via: "template", draft: draft() }));
-  const read = readDraft();
+  const read = readDraftV1();
   assert.equal(read?.source, null);
   assert.equal(read?.unmarked, null);
 });
 
 test("a non-string unmarked entry is dropped", () => {
   memory.set("pulsar.import-draft", JSON.stringify({ via: "model", draft: draft(), source: null, unmarked: ["a", 3, null, "b"] }));
-  assert.deepEqual(readDraft()?.unmarked, ["a", "b"]);
+  assert.deepEqual(readDraftV1()?.unmarked, ["a", "b"]);
 });
 
 test("clearDraft then readSource is null", () => {
-  saveDraft({ via: "template", draft: draft(), source: "t" });
+  saveDraftV1({ via: "template", draft: draft(), source: "t" });
   clearDraft();
-  assert.equal(readSource(), null);
+  assert.equal(readSourceV1(), null);
 });
 
 test("a draft with an unknown field reads null", () => {
   const bad = { goals: [{ ...draft().goals[0], extra: 1 }] };
   memory.set("pulsar.import-draft", JSON.stringify({ via: "template", draft: bad, source: null, unmarked: null }));
-  assert.equal(readDraft(), null);
+  assert.equal(readDraftV1(), null);
 });
 
 test("a file save reads back its name, and no text", () => {
-  saveDraft({ via: "model", draft: draft(), sourceName: "plan-2027.md" });
-  const read = readDraft();
+  saveDraftV1({ via: "model", draft: draft(), sourceName: "plan-2027.md" });
+  const read = readDraftV1();
   assert.equal(read?.sourceName, "plan-2027.md");
   assert.equal(read?.source, null);
 });
 
 test("a text save carries no file name", () => {
-  saveDraft({ via: "template", draft: draft(), source: "texto" });
-  assert.equal(readDraft()?.sourceName, null);
+  saveDraftV1({ via: "template", draft: draft(), source: "texto" });
+  assert.equal(readDraftV1()?.sourceName, null);
 });
 
 test("saveReview keeps the file name", () => {
-  saveDraft({ via: "model", draft: draft(), sourceName: "plan-2027.md" });
-  saveReview(draft(900), ["goals.0"]);
-  assert.equal(readDraft()?.sourceName, "plan-2027.md");
+  saveDraftV1({ via: "model", draft: draft(), sourceName: "plan-2027.md" });
+  saveReviewV1(draft(900), ["goals.0"]);
+  assert.equal(readDraftV1()?.sourceName, "plan-2027.md");
 });
 
 test("a stored file name that is no string reads null, and the older shape without one reads null", () => {
   memory.set("pulsar.import-draft", JSON.stringify({ via: "model", draft: draft(), sourceName: 3 }));
-  assert.equal(readDraft()?.sourceName, null);
+  assert.equal(readDraftV1()?.sourceName, null);
   memory.set("pulsar.import-draft", JSON.stringify({ via: "model", draft: draft() }));
-  assert.equal(readDraft()?.sourceName, null);
+  assert.equal(readDraftV1()?.sourceName, null);
+});
+
+// ---- version 2
+
+const goal2 = (amount = 720): DraftGoal => ({
+  key: "g1",
+  parent: null,
+  name: "IA aplicada",
+  horizon: "2027-10-01",
+  measure: { name: "horas", unit: "minutos" },
+  rhythm: null,
+  note: "contexto",
+  noteSrc: [{ from: 2, to: 3 }],
+  src: [{ from: 1, to: 1 }],
+  phases: [],
+  months: [{ month: "2026-10", amount, src: [] }],
+  commitments: [],
+  rules: [],
+  tasks: [],
+});
+const draft2 = (amount = 720): ImportDraft => ({ version: 2, goals: [goal2(amount)] });
+const source = { kind: "lines" as const, lines: ["a", "b", "c"] };
+const base = { via: "model" as const, draft: draft2(), corrections: [], notices: [], source };
+
+test("v2: a save reads back whole, unmarked null and nothing declined", () => {
+  saveDraft({ ...base, sourceName: "plan.md" });
+  const read = readDraft();
+  assert.equal(read?.version, 2);
+  assert.equal(read?.via, "model");
+  assert.deepEqual(read?.draft, draft2());
+  assert.deepEqual(read?.source, source);
+  assert.equal(read?.sourceName, "plan.md");
+  assert.equal(read?.unmarked, null);
+  assert.deepEqual(read?.declined, []);
+});
+
+test("v2: the workbook is a way in", () => {
+  saveDraft({ ...base, via: "workbook" });
+  assert.equal(readDraft()?.via, "workbook");
+});
+
+test("v2: saveReview keeps the draft, the unmarked paths and the declined corrections", () => {
+  saveDraft({ ...base, corrections: [{ id: "goals.0:nameShortened", at: "goals.0", code: "nameShortened", said: "s", proposed: "p", declined: "leavesOut" }] });
+  saveReview(draft2(900), ["goals.0.tasks.1"], ["goals.0:nameShortened"]);
+  const read = readDraft();
+  assert.equal(read?.draft.goals[0].months[0].amount, 900);
+  assert.deepEqual(read?.unmarked, ["goals.0.tasks.1"]);
+  assert.deepEqual(read?.declined, ["goals.0:nameShortened"]);
+  assert.equal(read?.corrections.length, 1);
+  assert.deepEqual(read?.source, source);
+});
+
+test("v2: a value without version 2 reads null, the older shape included", () => {
+  memory.set("pulsar.import-draft", JSON.stringify({ via: "template", draft: { goals: [] }, source: null, unmarked: null }));
+  assert.equal(readDraft(), null);
+  const v1: ImportDraftV1 = { goals: [] };
+  memory.set("pulsar.import-draft", JSON.stringify({ via: "model", draft: v1 }));
+  assert.equal(readDraft(), null);
+  saveDraft(base);
+  const stored = JSON.parse(memory.get("pulsar.import-draft") ?? "{}") as Record<string, unknown>;
+  memory.set("pulsar.import-draft", JSON.stringify({ ...stored, version: 1 }));
+  assert.equal(readDraft(), null);
+});
+
+test("v2: a draft the schema refuses reads null", () => {
+  saveDraft(base);
+  const stored = JSON.parse(memory.get("pulsar.import-draft") ?? "{}") as { draft: { goals: unknown[] } };
+  memory.set("pulsar.import-draft", JSON.stringify({ ...stored, draft: { ...stored.draft, goals: [{ extra: 1 }] } }));
+  assert.equal(readDraft(), null);
+});
+
+test("v2: a stored source that is no source reads null", () => {
+  saveDraft(base);
+  const stored = JSON.parse(memory.get("pulsar.import-draft") ?? "{}") as Record<string, unknown>;
+  memory.set("pulsar.import-draft", JSON.stringify({ ...stored, source: "texto" }));
+  assert.equal(readDraft(), null);
+});
+
+test("v2: saveReview does nothing when nothing is stored, and a v1 save is no v2 read", () => {
+  saveReview(draft2(), [], []);
+  assert.equal(memory.size, 0);
+  saveDraftV1({ via: "template", draft: { goals: [] } as ImportDraftV1, source: "t" });
+  assert.equal(readDraft(), null);
+  assert.equal(readSourceV1(), null);
 });
