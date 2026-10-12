@@ -8,7 +8,9 @@ import { parseTemplate as parseV2, parseTemplateV1 as parseTemplate, templateSou
 import { GOAL_NAME_MAX, GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
-const EXAMPLE: string = catalogue.template.example;
+
+// The first template's example, as the catalogue showed it before the second: the v1 tests read it.
+const EXAMPLE = "pulsar · plantilla 1\n\n# IA aplicada\nhorizonte: 2027-10-01\nmedida: horas de estudio · minutos\nritmo: 12 h\n\n## Fases\n- 2026-10-01 a 2026-12-31 · Evals y harness\n\n## Meses\n- 2026-10 · 12 h\n- 2026-11 · 20 h\n\n## Compromisos\n- Tema técnico · martes y jueves · 2 h\n- Inglés pasivo · cada día · toque\n\n## Tareas\n- 2026-10 · 4 h · Leer AI Engineering cap. 1–4\n- 2026-10 · Tutor\n  nota: Preguntar por la tarifa por hora.\n  nota: Pedir una clase de prueba antes de pagar.\n  - 1 h · Elegir tutor\n    nota: Comparar tres perfiles.\n  - 6 h · Sesiones 1–4";
 
 const EXAMPLE2 = `pulsar · plantilla 2
 
@@ -630,7 +632,7 @@ test("801 first line: «pulsar ·» with another version is refused on line 1, m
 
 test("801 first line: the refusal names the first line and the header the plantilla wants", () => {
   const [only] = mistakesOf("pulsar · plantilla 3\n# A\nhorizonte: 2027-10-01\n");
-  assert.equal(said(only), "La primera línea va como «pulsar · plantilla 1».");
+  assert.equal(said(only), "La primera línea va como «pulsar · plantilla 2».");
 });
 
 test("801 first line: a text that does not start with «pulsar ·» still goes to the AI reading", () => {

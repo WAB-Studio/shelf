@@ -5,6 +5,8 @@ import test from "node:test";
 
 import ts from "typescript";
 
+import { remapped } from "./import/reason-key";
+
 const root = join(import.meta.dirname, "..");
 const messagesDir = join(root, "messages", "es");
 
@@ -50,33 +52,8 @@ function scan(): { keys: Found[]; templates: Found[] } {
   return { keys, templates };
 }
 
-// Refusal ids, not catalogue keys: `reasonOf` in review-screen.tsx reads them.
-const REMAPPED = [
-  "import.errors.monthBeforeStart",
-  "import.errors.monthAfterEnd",
-  "import.errors.amountNoMeasure",
-  "import.errors.quantityNoMeasure",
-];
-
-// The `import.review.blocked.*` key each REMAPPED id's `case` clause names, or
-// null when the clause is gone.
-function remappedTarget(id: string): string | null {
-  const file = join(root, "components", "import", "review-screen.tsx");
-  const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
-  let target: string | null = null;
-  const visit = (node: ts.Node) => {
-    if (ts.isCaseClause(node) && ts.isStringLiteral(node.expression) && node.expression.text === id) {
-      const find = (n: ts.Node) => {
-        if (ts.isStringLiteral(n) && n.text.startsWith("import.review.blocked.")) target ??= n.text;
-        ts.forEachChild(n, find);
-      };
-      node.statements.forEach(find);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
-  return target;
-}
+// Refusal ids, not catalogue keys: `remapped` in lib/import/reason-key.ts names the sentence of each.
+const REMAPPED = Object.keys(remapped);
 
 function resolveKey(catalogues: Record<string, unknown>, key: string): unknown {
   return key.split(".").reduce<unknown>(
@@ -120,13 +97,19 @@ test("every message key a server file names is a leaf in messages/es", () => {
   assert.deepEqual(failures, []);
 });
 
-test("every remapped refusal id has a case in reasonOf naming a message that exists", () => {
+test("every remapped refusal id names a message that exists", () => {
   const catalogue = { import: JSON.parse(readFileSync(join(messagesDir, "import.json"), "utf8")) };
-  const failures = REMAPPED.flatMap((id) => {
-    const target = remappedTarget(id);
-    if (target === null) return [`${id}  has no case clause in components/import/review-screen.tsx`];
-    if (!isLeaf(resolveKey(catalogue, target))) return [`${id}  maps to ${target}, which is no message in messages/es`];
-    return [];
-  });
+  const failures = Object.entries(remapped).flatMap(([id, target]) =>
+    isLeaf(resolveKey(catalogue, target)) ? [] : [`${id}  maps to ${target}, which is no message in messages/es`],
+  );
   assert.deepEqual(failures, []);
+  assert.equal(REMAPPED.length, 4);
+});
+
+// What the server answers a workbook with: 885 returns these keys as data.
+test("the keys a workbook answer carries are messages in messages/es", () => {
+  const catalogue = { import: JSON.parse(readFileSync(join(messagesDir, "import.json"), "utf8")) };
+  for (const key of ["import.errors.workbookRows", "import.errors.workbookRow", "import.errors.workbookNotTemplate"]) {
+    assert.equal(isLeaf(resolveKey(catalogue, key)), true, key);
+  }
 });

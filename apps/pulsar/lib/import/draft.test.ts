@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readFileSync } from "node:fs";
 import { parseTemplateV1 as parseTemplate } from "./template";
 import { draftRefusals, importDraftJsonSchema, importDraftSchema, inMinutes, phaseCuts, phaseDrops, strayEstimates, withCutPhases, withoutStrayEstimates, type ImportDraftV1 } from "./draft";
 
@@ -161,13 +160,12 @@ test("draftRefusals: each goal is judged on its own and paths name it", () => {
 });
 
 const exampleDraft = (): ImportDraftV1 => {
-  const example = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8")).template.example;
-  const result = parseTemplate(example);
+  const result = parseTemplate("pulsar · plantilla 1\n\n# IA aplicada\nhorizonte: 2027-10-01\nmedida: horas de estudio · minutos\nritmo: 12 h\n\n## Fases\n- 2026-10-01 a 2026-12-31 · Evals y harness\n\n## Meses\n- 2026-10 · 12 h\n- 2026-11 · 20 h\n\n## Compromisos\n- Tema técnico · martes y jueves · 2 h\n- Inglés pasivo · cada día · toque\n\n## Tareas\n- 2026-10 · 4 h · Leer AI Engineering cap. 1–4\n- 2026-10 · Tutor\n  nota: Preguntar por la tarifa por hora.\n  nota: Pedir una clase de prueba antes de pagar.\n  - 1 h · Elegir tutor\n    nota: Comparar tres perfiles.\n  - 6 h · Sesiones 1–4");
   assert.ok(result.matched && "draft" in result);
   return result.draft;
 };
 
-test("draftRefusals: the catalogue's example, a month after October, refuses October's month and both its tasks", () => {
+test("draftRefusals: the first template's example, a month after October, refuses October's month and both its tasks", () => {
   assert.deepEqual(draftRefusals(exampleDraft(), "2026-11-15"), [
     { path: "goals.0.months.0", key: "import.errors.monthBeforeStart", values: { first: "2026-11" } },
     { path: "goals.0.tasks.0", key: "import.errors.monthBeforeStart", values: { first: "2026-11" } },
@@ -175,7 +173,7 @@ test("draftRefusals: the catalogue's example, a month after October, refuses Oct
   ]);
 });
 
-test("draftRefusals: the catalogue's example, the day before October ends, refuses nothing", () => {
+test("draftRefusals: the first template's example, the day before October ends, refuses nothing", () => {
   assert.deepEqual(draftRefusals(exampleDraft(), "2026-09-30"), []);
 });
 
