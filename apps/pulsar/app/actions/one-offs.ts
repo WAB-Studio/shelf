@@ -132,6 +132,18 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
           plannedMonth ??= current < opened ? opened : current;
           month = plannedMonth;
         }
+        // RP-80: a goal holding goals has no rhythm to place a task, so it is fixed to its month too.
+        if (day == null && parentId == null && plannedMonth == null) {
+          const [holder] = await tx.execute<{ holds: boolean }>(sql`
+            select exists (select 1 from ${goals} c where c.parent_id = ${goalId} and c.archived_at is null) as holds
+          `);
+          if (holder.holds) {
+            const opened = civilDateInZone(own.createdAt).slice(0, 7);
+            const current = todayInZone().slice(0, 7);
+            plannedMonth = current < opened ? opened : current;
+            month = plannedMonth;
+          }
+        }
       }
 
       if ((isTask || plannedMonth != null) && goal !== null) {
@@ -350,6 +362,7 @@ const REFUSALS: Record<string, MessageKey> = {
   parentEstimate: "roadmap.errors.parentEstimate",
   monthOutsideSpan: "roadmap.errors.monthOutsideSpan",
   monthEnded: "roadmap.errors.monthEnded",
+  holderTaskFixed: "tree.errors.holderTaskFixed",
 };
 
 /**
@@ -401,6 +414,9 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
                 when has_fact then 'doneTask'
                 when ${touchesMonth}::boolean and parent_id is not null then 'subTaskMonth'
                 when ${touchesMonth}::boolean and day is not null then 'dayInMonth'
+                when ${month ?? null}::text is null and ${touchesMonth}::boolean and exists (
+                  select 1 from goals c where c.parent_id = t.goal_id and c.archived_at is null
+                ) then 'holderTaskFixed'
                 when archived_at is not null or horizon <= ${today}::date then 'closed'
                 when ${estimate ?? null}::int is not null and has_children then 'parentEstimate'
                 when ${estimate ?? null}::int is not null and measure_unit is null then 'noMeasure'
