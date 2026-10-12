@@ -14,9 +14,11 @@ import {
   addCommitment,
   addPhase,
   createGoal,
+  moveGoal,
   moveHorizon,
   renameGoal,
   retireCommitment,
+  setGoalNote,
 } from "@/app/actions/plan";
 import { pgCode } from "@/lib/db-error";
 import { errorOf } from "@/lib/mcp/errors";
@@ -173,8 +175,19 @@ export function registerWriteTools(server: McpServer): void {
     fixTask({ oneOffId: input.oneOffId, month: null } as Parameters<typeof fixTask>[0]),
   );
 
-  tool("create_goal", { name: text, horizon: day }, (input) =>
+  tool("create_goal", { name: text, horizon: day, parent_id: id.optional() }, (input) =>
     createGoal(input as Parameters<typeof createGoal>[0]),
+  );
+
+  tool("move_goal", { goal_id: id, parent_id: id.nullable() }, (input) =>
+    moveGoal(input as Parameters<typeof moveGoal>[0]),
+  );
+
+  // A blank note would empty the goal's: the person empties, the AI never does.
+  tool("set_goal_note", { goal_id: id, note: text }, (input) =>
+    typeof input.note !== "string" || input.note.trim() === ""
+      ? Promise.resolve({ ok: false, error: "mcp.errors.noteEmpty" })
+      : setGoalNote(input as Parameters<typeof setGoalNote>[0]),
   );
 
   tool("retire_commitment", { commitment_id: id }, (input) =>
