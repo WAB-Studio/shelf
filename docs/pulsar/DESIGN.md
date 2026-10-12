@@ -223,6 +223,23 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 10».
 | `ImportarTope.dc.html` | ten AI reads today: tomorrow again; the template still reads |
 | `ImportarFormato.dc.html` | a file over 4 MB or of a kind not read: paste its text |
 
+- **The import in three steps is approved** (RP-86–RP-90, RP-95–RP-98), 2026-10-12, by the user: «Apruebo todos». Page
+  «Importar», row «La importación en tres pasos»: `ImportarEntrada`, `ImportarPasos` (1–3), `ImportarArbol` (1 at 360 and
+  1280, 2 a PDF, 3 notes open), `ImportarCorreccion` (1–2), `ImportarCambiar`, `ImportarFuera`, `ImportarNadaQueCrear`,
+  `ImportarCreando`, `ImportarCrearFallo`, `ImportarExcelFilas`, `ImportarExcelAjeno`. Words and structure:
+  `private/tableros-importacion/NOTAS.md` «# Importación». `ImportarLeyendo`, `ImportarRevisar`, `ImportarRevisarAvisos`
+  and `ImportarRevisarNota` are superseded and go to «Archivo»; `ImportarVacio`, `ImportarFallo`, `ImportarSinClave`,
+  `ImportarTope`, `ImportarFormato` and `ImportarPlantillaError` stay.
+- **A part's name, amount or month changes from the button at the row's end**: its amount, or a pencil when it has none.
+  It opens one sheet with only the fields that part has. Decided by the user 2026-10-12.
+- **A correction nobody touches counts as accepted.** The tree shows it applied; «Aceptar» confirms it, «Dejar como
+  estaba» undoes it, and «Crear» never waits on one. Decided by the user 2026-10-12.
+- **A goal that holds goals keeps the plan's phases; a plan's weeks are tasks with their sub-tasks.** Decided by the user
+  2026-10-12.
+- **The review tree needs primitive variants**: `CheckRow` gains `depth` (0–4, 16 px a level), `below` and `foldedNote`;
+  `Fold` gains `depth`.
+- **Boards that do not exist for the import**: the dark face (the token table's); 1280 except the tree (the 640 column does
+  not change); a workbook's count in rows; the «nota llena» line (it reads as one more «Sin lugar en el plan» row).
 - **The upload hint reads «PDF, texto o imagen · hasta 4 MB», without «Word».** The boards say «PDF, Word, texto o
   imagen»; the model's file part takes PDF alone and a `.docx` answers `unreadableType` (module 151). Decided by the
   coordinator 2026-10-01: the hint never promises a kind the route refuses.
