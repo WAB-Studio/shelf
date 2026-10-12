@@ -304,6 +304,7 @@ test("a goal reads the goal above, the goals below, its level and its note", () 
         level: "small",
         unit: "minutos",
         inUnit: true,
+        firstPlanned: null,
         month: { planned: 90, reached: 30 },
         endedOn: null,
         archivedAt: null,

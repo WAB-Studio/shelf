@@ -216,15 +216,15 @@ async function HolderPlan({ goal }: { goal: GoalView }) {
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
 
   // What each goal under it plans from now on: its current month, or the month it begins in.
-  const kids = await Promise.all(
-    goal.children.filter((child) => child.archivedAt === null).map(async (child) => ({ child, view: await loadGoal(child.id) })),
-  );
-  const rhythmOf = (child: GoalView["children"][number], view: GoalView | null): string | null => {
-    const first = view?.months.find((m) => !m.past && m.planned !== null && m.planned > 0);
-    if (!first || !child.unit || first.planned === null) return null;
+  const kids = goal.children.filter((child) => child.archivedAt === null);
+  const rhythmOf = (child: GoalView["children"][number]): string | null => {
+    const first = child.firstPlanned;
+    if (!first || !child.unit) return null;
     const hours = formatQuantity(first.planned, child.unit, words);
     const month = monthName(first.month, thisYear);
-    return first.current ? t("tree.holder.inMonth", { hours, month }) : t("tree.holder.startsIn", { hours, month });
+    return first.month === monthOf(todayInZone())
+      ? t("tree.holder.inMonth", { hours, month })
+      : t("tree.holder.startsIn", { hours, month });
   };
 
   const tasks = goal.tasks.filter((task) => task.parentId === null && task.plannedMonth !== null);
@@ -249,12 +249,12 @@ async function HolderPlan({ goal }: { goal: GoalView }) {
       </Text>
       {kids.length > 0 ? (
         <Section label={t("tree.holder.rhythmLabel")}>
-          {kids.map(({ child, view }) => (
+          {kids.map((child) => (
             <Row
               key={child.id}
               href={`/metas/${child.id}`}
               name={child.name}
-              meta={rhythmOf(child, view) ?? undefined}
+              meta={rhythmOf(child) ?? undefined}
               trailing={<ChevronRight size={20} aria-hidden />}
             />
           ))}
