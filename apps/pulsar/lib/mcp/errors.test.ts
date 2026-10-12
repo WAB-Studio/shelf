@@ -59,3 +59,12 @@ test("every error key the acts and their schemas can return has a sentence", () 
 test("a path that reaches a sentence but has no key's shape reads unknown", () => {
   assert.deepEqual(errorOf("mcp.instructions"), { key: "mcp.errors.unknown", message: UNKNOWN });
 });
+
+test("a tree refusal carries the goal's name and the day in its sentence", () => {
+  assert.equal(
+    errorOf("tree.errors.endPastAbove", { name: "Leer más", date: "2027-09-30" }).message,
+    "Pasa del final de «Leer más», el 30 sep 2027.",
+  );
+  assert.equal(errorOf("tree.errors.aboveArchived", { name: "Leer más" }).message, "«Leer más» está archivada. Reábrela primero.");
+  assert.equal(errorOf("tree.errors.noteTooLong").message, "La nota pasa de 20 000 caracteres.");
+});

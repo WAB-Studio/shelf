@@ -9,10 +9,12 @@ import month from "../../messages/es/month.json";
 import oauth from "../../messages/es/oauth.json";
 import plan from "../../messages/es/plan.json";
 import roadmap from "../../messages/es/roadmap.json";
+import tree from "../../messages/es/tree.json";
+import { civilDayMonthShort } from "../zone";
 
 // The request config belongs to a request; a tool answers outside one, so the
 // catalogue is read here directly, in the one locale there is.
-const messages = { connections, day, goal, import: importMessages, mcp, month, oauth, plan, roadmap };
+const messages = { connections, day, goal, import: importMessages, mcp, month, oauth, plan, roadmap, tree };
 const translate = createTranslator({ locale: "es", messages });
 
 const KEY = /^[A-Za-z]+\.errors\.[A-Za-z]+$/;
@@ -30,8 +32,15 @@ function hasSentence(key: string): boolean {
 
 // What an act's error key says, in Spanish. The key survives beside it so a
 // caller can branch on it; an unknown one is `mcp.errors.unknown`, never an
-// echo of its input.
-export function errorOf(key: string): { key: string; message: string } {
+// echo of its input. `values` fills a refusal's `{name}` and `{date}` (RP-56).
+export function errorOf(
+  key: string,
+  values?: { name?: string; date?: string },
+): { key: string; message: string } {
   if (!hasSentence(key)) return { key: "mcp.errors.unknown", message: translate("mcp.errors.unknown") };
-  return { key, message: translate(key as Parameters<typeof translate>[0]) };
+  const filled: Record<string, string> = {};
+  if (values?.name !== undefined) filled.name = values.name;
+  if (values?.date !== undefined) filled.date = `${civilDayMonthShort(values.date)} ${values.date.slice(0, 4)}`;
+  const name = key as Parameters<typeof translate>[0];
+  return { key, message: Object.keys(filled).length > 0 ? translate(name, filled) : translate(name) };
 }

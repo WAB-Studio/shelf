@@ -25,11 +25,11 @@ import { actAs } from "@/lib/session";
 
 import mcp from "../../../messages/es/mcp.json";
 
-type ActResult = { ok: true } | { ok: true; [key: string]: unknown } | { ok: false; error: string };
+type ActResult = { ok: true } | { ok: true; [key: string]: unknown } | { ok: false; error: string; values?: { name?: string; date?: string } };
 
 function answer(result: ActResult): CallToolResult {
   if (!result.ok) {
-    return { content: [{ type: "text", text: JSON.stringify(errorOf(result.error)) }], isError: true };
+    return { content: [{ type: "text", text: JSON.stringify(errorOf(result.error, result.values)) }], isError: true };
   }
   const value = result as Record<string, unknown>;
   return { content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value };
