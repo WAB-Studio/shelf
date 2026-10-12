@@ -2,21 +2,21 @@ import { isTimeUnit, parseTime, storedMeasure } from "@/lib/units/time";
 
 import { GOAL_NAME_MAX } from "@/lib/validation/plan";
 
-import { importDraftSchema, type ImportDraft } from "./draft";
+import { importDraftSchema, type ImportDraftV1 } from "./draft";
 
 // The grammar is docs/pulsar/PLANTILLA.md's.
 export const TEMPLATE_HEADER = "pulsar · plantilla 1";
 
 export type TemplateResult =
   | { matched: false }
-  | { matched: true; draft: ImportDraft }
+  | { matched: true; draft: ImportDraftV1 }
   | { matched: true; error: TemplateError; errors: TemplateError[]; cut: boolean };
 
 // `cut` means the reading stopped at a head line or the first line, so `errors` holds that one alone.
 // `expected` is a catalogue key; `unit` fills the sentence that names the goal's own.
 export type TemplateError = { line: number; expected: string; unit?: string };
 
-type Goal = ImportDraft["goals"][number];
+type Goal = ImportDraftV1["goals"][number];
 type Commitment = Goal["commitments"][number];
 type Task = Goal["tasks"][number];
 

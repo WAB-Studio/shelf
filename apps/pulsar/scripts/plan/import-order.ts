@@ -76,7 +76,7 @@ function installStubs(cookies: StoredCookie[]): void {
 
 let confirmImport: typeof import("@/app/actions/import").confirmImport;
 let parseTemplate: typeof import("@/lib/import/template").parseTemplate;
-type Draft = import("@/lib/import/draft").ImportDraft;
+type Draft = import("@/lib/import/draft").ImportDraftV1;
 
 const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
   prepare: false,

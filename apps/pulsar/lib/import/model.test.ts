@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { afterEach, mock } from "node:test";
 
-import type { ImportDraft } from "./draft";
+import type { ImportDraftV1 } from "./draft";
 
 const fakeEnv: { OPENAI_API_KEY?: string; PULSAR_MODEL_STUB?: string } = {};
 mock.module("@/lib/env", { namedExports: { env: fakeEnv } });
 
-const goal: ImportDraft["goals"][number] = {
+const goal: ImportDraftV1["goals"][number] = {
   name: "IA aplicada",
   horizon: "2027-10-01",
   rhythm: null,

@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 // variable of `@/lib/env`, which refuses to read it in a client bundle.
 import { env } from "@/lib/env";
 
-import { importDraftJsonSchema, importDraftSchema, inMinutes, type ImportDraft } from "./draft";
+import { importDraftJsonSchema, importDraftSchema, inMinutes, type ImportDraftV1 } from "./draft";
 import { modelStub, type ModelStub } from "./model-seam";
 
 export const MODEL_NAME = "gpt-5-mini";
@@ -27,7 +27,7 @@ export type PlanInput =
 type Usage = { input: number; output: number };
 
 export type PlanReading =
-  | { status: "ok"; draft: ImportDraft; usage: Usage }
+  | { status: "ok"; draft: ImportDraftV1; usage: Usage }
   | { status: "failed" | "invalid" | "empty" | "unreadableType"; usage?: Usage };
 
 type ChatCompletionsPayload = {

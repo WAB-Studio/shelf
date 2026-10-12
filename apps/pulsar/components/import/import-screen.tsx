@@ -4,8 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { readSource, saveDraft } from "@/lib/import/draft-store";
-import type { ImportDraft } from "@/lib/import/draft";
+import { readSourceV1 as readSource, saveDraftV1 as saveDraft } from "@/lib/import/draft-store";
+import type { ImportDraftV1 } from "@/lib/import/draft";
 import { parseTemplate } from "@/lib/import/template";
 import { Button, CodeBlock, FilePick, Flex, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -185,7 +185,7 @@ export function ImportScreen() {
         cut?: boolean;
         errors?: { line: number; expected: string; unit?: string }[];
         via?: "template" | "model";
-        draft?: ImportDraft;
+        draft?: ImportDraftV1;
       } | null;
 
       if (response.ok && body?.draft && body.via) {

@@ -509,7 +509,7 @@ test("a parent's hours that differ from its sub-tasks' say both figures", () => 
 });
 
 test("a cadence outside RP-12 goes to its ceiling", () => {
-  const goal = (c: object) => rawGoal({ commitments: [commitment(c)] });
+  const goal = (c: Record<string, unknown>) => rawGoal({ commitments: [commitment(c)] });
   const week = run([goal({ cadenceN: 9 })]);
   assert.equal(week.draft.goals[0].commitments[0].cadenceN, 7);
   assert.deepEqual(week.corrections.map((c) => c.code), ["cadenceClamped"]);

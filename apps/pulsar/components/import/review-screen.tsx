@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
-import { draftRefusals, phaseCuts, phaseDrops, strayEstimates, withoutStrayEstimates, type ImportDraft } from "@/lib/import/draft";
-import { clearDraft, readDraft, saveReview } from "@/lib/import/draft-store";
+import { draftRefusals, phaseCuts, phaseDrops, strayEstimates, withoutStrayEstimates, type ImportDraftV1 } from "@/lib/import/draft";
+import { clearDraft, readDraftV1 as readDraft, saveReviewV1 as saveReview } from "@/lib/import/draft-store";
 import { repeatedGoals } from "@/lib/import/repeated";
 import { dayBefore } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, splitMinutes } from "@/lib/units/time";
@@ -40,7 +40,7 @@ import {
 } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
-type Goal = ImportDraft["goals"][number];
+type Goal = ImportDraftV1["goals"][number];
 type Commitment = Goal["commitments"][number];
 
 const WHOLE = /^\d+$/;
@@ -55,7 +55,7 @@ type Unmarked = ReadonlySet<string>;
 const goalPath = (g: number) => `goals.${g}`;
 
 // The paths under a goal or a task, itself included.
-function underneath(draft: ImportDraft, path: string): string[] {
+function underneath(draft: ImportDraftV1, path: string): string[] {
   const match = /^goals\.(\d+)(?:\.tasks\.(\d+))?$/.exec(path);
   if (!match) return [path];
   const goal = draft.goals[Number(match[1])];
@@ -74,7 +74,7 @@ function underneath(draft: ImportDraft, path: string): string[] {
 
 // What `confirmImport` is sent: the marked items alone, and none the draft's
 // own refusals name. A parent's unmarked children go with it.
-export function markedDraft(draft: ImportDraft, unmarked: Unmarked, refused: ReadonlySet<string>): ImportDraft {
+export function markedDraft(draft: ImportDraftV1, unmarked: Unmarked, refused: ReadonlySet<string>): ImportDraftV1 {
   const kept = (path: string) => !unmarked.has(path) && !refused.has(path);
   const goals = draft.goals.flatMap((goal, g) => {
     const at = goalPath(g);
@@ -98,7 +98,7 @@ export function markedDraft(draft: ImportDraft, unmarked: Unmarked, refused: Rea
 }
 
 // Writes an amount at an item's path in a copy of the draft.
-function withAmount(draft: ImportDraft, path: string, amount: number): ImportDraft {
+function withAmount(draft: ImportDraftV1, path: string, amount: number): ImportDraftV1 {
   const next = structuredClone(draft);
   const parts = path.split(".");
   const goal = next.goals[Number(parts[1])];
@@ -125,7 +125,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const words = useTimeWords();
   const [stored, setStored] = useState<ReturnType<typeof readDraft>>(null);
   const [loaded, setLoaded] = useState(false);
-  const [draft, setDraft] = useState<ImportDraft | null>(null);
+  const [draft, setDraft] = useState<ImportDraftV1 | null>(null);
   const [unmarked, setUnmarked] = useState<Unmarked>(new Set());
   const [editing, setEditing] = useState<Editing | null>(null);
   const [pending, setPending] = useState(false);

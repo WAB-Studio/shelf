@@ -1,21 +1,109 @@
-import { importDraftSchema, type ImportDraft } from "./draft";
+import {
+  draftV2Schema,
+  importDraftSchema,
+  type Correction,
+  type ImportDraft,
+  type ImportDraftV1,
+  type Notice,
+  type Source,
+} from "./draft";
 
 const KEY = "pulsar.import-draft";
 
-// `source` is the pasted text, `null` for a file, whose name is `sourceName`. `unmarked` is `null` until
-// the review first saves, so a fresh draft differs from one the person marked.
+// `source` is the plan's lines, kept for the count (RP-96). `unmarked` is `null` until the review
+// first saves, so a fresh draft differs from one the person marked. `declined` holds correction ids.
 export type StoredDraft = {
-  via: "template" | "model";
+  version: 2;
+  via: "template" | "workbook" | "model";
   draft: ImportDraft;
+  corrections: Correction[];
+  notices: Notice[];
+  source: Source;
+  sourceName: string | null;
+  unmarked: string[] | null;
+  declined: string[];
+};
+
+// The draft rides from the import screen to its review in the tab's own storage: a reload of the
+// review keeps it, a new tab starts without it, and nothing reaches the database before the confirm.
+export function saveDraft(input: {
+  via: StoredDraft["via"];
+  draft: ImportDraft;
+  corrections: Correction[];
+  notices: Notice[];
+  source: Source;
+  sourceName?: string | null;
+}): void {
+  write({ version: 2, ...input, sourceName: input.sourceName ?? null, unmarked: null, declined: [] });
+}
+
+// Rewrites the draft, the unmarked paths and the declined corrections; the rest stays.
+export function saveReview(draft: ImportDraft, unmarked: string[], declined: string[]): void {
+  const current = readDraft();
+  if (!current) return;
+  write({ ...current, draft, unmarked, declined });
+}
+
+const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((p): p is string => typeof p === "string") : []);
+const records = <T>(value: unknown): T[] => (Array.isArray(value) ? value.filter((p): p is T => typeof p === "object" && p !== null) : []);
+
+// `null` for nothing stored, anything unreadable, a version other than 2, or a draft the schema refuses.
+export function readDraft(): StoredDraft | null {
+  try {
+    const raw = sessionStorage.getItem(KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed.version !== 2) return null;
+    if (parsed.via !== "template" && parsed.via !== "workbook" && parsed.via !== "model") return null;
+    const draft = draftV2Schema.safeParse(parsed.draft);
+    if (!draft.success) return null;
+    const source = parsed.source as { kind?: unknown; lines?: unknown } | null;
+    if (source === null || typeof source !== "object") return null;
+    if (source.kind !== "lines" && source.kind !== "rows" && source.kind !== "parts") return null;
+    if (source.lines !== null && !Array.isArray(source.lines)) return null;
+    return {
+      version: 2,
+      via: parsed.via,
+      draft: draft.data,
+      corrections: records<Correction>(parsed.corrections),
+      notices: records<Notice>(parsed.notices),
+      source: { kind: source.kind, lines: source.lines === null ? null : strings(source.lines) },
+      sourceName: typeof parsed.sourceName === "string" ? parsed.sourceName : null,
+      unmarked: Array.isArray(parsed.unmarked) ? strings(parsed.unmarked) : null,
+      declined: strings(parsed.declined),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearDraft(): void {
+  try {
+    sessionStorage.removeItem(KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+function write(stored: StoredDraft | StoredDraftV1): void {
+  try {
+    sessionStorage.setItem(KEY, JSON.stringify(stored));
+  } catch {
+    // Storage unavailable: the review finds no draft and sends the person back.
+  }
+}
+
+// ---- The version 1 shape the import and review screens still use, until 885 and 886 move them.
+
+export type StoredDraftV1 = {
+  via: "template" | "model";
+  draft: ImportDraftV1;
   source: string | null;
   sourceName: string | null;
   unmarked: string[] | null;
 };
 
-// The draft rides from the import screen to its review in the tab's own
-// storage: a reload of the review keeps it, a new tab starts without it, and
-// nothing reaches the database before the confirm.
-export function saveDraft(input: { via: StoredDraft["via"]; draft: ImportDraft; source?: string | null; sourceName?: string | null }): void {
+export function saveDraftV1(input: { via: StoredDraftV1["via"]; draft: ImportDraftV1; source?: string | null; sourceName?: string | null }): void {
   write({
     via: input.via,
     draft: input.draft,
@@ -25,15 +113,13 @@ export function saveDraft(input: { via: StoredDraft["via"]; draft: ImportDraft; 
   });
 }
 
-// Rewrites the draft and the unmarked paths; `via`, `source` and `sourceName` stay.
-export function saveReview(draft: ImportDraft, unmarked: string[]): void {
-  const current = readDraft();
+export function saveReviewV1(draft: ImportDraftV1, unmarked: string[]): void {
+  const current = readDraftV1();
   if (!current) return;
   write({ ...current, draft, unmarked });
 }
 
-// `null` for nothing stored, anything unreadable, or a draft the schema refuses.
-export function readDraft(): StoredDraft | null {
+export function readDraftV1(): StoredDraftV1 | null {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
@@ -55,22 +141,6 @@ export function readDraft(): StoredDraft | null {
   }
 }
 
-export function readSource(): string | null {
-  return readDraft()?.source ?? null;
-}
-
-export function clearDraft(): void {
-  try {
-    sessionStorage.removeItem(KEY);
-  } catch {
-    // Nothing to clear.
-  }
-}
-
-function write(stored: StoredDraft): void {
-  try {
-    sessionStorage.setItem(KEY, JSON.stringify(stored));
-  } catch {
-    // Storage unavailable: the review finds no draft and sends the person back.
-  }
+export function readSourceV1(): string | null {
+  return readDraftV1()?.source ?? null;
 }
