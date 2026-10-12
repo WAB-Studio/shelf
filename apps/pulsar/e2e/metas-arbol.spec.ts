@@ -3,7 +3,7 @@ import type postgres from "postgres";
 
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 
 // `JerarquiaArbol` (RP-81, RP-80, RNP-07, RNP-17): `/metas` draws the tree.
 // The «ABIERTAS» group is hairline rows in the tree's order; a holder carries
@@ -108,6 +108,12 @@ function row(page: Page, name: string): Locator {
   return page.locator("main").locator("a", { hasText: name });
 }
 
+// A goal's own arrow, by the goal's name («Plegar <name>» / «Desplegar <name>»).
+function arrowOf(page: Page, name: string): Locator {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return page.locator("main").getByRole("button", { name: new RegExp(`^(Plegar|Desplegar) ${escaped}$`) });
+}
+
 function folds(page: Page): Locator {
   return page.locator("main").getByRole("button", { name: /^(Plegar|Desplegar)/ });
 }
@@ -138,9 +144,7 @@ async function open(browser: import("@playwright/test").Browser, sessionFile: st
     hasTouch: width < 600,
   });
   const page = await context.newPage();
-  await page.goto("/metas");
-  await expect(page.locator("main")).toBeVisible();
-  await page.evaluate(() => document.fonts.ready);
+  await visit(page, "/metas");
   return { context, page };
 }
 
@@ -341,6 +345,27 @@ test("at 360 with three levels nothing overflows sideways and the fold arrows an
       expect(box!.height, `${name} row`).toBeGreaterThanOrEqual(32);
       expect(box!.x + box!.width, `${name} right edge`).toBeLessThanOrEqual(360);
     }
+  } finally {
+    await context.close();
+  }
+});
+
+test("each fold arrow's name carries its own goal's name, so two arrows never share a label", async ({
+  person,
+  browser,
+  db,
+}) => {
+  // Kills: one fixed label («Plegar») on every arrow.
+  const tree = await seedTree(db, person.id);
+  const { context, page } = await open(browser, person.sessionFile, 360);
+  try {
+    await expect(folds(page)).toHaveCount(2);
+    await expect(arrowOf(page, tree.general)).toHaveAccessibleName(`Plegar ${tree.general}`);
+    await expect(arrowOf(page, tree.big)).toHaveAccessibleName(`Plegar ${tree.big}`);
+    const names = await folds(page).evaluateAll((els) => els.map((el) => el.getAttribute("aria-label") ?? el.textContent));
+    expect(new Set(names).size).toBe(names.length);
+    await arrowOf(page, tree.general).click();
+    await expect(arrowOf(page, tree.general)).toHaveAccessibleName(`Desplegar ${tree.general}`);
   } finally {
     await context.close();
   }
