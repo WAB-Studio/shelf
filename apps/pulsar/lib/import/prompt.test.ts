@@ -31,8 +31,8 @@ test("the prompt asks hours when the plan counts hours, the rate with its period
   assert.match(SYSTEM_PROMPT, /hours/i);
   assert.match(SYSTEM_PROMPT, /\brate\b/);
   assert.match(SYSTEM_PROMPT, /\bper\b|period/i);
-  assert.match(SYSTEM_PROMPT, /weeks?\b.*tasks?|tasks?.*weeks?/is);
-  assert.match(SYSTEM_PROMPT, /rules?.*(per|each|every) week|per week/is);
+  assert.match(SYSTEM_PROMPT, /weeks?\b[\s\S]*tasks?/i);
+  assert.match(SYSTEM_PROMPT, /rules?[\s\S]*(per|each|every) week|per week/i);
 });
 
 test("the prompt says the bounds the answer keeps", () => {
