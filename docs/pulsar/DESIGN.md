@@ -1373,7 +1373,8 @@ Three answers of the user, 2026-10-09.
 - **Every row of one tree level shares one left edge.** A row without a fold chevron reserves its width; at 360 the general goal
   sits at 52 px, a large goal at 72 and a small goal at 92.
 - **Moving a goal picks one destination** from a single-choice list; a destination that cannot take it stays listed, dimmed,
-  with its reason. `CheckRow` gains a `radio` prop for it.
+  with its reason. `CheckRow` gains a `radio` prop for it. The board's «Empieza el …, y «…» arranca antes» is superseded by
+  P1 = B: no destination is refused for its start, since a goal that holds goals starts with its earliest goal.
 - **A level is a position, not a kind**: a goal is large because it sits under a general one.
 - **A month a holder's goals do not cover reads «sin monto».**
 - **A general goal keeps its own commitments** in the commitments section it always had.
