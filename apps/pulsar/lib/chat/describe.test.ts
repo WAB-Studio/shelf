@@ -137,3 +137,71 @@ test("every board word is a value in chat.json", () => {
   const missing = BOARD_WORDS.filter((word) => !values.has(word));
   assert.deepEqual(missing, []);
 });
+
+const REFUSED = { refused: "chat.errors.notInPlan" };
+
+test("an amount must be a whole number of at least zero: -1 and 1.5 are refused, 0 is shown", () => {
+  for (const amount of [-1, -60, 1.5, "120", null]) {
+    assert.deepEqual(describeChange(change("set_month_amount", { goal_id: G, month: "2026-11", amount }), names), REFUSED, String(amount));
+  }
+  const zero = describeChange(change("set_month_amount", { goal_id: G, month: "2026-11", amount: 0 }), names);
+  assert.ok("key" in zero);
+  assert.equal(zero.values.after, "0 min");
+});
+
+test("a month that is no month is refused, never drawn as a date", () => {
+  for (const month of ["2026-13", "2026-00", "noviembre", "26-11", ""]) {
+    assert.deepEqual(describeChange(change("fix_task", { one_off_id: T, month }), names), REFUSED, month);
+  }
+});
+
+test("a day that is no calendar day is refused", () => {
+  for (const day of ["2026-02-30", "2026-13-01", "mañana", "2026-11", ""]) {
+    assert.deepEqual(describeChange(change("schedule_task", { one_off_id: T, day }), names), REFUSED, day);
+  }
+});
+
+test("a blank name is refused and a name is shown without its edge spaces", () => {
+  for (const name of ["", "   ", "\n\t"]) {
+    assert.deepEqual(describeChange(change("rename_goal", { goal_id: G, name }), names), REFUSED, JSON.stringify(name));
+  }
+  const out = describeChange(change("rename_goal", { goal_id: G, name: "  Nuevo nombre \n" }), names);
+  assert.ok("key" in out);
+  assert.equal(out.values.name, "Nuevo nombre");
+});
+
+test("«antes» of a task note is the task's real state, not always «sin nota»", () => {
+  const held: ChangeNames = { ...names, tasks: new Map([[T, { name: "Maze", month: null, day: null, hasNote: true }]]) };
+  const had = describeChange(change("set_task_note", { one_off_id: T, note: "x" }), held);
+  const none = describeChange(change("set_task_note", { one_off_id: T, note: "x" }), names);
+  assert.ok("key" in had && "key" in none);
+  assert.equal(had.values.before, "con nota");
+  assert.equal(none.values.before, "sin nota");
+  assert.equal(had.values.after, "con nota");
+});
+
+test("«antes» of a fixed task is the month it holds, «al plan» when it holds none", () => {
+  const fixed: ChangeNames = { ...names, tasks: new Map([[T, { name: "Maze", month: "2026-10-01", day: null, hasNote: false }]]) };
+  const from = describeChange(change("fix_task", { one_off_id: T, month: "2026-11" }), fixed);
+  assert.ok("key" in from);
+  assert.equal(from.values.before, "octubre de 2026");
+  assert.equal(from.values.after, "noviembre de 2026");
+  const unfix = describeChange(change("unfix_task", { one_off_id: T }), fixed);
+  assert.ok("key" in unfix);
+  assert.equal(unfix.values.before, "octubre de 2026");
+  assert.equal(unfix.values.after, "al plan");
+});
+
+test("a retired commitment shows its target as «antes» only when it has one", () => {
+  const none = describeChange(change("retire_commitment", { commitment_id: C }), names);
+  assert.ok("key" in none);
+  assert.equal(none.values.before, undefined);
+  const aimed: ChangeNames = { ...names, commitments: new Map([[C, { name: "Leer", unit: "páginas", target: 5 }]]) };
+  const out = describeChange(change("retire_commitment", { commitment_id: C }), aimed);
+  assert.ok("key" in out);
+  assert.equal(out.values.before, "5 páginas");
+  const zero: ChangeNames = { ...names, commitments: new Map([[C, { name: "Leer", unit: null, target: 0 }]]) };
+  const zeroOut = describeChange(change("retire_commitment", { commitment_id: C }), zero);
+  assert.ok("key" in zeroOut);
+  assert.equal(zeroOut.values.before, "0");
+});

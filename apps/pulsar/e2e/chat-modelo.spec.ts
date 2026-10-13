@@ -583,3 +583,156 @@ test.describe("the chat's layout (RNP-07, RNP-17)", () => {
     }
   });
 });
+
+// Survivors of the train's mutator (private/reportes/tren-c1/MUTATOR.md), each one a thing a person can do.
+test.describe("the chat when the person acts fast or changes their mind (RP-92, RP-93)", () => {
+  // Holds every server action (`Next-Action` POST) until `release()`; counts them.
+  async function holdActions(page: Page) {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const seen = { n: 0 };
+    await page.route("**/chat", async (route) => {
+      if (route.request().method() !== "POST" || !route.request().headers()["next-action"]) return route.continue();
+      seen.n += 1;
+      await gate;
+      await route.continue();
+    });
+    return { release, seen };
+  }
+
+  test("after a failed answer, typing a new message offers «Enviar» and sends what was typed, not the old message", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    const { context, page } = await open(browser, baseURL!, person);
+    const sent: string[] = [];
+    await page.route("**/chat/enviar", async (route) => {
+      const body = route.request().postDataJSON() as { turns: { role: string; text: string }[] };
+      sent.push(body.turns.at(-1)!.text);
+      await route.continue();
+    });
+    try {
+      await send(page, "falla");
+      await expect(page.getByRole("button", { name: chat.retry, exact: true })).toBeVisible();
+
+      await field(page).fill("hola");
+      await expect(page.getByRole("button", { name: chat.retry, exact: true })).toHaveCount(0);
+      await expect(enviar(page)).toBeEnabled();
+      await enviar(page).click();
+
+      await expect(page.getByText("Hola, dime qué quieres ver o cambiar en tu plan.")).toBeVisible();
+      expect(sent).toEqual(["falla", "hola"]);
+      await expect(field(page)).toHaveValue("");
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a message the cap refuses leaves no turn behind: the conversation stays empty under the notice", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const ids: string[] = [];
+    for (let i = 0; i < 50; i += 1) {
+      const [row] = await db<{ id: string }[]>`
+        insert into goals.model_calls (user_id, model, source, outcome)
+        values (${person.id}, 'gpt-5-mini', 'chat', 'ok') returning id
+      `;
+      ids.push(row.id);
+    }
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await send(page, "mensaje sin respuesta");
+      await expect(page.getByText(chat.errors.cap, { exact: true })).toBeVisible();
+      await expect(page.getByText("mensaje sin respuesta", { exact: true })).toHaveCount(0);
+      await expect(page.getByText(chat.you, { exact: true })).toHaveCount(0);
+      const stored = await page.evaluate(() => sessionStorage.getItem("pulsar.chat"));
+      expect(stored === null || !stored.includes("mensaje sin respuesta")).toBe(true);
+    } finally {
+      await context.close();
+      await db`delete from goals.model_calls where id = any(${ids})`;
+    }
+  });
+
+  test("two submits in the same instant send one message", async ({ person, browser, baseURL, db }) => {
+    const { context, page } = await open(browser, baseURL!, person);
+    let hits = 0;
+    await page.route("**/chat/enviar", async (route) => {
+      hits += 1;
+      await route.continue();
+    });
+    try {
+      await expect(field(page)).toBeVisible();
+      await field(page).fill("hola");
+      await page.evaluate(() => {
+        const form = document.querySelector("main form") as HTMLFormElement;
+        form.requestSubmit();
+        form.requestSubmit();
+      });
+      await expect(page.getByText("Hola, dime qué quieres ver o cambiar en tu plan.")).toBeVisible();
+      expect(hits).toBe(1);
+      expect(await chatRows(db, person.id)).toHaveLength(1);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("while «Hacer todo» is making, no «Hacer» can be tapped", async ({ person, browser, baseURL, db }) => {
+    const world = await seed(db, person.id);
+    const { context, page } = await open(browser, baseURL!, person);
+    const held = await holdActions(page);
+    try {
+      await send(page, "organiza marzo");
+      await expect(hacer(page)).toHaveCount(3);
+      await hacerTodo(page).click();
+      await expect.poll(() => held.seen.n).toBe(1);
+      for (const i of [0, 1, 2]) await expect(hacer(page).nth(i)).toBeDisabled();
+      await expect(hacerTodo(page)).toBeDisabled();
+      held.release();
+      await expect(hechos(page)).toHaveCount(3);
+    } finally {
+      held.release();
+      await context.close();
+      await drop(db, world);
+    }
+  });
+
+  test("a message sent while «Hacer todo» is still making stops the changes not yet made: they lapse and are not made", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const world = await seed(db, person.id);
+    const { context, page } = await open(browser, baseURL!, person);
+    const held = await holdActions(page);
+    try {
+      await send(page, "organiza marzo");
+      await expect(hacer(page)).toHaveCount(3);
+      await hacerTodo(page).click();
+      await expect.poll(() => held.seen.n).toBe(1);
+
+      await send(page, "hola");
+      await expect(page.getByText("Hola, dime qué quieres ver o cambiar en tu plan.")).toBeVisible();
+      held.release();
+      await expect(page.getByText(chat.lapsed, { exact: true }).first()).toBeVisible();
+      await expect(hacer(page)).toHaveCount(0);
+
+      // The first request was already on its way; the other two were not taken, so they were never made.
+      await expect.poll(() => planned(db, world.maze)).toBe("2030-03-01");
+      await page.waitForTimeout(1500);
+      expect(await planned(db, world.base)).toBeNull();
+      expect(await budget(db, world.goal)).toBeNull();
+      expect(held.seen.n).toBe(1);
+    } finally {
+      held.release();
+      await context.close();
+      await drop(db, world);
+    }
+  });
+});
