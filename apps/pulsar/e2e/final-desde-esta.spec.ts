@@ -385,9 +385,11 @@ test("E2: «Dejarlo como está» after typing 10 closes the sheet, keeps the end
 });
 
 test("E2: moving «Salud» to week 7 offers «Mover también sus finales» with the dates counted from this week, and moves both (RP-108)", async ({ person, browser, baseURL, db }) => {
-  // Kills: `later` computed from a candidate counted from the opening (the aside and the stored dates land a week early).
+  // Kills: `later` judged against a candidate counted from the opening (it lists «Dormir mejor», which ends with the new end, as later).
   // Week 7 clears the phase (week 6): a phase past the new end would refuse the whole move.
   const { salud, correr } = await seedE2(db, person);
+  // Ends exactly where week 7 from this week ends: not after it. Counted from the opening, week 7 ends a week earlier and it would be.
+  const sueno = await seedOpenGoal(db, person, { name: "Dormir mejor", parent: salud, unit: MINUTES, horizon: fromThis(7), created: OPENED_LONG_AGO });
   const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${salud}`);
   try {
     const sheet = await openMove(page);
@@ -395,11 +397,13 @@ test("E2: moving «Salud» to week 7 offers «Mover también sus finales» with 
     await moveField(sheet).fill("7");
     await expect(sheet.getByText("1 meta termina después de esta fecha", { exact: true })).toBeVisible();
     await expect(sheet).toContainText(`Correr 10 km · hasta el ${lastDay(8)}`);
+    await expect(sheet.getByText("Dormir mejor")).toHaveCount(0);
     await expect(sheet).toContainText(`Con «Mover también sus finales» la meta termina el ${lastDay(7)}.`);
     await sheet.getByRole("button", { name: "Mover también sus finales", exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
     expect(await horizonOfGoal(db, salud)).toBe(fromThis(7));
     expect(await horizonOfGoal(db, correr)).toBe(fromThis(7));
+    expect(await horizonOfGoal(db, sueno)).toBe(fromThis(7));
   } finally {
     await context.close();
   }
