@@ -76,6 +76,8 @@ let foreignId: string;
 let today: string;
 let monthStart: string;
 let mes: Record<string, string> = {};
+let e4Id: string;
+let weeklyMesId: string;
 let q: {
   habit: typeof import("@/lib/queries/habit");
   month: typeof import("@/lib/queries/month");
@@ -128,6 +130,17 @@ before(async () => {
   const [member] = await sql<{ id: string }[]>`select id from auth.users where email = ${memberEmail}`;
   if (!member) throw new Error("no member identity — run harness:token for this lane");
   foreignId = await plant(member.id, "habit-readers.ts ajeno", { createdAt: `${CREATED}T12:00:00-05:00` });
+
+  // E4: the split week, in fixed days of 2025.
+  e4Id = await plant(userId, "habit-readers.ts E4 semanal", { createdAt: "2025-09-15T12:00:00-05:00", kind: "times_per_week", n: 1 });
+  await done(e4Id, ["2025-09-16", "2025-09-30", "2025-10-08", "2025-10-15", "2025-10-29"]);
+  // Mon 28 Sep 2026 is the week of October (its Thursday is the 1st): the fact is September's by day, October's by week.
+  weeklyMesId = await plant(userId, "habit-readers.ts mes semana partida", {
+    createdAt: "2026-09-01T12:00:00-05:00",
+    kind: "times_per_week",
+    n: 1,
+  });
+  await done(weeklyMesId, ["2026-09-28"]);
 
   // Opened on the 1st at Bogotá's midnight, so day d of the month asks d times of a daily habit.
   const opened = `${monthStart}T00:00:00-05:00`;
@@ -231,4 +244,53 @@ test("the habit's current month asks what Mes asks", async () => {
     assert.equal(current.month, monthStart);
     assert.equal(current.asked, month.loose.find((entry) => entry.id === mes[key])?.asked, key);
   }
+});
+
+test("loadHabit: E4, the weeks of a weekly habit by their Thursday, in one statement", async () => {
+  await q.habit.loadHabit(e4Id, AT);
+  const before = wireCalls.length;
+  const habit = await q.habit.loadHabit(e4Id, AT);
+  assert.ok(habit);
+  const calls = wireCalls.slice(before);
+  const reads = calls.filter((call) => /\bselect\b/i.test(call.query) && /"goals"\."/.test(call.query));
+  assert.equal(reads.length, 1);
+  assert.equal(readWire(calls).applicationStatements, 2);
+  const byMonth = new Map(habit.months.map((m) => [m.month, m.weeks]));
+  assert.deepEqual(byMonth.get("2025-09-01"), { met: 1, counted: 2 });
+  assert.deepEqual(byMonth.get("2025-10-01"), { met: 4, counted: 5 });
+});
+
+test("loadHabit: a daily habit has no weeks and asks what it asked", async () => {
+  const habit = await q.habit.loadHabit(habitId, AT);
+  assert.ok(habit);
+  assert.ok(habit.months.every((m) => m.weeks === null));
+  assert.deepEqual(habit.months.map((m) => m.asked), [12, 30, 13]);
+});
+
+test("Mes: the week that starts in the month before counts, the days of the month do not", async () => {
+  const month = await q.month.loadMonthAcross(AT);
+  const habit = month.loose.find((entry) => entry.id === weeklyMesId);
+  assert.ok(habit);
+  assert.deepEqual(habit.weeks, { met: 1, counted: 2 });
+  assert.equal(habit.daysDone, 0);
+  assert.equal(habit.asked, null);
+  const daily = month.loose.find((entry) => entry.id === habitId);
+  assert.equal(daily?.weeks, null);
+  assert.equal(daily?.daysDone, 1);
+});
+
+test("Mes: the weeks are the ones the habit's own screen draws", async () => {
+  const month = await q.month.loadMonthAcross(AT);
+  const screen = await q.habit.loadHabit(weeklyMesId, AT);
+  assert.ok(screen);
+  assert.deepEqual(month.loose.find((entry) => entry.id === weeklyMesId)?.weeks, screen.months.at(-1)!.weeks);
+});
+
+test("Mes: still one statement on the goals schema, whatever the habits", async () => {
+  await q.month.loadMonthAcross(AT);
+  const before = wireCalls.length;
+  await q.month.loadMonthAcross(AT);
+  const calls = wireCalls.slice(before);
+  const reads = calls.filter((call) => /\bselect\b/i.test(call.query) && /"goals"\."/.test(call.query));
+  assert.equal(reads.length, 1);
 });

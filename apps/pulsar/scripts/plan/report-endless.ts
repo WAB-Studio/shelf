@@ -81,6 +81,8 @@ let today: string;
 let openedOn: string;
 let endlessId: string;
 let endedId: string;
+let groupId: string;
+let childId: string;
 let loadReport: typeof import("@/lib/queries/report").loadReport;
 
 before(async () => {
@@ -97,7 +99,13 @@ before(async () => {
   const ended = await plan.createGoal({ name: "RP-106 fixture: con final", horizon });
   if (!ended.ok) throw new Error(`createGoal: ${ended.error}`);
   endedId = ended.goalId;
-  goalIds.push(endlessId, endedId);
+  const group = await plan.createGoal({ name: "RP-107 fixture: grupo sin final", horizon: null });
+  if (!group.ok) throw new Error(`createGoal: ${group.error}`);
+  groupId = group.goalId;
+  const child = await plan.createGoal({ name: "RP-107 fixture: meta del grupo", horizon: null, parentId: groupId });
+  if (!child.ok) throw new Error(`createGoal: ${child.error}`);
+  childId = child.goalId;
+  goalIds.push(endlessId, endedId, groupId, childId);
   const [row] = await sql<{ opened: string }[]>`
     update goals.goals set created_at = now() - interval '80 days' where id in ${sql(goalIds)}
     returning to_char((created_at at time zone 'America/Bogota')::date, 'YYYY-MM-DD') as opened`;
@@ -145,4 +153,30 @@ test("loadReport stays at four application statements", async () => {
   } finally {
     realReader = false;
   }
+});
+
+test("a goal with no end that holds a goal keeps its closed months, marked", async () => {
+  const report = await loadReport(today);
+  const group = report.goals.find((entry) => entry.id === groupId);
+  assert.ok(group);
+  assert.equal(group.holdsGoals, true);
+  const past = monthIndex(today) - monthIndex(openedOn);
+  assert.equal(group.months.filter((m) => m.past).length, past);
+  assert.ok(past >= 2 && past <= 3);
+  assert.equal(group.months.filter((m) => m.current).length, 1);
+  assert.equal(group.months.length, past + 12);
+  assert.ok(group.months.every((m) => "endless" in m && m.endless === true));
+});
+
+test("the report hands over each goal's rhythm: its own, null for a group, null for none", async () => {
+  const report = await loadReport(today);
+  assert.equal(report.goals.find((entry) => entry.id === groupId)?.rhythm, null);
+  assert.equal(report.goals.find((entry) => entry.id === childId)?.rhythm, null);
+  assert.equal(report.goals.find((entry) => entry.id === endlessId)?.rhythm, null);
+  await sql`update goals.goals set measure_name = 'páginas', measure_unit = 'pages', rhythm = 40 where id = ${endlessId}`;
+  await sql`update goals.goals set measure_name = 'páginas', measure_unit = 'pages', rhythm = 7 where id = ${childId}`;
+  const again = await loadReport(today);
+  assert.equal(again.goals.find((entry) => entry.id === endlessId)?.rhythm, 40);
+  assert.equal(again.goals.find((entry) => entry.id === childId)?.rhythm, 7);
+  assert.equal(again.goals.find((entry) => entry.id === groupId)?.rhythm, null);
 });
