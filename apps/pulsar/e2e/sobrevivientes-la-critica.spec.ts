@@ -163,7 +163,7 @@ test("a horizon typed short of the latest phase names that phase, not an earlier
     await sheet.getByRole("button", { name: "Moverlo" }).click();
 
     await expect(
-      sheet.getByText(`La fase «${later}» llega hasta la semana 8. El final no puede quedar antes.`),
+      sheet.getByText(`La fase «${later}» llega hasta la semana 8 (8 desde la apertura). El final no puede quedar antes.`),
     ).toBeVisible();
     expect(await horizonOf(db, goalId)).toBe(before);
   } finally {

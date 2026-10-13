@@ -113,7 +113,7 @@ test("a count ending before a phase is refused with its message and the column s
     await sheet.getByRole("button", { name: "Moverlo" }).click();
 
     await expect(
-      sheet.getByText(`La fase «${phaseName}» llega hasta la semana 12. El final no puede quedar antes.`),
+      sheet.getByText(`La fase «${phaseName}» llega hasta la semana 12 (12 desde la apertura). El final no puede quedar antes.`),
     ).toBeVisible();
     await expect(field).toHaveAttribute("aria-invalid", "true");
     await expect(sheet).toBeVisible();

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, inArray, isNull, max, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 
 import { commitments, evidenceSources, goals, oneOffs, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
@@ -805,15 +805,21 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
       if (!goal) throw new NamedError("plan.errors.notFound");
 
       const [last] = await tx
-        .select({ endsOn: max(phases.endsOn) })
+        .select({ name: phases.aim, endsOn: phases.endsOn })
         .from(phases)
-        .where(eq(phases.goalId, goalId));
+        .where(eq(phases.goalId, goalId))
+        .orderBy(desc(phases.endsOn))
+        .limit(1);
 
       const phaseRefusal = horizonRefusal({
         horizon,
         today: todayInZone(),
         lastPhaseEndsOn: last?.endsOn ?? null,
       });
+      if (phaseRefusal === "goal.errors.horizonBeforePhase" && last) {
+        // The phase as it stands now, so the sentence names its real end, not the page's.
+        return { ok: false, error: phaseRefusal, values: { name: last.name, date: last.endsOn } };
+      }
       if (phaseRefusal) throw new NamedError(phaseRefusal);
 
       const later = moveBranch ? branchEndsAfter(tree, goalId, horizon) : [];

@@ -12,7 +12,7 @@ import { refusalKey } from "@/lib/goals/refusal-key";
 import { buildTree, type TreeRow } from "@/lib/goals/tree";
 import { horizonRefusal, moveHorizonSchema } from "@/lib/validation/horizon";
 import { civilDayMonthYear, todayInZone } from "@/lib/zone";
-import { Button, Field, Flex, Notice, Sheet, SheetActions } from "@/components/ui";
+import { Button, Field, Flex, Notice, Sheet, SheetActions, Text } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 // The new-goal rule (`new-goal-form.tsx`): a whole number of weeks, 1 to 520.
@@ -62,6 +62,7 @@ const row = (id: string, parentId: string | null, ref: { name: string; horizon: 
 export function MoveHorizonAction({
   goalId,
   name,
+  openedOn,
   horizon: storedHorizon,
   weeks,
   phases,
@@ -121,11 +122,13 @@ export function MoveHorizonAction({
 
   const treeSentence = typed.success && !untouched ? treeSentenceFor(horizonForWeeks(anchor, typed.data)) : null;
 
-  function refusalText(key: MessageKey, count: number): string {
+  // The phase the refusal names: the page's, or the server's when it judged a longer one.
+  function refusalText(key: MessageKey, count: number, phase: { name: string; endsOn: string } | null = lastPhase): string {
     return t(key, {
       weeks: count,
-      name: lastPhase?.name ?? "",
-      week: lastPhase ? weekIndexOf(anchor, lastPhase.endsOn) : 0,
+      name: phase?.name ?? "",
+      week: phase ? weekIndexOf(anchor, phase.endsOn) : 0,
+      fromOpening: phase ? weekIndexOf(openedOn, phase.endsOn) : 0,
     });
   }
 
@@ -194,7 +197,8 @@ export function MoveHorizonAction({
       if (noEnd && horizon !== null) onPut?.(dayBefore(horizon));
       router.refresh();
     } else if (result.error.startsWith("goal.errors.")) {
-      setError(refusalText(result.error, count));
+      const served = "values" in result && result.values?.date ? { name: result.values.name, endsOn: result.values.date } : null;
+      setError(refusalText(result.error, count, served ?? lastPhase));
     } else if ("values" in result && result.values) {
       setError(
         t(result.error, {
@@ -235,6 +239,9 @@ export function MoveHorizonAction({
           hint={treeSentence ?? error ?? endsOn}
           autoFocus
         />
+        <Text as="p" variant="sentence" tone="muted">
+          {t("goal.horizon.bothCounts", { n: weekIndexOf(openedOn, anchor) })}
+        </Text>
         {later.length > 0 && candidate !== null ? (
           <Notice
             role="note"
