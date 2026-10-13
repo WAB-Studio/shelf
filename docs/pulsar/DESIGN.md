@@ -1469,3 +1469,9 @@ Three answers of the user, 2026-10-09.
 - **The review's sheets change more than names:** a commitment's cadence (days or times) and amount; a goal's horizon.
 - **Moving a general's end offers to move its branch:** the sheet says how many goals end after the new end and offers «Mover
   también sus finales»; one tap moves them all. Every end date shows its year.
+- **The five boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». `ExportarResumen` (page «Informe»),
+  `ImportarHojas` and `ImportarNotaLimpia` («Importar»), `MoverFinalRama` («Metas»), `RielArbol` («Armazón»). Words and structure:
+  `private/tableros-delgado/NOTAS.md`.
+- **The day chips are 40 px,** so the seven fit one row at 360 (7 × 40 + 6 × 4 = 304), everywhere `Chip day` is used.
+- **A general's end never moves alone past its goals' ends** (RP-79): «Mover también sus finales» is the only way to shorten it.
+- **An imported «HECHO» line becomes a done task and leaves the note;** it is never written twice.
