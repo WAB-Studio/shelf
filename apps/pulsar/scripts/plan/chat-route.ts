@@ -332,3 +332,25 @@ test("nothing of the conversation is stored: no row of any goals table carries t
   const [row] = await sql<Record<string, unknown>[]>`select * from goals.model_calls where user_id = ${userId} and source = 'chat'`;
   assert.deepEqual(Object.keys(row).filter((key) => /text|message|content|prompt|reply/i.test(key)), []);
 });
+
+test("an id the model made up, no uuid, refuses its own change and costs the others nothing", async () => {
+  stubScript({
+    "Fija dos": {
+      reply: "Esto cambiaría tu plan:",
+      calls: [
+        { name: "fix_task", arguments: { one_off_id: "la tarea de Maze", month: "2099-01" } },
+        { name: "fix_task", arguments: { one_off_id: seeded.task, month: "2099-01" } },
+        { name: "set_month_amount", arguments: { goal_id: "1; drop table goals.goals", month: "2099-01", amount: 60 } },
+      ],
+    },
+  });
+  const response = await route.POST(request(say("Fija dos")));
+  assert.equal(response.status, 200);
+  const { changes } = await body(response);
+  assert.equal(changes.length, 3);
+  assert.equal(changes[0].refused, "chat.errors.notInPlan");
+  assert.equal(changes[1].refused, undefined);
+  assert.equal(changes[1].words.values.task, "chat-route Maze");
+  assert.equal(changes[2].refused, "chat.errors.notInPlan");
+  assert.equal((await chatRows())[0].outcome, "ok");
+});
