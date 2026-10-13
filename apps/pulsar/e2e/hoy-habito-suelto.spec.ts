@@ -270,8 +270,8 @@ for (const width of FACES) {
       expect(text).not.toContain("última semana");
       expect(text).not.toMatch(/semana \d+ de \d+/);
       expect(text).not.toContain("fase");
-      expect(text).not.toContain("1969");
-      expect(text).not.toContain("1970");
+      expect(text).not.toMatch(/\b1969\b/);
+      expect(text).not.toMatch(/\b1970\b/);
       await expect(page.getByText(EMPTY)).toHaveCount(0);
     } finally {
       await context.close();

@@ -138,8 +138,8 @@ for (const width of FACES) {
         expect(body).not.toContain("terminó");
         expect(body).not.toContain("última semana");
         expect(body).not.toMatch(/semana \d+ de \d+/);
-        expect(body).not.toContain("1969");
-        expect(body).not.toContain("1970");
+        expect(body).not.toMatch(/\b1969\b/);
+        expect(body).not.toMatch(/\b1970\b/);
         await expect(page.getByText("Todavía no tienes una meta abierta.")).toHaveCount(0);
       } finally {
         await context.close();

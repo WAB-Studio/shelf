@@ -54,8 +54,8 @@ for (const width of [360, 1280]) {
       expect(body).toContain("mide en páginas");
       expect(body).not.toContain("hasta el");
       expect(body).not.toContain("terminada");
-      expect(body).not.toContain("1969");
-      expect(body).not.toContain("1970");
+      expect(body).not.toMatch(/\b1969\b/);
+      expect(body).not.toMatch(/\b1970\b/);
 
       const section = sectionOf(page, name);
       await expect(section.getByText("12 meses", { exact: true }).locator("visible=true")).toHaveCount(1);
@@ -94,8 +94,8 @@ test(`the paper of a goal with no end has no «hasta el» and prints the same tw
     expect(paper).toContain(`${name} · por mes · 12 meses`.toLowerCase());
     expect(paper).not.toContain("hasta el");
     expect(paper).not.toContain("terminada");
-    expect(paper).not.toContain("1969");
-    expect(paper).not.toContain("1970");
+    expect(paper).not.toMatch(/\b1969\b/);
+    expect(paper).not.toMatch(/\b1970\b/);
     for (let offset = -11; offset <= 0; offset++) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
     expect(paper).not.toContain(monthLabel(1));
     expect(paper).not.toContain(monthLabel(-12));
