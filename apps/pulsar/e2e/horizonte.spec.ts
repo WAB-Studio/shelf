@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
-import { addWeeksToCivilDate, civilDateInZone, todayInZone, weekOf } from "@/lib/zone";
+import { addWeeksToCivilDate, civilDateInZone, civilDateToDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect, visit } from "./fixtures";
 
@@ -11,6 +11,11 @@ import { test, expect, visit } from "./fixtures";
 // identity and deleted by id in `finally`.
 
 const DAY_MS = 86_400_000;
+
+// Module 931 (RP-108): every sheet counts «semanas, contando esta». Plain day arithmetic, never the app's own helpers.
+const weeksBetweenMondays = (from: string, to: string) =>
+  Math.round((civilDateToDate(to).getTime() - civilDateToDate(from).getTime()) / DAY_MS / 7);
+const thisMonday = () => weekOf(todayInZone())[0];
 
 async function seedGoal(
   db: postgres.Sql,
@@ -44,7 +49,7 @@ async function openHorizonSheet(page: Page, goalId: string) {
   return sheet;
 }
 
-test("moving 12 weeks to 16 reads «16 semanas» and writes the Sunday's next day (RP-11, RP-25)", async ({
+test("moving to 16 weeks counted from this one writes the Monday after them; the screen counts from the opening (RP-11, RP-25, RP-108)", async ({
   page,
   db,
   personId,
@@ -60,9 +65,12 @@ test("moving 12 weeks to 16 reads «16 semanas» and writes the Sunday's next da
     await expect(page.getByText(/^12 semanas · hasta el /)).toBeVisible();
 
     const sheet = await openHorizonSheet(page, goalId);
-    await expect(sheet.getByLabel(/^semanas, contando la del /i)).toHaveValue("12");
-    await sheet.getByLabel(/^semanas, contando la del /i).fill("16");
-    const end = dayBefore(horizonForWeeks(openedOn, 16));
+    // The sheet counts from this week; the screen behind keeps counting from the opening.
+    const stored = horizonForWeeks(openedOn, 12);
+    await expect(sheet.getByLabel(/^semanas, contando esta$/)).toHaveValue(String(weeksBetweenMondays(thisMonday(), stored)));
+    await sheet.getByLabel(/^semanas, contando esta$/).fill("16");
+    const target = addWeeksToCivilDate(thisMonday(), 16);
+    const end = dayBefore(target);
     const sunday = `${Number(end.slice(8, 10))} ${new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" })
       .format(new Date(`${end}T12:00:00Z`))
       .slice(0, 3)} ${end.slice(0, 4)}`;
@@ -70,8 +78,8 @@ test("moving 12 weeks to 16 reads «16 semanas» and writes the Sunday's next da
     await sheet.getByRole("button", { name: "Moverlo" }).click();
     await expect(sheet).toBeHidden();
 
-    await expect(page.getByText(/^16 semanas · hasta el /)).toBeVisible();
-    expect(await horizonOf(db, goalId)).toBe(horizonForWeeks(openedOn, 16));
+    await expect(page.getByText(`${weeksBetweenMondays(weekOf(openedOn)[0], target)} semanas · hasta el ${sunday}`, { exact: true })).toBeVisible();
+    expect(await horizonOf(db, goalId)).toBe(target);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
@@ -100,7 +108,7 @@ test("a count ending before a phase is refused with its message and the column s
     page.on("request", (request) => {
       if (request.method() === "POST" && request.headers()["next-action"]) actionCalls.push(request.url());
     });
-    const field = sheet.getByLabel(/^semanas, contando la del /i);
+    const field = sheet.getByLabel(/^semanas, contando esta$/);
     await field.fill("11");
     await sheet.getByRole("button", { name: "Moverlo" }).click();
 
@@ -116,21 +124,21 @@ test("a count ending before a phase is refused with its message and the column s
   }
 });
 
-test("a count already past is refused and the column stays (RP-25)", async ({ page, db, personId }) => {
+test("week 1 is this week: it is not past, ends this Sunday and writes next Monday (RP-25, RP-108)", async ({ page, db, personId }) => {
+  // Opened three weeks ago: counted from the opening, a «1» would be long past; counted from this week it is this week.
   const { goalId } = await seedGoal(db, personId, `Meta pasada ${Date.now()}`, {
     openedDaysAgo: 21,
     weeks: 12,
   });
   try {
-    const before = await horizonOf(db, goalId);
     const sheet = await openHorizonSheet(page, goalId);
-    await sheet.getByLabel(/^semanas, contando la del /i).fill("1");
+    await sheet.getByLabel(/^semanas, contando esta$/).fill("1");
+    const sunday = weekOf(todayInZone())[6];
+    await expect(sheet.getByText(`termina el ${Number(sunday.slice(8, 10))} `, { exact: false })).toBeVisible();
+    await expect(sheet.getByText(/ya pasó/)).toHaveCount(0);
     await sheet.getByRole("button", { name: "Moverlo" }).click();
-
-    await expect(
-      sheet.getByText("La semana 1 ya pasó. El final puede ser esta semana o una por venir."),
-    ).toBeVisible();
-    expect(await horizonOf(db, goalId)).toBe(before);
+    await expect(sheet).toBeHidden();
+    expect(await horizonOf(db, goalId)).toBe(addWeeksToCivilDate(thisMonday(), 1));
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
