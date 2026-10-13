@@ -121,7 +121,12 @@
     "weeksLabel": "semanas, contando la del {date}",
     "endsOn": "termina el {date}",
     "confirm": "Moverlo",
-    "cancel": "Dejarlo como está"
+    "cancel": "Dejarlo como está",
+    "moveBranch": "Mover también sus finales",
+    "laterTitle": "{count, plural, one {# meta termina después de esta fecha} other {# metas terminan después de esta fecha}}",
+    "laterRow": "{name} · hasta el {date}",
+    "laterAside": "Con «Mover también sus finales» {count, plural, one {la meta termina} other {las # terminan}} el {date}.",
+    "moved": "Se movió el final de la meta y el de {count, plural, one {# meta} other {# metas}} dentro."
   },
   "errors": {
     "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520.",

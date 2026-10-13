@@ -49,7 +49,7 @@ import {
 import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { CreateInsideAction } from "./create-inside-sheet";
-import { MoveHorizonAction } from "./horizon-sheet";
+import { MoveEndRow, MoveHorizonAction } from "./horizon-sheet";
 import { GoalNote } from "./goal-note-sheet";
 import { MoveGoalAction } from "./move-sheet";
 import { RenameGoalAction } from "./rename-sheet";
@@ -138,19 +138,20 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     .filter((node) => node.archivedAt === null && node.ancestors.includes(goal.id))
     .map((node) => node.name);
   const archiveBranch = { branchCount: goal.branchOpenCount, branchNames };
-  const moveAction = (
-    <MoveHorizonAction
-      goalId={goal.id}
-      name={goal.name}
-      openedOn={openedOn}
-      horizon={goal.horizon}
-      weeks={sheetWeeks}
-      phases={goal.phases}
-      reopening={ended}
-      above={goal.above}
-      latestBelow={goal.latestBelow}
-    />
-  );
+  const moveProps = {
+    goalId: goal.id,
+    name: goal.name,
+    openedOn,
+    horizon: goal.horizon,
+    weeks: sheetWeeks,
+    phases: goal.phases,
+    reopening: ended,
+    above: goal.above,
+    below: goal.tree
+      .filter((node) => node.ancestors.includes(goal.id))
+      .map((node) => ({ id: node.id, name: node.name, horizon: node.horizon })),
+  };
+  const moveAction = <MoveHorizonAction {...moveProps} />;
 
   const phoneActs = ended ? (
     <Face on="phone">
@@ -338,15 +339,14 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             {endedOnWords(goal.endedOn, t)}
           </Text>
         ) : (
-          <Flex justify="between" align="center">
+          <MoveEndRow {...moveProps} reopening={archived || ended}>
             <Text as="p" variant="sentence" tone="muted">
               {t("goal.detail.horizonUntil", {
                 weeks: totalWeeks,
                 date: endLabel,
               })}
             </Text>
-            {archived ? null : moveAction}
-          </Flex>
+          </MoveEndRow>
         )}
         {goal.measureUnit ? null : (
           <Text as="p" variant="sentence" tone="muted">

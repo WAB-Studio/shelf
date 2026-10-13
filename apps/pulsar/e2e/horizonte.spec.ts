@@ -62,12 +62,10 @@ test("moving 12 weeks to 16 reads «16 semanas» and writes the Sunday's next da
     const sheet = await openHorizonSheet(page, goalId);
     await expect(sheet.getByLabel(/^semanas, contando la del /i)).toHaveValue("12");
     await sheet.getByLabel(/^semanas, contando la del /i).fill("16");
-    const sunday = new Intl.DateTimeFormat("es-CO", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      timeZone: "UTC",
-    }).format(new Date(`${dayBefore(horizonForWeeks(openedOn, 16))}T12:00:00Z`));
+    const end = dayBefore(horizonForWeeks(openedOn, 16));
+    const sunday = `${Number(end.slice(8, 10))} ${new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" })
+      .format(new Date(`${end}T12:00:00Z`))
+      .slice(0, 3)} ${end.slice(0, 4)}`;
     await expect(sheet.getByText(`termina el ${sunday}`)).toBeVisible();
     await sheet.getByRole("button", { name: "Moverlo" }).click();
     await expect(sheet).toBeHidden();
