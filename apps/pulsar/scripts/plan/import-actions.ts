@@ -444,8 +444,8 @@ test("confirmImport: a rhythm on a measure that is not time is written (RP-102)"
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   draft.goals[0] = { ...draft.goals[0], rhythm: 30, measure: { name: "distancia", unit: "km" }, commitments: [], tasks: [], months: [] };
   const { goalIds: [goalId] } = await confirmed(draft);
-  const [row] = await sql`select rhythm, measure_unit from goals.goals where id = ${goalId}`;
-  assert.deepEqual({ ...row }, { rhythm: 30, measure_unit: "km" });
+  const [row] = await sql`select rhythm, measure_unit, plan_seen from goals.goals where id = ${goalId}`;
+  assert.deepEqual({ ...row }, { rhythm: 30, measure_unit: "km", plan_seen: null });
 });
 
 test("confirmImport: a goal in pages with a rhythm keeps its tasks on their month", async () => {
