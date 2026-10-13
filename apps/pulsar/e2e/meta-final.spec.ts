@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
-import { civilDateInZone, civilDayMonthYear, todayInZone } from "@/lib/zone";
+import { addWeeksToCivilDate, civilDateInZone, civilDateToDate, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 import goal from "../messages/es/goal.json";
@@ -18,12 +18,20 @@ const WIDTHS: [number, number][] = [
 
 const INVALID = goal.errors.horizonWeeksInvalid;
 const MOVE = goal.horizon.confirm;
-const WEEKS_LABEL = /^semanas, contando la del /i;
+const WEEKS_LABEL = /^semanas, contando esta$/;
 
 // Opened Monday 2026-08-24, last day Thursday 2027-09-30: a horizon that is
 // not a week's edge, the way a goal written with an end date lands.
 const OPENED = "2026-08-24";
 const MID_WEEK_HORIZON = "2027-10-01";
+
+// RP-108: the sheet counts from this week, so a goal's horizon is the Monday `weeks` after this week's Monday.
+const fromThisWeek = (weeks: number) => addWeeksToCivilDate(weekOf(todayInZone())[0], weeks);
+// The week of its last day, counting this one as 1 (plain arithmetic, never the app's helpers).
+function weeksFromThisTo(lastDay: string): number {
+  const days = civilDateToDate(weekOf(lastDay)[0]).getTime() - civilDateToDate(weekOf(todayInZone())[0]).getTime();
+  return Math.round(days / 86_400_000 / 7) + 1;
+}
 
 async function seed(
   db: postgres.Sql,
@@ -123,8 +131,8 @@ for (const [width, height] of WIDTHS) {
           const sheet = await openSheet(page, goalId);
           const field = sheet.getByLabel(WEEKS_LABEL);
           const opening = Number(await field.inputValue());
-          expect(opening).toBeGreaterThan(0);
-          const target = horizonForWeeks(OPENED, opening + 4);
+          expect(opening).toBe(weeksFromThisTo(dayBefore(MID_WEEK_HORIZON)));
+          const target = fromThisWeek(opening + 4);
           await field.fill(String(opening + 4));
           await expect(sheet.getByText(`termina el ${civilDayMonthYear(dayBefore(target))}`)).toBeVisible();
           expect(longDay(dayBefore(target))).toMatch(/^domingo, /);
@@ -138,7 +146,7 @@ for (const [width, height] of WIDTHS) {
     });
 
     test("a goal written in whole weeks still ends on its Sunday (RP-25)", async ({ person, browser, baseURL, db }) => {
-      const horizon = horizonForWeeks(OPENED, 12);
+      const horizon = fromThisWeek(12);
       const goalId = await seed(db, person.id, { createdAt: OPENED, horizon });
       try {
         await withPage({ person, browser, baseURL }, async (page) => {
@@ -153,7 +161,7 @@ for (const [width, height] of WIDTHS) {
     });
 
     test("a count that is not a week count says why as it is typed (RP-25)", async ({ person, browser, baseURL, db }) => {
-      const horizon = horizonForWeeks(OPENED, 12);
+      const horizon = fromThisWeek(12);
       const goalId = await seed(db, person.id, { createdAt: OPENED, horizon });
       try {
         await withPage({ person, browser, baseURL }, async (page) => {
