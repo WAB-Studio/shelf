@@ -177,6 +177,23 @@ export const addCommitmentSchema = z.intersection(
 
 export type AddCommitmentInput = z.infer<typeof addCommitmentSchema>;
 
+// Rename a habit and rewrite its note. Cadence, satisfaction and quantity are not fields: zod drops them.
+export const editHabitSchema = z.object({
+  commitmentId: z.uuid({ error: "plan.errors.commitmentInvalid" }),
+  name: z
+    .string({ error: "plan.errors.nameEmpty" })
+    .trim()
+    .min(1, { error: "plan.errors.nameEmpty" })
+    .max(120, { error: "plan.errors.nameTooLong" }),
+  note: z
+    .string()
+    .trim()
+    .max(2000, { error: "plan.errors.noteTooLong" })
+    .transform((value) => (value === "" ? null : value)),
+});
+
+export type EditHabitInput = z.infer<typeof editHabitSchema>;
+
 export const retireCommitmentSchema = z.object({
   commitmentId: z.uuid({ error: "plan.errors.commitmentInvalid" }),
 });
