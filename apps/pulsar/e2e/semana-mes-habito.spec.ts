@@ -22,6 +22,7 @@ import {
 
 const FACES = [360, 1280];
 const GROUP = "hábitos";
+const noonOf = (day: string) => new Date(`${day}T12:00:00-05:00`);
 const text = async (page: Page) => drawn(await page.locator("main").innerText());
 
 for (const width of FACES) {
@@ -183,7 +184,7 @@ test("«Mes» draws the «Hábitos» group after the goal blocks, rows without a
   const call = `Llamar ${stamp}`;
   const idle = `Sin hecho ${stamp}`;
   const goalId = await seedGoal(db, person.id, goalName, { horizon: shift(TODAY, 60), unit: "minutos", budget: 480 });
-  const waterId = await seedHabit(db, person.id, water, { kind: "daily" });
+  const waterId = await seedHabit(db, person.id, water, { kind: "daily" }, { kind: "tap" }, { created: noonOf(MONTH_START) });
   const callId = await seedHabit(db, person.id, call, { kind: "times_per_week", n: 1 });
   await seedHabit(db, person.id, idle, { kind: "times_per_week", n: 1 });
   for (let n = 0; n < dayOfMonth; n++) await seedFact(db, person.id, waterId, null, shift(MONTH_START, n));
@@ -215,5 +216,50 @@ test("«Mes» draws the «Hábitos» group after the goal blocks, rows without a
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
+  }
+});
+
+test("«Mes» counts a habit's days from the day it was created, not from the 1st", async ({ person, browser, baseURL, db }) => {
+  // Kills: `createdOn: month` in `looseHabit` (a habit created today reads «0 de 13 días»).
+  const dayOfMonth = Number(TODAY.slice(8, 10));
+  const name = `Recién ${Date.now()}`;
+  await seedHabit(db, person.id, name, { kind: "daily" }, { kind: "tap" }, { created: new Date() });
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 360, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await visit(page, "/mes");
+    const body = await text(page);
+    expect(body).toContain(`${name.toLowerCase()} todos los días · 0 de 1 día`);
+    expect(dayOfMonth).toBeGreaterThan(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("«Mes» stops counting a habit's days the day after it was retired (RP-13)", async ({ person, browser, baseURL, db }) => {
+  // Kills: `retiredAt: null` in `looseHabit` (a habit retired on the 2nd keeps asking through today).
+  test.skip(Number(TODAY.slice(8, 10)) < 3, "retired on the 2nd it still asks 2 days only when today is the 3rd or later");
+  const name = `Retirado ${Date.now()}`;
+  const secondDay = shift(MONTH_START, 1);
+  const id = await seedHabit(db, person.id, name, { kind: "daily" }, { kind: "tap" }, {
+    created: noonOf(MONTH_START),
+    retired: noonOf(secondDay),
+  });
+  await seedFact(db, person.id, id, null, MONTH_START);
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 360, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await visit(page, "/mes");
+    expect(await text(page)).toContain(`${name.toLowerCase()} todos los días · 1 de 2 días`);
+  } finally {
+    await context.close();
   }
 });

@@ -97,7 +97,7 @@ function looseHabit({ id, name, daysDone, row }: LooseRow, month: string, today:
   const cadence = toCadence(row);
   const counted = cadence.kind === "daily" || cadence.kind === "weekdays" || cadence.kind === "every_n_days";
   if (!counted) return { id, name, daysDone, cadence, asked: null };
-  const plan = { id, cadence, satisfiedBy: { kind: "tap" as const }, retiredAt: null, createdOn: month };
+  const plan = { id, cadence, satisfiedBy: { kind: "tap" as const }, retiredAt: row.retired_at, createdOn: civilDateInZone(new Date(row.created_at)) };
   let asked = 0;
   const cursor = civilDateToDate(month);
   for (let day = month; day <= today; day = dateToCivilDate(cursor)) {

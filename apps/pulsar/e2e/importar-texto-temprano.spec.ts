@@ -10,8 +10,8 @@ import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 // template reads without one.
 const STORED = messages.template.example;
 
-// Five lines whose third, «# X», is where the template reader stops.
-const TYPED = "pulsar · plantilla 1\n\n# X\nmedida: a · b\n";
+// Five lines whose third, a head line before any «# name», is where the template reader stops.
+const TYPED = "pulsar · plantilla 1\n\nhorizonte: pronto\nmedida: a · b\n";
 const REPLACED = "pulsar · plantilla 1\n\n# Y\nmedida: c · d\n";
 
 const READ = "Leer el plan";
@@ -116,7 +116,7 @@ test.describe("the import box keeps what was typed before the page settled (RP-3
       await hydrated(page);
       await page.getByRole("button", { name: READ }).click();
       const alert = appAlerts(page).filter({ hasText: /\S/ });
-      await expect(alert).toHaveText(/^1 línea por corregirLínea 3: «# X»\. (?![\s\S]*# X)\S/);
+      await expect(alert).toHaveText(/^1 línea por corregirLínea 3: «horizonte: pronto»\. (?![\s\S]*Carrera)\S/);
     });
   });
 

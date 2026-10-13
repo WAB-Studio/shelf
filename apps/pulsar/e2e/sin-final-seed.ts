@@ -75,15 +75,17 @@ export async function seedHabit(
     | { kind: "weekdays"; days: number[] }
     | { kind: "times_per_week"; n: number },
   satisfaction: { kind: "tap" } | { kind: "quantity"; target: number; unit: string } = { kind: "tap" },
+  opts: { created?: Date; retired?: Date } = {},
 ): Promise<string> {
   const days = cadence.kind === "weekdays" ? cadence.days : null;
   const n = cadence.kind === "times_per_week" ? cadence.n : null;
   const quantity = satisfaction.kind === "quantity";
   const [row] = await db<{ id: string }[]>`
     insert into goals.commitments
-      (user_id, goal_id, name, cadence_kind, cadence_n, cadence_weekdays, satisfaction, target_quantity, unit, created_at)
+      (user_id, goal_id, name, cadence_kind, cadence_n, cadence_weekdays, satisfaction, target_quantity, unit, created_at, retired_at)
     values (${personId}, null, ${name}, ${cadence.kind}, ${n}, ${days}, ${satisfaction.kind},
-            ${quantity ? satisfaction.target : null}, ${quantity ? satisfaction.unit : null}, ${LONG_AGO()})
+            ${quantity ? satisfaction.target : null}, ${quantity ? satisfaction.unit : null}, ${opts.created ?? LONG_AGO()},
+            ${opts.retired ?? null})
     returning id
   `;
   return row.id;

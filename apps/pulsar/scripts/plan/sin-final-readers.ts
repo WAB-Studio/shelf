@@ -193,3 +193,24 @@ test("its evidence counts from the opening up to today", async () => {
   assert.ok(view);
   assert.equal(view.measureTotal, 2);
 });
+
+test("a goal with no end that holds goals runs its months to eleven past today's", async () => {
+  // Same `later` as above: the months of a parent are drawn from the rolled-up figures, not goalFigures'.
+  const [parent] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${userId}, 'sin-final-readers.ts parent', null, 'searches', 'searches', now() - interval '70 days')
+    returning id`;
+  await db`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, parent_id, created_at)
+    values (${userId}, 'sin-final-readers.ts child', null, 'searches', 'searches', ${parent.id}, now() - interval '60 days')`;
+  try {
+    const later = addDays(today, 120);
+    const view = await q.goal.loadGoal(parent.id, later);
+    assert.ok(view);
+    const months = view.months.map((row) => row.month);
+    assert.equal(months[months.length - 1], monthFrom(later, 11));
+  } finally {
+    await db`delete from goals.goals where parent_id = ${parent.id}`;
+    await db`delete from goals.goals where id = ${parent.id}`;
+  }
+});
