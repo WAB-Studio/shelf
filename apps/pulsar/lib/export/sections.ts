@@ -31,8 +31,10 @@ export function keepsHeadWithTable(months: GoalReport["months"], unit: string | 
 
 // A month that has not started prints only with a planned amount (a planned 0
 // counts, RP-70); a goal that measures nothing (`unit` null) prints one with a
-// task too (RP-71). A past or current month always prints.
-export function printsOnPaper(month: GoalReport["months"][number], unit: string | null): boolean {
+// task too (RP-71). A past or current month always prints, and so does the
+// month after the current one when the caller marks it `next`.
+export function printsOnPaper(month: GoalReport["months"][number], unit: string | null, next = false): boolean {
+  if (next) return true;
   const held = unit === null && (month.tasks?.total ?? 0) > 0;
   return month.past || month.current || month.planned !== null || held;
 }

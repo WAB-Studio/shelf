@@ -39,7 +39,7 @@ test("«de M» counts from creation", () => {
 test("«de M» counts to retirement in the current month", () => {
   const [oct] = months({ createdOn: "2026-09-01", retiredOn: "2026-10-08" }).slice(-1);
   assert.equal(oct.asked, 8);
-  assert.equal(oct.current, true);
+  assert.equal(oct.current, false);
 });
 
 test("a full past month counts all its days; the current one stops at today", () => {
@@ -102,4 +102,68 @@ test("weeks counts the weeks of each month from daysDoneByWeek", () => {
   });
   assert.deepEqual(result.find((m) => m.month === "2026-07-01")?.weeks, { met: 3, counted: 4 });
   assert.deepEqual(result.find((m) => m.month === "2026-10-01")?.weeks, { met: 0, counted: 2 });
+});
+
+const weekly = (count: number): Cadence => ({ kind: "times_per_week", count });
+const octOf = (result: ReturnType<typeof months>) => result.find((m) => m.month === "2026-10-01");
+
+test("thisWeek E3: only the month of today, with the week's done and count", () => {
+  const result = months({
+    cadence: weekly(1),
+    createdOn: "2026-07-08",
+    daysDoneByWeek: new Map([["2026-10-12", 1]]),
+  });
+  assert.deepEqual(octOf(result)?.thisWeek, { done: 1, count: 1 });
+  assert.deepEqual(result.filter((m) => m.month !== "2026-10-01").map((m) => m.thisWeek), [null, null, null]);
+});
+
+test("thisWeek with nothing done is zero, not null; E4 counts of 2", () => {
+  assert.deepEqual(octOf(months({ cadence: weekly(1), createdOn: "2026-07-08" }))?.thisWeek, { done: 0, count: 1 });
+  const nadar = months({ cadence: weekly(2), createdOn: "2026-10-13", daysDoneByWeek: new Map([["2026-10-12", 1]]) });
+  assert.deepEqual(octOf(nadar)?.thisWeek, { done: 1, count: 2 });
+});
+
+test("thisWeek is null for a retired habit and for any other cadence", () => {
+  assert.equal(octOf(months({ cadence: weekly(2), createdOn: "2026-08-17", retiredOn: "2026-10-07" }))?.thisWeek, null);
+  for (const cadence of [daily, { kind: "every_n_days", n: 2, anchor: "2026-08-20" }, { kind: "times_per_month", count: 3 }] as Cadence[]) {
+    assert.ok(months({ cadence }).every((m) => m.thisWeek === null));
+  }
+});
+
+test("thisWeek on a Sunday reads the week that ends that day", () => {
+  const result = months({
+    cadence: weekly(1),
+    createdOn: "2026-07-08",
+    today: "2026-10-18",
+    daysDoneByWeek: new Map([["2026-10-12", 2], ["2026-10-19", 9]]),
+  });
+  assert.equal(octOf(result)?.thisWeek?.done, 2);
+});
+
+test("current: a retired habit's last month is not current, a live one's is", () => {
+  const retired = months({ cadence: weekly(2), createdOn: "2026-08-17", retiredOn: "2026-10-07" });
+  assert.equal(octOf(retired)?.current, false);
+  assert.equal(octOf(months({ cadence: weekly(2), createdOn: "2026-08-17" }))?.current, true);
+});
+
+test("E5 in habitMonths: October is 2 of 2 weeks", () => {
+  const result = months({
+    cadence: weekly(2),
+    createdOn: "2026-08-17",
+    retiredOn: "2026-10-07",
+    daysDoneByWeek: new Map([["2026-09-28", 2], ["2026-10-05", 2]]),
+  });
+  assert.deepEqual(octOf(result)?.weeks, { met: 2, counted: 2 });
+});
+
+test("E6: the window of Mes: on Sun 1 Nov the week of 26 Oct is November's? no, October's, and in progress", () => {
+  const result = months({
+    cadence: weekly(1),
+    createdOn: "2026-07-08",
+    today: "2026-11-01",
+    daysDoneByWeek: new Map([["2026-10-26", 1]]),
+  });
+  const nov = result.find((m) => m.month === "2026-11-01");
+  assert.deepEqual(nov?.thisWeek, { done: 1, count: 1 });
+  assert.deepEqual(nov?.weeks, { met: 0, counted: 0 });
 });

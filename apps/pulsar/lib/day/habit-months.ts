@@ -1,6 +1,6 @@
 import { civilDateToDate, dateToCivilDate } from "@/lib/zone";
 import { asksOn } from "./cadence";
-import { habitWeeks } from "./habit-weeks";
+import { habitThisWeek, habitWeeks } from "./habit-weeks";
 import type { Cadence, CommitmentPlan } from "./types";
 
 export type HabitMonth = {
@@ -11,6 +11,8 @@ export type HabitMonth = {
   current: boolean;
   // Weeks met of weeks lived, by the Thursday rule; null unless the cadence is counted by the week.
   weeks: { met: number; counted: number } | null;
+  // The week in progress, only in the month of today for a live weekly habit.
+  thisWeek: { done: number; count: number } | null;
 };
 
 // How many days in `from..to` the plan asks on, by `asksOn` with no facts.
@@ -70,10 +72,14 @@ export function habitMonths({
       month,
       daysDone: daysDoneByMonth.get(month) ?? 0,
       asked: counted ? askedIn(plan, from, to) : null,
-      current: month === todayMonth,
+      current: month === todayMonth && retiredOn === null,
       weeks:
         cadence.kind === "times_per_week"
           ? habitWeeks({ count: cadence.count, createdOn, retiredOn, daysDoneByWeek, month, today })
+          : null,
+      thisWeek:
+        cadence.kind === "times_per_week" && month === todayMonth
+          ? habitThisWeek({ count: cadence.count, retiredOn, daysDoneByWeek, today })
           : null,
     });
   }
