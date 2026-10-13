@@ -7,23 +7,28 @@ import { getPerson, withGoalsDb } from "@/lib/session";
 import { TIME_ZONE } from "@/lib/zone";
 
 export const MODEL_CALLS_DAILY_CAP = 10;
+export const CHAT_CALLS_DAILY_CAP = 50;
 
 export type ModelCallOutcome = "ok" | "failed" | "invalid" | "empty";
 
 /**
- * Claims one model call before it is made (RNP-13): the row lands only while
- * the person's count for the zone's today is under the cap, `null` otherwise.
+ * Claims one model call before it is made (RNP-13, RNP-21): the row lands only
+ * while the person's count for the zone's today, of the same kind, is under that
+ * kind's cap, `null` otherwise. The import (`paste`, `file`) and the chat count
+ * apart.
  * One statement, so the count and the insert share a round trip. Two claims
  * racing at nine may both land: a person's own double tap, accepted. The day
  * is the column default's, the real one even under `PULSAR_CLOCK`.
  */
 export async function claimModelCall(
   model: string,
-  source: "paste" | "file",
+  source: "paste" | "file" | "chat",
 ): Promise<{ id: string } | null> {
   const person = await getPerson();
   if (!person) throw new Error("claimModelCall called without a verified session");
 
+  const chat = source === "chat";
+  const cap = chat ? CHAT_CALLS_DAILY_CAP : MODEL_CALLS_DAILY_CAP;
   const rows = await withGoalsDb((tx) =>
     tx.execute<{ id: string }>(sql`
       insert into goals.model_calls (user_id, model, source)
@@ -31,7 +36,8 @@ export async function claimModelCall(
       where (
         select count(*) from goals.model_calls
         where user_id = ${person.id}::uuid and day = (now() at time zone ${TIME_ZONE})::date
-      ) < ${MODEL_CALLS_DAILY_CAP}
+          and (source = 'chat') = ${chat}
+      ) < ${cap}
       returning id
     `),
   );

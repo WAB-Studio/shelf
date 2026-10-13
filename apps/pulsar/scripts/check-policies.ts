@@ -2897,6 +2897,51 @@ async function checkGoalTree0018(): Promise<void> {
   await sql.end();
 }
 
+// RNP-21: `0020` admits `source = 'chat'` and nothing else changes. Driven as `authenticated`; own
+// transaction, forced rollback.
+async function checkModelCallsChat0020(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      await enterUserContext(tx, subject);
+
+      const own = await attemptRows<{ id: string; source: string }>(
+        tx,
+        (sp) => sp`insert into goals.model_calls (user_id, model, source)
+          values (${subject}, 'gpt-5-mini', 'chat') returning id, source`,
+      );
+      assert(
+        "P251",
+        own.code === undefined && own.rows.length === 1 && own.rows[0].source === "chat",
+        `own insert with source 'chat', sqlstate = ${own.code ?? "none"}, rows = ${own.rows.length}`,
+      );
+
+      const foreign = await attempt(
+        tx,
+        (sp) => sp`insert into goals.model_calls (user_id, model, source)
+          values (${intruder}, 'gpt-5-mini', 'chat')`,
+      );
+      assert("P252", foreign.code === "42501", `insert 'chat' for another person, sqlstate = ${foreign.code ?? "none"}`);
+
+      const unknown = await attempt(
+        tx,
+        (sp) => sp`insert into goals.model_calls (user_id, model, source) values (${subject}, 'gpt-5-mini', 'x')`,
+      );
+      assert("P253", unknown.code === "23514", `insert source 'x' after 0020, sqlstate = ${unknown.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -2928,6 +2973,7 @@ async function main(): Promise<void> {
   await checkAuditoria0015();
   await checkConnectionHost0016();
   await checkGoalTree0018();
+  await checkModelCallsChat0020();
 
   if (failed) process.exit(1);
 }
