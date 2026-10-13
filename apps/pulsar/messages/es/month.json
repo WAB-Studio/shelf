@@ -116,7 +116,9 @@
     "habits": {
       "title": "Hábitos",
       "line": "{cadence} · {count, plural, one {# día} other {# días}}",
-      "lineOf": "{cadence} · {done} de {asked, plural, one {# día} other {# días}}"
+      "lineOf": "{cadence} · {done} de {asked, plural, one {# día} other {# días}}",
+      "lineWeeks": "{cadence} · {met} de {counted, plural, one {# semana} other {# semanas}}",
+      "noWeeks": "{cadence} · aún sin semanas cerradas"
     },
     "unreadableTitle": "No pudimos leer una fuente.",
     "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",

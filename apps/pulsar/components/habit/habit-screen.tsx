@@ -35,8 +35,11 @@ export async function HabitScreen({
 
   const { shown, hidden } = tailOf(habit.months, all);
   const rows: TableRow[] = shown.map((month) => {
-    const line =
-      month.asked === null
+    const line = month.weeks
+      ? month.weeks.counted === 0
+        ? t("habit.months.noWeeks")
+        : t("habit.months.lineWeeks", month.weeks)
+      : month.asked === null
         ? t("habit.months.line", { count: month.daysDone })
         : t("habit.months.lineOf", { done: month.daysDone, asked: month.asked });
     return {
