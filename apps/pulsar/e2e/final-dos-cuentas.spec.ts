@@ -169,11 +169,9 @@ test("a phase lengthened between load and send: the server's refusal carries the
     // The sheet loaded with a phase ending in week 2: 5 passes here. Now the phase grows past it.
     await db`update goals.phases set ends_on = ${plusDays(fromThis(7), -1)} where id = ${phase}`;
     await sheet.getByRole("button", { name: "Moverlo", exact: true }).click();
-    const refusal = sheet.getByText(/^La fase «Preparación» llega hasta la semana \d+ \(\d+ desde la apertura\)\. El final no puede quedar antes\.$/);
+    // The phase now ends the Sunday of week 7 from this one: 8 from the opening, a week ahead of the page's own.
+    const refusal = sheet.getByText("La fase «Preparación» llega hasta la semana 7 (8 desde la apertura). El final no puede quedar antes.", { exact: true });
     await expect(refusal).toBeVisible();
-    const [, week, fromOpening] = (await refusal.innerText()).match(/semana (\d+) \((\d+) desde/)!;
-    // Opened last Monday: the opening count runs one ahead of the count from this week.
-    expect(Number(fromOpening)).toBe(Number(week) + 1);
     await expect(sheet.getByText(line(2), { exact: true })).toBeVisible();
     expect(await horizonOfGoal(db, correr)).toBe(fromThis(8));
   } finally {

@@ -136,6 +136,7 @@
     "weeksLabel": "semanas, contando la del {date}",
     "weeksFromThis": "semanas, contando esta",
     "endsOn": "termina el {date}",
+    "bothCounts": "contando desde esta semana; la meta lleva {n, plural, one {# semana} other {# semanas}}",
     "confirm": "Moverlo",
     "cancel": "Dejarlo como está",
     "removeEnd": "Quitar el final",
@@ -151,6 +152,6 @@
   "errors": {
     "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520.",
     "horizonPast": "La semana {weeks} ya pasó. El final puede ser esta semana o una por venir.",
-    "horizonBeforePhase": "La fase «{name}» llega hasta la semana {week}. El final no puede quedar antes."
+    "horizonBeforePhase": "La fase «{name}» llega hasta la semana {week} ({fromOpening} desde la apertura). El final no puede quedar antes."
   }
 }
