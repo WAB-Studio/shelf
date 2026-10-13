@@ -95,7 +95,7 @@ test.describe("reaching the screen (RP-105)", () => {
       await expect(page).toHaveURL(new RegExp(`/metas/habitos/${id}\\?`));
       expect(new URL(page.url()).searchParams.get("volver")).toBe("/mes");
       await expect(page.getByRole("heading", { level: 1, name: "Meditar" })).toBeVisible();
-      await page.locator("main").getByRole("link", { name: /^‹?\s*Mes$/ }).click();
+      await page.locator("main").getByRole("link", { name: /^Volver a Mes$/ }).click();
       await expect(page).toHaveURL(/\/mes$/);
     } finally {
       await context.close();
@@ -109,7 +109,7 @@ test.describe("reaching the screen (RP-105)", () => {
       const { page, context } = await visit(browser, baseURL, person, habitPath(id, query), 360);
       try {
         await mainLower(page);
-        const back = page.locator("main").getByRole("link", { name: /^‹?\s*Metas$/ });
+        const back = page.locator("main").getByRole("link", { name: /^Volver a Metas$/ });
         await expect(back).toHaveAttribute("href", "/metas");
         await back.click();
         await expect(page).toHaveURL(/\/metas$/);
