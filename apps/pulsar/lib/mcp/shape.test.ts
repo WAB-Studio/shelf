@@ -88,6 +88,17 @@ function goalView(unit: string | null): GoalView {
     planSeen: null,
     plan,
     roadmap: fillPlan(plan),
+    note: null,
+    parent: null,
+    ancestors: [],
+    level: null,
+    holdsGoals: false,
+    children: [],
+    outOfUnit: [],
+    branchOpenCount: 0,
+    latestBelow: null,
+    above: null,
+    tree: [],
   };
 }
 
@@ -256,6 +267,8 @@ test("the goal list keeps its three groups and each goal's measure", () => {
     measureName: unit === null ? null : "Lectura",
     measureUnit: unit,
     archivedAt,
+    parentId: n === 2 ? ID(1) : null,
+    level: null,
   });
   const shaped = shapeGoalList({
     open: [summary(1, "páginas", null)],
@@ -268,9 +281,43 @@ test("the goal list keeps its three groups and each goal's measure", () => {
     horizon: "2027-01-01",
     measure: { name: "Lectura", unit: "páginas" },
     archivedAt: null,
+    parentId: null,
+    level: null,
+    childIds: [ID(2)],
   });
   assert.equal(shaped.ended[0].measure, null);
   assert.equal(shaped.archived[0].archivedAt, "2026-09-01T10:00:00Z");
+});
+
+test("a goal reads the goal above, the goals below, its level and its note", () => {
+  const view: GoalView = {
+    ...goalView("minutos"),
+    note: "una\ndos",
+    parent: { id: ID(20), name: "Arriba", horizon: "2027-06-01" },
+    level: "large",
+    holdsGoals: true,
+    rhythm: null,
+    children: [
+      {
+        id: ID(21),
+        name: "Abajo",
+        level: "small",
+        unit: "minutos",
+        inUnit: true,
+        firstPlanned: null,
+        month: { planned: 90, reached: 30 },
+        endedOn: null,
+        archivedAt: null,
+      },
+    ],
+    outOfUnit: [{ id: ID(22), name: "Otra", unit: "páginas" }],
+  };
+  const shaped = shapeGoal(view);
+  assert.deepEqual(shaped.parent, { id: ID(20), name: "Arriba" });
+  assert.equal(shaped.children[0].name, "Abajo");
+  assert.equal(shaped.children[0].thisMonth?.planned?.value, 90);
+  assert.deepEqual([shaped.level, shaped.holdsGoals, shaped.rhythm, shaped.note], ["large", true, null, "una\ndos"]);
+  assert.deepEqual(shaped.outOfUnit, [{ id: ID(22), name: "Otra", unit: "páginas" }]);
 });
 
 type LoadedDay = Awaited<ReturnType<typeof loadDay>>;
@@ -287,8 +334,9 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     },
     evidence: "unreadable",
     goals: [
-      { id: ID(10), name: "Leer más", horizon: "2027-01-01", openedOn: "2026-08-15", measureName: "Lectura", measureUnit: "minutos" },
+      { id: ID(10), name: "Leer más", horizon: "2027-01-01", openedOn: "2026-08-15", measureName: "Lectura", measureUnit: "minutos", parentId: null, level: null, rootId: ID(10) },
     ],
+    groups: [{ rootId: ID(10), goalIds: [ID(10)] }],
     oneOffs: [
       { id: ID(20), goalId: ID(10), name: "Pedir el libro", note: "Pedir en la biblioteca\nantes del viernes", day: "2026-10-03" },
       { id: ID(21), goalId: null, name: "Llamar", note: null, day: "2026-10-05" },
@@ -299,7 +347,7 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     lastEnded: null,
     endedThisWeek: [],
     weekMeasure: { [ID(10)]: 90 },
-    monthLine: { [ID(10)]: { planned: 750, reached: 120, underPace: false } },
+    monthLine: { [ID(10)]: { planned: 750, reached: 120, underPace: false, ownBudget: false } },
     commitments: [
       { id: ID(12), goalId: ID(10), name: "Leer 30 min", kind: "quantity", target: 30, unit: "minutos", cadence: { kind: "daily" }, evidence: null },
       { id: ID(14), goalId: ID(10), name: "Repasar", kind: "tap", target: null, unit: null, cadence: { kind: "daily" }, evidence: null },

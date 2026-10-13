@@ -1,27 +1,76 @@
 {
+  "context": [
+    {
+      "what": "Diagnóstico de partida",
+      "src": [
+        {
+          "from": 1,
+          "to": 2
+        }
+      ]
+    }
+  ],
   "goals": [
     {
+      "key": "ia",
+      "parent": null,
       "name": "IA aplicada",
       "horizon": "2027-10-01",
       "measure": {
         "name": "horas de estudio",
-        "unit": "minutos"
+        "unit": "horas"
       },
+      "rate": {
+        "amount": 10,
+        "unit": "hours",
+        "per": "week"
+      },
+      "noteSrc": [
+        {
+          "from": 3,
+          "to": 4
+        }
+      ],
+      "noteText": null,
+      "src": [
+        {
+          "from": 3,
+          "to": 30
+        }
+      ],
       "phases": [
         {
           "aim": "Evals y harness",
           "startsOn": "2026-10-01",
-          "endsOn": "2026-12-31"
+          "endsOn": "2026-12-31",
+          "src": [
+            {
+              "from": 5,
+              "to": 6
+            }
+          ]
         }
       ],
       "months": [
         {
           "month": "2026-10",
-          "amount": 720
+          "amount": 12,
+          "src": [
+            {
+              "from": 7,
+              "to": 7
+            }
+          ]
         },
         {
           "month": "2026-11",
-          "amount": 1200
+          "amount": 20,
+          "src": [
+            {
+              "from": 8,
+              "to": 8
+            }
+          ]
         }
       ],
       "commitments": [
@@ -35,8 +84,14 @@
           ],
           "cadenceN": null,
           "satisfaction": "quantity",
-          "targetQuantity": 120,
-          "unit": "minutos"
+          "targetQuantity": 2,
+          "unit": "horas",
+          "src": [
+            {
+              "from": 9,
+              "to": 9
+            }
+          ]
         },
         {
           "name": "Inglés pasivo",
@@ -45,30 +100,153 @@
           "cadenceN": null,
           "satisfaction": "tap",
           "targetQuantity": null,
-          "unit": null
+          "unit": null,
+          "src": [
+            {
+              "from": 10,
+              "to": 10
+            }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "id": "ingles",
+          "label": "Inglés",
+          "perWeek": 3
         }
       ],
       "tasks": [
         {
           "name": "Leer AI Engineering cap. 1–4",
           "month": "2026-10",
-          "estimate": 240,
+          "estimate": 4,
+          "week": null,
+          "rule": null,
+          "noteSrc": [],
+          "noteText": null,
+          "src": [
+            {
+              "from": 11,
+              "to": 11
+            }
+          ],
           "children": []
         },
         {
-          "name": "Tutor",
+          "name": "Leer y resumir con ejemplos propios los primeros cuatro capítulos del libro de ingeniería de IA, anotar las dudas de cada capítulo y preparar tres preguntas para la sesión con el tutor de la semana",
           "month": "2026-10",
-          "estimate": null,
+          "estimate": 5,
+          "week": null,
+          "rule": null,
+          "noteSrc": [
+            {
+              "from": 13,
+              "to": 16
+            }
+          ],
+          "noteText": null,
+          "src": [
+            {
+              "from": 12,
+              "to": 16
+            }
+          ],
           "children": [
             {
               "name": "Elegir tutor",
-              "estimate": 60
+              "estimate": 1,
+              "rule": null,
+              "noteSrc": [],
+              "noteText": null,
+              "src": [
+                {
+                  "from": 14,
+                  "to": 14
+                }
+              ]
             },
             {
-              "name": "Sesiones 1–4",
-              "estimate": 360
+              "name": "Primera sesión",
+              "estimate": 2,
+              "rule": null,
+              "noteSrc": [
+                {
+                  "from": 15,
+                  "to": 15
+                }
+              ],
+              "noteText": null,
+              "src": [
+                {
+                  "from": 15,
+                  "to": 15
+                }
+              ]
             }
           ]
+        },
+        {
+          "name": "Semana 1",
+          "month": "2026-10",
+          "estimate": 6,
+          "week": "2026-10-05",
+          "rule": "ingles",
+          "noteSrc": [],
+          "noteText": null,
+          "src": [
+            {
+              "from": 17,
+              "to": 20
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "key": "evals",
+      "parent": "ia",
+      "name": "Evals",
+      "horizon": "2027-03-01",
+      "measure": {
+        "name": "horas de estudio",
+        "unit": "horas"
+      },
+      "rate": null,
+      "noteSrc": [],
+      "noteText": null,
+      "src": [
+        {
+          "from": 21,
+          "to": 30
+        }
+      ],
+      "phases": [],
+      "months": [],
+      "commitments": [],
+      "rules": [],
+      "tasks": [
+        {
+          "name": "Armar el harness",
+          "month": "2026-11",
+          "estimate": 8,
+          "week": null,
+          "rule": null,
+          "noteSrc": [
+            {
+              "from": 23,
+              "to": 24
+            }
+          ],
+          "noteText": null,
+          "src": [
+            {
+              "from": 22,
+              "to": 22
+            }
+          ],
+          "children": []
         }
       ]
     }

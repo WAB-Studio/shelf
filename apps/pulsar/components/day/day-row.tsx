@@ -18,6 +18,8 @@ export type DayRowKind = "tap" | "quantity" | "evidence";
 export type DayRowProps = {
   commitmentId: string;
   name: string;
+  // The goal a row of a large or a small goal names, before its other words.
+  goalName?: string;
   // What satisfies the commitment (RP-02, RP-03, RP-07): a `tap` row calls
   // `declareFact` outright, an `evidence` row never calls it at all — RP-07
   // says evidence takes no act from the person — and a `quantity` row opens
@@ -74,6 +76,7 @@ export type DayRowProps = {
 export function DayRow({
   commitmentId,
   name,
+  goalName,
   kind,
   markState,
   evidence,
@@ -138,6 +141,16 @@ export function DayRow({
         : null,
   });
 
+  const metaNodes =
+    goalName || meta
+      ? [
+          ...(goalName ? [goalName, ...(meta ? [" · "] : [])] : []),
+          ...(meta ?? []).map((part, index) =>
+            "figure" in part ? <Figure key={index} value={part.figure} variant="meta" /> : part.text,
+          ),
+        ]
+      : undefined;
+
   function handleTap() {
     if (!tappable || pending) return;
     setError(null);
@@ -163,9 +176,7 @@ export function DayRow({
         leading={<Mark state={markState} quiet={quiet} />}
         quiet={quiet}
         name={name}
-        meta={meta?.map((part, index) =>
-          "figure" in part ? <Figure key={index} value={part.figure} variant="meta" /> : part.text,
-        )}
+        meta={metaNodes}
         metaVariant="sentence"
         onClick={handleTap}
         disabled={!tappable || pending}

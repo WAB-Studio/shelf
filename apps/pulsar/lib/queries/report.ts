@@ -3,11 +3,13 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { phaseOn } from "@/lib/day/derive";
-import type { EvidenceDay } from "@/lib/day/types";
+import type { EvidenceDay, Phase, ReviewWeek } from "@/lib/day/types";
+import { measureByWeek } from "@/lib/day/review";
 import { dayBefore } from "@/lib/day/weeks";
+import { branchOf, buildTree, rollUp, spanStart, type GoalMonths, type RolledUp, type Tree, type TreeRow } from "@/lib/goals/tree";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
-import { monthOf, toDate } from "@/lib/plan/months";
+import { monthLine, monthOf, monthsOfSpan, toDate } from "@/lib/plan/months";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { weekPlanned } from "@/lib/plan/week-planned";
@@ -19,6 +21,7 @@ import {
   type GoalRow,
   type TaskRow,
 } from "@/lib/queries/goal";
+import { placeOf } from "@/lib/queries/month";
 import { toPhase, type PhaseRow } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { isTimeUnit } from "@/lib/units/time";
@@ -27,7 +30,7 @@ import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 // One row per open goal, each carrying what `queryGoalRow` (`goal.ts`) reads
 // for a single one.
 type ReportRow = {
-  goal: GoalRow;
+  goal: GoalRow & { parent_id: string | null; position: number };
   phases: PhaseRow[];
   commitments: CommitmentRow[];
   facts: FactRow[];
@@ -77,7 +80,8 @@ const reportEvidenceFrom = sql`(select min((g.created_at at time zone ${TIME_ZON
                       from "goals"."goals" g where g.archived_at is null)`;
 
 // The goal's plan, read the way `planMonthList` and `planShare` ask (RP-49).
-function planInputOf(row: ReportRow, today: string): PlanInput {
+// A goal that holds goals has no rhythm and no budgets of its own (RP-80).
+function planInputOf(row: ReportRow, today: string, holds: boolean): PlanInput {
   const tasks: PlanTask[] = row.tasks.map((task) => ({
     id: task.id,
     parentId: task.parent_id,
@@ -93,8 +97,8 @@ function planInputOf(row: ReportRow, today: string): PlanInput {
     position: task.position,
   }));
   return {
-    rhythm: row.goal.rhythm ?? null,
-    budgets: row.budgets,
+    rhythm: holds ? null : (row.goal.rhythm ?? null),
+    budgets: holds ? [] : row.budgets,
     tasks,
     openedOn: civilDateInZone(new Date(row.goal.created_at)),
     horizon: row.goal.horizon,
@@ -180,7 +184,9 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
   ]);
 
   const thisMonth = monthOf(today);
-  const goals = rows.map((row): GoalReport => {
+  const tree = buildTree(rows.map(treeRowOf));
+  const holders = new Set(tree.order.filter((node) => node.children.length > 0).map((node) => node.id));
+  const built = rows.map((row) => {
     const phases = row.phases.map(toPhase);
     const openedOn = civilDateInZone(new Date(row.goal.created_at));
     const figures = goalFigures({
@@ -197,19 +203,20 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       today,
     });
     const current = phaseOn(phases, today);
-    const planInput = planInputOf(row, today);
+    const planInput = planInputOf(row, today, holders.has(row.goal.id));
     const monthItems = planMonthList(planInput, thisMonth);
     // A time goal with no rhythm has no amount to read a month by, so it reads tasks.
     const unit = row.goal.measure_unit;
     const countsTasks = unit === null || (isTimeUnit(unit) && (row.goal.rhythm ?? null) === null);
 
-    return {
+    const report: GoalReport = {
       id: row.goal.id,
       name: row.goal.name,
       horizon: row.goal.horizon,
       endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
       unit: row.goal.measure_unit,
       measureName: row.goal.measure_name,
+      note: row.goal.note ?? null,
       measureFed: matchingSourceKeys(row.goal, row.commitments).size > 0,
       thisMonth: {
         planned: figures.month?.planned ?? null,
@@ -270,22 +277,169 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
             })
           : null;
       })(),
-      weekSplits: figures.weeks
-        .filter((week) => monthOf(week.startsOn) !== monthOf(week.endsOn))
-        .flatMap((week) => {
-          const secondMonth = monthOf(week.endsOn);
-          const parts = [
-            { month: monthOf(week.startsOn), startsOn: week.startsOn, endsOn: dayBefore(secondMonth) },
-            { month: secondMonth, startsOn: secondMonth, endsOn: week.endsOn },
-          ];
-          return parts.map((part) => ({
-            index: week.index,
-            ...part,
-            total: figures.totalInSpan(part.startsOn, part.endsOn),
-          }));
-        }),
+      weekSplits: weekSplitsOf(figures.weeks, figures.totalInSpan),
     };
+    return { report, figures, row, phases, planInput };
   });
 
-  return { today, evidence: evidenceOutcome.status === "read" ? "read" : "unreadable", goals };
+  // Each goal's own months feed the sum of the one above it (RP-80).
+  const own = new Map<string, GoalMonths>();
+  for (const { row, figures } of built) {
+    if (row.goal.measure_unit === null) continue;
+    const typed = new Set(row.budgets.map((budget) => budget.month));
+    own.set(row.goal.id, {
+      unit: row.goal.measure_unit,
+      months: new Map(
+        figures.months.map((m) => [m.month, { planned: m.planned, reached: m.reached, ownBudget: typed.has(m.month) }]),
+      ),
+    });
+  }
+  const rolled = rollUp(tree, own);
+
+  const byId = new Map(built.map((entry) => [entry.row.goal.id, entry]));
+  const reports = new Map<string, GoalReport>();
+  // Bottom-up, so a holder reads its goals' week amounts once they hold their own.
+  for (const { report, row, phases } of [...built].reverse()) {
+    const id = row.goal.id;
+    const sum = rolled.get(id);
+    reports.set(id, {
+      ...(sum ? holderOf({ report, sum, thisMonth, today, row, phases, tree, rolled, byId, reports }) : report),
+      ...placeOf(tree, id),
+      holdsGoals: sum !== undefined,
+      outOfUnit: sum?.outOfUnit ?? [],
+    });
+  }
+  const order = new Map(tree.order.map((node, index) => [node.id, index]));
+  const goals = [...reports.values()].sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+  const groups = tree.order
+    .filter((node) => node.depth === 0)
+    .map((node) => ({ rootId: node.id, goalIds: branchOf(tree, node.id) }));
+
+  return { today, evidence: evidenceOutcome.status === "read" ? "read" : "unreadable", goals, groups };
+}
+
+function treeRowOf(row: ReportRow): TreeRow {
+  return {
+    id: row.goal.id,
+    parentId: row.goal.parent_id,
+    position: row.goal.position,
+    createdAt: row.goal.created_at,
+    name: row.goal.name,
+    horizon: row.goal.horizon,
+    archivedAt: row.goal.archived_at,
+    measureUnit: row.goal.measure_unit,
+  };
+}
+
+// A week crossing two months, cut at the month's edge (RP-17).
+function weekSplitsOf(
+  weeks: ReviewWeek[],
+  total: (startsOn: string, endsOn: string) => number,
+): GoalReport["weekSplits"] {
+  return weeks
+    .filter((week) => monthOf(week.startsOn) !== monthOf(week.endsOn))
+    .flatMap((week) => {
+      const secondMonth = monthOf(week.endsOn);
+      const parts = [
+        { month: monthOf(week.startsOn), startsOn: week.startsOn, endsOn: dayBefore(secondMonth) },
+        { month: secondMonth, startsOn: secondMonth, endsOn: week.endsOn },
+      ];
+      return parts.map((part) => ({ index: week.index, ...part, total: total(part.startsOn, part.endsOn) }));
+    });
+}
+
+type Built = {
+  row: ReportRow;
+  figures: ReturnType<typeof goalFigures>;
+  planInput: PlanInput;
+};
+
+// A goal that holds goals reads its months, this month, its weeks and its task
+// counts off the sums of its goals plus its own (RP-80, P3 = B); it has no
+// week amount of its own, only theirs.
+function holderOf(args: {
+  report: GoalReport;
+  sum: RolledUp;
+  thisMonth: string;
+  today: string;
+  row: ReportRow;
+  phases: Phase[];
+  tree: Tree;
+  rolled: Map<string, RolledUp>;
+  byId: Map<string, Built>;
+  reports: Map<string, GoalReport>;
+}): GoalReport {
+  const { report, sum, thisMonth, today, row, phases, tree, rolled, byId, reports } = args;
+  const id = row.goal.id;
+  const node = tree.byId.get(id)!;
+  const unitOf = (goalId: string): string | null => rolled.get(goalId)?.unit ?? byId.get(goalId)!.row.goal.measure_unit;
+
+  // Its own plus every goal under it in its unit.
+  const spanTotal = (goalId: string, startsOn: string, endsOn: string): number => {
+    const unit = unitOf(goalId);
+    if (unit === null) return 0;
+    const entry = byId.get(goalId)!;
+    const ownUnit = entry.row.goal.measure_unit;
+    let total = ownUnit === null || ownUnit === unit ? entry.figures.totalInSpan(startsOn, endsOn) : 0;
+    for (const cid of tree.byId.get(goalId)!.children) {
+      if (unitOf(cid) === unit) total += spanTotal(cid, startsOn, endsOn);
+    }
+    return total;
+  };
+  const spanStartOn = spanStart(tree, id);
+  const weeks = measureByWeek({
+    openedOn: spanStartOn,
+    horizon: row.goal.horizon,
+    today,
+    unit: null,
+    facts: [],
+    evidence: [],
+    phases,
+  }).map((week) => ({ ...week, total: spanTotal(id, week.startsOn, week.endsOn) }));
+
+  const weekPlanned = node.children
+    .map((cid) => reports.get(cid))
+    .filter((child) => child !== undefined && child.weekPlanned != null && child.unit === sum.unit)
+    .reduce<number | null>((total, child) => (total ?? 0) + child!.weekPlanned!, null);
+
+  // Its months open where its first goal's do, which can be before its own opening.
+  const current = monthOf(today);
+  const kept = new Map(report.months.map((m) => [m.month, m]));
+  const branch = branchOf(tree, id);
+  const countsTasks = sum.unit === null || isTimeUnit(sum.unit);
+  const months = monthsOfSpan(spanStartOn, row.goal.horizon).map((month) => {
+    const figure = sum.months.get(month);
+    const old = kept.get(month);
+    const items = countsTasks ? branch.flatMap((goalId) => planMonthList(byId.get(goalId)!.planInput, month)) : null;
+    return {
+      month,
+      planned: figure?.planned ?? null,
+      reached: figure?.reached ?? 0,
+      current: month === current,
+      past: month < current,
+      carried: old?.carried ?? null,
+      ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
+    };
+  });
+  const figure = sum.months.get(thisMonth);
+  const planned = figure?.planned ?? null;
+  const reached = figure?.reached ?? 0;
+  const { underPace } = monthLine({
+    month: thisMonth,
+    today,
+    budget: planned === null ? null : { month: thisMonth, amount: planned },
+    reached,
+    openedOn: civilDateInZone(new Date(row.goal.created_at)),
+    horizon: row.goal.horizon,
+  });
+  return {
+    ...report,
+    unit: sum.unit,
+    thisMonth: { planned, reached, underPace },
+    toDate: toDate(months),
+    months,
+    weeks,
+    weekSplits: weekSplitsOf(weeks, (startsOn, endsOn) => spanTotal(id, startsOn, endsOn)),
+    weekPlanned: sum.unit === null ? null : weekPlanned,
+  };
 }

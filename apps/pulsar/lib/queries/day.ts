@@ -19,7 +19,6 @@ import { estimateFacts, type Task } from "@/lib/plan/carry";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planMoved, type PlanNotice } from "@/lib/plan/roadmap-read";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
-import { screenPlanned } from "@/lib/plan/screen-planned";
 import { phasePositions } from "@/lib/day/row-phrases";
 import { dayBefore } from "@/lib/day/weeks";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
@@ -36,6 +35,7 @@ import {
 import { sourceKey, type SourceKey } from "@/i18n/translator";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
+import { branchOf, buildTree, rollUp, rootOf, type GoalMonths, type Level, type Tree } from "@/lib/goals/tree";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -63,6 +63,8 @@ type GoalRow = {
   measure_unit: string | null;
   rhythm: number | null;
   plan_seen: string | null;
+  parent_id: string | null;
+  position: number;
 };
 
 // `source_key` and `source_unit` ride in from the join to `evidence_sources`;
@@ -202,8 +204,9 @@ export type EndedGoal = { id: string; name: string; lastDay: string };
  * `DayScreen` only ever groups a row under a goal it finds here. `commitments`
  * and `one_offs` do not join to the goal, so a row of an archived goal still
  * rides along, but nothing loops over either outside the per-goal grouping and
- * it never draws. `month_budgets`, `goal_tasks` and `scheduled_count` join
- * only open goals (`openGoal`). `goals.length === 0` is also what decides the
+ * it never draws. `goal_tasks` and `scheduled_count` join
+ * only open goals (`openGoal`); `month_budgets` also keeps a goal that ended this
+ * week, for the sum of the general above it. `goals.length === 0` is also what decides the
  * day's own empty state (`empty-day.tsx`), so an all-archived person needs no
  * second check.
  */
@@ -251,7 +254,8 @@ async function queryGoalsRow(
          where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
          from "goals"."month_budgets" b
-         join "goals"."goals" g on g.id = b.goal_id and ${openGoal("g", day)}
+         join "goals"."goals" g on g.id = b.goal_id
+           and g.archived_at is null and g.horizon > ${weekStart}::date
          where b.month >= (date_trunc('month', ${day}::date) - interval '1 month')::date) as month_budgets,
       (select coalesce(json_agg(to_jsonb(o) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
@@ -369,9 +373,16 @@ export type GoalSummary = {
   openedOn: string;
   measureName: string | null;
   measureUnit: string | null;
+  parentId: string | null;
+  // Null for a goal that stands alone: only one with goals under it is a general.
+  level: Level | null;
+  rootId: string;
 };
 
-function toGoalSummary(row: GoalRow): GoalSummary {
+// One general with the goals under it, or a goal on its own: ids in preorder.
+export type DayGroup = { rootId: string; goalIds: string[] };
+
+function toGoalSummary(row: GoalRow, tree: Tree): GoalSummary {
   return {
     id: row.id,
     name: row.name,
@@ -379,7 +390,64 @@ function toGoalSummary(row: GoalRow): GoalSummary {
     openedOn: civilDateInZone(new Date(row.created_at)),
     measureName: row.measure_name,
     measureUnit: row.measure_unit,
+    parentId: tree.byId.has(row.parent_id ?? "") ? row.parent_id : null,
+    level: tree.byId.get(row.id)?.level ?? null,
+    rootId: rootOf(tree, row.id),
   };
+}
+
+function treeOf(goals: GoalRow[]): Tree {
+  return buildTree(
+    goals.map((goal) => ({
+      id: goal.id,
+      parentId: goal.parent_id,
+      position: goal.position,
+      createdAt: goal.created_at,
+      name: goal.name,
+      horizon: goal.horizon,
+      archivedAt: null,
+      measureUnit: goal.measure_unit,
+    })),
+  );
+}
+
+// A goal with goals under it has no figures of its own: its line is the sum of
+// theirs (RP-80), its own reached amount added (RP-78).
+function rolledMonthLines(
+  all: GoalRow[],
+  tree: Tree,
+  lines: Record<string, DayMonthLine>,
+  day: string,
+): Record<string, DayMonthLine> {
+  const month = monthOf(day);
+  const own = new Map<string, GoalMonths>();
+  for (const [id, line] of Object.entries(lines)) {
+    own.set(id, {
+      unit: tree.byId.get(id)?.measureUnit ?? null,
+      months: new Map([[month, { planned: line.planned, reached: line.reached, ownBudget: line.ownBudget }]]),
+    });
+  }
+  const rolled = rollUp(tree, own);
+  const out = { ...lines };
+  for (const goal of all) {
+    const up = rolled.get(goal.id);
+    if (!up) continue;
+    delete out[goal.id];
+    if (up.unit === null) continue;
+    const figure = up.months.get(month) ?? { planned: null, reached: 0 };
+    const planned = figure.planned;
+    const line = monthLine({
+      month,
+      today: day,
+      budget: planned === null ? null : { month, amount: planned },
+      reached: figure.reached,
+      rhythm: null,
+      openedOn: civilDateInZone(new Date(goal.created_at)),
+      horizon: goal.horizon,
+    });
+    out[goal.id] = { ...line, planned, ownBudget: false };
+  }
+  return out;
 }
 
 // A one-off still owed (RP-19, RP-20): `goalId` is null for one that belongs
@@ -500,14 +568,16 @@ function estimateFactsOf(
 // Every goal with a measure: this month's amount, what was reached in it and
 // whether it runs under pace (RP-28, RP-29), over the month's facts by their
 // own `goal_id` and evidence in the goal's unit.
+export type DayMonthLine = MonthLine & { ownBudget: boolean };
+
 function monthLineOf(
   goals: GoalRow[],
   row: GoalsQueryRow,
   evidenceOutcome: EvidenceOutcome,
   day: string,
-): Record<string, MonthLine> {
+): Record<string, DayMonthLine> {
   const month = monthOf(day);
-  const lines: Record<string, MonthLine> = {};
+  const lines: Record<string, DayMonthLine> = {};
   for (const goal of goals) {
     const unit = goal.measure_unit;
     if (!unit) continue;
@@ -533,9 +603,9 @@ function monthLineOf(
       openedOn: civilDateInZone(new Date(goal.created_at)),
       horizon: goal.horizon,
     });
-    // A share of the rhythm that rounds to 0 reads on Hoy as a month with no
-    // amount; a budget of 0 the person typed stays. The goal keeps its 0.
-    lines[goal.id] = { ...line, planned: screenPlanned(line.planned, budget !== undefined) };
+    // The 0 stays for the AI; Hoy reads a share that rounds to 0 as a month
+    // with no amount, unless the 0 is a budget the person typed.
+    lines[goal.id] = { ...line, ownBudget: budget !== undefined };
   }
   return lines;
 }
@@ -700,6 +770,9 @@ export async function loadDay(day: string): Promise<{
   view: DayView;
   evidence: "read" | "unreadable";
   goals: GoalSummary[];
+  // The goals in tree order, a group per general or per goal on its own; the
+  // screen decides which group goes first.
+  groups: DayGroup[];
   oneOffs: OneOffSummary[];
   doneOneOffs: DoneOneOffSummary[];
   daylessCount: number;
@@ -710,7 +783,7 @@ export async function loadDay(day: string): Promise<{
   // `day` itself, most recent first: what Hoy's «terminó ayer» line names.
   endedThisWeek: EndedGoal[];
   weekMeasure: Record<string, number>;
-  monthLine: Record<string, MonthLine>;
+  monthLine: Record<string, DayMonthLine>;
   // Each open goal's next undone leaf of the month, carried first; read on
   // today alone, `{}` on any other day.
   monthTask: Record<string, MonthTask | null>;
@@ -769,6 +842,19 @@ export async function loadDay(day: string): Promise<{
   );
   const evidence = toEvidenceByCommitment(row.commitments, dayEvidence);
   const goals = row.goals.filter((goal) => goal.horizon > day);
+  // The tree spans every goal the statement returns: one that ended this week
+  // still counts in the sum of the general above it.
+  const tree = treeOf(row.goals);
+  const visible = new Set(goals.map((goal) => goal.id));
+  const holders = new Set(tree.order.filter((node) => node.children.length > 0).map((node) => node.id));
+  const groups: DayGroup[] = tree.order
+    .filter((node) => node.depth === 0 && visible.has(node.id))
+    .map((node) => ({ rootId: node.id, goalIds: branchOf(tree, node.id).filter((id) => visible.has(id)) }));
+  const monthLines = Object.fromEntries(
+    Object.entries(
+      rolledMonthLines(row.goals, tree, monthLineOf(row.goals, row, evidenceOutcome, day), day),
+    ).filter(([id]) => visible.has(id)),
+  );
 
   const monthItems = isToday ? monthItemsOf(goals, row, day) : null;
 
@@ -789,7 +875,8 @@ export async function loadDay(day: string): Promise<{
     view,
     periodDone,
     evidence: evidenceOutcome.status,
-    goals: goals.map(toGoalSummary),
+    goals: goals.map((goal) => toGoalSummary(goal, tree)),
+    groups,
     oneOffs: row.one_offs.map(toOneOffSummary),
     doneOneOffs: row.done_one_offs.map((o) => ({
       id: o.id,
@@ -808,10 +895,10 @@ export async function loadDay(day: string): Promise<{
       lastDay: dayBefore(goal.horizon),
     })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
-    monthLine: monthLineOf(goals, row, evidenceOutcome, day),
+    monthLine: monthLines,
     monthTask: monthItems ? monthTaskOf(goals, monthItems) : {},
     monthTaskCounts: monthItems ? monthTaskCountsOf(monthItems) : {},
-    planNotice: isToday ? planNoticeOf(goals, row, day) : {},
+    planNotice: isToday ? planNoticeOf(goals.filter((goal) => !holders.has(goal.id)), row, day) : {},
     commitments: row.commitments.map(toCommitmentInfo),
     firstGoalDay: row.first_goal_at ? civilDateInZone(new Date(row.first_goal_at)) : null,
     phases: inEffect.map(toPhaseInfo),

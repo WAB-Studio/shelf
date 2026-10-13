@@ -349,6 +349,8 @@ test("the import review ends the measure row in «búsquedas» for a unit writte
     "# Leer en inglés",
     `horizonte: ${plusDays(120)}`,
     "medida: Consultas al diccionario · searches",
+    "## Meses",
+    `- ${todayInZone().slice(0, 7)} · 10 searches`,
   ].join("\n");
   const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
   try {
@@ -357,10 +359,8 @@ test("the import review ends the measure row in «búsquedas» for a unit writte
     await page.getByLabel(importMessages.textLabel).fill(text);
     await page.getByRole("button", { name: "Leer el plan" }).click();
     await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
-    // The measure row alone: its name is not the unit, so only its end can say «búsquedas».
-    const row = page.locator("label").filter({ hasText: "Consultas al diccionario" }).locator("visible=true");
-    await expect(row).toHaveCount(1);
-    await expect(row).toHaveText(/Consultas al diccionario\s*medida\s*búsquedas$/);
+    // The tree shows the unit where a figure carries it: the month's amount button.
+    await expect(page.getByRole("button", { name: /10 búsquedas/ })).toHaveText("10 búsquedas");
     await expect(page.getByText("searches", { exact: true })).toHaveCount(0);
   } finally {
     await context.close();

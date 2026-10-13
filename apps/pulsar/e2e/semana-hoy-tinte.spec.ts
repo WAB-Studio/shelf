@@ -29,6 +29,8 @@ const today = todayInZone();
 const mondayToday = (civilDateToDate(today).getUTCDay() + 6) % 7 === 0;
 // A day of today's own week that is not today.
 const otherDay = mondayToday ? shift(today, 1) : shift(today, -1);
+// A day to come draws no evidence, so on a Monday the week has no other day with one: today's own mark stands in.
+const evidenceDay = mondayToday ? today : otherDay;
 
 const stamp = Date.now();
 const EVIDENCE = `Buscar palabras ${stamp}`;
@@ -190,7 +192,7 @@ for (const scheme of ["light", "dark"] as const) {
     const { context, page } = await open(browser, baseURL, person, 1440, scheme);
     try {
       await page.goto("/semana");
-      const evidence = markOf(page, EVIDENCE, otherDay);
+      const evidence = markOf(page, EVIDENCE, evidenceDay);
       await expect(evidence).toHaveAttribute("data-state", "evidence");
       const token = await tokens(page);
       const dot = await evidence.evaluate(paint);

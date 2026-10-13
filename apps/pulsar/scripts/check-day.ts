@@ -2399,6 +2399,51 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runEvidenceInfoAndFirstGoalDayCheck();
   await runWeekAcrossMonthEvidenceCheck();
   await runSharedMonthLineCheck();
+  await runAiZeroPartCheck();
+}
+
+// RP-76: a share of the rhythm that rounds to 0 stays 0 for the AI; only the
+// screen turns it into «sin monto». 20 a month opened on a month's last day
+// plans floor(20 × 1 / 31) = 0.
+async function runAiZeroPartCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { shapeDay } = await import("@/lib/mcp/shape");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runAiZeroPartCheck: no verified session");
+  const userId = person.id;
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goal: string | null = null;
+  try {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${userId}, 'ai-zero-part probe', '2099-12-31'::date, 'kilometers', 'kilometers', 20,
+              '2010-10-31T15:00:00Z'::timestamptz)
+      returning id
+    `;
+    goal = row.id;
+    const loaded = await loadDay("2010-10-31");
+    assert(
+      "the month line keeps a share that rounds to 0 as 0, not null",
+      loaded.monthLine[goal]?.planned === 0,
+      `monthLine = ${JSON.stringify(loaded.monthLine[goal])}`,
+    );
+    assert(
+      "the line says the 0 is not a budget the person typed",
+      loaded.monthLine[goal]?.ownBudget === false,
+      `monthLine = ${JSON.stringify(loaded.monthLine[goal])}`,
+    );
+    const shaped = shapeDay(loaded).goals.find((g) => g.id === goal);
+    assert(
+      "get_today reads planned 0 for that goal, not null",
+      shaped?.thisMonth?.planned?.value === 0,
+      `thisMonth = ${JSON.stringify(shaped?.thisMonth)}`,
+    );
+  } finally {
+    if (goal) await db`delete from goals.goals where id = ${goal} and user_id = ${userId}`;
+    await db.end();
+  }
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the

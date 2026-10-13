@@ -17,6 +17,8 @@ export const createGoalSchema = z.object({
     .min(1, { error: "plan.errors.nameEmpty" })
     .max(GOAL_NAME_MAX, { error: "plan.errors.nameTooLong" }),
   horizon: civilDate("plan.errors.horizonInvalid"),
+  // The goal it opens inside (RP-78); absent for a goal on its own.
+  parentId: z.uuid({ error: "plan.errors.goalInvalid" }).optional(),
 });
 
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
@@ -200,3 +202,25 @@ export const reopenGoalSchema = z.object({
 });
 
 export type ReopenGoalInput = z.infer<typeof reopenGoalSchema>;
+
+// RP-79: a goal goes under another or back to the top (`null`).
+export const moveGoalSchema = z.object({
+  goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
+  parentId: z.uuid({ error: "plan.errors.goalInvalid" }).nullable(),
+});
+
+export type MoveGoalInput = z.infer<typeof moveGoalSchema>;
+
+export const GOAL_NOTE_MAX = 100000;
+
+// RP-95: plain text; blank is no note. Mirrors `goals_note_shape`.
+export const setGoalNoteSchema = z.object({
+  goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
+  note: z
+    .string({ error: "plan.errors.notFound" })
+    .trim()
+    .max(GOAL_NOTE_MAX, { error: "tree.errors.noteTooLong" })
+    .transform((value) => (value === "" ? null : value)),
+});
+
+export type SetGoalNoteInput = z.input<typeof setGoalNoteSchema>;

@@ -38,7 +38,8 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
   const currentIndex = goal.months.findIndex((row) => row.current);
   const openIndex = goal.months.findIndex((row) => row.month === open);
 
-  if (!goal.measureUnit || !goal.measureName) {
+  // A holder measures through its goals: its own measure name may be empty (RP-80).
+  if (!goal.measureUnit || (!goal.measureName && !goal.holdsGoals)) {
     const bare: TableRow[] = goal.months.map((row) => {
       const count = planMonthList(goal.plan, row.month).length;
       const tasks = (
@@ -157,11 +158,11 @@ export async function MonthsScreen({
   const t = await getTranslations();
   const open = goal.archivedAt === null && goal.endedOn === null;
   const target = goal.months.find((row) => row.current) ?? goal.months[0];
-  const empty = Boolean(goal.measureUnit && goal.measureName) && goal.budgets.length === 0 && goal.rhythm === null;
+  const empty = !goal.holdsGoals && Boolean(goal.measureUnit && goal.measureName) && goal.budgets.length === 0 && goal.rhythm === null;
   const planHref = (month: string) => `/metas/${goal.id}/meses?planear=${month.slice(0, 7)}`;
 
   const unit = goal.measureUnit;
-  const planned = open && unit
+  const planned = open && unit && !goal.holdsGoals
     ? goal.months.find((row) => !row.past && row.month.slice(0, 7) === planning)
     : undefined;
 
@@ -171,6 +172,11 @@ export async function MonthsScreen({
         title={t("month.months.title")}
         back={{ href: `/metas/${goal.id}`, place: goal.name }}
       />
+      {goal.holdsGoals ? (
+        <Text as="p" variant="sentence">
+          {t("tree.holder.monthsSentence")}
+        </Text>
+      ) : null}
       {empty && open && target ? (
         <>
           <Text as="p" variant="sentence">

@@ -3,7 +3,6 @@ import test from "node:test";
 
 import { dayBefore } from "@/lib/day/weeks";
 
-import { carryShare } from "./carry";
 import { fillPlan, type PlanInput, type PlanTask } from "./roadmap";
 import { doneIn, openMonthsOf, planMonthList, planMonthOf, planMoved, planShare, rhythmToMeet } from "./roadmap-read";
 
@@ -109,10 +108,9 @@ function october(): PlanTask[] {
   ];
 }
 
-test("planShare: a closed month of fixed tasks equals carryShare", () => {
+test("planShare: a closed month of fixed tasks reads its planned and carried hours", () => {
   const tasks = october();
-  assert.deepEqual(planShare(input(tasks, { today: "2026-11-15" }), OCT), carryShare(tasks, OCT));
-  assert.deepEqual(planShare(input(tasks, { today: "2026-12-05" }), NOV), carryShare(tasks, NOV));
+  assert.deepEqual(planShare(input(tasks, { today: "2026-12-05" }), NOV), { carried: 42, planned: 42 });
   assert.deepEqual(planShare(input(tasks, { today: "2026-11-15" }), OCT), { carried: 12, planned: 35 });
 });
 
@@ -169,7 +167,6 @@ test("planShare: a task done early still counts in its own month and carries not
     task("left", { plannedMonth: OCT, estimate: 4 }),
   ];
   const share = planShare(input(tasks, { today: "2026-11-15" }), OCT);
-  assert.deepEqual(share, carryShare(tasks, OCT));
   assert.deepEqual(share, { carried: 4, planned: 9 });
 });
 
@@ -187,7 +184,6 @@ test("planShare: a task created today and fixed to a closed month counts in that
   ];
   const share = planShare(input(tasks, { today: "2026-10-20" }), SEP);
   assert.deepEqual(share, { carried: 4, planned: 10 });
-  assert.deepEqual(share, carryShare(tasks, SEP));
 });
 
 test("planMoved: a goal opened in the closed month still reads its notice", () => {

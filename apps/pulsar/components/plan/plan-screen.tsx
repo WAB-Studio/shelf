@@ -1,7 +1,9 @@
+import { ChevronRight } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { AddTask, PlanEnd } from "@/components/plan/plan-end";
+import { TaskRow } from "@/components/month/task-row";
 import { PlanMonths } from "@/components/plan/plan-months";
 import { RhythmForm } from "@/components/plan/rhythm-form";
 import { RhythmSheet } from "@/components/plan/rhythm-sheet";
@@ -18,10 +20,12 @@ import {
 } from "@/components/ui";
 import { daysBetween } from "@/lib/day/weeks";
 import { releasedPlan } from "@/lib/plan/first-rhythm";
+import { monthName, monthNameWithYear } from "@/lib/plan/month-name";
+import { monthOf } from "@/lib/plan/months";
 import { openMonthsOf, rhythmToMeet } from "@/lib/plan/roadmap-read";
-import { loadGoal } from "@/lib/queries/goal";
+import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
-import { civilDateToDate, civilDateWithYear, dateToCivilDate } from "@/lib/zone";
+import { todayInZone, civilDateToDate, civilDateWithYear, dateToCivilDate } from "@/lib/zone";
 
 // «20 de marzo de 2027»: the lead names the year the plan ends in.
 const dateFormat = new Intl.DateTimeFormat("es-CO", {
@@ -52,6 +56,7 @@ const SHOWN = 3;
 export async function PlanScreen({ goalId, all = false }: { goalId: string; all?: boolean }) {
   const goal = await loadGoal(goalId);
   if (!goal) notFound();
+  if (goal.holdsGoals) return <HolderPlan goal={goal} />;
   // A goal measured in something other than time has no plan (RP-62).
   if (goal.measureUnit !== null && !isTimeUnit(goal.measureUnit)) redirect(`/metas/${goal.id}`);
 
@@ -72,7 +77,10 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
   let late = false;
   if (unit && roadmap.state === "planned" && roadmap.end !== null) {
     const days = daysBetween(roadmap.end, roadmap.lastDay);
-    if (days > 0) lead = t("roadmap.plan.finish", { date: dateLabel(roadmap.end), days });
+    const pending = [...roadmap.months.flatMap((m) => m.items), ...roadmap.unplaced].filter((item) => !item.done);
+    if (pending.length > 0 && pending.every((item) => item.hours === 0)) {
+      lead = t("roadmap.plan.noEstimate", { month: monthNameWithYear(roadmap.months[0]?.month ?? monthOf(roadmap.end)) });
+    } else if (days > 0) lead = t("roadmap.plan.finish", { date: dateLabel(roadmap.end), days });
     else if (days === 0) lead = t("roadmap.plan.finishOnEnd", { date: dateLabel(roadmap.end) });
     else {
       late = true;
@@ -180,6 +188,99 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
           variant={unit && rhythmFormDrawn ? "outline" : "solid"}
         />
       ) : null}
+      <Section as="div">
+        <Separator />
+        <Text as="p" variant="sentence" tone="muted">
+          <TextLink href={`/metas/${goal.id}/meses`}>{t("roadmap.plan.seeMonths")}</TextLink>
+        </Text>
+      </Section>
+    </Page>
+  );
+}
+
+/**
+ * `JerarquiaPorMes`, «El plan» of a goal that holds goals (RP-80): no rhythm of its own, the rhythm of each
+ * goal under it, and its own tasks fixed to their month.
+ */
+async function HolderPlan({ goal }: { goal: GoalView }) {
+  const t = await getTranslations();
+  const units = await getTranslations("units");
+  const words: TimeWords = {
+    h: (h) => units("h", { h }),
+    min: (min) => units("min", { min }),
+    join: (h, min) => units("join", { h, min }),
+  };
+  const thisYear = todayInZone().slice(0, 4);
+  const open = goal.archivedAt === null && goal.endedOn === null;
+  const unit = goal.measureUnit;
+  const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
+
+  // What each goal under it plans from now on: its current month, or the month it begins in.
+  const kids = goal.children.filter((child) => child.archivedAt === null);
+  const rhythmOf = (child: GoalView["children"][number]): string | null => {
+    const first = child.firstPlanned;
+    if (!first || !child.unit) return null;
+    const hours = formatQuantity(first.planned, child.unit, words);
+    const month = monthName(first.month, thisYear);
+    return first.month === monthOf(todayInZone())
+      ? t("tree.holder.inMonth", { hours, month })
+      : t("tree.holder.startsIn", { hours, month });
+  };
+
+  const tasks = goal.tasks.filter((task) => task.parentId === null && task.plannedMonth !== null);
+  const byMonth = [...new Set(tasks.map((task) => (task.plannedMonth as string).slice(0, 7)))].sort();
+  const openMonths = openMonthsOf(goal.plan);
+  const sheetOf = (task: GoalView["tasks"][number]) => ({
+    goalId: goal.id,
+    goalName: goal.name,
+    unit,
+    estimate: task.estimate,
+    planMonth: null,
+    months: openMonths,
+    canDelete: task.doneOn === null,
+    fixedMonth: task.plannedMonth?.slice(0, 7) ?? null,
+  });
+
+  return (
+    <Page width="column">
+      <ScreenHeader title={t("roadmap.plan.title")} back={{ href: `/metas/${goal.id}`, place: goal.name }} />
+      <Text as="p" variant="sentence">
+        {t("tree.holder.planSentence")}
+      </Text>
+      {kids.length > 0 ? (
+        <Section label={t("tree.holder.rhythmLabel")}>
+          {kids.map((child) => (
+            <Row
+              key={child.id}
+              href={`/metas/${child.id}`}
+              name={child.name}
+              meta={rhythmOf(child) ?? undefined}
+              trailing={<ChevronRight size={20} aria-hidden />}
+            />
+          ))}
+        </Section>
+      ) : null}
+      {byMonth.map((month) => (
+        <Section key={month} label={t("tree.holder.tasksLabel", { month: monthName(`${month}-01`, month.slice(0, 4)), year: month.slice(0, 4) })}>
+          <Flex direction="column">
+            {tasks
+              .filter((task) => (task.plannedMonth as string).startsWith(month))
+              .map((task) => (
+                <TaskRow
+                  key={task.id}
+                  oneOffId={task.id}
+                  name={task.name}
+                  factId={task.factId ?? null}
+                  done={task.doneOn !== null}
+                  trailing={unit && task.estimate ? say(task.estimate) : undefined}
+                  note={task.note}
+                  sheet={sheetOf(task)}
+                />
+              ))}
+          </Flex>
+        </Section>
+      ))}
+      {open ? <AddTask goalId={goal.id} goalName={goal.name} unit={unit} months={openMonths} variant="outline" /> : null}
       <Section as="div">
         <Separator />
         <Text as="p" variant="sentence" tone="muted">

@@ -18,7 +18,7 @@ const HORIZON = `${shift(0).year + 1}-${shift(0).month}-17`;
 
 const CUT_LINE = "Arréglala y vuelve a leer: las líneas de abajo no se pudieron leer.";
 const MEASURE_SENTENCE = "La medida va como «medida: nombre · unidad».";
-const FIRST_LINE_SENTENCE = "La primera línea va como «pulsar · plantilla 1».";
+const FIRST_LINE_SENTENCE = "La primera línea va como «pulsar · plantilla 2».";
 
 const MONTH_BAD = `- ${M2} · 8 h`;
 const SERIES_BAD = "- Series · martes · 30 min";
@@ -146,13 +146,13 @@ test.describe("a broken header cuts the reading (board ImportarCabeceraRota)", (
 });
 
 test.describe("a wrong first line is refused on the screen (board ImportarPrimeraLinea)", () => {
-  test("«pulsar · plantilla 2»: one row on line 1 and the grey cut line", async ({ person, browser, baseURL }) => {
+  test("«pulsar · plantilla 3»: one row on line 1 and the grey cut line", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, SIZES[0].viewport, async (page) => {
-      await paste(page, plan(HEAD).replace("pulsar · plantilla 1", "pulsar · plantilla 2"));
+      await paste(page, plan(HEAD).replace("pulsar · plantilla 1", "pulsar · plantilla 3"));
       const alert = alertOf(page);
       await expect(alert.getByText("1 línea por corregir", { exact: true })).toBeVisible();
       const whole = (await alert.textContent()) ?? "";
-      expect(whole).toContain(`Línea 1: «pulsar · plantilla 2». ${FIRST_LINE_SENTENCE}`);
+      expect(whole).toContain(`Línea 1: «pulsar · plantilla 3». ${FIRST_LINE_SENTENCE}`);
       expect(whole.match(/Línea \d+:/g)).toHaveLength(1);
       await expect(alert.getByText(CUT_LINE, { exact: true })).toBeVisible();
       await expect(page).toHaveURL(/\/metas\/importar$/);

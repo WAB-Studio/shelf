@@ -64,7 +64,7 @@
 .unit {
   font-size: var(--pulsar-text-unit-size);
   font-weight: 400;
-  color: var(--pulsar-quiet);
+  color: var(--pulsar-muted);
 }
 
 /* The dates under «semana N»: two lines in one label, 3px apart. */
@@ -242,12 +242,12 @@
 }
 
 /* The measure's unit beside its name, the way the phone sets it beside the
-   figure: quiet, and not folded to capitals. */
+   figure: muted, and not folded to capitals. */
 .headerUnit {
   margin-inline-start: 8px;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--pulsar-quiet);
+  color: var(--pulsar-muted);
 }
 
 .labelWidth {

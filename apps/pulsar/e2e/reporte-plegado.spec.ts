@@ -581,7 +581,8 @@ test.describe("the report's week names the days the goal does not fill", () => {
     const seeded = await seedPartial(db, person, { opens: false, ends: true });
     try {
       const text = await weekLine(browser, baseURL!, person, seeded.name);
-      expect(text).toMatch(new RegExp(`^Esta semana, hasta el ${DAY_NAMES[weekday]}: 1 h 30 min de .+\\.$`));
+      // On a Monday the goal's last day is also the week's first: one day, said as «el lunes».
+      expect(text).toMatch(new RegExp(`^Esta semana, ${untilDay()}: 1 h 30 min de .+\\.$`));
     } finally {
       await remove(db, person, [seeded.goalId]);
     }
@@ -650,6 +651,8 @@ test.describe("the report's week names the days the goal does not fill", () => {
 // Saturday and Sunday cannot show the difference.
 const weekday = (civilDateToDate(todayInZone()).getUTCDay() + 6) % 7;
 const DAY_NAMES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+// A goal ending today: «hasta el <día>», or «el lunes» alone when today opens the week.
+const untilDay = () => (weekday === 0 ? `el ${DAY_NAMES[0]}` : `hasta el ${DAY_NAMES[weekday]}`);
 
 test("a goal ending this week counts its planned figure up to its last day, not to Sunday (RP-58)", async ({
   person,
@@ -672,10 +675,10 @@ test("a goal ending this week counts its planned figure up to its last day, not 
     const amounts = Object.fromEntries(seeded.months.map((month) => [month, 720]));
     const planned = plannedByRule(amounts, seeded.openedOn, seeded.horizon);
     expect(planned).toBeLessThan(plannedByRule(amounts, seeded.openedOn, "9999-12-31"));
-    const line = main.getByText(/^Esta semana, hasta el /).locator("visible=true");
+    const line = main.getByText(new RegExp(`^Esta semana, ${untilDay()}:`)).locator("visible=true");
     await expect(line).toHaveCount(1);
     const text = ((await line.textContent()) ?? "").replace(/\s+/g, " ").trim();
-    expect(text).toBe(`Esta semana, hasta el ${DAY_NAMES[weekday]}: 1 h 30 min de ${minutesText(planned)}.`);
+    expect(text).toBe(`Esta semana, ${untilDay()}: 1 h 30 min de ${minutesText(planned)}.`);
   } finally {
     await context.close();
     await remove(db, person, [seeded.goalId]);

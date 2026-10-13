@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
 import { Button, Face, Figure, Flex, Page, Panel, Section, SectionLabel, Split, Text, TextLink } from "@/components/ui";
@@ -19,6 +19,8 @@ import { EmptyDay } from "./empty-day";
 import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
 import type { SourceKey } from "@/i18n/translator";
+import { screenPlanned } from "@/lib/plan/screen-planned";
+import type { DayMonthLine } from "@/lib/queries/day";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { NewOneOff } from "./new-one-off";
 import { MonthTaskLine } from "./month-task-line";
@@ -38,6 +40,11 @@ export function shiftCivilDay(day: string, days: number): string {
 // day before it, and its own screen draws no step back from it.
 export function oldestPastDay(today: string): string {
   return shiftCivilDay(today, -PAST_DAY_LIMIT);
+}
+
+// RP-76: the query keeps the 0; the screen reads it as a month with no amount.
+function screenPlannedOf(line: DayMonthLine | undefined): number | null {
+  return line === undefined ? null : screenPlanned(line.planned, line.ownBudget);
 }
 
 // Monday first, as `day.weekdayLong` lists them; `getUTCDay` is 0 for Sunday.
@@ -225,169 +232,137 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     .filter(({ rows, met }) => !past || rows.length > 0 || met.length > 0)
     .sort((a, b) => Number(!a.asks) - Number(!b.asks));
 
-  // One block, so the past day's two columns never split the title from its line.
-  const goalsMain = past && sections.length === 0 ? (
-    <Flex direction="column" gap="2">
-      <Text as="p" variant="title">
-        {t("day.past.nothingTitle")}
-      </Text>
-      {goals.length === 0 && laterGoal ? (
-        <Text as="p" variant="sentence">
-          {dayPhrase("day.past.startedOn", laterGoal.openedOn, t, { goal: laterGoal.name })}
-        </Text>
-      ) : null}
-    </Flex>
-  ) : lastEnded ? (
-    <Panel as="div">
-      {oneOffs.length === 0 ? (
-        <Text as="p" variant="title" plainWide>
-          {t("day.allEnded.title")}
-        </Text>
-      ) : null}
-      <Text as="p">
-        {t("day.allEnded.body", {
-          goal: lastEnded.name,
-          date: dateLabel(shiftCivilDay(lastEnded.horizon, -1), t),
-          year: shiftCivilDay(lastEnded.horizon, -1).slice(0, 4),
-        })}
-      </Text>
-      <Button asChild block>
-        <Link href="/metas">{t("day.allEnded.toGoals")}</Link>
-      </Button>
-      <Button asChild block variant="outline">
-        <Link href="/metas/nueva">{t("day.allEnded.newGoal")}</Link>
-      </Button>
-    </Panel>
-  ) : goals.length === 0 ? (
-    <EmptyDay />
-  ) : (
-    <>
-      {sections.map(({ goal, rows, met, asks }) => {
-        const goalPhases = phases.filter((phase) => phase.goalId === goal.id);
-        const goalPhase = phaseOn(goalPhases, day);
+  type SectionItem = (typeof sections)[number];
 
-        // What «hechos» counts: every row that asks that day.
-        const asked = rows.length;
-
-        const section = (
-          <Panel as="div" key={goal.id}>
-            <Section
-              label={
-                past && asked > 0
-                  ? t("day.past.asked", {
-                      goal: goal.name,
-                      count: (t.raw("day.past.askedWords") as string[])[asked] ?? asked,
-                    })
-                  : goal.name
+  // `naming` is the goal a row of a large or a small goal names; the
+  // general's own rows and a loose goal's name nothing.
+  function itemBody(item: SectionItem, naming: string | undefined) {
+    const { goal, rows, met } = item;
+    const goalPhase = phaseOn(
+      phases.filter((phase) => phase.goalId === goal.id),
+      day,
+    );
+    return (
+      <>
+        {goalPhase ? (
+          <Text as="p" variant="sentence">
+            {phaseLine((key, values) => t(key, values), goalPhase.name, phasePositions[goalPhase.id])}
+          </Text>
+        ) : null}
+        {rows.map(({ commitment, slot }) => {
+          const logged = factsByCommitment[commitment.id];
+          return (
+            <DayRow
+              key={commitment.id}
+              commitmentId={commitment.id}
+              name={commitment.name}
+              goalName={naming}
+              kind={commitment.kind}
+              markState={
+                slot.satisfiedBy === "evidence"
+                  ? "evidence"
+                  : slot.satisfied
+                    ? "declared"
+                    : slot.partial
+                      ? "partial"
+                      : "empty"
               }
-            >
-              <Flex direction="column">
-                {goalPhase ? (
-                  <Text as="p" variant="sentence">
-                    {phaseLine((key, values) => t(key, values), goalPhase.name, phasePositions[goalPhase.id])}
-                  </Text>
-                ) : null}
-                {rows.map(({ commitment, slot }) => {
-                  const logged = factsByCommitment[commitment.id];
-                  return (
-                    <DayRow
-                      key={commitment.id}
-                      commitmentId={commitment.id}
-                      name={commitment.name}
-                      kind={commitment.kind}
-                      markState={
+              evidence={
+                commitment.evidence
+                  ? {
+                      asks:
+                        evidence === "unreadable"
+                          ? t("day.row.unreadSourceAsks", { asks: evidenceAmount(commitment.evidence, commitment.evidence.threshold) })
+                          : evidenceAmount(commitment.evidence, commitment.evidence.threshold),
+                      got:
                         slot.satisfiedBy === "evidence"
-                          ? "evidence"
-                          : slot.satisfied
-                            ? "declared"
-                            : slot.partial
-                              ? "partial"
-                              : "empty"
-                      }
-                      evidence={
-                        commitment.evidence
-                          ? {
-                              asks:
-                                evidence === "unreadable"
-                                  ? t("day.row.unreadSourceAsks", { asks: evidenceAmount(commitment.evidence, commitment.evidence.threshold) })
-                                  : evidenceAmount(commitment.evidence, commitment.evidence.threshold),
-                              got:
-                                slot.satisfiedBy === "evidence"
-                                  ? evidenceAmount(commitment.evidence, slot.quantity ?? 0)
-                                  : null,
-                              source: slot.satisfiedBy === "evidence" ? t(commitment.evidence.labelKey) : null,
-                            }
-                          : undefined
-                      }
-                      quiet={evidence === "unreadable" && Boolean(commitment.evidence)}
-                      target={commitment.target}
-                      unit={commitment.unit}
-                      cadence={commitment.cadence}
-                      periodDone={periodDone[commitment.id]}
-                      factId={logged?.factId}
-                      loggedQuantity={logged?.quantity ?? null}
-                      note={logged?.note ?? null}
-                      day={past ? day : undefined}
-                      writtenLabel={
-                        logged && logged.writtenOn !== day
-                          ? dayPhrase("day.past.writtenOn", logged.writtenOn, t)
-                          : undefined
-                      }
-                      writtenTime={
-                        logged && slot.satisfiedBy !== "evidence" && (slot.satisfied || commitment.kind === "quantity")
-                          ? timeInZone(logged.writtenAt)
-                          : undefined
-                      }
-                    />
-                  );
-                })}
-                {met.map((commitment) => {
-                  const logged = factsByCommitment[commitment.id];
-                  return (
-                    <DayRow
-                      key={commitment.id}
-                      commitmentId={commitment.id}
-                      name={commitment.name}
-                      kind={commitment.kind}
-                      markState="declared"
-                      quiet
-                      target={commitment.target}
-                      unit={commitment.unit}
-                      cadence={commitment.cadence}
-                      periodDone={periodDone[commitment.id]}
-                      factId={logged?.factId}
-                      loggedQuantity={logged?.quantity ?? null}
-                      note={logged?.note ?? null}
-                      day={past ? day : undefined}
-                    />
-                  );
-                })}
-                {past ? null : (
-                  <>
-                    {carriedFirst.filter((oneOff) => oneOff.goalId === goal.id).map(oneOffRow)}
-                    <NewOneOff goalId={goal.id} daylessCount={daylessCount} goalName={goal.name} />
-                  </>
-                )}
-              </Flex>
-            </Section>
-          </Panel>
-        );
-        // A goal that asks nothing today has no section on the phone; its
-        // «este mes» line is drawn elsewhere (`HoyTelefonoSinPedido.dc.html`).
-        return asks ? section : <Face on="desktop" key={goal.id}>{section}</Face>;
-      })}
-    </>
+                          ? evidenceAmount(commitment.evidence, slot.quantity ?? 0)
+                          : null,
+                      source: slot.satisfiedBy === "evidence" ? t(commitment.evidence.labelKey) : null,
+                    }
+                  : undefined
+              }
+              quiet={evidence === "unreadable" && Boolean(commitment.evidence)}
+              target={commitment.target}
+              unit={commitment.unit}
+              cadence={commitment.cadence}
+              periodDone={periodDone[commitment.id]}
+              factId={logged?.factId}
+              loggedQuantity={logged?.quantity ?? null}
+              note={logged?.note ?? null}
+              day={past ? day : undefined}
+              writtenLabel={
+                logged && logged.writtenOn !== day
+                  ? dayPhrase("day.past.writtenOn", logged.writtenOn, t)
+                  : undefined
+              }
+              writtenTime={
+                logged && slot.satisfiedBy !== "evidence" && (slot.satisfied || commitment.kind === "quantity")
+                  ? timeInZone(logged.writtenAt)
+                  : undefined
+              }
+            />
+          );
+        })}
+        {met.map((commitment) => {
+          const logged = factsByCommitment[commitment.id];
+          return (
+            <DayRow
+              key={commitment.id}
+              commitmentId={commitment.id}
+              name={commitment.name}
+              goalName={naming}
+              kind={commitment.kind}
+              markState="declared"
+              quiet
+              target={commitment.target}
+              unit={commitment.unit}
+              cadence={commitment.cadence}
+              periodDone={periodDone[commitment.id]}
+              factId={logged?.factId}
+              loggedQuantity={logged?.quantity ?? null}
+              note={logged?.note ?? null}
+              day={past ? day : undefined}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  // Groups in tree order; the ones that ask today first.
+  const groupBlocks = loaded.groups
+    .map((group) => {
+      const items = group.goalIds
+        .map((id) => sections.find((item) => item.goal.id === id))
+        .filter((item): item is SectionItem => item !== undefined);
+      const rootGoal = openGoals.find((goal) => goal.id === group.rootId);
+      return {
+        rootId: group.rootId,
+        items,
+        asks: items.some((item) => item.asks),
+        tree: rootGoal?.level != null,
+      };
+    })
+    .filter((block) => block.items.length > 0)
+    .sort((a, b) => Number(!a.asks) - Number(!b.asks));
+  // A goal whose month line stands in its asking block; the rest keep the
+  // flat «este mes» lines below.
+  const embedded = new Set(
+    groupBlocks.filter((block) => block.tree && block.asks && !past).flatMap((block) => block.items.map((item) => item.goal.id)),
   );
 
   // One card per open goal that has a measure; the rest get one only for «este mes».
-  const figures = goals.filter((goal) => goal.measureName !== null && weekMeasure[goal.id] !== undefined);
+  const figures = goals.filter(
+    (goal) => goal.measureName !== null && weekMeasure[goal.id] !== undefined && !embedded.has(goal.id),
+  );
 
   // Drawn inside `goalless`, so only on today (RP-28), never on a past day.
   // A goal with no amount and no task this month draws nothing; one with
   // tasks draws its line measured or not.
   const monthGoals = goals.filter(
     (goal) =>
-      (goal.measureUnit !== null && loaded.monthLine[goal.id]?.planned != null) ||
+      (goal.measureUnit !== null && screenPlannedOf(loaded.monthLine[goal.id]) !== null) ||
       loaded.monthTaskCounts[goal.id] !== undefined,
   );
 
@@ -395,9 +370,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   // «de» planned, and from the 20th the pace in ink, never an alarm.
   const monthLines = (goal: (typeof goals)[number]) => {
     const line = loaded.monthLine[goal.id];
-    const planned = line?.planned ?? null;
+    const planned = screenPlannedOf(line);
     const counts = loaded.monthTaskCounts[goal.id];
-    const task = loaded.monthTask[goal.id];
     return (
       <>
         {line === undefined || planned === null ? (
@@ -436,26 +410,129 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             </Text>
           </Flex>
         )}
-        {task ? (
-          <MonthTaskLine
-            key={task.id}
-            oneOffId={task.id}
-            name={task.name}
-            estimate={task.estimate}
-            unit={goal.measureUnit ?? ""}
-            parentName={task.parentName}
-            part={task.part}
-            note={task.note}
-            noteEyebrow={noteEyebrow(goal.id)}
-          />
-        ) : null}
+        {taskLine(goal)}
       </>
     );
   };
 
+  const taskLine = (goal: (typeof goals)[number]) => {
+    const task = loaded.monthTask[goal.id];
+    return task ? (
+      <MonthTaskLine
+        key={task.id}
+        oneOffId={task.id}
+        name={task.name}
+        estimate={task.estimate}
+        unit={goal.measureUnit ?? ""}
+        parentName={task.parentName}
+        part={task.part}
+        note={task.note}
+        noteEyebrow={noteEyebrow(goal.id)}
+      />
+    ) : null;
+  };
+
+  // A goal's month inside its group's block: the month and the sum for the
+  // general, the goal's name above its own line for a large or a small one.
+  const embeddedMonth = (goal: (typeof goals)[number], naming: boolean) => {
+    if (!monthGoals.includes(goal)) return null;
+    const line = loaded.monthLine[goal.id];
+    const planned = screenPlannedOf(line);
+    return (
+      <Flex key={`month-${goal.id}`} direction="column" gap="2">
+        {naming ? (
+          <Text as="p" variant="name">
+            {goal.name}
+          </Text>
+        ) : null}
+        {line !== undefined && planned !== null ? (
+          <>
+            <Text as="p" variant="sentence">
+              {(t.raw("day.monthLong") as string[])[Number(day.slice(5, 7)) - 1]} ·{" "}
+              <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" bare />{" "}
+              {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
+            </Text>
+            {taskLine(goal)}
+          </>
+        ) : (
+          monthLines(goal)
+        )}
+      </Flex>
+    );
+  };
+
+  // One block, so the past day's two columns never split the title from its line.
+  const goalsMain = past && sections.length === 0 ? (
+    <Flex direction="column" gap="2">
+      <Text as="p" variant="title">
+        {t("day.past.nothingTitle")}
+      </Text>
+      {goals.length === 0 && laterGoal ? (
+        <Text as="p" variant="sentence">
+          {dayPhrase("day.past.startedOn", laterGoal.openedOn, t, { goal: laterGoal.name })}
+        </Text>
+      ) : null}
+    </Flex>
+  ) : lastEnded ? (
+    <Panel as="div">
+      {oneOffs.length === 0 ? (
+        <Text as="p" variant="title" plainWide>
+          {t("day.allEnded.title")}
+        </Text>
+      ) : null}
+      <Text as="p">
+        {t("day.allEnded.body", {
+          goal: lastEnded.name,
+          date: dateLabel(shiftCivilDay(lastEnded.horizon, -1), t),
+          year: shiftCivilDay(lastEnded.horizon, -1).slice(0, 4),
+        })}
+      </Text>
+      <Button asChild block>
+        <Link href="/metas">{t("day.allEnded.toGoals")}</Link>
+      </Button>
+      <Button asChild block variant="outline">
+        <Link href="/metas/nueva">{t("day.allEnded.newGoal")}</Link>
+      </Button>
+    </Panel>
+  ) : goals.length === 0 ? (
+    <EmptyDay />
+  ) : (
+    <>
+      {groupBlocks.map(({ rootId, items, asks, tree }) => {
+        const root = items[0].goal.id === rootId ? items[0].goal : openGoals.find((goal) => goal.id === rootId);
+        const asked = items.reduce((total, item) => total + item.rows.length, 0);
+        const label =
+          past && asked > 0
+            ? t("day.past.asked", { goal: root?.name ?? "", count: (t.raw("day.past.askedWords") as string[])[asked] ?? asked })
+            : (root?.name ?? "");
+        const block = (
+          <Panel as="div" key={rootId}>
+            <Section label={label}>
+              <Flex direction="column">
+                {tree && root && !past ? embeddedMonth(root, false) : null}
+                {items.map((item) => (
+                  <Fragment key={item.goal.id}>
+                    {itemBody(item, tree && item.goal.id !== rootId ? item.goal.name : undefined)}
+                    {past ? null : carriedFirst.filter((oneOff) => oneOff.goalId === item.goal.id).map(oneOffRow)}
+                    {tree && !past && item.goal.id !== rootId ? embeddedMonth(item.goal, true) : null}
+                  </Fragment>
+                ))}
+                {past || !root ? null : <NewOneOff goalId={root.id} daylessCount={daylessCount} goalName={root.name} />}
+              </Flex>
+            </Section>
+          </Panel>
+        );
+        // A group that asks nothing today has no block on the phone; its
+        // «este mes» line is drawn elsewhere (`HoyTelefonoSinPedido.dc.html`).
+        return asks ? block : <Face on="desktop" key={rootId}>{block}</Face>;
+      })}
+    </>
+  );
+
   // A one-off belonging to nothing (RP-20) has no goal section to draw
   // under, so it gets a group of its own — always on screen, even with
   // no goal open yet, because RP-19 asks for no goal behind it either.
+  const phoneMonthGoals = monthGoals.filter((goal) => !embedded.has(goal.id));
   const goalless = past ? undefined : (
     <>
       {figures.map((goal) => (
@@ -477,7 +554,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         </Panel>
       ))}
       {monthGoals
-        .filter((goal) => !figures.includes(goal))
+        .filter((goal) => !figures.includes(goal) && !embedded.has(goal.id))
         .map((goal) => (
           <Panel as="div" key={goal.id}>
             <Face on="desktop">
@@ -488,12 +565,12 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             </Face>
           </Panel>
         ))}
-      {monthGoals.length > 0 ? (
+      {phoneMonthGoals.length > 0 ? (
         <Face on="phone">
           <Panel as="div">
             <Section label={t("day.monthLine.title")}>
               <Flex direction="column" gap="6">
-                {monthGoals.map((goal) => (
+                {phoneMonthGoals.map((goal) => (
                   <Flex key={goal.id} direction="column" gap="2">
                     <Text as="p" variant="name">
                       {goal.name}

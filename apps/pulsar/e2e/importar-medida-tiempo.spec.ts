@@ -3,6 +3,7 @@ import type { Browser, Page } from "@playwright/test";
 import messages from "../messages/es/import.json";
 import { test, expect, settled as pageSettled } from "./fixtures";
 import { todayInZone } from "../lib/zone";
+import { movedExample } from "./importar-plan";
 
 // RP-35, RP-66: the review names a time measure «horas y minutos», whatever unit the person wrote.
 const MEASURE_LINE = "medida: horas de estudio · minutos";
@@ -16,14 +17,7 @@ function shift(by: number) {
 
 // The catalogue's example, its dates moved to the person's now.
 function template(measure: string): string {
-  const first = `${shift(0).year}-${shift(0).month}`;
-  const second = `${shift(1).year}-${shift(1).month}`;
-  const horizon = `${shift(0).year + 1}-${shift(0).month}-01`;
-  const text = messages.template.example
-    .replace("2027-10-01", horizon)
-    .replace("2026-10-01 a 2026-12-31", `${first}-01 a ${first}-28`)
-    .replaceAll("2026-10", first)
-    .replaceAll("2026-11", second);
+  const text = movedExample();
   if (!text.includes(MEASURE_LINE)) throw new Error("the template example carries no `medida:` line");
   return text.replace(MEASURE_LINE, measure);
 }
@@ -48,38 +42,26 @@ async function asPerson({ person, browser, baseURL }: Fixtures, run: (page: Page
   }
 }
 
-// A second goal beside the template's, whose measure is not time.
-function withKmGoal(): string {
-  const horizon = `${shift(0).year + 1}-${shift(0).month}-01`;
-  return `${template(MEASURE_LINE)}\n\n# Correr 10K\nhorizonte: ${horizon}\nmedida: distancia · km`;
-}
+const monthName = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(shift(0).year, Number(shift(0).month) - 1, 1)));
+// A month's amount button: named by its month and its figure, whatever the unit the plan wrote.
+const monthButton = (page: Page, amount: string) => page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${monthName}.*, ${amount}$`, "i") });
 
-const card = (page: Page, name = "IA aplicada") => page.getByRole("region", { name });
-
-test.describe("the review names a time measure «horas y minutos» (RP-35, RP-66)", () => {
-  test("a measure written in hours reads «horas y minutos», never «minutos»", async ({ person, browser, baseURL }) => {
+test.describe("a time measure shows as hours and minutes, never as its unit (RP-35, RP-66)", () => {
+  test("a measure written in hours reads «11 h» on its month (the sum of its tasks), with no measure row", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, template("medida: horas de estudio · horas"));
-      await expect(card(page).getByText("horas de estudio", { exact: true })).toBeVisible();
-      await expect(card(page).getByText(TIME_WORDS, { exact: true })).toBeVisible();
-      await expect(card(page).getByText("minutos", { exact: true })).toHaveCount(0);
+      await expect(monthButton(page, "11 h")).toBeVisible();
+      await expect(monthButton(page, "11 h")).toHaveText("11 h");
+      await expect(page.getByText(TIME_WORDS, { exact: true })).toHaveCount(0);
+      await expect(page.getByText("minutos", { exact: true })).toHaveCount(0);
     });
   });
 
-  test("a measure written in minutes reads «horas y minutos»", async ({ person, browser, baseURL }) => {
+  test("a measure written in minutes reads «11 h» too", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, template(MEASURE_LINE));
-      await expect(card(page).getByText(TIME_WORDS, { exact: true })).toBeVisible();
-      await expect(card(page).getByText("minutos", { exact: true })).toHaveCount(0);
-    });
-  });
-
-  test("a measure in km keeps «km»", async ({ person, browser, baseURL }) => {
-    await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, withKmGoal());
-      await expect(card(page, "Correr 10K").getByText("distancia", { exact: true })).toBeVisible();
-      await expect(card(page, "Correr 10K").getByText("km", { exact: true })).toBeVisible();
-      await expect(card(page, "Correr 10K").getByText(TIME_WORDS, { exact: true })).toHaveCount(0);
+      await expect(monthButton(page, "11 h")).toHaveText("11 h");
+      await expect(page.getByText("minutos", { exact: true })).toHaveCount(0);
     });
   });
 });
@@ -92,7 +74,8 @@ test.describe("a month's amount in the goal's unit (km)", () => {
   test("«8 km» passes to the review", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, kmPlan("8 km"));
-      await expect(card(page, "Correr 10K")).toBeVisible();
+      await expect(monthButton(page, "8 km")).toHaveText("8 km");
+      await expect(page.getByText(TIME_WORDS, { exact: true })).toHaveCount(0);
     });
   });
 

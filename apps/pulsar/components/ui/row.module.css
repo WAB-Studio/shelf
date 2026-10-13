@@ -118,7 +118,7 @@
 }
 
 /* The rest of a split row: same shape `.row` gave the whole button before
-   it was split in two. */
+   it was split in two. A tree row's link takes it too. */
 .bodyButton {
   display: flex;
   align-items: center;
@@ -132,6 +132,7 @@
   border-radius: 0;
   color: var(--pulsar-ink);
   font: inherit;
+  text-decoration: none;
   text-align: start;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -220,4 +221,46 @@
   display: flex;
   align-items: center;
   flex: none;
+}
+
+/* A row inside a goal of a tree: the row, hairline included, starts in. */
+.level1 {
+  margin-inline-start: 20px;
+  inline-size: calc(100% - 20px);
+}
+
+.level2 {
+  margin-inline-start: 40px;
+  inline-size: calc(100% - 40px);
+}
+
+/* The tree's 20px slot before the name, empty on a leaf. */
+.foldSlot {
+  flex: none;
+  inline-size: 20px;
+}
+
+/* The fold arrow sits in that slot; padding cancelled by negative margin
+   takes its target to 32px wide (RNP-07), stretched to the row's height. */
+.foldButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  flex: none;
+  box-sizing: content-box;
+  inline-size: 20px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  color: var(--pulsar-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.foldButton:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: -2px;
 }

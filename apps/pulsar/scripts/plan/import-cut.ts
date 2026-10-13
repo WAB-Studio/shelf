@@ -146,7 +146,7 @@ async function phasesOf(goalId: string) {
 before(async () => {
   installStubs(loadCookies());
   ({ confirmImport } = await import("@/app/actions/import"));
-  ({ parseTemplate } = await import("@/lib/import/template"));
+  ({ parseTemplate: parseTemplate } = await import("@/lib/import/template"));
   ({ todayInZone } = await import("@/lib/zone"));
   TODAY = todayInZone();
   HORIZON = `${shiftDay(TODAY, 400).slice(0, 7)}-01`;
@@ -193,8 +193,8 @@ test("confirmImport: phases wholly before the goal opens that overlap each other
   const draft = draftOf(goalText("RP-37 cut: pasadas que se cruzan", [`- ${shiftDay(TODAY, 1)} a ${end} · Viva`]));
   const [live] = draft.goals[0].phases;
   draft.goals[0].phases = [
-    { aim: "Pasada A", startsOn: shiftDay(TODAY, -40), endsOn: shiftDay(TODAY, -10) },
-    { aim: "Pasada B", startsOn: shiftDay(TODAY, -30), endsOn: shiftDay(TODAY, -5) },
+    { aim: "Pasada A", startsOn: shiftDay(TODAY, -40), endsOn: shiftDay(TODAY, -10), src: [] },
+    { aim: "Pasada B", startsOn: shiftDay(TODAY, -30), endsOn: shiftDay(TODAY, -5), src: [] },
     live,
   ];
   const { goalId } = await confirmed(draft);

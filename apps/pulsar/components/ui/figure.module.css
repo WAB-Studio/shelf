@@ -42,9 +42,9 @@
   color: var(--pulsar-muted);
 }
 
-/* docs/pulsar/DESIGN.md "Tokens": quiet draws the units beside a figure. */
+/* docs/pulsar/DESIGN.md "Tokens": the unit beside a figure is muted, the smallest text colour. */
 .unit {
   font-size: var(--pulsar-text-unit-size);
   font-weight: 400;
-  color: var(--pulsar-quiet);
+  color: var(--pulsar-muted);
 }

@@ -15,6 +15,7 @@ import {
   Split,
   Text,
 } from "@/components/ui";
+import { GoalBranch, type BranchGoal } from "@/components/goal/goal-branch";
 import { dayBefore } from "@/lib/day/weeks";
 import type {
   GoalSummary,
@@ -107,6 +108,42 @@ export async function GoalsScreen({
   };
   const chevron = <ChevronRight size={16} strokeWidth={1.5} aria-hidden />;
 
+  // The tree as `/metas` draws it: depth and holding are read among the open
+  // goals, so with no goal inside another every row is flush and arrowless.
+  const parentOf = new Map(open.map((goal) => [goal.id, goal.parentId]));
+  const inside = new Map<string, number>();
+  for (const goal of open) {
+    if (goal.parentId && parentOf.has(goal.parentId)) {
+      inside.set(goal.parentId, (inside.get(goal.parentId) ?? 0) + 1);
+    }
+  }
+  const depthOf = (goal: MetasOpenGoal): 0 | 1 | 2 => {
+    let depth = 0;
+    for (let up = goal.parentId; up && parentOf.has(up); up = parentOf.get(up) ?? null) depth += 1;
+    return Math.min(depth, 2) as 0 | 1 | 2;
+  };
+  const branch: BranchGoal[] = open.map((goal) => {
+    const count = inside.get(goal.id) ?? 0;
+    const depth = depthOf(goal);
+    const until = count > 0
+      ? t("tree.list.untilInside", { date: lastDay(goal), count })
+      : t("goal.list.untilShort", { date: lastDay(goal) });
+    return {
+      id: goal.id,
+      parentId: depth > 0 ? goal.parentId : null,
+      depth,
+      slot: depth > 0 || count > 0,
+      holds: count > 0,
+      foldLabel: t("tree.list.foldNamed", { name: goal.name }),
+      unfoldLabel: t("tree.list.unfoldNamed", { name: goal.name }),
+      name: goal.name,
+      meta: until,
+      narrowMetaAbove: monthMeta(goal),
+      wideMeta: monthMeta(goal),
+      wideTrailing: goal.month ? <Text variant="meta">{until}</Text> : undefined,
+    };
+  });
+
   return (
     <Page width="full">
       <ScreenHeader title={t("common.nav.goals")} />
@@ -122,25 +159,7 @@ export async function GoalsScreen({
                     role="group"
                     aria-label={t("goal.list.openTitle")}
                   >
-                    {open.map((goal) => (
-                      <Row
-                        key={goal.id}
-                        href={`/metas/${goal.id}`}
-                        name={goal.name}
-                        meta={t("goal.list.untilShort", { date: lastDay(goal) })}
-                        metaVariant="sentence"
-                        narrowMetaAbove={monthMeta(goal)}
-                        wideMeta={monthMeta(goal)}
-                        wideTrailing={
-                          goal.month ? (
-                            <Text variant="meta">
-                              {t("goal.list.untilShort", { date: lastDay(goal) })}
-                            </Text>
-                          ) : undefined
-                        }
-                        trailing={chevron}
-                      />
-                    ))}
+                    <GoalBranch goals={branch} />
                   </Flex>
                   <Button asChild variant="outline" block>
                     <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
