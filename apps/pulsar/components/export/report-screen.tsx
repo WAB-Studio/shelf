@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useFormatter } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
@@ -12,6 +12,7 @@ import {
   printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
+import { tailOf } from "@/lib/lists/tail";
 import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { screenPlanned } from "@/lib/plan/screen-planned";
@@ -37,6 +38,7 @@ import {
   SummaryList,
   Table,
   Text,
+  TextLink,
   type TableRow,
 } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
@@ -293,17 +295,21 @@ function GoalPart({
   declaredOnly,
   today,
   inside,
+  all,
   t,
 }: {
   goal: GoalReport;
   declaredOnly: boolean;
   today: string;
+  // `?todo=1`: the screen lists a goal with no end from its opening; paper still prints its twelve.
+  all: boolean;
   // The goals under a general, in preorder: the screen lists one line each.
   inside?: GoalReport[];
   t: Translator<"export">;
 }) {
   const unit = goal.unit;
   const format = useFormatter();
+  const commonT = useTranslations("common");
 
   if (goal.endedOn !== null) {
     return (
@@ -337,12 +343,24 @@ function GoalPart({
     );
   }
 
+  // Paper always prints the twelve a goal with no end lists; `?todo=1` only widens the screen.
+  const paperMonths = goal.horizon === null ? tailOf(goal.months, false).shown : goal.months;
+  const paperKeys = new Set(paperMonths.map((month) => month.month));
+  const screenMonths = all ? goal.months : paperMonths;
+  const paperGoal: GoalReport = { ...goal, months: paperMonths };
+  const seeAll =
+    goal.horizon === null && !all && goal.months.length > paperMonths.length ? (
+      <PrintHidden>
+        <TextLink href="/exportar?todo=1">{commonT("seeAll")}</TextLink>
+      </PrintHidden>
+    ) : null;
+
   const held = inside !== undefined && inside.length > 0;
   // The screen lists every task of the group naming its goal; paper keeps each goal's own.
   const groupTasks = held
     ? [goal, ...inside].flatMap((member) => member.tasks.map((task) => ({ task, of: member.name })))
     : [];
-  const sections: (GoalSection | "inside")[] = goalSections(goal);
+  const sections: (GoalSection | "inside")[] = goalSections(paperGoal);
   if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
   if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
   const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
@@ -475,7 +493,7 @@ function GoalPart({
       }
       case "months": {
         if (unit === null) {
-          const rows: TableRow[] = goal.months.map((month) => {
+          const rows: TableRow[] = screenMonths.map((month) => {
             const started = month.current || month.past;
             const tasks = month.tasks ?? { done: 0, total: 0 };
             return {
@@ -489,17 +507,17 @@ function GoalPart({
                     : t("tasksToDo", { count: tasks.total }),
                 month.current ? t("current") : started ? t("closed") : t("upcoming"),
               ],
-              printed: printsOnPaper(month, goal.unit),
+              printed: paperKeys.has(month.month) && printsOnPaper(month, goal.unit),
             };
           });
-          const out = goal.months.filter((m) => !printsOnPaper(m, goal.unit));
+          const out = paperMonths.filter((m) => !printsOnPaper(m, goal.unit));
           return (
             <Section
               label={t("byMonth", { goal: goal.name })}
-              printSuffix={t("monthsCaption", { count: goal.months.length - out.length })}
+              printSuffix={t("monthsCaption", { count: paperMonths.length - out.length })}
             >
               <Table
-                caption={t("monthsCaption", { count: goal.months.length })}
+                caption={t("monthsCaption", { count: screenMonths.length })}
                 columns={[t("columns.month"), t("columns.tasks"), t("columns.status")]}
                 rows={rows}
                 nowrapLabel
@@ -517,6 +535,7 @@ function GoalPart({
                   ) : undefined
                 }
               />
+              {seeAll}
             </Section>
           );
         }
@@ -526,7 +545,7 @@ function GoalPart({
           return monthOnly.format(day);
         };
         const timed = isTimeUnit(unit as string);
-        const rows: TableRow[] = goal.months.map((month) => {
+        const rows: TableRow[] = screenMonths.map((month) => {
           const started = month.current || month.past;
           const share = month.carried;
           const screenAmount = screenPlanned(month.planned, (goal.ownMonths ?? []).includes(month.month));
@@ -612,10 +631,10 @@ function GoalPart({
               ) : (
                 (paperNote ?? phoneNote)
               ),
-            printed: printsOnPaper(month, goal.unit),
+            printed: paperKeys.has(month.month) && printsOnPaper(month, goal.unit),
           };
         });
-        const out = goal.months.filter((m) => !printsOnPaper(m, goal.unit));
+        const out = paperMonths.filter((m) => !printsOnPaper(m, goal.unit));
         const outNames = format.list(
           out.map((m) => monthYear.format(civilDateToDate(m.month))),
           { type: "conjunction" },
@@ -630,7 +649,7 @@ function GoalPart({
               return groups;
             }, [])
           : null;
-        const current = goal.months.findIndex((m) => m.current);
+        const current = screenMonths.findIndex((m) => m.current);
         const week = goal.weeks.find((w) => w.current);
         const weekPlanned = goal.weekPlanned ?? null;
         // A week the goal does not fill says from or to which day it counts.
@@ -663,11 +682,11 @@ function GoalPart({
           <Flex direction="column" gap="6">
             <Section
               label={t("byMonth", { goal: goal.name })}
-              printSuffix={t("monthsCaption", { count: goal.months.length - out.length })}
+              printSuffix={t("monthsCaption", { count: paperMonths.length - out.length })}
             >
               <Table
                 caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", {
-                  count: goal.months.length,
+                  count: screenMonths.length,
                 })}
                 columns={[
                   t("columns.month"),
@@ -710,6 +729,7 @@ function GoalPart({
                   ) : undefined
                 }
               />
+              {seeAll}
             </Section>
             {goal.weeks.length > 0 ? (
               <PrintHidden>
@@ -752,7 +772,7 @@ function GoalPart({
 
   const spans = (section: GoalSection | "inside") => (section !== "month" && section !== "toDate" ? "all" : undefined);
   return (
-    <PrintGoal whole={keepsHeadWithTable(goal.months, goal.unit)}>
+    <PrintGoal whole={keepsHeadWithTable(paperMonths, goal.unit)}>
       <PrintBlock span="lead">
         <Flex direction="column" gap="3">
           <Text asChild variant="name" rule>
@@ -771,7 +791,7 @@ function GoalPart({
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
-        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(goal.months, goal.unit)} only={section === "months" && unit === null}>
+        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(paperMonths, goal.unit)} only={section === "months" && unit === null}>
           {render(section)}
         </PrintBlock>
       ))}
@@ -846,7 +866,7 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
  * others, so one that measures nothing never prints a zero; a goal that has
  * ended prints its name, its last day and what it reached, and goes last.
  */
-export async function ReportScreen({ report }: { report: Report }) {
+export async function ReportScreen({ report, showAll = false }: { report: Report; showAll?: boolean }) {
   const t = await getTranslations("export");
 
   const back = { href: "/metas", place: t("place") };
@@ -929,11 +949,11 @@ export async function ReportScreen({ report }: { report: Report }) {
         <PanelGrid print="stack">
           {groups.map(({ root, inside }) => (
             <Panel key={root.id} print="plain">
-              <GoalPart goal={root} declaredOnly={declaredOnly} today={report.today} inside={inside} t={t} />
+              <GoalPart goal={root} declaredOnly={declaredOnly} today={report.today} inside={inside} all={showAll} t={t} />
               {inside.map((member) => (
                 <PrintOnly key={member.id}>
                   <Flex direction="column" pl={member.parentId === root.id ? "5" : "7"}>
-                    <GoalPart goal={member} declaredOnly={declaredOnly} today={report.today} t={t} />
+                    <GoalPart goal={member} declaredOnly={declaredOnly} today={report.today} all={showAll} t={t} />
                   </Flex>
                 </PrintOnly>
               ))}

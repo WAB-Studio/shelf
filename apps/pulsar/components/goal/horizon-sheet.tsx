@@ -77,6 +77,9 @@ export function MoveHorizonAction({
   const [open, setOpen] = useState(false);
   const startWeeks = weeks ?? DEFAULT_WEEKS;
   const noEnd = storedHorizon === null;
+  // A goal with no end counts its weeks from the current one; the rest, from the day the goal opened.
+  const fromThis = noEnd && !reopening;
+  const anchor = fromThis ? todayInZone() : openedOn;
   const [value, setValue] = useState(String(startWeeks));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +97,7 @@ export function MoveHorizonAction({
   // week's edge that count would write.
   const untouched = !noEnd && !reopening && typed.success && typed.data === weeks;
 
-  const candidate = typed.success && !untouched ? horizonForWeeks(openedOn, typed.data) : null;
+  const candidate = typed.success && !untouched ? horizonForWeeks(anchor, typed.data) : null;
   // The goals below that end after the typed end: «Mover también sus finales» takes them along.
   const later =
     candidate === null
@@ -118,13 +121,13 @@ export function MoveHorizonAction({
     return t(refusalKey(refusal.code), { name: ref.name, date: ref.horizon ? civilDayMonthYear(dayBefore(ref.horizon)) : "" });
   }
 
-  const treeSentence = typed.success && !untouched ? treeSentenceFor(horizonForWeeks(openedOn, typed.data)) : null;
+  const treeSentence = typed.success && !untouched ? treeSentenceFor(horizonForWeeks(anchor, typed.data)) : null;
 
   function refusalText(key: MessageKey, count: number): string {
     return t(key, {
       weeks: count,
       name: lastPhase?.name ?? "",
-      week: lastPhase ? weekIndexOf(openedOn, lastPhase.endsOn) : 0,
+      week: lastPhase ? weekIndexOf(anchor, lastPhase.endsOn) : 0,
     });
   }
 
@@ -157,7 +160,7 @@ export function MoveHorizonAction({
       return;
     }
 
-    await commit(horizonForWeeks(openedOn, typed.data), moveBranch);
+    await commit(horizonForWeeks(anchor, typed.data), moveBranch);
   }
 
   async function commit(horizon: string | null, moveBranch = false) {
@@ -208,7 +211,7 @@ export function MoveHorizonAction({
 
   const endsOn = typed.success
     ? t("goal.horizon.endsOn", {
-        date: civilDayMonthYear(dayBefore(untouched && storedHorizon ? storedHorizon : horizonForWeeks(openedOn, typed.data))),
+        date: civilDayMonthYear(dayBefore(untouched && storedHorizon ? storedHorizon : horizonForWeeks(anchor, typed.data))),
       })
     : t("goal.errors.horizonWeeksInvalid");
 
@@ -219,7 +222,7 @@ export function MoveHorizonAction({
       </Button>
       <Sheet open={open} onOpenChange={setOpen} label={name} title={t("goal.horizon.title")}>
         <Field
-          label={t("goal.horizon.weeksLabel", { date: civilDateLabel(openedOn) })}
+          label={fromThis ? t("goal.horizon.weeksFromThis") : t("goal.horizon.weeksLabel", { date: civilDateLabel(openedOn) })}
           type="number"
           inputMode="numeric"
           min={1}

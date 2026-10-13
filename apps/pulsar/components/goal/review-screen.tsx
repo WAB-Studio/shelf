@@ -3,9 +3,10 @@ import { getTranslations } from "next-intl/server";
 
 import type { MessageKey } from "@/i18n/translator";
 import { civilSpan } from "@/lib/export/sections";
+import { tailOf } from "@/lib/lists/tail";
 import { loadGoal } from "@/lib/queries/goal";
 import { isTimeUnit } from "@/lib/units/time";
-import { Page, ScreenHeader, Section, Table, Text, type TableRow } from "@/components/ui";
+import { Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
 
 /**
  * `RevisionAncha.dc.html` (RP-17): the goal's own
@@ -16,7 +17,7 @@ import { Page, ScreenHeader, Section, Table, Text, type TableRow } from "@/compo
  * other rejection reaches the error boundary — no `.catch` here, unlike
  * `goal-screen.tsx`'s own sibling routes.
  */
-export async function ReviewScreen({ goalId }: { goalId: string }) {
+export async function ReviewScreen({ goalId, all = false }: { goalId: string; all?: boolean }) {
   const goal = await loadGoal(goalId);
   if (!goal) notFound();
 
@@ -53,18 +54,22 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
   ];
 
   // The phase is named where it starts, not on every week it spans.
-  const rows: TableRow[] = goal.weeks.map((week, index) => {
-    const phase = week.phaseName !== goal.weeks[index - 1]?.phaseName ? (week.phaseName ?? "") : "";
+  // A goal with no end shows its last 12 weeks, the current one last, unless asked for all.
+  const { shown, hidden } = goal.horizon === null ? tailOf(goal.weeks, all) : { shown: goal.weeks, hidden: 0 };
+
+  const rows: TableRow[] = shown.map((week, index) => {
+    const phase = week.phaseName !== shown[index - 1]?.phaseName ? (week.phaseName ?? "") : "";
     const note = week.current ? t("goal.review.current") : "";
     return {
       key: String(week.index),
-      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, phase, note],
+      // The trailing space keeps the label apart from the dates beside it in a text read of the row.
+      cells: [`${t("goal.review.weekLabel", { n: week.index })} `, week.total, phase, note],
       note: note || undefined,
       detail: civilSpan(week.startsOn, week.endsOn),
     };
   });
 
-  const currentIndex = goal.weeks.findIndex((week) => week.current);
+  const currentIndex = shown.findIndex((week) => week.current);
 
   return (
     <Page width="full">
@@ -83,6 +88,9 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
         current={currentIndex === -1 ? undefined : currentIndex}
         fitDetail
       />
+      {hidden > 0 ? (
+        <TextLink href={`/metas/${goal.id}/revision?todo=1`}>{t("common.seeAll")}</TextLink>
+      ) : null}
     </Page>
   );
 }
