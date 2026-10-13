@@ -330,7 +330,8 @@ test.describe("«Editar» (RP-104)", () => {
       const [row] = await db<{ note: string | null; name: string }[]>`select note, name from goals.commitments where id = ${id}`;
       expect(row.note).toBeNull();
       expect(row.name).toBe("Meditar");
-      expect(await mainLower(page)).not.toContain("cinco minutos.");
+      // The sheet closes before the refresh lands: wait for the screen, never read it once.
+      await expect(page.locator("main")).not.toContainText("Cinco minutos.", { ignoreCase: true });
     } finally {
       await context.close();
     }
