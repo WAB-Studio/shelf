@@ -72,7 +72,10 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     const page = await context.newPage();
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${measuredId}/revision`);
-    const current = await page.locator("tr[data-current]").innerText();
+    // A row still in React's hidden streaming div reads as textContent: «2026» glued to «12».
+    const currentRow = page.locator("tr[data-current]");
+    await expect(currentRow).toBeVisible();
+    const current = await currentRow.innerText();
     const revisionNumber = current.match(/(\d+)\s*min\s*en curso/)?.[1];
     expect(revisionNumber).toBe("12");
 
