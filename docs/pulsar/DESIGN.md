@@ -1443,9 +1443,9 @@ Three answers of the user, 2026-10-09.
 - **Creating a goal inside one with a rhythm says so in one line before «Abrirla»,** and the new goal takes the measure of the
   goal above it, so its rhythm can carry the sum.
 - **«Loses nothing» (RP-96) means every line the model leaves out goes, verbatim, into the general goal's note before the
-  review.** Not built yet; next session.
+  review.** Built 2026-10-13, module 903.
 - **The model puts tasks under the goal they serve,** and the check step flags a goal with a rhythm and no tasks while the goal
-  above holds tasks; the person decides. Measured again on the real roadmap (one paid read). Not built yet; next session.
+  above holds tasks; the person decides. Measured again on the real roadmap (one paid read). Built 2026-10-13, module 903.
 - **The fix boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Page «Importar»: `ImportarAdjunto` (a picked file
   named with «Quitar», nothing sent until «Leer el plan»; after a refused type the file stays named and the type's sentence stays);
   page «Metas»: `CrearDentroAviso` (muted line before the buttons: «El ritmo al mes de «{name}» deja de contar; la meta nueva mide
