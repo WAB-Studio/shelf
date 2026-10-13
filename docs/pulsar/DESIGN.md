@@ -1412,3 +1412,15 @@ Three answers of the user, 2026-10-09.
   screen keeps the board's one line per goal inside.
 - **Boards that do not exist**: the dark face of every hierarchy board (the token table's); «Por mes» and «Mes» grouped at 1280
   (the list and the card they always had); the paper's note (drawn by no board; it prints as the screen's text, whole).
+
+## Decisions of 2026-10-13, after the critic of the hierarchy and the import, by the user
+
+- **A goal that holds goals and measures nothing reads in its goals' unit on `/metas`,** as its own screen already does
+  («0 min de 11 h», never «0 de 660»). Nothing stored changes.
+- **Picking a file on `/metas/importar` only attaches it.** «Leer el plan» sends it; no paid read starts on a pick.
+- **Creating a goal inside one with a rhythm says so in one line before «Abrirla»,** and the new goal takes the measure of the
+  goal above it, so its rhythm can carry the sum.
+- **«Loses nothing» (RP-96) means every line the model leaves out goes, verbatim, into the general goal's note before the
+  review.** Not built yet; next session.
+- **The model puts tasks under the goal they serve,** and the check step flags a goal with a rhythm and no tasks while the goal
+  above holds tasks; the person decides. Measured again on the real roadmap (one paid read). Not built yet; next session.
