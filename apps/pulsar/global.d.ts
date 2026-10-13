@@ -15,13 +15,14 @@ import type oauth from "./messages/es/oauth.json";
 import type roadmap from "./messages/es/roadmap.json";
 import type tree from "./messages/es/tree.json";
 import type chat from "./messages/es/chat.json";
+import type habit from "./messages/es/habit.json";
 
 // next-intl walks an array's methods as if they were keys and gives up on the
 // whole namespace; an array leaf is read through `t.raw`, so it stands as one key.
 // Known hole: an array key typechecks under `t()` too, though only `t.raw` reads it.
 type Leafed<T> = T extends readonly unknown[] ? string : T extends object ? { [K in keyof T]: Leafed<T[K]> } : T;
 
-// Same seventeen namespaces `i18n/request.ts` returns; `mcp.json` is read
+// Same eighteen namespaces `i18n/request.ts` returns; `mcp.json` is read
 // directly by lib/mcp and never through `t`.
 declare module "next-intl" {
   interface AppConfig {
@@ -44,6 +45,7 @@ declare module "next-intl" {
       roadmap: Leafed<typeof roadmap>;
       tree: Leafed<typeof tree>;
       chat: Leafed<typeof chat>;
+      habit: Leafed<typeof habit>;
     };
   }
 }
