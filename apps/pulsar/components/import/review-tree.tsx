@@ -213,6 +213,7 @@ export function ReviewTree({
       if (commitment!.satisfaction === "tap") parts.push(t("goal.satisfaction.tap"));
     } else if (node.kind === "task" || node.kind === "subTask") {
       const task = partOf(node.path).task!;
+      if (node.doneOn) parts.push(t("import.review.doneOn", { date: dayShort(node.doneOn) }));
       parts.push(monthWord(task.month));
       const stray = strays.get(node.path);
       if (stray) parts.push(t(messageKey(stray)));
@@ -294,7 +295,7 @@ export function ReviewTree({
       case "endWithinAbove":
         return { said: dayShort(c.said), proposed: dayShort(c.proposed), above: v.above ?? "" };
       default:
-        return { said: c.said, proposed: c.proposed };
+        return { said: c.said, proposed: c.proposed, name: node.label };
     }
   };
 

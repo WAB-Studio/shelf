@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { draftRefusals, type DraftGoal, type DraftTask, type ImportDraft } from "./draft";
 import type { StoredDraft } from "./draft-store";
-import { edit, markedDraft, nameKey, reviewTree } from "./review";
+import { edit, editedCorrections, goalHorizonRefusal, markedDraft, nameKey, remapUnmarked, reviewTree, weekdaysIn } from "./review";
 
 const TODAY = "2026-10-15";
 
@@ -200,4 +200,139 @@ test("903: a goal name is compared composed, trimmed, with spaces collapsed and 
   assert.equal(nameKey("Ingle\u0301s"), nameKey("Inglés"));
   assert.equal(nameKey("Inglés").length, 6);
   assert.notEqual(nameKey("Ingles"), nameKey("Inglés"));
+});
+
+// ---- 906: the review changes a commitment's cadence and amount, and a goal's horizon.
+
+const commitment = (over: Partial<DraftGoal["commitments"][number]> = {}): DraftGoal["commitments"][number] => ({
+  name: "Inglés pasivo",
+  cadenceKind: "times_per_week",
+  cadenceWeekdays: null,
+  cadenceN: 1,
+  satisfaction: "quantity",
+  targetQuantity: 30,
+  unit: "minutos",
+  src: [],
+  ...over,
+});
+const withCommitment = (over: Partial<DraftGoal["commitments"][number]> = {}) => draft(goal({ commitments: [commitment(over)] }));
+
+test("906: a cadence edit to days writes the days and no count", () => {
+  const next = edit(withCommitment(), "goals.0.commitments.0", { cadence: { kind: "weekdays", weekdays: [7, 3, 3], n: 4 } });
+  const c = next.goals[0].commitments[0];
+  assert.deepEqual([c.cadenceKind, c.cadenceWeekdays, c.cadenceN], ["weekdays", [3, 7], null]);
+});
+
+test("906: a cadence edit to a count writes the count and no days", () => {
+  const start = withCommitment({ cadenceKind: "weekdays", cadenceWeekdays: [7], cadenceN: null });
+  const c = edit(start, "goals.0.commitments.0", { cadence: { kind: "every_n_days", weekdays: [7], n: 3 } }).goals[0].commitments[0];
+  assert.deepEqual([c.cadenceKind, c.cadenceWeekdays, c.cadenceN], ["every_n_days", null, 3]);
+  const daily = edit(start, "goals.0.commitments.0", { cadence: { kind: "daily", weekdays: [7], n: 3 } }).goals[0].commitments[0];
+  assert.deepEqual([daily.cadenceKind, daily.cadenceWeekdays, daily.cadenceN], ["daily", null, null]);
+});
+
+test("906: an edited cadence leaves a draft the refusals accept; days left empty are refused by name", () => {
+  const ok = edit(withCommitment(), "goals.0.commitments.0", { cadence: { kind: "weekdays", weekdays: [7], n: null } });
+  assert.deepEqual(draftRefusals(ok, TODAY), []);
+  const empty = edit(withCommitment(), "goals.0.commitments.0", { cadence: { kind: "weekdays", weekdays: [], n: null } });
+  assert.deepEqual(draftRefusals(empty, TODAY).map((r) => [r.path, r.key]), [["goals.0.commitments.0", "plan.errors.weekdaysEmpty"]]);
+});
+
+test("906: the amount of a commitment is its target, and a tap has none to change", () => {
+  assert.equal(edit(withCommitment(), "goals.0.commitments.0", { amount: 45 }).goals[0].commitments[0].targetQuantity, 45);
+  const tap = withCommitment({ satisfaction: "tap", targetQuantity: null, unit: null });
+  assert.equal(edit(tap, "goals.0.commitments.0", { amount: 45 }).goals[0].commitments[0].targetQuantity, null);
+});
+
+test("906: a horizon edit moves the goal's end and nothing else", () => {
+  const start = draft(goal({ name: "A" }), goal({ key: "g2", name: "B" }));
+  const next = edit(start, "goals.1", { horizon: "2027-03-01" });
+  assert.deepEqual(next.goals.map((g) => g.horizon), ["2027-10-01", "2027-03-01"]);
+});
+
+test("906: the edit never touches the draft it was given", () => {
+  const start = withCommitment();
+  edit(start, "goals.0.commitments.0", { cadence: { kind: "daily", weekdays: [], n: null } });
+  assert.equal(start.goals[0].commitments[0].cadenceKind, "times_per_week");
+});
+
+test("906: a horizon past the end of a goal inside is refused by the goal inside, with its name and day", () => {
+  const d = draft(goal({ key: "g1", name: "General", horizon: "2027-10-01" }), goal({ key: "g2", parent: "g1", name: "Inglés B1", horizon: "2027-10-01" }));
+  assert.deepEqual(goalHorizonRefusal(d, 0, "2027-06-01", TODAY), { key: "tree.errors.belowEndsLater", values: { name: "Inglés B1", date: "2027-09-30" } });
+});
+
+test("906: a horizon past the goal above, or already gone, is refused; a fitting one is not", () => {
+  const d = draft(goal({ key: "g1", name: "General", horizon: "2027-06-01" }), goal({ key: "g2", parent: "g1", name: "Inglés B1", horizon: "2027-03-01" }));
+  assert.deepEqual(goalHorizonRefusal(d, 1, "2027-09-01", TODAY), { key: "tree.errors.endPastAbove", values: { name: "General", date: "2027-05-31" } });
+  assert.deepEqual(goalHorizonRefusal(d, 1, TODAY, TODAY), { key: "import.errors.horizonPast", values: {} });
+  assert.equal(goalHorizonRefusal(d, 1, "2027-05-01", TODAY), null);
+  assert.equal(goalHorizonRefusal(d, 0, "2027-12-01", TODAY), null);
+});
+
+test("906: the corrections a person's edit overrides are dropped, the others stay", () => {
+  const cs = [
+    { id: "goals.0.commitments.0:cadenceToWeekdays", at: "goals.0.commitments.0", code: "cadenceToWeekdays" as const, said: "", proposed: "", declined: "leavesOut" as const },
+    { id: "goals.0.commitments.0:cadenceClamped", at: "goals.0.commitments.0", code: "cadenceClamped" as const, said: "", proposed: "", declined: "leavesOut" as const },
+    { id: "goals.0.commitments.1:cadenceClamped", at: "goals.0.commitments.1", code: "cadenceClamped" as const, said: "", proposed: "", declined: "leavesOut" as const },
+    { id: "goals.0:endWithinAbove", at: "goals.0", code: "endWithinAbove" as const, said: "", proposed: "", declined: "leavesOut" as const },
+    { id: "goals.1:endWithinAbove", at: "goals.1", code: "endWithinAbove" as const, said: "", proposed: "", declined: "leavesOut" as const },
+  ];
+  assert.deepEqual(editedCorrections(cs, "goals.0.commitments.0", { cadence: { kind: "daily", weekdays: [], n: null } }).map((c) => c.id), [
+    "goals.0.commitments.1:cadenceClamped",
+    "goals.0:endWithinAbove",
+    "goals.1:endWithinAbove",
+  ]);
+  assert.deepEqual(editedCorrections(cs, "goals.0", { horizon: "2027-01-01" }).map((c) => c.id), cs.slice(0, 3).concat(cs.slice(4)).map((c) => c.id));
+  assert.equal(editedCorrections(cs, "goals.0", { name: "x" }).length, 5);
+});
+
+test("906: the weekday a plan line names is found, in any case and with or without an accent", () => {
+  assert.deepEqual(weekdaysIn("Inglés pasivo · Domingo · 30 min"), [{ word: "Domingo", day: 7 }]);
+  assert.deepEqual(weekdaysIn("el miercoles y el SÁBADO"), [{ word: "miercoles", day: 3 }, { word: "SÁBADO", day: 6 }]);
+  assert.deepEqual(weekdaysIn("cada semana"), []);
+});
+
+test("906: a task marked done shows its day in the review", () => {
+  const { nodes } = review(draft(goal({ tasks: [task({ name: "EF SET", doneOn: "2026-10-09" }), task({ name: "Otra" })] })));
+  assert.deepEqual(nodes.filter((n) => n.kind === "task").map((n) => [n.label, n.doneOn]), [["EF SET", "2026-10-09"], ["Otra", null]]);
+});
+
+// ---- 903c: tasks the second pass moved are drawn where they went, with their corrections.
+
+const movedDraft = () =>
+  draft(
+    goal({ key: "g", name: "General", tasks: [task({ name: "A" }), task({ name: "B" })] }),
+    goal({ key: "p", parent: "g", name: "Pilar", tasks: [task({ name: "D" })] }),
+  );
+const moveB = { id: "goals.0.tasks.1:taskMoved", at: "goals.0.tasks.1", code: "taskMoved" as const, said: "General", proposed: "Pilar", values: { to: "p", name: "B" }, declined: "keepsPlan" as const };
+
+test("903c: a moved task is a node of the goal it went to, and its correction hangs on it", () => {
+  const { nodes } = review(movedDraft(), { corrections: [moveB] });
+  assert.deepEqual(nodes.filter((n) => n.kind === "task").map((n) => [n.path, n.label]), [["goals.0.tasks.0", "A"], ["goals.1.tasks.0", "D"], ["goals.1.tasks.1", "B"]]);
+  assert.deepEqual(nodes.find((n) => n.path === "goals.1.tasks.1")?.corrections.map((c) => c.id), [moveB.id]);
+  assert.deepEqual(review(movedDraft(), { corrections: [moveB] }).corrections.map((c) => c.at), ["goals.1.tasks.1"]);
+});
+
+test("903c: a declined move leaves the task in the goal that held it, and its correction there", () => {
+  const { nodes } = review(movedDraft(), { corrections: [moveB], declined: [moveB.id] });
+  assert.deepEqual(nodes.filter((n) => n.kind === "task").map((n) => n.path), ["goals.0.tasks.0", "goals.0.tasks.1", "goals.1.tasks.0"]);
+  assert.deepEqual(nodes.find((n) => n.path === "goals.0.tasks.1")?.corrections.map((c) => c.id), [moveB.id]);
+});
+
+test("903c: what is sent has the task under the goal it went to", () => {
+  const { toSend } = review(movedDraft(), { corrections: [moveB] });
+  assert.deepEqual(toSend.goals.map((g) => g.tasks.map((t) => t.name)), [["A"], ["D", "B"]]);
+});
+
+test("903c: unmarked paths follow a task when a move is declined or accepted again", () => {
+  const withMove = stored(movedDraft(), { corrections: [moveB], declined: [], unmarked: ["goals.1.tasks.1"] });
+  assert.deepEqual(remapUnmarked(withMove, new Set([moveB.id]), ["goals.1.tasks.1"]), ["goals.0.tasks.1"]);
+  const without = stored(movedDraft(), { corrections: [moveB], declined: [moveB.id] });
+  assert.deepEqual(remapUnmarked(without, new Set(), ["goals.0.tasks.1", "goals.1"]), ["goals.1.tasks.1", "goals.1"]);
+});
+
+test("906b: a sub-task marked done shows its day too", () => {
+  const child = { name: "EF SET", estimate: 60, note: null, noteSrc: [], src: [], rule: null, doneOn: "2026-10-09" };
+  const { nodes } = review(draft(goal({ tasks: [task({ name: "Semana", children: [child] })] })));
+  assert.deepEqual(nodes.filter((n) => n.kind === "subTask").map((n) => [n.label, n.doneOn]), [["EF SET", "2026-10-09"]]);
 });
