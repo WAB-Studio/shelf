@@ -9,7 +9,7 @@ import { planShare } from "@/lib/plan/roadmap-read";
 import { civilDateInZone } from "@/lib/zone";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import type { loadDay } from "@/lib/queries/day";
-import type { GoalView, MetasSummary } from "@/lib/queries/goal";
+import type { GoalCommitment, GoalView, LooseCommitment, MetasSummary } from "@/lib/queries/goal";
 import type { DaylessOneOff, ScheduledOneOff } from "@/lib/queries/one-offs";
 
 import units from "../../messages/es/units.json";
@@ -164,7 +164,22 @@ function shapeLine(line: MonthLine & { month?: string }, unit: string | null) {
   };
 }
 
-export function shapeGoalList(list: { open: MetasSummary[]; ended: MetasSummary[]; archived: MetasSummary[] }) {
+function shapeGoalCommitment(commitment: GoalCommitment) {
+  return {
+    id: commitment.id,
+    name: commitment.name,
+    cadence: shapeCadence(commitment.cadence),
+    satisfiedBy: shapeSatisfiedBy(commitment.satisfiedBy),
+    retiredAt: commitment.retiredAt,
+    daysDone: commitment.factDayCount,
+    evidenceSource: commitment.sourceLabelKey,
+  };
+}
+
+export function shapeGoalList(
+  list: { open: MetasSummary[]; ended: MetasSummary[]; archived: MetasSummary[] },
+  loose: LooseCommitment[] = [],
+) {
   // The goals directly under each, in the order the list holds them.
   const childIds = new Map<string, string[]>();
   for (const goal of [...list.open, ...list.ended, ...list.archived]) {
@@ -180,7 +195,13 @@ export function shapeGoalList(list: { open: MetasSummary[]; ended: MetasSummary[
     level: goal.level,
     childIds: childIds.get(goal.id) ?? [],
   });
-  return { open: list.open.map(one), ended: list.ended.map(one), archived: list.archived.map(one) };
+  return {
+    open: list.open.map(one),
+    ended: list.ended.map(one),
+    archived: list.archived.map(one),
+    // Habits with no goal (RP-100), live and retired.
+    looseHabits: loose.map((habit) => ({ ...shapeGoalCommitment(habit), note: habit.note })),
+  };
 }
 
 export function shapeGoal(view: GoalView) {
@@ -200,15 +221,7 @@ export function shapeGoal(view: GoalView) {
         ? null
         : { month: monthKey(view.month.month), ...shapeLine(view.month, unit) },
     phases: view.phases.map(shapePhase),
-    commitments: view.commitments.map((commitment) => ({
-      id: commitment.id,
-      name: commitment.name,
-      cadence: shapeCadence(commitment.cadence),
-      satisfiedBy: shapeSatisfiedBy(commitment.satisfiedBy),
-      retiredAt: commitment.retiredAt,
-      daysDone: commitment.factDayCount,
-      evidenceSource: commitment.sourceLabelKey,
-    })),
+    commitments: view.commitments.map(shapeGoalCommitment),
     // The goal's units per month (RP-50); the AI reads it, never sets it (RP-56). Null for a goal that holds goals.
     rhythm: amountOrNull(view.rhythm, unit),
     // The day the plan's last task fills, null while it cannot say.
@@ -287,6 +300,22 @@ export function shapeDay(loaded: LoadedDay) {
   const { view } = loaded;
   const goalUnit = new Map(loaded.goals.map((goal) => [goal.id, goal.measureUnit]));
   const info = new Map(loaded.commitments.map((commitment) => [commitment.id, commitment]));
+  const slotOf = (slot: (typeof view.slots)[number]) => {
+    const commitment = info.get(slot.commitmentId);
+    const unit = commitment?.unit ?? goalUnit.get(commitment?.goalId ?? "") ?? null;
+    return {
+      commitmentId: slot.commitmentId,
+      goalId: commitment?.goalId ?? null,
+      name: commitment?.name ?? null,
+      cadence: commitment === undefined ? null : shapeCadence(commitment.cadence),
+      kind: commitment?.kind ?? null,
+      target: commitment === undefined ? null : amountOrNull(commitment.target, commitment.unit),
+      satisfied: slot.satisfied,
+      satisfiedBy: slot.satisfiedBy,
+      quantity: amountOrNull(slot.quantity, unit),
+      periodDone: loaded.periodDone[slot.commitmentId] ?? null,
+    };
+  };
   return {
     day: view.day,
     evidence: loaded.evidence,
@@ -304,22 +333,18 @@ export function shapeDay(loaded: LoadedDay) {
         thisMonth: line === undefined ? null : shapeLine(line, goal.measureUnit),
       };
     }),
-    slots: view.slots.map((slot) => {
-      const commitment = info.get(slot.commitmentId);
-      const unit = commitment?.unit ?? goalUnit.get(commitment?.goalId ?? "") ?? null;
-      return {
-        commitmentId: slot.commitmentId,
-        goalId: commitment?.goalId ?? null,
-        name: commitment?.name ?? null,
-        cadence: commitment === undefined ? null : shapeCadence(commitment.cadence),
-        kind: commitment?.kind ?? null,
-        target: commitment === undefined ? null : amountOrNull(commitment.target, commitment.unit),
-        satisfied: slot.satisfied,
-        satisfiedBy: slot.satisfiedBy,
-        quantity: amountOrNull(slot.quantity, unit),
-        periodDone: loaded.periodDone[slot.commitmentId] ?? null,
-      };
-    }),
+    slots: view.slots.map(slotOf),
+    // Habits with no goal (RP-100): the commitments and what they ask today.
+    loose: {
+      commitments: loaded.loose.commitments.map((commitment) => ({
+        id: commitment.id,
+        name: commitment.name,
+        cadence: shapeCadence(commitment.cadence),
+        kind: commitment.kind,
+        target: amountOrNull(commitment.target, commitment.unit),
+      })),
+      slots: loaded.loose.slots.map(slotOf),
+    },
     oneOffs: loaded.oneOffs.map((oneOff) => ({
       id: oneOff.id,
       goalId: oneOff.goalId,

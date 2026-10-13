@@ -199,6 +199,8 @@ async function found(): Promise<Found> {
     return outcome.ok ? outcome.value : {};
   };
   const list = (await run("list_goals")) as Record<string, { id: string; name: string }[] | undefined>;
+  // A habit with no goal answers to its name too.
+  out.commitments.push(...(list.looseHabits ?? []).map((habit) => ({ id: habit.id, name: habit.name })));
   for (const goal of [...(list.open ?? []), ...(list.ended ?? [])]) {
     out.goals.push({ id: goal.id, name: goal.name });
     const view = (await run("get_goal", { goal_id: goal.id })) as {

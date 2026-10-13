@@ -352,6 +352,7 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
       { id: ID(12), goalId: ID(10), name: "Leer 30 min", kind: "quantity", target: 30, unit: "minutos", cadence: { kind: "daily" }, evidence: null },
       { id: ID(14), goalId: ID(10), name: "Repasar", kind: "tap", target: null, unit: null, cadence: { kind: "daily" }, evidence: null },
     ],
+    loose: { commitments: [], slots: [] },
     firstGoalDay: "2026-09-01",
     phases: [],
     phasePositions: {},
@@ -488,4 +489,32 @@ test("loose one-offs keep the two lists apart, the scheduled with their day", ()
     dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null, note: "Empezar por el estante" }],
     scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", note: null, day: "2026-10-09" }],
   });
+});
+
+test("a goal with no end reads horizon null; a loose habit reads on its own list and in the day", () => {
+  const listed = shapeGoalList(
+    {
+      open: [{ id: ID(30), name: "Leer", horizon: null, measureName: null, measureUnit: null, archivedAt: null, parentId: null, level: null }],
+      ended: [],
+      archived: [],
+    },
+    [
+      {
+        id: ID(31),
+        name: "Bañarse",
+        cadence: { kind: "daily" },
+        satisfiedBy: { kind: "tap" },
+        retiredAt: null,
+        sourceLabelKey: null,
+        factDayCount: 4,
+        note: "con agua tibia",
+      },
+    ],
+  );
+  assert.equal(listed.open[0].horizon, null);
+  assert.deepEqual(
+    listed.looseHabits.map((habit) => [habit.name, habit.daysDone, habit.note]),
+    [["Bañarse", 4, "con agua tibia"]],
+  );
+  assert.deepEqual(shapeGoalList({ open: [], ended: [], archived: [] }).looseHabits, []);
 });
