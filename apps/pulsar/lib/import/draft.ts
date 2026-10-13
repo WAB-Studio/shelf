@@ -431,9 +431,8 @@ export type CorrectionCode =
   | "endWithinAbove"
   | "measureInHours"
   | "monthSumDiffers"
-  | "monthOverRhythm"
-  | "rhythmWithoutTasks";
-export type NoticeCode = "weekRuleBroken";
+  | "monthOverRhythm";
+export type NoticeCode = "weekRuleBroken" | "rhythmWithoutTasks";
 
 // `id` is `at:code`. `declined` says what rejecting it does: keep what the plan said, or leave the part out.
 export type Correction = {
@@ -753,12 +752,6 @@ export function decide(draft: ImportDraft, corrections: Correction[], declined: 
         if (refused) {
           goal.note = withoutAdded(goal.note, c.values?.added);
           goal.months = JSON.parse(c.values?.months ?? "[]") as typeof goal.months;
-        }
-        break;
-      case "rhythmWithoutTasks":
-        if (!refused && goal.rhythm !== null) {
-          goal.note = append(goal.note, c.values?.added ?? "");
-          goal.rhythm = null;
         }
         break;
       case "endWithinAbove":

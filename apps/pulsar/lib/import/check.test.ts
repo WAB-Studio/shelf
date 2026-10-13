@@ -117,31 +117,18 @@ const under = (over: Partial<DraftGoal> = {}) =>
     goal({ key: "h", parent: "g", name: "Inglés", rhythm: H(13), tasks: [], ...over }),
   );
 
-test("903: a goal with a rhythm and no tasks under a goal that has tasks proposes moving the rhythm to its note", () => {
-  const d = under();
-  const { corrections } = check(d);
-  const found = corrections.filter((c) => c.code === "rhythmWithoutTasks");
-  assert.equal(found.length, 1);
-  assert.equal(found[0].id, "goals.1.rhythm:rhythmWithoutTasks");
-  assert.equal(found[0].at, "goals.1.rhythm");
-  assert.equal(found[0].said, String(H(13)));
-  assert.equal(found[0].declined, "keepsPlan");
-  assert.deepEqual(found[0].values, { above: "General", added: `ritmo: ${H(13)} minutos al mes` });
-});
-
-test("903: accepted, the rhythm goes to the note; declined, the goal keeps it", () => {
+test("903: a goal with a rhythm and no tasks under a goal that has tasks is a notice naming both, and changes nothing", () => {
   const d = under({ note: "algo" });
-  const { corrections } = check(d);
-  const kept = decide(d, corrections, new Set(corrections.map((c) => c.id)));
-  assert.equal(kept.goals[1].rhythm, H(13));
-  assert.equal(kept.goals[1].note, "algo");
-  const moved = decide(d, corrections, new Set());
-  assert.equal(moved.goals[1].rhythm, null);
-  assert.equal(moved.goals[1].note, `algo\n\nritmo: ${H(13)} minutos al mes`);
+  const { corrections, notices } = check(d);
+  assert.deepEqual(corrections, []);
+  assert.deepEqual(notices, [{ at: "goals.1", code: "rhythmWithoutTasks", values: { name: "Inglés", above: "General" } }]);
+  const decided = decide(d, corrections, new Set());
+  assert.equal(decided.goals[1].rhythm, H(13));
+  assert.equal(decided.goals[1].note, "algo");
 });
 
 test("903: no word when the goal has tasks, has no rhythm, has no parent, or the goal above has none", () => {
-  const codes = (d: ImportDraft) => check(d).corrections.filter((c) => c.code === "rhythmWithoutTasks").length;
+  const codes = (d: ImportDraft) => check(d).notices.filter((n) => n.code === "rhythmWithoutTasks").length;
   assert.equal(codes(under({ tasks: [task()] })), 0);
   assert.equal(codes(under({ rhythm: null })), 0);
   assert.equal(codes(draft(goal({ rhythm: H(5) }))), 0);
@@ -154,9 +141,9 @@ test("903: a holder with a rhythm is not asked about; the one named by key, not 
     goal({ key: "g", name: "General", tasks: [task()] }),
     goal({ key: "h", parent: "g", rhythm: H(2), tasks: [] }),
   );
-  const found = check(d).corrections.filter((c) => c.code === "rhythmWithoutTasks");
-  assert.deepEqual(found.map((c) => c.at), ["goals.2.rhythm"]);
-  assert.equal(found[0].values?.above, "General");
+  const found = check(d).notices.filter((n) => n.code === "rhythmWithoutTasks");
+  assert.deepEqual(found.map((n) => n.at), ["goals.2"]);
+  assert.equal(found[0].values.above, "General");
 });
 
 test("903: a sub-task with no rule of its own counts toward its task's rule", () => {

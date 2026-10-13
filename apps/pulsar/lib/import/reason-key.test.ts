@@ -28,7 +28,6 @@ const CORRECTIONS = [
   "monthSumDiffers",
   "monthOverRhythm",
   "cadenceToWeekdays",
-  "rhythmWithoutTasks",
 ];
 const FORMS = [
   "import.errors.form.goal",
@@ -69,7 +68,7 @@ test("every correction code has its said, proposed and why, each a message", () 
 });
 
 test("the weekly rule notice, the four out reasons and the two declines each have a message", () => {
-  assert.deepEqual(Object.keys(noticeKey), ["weekRuleBroken"]);
+  assert.deepEqual(Object.keys(noticeKey), ["weekRuleBroken", "rhythmWithoutTasks"]);
   assert.deepEqual(Object.keys(outKey).sort(), ["noteFull", "notPlaced", "refused", "unmarked"].sort());
   assert.deepEqual(Object.keys(declinedKeys).sort(), ["keepsPlan", "leavesOut"]);
   for (const key of [...Object.values(noticeKey), ...Object.values(outKey), ...Object.values(declinedKeys)]) {
