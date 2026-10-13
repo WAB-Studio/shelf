@@ -389,6 +389,43 @@ test("a tree trigger's 23514 reached through a race names the goal that blocks, 
   assert.equal((await rowOf(G)).horizon, horizonAt(7));
 });
 
+test("a no-end trigger's 23514 reached through a race says belowNoEnd and names the goal with no end inside", async () => {
+  const [{ id: G }] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name) values (${userId}, '867 sin final G') returning id`;
+  rootIds.push(G);
+  const holder = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let locked!: () => void;
+  const taken = new Promise<void>((resolve) => (locked = resolve));
+  // The row lock stops moveHorizon's UPDATE after its pure checks passed (G holds nothing); a goal
+  // with no end is placed inside it meanwhile, so only the trigger can refuse giving G an end.
+  const held = holder.begin(async (tx) => {
+    await tx`select id from goals.goals where id = ${G} for no key update`;
+    locked();
+    await gate;
+  });
+  await taken;
+  const pending = plan.moveHorizon({ goalId: G, horizon: horizonAt(3) });
+  let waiting = 0;
+  try {
+    for (let i = 0; i < 100 && waiting < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      [{ waiting }] = await sql<{ waiting: number }[]>`
+        select count(*)::int as waiting from pg_locks where locktype = 'transactionid' and not granted`;
+    }
+    await sql`insert into goals.goals (user_id, name, parent_id) values (${userId}, '867 sin final hija', ${G})`;
+  } finally {
+    release();
+    await held;
+    await holder.end();
+  }
+  assert.ok(waiting >= 1, "the horizon move waits on the goal's row");
+  assert.deepEqual(await pending, { ok: false, error: "tree.errors.belowNoEnd", values: { name: "867 sin final hija" } });
+  const [after] = await sql<{ horizon: string | null }[]>`select horizon::text as horizon from goals.goals where id = ${G}`;
+  assert.equal(after.horizon, null);
+});
+
 test("createGoal inside a goal that has a measure: the new goal measures the same, so its rhythm can add up", async () => {
   const above = await mk("867 medida arriba", 7);
   await sql`update goals.goals set measure_name = 'horas de estudio', measure_unit = 'minutos' where id = ${above}`;
@@ -570,6 +607,17 @@ test("moveHorizon with moveBranch refuses, naming the goal, when a phase of a go
   assert.equal((await rowOf(G)).horizon, horizonAt(7));
   assert.equal((await rowOf(g1)).horizon, horizonAt(6));
   assert.equal((await rowOf(g2)).horizon, horizonAt(6));
+});
+
+test("moveHorizon with moveBranch to no end under a goal that has one is endPastAbove, refused before any write", async () => {
+  const { G, g1 } = await tree("rama5");
+  const { result, calls } = await counted(() => plan.moveHorizon({ goalId: g1, horizon: null, moveBranch: true }));
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error, "tree.errors.endPastAbove");
+  assert.equal(result.values?.name, "867 rama5 G");
+  assert.equal((await rowOf(g1)).horizon, horizonAt(6));
+  assert.equal(calls.filter((call) => /^\s*update\b/i.test(call)).length, 0, calls.join(" | "));
 });
 
 test("moveHorizon with moveBranch still refuses an end past the goal above", async () => {

@@ -1435,6 +1435,7 @@ Three answers of the user, 2026-10-09.
 - **Turns are labelled «TÚ» and «PULSAR»,** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
   changes open. A change reads in two lines: what, in the person's own names; then «antes → después» in mono.
 - **Faces not drawn for the chat:** dark (the token table says it) and 700–1023 (between the two drawn).
+- **A change's line keeps the screens' words:** «Mover el final de «Meta»», «Fijar «Tarea» en noviembre». The other 14 stay as they read. 2026-10-13.
 ## Decisions of 2026-10-13, after the critic of the hierarchy and the import, by the user
 
 - **A goal that holds goals and measures nothing reads in its goals' unit on `/metas`,** as its own screen already does

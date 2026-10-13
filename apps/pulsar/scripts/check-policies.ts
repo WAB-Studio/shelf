@@ -2652,6 +2652,8 @@ async function checkGoalTree0018(): Promise<void> {
     .begin(async (tx) => {
       await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
       if (mutant) await tx.unsafe(mutant);
+      // 0021 rewrote the tree guard whole: a mutant of its body must meet these probes too.
+      if (process.env.GOAL_END_MUTANT_SQL) await tx.unsafe(process.env.GOAL_END_MUTANT_SQL);
       const [theirs] = await tx<{ id: string }[]>`
         insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2027-12-31') returning id`;
 
@@ -3075,6 +3077,29 @@ async function checkNoEndAndLoose0021(): Promise<void> {
 
       const seen = await tx<{ name: string }[]>`select name from goals.commitments where name = 'hábito ajeno'`;
       assert("P268", seen.length === 0, `another person's loose commitment seen as mine, rows = ${seen.length}`);
+
+      // A person writes only under their own id, with a goal or without one (RP-100).
+      const foreignLoose = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.commitments (user_id, name, cadence_kind, satisfaction)
+          values (${intruder}, 'a nombre de otro', 'daily', 'tap')`,
+      );
+      assert("P269", foreignLoose.code === "42501", `a loose commitment written under another person's id, ${shape(foreignLoose)}`);
+      const foreignOnMine = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+          values (${intruder}, ${mine.id}, 'a nombre de otro, en mi meta', 'daily', 'tap')`,
+      );
+      assert("P270", foreignOnMine.code === "42501", `a commitment on my goal written under another person's id, ${shape(foreignOnMine)}`);
+
+      // The goal above may end the very day a goal inside it ends; only a later end is refused.
+      const [top] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'arriba', '2028-12-31') returning id`;
+      await tx`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'abajo', '2028-06-30', ${top.id})`;
+      const meet = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = '2028-06-30' where id = ${top.id}`);
+      assert("P271", meet.code === undefined && meet.count === 1, `the goal above moved to the day the goal inside ends, ${shape(meet)}`);
+      const pass = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = '2028-06-29' where id = ${top.id}`);
+      assert("P272", pass.code === "23514" && pass.constraint === "goals_tree_end", `the goal above moved to the day before the goal inside ends, ${shape(pass)}`);
 
       throw forcedRollback;
     })

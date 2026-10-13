@@ -124,3 +124,67 @@ test("retireCommitment retires a loose habit", async () => {
   const [row] = await admin<{ retired: boolean }[]>`select retired_at is not null as retired from goals.commitments where id = ${commitmentId}`;
   assert.equal(row.retired, true);
 });
+
+async function noteOf(commitmentId: string): Promise<string | null> {
+  const [row] = await admin<{ note: string | null }[]>`select note from goals.commitments where id = ${commitmentId}`;
+  return row.note;
+}
+
+test("a loose habit stores the note typed for it, trimmed; a blank one stores none (RP-100)", async () => {
+  const made = await as(owner, () =>
+    plan.addCommitment({ name: "bañarse", cadenceKind: "daily", satisfaction: "tap", note: "  agua tibia, después del gimnasio \n" }),
+  );
+  assert.equal(made.ok, true);
+  if (!made.ok) return;
+  commitmentIds.push(made.commitmentId);
+  assert.equal(await noteOf(made.commitmentId), "agua tibia, después del gimnasio");
+
+  const blank = await as(owner, () => plan.addCommitment({ name: "sin nota", cadenceKind: "daily", satisfaction: "tap", note: "   " }));
+  assert.equal(blank.ok, true);
+  if (!blank.ok) return;
+  commitmentIds.push(blank.commitmentId);
+  assert.equal(await noteOf(blank.commitmentId), null);
+});
+
+test("a habit under a goal carries no note: only a loose habit has one", async () => {
+  const goal = await as(owner, () => plan.createGoal({ name: "meta con hábito", horizon: null }));
+  assert.equal(goal.ok, true);
+  if (!goal.ok) return;
+  goalIds.push(goal.goalId);
+  const made = await as(owner, () =>
+    plan.addCommitment({ goalId: goal.goalId, name: "con meta", cadenceKind: "daily", satisfaction: "tap", note: "no debe quedar" }),
+  );
+  assert.equal(made.ok, true);
+  if (!made.ok) return;
+  commitmentIds.push(made.commitmentId);
+  assert.equal(await noteOf(made.commitmentId), null);
+});
+
+test("a habit note of 2000 characters lands; of 2001 is refused by the action, nothing written", async () => {
+  const before = (await admin<{ n: number }[]>`select count(*)::int as n from goals.commitments where user_id = ${owner.id}`)[0].n;
+  const long = await as(owner, () =>
+    plan.addCommitment({ name: "nota larga", cadenceKind: "daily", satisfaction: "tap", note: "a".repeat(2000) }),
+  );
+  assert.equal(long.ok, true);
+  if (long.ok) commitmentIds.push(long.commitmentId);
+  const tooLong = await as(owner, () =>
+    plan.addCommitment({ name: "nota larguísima", cadenceKind: "daily", satisfaction: "tap", note: "a".repeat(2001) }),
+  );
+  assert.deepEqual(tooLong, { ok: false, error: "plan.errors.noteTooLong" });
+  const after = (await admin<{ n: number }[]>`select count(*)::int as n from goals.commitments where user_id = ${owner.id}`)[0].n;
+  assert.equal(after - before, 1);
+});
+
+test("a loose habit opens the day it was made: the day before is refused, that day is taken", async () => {
+  const commitmentId = await loose("tap");
+  await admin`update goals.commitments set created_at = now() - interval '3 days' where id = ${commitmentId}`;
+  const { civilDateInZone } = await import("@/lib/zone");
+  const dayAgo = (days: number) => civilDateInZone(new Date(Date.now() - days * 86_400_000));
+  const before = await as(owner, () => facts.declareFact({ commitmentId, day: dayAgo(4) }));
+  assert.equal(before.ok, false);
+  const count = async () => (await admin<{ n: number }[]>`select count(*)::int as n from goals.facts where commitment_id = ${commitmentId}`)[0].n;
+  assert.equal(await count(), 0);
+  const opening = await as(owner, () => facts.declareFact({ commitmentId, day: dayAgo(3) }));
+  assert.equal(opening.ok, true);
+  assert.equal(await count(), 1);
+});
