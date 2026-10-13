@@ -221,6 +221,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       measureName: row.goal.measure_name,
       note: row.goal.note ?? null,
       measureFed: matchingSourceKeys(row.goal, row.commitments).size > 0,
+      rhythm: row.goal.rhythm ?? null,
       thisMonth: {
         planned: figures.month?.planned ?? null,
         reached: figures.month?.reached ?? 0,
@@ -440,6 +441,7 @@ function holderOf(args: {
   });
   return {
     ...report,
+    rhythm: null,
     unit: sum.unit,
     thisMonth: { planned, reached, underPace },
     toDate: toDate(everyMonth),

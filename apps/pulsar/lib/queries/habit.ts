@@ -25,10 +25,11 @@ export type HabitView = {
 type HabitSqlRow = {
   row: (CommitmentRow & { source_label_key: string | null }) | null;
   months: { month: string; days: number }[];
+  weeks: { week: string; days: number }[];
 };
 
 /**
- * One loose habit with its done days per month: one transaction, one statement.
+ * One loose habit with its done days per month and per week: one transaction, one statement.
  * RLS scopes it to the person; a goal's commitment, another person's or a
  * missing one is `null`.
  */
@@ -50,7 +51,13 @@ export async function loadHabit(id: string, today: string = todayInZone()): Prom
                    from "goals"."facts" f
                    join "goals"."commitments" c on c.id = f.commitment_id
                   where f.commitment_id = ${id} and c.goal_id is null
-                  group by 1) m) as months
+                  group by 1) m) as months,
+        (select coalesce(json_agg(jsonb_build_object('week', w.week, 'days', w.days) order by w.week), '[]'::json)
+           from (select to_char(date_trunc('week', f.day), 'YYYY-MM-DD') as week, count(distinct f.day)::int as days
+                   from "goals"."facts" f
+                   join "goals"."commitments" c on c.id = f.commitment_id
+                  where f.commitment_id = ${id} and c.goal_id is null
+                  group by 1) w) as weeks
     `),
   );
   if (!found?.row) return null;
@@ -60,6 +67,7 @@ export async function loadHabit(id: string, today: string = todayInZone()): Prom
   const retiredOn = row.retired_at ? civilDateInZone(new Date(row.retired_at)) : null;
   const cadence = toCadence(row);
   const daysDoneByMonth = new Map(found.months.map((entry) => [entry.month, entry.days]));
+  const daysDoneByWeek = new Map(found.weeks.map((entry) => [entry.week, entry.days]));
   let factDayCount = 0;
   for (const days of daysDoneByMonth.values()) factDayCount += days;
   return {
@@ -71,6 +79,6 @@ export async function loadHabit(id: string, today: string = todayInZone()): Prom
     createdOn,
     retiredOn,
     factDayCount,
-    months: habitMonths({ cadence, createdOn, retiredOn, daysDoneByMonth, today }),
+    months: habitMonths({ cadence, createdOn, retiredOn, daysDoneByMonth, daysDoneByWeek, today }),
   };
 }

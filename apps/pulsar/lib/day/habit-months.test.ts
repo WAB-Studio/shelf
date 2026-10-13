@@ -84,3 +84,22 @@ test("askedIn counts both edges", () => {
   assert.equal(askedIn(plan, "2026-10-01", "2026-10-01"), 1);
   assert.equal(askedIn(plan, "2026-10-01", "2026-10-31"), 31);
 });
+
+test("weeks is set only for a times_per_week cadence", () => {
+  const weekly = months({ cadence: { kind: "times_per_week", count: 1 } });
+  assert.ok(weekly.every((m) => m.weeks !== null));
+  assert.equal(weekly.every((m) => m.asked === null), true);
+  for (const cadence of [daily, { kind: "every_n_days", n: 2, anchor: "2026-08-20" }, { kind: "times_per_month", count: 3 }] as Cadence[]) {
+    assert.ok(months({ cadence }).every((m) => m.weeks === null));
+  }
+});
+
+test("weeks counts the weeks of each month from daysDoneByWeek", () => {
+  const result = months({
+    cadence: { kind: "times_per_week", count: 1 },
+    createdOn: "2026-07-08",
+    daysDoneByWeek: new Map([["2026-07-06", 1], ["2026-07-13", 1], ["2026-07-20", 1]]),
+  });
+  assert.deepEqual(result.find((m) => m.month === "2026-07-01")?.weeks, { met: 3, counted: 4 });
+  assert.deepEqual(result.find((m) => m.month === "2026-10-01")?.weeks, { met: 0, counted: 2 });
+});
