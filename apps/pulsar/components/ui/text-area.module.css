@@ -47,3 +47,12 @@
   -webkit-text-fill-color: var(--pulsar-muted);
   border-color: var(--pulsar-line);
 }
+
+/* The refusal's sentence, in ink at 14/500: this design has no colour for failure. */
+.refusal {
+  margin-block-start: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--pulsar-ink);
+}

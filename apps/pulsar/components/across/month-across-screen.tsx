@@ -290,7 +290,7 @@ export async function MonthAcrossScreen() {
               return (
                 <Flex key={habit.id} direction="column">
                   <Text as="p" variant="name">
-                    {habit.name}
+                    <TextLink href={`/metas/habitos/${habit.id}?volver=/mes`}>{habit.name}</TextLink>
                   </Text>
                   <Text as="p" variant="meta">
                     {habit.asked === null
