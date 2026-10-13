@@ -3180,3 +3180,10 @@ Measured 2026-10-13, module 898 (`apps/pulsar/app/actions/import.ts`). Writing `
 inside `db.transaction` looks right and fails: postgres-js remembers the first error and re-raises it when the outer `begin`
 ends, so the whole import still rolls back. Nest `tx.transaction(async (sp) => …)` instead: drizzle issues the savepoint and the
 driver forgets the error it caught. The fast path stays one transaction; the nested ones run only after a class-23 refusal.
+
+### `supabase-local.sh exec` blanks the app's OpenAI key
+
+Measured 2026-10-13, module 903. The wrapper exports `OPENAI_API_KEY=` (empty) so no suite reaches OpenAI, and an exported
+variable wins over `.env.local`: a dev server started through it answers 503 `noKey` even with the key in the lane's
+`apps/pulsar/.env.local`. A deliberate paid read needs the server started with the key read from `.env.local` inside the exec.
+That 503 calls no model, so a forgotten key costs nothing but the confusion.
