@@ -86,7 +86,7 @@ export async function GoalsScreen({
         total: month.total,
       });
     }
-    const unit = goal.measureUnit ?? undefined;
+    const unit = goal.monthUnit ?? undefined;
     return (
       <>
         {monthName(month.month)} ·{" "}

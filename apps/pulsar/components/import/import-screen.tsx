@@ -169,6 +169,8 @@ export function ImportScreen() {
   const [fileNote, setFileNote] = useState<string | null>(null);
   // A workbook's own note: its name, and whether it was not the template.
   const [bookNote, setBookNote] = useState<{ name: string; alien: boolean } | null>(null);
+  // The file picked and not yet read: «Leer el plan» sends it, nothing before.
+  const [attached, setAttached] = useState<File | null>(null);
   const reread = failure?.kind === "templateLine" ? parseTemplate(text) : null;
   // The list goes when the text stops being the template; the notice says why.
   const notTemplate = reread !== null && !reread.matched && text.trim() !== "";
@@ -249,6 +251,7 @@ export function ImportScreen() {
         if (fileName !== null && source !== "") {
           setTyped(source);
           setFileNote(fileName);
+          setAttached(null);
         }
         fail({
           kind: "templateLine",
@@ -304,6 +307,10 @@ export function ImportScreen() {
 
   function readText() {
     if (busy) return;
+    if (attached) {
+      void readFile(attached);
+      return;
+    }
     if (text.trim() === "") {
       fail({ kind: "key", key: "import.errors.blank" });
       return;
@@ -410,12 +417,34 @@ export function ImportScreen() {
             </Text>
           ) : null}
 
-          <FilePick
-            label={t("import.upload")}
-            hint={t("import.uploadHint")}
-            disabled={busy || modelShut}
-            onPick={(file) => void readFile(file)}
-          />
+          {attached ? (
+            <Flex align="center" justify="between" gap="4">
+              <Flex direction="column" gap="1">
+                <Text as="p" variant="name">
+                  {attached.name}
+                </Text>
+                <Text as="p" variant="meta" tone="muted">
+                  {t("import.size", { value: format.number(attached.size / (1024 * 1024), { maximumFractionDigits: 1 }) })}
+                </Text>
+              </Flex>
+              <Button variant="ghost" tone="accent" tap={44} disabled={busy} onClick={() => setAttached(null)}>
+                {t("import.remove")}
+              </Button>
+            </Flex>
+          ) : (
+            <FilePick
+              label={t("import.upload")}
+              hint={t("import.uploadHint")}
+              disabled={busy || modelShut}
+              onPick={setAttached}
+            />
+          )}
+
+          {attached && text.trim() !== "" ? (
+            <Text as="p" variant="sentence" tone="muted">
+              {t("import.onlyFile")}
+            </Text>
+          ) : null}
 
           {bookNote ? (
             <Text as="p" variant="sentence" tone="muted">
