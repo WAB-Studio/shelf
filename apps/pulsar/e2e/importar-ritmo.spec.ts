@@ -26,7 +26,8 @@ function shift(by: number) {
 // The catalogue's own example, its dates moved to the person's now so the
 // months stay inside the goals' spans whatever day the suite runs.
 function template(rhythm: string | null = "12 h"): string {
-  const text = movedExample();
+  // The example's closing «Leer» (no end, pages) is `importar-sin-final.spec.ts`'s: this file reads the rhythm in hours.
+  const text = movedExample().split("\n\n# Leer\n")[0];
   if (!text.includes(SOURCE_LINE)) throw new Error("the template example carries no `ritmo:` line");
   return rhythm === null ? text.replace(`\n${SOURCE_LINE}`, "") : text.replace(SOURCE_LINE, `ritmo: ${rhythm}`);
 }

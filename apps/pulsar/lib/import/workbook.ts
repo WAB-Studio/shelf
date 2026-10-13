@@ -257,10 +257,11 @@ export async function templateWorkbook(): Promise<Uint8Array> {
       ["Carrera en IA", null, "2028-10-01", null, null, null, "Lo que busco en dos años.\nUn ritmo que pueda sostener."],
       ["IA aplicada", "Carrera en IA", "2027-10-01", null, null, null, null],
       [goal, "IA aplicada", "2027-03-01", "horas de estudio", "minutos", "12 h", "Empezar por lo que ya sé medir."],
+      ["Leer", null, null, "lectura", "páginas", "40 páginas", null],
     ],
     Fases: [[goal, "2026-10-01", "2026-12-31", goal]],
     Meses: [[goal, "2026-10", "12 h"], [goal, "2026-11", "20 h"]],
-    Compromisos: [[goal, "Tema técnico", "martes y jueves", "2 h"], [goal, "Inglés pasivo", "cada día", "toque"]],
+    Compromisos: [[goal, "Tema técnico", "martes y jueves", "2 h"], [goal, "Inglés pasivo", "cada día", "toque"], ["Leer", "Leer", "cada día", "10 páginas"]],
     Tareas: [
       [goal, "2026-10", "Leer AI Engineering cap. 1–4", null, "4 h", null],
       [goal, "2026-10", "Tutor", null, null, "Preguntar por la tarifa por hora.\nPedir una clase de prueba antes de pagar."],

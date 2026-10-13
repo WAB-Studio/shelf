@@ -48,7 +48,14 @@ nota: Empezar por lo que ya sé medir.
   nota: Pedir una clase de prueba antes de pagar.
   - 1 h · Elegir tutor
     nota: Comparar tres perfiles.
-  - 6 h · Sesiones 1–4`;
+  - 6 h · Sesiones 1–4
+
+# Leer
+medida: lectura · páginas
+ritmo: 40 páginas
+
+## Compromisos
+- Leer · cada día · 10 páginas`;
 
 // The v1 tests below read through the v1 projection of the v2 reader: same text, same content as before.
 test("PLANTILLA.md's example is the fixture's, byte for byte", () => {
@@ -917,7 +924,7 @@ test("880 three levels: a general, a big goal inside it and a small one inside t
   assert.equal(general.parent, null);
   assert.equal(big.parent, general.key);
   assert.equal(small.parent, big.key);
-  assert.equal(new Set(draft.goals.map((g) => g.key)).size, 3);
+  assert.equal(new Set(draft.goals.map((g) => g.key)).size, 4);
   assert.deepEqual(draftRefusals(draft, "2026-10-01"), []);
 });
 

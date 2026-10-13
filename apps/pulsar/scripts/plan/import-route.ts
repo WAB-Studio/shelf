@@ -223,7 +223,7 @@ test("a template text (plantilla 2): 200 via template with its draft, correction
   assert.equal(body.via, "template");
   const draft = body.draft as { version: number; goals: { name: string; parent: string | null; note: string | null }[] };
   assert.equal(draft.version, 2);
-  assert.deepEqual(draft.goals.map((g) => g.name), ["Carrera en IA", "IA aplicada", "Evals y harness"]);
+  assert.deepEqual(draft.goals.map((g) => g.name), ["Carrera en IA", "IA aplicada", "Evals y harness", "Leer"]);
   assert.equal(draft.goals[0].note, "Lo que busco en dos años.\nUn ritmo que pueda sostener.");
   assert.ok(Array.isArray(body.corrections));
   assert.ok(Array.isArray(body.notices));
@@ -505,7 +505,7 @@ test("the delivered workbook, uploaded: 200 via workbook with its draft; no key,
   assert.equal(body.via, "workbook");
   const draft = body.draft as { version: number; goals: { name: string; parent: string | null }[] };
   assert.equal(draft.version, 2);
-  assert.deepEqual(draft.goals.map((g) => g.name), ["Carrera en IA", "IA aplicada", "Evals y harness"]);
+  assert.deepEqual(draft.goals.map((g) => g.name), ["Carrera en IA", "IA aplicada", "Evals y harness", "Leer"]);
   assert.deepEqual(body.source, { kind: "rows", lines: null });
   assert.ok(Array.isArray(body.corrections) && Array.isArray(body.notices));
   assert.equal((await rows()).length, 0);
@@ -565,7 +565,7 @@ test("the download: GET /importar/plantilla.xlsx hands the workbook as an attach
   const { readWorkbook } = await import("@/lib/import/workbook");
   const read = await readWorkbook(bytes);
   assert.ok(read.matched && "draft" in read, "the bytes are a workbook the reader takes");
-  assert.equal(read.draft.goals.length, 3);
+  assert.equal(read.draft.goals.length, 4);
   assert.equal((await rows()).length, 0);
 });
 
