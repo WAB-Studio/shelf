@@ -3,6 +3,9 @@ import { phaseWithinHorizon, type PhaseSpan } from "@/lib/validation/plan";
 
 export { daysBetween };
 
+// The longest a goal runs, in weeks: `/metas/nueva`'s own cap, and the stand-in for a goal with no end.
+export const MAX_GOAL_WEEKS = 520;
+
 // The 1-based Monday-to-Sunday goal week `day` falls in —
 // what `Meta.dc.html` calls "semanas 1–4" for a phase's own span. The one
 // convention every screen that counts a goal's weeks reuses; never a second
@@ -12,7 +15,9 @@ export const weekIndex = weekIndexOf;
 
 // How many goal weeks a horizon holds, its partial last week included —
 // `lib/day/weeks.ts`'s `horizonWeeksOf`.
-export function horizonWeeks(openedOn: string, horizon: string): number {
+export function horizonWeeks(openedOn: string, horizon: string): number;
+export function horizonWeeks(openedOn: string, horizon: string | null): number | null;
+export function horizonWeeks(openedOn: string, horizon: string | null): number | null {
   return horizonWeeksOf(openedOn, horizon);
 }
 
@@ -24,7 +29,7 @@ export function weeksToPhaseSpan(
   openedOn: string,
   fromWeek: number,
   toWeek: number,
-  horizon?: string,
+  horizon?: string | null,
 ): { startsOn: string; endsOn: string } {
   return weekSpan(openedOn, fromWeek, toWeek, horizon);
 }
@@ -39,7 +44,7 @@ export function defaultPhaseWeeks({
   phases,
 }: {
   openedOn: string;
-  horizon: string;
+  horizon: string | null;
   phases: PhaseSpan[];
 }): { from: number; to: number } | null {
   const lastEndsOn = phases.reduce<string | null>(
@@ -47,7 +52,9 @@ export function defaultPhaseWeeks({
     null,
   );
   const from = lastEndsOn ? weekIndexOf(openedOn, lastEndsOn) + 1 : 1;
-  const fits = (week: number) => phaseWithinHorizon(weekSpan(openedOn, from, week, horizon), horizon);
+  const fits = (week: number) =>
+    week <= (horizonWeeksOf(openedOn, horizon) ?? MAX_GOAL_WEEKS) &&
+    phaseWithinHorizon(weekSpan(openedOn, from, week, horizon), horizon);
   if (!fits(from)) return null;
   let to = from;
   while (to < from + 3 && fits(to + 1)) to += 1;

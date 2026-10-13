@@ -16,7 +16,8 @@ export const createGoalSchema = z.object({
     .trim()
     .min(1, { error: "plan.errors.nameEmpty" })
     .max(GOAL_NAME_MAX, { error: "plan.errors.nameTooLong" }),
-  horizon: civilDate("plan.errors.horizonInvalid"),
+  // Absent or null: a goal with no end (RP-99).
+  horizon: civilDate("plan.errors.horizonInvalid").nullable().default(null),
   // The goal it opens inside (RP-78); absent for a goal on its own.
   parentId: z.uuid({ error: "plan.errors.goalInvalid" }).optional(),
 });
@@ -58,8 +59,8 @@ export function phasesOverlap(a: PhaseSpan, b: PhaseSpan): boolean {
 // never past it. Compared as civil dates, never as week numbers — the
 // horizon is stored as a date, and this holds regardless of which week
 // convention drew the span.
-export function phaseWithinHorizon(span: PhaseSpan, horizon: string): boolean {
-  return span.endsOn <= horizon;
+export function phaseWithinHorizon(span: PhaseSpan, horizon: string | null): boolean {
+  return horizon === null || span.endsOn <= horizon;
 }
 
 // RP-12's five cadences, keyed on `cadenceKind` so an impossible column never
@@ -154,7 +155,8 @@ const satisfactionSchema = z.discriminatedUnion("satisfaction", [
 export const addCommitmentSchema = z.intersection(
   z.intersection(
     z.object({
-      goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
+      // Absent: a habit with no goal (RP-100).
+      goalId: z.uuid({ error: "plan.errors.goalInvalid" }).optional(),
       name: z
         .string({ error: "plan.errors.nameEmpty" })
         .trim()

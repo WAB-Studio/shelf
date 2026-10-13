@@ -32,7 +32,7 @@ export type WeekSplit = { index: number; month: string; startsOn: string; endsOn
 export type GoalReport = {
   id: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   endedOn: string | null;
   unit: string | null;
   // The word the person gave the measure; «mide {measureName}» reads it, never the unit.

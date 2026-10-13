@@ -1,6 +1,7 @@
 import { measureOf } from "@/lib/day/derive";
 import { dayBefore } from "@/lib/day/weeks";
 import type { DeclaredFact, EvidenceDay } from "@/lib/day/types";
+import { todayInZone } from "@/lib/zone";
 
 export type MonthBudget = { month: string; amount: number };
 
@@ -31,10 +32,22 @@ export function nextMonth(month: string): string {
     : `${year}-${String(index + 1).padStart(2, "0")}-01`;
 }
 
+// A goal with no end (RP-99) plans this many months past the current one.
+export const ENDLESS_MONTHS_AHEAD = 11;
+
 // The horizon is the first day after the goal, so its own month holds no day
-// of the goal when it falls on the 1st: the last month is the last day's.
-export function monthsOfSpan(openedOn: string, horizon: string): string[] {
-  const last = monthOf(dayBefore(horizon));
+// of the goal when it falls on the 1st: the last month is the last day's. With
+// no horizon it is the current month plus `ENDLESS_MONTHS_AHEAD`, never before the opening's.
+export function lastMonthOf(openedOn: string, horizon: string | null, today: string = todayInZone()): string {
+  if (horizon !== null) return monthOf(dayBefore(horizon));
+  let month = monthOf(today);
+  for (let i = 0; i < ENDLESS_MONTHS_AHEAD; i += 1) month = nextMonth(month);
+  const opened = monthOf(openedOn);
+  return opened > month ? opened : month;
+}
+
+export function monthsOfSpan(openedOn: string, horizon: string | null, today: string = todayInZone()): string[] {
+  const last = lastMonthOf(openedOn, horizon, today);
   const months: string[] = [];
   for (let month = monthOf(openedOn); month <= last; month = nextMonth(month)) {
     months.push(month);
@@ -78,7 +91,7 @@ function daysInMonth(month: string): number {
 // first day after the goal; a month with none of its days plans 0.
 export function plannedOf(
   month: string,
-  input: { budgets: MonthBudget[]; rhythm?: number | null; openedOn: string; horizon: string },
+  input: { budgets: MonthBudget[]; rhythm?: number | null; openedOn: string; horizon: string | null },
 ): number | null {
   const own = input.budgets.find((budget) => budget.month === month);
   if (own) return own.amount;
@@ -86,9 +99,9 @@ export function plannedOf(
   if (rhythm === null) return null;
   const length = daysInMonth(month);
   const lastOfMonth = `${month.slice(0, 8)}${String(length).padStart(2, "0")}`;
-  const lastOfGoal = dayBefore(input.horizon);
+  const lastOfGoal = input.horizon === null ? null : dayBefore(input.horizon);
   const from = input.openedOn > month ? input.openedOn : month;
-  const to = lastOfGoal < lastOfMonth ? lastOfGoal : lastOfMonth;
+  const to = lastOfGoal !== null && lastOfGoal < lastOfMonth ? lastOfGoal : lastOfMonth;
   if (from > to) return 0;
   const days = Number(to.slice(8, 10)) - Number(from.slice(8, 10)) + 1;
   return Math.floor((rhythm * days) / length);
@@ -99,14 +112,14 @@ export function plannedOf(
 // or a share that rounds to 0 has nothing to explain.
 export function partOf(
   month: string,
-  input: { budgets: MonthBudget[]; rhythm?: number | null; openedOn: string; horizon: string },
+  input: { budgets: MonthBudget[]; rhythm?: number | null; openedOn: string; horizon: string | null },
 ): { kind: "from" | "to" | "between"; from: number; to: number; share: number; rhythm: number } | null {
   const rhythm = input.rhythm ?? null;
   if (rhythm === null || input.budgets.some((budget) => budget.month === month)) return null;
   const length = daysInMonth(month);
-  const lastOfGoal = dayBefore(input.horizon);
+  const lastOfGoal = input.horizon === null ? null : dayBefore(input.horizon);
   const from = monthOf(input.openedOn) === month ? Number(input.openedOn.slice(8, 10)) : 1;
-  const to = monthOf(lastOfGoal) === month ? Number(lastOfGoal.slice(8, 10)) : length;
+  const to = lastOfGoal !== null && monthOf(lastOfGoal) === month ? Number(lastOfGoal.slice(8, 10)) : length;
   if (from === 1 && to === length) return null;
   const share = plannedOf(month, input);
   if (!share) return null;
@@ -126,7 +139,7 @@ export function monthLine(input: {
   reached: number;
   rhythm?: number | null;
   openedOn: string;
-  horizon: string;
+  horizon: string | null;
 }): MonthLine {
   const { month, today, budget, reached, rhythm, openedOn, horizon } = input;
   const planned = plannedOf(month, { budgets: budget ? [{ month, amount: budget.amount }] : [], rhythm, openedOn, horizon });
@@ -143,7 +156,7 @@ export function monthLine(input: {
 // with no budget of its own plans its share of the goal's rhythm (RP-50, RP-74).
 export function monthRows(input: {
   openedOn: string;
-  horizon: string;
+  horizon: string | null;
   today: string;
   budgets: MonthBudget[];
   reached: Map<string, number>;
@@ -151,7 +164,7 @@ export function monthRows(input: {
 }): MonthRow[] {
   const { openedOn, horizon, today, budgets, reached, rhythm } = input;
   const thisMonth = monthOf(today);
-  return monthsOfSpan(openedOn, horizon).map((month) => ({
+  return monthsOfSpan(openedOn, horizon, today).map((month) => ({
     month,
     planned: plannedOf(month, { budgets, rhythm, openedOn, horizon }),
     reached: reached.get(month) ?? 0,

@@ -16,13 +16,13 @@ export function weekPlanned(input: {
   weekEnd: string;
   budgets: MonthBudget[];
   openedOn: string;
-  horizon: string;
+  horizon: string | null;
   rhythm?: number | null;
 }): number | null {
   const amounts = new Map(input.budgets.map((b) => [b.month, b.amount]));
-  const last = dayBefore(input.horizon);
+  const last = input.horizon === null ? null : dayBefore(input.horizon);
   const from = input.weekStart > input.openedOn ? input.weekStart : input.openedOn;
-  const to = input.weekEnd < last ? input.weekEnd : last;
+  const to = last !== null && last < input.weekEnd ? last : input.weekEnd;
   // lcm(28, 29, 30, 31): every month length divides it, so each day's share is an exact integer.
   const scale = 377580;
   let scaled = 0;

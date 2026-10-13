@@ -29,7 +29,11 @@ export function horizonForWeeks(openedOn: string, weeks: number): string {
 
 // The week the goal's last day falls in. A horizon from `horizonForWeeks`
 // reads back as its N; one that falls mid-week counts that partial last week.
-export function horizonWeeksOf(openedOn: string, horizon: string): number {
+// A goal with no end has no weeks: null.
+export function horizonWeeksOf(openedOn: string, horizon: string): number;
+export function horizonWeeksOf(openedOn: string, horizon: string | null): number | null;
+export function horizonWeeksOf(openedOn: string, horizon: string | null): number | null {
+  if (horizon === null) return null;
   return horizon <= openedOn ? 0 : weekIndexOf(openedOn, dayBefore(horizon));
 }
 
@@ -48,11 +52,11 @@ export function weekSpan(
   openedOn: string,
   fromWeek: number,
   toWeek: number,
-  horizon?: string,
+  horizon?: string | null,
 ): { startsOn: string; endsOn: string } {
   const firstMonday = mondayOf(openedOn);
   const sunday = dayBefore(addWeeksToCivilDate(firstMonday, toWeek));
-  const holdsLastDay = horizon !== undefined && addWeeksToCivilDate(firstMonday, toWeek - 1) < horizon;
+  const holdsLastDay = horizon != null && addWeeksToCivilDate(firstMonday, toWeek - 1) < horizon;
   const last = holdsLastDay ? dayBefore(horizon) : sunday;
   return {
     startsOn: fromWeek === 1 ? openedOn : addWeeksToCivilDate(firstMonday, fromWeek - 1),
