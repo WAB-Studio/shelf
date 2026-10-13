@@ -46,7 +46,13 @@ export async function HabitScreen({
       key: month.month,
       cells: [`${monthNames[Number(month.month.slice(5, 7)) - 1]} ${month.month.slice(0, 4)}`, line],
       detail: month.current ? t("habit.months.current") : null,
-      note: line,
+      note: month.thisWeek ? (
+        <>
+          {line}
+          <br />
+          {t("week.flexible.weekProgress", { done: month.thisWeek.done, total: month.thisWeek.count })}
+        </>
+      ) : line,
     };
   });
   const currentIndex = shown.findIndex((month) => month.current);
