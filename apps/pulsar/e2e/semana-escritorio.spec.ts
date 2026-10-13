@@ -222,7 +222,7 @@ test("at 1280 a past day's header opens that day (RP-06)", async ({ page, db, pe
     const table = page.getByRole("table");
     await expect(table.getByRole("rowheader", { name: `Compromiso ${name}`, exact: true })).toBeVisible();
     await expect(table.getByRole("link", { name: openName(weekDays[todayIndex]) })).toHaveCount(0);
-    await expect(table.getByRole("link", { name: /^Abrir el/ })).toHaveCount(todayIndex);
+    await expect(table.getByRole("link", { name: /^Abrir el (?!chat$)/ })).toHaveCount(todayIndex);
     if (todayIndex > 0) {
       const past = weekDays[0];
       await table.getByRole("link", { name: openName(past) }).click();

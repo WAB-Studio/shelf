@@ -129,7 +129,7 @@ test("‹ four times lands on the week holding the fact, done and read-only; ›
         .getByText(new RegExp(`^${ARCHIVED_GOAL} · semana \\d+ de \\d+ · archivada el \\d+ \\w+ \\d{4}$`, "i"))
         .locator("visible=true"),
     ).toHaveCount(1);
-    await expect(page.getByRole("link", { name: /^Abrir el/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^Abrir el (?!chat$)/ })).toHaveCount(0);
     await expect(page.getByText(/· hoy/).locator("visible=true")).toHaveCount(0);
 
     for (let weeks = 3; weeks >= 1; weeks--) {
@@ -183,7 +183,7 @@ test("within seven days a day is still a link and opens /dia/<day> (RP-06)", asy
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(mondayAgo(1)));
     const lastWeek = Array.from({ length: 7 }, (_, i) => shift(mondayAgo(1), i));
     const reachable = lastWeek.filter((day) => day >= shift(today, -7));
-    await expect(page.getByRole("link", { name: /^Abrir el/ })).toHaveCount(reachable.length);
+    await expect(page.getByRole("link", { name: /^Abrir el (?!chat$)/ })).toHaveCount(reachable.length);
     const sunday = lastWeek[6];
     await page.getByRole("link", { name: new RegExp(`^Abrir el ${longName(sunday)}$`) }).click();
     await expect(page).toHaveURL(new RegExp(`/dia/${sunday}$`));
