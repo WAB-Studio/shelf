@@ -46,7 +46,7 @@ async function open(browser: Browser, baseURL: string | undefined, person: Perso
 }
 
 const entry = (page: Page): Locator =>
-  page.locator("main > header").getByRole("link", { name: chat.open, exact: true });
+  page.locator("main header").first().getByRole("link", { name: chat.open, exact: true });
 
 type Box = { x: number; y: number; width: number; height: number };
 const box = async (locator: Locator): Promise<Box> => (await locator.boundingBox())!;
@@ -150,7 +150,7 @@ test.describe("the way into the chat (RP-91, P1 = B)", () => {
         expect(mine.x + mine.width, `${at}: inside the right edge`).toBeLessThanOrEqual(360);
         expect(await page.evaluate(() => document.documentElement.scrollWidth), `${at}: no overflow`).toBeLessThanOrEqual(360);
 
-        const title = page.locator("main > header").getByRole("heading", { level: 1 });
+        const title = page.locator("main header").first().getByRole("heading", { level: 1 });
         const heading = await box(title);
         expect(overlap(mine, heading), `${at}: the title is not covered`).toBe(false);
         // The title's own centre still hits the title, and the entry's hits the entry.
@@ -165,7 +165,7 @@ test.describe("the way into the chat (RP-91, P1 = B)", () => {
         expect(hit.link, `${at}: the entry is on top at its centre`).toBe("/chat");
 
         // Every other control of the header keeps its own box.
-        const others = page.locator("main > header").locator("a, button").filter({ hasNot: link });
+        const others = page.locator("main header").first().locator("a, button").filter({ hasNot: link });
         for (const other of await others.all()) {
           if (!(await other.isVisible())) continue;
           const name = (await other.getAttribute("aria-label")) ?? (await other.textContent());
@@ -190,9 +190,9 @@ test.describe("the way into the chat (RP-91, P1 = B)", () => {
           await page.goto(path);
           await settled(page);
           const at = `${path} at ${width}`;
-          const header = await box(page.locator("main > header").first());
+          const header = await box(page.locator("main header").first().first());
           const mine = await box(entry(page));
-          const title = await box(page.locator("main > header").getByRole("heading", { level: 1 }));
+          const title = await box(page.locator("main header").first().getByRole("heading", { level: 1 }));
           expect(mine.y + mine.height, `${at}: above the title`).toBeLessThanOrEqual(title.y + 2);
           expect(header.x + header.width - (mine.x + mine.width), `${at}: ends the header`).toBeLessThanOrEqual(24);
           expect(mine.x, `${at}: at the right half`).toBeGreaterThan(header.x + header.width / 2);
@@ -201,7 +201,7 @@ test.describe("the way into the chat (RP-91, P1 = B)", () => {
           // Hoy: right of the theme control, on its line.
           await page.goto("/");
           await settled(page);
-          const toggle = await box(page.locator("main > header").getByRole("button", { name: /modo (oscuro|claro)/ }));
+          const toggle = await box(page.locator("main header").first().getByRole("button", { name: /modo (oscuro|claro)/ }));
           const mine = await box(entry(page));
           expect(mine.x, "Hoy: right of the theme control").toBeGreaterThanOrEqual(toggle.x + toggle.width - 1);
           expect(Math.abs(mine.y + mine.height / 2 - (toggle.y + toggle.height / 2)), "Hoy: on its line").toBeLessThanOrEqual(8);
@@ -244,6 +244,19 @@ test.describe("the way into the chat (RP-91, P1 = B)", () => {
         await expect(links.filter({ hasText: /^(Hoy|Semana|Mes|Metas)$/ }), screen.name).toHaveCount(4);
         await expect(page.getByRole("navigation").locator('a[href="/chat"]'), screen.name).toHaveCount(0);
       }
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("on paper /exportar draws no chat link", async ({ browser, baseURL, person }) => {
+    const { context, page } = await open(browser, baseURL, person, 1280);
+    try {
+      await page.goto("/exportar");
+      await settled(page);
+      await expect(entry(page)).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      await expect(entry(page)).toBeHidden();
     } finally {
       await context.close();
     }
