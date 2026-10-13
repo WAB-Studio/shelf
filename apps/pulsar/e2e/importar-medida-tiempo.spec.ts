@@ -3,7 +3,7 @@ import type { Browser, Page } from "@playwright/test";
 import messages from "../messages/es/import.json";
 import { test, expect, settled as pageSettled } from "./fixtures";
 import { todayInZone } from "../lib/zone";
-import { movedExample } from "./importar-plan";
+import { movedExample, unfold } from "./importar-plan";
 
 // RP-35, RP-66: the review names a time measure «horas y minutos», whatever unit the person wrote.
 const MEASURE_LINE = "medida: horas de estudio · minutos";
@@ -22,7 +22,7 @@ function template(measure: string): string {
   return text.replace(MEASURE_LINE, measure);
 }
 
-async function toReview(page: Page, text: string) {
+async function toOpenReview(page: Page, text: string) {
   await page.goto("/metas/importar");
   await expect(page.getByRole("button", { name: "Leer el plan" })).toBeVisible();
   await page.getByLabel(messages.textLabel).fill(text);
@@ -30,6 +30,7 @@ async function toReview(page: Page, text: string) {
   await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await pageSettled(page);
+  await unfold(page);
 }
 
 type Fixtures = { person: { id: string; sessionFile: string }; browser: Browser; baseURL: string | undefined };
@@ -49,7 +50,7 @@ const monthButton = (page: Page, amount: string) => page.getByRole("button", { n
 test.describe("a time measure shows as hours and minutes, never as its unit (RP-35, RP-66)", () => {
   test("a measure written in hours reads «11 h» on its month (the sum of its tasks), with no measure row", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, template("medida: horas de estudio · horas"));
+      await toOpenReview(page, template("medida: horas de estudio · horas"));
       await expect(monthButton(page, "11 h")).toBeVisible();
       await expect(monthButton(page, "11 h")).toHaveText("11 h");
       await expect(page.getByText(TIME_WORDS, { exact: true })).toHaveCount(0);
@@ -59,7 +60,7 @@ test.describe("a time measure shows as hours and minutes, never as its unit (RP-
 
   test("a measure written in minutes reads «11 h» too", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, template(MEASURE_LINE));
+      await toOpenReview(page, template(MEASURE_LINE));
       await expect(monthButton(page, "11 h")).toHaveText("11 h");
       await expect(page.getByText("minutos", { exact: true })).toHaveCount(0);
     });
@@ -73,7 +74,7 @@ const kmPlan = (amount: string) =>
 test.describe("a month's amount in the goal's unit (km)", () => {
   test("«8 km» passes to the review", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, kmPlan("8 km"));
+      await toOpenReview(page, kmPlan("8 km"));
       await expect(monthButton(page, "8 km")).toHaveText("8 km");
       await expect(page.getByText(TIME_WORDS, { exact: true })).toHaveCount(0);
     });

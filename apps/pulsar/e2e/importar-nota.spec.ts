@@ -2,7 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
-import { movedExample } from "./importar-plan";
+import { movedExample, unfold } from "./importar-plan";
 
 // The review draws a template task's and sub-task's note, whole and read-only
 // (RP-45); the template path needs no model key. Board `ImportarRevisarNota`.
@@ -22,13 +22,14 @@ async function asPerson({ person, browser, baseURL }: Fixtures, run: (page: Page
   }
 }
 
-async function toReview(page: Page) {
+async function toOpenReview(page: Page) {
   await page.goto("/metas/importar");
   await page.getByLabel(messages.textLabel).fill(template());
   await page.getByRole("button", { name: "Leer el plan" }).click();
   await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await expect(page.locator("main")).toHaveCount(1);
+  await unfold(page);
 }
 
 test.describe("the review shows each task's note (RP-45)", () => {
@@ -39,7 +40,7 @@ test.describe("the review shows each task's note (RP-45)", () => {
     db,
   }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page);
+      await toOpenReview(page);
 
       // A note stays shut behind the button that names it; its row is the box around its checkbox.
       const rowOf = (name: RegExp) => page.locator("div").filter({ has: page.getByRole("checkbox", { name }) }).last();

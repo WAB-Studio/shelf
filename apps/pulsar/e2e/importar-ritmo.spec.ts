@@ -4,7 +4,7 @@ import messages from "../messages/es/import.json";
 import roadmap from "../messages/es/roadmap.json";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 import { todayInZone } from "../lib/zone";
-import { movedExample } from "./importar-plan";
+import { movedExample, unfold } from "./importar-plan";
 
 // RP-63: the review says each goal's rhythm before the person confirms (board `ImportarRevisarRitmo`).
 // RP-67: the row is «Ritmo al mes · las tareas van al plan» with an amount button (board `ImportarRitmoPlan`).
@@ -36,7 +36,7 @@ function withKmGoal(): string {
   return `${template()}\n\n# Correr 10K\nhorizonte: ${horizon}\nmedida: distancia · km`;
 }
 
-async function toReview(page: Page, text: string) {
+async function toOpenReview(page: Page, text: string) {
   await page.goto("/metas/importar");
   await expect(page.getByRole("button", { name: "Leer el plan" })).toBeVisible();
   await page.getByLabel(messages.textLabel).fill(text);
@@ -44,6 +44,7 @@ async function toReview(page: Page, text: string) {
   await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await pageSettled(page);
+  await unfold(page);
 }
 
 type Fixtures = { person: { id: string; sessionFile: string }; browser: Browser; baseURL: string | undefined };
@@ -70,7 +71,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
   for (const width of [390, 1440]) {
     test(`@${width}: the template's rhythm is a row «Ritmo al mes» with a «12 h» button and the board's line, under its goal`, async ({ person, browser, baseURL }) => {
       await asPerson({ person, browser, baseURL }, { width, height: 900 }, async (page) => {
-        await toReview(page, template());
+        await toOpenReview(page, template());
 
         const main = page.getByText(RHYTHM_NAME, { exact: true });
         const meta = page.getByText(RHYTHM_LINE, { exact: true });
@@ -92,7 +93,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
 
   test("a rhythm with minutes reads in hours and minutes, not as 90 min or 1.5 h", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
-      await toReview(page, template("1 h 30 min"));
+      await toOpenReview(page, template("1 h 30 min"));
       await expect(rhythmButton(page, "1 h 30 min")).toHaveText("1 h 30 min");
       await expect(page.getByText(RHYTHM_LINE, { exact: true })).toBeVisible();
       await expect(page.getByText(/90 min|1[.,]5 h/)).toHaveCount(0);
@@ -101,7 +102,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
 
   test("a template without ritmo: paints no rhythm row, and no «0 h al mes»", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
-      await toReview(page, template(null));
+      await toOpenReview(page, template(null));
       await expect(box(page, /^IA aplicada/)).toBeVisible();
       await expect(page.getByText(RHYTHM_LINE, { exact: true })).toHaveCount(0);
       await expect(page.getByText(/ al mes$/)).toHaveCount(0);
@@ -113,7 +114,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
 
   test("a goal in km beside a timed one has no rhythm row: only the goal that carries it says it", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 1200 }, async (page) => {
-      await toReview(page, withKmGoal());
+      await toOpenReview(page, withKmGoal());
       await expect(page.getByRole("button", { name: "Crear 4 metas" })).toBeVisible();
       await expect(box(page, /^Correr 10K/)).toBeVisible();
       await expect(rowOf(page, /^Correr 10K/).getByText(RHYTHM_LINE, { exact: true })).toHaveCount(0);
@@ -124,7 +125,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
   test("confirming builds the plan: the goal opens with «El plan» and its end", async ({ person, browser, baseURL, db }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
       try {
-        await toReview(page, template());
+        await toOpenReview(page, template());
         await page.getByRole("button", { name: "Crear 3 metas" }).click();
         await expect(page).toHaveURL(/\/metas$/);
         await page.getByRole("link", { name: /Evals y harness/ }).first().click();
@@ -143,7 +144,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
   test("unchecking the rhythm row creates the goal without a rhythm: the goal offers «Armar el plan»", async ({ person, browser, baseURL, db }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
       try {
-        await toReview(page, template());
+        await toOpenReview(page, template());
         const box = rhythmBox(page);
         await box.click();
         await expect(box).not.toBeChecked();
@@ -180,7 +181,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
   test("while it confirms the button is aria-busy, and the goal is written once", async ({ person, browser, baseURL, db }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
       try {
-        await toReview(page, template());
+        await toOpenReview(page, template());
         let release!: () => void;
         const gate = new Promise<void>((resolve) => (release = resolve));
         await page.route("**/metas/importar/revisar", async (route) => {
@@ -203,7 +204,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
   test("«‹ tu texto» leads back with the template, ritmo: line included, still in the field", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
       const text = template();
-      await toReview(page, text);
+      await toOpenReview(page, text);
       await page.getByRole("link", { name: `Volver a ${messages.review.place}`, exact: true }).click();
       await expect(page).toHaveURL(/\/metas\/importar$/);
       await expect(page.getByLabel(messages.textLabel)).toHaveValue(text);
@@ -212,7 +213,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
 
   test("at 360 the review with its rhythm row does not overflow, and every row keeps a 44px tap target", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 360, height: 800 }, async (page) => {
-      await toReview(page, withKmGoal());
+      await toOpenReview(page, withKmGoal());
       await expect(page.getByText(RHYTHM_LINE, { exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       const row = (await rhythmBox(page).locator("xpath=ancestor::label").boundingBox())!;
@@ -233,7 +234,7 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
       await asPerson({ person, browser, baseURL }, { width, height: 900 }, async (page) => {
         try {
           // The current month's own budget would beat the rhythm on the plan link (RP-50): drop it.
-          await toReview(page, template().replace(`\n- ${shift(0).year}-${shift(0).month} · 12 h`, ""));
+          await toOpenReview(page, template().replace(`\n- ${shift(0).year}-${shift(0).month} · 12 h`, ""));
           await rhythmButton(page, "12 h").click();
           await expect(page.getByRole("heading", { name: "Cambiar el ritmo" })).toBeVisible();
           await expect(page.getByText("ritmo al mes · Evals y harness", { exact: true })).toBeVisible();
@@ -269,7 +270,7 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
 
   test("a change the person does not save: «Cancelar» closes the sheet and leaves «12 h»", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
-      await toReview(page, template());
+      await toOpenReview(page, template());
       await rhythmButton(page, "12 h").click();
       await page.getByRole("spinbutton", { name: "horas" }).fill("3");
       await page.getByRole("button", { name: "Cancelar" }).click();
@@ -280,7 +281,7 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
 
   test("0 h is refused with the rhythm's own reason under the field, the sheet stays open, nothing changes", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
-      await toReview(page, template());
+      await toOpenReview(page, template());
       await rhythmButton(page, "12 h").click();
       await page.getByRole("spinbutton", { name: "horas" }).fill("0");
       await page.getByRole("spinbutton", { name: "minutos" }).fill("0");
@@ -295,7 +296,7 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
   for (const width of [360, 1440]) {
     test(`@${width}: with ritmo each task row says «tarea» and its month; a parent adds its sub-tasks' sum; none says «va al plan»`, async ({ person, browser, baseURL }) => {
       await asPerson({ person, browser, baseURL }, { width, height: 1200 }, async (page) => {
-        await toReview(page, template());
+        await toOpenReview(page, template());
         const row = (task: RegExp) => rowOf(page, task).locator("label");
         for (const task of [/^Leer AI Engineering cap. 1–4/, /^Tutor/]) {
           await expect(row(task)).toContainText(`tarea · ${monthLower(0)}`);
@@ -310,7 +311,7 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
 
   test("without ritmo there is no rhythm row, and the task rows say the same", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 1200 }, async (page) => {
-      await toReview(page, template(null));
+      await toOpenReview(page, template(null));
       await expect(page.getByText(RHYTHM_NAME, { exact: true })).toHaveCount(0);
       await expect(rowOf(page, /^Leer AI Engineering/).locator("label")).toContainText(`tarea · ${monthLower(0)}`);
     });
@@ -318,7 +319,7 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
 
   test("unchecking the rhythm leaves the task rows as they were: each says its month, none says «va al plan»", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 1200 }, async (page) => {
-      await toReview(page, template());
+      await toOpenReview(page, template());
       await rhythmBox(page).click();
       await expect(rhythmBox(page)).not.toBeChecked();
       await expect(rowOf(page, /^Leer AI Engineering/).locator("label")).toContainText(`tarea · ${monthLower(0)}`);

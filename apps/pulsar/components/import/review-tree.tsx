@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { Pencil } from "lucide-react";
 
 import { srcLines, type Correction, type DraftGoal, type ImportDraft, type Notice as DraftNotice, type Src } from "@/lib/import/draft";
+import { bySection } from "@/lib/import/sections";
 import { correctionKeys, declinedKeys, noticeKey, outKey, remapped } from "@/lib/import/reason-key";
 import type { reviewTree, ReviewNode } from "@/lib/import/review";
 import { phaseCuts, phaseDrops } from "@/lib/import/draft";
@@ -45,6 +46,7 @@ function srcOf(draft: ImportDraft, path: string): Src[] {
 export type TreeHandlers = {
   disabled: boolean;
   onToggle: (path: string, on: boolean) => void;
+  onToggleMany: (paths: string[], on: boolean) => void;
   onEdit: (node: ReviewNode) => void;
   onDecline: (id: string) => void;
   onUndo: (id: string) => void;
@@ -441,7 +443,7 @@ export function ReviewTree({
     return parts.join(".");
   }
 
-  function row(node: ReviewNode, depth: number, blocked = false): ReactNode {
+  function row(node: ReviewNode, depth: number, blocked = false, summary?: string): ReactNode {
     const unit = node.figure?.unit ?? unitOf(node);
     const name = nameOf(node);
     const note = noteOf(node);
@@ -485,6 +487,7 @@ export function ReviewTree({
         boxLabel={node.kind === "rhythm" ? t("import.review.rhythmOf", { amount: fmt(node.figure?.amount ?? 0, unit) }) : undefined}
         trailing={sum !== null ? <Figure variant="meta" value={sum} unit={unit} /> : node.kind === "commitment" && partOf(node.path).commitment?.targetQuantity != null ? <Figure variant="meta" value={partOf(node.path).commitment!.targetQuantity!} unit={partOf(node.path).commitment!.unit ?? ""} /> : undefined}
         onAmount={() => handlers.onEdit(node)}
+        metaMore={summary}
         below={belowOf(node)}
         {...amount}
         {...props}
@@ -492,24 +495,90 @@ export function ReviewTree({
     );
   }
 
-  // Drawn rows, in the tree's order, a task's sub-tasks folded behind their count.
+  // Drawn rows, in the tree's order. A goal is one row with its summary; its parts fold behind
+  // «Sus partes», its months fold inside, a task's sub-tasks behind their count.
   const drawn = nodes.filter((n) => n.kind !== "note" && n.markable && !phaseDrops(work, today).some((drop) => drop.path === n.path));
-  const rows: ReactNode[] = [];
-  for (let i = 0; i < drawn.length; i++) {
-    const node = drawn[i];
-    if (node.kind === "subTask") continue;
-    rows.push(row(node, node.depth));
-    if (node.kind === "task") {
-      const children = drawn.filter((n) => n.kind === "subTask" && n.path.startsWith(`${node.path}.children.`));
-      if (children.length > 0) {
-        rows.push(
-          <Fold key={`${node.path}:fold`} depth={Math.min(node.depth + 1, 4) as 1 | 2 | 3 | 4} label={t("import.review.tree.subTasks", { count: children.length })}>
-            {children.map((child) => row(child, child.depth))}
-          </Fold>,
-        );
-      }
+  const undecided = corrections.filter((c) => !declined.has(c.id) && !accepted.has(c.id));
+  const monthOfNode = (node: ReviewNode): string | null =>
+    node.kind === "month" ? node.label : node.kind === "task" || node.kind === "subTask" ? (partOf(node.path).task?.month ?? null) : null;
+  const noticeAnchors = notices.map((notice) => weekNoticeAt(notice) ?? `goals.${notice.at.split(".")[1]}`);
+
+  function taskRows(node: ReviewNode): ReactNode[] {
+    const out: ReactNode[] = [row(node, node.depth)];
+    const children = drawn.filter((n) => n.kind === "subTask" && n.path.startsWith(`${node.path}.children.`));
+    if (children.length > 0) {
+      out.push(
+        <Fold key={`${node.path}:fold`} depth={Math.min(node.depth + 1, 4) as 1 | 2 | 3 | 4} label={t("import.review.tree.subTasks", { count: children.length })}>
+          {children.map((child) => row(child, child.depth))}
+        </Fold>,
+      );
     }
+    return out;
   }
+
+  function monthFold(goal: ReviewNode, month: string, members: ReviewNode[]): ReactNode {
+    const monthNode = members.find((n) => n.kind === "month");
+    const tasks = members.filter((n) => n.kind === "task");
+    const unit = unitOf(goal);
+    const reach = new Set(members.flatMap((n) => [n.path, ...drawn.filter((d) => d.path.startsWith(`${n.path}.children.`)).map((d) => d.path)]));
+    const pending = undecided.filter((c) => reach.has(nearest(c.at))).length;
+    const hours = monthNode?.figure ? monthNode.figure.amount : tasks.reduce((sum, n) => sum + (n.figure?.amount ?? 0), 0);
+    const marked = tasks.filter((n) => n.marked);
+    const label = [
+      monthName(month),
+      t("import.review.tree.monthTasks", { count: tasks.length }),
+      ...(hours > 0 ? [fmt(hours, unit)] : []),
+      ...(pending > 0 ? [t("import.review.tree.summaryPending", { count: pending })] : []),
+    ].join(" · ");
+    return (
+      <Fold key={`${goal.path}:${month}`} depth={Math.min(goal.depth + 2, 4) as 2 | 3 | 4} label={label}>
+        {members.flatMap((n) => (n.kind === "task" ? taskRows(n) : [row(n, n.depth)]))}
+        {marked.length > 0 ? (
+          <Button
+            variant="ghost"
+            tone="accent"
+            disabled={handlers.disabled}
+            onClick={() => handlers.onToggleMany(marked.map((n) => n.path), false)}
+          >
+            {t("import.review.tree.removeMonth", { count: marked.length, month: monthWord(month) })}
+          </Button>
+        ) : null}
+      </Fold>
+    );
+  }
+
+  function goalRows(node: ReviewNode): ReactNode[] {
+    const inside = drawn.filter((n) => n.kind !== "subTask" && n.path.startsWith(`${node.path}.`));
+    const head = inside.filter((n) => n.kind !== "month" && n.kind !== "task");
+    const byMonth = new Map<string, ReviewNode[]>();
+    for (const n of inside) {
+      const month = monthOfNode(n);
+      if (month !== null) byMonth.set(month, [...(byMonth.get(month) ?? []), n]);
+    }
+    const g = Number(node.path.split(".")[1]);
+    const pending = undecided.filter((c) => Number(c.at.split(".")[1]) === g).length;
+    const taskCount = inside.filter((n) => n.kind === "task").length;
+    const summary = [
+      ...(inside.some((n) => n.kind === "phase") ? [t("import.review.tree.summaryPhases", { count: inside.filter((n) => n.kind === "phase").length })] : []),
+      ...(taskCount > 0 ? [t("import.review.tree.summaryTasks", { count: taskCount })] : []),
+      ...(inside.some((n) => n.kind === "commitment") ? [t("import.review.tree.summaryCommitments", { count: inside.filter((n) => n.kind === "commitment").length })] : []),
+      ...(byMonth.size > 0 ? [t("import.review.tree.summaryMonths", { count: byMonth.size })] : []),
+      ...(pending > 0 ? [t("import.review.tree.summaryPending", { count: pending })] : []),
+    ].join(" · ");
+    const out: ReactNode[] = [row(node, node.depth, false, summary)];
+    if (inside.length > 0) {
+      const open = pending > 0 || noticeAnchors.some((at) => at === node.path || at.startsWith(`${node.path}.`));
+      out.push(
+        <Fold key={`${node.path}:parts`} depth={Math.min(node.depth + 1, 4) as 1 | 2 | 3 | 4} defaultOpen={open} label={t("import.review.tree.parts")}>
+          {head.map((n) => row(n, n.depth))}
+          {[...byMonth.keys()].sort().map((month) => monthFold(node, month, byMonth.get(month)!))}
+        </Fold>,
+      );
+    }
+    return out;
+  }
+
+  const rows: ReactNode[] = drawn.flatMap((node) => (node.kind === "goal" || node.kind === "group" ? goalRows(node) : []));
 
   // ---- What is not in the tree.
   // A goal refused whole is one row; what is refused under it is not listed again.
@@ -538,6 +607,18 @@ export function ReviewTree({
     }
     return "";
   };
+
+  const sections = bySection(placed, sourceLines);
+  const placedRow = (line: (typeof placed)[number]) => (
+    <CheckRow
+      key={line.line}
+      checked={false}
+      disabled
+      name={line.text}
+      meta={t("import.review.lineAt", { line: line.line })}
+      reason={t(outKey[line.reason], { name: noteOwner(line.line) })}
+    />
+  );
 
   const section = (title: MessageKey, hint: MessageKey, children: ReactNode) => (
     <Section label={t(title)}>
@@ -570,16 +651,16 @@ export function ReviewTree({
         ? section(
             "import.review.unplaced.title",
             "import.review.unplaced.hint",
-            placed.map((line) => (
-              <CheckRow
-                key={line.line}
-                checked={false}
-                disabled
-                name={line.text}
-                meta={t("import.review.lineAt", { line: line.line })}
-                reason={t(outKey[line.reason], { name: noteOwner(line.line) })}
-              />
-            )),
+            sections
+              ? sections.map((group) => (
+                  <Fold
+                    key={group.lines[0].line}
+                    label={t("import.review.unplaced.group", { heading: group.heading ?? t("import.review.unplaced.noHeading"), count: group.lines.length })}
+                  >
+                    {group.lines.map(placedRow)}
+                  </Fold>
+                ))
+              : placed.map(placedRow),
           )
         : null}
 

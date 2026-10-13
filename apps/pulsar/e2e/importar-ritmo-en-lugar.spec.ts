@@ -2,6 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect, settled as pageSettled } from "./fixtures";
+import { unfold } from "./importar-plan";
 import { todayInZone } from "../lib/zone";
 
 // 687, redrawn by `ImportarArbol` (RP-89): a month row is «Mes» and its amount, under a rhythm
@@ -45,7 +46,7 @@ const kilometres = [
   `- ${at(0)} · 30`,
 ].join("\n");
 
-async function toReview(page: Page, text: string) {
+async function toOpenReview(page: Page, text: string) {
   await page.goto("/metas/importar");
   await expect(page.getByRole("button", { name: "Leer el plan" })).toBeVisible();
   await page.getByLabel(messages.textLabel).fill(text);
@@ -53,6 +54,7 @@ async function toReview(page: Page, text: string) {
   await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await pageSettled(page);
+  await unfold(page);
 }
 
 type Fixtures = { person: { id: string; sessionFile: string }; browser: Browser; baseURL: string | undefined };
@@ -70,7 +72,7 @@ const monthRow = (page: Page, by: number) => page.getByRole("checkbox", { name: 
 for (const width of [360, 1440]) {
   test(`@${width}: under a rhythm each month with its own amount is «mes» and its amount, with no «en lugar del ritmo»`, async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, width, async (page) => {
-      await toReview(page, timed(true));
+      await toOpenReview(page, timed(true));
       for (const by of [0, 1]) {
         const row = monthRow(page, by);
         const line = row.getByText("mes", { exact: true });
@@ -89,7 +91,7 @@ for (const width of [360, 1440]) {
 
 test("the rhythm's mark leaves the month rows as they are", async ({ person, browser, baseURL }) => {
   await asPerson({ person, browser, baseURL }, 390, async (page) => {
-    await toReview(page, timed(true));
+    await toOpenReview(page, timed(true));
     const box = page.getByRole("checkbox", { name: /Ritmo al mes/ });
     await box.click();
     await expect(box).not.toBeChecked();
@@ -103,7 +105,7 @@ test("the rhythm's mark leaves the month rows as they are", async ({ person, bro
 
 test("with no ritmo: a month row is only its month and its amount", async ({ person, browser, baseURL }) => {
   await asPerson({ person, browser, baseURL }, 390, async (page) => {
-    await toReview(page, timed(false));
+    await toOpenReview(page, timed(false));
     await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(0)}`, "i") })).toBeVisible();
     await expect(page.getByText(IN_LIEU)).toHaveCount(0);
     await expect(page.getByText("Ritmo al mes", { exact: true })).toHaveCount(0);
@@ -112,7 +114,7 @@ test("with no ritmo: a month row is only its month and its amount", async ({ per
 
 test("a goal that does not measure time has no rhythm to stand in for", async ({ person, browser, baseURL }) => {
   await asPerson({ person, browser, baseURL }, 390, async (page) => {
-    await toReview(page, kilometres);
+    await toOpenReview(page, kilometres);
     await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(0)}`, "i") })).toBeVisible();
     await expect(page.getByText(IN_LIEU)).toHaveCount(0);
   });

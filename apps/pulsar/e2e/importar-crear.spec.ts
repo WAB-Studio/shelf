@@ -15,7 +15,7 @@ import {
   createButton,
   months,
   planText,
-  toReview,
+  toOpenReview,
 } from "./importar-plan";
 
 // Creating the plan (RP-86, RP-88, RP-90, RP-95): what is written is what the review shows, and
@@ -25,7 +25,7 @@ test.describe("«Crear» writes the tree the person left (RP-90, RP-95)", () => 
   test("under a rhythm the tasks are written into the plan, with no month (RP-67)", async ({ person, browser, baseURL, db }) => {
     // Kills: writing the task's month for a goal that has a rhythm.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await createButton(page).click();
       await expect(page).toHaveURL(/\/metas$/);
       const tasks = await db`select name, in_plan, planned_month::text as month from goals.one_offs where user_id = ${person.id} and parent_id is null`;
@@ -42,7 +42,7 @@ test.describe("«Crear» writes the tree the person left (RP-90, RP-95)", () => 
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
       // No `ritmo:` line: under a rhythm the tasks go to the plan and carry no month (RP-67).
-      await toReview(page, planText({ rhythm: false }));
+      await toOpenReview(page, planText({ rhythm: false }));
       await page.getByRole("button", { name: "2 sub-tareas" }).click();
       await page.getByRole("checkbox", { name: new RegExp(`^${SUB_B}`) }).uncheck();
       expect(await db`select 1 from goals.goals where user_id = ${person.id}`).toHaveLength(0);
@@ -73,7 +73,7 @@ test.describe("«Crear» writes the tree the person left (RP-90, RP-95)", () => 
   test("while it creates, the tree stands still, the button says «Creando…», and a second tap creates nothing more", async ({ person, browser, baseURL, db }) => {
     // Kills: leaving the button live while the call runs (two plans written).
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       let calls = 0;
       await page.route("**/metas/importar/revisar", async (route) => {
         if (route.request().method() === "POST") {
@@ -97,7 +97,7 @@ test.describe("«Crear» writes the tree the person left (RP-90, RP-95)", () => 
   test("a failed create leaves the tree and its marks, says so, and the same button tries again", async ({ person, browser, baseURL, db }) => {
     // Kills: clearing the draft when the call fails.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await page.getByRole("checkbox", { name: new RegExp(`^${TASK_A}`) }).uncheck();
       await page.route("**/metas/importar/revisar", (route) => (route.request().method() === "POST" ? route.abort() : route.continue()));
       await createButton(page).click();

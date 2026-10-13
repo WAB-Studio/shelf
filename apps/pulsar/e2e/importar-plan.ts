@@ -119,6 +119,19 @@ export async function toReview(page: Page, text: string) {
   await settled(page);
 }
 
+// Opens every goal and month of the review: it arrives folded, whatever the plan's length (902).
+export async function unfold(page: Page) {
+  // A review of refused goals alone has none to open.
+  await page.getByRole("button", { name: /^Sus partes/ }).first().waitFor({ timeout: 3000 }).catch(() => undefined);
+  const closed = page.getByRole("button", { name: /^(Sus partes|[^·]+ · \d+ tareas?)/, expanded: false });
+  while ((await closed.count()) > 0) await closed.first().click();
+}
+
+export async function toOpenReview(page: Page, text: string) {
+  await toReview(page, text);
+  await unfold(page);
+}
+
 // A draft in the tab's storage (version 2), as `/importar/leer` would have left it for the review.
 export type Seed = {
   raw: RawDraft;
@@ -152,6 +165,11 @@ export async function toSeededReview(page: Page, seed: Seed) {
   await page.goto("/metas/importar/revisar");
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await settled(page);
+}
+
+export async function toOpenSeededReview(page: Page, seed: Seed) {
+  await toSeededReview(page, seed);
+  await unfold(page);
 }
 
 // What `/importar/leer` answers for a text the server reads with no model: the real payload,
