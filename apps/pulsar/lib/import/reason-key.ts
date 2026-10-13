@@ -21,6 +21,7 @@ export const correctionKeys = {
   measureInHours: sentence("measureInHours"),
   monthSumDiffers: sentence("monthSumDiffers"),
   monthOverRhythm: sentence("monthOverRhythm"),
+  rhythmWithoutTasks: sentence("rhythmWithoutTasks"),
 } satisfies Record<CorrectionCode, { said: MessageKey; proposed: MessageKey; why: MessageKey }>;
 
 function sentence<C extends CorrectionCode>(code: C) {

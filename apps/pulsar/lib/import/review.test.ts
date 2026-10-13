@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { draftRefusals, type DraftGoal, type DraftTask, type ImportDraft } from "./draft";
 import type { StoredDraft } from "./draft-store";
-import { edit, reviewTree } from "./review";
+import { edit, markedDraft, nameKey, reviewTree } from "./review";
 
 const TODAY = "2026-10-15";
 
@@ -176,4 +176,28 @@ test("coverage rides along: the counts are the draft's own", () => {
   const d = draft(goal({ src: [{ from: 1, to: 2 }] }));
   const r = review(d, { source: { kind: "lines", lines: ["a", "b", "c"] } });
   assert.deepEqual([r.coverage.plan, r.coverage.out, r.coverage.total], [2, 1, 3]);
+});
+
+// ---- 903
+
+test("903: a phase the person unticked is not sent", () => {
+  const d = draft(goal({ phases: [phase, { ...phase, aim: "Otra", startsOn: "2027-01-01", endsOn: "2027-03-01" }] }));
+  const sent = markedDraft(d, new Set(["goals.0.phases.0"]), new Set());
+  assert.deepEqual(sent.goals[0].phases.map((p) => p.aim), ["Otra"]);
+});
+
+test("903: renaming a commitment or a phase in its sheet changes that part and no other", () => {
+  const c = { name: "Correr", cadenceKind: "daily" as const, cadenceWeekdays: null, cadenceN: null, satisfaction: "tap" as const, targetQuantity: null, unit: null, src: [] };
+  const d = draft(goal({ phases: [phase], commitments: [c, { ...c, name: "Leer" }] }));
+  const renamed = edit(d, "goals.0.commitments.1", { name: "Leer más" });
+  assert.deepEqual(renamed.goals[0].commitments.map((x) => x.name), ["Correr", "Leer más"]);
+  assert.equal(edit(d, "goals.0.phases.0", { name: "Nueva" }).goals[0].phases[0].aim, "Nueva");
+  assert.equal(d.goals[0].commitments[1].name, "Leer");
+});
+
+test("903: a goal name is compared composed, trimmed, with spaces collapsed and without case", () => {
+  assert.equal(nameKey("Ordenar la casa"), nameKey("  ordenar   LA casa "));
+  assert.equal(nameKey("Ingle\u0301s"), nameKey("Inglés"));
+  assert.equal(nameKey("Inglés").length, 6);
+  assert.notEqual(nameKey("Ingles"), nameKey("Inglés"));
 });

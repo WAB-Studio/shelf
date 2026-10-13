@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { check } from "@/lib/import/check";
+import { placeLeftovers } from "@/lib/import/coverage";
 import { normalize } from "@/lib/import/draft";
 import { MODEL_NAME, fileRoute, modelAvailable, readPlan, type PlanInput, type PlanReading } from "@/lib/import/model";
 import { claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
@@ -127,11 +128,12 @@ export async function POST(request: NextRequest) {
         }
         send({ step: "check" });
         const normalized = normalize(reading.raw, reading.source);
-        const checked = check(normalized.draft);
+        const placed = placeLeftovers(normalized.draft, reading.source);
+        const checked = check(placed);
         send({
           done: {
             via: "model",
-            draft: normalized.draft,
+            draft: placed,
             corrections: [...normalized.corrections, ...checked.corrections],
             notices: checked.notices,
             source: reading.source,

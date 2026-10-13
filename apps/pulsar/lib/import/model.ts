@@ -18,7 +18,7 @@ const MAX_OUTPUT_TOKENS = 32_000;
 
 const REASONING_EFFORT = "medium";
 
-const REQUEST_TIMEOUT_MS = 240_000;
+export const REQUEST_TIMEOUT_MS = 240_000;
 
 export type Step = "find" | "arrange";
 

@@ -55,3 +55,21 @@ test("the result is kept, read back and cleared; junk reads as nothing", () => {
   memory.set("pulsar.import-created", "{nope");
   assert.equal(readCreated(), null);
 });
+
+test("903: a stored result with no readable part reads as nothing", () => {
+  memory.set("pulsar.import-created", JSON.stringify({ goals: 2, parts: [] }));
+  assert.equal(readCreated(), null);
+  memory.set("pulsar.import-created", JSON.stringify({ goals: 2, parts: [{ name: "x", goal: "g", kind: "nope", reason: "r" }] }));
+  assert.equal(readCreated(), null);
+  clearCreated();
+});
+
+test("903: a refused month is named by its month, and each reason reads as its own sentence", () => {
+  const draft = { goals: [{ name: "Casa", tasks: [] }] } as never;
+  const part = describePart(draft, { path: "goals.0.months.2", name: "2026-11", reason: "x" });
+  assert.deepEqual([part.kind, part.month, part.name], ["month", "2026-11", "2026-11"]);
+  assert.equal(reasonSentence("import.errors.cadenceCount"), "import.created.reasons.cadenceCount");
+  assert.equal(reasonSentence("import.errors.cadenceWeekdays"), "import.created.reasons.cadenceWeekdays");
+  assert.equal(reasonSentence("import.errors.quantityNoAmount"), "import.created.reasons.quantityNoAmount");
+  assert.equal(reasonSentence("import.errors.noteShape"), "import.created.reasons.noteShape");
+});

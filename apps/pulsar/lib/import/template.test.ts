@@ -1015,3 +1015,45 @@ test("880 limit: plantilla 1 keeps its 12", () => {
   assert.equal(parseV2(`pulsar · plantilla 1\n${goals(12)}`).matched && "draft" in parseV2(`pulsar · plantilla 1\n${goals(12)}`), true);
   assert.deepEqual(errors2(`pulsar · plantilla 1\n${goals(13)}`).errors.map((e) => e.line), [2 + 12 * 2]);
 });
+
+// ---- 903: survivors of the tren-i1 mutator in the second template's reader.
+
+test("903 dentro de: a second line naming a goal above is an error on the second line", () => {
+  const text = `${H2}# A\nhorizonte: 2027-10-01\n# B\nhorizonte: 2027-10-01\n# C\nhorizonte: 2027-10-01\ndentro de: A\ndentro de: B\n`;
+  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[9, "inside"]]);
+});
+
+test("903 dentro de: a line with no name cuts the read at that line", () => {
+  const result = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de:\n## Tareas\n- mal\n`);
+  assert.equal(result.cut, true);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[4, "inside"]]);
+});
+
+test("903 dentro de: a goal cannot be inside itself", () => {
+  const result = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de: A\n`);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[4, "insideUnknown"]]);
+});
+
+test("903 dentro de: before the horizon it asks for the horizon, not for a parent", () => {
+  const result = errors2(`${H2}# A\nhorizonte: 2027-10-01\n# B\ndentro de: A\n`);
+  assert.equal(result.cut, true);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[5, "import.errors.form.horizon"]]);
+});
+
+test("903 a line two things are wrong with is listed once", () => {
+  const text = `${H2}# A\nhorizonte: 2027-10-01\nmedida: m · h\n## Tareas\n- 2026-13 · 0 h · ${"x".repeat(130)}\n`;
+  assert.deepEqual(errors2(text).errors.map((e) => e.line), [6]);
+});
+
+test("903 a schema refusal in the 14th goal lands on that goal's own line", () => {
+  const goals = Array.from({ length: 13 }, (_, i) => `# Meta ${i}\nhorizonte: 2027-10-01\n`).join("");
+  const text = `${H2}${goals}# Última\nhorizonte: 2027-10-01\n## Tareas\n- 2026-13 · T\n`;
+  const lastLine = text.split("\n").length - 1;
+  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[lastLine, "import.errors.form.monthReal"]]);
+});
+
+test("903 a goal name of exactly the ceiling reads, one more stops at its line", () => {
+  assert.equal(read2(`${H2}# ${"n".repeat(GOAL_NAME_MAX)}\nhorizonte: 2027-10-01\n`).goals.length, 1);
+  const over = errors2(`${H2}# ${"n".repeat(GOAL_NAME_MAX + 1)}\nhorizonte: 2027-10-01\n`);
+  assert.deepEqual(over.errors.map((e) => [e.line, e.expected]), [[2, "import.errors.form.goalLong"]]);
+});

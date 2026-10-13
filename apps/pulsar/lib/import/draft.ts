@@ -431,7 +431,8 @@ export type CorrectionCode =
   | "endWithinAbove"
   | "measureInHours"
   | "monthSumDiffers"
-  | "monthOverRhythm";
+  | "monthOverRhythm"
+  | "rhythmWithoutTasks";
 export type NoticeCode = "weekRuleBroken";
 
 // `id` is `at:code`. `declined` says what rejecting it does: keep what the plan said, or leave the part out.
@@ -692,7 +693,9 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
 
 function withoutAdded(note: string | null, added: string | undefined): string | null {
   if (note === null || added === undefined) return note;
-  const stripped = note.endsWith(added) ? note.slice(0, note.length - added.length).replace(/\n*$/, "") : note;
+  const at = note.lastIndexOf(added);
+  if (at < 0) return note;
+  const stripped = `${note.slice(0, at).replace(/\n*$/, "")}\n\n${note.slice(at + added.length).replace(/^\n+/, "")}`.replace(/^\n+|\n+$/g, "");
   return stripped === "" ? null : stripped;
 }
 
@@ -750,6 +753,12 @@ export function decide(draft: ImportDraft, corrections: Correction[], declined: 
         if (refused) {
           goal.note = withoutAdded(goal.note, c.values?.added);
           goal.months = JSON.parse(c.values?.months ?? "[]") as typeof goal.months;
+        }
+        break;
+      case "rhythmWithoutTasks":
+        if (!refused && goal.rhythm !== null) {
+          goal.note = append(goal.note, c.values?.added ?? "");
+          goal.rhythm = null;
         }
         break;
       case "endWithinAbove":

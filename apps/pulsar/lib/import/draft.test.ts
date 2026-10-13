@@ -4,7 +4,9 @@ import test from "node:test";
 import { parseTemplateV1 as parseTemplate } from "./template";
 import { draftRefusals, importDraftJsonSchema, importDraftSchema, inMinutes, phaseCuts, phaseDrops, strayEstimates, withCutPhases, withoutStrayEstimates, type ImportDraftV1 } from "./draft";
 
-import { decide, draftRefusals as refusalsOf, draftV2Schema, normalize, rawDraftJsonSchema, rawDraftSchema, type DraftGoal, type ImportDraft, type RawGoal, type RawTask, type Source } from "./draft";
+import { commitmentShapeKey, decide, draftRefusals as refusalsOf, draftV2Schema, normalize, rawDraftJsonSchema, rawDraftSchema, type DraftGoal, type ImportDraft, type RawGoal, type RawTask, type Source } from "./draft";
+
+import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
 const TODAY = "2026-10-15";
 
@@ -680,4 +682,124 @@ test("898: hours, hour, hrs and hr in a commitment or a measure are time; minute
   }
   assert.equal(run([rawGoal({ measure: { name: "x", unit: "hours" } })]).draft.goals[0].measure?.unit, "minutos");
   assert.equal(run([rawGoal({ measure: { name: "x", unit: "minutes" } })]).draft.goals[0].measure?.unit, "minutos");
+});
+
+// ---- 903: the lines of the commitment shape, the correction words, the ceilings, the boundaries.
+
+const shape = (over: Partial<Parameters<typeof commitmentShapeKey>[0]> = {}) =>
+  commitmentShapeKey({ cadenceKind: "daily", cadenceWeekdays: null, cadenceN: null, satisfaction: "tap", targetQuantity: null, unit: null, ...over });
+
+test("903: commitmentShapeKey: days only on weekdays, and a weekdays commitment with none is named", () => {
+  assert.equal(shape(), null);
+  assert.equal(shape({ cadenceKind: "weekdays", cadenceWeekdays: [1] }), null);
+  assert.equal(shape({ cadenceKind: "weekdays", cadenceWeekdays: [] }), "plan.errors.weekdaysEmpty");
+  assert.equal(shape({ cadenceKind: "weekdays", cadenceWeekdays: null }), "plan.errors.weekdaysEmpty");
+  assert.equal(shape({ cadenceKind: "daily", cadenceWeekdays: [1] }), "import.errors.cadenceWeekdays");
+  assert.equal(shape({ cadenceKind: "times_per_week", cadenceN: 2, cadenceWeekdays: [] }), "import.errors.cadenceWeekdays");
+});
+
+test("903: commitmentShapeKey: a count belongs to the three counted kinds and is at least 1", () => {
+  for (const cadenceKind of ["times_per_week", "every_n_days", "times_per_month"]) {
+    assert.equal(shape({ cadenceKind, cadenceN: 1 }), null, cadenceKind);
+    assert.equal(shape({ cadenceKind, cadenceN: null }), "import.errors.cadenceCount", `${cadenceKind} with no count`);
+    assert.equal(shape({ cadenceKind, cadenceN: 0 }), "import.errors.cadenceCount", `${cadenceKind} with 0`);
+  }
+  assert.equal(shape({ cadenceKind: "daily", cadenceN: 1 }), "import.errors.cadenceCount");
+  assert.equal(shape({ cadenceKind: "weekdays", cadenceWeekdays: [1], cadenceN: 1 }), "import.errors.cadenceCount");
+});
+
+test("903: commitmentShapeKey: a quantity carries a target and a unit, a tap neither", () => {
+  assert.equal(shape({ satisfaction: "quantity", targetQuantity: 30, unit: "min" }), null);
+  for (const [targetQuantity, unit] of [[30, null], [null, "min"], [null, null]] as const) {
+    assert.equal(shape({ satisfaction: "quantity", targetQuantity, unit }), "import.errors.quantityNoAmount", `${targetQuantity} ${unit}`);
+  }
+  assert.equal(shape({ satisfaction: "tap", targetQuantity: 30, unit: "min" }), "import.errors.tapWithAmount");
+});
+
+test("903: the correction names the days Monday to Sunday and ignores a day past Sunday", () => {
+  const said = (days: number[]) => {
+    const { draft, corrections } = run([rawGoal({ commitments: [commitment({ cadenceWeekdays: days })] })]);
+    return { text: corrections.find((c) => c.code === "cadenceToWeekdays")?.proposed, days: draft.goals[0].commitments[0].cadenceWeekdays };
+  };
+  assert.equal(said([1]).text, "lun");
+  assert.equal(said([7, 1, 3]).text, "lun, mié, dom");
+  assert.deepEqual(said([8, 2]), { text: "mar", days: [2] });
+  const past = run([rawGoal({ commitments: [commitment({ cadenceWeekdays: [8] })] })]);
+  assert.deepEqual(past.corrections, []);
+  assert.equal(past.draft.goals[0].commitments[0].cadenceKind, "times_per_week");
+});
+
+test("903: a weekly rate is kept when accepted and dropped from the goal when declined", () => {
+  const { draft, corrections } = run([rawGoal({ rate: { amount: 10, unit: "hours", per: "week" } })]);
+  assert.equal(decide(draft, corrections, new Set()).goals[0].rhythm, 2600);
+  assert.equal(decide(draft, corrections, new Set([corrections[0].id])).goals[0].rhythm, null);
+});
+
+test("903: a weekly rate rounds down to whole minutes", () => {
+  assert.equal(run([rawGoal({ rate: { amount: 1, unit: "minutes", per: "week" } })]).draft.goals[0].rhythm, 4);
+});
+
+test("903: a commitment target in hours is stored in minutes", () => {
+  const { draft } = run([rawGoal({ commitments: [commitment({ cadenceKind: "daily", cadenceN: null, satisfaction: "quantity", targetQuantity: 2, unit: "horas" })] })]);
+  assert.equal(draft.goals[0].commitments[0].targetQuantity, 120);
+});
+
+const taskWithNote = (n: number) => ({ name: "T", month: "2026-11", estimate: null, note: "n".repeat(n), noteSrc: [], src: [], week: null, rule: null, children: [] });
+
+test("903: a task note, a sub-task note and a goal note are refused one character past their ceiling, not at it", () => {
+  const child = (n: number) => ({ ...taskWithNote(0), children: [{ name: "c", estimate: null, note: "n".repeat(n), noteSrc: [], src: [], rule: null }] });
+  assert.deepEqual(refusalKeys(tree({ tasks: [taskWithNote(2000)] })), []);
+  assert.deepEqual(refusalKeys(tree({ tasks: [taskWithNote(2001)] })), ["goals.0.tasks.0.note day.errors.oneOffNoteTooLong"]);
+  assert.deepEqual(refusalKeys(tree({ tasks: [child(2000)] })), []);
+  assert.deepEqual(refusalKeys(tree({ tasks: [child(2001)] })), ["goals.0.tasks.0.children.0.note day.errors.oneOffNoteTooLong"]);
+  assert.deepEqual(refusalKeys(tree({ note: "n".repeat(GOAL_NOTE_MAX) })), []);
+  assert.deepEqual(refusalKeys(tree({ note: "n".repeat(GOAL_NOTE_MAX + 1) })), ["goals.0.note tree.errors.noteTooLong"]);
+});
+
+test("903: a month named twice is refused on the second, and a month past the span is refused once", () => {
+  const entry = (month: string) => ({ month, amount: 60, src: [] });
+  assert.deepEqual(refusalKeys(tree({ months: [entry("2026-11"), entry("2026-11")] })), ["goals.0.months.1 import.errors.duplicateMonth"]);
+  assert.deepEqual(refusalKeys(tree({ months: [entry("2026-09"), entry("2026-09")] })), [
+    "goals.0.months.0 import.errors.monthBeforeStart",
+    "goals.0.months.1 import.errors.monthBeforeStart",
+  ]);
+});
+
+test("903: a sub-task figure in a goal with no measure is refused on the sub-task", () => {
+  const withChild = { ...taskWithNote(0), children: [{ name: "c", estimate: 30, note: null, noteSrc: [], src: [], rule: null }] };
+  assert.deepEqual(refusalKeys(tree({ measure: null, tasks: [withChild] })), ["goals.0.tasks.0.children.0 month.errors.noMeasure"]);
+});
+
+test("903: a name of exactly 120 characters stays whole; one cut at a space keeps the whole 120 before it", () => {
+  const exact = `${"abcdefghi ".repeat(11)}abcdefghij`;
+  assert.equal(exact.length, 120);
+  const kept = run([rawGoal({ name: exact })]);
+  assert.equal(kept.draft.goals[0].name, exact);
+  assert.deepEqual(kept.corrections, []);
+  const spaced = `${"x".repeat(10)} ${"y".repeat(109)} tail`;
+  const cut = run([rawGoal({ name: spaced })]);
+  assert.equal(cut.draft.goals[0].name, `${"x".repeat(10)} ${"y".repeat(109)}`);
+  assert.equal(run([rawGoal({ name: `${"x".repeat(10)} ${"y".repeat(150)}` })]).draft.goals[0].name, "x".repeat(10));
+});
+
+test("903: the note of a shortened name leaves room for its head and fills the rest exactly", () => {
+  const full = "palabra ".repeat(17).trim();
+  const room = 2000 - (full.length + 2);
+  const note = (body: number) => {
+    const lines = ["b".repeat(body)];
+    const { draft } = run([rawGoal({ tasks: [rawTask({ name: full, noteSrc: [{ from: 1, to: 1 }] })] })], { kind: "lines", lines });
+    return draft.goals[0].tasks[0].note;
+  };
+  assert.equal(note(room)?.length, 2000);
+  assert.equal(note(room + 1), full);
+});
+
+test("903: declining the holder's rhythm correction takes its line out of the note wherever it sits", () => {
+  const { draft, corrections } = run([rawGoal({ rate: { amount: 10, unit: "hours", per: "week" } }), rawGoal({ key: "g2", parent: "g1" })]);
+  const added = corrections.find((c) => c.code === "holderRhythmToNote")!.values!.added;
+  draft.goals[0].note = `${draft.goals[0].note}\n\nRiesgos del plan\nSemana tipo`;
+  assert.ok(draft.goals[0].note.includes(added));
+  const back = decide(draft, corrections, new Set(corrections.map((c) => c.id)));
+  assert.equal(back.goals[0].note, "Riesgos del plan\nSemana tipo");
+  assert.equal(back.goals[0].rhythm, 2600);
 });
