@@ -1487,3 +1487,14 @@ Three answers of the user, 2026-10-09.
 - Words and structure: `private/tableros-revision/NOTAS.md` §A, with the three decisions above where it differs.
 - **Every plan's review arrives folded,** short or long, 2026-10-13, by the user: one rule, whatever the length. A goal opens on
   its own only when it has corrections to decide. `ImportarArbol` (drawn unfolded) gives way to `ImportarRevisionLarga` for that.
+
+## Decisions of 2026-10-13, goals with no end, loose habits, a rhythm in any unit (RP-99–102), by the user
+
+- **The boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», four boards by
+  area (`SinFinalMetas`, `SinFinalPlan`, `SinFinalDias`, `SinFinalInformeImportar`), holding `MetasSinFinal`, `MetaNuevaSinFinal`,
+  `MetaSinFinal`, `FinalQuitarPoner`, `HabitosSueltos`, `MetaRitmoUnidad`, `PorMesRitmoUnidad`, `PorMesSinFinal`, `HoyHabitoSuelto`,
+  `HoySinFinal`, `SemanaHabitoSuelto`, `MesHabitoSuelto`, `InformeSinFinal`, `ImportarSinFinal`. Words: `private/tableros-sin-final/NOTAS.md`.
+- **The loose habits are «Hábitos» everywhere:** the group on Hoy, Semana and «Mes», and the section on `/metas`. Never «Sin meta».
+- **A goal with no end prints the same twelve months the screen shows** (the current one and eleven after).
+- The user's answers P1–P11 are at the end of `private/plan-pulsar-sin-final-2026-10-13.md`; the spec carries them (RP-99–102).
+- Faces not drawn: dark (the token table) and 700–1023.
