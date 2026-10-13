@@ -230,3 +230,43 @@ test("an archived child adds nothing and is not listed", () => {
   assert.deepEqual(figure(up, "G", M), { planned: 100, reached: 50 });
   assert.deepEqual(up.get("G")?.outOfUnit, []);
 });
+
+test("spanStart ignores an archived goal, however early it was opened (RP-79, RP-83)", () => {
+  // Kills: reading archived goals into the span.
+  const tree = buildTree([
+    row("G", { createdAt: "2026-10-05T12:00:00Z" }),
+    row("old", { parentId: "G", createdAt: "2026-01-10T15:00:00Z", archivedAt: "2026-08-01T00:00:00Z" }),
+    row("live", { parentId: "G", createdAt: "2026-09-01T15:00:00Z", position: 1 }),
+  ]);
+  assert.equal(spanStart(tree, "G"), "2026-09-01");
+});
+
+test("spanStart of a branch archived whole is its earliest day all the same (RP-83)", () => {
+  // Kills: an empty span when no goal is open.
+  const closed = "2026-08-01T00:00:00Z";
+  const tree = buildTree([
+    row("G", { createdAt: "2026-10-05T12:00:00Z", archivedAt: closed }),
+    row("g1", { parentId: "G", createdAt: "2026-03-10T15:00:00Z", archivedAt: closed }),
+  ]);
+  assert.equal(spanStart(tree, "G"), "2026-03-10");
+});
+
+test("what a holder reached in another unit than its sum's adds nothing (RP-80)", () => {
+  // Kills: adding the holder's own reached whatever its unit.
+  const tree = buildTree([
+    row("G", { measureUnit: "min" }),
+    row("a", { parentId: "G", measureUnit: "min" }),
+  ]);
+  const up = rollUp(tree, new Map([["a", own("min", { [M]: [120, 90] })], ["G", own("km", { [M]: [null, 15] })]]));
+  assert.deepEqual(figure(up, "G", M), { planned: 120, reached: 90 });
+});
+
+test("a sum is never a typed amount, whatever its goals carried (RP-80)", () => {
+  // Kills: passing a goal's ownBudget flag up to its holder.
+  const tree = buildTree([
+    row("G", { measureUnit: "min" }),
+    row("a", { parentId: "G", measureUnit: "min" }),
+  ]);
+  const up = rollUp(tree, new Map([["a", own("min", { [M]: [120, 90] })]]));
+  assert.equal(up.get("G")?.months.get(M)?.ownBudget, false);
+});

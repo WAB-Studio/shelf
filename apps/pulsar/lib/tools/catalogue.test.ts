@@ -113,3 +113,30 @@ test("get_goal on a goal that is not there answers goalNotFound", async () => {
   const outcome = await spec.run({ goal_id: "7f1c2b3a-4d5e-4f60-8a9b-0c1d2e3f4a5b" });
   assert.deepEqual(outcome, { ok: false, error: "mcp.errors.goalNotFound" });
 });
+
+const ABOVE = "7f1c2b3a-4d5e-4f60-8a9b-0c1d2e3f4a5b";
+
+// What the server does with a call: parse the input with the tool's schema, then run it (RP-85).
+async function call(name: string, wire: Record<string, unknown>) {
+  const { writeTool } = await catalogue();
+  const spec = writeTool(name)!;
+  return spec.run(spec.input.parse(wire));
+}
+
+test("create_goal puts the goal inside the one named by parent_id, and at the top without it (RP-85)", async () => {
+  await call("create_goal", { name: "Dentro", horizon: "2027-01-01", parent_id: ABOVE });
+  await call("create_goal", { name: "Arriba", horizon: "2027-01-01" });
+  assert.deepEqual(calls, [
+    { act: "createGoal", input: { name: "Dentro", horizon: "2027-01-01", parentId: ABOVE } },
+    { act: "createGoal", input: { name: "Arriba", horizon: "2027-01-01" } },
+  ]);
+});
+
+test("move_goal moves a goal under another, and to the top with a null parent_id (RP-85, RP-82)", async () => {
+  await call("move_goal", { goal_id: "g1", parent_id: ABOVE });
+  await call("move_goal", { goal_id: "g1", parent_id: null });
+  assert.deepEqual(calls, [
+    { act: "moveGoal", input: { goalId: "g1", parentId: ABOVE } },
+    { act: "moveGoal", input: { goalId: "g1", parentId: null } },
+  ]);
+});
