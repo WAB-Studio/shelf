@@ -343,6 +343,7 @@ jobs:
         run: |
           PULSAR_FAULT_SEAM=reading_lookups \
           PULSAR_MODEL_STUB=draft:${{ github.workspace }}/apps/pulsar/e2e/data/modelo-borrador.json \
+          PULSAR_CHAT_STUB=script:${{ github.workspace }}/apps/pulsar/e2e/data/chat-guion.json \
           OPENAI_API_KEY=sk-stub \
             npm run start -w apps/pulsar -- --port 3227 > /tmp/pulsar-fault.log 2>&1 &
           for _ in $(seq 1 60); do
