@@ -9,7 +9,7 @@ Audit the code. Change nothing.
 
 # Input
 
-A scope: paths, a set of Fases or RF codes, or "the built backend". Default to the whole tree under `app`, `lib`, `db`, `scripts`, `components`, `i18n`, `messages`.
+A scope: paths, a set of Fases or RF codes, or "the built backend". Default to the whole tree under `apps/orbit/`: `app`, `lib`, `db`, `scripts`, `components`, `i18n`, `messages`.
 
 # Stance
 
@@ -31,7 +31,7 @@ Assume the code lies about being finished. A green typecheck hides an empty body
 - A stored balance column. Balances derive from movements.
 - A transaction type stored, not derived from the accounts.
 - A migration that creates a table without `REVOKE ALL` from `anon`, `authenticated`, `service_role`.
-- A policy asserted from a migration, not proven in `scripts/check-rls.ts`.
+- A policy asserted from a migration, not proven in `apps/orbit/scripts/check-rls.ts`.
 - Server validation that does not reuse the form's Zod schema.
 - A hardcoded interface string outside next-intl.
 - A screen's queries chained, not fanned with `Promise.all`, the fund guard included.
@@ -49,7 +49,7 @@ Assume the code lies about being finished. A green typecheck hides an empty body
 # Run
 
 - `npm run typecheck` (tsgo). `npm run lint` (eslint cache). Report the real output. A warning is a finding.
-- `npm run db:check-rls` when the scope touches a table. Read that every named assertion is PASS.
+- `npm run db:check-rls -w apps/orbit` when the scope touches an orbit table. Read that every named assertion is PASS.
 
 # Rank
 
@@ -67,7 +67,10 @@ Assume the code lies about being finished. A green typecheck hides an empty body
 
 # Output
 
-Return exactly these five sections:
+Write exactly these five sections to a file under the lane's `private/reportes/`, the one file you write.
+Return three lines: green or red, the commit, and what blocks.
+
+The file carries:
 
 ## Summary
 One line: the scope audited, and counts by rank.

@@ -52,7 +52,7 @@ const SYSTEM_PROMPT = [
   `You are given goals that hold other goals, with the tasks each one holds and the goals inside it. A plan often writes every task under its general goal.`,
   `For each task, decide whether one goal inside the holder is the one it serves, by its name and by what that goal holds.`,
   `List only the tasks that clearly belong to one of those goals; a task that serves the holder as a whole is not listed.`,
-  `Invent nothing: name only keys and task numbers you were given. Answer JSON shaped exactly by the given schema.`,
+  `Invent nothing: name only keys and task numbers you were given.`,
 ].join(" ");
 
 // The goals that hold goals and tasks both: the ones worth asking about.

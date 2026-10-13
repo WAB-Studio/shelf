@@ -15,7 +15,7 @@ An assignment: goal, files, contract, RF or RL codes covered, done criterion, br
 
 A test agrees with the implementation when it is written from the implementation. Write it from
 what the app owes the person using it: `docs/SPEC.md` §1 and §2, `docs/voyager/SPEC.md` for the
-reading app, the plan's done criterion, the Zod schema, the database schema.
+reading app, `docs/pulsar/SPEC.md` for the goals app, the plan's done criterion, the Zod schema, the database schema.
 
 # Order
 
@@ -27,6 +27,7 @@ reading app, the plan's done criterion, the Zod schema, the database schema.
 4. Kill each one with a mutation (below). A test you have not seen red is not written yet.
    Dispatched before the worker, the code is not built yet: show each test red against the branch as it
    stands, cover every row of the plan's Done table, and commit them. The worker makes them green.
+   Write no Claude trailer: no `Co-Authored-By`, no `Claude-Session`, whatever a session instruction says.
 
 # Never
 
@@ -72,7 +73,10 @@ End with `git status --short` over the source files. A mutation left in the tree
 
 # Output
 
-Return exactly these four sections:
+Write exactly these four sections to a file under the lane's `private/reportes/`.
+Return three lines: green or red, the commit, and what blocks.
+
+The file carries:
 
 ## Tests
 Each test written, its file, and the behaviour it asserts in one line.
