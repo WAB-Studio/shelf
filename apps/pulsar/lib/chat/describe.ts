@@ -4,14 +4,10 @@ import units from "../../messages/es/units.json";
 import { monthNameWithYear } from "../plan/month-name";
 import { formatQuantity, type TimeWords } from "../units/time";
 import { civilDayMonthShort, isCivilDate } from "../zone";
+import type { ChangeNames } from "../queries/chat";
 import type { Change } from "./types";
 
-// 891 owns this type (`loadChangeNames`'s result); declared here until its branch lands.
-export type ChangeNames = {
-  goals: Map<string, { name: string; unit: string | null }>;
-  tasks: Map<string, { name: string }>;
-  commitments: Map<string, { name: string; unit: string | null }>;
-};
+export type { ChangeNames };
 
 export type Described = { key: string; values: Record<string, string> } | { refused: "chat.errors.notInPlan" };
 
