@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthStart } from "@/lib/validation/budget";
@@ -17,6 +18,9 @@ import { TIME_UNITS } from "@/lib/units/time";
 import { TIME_ZONE, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
+
+// A month holds 44 640 minutes at most; other units answer to the column's cap.
+const MAX_TIME_RHYTHM = 44_640;
 
 export type SetRhythmResult = { ok: true } | { ok: false; error: MessageKey };
 export type DismissPlanNoticeResult = { ok: true } | { ok: false; error: MessageKey };
@@ -37,7 +41,23 @@ export type DismissPlanNoticeResult = { ok: true } | { ok: false; error: Message
  */
 export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
   const parsed = setRhythmSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  if (!parsed.success) {
+    const key = messageKey(parsed.error.issues[0].message);
+    const raw = input as { goalId?: unknown; amount?: unknown } | null;
+    // Past the column's cap the words depend on the unit: a time unit speaks hours, any other a plain count.
+    if (key !== "roadmap.errors.rhythmRange" || typeof raw?.amount !== "number" || raw.amount <= 1_000_000) {
+      return { ok: false, error: key };
+    }
+    const person = await getPerson();
+    if (!person || typeof raw.goalId !== "string" || !z.uuid().safeParse(raw.goalId).success) return { ok: false, error: key };
+    const rows = await withGoalsDb((tx) =>
+      tx.execute<{ timed: boolean }>(sql`
+        select coalesce(lower(trim(measure_unit)) = any(array[${sql.join(TIME_UNITS.map((u) => sql`${u}`), sql`, `)}]::text[]), false) as timed
+        from goals where id = ${raw.goalId}
+      `),
+    );
+    return { ok: false, error: rows[0] && !rows[0].timed ? "roadmap.errors.rhythmRangeAny" : key };
+  }
   const { goalId, amount } = parsed.data;
 
   const person = await getPerson();
@@ -58,12 +78,13 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
       ),
       ok as (
         select * from g
-        where lower(trim(measure_unit)) = any(${timeUnits}) and archived_at is null and horizon > ${today}::date
+        where measure_unit is not null and archived_at is null and (horizon is null or horizon > ${today}::date)
+          and not (lower(trim(measure_unit)) = any(${timeUnits}) and ${amount}::int > ${MAX_TIME_RHYTHM}::int)
           and not exists (select 1 from goals c where c.parent_id = g.id and c.archived_at is null)
       ),
       upd as (
         update goals set rhythm = ${amount},
-          plan_seen = case when rhythm is null
+          plan_seen = case when rhythm is null and lower(trim(measure_unit)) = any(${timeUnits})
             then greatest(plan_seen, (date_trunc('month', ${today}::date) - interval '1 month')::date)
             else plan_seen end
         where id in (select id from ok) returning id
@@ -81,7 +102,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
       ),
       rel as (
         update one_offs set planned_month = null
-        where goal_id in (select id from ok where rhythm is null)
+        where goal_id in (select id from ok where rhythm is null and lower(trim(measure_unit)) = any(${timeUnits}))
           and parent_id is null and planned_month is not null
           and not exists (select 1 from facts f where f.one_off_id = one_offs.id)
           and not (
@@ -95,7 +116,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
       )
       select measure_unit is not null as measured,
              coalesce(lower(trim(measure_unit)) = any(${timeUnits}), false) as timed,
-             archived_at is null and horizon > ${today}::date as open,
+             archived_at is null and (horizon is null or horizon > ${today}::date) as open,
              exists (select 1 from goals c where c.parent_id = g.id and c.archived_at is null) as holder
       from g
     `),
@@ -106,7 +127,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
   if (!goal.open) return { ok: false, error: "month.errors.closed" };
   if (goal.holder) return { ok: false, error: "tree.errors.holderNoRhythm" };
   if (!goal.measured) return { ok: false, error: "roadmap.errors.rhythmNoMeasure" };
-  if (!goal.timed) return { ok: false, error: "roadmap.errors.rhythmNotTime" };
+  if (goal.timed && amount > MAX_TIME_RHYTHM) return { ok: false, error: "roadmap.errors.rhythmRange" };
 
   revalidatePath(`/metas/${goalId}`, "layout");
   revalidatePath("/");
