@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
-import { PHASE, SMALL, SUB_B, TASK_A, TASK_B, asPerson, createButton, months, planText, toReview, word } from "./importar-plan";
+import { PHASE, SMALL, SUB_B, TASK_A, TASK_B, asPerson, createButton, months, planText, toOpenReview, word, unfold } from "./importar-plan";
 
 // One sheet changes a part's name, amount or month (RP-89). The board is `ImportarCambiar`: the
 // sheet carries only the fields the part has, «Cancelar» leaves everything as it was.
@@ -17,7 +17,7 @@ test.describe("changing a part from the end of its row (RP-89)", () => {
     const { first, second } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
       // No `ritmo:` line: under a rhythm the tasks go to the plan and carry no month (RP-67).
-      await toReview(page, planText({ rhythm: false }));
+      await toOpenReview(page, planText({ rhythm: false }));
       await amountOf(page, TASK_B).click();
       await expect(sheet(page).getByText(messages.review.edit.titleOf.task, { exact: true })).toBeVisible();
       await expect(sheet(page).getByText(SMALL, { exact: true })).toBeVisible();
@@ -46,7 +46,7 @@ test.describe("changing a part from the end of its row (RP-89)", () => {
   test("a phase has no amount: a pencil opens a sheet with its name alone", async ({ person, browser, baseURL, db }) => {
     // Kills: no way to rename a part that has no figure, or a sheet with fields the part lacks.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await nameOf(page, PHASE).click();
       await expect(sheet(page).getByText(messages.review.edit.titleOf.phase, { exact: true })).toBeVisible();
       await expect(sheet(page).getByLabel(messages.review.edit.name)).toHaveValue(PHASE);
@@ -66,7 +66,7 @@ test.describe("changing a part from the end of its row (RP-89)", () => {
     // Kills: giving a month a name or a month field.
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await amountOf(page, word(first)).click();
       await expect(sheet(page).getByText(messages.review.edit.titleOf.month, { exact: true })).toBeVisible();
       await expect(sheet(page).getByRole("spinbutton", { name: messages.review.edit.hours })).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("changing a part from the end of its row (RP-89)", () => {
   test("«Cancelar» leaves the part as it was, and so does a reload", async ({ person, browser, baseURL }) => {
     // Kills: saving what was typed when the sheet closes.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await amountOf(page, TASK_A).click();
       await sheet(page).getByLabel(messages.review.edit.name).fill("Otro nombre");
       await sheet(page).getByRole("spinbutton", { name: messages.review.edit.hours }).fill("9");
@@ -88,6 +88,7 @@ test.describe("changing a part from the end of its row (RP-89)", () => {
       await expect(amountOf(page, TASK_A)).toHaveText("4 h");
       await page.reload();
       await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
+      await unfold(page);
       await expect(amountOf(page, TASK_A)).toHaveText("4 h");
       await expect(page.getByRole("checkbox", { name: /^Otro nombre/ })).toHaveCount(0);
       void SUB_B;

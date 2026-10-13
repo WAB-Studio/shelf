@@ -2,6 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { todayInZone } from "../lib/zone";
+import { unfold } from "./importar-plan";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 
 // RP-72, board `ImportarTodosLosErrores`: one reading answers every line that cannot be read.
@@ -109,6 +110,8 @@ test.describe("one reading lists every mistake (RP-72)", () => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await paste(page, plan(...sections(`- ${M2} · 8 km`, SERIES_OK, TASK_OK)));
       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+      await expect(page.getByRole("button", { name: /^Sus partes/ }).first()).toBeVisible();
+      await unfold(page);
       await expect(page.getByRole("checkbox", { name: /^Fondo .*8 km$/ })).toBeVisible();
     });
   });

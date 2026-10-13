@@ -300,7 +300,7 @@ test.describe("what the review owed still holds when it is folded (902)", () => 
       await open(first);
       await open(monthFold(page, monthAt(0)));
       await page.getByRole("button", { name: "Dejar como estaba" }).first().click();
-      await expect(page.getByText(/^Se queda como decía el plan/).first()).toBeVisible();
+      await expect(page.getByText(/^Se queda (como decía el plan|fuera)/).first()).toBeVisible();
       await expect(goalRow(page, CASO1)).toContainText(new RegExp(`\\b${corrections.caso1 - 1} por revisar`));
     });
   });

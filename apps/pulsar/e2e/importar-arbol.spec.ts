@@ -24,7 +24,7 @@ import {
   nonBlank,
   plus,
   planText,
-  toReview,
+  toOpenReview,
   word,
 } from "./importar-plan";
 
@@ -40,7 +40,7 @@ test.describe("the review draws the plan as a tree (RP-89)", () => {
   test("three levels of goal, with a phase, a week and a task under their goal, each saying its class, 16 px a level", async ({ person, browser, baseURL }) => {
     // Kills: drawing the rows flat, or a fixed step per level that is not 16 px.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await expect(page.getByText(messages.review.hint, { exact: true })).toBeVisible();
 
       await expect(box(page, new RegExp(`^${GENERAL}`))).toHaveAccessibleName(/meta general/);
@@ -76,7 +76,7 @@ test.describe("the review draws the plan as a tree (RP-89)", () => {
   test("a task's sub-tasks and a part's note stay folded until their button is pressed", async ({ person, browser, baseURL }) => {
     // Kills: drawing the sub-tasks and notes open, or a note that loses its line break.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await expect(page.getByText(SUB_A)).toHaveCount(0);
       await expect(page.getByText(GENERAL_NOTE_1)).toHaveCount(0);
       await expect(page.getByText(WEEK_NOTE)).toHaveCount(0);
@@ -100,7 +100,7 @@ test.describe("the count says where every line of the text went (RP-96)", () => 
     // Kills: a count that ignores what the person unmarked, or that counts blank lines.
     const text = planText();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, text);
+      await toOpenReview(page, text);
       const whole = await countOf(page);
       expect(whole.total).toBe(nonBlank(text));
       expect(whole.plan + whole.notes + whole.out).toBe(whole.total);
@@ -123,7 +123,7 @@ test.describe("the count says where every line of the text went (RP-96)", () => 
     // Kills: no way back for a part left out, or a line number that is not the text's own.
     const text = planText();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, text);
+      await toOpenReview(page, text);
       await page.getByRole("button", { name: "2 sub-tareas" }).click();
       await box(page, new RegExp(`^${SUB_B}`)).uncheck();
 
@@ -157,7 +157,7 @@ test.describe("what cannot be created is listed, and a plan with nothing to crea
       `- ${later} · 2 h · Tarea tardía`,
     ].join("\n");
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, text);
+      await toOpenReview(page, text);
       await expect(page.getByText(messages.review.blocked.hint, { exact: true })).toBeVisible();
       const section = page.getByText(messages.review.blocked.title, { exact: true }).locator("xpath=..");
       await expect(section).toContainText("Tarea tardía");
@@ -174,7 +174,7 @@ test.describe("what cannot be created is listed, and a plan with nothing to crea
     // Kills: a create button that is only disabled, or an empty review with no sentence.
     const text = ["pulsar · plantilla 2", "", "# Caso pasado", `horizonte: ${plus(-5)}`, "", "## Tareas", `- ${months().first} · Una tarea`].join("\n");
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, text);
+      await toOpenReview(page, text);
       await expect(page.getByText(messages.review.nothing, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.errors.horizonPast, { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: /Crear/ })).toHaveCount(0);
@@ -192,7 +192,7 @@ test.describe("the way back to the text (RP-86)", () => {
     // Kills: clearing the draft on the way back.
     const text = planText();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, text);
+      await toOpenReview(page, text);
       await page.getByRole("link", { name: backName }).first().click();
       await expect(page).toHaveURL(/\/metas\/importar$/);
       await expect(page.getByLabel(messages.textLabel, { exact: true })).toHaveValue(text);
@@ -206,7 +206,7 @@ test.describe("the way back to the text (RP-86)", () => {
     await asPerson(
       { person, browser, baseURL },
       async (page) => {
-        await toReview(page, text);
+        await toOpenReview(page, text);
         const source = page.getByRole("textbox", { name: messages.review.sourceLabel, exact: true });
         await expect(source).toHaveValue(text);
         await expect(source).not.toBeEditable();
@@ -247,7 +247,7 @@ test.describe("at 360 px nothing overflows and nothing to tap is small (RNP-07)"
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       expect(await small(page)).toEqual([]);
 
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await page.getByRole("button", { name: "2 sub-tareas" }).click();
       await page.getByRole("button", { name: "nota · 2 líneas" }).click();
       await expect(box(page, new RegExp(`^${SUB_A}`))).toBeVisible();
