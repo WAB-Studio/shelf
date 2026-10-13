@@ -174,3 +174,17 @@ test("a habit note of 2000 characters lands; of 2001 is refused by the action, n
   const after = (await admin<{ n: number }[]>`select count(*)::int as n from goals.commitments where user_id = ${owner.id}`)[0].n;
   assert.equal(after - before, 1);
 });
+
+test("a loose habit opens the day it was made: the day before is refused, that day is taken", async () => {
+  const commitmentId = await loose("tap");
+  await admin`update goals.commitments set created_at = now() - interval '3 days' where id = ${commitmentId}`;
+  const { civilDateInZone } = await import("@/lib/zone");
+  const dayAgo = (days: number) => civilDateInZone(new Date(Date.now() - days * 86_400_000));
+  const before = await as(owner, () => facts.declareFact({ commitmentId, day: dayAgo(4) }));
+  assert.equal(before.ok, false);
+  const count = async () => (await admin<{ n: number }[]>`select count(*)::int as n from goals.facts where commitment_id = ${commitmentId}`)[0].n;
+  assert.equal(await count(), 0);
+  const opening = await as(owner, () => facts.declareFact({ commitmentId, day: dayAgo(3) }));
+  assert.equal(opening.ok, true);
+  assert.equal(await count(), 1);
+});

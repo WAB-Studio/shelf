@@ -254,3 +254,26 @@ test("Mes: a goal with no end adds up the month of a goal inside it that has end
     await db`delete from goals.goals where id = ${parent.id}`;
   }
 });
+
+test("a goal's goals inside it: the one with no end has not ended, the one that ended says its last day", async () => {
+  const [parent] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${userId}, 'sin-final-readers.ts madre de hijas', null, now() - interval '70 days') returning id`;
+  const lastDay = addDays(today, -1);
+  const [open] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, parent_id, position, created_at)
+    values (${userId}, 'sin-final-readers.ts hija abierta', null, ${parent.id}, 1, now() - interval '60 days') returning id`;
+  const [ended] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, parent_id, position, created_at)
+    values (${userId}, 'sin-final-readers.ts hija terminada 2', ${today}::date, ${parent.id}, 2, now() - interval '60 days') returning id`;
+  try {
+    const view = await q.goal.loadGoal(parent.id, today);
+    assert.ok(view);
+    const byId = new Map(view.children.map((child) => [child.id, child]));
+    assert.equal(byId.get(open.id)?.endedOn, null);
+    assert.equal(byId.get(ended.id)?.endedOn, lastDay);
+  } finally {
+    await db`delete from goals.goals where parent_id = ${parent.id}`;
+    await db`delete from goals.goals where id = ${parent.id}`;
+  }
+});

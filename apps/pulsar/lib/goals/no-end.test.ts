@@ -6,6 +6,7 @@ import { refusalKey, refusalName, REFUSAL_CODES } from "./refusal-key";
 import { buildTree } from "./tree";
 import type { TreeRow } from "./tree";
 import { isClosed } from "@/lib/validation/closed";
+import { todayInZone } from "@/lib/zone";
 
 const TODAY = "2026-10-13";
 
@@ -87,4 +88,12 @@ test("belowNoEnd has its key and words", () => {
 test("branchEndsAfter: nothing outlasts no end, so a branch moved to no end has no goal to pull along", () => {
   assert.deepEqual(branchEndsAfter(tree(), "D", null), []);
   assert.deepEqual(branchEndsAfter(tree(), "N", null), []);
+});
+
+test("isClosed: a goal whose horizon is today is closed (its last day was yesterday); one ending tomorrow is open", () => {
+  const today = todayInZone();
+  const plus = (days: number) => new Date(new Date(`${today}T00:00:00Z`).getTime() + days * 86_400_000).toISOString().slice(0, 10);
+  assert.equal(isClosed({ horizon: today, archivedAt: null }), true);
+  assert.equal(isClosed({ horizon: plus(-1), archivedAt: null }), true);
+  assert.equal(isClosed({ horizon: plus(1), archivedAt: null }), false);
 });
