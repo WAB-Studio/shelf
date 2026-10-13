@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
+import { asPerson, movedExample, toOpenReview } from "./importar-plan";
 
 // The page always carries Next's own empty `role="alert"` route announcer, so an
 // alert is the one with text in it.
@@ -126,6 +127,15 @@ test.describe("the import screen (RP-37)", () => {
     } finally {
       await context.close();
     }
+  });
+
+  test("the example's last goal, «Leer», is read with no end and a rhythm of 40 pages", async ({ person, browser, baseURL }) => {
+    // Kills: a default horizon for a goal the template gives none.
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, movedExample());
+      await expect(page.getByText("meta · sin final")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Cambiar el ritmo, 40 páginas al mes", exact: true })).toBeVisible();
+    });
   });
 
   test("the text last read is in the box when the screen opens again, and a file read leaves it empty", async ({
