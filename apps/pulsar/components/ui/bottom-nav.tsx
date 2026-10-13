@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore, type FocusEvent, type MouseEvent } from "react";
 import { usePathname } from "next/navigation";
 
@@ -58,6 +59,21 @@ const serverWide = () => false;
 // `aria-current` follows the width once the page hydrates.
 type Balloon = { name: string; top: number; left: number };
 
+// A goal of the rail's tree. `depth` is its level (0 root, 1 large, 2 small), `holds` says it has
+// goals inside and so a fold control; the two labels carry its own name. Folding is this nav's
+// alone: nothing is stored and a reload draws every branch open.
+export type RailGoal = {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  depth?: 0 | 1 | 2;
+  holds?: boolean;
+  foldLabel?: string;
+  unfoldLabel?: string;
+};
+
+const LEVELS = ["levelRoot", "levelLarge", "levelSmall"] as const;
+
 export function BottomNav({
   labels,
   appName,
@@ -70,11 +86,12 @@ export function BottomNav({
   appName?: string;
   date?: string;
   theme?: { toLightLabel: string; toDarkLabel: string };
-  goals?: { id: string; name: string }[];
+  goals?: RailGoal[];
   goalsSectionLabel?: string;
 }) {
   const pathname = usePathname();
   const [balloon, setBalloon] = useState<Balloon | null>(null);
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const unmarked = useSyncExternalStore(subscribe, readUnmarked, serverUnmarked);
   const wide = useSyncExternalStore(subscribeWide, readWide, serverWide);
   // The name's first word is the mark, the rest its mono line under it.
@@ -99,6 +116,22 @@ export function BottomNav({
     setBalloon({ name, top: (top + bottom) / 2, left: right + 8 });
   };
   const hideBalloon = () => setBalloon(null);
+
+  const parentOf = new Map(goals.map((goal) => [goal.id, goal.parentId ?? null]));
+  const hidden = (goal: RailGoal) => {
+    for (let up = goal.parentId ?? null; up; up = parentOf.get(up) ?? null) {
+      if (folded.has(up)) return true;
+    }
+    return false;
+  };
+  const toggle = (id: string) =>
+    setFolded((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  // Every row keeps the arrow's slot once any goal holds others, so names align by level.
+  const slotted = goals.some((goal) => goal.holds);
 
   const items = [
     { href: "/", label: labels.today, active: pathname === "/" || pathname.startsWith("/sueltas") },
@@ -152,23 +185,47 @@ export function BottomNav({
               tabIndex={0}
               className={styles.goals}
             >
-              {goals.map((goal) => {
-                const current = openGoal?.id === goal.id && !unmarked;
-                return (
-                  <Link
-                    key={goal.id}
-                    href={`/metas/${goal.id}`}
-                    onMouseEnter={(event) => showBalloon(event, goal.name)}
-                    onMouseLeave={hideBalloon}
-                    onFocus={(event) => showBalloon(event, goal.name)}
-                    onBlur={hideBalloon}
-                    aria-current={current && wide ? "page" : undefined}
-                    className={current ? `${styles.goal} ${styles.goalActive}` : styles.goal}
-                  >
-                    <span className={styles.goalName}>{goal.name}</span>
-                  </Link>
-                );
-              })}
+              {goals
+                .filter((goal) => !hidden(goal))
+                .map((goal) => {
+                  const current = openGoal?.id === goal.id && !unmarked;
+                  const expanded = !folded.has(goal.id);
+                  const link = current ? `${styles.goal} ${styles.goalActive}` : styles.goal;
+                  return (
+                    <div key={goal.id} className={`${styles.goalRow} ${styles[LEVELS[goal.depth ?? 0]]}`}>
+                      {slotted ? (
+                        goal.holds ? (
+                          <button
+                            type="button"
+                            className={styles.foldButton}
+                            aria-expanded={expanded}
+                            aria-label={expanded ? goal.foldLabel : goal.unfoldLabel}
+                            onClick={() => toggle(goal.id)}
+                          >
+                            {expanded ? (
+                              <ChevronDown size={16} strokeWidth={1.5} aria-hidden />
+                            ) : (
+                              <ChevronRight size={16} strokeWidth={1.5} aria-hidden />
+                            )}
+                          </button>
+                        ) : (
+                          <span className={styles.foldSlot} aria-hidden />
+                        )
+                      ) : null}
+                      <Link
+                        href={`/metas/${goal.id}`}
+                        onMouseEnter={(event) => showBalloon(event, goal.name)}
+                        onMouseLeave={hideBalloon}
+                        onFocus={(event) => showBalloon(event, goal.name)}
+                        onBlur={hideBalloon}
+                        aria-current={current && wide ? "page" : undefined}
+                        className={slotted ? `${link} ${styles.goalSlotted}` : link}
+                      >
+                        <span className={styles.goalName}>{goal.name}</span>
+                      </Link>
+                    </div>
+                  );
+                })}
             </div>
           </>
         ) : null}

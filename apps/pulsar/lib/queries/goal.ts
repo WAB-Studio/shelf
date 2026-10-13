@@ -878,11 +878,17 @@ function toGoalSummary(row: GoalRow): GoalSummary {
  * `cache()`-wrapped: the layout's rail and the screen's `otherGoals` read it in
  * one render, so a page pays this statement once (RNP-18). It takes no
  * argument, so the one entry is the whole request's.
+ *
+ * The rows come in the tree's preorder (siblings by position, a goal's goals
+ * right after it), each with its parent among the open ones: the rail draws
+ * the tree from this list.
  */
-export const listGoals = cache(async function listGoals(): Promise<GoalSummary[]> {
+export type OpenGoal = GoalSummary & { parentId: string | null };
+
+export const listGoals = cache(async function listGoals(): Promise<OpenGoal[]> {
   const rows = await withGoalsDb((tx) =>
-    tx.execute<GoalRow>(sql`
-      select id, name, horizon, measure_name, measure_unit, archived_at
+    tx.execute<GoalRow & { parent_id: string | null; position: number }>(sql`
+      select id, name, horizon, measure_name, measure_unit, archived_at, created_at, parent_id, position
       from "goals"."goals"
       where archived_at is null
       order by position, created_at, id
@@ -892,7 +898,24 @@ export const listGoals = cache(async function listGoals(): Promise<GoalSummary[]
   // The civil day is the person's, so the cut is JS against `todayInZone()`,
   // never `current_date`: an ended goal is refused like an archived one.
   const today = todayInZone();
-  return rows.filter((row) => row.horizon > today).map(toGoalSummary);
+  const open = rows.filter((row) => row.horizon > today);
+  const tree = buildTree(
+    open.map((row) => ({
+      id: row.id,
+      parentId: row.parent_id,
+      position: row.position,
+      createdAt: row.created_at,
+      name: row.name,
+      horizon: row.horizon,
+      archivedAt: row.archived_at,
+      measureUnit: row.measure_unit,
+    })),
+  );
+  const byId = new Map(open.map((row) => [row.id, row]));
+  return tree.order.map((node) => ({
+    ...toGoalSummary(byId.get(node.id)!),
+    parentId: node.ancestors.length > 0 ? node.ancestors[0] : null,
+  }));
 });
 
 // An open goal's current month, as `/metas` draws it beside the goal: the

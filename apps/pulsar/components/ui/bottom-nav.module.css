@@ -158,9 +158,49 @@
     border-block-end: 1px solid var(--pulsar-line);
   }
 
-  .goal {
+  .goalRow {
     display: flex;
     flex: none;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .levelLarge {
+    padding-inline-start: 16px;
+  }
+
+  .levelSmall {
+    padding-inline-start: 32px;
+  }
+
+  .foldButton,
+  .foldSlot {
+    flex: none;
+    inline-size: 28px;
+  }
+
+  .foldButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    block-size: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--pulsar-muted);
+    cursor: pointer;
+  }
+
+  .foldButton:focus-visible {
+    outline: 2px solid var(--pulsar-accent);
+    outline-offset: -2px;
+  }
+
+  .goal {
+    display: flex;
+    flex: 1 1 0;
+    min-inline-size: 0;
     align-items: center;
     min-block-size: 44px;
     padding: 0 14px;
@@ -174,6 +214,10 @@
   .goal:focus-visible {
     outline: 2px solid var(--pulsar-accent);
     outline-offset: -2px;
+  }
+
+  .goalSlotted {
+    padding-inline-start: 4px;
   }
 
   .goalActive {

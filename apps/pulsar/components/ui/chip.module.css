@@ -39,13 +39,13 @@
 }
 
 /* One of seven in a row. At 360px the page leaves a 320px column, so seven of
-   these take 308 and the row that holds them has 12px to spend on gaps: 2px
-   between chips, and no more. Never shrinks below its floor — a row with a
-   wider gap overflows visibly rather than handing back a 38px target. */
+   these take 280 and the row that holds them has 40px to spend on gaps. Never
+   shrinks below its floor — a row with a wider gap overflows visibly rather
+   than handing back a 38px target. */
 .day {
-  flex: 1 0 44px;
-  min-inline-size: 44px;
-  block-size: 44px;
+  flex: 1 0 40px;
+  min-inline-size: 40px;
+  block-size: 40px;
   padding: 0;
 }
 

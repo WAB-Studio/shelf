@@ -12,22 +12,26 @@ export function PrintPage({ children }: { children?: ReactNode }) {
 // A block on paper. It sets no style on screen.
 // `span` keeps the block across every column of a `PrintGoal`; `lead` also keeps it with the block after it.
 // `whole` keeps it on one page; a block taller than a page still breaks.
+// `newPage` opens a sheet on paper: the block starts at the top of one.
 // `only` takes the block off the screen altogether, gap included.
 export function PrintBlock({
   children,
   span,
   whole,
   only,
+  newPage,
 }: {
   children?: ReactNode;
   span?: "all" | "lead";
   whole?: boolean;
   only?: boolean;
+  newPage?: boolean;
 }) {
   const classes = [styles.block];
   if (span) classes.push(styles.all);
   if (span === "lead") classes.push(styles.lead);
   if (whole) classes.push(styles.whole);
+  if (newPage) classes.push(styles.newPage);
   if (only) classes.push(styles.blockOnly);
   return <section className={classes.join(" ")}>{children}</section>;
 }
