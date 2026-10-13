@@ -11,7 +11,7 @@ import { Button, Field, FieldPair, Figure, Page, ScreenHeader, Section, Text, Te
 import { dayBefore, horizonWeeksOf, weekIndexOf } from "@/lib/day/weeks";
 import { civilDateLabel } from "@/lib/zone";
 
-import { weeksToPhaseSpan } from "./phase-weeks";
+import { MAX_GOAL_WEEKS, weeksToPhaseSpan } from "./phase-weeks";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type PhaseFormProps = {
@@ -23,7 +23,8 @@ export type PhaseFormProps = {
   openedOn: string;
   // A goal names one horizon (RP-11); a phase past it is refused here first,
   // then again, authoritative, inside `addPhase`'s own transaction.
-  horizon: string;
+  // Null: the goal never ends, and no week is past it.
+  horizon: string | null;
   defaultFromWeek: number | null;
   defaultToWeek: number | null;
   // Every phase the goal already has, spans alone: what the overlap refusal
@@ -76,8 +77,8 @@ export function PhaseForm({
   const toRef = useRef<HTMLInputElement>(null);
 
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
-  const lastWeek = horizonWeeksOf(openedOn, horizon);
-  const lastDay = civilDateLabel(dayBefore(horizon));
+  const lastWeek = horizonWeeksOf(openedOn, horizon) ?? MAX_GOAL_WEEKS;
+  const lastDay = horizon === null ? "" : civilDateLabel(dayBefore(horizon));
   const fromTyped = weekSchema.safeParse(fromWeek);
   const toTyped = weekSchema.safeParse(toWeek);
   const fromData = fromTyped.success ? fromTyped.data : null;

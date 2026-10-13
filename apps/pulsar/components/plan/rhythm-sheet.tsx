@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { Row, Sheet } from "@/components/ui";
 import type { PlanInput } from "@/lib/plan/roadmap";
+import { isTimeUnit } from "@/lib/units/time";
 
 import { RhythmForm } from "./rhythm-form";
 
@@ -53,7 +54,7 @@ export function RhythmSheet({
         open={open}
         onOpenChange={setOpen}
         label={t("roadmap.ritmo.eyebrow", { goal: goalName })}
-        title={t("roadmap.ritmo.title")}
+        title={isTimeUnit(unit) ? t("roadmap.ritmo.title") : t("roadmap.ritmo.titleOther", { unit })}
       >
         {open ? (
           <RhythmForm

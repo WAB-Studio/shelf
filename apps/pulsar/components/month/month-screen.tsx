@@ -8,7 +8,7 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
 import type { Task } from "@/lib/plan/carry";
 import type { PlanItem } from "@/lib/plan/roadmap";
-import { nextMonth, partOf, settledMonths } from "@/lib/plan/months";
+import { nextMonth, partOf, partWords, settledMonths } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
 import { screenPlanned } from "@/lib/plan/screen-planned";
@@ -125,6 +125,15 @@ export async function MonthDetail({
   } else if (doneInMonth > 0) {
     note = t.rich("month.list.includesDone", { done: say(doneInMonth), ...fig });
   }
+
+  // A unit other than time has no plan: a month without an amount of its own takes the rhythm (RP-101).
+  const rhythmTaken =
+    unit !== null &&
+    !isTimeUnit(unit) &&
+    !goal.holdsGoals &&
+    goal.rhythm !== null &&
+    rowPlanned !== null &&
+    !goal.plan.budgets.some((budget) => budget.month === mes);
 
   const openMonths = openMonthsOf(goal.plan);
   const sheetOf = (task: Task, kids: Task[]) => ({
@@ -244,8 +253,22 @@ export async function MonthDetail({
           </Flex>
           {part ? (
             <Text as="p" variant="sentence" tone="muted">
-              {t.rich("goal.detail.monthPart", { ...part, share: say(part.share), rhythm: say(part.rhythm), ...fig })}
+              {t.rich("goal.detail.monthPart", { ...partWords(part, mes, unit ?? "", say), ...fig })}
             </Text>
+          ) : null}
+          {rhythmTaken ? (
+            <>
+              <Text as="p" variant="sentence" tone="muted">
+                {t("month.list.rhythmTaken", { amount: say(goal.rhythm as number) })}
+              </Text>
+              {open && !closed ? (
+                <Button asChild variant="outline">
+                  <Link href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>
+                    {t("month.planMonth", { month: name })}
+                  </Link>
+                </Button>
+              ) : null}
+            </>
           ) : null}
           {note ? (
             <Text as="p" variant="sentence">

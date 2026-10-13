@@ -96,7 +96,12 @@
     "rhythmLine": "Ritmo <fig>{amount}</fig> al mes",
     "rhythmLineDone": "Ritmo <fig>{amount}</fig> al mes · en {month}, <fig>{done}</fig> de <fig>{total}</fig> {total, plural, one {tarea hecha} other {tareas hechas}}",
     "finish": "A este ritmo terminas el {date}",
-    "build": "Armar el plan"
+    "build": "Armar el plan",
+    "rhythmLabel": "el ritmo",
+    "rhythmOffer": "Poner un ritmo",
+    "rhythmOfferHint": "cuántas {unit} al mes; cada mes sin monto lo toma",
+    "rhythmOtherLine": "{amount} al mes",
+    "rhythmOtherHint": "cada mes sin monto propio lo toma"
   },
   "moverFinal": {
     "title": "Mover el final",
@@ -112,7 +117,11 @@
     "preview": "Con {hours} al mes terminas el {date}, a tiempo. Los meses que ya cerraron no cambian.",
     "previewNoEstimate": "Con {hours} al mes. Ninguna tarea pendiente tiene estimación: van a {month} hasta que les pongas una. Los meses que ya cerraron no cambian.",
     "previewLate": "Con {hours} al mes terminas el {date}, {weeks, plural, one {# semana} other {# semanas}} después de tu final. Los meses que ya cerraron no cambian.",
+    "titleOther": "¿Cuántas {unit} al mes?",
+    "fieldOther": "{unit} al mes",
+    "closedMonths": "Los meses que ya cerraron no cambian.",
     "save": "Guardar el ritmo",
+    "saving": "Guardando…",
     "cancel": "Cancelar"
   }
 }

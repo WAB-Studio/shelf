@@ -9,7 +9,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { moveTargets, type PlacementRefusal } from "@/lib/goals/placement";
 import { refusalKey, refusalName } from "@/lib/goals/refusal-key";
 import { buildTree, type TreeNode } from "@/lib/goals/tree";
-import { civilDateLabel } from "@/lib/zone";
+import { civilDateLabel, civilDayMonthYear } from "@/lib/zone";
 import { Button, CheckRow, Sheet, SheetActions, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 
@@ -59,7 +59,7 @@ export function MoveGoalAction({ goalId, name, tree: nodes, today }: MoveGoalAct
     const above = "above" in refusal ? refusal.above : null;
     return t(refusalKey(refusal.code), {
       name: refusalName(refusal) ?? "",
-      date: above ? civilDateLabel(dayBefore(above.horizon)) : "",
+      date: above?.horizon ? civilDayMonthYear(dayBefore(above.horizon)) : "",
     });
   }
 

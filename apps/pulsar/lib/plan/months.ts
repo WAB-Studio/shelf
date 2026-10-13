@@ -1,7 +1,8 @@
 import { measureOf } from "@/lib/day/derive";
 import { dayBefore } from "@/lib/day/weeks";
 import type { DeclaredFact, EvidenceDay } from "@/lib/day/types";
-import { todayInZone } from "@/lib/zone";
+import { formatCount, isTimeUnit } from "@/lib/units/time";
+import { civilDayMonthShort, todayInZone } from "@/lib/zone";
 
 export type MonthBudget = { month: string; amount: number };
 
@@ -124,6 +125,19 @@ export function partOf(
   const share = plannedOf(month, input);
   if (!share) return null;
   return { kind: from > 1 && to < length ? "between" : from > 1 ? "from" : "to", from, to, share, rhythm };
+}
+
+// The values of `goal.detail.monthPart`. A time unit says the day number and the share with its
+// unit; any other says the day with its month, and the share bare beside the rhythm that carries the unit.
+export function partWords(
+  part: NonNullable<ReturnType<typeof partOf>>,
+  month: string,
+  unit: string,
+  say: (n: number) => string,
+) {
+  if (isTimeUnit(unit)) return { ...part, share: say(part.share), rhythm: say(part.rhythm) };
+  const day = (n: number) => civilDayMonthShort(`${month.slice(0, 7)}-${String(n).padStart(2, "0")}`);
+  return { ...part, from: day(part.from), to: day(part.to), share: formatCount(part.share), rhythm: say(part.rhythm) };
 }
 
 // Under 60 % is `reached * 5 < planned * 3`: integers only, so 432 of 720

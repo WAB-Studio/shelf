@@ -229,7 +229,7 @@ test.describe("retiring a habit", () => {
     }
   });
 
-  test("«Retirarlo» takes it out of the section and out of Hoy, and keeps the row and its days (RP-13, RP-100)", async ({ person, browser, baseURL, db }) => {
+  test("«Retirarlo» takes it out of the section, keeps asking until tomorrow on Hoy, and keeps the row and its days (RP-13, RP-100)", async ({ person, browser, baseURL, db }) => {
     // Kills: deleting the row instead of retiring it; a retired habit still listed.
     const id = await seedHabit(db, person, { name: "Tomar agua", quantity: 2, unit: "litros" });
     await db`
@@ -249,8 +249,9 @@ test.describe("retiring a habit", () => {
       expect(rows[0].retired_at).not.toBeNull();
       const [{ n }] = await db<{ n: string }[]>`select count(*)::text as n from goals.facts where commitment_id = ${id}`;
       expect(Number(n)).toBe(1);
+      // «Deja de pedirse desde mañana» (RP-13, `asksOn`): the day it is retired on still asks.
       await page.goto("/");
-      await expect(page.getByText("Tomar agua", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("Tomar agua", { exact: true }).first()).toBeVisible();
     } finally {
       await context.close();
     }

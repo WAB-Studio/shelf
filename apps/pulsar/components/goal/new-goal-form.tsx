@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
@@ -9,7 +9,7 @@ import { createGoal } from "@/app/actions/plan";
 import { createGoalSchema } from "@/lib/validation/plan";
 import { horizonForWeeks } from "@/lib/day/weeks";
 import { todayInZone } from "@/lib/zone";
-import { Button, Field, Page, ScreenHeader, Text } from "@/components/ui";
+import { Button, Chip, ChipRow, Field, Page, ScreenHeader, Section, Text } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 // The board's own default (`MetaNueva.dc.html` draws "12 semanas" already
@@ -26,9 +26,10 @@ const NAME_ERRORS: MessageKey[] = ["plan.errors.nameEmpty", "plan.errors.nameToo
 const HORIZON_ERRORS: MessageKey[] = ["goal.errors.horizonWeeksInvalid", "plan.errors.horizonInvalid"];
 
 /**
- * `/metas/nueva` (RP-11, §0.3 3): a name and a horizon, nothing else. The
- * horizon is typed in weeks and turned into the civil date the shared schema
- * and `createGoal` actually store, with `lib/zone.ts`'s own arithmetic —
+ * `/metas/nueva` (RP-11, RP-99, §0.3 3): a name and a horizon, nothing else. The
+ * horizon is «con final» — typed in weeks and turned into the civil date the shared schema
+ * and `createGoal` actually store, with `lib/zone.ts`'s own arithmetic — or «sin final», sent with
+ * no horizon at all —
  * never the browser's zone (docs/pulsar/DESIGN.md "The day is `America/
  * Bogota`"). `createGoalSchema.safeParse` runs here first, so a name or a
  * horizon the server would refuse is refused before the request ever leaves
@@ -37,8 +38,10 @@ const HORIZON_ERRORS: MessageKey[] = ["goal.errors.horizonWeeksInvalid", "plan.e
 export function NewGoalForm() {
   const t = useTranslations();
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  // Held until the goal opens: a transition would end before the answer, and a second tap would open a second goal.
+  const [pending, setPending] = useState(false);
   const [name, setName] = useState("");
+  const [withEnd, setWithEnd] = useState(true);
   const [weeks, setWeeks] = useState(DEFAULT_WEEKS);
   const [error, setError] = useState<MessageKey | null>(null);
 
@@ -51,24 +54,30 @@ export function NewGoalForm() {
     if (pending) return;
     setError(null);
 
-    const weeksResult = weeksSchema.safeParse(weeks);
-    if (!weeksResult.success) {
-      setError("goal.errors.horizonWeeksInvalid");
-      return;
+    let horizon: string | undefined;
+    if (withEnd) {
+      const weeksResult = weeksSchema.safeParse(weeks);
+      if (!weeksResult.success) {
+        setError("goal.errors.horizonWeeksInvalid");
+        return;
+      }
+      horizon = horizonForWeeks(todayInZone(), weeksResult.data);
     }
 
-    const horizon = horizonForWeeks(todayInZone(), weeksResult.data);
-    const parsed = createGoalSchema.safeParse({ name, horizon });
+    const parsed = createGoalSchema.safeParse({ name, ...(horizon ? { horizon } : {}) });
     if (!parsed.success) {
       setError(messageKey(parsed.error.issues[0].message));
       return;
     }
 
-    startTransition(() => {
-      void createGoal(parsed.data).then((result) => {
-        if (result.ok) router.push(`/metas/${result.goalId}`);
-        else setError(result.error);
-      });
+    setPending(true);
+    void createGoal(parsed.data).then((result) => {
+      if (result.ok) {
+        router.push(`/metas/${result.goalId}`);
+        return;
+      }
+      setPending(false);
+      setError(result.error);
     });
   }
 
@@ -88,17 +97,33 @@ export function NewGoalForm() {
         hint={nameRefusal}
       />
 
-      <Field
-        label={t("goal.new.horizonLabel")}
-        type="number"
-        inputMode="numeric"
-        min={1}
-        step={1}
-        value={weeks}
-        onChange={(event) => setWeeks(event.target.value)}
-        invalid={horizonRefusal !== undefined}
-        hint={horizonRefusal ?? t("goal.new.horizonHint")}
-      />
+      <Section>
+        <ChipRow>
+          <Chip radio selected={withEnd} onClick={() => setWithEnd(true)}>
+            {t("goal.new.withEnd")}
+          </Chip>
+          <Chip radio selected={!withEnd} onClick={() => setWithEnd(false)}>
+            {t("goal.new.noEnd")}
+          </Chip>
+        </ChipRow>
+        {withEnd ? (
+          <Field
+            label={t("goal.new.horizonLabel")}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={weeks}
+            onChange={(event) => setWeeks(event.target.value)}
+            invalid={horizonRefusal !== undefined}
+            hint={horizonRefusal ?? t("goal.new.horizonHint")}
+          />
+        ) : (
+          <Text as="p" tone="muted" variant="sentence">
+            {t("goal.new.noEndSentence")}
+          </Text>
+        )}
+      </Section>
 
       {error && !nameRefusal && !horizonRefusal ? (
         <Text as="p" tone="ink" variant="sentence">
@@ -107,7 +132,7 @@ export function NewGoalForm() {
       ) : null}
 
       <Button block onClick={handleSubmit} disabled={pending}>
-        {t("goal.new.submit")}
+        {t(pending ? "goal.new.submitting" : "goal.new.submit")}
       </Button>
 
       <Text as="p" tone="muted" variant="sentence">

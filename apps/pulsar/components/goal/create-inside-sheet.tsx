@@ -17,8 +17,8 @@ const weeksSchema = z.coerce.number().int().positive().max(520);
 export type CreateInsideActionProps = {
   goalId: string;
   name: string;
-  // The upper goal's stored horizon: the first day after it.
-  horizon: string;
+  // The upper goal's stored horizon: the first day after it. Null: it never ends.
+  horizon: string | null;
   // A large goal takes a small one; a general or lone goal takes a large one.
   kind: "big" | "small";
   variant?: "solid" | "outline" | "ghost";
@@ -42,15 +42,18 @@ export function CreateInsideAction({ goalId, name, horizon, kind, variant = "out
   const [error, setError] = useState<string | null>(null);
 
   const today = todayInZone();
-  const room = horizonWeeksOf(today, horizon);
+  const room = horizon === null ? 520 : horizonWeeksOf(today, horizon);
   const typed = weeksSchema.safeParse(value);
   const pastEnd = typed.success && typed.data > room;
   const newHorizon = typed.success ? horizonForWeeks(today, typed.data) : null;
 
-  const pastEndText = `${t("tree.errors.endPastAbove", {
-    name,
-    date: civilDateLabel(dayBefore(horizon)),
-  })} ${t("tree.create.upTo", { weeks: room })}`;
+  const pastEndText =
+    horizon === null
+      ? ""
+      : `${t("tree.errors.endPastAbove", {
+          name,
+          date: civilDateLabel(dayBefore(horizon)),
+        })} ${t("tree.create.upTo", { weeks: room })}`;
   const weeksHint = pastEnd
     ? pastEndText
     : (error ??

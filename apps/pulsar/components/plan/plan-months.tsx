@@ -35,7 +35,8 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
   const glue = (text: string) => text.replace(/ /g, "\u00a0");
   const thisYear = todayInZone().slice(0, 4);
   const { roadmap } = goal;
-  const lastMonth = monthOf(roadmap.lastDay);
+  // A goal with no end has no month past it.
+  const lastMonth = roadmap.lastDay === null ? "9999-12-01" : monthOf(roadmap.lastDay);
 
   // A past-end task keeps the parts that fall inside the span in their month; only what
   // falls after the end is listed under «después de tu final», once per task.

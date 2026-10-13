@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+// A month holds 44 640 minutes at most: the cap of a time unit, which the action judges and the form mirrors.
+export const MAX_TIME_RHYTHM = 44_640;
+
 const goalId = z.uuid({ error: "month.errors.invalid" });
 
 export const setRhythmSchema = z.object({

@@ -13,7 +13,7 @@ import { fillPlan, type PlanInput } from "@/lib/plan/roadmap";
 import { monthNameWithYear } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import { formatQuantity, isTimeUnit, parseTime } from "@/lib/units/time";
-import { setRhythmSchema } from "@/lib/validation/rhythm";
+import { MAX_TIME_RHYTHM, setRhythmSchema } from "@/lib/validation/rhythm";
 import { civilDateWithYear } from "@/lib/zone";
 import { messageKey } from "@/i18n/translator";
 
@@ -51,7 +51,7 @@ export function RhythmForm({
   const words = useTimeWords();
   const time = isTimeUnit(unit);
   const [amount, setAmount] = useState<number | null>(initial ?? (time ? OFFERS[1] : null));
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState(!time && initial !== null ? String(initial) : "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +83,9 @@ export function RhythmForm({
   const total = [...hoursOf.values()].reduce((sum, hours) => sum + hours, 0);
 
   let hint: string | null = null;
-  if (amount !== null && end !== null && filled) {
+  // A unit other than time has no end to preview: the sheet only says what stays.
+  if (!time && sheet) hint = t("roadmap.ritmo.closedMonths");
+  else if (amount !== null && end !== null && filled && filled.lastDay !== null) {
     const late = daysBetween(filled.lastDay, end);
     // Tasks with no estimate take no room: the end that comes out is not theirs.
     const unestimated = total === 0 && pendingTasks > 0;
@@ -122,7 +124,12 @@ export function RhythmForm({
       return;
     }
     if (!checked.success) {
-      setError(t(messageKey(checked.error.issues[0].message)));
+      const key = messageKey(checked.error.issues[0].message);
+      setError(t(!time && key === "roadmap.errors.rhythmRange" ? "roadmap.errors.rhythmRangeAny" : key));
+      return;
+    }
+    if (time && checked.data.amount > MAX_TIME_RHYTHM) {
+      setError(t("roadmap.errors.rhythmRange"));
       return;
     }
     setPending(true);
@@ -164,7 +171,7 @@ export function RhythmForm({
         </>
       ) : null}
       <Field
-        label={time ? t("roadmap.sinRitmo.other") : unit}
+        label={time ? t("roadmap.sinRitmo.other") : sheet ? t("roadmap.ritmo.fieldOther", { unit }) : unit}
         hideLabel={time}
         placeholder={time ? t("roadmap.sinRitmo.other") : undefined}
         inputMode={time ? "text" : "numeric"}
@@ -180,7 +187,7 @@ export function RhythmForm({
       ) : null}
       <SheetActions>
         <Button block onClick={handleSave} disabled={pending}>
-          {sheet ? t("roadmap.ritmo.save") : t("roadmap.sinRitmo.build")}
+          {sheet ? t(pending ? "roadmap.ritmo.saving" : "roadmap.ritmo.save") : t("roadmap.sinRitmo.build")}
         </Button>
         {sheet ? (
           <Button block variant="outline" onClick={onDone} disabled={pending}>

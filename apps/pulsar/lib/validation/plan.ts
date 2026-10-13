@@ -162,6 +162,13 @@ export const addCommitmentSchema = z.intersection(
         .trim()
         .min(1, { error: "plan.errors.nameEmpty" })
         .max(120, { error: "plan.errors.nameTooLong" }),
+      // A habit's note, as a task's (RP-88): blank is no note. Mirrors `commitments_note_shape`.
+      note: z
+        .string()
+        .trim()
+        .max(2000, { error: "plan.errors.noteTooLong" })
+        .transform((value) => (value === "" ? undefined : value))
+        .optional(),
     }),
     cadenceSchema,
   ),

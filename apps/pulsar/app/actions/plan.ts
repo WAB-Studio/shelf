@@ -476,11 +476,11 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${commitments}
           (user_id, goal_id, name, cadence_kind, cadence_n, cadence_weekdays,
-           satisfaction, target_quantity, unit, source_id, threshold)
+           satisfaction, target_quantity, unit, source_id, threshold, note)
         values
           (${person.id}, ${goalId ?? null}, ${data.name}, ${data.cadenceKind}, ${cadenceN},
            ${cadenceWeekdays}, ${data.satisfaction}, ${targetQuantity}, ${unit},
-           ${sourceId}, ${threshold})
+           ${sourceId}, ${threshold}, ${goalId === undefined ? (data.note ?? null) : null})
         returning id
       `);
 
