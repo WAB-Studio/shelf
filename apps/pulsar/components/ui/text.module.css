@@ -140,6 +140,10 @@
   overflow-wrap: anywhere;
 }
 
+.breakWords.breakWords {
+  overflow-wrap: anywhere;
+}
+
 @media print {
   .note.note {
     font-size: 12pt;
