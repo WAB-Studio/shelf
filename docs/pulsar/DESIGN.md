@@ -1424,3 +1424,9 @@ Three answers of the user, 2026-10-09.
   review.** Not built yet; next session.
 - **The model puts tasks under the goal they serve,** and the check step flags a goal with a rhythm and no tasks while the goal
   above holds tasks; the person decides. Measured again on the real roadmap (one paid read). Not built yet; next session.
+- **The fix boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Page «Importar»: `ImportarAdjunto` (a picked file
+  named with «Quitar», nothing sent until «Leer el plan»; after a refused type the file stays named and the type's sentence stays);
+  page «Metas»: `CrearDentroAviso` (muted line before the buttons: «El ritmo al mes de «{name}» deja de contar; la meta nueva mide
+  como ella.», only when the goal above has a rhythm) and `MetasUnidadArbol`. Words: `private/tableros-f1/NOTAS.md`.
+- **A file attached with text in the box:** «Leer el plan» reads the file, and one line under the file says «Se lee el archivo; el
+  texto de la caja no se envía.»
