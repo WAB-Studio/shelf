@@ -18,7 +18,7 @@ import { planHrefFrom } from "@/lib/plan/return-to";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal } from "@/lib/queries/goal";
-import { dayBefore } from "@/lib/day/weeks";
+import { dayBefore, weekIndexOf } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 import {
   civilDateInZone,
@@ -122,10 +122,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     goal.level === null ? "" : t(`tree.levels.${goal.level === "large" ? "grande" : goal.level === "small" ? "pequena" : "general"}`);
   const archived = goal.archivedAt !== null;
   const ended = goal.endedOn !== null && !archived;
-  // An ended goal's sheet opens on the count that ends this Sunday.
-  const sheetWeeks = ended
-    ? Math.max(totalWeeks ?? 0, weekIndex(openedOn, today))
-    : totalWeeks;
+  // The end sheet counts from this week: an ended goal opens on 1 (it ends this Sunday).
+  const sheetWeeks = ended ? 1 : endDay === null ? null : weekIndexOf(today, endDay);
   const holds = goal.holdsGoals;
   const insideAction =
     archived || ended || goal.level === "small" ? null : (
