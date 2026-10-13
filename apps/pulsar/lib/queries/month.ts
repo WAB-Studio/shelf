@@ -2,7 +2,8 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import type { EvidenceDay } from "@/lib/day/types";
+import { asksOn } from "@/lib/day/cadence";
+import type { Cadence, EvidenceDay } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
   branchOf,
@@ -27,9 +28,9 @@ import {
   type GoalRow,
   type TaskRow,
 } from "@/lib/queries/goal";
-import { toDeclaredFact } from "@/lib/queries/rows";
+import { toCadence, toDeclaredFact } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, todayInZone } from "@/lib/zone";
 
 export type MonthAcrossGoal = {
   id: string;
@@ -70,12 +71,15 @@ export type MonthAcross = {
   loose: MonthLooseHabit[];
 };
 
-export type MonthLooseHabit = { id: string; name: string; daysDone: number };
+// `asked` is how many days of the month through today the cadence asked on; null for a cadence counted by the week or the month.
+export type MonthLooseHabit = { id: string; name: string; daysDone: number; cadence: Cadence; asked: number | null };
+
+type LooseRow = { id: string; name: string; daysDone: number; row: CommitmentRow };
 
 type Row = {
   // Null on the one row a person with no open goal gets, which still carries `loose`.
   goal: (GoalRow & { parent_id: string | null; position: number }) | null;
-  loose: MonthLooseHabit[];
+  loose: LooseRow[];
   commitments: CommitmentRow[];
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
@@ -89,6 +93,20 @@ type PlanTaskRow = TaskRow & { in_plan: boolean; created_at: string; position: n
 // month so a past month never reaches the process; tasks and budgets are not,
 // since the plan fills from every task through every month of the goal. A goal that ended under
 // an open goal is read too, for its part of the month's sum. RLS narrows it to the caller (RNP-05).
+function looseHabit({ id, name, daysDone, row }: LooseRow, month: string, today: string): MonthLooseHabit {
+  const cadence = toCadence(row);
+  const counted = cadence.kind === "daily" || cadence.kind === "weekdays" || cadence.kind === "every_n_days";
+  if (!counted) return { id, name, daysDone, cadence, asked: null };
+  const plan = { id, cadence, satisfiedBy: { kind: "tap" as const }, retiredAt: null, createdOn: month };
+  let asked = 0;
+  const cursor = civilDateToDate(month);
+  for (let day = month; day <= today; day = dateToCivilDate(cursor)) {
+    if (asksOn(plan, day, [])) asked += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return { id, name, daysDone, cadence, asked };
+}
+
 async function queryRows(tx: Transaction, month: string, today: string): Promise<Row[]> {
   const rows = await tx.execute<Row>(sql`
     select
@@ -96,6 +114,7 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
       (select coalesce(json_agg(jsonb_build_object(
                  'id', h.id,
                  'name', h.name,
+                 'row', to_jsonb(h),
                  'daysDone', (select count(distinct f.day)::int from "goals"."facts" f
                                where f.commitment_id = h.id and f.day between ${month}::date and ${today}::date)
                ) order by h.position, h.created_at, h.id), '[]'::json)
@@ -177,7 +196,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
     ),
   ]);
 
-  const loose = rows[0]?.loose ?? [];
+  const loose = (rows[0]?.loose ?? []).map((habit) => looseHabit(habit, month, today));
   const goalRows = rows.filter((row): row is Row & { goal: NonNullable<Row["goal"]> } => row.goal !== null);
   const tree = buildTree(goalRows.map(treeRowOf));
   const holders = new Set(tree.order.filter((node) => node.children.length > 0).map((node) => node.id));
