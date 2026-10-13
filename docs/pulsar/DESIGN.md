@@ -1529,3 +1529,17 @@ Boards, approved 2026-10-13 on the page «Sin final y hábitos»: `HabitoPantall
   contando la del {fecha}».
 - **Faces not drawn for s2:** dark (the token table says it) and 700–1023 (between the two drawn). The habit screen at 1280 is the same
   640 column, drawn once. «ver todo» opened in «Por mes» and in the report is the list as it reads today, not drawn again.
+
+## Decisions of 2026-10-13, after the critic of slice s2, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s2/REPORT.md`.
+
+- **A goal with no end shows its last 11 closed months and the current one** in «Por mes», the report and paper. The months ahead fold
+  into one line («los meses que vienen: 40 páginas cada uno»). The cut built in s2, the current month and 11 ahead, is a defect against
+  «the last 12».
+- **Every end sheet counts «semanas, contando esta»,** on any goal: «ponerle final» and «mover el final» alike. Retires RP-103's last
+  sentence when built. The phase line keeps counting from the opening.
+- **A retired habit lives in a folded «Retirados» under «Hábitos» on /metas;** each row opens its screen. No «volver a pedirlo».
+- **A weekly habit's month reads «3 de 4 semanas»,** the weeks met. A week across two months needs its rule before it is built.
+- **Paper folds the empty months ahead of a goal with no end into one line,** as a goal with an end does. Paper no longer matches the
+  screen row for row there.
