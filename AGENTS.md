@@ -245,6 +245,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   get a PR of their own, so the rule above never fires for them. Measured 2026-10-12: 98 branches alive, ~95
   of them module branches already inside a merged train; one held a fix that never landed.
 - Leave `delete_branch_on_merge` on in the repo. It deletes the PR's own branch; a module branch is still yours.
+- Restore `integracion` right after merging it into `main`: `delete_branch_on_merge` deletes it too.
+  `git push origin origin/main:refs/heads/integracion`. Measured 2026-10-13 on #592.
 - Delete it only after `gh pr view <n> --json state` reads `MERGED`. Never chain the delete after `gh pr merge` in one
   command: on 2026-10-09 a merge refused on a conflict still deleted #526's branch, and GitHub closed the PR.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.
