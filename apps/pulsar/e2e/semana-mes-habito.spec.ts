@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect, visit } from "./fixtures";
+import { expectedMonths, figure } from "./habit-weeks";
 import {
   MONTH_START,
   MONTH_WORD,
@@ -185,8 +186,9 @@ test("«Mes» draws the «Hábitos» group after the goal blocks, rows without a
   const idle = `Sin hecho ${stamp}`;
   const goalId = await seedGoal(db, person.id, goalName, { horizon: shift(TODAY, 60), unit: "minutos", budget: 480 });
   const waterId = await seedHabit(db, person.id, water, { kind: "daily" }, { kind: "tap" }, { created: noonOf(MONTH_START) });
-  const callId = await seedHabit(db, person.id, call, { kind: "times_per_week", n: 1 });
-  await seedHabit(db, person.id, idle, { kind: "times_per_week", n: 1 });
+  const callCreated = shift(TODAY, -20);
+  const callId = await seedHabit(db, person.id, call, { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(callCreated) });
+  await seedHabit(db, person.id, idle, { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(callCreated) });
   for (let n = 0; n < dayOfMonth; n++) await seedFact(db, person.id, waterId, null, shift(MONTH_START, n));
   await seedFact(db, person.id, callId, null, TODAY);
   const context = await browser.newContext({
@@ -204,8 +206,13 @@ test("«Mes» draws the «Hábitos» group after the goal blocks, rows without a
     expect(group).toBeGreaterThan(body.indexOf(goalName.toLowerCase()));
     expect(body).not.toContain("sin meta");
     expect(body).toContain(`${water.toLowerCase()} todos los días · ${dayOfMonth} de ${dayOfMonth} días`);
-    expect(body).toContain(`${call.toLowerCase()} 1 vez por semana · 1 día`);
-    expect(body).toContain(`${idle.toLowerCase()} 1 vez por semana · 0 días`);
+    // A weekly habit reads its weeks (RP-109), never its days; the figure is the reference's for this month.
+    const month = expectedMonths(callCreated, null, TODAY, new Set([TODAY]), 1).get(TODAY.slice(0, 7));
+    if (month && month.counted > 0) {
+      expect(body).toContain(`${call.toLowerCase()} 1 vez por semana · ${figure(0, month.counted)}`);
+      expect(body).toContain(`${idle.toLowerCase()} 1 vez por semana · ${figure(0, month.counted)}`);
+    }
+    expect(body).not.toMatch(/1 vez por semana · \d+ días?/);
     expect(body).not.toContain("1 días");
     // Read-only: Mes counts, it never marks.
     for (const name of [water, call, idle]) {

@@ -67,7 +67,9 @@ for (const width of [360, 1280]) {
         expect(section).toContain("llamar a mamá 1 vez por semana los domingos, después de almorzar.");
         expect(section).not.toContain("estirar lun, mié y vie · 10 min un vaso");
         expect(section).not.toContain("bañarse");
-        expect(section).not.toContain("retirado");
+        // The retired one sits folded in «Retirados» (RP-109): counted, never listed among the live.
+        expect(section).not.toContain("hábito retirado");
+        expect(section).toContain("retirados");
         expect(section).not.toContain("ninguno todavía");
         expect(text.indexOf(SECTION)).toBeGreaterThan(text.indexOf("cuidado personal"));
         expect(text).not.toContain("sin meta");
@@ -251,6 +253,11 @@ test.describe("retiring a habit", () => {
       await page.goto("/metas");
       await expect(page.getByText("Tomar agua", { exact: true })).toHaveCount(0);
       expect(await mainLower(page)).toContain("ninguno todavía.");
+      // It lives on in the folded group (RP-109): out of the live ones, one tap from its screen.
+      const retired = page.getByRole("button", { name: "Desplegar Retirados", exact: true }).locator("visible=true");
+      await expect(retired).toHaveCount(1);
+      await retired.click();
+      await expect(page.locator(`main a[href="/metas/habitos/${id}"]:visible`)).toHaveCount(1);
       const rows = await habitRows(db, person, "Tomar agua");
       expect(rows).toHaveLength(1);
       expect(rows[0].retired_at).not.toBeNull();
