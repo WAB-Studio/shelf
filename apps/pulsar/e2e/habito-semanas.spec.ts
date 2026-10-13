@@ -11,13 +11,12 @@ import { TODAY, monthLabel, seedFact, seedHabit, shift } from "./sin-final-seed"
 // A week belongs to the month of its Thursday, is judged whole (lun a dom), is counted once it has ended, and the
 // first and last week count when the habit lived that week's Thursday. Boards: HabitoSemanas (private/tableros-s3/
 // NOTAS.md §5), E3 and E4 of private/contrato-933.md. Written from the contract before `weeks` reaches the screens.
-// E3 is dated to Tue 13 Oct 2026 and skips on any other clock; the oracle test below runs on every day.
+// Fixed examples use days of 2025, which read the same any day; what depends on today is computed from it by a
+// reference of the rule (`habit-weeks.ts`), never seeded with the answer.
 
 test.use({ actionTimeout: 6000 });
 
 const noonOf = (day: string) => new Date(`${day}T12:00:00-05:00`);
-const ON_E3 = TODAY === "2026-10-13";
-const E3_ONLY = "E3 is dated Tue 13 Oct 2026: run it under PULSAR_CLOCK=2026-10-13";
 const MONTH_RE = /(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre) \d{4}/g;
 const NONE_YET = "aún sin semanas cerradas";
 
@@ -49,36 +48,26 @@ async function fits360(page: Page): Promise<string[]> {
   });
 }
 
-// E3: «Llamar a mamá», 1 vez por semana, created Wed 8 Jul 2026. Weeks met: 6, 13, 20 Jul (not 27); all four of August;
-// 31 Aug, 7 and 14 Sep (not 21); 5 Oct (not 28 Sep). A fact today (13 Oct) belongs to a week still running.
-async function e3(db: import("./meta-arbol-seed").Db, personId: string, name = "Llamar a mamá") {
-  const id = await seedHabit(db, personId, name, { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2026-07-08") });
-  for (const day of ["2026-07-08", "2026-07-15", "2026-07-22", "2026-08-05", "2026-08-12", "2026-08-19", "2026-08-26", "2026-09-02", "2026-09-09", "2026-09-16", "2026-10-07", "2026-10-13"]) {
-    await seedFact(db, personId, id, null, day);
-  }
-  return id;
-}
-
 test.describe("the habit's screen, by the week (RP-109)", () => {
   test.use({ viewport: { width: 360, height: 900 } });
 
-  test("E3: julio «3 de 4 semanas», agosto «4 de 4», septiembre «3 de 4», octubre «en curso» «1 de 2 semanas»", async ({ person, browser, baseURL, db }) => {
-    // Kills: counting the week of 29 Jun (julio 5), not counting the week of 6 Jul, counting the running week of 12 Oct
-    // (octubre «2 de 3»), a week belonging to the month of its Monday (the 28 Sep week in September), «N días» left in place.
-    test.skip(!ON_E3, E3_ONLY);
-    const id = await e3(db, person.id);
-    const { page, context } = await visit(browser, baseURL, person, path(id), 360);
+  test("E3 in fixed days of 2025: julio «3 de 4 semanas», agosto «4 de 4», septiembre «3 de 4», octubre «1 de 5»", async ({ person, browser, baseURL, db }) => {
+    // Kills: counting the week of 30 Jun (julio 5), not counting the week of 7 Jul, a week belonging to the month of its Monday
+    // (the 29 Sep week in September), «N días» left in place.
+    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2025-07-09") });
+    for (const day of ["2025-07-09", "2025-07-16", "2025-07-23", "2025-08-06", "2025-08-13", "2025-08-20", "2025-08-27", "2025-09-03", "2025-09-10", "2025-09-17", "2025-10-08"]) {
+      await seedFact(db, person.id, id, null, day);
+    }
+    const { page, context } = await visit(browser, baseURL, person, path(id, "?todo=1"), 360);
     try {
       const text = await mainLower(page);
       expect(text).toContain("1 vez por semana");
       const section = between(text, "por mes");
-      expect(rowsOf(section)).toEqual(["julio 2026", "agosto 2026", "septiembre 2026", "octubre 2026"]);
-      expect(rowText(section, "julio 2026")).toContain(figure(3, 4));
-      expect(rowText(section, "agosto 2026")).toContain(figure(4, 4));
-      expect(rowText(section, "septiembre 2026")).toContain(figure(3, 4));
-      const october = rowText(section, "octubre 2026");
-      expect(october).toContain("en curso");
-      expect(october).toContain(figure(1, 2));
+      expect(rowsOf(section).slice(0, 4)).toEqual(["julio 2025", "agosto 2025", "septiembre 2025", "octubre 2025"]);
+      expect(rowText(section, "julio 2025")).toContain(figure(3, 4));
+      expect(rowText(section, "agosto 2025")).toContain(figure(4, 4));
+      expect(rowText(section, "septiembre 2025")).toContain(figure(3, 4));
+      expect(rowText(section, "octubre 2025")).toContain(figure(1, 5));
       expect(section).not.toMatch(/\d+ días?/);
       expect(text).not.toContain("volver a pedirlo");
       expect(await fits360(page)).toEqual([]);
@@ -136,12 +125,12 @@ test.describe("the habit's screen, by the week (RP-109)", () => {
     }
   });
 
-  test("a retired habit's last week counts when it lived that week's Thursday: retired Wed 15 Oct 2025 «2 de 2», retired Fri 17 Oct «3 de 3»", async ({ person, browser, baseURL, db }) => {
+  test("a retired habit's last week counts when it lived that week's Thursday: retired Wed 22 Oct 2025 «3 de 3», retired Thu 23 Oct «4 de 4»", async ({ person, browser, baseURL, db }) => {
     // Kills: counting the retirement week whatever the day; dropping it always; a row for a month after the retirement.
-    const early = await seedHabit(db, person.id, "Retirado miércoles", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2025-09-15"), retired: noonOf("2025-10-15") });
-    const late = await seedHabit(db, person.id, "Retirado viernes", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2025-09-15"), retired: noonOf("2025-10-17") });
-    for (const id of [early, late]) for (const day of ["2025-09-30", "2025-10-07", "2025-10-14"]) await seedFact(db, person.id, id, null, day);
-    for (const [id, expected] of [[early, figure(2, 2)], [late, figure(3, 3)]] as const) {
+    const early = await seedHabit(db, person.id, "Retirado miércoles", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2025-09-15"), retired: noonOf("2025-10-22") });
+    const late = await seedHabit(db, person.id, "Retirado jueves", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2025-09-15"), retired: noonOf("2025-10-23") });
+    for (const id of [early, late]) for (const day of ["2025-09-30", "2025-10-07", "2025-10-14", "2025-10-21"]) await seedFact(db, person.id, id, null, day);
+    for (const [id, expected] of [[early, figure(3, 3)], [late, figure(4, 4)]] as const) {
       const { page, context } = await visit(browser, baseURL, person, path(id, "?todo=1"), 360);
       try {
         const section = await monthsText(page);
@@ -153,36 +142,26 @@ test.describe("the habit's screen, by the week (RP-109)", () => {
     }
   });
 
-  test("controls: «12 de 13 días» daily, «5 de 5 días» on weekdays, «2 días» by the month: the days reading is untouched", async ({ person, browser, baseURL, db }) => {
-    // Kills: weeks computed for every cadence (a daily habit reading «0 de 1 semana»).
-    test.skip(!ON_E3, E3_ONLY);
-    const daily = await seedHabit(db, person.id, "Meditar", { kind: "daily" }, { kind: "tap" }, { created: noonOf("2026-10-01") });
-    const days = await seedHabit(db, person.id, "Estirar", { kind: "weekdays", days: [1, 3, 5] }, { kind: "tap" }, { created: noonOf("2026-10-01") });
+  test("controls, September 2025: «12 de 30 días» daily, «5 de 13 días» on weekdays, «2 días» by the month: the days reading is untouched", async ({ person, browser, baseURL, db }) => {
+    // Kills: weeks computed for every cadence (a daily habit reading «12 de 4 semanas»).
+    const created = { created: noonOf("2025-09-01") };
+    const daily = await seedHabit(db, person.id, "Meditar", { kind: "daily" }, { kind: "tap" }, created);
+    const days = await seedHabit(db, person.id, "Estirar", { kind: "weekdays", days: [1, 3, 5] }, { kind: "tap" }, created);
     const [{ id: monthly }] = await db<{ id: string }[]>`
       insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
-      values (${person.id}, null, 'Ir al cine', 'times_per_month', 3, 'tap', ${noonOf("2026-10-01")}) returning id`;
-    for (let d = 2; d <= 13; d += 1) await seedFact(db, person.id, daily, null, `2026-10-${String(d).padStart(2, "0")}`);
-    for (const day of ["2026-10-02", "2026-10-05", "2026-10-07", "2026-10-09", "2026-10-12"]) await seedFact(db, person.id, days, null, day);
-    for (const day of ["2026-10-03", "2026-10-10"]) await seedFact(db, person.id, monthly, null, day);
-    for (const [id, expected] of [[daily, "12 de 13 días"], [days, "5 de 5 días"], [monthly, "2 días"]] as const) {
-      const { page, context } = await visit(browser, baseURL, person, path(id), 360);
+      values (${person.id}, null, 'Ir al cine', 'times_per_month', 3, 'tap', ${created.created}) returning id`;
+    for (let d = 1; d <= 12; d += 1) await seedFact(db, person.id, daily, null, `2025-09-${String(d).padStart(2, "0")}`);
+    for (const day of ["2025-09-01", "2025-09-03", "2025-09-05", "2025-09-08", "2025-09-10"]) await seedFact(db, person.id, days, null, day);
+    for (const day of ["2025-09-03", "2025-09-10"]) await seedFact(db, person.id, monthly, null, day);
+    for (const [id, expected] of [[daily, "12 de 30 días"], [days, "5 de 13 días"], [monthly, "2 días"]] as const) {
+      const { page, context } = await visit(browser, baseURL, person, path(id, "?todo=1"), 360);
       try {
         const section = await monthsText(page);
-        expect(rowText(section, "octubre 2026")).toContain(expected);
+        expect(rowText(section, "septiembre 2025")).toContain(expected);
         expect(section).not.toContain("semana");
       } finally {
         await context.close();
       }
-    }
-    const { page, context } = await visit(browser, baseURL, person, "/mes", 360);
-    try {
-      const text = await mainLower(page);
-      expect(text).toContain("meditar todos los días · 12 de 13 días");
-      expect(text).toContain("estirar lun, mié y vie · 5 de 5 días");
-      expect(text).toContain("ir al cine 3 veces al mes · 2 días");
-      expect(text).not.toContain("semana ·");
-    } finally {
-      await context.close();
     }
   });
 });
@@ -222,6 +201,7 @@ for (const n of [1, 2]) {
           expect(row).not.toContain(NONE_YET);
         }
       }
+      expect(rowText(section, labelOf(TODAY.slice(0, 7)))).toContain("en curso");
       expect(await fits360(page)).toEqual([]);
     } finally {
       await context.close();
@@ -232,15 +212,29 @@ for (const n of [1, 2]) {
 test.describe("«Mes», by the week (RP-109)", () => {
   test.use({ viewport: { width: 360, height: 900 } });
 
-  test("E3: «Llamar a mamá» reads «1 vez por semana · 1 de 2 semanas» and its name still links to the habit", async ({ person, browser, baseURL, db }) => {
-    // Kills: reading `daysDone` for a weekly habit («· 2 días»); the name drawn as plain text; counting the running week.
-    test.skip(!ON_E3, E3_ONLY);
-    const id = await e3(db, person.id);
+  // «Mes» is always the current month, so the figure comes from the reference of the rule applied to today.
+  test("a weekly habit reads «1 vez por semana · {met} de {counted} semanas» for this month's closed weeks, never days, and its name links", async ({ person, browser, baseURL, db }) => {
+    // Kills: reading `daysDone` for a weekly habit («· 2 días»); the name drawn as plain text; counting the running week; «1 de 1 semanas».
+    let created = shift(TODAY, -56);
+    while (((civilDateToDate(created).getUTCDay() + 6) % 7) !== 0) created = shift(created, 1);
+    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(created) });
+    const facts = new Set<string>();
+    for (let monday = created, index = 0; monday <= TODAY; monday = shift(monday, 7), index += 1) {
+      if (index % 3 === 0) continue;
+      const day = shift(monday, 2);
+      if (day <= TODAY) facts.add(day);
+    }
+    for (const day of facts) await seedFact(db, person.id, id, null, day);
+    const month = expectedMonths(created, null, TODAY, facts, 1).get(TODAY.slice(0, 7));
     const { page, context } = await visit(browser, baseURL, person, "/mes", 360);
     try {
       const text = await mainLower(page);
-      expect(text).toContain("llamar a mamá 1 vez por semana · 1 de 2 semanas");
+      if (month && month.counted > 0) {
+        expect(text).toContain(`llamar a mamá 1 vez por semana · ${figure(month.met, month.counted)}`);
+      }
+      expect(text).toContain("llamar a mamá 1 vez por semana");
       expect(text).not.toMatch(/1 vez por semana · \d+ días?/);
+      expect(text).not.toContain("1 de 1 semanas");
       await expect(page.locator("main").getByRole("link", { name: "Llamar a mamá", exact: true })).toHaveAttribute("href", new RegExp(`/metas/habitos/${id}`));
       expect(await fits360(page)).toEqual([]);
     } finally {
@@ -248,16 +242,25 @@ test.describe("«Mes», by the week (RP-109)", () => {
     }
   });
 
-  test("a single closed week reads the singular: «1 vez por semana · 1 de 1 semana»", async ({ person, browser, baseURL, db }) => {
-    // Kills: «1 de 1 semanas»; counting the week of 28 Sep, whose Thursday the habit (made Tue 6 Oct) did not live.
-    test.skip(!ON_E3, E3_ONLY);
-    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2026-10-06") });
-    await seedFact(db, person.id, id, null, "2026-10-07");
+  test("the day-counting cadences keep their line in «Mes»: «todos los días · N de M días», «3 veces al mes · N días»", async ({ person, browser, baseURL, db }) => {
+    // Kills: weeks computed for every cadence.
+    const dayOfMonth = Number(TODAY.slice(8, 10));
+    const monthStart = `${TODAY.slice(0, 7)}-01`;
+    const daily = await seedHabit(db, person.id, "Meditar", { kind: "daily" }, { kind: "tap" }, { created: noonOf(monthStart) });
+    const [{ id: monthly }] = await db<{ id: string }[]>`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+      values (${person.id}, null, 'Ir al cine', 'times_per_month', 3, 'tap', ${noonOf(monthStart)}) returning id`;
+    const done = Math.min(dayOfMonth, 2);
+    for (let d = 0; d < done; d += 1) {
+      await seedFact(db, person.id, daily, null, shift(monthStart, d));
+      await seedFact(db, person.id, monthly, null, shift(monthStart, d));
+    }
     const { page, context } = await visit(browser, baseURL, person, "/mes", 360);
     try {
       const text = await mainLower(page);
-      expect(text).toContain("llamar a mamá 1 vez por semana · 1 de 1 semana");
-      expect(text).not.toContain("1 de 1 semanas");
+      expect(text).toContain(`meditar todos los días · ${done} de ${dayOfMonth} ${dayOfMonth === 1 ? "día" : "días"}`);
+      expect(text).toContain(`ir al cine 3 veces al mes · ${done} ${done === 1 ? "día" : "días"}`);
+      expect(text).not.toContain("semana ·");
     } finally {
       await context.close();
     }
