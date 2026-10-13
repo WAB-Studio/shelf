@@ -24,8 +24,8 @@ file tool, the pattern for a search, the agent type for a dispatch.
    `SELECT` bodies, lane numbers. `npm run check:e2e > <log>` and `npm run check:e2e` are one shape.
    Count the shapes and show the top fifteen with their counts.
 3. **The suites.** Count the runs of `check:e2e`, `check:queries`, `check:http`, `db:check-rls`,
-   `typecheck`, `lint`. Multiply by the measured run time — e2e is about 12 minutes, `db:check-rls`
-   about 9 — and say what the session spent on verification.
+   `typecheck`, `lint`. Multiply by each suite's run time from its latest CI run or saved log, name
+   where each number came from, and say what the session spent on verification.
 4. **The waste.** Name the shapes repeated in a burst: the same suite run more than twice, a file
    read more than three times, the same grep re-run. Each one is either a script or a mistake.
 5. **The candidates.** For a shape that repeats and has no skill in `.claude/skills/` and no script

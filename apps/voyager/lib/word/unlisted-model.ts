@@ -32,18 +32,32 @@ type ChatCompletionsPayload = {
   choices?: Array<{ message?: { content?: string } }>;
 };
 
+// Strict structured outputs: every key required; `modelAnswerSchema` still judges the answer.
+const UNLISTED_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    translations: { type: "array", minItems: 1, items: { type: "string" } },
+    definition: { type: ["string", "null"] },
+    example: {
+      type: "object",
+      properties: { en: { type: "string" }, es: { type: "string" } },
+      required: ["en", "es"],
+      additionalProperties: false,
+    },
+  },
+  required: ["translations", "definition", "example"],
+  additionalProperties: false,
+};
+
 export type UnlistedInflection = { lemma: string; rule: string };
 
 function buildSystemPrompt(word: string, inflection: UnlistedInflection | null): string {
-  const shape =
-    'Reply with strict JSON only, shaped exactly as ' +
-    '{"translations": string[], "definition": string|null, "example": {"en": string, "es": string}}.';
   if (inflection) {
     // The lemma is context, never the answer: the reader typed the form, and
     // a translation of "swish" where they typed "swishing" is the wrong word.
     return (
       `You extend an English-Spanish learner's dictionary. The word "${word}" is not a headword ` +
-      `itself: it is the headword "${inflection.lemma}" inflected. ${shape} "translations" holds ` +
+      `itself: it is the headword "${inflection.lemma}" inflected. "translations" holds ` +
       `one or more Spanish translations of "${word}" exactly as written — in its own tense and ` +
       `number, never the lemma's dictionary form. Set "definition" to null: a form is not defined ` +
       `on its own. "example.en" is one natural English sentence that uses "${word}" exactly as ` +
@@ -52,7 +66,7 @@ function buildSystemPrompt(word: string, inflection: UnlistedInflection | null):
   }
   return (
     `You extend an English-Spanish learner's dictionary. "${word}" has no entry in it at all. ` +
-    `${shape} "translations" holds one or more Spanish translations of "${word}", most common ` +
+    `"translations" holds one or more Spanish translations of "${word}", most common ` +
     `first. "definition" is one concise English sentence defining "${word}", in a dictionary's ` +
     `own register. "example.en" is one natural English sentence that uses "${word}". "example.es" ` +
     `is its Spanish translation.`
@@ -75,7 +89,10 @@ export async function generateUnlistedAnswer(
     model: MODEL_NAME,
     reasoning_effort: REASONING_EFFORT,
     max_completion_tokens: MAX_OUTPUT_TOKENS,
-    response_format: { type: "json_object" },
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "unlisted_word", schema: UNLISTED_JSON_SCHEMA, strict: true },
+    },
     messages: [
       { role: "system", content: buildSystemPrompt(word, inflection) },
       { role: "user", content: `Word: ${word}` },

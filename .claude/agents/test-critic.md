@@ -64,7 +64,10 @@ Say what you did not run, and what that leaves unjudged.
 
 # Output
 
-Return exactly these five sections:
+Write exactly these five sections to a file under the lane's `private/reportes/`, the one file you write.
+Return three lines: green or red, the commit, and what blocks.
+
+The file carries:
 
 ## Verdict
 What a green run of this suite honestly promises, in three lines or fewer.

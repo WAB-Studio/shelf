@@ -28,6 +28,23 @@ type ChatCompletionsPayload = {
   choices?: Array<{ message?: { content?: string } }>;
 };
 
+// Strict structured outputs: every key required, a field the prompt sets to null typed as nullable.
+const WORD_TEXT_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    definition: { type: ["string", "null"] },
+    example: {
+      type: "object",
+      properties: { en: { type: "string" }, es: { type: "string" } },
+      required: ["en", "es"],
+      additionalProperties: false,
+    },
+    translations: { type: ["array", "null"], items: { type: "string" } },
+  },
+  required: ["definition", "example", "translations"],
+  additionalProperties: false,
+};
+
 // RL-45's ask, folded into the one prompt: `existingSenses` null means the
 // entry was never thin and none is wanted; an array (even empty) is every
 // sense the dictionary already carries, asked for every sense none of the
@@ -73,9 +90,7 @@ function buildSystemPrompt(headword: string, wantDefinition: boolean, existingSe
       `own register, starting with the definition itself — never with "${headword}" or its part of speech.`
     : `Set "definition" to null: this headword already has one.`;
   return (
-    `You extend an English-Spanish learner's dictionary. Reply with strict JSON only, shaped ` +
-    `exactly as {"definition": string|null, "example": {"en": string, "es": string}, ` +
-    `"translations": string[]|null}. "example.en" is one natural English sentence that uses ` +
+    `You extend an English-Spanish learner's dictionary. "example.en" is one natural English sentence that uses ` +
     `"${headword}". "example.es" is its Spanish translation. ${definitionInstruction} ` +
     `${buildTranslationsInstruction(headword, existingSenses)}`
   );
@@ -105,7 +120,10 @@ export async function generateWordText(
     model: MODEL_NAME,
     reasoning_effort: REASONING_EFFORT,
     max_completion_tokens: MAX_OUTPUT_TOKENS,
-    response_format: { type: "json_object" },
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "word_text", schema: WORD_TEXT_JSON_SCHEMA, strict: true },
+    },
     messages: [
       { role: "system", content: buildSystemPrompt(headword, wantDefinition, existingSenses) },
       { role: "user", content: `Headword: ${headword}` },

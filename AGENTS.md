@@ -86,8 +86,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `apps/voyager` is the reading dictionary. Its contract is `docs/voyager/SPEC.md`; its `RL` and `RNL` codes share no number with the finances `RF`/`RNF` series.
 - Add `https://<the app's URL>/auth/confirm` to Supabase's Redirect URLs before an app that signs in
   by email first deploys. Without it the link lands on orbit's Site URL.
+- `apps/pulsar` is the goal log. Its contract is `docs/pulsar/SPEC.md`.
 - Give every app its own design. `docs/DESIGN.md` governs `apps/orbit` alone; `docs/voyager/DESIGN.md`
-  governs `apps/voyager`. Never carry a pattern across because it exists next door.
+  governs `apps/voyager`; `docs/pulsar/DESIGN.md` governs `apps/pulsar`. Never carry a pattern across
+  because it exists next door.
 
 ## Design
 
@@ -144,10 +146,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Lane 1 is this checkout; lanes 2 and up are worktrees at `../<checkout>-l<n>`. Lanes 2 to 6 may run
   e2e specs; lanes 7 and up take only work with no e2e (docs, words, pure functions, `check:*`).
   Decided by the user 2026-10-05, raised from four to five lanes 2026-10-06. The cap is RAM and the shared Auth, not the lane count.
-- A lane's port comes from its app: finances on :300<n-1>, reading on :310<n-1>. They never collide.
+- A lane's port comes from its app: orbit on :300<n-1>, voyager on :310<n-1>, pulsar on :320<n-1>. They never collide.
 - Run an app's npm scripts from its own directory, `apps/orbit`, or from the root with `-w apps/orbit`.
 - Open a lane: `scripts/worktree.sh <lane> <branch> [base] [--app <name>]`. It costs 4 seconds.
-- `--app` defaults to `finances`. An app with no database copies no `.env.local` and mints no
+- `--app` defaults to `orbit` and takes `orbit`, `voyager` or `pulsar`. An app with no database copies no `.env.local` and mints no
   identity, so its lane opens with the database unreachable. An unknown name refuses, never guesses.
 - The app must already be committed on the base branch. A lane for an app that is not there yet
   is opened by hand: `git worktree add -b <branch> ../<checkout>-l<n> <base> && cp -al node_modules ...`.
@@ -228,21 +230,15 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   branch, merged or not. Read the truth with
   `gh pr list --state merged --limit 300 --json number,headRefName,baseRefName` and delete the
   branches whose `headRefName` is in it.
-  - Measured 2026-09-20: 206 merged pull requests, 0 open, and **87 remote branches still alive**.
-    `--is-ancestor` called 5 of 24 local branches merged; GitHub called 83 of 87 remote ones merged,
-    and the seven the ancestry test called live were each verified landed by their own content —
-    the `RL-36` retirement, `RL-49`, and two documentation branches whose paragraphs are in
-    `DESIGN.md` and `TRAPS.md` today. **This rule is why nothing was ever deleted.** The rule said
-    check ancestry, the repo merges by squash, so every session read «unmerged» and moved on.
   - A branch with no merged PR is not automatically dead. Check its content before deleting it:
     `ruta-definir` held a schema sketch for `RL-29`, which is retired and was never built.
   - `git merge-base --is-ancestor` still answers the one question it can: whether a branch was
     merged **without** a pull request, which is how a few local-only branches landed.
 - Check against the branch its PR targets, never against HEAD and never against a name this file
-  hardcodes. Since 2026-09-08 a module's PR targets `integracion`; before that they targeted `main`.
+  hardcodes.
   Read the base with `gh pr view <n> --json baseRefName`.
-- **Fetch before you compare.** A local `main` nobody updated is not `origin/main`. Measured the same
-  day: this checkout's `main` had sat at the 2026-09-10 merge for nine days, 81 commits behind, and
+- **Fetch before you compare.** A local `main` nobody updated is not `origin/main`. Measured
+  2026-09-20: this checkout's `main` had sat at the 2026-09-10 merge for nine days, 81 commits behind, and
   a session reported `integracion` as 93 commits ahead of `main` when it was 14.
 - Delete a branch the day its PR merges. Report it.
 - Delete a train's module branches, local and remote, the moment the train's PR reads `MERGED`. They never
@@ -257,7 +253,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   the user 2026-09-27 for the push and 2026-09-30 for the commit.
 - **Point every PR at `integracion`. Never at `main`.**
 - **Take `integracion` to `main` once per slice, at most once a day.** That merge is the deploy.
-  Both apps ship from `main` alone (`apps/*/vercel.json`, `deploymentEnabled` `main` only), so every
+  Every app but `apps/portal` ships from `main` alone (`apps/*/vercel.json`, `deploymentEnabled` `main` only), so every
   push to `main` spends one production deployment of a quota that runs out.
   Measured 2026-09-08: 13 merges to `main` in one session, 13 deployments, and Vercel refused the
   rest for 24 hours — on the free plan the quota is the budget, not the build.
@@ -281,18 +277,19 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Size the proof by what the change reaches. Decided by the user 2026-10-05: module 182 spent 22
   minutes re-running suites its new, unimported file could not break, and each module paid the same
   suite up to three times (worker, validator, CI).
-  - A pure function, or a file nothing imports yet: `typecheck`, `lint`, `check:unit`, its own
-    tests and its mutations. Nothing else.
+  - A pure function, or a file nothing imports yet: `typecheck`, `lint`, `check:unit` and its own
+    tests. Nothing else.
   - A query or a server action: add every `check:*` that imports it. Grep the importers; when in doubt,
     run them all. Measured 2026-09-29: module 88 made `addCommitment` refuse an ended goal and broke
     three `check:day` probes nobody ran.
-  - A screen: its own specs and the specs the plan names. **The whole e2e suite runs once, in CI on
-    the pull request — never locally.** A red there is fixed on the branch before it merges. A chosen
+  - A screen: its own specs and the specs the plan names. **The whole e2e suite runs once, in CI —
+    never locally:** on the pull request for orbit and voyager, on the train's branch for pulsar (below).
+    A red there is fixed on the branch before it merges. A chosen
     list missed `deshacer.spec.ts` and `cifra-unidad.spec.ts` on 2026-09-30; CI is what caught them.
 - Have the worker save every check's output to a file under the lane's `private/` and name the paths.
-  The validator reads those logs, re-runs only the module's own tests, and asks of each assertion
-  whether it can fail. It never re-runs a suite the worker logged green, nor a mutation the worker
-  logged red: it checks that log ran the right code. Decided by the user 2026-10-10.
+  The train's validator reads those logs, re-runs only the train's own tests, and asks of each assertion
+  whether it can fail. It never re-runs a suite a worker logged green: it checks that log ran the right
+  code. Decided by the user 2026-10-10.
 - Give a module that only changes words on a line that already exists one agent for tests and code:
   it writes the Done table red first, then makes it green. Keep the separate `tester` for any new
   form. Decided by the user 2026-10-10.
@@ -304,7 +301,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   difference a cold `next dev` compile; the specs took 57 s on the build and 2.4 min on dev.
 - Run at most two whole suites at once against the remote pool: a third exhausts it (`EMAXCONNSESSION`,
   15 clients). CI and the lanes run on local stacks and do not count.
-- Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
+- Run a new spec under `pulsar-e2e`, fired on its branch, before calling it green. A spec that measures
   boxes passed 182/0 locally and failed in CI, where `loading.tsx` still stood (`docs/TRAPS.md`).
 - **Pulsar's `pulsar-e2e` runs on the push only, never on a pull request.** Decided by the user 2026-10-05,
   twice: the second time with the suite at ~2 min on the runner's stack. Merge on `typecheck`, `lint`,
@@ -320,17 +317,16 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified
   2026-09-08. It runs on a pull request only when the change reaches `apps/orbit`, `packages/` or the
   lockfile, and always on the push to `main`. Merge on `typecheck`, `lint` and `voyager-e2e`; read a
-  red on `main` and fix forward. Waiting on it by choice is what cost this session its afternoon, not
-  the suite.
+  red on `main` and fix forward.
 - **`voyager-e2e` runs on a pull request only when it reaches `apps/voyager`, `packages/`, the lockfile
   or `ci.yml`,** and always on a push. Skipped, it does not block the merge. Decided by the user 2026-10-10.
 - The suite is 17 minutes and **1043 of its 1099 seconds are the suite itself** — setup is 48. There
   is nothing to shave there. Make it run less, or shard it across harness lanes. Never micro-optimise
   the install.
 - `npm run typecheck` is tsgo, `npm run lint` is eslint cached. Both are seconds. Run them freely.
-- Run `next build` at a milestone. Never per step. CI builds both apps on every pull request that
-  reaches them — orbit in `build-orbit`, voyager inside `voyager-e2e`. Preview deployments are off,
-  so those two jobs are the only place a broken build is caught before production.
+- Run `next build` at a milestone. Never per step. CI builds every app on every pull request that
+  reaches it — orbit in `build-orbit`, pulsar in `build-pulsar`, voyager inside `voyager-e2e`. Preview
+  deployments are off, so those jobs are the only place a broken build is caught before production.
 - The database is remote: every query pays the round trip. Count round trips, not queries.
 - Prove a policy by driving it. Never assert it from the migration.
 - Read `docs/TRAPS.md` before writing a query, a migration or a spec.
@@ -423,7 +419,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   gets a function there. Never silence the lint rule with a disable. Decided by the user 2026-09-19.
 - Add a prop to the primitive when a screen needs a variant. Never patch one from outside.
 - Write interface text a person acts on. Cut text that only explains.
-- Install only from §4. Discard the do-not-install list.
+- Install only from §4. Install nothing on its «Do not install» list.
 - Leave `apps/voyager/.env.local` alone. It is gitignored, it never ships, and its keys are not
   rotated on an agent's initiative. Decided by the user 2026-09-08. Do not raise it again.
 - Copy `apps/voyager/.env.local` unchanged into a lane that runs voyager's suites, as `worktree.sh --app voyager`

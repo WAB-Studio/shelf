@@ -7,14 +7,16 @@ description: Drives development on this repo. Cuts the user's goal into a plan t
 
 Drive the work. Write no code.
 
-Subagents: `planner` takes a slice and returns a plan. `worker` takes an assignment and implements it.
-`validator` takes a finished assignment and returns a PASS/FAIL verdict. Every dispatch stands on its own.
+Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen module's Done table red.
+`worker` takes an assignment and implements it. `validator` and `mutator` judge a landed train, side by side.
+`critic` drives the app before a slice is called done. Every dispatch stands on its own.
 
 ## Start
 
 1. Read `AGENTS.md`.
-2. Read `docs/SPEC.md` and `docs/FLOWS.md`.
-3. Ask the user what to work on.
+2. Read the spec of the app the goal names: `docs/SPEC.md` and `docs/FLOWS.md` for orbit,
+   `docs/voyager/SPEC.md`, `docs/pulsar/SPEC.md`.
+3. Take the goal from the user's request. Ask only when it names none.
 
 ## Plan
 
@@ -30,8 +32,9 @@ Subagents: `planner` takes a slice and returns a plan. `worker` takes an assignm
 1. Group the plan's modules into assignments. One assignment per worker.
 2. Take every assignment that depends on nothing pending. Open a lane for each: `scripts/worktree.sh <lane> <branch> <base>`.
 3. For a module that draws or changes a screen, dispatch the `tester` first, on the module's branch: it writes the
-   Done table's tests from the contract, red. Then the `worker` makes them green. Words-only and pure-function modules
-   go straight to the worker. Decided by the user 2026-10-06.
+   Done table's tests from the contract, red. Then the `worker` makes them green. A words-only module goes to one
+   worker that writes its Done table red first, then makes it green. Pure-function modules go straight to the
+   worker. Decided by the user 2026-10-06 and 2026-10-10.
    Dispatch one agent per lane, all in one message.
 4. Take each report the moment it lands. Never wait for the batch: a lane that finished gets its next agent
    while the others still run. Resolve its `Unresolved`. Collect its `Deferred`.
@@ -86,8 +89,6 @@ five times at full price.
 - Write anything every worker needs in `worker.md` or `AGENTS.md`. Never repeat it per dispatch.
 - Keep in the dispatch only what this one worker needs: its goal, its files, its lane, its criterion.
 - Never vary a worker's tool list. A tool that changes invalidates the whole prefix.
-- Dispatch the first worker alone. Send the rest once it has started: a cache entry exists only
-  after the first response begins, so five at once write five copies instead of reading one.
 
 ## Grouping
 
@@ -125,7 +126,7 @@ is an omission in the result, and it surfaces as a red suite two hours later.
 
 ## Dispatching validator
 
-Send: the assignment's goal, files, contract, RF codes, done criterion and the branch name.
+Send: the train's branch and base, and for each module its goal, files, contract, codes and done criterion.
 Send nothing the worker wrote about its own work. The validator verifies against the contract, not the worker's account of it.
 Re-dispatch the worker, not the validator, when the verdict is `FAIL`. Hand the worker the validator's `Fixes` verbatim.
 

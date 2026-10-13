@@ -9,7 +9,7 @@ export function numberLines(text: string): string {
 }
 
 export const SYSTEM_PROMPT = [
-  `You read a personal plan and answer JSON shaped exactly by the given schema, in three steps, in one answer.`,
+  `You read a personal plan and write it into the given schema in three steps, in one answer.`,
   `Step 1, find: decide what is plan (goals, phases, months, weeks, commitments, tasks, steps, hours) and what is context ` +
     `(a diagnosis, costs, sources, a reading list). Write the context first, under "context", each with the lines it spans.`,
   `Step 2, arrange: put the plan into the app's shape under "goals", up to three levels of goals (a goal names its parent by key), ` +
