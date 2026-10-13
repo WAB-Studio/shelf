@@ -7,16 +7,45 @@ import { revalidatePath } from "next/cache";
 import { sql, type SQL } from "drizzle-orm";
 
 import { commitments, goals, monthBudgets, oneOffs, phases } from "@/db/schema";
+import { pgCode } from "@/lib/db-error";
 import { draftRefusals, draftV2Schema, strayEstimates, withCutPhases } from "@/lib/import/draft";
-import { getPerson, withGoalsDb } from "@/lib/session";
+import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
 import { isTimeUnit } from "@/lib/units/time";
 import { monthStart } from "@/lib/validation/budget";
 import { todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
+// A part the table refused after everything the review checks: its path in the draft, its name, and why.
+export type FailedPart = { path: string; name: string; reason: MessageKey };
+
 export type ConfirmImportResult =
-  | { ok: true; goalIds: string[] }
+  | { ok: true; goalIds: string[]; failed: FailedPart[] }
   | { ok: false; error: MessageKey; at?: string };
+
+// A row of one multi-row insert, kept with what names it if the table refuses it.
+type Part = { row: SQL; path: string; name: string };
+
+const CONSTRAINT_REASONS: Record<string, MessageKey> = {
+  commitments_weekdays_for_weekdays: "import.errors.cadenceWeekdays",
+  commitments_n_for_counted_kinds: "import.errors.cadenceCount",
+  commitments_quantity_for_quantity: "import.errors.quantityNoAmount",
+  one_offs_note_shape: "import.errors.noteShape",
+};
+
+function reasonOf(error: unknown): MessageKey {
+  let current: unknown = error;
+  for (let hop = 0; hop < 5 && typeof current === "object" && current !== null; hop++) {
+    const name = (current as Record<string, unknown>).constraint_name;
+    if (typeof name === "string") return CONSTRAINT_REASONS[name] ?? "import.errors.partFailed";
+    current = (current as { cause?: unknown }).cause;
+  }
+  return "import.errors.partFailed";
+}
+
+// A part-level refusal is an integrity violation (class 23); anything else is not the draft's fault.
+function isIntegrity(error: unknown): boolean {
+  return pgCode(error)?.startsWith("23") ?? false;
+}
 
 // One parenthesised row per entry, joined into a single multi-row VALUES.
 function rows(entries: SQL[]): SQL {
@@ -35,6 +64,20 @@ function weekdaysSql(days: number[] | null): SQL {
   )}]::smallint[]`;
 }
 
+// One statement behind a savepoint (drizzle's nested transaction): its failure rolls back to it and leaves
+// the transaction usable. A hand-written `rollback to savepoint` is not enough, the driver then re-raises the
+// first error when the transaction ends.
+async function attempt(tx: Transaction, run: (inner: Transaction) => Promise<unknown>): Promise<{ ok: true } | { ok: false; error: unknown }> {
+  try {
+    await tx.transaction(async (inner) => {
+      await run(inner as unknown as Transaction);
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
 /**
  * Writes a reviewed import draft (RP-37, RP-88, RP-95): a tree of goals up to three levels deep,
  * with the notes of goals and tasks. The draft is judged again here with the schema and the
@@ -50,6 +93,9 @@ function weekdaysSql(days: number[] | null): SQL {
  * grant as two statements for the same reason. The same update arms the rhythm (RP-63):
  * `plan_seen` as `setRhythm`'s first rhythm. A goal that holds goals has no rhythm (refused above),
  * so its tasks are written fixed to their month, as `fixHolderTasks` leaves them.
+ *
+ * RP-90: a phase, month, commitment or task the table still refuses after those checks is returned in `failed`
+ * with its name and reason, and the rest is written; only a goal the table refuses fails the call.
  */
 export async function confirmImport(input: unknown): Promise<ConfirmImportResult> {
   const parsed = draftV2Schema.safeParse(input);
@@ -84,11 +130,11 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   const layerOf: number[] = [];
   const layers: SQL[][] = [[], [], []];
   const measureRows: SQL[] = [];
-  const phaseRows: SQL[] = [];
-  const budgetRows: SQL[] = [];
-  const commitmentRows: SQL[] = [];
-  const parentRows: SQL[] = [];
-  const childRows: SQL[] = [];
+  const phaseRows: Part[] = [];
+  const budgetRows: Part[] = [];
+  const commitmentRows: Part[] = [];
+  const parentRows: (Part & { taskId: string })[] = [];
+  const childRows: (Part & { taskId: string })[] = [];
   const goalIds: string[] = [];
 
   // RP-47: each table's position is the person's current max plus the row's
@@ -118,88 +164,136 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     if (goal.measure !== null) {
       measureRows.push(sql`${goalId}::uuid, ${goal.measure.name}, ${goal.measure.unit}, ${goal.rhythm}::integer`);
     }
-    for (const phase of goal.phases) {
-      phaseRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${phase.aim}, ${phase.startsOn}::date, ${phase.endsOn}::date`);
-    }
-    for (const entry of goal.months) {
-      budgetRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${monthStart(entry.month)}::date, ${entry.amount}::integer`);
-    }
-    for (const commitment of goal.commitments) {
+    const at = `goals.${goalIds.length - 1}`;
+    goal.phases.forEach((phase, p) => {
+      phaseRows.push({
+        row: sql`${person.id}::uuid, ${goalId}::uuid, ${phase.aim}, ${phase.startsOn}::date, ${phase.endsOn}::date`,
+        path: `${at}.phases.${p}`,
+        name: phase.aim,
+      });
+    });
+    goal.months.forEach((entry, m) => {
+      budgetRows.push({
+        row: sql`${person.id}::uuid, ${goalId}::uuid, ${monthStart(entry.month)}::date, ${entry.amount}::integer`,
+        path: `${at}.months.${m}`,
+        name: entry.month,
+      });
+    });
+    goal.commitments.forEach((commitment, c) => {
       commitmentIndex += 1;
-      commitmentRows.push(sql`
+      commitmentRows.push({
+        row: sql`
         ${person.id}::uuid, ${goalId}::uuid, ${commitment.name}, ${commitment.cadenceKind},
         ${commitment.cadenceN}::integer, ${weekdaysSql(commitment.cadenceWeekdays)},
         ${commitment.satisfaction}, ${commitment.targetQuantity}::integer, ${commitment.unit}::text,
-        ${basePosition(commitments)} + ${commitmentIndex}::integer`);
-    }
+        ${basePosition(commitments)} + ${commitmentIndex}::integer`,
+        path: `${at}.commitments.${c}`,
+        name: commitment.name,
+      });
+    });
     // RP-67: with a rhythm the month only orders the tasks; Array.sort is stable, so a month keeps reading order.
-    const ordered = goal.rhythm === null ? goal.tasks : [...goal.tasks].sort((a, b) => a.month.localeCompare(b.month));
-    for (const task of ordered) {
+    const ordered = goal.rhythm === null ? goal.tasks.map((task, t) => ({ task, t })) : goal.tasks.map((task, t) => ({ task, t })).sort((a, b) => a.task.month.localeCompare(b.task.month));
+    for (const { task, t } of ordered) {
       const taskId = randomUUID();
       taskIndex += 1;
       const parentIndex = taskIndex;
       // `in_plan` is named: the trigger sets it only for a row with a month or a parent.
       const plannedMonth = goal.rhythm === null ? sql`${monthStart(task.month)}::date` : sql`null::date`;
-      parentRows.push(sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${plannedMonth}, ${goal.rhythm !== null}::boolean, ${task.estimate}::integer, ${task.note ?? null}::text, ${basePosition(oneOffs)} + ${parentIndex}::integer`);
+      parentRows.push({
+        taskId,
+        row: sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${plannedMonth}, ${goal.rhythm !== null}::boolean, ${task.estimate}::integer, ${task.note ?? null}::text, ${basePosition(oneOffs)} + ${parentIndex}::integer`,
+        path: `${at}.tasks.${t}`,
+        name: task.name,
+      });
       for (const [place, child] of task.children.entries()) {
         taskIndex += 1;
         // The parent's own row already holds base + parentIndex.
-        childRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${taskId}::uuid, ${child.name}, ${child.estimate}::integer, ${child.note ?? null}::text, (select p.position from ${oneOffs} p where p.id = ${taskId}::uuid) + ${place + 1}::integer`);
+        childRows.push({
+          taskId,
+          row: sql`${person.id}::uuid, ${goalId}::uuid, ${taskId}::uuid, ${child.name}, ${child.estimate}::integer, ${child.note ?? null}::text, (select p.position from ${oneOffs} p where p.id = ${taskId}::uuid) + ${place + 1}::integer`,
+          path: `${at}.tasks.${t}.children.${place}`,
+          name: child.name,
+        });
       }
     }
   }
 
-  await withGoalsDb(async (tx) => {
-    // One statement per layer, parents first.
-    for (const layer of layers) {
-      if (layer.length === 0) continue;
-      await tx.execute(sql`
-        insert into ${goals} (id, user_id, name, horizon, parent_id, note, position) values ${rows(layer)}
+  // The fast path writes each table in one statement, as always. When the table refuses a part, that
+  // transaction is gone: the same rows are written again with each table behind a savepoint, and a
+  // table that refuses falls back to one savepoint per part, so only the refused part is left out (RP-90).
+  const write = (tolerant: boolean) =>
+    withGoalsDb(async (tx) => {
+      const failed: FailedPart[] = [];
+      // One statement per layer, parents first.
+      for (const layer of layers) {
+        if (layer.length === 0) continue;
+        await tx.execute(sql`
+          insert into ${goals} (id, user_id, name, horizon, parent_id, note, position) values ${rows(layer)}
+        `);
+      }
+      if (measureRows.length > 0) {
+        await tx.execute(sql`
+          update ${goals} set measure_name = m.name, measure_unit = m.unit, rhythm = m.rhythm,
+            plan_seen = case when m.rhythm is null then plan_seen
+              else (date_trunc('month', ${today}::date) - interval '1 month')::date end
+          from (values ${rows(measureRows)}) as m(id, name, unit, rhythm)
+          where ${goals}.id = m.id
+        `);
+      }
+      const put = async <P extends Part>(parts: P[], insert: (values: SQL) => SQL): Promise<P[]> => {
+        if (parts.length === 0) return [];
+        if (!tolerant) {
+          await tx.execute(insert(rows(parts.map((part) => part.row))));
+          return parts;
+        }
+        const landed = await attempt(tx, (inner) => inner.execute(insert(rows(parts.map((part) => part.row)))));
+        if (landed.ok) return parts;
+        const kept: P[] = [];
+        for (const part of parts) {
+          const one = await attempt(tx, (inner) => inner.execute(insert(rows([part.row]))));
+          if (one.ok) kept.push(part);
+          else failed.push({ path: part.path, name: part.name, reason: reasonOf(one.error) });
+        }
+        return kept;
+      };
+      await put(phaseRows, (values) => sql`
+        insert into ${phases} (user_id, goal_id, aim, starts_on, ends_on) values ${values}
       `);
-    }
-    if (measureRows.length > 0) {
-      await tx.execute(sql`
-        update ${goals} set measure_name = m.name, measure_unit = m.unit, rhythm = m.rhythm,
-          plan_seen = case when m.rhythm is null then plan_seen
-            else (date_trunc('month', ${today}::date) - interval '1 month')::date end
-        from (values ${rows(measureRows)}) as m(id, name, unit, rhythm)
-        where ${goals}.id = m.id
+      await put(budgetRows, (values) => sql`
+        insert into ${monthBudgets} (user_id, goal_id, month, amount) values ${values}
       `);
-    }
-    if (phaseRows.length > 0) {
-      await tx.execute(sql`
-        insert into ${phases} (user_id, goal_id, aim, starts_on, ends_on) values ${rows(phaseRows)}
-      `);
-    }
-    if (budgetRows.length > 0) {
-      await tx.execute(sql`
-        insert into ${monthBudgets} (user_id, goal_id, month, amount) values ${rows(budgetRows)}
-      `);
-    }
-    if (commitmentRows.length > 0) {
-      await tx.execute(sql`
+      await put(commitmentRows, (values) => sql`
         insert into ${commitments}
           (user_id, goal_id, name, cadence_kind, cadence_n, cadence_weekdays,
            satisfaction, target_quantity, unit, position)
-        values ${rows(commitmentRows)}
+        values ${values}
       `);
-    }
-    // Parents before children: the child's policy reads its parent back.
-    if (parentRows.length > 0) {
-      await tx.execute(sql`
+      // Parents before children: the child's policy reads its parent back.
+      const keptParents = await put(parentRows, (values) => sql`
         insert into ${oneOffs} (id, user_id, goal_id, name, planned_month, in_plan, estimate, note, position)
-        values ${rows(parentRows)}
+        values ${values}
       `);
-    }
-    if (childRows.length > 0) {
-      await tx.execute(sql`
-        insert into ${oneOffs} (user_id, goal_id, parent_id, name, estimate, note, position)
-        values ${rows(childRows)}
-      `);
-    }
-  });
+      const keptIds = new Set(keptParents.map((part) => part.taskId));
+      // A refused parent takes its sub-tasks with it, and they are not listed apart.
+      await put(
+        childRows.filter((part) => keptIds.has(part.taskId)),
+        (values) => sql`
+          insert into ${oneOffs} (user_id, goal_id, parent_id, name, estimate, note, position)
+          values ${values}
+        `,
+      );
+      return failed;
+    });
+
+  let failed: FailedPart[];
+  try {
+    failed = await write(false);
+  } catch (error) {
+    if (!isIntegrity(error)) throw error;
+    failed = await write(true);
+  }
 
   revalidatePath("/");
   revalidatePath("/metas");
-  return { ok: true, goalIds };
+  return { ok: true, goalIds, failed };
 }

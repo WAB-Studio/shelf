@@ -123,3 +123,17 @@ test("«hs» is hours too, in any case, with a fraction or minutes", () => {
 test("nothing else after «h» is an hour word", () => {
   for (const text of ["8 hss", "8 hx", "8 hrss"]) assert.equal(parseTime(text), null, text);
 });
+
+test("hours, hour, hrs and hr are hours, and are stored as minutes", () => {
+  for (const word of ["hours", "hour", "hrs", "hr", " Hours "]) {
+    assert.equal(isHourUnit(word), true, word);
+    assert.deepEqual(storedMeasure(word, 2), { unit: "minutos", amount: 120 }, word);
+  }
+});
+
+test("minutes and minute are stored as minutos with the amount as it is, and still do not read as stored time", () => {
+  assert.deepEqual(storedMeasure("minutes", 90), { unit: "minutos", amount: 90 });
+  assert.deepEqual(storedMeasure("Minute", 10), { unit: "minutos", amount: 10 });
+  assert.equal(isTimeUnit("minutes"), false);
+  assert.deepEqual(storedMeasure("minutos", 5), { unit: "minutos", amount: 5 });
+});

@@ -323,12 +323,26 @@ export async function readPlan(input: PlanInput, onStep: (step: Step) => void): 
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!response.ok || !response.body) return { status: "failed" };
+    if (!response.ok || !response.body) {
+      console.error("import model read failed: status", response.status, await errorOf(response));
+      return { status: "failed" };
+    }
 
     const answer = await readStream(response.body, onStep);
     if (answer.finish === "length" || answer.refusal) return { status: "failed", usage: answer.usage };
     return judge(answer.content, answer.usage, source);
-  } catch {
+  } catch (error) {
+    console.error("import model read failed:", error instanceof Error ? `${error.name}: ${error.message}` : "unknown");
     return { status: "failed" };
+  }
+}
+
+// The provider's error type and code. Never its message: a rejected key is echoed there.
+async function errorOf(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: { type?: unknown; code?: unknown } };
+    return [body.error?.type, body.error?.code].filter((part) => typeof part === "string").join(" ");
+  } catch {
+    return "";
   }
 }

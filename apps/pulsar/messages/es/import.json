@@ -133,7 +133,7 @@
       "decline": "Dejar como estaba",
       "acceptDeclined": "Aceptar la corrección",
       "keepsPlan": "Se queda como decía el plan: {said}.",
-      "leavesOut": "Se queda fuera: {code, select, nameShortened {con 120 caracteres o menos no cabía} cadenceClamped {la cadencia pasaba del tope} endWithinAbove {terminaba después de la meta que la lleva} other {no cabía como estaba}}.",
+      "leavesOut": "Se queda fuera: {code, select, nameShortened {con 120 caracteres o menos no cabía} cadenceClamped {la cadencia pasaba del tope} cadenceToWeekdays {la cadencia y los días no van juntos} endWithinAbove {terminaba después de la meta que la lleva} other {no cabía como estaba}}.",
       "said": "decía",
       "proposed": "se propone",
       "why": "porque",
@@ -176,6 +176,11 @@
         "said": "{said}",
         "proposed": "{proposed}",
         "why": "Una cadencia no pasa de {proposed}."
+      },
+      "cadenceToWeekdays": {
+        "said": "{said}, con días",
+        "proposed": "Los días: {proposed}",
+        "why": "Un compromiso con días se repite esos días de la semana, no un número de veces."
       },
       "rateToRhythm": {
         "said": "{said}",
@@ -257,6 +262,11 @@
     "horizonPast": "El final de la meta ya pasó. Pon una fecha por venir.",
     "duplicateMonth": "Hay dos montos para un mismo mes.",
     "parentWithAmount": "Una tarea con sub-tareas no lleva monto propio. Quítalo o quita las sub-tareas.",
+    "cadenceWeekdays": "Los días solo van con la cadencia de días de la semana. Quítalos o cambia la cadencia.",
+    "cadenceCount": "Una cadencia de días no lleva cantidad y una de veces sí. Corrígela.",
+    "quantityNoAmount": "Un compromiso con cantidad lleva monto y unidad. Ponlos.",
+    "noteShape": "La nota de esta parte está vacía. Quítala o escríbela.",
+    "partFailed": "No se pudo escribir. El resto del plan sí se creó.",
     "tapWithAmount": "Un compromiso de una vez no lleva monto ni unidad. Quítalos.",
     "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez.",
     "workbookRows": "{count, plural, one {# fila por corregir} other {# filas por corregir}}",
