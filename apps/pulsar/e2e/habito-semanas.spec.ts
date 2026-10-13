@@ -85,8 +85,9 @@ test.describe("the habit's screen, by the week (RP-109)", () => {
       expect(rowsOf(section)).toEqual([monthLabel(0)]);
       expect(section).toContain("en curso");
       expect(section).toContain(NONE_YET);
-      expect(section).not.toMatch(/\d+ de \d+/);
-      expect(section).not.toMatch(/\bsemanas?\b(?!s? cerradas)/);
+      expect(section).not.toMatch(/\d+ de \d+ semanas?/);
+      expect(section).toContain("0 de 1 esta semana");
+      expect(section.replace(NONE_YET, "").replace("0 de 1 esta semana", "")).not.toContain("semana");
       await expect(page.getByRole("button", { name: "Retirarlo", exact: true })).toBeVisible();
     } finally {
       await context.close();
@@ -129,7 +130,10 @@ test.describe("the habit's screen, by the week (RP-109)", () => {
     // Kills: counting the retirement week whatever the day; dropping it always; a row for a month after the retirement.
     const early = await seedHabit(db, person.id, "Retirado miércoles", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2025-09-15"), retired: noonOf("2025-10-22") });
     const late = await seedHabit(db, person.id, "Retirado jueves", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf("2025-09-15"), retired: noonOf("2025-10-23") });
-    for (const id of [early, late]) for (const day of ["2025-09-30", "2025-10-07", "2025-10-14", "2025-10-21"]) await seedFact(db, person.id, id, null, day);
+    // The week of the 20th is met only for the habit retired on its Thursday: a retirement week counts when it was met before
+    // retiring (RP-112) or when the habit lived its Thursday, so the Wednesday one keeps it unmet to be dropped.
+    for (const day of ["2025-09-30", "2025-10-07", "2025-10-14"]) await seedFact(db, person.id, early, null, day);
+    for (const day of ["2025-09-30", "2025-10-07", "2025-10-14", "2025-10-21"]) await seedFact(db, person.id, late, null, day);
     for (const [id, expected] of [[early, figure(3, 3)], [late, figure(4, 4)]] as const) {
       const { page, context } = await visit(browser, baseURL, person, path(id, "?todo=1"), 360);
       try {
@@ -195,7 +199,7 @@ for (const n of [1, 2]) {
         const found = expected.get(key) ?? { met: 0, counted: 0 };
         if (found.counted === 0) {
           expect(row, labelOf(key)).toContain(NONE_YET);
-          expect(row).not.toMatch(/\d+ de \d+/);
+          expect(row).not.toMatch(/\d+ de \d+ semanas?/);
         } else {
           expect(row, labelOf(key)).toContain(figure(found.met, found.counted));
           expect(row).not.toContain(NONE_YET);
