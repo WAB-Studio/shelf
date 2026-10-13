@@ -13,6 +13,7 @@ export const correctionKeys = {
   parentEstimateDropped: sentence("parentEstimateDropped"),
   parentEstimateDiffers: sentence("parentEstimateDiffers"),
   cadenceClamped: sentence("cadenceClamped"),
+  cadenceToWeekdays: sentence("cadenceToWeekdays"),
   rateToRhythm: sentence("rateToRhythm"),
   holderRhythmToNote: sentence("holderRhythmToNote"),
   holderMonthsToNote: sentence("holderMonthsToNote"),

@@ -122,3 +122,21 @@ test("from parts, the parts a src names are counted and none is out", () => {
   const c = coverage(d, { kind: "parts", lines: null }, none, none);
   assert.deepEqual([c.kind, c.total, c.plan, c.notes, c.out], ["parts", 3, 2, 1, 0]);
 });
+
+test("898: a note the model reworded still holds the lines whose text it carries", () => {
+  const lines = ["- **Pilar 1** análisis", "Pilar 2", "otra cosa"];
+  const d = draft(goal({ note: "Resumen del plan\n\n* Pilar 1 análisis\nPilar 2\n\nuna cola que no es la fuente", noteSrc: [{ from: 1, to: 3 }] }));
+  const c = coverage(d, source(["- Pilar 1 análisis", lines[1], lines[2]]), none, none);
+  assert.deepEqual([c.plan, c.notes, c.out], [0, 2, 1]);
+  assert.equal(c.outLines[0].reason, "notPlaced");
+});
+
+test("898: a line the note lacks is noteFull only when it would not fit", () => {
+  const lines = ["alfa", "beta", "gamma"];
+  const d = draft(goal({ note: "alfa", noteSrc: [{ from: 1, to: 3 }] }));
+  const roomy = coverage(d, source(lines), none, none);
+  assert.deepEqual(roomy.outLines.map((l) => [l.text, l.reason]), [["beta", "notPlaced"], ["gamma", "notPlaced"]]);
+  const big = "z".repeat(GOAL_NOTE_MAX - 6);
+  const full = coverage(draft(goal({ note: `alfa\n${big}`.slice(0, GOAL_NOTE_MAX - 2), noteSrc: [{ from: 1, to: 3 }] })), source(lines), none, none);
+  assert.deepEqual(full.outLines.map((l) => [l.text, l.reason]), [["beta", "noteFull"], ["gamma", "noteFull"]]);
+});

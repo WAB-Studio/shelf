@@ -1,4 +1,6 @@
-import { srcLines, WHOLE_GOAL, type ImportDraft, type Source, type Src } from "./draft";
+import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
+
+import { srcLines, TASK_NOTE_MAX, WHOLE_GOAL, type ImportDraft, type Source, type Src } from "./draft";
 
 export type OutReason = "notPlaced" | "unmarked" | "refused" | "noteFull";
 type Why = "unmarked" | "refused";
@@ -30,14 +32,32 @@ export function outness(draft: ImportDraft, unmarked: ReadonlySet<string>, refus
   };
 }
 
-// How many of a note's lines the note holds: it was filled with whole lines, in order, from the top.
-function lineCount(note: string | null, texts: string[]): number {
-  if (note === null) return 0;
-  for (let k = texts.length; k >= 1; k--) {
-    const joined = texts.slice(0, k).join("\n").trim();
-    if (joined !== "" && note.endsWith(joined)) return k;
-  }
-  return 0;
+// A line as the note may carry it: list marks and emphasis gone, spaces collapsed.
+function flat(text: string): string {
+  return text
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, "")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Whether the note carries each line's text, in the note's words and not only as its tail.
+function inNote(note: string | null, texts: string[]): boolean[] {
+  if (note === null) return texts.map(() => false);
+  // A repeated line is held as many times as the note repeats it.
+  const noteLines = new Map<string, number>();
+  for (const line of note.split("\n").map(flat)) noteLines.set(line, (noteLines.get(line) ?? 0) + 1);
+  const whole = flat(note.replace(/\n/g, " "));
+  return texts.map((text) => {
+    const line = flat(text);
+    if (line === "") return false;
+    const left = noteLines.get(line);
+    if (left !== undefined) {
+      noteLines.set(line, Math.max(left - 1, 0));
+      return left > 0;
+    }
+    return line.length >= 20 && whole.includes(line);
+  });
 }
 
 type Mark = { plan: boolean; notes: boolean; reasons: OutReason[] };
@@ -66,31 +86,36 @@ export function coverage(
       else mark(n).reasons.push(why);
     }
   };
-  const notes = (path: string, ranges: Src[], note: string | null) => {
+  const notes = (path: string, ranges: Src[], note: string | null, cap: number) => {
     const why = out(`${path}.note`);
     const numbers = inside(ranges);
-    const fits = lines === null ? numbers.length : lineCount(note, numbers.map((n) => lines[n - 1]));
+    const held = lines === null ? numbers.map(() => true) : inNote(note, numbers.map((n) => lines[n - 1]));
+    // The note is filled in order and stops at the first line that does not fit: that one and the ones after are noteFull.
+    let cut = false;
     numbers.forEach((n, i) => {
       if (why !== null) mark(n).reasons.push(why);
-      else if (i < fits) mark(n).notes = true;
-      else mark(n).reasons.push("noteFull");
+      else if (held[i]) mark(n).notes = true;
+      else {
+        if (!cut && (note?.length ?? 0) + 1 + (lines?.[n - 1].trim().length ?? 0) > cap) cut = true;
+        mark(n).reasons.push(cut ? "noteFull" : "notPlaced");
+      }
     });
   };
 
   draft.goals.forEach((goal, g) => {
     const at = `goals.${g}`;
     covers(at, goal.src);
-    notes(at, goal.noteSrc, goal.note);
+    notes(at, goal.noteSrc, goal.note, GOAL_NOTE_MAX);
     goal.phases.forEach((part, i) => covers(`${at}.phases.${i}`, part.src));
     goal.months.forEach((part, i) => covers(`${at}.months.${i}`, part.src));
     goal.commitments.forEach((part, i) => covers(`${at}.commitments.${i}`, part.src));
     goal.tasks.forEach((task, t) => {
       const taskAt = `${at}.tasks.${t}`;
       covers(taskAt, task.src);
-      notes(taskAt, task.noteSrc, task.note);
+      notes(taskAt, task.noteSrc, task.note, TASK_NOTE_MAX);
       task.children.forEach((child, c) => {
         covers(`${taskAt}.children.${c}`, child.src);
-        notes(`${taskAt}.children.${c}`, child.noteSrc, child.note);
+        notes(`${taskAt}.children.${c}`, child.noteSrc, child.note, TASK_NOTE_MAX);
       });
     });
   });
