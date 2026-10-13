@@ -136,3 +136,26 @@ export function coverage(
   }
   return { kind: source.kind, total: plan + noted + outLines.length, plan, notes: noted, out: outLines.length, outLines };
 }
+
+// RP-96: every line the model left out goes, as written and in the text's order, to the end of the
+// note of the general goal (the first with none above it). A line that no longer fits under the
+// goal-note ceiling is named in `noteSrc` all the same, so the count calls it out as `noteFull`.
+export function placeLeftovers(draft: ImportDraft, source: Source): ImportDraft {
+  const lines = source.lines;
+  const root = draft.goals.findIndex((goal) => goal.parent === null);
+  if (lines === null || root < 0) return draft;
+  const left = coverage(draft, source, new Set(), new Set()).outLines.map((entry) => entry.line);
+  if (left.length === 0) return draft;
+  let note = draft.goals[root].note ?? "";
+  let room = true;
+  left.forEach((n, i) => {
+    const text = lines[n - 1].trimEnd();
+    const joined = note === "" ? text : `${note}${i === 0 ? "\n\n" : "\n"}${text}`;
+    if (room && joined.length <= GOAL_NOTE_MAX) note = joined;
+    else room = false;
+  });
+  const goals = draft.goals.map((goal, g) =>
+    g === root ? { ...goal, note: note === "" ? null : note, noteSrc: [...goal.noteSrc, ...left.map((n) => ({ from: n, to: n }))] } : goal,
+  );
+  return { ...draft, goals };
+}

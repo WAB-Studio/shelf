@@ -568,3 +568,32 @@ test("the download: GET /importar/plantilla.xlsx hands the workbook as an attach
   assert.equal(read.draft.goals.length, 3);
   assert.equal((await rows()).length, 0);
 });
+
+// ---- 903
+
+test("903: what the model leaves out reaches the general goal's note on the way to the review", async () => {
+  stubDraft(rawGoal({ src: [{ from: 1, to: 1 }], months: [{ month: "2026-10", amount: 720, src: [{ from: 2, to: 2 }] }] }));
+  const lines = await ndjson(await route.POST(request({ text: "# Plan\nmes\nRiesgos del plan\n\n  - sin tiempo" })));
+  const done = lastLine(lines).done;
+  assert.equal(done.draft.goals[0].note, "Riesgos del plan\n  - sin tiempo");
+  assert.deepEqual(done.draft.goals[0].noteSrc, [{ from: 3, to: 3 }, { from: 5, to: 5 }]);
+});
+
+test("903: the check's proposal and notice reach the review of a model read", async () => {
+  stubDraft(
+    rawGoal({
+      months: [{ month: "2026-10", amount: 720, src: [{ from: 2, to: 2 }] }],
+      rules: [{ id: "r1", label: "Inglés", perWeek: 180 }],
+      tasks: [{ name: "Leer", month: "2026-10", estimate: 600, week: "2026-W41", rule: null, noteSrc: [], noteText: null, src: [{ from: 3, to: 3 }], children: [] }],
+    }),
+  );
+  const done = lastLine(await ndjson(await route.POST(request({ text: "uno\ndos\ntres" })))).done;
+  assert.deepEqual(done.corrections.map((c: { code: string }) => c.code), ["monthSumDiffers"]);
+  assert.deepEqual(done.notices.map((n: { code: string }) => n.code), ["weekRuleBroken"]);
+});
+
+test("903: the route may run longer than the read waits", async () => {
+  const { REQUEST_TIMEOUT_MS } = await import("@/lib/import/model");
+  assert.ok(route.maxDuration * 1000 > REQUEST_TIMEOUT_MS);
+  assert.equal(route.maxDuration, 300);
+});

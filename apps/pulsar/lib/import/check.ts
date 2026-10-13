@@ -45,6 +45,24 @@ function ruleChecks(goal: DraftGoal, at: string, notices: Notice[]): void {
   }
 }
 
+// A goal with a rhythm and no tasks while the goal above holds tasks: the tasks that fill it sit one level up.
+function rhythmChecks(draft: ImportDraft, goal: DraftGoal, at: string, corrections: Correction[]): void {
+  if (goal.rhythm === null || goal.tasks.length > 0 || goal.parent === null) return;
+  const above = draft.goals.find((entry) => entry.key === goal.parent);
+  if (!above || above.tasks.length === 0) return;
+  const added = `ritmo: ${goal.rhythm} ${goal.measure?.unit ?? "min"} al mes`;
+  const path = `${at}.rhythm`;
+  corrections.push({
+    id: `${path}:rhythmWithoutTasks`,
+    at: path,
+    code: "rhythmWithoutTasks",
+    said: String(goal.rhythm),
+    proposed: "",
+    values: { above: above.name, added },
+    declined: "keepsPlan",
+  });
+}
+
 // RP-86's third step: the plan against itself. A correction is a proposal the person accepts or
 // declines; a notice only says what does not add up.
 export function check(draft: ImportDraft): { corrections: Correction[]; notices: Notice[] } {
@@ -53,6 +71,7 @@ export function check(draft: ImportDraft): { corrections: Correction[]; notices:
   const holders = new Set(draft.goals.flatMap((goal) => (goal.parent === null ? [] : [goal.parent])));
   draft.goals.forEach((goal, g) => {
     if (holders.has(goal.key)) return;
+    rhythmChecks(draft, goal, `goals.${g}`, corrections);
     monthChecks(goal, `goals.${g}`, corrections);
     ruleChecks(goal, `goals.${g}`, notices);
   });

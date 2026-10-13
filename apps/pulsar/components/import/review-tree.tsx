@@ -281,6 +281,8 @@ export function ReviewTree({
       }
       case "monthOverRhythm":
         return { month: monthWord(v.month ?? ""), said: fmt(Number(c.said), unit), proposed: fmt(Number(c.proposed), unit) };
+      case "rhythmWithoutTasks":
+        return { said: fmt(Number(c.said), unit), name: goal.name, above: v.above ?? "" };
       case "parentEstimateDropped": {
         const task = partOf(node.path).task;
         return { name: node.label, said: `${c.said} ${v.unit ?? ""}`.trim(), count: task?.children.length ?? 0 };
@@ -298,7 +300,7 @@ export function ReviewTree({
 
   const saidOf = (c: Correction, node: ReviewNode): string => {
     const unit = unitOf(node);
-    if (c.code === "monthSumDiffers" || c.code === "monthOverRhythm") return fmt(Number(c.said), unit);
+    if (c.code === "monthSumDiffers" || c.code === "monthOverRhythm" || c.code === "rhythmWithoutTasks") return fmt(Number(c.said), unit);
     if (c.code === "parentEstimateDropped" || c.code === "parentEstimateDiffers") return `${c.said} ${c.values?.unit ?? ""}`.trim();
     return c.said;
   };

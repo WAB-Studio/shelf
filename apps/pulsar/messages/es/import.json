@@ -157,6 +157,11 @@
         "proposed": "Ritmo al mes: {proposed}",
         "why": "Las tareas de {month} suman {proposed}, más que el ritmo de {said}."
       },
+      "rhythmWithoutTasks": {
+        "said": "Ritmo al mes, {said}, y ninguna tarea",
+        "proposed": "El ritmo pasa a la nota de «{name}»",
+        "why": "Las tareas están en «{above}», no en esta meta. Déjalo como estaba si las vas a pasar aquí."
+      },
       "parentEstimateDropped": {
         "said": "{name}: {said}",
         "proposed": "{name} sin horas propias",

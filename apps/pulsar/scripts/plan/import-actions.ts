@@ -776,3 +776,44 @@ test("confirmImport: a clean plan still pays the same statements and lists nothi
   const { statements } = await confirmed(draftOf(EXAMPLE.replace("# IA aplicada", `# 898 limpia ${RUN}`)));
   assert.equal(statements, 8);
 });
+
+// ---- 903: survivors of the f1 and i1 mutators.
+
+test("903: a sub-task the table refuses is named by its place under its task, and its sister is written", async () => {
+  const name = `903 hija ${RUN}`;
+  const child = (childName: string, note: string | null) => ({ name: childName, estimate: 30, note, noteSrc: [], src: [], rule: null });
+  const draft = tree([full("a", null, name, { tasks: [task("Madre", M0, null, [child("Hija 1", null), child("Hija 2", "   "), child("Hija 3", null)])] })]);
+  const result = await confirmImport(draft);
+  if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
+  goalIds.push(...result.goalIds);
+  assert.deepEqual(result.failed, [{ path: "goals.0.tasks.0.children.1", name: "Hija 2", reason: "import.errors.noteShape" }]);
+  const kept = await sql<{ name: string }[]>`select name from goals.one_offs where goal_id = ${result.goalIds[0]} and parent_id is not null order by name`;
+  assert.deepEqual(kept.map((row) => row.name), ["Hija 1", "Hija 3"]);
+});
+
+test("903: an error that is not the draft's fault surfaces; it is not retried as a partial write", async () => {
+  const name = `903 infraestructura ${RUN}`;
+  // A NUL byte passes every check of the review and meets the server as class 22, not 23.
+  const draft = tree([full("a", null, name, { tasks: [{ ...task("Con NUL", M0, null), note: "a\u0000b" }] })]);
+  try {
+    await assert.rejects(confirmImport(draft));
+    assert.equal(await countGoals(`${name} ${RUN}`), 0);
+  } finally {
+    await sql`delete from goals.goals where user_id = ${personId} and name like ${`%${name}%`}`;
+  }
+});
+
+test("903: two goals with one key: a goal inside it goes under the first", async () => {
+  const draft = tree([bare("dup", null, "903 clave uno", `${M14}-01`), bare("dup", null, "903 clave dos", `${M14}-01`), bare("dup", "dup", "903 hija", `${M6}-01`)]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await sql<{ id: string; parent_id: string | null }[]>`select id, parent_id from goals.goals where id in ${sql(ids)}`;
+  assert.equal(rows.find((row) => row.id === ids[2])?.parent_id, ids[0]);
+});
+
+test("903: with a rhythm the tasks are in the plan with no month, in the order of their months", async () => {
+  const draft = tree([full("a", null, "903 ritmo", { rhythm: 600, months: [], tasks: [task("Tarde", M1, 60), task("Pronto", M0, 30)] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await sql<{ name: string; in_plan: boolean; planned_month: string | null }[]>`
+    select name, in_plan, planned_month::text as planned_month from goals.one_offs where goal_id = ${ids[0]} order by position`;
+  assert.deepEqual(rows.map((row) => [row.name, row.in_plan, row.planned_month]), [["Pronto", true, null], ["Tarde", true, null]]);
+});

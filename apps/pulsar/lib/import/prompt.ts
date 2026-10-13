@@ -15,6 +15,8 @@ export const SYSTEM_PROMPT = [
   `Step 2, arrange: put the plan into the app's shape under "goals", up to three levels of goals (a goal names its parent by key), ` +
     `phases, months, commitments, tasks with sub-tasks.`,
   `Step 3 is not yours: the app checks the plan against itself.`,
+  `Put each task under the goal it serves: a goal with a rhythm or a month budget holds the tasks that fill it, and the goal above ` +
+    `holds only the tasks that serve it as a whole.`,
   `Put every line of the plan in a part, in a note, or nowhere. Invent nothing: a figure, date or sentence the plan does not state ` +
     `is null where the schema allows it, and a part the plan does not mention is an empty array.`,
   `The text comes with a number before each line ("12|..."). Copy the line numbers a part came from into its "src", ` +
