@@ -1510,3 +1510,22 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/s1-crit
 - Lists that grow without an end (Por semana, Por mes, the report) show the last 12 with «ver todo». Screen and paper use the same 12.
 - The template's example and the «PARA OTRA IA» text teach a goal without `horizonte:` and a `ritmo: 40 páginas`. Words only. Habits in the template and the report are a slice of their own, not taken.
 - Not decided, pending: create a goal «sin final» inside a goal with no end from its sheet; thousands written «1.000» accepted back by the rhythm sheet and the import.
+
+## Decisions of 2026-10-13, the boards of slice s2 (RP-103–106), by the user
+
+Boards, approved 2026-10-13 on the page «Sin final y hábitos»: `HabitoPantalla.dc.html`, `VerTodoListas.dc.html`,
+`PonerFinalDesdeEsta.dc.html`. Words and structure: `private/tableros-s2/NOTAS.md`.
+
+- **A habit has its own screen,** `/metas/habitos/{id}`: «HÁBITO · DESDE EL {fecha}» above its name, its cadence, its note, «Editar»
+  (outline), «POR MES» as a bare table, and «Retirarlo» at the foot. No card. The tab reads «Hábito».
+- **A habit month reads «25 de 27 días»;** «0 de 1 día» takes the catalogue's plural. A cadence by week or month reads «3 días», never «de M».
+- **A retired habit says «retirado el {fecha}»** under its name and keeps its months. It shows neither «Editar» nor «Retirarlo».
+- **«Editarlo» edits the name and the note only:** «Guardarlo», «Guardando…», «Cancelar».
+- **The /metas row of a habit opens its screen,** with a chevron. In «Mes», a habit's name is a link to it.
+- **«ver todo»** sits under the table, on the left, once a list that grows with no end passes 12 rows. It has no «ver menos»: leaving the
+  screen brings back the 12. Only goals with no end, and a habit's months, are cut (D1). Paper prints the same 12.
+- **Putting an end on a goal with no end counts from this week:** the field reads «semanas, contando esta», 12 by default. A refused phase
+  is named by its week counted the same way («semana 19»), the number the person changes in the field. A goal with an end keeps «semanas,
+  contando la del {fecha}».
+- **Faces not drawn for s2:** dark (the token table says it) and 700–1023 (between the two drawn). The habit screen at 1280 is the same
+  640 column, drawn once. «ver todo» opened in «Por mes» and in the report is the list as it reads today, not drawn again.
