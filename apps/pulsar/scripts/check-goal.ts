@@ -1716,10 +1716,46 @@ async function runMain(): Promise<void> {
 
   await runCommitmentUnitCheck();
   await runSharedMonthsCheck();
+  await runEndlessGoalCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
   process.exit(failed ? 1 : 0);
+}
+
+// RP-99: a goal with no end is open for good on /metas and its own screen, never ended.
+async function runEndlessGoalCheck(): Promise<void> {
+  const { loadGoal, listGoalsForMetas, listGoals } = await import("@/lib/queries/goal");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runEndlessGoalCheck: no verified session");
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId: string | null = null;
+  try {
+    const [goal] = await migrationDb<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, 'check-goal.ts probe — 913 sin final', null, '2026-08-10T12:00:00-05:00'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+    const metas = await listGoalsForMetas("2026-10-13");
+    assert(
+      "913: /metas lists a goal with no end open and never ended",
+      metas.open.some((g) => g.id === goalId) && !metas.ended.some((g) => g.id === goalId),
+      `open=${metas.open.length} ended=${metas.ended.length}`,
+    );
+    const view = await loadGoal(goalId, "2026-10-13");
+    assert(
+      "913: its screen has no end day and its months reach eleven past October, 2027-09",
+      view?.endedOn === null && view.months[0]?.month === "2026-08-01" && view.months.at(-1)?.month === "2027-09-01",
+      `endedOn=${view?.endedOn} months=${JSON.stringify(view?.months.map((m) => m.month))}`,
+    );
+    assert("913: the rail lists it", (await listGoals()).some((g) => g.id === goalId), "missing from listGoals");
+  } finally {
+    if (goalId) await migrationDb`delete from goals.goals where id = ${goalId}`;
+    await migrationDb.end();
+  }
 }
 
 void (async () => {

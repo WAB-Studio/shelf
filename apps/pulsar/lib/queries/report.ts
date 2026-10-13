@@ -156,11 +156,12 @@ function toReportTask(item: PlanItem): ReportTask {
 function withinGoal(
   bySourceKey: Record<string, EvidenceDay[]>,
   openedOn: string,
-  horizon: string,
+  horizon: string | null,
+  today: string,
 ): Record<string, EvidenceDay[]> {
   const bounded: Record<string, EvidenceDay[]> = {};
   for (const [key, days] of Object.entries(bySourceKey)) {
-    bounded[key] = days.filter((day) => day.day >= openedOn && day.day < horizon);
+    bounded[key] = days.filter((day) => day.day >= openedOn && (horizon === null ? day.day <= today : day.day < horizon));
   }
   return bounded;
 }
@@ -198,7 +199,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       tasks: row.tasks,
       evidence:
         evidenceOutcome.status === "read"
-          ? withinGoal(evidenceOutcome.bySourceKey, openedOn, row.goal.horizon)
+          ? withinGoal(evidenceOutcome.bySourceKey, openedOn, row.goal.horizon, today)
           : null,
       today,
     });
@@ -213,7 +214,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       id: row.goal.id,
       name: row.goal.name,
       horizon: row.goal.horizon,
-      endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
+      endedOn: row.goal.horizon !== null && row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
       unit: row.goal.measure_unit,
       measureName: row.goal.measure_name,
       note: row.goal.note ?? null,
@@ -407,7 +408,7 @@ function holderOf(args: {
   const kept = new Map(report.months.map((m) => [m.month, m]));
   const branch = branchOf(tree, id);
   const countsTasks = sum.unit === null || isTimeUnit(sum.unit);
-  const months = monthsOfSpan(spanStartOn, row.goal.horizon).map((month) => {
+  const months = monthsOfSpan(spanStartOn, row.goal.horizon, today).map((month) => {
     const figure = sum.months.get(month);
     const old = kept.get(month);
     const items = countsTasks ? branch.flatMap((goalId) => planMonthList(byId.get(goalId)!.planInput, month)) : null;

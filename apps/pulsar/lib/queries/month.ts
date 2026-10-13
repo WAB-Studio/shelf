@@ -66,10 +66,16 @@ export type MonthAcross = {
   goals: MonthAcrossGoal[];
   // One entry per general (or lone goal); `goalIds` in preorder, drawn goals only.
   groups: { rootId: string; goalIds: string[] }[];
+  // Habits with no goal (RP-100), live or retired this month, with the days of the month each was done.
+  loose: MonthLooseHabit[];
 };
 
+export type MonthLooseHabit = { id: string; name: string; daysDone: number };
+
 type Row = {
-  goal: GoalRow & { parent_id: string | null; position: number };
+  // Null on the one row a person with no open goal gets, which still carries `loose`.
+  goal: (GoalRow & { parent_id: string | null; position: number }) | null;
+  loose: MonthLooseHabit[];
   commitments: CommitmentRow[];
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
@@ -87,6 +93,15 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
   const rows = await tx.execute<Row>(sql`
     select
       to_jsonb(g) as goal,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'id', h.id,
+                 'name', h.name,
+                 'daysDone', (select count(distinct f.day)::int from "goals"."facts" f
+                               where f.commitment_id = h.id and f.day between ${month}::date and ${today}::date)
+               ) order by h.position, h.created_at, h.id), '[]'::json)
+         from "goals"."commitments" h
+         where h.goal_id is null
+           and (h.retired_at is null or (h.retired_at at time zone ${TIME_ZONE})::date >= ${month}::date)) as loose,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit,
@@ -112,14 +127,15 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
                              order by f.day, f.id limit 1)
                ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o where o.goal_id = g.id) as tasks
-    from "goals"."goals" g
-    where g.archived_at is null
+    from (select 1) one
+    left join "goals"."goals" g
+      on g.archived_at is null
       and (g.created_at at time zone ${TIME_ZONE})::date <= ${today}::date
-      and (g.horizon > ${today}::date
+      and (g.horizon is null or g.horizon > ${today}::date
         or exists (
           select 1 from "goals"."goals" a
           where a.archived_at is null
-            and a.horizon > ${today}::date
+            and (a.horizon is null or a.horizon > ${today}::date)
             and a.id in (g.parent_id, (select pp.parent_id from "goals"."goals" pp where pp.id = g.parent_id))
         ))
     order by g.position, g.created_at, g.id
@@ -161,10 +177,12 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
     ),
   ]);
 
-  const tree = buildTree(rows.map(treeRowOf));
+  const loose = rows[0]?.loose ?? [];
+  const goalRows = rows.filter((row): row is Row & { goal: NonNullable<Row["goal"]> } => row.goal !== null);
+  const tree = buildTree(goalRows.map(treeRowOf));
   const holders = new Set(tree.order.filter((node) => node.children.length > 0).map((node) => node.id));
 
-  const built = rows.map((row) => {
+  const built = goalRows.map((row) => {
     const tasks: PlanTask[] = row.tasks.map((task) => ({
       id: task.id,
       parentId: task.parent_id,
@@ -251,7 +269,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
   }
   const rolled = rollUp(tree, own);
 
-  const open = (row: Row): boolean => row.goal.horizon > today;
+  const open = (row: { goal: { horizon: string | null } }): boolean => row.goal.horizon === null || row.goal.horizon > today;
   const goals = built.filter(({ row }) => open(row)).map(({ row, unit, line, items, plan }): MonthAcrossGoal => {
     const id = row.goal.id;
     const sum = rolled.get(id);
@@ -277,10 +295,10 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
     .map((node) => ({ rootId: node.id, goalIds: branchOf(tree, node.id).filter((id) => drawn.has(id)) }))
     .filter((group) => group.goalIds.length > 0);
 
-  return { month, today, evidence: outcome.status === "read" ? "read" : "unreadable", goals, groups };
+  return { month, today, evidence: outcome.status === "read" ? "read" : "unreadable", goals, groups, loose };
 }
 
-function treeRowOf(row: Row): TreeRow {
+function treeRowOf(row: Row & { goal: NonNullable<Row["goal"]> }): TreeRow {
   return {
     id: row.goal.id,
     parentId: row.goal.parent_id,

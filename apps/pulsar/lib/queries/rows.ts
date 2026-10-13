@@ -22,6 +22,8 @@ export type CommitmentRow = {
   created_at: string;
   source_key: string | null;
   source_unit: string | null;
+  // Only a habit with no goal carries one (RP-88).
+  note?: string | null;
 };
 
 // The columns `toPhase` reads. `lib/queries/day.ts` widens it with `goal_id`

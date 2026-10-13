@@ -20,10 +20,10 @@ type DaylessRow = {
   note: string | null;
 };
 
-// A goal is open on `day` while it is not archived and its horizon, the
-// first day after it, lies after `day`. `g` is the joined goal.
+// A goal is open on `day` while it is not archived and it has no end or its
+// horizon, the first day after it, lies after `day`. `g` is the joined goal.
 function openGoal(day: string) {
-  return sql`g.archived_at is null and g.horizon > ${day}::date`;
+  return sql`g.archived_at is null and (g.horizon is null or g.horizon > ${day}::date)`;
 }
 
 // One-offs written with no day, not done, and no goal: a goal's task waits in
