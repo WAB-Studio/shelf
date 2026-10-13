@@ -9,6 +9,8 @@ import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema, noteSchema } from "@/lib/validation/one-off";
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
+import { cleanLine, shortenName as shorten } from "./clean";
+
 // The forms' own schemas judge what the import carries; the model's answer
 // and the template are shaped around them, never a second set of rules.
 const PLACEHOLDER_GOAL_ID = "00000000-0000-4000-8000-000000000000";
@@ -342,6 +344,8 @@ const taskV2 = z.strictObject({
   src,
   week: z.string().nullable(),
   rule: z.string().nullable(),
+  // The day a task the plan marked done was done: it is written already done. Absent on a draft that predates it.
+  doneOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   children: z.array(childV2),
 });
 const goalV2 = z.strictObject({
@@ -447,7 +451,6 @@ export type Correction = {
 export type Notice = { at: string; code: NoticeCode; values: Record<string, string> };
 
 export const TASK_NOTE_MAX = 2000;
-const NAME_MAX = 120;
 const CADENCE_CEILING: Record<string, number> = { times_per_week: 7, times_per_month: 31, every_n_days: 365 };
 
 // The line numbers a list of ranges names, in order, once each, inside `total`.
@@ -465,22 +468,13 @@ export function srcLines(ranges: Src[], total: number): number[] {
   return out;
 }
 
-// Up to `cap` characters, ending on a whole word.
-function shorten(full: string): string {
-  if (full.length <= NAME_MAX) return full;
-  const cut = full.slice(0, NAME_MAX);
-  if (/\s/.test(full[NAME_MAX])) return cut.trimEnd();
-  const space = cut.search(/\s\S*$/);
-  return (space > 0 ? cut.slice(0, space) : cut).trimEnd();
-}
-
 // The note of a part. With lines it is their literal text, whole lines up to `cap`, never the
 // answer's words; a source with no lines takes the answer's `noteText`.
 function buildNote(source: Source, ranges: Src[], noteText: string | null, cap: number, head: string | null): string | null {
   let body = "";
   if (source.kind === "parts") body = (noteText ?? "").trim();
   else if (source.lines !== null) {
-    const texts = srcLines(ranges, source.lines.length).map((n) => source.lines![n - 1]);
+    const texts = srcLines(ranges, source.lines.length).map((n) => cleanLine(source.lines![n - 1]));
     const room = cap - (head === null ? 0 : head.length + 2);
     for (let k = 1; k <= texts.length; k++) {
       const candidate = texts.slice(0, k).join("\n").trim();
@@ -800,6 +794,30 @@ export function commitmentShapeKey(c: {
   return null;
 }
 
+// The key of the first thing the commitment form's schema or the table's shape refuses in a commitment, or
+// null. The review's sheet asks it of what the person typed, the server of what it is sent.
+export function commitmentFormIssue(entry: {
+  name: string;
+  cadenceKind: "daily" | "weekdays" | "times_per_week" | "every_n_days" | "times_per_month";
+  cadenceWeekdays: number[] | null;
+  cadenceN: number | null;
+  satisfaction: "tap" | "quantity";
+  targetQuantity: number | null;
+  unit: string | null;
+}): string | null {
+  return (
+    firstIssue(commitment, {
+      name: entry.name,
+      cadenceKind: entry.cadenceKind,
+      cadenceWeekdays: entry.cadenceWeekdays,
+      cadenceN: entry.cadenceN,
+      satisfaction: entry.satisfaction,
+      targetQuantity: entry.targetQuantity,
+      unit: entry.unit,
+    }) ?? commitmentShapeKey(entry)
+  );
+}
+
 // The refusals that leave a whole goal out, with the goals inside it (RP-90).
 export const WHOLE_GOAL = /^goals\.\d+\.(horizon|parent|name|measure)$/;
 
@@ -892,18 +910,8 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
 
     goal.commitments.forEach((entry, c) => {
       const path = `.commitments.${c}`;
-      const issue = firstIssue(commitment, {
-        name: entry.name,
-        cadenceKind: entry.cadenceKind,
-        cadenceWeekdays: entry.cadenceWeekdays,
-        cadenceN: entry.cadenceN,
-        satisfaction: entry.satisfaction,
-        targetQuantity: entry.targetQuantity,
-        unit: entry.unit,
-      });
-      const shape = commitmentShapeKey(entry);
-      if (issue) refuse(path, issue);
-      else if (shape) refuse(path, shape);
+      const formIssue = commitmentFormIssue(entry);
+      if (formIssue) refuse(path, formIssue);
       else if (entry.satisfaction === "quantity" && goal.measure === null) refuse(path, "import.errors.quantityNoMeasure");
       else if (entry.satisfaction === "tap" && (entry.targetQuantity !== null || entry.unit !== null)) refuse(path, "import.errors.tapWithAmount");
     });
@@ -921,6 +929,11 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
         else if (goal.measure === null && task.estimate !== null) refuse(path, "month.errors.noMeasure");
       }
       if (task.note !== null && task.note.length > TASK_NOTE_MAX) refuse(`${path}.note`, "day.errors.oneOffNoteTooLong");
+      if (task.doneOn) {
+        // A parent is done by its sub-tasks, and nothing is done after today.
+        if (task.children.length > 0) refuse(path, "import.errors.doneWithSubtasks");
+        else if (task.doneOn > today) refuse(path, "import.errors.doneInFuture");
+      }
       task.children.forEach((child, c) => {
         const childPath = `${path}.children.${c}`;
         const childIssue = firstIssue(createOneOffSchema.shape.name, child.name) ?? firstIssue(estimate.nullable(), child.estimate);

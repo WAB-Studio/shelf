@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import { sql, type SQL } from "drizzle-orm";
 
-import { commitments, goals, monthBudgets, oneOffs, phases } from "@/db/schema";
+import { commitments, facts, goals, monthBudgets, oneOffs, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
 import { draftRefusals, draftV2Schema, strayEstimates, withCutPhases } from "@/lib/import/draft";
 import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
@@ -135,6 +135,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   const commitmentRows: Part[] = [];
   const parentRows: (Part & { taskId: string })[] = [];
   const childRows: (Part & { taskId: string })[] = [];
+  const doneRows: (Part & { taskId: string })[] = [];
   const goalIds: string[] = [];
 
   // RP-47: each table's position is the person's current max plus the row's
@@ -205,6 +206,15 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
         path: `${at}.tasks.${t}`,
         name: task.name,
       });
+      // RP-96: a task the plan marked done is born done, on the day it names.
+      if (task.doneOn) {
+        doneRows.push({
+          taskId,
+          row: sql`${person.id}::uuid, ${taskId}::uuid, ${goalId}::uuid, ${task.doneOn}::date`,
+          path: `${at}.tasks.${t}`,
+          name: task.name,
+        });
+      }
       for (const [place, child] of task.children.entries()) {
         taskIndex += 1;
         // The parent's own row already holds base + parentIndex.
@@ -274,6 +284,12 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
         values ${values}
       `);
       const keptIds = new Set(keptParents.map((part) => part.taskId));
+      await put(
+        doneRows.filter((part) => keptIds.has(part.taskId)),
+        (values) => sql`
+          insert into ${facts} (user_id, one_off_id, goal_id, day) values ${values}
+        `,
+      );
       // A refused parent takes its sub-tasks with it, and they are not listed apart.
       await put(
         childRows.filter((part) => keptIds.has(part.taskId)),

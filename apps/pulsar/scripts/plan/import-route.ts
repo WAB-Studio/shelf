@@ -575,7 +575,7 @@ test("903: what the model leaves out reaches the general goal's note on the way 
   stubDraft(rawGoal({ src: [{ from: 1, to: 1 }], months: [{ month: "2026-10", amount: 720, src: [{ from: 2, to: 2 }] }] }));
   const lines = await ndjson(await route.POST(request({ text: "# Plan\nmes\nRiesgos del plan\n\n  - sin tiempo" })));
   const done = lastLine(lines).done;
-  assert.equal(done.draft.goals[0].note, "Riesgos del plan\n  - sin tiempo");
+  assert.equal(done.draft.goals[0].note, "Riesgos del plan\nsin tiempo");
   assert.deepEqual(done.draft.goals[0].noteSrc, [{ from: 3, to: 3 }, { from: 5, to: 5 }]);
 });
 
@@ -596,4 +596,17 @@ test("903: the route may run longer than the read waits", async () => {
   const { REQUEST_TIMEOUT_MS } = await import("@/lib/import/model");
   assert.ok(route.maxDuration * 1000 > REQUEST_TIMEOUT_MS);
   assert.equal(route.maxDuration, 300);
+});
+
+test("906: a HECHO line the model left out becomes a done task on its day and leaves the note", async () => {
+  stubDraft(rawGoal({ src: [{ from: 1, to: 1 }], months: [] }));
+  const text = ["# Plan", "# Reglas", "- [ ] **1 h · EF SET (línea base).** ✅ HECHO el 9 oct 2026", "Sin empleo antes de abril."].join("\n");
+  const done = lastLine(await ndjson(await route.POST(request({ text })))).done;
+  const [goal] = done.draft.goals;
+  assert.equal(goal.note, "Reglas\nSin empleo antes de abril.");
+  assert.deepEqual(
+    goal.tasks.map((t: { name: string; estimate: number; doneOn: string }) => [t.name, t.estimate, t.doneOn.slice(5)]),
+    [["EF SET · línea base", 60, "10-09"]],
+  );
+  assert.deepEqual(done.corrections, []);
 });

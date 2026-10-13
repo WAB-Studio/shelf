@@ -1,5 +1,6 @@
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
+import { cleanLine } from "./clean";
 import { srcLines, TASK_NOTE_MAX, WHOLE_GOAL, type ImportDraft, type Source, type Src } from "./draft";
 
 export type OutReason = "notPlaced" | "unmarked" | "refused" | "noteFull";
@@ -32,13 +33,9 @@ export function outness(draft: ImportDraft, unmarked: ReadonlySet<string>, refus
   };
 }
 
-// A line as the note may carry it: list marks and emphasis gone, spaces collapsed.
+// A line as the note may carry it: clean text, spaces collapsed.
 function flat(text: string): string {
-  return text
-    .replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, "")
-    .replace(/[*_`]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return cleanLine(text).replace(/\s+/g, " ").trim();
 }
 
 // Whether the note carries each line's text, in the note's words and not only as its tail.
@@ -149,7 +146,7 @@ export function placeLeftovers(draft: ImportDraft, source: Source): ImportDraft 
   let note = draft.goals[root].note ?? "";
   let room = true;
   left.forEach((n, i) => {
-    const text = lines[n - 1].trimEnd();
+    const text = cleanLine(lines[n - 1]);
     const joined = note === "" ? text : `${note}${i === 0 ? "\n\n" : "\n"}${text}`;
     if (room && joined.length <= GOAL_NOTE_MAX) note = joined;
     else room = false;

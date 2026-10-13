@@ -817,3 +817,37 @@ test("903: with a rhythm the tasks are in the plan with no month, in the order o
     select name, in_plan, planned_month::text as planned_month from goals.one_offs where goal_id = ${ids[0]} order by position`;
   assert.deepEqual(rows.map((row) => [row.name, row.in_plan, row.planned_month]), [["Pronto", true, null], ["Tarde", true, null]]);
 });
+
+// ---- 906: a task the plan marks done is written already done.
+
+test("906: a task with a doneOn is written with its fact on that day, and the sister task is not done", async () => {
+  const day = shiftDay(TODAY, -3);
+  const draft = tree([full("a", null, "906 hecha", { tasks: [{ ...task("Hecha", M0, 60), doneOn: day }, task("Pendiente", M0, 30)] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await asPerson((tx) => tx<{ name: string; day: string | null; goal_id: string | null }[]>`
+    select o.name, f.day::text as day, f.goal_id from goals.one_offs o
+    left join goals.facts f on f.one_off_id = o.id where o.goal_id = ${ids[0]} order by o.name`);
+  assert.deepEqual(rows.map((row) => [row.name, row.day]), [["Hecha", day], ["Pendiente", null]]);
+  assert.equal(rows[0].goal_id, ids[0]);
+});
+
+test("906: done tasks add one statement to the import, whatever their number", async () => {
+  const plain = await confirmed(tree([full("a", null, "906 ninguna", { tasks: [task("Pendiente", M0, 60)] })]));
+  const one = await confirmed(tree([full("a", null, "906 una", { tasks: [{ ...task("Hecha", M0, 60), doneOn: TODAY }] })]));
+  const three = await confirmed(tree([full("a", null, "906 tres", { tasks: [1, 2, 3].map((n) => ({ ...task(`Hecha ${n}`, M0, 60), doneOn: TODAY })) })]));
+  assert.equal(one.statements, plain.statements + 1);
+  assert.equal(three.statements, one.statements);
+});
+
+test("906: a done day after today is refused with its key and path, and writes nothing", async () => {
+  const name = `906 futura ${RUN}`;
+  const draft = tree([full("a", null, name, { tasks: [{ ...task("Hecha", M0, 60), doneOn: shiftDay(TODAY, 2) }] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneInFuture", at: "goals.0.tasks.0" });
+  assert.equal(await countGoals(`${name} ${RUN}`), 0);
+});
+
+test("906: a done task with sub-tasks is refused, and writes nothing", async () => {
+  const child = { name: "Hija", estimate: 30, note: null, noteSrc: [], src: [], rule: null };
+  const draft = tree([full("a", null, "906 madre", { tasks: [{ ...task("Madre", M0, null, [child]), doneOn: TODAY }] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneWithSubtasks", at: "goals.0.tasks.0" });
+});

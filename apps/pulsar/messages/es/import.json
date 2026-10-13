@@ -77,6 +77,9 @@
       "hours": "horas",
       "minutes": "minutos",
       "month": "mes",
+      "when": "cada cuándo",
+      "eachTime": "cada vez",
+      "saidDay": "Tu plan decía «{word}». Se leyó como {read}: elige «días sueltos» para dejarlo en {day}.",
       "save": "Guardar",
       "cancel": "Cancelar",
       "titleOf": {
@@ -221,6 +224,7 @@
       "hint": "márcalas para volver a ponerlas en el plan"
     },
     "lineAt": "línea {line}",
+    "doneOn": "hecha el {date}",
     "nothing": "Nada que crear. Ninguna parte de este plan se puede escribir."
   },
   "notices": {
@@ -228,6 +232,8 @@
     "estimateDroppedNotTime": "se crea sin cifra: esta meta no mide tiempo"
   },
   "errors": {
+    "doneInFuture": "Una tarea hecha no puede tener un día por venir. Pon hoy o un día anterior.",
+    "doneWithSubtasks": "Una tarea con sub-tareas se da por hecha con ellas. Quita el día.",
     "estimateNotTime": "Quita la cifra de esta línea: esta meta no mide tiempo.",
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "tooBig": "El archivo pesa más de 4 MB. Pega su texto en la caja.",

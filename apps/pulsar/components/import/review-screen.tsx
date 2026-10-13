@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
-import { strayEstimates } from "@/lib/import/draft";
+import { srcLines, strayEstimates } from "@/lib/import/draft";
 import { clearCreated, describePart, readCreated, saveCreated, type CreatedResult } from "@/lib/import/created-store";
 import { clearDraft, readDraft, saveReview, storedText, type StoredDraft } from "@/lib/import/draft-store";
-import { edit, nameKey, reviewTree, type ReviewNode } from "@/lib/import/review";
+import { edit, editedCorrections, goalHorizonRefusal, nameKey, reviewTree, weekdaysIn, type ReviewNode } from "@/lib/import/review";
 import { monthsOfSpan } from "@/lib/plan/months";
 import { civilDateToDate } from "@/lib/zone";
 import { ActionBar, Button, Flex, ListDetail, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
@@ -85,7 +85,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   function keep(next: StoredDraft, unmarked: ReadonlySet<string>) {
     setStored({ ...next, unmarked: [...unmarked] });
-    saveReview(next.draft, [...unmarked], next.declined);
+    saveReview(next.draft, [...unmarked], next.declined, next.corrections);
   }
 
   function toggle(path: string, on: boolean) {
@@ -122,7 +122,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     const g = Number(node.path.split(".")[1]);
     const goal = review!.work.goals[g];
     const unit = goal.measure?.unit ?? "";
-    const base = { path: node.path, eyebrow: goal.name, unit, name: null, amount: null, month: null, months: [] };
+    const base = { path: node.path, eyebrow: goal.name, unit, name: null, amount: null, month: null, months: [], commitment: null, horizon: null };
     if (node.kind === "rhythm") {
       setEditing({ ...base, kind: "rhythm", eyebrow: t("import.review.edit.rhythmEyebrow", { goal: goal.name }), amount: node.figure?.amount ?? 0 });
     } else if (node.kind === "month") {
@@ -139,23 +139,66 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         month: node.kind === "task" ? task.month : null,
         months,
       });
+    } else if (node.kind === "commitment") {
+      const entry = goal.commitments[Number(node.path.split(".")[3])];
+      const found = stored!.source.lines === null ? [] : weekdaysIn(srcLines(entry.src, Infinity).map((n) => stored!.source.lines![n - 1] ?? "").join(" "));
+      const read =
+        entry.cadenceKind === "times_per_week"
+          ? t("goal.cadence.timesPerWeek", { count: entry.cadenceN ?? 0 })
+          : entry.cadenceKind === "times_per_month"
+            ? t("goal.cadence.timesPerMonth", { count: entry.cadenceN ?? 0 })
+            : entry.cadenceKind === "every_n_days"
+              ? t("goal.cadence.everyNDays", { n: entry.cadenceN ?? 0 })
+              : t("goal.cadence.daily");
+      // The plan names one day and the reading did not keep it as days: the sheet says so.
+      const saidDay =
+        found.length === 1 && entry.cadenceKind !== "weekdays"
+          ? { word: found[0].word.charAt(0).toUpperCase() + found[0].word.slice(1), day: (t.raw("goal.cadence.weekdayFull") as string[])[found[0].day - 1] }
+          : null;
+      setEditing({
+        ...base,
+        kind: "commitment",
+        name: node.label,
+        unit: entry.unit ?? unit,
+        amount: entry.satisfaction === "quantity" ? entry.targetQuantity : null,
+        commitment: { cadence: { kind: entry.cadenceKind, weekdays: entry.cadenceWeekdays ?? [], n: entry.cadenceN }, entry, read, saidDay },
+      });
+    } else if (node.kind === "goal" || node.kind === "group") {
+      const g = Number(node.path.split(".")[1]);
+      setEditing({
+        ...base,
+        kind: "goal",
+        name: node.label,
+        horizon: { current: goal.horizon, today, refuse: (horizon) => goalHorizonRefusal(stored!.draft, g, horizon, today) },
+      });
     } else {
-      setEditing({ ...base, kind: node.kind === "phase" ? "phase" : node.kind === "commitment" ? "commitment" : "goal", name: node.label });
+      setEditing({ ...base, kind: "phase", name: node.label });
     }
   }
 
   function save(change: Change) {
     const target = editing!;
     setEditing(null);
-    if (change.name === undefined && change.amount === undefined && change.month === undefined) return;
+    if (Object.values(change).every((value) => value === undefined)) return;
     let draft = stored!.draft;
-    if (change.name !== undefined) draft = edit(draft, target.path, { name: change.name });
-    if (change.amount !== undefined) draft = edit(draft, target.path, { amount: change.amount });
-    if (change.month !== undefined) draft = edit(draft, target.path, { month: change.month });
+    let corrections = stored!.corrections;
+    const apply = (one: Parameters<typeof edit>[2]) => {
+      draft = edit(draft, target.path, one);
+      corrections = editedCorrections(corrections, target.path, one);
+    };
+    if (change.name !== undefined) apply({ name: change.name });
+    if (change.amount !== undefined) apply({ amount: change.amount });
+    if (change.month !== undefined) apply({ month: change.month });
+    if (change.cadence !== undefined) apply({ cadence: change.cadence });
+    if (change.horizon !== undefined) apply({ horizon: change.horizon });
     // A figure the person typed is theirs: the check's proposal for it no longer stands.
     const overridden =
       change.amount === undefined ? [] : stored!.corrections.filter((c) => c.at === target.path && c.declined === "keepsPlan").map((c) => c.id);
-    keep({ ...stored!, draft, declined: [...new Set([...stored!.declined, ...overridden])] }, review!.unmarked);
+    const gone = new Set(corrections.map((c) => c.id));
+    keep(
+      { ...stored!, draft, corrections, declined: [...new Set([...stored!.declined, ...overridden])].filter((id) => gone.has(id)) },
+      review!.unmarked,
+    );
   }
 
   const goalsKept = review.toSend.goals.length;

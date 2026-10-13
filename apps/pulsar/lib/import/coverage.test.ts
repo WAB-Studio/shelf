@@ -143,11 +143,11 @@ test("898: a line the note lacks is noteFull only when it would not fit", () => 
 
 // ---- 903: what the model leaves out goes to the general goal's note.
 
-test("903: every line the model left out goes verbatim, in the text's order, to the general goal's note", () => {
+test("903: every line the model left out goes, as clean text and in the text's order, to the general goal's note", () => {
   const lines = ["# Plan", "meses", "", "Riesgos del plan", "  - sin tiempo", "Semana tipo", "lun: leer"];
   const d = draft(goal({ src: [{ from: 1, to: 2 }], note: "contexto" , noteSrc: [] }));
   const placed = placeLeftovers(d, source(lines));
-  assert.equal(placed.goals[0].note, "contexto\n\nRiesgos del plan\n  - sin tiempo\nSemana tipo\nlun: leer");
+  assert.equal(placed.goals[0].note, "contexto\n\nRiesgos del plan\nsin tiempo\nSemana tipo\nlun: leer");
   const c = coverage(placed, source(lines), none, none);
   assert.deepEqual([c.total, c.plan, c.notes, c.out], [6, 2, 4, 0]);
 });

@@ -3,11 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { check } from "@/lib/import/check";
 import { placeLeftovers } from "@/lib/import/coverage";
 import { normalize } from "@/lib/import/draft";
+import { linesToTasks } from "@/lib/import/line-tasks";
 import { MODEL_NAME, fileRoute, modelAvailable, readPlan, type PlanInput, type PlanReading } from "@/lib/import/model";
 import { claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
 import { parseTemplate, templateSource } from "@/lib/import/template";
 import { readWorkbook } from "@/lib/import/workbook";
 import { getPerson } from "@/lib/session";
+import { todayInZone } from "@/lib/zone";
 
 // One real read of a 599-line roadmap took 87 s (2026-10-12); `readPlan` aborts at 240 s. It is
 // Vercel's Hobby ceiling with fluid compute (300 s) that allows it: a plan without it stops at 60 s.
@@ -129,12 +131,13 @@ export async function POST(request: NextRequest) {
         send({ step: "check" });
         const normalized = normalize(reading.raw, reading.source);
         const placed = placeLeftovers(normalized.draft, reading.source);
-        const checked = check(placed);
+        const lined = linesToTasks(placed, reading.source, todayInZone(), { onlyDone: true });
+        const checked = check(lined.draft);
         send({
           done: {
             via: "model",
-            draft: placed,
-            corrections: [...normalized.corrections, ...checked.corrections],
+            draft: lined.draft,
+            corrections: [...normalized.corrections, ...lined.corrections, ...checked.corrections],
             notices: checked.notices,
             source: reading.source,
           },
