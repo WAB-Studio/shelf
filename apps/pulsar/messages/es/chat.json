@@ -38,21 +38,21 @@
     "noDay": "sin día"
   },
   "change": {
-    "declare_fact": "Cumplido · «{commitment}»",
-    "complete_task": "Tarea hecha · «{task}»",
-    "create_task": "Tarea nueva · «{name}»",
-    "set_task_note": "Nota de la tarea · «{task}»",
-    "schedule_task": "Día de la tarea · «{task}»",
-    "set_month_amount": "Monto de {month} · «{goal}»",
-    "rename_goal": "Nombre de la meta · «{goal}»",
-    "add_phase": "Fase nueva · «{goal}»",
-    "add_commitment": "Compromiso nuevo · «{name}»",
-    "move_horizon": "Plazo de la meta · «{goal}»",
-    "fix_task": "Tarea fijada a {month} · «{task}»",
-    "unfix_task": "Tarea al plan · «{task}»",
-    "create_goal": "Meta nueva · «{name}»",
-    "move_goal": "Meta movida · «{goal}»",
-    "set_goal_note": "Nota de la meta · «{goal}»",
-    "retire_commitment": "Compromiso retirado · «{commitment}»"
+    "declare_fact": "Marcar «{commitment}» como cumplido",
+    "complete_task": "Marcar la tarea «{task}» como hecha",
+    "create_task": "Crear la tarea «{name}»",
+    "set_task_note": "Cambiar la nota de la tarea «{task}»",
+    "schedule_task": "Cambiar el día de la tarea «{task}»",
+    "set_month_amount": "Poner el monto de {month} en «{goal}»",
+    "rename_goal": "Renombrar la meta «{goal}»",
+    "add_phase": "Agregar una fase a «{goal}»",
+    "add_commitment": "Crear el compromiso «{name}»",
+    "move_horizon": "Mover el plazo de «{goal}»",
+    "fix_task": "Fijar «{task}» a {month}",
+    "unfix_task": "Devolver «{task}» al plan",
+    "create_goal": "Crear la meta «{name}»",
+    "move_goal": "Mover la meta «{goal}»",
+    "set_goal_note": "Cambiar la nota de la meta «{goal}»",
+    "retire_commitment": "Retirar el compromiso «{commitment}»"
   }
 }
