@@ -205,3 +205,32 @@ test("a retired commitment shows its target as «antes» only when it has one", 
   assert.ok("key" in zeroOut);
   assert.equal(zeroOut.values.before, "0");
 });
+
+const PLACEHOLDERS: Record<string, string[]> = {
+  declare_fact: ["commitment"],
+  complete_task: ["task"],
+  create_task: ["name"],
+  set_task_note: ["task"],
+  schedule_task: ["task"],
+  set_month_amount: ["goal", "month"],
+  rename_goal: ["goal"],
+  add_phase: ["goal"],
+  add_commitment: ["name"],
+  move_horizon: ["goal"],
+  fix_task: ["month", "task"],
+  unfix_task: ["task"],
+  create_goal: ["name"],
+  move_goal: ["goal"],
+  set_goal_note: ["goal"],
+  retire_commitment: ["commitment"],
+};
+
+test("every change phrase opens with an infinitive and keeps its placeholders", () => {
+  const phrases = chat.change as Record<string, string>;
+  assert.deepEqual(Object.keys(phrases).sort(), Object.keys(PLACEHOLDERS).sort());
+  for (const [tool, phrase] of Object.entries(phrases)) {
+    assert.match(phrase.split(" ")[0], /^\p{L}+(ar|er|ir)$/u, tool);
+    const used = [...phrase.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+    assert.deepEqual(used, PLACEHOLDERS[tool], tool);
+  }
+});
