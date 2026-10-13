@@ -1428,6 +1428,7 @@ Three answers of the user, 2026-10-09.
   captures of a prototype: `ChatVacio`, `ChatEnviando`, `ChatRespuesta`, `ChatPropuesta`, `ChatPropuestas`, `ChatHecho`,
   `ChatRechazada`, `ChatFallo`, `ChatTope`, `ChatSinClave`, `ChatEscritorio` (1280) and `ChatEntrada` (Hoy and Metas, 360 and
   1280). Words and structure: `private/tableros-chat/NOTAS.md`.
+- **On a screen whose header carries a steps row** (Semana, a day), the chat icon sits at the right end of the title row; the steps keep their two edges. 2026-10-13.
 - **The field lives in the flow,** below the last turn, never fixed to the foot. The tab bar stays the only fixed thing.
 - **A failed message stays as a turn;** the button reads «Intentar otra vez» and nothing is retyped.
 - **A refused change has no button.** Its row carries the act's reason; the person asks again in a new message.
