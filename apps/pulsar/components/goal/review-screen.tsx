@@ -62,8 +62,7 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
     const note = week.current ? t("goal.review.current") : "";
     return {
       key: String(week.index),
-      // The trailing space keeps the label apart from the dates beside it in a text read of the row.
-      cells: [`${t("goal.review.weekLabel", { n: week.index })} `, week.total, phase, note],
+      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, phase, note],
       note: note || undefined,
       detail: civilSpan(week.startsOn, week.endsOn),
     };

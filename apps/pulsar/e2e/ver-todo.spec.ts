@@ -66,10 +66,11 @@ for (const width of [360, 1280]) {
         await expect(seeAll(page.locator("main"))).toBeVisible();
         const rows = weekRows(page);
         await expect(rows).toHaveCount(12);
-        await expect(rows.first()).toContainText(new RegExp(`semana ${n - 11}\\b`, "i"));
-        await expect(rows.last()).toContainText(new RegExp(`semana ${n}\\b`, "i"));
+        // The row's textContent glues «semana 135» to its dates; innerText keeps the line between them.
+        await expect(rows.first()).toContainText(new RegExp(`semana ${n - 11}\\b`, "i"), { useInnerText: true });
+        await expect(rows.last()).toContainText(new RegExp(`semana ${n}\\b`, "i"), { useInnerText: true });
         await expect(rows.last()).toContainText("en curso");
-        await expect(rows.filter({ hasText: /semana 1\b/i })).toHaveCount(0);
+        expect(await rows.evaluateAll((all) => all.filter((row) => /semana 1\b/i.test((row as HTMLElement).innerText)).length)).toBe(0);
       } finally {
         await context.close();
       }
@@ -85,7 +86,7 @@ for (const width of [360, 1280]) {
         await expect(page).toHaveURL(/todo=1/);
         const rows = weekRows(page);
         await expect(rows).toHaveCount(n);
-        await expect(rows.first()).toContainText(/semana 1\b/i);
+        await expect(rows.first()).toContainText(/semana 1\b/i, { useInnerText: true });
         await expect(rows.last()).toContainText("en curso");
         await expect(seeAll(page.locator("main"))).toHaveCount(0);
         await expect(page.getByRole("link", { name: /ver menos/i })).toHaveCount(0);
