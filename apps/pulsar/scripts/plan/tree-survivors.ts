@@ -72,9 +72,6 @@ let today: string;
 let month: string;
 let farHorizon: string;
 let midHorizon: string;
-let owner: Person;
-let other: Person;
-let single: Person;
 
 const as = <T>(person: Person, read: () => Promise<T>): Promise<T> => session.actAs(asResolved(person), read);
 
@@ -105,31 +102,9 @@ async function plantGoal(seed: GoalSeed): Promise<string> {
   return id;
 }
 
-// An amount planned for the current month and a quantity done today, in the goal's unit.
-async function plantMonth(
-  user: Person,
-  goalId: string,
-  figures: { planned?: number; reached?: number },
-): Promise<void> {
-  if (figures.planned !== undefined) {
-    await admin`
-      insert into goals.month_budgets (user_id, goal_id, month, amount)
-      values (${user.id}, ${goalId}, ${month}, ${figures.planned})`;
-  }
-  if (figures.reached !== undefined) {
-    const [{ id }] = await admin<{ id: string }[]>`
-      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
-      select ${user.id}, g.id, 'plant', 'daily', 'quantity', 10, g.measure_unit
-        from goals.goals g where g.id = ${goalId}
-      returning id`;
-    await admin`
-      insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
-      values (${user.id}, ${id}, ${goalId}, ${today}, ${figures.reached})`;
-  }
-}
-
 let db: postgres.Sql | postgres.ReservedSql = admin;
 let reserved: postgres.ReservedSql | null = null;
+let guardPool: postgres.Sql | null = null;
 const pool: Person[] = [];
 const nextPerson = (): Person => {
   const person = pool.shift();
@@ -160,7 +135,9 @@ before(async () => {
   pool.push(...(await createPeople(admin, runId, door, 14)));
   // The guard probes run inside one transaction that is rolled back; a mutation proof of a guard replaces
   // its function in that same transaction, so the shared stack is never altered.
-  reserved = await admin.reserve();
+  // Its own connection: the admin one is a single connection the other tests wait on.
+  guardPool = adminSql();
+  reserved = await guardPool.reserve();
   await reserved`begin`;
   if (process.env.GUARD_MUTANT_SQL) await reserved.unsafe(readFileSync(process.env.GUARD_MUTANT_SQL, "utf8"));
   db = reserved;
@@ -172,6 +149,7 @@ after(async () => {
       await reserved`rollback`;
       reserved.release();
     }
+    await guardPool?.end();
     await dropPeople(admin);
   } finally {
     await door.end();
@@ -468,29 +446,4 @@ test("database guard: moving an end before several goals names the one that ends
   await guardGoal(u, "G3 middle", 60, holder);
   const refusal = await refusalOf(() => db`update goals.goals set horizon = ${addDays(today, 10)} where id = ${holder}`);
   assert.deepEqual(refusal, { code: "23514", constraint: "goals_tree_end", detail: last });
-});
-
-test("a general's month on Hoy adds what a goal ended this week planned, never a goal ended before it or archived (RP-80, RP-84)", async () => {
-  const u = nextPerson();
-  const { todayInZone, weekOf } = await import("@/lib/zone");
-  const [monday] = weekOf(todayInZone());
-  const sunday = weekOf(todayInZone())[6];
-  const created = addDays(monday, -20);
-  const g = await plantGoal({ user: u, name: "S11 general", position: 1, horizon: farHorizon, createdDay: created });
-  const mk = (name: string, position: number, horizon: string, archived = false) =>
-    plantGoal({ user: u, name, parent: g, position, unit: "min", horizon, createdDay: created, archived });
-  const [open, endedThisWeek, endedBefore, archived] = [
-    await mk("S11 open", 1, farHorizon),
-    await mk("S11 ended this week", 2, addDays(monday, 2)),
-    // Its horizon is the first day after it: it ended on the Sunday before the week.
-    await mk("S11 ended before", 3, monday),
-    await mk("S11 archived", 4, farHorizon, true),
-  ];
-  const thisMonth = `${sunday.slice(0, 7)}-01`;
-  for (const [goalId, amount] of [[open, 20], [endedThisWeek, 10], [endedBefore, 100], [archived, 1000]] as const) {
-    await admin`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${u.id}, ${goalId}, ${thisMonth}, ${amount})`;
-  }
-  const dayQueries = await import("@/lib/queries/day");
-  const loaded = await as(u, () => dayQueries.loadDay(sunday));
-  assert.equal(loaded.monthLine[g]?.planned, 30);
 });

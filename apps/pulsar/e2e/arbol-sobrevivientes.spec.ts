@@ -11,6 +11,7 @@ import {
   today,
 } from "./meta-arbol-seed";
 import {
+  notToday,
   plusDays,
   seedBudget as seedDayBudget,
   seedCommitment as seedDayCommitment,
@@ -202,6 +203,86 @@ test("a past day's group offers no new task, as today's does (RP-84, RP-06)", as
     await expect(page.getByText(`Una tarea de ${names.g}`, { exact: true }), "today offers it").toHaveCount(1);
     await at(`/dia/${plusDays(-1)}`);
     await expect(page.getByText(/Una tarea de/)).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the places to move to step in by level: a large goal sits further in than the general it is under (RP-82)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: one flush list of destinations, no indent for the large goals.
+  const tree = await seedTree(db, person, Date.now());
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.p}`);
+  try {
+    const sheet = await openMoveSheet(page);
+    // The three left edges in one frame, so the sheet's slide-in cannot skew one against another.
+    const lefts = () =>
+      sheet.evaluate(
+        (el, names) => names.map((name) => {
+          const hit = [...el.querySelectorAll("*")].find((node) => node.children.length === 0 && node.textContent === name);
+          return hit ? Math.round(hit.getBoundingClientRect().left) : -1;
+        }),
+        [tree.names.G, tree.names.g1, tree.names.g2],
+      );
+    await expect.poll(async () => {
+      const [general, first, second] = await lefts();
+      return general >= 0 && first > general && first === second;
+    }).toBe(true);
+  } finally {
+    await context.close();
+  }
+});
+
+test("a group that asks nothing today has no block on the phone, only on the wide screen (RP-84, RNP-07)", async ({ person, browser, db }) => {
+  // Kills: drawing on the phone the block of a general none of whose goals asks anything today.
+  const stamp = Date.now();
+  const asking = await seedDayGoal(db, person.id, `Pide ${stamp}`);
+  await seedDayCommitment(db, person.id, asking, `Fila pide ${stamp}`);
+  const silent = await seedDayGoal(db, person.id, `Calla ${stamp}`);
+  const silentLarge = await seedDayGoal(db, person.id, `Calla grande ${stamp}`, silent);
+  await seedDayBudget(db, person.id, silentLarge, 300);
+  await seedDayCommitment(db, person.id, silentLarge, `Fila calla ${stamp}`, { weekdays: [notToday] });
+  const add = `Una tarea de Calla ${stamp}`;
+  for (const [width, drawn] of [[360, 0], [1200, 1]] as const) {
+    const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width, height: 900 } });
+    try {
+      const page = await context.newPage();
+      await page.goto("/");
+      await expect(page.getByText(`Fila pide ${stamp}`).first()).toBeVisible();
+      // The wide screen's block is in the page at every width; the phone hides it.
+      await expect(page.getByText(add, { exact: true }).locator("visible=true"), `${width}px`).toHaveCount(drawn);
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+test("opening «mover el final» of a goal that ends the day its general does names no refusal until the count changes (RP-79)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: judging the sheet's opening count by the week's edge it would write, which passes the general's end.
+  let end = monthsAhead(2);
+  for (let n = 3; new Date(`${end}T00:00:00Z`).getUTCDay() === 1 && n < 10; n += 1) end = monthsAhead(n);
+  const stamp = Date.now();
+  const general = await seedGoal(db, person, { name: `Techo ${stamp}`, unit: MINUTES, horizon: end });
+  const large = await seedGoal(db, person, { name: `Bajo ${stamp}`, parent: general, unit: MINUTES, horizon: end });
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${large}`);
+  try {
+    await page.getByRole("button", { name: "mover el final" }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    expect(flat(await sheet.innerText())).not.toContain(`«Techo ${stamp}»`);
+    // Eight weeks more pass the general's end: now the sheet says so.
+    const weeks = sheet.getByRole("spinbutton");
+    await weeks.fill(String(Number(await weeks.inputValue()) + 8));
+    expect(flat(await sheet.innerText())).toContain(`Pasa del final de «Techo ${stamp}»`);
   } finally {
     await context.close();
   }
