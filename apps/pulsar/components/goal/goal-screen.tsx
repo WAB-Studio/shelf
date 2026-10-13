@@ -546,6 +546,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   return (
     <Page width="full">
       <ScreenHeader
+        chat
         title={goal.name}
         back={
           goal.parent

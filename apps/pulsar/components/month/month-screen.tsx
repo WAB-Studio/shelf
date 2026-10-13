@@ -326,6 +326,7 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
   return (
     <Page width="full">
       <ScreenHeader
+        chat
         title={capitalised(yearLabel(mes))}
         back={{ href: `/metas/${goal.id}`, place: goal.name }}
         eyebrow={<TextLink href={`/metas/${goal.id}/meses`}>{t("month.list.allMonths")}</TextLink>}

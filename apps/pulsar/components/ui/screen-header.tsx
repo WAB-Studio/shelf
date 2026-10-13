@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, MessageCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
+import { IconButton } from "./button";
 import { SectionLabel } from "./section-label";
 import { Skeleton } from "./skeleton";
 import { Text } from "./text";
@@ -22,6 +23,7 @@ export function ScreenHeader({
   meta,
   metaVariant = "meta",
   lead,
+  chat = false,
 }: {
   title: string;
   back?: { href: string; place: string };
@@ -40,8 +42,18 @@ export function ScreenHeader({
   metaVariant?: "meta" | "sentence";
   // A mono line in ink straight under the title, before `meta`; its `<strong>` is the part to read first.
   lead?: ReactNode;
+  // Draws the way into /chat at the end of the controls line (`ChatEntrada`, RP-91).
+  chat?: boolean;
 }) {
   const t = useTranslations("common");
+  const tChat = useTranslations("chat");
+  const chatLink = chat ? (
+    <IconButton asChild tap={44} variant="ghost" className={styles.chat}>
+      <Link href="/chat" aria-label={tChat("open")}>
+        <MessageCircle size={22} strokeWidth={1.5} aria-hidden />
+      </Link>
+    </IconButton>
+  ) : null;
   const eyebrowNode =
     typeof eyebrow !== "string" ? (
       eyebrow
@@ -52,26 +64,47 @@ export function ScreenHeader({
     ) : (
       <SectionLabel>{eyebrow}</SectionLabel>
     );
+  // With a way back and no row for controls or an eyebrow, the entry shares the back's line.
+  const chatInBackRow = chat && !!back && !controls && !eyebrowNode;
+  const backLink = back ? (
+    <Link
+      href={back.href}
+      className={styles.back}
+      aria-label={t("header.back", { place: back.place })}
+    >
+      <ChevronLeft size={16} strokeWidth={1.5} aria-hidden />
+      <span>{back.place}</span>
+    </Link>
+  ) : null;
 
   return (
     <header className={styles.header}>
-      {back ? (
-        <Link
-          href={back.href}
-          className={styles.back}
-          aria-label={t("header.back", { place: back.place })}
-        >
-          <ChevronLeft size={16} strokeWidth={1.5} aria-hidden />
-          <span>{back.place}</span>
-        </Link>
-      ) : null}
+      {backLink && chatInBackRow ? (
+        <div className={styles.backRow}>
+          {backLink}
+          {chatLink}
+        </div>
+      ) : (
+        backLink
+      )}
       {controls ? (
         <div className={styles.top}>
           {eyebrowNode ? <div className={styles.eyebrow}>{eyebrowNode}</div> : null}
           <div className={styles.controls}>{controls}</div>
+          {chatLink}
         </div>
       ) : eyebrowNode ? (
-        <div className={eyebrowFill ? `${styles.eyebrow} ${styles.eyebrowFill}` : styles.eyebrow}>{eyebrowNode}</div>
+        chat ? (
+          <div className={styles.top}>
+            <div className={eyebrowFill ? `${styles.eyebrow} ${styles.eyebrowFill}` : styles.eyebrow}>{eyebrowNode}</div>
+            <div className={styles.controls} />
+            {chatLink}
+          </div>
+        ) : (
+          <div className={eyebrowFill ? `${styles.eyebrow} ${styles.eyebrowFill}` : styles.eyebrow}>{eyebrowNode}</div>
+        )
+      ) : chat && !back ? (
+        <div className={styles.chatRow}>{chatLink}</div>
       ) : null}
       <div className={styles.line}>
         <Text asChild variant="title">

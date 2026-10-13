@@ -34,6 +34,7 @@ export async function DaylessScreen() {
   return (
     <Page width="column">
       <ScreenHeader
+        chat
         title={t("oneOffs.title")}
         back={{ href: "/", place: t("common.nav.today") }}
       />

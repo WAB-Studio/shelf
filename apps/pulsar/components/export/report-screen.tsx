@@ -783,7 +783,7 @@ export async function ReportScreen({ report }: { report: Report }) {
     return (
       <Page width="full" print="full">
         <PrintPage>
-          <ScreenHeader title={t("title")} back={back} eyebrow={t("eyebrowEmpty")} />
+          <ScreenHeader chat title={t("title")} back={back} eyebrow={t("eyebrowEmpty")} />
           <Text as="p" variant="sentence" tone="secondary">
             {t("empty")}
           </Text>
@@ -817,6 +817,7 @@ export async function ReportScreen({ report }: { report: Report }) {
       <PrintPage>
         <Flex direction="column" gap="3">
           <ScreenHeader
+            chat
             title={t("title")}
             back={back}
             eyebrow={

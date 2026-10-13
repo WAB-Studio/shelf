@@ -146,7 +146,7 @@ export async function GoalsScreen({
 
   return (
     <Page width="full">
-      <ScreenHeader title={t("common.nav.goals")} />
+      <ScreenHeader chat title={t("common.nav.goals")} />
       <Split
         twoFifths
         main={
