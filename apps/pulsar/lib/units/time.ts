@@ -18,15 +18,24 @@ export type TimeWords = {
 };
 
 // Words for an hour. Never in TIME_UNITS: what is stored in them keeps reading as it does.
-export const HOUR_UNITS = ["horas", "hora", "h"] as const;
+export const HOUR_UNITS = ["horas", "hora", "h", "hours", "hour", "hrs", "hr"] as const;
 const HOUR_UNIT_SET: ReadonlySet<string> = new Set(HOUR_UNITS);
 
 export function isHourUnit(unit: string): boolean {
   return HOUR_UNIT_SET.has(unit.trim().toLowerCase());
 }
 
-// What a commitment keeps: hours become whole minutes, any other unit stays.
+// A minute said in English is not in TIME_UNITS (what is stored that way keeps reading as it does),
+// but a new write keeps it as minutes.
+const ENGLISH_MINUTE_SET: ReadonlySet<string> = new Set(["minutes", "minute"]);
+
+export function isEnglishMinuteUnit(unit: string): boolean {
+  return ENGLISH_MINUTE_SET.has(unit.trim().toLowerCase());
+}
+
+// What a commitment keeps: hours become whole minutes, English minutes become «minutos», any other unit stays.
 export function storedMeasure(unit: string, amount: number | null): { unit: string; amount: number | null } {
+  if (isEnglishMinuteUnit(unit)) return { unit: "minutos", amount };
   if (!isHourUnit(unit)) return { unit, amount };
   return { unit: "minutos", amount: amount === null ? null : amount * 60 };
 }

@@ -619,3 +619,65 @@ test("decide undoes each normalize correction it is told to decline", () => {
     "goals.0.tasks.0 import.errors.parentWithAmount",
   ]);
 });
+
+// ---- 898: a cadence the table accepts, and units the plan keeps as time.
+
+test("898: a counted cadence that carries days becomes weekdays with those days, once each", () => {
+  const { draft, corrections } = run([rawGoal({ commitments: [commitment({ cadenceKind: "times_per_week", cadenceN: 1, cadenceWeekdays: [7, 3, 7] })] })]);
+  const [c] = draft.goals[0].commitments;
+  assert.deepEqual([c.cadenceKind, c.cadenceN, c.cadenceWeekdays], ["weekdays", null, [3, 7]]);
+  assert.deepEqual(corrections.map((x) => [x.code, x.at, x.declined]), [["cadenceToWeekdays", "goals.0.commitments.0", "leavesOut"]]);
+  assert.deepEqual(refusalsOf(draft, TODAY), []);
+});
+
+test("898: every kind but weekdays ends with no days; weekdays and daily end with no count", () => {
+  const kinds = ["daily", "times_per_week", "every_n_days", "times_per_month"] as const;
+  for (const cadenceKind of kinds) {
+    const n = cadenceKind === "daily" ? null : 2;
+    const empty = run([rawGoal({ commitments: [commitment({ cadenceKind, cadenceN: n, cadenceWeekdays: [] })] })]);
+    assert.equal(empty.draft.goals[0].commitments[0].cadenceWeekdays, null, `${cadenceKind} with []`);
+    assert.deepEqual(empty.corrections, [], `${cadenceKind} with []`);
+    const outOfRange = run([rawGoal({ commitments: [commitment({ cadenceKind, cadenceN: n, cadenceWeekdays: [9, 0] })] })]);
+    assert.equal(outOfRange.draft.goals[0].commitments[0].cadenceWeekdays, null, `${cadenceKind} with [9, 0]`);
+    assert.equal(outOfRange.draft.goals[0].commitments[0].cadenceKind, cadenceKind);
+  }
+  const weekdays = run([rawGoal({ commitments: [commitment({ cadenceKind: "weekdays", cadenceN: 3, cadenceWeekdays: [2, 4] })] })]);
+  assert.equal(weekdays.draft.goals[0].commitments[0].cadenceN, null);
+  const daily = run([rawGoal({ commitments: [commitment({ cadenceKind: "daily", cadenceN: 3, cadenceWeekdays: null })] })]);
+  assert.equal(daily.draft.goals[0].commitments[0].cadenceN, null);
+});
+
+test("898: the review refuses what commitments_weekdays_for_weekdays and commitments_n_for_counted_kinds refuse", () => {
+  const refused = (over: Record<string, unknown>) => {
+    const d = tree({ commitments: [{ ...commitment(), ...over } as never] });
+    return refusalsOf(d, TODAY).filter((r) => r.path.includes("commitments")).map((r) => r.key);
+  };
+  assert.deepEqual(refused({ cadenceKind: "times_per_week", cadenceN: 1, cadenceWeekdays: [1] }), ["import.errors.cadenceWeekdays"]);
+  assert.deepEqual(refused({ cadenceKind: "daily", cadenceN: null, cadenceWeekdays: [1] }), ["import.errors.cadenceWeekdays"]);
+  assert.deepEqual(refused({ cadenceKind: "daily", cadenceN: 3, cadenceWeekdays: null }), ["import.errors.cadenceCount"]);
+  assert.deepEqual(refused({ cadenceKind: "weekdays", cadenceN: 2, cadenceWeekdays: [1] }), ["import.errors.cadenceCount"]);
+  assert.deepEqual(refused({ cadenceKind: "weekdays", cadenceN: null, cadenceWeekdays: [] }), ["plan.errors.weekdaysEmpty"]);
+  assert.deepEqual(refused({ cadenceKind: "times_per_week", cadenceN: 2, cadenceWeekdays: null }), []);
+  assert.deepEqual(refused({ cadenceKind: "weekdays", cadenceN: null, cadenceWeekdays: [1, 7] }), []);
+});
+
+test("898: declining the weekdays correction gives back what the plan said, and the part is then refused", () => {
+  const { draft, corrections } = run([rawGoal({ commitments: [commitment({ cadenceKind: "times_per_week", cadenceN: 1, cadenceWeekdays: [1] })] })]);
+  assert.equal(decide(draft, corrections, new Set()).goals[0].commitments[0].cadenceKind, "weekdays");
+  const back = decide(draft, corrections, new Set([corrections[0].id])).goals[0].commitments[0];
+  assert.deepEqual([back.cadenceKind, back.cadenceN, back.cadenceWeekdays], ["times_per_week", 1, [1]]);
+  assert.deepEqual(refusalsOf(decide(draft, corrections, new Set([corrections[0].id])), TODAY).map((r) => r.key), ["import.errors.cadenceWeekdays"]);
+});
+
+test("898: hours, hour, hrs and hr in a commitment or a measure are time; minutes and minute are minutos", () => {
+  for (const unit of ["hours", "hour", "hrs", "hr"]) {
+    const { draft } = run([rawGoal({ measure: { name: "x", unit: "minutos" }, commitments: [commitment({ cadenceKind: "daily", cadenceN: null, satisfaction: "quantity", targetQuantity: 2, unit })] })]);
+    assert.deepEqual([draft.goals[0].commitments[0].unit, draft.goals[0].commitments[0].targetQuantity], ["minutos", 120], unit);
+  }
+  for (const unit of ["minutes", "minute"]) {
+    const { draft } = run([rawGoal({ measure: { name: "x", unit: "minutos" }, commitments: [commitment({ cadenceKind: "daily", cadenceN: null, satisfaction: "quantity", targetQuantity: 90, unit })] })]);
+    assert.deepEqual([draft.goals[0].commitments[0].unit, draft.goals[0].commitments[0].targetQuantity], ["minutos", 90], unit);
+  }
+  assert.equal(run([rawGoal({ measure: { name: "x", unit: "hours" } })]).draft.goals[0].measure?.unit, "minutos");
+  assert.equal(run([rawGoal({ measure: { name: "x", unit: "minutes" } })]).draft.goals[0].measure?.unit, "minutos");
+});
