@@ -1424,3 +1424,13 @@ Three answers of the user, 2026-10-09.
 - **P4 — One line under the field, always,** says the message and the parts of the plan it reads go to OpenAI.
 - **P5 — The chat answers questions about the plan too,** from the same reads (RP-39). Each question is one of the fifty.
 - **P6 — An untaken change lapses when the next message is sent:** it reads «sin hacer» and has no button.
+- **The chat boards are approved** (RP-91–94), 2026-10-13, by the user: «Apruebo tal cual». Page «Chat» of the canvas, 15
+  captures of a prototype: `ChatVacio`, `ChatEnviando`, `ChatRespuesta`, `ChatPropuesta`, `ChatPropuestas`, `ChatHecho`,
+  `ChatRechazada`, `ChatFallo`, `ChatTope`, `ChatSinClave`, `ChatEscritorio` (1280) and `ChatEntrada` (Hoy and Metas, 360 and
+  1280). Words and structure: `private/tableros-chat/NOTAS.md`.
+- **The field lives in the flow,** below the last turn, never fixed to the foot. The tab bar stays the only fixed thing.
+- **A failed message stays as a turn;** the button reads «Intentar otra vez» and nothing is retyped.
+- **A refused change has no button.** Its row carries the act's reason; the person asks again in a new message.
+- **Turns are labelled «TÚ» and «PULSAR»,** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
+  changes open. A change reads in two lines: what, in the person's own names; then «antes → después» in mono.
+- **Faces not drawn for the chat:** dark (the token table says it) and 700–1023 (between the two drawn).
