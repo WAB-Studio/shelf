@@ -6,11 +6,11 @@ Un plan escrito así se lee en la app, sin IA y sin tope (RP-37). Cualquier otro
 
 - La primera línea no vacía es exactamente `pulsar · plantilla 2`. Sin ella, el texto no es una plantilla. `pulsar · plantilla 1` se sigue leyendo como antes: una sola capa de metas, sin `dentro de:` y sin nota de meta, hasta 12 metas.
 - Las líneas en blanco se ignoran. Cada meta empieza en `# <nombre>`; un archivo trae de 1 a 40. Dos metas no llevan el mismo nombre.
-- `horizonte: AAAA-MM-DD` es obligatorio y va justo después del nombre. Es el primer día después de la meta.
-- `dentro de: <nombre>` es opcional y va después de `horizonte:`. El nombre es exactamente el de una meta que aparece antes en el archivo. Así se arman tres niveles: una meta general, las grandes dentro de ella y las pequeñas dentro de una grande. Una cuarta capa, un nombre que no está antes o un nombre repetido es un error de esa línea.
+- `horizonte: AAAA-MM-DD` es opcional y va después del nombre. Es el primer día después de la meta. Una meta sin `horizonte:` es una meta sin final (RP-102); una sin final no va dentro de una que lo tiene, y esa línea se dice con su razón.
+- `dentro de: <nombre>` es opcional y va después del nombre. El nombre es exactamente el de una meta que aparece antes en el archivo. Así se arman tres niveles: una meta general, las grandes dentro de ella y las pequeñas dentro de una grande. Una cuarta capa, un nombre que no está antes o un nombre repetido es un error de esa línea.
 - Nota de la meta: líneas `nota: <texto>` sin sangría, después de las cabeceras de la meta y antes de su primera sección. Mismas reglas que la nota de una tarea; el tope es el de la nota de una meta, y más es un error de su primera línea `nota:`. Una `nota:` sin sangría bajo una sección es una línea fuera de forma.
 - `medida: <nombre> · <unidad>` es opcional. Sin ella, la meta no lleva montos ni tiempo. Una medida en horas (`horas`) se guarda en minutos.
-- `ritmo: <monto>` es opcional y va justo después de `medida:`, solo si la medida es en horas o minutos: `12 h`, `12 h 30 min` o `90 min`, y se guarda en minutos. En otro lugar, o con otra unidad, detiene la lectura. Con `ritmo:`, las tareas entran al plan y su mes solo las ordena (RP-67). Una plantilla sin `ritmo:` se lee como antes.
+- `ritmo: <monto>` es opcional y va justo después de `medida:`, con cualquier medida (RP-102). En horas o minutos: `12 h`, `12 h 30 min` o `90 min`, y se guarda en minutos; con otra unidad, un entero en la unidad de la medida, como `ritmo: 40` con páginas. Sin medida, o en otro lugar, detiene la lectura. En tiempo, las tareas entran al plan y su mes solo las ordena (RP-67); en otra unidad siguen fijas en su mes. Una plantilla sin `ritmo:` se lee como antes.
 - Las secciones `## Fases`, `## Meses`, `## Compromisos` y `## Tareas` van en cualquier orden y son opcionales; cada una lista líneas que empiezan en `- `.
 - Fase: `- AAAA-MM-DD a AAAA-MM-DD · <objetivo>`.
 - Mes: `- AAAA-MM · <monto>`. El mes va de 01 a 12; otro número dice que ese mes no existe. Un mes no se repite.
@@ -20,7 +20,7 @@ Un plan escrito así se lee en la app, sin IA y sin tope (RP-37). Cualquier otro
 - Sub-tarea: una línea `- ` con exactamente dos espacios antes, justo bajo su tarea: `  - <nombre>` o `  - <monto> · <nombre>`.
 - Nota: una línea `nota: <texto>` justo bajo su tarea, con dos espacios antes, o bajo su sub-tarea, con cuatro. La de una tarea va antes de sus sub-tareas.
 - Una nota de varias líneas repite la línea: cada `nota:` es una línea de la nota, y `nota:` sola es una línea en blanco. El texto va tal cual; la nota entera se recorta en ambos extremos y, toda en blanco, no es nota. Máximo 2000 caracteres: más es un error de su primera línea `nota:`. Una `nota:` con sangría en otro lugar es una línea fuera de forma. Una plantilla sin `nota:` se lee sin ninguna.
-- Monto: con una medida en horas o minutos, `12 h`, `12 hrs`, `12 hs`, `1,5 h`, `12 h 30 min` o `90 min` (también `hora`, `horas`, `minuto`, `minutos`), y se guarda en minutos; con cualquier otra unidad, un número entero. Con `ritmo:`, las tareas entran al plan y su mes solo las ordena (RP-67).
+- Monto: con una medida en horas o minutos, `12 h`, `12 hrs`, `12 hs`, `1,5 h`, `12 h 30 min` o `90 min` (también `hora`, `horas`, `minuto`, `minutos`), y se guarda en minutos; con cualquier otra unidad, un número entero.
 - Las líneas que no siguen la forma se dicen todas a la vez, en orden, cada una con su número, su texto y lo que debía decir (RP-72). Una cabecera rota detiene la lectura: se dice solo ella, la más alta, y ninguna otra línea.
 
 ## Ejemplo
@@ -70,7 +70,7 @@ nota: Empezar por lo que ya sé medir.
 El libro `.xlsx` de la plantilla lleva la misma información en cinco hojas. Cada hoja lleva sus encabezados en la primera fila (en `Metas`, en la segunda, bajo la marca), y cada fila de datos es una línea de la plantilla.
 
 - La marca `pulsar · plantilla 2` va en `Metas!A1`; los encabezados de `Metas` van en la fila 2.
-- `Metas`: `nombre`, `dentro de`, `horizonte`, `medida`, `unidad`, `ritmo`, `nota`. `dentro de` es el nombre exacto de una meta de una fila anterior; los nombres no se repiten.
+- `Metas`: `nombre`, `dentro de`, `horizonte`, `medida`, `unidad`, `ritmo`, `nota`. Una celda de `horizonte` vacía es una meta sin final. `dentro de` es el nombre exacto de una meta de una fila anterior; los nombres no se repiten.
 - `Fases`: `meta`, `desde`, `hasta`, `objetivo`.
 - `Meses`: `meta`, `mes`, `monto`.
 - `Compromisos`: `meta`, `nombre`, `cadencia`, `toque o monto`.
