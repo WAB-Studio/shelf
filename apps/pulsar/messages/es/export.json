@@ -50,6 +50,15 @@
     "planned": "planeado",
     "status": "estado"
   },
+  "summary": {
+    "title": "resumen",
+    "annex": "el detalle de cada meta",
+    "goal": "Meta",
+    "weekHead": "Semana del {from} al {to}",
+    "of": "{done} de {planned}",
+    "week": "semana {value}",
+    "noAmount": "sin monto este mes"
+  },
   "of": "de {planned}",
   "fromMonth": "de {month}",
   "carriedTo": "{percent} % pasó a {month}",

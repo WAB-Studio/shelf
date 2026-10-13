@@ -28,6 +28,8 @@ const CORRECTIONS = [
   "monthSumDiffers",
   "monthOverRhythm",
   "cadenceToWeekdays",
+  "lineToTask",
+  "taskMoved",
 ];
 const FORMS = [
   "import.errors.form.goal",
@@ -68,7 +70,7 @@ test("every correction code has its said, proposed and why, each a message", () 
 });
 
 test("the weekly rule notice, the four out reasons and the two declines each have a message", () => {
-  assert.deepEqual(Object.keys(noticeKey), ["weekRuleBroken"]);
+  assert.deepEqual(Object.keys(noticeKey), ["weekRuleBroken", "rhythmWithoutTasks"]);
   assert.deepEqual(Object.keys(outKey).sort(), ["noteFull", "notPlaced", "refused", "unmarked"].sort());
   assert.deepEqual(Object.keys(declinedKeys).sort(), ["keepsPlan", "leavesOut"]);
   for (const key of [...Object.values(noticeKey), ...Object.values(outKey), ...Object.values(declinedKeys)]) {
@@ -97,4 +99,18 @@ test("the four remapped refusal ids name a refusal sentence of the review", () =
 test("the bare form codes say their rule in a sentence", () => {
   assert.match(leaf(formKey.inside)!, /dentro de/);
   assert.match(leaf(formKey.goalNameRepeated)!, /mismo nombre/);
+});
+
+test("903: each out reason and each form code names its own sentence, none another's", () => {
+  assert.deepEqual(outKey, {
+    notPlaced: "import.review.out.notPlaced",
+    unmarked: "import.review.out.unmarked",
+    refused: "import.review.out.refused",
+    noteFull: "import.review.out.noteFull",
+  });
+  assert.equal(formKey.goalNote, "import.errors.form.goalNote");
+  assert.equal(formKey.insideTooDeep, "import.errors.form.insideTooDeep");
+  assert.equal(formKey.insideUnknown, "import.errors.form.insideUnknown");
+  assert.equal(formKey.inside, "import.errors.form.inside");
+  assert.equal(formKey.goalNameRepeated, "import.errors.form.goalNameRepeated");
 });

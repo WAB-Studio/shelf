@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
@@ -11,8 +11,8 @@ import { horizonTreeRefusal, type PlacementRefusal } from "@/lib/goals/placement
 import { refusalKey } from "@/lib/goals/refusal-key";
 import { buildTree, type TreeRow } from "@/lib/goals/tree";
 import { horizonRefusal, moveHorizonSchema } from "@/lib/validation/horizon";
-import { civilDateLabel, todayInZone } from "@/lib/zone";
-import { Button, Field, Sheet, SheetActions } from "@/components/ui";
+import { civilDateLabel, civilDayMonthYear, todayInZone } from "@/lib/zone";
+import { Button, Field, Flex, Notice, Sheet, SheetActions } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 // The new-goal rule (`new-goal-form.tsx`): a whole number of weeks, 1 to 520.
@@ -30,9 +30,11 @@ export type MoveHorizonActionProps = {
   phases: { name: string; endsOn: string | null }[];
   // An ended goal opens the sheet on the count that ends this Sunday.
   reopening?: boolean;
-  // The goal above and the one under that ends last: the ends this one's cannot cross (RP-79).
+  // The goal above, and every goal under this one: the ends this one's cannot cross (RP-79).
   above?: GoalRef | null;
-  latestBelow?: GoalRef | null;
+  below?: GoalRef[];
+  // Called with the number of goals the move took along.
+  onMoved?: (count: number) => void;
 };
 
 const row = (id: string, parentId: string | null, ref: { name: string; horizon: string }): TreeRow => ({
@@ -61,7 +63,8 @@ export function MoveHorizonAction({
   phases,
   reopening = false,
   above = null,
-  latestBelow = null,
+  below = [],
+  onMoved,
 }: MoveHorizonActionProps) {
   const t = useTranslations();
   const router = useRouter();
@@ -83,14 +86,17 @@ export function MoveHorizonAction({
   // week's edge that count would write.
   const untouched = !reopening && typed.success && typed.data === weeks;
 
-  // The goals around this one, as far as the page knows them, judged by the rule the server runs.
+  const candidate = typed.success && !untouched ? horizonForWeeks(openedOn, typed.data) : null;
+  // The goals below that end after the typed end: «Mover también sus finales» takes them along.
+  const later = candidate === null ? [] : below.filter((g) => g.horizon > candidate);
+
+  // The goal above, judged by the rule the server runs; the goals below are offered, not refused.
   const treeRefusal: PlacementRefusal | null =
     typed.success && !untouched
       ? horizonTreeRefusal(
           buildTree([
             ...(above ? [row("above", null, above)] : []),
             row("goal", above ? "above" : null, { name, horizon: storedHorizon }),
-            ...(latestBelow ? [row("below", "goal", latestBelow)] : []),
           ]),
           "goal",
           horizonForWeeks(openedOn, typed.data),
@@ -98,7 +104,7 @@ export function MoveHorizonAction({
       : null;
 
   function treeText(key: MessageKey, ref: { name: string; horizon: string }): string {
-    return t(key, { name: ref.name, date: civilDateLabel(dayBefore(ref.horizon)) });
+    return t(key, { name: ref.name, date: civilDayMonthYear(dayBefore(ref.horizon)) });
   }
 
   const named = treeRefusal && ("above" in treeRefusal ? treeRefusal.above : "below" in treeRefusal ? treeRefusal.below : null);
@@ -118,7 +124,7 @@ export function MoveHorizonAction({
     setOpen(true);
   }
 
-  async function handleMove() {
+  async function handleMove(moveBranch = false) {
     if (pending) return;
 
     if (!typed.success) {
@@ -132,7 +138,7 @@ export function MoveHorizonAction({
     }
 
     const horizon = horizonForWeeks(openedOn, typed.data);
-    const parsed = moveHorizonSchema.safeParse({ goalId, horizon });
+    const parsed = moveHorizonSchema.safeParse({ goalId, horizon, ...(moveBranch ? { moveBranch: true } : {}) });
     if (!parsed.success) {
       setError(t(messageKey(parsed.error.issues[0].message)));
       return;
@@ -159,6 +165,7 @@ export function MoveHorizonAction({
     setPending(false);
     if (result.ok) {
       setOpen(false);
+      if (moveBranch) onMoved?.(later.length);
       router.refresh();
     } else if (result.error.startsWith("goal.errors.")) {
       setError(refusalText(result.error, typed.data));
@@ -166,7 +173,7 @@ export function MoveHorizonAction({
       setError(
         t(result.error, {
           name: result.values.name,
-          date: result.values.date ? civilDateLabel(result.values.date) : "",
+          date: result.values.date ? civilDayMonthYear(result.values.date) : "",
         }),
       );
     } else {
@@ -176,10 +183,7 @@ export function MoveHorizonAction({
 
   const endsOn = typed.success
     ? t("goal.horizon.endsOn", {
-        date: civilDateLabel(
-          dayBefore(untouched ? storedHorizon : horizonForWeeks(openedOn, typed.data)),
-          true,
-        ),
+        date: civilDayMonthYear(dayBefore(untouched ? storedHorizon : horizonForWeeks(openedOn, typed.data))),
       })
     : t("goal.errors.horizonWeeksInvalid");
 
@@ -197,13 +201,36 @@ export function MoveHorizonAction({
           max={520}
           step={1}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
-          invalid={error !== null || !typed.success || treeSentence !== null}
+          onChange={(event) => {
+            setValue(event.target.value);
+            setError(null);
+          }}
+          invalid={error !== null || !typed.success || treeSentence !== null || later.length > 0}
           hint={treeSentence ?? error ?? endsOn}
           autoFocus
         />
+        {later.length > 0 && candidate !== null ? (
+          <Notice
+            role="note"
+            title={t("goal.horizon.laterTitle", { count: later.length })}
+            rows={later.map((g) =>
+              t("goal.horizon.laterRow", { name: g.name, date: civilDayMonthYear(dayBefore(g.horizon)) }),
+            )}
+            aside={t("goal.horizon.laterAside", { count: later.length, date: civilDayMonthYear(dayBefore(candidate)) })}
+          />
+        ) : null}
         <SheetActions>
-          <Button block onClick={handleMove} disabled={pending || treeSentence !== null}>
+          {later.length > 0 ? (
+            <Button block onClick={() => handleMove(true)} disabled={pending || treeSentence !== null}>
+              {t("goal.horizon.moveBranch")}
+            </Button>
+          ) : null}
+          <Button
+            block
+            variant={later.length > 0 ? "ghost" : "solid"}
+            onClick={() => handleMove()}
+            disabled={pending || treeSentence !== null || later.length > 0}
+          >
             {t("goal.horizon.confirm")}
           </Button>
           <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
@@ -211,6 +238,24 @@ export function MoveHorizonAction({
           </Button>
         </SheetActions>
       </Sheet>
+    </>
+  );
+}
+
+/**
+ * The end line of a goal with its move action, and under it the notice a move that took
+ * goals along leaves behind.
+ */
+export function MoveEndRow({ children, ...props }: MoveHorizonActionProps & { children: ReactNode }) {
+  const t = useTranslations();
+  const [moved, setMoved] = useState(0);
+  return (
+    <>
+      <Flex justify="between" align="center">
+        {children}
+        {props.reopening ? null : <MoveHorizonAction {...props} onMoved={setMoved} />}
+      </Flex>
+      {moved > 0 ? <Notice role="note">{t("goal.horizon.moved", { count: moved })}</Notice> : null}
     </>
   );
 }

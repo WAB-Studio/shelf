@@ -21,6 +21,8 @@ export const correctionKeys = {
   measureInHours: sentence("measureInHours"),
   monthSumDiffers: sentence("monthSumDiffers"),
   monthOverRhythm: sentence("monthOverRhythm"),
+  lineToTask: sentence("lineToTask"),
+  taskMoved: sentence("taskMoved"),
 } satisfies Record<CorrectionCode, { said: MessageKey; proposed: MessageKey; why: MessageKey }>;
 
 function sentence<C extends CorrectionCode>(code: C) {
@@ -33,6 +35,7 @@ function sentence<C extends CorrectionCode>(code: C) {
 
 export const noticeKey = {
   weekRuleBroken: "import.review.notice.weekRuleBroken",
+  rhythmWithoutTasks: "import.review.notice.rhythmWithoutTasks",
 } satisfies Record<NoticeCode, MessageKey>;
 
 export const outKey = {

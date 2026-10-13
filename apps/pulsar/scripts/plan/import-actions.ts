@@ -776,3 +776,99 @@ test("confirmImport: a clean plan still pays the same statements and lists nothi
   const { statements } = await confirmed(draftOf(EXAMPLE.replace("# IA aplicada", `# 898 limpia ${RUN}`)));
   assert.equal(statements, 8);
 });
+
+// ---- 903: survivors of the f1 and i1 mutators.
+
+test("903: a sub-task the table refuses is named by its place under its task, and its sister is written", async () => {
+  const name = `903 hija ${RUN}`;
+  const child = (childName: string, note: string | null) => ({ name: childName, estimate: 30, note, noteSrc: [], src: [], rule: null });
+  const draft = tree([full("a", null, name, { tasks: [task("Madre", M0, null, [child("Hija 1", null), child("Hija 2", "   "), child("Hija 3", null)])] })]);
+  const result = await confirmImport(draft);
+  if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
+  goalIds.push(...result.goalIds);
+  assert.deepEqual(result.failed, [{ path: "goals.0.tasks.0.children.1", name: "Hija 2", reason: "import.errors.noteShape" }]);
+  const kept = await sql<{ name: string }[]>`select name from goals.one_offs where goal_id = ${result.goalIds[0]} and parent_id is not null order by name`;
+  assert.deepEqual(kept.map((row) => row.name), ["Hija 1", "Hija 3"]);
+});
+
+test("903: an error that is not the draft's fault surfaces; it is not retried as a partial write", async () => {
+  const name = `903 infraestructura ${RUN}`;
+  // A NUL byte passes every check of the review and meets the server as class 22, not 23.
+  const draft = tree([full("a", null, name, { tasks: [{ ...task("Con NUL", M0, null), note: "a\u0000b" }] })]);
+  try {
+    await assert.rejects(confirmImport(draft));
+    assert.equal(await countGoals(`${name} ${RUN}`), 0);
+  } finally {
+    await sql`delete from goals.goals where user_id = ${personId} and name like ${`%${name}%`}`;
+  }
+});
+
+test("903: two goals with one key: a goal inside it goes under the first", async () => {
+  const draft = tree([bare("dup", null, "903 clave uno", `${M14}-01`), bare("dup", null, "903 clave dos", `${M14}-01`), bare("dup", "dup", "903 hija", `${M6}-01`)]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await sql<{ id: string; parent_id: string | null }[]>`select id, parent_id from goals.goals where id in ${sql(ids)}`;
+  assert.equal(rows.find((row) => row.id === ids[2])?.parent_id, ids[0]);
+});
+
+test("903: with a rhythm the tasks are in the plan with no month, in the order of their months", async () => {
+  const draft = tree([full("a", null, "903 ritmo", { rhythm: 600, months: [], tasks: [task("Tarde", M1, 60), task("Pronto", M0, 30)] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await sql<{ name: string; in_plan: boolean; planned_month: string | null }[]>`
+    select name, in_plan, planned_month::text as planned_month from goals.one_offs where goal_id = ${ids[0]} order by position`;
+  assert.deepEqual(rows.map((row) => [row.name, row.in_plan, row.planned_month]), [["Pronto", true, null], ["Tarde", true, null]]);
+});
+
+// ---- 906: a task the plan marks done is written already done.
+
+test("906: a task with a doneOn is written with its fact on that day, and the sister task is not done", async () => {
+  const day = shiftDay(TODAY, -3);
+  const draft = tree([full("a", null, "906 hecha", { tasks: [{ ...task("Hecha", M0, 60), doneOn: day }, task("Pendiente", M0, 30)] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await asPerson((tx) => tx<{ name: string; day: string | null; goal_id: string | null }[]>`
+    select o.name, f.day::text as day, f.goal_id from goals.one_offs o
+    left join goals.facts f on f.one_off_id = o.id where o.goal_id = ${ids[0]} order by o.name`);
+  assert.deepEqual(rows.map((row) => [row.name, row.day]), [["Hecha", day], ["Pendiente", null]]);
+  assert.equal(rows[0].goal_id, ids[0]);
+});
+
+test("906: done tasks add one statement to the import, whatever their number", async () => {
+  const plain = await confirmed(tree([full("a", null, "906 ninguna", { tasks: [task("Pendiente", M0, 60)] })]));
+  const one = await confirmed(tree([full("a", null, "906 una", { tasks: [{ ...task("Hecha", M0, 60), doneOn: TODAY }] })]));
+  const three = await confirmed(tree([full("a", null, "906 tres", { tasks: [1, 2, 3].map((n) => ({ ...task(`Hecha ${n}`, M0, 60), doneOn: TODAY })) })]));
+  assert.equal(one.statements, plain.statements + 1);
+  assert.equal(three.statements, one.statements);
+});
+
+test("906: a done day after today is refused with its key and path, and writes nothing", async () => {
+  const name = `906 futura ${RUN}`;
+  const draft = tree([full("a", null, name, { tasks: [{ ...task("Hecha", M0, 60), doneOn: shiftDay(TODAY, 2) }] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneInFuture", at: "goals.0.tasks.0" });
+  assert.equal(await countGoals(`${name} ${RUN}`), 0);
+});
+
+test("906: a done task with sub-tasks is refused, and writes nothing", async () => {
+  const child = { name: "Hija", estimate: 30, note: null, noteSrc: [], src: [], rule: null };
+  const draft = tree([full("a", null, "906 madre", { tasks: [{ ...task("Madre", M0, null, [child]), doneOn: TODAY }] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneWithSubtasks", at: "goals.0.tasks.0" });
+});
+
+test("906b: a sub-task with a doneOn is written done on that day, its parent and sister are not", async () => {
+  const day = shiftDay(TODAY, -2);
+  const child = (name: string, doneOn?: string) => ({ name, estimate: 30, note: null, noteSrc: [], src: [], rule: null, ...(doneOn ? { doneOn } : {}) });
+  const draft = tree([full("a", null, "906b hijas", { tasks: [task("Madre", M0, null, [child("Hecha", day), child("Pendiente")])] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await asPerson((tx) => tx<{ name: string; day: string | null }[]>`
+    select o.name, f.day::text as day from goals.one_offs o left join goals.facts f on f.one_off_id = o.id
+    where o.goal_id = ${ids[0]} order by o.name`);
+  assert.deepEqual(rows.map((row) => [row.name, row.day]), [["Hecha", day], ["Madre", null], ["Pendiente", null]]);
+});
+
+test("906b: a done sub-task adds the one statement a done task adds, and a future day is refused at the sub-task", async () => {
+  const child = (doneOn?: string) => ({ name: "Hija", estimate: 30, note: null, noteSrc: [], src: [], rule: null, ...(doneOn ? { doneOn } : {}) });
+  const pending = await confirmed(tree([full("a", null, "906b hija pendiente", { tasks: [task("Madre", M0, null, [child()])] })]));
+  const done = await confirmed(tree([full("a", null, "906b hija hecha", { tasks: [task("Madre", M0, null, [child(TODAY)])] })]));
+  assert.equal(done.statements, pending.statements + 1);
+  const name = `906b futura ${RUN}`;
+  const draft = tree([full("a", null, name, { tasks: [task("Madre", M0, null, [child(shiftDay(TODAY, 3))])] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneInFuture", at: "goals.0.tasks.0.children.0" });
+});

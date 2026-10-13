@@ -176,10 +176,10 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 #### A chat inside the app
 
-- [ ] **RP-91** — The app has a chat, on a screen of its own reached from every screen. The person writes in Spanish what they want changed («pasa la tarea de Maze a noviembre», «agrega 2 h de inglés el martes») and the chat answers through the same tools a connected AI uses (RP-39, RP-56, RP-85), with the same refusals and the same reasons. Decided by the user 2026-10-12.
-- [ ] **RP-92** — The chat never writes on its own: each change is shown as a proposal, with what it changes, and is made when the person taps «Hacer». The changes of one message are accepted together or one by one. What RP-56 forbids an AI — deleting, archiving, undoing a mark — the chat never does. Decided by the user 2026-10-12.
-- [ ] **RP-93** — The chat answers with **gpt-5-mini**, and each message is a paid call under RNP-21. Past the day's cap the chat says so and calls no model. Decided by the user 2026-10-12.
-- [ ] **RP-94** — The conversation lives in the tab that holds it and is not stored on the server; closing the tab ends it. What the chat changed stays in the plan like any other change. Decided by the user 2026-10-12.
+- [x] **RP-91** — The app has a chat, on a screen of its own reached from every screen. The person writes in Spanish what they want changed («pasa la tarea de Maze a noviembre», «agrega 2 h de inglés el martes») and the chat answers through the same tools a connected AI uses (RP-39, RP-56, RP-85), with the same refusals and the same reasons. Decided by the user 2026-10-12.
+- [x] **RP-92** — The chat never writes on its own: each change is shown as a proposal, with what it changes, and is made when the person taps «Hacer». The changes of one message are accepted together or one by one. What RP-56 forbids an AI — deleting, archiving, undoing a mark — the chat never does. Decided by the user 2026-10-12.
+- [x] **RP-93** — The chat answers with **gpt-5-mini**, and each message is a paid call under RNP-21. Past the day's cap the chat says so and calls no model. Decided by the user 2026-10-12.
+- [x] **RP-94** — The conversation lives in the tab that holds it and is not stored on the server; closing the tab ends it. What the chat changed stays in the plan like any other change. Decided by the user 2026-10-12.
 
 #### The week and the review
 
@@ -226,9 +226,9 @@ of this gets built, and no schema, table or column is "prepared for" it.
   token requests in five minutes, with 429 and the seconds to wait. It keeps at most one hundred registered assistants that
   nobody has used, dropping the oldest.
 - [x] **RNP-20** — A key or an authorization that goes ninety days without use opens nothing, as if revoked, and the
-- [ ] **RNP-21** — A chat message (RP-93) is a paid call claimed like an import's (RNP-13), under a cap of its own: fifty a day per person, apart from the import's ten. The record keeps the day, the model and, once answered, the tokens and the outcome. No automated check reaches the paid model. Decided by the user 2026-10-12.
   connections screen says so; one in use never lapses. Use is a call through the key, or a refresh of the authorization.
   Decided by the user 2026-10-08.
+- [x] **RNP-21** — A chat message (RP-93) is a paid call claimed like an import's (RNP-13), under a cap of its own: fifty a day per person, apart from the import's ten. The record keeps the day, the model and, once answered, the tokens and the outcome. No automated check reaches the paid model. Decided by the user 2026-10-12.
 - [x] **RP-64** — The connections screen names, for each authorization, the host it returns to, as the consent does (RP-60), and folds every key and authorization that has stopped opening for more than thirty days under one line that counts them; the thirty days count from when it stopped entering (lapsed or revoked). Nothing is deleted (RP-38). A lapsed key offers to create another. Decided by the user 2026-10-08.
 
 ---

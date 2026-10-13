@@ -3,12 +3,18 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { z } from "zod";
+
+import { dayBefore, horizonForWeeks, horizonWeeksOf } from "@/lib/day/weeks";
+import { commitmentFormIssue, type DraftGoal } from "@/lib/import/draft";
+import type { Cadence } from "@/lib/import/review";
 import { isTimeUnit, splitMinutes } from "@/lib/units/time";
+import { civilDateLabel } from "@/lib/zone";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { addPhaseSchema, createGoalSchema } from "@/lib/validation/plan";
 import { setRhythmSchema } from "@/lib/validation/rhythm";
-import { Button, Chip, ChipRow, Field, FieldPair, Flex, Sheet, SheetActions, SectionLabel } from "@/components/ui";
+import { Button, Chip, ChipRow, Field, FieldPair, Flex, Sheet, SheetActions, SectionLabel, Text } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
 const WHOLE = /^\d+$/;
@@ -26,9 +32,17 @@ export type Editing = {
   // The month a task sits in and the months its goal runs through.
   month: string | null;
   months: string[];
+  // A commitment's cadence and what it counts, to change.
+  commitment: { cadence: Cadence; entry: DraftGoal["commitments"][number]; read: string; saidDay: { word: string; day: string } | null } | null;
+  // A goal's end, to change in whole weeks from `today`; `refuse` is the review's rule for an end.
+  horizon: { current: string; today: string; refuse: (horizon: string) => { key: string; values: Record<string, string> } | null } | null;
 };
 
-export type Change = { name?: string; amount?: number; month?: string };
+export type Change = { name?: string; amount?: number; month?: string; horizon?: string; cadence?: Cadence };
+
+const CADENCE_KINDS = ["daily", "weekdays", "times_per_week", "every_n_days", "times_per_month"] as const;
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+const weeksSchema = z.coerce.number().int().positive().max(520);
 
 const nameSchema = {
   goal: createGoalSchema.shape.name,
@@ -71,6 +85,26 @@ export function EditSheet({
   const [month, setMonth] = useState(editing.month);
   const [nameError, setNameError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
+  const horizon = editing.horizon;
+  const weeksNow = horizon ? horizonWeeksOf(horizon.today, horizon.current) : 0;
+  const [weeks, setWeeks] = useState(String(weeksNow));
+  const [kind, setKind] = useState<Cadence["kind"]>(editing.commitment?.cadence.kind ?? "daily");
+  const [days, setDays] = useState<number[]>(editing.commitment?.cadence.weekdays ?? []);
+  const [count, setCount] = useState(String(editing.commitment?.cadence.n ?? ""));
+  const [cadenceError, setCadenceError] = useState<string | null>(null);
+  const weekdayShort = t.raw("day.cadence.weekdayShort") as string[];
+
+  // The end the weeks field stands for: untouched, the end the draft holds.
+  const typedWeeks = weeksSchema.safeParse(weeks);
+  const candidate = !horizon || !typedWeeks.success ? null : typedWeeks.data === weeksNow ? horizon.current : horizonForWeeks(horizon.today, typedWeeks.data);
+  const horizonRefusal = horizon && candidate ? horizon.refuse(candidate) : null;
+  const horizonSentence = horizonRefusal
+    ? t(messageKey(horizonRefusal.key), { name: horizonRefusal.values.name ?? "", date: horizonRefusal.values.date ? civilDateLabel(horizonRefusal.values.date) : "" })
+    : null;
+
+  function toggleDay(day: number) {
+    setDays((now) => (now.includes(day) ? now.filter((value) => value !== day) : [...now, day].sort((a, b) => a - b)));
+  }
 
   function save() {
     const change: Change = {};
@@ -85,7 +119,7 @@ export function EditSheet({
         if (parsed.data !== editing.name) change.name = parsed.data;
       }
     }
-    if (editing.amount !== null && (editing.kind === "month" || editing.kind === "task" || editing.kind === "subtask" || editing.kind === "rhythm")) {
+    if (editing.amount !== null && (editing.kind === "month" || editing.kind === "task" || editing.kind === "subtask" || editing.kind === "rhythm" || editing.kind === "commitment")) {
       let typed: number;
       if (timed) {
         const h = hours.trim() === "" ? "0" : hours.trim();
@@ -99,7 +133,8 @@ export function EditSheet({
         typed = WHOLE.test(single.trim()) ? Number(single.trim()) : Number.NaN;
       }
       if (!refused || !timed) {
-        const parsed = amountSchema[editing.kind].safeParse(typed);
+        // A commitment's quantity is judged with its cadence below, by the form's own schema.
+        const parsed = editing.kind === "commitment" ? ({ success: true } as const) : amountSchema[editing.kind].safeParse(typed);
         if (!parsed.success) {
           setAmountError(t(messageKey(parsed.error.issues[0].message)));
           refused = true;
@@ -108,6 +143,36 @@ export function EditSheet({
           if (typed !== editing.amount) change.amount = typed;
         }
       }
+    }
+    if (editing.commitment) {
+      const cadence: Cadence = { kind, weekdays: days, n: kind === "daily" || kind === "weekdays" ? null : Number(count) };
+      const entry = {
+        ...editing.commitment.entry,
+        name: change.name ?? editing.commitment.entry.name,
+        cadenceKind: kind,
+        cadenceWeekdays: kind === "weekdays" ? days : null,
+        cadenceN: cadence.n,
+        targetQuantity: change.amount ?? editing.commitment.entry.targetQuantity,
+      };
+      const issue = Number.isNaN(Number(count)) && cadence.n !== null ? "plan.errors.timesPerWeekInvalid" : commitmentFormIssue(entry);
+      if (issue === "plan.errors.targetQuantityInvalid") {
+        setAmountError(t(messageKey(issue)));
+        refused = true;
+      } else if (issue) {
+        setCadenceError(t(messageKey(issue)));
+        refused = true;
+      } else {
+        setCadenceError(null);
+        const was = editing.commitment.cadence;
+        if (kind !== was.kind || cadence.n !== was.n || days.join() !== was.weekdays.join()) change.cadence = cadence;
+      }
+    }
+    if (horizon) {
+      if (!typedWeeks.success) {
+        setAmountError(t("goal.errors.horizonWeeksInvalid"));
+        refused = true;
+      } else if (horizonSentence !== null) refused = true;
+      else if (candidate !== null && candidate !== horizon.current) change.horizon = candidate;
     }
     if (refused) return;
     if (month !== null && month !== editing.month) change.month = month;
@@ -138,6 +203,67 @@ export function EditSheet({
             invalid={nameError !== null}
             hint={nameError}
             autoFocus
+          />
+        ) : null}
+        {editing.commitment ? (
+          <Flex direction="column" gap="2">
+            <SectionLabel>{t("import.review.edit.when")}</SectionLabel>
+            <div role="radiogroup" aria-label={t("import.review.edit.when")}>
+              <ChipRow>
+                {CADENCE_KINDS.map((entry) => (
+                  <Chip key={entry} radio selected={kind === entry} onClick={() => setKind(entry)}>
+                    {t(`plan.commitmentForm.cadence.${entry}`)}
+                  </Chip>
+                ))}
+              </ChipRow>
+            </div>
+            {kind === "weekdays" ? (
+              <ChipRow tight>
+                {WEEKDAYS.map((day) => (
+                  <Chip key={day} shape="day" mono selected={days.includes(day)} onClick={() => toggleDay(day)}>
+                    {weekdayShort[day - 1]}
+                  </Chip>
+                ))}
+              </ChipRow>
+            ) : null}
+            {kind === "times_per_week" || kind === "every_n_days" || kind === "times_per_month" ? (
+              <Field
+                label={t(kind === "times_per_week" ? "plan.commitmentForm.timesPerWeekLabel" : kind === "every_n_days" ? "plan.commitmentForm.everyNDaysLabel" : "plan.commitmentForm.timesPerMonthLabel")}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={count}
+                onChange={(event) => setCount(event.target.value)}
+                invalid={cadenceError !== null}
+              />
+            ) : null}
+            {cadenceError ? (
+              <Text as="p" tone="ink" variant="sentence">
+                {cadenceError}
+              </Text>
+            ) : null}
+            {editing.commitment.saidDay && kind !== "weekdays" ? (
+              <Text as="p" variant="sentence" tone="muted">
+                {t("import.review.edit.saidDay", { word: editing.commitment.saidDay.word, read: editing.commitment.read, day: editing.commitment.saidDay.day })}
+              </Text>
+            ) : null}
+            {hasAmount ? <SectionLabel>{t("import.review.edit.eachTime")}</SectionLabel> : null}
+          </Flex>
+        ) : null}
+        {horizon ? (
+          <Field
+            label={t("goal.horizon.weeksLabel", { date: civilDateLabel(horizon.today) })}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={520}
+            step={1}
+            value={weeks}
+            onChange={(event) => setWeeks(event.target.value)}
+            invalid={horizonSentence !== null || amountError !== null || !typedWeeks.success}
+            hint={horizonSentence ?? amountError ?? (candidate ? t("goal.horizon.endsOn", { date: civilDateLabel(dayBefore(candidate), true) }) : t("goal.errors.horizonWeeksInvalid"))}
+            autoFocus={editing.name === null}
           />
         ) : null}
         {hasAmount && timed ? (
@@ -197,7 +323,7 @@ export function EditSheet({
         ) : null}
       </Flex>
       <SheetActions>
-        <Button block onClick={save}>
+        <Button block onClick={save} disabled={horizonSentence !== null}>
           {t("import.review.edit.save")}
         </Button>
         <Button block variant="outline" onClick={onClose}>

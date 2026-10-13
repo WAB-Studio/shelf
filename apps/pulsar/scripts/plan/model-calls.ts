@@ -55,6 +55,7 @@ let first: Person;
 let second: Person;
 let today: string;
 let claimModelCall: typeof import("@/lib/import/spend").claimModelCall;
+let claimFollowUp: typeof import("@/lib/import/spend").claimFollowUp;
 let settleModelCall: typeof import("@/lib/import/spend").settleModelCall;
 let cap: number;
 let chatCap: number;
@@ -68,14 +69,14 @@ async function person(email: string): Promise<Person> {
 
 before(async () => {
   installStubs();
-  ({ claimModelCall, settleModelCall } = await import("@/lib/import/spend"));
+  ({ claimModelCall, claimFollowUp, settleModelCall } = await import("@/lib/import/spend"));
   ({ MODEL_CALLS_DAILY_CAP: cap, CHAT_CALLS_DAILY_CAP: chatCap } = await import("@/lib/import/spend"));
   const { todayInZone } = await import("@/lib/zone");
   today = todayInZone();
   first = await person(`harness-member${suffix}@example.invalid`);
   second = await person(`harness${suffix}@example.invalid`);
   // Clear anything an earlier aborted run left for today.
-  await sql`delete from goals.model_calls where user_id in ${sql([first.id, second.id])} and model = 'RNP-13 fixture'`;
+  await sql`delete from goals.model_calls where user_id in ${sql([first.id, second.id])} and model like 'RNP-13 fixture%'`;
   const [{ count }] = await sql<{ count: string }[]>`
     select count(*) from goals.model_calls where user_id in ${sql([first.id, second.id])} and day = ${today}`;
   if (Number(count) !== 0) throw new Error(`the lane's identities already hold ${count} calls today`);
@@ -89,7 +90,7 @@ after(async () => {
 // Every test starts from zero calls for both persons and ends owning only the
 // rows it claimed, so none depends on what an earlier one left.
 beforeEach(async () => {
-  await sql`delete from goals.model_calls where user_id in ${sql([first.id, second.id])} and model = 'RNP-13 fixture'`;
+  await sql`delete from goals.model_calls where user_id in ${sql([first.id, second.id])} and model like 'RNP-13 fixture%'`;
   claimed.length = 0;
 });
 
@@ -223,4 +224,46 @@ test("claimModelCall chat: the row keeps its model and source, no outcome until 
   } finally {
     await sql`delete from goals.model_calls where id = ${call.id}`;
   }
+});
+
+// 903c: the second pass is claimed and settled like the read, and the read's cap never counts it.
+async function followUp(who: Person, source: "paste" | "file" = "paste"): Promise<{ id: string } | null> {
+  current = who;
+  const call = await claimFollowUp("RNP-13 fixture", source);
+  if (call) claimed.push(call.id);
+  return call;
+}
+
+test("903c: a follow-up claim lands even with the day's reads spent, and is a row of its own with the read's source", async () => {
+  for (let i = 0; i < 10; i++) await claim(first, "file");
+  assert.equal(await claim(first, "file"), null);
+  const call = await followUp(first, "file");
+  assert.ok(call);
+  const [row] = await sql<{ model: string; source: string; outcome: string | null; day: string }[]>`
+    select model, source, outcome, day::text as day from goals.model_calls where id = ${call.id}`;
+  assert.deepEqual(row, { model: "RNP-13 fixture/arrange", source: "file", outcome: null, day: today });
+});
+
+test("903c: follow-ups never take a read from the cap: nine reads and any number of follow-ups leave the tenth", async () => {
+  for (let i = 0; i < 9; i++) await claim(first);
+  for (let i = 0; i < 5; i++) assert.ok(await followUp(first));
+  assert.ok(await claim(first), "the tenth read still lands");
+  assert.equal(await claim(first), null);
+});
+
+test("903c: a follow-up settles its tokens and outcome like a read, and only for its owner", async () => {
+  const call = await followUp(first);
+  assert.ok(call);
+  assert.equal(await settleModelCall(call.id, { inputTokens: 900, outputTokens: 120, outcome: "ok" }), true);
+  const [row] = await sql<{ i: number; o: number; outcome: string }[]>`
+    select input_tokens as i, output_tokens as o, outcome from goals.model_calls where id = ${call.id}`;
+  assert.deepEqual(row, { i: 900, o: 120, outcome: "ok" });
+  current = second;
+  assert.equal(await settleModelCall(call.id, { inputTokens: 1, outputTokens: 1, outcome: "failed" }), false);
+});
+
+test("903c: the chat cap does not count a follow-up either", async () => {
+  await plantToday(first, "chat", 49);
+  await followUp(first);
+  assert.ok(await claim(first, "chat"), "the fiftieth chat claim lands");
 });

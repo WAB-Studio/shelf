@@ -1,11 +1,16 @@
+import { horizonTreeRefusal } from "@/lib/goals/placement";
+import { refusalKey } from "@/lib/goals/refusal-key";
 import { buildTree, type Level } from "@/lib/goals/tree";
+import { dayBefore } from "@/lib/day/weeks";
+import { createGoalSchema } from "@/lib/validation/plan";
 
 import { coverage, outness } from "./coverage";
 import {
-  decide,
+  decideWithPaths,
   draftRefusals,
   withoutStrayEstimates,
   type Correction,
+  type CorrectionCode,
   type DraftRefusal,
   type DraftGoal,
   type ImportDraft,
@@ -21,6 +26,8 @@ export type ReviewNode = {
   level: Level | null;
   label: string;
   figure: { amount: number; unit: string } | null;
+  // The day a task the plan marked done was done; null on every other node.
+  doneOn: string | null;
   marked: boolean;
   markable: boolean;
   refusal: DraftRefusal | null;
@@ -63,14 +70,26 @@ export function markedDraft(draft: ImportDraft, unmarked: ReadonlySet<string>, r
   return { ...draft, goals };
 }
 
-// A copy of the draft with one part changed: a name, an amount or a month, at the part's path.
-export function edit(draft: ImportDraft, path: string, change: { name: string } | { amount: number } | { month: string }): ImportDraft {
+export type Cadence = { kind: DraftGoal["commitments"][number]["cadenceKind"]; weekdays: number[]; n: number | null };
+
+export type EditChange =
+  | { name: string }
+  | { amount: number }
+  | { month: string }
+  | { horizon: string }
+  | { cadence: Cadence };
+
+// A copy of the draft with one part changed, at the part's path: a name, an amount or a month, a goal's
+// horizon, a commitment's cadence. The cadence keeps the table's shape: days on `weekdays` alone, a count on
+// the counted kinds alone.
+export function edit(draft: ImportDraft, path: string, change: EditChange): ImportDraft {
   const next = structuredClone(draft);
   const p = path.split(".");
   const goal = next.goals[Number(p[1])];
   if (!goal) return next;
   if (p.length === 2) {
     if ("name" in change) goal.name = change.name;
+    if ("horizon" in change) goal.horizon = change.horizon;
   } else if (p[2] === "rhythm") {
     if ("amount" in change) goal.rhythm = change.amount;
   } else if (p[2] === "months") {
@@ -83,6 +102,13 @@ export function edit(draft: ImportDraft, path: string, change: { name: string } 
   } else if (p[2] === "commitments") {
     const entry = goal.commitments[Number(p[3])];
     if (entry && "name" in change) entry.name = change.name;
+    if (entry && "amount" in change && entry.satisfaction === "quantity") entry.targetQuantity = change.amount;
+    if (entry && "cadence" in change) {
+      const { kind, weekdays, n } = change.cadence;
+      entry.cadenceKind = kind;
+      entry.cadenceWeekdays = kind === "weekdays" ? [...new Set(weekdays)].sort((a, b) => a - b) : null;
+      entry.cadenceN = kind === "daily" || kind === "weekdays" ? null : n;
+    }
   } else if (p[2] === "tasks") {
     const task = goal.tasks[Number(p[3])];
     const target = p[4] === "children" ? task?.children[Number(p[5])] : task;
@@ -93,8 +119,86 @@ export function edit(draft: ImportDraft, path: string, change: { name: string } 
   return next;
 }
 
+// What a person's own edit settles: the corrections about the same cadence or the same end no longer stand,
+// or declining them would put the plan's value back over theirs.
+export function editedCorrections(corrections: Correction[], path: string, change: EditChange): Correction[] {
+  const overridden: CorrectionCode[] = "cadence" in change ? ["cadenceClamped", "cadenceToWeekdays"] : "horizon" in change ? ["endWithinAbove"] : [];
+  return corrections.filter((c) => !(c.at === path && overridden.includes(c.code)));
+}
+
+// Why a goal's end cannot be `horizon`, as a catalogue key and its values, or null: the form's own rule, a day
+// already gone, and the goals around it. The tree is the draft's own, so a goal inside that ends later is named.
+export function goalHorizonRefusal(draft: ImportDraft, g: number, horizon: string, today: string): { key: string; values: Record<string, string> } | null {
+  const issue = createGoalSchema.shape.horizon.safeParse(horizon);
+  if (!issue.success) return { key: issue.error.issues[0].message, values: {} };
+  if (horizon <= today) return { key: "import.errors.horizonPast", values: {} };
+  const first = new Map<string, number>();
+  draft.goals.forEach((goal, i) => {
+    if (!first.has(goal.key)) first.set(goal.key, i);
+  });
+  const rows = draft.goals.map((goal, i) => {
+    const p = goal.parent === null ? undefined : first.get(goal.parent);
+    return {
+      id: String(i),
+      parentId: p !== undefined && p < i ? String(p) : null,
+      position: i,
+      createdAt: "",
+      name: goal.name,
+      horizon: i === g ? horizon : goal.horizon,
+      archivedAt: null,
+      measureUnit: null,
+    };
+  });
+  const refusal = horizonTreeRefusal(buildTree(rows), String(g), horizon);
+  if (!refusal) return null;
+  const named = "above" in refusal ? refusal.above : "below" in refusal ? refusal.below : null;
+  return { key: refusalKey(refusal.code), values: named ? { name: named.name, date: dayBefore(named.horizon) } : {} };
+}
+
+const WEEKDAY_WORDS: [RegExp, number][] = [
+  [/lunes/i, 1],
+  [/martes/i, 2],
+  [/mi[eé]rcoles/i, 3],
+  [/jueves/i, 4],
+  [/viernes/i, 5],
+  [/s[aá]bado/i, 6],
+  [/domingo/i, 7],
+];
+
+// The weekdays a plan line names, as written, in the order it writes them.
+export function weekdaysIn(text: string): { word: string; day: number }[] {
+  const found: { word: string; day: number; at: number }[] = [];
+  for (const [pattern, day] of WEEKDAY_WORDS) {
+    const match = new RegExp(`\\b${pattern.source}\\b`, "i").exec(text);
+    if (match) found.push({ word: match[0], day, at: match.index });
+  }
+  return found.sort((a, b) => a.at - b.at).map(({ word, day }) => ({ word, day }));
+}
+
 // Accents count: «Inglés» and «Ingles» differ, but one «é» composed or decomposed is the same.
 export const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+
+const TASK_KEY = /^goals\.(\d+)\.tasks\.(\d+)(\..+)?$/;
+
+// The unmarked paths, which are paths of the review as drawn, for the review drawn once `declined` is the
+// decision: a move taken or undone changes where its task lies.
+export function remapUnmarked(stored: StoredDraft, declined: ReadonlySet<string>, unmarked: string[]): string[] {
+  const now = decideWithPaths(stored.draft, stored.corrections, new Set(stored.declined)).pathOf;
+  const next = decideWithPaths(stored.draft, stored.corrections, declined).pathOf;
+  const back = new Map<string, string>();
+  stored.draft.goals.forEach((goal, g) =>
+    goal.tasks.forEach((_, t) => {
+      const at = `goals.${g}.tasks.${t}`;
+      const there = now(at);
+      if (TASK_KEY.test(there)) back.set(there, at);
+    }),
+  );
+  return unmarked.map((path) => {
+    const hit = TASK_KEY.exec(path);
+    const own = hit ? back.get(`goals.${hit[1]}.tasks.${hit[2]}`) : undefined;
+    return own === undefined ? path : next(`${own}${hit![3] ?? ""}`);
+  });
+}
 
 const WRITTEN = new Set<ReviewNode["kind"]>(["goal", "group", "phase", "month", "commitment", "task", "subTask"]);
 
@@ -102,7 +206,10 @@ const WRITTEN = new Set<ReviewNode["kind"]>(["goal", "group", "phase", "month", 
 // plan's lines came to. The corrections the person declined are undone, the check's proposals they
 // did not decline are applied, and a goal an open goal already names starts unmarked.
 export function reviewTree(stored: StoredDraft, today: string, openGoalNames: string[]) {
-  const work = withoutStrayEstimates(decide(stored.draft, stored.corrections, new Set(stored.declined)));
+  const decided = decideWithPaths(stored.draft, stored.corrections, new Set(stored.declined));
+  const work = withoutStrayEstimates(decided.draft);
+  // A correction is drawn where its part now lies: a task the second pass moved has gone to another goal.
+  const corrections = stored.corrections.map((c) => ({ ...c, at: decided.pathOf(c.at) }));
   const refusals = draftRefusals(work, today);
   const refused = new Set(refusals.map((refusal) => refusal.path));
   const open = new Set(openGoalNames.map(nameKey));
@@ -133,9 +240,10 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
 
   const wholeRefusal = (at: string) => refusals.find((r) => r.path === at || (r.path.startsWith(`${at}.`) && /\.(horizon|parent|name|measure)$/.test(r.path) && r.path.split(".").length === 3));
   const nodes: ReviewNode[] = [];
-  const push = (node: Omit<ReviewNode, "marked" | "markable" | "refusal" | "corrections" | "notices" | "level"> & { level?: Level | null; refusal?: DraftRefusal | null }) => {
+  const push = (node: Omit<ReviewNode, "marked" | "markable" | "refusal" | "corrections" | "notices" | "level" | "doneOn"> & { level?: Level | null; refusal?: DraftRefusal | null; doneOn?: string | null }) => {
     nodes.push({
       level: null,
+      doneOn: null,
       refusal: refusals.find((r) => r.path === node.path) ?? null,
       ...node,
       marked: out(node.path) === null,
@@ -159,9 +267,9 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
     goal.commitments.forEach((entry, i) => push({ path: `${at}.commitments.${i}`, kind: "commitment", depth: (d + 1) as 1, label: entry.name, figure: null }));
     goal.tasks.forEach((task, t) => {
       const taskAt = `${at}.tasks.${t}`;
-      push({ path: taskAt, kind: "task", depth: (d + 1) as 1, label: task.name, figure: task.estimate === null ? null : { amount: task.estimate, unit } });
+      push({ path: taskAt, kind: "task", depth: (d + 1) as 1, label: task.name, figure: task.estimate === null ? null : { amount: task.estimate, unit }, doneOn: task.doneOn ?? null });
       task.children.forEach((child, c) =>
-        push({ path: `${taskAt}.children.${c}`, kind: "subTask", depth: (d + 2) as 2, label: child.name, figure: child.estimate === null ? null : { amount: child.estimate, unit } }),
+        push({ path: `${taskAt}.children.${c}`, kind: "subTask", depth: (d + 2) as 2, label: child.name, figure: child.estimate === null ? null : { amount: child.estimate, unit }, doneOn: child.doneOn ?? null }),
       );
     });
   }
@@ -173,7 +281,7 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
     while (parts.length > 1 && !paths.has(parts.join("."))) parts.pop();
     return nodes.find((n) => n.path === parts.join("."));
   };
-  for (const correction of stored.corrections) nodeAt(correction.at)?.corrections.push(correction);
+  for (const correction of corrections) nodeAt(correction.at)?.corrections.push(correction);
   for (const notice of stored.notices) nodeAt(notice.at)?.notices.push(notice);
 
   const toSend = markedDraft(work, unmarked, refused);
@@ -183,6 +291,7 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
   );
   return {
     nodes,
+    corrections,
     work,
     unmarked,
     refused,

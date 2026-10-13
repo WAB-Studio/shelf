@@ -34,6 +34,7 @@ import {
   Section,
   SectionLabel,
   Separator,
+  SummaryList,
   Table,
   Text,
   type TableRow,
@@ -765,6 +766,64 @@ function GoalPart({
   );
 }
 
+// `ExportarResumen`: page one, a line per open goal in the tree's order. The screen draws rows
+// (a figure pair does not fit a line at 360), paper a table with «—» where a goal has no amount.
+function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> }) {
+  const words = useTimeWords();
+  const month = monthOnly.format(civilDateToDate(report.today));
+  const monday = civilDateToDate(report.today);
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  const sunday = new Date(monday);
+  sunday.setUTCDate(sunday.getUTCDate() + 6);
+  const weekHead = t("summary.weekHead", { from: monday.getUTCDate(), to: sunday.getUTCDate() });
+
+  const lines = report.goals
+    .filter((goal) => goal.endedOn === null)
+    .map((goal) => {
+      const unit = goal.unit;
+      const planned =
+        unit === null
+          ? null
+          : screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${report.today.slice(0, 7)}-01`));
+      if (unit === null || planned === null) return { goal, month: null, week: null };
+      const quantity = (value: number) => formatQuantity(value, unit, words);
+      const done = goal.weeks.find((w) => w.current)?.total ?? 0;
+      const weekPlanned = goal.weekPlanned ?? null;
+      return {
+        goal,
+        month: t("summary.of", { done: quantity(goal.thisMonth.reached), planned: quantity(planned) }),
+        week: weekPlanned === null ? quantity(done) : t("summary.of", { done: quantity(done), planned: quantity(weekPlanned) }),
+      };
+    });
+  const depth = new Map<string, 0 | 1 | 2>();
+  const levelOf = (goal: GoalReport): 0 | 1 | 2 => {
+    const above = goal.parentId ? depth.get(goal.parentId) : undefined;
+    const level = (above === undefined ? 0 : Math.min(above + 1, 2)) as 0 | 1 | 2;
+    depth.set(goal.id, level);
+    return level;
+  };
+  const levels = lines.map((line) => levelOf(line.goal));
+
+  return (
+    <Section label={t("summary.title")}>
+      <SummaryList
+        head={{ goal: t("summary.goal"), month, week: weekHead }}
+        noAmount={t("summary.noAmount")}
+        rows={lines.map((line, index) => ({
+          key: line.goal.id,
+          href: `/metas/${line.goal.id}`,
+          name: line.goal.name,
+          level: levels[index],
+          month: line.month === null ? null : `${month} ${line.month}`,
+          week: line.week === null ? null : t("summary.week", { value: line.week }),
+          monthCell: line.month,
+          weekCell: line.week,
+        }))}
+      />
+    </Section>
+  );
+}
+
 /**
  * `ReporteTareas.dc.html`, `ReporteMesesSemanas.dc.html`,
  * `ReporteImpresoTareas.dc.html`, `ReporteMarcoEscritorio.dc.html` and
@@ -850,6 +909,10 @@ export async function ReportScreen({ report }: { report: Report }) {
             </Text>
           ) : null}
         </Flex>
+        <ReportSummary report={report} t={t} />
+        <PrintBlock newPage>
+          <Section label={t("summary.annex")} />
+        </PrintBlock>
         <PanelGrid print="stack">
           {groups.map(({ root, inside }) => (
             <Panel key={root.id} print="plain">

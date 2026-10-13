@@ -762,3 +762,24 @@ const GOLDEN_METAS: unknown = {
     }
   ]
 };
+
+test("listGoals hands each open goal its parent, in the tree's order: siblings by position, a goal's goals right after it, archived left out", async () => {
+  const listed = await as(owner, () => goalQueries.listGoals());
+  const own = new Set(Object.values(ids));
+  const mine = listed.filter((goal) => own.has(goal.id)) as Array<(typeof listed)[number] & { parentId?: string | null }>;
+  assert.deepEqual(
+    mine.map((goal) => goal.id),
+    [ids.G, ids.B, ids.A, ids.C, ids.H, ids.Z, ids.X, ids.p, ids.R, ids.q, ids.K, ids.k1, ids.k2, ids.E, ids.F],
+  );
+  assert.deepEqual(
+    mine.map((goal) => [goal.id, goal.parentId ?? null]),
+    [
+      [ids.G, null], [ids.B, ids.G], [ids.A, ids.G], [ids.C, ids.G],
+      [ids.H, null], [ids.Z, ids.H], [ids.X, ids.H], [ids.p, ids.X],
+      [ids.R, null], [ids.q, ids.R],
+      [ids.K, null], [ids.k1, ids.K], [ids.k2, ids.K],
+      [ids.E, null], [ids.F, ids.E],
+    ],
+  );
+  assert.ok(!listed.some((goal) => goal.id === ids.O || goal.id === ids.o1), "another person's goals never come");
+});

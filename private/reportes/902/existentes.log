@@ -1,0 +1,50 @@
+supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322
+e2e-run: opened run 4cd34477-d63b-498d-982b-6b82ed38837f
+wrote /home/cxrkeyb/projects/finances-app-l2/apps/pulsar/private/session-2.json (1 cookie(s), origin http://localhost:3201)
+minted a session for harness-pulsar-95a47a26-3ac5-446f-bf82-55649469fce7@example.invalid (95a47a26-3ac5-446f-bf82-55649469fce7), lane 2
+seeding as harness-pulsar-95a47a26-3ac5-446f-bf82-55649469fce7@example.invalid (95a47a26-3ac5-446f-bf82-55649469fce7)
+goal 02b3ba89-31d6-46fb-ab34-aa3294d1a6d6
+phase 526dbbb9-6f63-4388-a7c9-6ed37070d13d — Desbloquear la boca: perder el miedo a hablar y pasar de 2 a 4 minutos de monólogo sin congelarse.
+phase c056e660-73fc-49c8-bfb5-e2a925142312 — Precisión: corregir los 3-4 errores que se repiten siempre y subir a 2 conversaciones humanas por semana.
+phase 58a0314d-7f61-4db1-b48b-70e376cfaba2 — Contexto laboral: convertir el monólogo en respuestas STAR, preparar 6-8 historias y aplicar a vacantes.
+commitment 8536013d-0df1-4410-a0db-e3dbb4fa5aa7 — Anki
+commitment f6f722c2-0693-4c55-9deb-2522d60d16cc — Shadowing
+commitment 748ba6de-65f6-454c-863f-ec97448495f0 — Monólogo grabado
+commitment 3f1c2997-af0a-4faf-b0a4-2909f412f35e — Cerrar el ciclo: tarjetas de los errores
+commitment ca9a8fa6-98f2-4a3f-9f90-e632bccb162d — Bloque variable del día
+commitment fee337df-629b-4ff6-b8f9-b3f62f08542c — Buscar palabras nuevas mientras leo
+one-off 9ec9c31c-6eee-407b-83e2-db1affcad193
+
+Running 28 tests using 1 worker
+
+  ✓   1 [mobile] › e2e/importar-arbol.spec.ts:40:7 › the review draws the plan as a tree (RP-89) › three levels of goal, with a phase, a week and a task under their goal, each saying its class, 16 px a level (829ms)
+  ✓   2 [mobile] › e2e/importar-arbol.spec.ts:76:7 › the review draws the plan as a tree (RP-89) › a task's sub-tasks and a part's note stay folded until their button is pressed (700ms)
+  ✓   3 [mobile] › e2e/importar-arbol.spec.ts:99:7 › the count says where every line of the text went (RP-96) › «N líneas: P en el plan, M en notas, F fuera» counts the text's lines, and leaving a big goal out raises «fuera» by its lines (659ms)
+  ✓   4 [mobile] › e2e/importar-arbol.spec.ts:122:7 › the count says where every line of the text went (RP-96) › a part the person leaves out is listed under «las dejaste fuera» with its line, and marking it there puts it back (1.5s)
+  ✓   5 [mobile] › e2e/importar-arbol.spec.ts:145:7 › what cannot be created is listed, and a plan with nothing to create has no button (RP-90, RP-97) › a task past its goal's end is listed under «No se puede crear» with its line and its reason, and cannot be marked (551ms)
+  ✓   6 [mobile] › e2e/importar-arbol.spec.ts:173:7 › what cannot be created is listed, and a plan with nothing to create has no button (RP-90, RP-97) › when every goal is refused the review says «Nada que crear» and offers no way to create (553ms)
+  ✓   7 [mobile] › e2e/importar-arbol.spec.ts:191:7 › the way back to the text (RP-86) › «tu texto» at the top of the review returns to the box with the text and writes nothing (643ms)
+  ✓   8 [mobile] › e2e/importar-arbol.spec.ts:203:7 › the way back to the text (RP-86) › from 1024 px the original text stands read-only on the left with «Volver al texto» under it and the tree on the right (660ms)
+  ✓   9 [mobile] › e2e/importar-arbol.spec.ts:241:7 › at 360 px nothing overflows and nothing to tap is small (RNP-07) › the entry and the five-level tree, sub-tasks and notes open, fit the width and every control is at least 32 px tall (762ms)
+  ✓  10 [mobile] › e2e/importar-revisar.spec.ts:86:7 › the review of an imported plan (RP-37, RP-35) › it reads the goal, its amounts, its commitments and the tutor task with its two sub-tasks (618ms)
+  ✓  11 [mobile] › e2e/importar-revisar.spec.ts:110:7 › the review of an imported plan (RP-37, RP-35) › a commitment whose days come out of order is read Monday first with «y» before the last (564ms)
+  ✓  12 [mobile] › e2e/importar-revisar.spec.ts:120:7 › the review of an imported plan (RP-37, RP-35) › unmarking a sub-task and changing a month, then confirming, writes exactly that (1.9s)
+  ✓  13 [mobile] › e2e/importar-revisar.spec.ts:159:7 › the review of an imported plan (RP-37, RP-35) › a month before today is shown under the warnings, unmarked, and is not written (865ms)
+  ✓  14 [mobile] › e2e/importar-revisar.spec.ts:187:7 › the review of an imported plan (RP-37, RP-35) › a reload keeps the draft, and none sends the person back to the import (1.4s)
+  ✓  15 [mobile] › e2e/importar-revisar.spec.ts:200:7 › the review of an imported plan (RP-37, RP-35) › the goal's last day is the day before its horizon, and a month names the right reason (573ms)
+  ✓  16 [mobile] › e2e/importar-revisar.spec.ts:214:7 › the review of an imported plan (RP-37, RP-35) › a task in a goal that measures nothing is kept, without time, and written with a null estimate (760ms)
+  ✓  17 [mobile] › e2e/importar-revisar.spec.ts:235:7 › the review of an imported plan (RP-37, RP-35) › an unmarked sub-task and a changed month survive a reload, and the way back leads to the text (1.6s)
+  ✓  18 [mobile] › e2e/importar-revisar.spec.ts:262:7 › the review of an imported plan (RP-37, RP-35) › an amount button is one button named by its item, and no checkbox takes the amount (618ms)
+  ✓  19 [mobile] › e2e/importar-revisar.spec.ts:279:7 › the review of an imported plan (RP-37, RP-35) › a goal an open goal already names starts unmarked with a warning, and marking it writes a second (1.4s)
+  ✓  20 [mobile] › e2e/importar-revisar.spec.ts:307:9 › the review of an imported plan (RP-37, RP-35) › it holds at 360 (822ms)
+  ✓  21 [mobile] › e2e/importar-revisar.spec.ts:307:9 › the review of an imported plan (RP-37, RP-35) › it holds at 1280 (657ms)
+  ✓  22 [mobile] › e2e/importar-revisar.spec.ts:337:9 › the review of an imported plan (RP-37, RP-35) › its header and its text hold at 360 (565ms)
+  ✓  23 [mobile] › e2e/importar-revisar.spec.ts:337:9 › the review of an imported plan (RP-37, RP-35) › its header and its text hold at 390 (529ms)
+  ✓  24 [mobile] › e2e/importar-revisar.spec.ts:337:9 › the review of an imported plan (RP-37, RP-35) › its header and its text hold at 1280 (583ms)
+  ✓  25 [mobile] › e2e/importar-revisar.spec.ts:337:9 › the review of an imported plan (RP-37, RP-35) › its header and its text hold at 1440 (600ms)
+  ✓  26 [mobile] › e2e/importar-revisar.spec.ts:367:7 › the review of an imported plan (RP-37, RP-35) › at 1440 the goals are one tree in one card, and a file import shows its name where the text would be (936ms)
+  ✓  27 [mobile] › e2e/importar-revisar.spec.ts:393:9 › the review of an imported plan (RP-37, RP-35) › its provenance is the header's one eyebrow and its sentences read in Archivo at 360 (560ms)
+  ✓  28 [mobile] › e2e/importar-revisar.spec.ts:393:9 › the review of an imported plan (RP-37, RP-35) › its provenance is the header's one eyebrow and its sentences read in Archivo at 1280 (592ms)
+REPORT  e2e-run — dropped 2 identity(ies), 0 OAuth client(s), run closed.
+
+  28 passed (24.7s)

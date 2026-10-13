@@ -3,6 +3,7 @@
 // stubbed, the lane's minted session as the caller. Fixture goals are inserted straight through
 // the owner connection; every refusal is read back as rows that did not move.
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { resolve } from "node:path";
@@ -406,4 +407,177 @@ test("createGoal inside a goal with no measure leaves the new goal with none", a
   if (!result.ok) return;
   const [child] = await sql<{ measure_unit: string | null }[]>`select measure_unit from goals.goals where id = ${result.goalId}`;
   assert.equal(child.measure_unit, null);
+});
+
+// A goal with a stored rhythm and two planned tasks that no month holds yet, opened two months ago.
+async function rhythmHolder(tag: string): Promise<{ id: string; tasks: string[] }> {
+  const opened = `${monthFrom(today, -2)}-05`;
+  const [h] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${userId}, ${`867 ${tag} H`}, ${horizonAt(8)}, 'horas', 'minutos', 1000, ${opened}) returning id`;
+  rootIds.push(h.id);
+  const tasks = await sql<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, created_at)
+    values (${userId}, ${h.id}, ${`867 ${tag} tarea 1`}, 1000, true, ${opened}), (${userId}, ${h.id}, ${`867 ${tag} tarea 2`}, 1000, true, ${opened}) returning id`;
+  return { id: h.id, tasks: tasks.map((t) => t.id) };
+}
+
+async function plannedMonths(ids: string[]): Promise<(string | null)[]> {
+  const rows = await sql<{ planned_month: string | null }[]>`
+    select planned_month::text as planned_month from goals.one_offs where id in ${sql(ids)} order by name`;
+  return rows.map((row) => row.planned_month);
+}
+
+test("moveGoal under a goal with a stored rhythm fixes that goal's planned tasks to the month the plan gave them", async () => {
+  const { id: holder, tasks } = await rhythmHolder("mover ritmo");
+  const mine = await mk("867 mover ritmo libre", 5);
+  assert.deepEqual(await plannedMonths(tasks), [null, null]);
+  assert.deepEqual(await plan.moveGoal({ goalId: mine, parentId: holder }), { ok: true });
+  assert.deepEqual(await plannedMonths(tasks), [`${monthFrom(today, 0)}-01`, `${monthFrom(today, 1)}-01`]);
+});
+
+test("a goal whose goals are all archived is not a holder yet: a new goal in it fixes its planned tasks", async () => {
+  const { id: holder, tasks } = await rhythmHolder("archivada");
+  const old = await mk("867 archivada vieja", 5, holder);
+  await sql`update goals.goals set archived_at = now() where id = ${old}`;
+  const made = await plan.createGoal({ name: "867 archivada nueva", horizon: horizonAt(6), parentId: holder });
+  assert.equal(made.ok, true);
+  assert.deepEqual(await plannedMonths(tasks), [`${monthFrom(today, 0)}-01`, `${monthFrom(today, 1)}-01`]);
+});
+
+test("a goal that already holds an open goal fixes nothing when it receives another", async () => {
+  const { id: holder, tasks } = await rhythmHolder("segunda");
+  // Opening the first goal fixes the tasks; the person then unpins one by hand, and a second goal must not pin it again.
+  const first = await plan.createGoal({ name: "867 segunda primera", horizon: horizonAt(6), parentId: holder });
+  assert.equal(first.ok, true);
+  await sql`update goals.one_offs set planned_month = null where id in ${sql(tasks)}`;
+  const second = await plan.createGoal({ name: "867 segunda segunda", horizon: horizonAt(6), parentId: holder });
+  assert.equal(second.ok, true);
+  assert.deepEqual(await plannedMonths(tasks), [null, null]);
+});
+
+test("moveGoal revalidates the goal's screen, the one it left and the one it joined", async () => {
+  const { g1, p, g2 } = await tree("revalida mover");
+  revalidated.length = 0;
+  assert.deepEqual(await plan.moveGoal({ goalId: p, parentId: g2 }), { ok: true });
+  for (const id of [p, g1, g2]) assert.ok(revalidated.includes(`/metas/${id}`), `/metas/${id} not revalidated: ${revalidated.join(",")}`);
+  for (const path of ["/", "/metas", "/mes", "/exportar"]) assert.ok(revalidated.includes(path), path);
+});
+
+test("moveHorizon revalidates the goal's screen, the goal above it and every goal under it", async () => {
+  const { G, g1, p } = await tree("revalida final");
+  revalidated.length = 0;
+  assert.deepEqual(await plan.moveHorizon({ goalId: g1, horizon: horizonAt(5) }), { ok: true });
+  for (const id of [g1, G, p]) assert.ok(revalidated.includes(`/metas/${id}`), `/metas/${id} not revalidated: ${revalidated.join(",")}`);
+  for (const path of ["/", "/metas", "/mes", "/exportar"]) assert.ok(revalidated.includes(path), path);
+});
+
+test("archiveGoal of a goal that is not there, or is another person's, is not found and archives nothing", async () => {
+  const lane = laneNumber();
+  const [member] = await sql<{ id: string }[]>`
+    select id from auth.users where email = ${`harness-member${lane === 1 ? "" : `-${lane}`}@example.invalid`}`;
+  const [foreign] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${member.id}, '867 archivar ajena', ${horizonAt(5)}) returning id`;
+  try {
+    const notFound = { ok: false, error: "plan.errors.notFound" };
+    assert.deepEqual(await plan.archiveGoal({ goalId: randomUUID() }), notFound);
+    assert.deepEqual(await plan.archiveGoal({ goalId: foreign.id }), notFound);
+    assert.equal((await rowOf(foreign.id)).archived_at, null);
+  } finally {
+    await sql`delete from goals.goals where id = ${foreign.id} and user_id = ${member.id}`;
+  }
+});
+
+test("reopenGoal under a branch archived with it names the goal right above, not the one at the top", async () => {
+  const { G, g1, p } = await tree("bajo cercana");
+  assert.equal((await plan.archiveGoal({ goalId: G })).ok, true);
+  const result = await plan.reopenGoal({ goalId: p });
+  assert.deepEqual(result, { ok: false, error: "tree.errors.aboveArchived", values: { name: "867 bajo cercana g1" } });
+  assert.ok(g1);
+});
+
+test("a depth trigger's 23514 reached through a race says tooDeep and names the goal it would sit under", async () => {
+  const a = await mk("867 prof a", 8);
+  const b = await mk("867 prof b", 7);
+  const c = await mk("867 prof c", 6);
+  await mk("867 prof e", 5, c);
+  const holder = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let locked!: () => void;
+  const taken = new Promise<void>((resolve) => (locked = resolve));
+  // The row lock stops moveGoal's UPDATE after its pure checks passed (c under b is three levels
+  // deep); b is placed under a meanwhile, so only the trigger sees four.
+  const held = holder.begin(async (tx) => {
+    await tx`select id from goals.goals where id = ${c} for no key update`;
+    locked();
+    await gate;
+  });
+  await taken;
+  const pending = plan.moveGoal({ goalId: c, parentId: b });
+  let waiting = 0;
+  try {
+    for (let i = 0; i < 100 && waiting < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      [{ waiting }] = await sql<{ waiting: number }[]>`
+        select count(*)::int as waiting from pg_locks where locktype = 'transactionid' and not granted`;
+    }
+    await sql`update goals.goals set parent_id = ${a} where id = ${b}`;
+  } finally {
+    release();
+    await held;
+    await holder.end();
+  }
+  assert.ok(waiting >= 1, "the move waits on the goal's row");
+  assert.deepEqual(await pending, { ok: false, error: "tree.errors.tooDeep", values: { name: "867 prof b" } });
+  assert.equal((await rowOf(c)).parent_id, null);
+});
+
+
+test("moveHorizon with moveBranch gives every goal under it that ends later the new end, in one transaction", async () => {
+  const { G, g1, p, g2 } = await tree("rama");
+  const end = horizonAt(3);
+  const refusedAlone = await plan.moveHorizon({ goalId: G, horizon: end });
+  assert.equal(refusedAlone.ok, false);
+  const { result, calls } = await counted(() => plan.moveHorizon({ goalId: G, horizon: end, moveBranch: true }));
+  assert.equal(result.ok, true);
+  for (const id of [G, g1, p, g2]) assert.equal((await rowOf(id)).horizon, end);
+  // Settle, tree, phases, then one write per level: small, large, general.
+  assert.ok(calls.length <= 8, calls.join(" | "));
+});
+
+test("moveHorizon with moveBranch leaves a goal under it that already ends before the new end", async () => {
+  const { G, g1, p, g2 } = await tree("rama2");
+  await sql`update goals.goals set horizon = ${horizonAt(3)} where id = ${p}`;
+  await sql`update goals.goals set horizon = ${horizonAt(4)} where id = ${g1}`;
+  const result = await plan.moveHorizon({ goalId: G, horizon: horizonAt(5), moveBranch: true });
+  assert.equal(result.ok, true);
+  assert.equal((await rowOf(g1)).horizon, horizonAt(4));
+  assert.equal((await rowOf(p)).horizon, horizonAt(3));
+  assert.equal((await rowOf(g2)).horizon, horizonAt(5));
+});
+
+test("moveHorizon with moveBranch refuses, naming the goal, when a phase of a goal under it passes the new end, and moves nothing", async () => {
+  const { G, g1, p, g2 } = await tree("rama3");
+  const [s] = await sql<{ ends: string }[]>`select (${horizonAt(5)}::date - 1)::text as ends`;
+  await sql`insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on) values (${userId}, ${p}, 'fase', ${horizonAt(4)}, ${s.ends})`;
+  const result = await plan.moveHorizon({ goalId: G, horizon: horizonAt(3), moveBranch: true });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error, "tree.errors.branchPhaseAfter");
+  assert.equal(result.values?.name, "867 rama3 p");
+  assert.equal(result.values?.date, s.ends);
+  assert.equal((await rowOf(G)).horizon, horizonAt(7));
+  assert.equal((await rowOf(g1)).horizon, horizonAt(6));
+  assert.equal((await rowOf(g2)).horizon, horizonAt(6));
+});
+
+test("moveHorizon with moveBranch still refuses an end past the goal above", async () => {
+  const { G, g1, g2 } = await tree("rama4");
+  const result = await plan.moveHorizon({ goalId: g1, horizon: horizonAt(8), moveBranch: true });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error, "tree.errors.endPastAbove");
+  assert.equal((await rowOf(G)).horizon, horizonAt(7));
+  assert.equal((await rowOf(g2)).horizon, horizonAt(6));
 });

@@ -4,7 +4,7 @@ import messages from "../messages/es/import.json";
 import { test, expect, settled as pageSettled } from "./fixtures";
 import { dayBefore } from "../lib/day/weeks";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
-import { rawGoal, rawTask, seedOf, stored } from "./importar-plan";
+import { rawGoal, rawTask, seedOf, stored, unfold } from "./importar-plan";
 
 // RP-37, RP-63, RP-67: the review of an imported plan never says a month or a
 // date without its year, and says the goal's end once, in the horizon's row.
@@ -89,11 +89,12 @@ async function toDraftReview(page: Page) {
   await page.goto("/metas/importar/revisar");
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await pageSettled(page);
+  await unfold(page);
 }
 
 const plan = (...goals: string[]) => ["pulsar · plantilla 1", "", goals.join("\n\n")].join("\n");
 
-async function toReview(page: Page, text: string) {
+async function toOpenReview(page: Page, text: string) {
   await page.goto("/metas/importar");
   await expect(page.getByRole("button", { name: "Leer el plan" })).toBeVisible();
   await page.getByLabel(messages.textLabel).fill(text);
@@ -101,6 +102,7 @@ async function toReview(page: Page, text: string) {
   await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await pageSettled(page);
+  await unfold(page);
 }
 
 type Fixtures = { person: { id: string; sessionFile: string }; browser: Browser; baseURL: string | undefined };
@@ -127,7 +129,7 @@ test.describe("the review says the year where the plan needs it (RP-37)", () => 
   for (const width of [360, 1280]) {
     test(`@${width}: the goal's end is said once, with its year, in the goal's own row`, async ({ person, browser, baseURL }) => {
       await asPerson({ person, browser, baseURL }, width, async (page) => {
-        await toReview(page, plan(hoursGoal));
+        await toOpenReview(page, plan(hoursGoal));
         await expect(page.getByText(`hasta el ${dayShort(lastDay)}`)).toHaveCount(1);
         await expect(rowOf(page, new RegExp(`^${HOURS}`))).toContainText(`hasta el ${dayShort(lastDay)}`);
         await expect(page.getByText(dayShort(lastDay), { exact: false })).toHaveCount(1);
@@ -138,7 +140,7 @@ test.describe("the review says the year where the plan needs it (RP-37)", () => 
 
   test("«## Meses» names each month, with its year when it is not this one's", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, 360, async (page) => {
-      await toReview(page, plan(hoursGoal));
+      await toOpenReview(page, plan(hoursGoal));
       for (const month of [first, second]) {
         await expect(page.getByRole("checkbox", { name: new RegExp(`^${rowName(month)}`) })).toHaveCount(1);
         await expect(rowOf(page, new RegExp(`^${rowName(month)}`))).toContainText("mes");
@@ -148,7 +150,7 @@ test.describe("the review says the year where the plan needs it (RP-37)", () => 
 
   test("a task reads «tarea» and its month, a parent too", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, 360, async (page) => {
-      await toReview(page, plan(hoursGoal));
+      await toOpenReview(page, plan(hoursGoal));
       await expect(rowOf(page, /^Comparar perfiles/)).toContainText(`tarea · ${monthName(second)}`);
       await expect(rowOf(page, /^Madre/)).toContainText(`tarea · ${monthName(first)}`);
     });
@@ -163,14 +165,14 @@ test.describe("the review says the year where the plan needs it (RP-37)", () => 
 
   test("a phase names its two days, each with its year, also when it does not cross a year", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, 360, async (page) => {
-      await toReview(page, plan(hoursGoal));
+      await toOpenReview(page, plan(hoursGoal));
       await expect(page.getByText(`fase · ${dayShort(today)} – ${dayShort(phaseEnd)}`, { exact: true })).toBeVisible();
     });
   });
 
   test("a goal with rhythm: its task rows say their month, the months say «mes», none says «va al plan»", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, 360, async (page) => {
-      await toReview(page, plan(rhythmGoal));
+      await toOpenReview(page, plan(rhythmGoal));
       await expect(rowOf(page, /^Leer/)).toContainText(`tarea · ${monthName(first)}`);
       await expect(rowOf(page, /^Tutor/)).toContainText(`tarea · ${monthName(first)}`);
       await expect(rowOf(page, new RegExp(`^${rowName(first)}`))).toContainText("mes");
@@ -182,14 +184,14 @@ test.describe("the review says the year where the plan needs it (RP-37)", () => 
 test.describe("the review fits", () => {
   test("at 360 two goals leave no sideways scroll", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, 360, async (page) => {
-      await toReview(page, plan(hoursGoal, otherGoal));
+      await toOpenReview(page, plan(hoursGoal, otherGoal));
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     });
   });
 
   test("at 1024 two goals lay out as at 1280: the tree's one card is not squeezed to a sliver", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, 1024, async (page) => {
-      await toReview(page, plan(hoursGoal, otherGoal));
+      await toOpenReview(page, plan(hoursGoal, otherGoal));
       expect((await page.getByRole("region", { name: messages.review.title }).boundingBox())!.width).toBeGreaterThanOrEqual(240);
       for (const name of [HOURS, OTHER]) await expect(page.getByRole("checkbox", { name: new RegExp(`^${name}`) })).toBeVisible();
     });
@@ -197,7 +199,7 @@ test.describe("the review fits", () => {
 
   test("at 1024 two goals: no word breaks letter by letter, no sideways scroll", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, 1024, async (page) => {
-      await toReview(page, plan(hoursGoal, otherGoal));
+      await toOpenReview(page, plan(hoursGoal, otherGoal));
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
       // A word split over two lines has two client rects.
       const broken = await page.evaluate(() => {

@@ -1443,9 +1443,9 @@ Three answers of the user, 2026-10-09.
 - **Creating a goal inside one with a rhythm says so in one line before «Abrirla»,** and the new goal takes the measure of the
   goal above it, so its rhythm can carry the sum.
 - **«Loses nothing» (RP-96) means every line the model leaves out goes, verbatim, into the general goal's note before the
-  review.** Not built yet; next session.
+  review.** Built 2026-10-13, module 903.
 - **The model puts tasks under the goal they serve,** and the check step flags a goal with a rhythm and no tasks while the goal
-  above holds tasks; the person decides. Measured again on the real roadmap (one paid read). Not built yet; next session.
+  above holds tasks; the person decides. Measured again on the real roadmap (one paid read). Built 2026-10-13, module 903.
 - **The fix boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Page «Importar»: `ImportarAdjunto` (a picked file
   named with «Quitar», nothing sent until «Leer el plan»; after a refused type the file stays named and the type's sentence stays);
   page «Metas»: `CrearDentroAviso` (muted line before the buttons: «El ritmo al mes de «{name}» deja de contar; la meta nueva mide
@@ -1458,3 +1458,32 @@ Three answers of the user, 2026-10-09.
   reason says what happened and what to do in plain words, never «la tabla». With nothing failed, «Crear» goes to Metas as before.
   The list lives in the tab (`sessionStorage`, from `lib/`) until «Ir a Metas»; a reload keeps it. `ImportarCreadoConFallos-B`
   goes to «Archivo».
+
+## Decisions of 2026-10-13, the critic's «thin» items, by the user
+
+- **The PDF opens with a summary, then the annex.** Page one lists every goal in one line each (its month and its week); behind
+  it, the detail as today, whole (the 2026-10-12 «no cap» decision stands for the annex).
+- **An imported note is clean text.** The import strips list marks, `**` and headings from note lines; a line marked «HECHO» or
+  `- [x]` creates its task already done on its date, and the review shows it as done.
+- **The 1280 rail draws the tree:** each general goal with its goals indented under it, folding as `/metas` does.
+- **The review's sheets change more than names:** a commitment's cadence (days or times) and amount; a goal's horizon.
+- **Moving a general's end offers to move its branch:** the sheet says how many goals end after the new end and offers «Mover
+  también sus finales»; one tap moves them all. Every end date shows its year.
+- **The five boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». `ExportarResumen` (page «Informe»),
+  `ImportarHojas` and `ImportarNotaLimpia` («Importar»), `MoverFinalRama` («Metas»), `RielArbol` («Armazón»). Words and structure:
+  `private/tableros-delgado/NOTAS.md`.
+- **The day chips are 40 px,** so the seven fit one row at 360 (7 × 40 + 6 × 4 = 304), everywhere `Chip day` is used.
+- **A general's end never moves alone past its goals' ends** (RP-79): «Mover también sus finales» is the only way to shorten it.
+- **An imported «HECHO» line becomes a done task and leaves the note;** it is never written twice.
+## Decisions of 2026-10-13, the review of a long plan (module 902), by the user
+
+- **Option A,** `ImportarRevisionLarga` (page «Importar»): every goal is one row with its summary (tasks, commitments, months,
+  «N por revisar») and «Sus partes» folded under it; inside, each month folded. 1 632 px at 360 for the real roadmap, from
+  74 690. Option B (one goal at a time behind chips) goes to «Archivo».
+- **«SIN LUGAR EN EL PLAN» is grouped by the section of the person's own text** (its heading: «Presupuesto de horas por mes»,
+  «Fuentes»…), each group folded with its count. Never by form (table row, link, title).
+- **A goal with corrections still to decide arrives open;** the others arrive folded.
+- **The goals under the general stay at their level, indented,** each with its summary; they never fold inside the general.
+- Words and structure: `private/tableros-revision/NOTAS.md` §A, with the three decisions above where it differs.
+- **Every plan's review arrives folded,** short or long, 2026-10-13, by the user: one rule, whatever the length. A goal opens on
+  its own only when it has corrections to decide. `ImportarArbol` (drawn unfolded) gives way to `ImportarRevisionLarga` for that.

@@ -5,12 +5,23 @@ import { test, expect, visit } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
 // `JerarquiaMes` (RP-84, RP-43): «Mes» draws one block per general goal, its
-// tasks in tree order, and the loose goal its own block after. Run under
-// `PULSAR_CLOCK=2026-10-12` exported to the server and the spec alike (the
-// board's Monday); on any other day every test here skips.
-const TODAY = "2026-10-12";
-const MONTH = "2026-10-01";
-const SKIP = "needs PULSAR_CLOCK=2026-10-12 on the server and the spec";
+// tasks in tree order, and the loose goal its own block after. It runs on any
+// day: every date below is read from the day the app reads (`todayInZone`,
+// which `PULSAR_CLOCK` pins on a test server), and the Spanish words of the
+// month and the day are derived from it.
+const TODAY = todayInZone();
+const MONTH = `${TODAY.slice(0, 7)}-01`;
+const DAY_MS = 86_400_000;
+const shift = (day: string, days: number) => new Date(Date.parse(`${day}T12:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+const MONTH_WORD = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" }).format(new Date(`${MONTH}T12:00:00Z`));
+const MONTH_TITLE = MONTH_WORD.charAt(0).toUpperCase() + MONTH_WORD.slice(1);
+// «lunes 12 de octubre»
+const TODAY_LINE = new Intl.DateTimeFormat("es", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
+  .format(new Date(`${TODAY}T12:00:00Z`))
+  .replace(",", "");
+// Seeded relative to the day the app reads: opened 20 days ago, ending in 250.
+const OPENED = shift(TODAY, -20);
+const HORIZON = shift(TODAY, 250);
 
 const G = "Product Designer junior";
 const G1 = "Caso #1 · Urban Vibes";
@@ -26,8 +37,8 @@ async function seedGoal(db: Db, personId: string, name: string, parentId: string
   tick += 1;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, parent_id, created_at)
-    values (${personId}, ${name}, '2027-06-30'::date, 'minutos', 'minutos', ${parentId},
-            '2026-09-20T12:00:00Z'::timestamptz + ${tick} * interval '1 minute')
+    values (${personId}, ${name}, ${HORIZON}::date, 'minutos', 'minutos', ${parentId},
+            ${`${OPENED}T12:00:00Z`}::timestamptz + ${tick} * interval '1 minute')
     returning id
   `;
   if (budget !== null) {
@@ -96,19 +107,15 @@ const norm = (text: string) => text.replace(/\s+/g, " ").trim();
 const lc = (text: string) => text.toLowerCase();
 
 async function mainText(page: Page): Promise<string> {
-  // The section label («DE OCTUBRE») sits wherever the worker puts it; it is not a row.
+  // The section label («DE OCTUBRE», the month's own word) sits wherever the worker puts it; it is not a row.
   // Lowercase: the screen sets some lines in capitals, and innerText returns what is drawn.
-  return norm((await page.locator("main").innerText()).replace(/DE OCTUBRE/gi, " ")).toLowerCase();
+  return norm((await page.locator("main").innerText()).replace(new RegExp(`DE ${MONTH_WORD}`, "gi"), " ")).toLowerCase();
 }
 
 async function openMes(page: Page) {
   await visit(page, "/mes");
   await expect(page.getByRole("heading", { level: 2 })).not.toHaveCount(0);
 }
-
-test.beforeEach(() => {
-  test.skip(todayInZone() !== TODAY, SKIP);
-});
 
 test("one block per general goal in tree order, the loose goal its own block after; the general's block holds the tasks of G, g1 and p in tree order (RP-84, RP-43)", async ({
   person,
@@ -121,13 +128,13 @@ test("one block per general goal in tree order, the loose goal its own block aft
   const page = await context.newPage();
   await openMes(page);
 
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Octubre");
-  await expect(page.getByText("lunes 12 de octubre", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(MONTH_TITLE);
+  await expect(page.getByText(TODAY_LINE, { exact: true })).toBeVisible();
   // Only the general and the loose goal head a block: g1, p, g2 and g3 do not.
   await expect(page.getByRole("heading", { level: 2 })).toHaveCount(2);
   const general = page.getByRole("heading", { level: 2, name: G, exact: true });
   const loose = page.getByRole("heading", { level: 2, name: LOOSE, exact: true });
-  await expect(general.getByRole("link")).toHaveAttribute("href", /\/metas\/[0-9a-f-]+\/meses\/2026-10$/);
+  await expect(general.getByRole("link")).toHaveAttribute("href", new RegExp(`/metas/[0-9a-f-]+/meses/${MONTH.slice(0, 7)}$`));
   expect((await general.boundingBox())!.y).toBeLessThan((await loose.boundingBox())!.y);
 
   // Every task of the tree sits between G's heading and the loose goal's.
@@ -181,8 +188,8 @@ test("the general's figure is the sum of its goals, not its own month (RP-80, RP
   // The loose goal keeps its own reading.
   const looseHeader = text.slice(text.indexOf(lc(LOOSE)), text.indexOf(lc("Grabar el audio de referencia (semana 1)")));
   expect(looseHeader).toContain("0 min");
-  expect(looseHeader).toContain("en octubre · sin monto este mes");
-  await expect(page.getByRole("link", { name: "Planear octubre", exact: true }).last()).toBeVisible();
+  expect(looseHeader).toContain(`en ${MONTH_WORD} · sin monto este mes`);
+  await expect(page.getByRole("link", { name: `Planear ${MONTH_WORD}`, exact: true }).last()).toBeVisible();
 });
 
 test("a done task sits last in the group, muted, with a full mark (RP-84)", async ({ person, db, browser, baseURL }) => {
@@ -271,8 +278,8 @@ test("with no goal the screen is today's empty one (RP-43)", async ({ person, br
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 360, height: 740 } });
   const page = await context.newPage();
   await visit(page, "/mes");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Octubre");
-  await expect(page.getByText("lunes 12 de octubre", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(MONTH_TITLE);
+  await expect(page.getByText(TODAY_LINE, { exact: true })).toBeVisible();
   await expect(page.getByText("Todavía no tienes una meta abierta.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveAttribute("href", "/metas/nueva");
   await expect(page.getByRole("link", { name: "Importar un plan" })).toHaveAttribute("href", "/metas/importar");
@@ -301,5 +308,5 @@ test("with no tree, goals keep the flat blocks: one heading per goal, each with 
   expect(text.indexOf(lc("Tarea de A"))).toBeLessThan(b1);
   expect(b1).toBeLessThan(text.indexOf(lc("Tarea de B")));
   expect(text.slice(text.indexOf(lc("Tarea de A")), b1)).not.toContain("suelta a");
-  expect(text).toContain("en octubre · sin monto este mes");
+  expect(text).toContain(`en ${MONTH_WORD} · sin monto este mes`);
 });
