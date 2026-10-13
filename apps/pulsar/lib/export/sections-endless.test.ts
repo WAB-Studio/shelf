@@ -31,3 +31,10 @@ test("a past or current endless month prints", () => {
   assert.equal(printsOnPaper(month({ past: true }), "páginas"), true);
   assert.equal(printsOnPaper(month({ current: true }), "páginas"), true);
 });
+
+test("the month after the current prints when marked next, empty or not", () => {
+  assert.equal(printsOnPaper(month({}), "páginas", true), true);
+  assert.equal(printsOnPaper(month({}), null, true), true);
+  assert.equal(printsOnPaper(month({}), "páginas"), false);
+  assert.equal(printsOnPaper(month({}), "páginas", false), false);
+});

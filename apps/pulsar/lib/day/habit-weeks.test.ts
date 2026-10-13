@@ -67,3 +67,95 @@ test("a week is met at count days or more", () => {
   const done = new Map([["2026-10-05", 2], ["2026-10-12", 3]]);
   assert.equal(habitWeeks({ ...base, count: 3, month: "2026-10-01", today: "2026-10-19", daysDoneByWeek: done }).met, 1);
 });
+
+import { habitThisWeek } from "./habit-weeks";
+
+test("w2: a Thursday that closes the month keeps its week in that month", () => {
+  assert.equal(weekMonthOf("2025-07-28"), "2025-07-01");
+  assert.deepEqual(weeksOfMonth("2025-07-01"), ["2025-06-30", "2025-07-07", "2025-07-14", "2025-07-21", "2025-07-28"]);
+  assert.equal(weekMonthOf("2026-12-28"), "2026-12-01");
+  assert.deepEqual(weeksOfMonth("2026-12-01"), ["2026-11-30", "2026-12-07", "2026-12-14", "2026-12-21", "2026-12-28"]);
+});
+
+const yoga = {
+  count: 2,
+  createdOn: "2026-08-17",
+  retiredOn: "2026-10-07" as string | null,
+  today: "2026-10-13",
+  daysDoneByWeek: new Map([
+    ["2026-08-17", 2], ["2026-08-24", 2], ["2026-08-31", 2], ["2026-09-07", 2], ["2026-09-14", 2],
+    ["2026-09-28", 2], ["2026-10-05", 2],
+  ]),
+};
+
+test("E5: the week of retirement met before retiring counts and is met", () => {
+  assert.deepEqual(habitWeeks({ ...yoga, month: "2026-08-01" }), { met: 2, counted: 2 });
+  assert.deepEqual(habitWeeks({ ...yoga, month: "2026-09-01" }), { met: 3, counted: 4 });
+  assert.deepEqual(habitWeeks({ ...yoga, month: "2026-10-01" }), { met: 2, counted: 2 });
+});
+
+test("E5: retired Wednesday with only the 5th done, the unmet week does not count", () => {
+  const input = { ...yoga, daysDoneByWeek: new Map([["2026-09-28", 2], ["2026-10-05", 1]]) };
+  assert.deepEqual(habitWeeks({ ...input, month: "2026-10-01" }), { met: 1, counted: 1 });
+});
+
+test("E5: retired Thursday 8 Oct with only the 5th done, the unmet week lived its Thursday and counts", () => {
+  const input = { ...yoga, retiredOn: "2026-10-08", daysDoneByWeek: new Map([["2026-09-28", 2], ["2026-10-05", 1]]) };
+  assert.deepEqual(habitWeeks({ ...input, month: "2026-10-01" }), { met: 1, counted: 2 });
+});
+
+test("E5b: retired today, the week in progress counts once met", () => {
+  const input = {
+    count: 1,
+    createdOn: "2026-09-07",
+    retiredOn: "2026-10-13",
+    today: "2026-10-13",
+    daysDoneByWeek: new Map([["2026-09-07", 1], ["2026-09-14", 1], ["2026-09-21", 1], ["2026-09-28", 1], ["2026-10-05", 1], ["2026-10-12", 1]]),
+  };
+  assert.deepEqual(habitWeeks({ ...input, month: "2026-10-01" }), { met: 3, counted: 3 });
+});
+
+test("E5c: the retirement week whose Thursday is next month counts in the month of retirement", () => {
+  const input = {
+    count: 1,
+    createdOn: "2026-09-07",
+    retiredOn: "2026-09-29",
+    today: "2026-10-13",
+    daysDoneByWeek: new Map([["2026-09-07", 1], ["2026-09-14", 1], ["2026-09-21", 1], ["2026-09-28", 1]]),
+  };
+  assert.deepEqual(habitWeeks({ ...input, month: "2026-09-01" }), { met: 4, counted: 4 });
+  assert.deepEqual(habitWeeks({ ...input, month: "2026-10-01" }), { met: 0, counted: 0 });
+  const without = { ...input, daysDoneByWeek: new Map([["2026-09-07", 1], ["2026-09-14", 1], ["2026-09-21", 1]]) };
+  assert.deepEqual(habitWeeks({ ...without, month: "2026-09-01" }), { met: 3, counted: 3 });
+});
+
+test("a week is met at exactly count days and over, not below", () => {
+  const input = { ...base, count: 2, month: "2026-10-01", today: "2026-10-19" };
+  assert.equal(habitWeeks({ ...input, daysDoneByWeek: new Map([["2026-10-05", 3]]) }).met, 1);
+  assert.equal(habitWeeks({ ...input, daysDoneByWeek: new Map([["2026-10-05", 2]]) }).met, 1);
+  assert.equal(habitWeeks({ ...input, daysDoneByWeek: new Map([["2026-10-05", 1]]) }).met, 0);
+});
+
+test("habitThisWeek: done of the Monday of today, zero when none, null once retired", () => {
+  const args = { count: 1, retiredOn: null, today: "2026-10-13", daysDoneByWeek: new Map([["2026-10-12", 1]]) };
+  assert.deepEqual(habitThisWeek(args), { done: 1, count: 1 });
+  assert.deepEqual(habitThisWeek({ ...args, daysDoneByWeek: new Map() }), { done: 0, count: 1 });
+  assert.deepEqual(habitThisWeek({ ...args, count: 2 }), { done: 1, count: 2 });
+  assert.equal(habitThisWeek({ ...args, retiredOn: "2026-10-07" }), null);
+  assert.deepEqual(habitThisWeek({ ...args, today: "2026-10-18", daysDoneByWeek: new Map([["2026-10-12", 2], ["2026-10-19", 5]]) }), { done: 2, count: 1 });
+});
+
+test("an unmet retirement week stays in its Thursday's month, not the month of retirement", () => {
+  const input = {
+    count: 2,
+    createdOn: "2026-06-01",
+    retiredOn: "2026-08-01",
+    today: "2026-10-13",
+    daysDoneByWeek: new Map([["2026-07-27", 1]]),
+  };
+  assert.equal(habitWeeks({ ...input, month: "2026-07-01" }).counted, 5);
+  assert.equal(habitWeeks({ ...input, month: "2026-08-01" }).counted, 0);
+  const met = { ...input, daysDoneByWeek: new Map([["2026-07-27", 2]]) };
+  assert.deepEqual(habitWeeks({ ...met, month: "2026-08-01" }), { met: 1, counted: 1 });
+  assert.equal(habitWeeks({ ...met, month: "2026-07-01" }).counted, 4);
+});
