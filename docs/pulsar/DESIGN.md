@@ -1436,3 +1436,14 @@ Three answers of the user, 2026-10-09.
   reason says what happened and what to do in plain words, never «la tabla». With nothing failed, «Crear» goes to Metas as before.
   The list lives in the tab (`sessionStorage`, from `lib/`) until «Ir a Metas»; a reload keeps it. `ImportarCreadoConFallos-B`
   goes to «Archivo».
+
+## Decisions of 2026-10-13, the review of a long plan (module 902), by the user
+
+- **Option A,** `ImportarRevisionLarga` (page «Importar»): every goal is one row with its summary (tasks, commitments, months,
+  «N por revisar») and «Sus partes» folded under it; inside, each month folded. 1 632 px at 360 for the real roadmap, from
+  74 690. Option B (one goal at a time behind chips) goes to «Archivo».
+- **«SIN LUGAR EN EL PLAN» is grouped by the section of the person's own text** (its heading: «Presupuesto de horas por mes»,
+  «Fuentes»…), each group folded with its count. Never by form (table row, link, title).
+- **A goal with corrections still to decide arrives open;** the others arrive folded.
+- **The goals under the general stay at their level, indented,** each with its summary; they never fold inside the general.
+- Words and structure: `private/tableros-revision/NOTAS.md` §A, with the three decisions above where it differs.
