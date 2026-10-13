@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import roadmap from "../../messages/es/roadmap.json";
-import { setRhythmSchema } from "./rhythm";
+import { MAX_TIME_RHYTHM, setRhythmSchema } from "./rhythm";
 
 const goalId = "6f1c9a52-3c1e-4d0e-9a43-1d2f7b8e9c10";
 const KEY = "roadmap.errors.rhythmRange";
@@ -33,4 +33,8 @@ test("setRhythmSchema: a half minute, text or nothing is the same refusal", () =
 
 test("the rhythm's refusal says the range the schema holds, in hours", () => {
   assert.equal(roadmap.errors.rhythmRange, "El ritmo va de 1 min a 744 h al mes.");
+});
+
+test("the time cap is the minutes of the longest month: 31 days of 24 hours", () => {
+  assert.equal(MAX_TIME_RHYTHM, MONTH_MINUTES);
 });
