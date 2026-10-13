@@ -13,7 +13,7 @@ import { civilDateLabel } from "@/lib/zone";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { addPhaseSchema, createGoalSchema } from "@/lib/validation/plan";
-import { setRhythmSchema } from "@/lib/validation/rhythm";
+import { MAX_TIME_RHYTHM, setRhythmSchema } from "@/lib/validation/rhythm";
 import { Button, Chip, ChipRow, Field, FieldPair, Flex, Sheet, SheetActions, SectionLabel, Text } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
@@ -142,6 +142,9 @@ export function EditSheet({
         const parsed = editing.kind === "commitment" ? ({ success: true } as const) : amountSchema[editing.kind].safeParse(typed);
         if (!parsed.success) {
           setAmountError(t(messageKey(parsed.error.issues[0].message)));
+          refused = true;
+        } else if (editing.kind === "rhythm" && timed && typed > MAX_TIME_RHYTHM) {
+          setAmountError(t("roadmap.errors.rhythmRange"));
           refused = true;
         } else {
           setAmountError(null);

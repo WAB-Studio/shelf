@@ -44,8 +44,8 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
   if (!parsed.success) {
     const key = messageKey(parsed.error.issues[0].message);
     const raw = input as { goalId?: unknown; amount?: unknown } | null;
-    // Past the column's cap the words depend on the unit: a time unit speaks hours, any other a plain count.
-    if (key !== "roadmap.errors.rhythmRange" || typeof raw?.amount !== "number" || raw.amount <= 1_000_000) {
+    // Out of range the words depend on the unit: a time unit speaks hours, any other a plain count.
+    if (key !== "roadmap.errors.rhythmRange" || typeof raw?.amount !== "number") {
       return { ok: false, error: key };
     }
     const person = await getPerson();

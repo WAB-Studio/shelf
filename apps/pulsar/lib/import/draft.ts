@@ -4,7 +4,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { lastMonthOf, monthsOfSpan, nextMonth } from "@/lib/plan/months";
 import { isEnglishMinuteUnit, isHourUnit, isTimeUnit } from "@/lib/units/time";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
-import { setRhythmSchema } from "@/lib/validation/rhythm";
+import { MAX_TIME_RHYTHM, setRhythmSchema } from "@/lib/validation/rhythm";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema, noteSchema } from "@/lib/validation/one-off";
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
@@ -103,7 +103,14 @@ function draftSchema(withNote: boolean) {
     months: z.array(month),
     commitments: z.array(commitment),
     tasks: z.array(task),
-  });
+  }).refine(
+    // A month holds 44 640 minutes: the cap a time unit keeps whatever the column allows.
+    (g) => {
+      const rate = (g as { rhythm?: number | null }).rhythm ?? null;
+      return rate === null || g.measure === null || !isTimeUnit(g.measure.unit) || rate <= MAX_TIME_RHYTHM;
+    },
+    { error: "roadmap.errors.rhythmRange", path: ["rhythm"] },
+  );
 
   return z.strictObject({
     goals: z

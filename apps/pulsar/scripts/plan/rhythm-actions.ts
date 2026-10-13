@@ -256,6 +256,20 @@ test("setRhythm: past a million, km says the plain range and minutes say hours",
   });
 });
 
+test("setRhythm: 0 in km says the plain range, 0 in minutes says hours", async () => {
+  const km = await goal(owner, "kilometros cero", true, "km");
+  const min = await goal(owner, "minutos cero", true);
+  goalIds.push(km, min);
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: km, amount: 0 })), {
+    ok: false,
+    error: "roadmap.errors.rhythmRangeAny",
+  });
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: min, amount: 0 })), {
+    ok: false,
+    error: "roadmap.errors.rhythmRange",
+  });
+});
+
 test("setRhythm: an input that is not an object is refused with a key, not thrown", async () => {
   for (const input of [undefined, null, "x"]) {
     assert.deepEqual(await as(owner, () => roadmap.setRhythm(input)), {
