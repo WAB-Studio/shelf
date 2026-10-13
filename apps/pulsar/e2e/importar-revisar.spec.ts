@@ -378,6 +378,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
 
         await page.goto("/metas/importar");
         await page.getByLabel(messages.upload).setInputFiles({ name: "mi-plan.txt", mimeType: "text/plain", buffer: Buffer.from(template()) });
+        await page.getByRole("button", { name: messages.read }).click();
         await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
         await settled(page);
         await expect(page.getByText(messages.review.sourceFile.replace("{name}", "mi-plan.txt"), { exact: true })).toBeVisible();

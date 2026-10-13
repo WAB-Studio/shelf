@@ -73,6 +73,7 @@
     "weeksFromAbove": "semanas, desde el {date}, donde empieza «{name}»",
     "ends": "termina el {date}",
     "upTo": "Hasta {weeks, plural, one {# semana} other {# semanas}}.",
+    "rhythmNote": "El ritmo al mes de «{name}» deja de contar; la meta nueva mide como ella.",
     "confirm": "Abrirla",
     "cancel": "No abrirla"
   },

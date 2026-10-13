@@ -130,6 +130,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         name={goal.name}
         horizon={goal.horizon}
         kind={goal.level === "large" ? "small" : "big"}
+        rhythm={goal.rhythm !== null}
       />
     );
   // The open goals under this one, in plan order: what archiving it takes along.

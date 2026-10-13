@@ -27,6 +27,7 @@ const CORRECTIONS = [
   "measureInHours",
   "monthSumDiffers",
   "monthOverRhythm",
+  "cadenceToWeekdays",
 ];
 const FORMS = [
   "import.errors.form.goal",

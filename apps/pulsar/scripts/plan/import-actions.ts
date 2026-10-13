@@ -379,23 +379,12 @@ test("confirmImport: a tap commitment with a target is refused at the commitment
   assert.equal(await countGoals(name), 0);
 });
 
-test("confirmImport: a commitment the table refuses leaves no goal behind", async () => {
+test("confirmImport: a commitment whose days sit on a counted cadence is refused before the table, and writes no goal", async () => {
   const name = `RP-37 fixture: atómica ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
-  // A daily commitment with a count passes the form's schema and meets
-  // `commitments_n_for_counted_kinds` at the commitments insert, after the goals.
+  // The review's own invariant (898) now closes what `commitments_n_for_counted_kinds` used to meet at the insert.
   draft.goals[0].commitments[1] = { ...draft.goals[0].commitments[1], cadenceN: 3 };
-  // The table's own refusal, not any throw: a check violation naming the constraint.
-  const { pgCode } = await import("@/lib/db-error");
-  await assert.rejects(
-    () => confirmImport(draft),
-    (error: unknown) => {
-      assert.equal(pgCode(error), "23514");
-      const cause = (error as { cause?: { constraint_name?: string } }).cause;
-      assert.equal(cause?.constraint_name, "commitments_n_for_counted_kinds");
-      return true;
-    },
-  );
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.cadenceCount", at: "goals.0.commitments.1" });
   assert.equal(await countGoals(name), 0);
 });
 
@@ -711,4 +700,79 @@ test("confirmImport: a goal ending after the one above it is refused, and so is 
   const reversed = tree([bare("b", "a", "RP-79 orden hijo", `${M6}-01`), bare("a", null, "RP-79 orden", `${M12}-01`)]);
   assert.deepEqual(await confirmImport(reversed), { ok: false, error: "tree.errors.notFound", at: "goals.0.parent" });
   assert.equal(await countGoals(`RP-79 fin ${RUN}`), 0);
+});
+
+// ---- 898: the roadmap that broke «Crear», and a part that fails after everything is checked.
+
+function rawCommitment(name: string, over: Record<string, unknown> = {}) {
+  return { name, cadenceKind: "times_per_week" as const, cadenceWeekdays: null, cadenceN: 1, satisfaction: "tap" as const, targetQuantity: null, unit: null, src: [], ...over };
+}
+
+function rawGoalOf(key: string, parent: string | null, name: string, commitments: ReturnType<typeof rawCommitment>[]): import("@/lib/import/draft").RawGoal {
+  return {
+    key, parent, name, horizon: `${M12}-01`, measure: null, rate: null, noteSrc: [], noteText: null, src: [],
+    phases: [], months: [], commitments, rules: [], tasks: [],
+  };
+}
+
+test("confirmImport: the model's roadmap — eight times_per_week commitments with days — creates 5 goals and 8 weekdays commitments", async () => {
+  const { normalize } = await import("@/lib/import/draft");
+  const names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map((d) => `898 ${d} ${RUN}`);
+  const raw = {
+    goals: [
+      rawGoalOf("g0", null, `898 carrera ${RUN}`, [rawCommitment(names[0], { cadenceWeekdays: [1] }), rawCommitment(names[1], { cadenceWeekdays: [2] })]),
+      rawGoalOf("g1", "g0", `898 pilar uno ${RUN}`, [rawCommitment(names[2], { cadenceWeekdays: [3] }), rawCommitment(names[3], { cadenceWeekdays: [4] })]),
+      rawGoalOf("g2", "g0", `898 pilar dos ${RUN}`, [rawCommitment(names[4], { cadenceWeekdays: [5] }), rawCommitment(names[5], { cadenceWeekdays: [6] })]),
+      rawGoalOf("g3", "g0", `898 pilar tres ${RUN}`, [rawCommitment(names[6], { cadenceWeekdays: [7] }), rawCommitment(`898 Inglés ${RUN}`, { cadenceWeekdays: [] })]),
+      rawGoalOf("g4", "g0", `898 pilar cuatro ${RUN}`, []),
+    ],
+  };
+  const { draft, corrections } = normalize(raw, { kind: "parts", lines: null });
+  assert.equal(corrections.filter((c) => c.code === "cadenceToWeekdays").length, 7);
+  const result = await confirmImport(draft);
+  if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
+  goalIds.push(...result.goalIds);
+  assert.equal(result.goalIds.length, 5);
+  assert.deepEqual(result.failed, []);
+  const rows = await sql<{ name: string; cadence_kind: string; cadence_n: number | null; cadence_weekdays: number[] | null }[]>`
+    select name, cadence_kind, cadence_n, cadence_weekdays from goals.commitments where goal_id in ${sql(result.goalIds)} order by name`;
+  assert.equal(rows.length, 8);
+  const sunday = rows.find((r) => r.name === names[6])!;
+  assert.deepEqual([sunday.cadence_kind, sunday.cadence_n, [...sunday.cadence_weekdays!]], ["weekdays", null, [7]]);
+  assert.equal(rows.filter((r) => r.cadence_kind === "weekdays").length, 7);
+  const english = rows.find((r) => r.name === `898 Inglés ${RUN}`)!;
+  assert.deepEqual([english.cadence_kind, english.cadence_n, english.cadence_weekdays], ["times_per_week", 1, null]);
+});
+
+test("confirmImport: a forged commitment with days on a counted cadence is refused with its path, and nothing is written", async () => {
+  const name = `898 forjada ${RUN}`;
+  const draft = tree([full("a", null, name, { commitments: [{ name: "Domingo", cadenceKind: "times_per_week", cadenceWeekdays: [7], cadenceN: 1, satisfaction: "tap", targetQuantity: null, unit: null, src: [] }] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.cadenceWeekdays", at: "goals.0.commitments.0" });
+  assert.equal(await countGoals(name), 0);
+});
+
+test("confirmImport: a task the table refuses is named and left out; the rest of the plan is written (RP-90)", async () => {
+  const name = `898 parte ${RUN}`;
+  // A note of blanks passes every check of the review and meets `one_offs_note_shape` at the insert.
+  const broken = { ...task("Tarea rota", M0, null, [{ name: "Hija rota", estimate: 30, note: null, noteSrc: [], src: [], rule: null }]), note: "   " };
+  const draft = tree([
+    full("a", null, name, { tasks: [task("Tarea buena uno", M0, 60), broken, task("Tarea buena dos", M1, 30)] }),
+    full("b", null, `${name} hermana`),
+  ]);
+  const result = await confirmImport(draft);
+  if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
+  goalIds.push(...result.goalIds);
+  assert.deepEqual(result.failed, [{ path: "goals.0.tasks.1", name: "Tarea rota", reason: "import.errors.noteShape" }]);
+  assert.equal(result.goalIds.length, 2);
+  const tasks = await sql<{ name: string }[]>`select name from goals.one_offs where goal_id = ${result.goalIds[0]} order by name`;
+  assert.deepEqual(tasks.map((t) => t.name), ["Tarea buena dos", "Tarea buena uno"]);
+  const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from goals.commitments where goal_id in ${sql(result.goalIds)}`;
+  assert.equal(count, 2);
+  const [{ sister }] = await sql<{ sister: number }[]>`select count(*)::int as sister from goals.one_offs where goal_id = ${result.goalIds[1]}`;
+  assert.equal(sister, 3);
+});
+
+test("confirmImport: a clean plan still pays the same statements and lists nothing failed", async () => {
+  const { statements } = await confirmed(draftOf(EXAMPLE.replace("# IA aplicada", `# 898 limpia ${RUN}`)));
+  assert.equal(statements, 8);
 });

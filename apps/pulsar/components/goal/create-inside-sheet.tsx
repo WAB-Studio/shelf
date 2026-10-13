@@ -9,7 +9,7 @@ import { createGoal } from "@/app/actions/plan";
 import { dayBefore, horizonForWeeks, horizonWeeksOf } from "@/lib/day/weeks";
 import { createGoalSchema } from "@/lib/validation/plan";
 import { civilDateLabel, todayInZone } from "@/lib/zone";
-import { Button, Field, Sheet, SheetActions } from "@/components/ui";
+import { Button, Field, Sheet, SheetActions, Text } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
 const weeksSchema = z.coerce.number().int().positive().max(520);
@@ -22,6 +22,8 @@ export type CreateInsideActionProps = {
   // A large goal takes a small one; a general or lone goal takes a large one.
   kind: "big" | "small";
   variant?: "solid" | "outline" | "ghost";
+  // The goal above has a rhythm: the sheet says it stops counting.
+  rhythm?: boolean;
 };
 
 /**
@@ -30,7 +32,7 @@ export type CreateInsideActionProps = {
  * the count runs from today's week; one that ends after the upper goal is
  * refused here with the room left, before any request leaves.
  */
-export function CreateInsideAction({ goalId, name, horizon, kind, variant = "outline" }: CreateInsideActionProps) {
+export function CreateInsideAction({ goalId, name, horizon, kind, variant = "outline", rhythm = false }: CreateInsideActionProps) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -117,6 +119,11 @@ export function CreateInsideAction({ goalId, name, horizon, kind, variant = "out
           invalid={pastEnd || error !== null}
           hint={weeksHint}
         />
+        {rhythm ? (
+          <Text as="p" variant="sentence" tone="muted">
+            {t("tree.create.rhythmNote", { name })}
+          </Text>
+        ) : null}
         <SheetActions>
           <Button block onClick={handleCreate} disabled={pending || pastEnd}>
             {t("tree.create.confirm")}

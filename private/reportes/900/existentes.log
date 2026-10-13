@@ -1,0 +1,906 @@
+supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322
+e2e-run: opened run 180e4a25-910c-4f06-931f-85180e067989
+wrote /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/private/session-4.json (1 cookie(s), origin http://localhost:3203)
+minted a session for harness-pulsar-dc158169-b1f5-48aa-8f82-437b36deca5f@example.invalid (dc158169-b1f5-48aa-8f82-437b36deca5f), lane 4
+seeding as harness-pulsar-dc158169-b1f5-48aa-8f82-437b36deca5f@example.invalid (dc158169-b1f5-48aa-8f82-437b36deca5f)
+goal 585f22b2-849a-4663-a590-38cc7d7508d8
+phase c8159504-f783-476f-8ad1-0261200507e5 — Desbloquear la boca: perder el miedo a hablar y pasar de 2 a 4 minutos de monólogo sin congelarse.
+phase 6ffca02d-8199-49f7-a6a0-2413efaa76b9 — Precisión: corregir los 3-4 errores que se repiten siempre y subir a 2 conversaciones humanas por semana.
+phase faaffa2d-13b5-4898-8845-84a2f81fc02f — Contexto laboral: convertir el monólogo en respuestas STAR, preparar 6-8 historias y aplicar a vacantes.
+commitment 5af8ca39-2eac-4d0d-ab1d-3f392b7be7d8 — Anki
+commitment cb83bf2c-b13c-43e1-8cfd-01e41405da8a — Shadowing
+commitment 2842d963-6de6-4b62-864a-b245d2aebf07 — Monólogo grabado
+commitment 3f54cc96-dcdd-4d4f-ba54-ba46f26ad30e — Cerrar el ciclo: tarjetas de los errores
+commitment 8570af24-9ceb-4d31-b0a0-57053c9a4ee5 — Bloque variable del día
+commitment 3e95e951-6e6e-4fbb-b449-bce22100f179 — Buscar palabras nuevas mientras leo
+one-off 56e1673f-40b1-4970-8976-822be5428081
+
+Running 262 tests using 2 workers
+
+  ✓    2 [mobile] › e2e/importar-adjunto.spec.ts:45:5 › picking a PDF sends nothing; the file shows named with «Quitar»; «Leer el plan» sends it (1.6s)
+  ✓    1 [mobile] › e2e/crear-dentro.spec.ts:62:5 › from a large goal, «Agregar meta pequeña» opens the sheet and saving lands on the new goal, inside it (RP-82) (1.8s)
+  ✓    3 [mobile] › e2e/importar-adjunto.spec.ts:59:5 › «Quitar» drops the file: its name goes, the picker returns, and nothing was sent (821ms)
+  ✓    5 [mobile] › e2e/importar-adjunto.spec.ts:75:5 › after a refused type the file stays named, the type's sentence stays, and a second «Leer el plan» never says «No pegaste nada» (1.0s)
+  ✓    6 [mobile] › e2e/importar-adjunto.spec.ts:94:5 › a file plus text in the box: the line says only the file is read, and the request carries the file, not the text (881ms)
+  ✓    4 [mobile] › e2e/crear-dentro.spec.ts:98:5 › while saving, «Abrirla» cannot fire a second time (RP-82) (3.5s)
+  ✓    8 [mobile] › e2e/crear-dentro.spec.ts:135:5 › weeks past the upper goal's end are refused on the client, naming it, with «Abrirla» disabled (RP-79) (2.5s)
+  ✓    7 [mobile] › e2e/importar-arbol.spec.ts:40:7 › the review draws the plan as a tree (RP-89) › three levels of goal, with a phase, a week and a task under their goal, each saying its class, 16 px a level (4.7s)
+  ✓    9 [mobile] › e2e/crear-dentro.spec.ts:178:5 › the upper goal archived while the sheet is open: saving says so under the field and writes nothing (RP-82) (2.1s)
+  ✓   10 [mobile] › e2e/importar-arbol.spec.ts:76:7 › the review draws the plan as a tree (RP-89) › a task's sub-tasks and a part's note stay folded until their button is pressed (2.2s)
+  ✓   11 [mobile] › e2e/crear-dentro.spec.ts:208:5 › «No abrirla» closes the sheet and creates nothing (RP-82) (2.2s)
+  ✓   12 [mobile] › e2e/importar-arbol.spec.ts:99:7 › the count says where every line of the text went (RP-96) › «N líneas: P en el plan, M en notas, F fuera» counts the text's lines, and leaving a big goal out raises «fuera» by its lines (836ms)
+  ✓   13 [mobile] › e2e/crear-dentro.spec.ts:236:5 › a small goal's screen offers no «Agregar meta …» (RP-78, RP-82) (692ms)
+  ✓   15 [mobile] › e2e/crear-dentro.spec.ts:251:5 › on a general goal the button and the title say «grande», and the new goal is a large one (RP-82) (753ms)
+  ✓   14 [mobile] › e2e/importar-arbol.spec.ts:122:7 › the count says where every line of the text went (RP-96) › a part the person leaves out is listed under «las dejaste fuera» with its line, and marking it there puts it back (2.0s)
+  ✓   17 [mobile] › e2e/importar-arbol.spec.ts:145:7 › what cannot be created is listed, and a plan with nothing to create has no button (RP-90, RP-97) › a task past its goal's end is listed under «No se puede crear» with its line and its reason, and cannot be marked (818ms)
+  ✓   18 [mobile] › e2e/importar-arbol.spec.ts:173:7 › what cannot be created is listed, and a plan with nothing to create has no button (RP-90, RP-97) › when every goal is refused the review says «Nada que crear» and offers no way to create (824ms)
+  ✓   19 [mobile] › e2e/importar-arbol.spec.ts:191:7 › the way back to the text (RP-86) › «tu texto» at the top of the review returns to the box with the text and writes nothing (873ms)
+  ✓   20 [mobile] › e2e/importar-arbol.spec.ts:203:7 › the way back to the text (RP-86) › from 1024 px the original text stands read-only on the left with «Volver al texto» under it and the tree on the right (868ms)
+  ✓   21 [mobile] › e2e/importar-arbol.spec.ts:241:7 › at 360 px nothing overflows and nothing to tap is small (RNP-07) › the entry and the five-level tree, sub-tasks and notes open, fit the width and every control is at least 32 px tall (999ms)
+  ✓   22 [mobile] › e2e/importar-cabecera-marca.spec.ts:114:7 › a broken header cuts the reading (board ImportarCabeceraRota) › row 1: «medida: distancia» answers one row with the measure sentence and the grey cut line, nothing below judged (549ms)
+  ✘   16 [mobile] › e2e/importar-archivo-vivo.spec.ts:101:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 1: the file's text is in the box, the note names the file and sits between the box and the list (5.8s)
+  ✓   23 [mobile] › e2e/importar-cabecera-marca.spec.ts:138:7 › a broken header cuts the reading (board ImportarCabeceraRota) › row 2: after a sound header all three errors are listed and the card has no cut line (552ms)
+  ✓   25 [mobile] › e2e/importar-cabecera-marca.spec.ts:149:7 › a wrong first line is refused on the screen (board ImportarPrimeraLinea) › «pulsar · plantilla 3»: one row on line 1 and the grey cut line (639ms)
+  ✓   26 [mobile] › e2e/importar-cabecera-marca.spec.ts:165:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › focus lands on the error list after a reading with errors (595ms)
+  ✓   27 [mobile] › e2e/importar-cabecera-marca.spec.ts:175:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › each error is a button of 44 px or more, one per error (542ms)
+  ✓   28 [mobile] › e2e/importar-cabecera-marca.spec.ts:187:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › tapping a row focuses the box, selects exactly that line and brings it into view, in any order (1.1s)
+  ✓   29 [mobile] › e2e/importar-cabecera-marca.spec.ts:207:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › with long wrapping lines above, a tapped row still brings its line into view (1.8s)
+  ✘   24 [mobile] › e2e/importar-archivo-vivo.spec.ts:117:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 2: tapping a row selects that line in the box (5.7s)
+  ✓   30 [mobile] › e2e/importar-cabecera-marca.spec.ts:234:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › tapping a row of a long error list brings the line into the screen, not only into the box, and keeps it there when the keyboard shrinks the screen (2.7s)
+  ✓   32 [mobile] › e2e/importar-cabecera-marca.spec.ts:269:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › a short error row is still a button of 44 px or more (512ms)
+  ✓   33 [mobile] › e2e/importar-cabecera-marca.spec.ts:279:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › a broken-header row selects its header line (570ms)
+  ✓   34 [mobile] › e2e/importar-cabecera-marca.spec.ts:290:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › the tapped row is marked with aria-current and the mark moves to the next one tapped (791ms)
+  ✓   35 [mobile] › e2e/importar-cabecera-marca.spec.ts:307:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › reading again after a tap clears the mark: no row carries aria-current on the new list (848ms)
+  ✓   36 [mobile] › e2e/importar-cabecera-marca.spec.ts:325:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › the box is marked invalid while the error list shows, and not before (568ms)
+  ✓   37 [mobile] › e2e/importar-cabecera-marca.spec.ts:340:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › a refusal that is not a list of lines takes no focus and its box is not marked invalid (934ms)
+  ✘   31 [mobile] › e2e/importar-archivo-vivo.spec.ts:127:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 3: fixing a line in the box drops its row and the count, with no request to the route (5.5s)
+  ✓   38 [mobile] › e2e/importar-cabecera-marca.spec.ts:353:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › a line under very long unbroken words is still brought into view (1.1s)
+  ✓   39 [mobile] › e2e/importar-cabecera-marca.spec.ts:372:9 › tapping an error marks its line in the box, at 390x844 (board ImportarErrorMarcaLinea) › an error that points past the last line selects the empty line and brings it into view (1.2s)
+  ✓   41 [mobile] › e2e/importar-cabecera-marca.spec.ts:165:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › focus lands on the error list after a reading with errors (1.3s)
+  ✓   42 [mobile] › e2e/importar-cabecera-marca.spec.ts:175:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › each error is a button of 44 px or more, one per error (641ms)
+  ✓   43 [mobile] › e2e/importar-cabecera-marca.spec.ts:187:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › tapping a row focuses the box, selects exactly that line and brings it into view, in any order (1.0s)
+  ✓   44 [mobile] › e2e/importar-cabecera-marca.spec.ts:207:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › with long wrapping lines above, a tapped row still brings its line into view (1.5s)
+  ✘   40 [mobile] › e2e/importar-archivo-vivo.spec.ts:144:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 3b: with every line fixed the list, the note and the mark go, and «Leer el plan» leads to the review (6.3s)
+  ✓   45 [mobile] › e2e/importar-cabecera-marca.spec.ts:234:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › tapping a row of a long error list brings the line into the screen, not only into the box, and keeps it there when the keyboard shrinks the screen (2.1s)
+  ✓   47 [mobile] › e2e/importar-cabecera-marca.spec.ts:269:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › a short error row is still a button of 44 px or more (819ms)
+  ✓   48 [mobile] › e2e/importar-cabecera-marca.spec.ts:279:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › a broken-header row selects its header line (564ms)
+  ✓   49 [mobile] › e2e/importar-cabecera-marca.spec.ts:290:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › the tapped row is marked with aria-current and the mark moves to the next one tapped (818ms)
+  ✓   50 [mobile] › e2e/importar-cabecera-marca.spec.ts:307:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › reading again after a tap clears the mark: no row carries aria-current on the new list (896ms)
+  ✓   51 [mobile] › e2e/importar-cabecera-marca.spec.ts:325:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › the box is marked invalid while the error list shows, and not before (574ms)
+  ✓   52 [mobile] › e2e/importar-cabecera-marca.spec.ts:340:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › a refusal that is not a list of lines takes no focus and its box is not marked invalid (626ms)
+  ✓   53 [mobile] › e2e/importar-cabecera-marca.spec.ts:353:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › a line under very long unbroken words is still brought into view (561ms)
+  ✓   54 [mobile] › e2e/importar-cabecera-marca.spec.ts:372:9 › tapping an error marks its line in the box, at 1440 (board ImportarErrorMarcaLinea) › an error that points past the last line selects the empty line and brings it into view (508ms)
+  ✘   46 [mobile] › e2e/importar-archivo-vivo.spec.ts:157:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 4: deleting line 1 removes the list, the note and the mark, and says it is no longer the template (5.8s)
+  ✓   55 [mobile] › e2e/importar-cifra-descartada.spec.ts:54:7 › @360: a task and a sub-task in a goal measured in km say «no mide tiempo»; with no measure they say «no mide nada» (1.1s)
+  ✓   57 [mobile] › e2e/importar-cifra-descartada.spec.ts:54:7 › @1440: a task and a sub-task in a goal measured in km say «no mide tiempo»; with no measure they say «no mide nada» (1.0s)
+  ✓   58 [mobile] › e2e/importar-correccion.spec.ts:69:7 › a correction hangs under its part and is accepted unless the person undoes it (RP-90) › monthSumDiffers: «decía», «se propone», «porque» under the month, the row shows the proposal; undoing it restores the plan's figure (777ms)
+  ✓   59 [mobile] › e2e/importar-correccion.spec.ts:98:7 › a correction hangs under its part and is accepted unless the person undoes it (RP-90) › an untouched correction is written as proposed: the month is the sum of its tasks (809ms)
+  ✓   60 [mobile] › e2e/importar-correccion.spec.ts:113:7 › a correction hangs under its part and is accepted unless the person undoes it (RP-90) › declining monthSumDiffers writes the plan's own figure, read from the database (1.0s)
+  ✓   61 [mobile] › e2e/importar-correccion.spec.ts:129:7 › a correction hangs under its part and is accepted unless the person undoes it (RP-90) › what the person undid and left out is still so after a reload, and nothing was written (1.4s)
+  ✘   56 [mobile] › e2e/importar-archivo-vivo.spec.ts:172:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 5: restoring line 1 brings the list and the note back and takes the notice away (5.7s)
+  ✓   62 [mobile] › e2e/importar-correccion.spec.ts:147:7 › a name cut to 120, a week rule broken, a line with no place (RP-90, RP-96, RP-97) › nameShortened shows the short name in the tree and the whole one as «decía»; undoing it sends the task out, with its line (2.0s)
+  ✓   64 [mobile] › e2e/importar-correccion.spec.ts:168:7 › a name cut to 120, a week rule broken, a line with no place (RP-90, RP-96, RP-97) › the week rule broken is a notice in the box's own words, with no button (1.6s)
+  ✓   65 [mobile] › e2e/importar-correccion.spec.ts:181:7 › a name cut to 120, a week rule broken, a line with no place (RP-90, RP-96, RP-97) › lines no part carries are listed with their text, their number and why, and counted as «fuera» (984ms)
+  ✓   66 [mobile] › e2e/importar-correccion.spec.ts:198:7 › a name cut to 120, a week rule broken, a line with no place (RP-90, RP-96, RP-97) › a plan read from a PDF counts its parts and says it was read from one (715ms)
+  ✓   67 [mobile] › e2e/importar-crear.spec.ts:25:7 › «Crear» writes the tree the person left (RP-90, RP-95) › under a rhythm the tasks are written into the plan, with no month (RP-67) (952ms)
+  ✓   68 [mobile] › e2e/importar-crear.spec.ts:40:7 › «Crear» writes the tree the person left (RP-90, RP-95) › three levels go to /metas with their parents and notes; a sub-task left out and a month changed are not what was written (928ms)
+  ✘   63 [mobile] › e2e/importar-archivo-vivo.spec.ts:188:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 6: with the model shut, «Leer el plan» on the no-longer-template text answers once, with the shut notice and no second one (6.6s)
+  ✓   69 [mobile] › e2e/importar-crear.spec.ts:73:7 › «Crear» writes the tree the person left (RP-90, RP-95) › while it creates, the tree stands still, the button says «Creando…», and a second tap creates nothing more (3.5s)
+  ✓   71 [mobile] › e2e/importar-crear.spec.ts:97:7 › «Crear» writes the tree the person left (RP-90, RP-95) › a failed create leaves the tree and its marks, says so, and the same button tries again (1.1s)
+  ✓   72 [mobile] › e2e/importar-edicion.spec.ts:15:7 › changing a part from the end of its row (RP-89) › a task's sheet offers its name, hours and minutes and the goal's months; saving changes what is written (1.2s)
+  ✘   70 [mobile] › e2e/importar-archivo-vivo.spec.ts:204:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › a file is read once: the box is disabled while it reads and the text arrives with the answer (5.4s)
+  ✓   73 [mobile] › e2e/importar-edicion.spec.ts:46:7 › changing a part from the end of its row (RP-89) › a phase has no amount: a pencil opens a sheet with its name alone (1.2s)
+  ✓   74 [mobile] › e2e/importar-edicion.spec.ts:65:7 › changing a part from the end of its row (RP-89) › a month's sheet carries its amount alone (835ms)
+  ✓   76 [mobile] › e2e/importar-edicion.spec.ts:78:7 › changing a part from the end of its row (RP-89) › «Cancelar» leaves the part as it was, and so does a reload (1.4s)
+  ✘   77 [mobile] › e2e/importar-excel.spec.ts:33:7 › a workbook is read on the server, never by the model (RP-98) › broken rows are all said at once, in sheet and row order, with their count, and the text box stays empty (5.4s)
+  ✘   78 [mobile] › e2e/importar-excel.spec.ts:62:7 › a workbook is read on the server, never by the model (RP-98) › a book with a broken header says that one row and nothing below it (5.6s)
+  ✘   79 [mobile] › e2e/importar-excel.spec.ts:77:7 › a workbook is read on the server, never by the model (RP-98) › another book says to use the template, offers the download and costs no read (5.5s)
+  ✘   80 [mobile] › e2e/importar-excel.spec.ts:97:7 › a workbook is read on the server, never by the model (RP-98) › the template book itself goes to the review, counted in rows, with no read spent (5.6s)
+  ✓   81 [mobile] › e2e/importar-fase-mes.spec.ts:25:7 › the review's phase span (RP-37) › a phase inside one month reads its two days, with the year (770ms)
+  ✓   82 [mobile] › e2e/importar-fase-mes.spec.ts:38:7 › the review's phase span (RP-37) › a phase that crosses a year names the year on both days (582ms)
+  ✓   83 [mobile] › e2e/importar-fase-mes.spec.ts:50:7 › the review's phase span (RP-37) › a phase from one month to the same month a year on names the year on both days (623ms)
+  ✓   84 [mobile] › e2e/importar-fase-recortada.spec.ts:76:7 › the review says the cut (RP-37) › a phase starting before today is named with week 1 and today; one ending before it is not created (775ms)
+  ✓   85 [mobile] › e2e/importar-fase-recortada.spec.ts:106:7 › the review says the cut (RP-37) › at 1440 with one goal the card and the confirm bar stand one width (552ms)
+  ✘   75 [mobile] › e2e/importar-archivo-vivo.spec.ts:223:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 7: a PDF or an image that fails leaves the box as it was, with no file note (30.0s)
+  ✓   86 [mobile] › e2e/importar-fase-recortada.spec.ts:128:7 › the review says the cut (RP-37) › at 1440 with two goals the tree is still one card and the confirm bar stands its width (1.2s)
+  ✓   88 [mobile] › e2e/importar-fase-recortada.spec.ts:152:7 › the review says the cut (RP-37) › with two goals the cut and drop notes name only the goal that has them, never the other's phase (1.8s)
+  ✓   89 [mobile] › e2e/importar-fuera.spec.ts:64:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › one part out: it is listed under «No se puede crear» with its sub-tasks left out of the list, and the bar says nothing (1.3s)
+  ✓   90 [mobile] › e2e/importar-fuera.spec.ts:78:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › a goal refused whole is listed once, and the parts under it are not (1.3s)
+  ✓   91 [mobile] › e2e/importar-fuera.spec.ts:95:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › nothing out: no list and the bar is the button alone (906ms)
+  ✓   92 [mobile] › e2e/importar-fuera.spec.ts:103:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › the list stands after the tree, so the count has nothing to link to (1.1s)
+  ✘   87 [mobile] › e2e/importar-archivo-vivo.spec.ts:245:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › a second reading that fails with template errors drops the first file's note (6.5s)
+  ✓   93 [mobile] › e2e/importar-fuera.spec.ts:118:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › «Crear 1 meta» still creates the goal without the refused task (1.2s)
+  ✓   95 [mobile] › e2e/importar-fuera.spec.ts:129:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › at 1440 the bar stands one card wide (595ms)
+  ✓   96 [mobile] › e2e/importar-fuera.spec.ts:142:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › a phase refused alone: the row names the phase and says its class, not the goal's (570ms)
+  ✓   97 [mobile] › e2e/importar-fuera.spec.ts:165:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › a month refused alone: the row names the month with its year (507ms)
+  ✓   98 [mobile] › e2e/importar-fuera.spec.ts:186:7 › what stays out is listed, and the bar is the button alone (RP-37, RP-97) › a commitment refused alone: the row names the commitment, not the goal (537ms)
+  ✓   99 [mobile] › e2e/importar-lista-viva.spec.ts:103:7 › the error list is always what the box has now (board ImportarErroresVivos) › state 1: fixing line 13 drops its row, the count reads 2 and the other rows stay (494ms)
+  ✓  100 [mobile] › e2e/importar-lista-viva.spec.ts:118:7 › the error list is always what the box has now (board ImportarErroresVivos) › the re-reading makes no request to /importar/leer, not even for the keystrokes of a whole fix (488ms)
+  ✓  101 [mobile] › e2e/importar-lista-viva.spec.ts:131:7 › the error list is always what the box has now (board ImportarErroresVivos) › focus and caret stay in the box after each keystroke of a fix (721ms)
+  ✓  102 [mobile] › e2e/importar-lista-viva.spec.ts:162:7 › the error list is always what the box has now (board ImportarErroresVivos) › each row quotes its line as the box holds it now (504ms)
+  ✓  103 [mobile] › e2e/importar-lista-viva.spec.ts:177:7 › the error list is always what the box has now (board ImportarErroresVivos) › state 2: fixing a broken header drops the cut notice and lists the rows below, in order (501ms)
+  ✘   94 [mobile] › e2e/importar-archivo-vivo.spec.ts:260:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › emptying the box entirely after a template failure shows neither the list nor the no-longer-template notice (5.5s)
+  ✓  104 [mobile] › e2e/importar-lista-viva.spec.ts:197:7 › the error list is always what the box has now (board ImportarErroresVivos) › a line that breaks after the reading gets its row, in its order (504ms)
+  ✓  105 [mobile] › e2e/importar-lista-viva.spec.ts:217:7 › the error list is always what the box has now (board ImportarErroresVivos) › state 3: with every line fixed the list goes, the box loses its invalid mark and «Leer el plan» leads to the review (796ms)
+  ✓  106 [mobile] › e2e/importar-medida-tiempo.spec.ts:50:7 › a time measure shows as hours and minutes, never as its unit (RP-35, RP-66) › a measure written in hours reads «11 h» on its month (the sum of its tasks), with no measure row (799ms)
+  ✓  107 [mobile] › e2e/importar-lista-viva.spec.ts:231:7 › the error list is always what the box has now (board ImportarErroresVivos) › a text that stops being a template loses the list and the mark (855ms)
+  ✓  108 [mobile] › e2e/importar-medida-tiempo.spec.ts:60:7 › a time measure shows as hours and minutes, never as its unit (RP-35, RP-66) › a measure written in minutes reads «11 h» too (792ms)
+  ✓  109 [mobile] › e2e/importar-lista-viva.spec.ts:243:7 › the error list is always what the box has now (board ImportarErroresVivos) › a re-reading clears the pressed mark, and a row tapped afterwards still selects its line (910ms)
+  ✓  110 [mobile] › e2e/importar-medida-tiempo.spec.ts:74:7 › a month's amount in the goal's unit (km) › «8 km» passes to the review (741ms)
+  ✓  111 [mobile] › e2e/importar-lista-viva.spec.ts:266:7 › the error list is always what the box has now (board ImportarErroresVivos) › while a reading is pending the box is disabled and the list does not come back before the answer (715ms)
+  ✓  112 [mobile] › e2e/importar-medida-tiempo.spec.ts:82:7 › a month's amount in the goal's unit (km) › «8 h» is refused with the message that names «km» (562ms)
+  ✓  114 [mobile] › e2e/importar-medida-tiempo.spec.ts:98:7 › a month's amount in the goal's unit (km) › «8,5 km» is refused with the whole-number message (631ms)
+  ✓  113 [mobile] › e2e/importar-lista-viva.spec.ts:287:7 › the error list is always what the box has now (board ImportarErroresVivos) › a refusal that is not a list of lines does not change while typing (744ms)
+  ✓  115 [mobile] › e2e/importar-nota.spec.ts:35:7 › the review shows each task's note (RP-45) › both notes sit whole under their tasks, read-only; unmarking a task hides no other; confirming stores them (1.3s)
+  ✓  117 [mobile] › e2e/importar-pasos.spec.ts:22:7 › the entry hands over the template, the workbook and the text for another AI (RP-86, RP-98) › «copiar la plantilla» copies plantilla 2 and «copiar el texto» copies the instruction that holds it (538ms)
+  ✓  118 [mobile] › e2e/importar-pasos.spec.ts:41:7 › the entry hands over the template, the workbook and the text for another AI (RP-86, RP-98) › the empty entry shows «la plantilla» and «para otra IA» with their words, and the privacy line (467ms)
+  ✓  119 [mobile] › e2e/importar-pasos.spec.ts:59:7 › the entry hands over the template, the workbook and the text for another AI (RP-86, RP-98) › «Descargar la plantilla en Excel» downloads plantilla-pulsar.xlsx, a book the reader takes for the template (922ms)
+  ✘  116 [mobile] › e2e/importar-lista-viva.spec.ts:306:7 › the error list is always what the box has now (board ImportarErroresVivos) › a list read from an uploaded file is the box's list: the file's text is in the box and typing re-reads it, with no request (5.5s)
+  ✓  120 [mobile] › e2e/importar-pasos.spec.ts:79:7 › a model read says its three steps (RP-86, RNP-13) › «Encuentra», then «Acomoda», then «Revisa» are marked in progress in that order, then the review opens (3.3s)
+  ✓  121 [mobile] › e2e/importar-revisar.spec.ts:86:7 › the review of an imported plan (RP-37, RP-35) › it reads the goal, its amounts, its commitments and the tutor task with its two sub-tasks (1.0s)
+  ✓  122 [mobile] › e2e/importar-pasos.spec.ts:107:7 › a model read says its three steps (RP-86, RNP-13) › a template read draws no steps: no model is asked (844ms)
+  ✓  123 [mobile] › e2e/importar-revisar.spec.ts:110:7 › the review of an imported plan (RP-37, RP-35) › a commitment whose days come out of order is read Monday first with «y» before the last (752ms)
+  ✓  124 [mobile] › e2e/importar-pasos.spec.ts:120:7 › a model read says its three steps (RP-86, RNP-13) › a stream that ends in an error shows that error, drops the steps and keeps the text (1.4s)
+  ✓  126 [mobile] › e2e/importar-revision-ano.spec.ts:128:9 › the review says the year where the plan needs it (RP-37) › @360: the goal's end is said once, with its year, in the goal's own row (1.1s)
+  ✓  125 [mobile] › e2e/importar-revisar.spec.ts:120:7 › the review of an imported plan (RP-37, RP-35) › unmarking a sub-task and changing a month, then confirming, writes exactly that (2.1s)
+  ✓  127 [mobile] › e2e/importar-revision-ano.spec.ts:128:9 › the review says the year where the plan needs it (RP-37) › @1280: the goal's end is said once, with its year, in the goal's own row (761ms)
+  ✓  128 [mobile] › e2e/importar-revisar.spec.ts:159:7 › the review of an imported plan (RP-37, RP-35) › a month before today is shown under the warnings, unmarked, and is not written (1.0s)
+  ✓  129 [mobile] › e2e/importar-revision-ano.spec.ts:139:7 › the review says the year where the plan needs it (RP-37) › «## Meses» names each month, with its year when it is not this one's (668ms)
+  ✓  131 [mobile] › e2e/importar-revision-ano.spec.ts:149:7 › the review says the year where the plan needs it (RP-37) › a task reads «tarea» and its month, a parent too (698ms)
+  ✓  130 [mobile] › e2e/importar-revisar.spec.ts:187:7 › the review of an imported plan (RP-37, RP-35) › a reload keeps the draft, and none sends the person back to the import (1.5s)
+  ✓  132 [mobile] › e2e/importar-revision-ano.spec.ts:157:7 › the review says the year where the plan needs it (RP-37) › a figure the goal cannot keep says «tarea · <mes> · se crea sin cifra» (664ms)
+  ✓  133 [mobile] › e2e/importar-revisar.spec.ts:200:7 › the review of an imported plan (RP-37, RP-35) › the goal's last day is the day before its horizon, and a month names the right reason (697ms)
+  ✓  134 [mobile] › e2e/importar-revision-ano.spec.ts:164:7 › the review says the year where the plan needs it (RP-37) › a phase names its two days, each with its year, also when it does not cross a year (721ms)
+  ✓  136 [mobile] › e2e/importar-revision-ano.spec.ts:171:7 › the review says the year where the plan needs it (RP-37) › a goal with rhythm: its task rows say their month, the months say «mes», none says «va al plan» (593ms)
+  ✓  135 [mobile] › e2e/importar-revisar.spec.ts:214:7 › the review of an imported plan (RP-37, RP-35) › a task in a goal that measures nothing is kept, without time, and written with a null estimate (879ms)
+  ✓  137 [mobile] › e2e/importar-revision-ano.spec.ts:183:7 › the review fits › at 360 two goals leave no sideways scroll (633ms)
+  ✓  139 [mobile] › e2e/importar-revision-ano.spec.ts:190:7 › the review fits › at 1024 two goals lay out as at 1280: the tree's one card is not squeezed to a sliver (626ms)
+  ✓  140 [mobile] › e2e/importar-revision-ano.spec.ts:198:7 › the review fits › at 1024 two goals: no word breaks letter by letter, no sideways scroll (678ms)
+  ✓  138 [mobile] › e2e/importar-revisar.spec.ts:235:7 › the review of an imported plan (RP-37, RP-35) › an unmarked sub-task and a changed month survive a reload, and the way back leads to the text (2.0s)
+  ✓  141 [mobile] › e2e/importar-ritmo-en-lugar.spec.ts:71:7 › @360: under a rhythm each month with its own amount is «mes» and its amount, with no «en lugar del ritmo» (975ms)
+  ✓  142 [mobile] › e2e/importar-revisar.spec.ts:262:7 › the review of an imported plan (RP-37, RP-35) › an amount button is one button named by its item, and no checkbox takes the amount (887ms)
+  ✓  143 [mobile] › e2e/importar-ritmo-en-lugar.spec.ts:71:7 › @1440: under a rhythm each month with its own amount is «mes» and its amount, with no «en lugar del ritmo» (822ms)
+  ✓  145 [mobile] › e2e/importar-ritmo-en-lugar.spec.ts:90:5 › the rhythm's mark leaves the month rows as they are (751ms)
+  ✓  144 [mobile] › e2e/importar-revisar.spec.ts:279:7 › the review of an imported plan (RP-37, RP-35) › a goal an open goal already names starts unmarked with a warning, and marking it writes a second (1.8s)
+  ✓  146 [mobile] › e2e/importar-ritmo-en-lugar.spec.ts:104:5 › with no ritmo: a month row is only its month and its amount (614ms)
+  ✓  147 [mobile] › e2e/importar-revisar.spec.ts:307:9 › the review of an imported plan (RP-37, RP-35) › it holds at 360 (817ms)
+  ✓  148 [mobile] › e2e/importar-ritmo-en-lugar.spec.ts:113:5 › a goal that does not measure time has no rhythm to stand in for (724ms)
+  ✓  149 [mobile] › e2e/importar-revisar.spec.ts:307:9 › the review of an imported plan (RP-37, RP-35) › it holds at 1280 (886ms)
+  ✓  150 [mobile] › e2e/importar-ritmo.spec.ts:71:9 › the review says the rhythm before creating (RP-63, RP-35) › @390: the template's rhythm is a row «Ritmo al mes» with a «12 h» button and the board's line, under its goal (769ms)
+  ✓  151 [mobile] › e2e/importar-revisar.spec.ts:337:9 › the review of an imported plan (RP-37, RP-35) › its header and its text hold at 360 (664ms)
+  ✓  152 [mobile] › e2e/importar-ritmo.spec.ts:71:9 › the review says the rhythm before creating (RP-63, RP-35) › @1440: the template's rhythm is a row «Ritmo al mes» with a «12 h» button and the board's line, under its goal (791ms)
+  ✓  153 [mobile] › e2e/importar-revisar.spec.ts:337:9 › the review of an imported plan (RP-37, RP-35) › its header and its text hold at 390 (686ms)
+  ✓  154 [mobile] › e2e/importar-ritmo.spec.ts:93:7 › the review says the rhythm before creating (RP-63, RP-35) › a rhythm with minutes reads in hours and minutes, not as 90 min or 1.5 h (710ms)
+  ✓  155 [mobile] › e2e/importar-revisar.spec.ts:337:9 › the review of an imported plan (RP-37, RP-35) › its header and its text hold at 1280 (817ms)
+  ✓  156 [mobile] › e2e/importar-ritmo.spec.ts:102:7 › the review says the rhythm before creating (RP-63, RP-35) › a template without ritmo: paints no rhythm row, and no «0 h al mes» (808ms)
+  ✓  157 [mobile] › e2e/importar-revisar.spec.ts:337:9 › the review of an imported plan (RP-37, RP-35) › its header and its text hold at 1440 (726ms)
+  ✓  158 [mobile] › e2e/importar-ritmo.spec.ts:114:7 › the review says the rhythm before creating (RP-63, RP-35) › a goal in km beside a timed one has no rhythm row: only the goal that carries it says it (761ms)
+  ✓  160 [mobile] › e2e/importar-ritmo.spec.ts:124:7 › the review says the rhythm before creating (RP-63, RP-35) › confirming builds the plan: the goal opens with «El plan» and its end (1.2s)
+  ✓  161 [mobile] › e2e/importar-ritmo.spec.ts:143:7 › the review says the rhythm before creating (RP-63, RP-35) › unchecking the rhythm row creates the goal without a rhythm: the goal offers «Armar el plan» (1.1s)
+  ✓  162 [mobile] › e2e/importar-ritmo.spec.ts:163:7 › the review says the rhythm before creating (RP-63, RP-35) › ritmo: on a goal measured in km is refused with its line, and nothing is written (516ms)
+  ✓  163 [mobile] › e2e/importar-ritmo.spec.ts:180:7 › the review says the rhythm before creating (RP-63, RP-35) › while it confirms the button is aria-busy, and the goal is written once (1.0s)
+  ✓  164 [mobile] › e2e/importar-ritmo.spec.ts:203:7 › the review says the rhythm before creating (RP-63, RP-35) › «‹ tu texto» leads back with the template, ritmo: line included, still in the field (663ms)
+  ✓  165 [mobile] › e2e/importar-ritmo.spec.ts:213:7 › the review says the rhythm before creating (RP-63, RP-35) › at 360 the review with its rhythm row does not overflow, and every row keeps a 44px tap target (684ms)
+  ✘  159 [mobile] › e2e/importar-revisar.spec.ts:367:7 › the review of an imported plan (RP-37, RP-35) › at 1440 the goals are one tree in one card, and a file import shows its name where the text would be (6.0s)
+  ✓  166 [mobile] › e2e/importar-ritmo.spec.ts:232:9 › the rhythm row is touched like an amount (RP-67) › @360: touching «12 h», writing 10 h and creating stores rhythm = 600 and puts the tasks in the plan (3.0s)
+  ✓  167 [mobile] › e2e/importar-revisar.spec.ts:392:9 › the review of an imported plan (RP-37, RP-35) › its provenance is the header's one eyebrow and its sentences read in Archivo at 360 (1.5s)
+  ✓  169 [mobile] › e2e/importar-revisar.spec.ts:392:9 › the review of an imported plan (RP-37, RP-35) › its provenance is the header's one eyebrow and its sentences read in Archivo at 1280 (1.0s)
+  ✓  168 [mobile] › e2e/importar-ritmo.spec.ts:232:9 › the rhythm row is touched like an amount (RP-67) › @1440: touching «12 h», writing 10 h and creating stores rhythm = 600 and puts the tasks in the plan (2.1s)
+  ✓  170 [mobile] › e2e/importar-texto-temprano.spec.ts:72:7 › the import box keeps what was typed before the page settled (RP-37) › text typed before hydration is the text after it, never the stored one (1.4s)
+  ✓  171 [mobile] › e2e/importar-ritmo.spec.ts:270:7 › the rhythm row is touched like an amount (RP-67) › a change the person does not save: «Cancelar» closes the sheet and leaves «12 h» (1.4s)
+  ✓  172 [mobile] › e2e/importar-texto-temprano.spec.ts:86:7 › the import box keeps what was typed before the page settled (RP-37) › select-all before hydration and typing after replaces the text, never joins it to the stored one (1.4s)
+  ✓  173 [mobile] › e2e/importar-ritmo.spec.ts:281:7 › the rhythm row is touched like an amount (RP-67) › 0 h is refused with the rhythm's own reason under the field, the sheet stays open, nothing changes (1.4s)
+  ✓  174 [mobile] › e2e/importar-texto-temprano.spec.ts:105:7 › the import box keeps what was typed before the page settled (RP-37) › «Leer el plan» reads the typed text: the error is its line 3, never a line of the stored one (1.4s)
+  ✓  175 [mobile] › e2e/importar-ritmo.spec.ts:296:9 › the rhythm row is touched like an amount (RP-67) › @360: with ritmo each task row says «tarea» and its month; a parent adds its sub-tasks' sum; none says «va al plan» (811ms)
+  ✓  176 [mobile] › e2e/importar-texto-temprano.spec.ts:123:7 › the import box keeps what was typed before the page settled (RP-37) › a return from the review with nothing typed shows the stored text, all of it (813ms)
+  ✓  177 [mobile] › e2e/importar-ritmo.spec.ts:296:9 › the rhythm row is touched like an amount (RP-67) › @1440: with ritmo each task row says «tarea» and its month; a parent adds its sub-tasks' sum; none says «va al plan» (774ms)
+  ✓  178 [mobile] › e2e/importar-texto-temprano.spec.ts:133:7 › the import box keeps what was typed before the page settled (RP-37) › a fresh visit with nothing stored shows an empty box and its placeholder (448ms)
+  ✓  179 [mobile] › e2e/importar-ritmo.spec.ts:311:7 › the rhythm row is touched like an amount (RP-67) › without ritmo there is no rhythm row, and the task rows say the same (663ms)
+  ✓  180 [mobile] › e2e/importar-todos-errores.spec.ts:62:7 › one reading lists every mistake (RP-72) › rows 1 and 2: three broken lines are listed in the text's order under «3 líneas por corregir» (599ms)
+  ✓  182 [mobile] › e2e/importar-todos-errores.spec.ts:99:7 › one reading lists every mistake (RP-72) › row 2: one broken line says «1 línea por corregir», singular (524ms)
+  ✓  181 [mobile] › e2e/importar-ritmo.spec.ts:319:7 › the rhythm row is touched like an amount (RP-67) › unchecking the rhythm leaves the task rows as they were: each says its month, none says «va al plan» (733ms)
+  ✓  184 [mobile] › e2e/importar.spec.ts:45:7 › the import screen (RP-37) › the header's way back, «Volver a Metas», lands on /metas, and the page has one h1 (595ms)
+  ✓  183 [mobile] › e2e/importar-todos-errores.spec.ts:108:7 › one reading lists every mistake (RP-72) › row 3: a km commitment «8 km» is accepted and the review shows it with 8 km (732ms)
+  ✓  185 [mobile] › e2e/importar.spec.ts:59:7 › the import screen (RP-37) › the privacy line is visible before any send, above «Leer el plan» (469ms)
+  ✓  186 [mobile] › e2e/importar-todos-errores.spec.ts:116:7 › one reading lists every mistake (RP-72) › row 4: a km commitment written «30 min» answers with the sentence that names km (559ms)
+  ✓  187 [mobile] › e2e/importar.spec.ts:75:7 › the import screen (RP-37) › a pasted text outside the template answers the missing key, keeps the text and writes no claim (562ms)
+  ✓  188 [mobile] › e2e/importar-todos-errores.spec.ts:125:7 › one reading lists every mistake (RP-72) › row 5: in a goal measured in time, a month or a commitment in km names the goal's unit, not the generic form (518ms)
+  ✓  189 [mobile] › e2e/importar.spec.ts:108:7 › the import screen (RP-37) › the catalogue's template example, pasted, lands on the review without a key (682ms)
+  ✓  190 [mobile] › e2e/importar-todos-errores.spec.ts:140:7 › one reading lists every mistake (RP-72) › row 6: a plan with no mistakes reaches the review (611ms)
+  ✓  192 [mobile] › e2e/importar-todos-errores.spec.ts:147:7 › one reading lists every mistake (RP-72) › row 6: a missing «# nombre» is still reported, on its line (609ms)
+  ✓  193 [mobile] › e2e/meta-otra-unidad.spec.ts:8:5 › a goal in km under a goal in minutes is named in a notice and adds nothing to the sum (RP-80) (634ms)
+  ✓  194 [mobile] › e2e/meta-otra-unidad.spec.ts:37:5 › a large goal with a small goal in words: the notice names it, the sum is the minutes alone, the row reads in words (RP-80) (667ms)
+  ✓  195 [mobile] › e2e/meta-otra-unidad.spec.ts:67:5 › a goal in another unit with no amount this month draws no notice, and the sum is still read (RP-80) (494ms)
+  ✓  196 [mobile] › e2e/metas-arbol.spec.ts:151:5 › /metas draws the tree in order: G, its large goal indented, the small under it deeper, the next large goal level with the first, the lone goal flush at the foot (501ms)
+  ✓  197 [mobile] › e2e/metas-arbol.spec.ts:186:5 › a holder's month is the sum of the goals under it: «1 h 30 min de 3 h», never its own stored month (435ms)
+  ✓  198 [mobile] › e2e/metas-arbol.spec.ts:205:5 › a goal in another unit adds nothing to its holder's figure and /metas draws no other-unit line (575ms)
+  ✓  199 [mobile] › e2e/metas-arbol.spec.ts:225:5 › a holder's row reads «· N metas» with the goals directly inside it (451ms)
+  ✘  200 [mobile] › e2e/metas-arbol.spec.ts:240:5 › folding G's arrow hides every goal under it, unfolding shows them; no request leaves, nothing is stored, the name still opens the goal (514ms)
+  ✓  201 [mobile] › e2e/metas-arbol.spec.ts:291:5 › folding one large goal hides only its small goals; the count on its row stays (552ms)
+  ✘  191 [mobile] › e2e/importar.spec.ts:131:7 › the import screen (RP-37) › the text last read is in the box when the screen opens again, and a file read leaves it empty (6.2s)
+  ✓  202 [mobile] › e2e/metas-arbol.spec.ts:307:5 › three lone goals draw as before: one left edge, no arrow (487ms)
+  ✓  204 [mobile] › e2e/metas-arbol.spec.ts:326:5 › at 360 with three levels nothing overflows sideways and the fold arrows and rows are at least 32 px (587ms)
+  ✓  203 [mobile] › e2e/importar.spec.ts:166:7 › the import screen (RP-37) › the example with a broken month line names the line and keeps the text (722ms)
+  ✓  205 [mobile] › e2e/metas-arbol.spec.ts:353:5 › each fold arrow's name carries its own goal's name, so two arrows never share a label (581ms)
+  ✓  207 [mobile] › e2e/metas-barrido.spec.ts:20:5 › /metas with no goal draws no eyebrow above its title (489ms)
+  ✓  208 [mobile] › e2e/metas-barrido.spec.ts:33:7 › a goal with nothing at 360: one solid act, a sentence in Archivo, a refusal in its field (835ms)
+  ✓  209 [mobile] › e2e/metas-barrido.spec.ts:33:7 › a goal with nothing at 1280: one solid act, a sentence in Archivo, a refusal in its field (1.0s)
+  ✓  210 [mobile] › e2e/metas-barrido.spec.ts:83:5 › a goal with no measure at 1280: its month sits in a card and «Ver por mes» is the one link style (888ms)
+  ✓  211 [mobile] › e2e/metas-conectar.spec.ts:16:5 › with no goal, «Conectar una IA» lands on /conexiones in one tap (RP-38) (1.7s)
+  ✘  206 [mobile] › e2e/importar.spec.ts:191:7 › the import screen (RP-37) › an uploaded text file with a broken month line quotes that line (5.6s)
+  ✓  212 [mobile] › e2e/metas-conectar.spec.ts:38:5 › with a goal, «Conectar una IA» follows «Exportar» (RP-38) (1.5s)
+  ✓  213 [mobile] › e2e/importar.spec.ts:209:7 › the import screen (RP-37) › a text with nothing in it answers the empty notice and offers the template (813ms)
+  ✓  215 [mobile] › e2e/importar.spec.ts:233:7 › the import screen (RP-37) › a blank box answers the blank notice without sending anything (549ms)
+  ✓  214 [mobile] › e2e/metas-conectar.spec.ts:75:5 › with only an ended goal, «Conectar una IA» is there and lands on /conexiones (RP-38) (1.4s)
+  ✓  217 [mobile] › e2e/metas-plan-filas.spec.ts:56:5 › with a goal, the plan cards keep one-line titles, hints under them and 12px between, at 360, 1024 and 1440; «Abrir otra meta» stays centred (1.3s)
+  ✓  218 [mobile] › e2e/metas-plan-filas.spec.ts:98:5 › with no goal, «Importar un plan» and «Conectar una IA» keep the same cards at 360 and 1440 (820ms)
+  ✓  219 [mobile] › e2e/metas-terminadas.spec.ts:36:5 › one open, one ended and one archived goal list each under its heading, in order, and each row opens its goal (1.6s)
+  ✓  220 [mobile] › e2e/metas-terminadas.spec.ts:99:5 › a person whose only goal ended lands on the list, not on /metas/nueva (570ms)
+  ✓  221 [mobile] › e2e/metas-unidad-hijas.spec.ts:43:5 › /metas: a holder that measures nothing reads «0 min de 11 h», its goals' sum in their unit, never «0 de 660» (393ms)
+  ✓  222 [mobile] › e2e/metas-unidad-una-vez.spec.ts:77:7 › /metas at 360: a word unit is said once, «30 de 60 búsquedas» and «15 de 40 km» (379ms)
+  ✓  223 [mobile] › e2e/metas-unidad-una-vez.spec.ts:110:7 › /metas at 360: a time unit keeps its «h» on both figures, «2 h de 8 h» and «45 min de 10 h» (357ms)
+  ✘  216 [mobile] › e2e/importar.spec.ts:254:7 › the import screen (RP-37) › a 5 MB file shows the size notice without sending it (6.0s)
+  ✓  224 [mobile] › e2e/metas-unidad-una-vez.spec.ts:142:7 › /metas at 360: a goal with no amount keeps its unit, «octubre · 18 búsquedas» (345ms)
+  ✓  225 [mobile] › e2e/metas-unidad-una-vez.spec.ts:166:7 › /metas at 360: one search with no amount says it in the singular, «octubre · 1 búsqueda» (352ms)
+  ✓  227 [mobile] › e2e/metas-unidad-una-vez.spec.ts:77:7 › /metas at 1280: a word unit is said once, «30 de 60 búsquedas» and «15 de 40 km» (450ms)
+  ✓  226 [mobile] › e2e/importar.spec.ts:279:7 › the import screen (RP-37) › while it reads, the button says so and the text and the upload are shut (645ms)
+  ✓  228 [mobile] › e2e/metas-unidad-una-vez.spec.ts:110:7 › /metas at 1280: a time unit keeps its «h» on both figures, «2 h de 8 h» and «45 min de 10 h» (442ms)
+  ✓  229 [mobile] › e2e/importar.spec.ts:314:9 › the import screen (RP-37) › at 360 the screen holds: nothing overflows and the template shows (459ms)
+  ✓  230 [mobile] › e2e/metas-unidad-una-vez.spec.ts:142:7 › /metas at 1280: a goal with no amount keeps its unit, «octubre · 18 búsquedas» (386ms)
+  ✓  232 [mobile] › e2e/metas-unidad-una-vez.spec.ts:166:7 › /metas at 1280: one search with no amount says it in the singular, «octubre · 1 búsqueda» (412ms)
+  ✓  231 [mobile] › e2e/importar.spec.ts:344:9 › the import screen (RP-37) › at 360 a broken line shows «ver la plantilla» under its error and nothing overflows (546ms)
+  ✓  234 [mobile] › e2e/importar.spec.ts:314:9 › the import screen (RP-37) › at 1280 the screen holds: nothing overflows and the template shows (521ms)
+  ✓  233 [mobile] › e2e/metas-unidad-una-vez.spec.ts:191:5 › /metas at 360: the month figure sits under the name and above «hasta el …»; ended and archived rows and a goal with no measure draw none (537ms)
+  ✓  235 [mobile] › e2e/importar.spec.ts:344:9 › the import screen (RP-37) › at 1280 a broken line shows «ver la plantilla» under its error and nothing overflows (737ms)
+  ✓  237 [mobile] › e2e/importar.spec.ts:377:9 › the import screen (RP-37) › the header repeats nothing and the quiet lines read in Archivo at 360 (566ms)
+  ✓  238 [mobile] › e2e/importar.spec.ts:377:9 › the import screen (RP-37) › the header repeats nothing and the quiet lines read in Archivo at 1280 (570ms)
+  ✓  239 [mobile] › e2e/importar.spec.ts:418:9 › the error of one line, at 390 wide (RP-37, board ImportarErrorLinea) › a ritmo: out of place reads the board's sentence, under the text and above «Leer el plan» (538ms)
+  ✓  240 [mobile] › e2e/importar.spec.ts:457:9 › the error of one line, at 390 wide (RP-37, board ImportarErrorLinea) › the written ritmo: appears once in the error, whatever its amount (652ms)
+  ✓  236 [mobile] › e2e/metas.spec.ts:46:7 › /metas at 360: the goals as rows with their last day, «Abrir otra meta» apart, the plan one tap away (3.6s)
+  ✓  241 [mobile] › e2e/importar.spec.ts:472:9 › the error of one line, at 390 wide (RP-37, board ImportarErrorLinea) › a ritmo: on a measure that is not time says so, not where it goes (1.4s)
+  ✓  243 [mobile] › e2e/importar.spec.ts:418:9 › the error of one line, at 1440 wide (RP-37, board ImportarErrorLinea) › a ritmo: out of place reads the board's sentence, under the text and above «Leer el plan» (766ms)
+  ✓  244 [mobile] › e2e/importar.spec.ts:457:9 › the error of one line, at 1440 wide (RP-37, board ImportarErrorLinea) › the written ritmo: appears once in the error, whatever its amount (666ms)
+  ✓  245 [mobile] › e2e/importar.spec.ts:472:9 › the error of one line, at 1440 wide (RP-37, board ImportarErrorLinea) › a ritmo: on a measure that is not time says so, not where it goes (748ms)
+  ✓  242 [mobile] › e2e/metas.spec.ts:46:7 › /metas at 390: the goals as rows with their last day, «Abrir otra meta» apart, the plan one tap away (4.4s)
+  ✓  247 [mobile] › e2e/metas.spec.ts:46:7 › /metas at 1280: the goals as rows with their last day, «Abrir otra meta» apart, the plan one tap away (3.3s)
+  ✓  248 [mobile] › e2e/metas.spec.ts:46:7 › /metas at 1440: the goals as rows with their last day, «Abrir otra meta» apart, the plan one tap away (2.4s)
+  ✓  249 [mobile] › e2e/metas.spec.ts:139:7 › /metas at 390: both rows carry the goal's month and figure, the phone one above its last day, and the plan sits before «Archivadas» (442ms)
+  ✓  250 [mobile] › e2e/metas.spec.ts:139:7 › /metas at 1440: both rows carry the goal's month and figure, the phone one above its last day, and the plan sits before «Archivadas» (375ms)
+  ✓  251 [mobile] › e2e/metas.spec.ts:222:5 › /metas at 1440: a goal's figure folds in the evidence its source recorded this month, as Hoy does (354ms)
+  ✓  252 [mobile] › e2e/metas.spec.ts:290:7 › the goal says «mide en búsquedas» for a goal stored in «searches» (476ms)
+  ✓  253 [mobile] › e2e/metas.spec.ts:290:7 › its weekly review says «mide en búsquedas» for a goal stored in «searches» (1.3s)
+  ✓  254 [mobile] › e2e/metas.spec.ts:316:9 › the goal: «Searches» reads «mide en búsquedas» (a unit stored with a capital reads in the catalogue's word) (477ms)
+  ✓  255 [mobile] › e2e/metas.spec.ts:316:9 › the goal: «repeticiones» reads «mide en repeticiones» (a word the catalogue lacks prints as typed) (677ms)
+  ✓  256 [mobile] › e2e/metas.spec.ts:316:9 › the goal: «searches.length» reads «mide en searches.length» (a unit with a dot is never looked up in the catalogue) (513ms)
+  ✓  257 [mobile] › e2e/metas.spec.ts:316:9 › its weekly review: «Searches» reads «mide en búsquedas» (a unit stored with a capital reads in the catalogue's word) (476ms)
+  ✓  258 [mobile] › e2e/metas.spec.ts:316:9 › its weekly review: «repeticiones» reads «mide en repeticiones» (a word the catalogue lacks prints as typed) (517ms)
+  ✓  259 [mobile] › e2e/metas.spec.ts:316:9 › its weekly review: «searches.length» reads «mide en searches.length» (a unit with a dot is never looked up in the catalogue) (485ms)
+  ✓  260 [mobile] › e2e/metas.spec.ts:332:5 › the /metas row says the unit once after a figure of 1, «1 de 10 búsquedas» (590ms)
+  ✓  261 [mobile] › e2e/metas.spec.ts:345:5 › the import review ends the measure row in «búsquedas» for a unit written «searches» (544ms)
+  ✘  246 [mobile] › e2e/varias-metas.spec.ts:16:5 › the Metas tab opens the goals list, and a second goal is opened from it, not typed (RP-11) (30.0s)
+  ✓  262 [mobile] › e2e/varias-metas.spec.ts:74:5 › an empty week says what to do and links to opening one (RP-11, RP-16) (1.4s)
+REPORT  e2e-run — dropped 25 identity(ies), 0 OAuth client(s), run closed.
+
+
+  1) [mobile] › e2e/importar-archivo-vivo.spec.ts:101:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 1: the file's text is in the box, the note names the file and sits between the box and the list 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:105:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:102:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-66f28-etween-the-box-and-the-list-mobile/error-context.md
+
+  2) [mobile] › e2e/importar-archivo-vivo.spec.ts:117:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 2: tapping a row selects that line in the box 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:119:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:118:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-7e376-elects-that-line-in-the-box-mobile/error-context.md
+
+  3) [mobile] › e2e/importar-archivo-vivo.spec.ts:127:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 3: fixing a line in the box drops its row and the count, with no request to the route 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:129:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:128:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-395ab-ith-no-request-to-the-route-mobile/error-context.md
+
+  4) [mobile] › e2e/importar-archivo-vivo.spec.ts:144:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 3b: with every line fixed the list, the note and the mark go, and «Leer el plan» leads to the review 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:146:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:145:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-526e8-l-plan»-leads-to-the-review-mobile/error-context.md
+
+  5) [mobile] › e2e/importar-archivo-vivo.spec.ts:157:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 4: deleting line 1 removes the list, the note and the mark, and says it is no longer the template 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:159:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:158:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-d74c8-t-is-no-longer-the-template-mobile/error-context.md
+
+  6) [mobile] › e2e/importar-archivo-vivo.spec.ts:172:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 5: restoring line 1 brings the list and the note back and takes the notice away 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:174:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:173:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-21b96-k-and-takes-the-notice-away-mobile/error-context.md
+
+  7) [mobile] › e2e/importar-archivo-vivo.spec.ts:188:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 6: with the model shut, «Leer el plan» on the no-longer-template text answers once, with the shut notice and no second one 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:190:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:189:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-76cbd-ut-notice-and-no-second-one-mobile/error-context.md
+
+  8) [mobile] › e2e/importar-archivo-vivo.spec.ts:204:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › a file is read once: the box is disabled while it reads and the text arrives with the answer 
+
+    Error: expect(locator).toBeDisabled() failed
+
+    Locator:  getByLabel('tu plan')
+    Expected: disabled
+    Received: enabled
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeDisabled" with timeout 5000ms
+      - waiting for getByLabel('tu plan')
+        14 × locator resolved to <textarea rows="10" id="_R_8qatpesneknelb_" class="text-area-module__erPn9W__control" placeholder="Pega aquí tu plan, como lo tengas escrito."></textarea>
+           - unexpected value "enabled"
+
+
+      212 |       });
+      213 |       await page.getByLabel(messages.upload).setInputFiles({ name: "plan.md", mimeType: "text/markdown", buffer: Buffer.from(plan()) });
+    > 214 |       await expect(boxOf(page)).toBeDisabled();
+          |                                 ^
+      215 |       await expect(page.getByText("líneas por corregir")).toHaveCount(0);
+      216 |       release();
+      217 |       await expect(boxOf(page)).toBeEnabled();
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:214:33
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:205:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-0a30a-ext-arrives-with-the-answer-mobile/error-context.md
+
+  9) [mobile] › e2e/importar-archivo-vivo.spec.ts:223:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 7: a PDF or an image that fails leaves the box as it was, with no file note 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: browserContext.close: Target page, context or browser has been closed
+
+      65 |     await run(await context.newPage());
+      66 |   } finally {
+    > 67 |     await context.close();
+         |     ^
+      68 |   }
+      69 | }
+      70 |
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:67:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:224:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-a7997-as-it-was-with-no-file-note-mobile/error-context.md
+
+  10) [mobile] › e2e/importar-archivo-vivo.spec.ts:245:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › a second reading that fails with template errors drops the first file's note 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:247:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:246:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-186f3-drops-the-first-file-s-note-mobile/error-context.md
+
+  11) [mobile] › e2e/importar-archivo-vivo.spec.ts:260:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › emptying the box entirely after a template failure shows neither the list nor the no-longer-template notice 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 líneas por corregir', { exact: true })
+
+
+      92 |   await open(page);
+      93 |   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+    > 94 |   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
+         |                                                           ^
+      95 | }
+      96 |
+      97 | const selected = (box: Locator) =>
+        at upload (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:94:59)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:262:7
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:65:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-archivo-vivo.spec.ts:261:5
+
+    Error Context: private/playwright-results/importar-archivo-vivo-a-fi-e51b1-e-no-longer-template-notice-mobile/error-context.md
+
+  12) [mobile] › e2e/importar-excel.spec.ts:33:7 › a workbook is read on the server, never by the model (RP-98) › broken rows are all said at once, in sheet and row order, with their count, and the text box stays empty 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('3 filas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('3 filas por corregir', { exact: true })
+
+
+      44 |       await page.getByLabel(messages.upload).setInputFiles(file);
+      45 |
+    > 46 |       await expect(page.getByText("3 filas por corregir", { exact: true })).toBeVisible();
+         |                                                                             ^
+      47 |       const alert = page.getByRole("alert").filter({ hasText: "3 filas por corregir" });
+      48 |       const rows = alert.getByText(/^(Meses|Tareas|Compromisos), fila \d+: /);
+      49 |       await expect(rows).toHaveCount(3);
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-excel.spec.ts:46:77
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-plan.ts:106:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-excel.spec.ts:42:5
+
+    Error Context: private/playwright-results/importar-excel-a-workbook--c93e0-nd-the-text-box-stays-empty-mobile/error-context.md
+
+  13) [mobile] › e2e/importar-excel.spec.ts:62:7 › a workbook is read on the server, never by the model (RP-98) › a book with a broken header says that one row and nothing below it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('1 fila por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('1 fila por corregir', { exact: true })
+
+
+      68 |       await page.goto("/metas/importar");
+      69 |       await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-pulsar.xlsx", await bytes(wb)));
+    > 70 |       await expect(page.getByText("1 fila por corregir", { exact: true })).toBeVisible();
+         |                                                                            ^
+      71 |       await expect(page.getByText(/^Meses, fila 1: /)).toBeVisible();
+      72 |       await expect(page.getByText(/^Meses, fila 4: /)).toHaveCount(0);
+      73 |     });
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-excel.spec.ts:70:76
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-plan.ts:106:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-excel.spec.ts:67:5
+
+    Error Context: private/playwright-results/importar-excel-a-workbook--08189-ne-row-and-nothing-below-it-mobile/error-context.md
+
+  14) [mobile] › e2e/importar-excel.spec.ts:77:7 › a workbook is read on the server, never by the model (RP-98) › another book says to use the template, offers the download and costs no read 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Ese Excel no es la plantilla. Descárgala, escribe tu plan en ella y súbela.', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('Ese Excel no es la plantilla. Descárgala, escribe tu plan en ella y súbela.', { exact: true })
+
+
+      85 |       await page.getByLabel(messages.upload).setInputFiles(upload("gastos-octubre.xlsx", await bytes(wb)));
+      86 |
+    > 87 |       await expect(page.getByText(messages.errors.workbookNotTemplate, { exact: true })).toBeVisible();
+         |                                                                                          ^
+      88 |       await expect(page.getByText("Leído de gastos-octubre.xlsx.", { exact: true })).toBeVisible();
+      89 |       await expect(page.getByRole("link", { name: messages.entry.workbook })).toBeVisible();
+      90 |       await expect(page.getByText(messages.errors.modelFailed)).toHaveCount(0);
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-excel.spec.ts:87:90
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-plan.ts:106:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-excel.spec.ts:83:5
+
+    Error Context: private/playwright-results/importar-excel-a-workbook--48e89--download-and-costs-no-read-mobile/error-context.md
+
+  15) [mobile] › e2e/importar-excel.spec.ts:97:7 › a workbook is read on the server, never by the model (RP-98) › the template book itself goes to the review, counted in rows, with no read spent 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/metas\/importar\/revisar$/
+    Received string:  "http://localhost:3203/metas/importar"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 5000ms
+        14 × locator resolved to <html lang="es" class="archivo_e390b269-module__MetasG__variable dm_mono_d0b3be9e-module__TfXW-q__variable light">…</html>
+           - unexpected value "http://localhost:3203/metas/importar"
+
+
+      100 |       await page.goto("/metas/importar");
+      101 |       await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-pulsar.xlsx", await bytes(await load())));
+    > 102 |       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+          |                          ^
+      103 |       await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
+      104 |       const count = await countOf(page, "filas");
+      105 |       expect(count.plan + count.notes + count.out).toBe(count.total);
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-excel.spec.ts:102:26
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-plan.ts:106:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-excel.spec.ts:99:5
+
+    Error Context: private/playwright-results/importar-excel-a-workbook--440a1--in-rows-with-no-read-spent-mobile/error-context.md
+
+  16) [mobile] › e2e/importar-lista-viva.spec.ts:306:7 › the error list is always what the box has now (board ImportarErroresVivos) › a list read from an uploaded file is the box's list: the file's text is in the box and typing re-reads it, with no request 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('body > :not(next-route-announcer)').locator('xpath=descendant-or-self::*[@role="alert"]').filter({ hasText: /\S/ }).getByText('3 líneas por corregir', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('body > :not(next-route-announcer)').locator('xpath=descendant-or-self::*[@role="alert"]').filter({ hasText: /\S/ }).getByText('3 líneas por corregir', { exact: true })
+
+
+      311 |       await page.getByLabel(messages.upload).setInputFiles({ name: "plan.md", mimeType: "text/markdown", buffer: Buffer.from(fileText) });
+      312 |       const alert = alertOf(page);
+    > 313 |       await expect(alert.getByText(count(3), { exact: true })).toBeVisible();
+          |                                                                ^
+      314 |       await expect(boxOf(page)).toHaveValue(fileText);
+      315 |       expect(await rowTexts(page)).toHaveLength(3);
+      316 |
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-lista-viva.spec.ts:313:64
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-lista-viva.spec.ts:60:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-lista-viva.spec.ts:307:5
+
+    Error Context: private/playwright-results/importar-lista-viva-the-er-12568-re-reads-it-with-no-request-mobile/error-context.md
+
+  17) [mobile] › e2e/importar-revisar.spec.ts:367:7 › the review of an imported plan (RP-37, RP-35) › at 1440 the goals are one tree in one card, and a file import shows its name where the text would be 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/metas\/importar\/revisar$/
+    Received string:  "http://localhost:3203/metas/importar"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 5000ms
+        14 × locator resolved to <html lang="es" class="archivo_e390b269-module__MetasG__variable dm_mono_d0b3be9e-module__TfXW-q__variable light">…</html>
+           - unexpected value "http://localhost:3203/metas/importar"
+
+
+      379 |         await page.goto("/metas/importar");
+      380 |         await page.getByLabel(messages.upload).setInputFiles({ name: "mi-plan.txt", mimeType: "text/plain", buffer: Buffer.from(template()) });
+    > 381 |         await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+          |                            ^
+      382 |         await settled(page);
+      383 |         await expect(page.getByText(messages.review.sourceFile.replace("{name}", "mi-plan.txt"), { exact: true })).toBeVisible();
+      384 |         expect(await page.getByText(messages.review.sourceFile.replace("{name}", "mi-plan.txt"), { exact: true }).evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+        at asPerson.width (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-revisar.spec.ts:381:28)
+        at asPerson (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-revisar.spec.ts:60:5)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar-revisar.spec.ts:370:5
+
+    Error Context: private/playwright-results/importar-revisar-the-revie-d364a-ame-where-the-text-would-be-mobile/error-context.md
+
+  18) [mobile] › e2e/importar.spec.ts:131:7 › the import screen (RP-37) › the text last read is in the box when the screen opens again, and a file read leaves it empty 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/metas\/importar\/revisar$/
+    Received string:  "http://localhost:3203/metas/importar"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 5000ms
+        14 × locator resolved to <html lang="es" class="archivo_e390b269-module__MetasG__variable dm_mono_d0b3be9e-module__TfXW-q__variable light">…</html>
+           - unexpected value "http://localhost:3203/metas/importar"
+
+
+      154 |         buffer: Buffer.from(EXAMPLE),
+      155 |       });
+    > 156 |       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+          |                          ^
+      157 |
+      158 |       await page.goto("/metas/importar");
+      159 |       await settled(page);
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar.spec.ts:156:26
+
+    Error Context: private/playwright-results/importar-the-import-screen-2a71f-a-file-read-leaves-it-empty-mobile/error-context.md
+
+  19) [mobile] › e2e/importar.spec.ts:191:7 › the import screen (RP-37) › an uploaded text file with a broken month line quotes that line 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('body > :not(next-route-announcer)').locator('xpath=descendant-or-self::*[@role="alert"]').filter({ hasText: /\S/ })
+    Expected pattern: /^\d+ líneas? por corregirLínea 24: «- 2026-13 · 20 h»\. \S[\s\S]*\.$/
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" with timeout 5000ms
+      - waiting for locator('body > :not(next-route-announcer)').locator('xpath=descendant-or-self::*[@role="alert"]').filter({ hasText: /\S/ })
+
+
+      28 |   const alert = appAlerts(page).filter({ hasText: /\S/ });
+      29 |   const escaped = written.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    > 30 |   await expect(alert).toHaveText(new RegExp(`^\\d+ líneas? por corregirLínea ${line}: «${escaped}»\\. \\S[\\s\\S]*\\.$`));
+         |                       ^
+      31 |   const whole = ((await alert.textContent()) ?? "").replace(/^\d+ líneas? por corregir/, "");
+      32 |   const sentence = whole.slice(`Línea ${line}: «${written}». `.length);
+      33 |   expect(sentence, "the cause").not.toContain(written);
+        at expectLineError (/home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar.spec.ts:30:23)
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar.spec.ts:203:13
+
+    Error Context: private/playwright-results/importar-the-import-screen-c5395-month-line-quotes-that-line-mobile/error-context.md
+
+  20) [mobile] › e2e/importar.spec.ts:254:7 › the import screen (RP-37) › a 5 MB file shows the size notice without sending it 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('body > :not(next-route-announcer)').locator('xpath=descendant-or-self::*[@role="alert"]').filter({ hasText: /\S/ })
+    Expected: "«roadmap-escaneado.pdf» pesa 5 MB y el tope es 4 MB. Pega su texto en la caja."
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" with timeout 5000ms
+      - waiting for locator('body > :not(next-route-announcer)').locator('xpath=descendant-or-self::*[@role="alert"]').filter({ hasText: /\S/ })
+
+
+      268 |         buffer: Buffer.alloc(5 * 1024 * 1024, 1),
+      269 |       });
+    > 270 |       await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(
+          |                                                               ^
+      271 |         "«roadmap-escaneado.pdf» pesa 5 MB y el tope es 4 MB. Pega su texto en la caja.",
+      272 |       );
+      273 |       expect(sent).toBe(0);
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/importar.spec.ts:270:63
+
+    Error Context: private/playwright-results/importar-the-import-screen-f286a-e-notice-without-sending-it-mobile/error-context.md
+
+  21) [mobile] › e2e/metas-arbol.spec.ts:240:5 › folding G's arrow hides every goal under it, unfolding shows them; no request leaves, nothing is stored, the name still opens the goal 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      272 |
+      273 |     expect(sent).toEqual([]);
+    > 274 |     expect(navigated).toBe(0);
+          |                       ^
+      275 |     expect(page.url()).toBe(url);
+      276 |
+      277 |     // Screen-only: a reload draws everything open again.
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/metas-arbol.spec.ts:274:23
+
+    Error Context: private/playwright-results/metas-arbol-folding-G-s-ar-f886e-e-name-still-opens-the-goal-mobile/error-context.md
+
+  22) [mobile] › e2e/varias-metas.spec.ts:16:5 › the Metas tab opens the goals list, and a second goal is opened from it, not typed (RP-11) 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('navigation').getByRole('link', { name: 'Metas', exact: true })
+        - locator resolved to <a href="/metas" class="bottom-nav-module__e36fZq__link">Metas</a>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <nextjs-portal></nextjs-portal> from <script data-nextjs-dev-overlay="true">…</script> subtree intercepts pointer events
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <nextjs-portal></nextjs-portal> from <script data-nextjs-dev-overlay="true">…</script> subtree intercepts pointer events
+        - retrying click action
+          - waiting 100ms
+        55 × waiting for element to be visible, enabled and stable
+           - element is visible, enabled and stable
+           - scrolling into view if needed
+           - done scrolling
+           - <nextjs-portal></nextjs-portal> from <script data-nextjs-dev-overlay="true">…</script> subtree intercepts pointer events
+         - retrying click action
+           - waiting 500ms
+
+
+      20 | }) => {
+      21 |   await page.goto("/");
+    > 22 |   await page.getByRole("navigation").getByRole("link", { name: "Metas", exact: true }).click();
+         |                                                                                        ^
+      23 |   await page.waitForURL("**/metas");
+      24 |
+      25 |   // The seeded goal is already listed — this list never redirects past it —
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/varias-metas.spec.ts:22:88
+
+    Error Context: private/playwright-results/varias-metas-the-Metas-tab-f7164-ed-from-it-not-typed-RP-11--mobile/error-context.md
+
+  22 failed
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:101:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 1: the file's text is in the box, the note names the file and sits between the box and the list 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:117:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 2: tapping a row selects that line in the box 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:127:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 3: fixing a line in the box drops its row and the count, with no request to the route 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:144:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 3b: with every line fixed the list, the note and the mark go, and «Leer el plan» leads to the review 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:157:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 4: deleting line 1 removes the list, the note and the mark, and says it is no longer the template 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:172:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 5: restoring line 1 brings the list and the note back and takes the notice away 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:188:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 6: with the model shut, «Leer el plan» on the no-longer-template text answers once, with the shut notice and no second one 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:204:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › a file is read once: the box is disabled while it reads and the text arrives with the answer 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:223:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › state 7: a PDF or an image that fails leaves the box as it was, with no file note 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:245:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › a second reading that fails with template errors drops the first file's note 
+    [mobile] › e2e/importar-archivo-vivo.spec.ts:260:7 › a file's template errors are corrected in the box (board ImportarArchivoYAviso) › emptying the box entirely after a template failure shows neither the list nor the no-longer-template notice 
+    [mobile] › e2e/importar-excel.spec.ts:33:7 › a workbook is read on the server, never by the model (RP-98) › broken rows are all said at once, in sheet and row order, with their count, and the text box stays empty 
+    [mobile] › e2e/importar-excel.spec.ts:62:7 › a workbook is read on the server, never by the model (RP-98) › a book with a broken header says that one row and nothing below it 
+    [mobile] › e2e/importar-excel.spec.ts:77:7 › a workbook is read on the server, never by the model (RP-98) › another book says to use the template, offers the download and costs no read 
+    [mobile] › e2e/importar-excel.spec.ts:97:7 › a workbook is read on the server, never by the model (RP-98) › the template book itself goes to the review, counted in rows, with no read spent 
+    [mobile] › e2e/importar-lista-viva.spec.ts:306:7 › the error list is always what the box has now (board ImportarErroresVivos) › a list read from an uploaded file is the box's list: the file's text is in the box and typing re-reads it, with no request 
+    [mobile] › e2e/importar-revisar.spec.ts:367:7 › the review of an imported plan (RP-37, RP-35) › at 1440 the goals are one tree in one card, and a file import shows its name where the text would be 
+    [mobile] › e2e/importar.spec.ts:131:7 › the import screen (RP-37) › the text last read is in the box when the screen opens again, and a file read leaves it empty 
+    [mobile] › e2e/importar.spec.ts:191:7 › the import screen (RP-37) › an uploaded text file with a broken month line quotes that line 
+    [mobile] › e2e/importar.spec.ts:254:7 › the import screen (RP-37) › a 5 MB file shows the size notice without sending it 
+    [mobile] › e2e/metas-arbol.spec.ts:240:5 › folding G's arrow hides every goal under it, unfolding shows them; no request leaves, nothing is stored, the name still opens the goal 
+    [mobile] › e2e/varias-metas.spec.ts:16:5 › the Metas tab opens the goals list, and a second goal is opened from it, not typed (RP-11) 
+  240 passed (3.7m)

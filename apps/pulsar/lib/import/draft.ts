@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { dayBefore } from "@/lib/day/weeks";
 import { monthsOfSpan } from "@/lib/plan/months";
-import { isHourUnit, isTimeUnit } from "@/lib/units/time";
+import { isEnglishMinuteUnit, isHourUnit, isTimeUnit } from "@/lib/units/time";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
 import { setRhythmSchema } from "@/lib/validation/rhythm";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
@@ -424,6 +424,7 @@ export type CorrectionCode =
   | "parentEstimateDropped"
   | "parentEstimateDiffers"
   | "cadenceClamped"
+  | "cadenceToWeekdays"
   | "rateToRhythm"
   | "holderRhythmToNote"
   | "holderMonthsToNote"
@@ -491,6 +492,43 @@ function buildNote(source: Source, ranges: Src[], noteText: string | null, cap: 
   return note === "" ? null : note;
 }
 
+const DAY_WORDS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+
+function cadenceSaid(c: { cadenceKind: string; cadenceN: number | null }): string {
+  const n = c.cadenceN ?? 1;
+  switch (c.cadenceKind) {
+    case "times_per_week":
+      return `${n} por semana`;
+    case "times_per_month":
+      return `${n} al mes`;
+    case "every_n_days":
+      return `cada ${n} días`;
+    default:
+      return "cada día";
+  }
+}
+
+// The days live in `weekdays` alone and a count in the counted kinds alone, as the table holds them
+// (`commitments_weekdays_for_weekdays`, `commitments_n_for_counted_kinds`). A model that names days on
+// another kind meant those days: the plan's «Domingo» stays Sunday.
+function cadenceShape<C extends { cadenceKind: string; cadenceWeekdays: number[] | null; cadenceN: number | null }>(
+  c: C,
+  at: string,
+  add: (at: string, code: CorrectionCode, said: string, proposed: string, declined: Correction["declined"], values?: Record<string, string>) => unknown,
+): C {
+  const days = [...new Set(c.cadenceWeekdays ?? [])].filter((day) => day >= 1 && day <= 7).sort((a, b) => a - b);
+  if (c.cadenceKind === "weekdays") return { ...c, cadenceN: null };
+  if (days.length > 0) {
+    add(at, "cadenceToWeekdays", cadenceSaid(c), days.map((day) => DAY_WORDS[day - 1]).join(", "), "leavesOut", {
+      kind: c.cadenceKind,
+      n: c.cadenceN === null ? "" : String(c.cadenceN),
+      days: JSON.stringify(c.cadenceWeekdays),
+    });
+    return { ...c, cadenceKind: "weekdays", cadenceWeekdays: days, cadenceN: null };
+  }
+  return { ...c, cadenceWeekdays: null, cadenceN: c.cadenceKind === "daily" ? null : c.cadenceN };
+}
+
 const append = (note: string | null, text: string) => (note === null ? text : `${note}\n\n${text}`);
 
 export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; corrections: Correction[] } {
@@ -519,6 +557,8 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
     } else if (measure !== null && isHourUnit(measure.unit)) {
       measure = { ...measure, unit: "minutos" };
       times = 60;
+    } else if (measure !== null && isEnglishMinuteUnit(measure.unit)) {
+      measure = { ...measure, unit: "minutos" };
     }
     const figure = (n: number | null) => (n === null ? null : n * times);
 
@@ -557,8 +597,10 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
       }
       if (next.unit !== null && isHourUnit(next.unit)) {
         next = { ...next, unit: "minutos", targetQuantity: next.targetQuantity === null ? null : next.targetQuantity * 60 };
+      } else if (next.unit !== null && isEnglishMinuteUnit(next.unit)) {
+        next = { ...next, unit: "minutos" };
       }
-      return next;
+      return cadenceShape(next, `${at}.commitments.${i}`, add);
     });
 
     const tasks = rg.tasks.map((t, ti) => {
@@ -687,6 +729,14 @@ export function decide(draft: ImportDraft, corrections: Correction[], declined: 
       case "cadenceClamped":
         if (refused) goal.commitments[Number(parts[3])].cadenceN = Number(c.values?.was);
         break;
+      case "cadenceToWeekdays":
+        if (refused) {
+          const entry = goal.commitments[Number(parts[3])];
+          entry.cadenceKind = (c.values?.kind ?? entry.cadenceKind) as typeof entry.cadenceKind;
+          entry.cadenceN = c.values?.n ? Number(c.values.n) : null;
+          entry.cadenceWeekdays = JSON.parse(c.values?.days ?? "null") as number[] | null;
+        }
+        break;
       case "rateToRhythm":
         if (refused) goal.rhythm = null;
         break;
@@ -725,6 +775,27 @@ function withoutHead(note: string | null, full: string): string | null {
 function firstIssue(schema: z.ZodType, value: unknown): string | null {
   const parsed = schema.safeParse(value);
   return parsed.success ? null : parsed.error.issues[0].message;
+}
+
+// The table's three checks on a commitment's columns, as one key or null: days only on `weekdays`,
+// a count only on the counted kinds, a target and a unit only on a quantity.
+export function commitmentShapeKey(c: {
+  cadenceKind: string;
+  cadenceWeekdays: number[] | null;
+  cadenceN: number | null;
+  satisfaction: string;
+  targetQuantity: number | null;
+  unit: string | null;
+}): string | null {
+  if (c.cadenceKind === "weekdays" ? (c.cadenceWeekdays?.length ?? 0) === 0 : c.cadenceWeekdays !== null) {
+    return c.cadenceKind === "weekdays" ? "plan.errors.weekdaysEmpty" : "import.errors.cadenceWeekdays";
+  }
+  const counted = c.cadenceKind === "times_per_week" || c.cadenceKind === "every_n_days" || c.cadenceKind === "times_per_month";
+  if (counted !== (c.cadenceN !== null && c.cadenceN > 0)) return "import.errors.cadenceCount";
+  if ((c.satisfaction === "quantity") !== (c.targetQuantity !== null && c.unit !== null)) {
+    return c.satisfaction === "quantity" ? "import.errors.quantityNoAmount" : "import.errors.tapWithAmount";
+  }
+  return null;
 }
 
 // The refusals that leave a whole goal out, with the goals inside it (RP-90).
@@ -828,7 +899,9 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
         targetQuantity: entry.targetQuantity,
         unit: entry.unit,
       });
+      const shape = commitmentShapeKey(entry);
       if (issue) refuse(path, issue);
+      else if (shape) refuse(path, shape);
       else if (entry.satisfaction === "quantity" && goal.measure === null) refuse(path, "import.errors.quantityNoMeasure");
       else if (entry.satisfaction === "tap" && (entry.targetQuantity !== null || entry.unit !== null)) refuse(path, "import.errors.tapWithAmount");
     });
