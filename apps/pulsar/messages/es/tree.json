@@ -11,6 +11,7 @@
     "aboveClosed": "«{name}» está archivada o terminada.",
     "endPastAbove": "Pasa del final de «{name}», el {date}.",
     "belowEndsLater": "«{name}» termina el {date}, después de ese día. Mueve primero su final.",
+    "branchPhaseAfter": "«{name}» tiene una fase que llega hasta el {date}. Mueve primero esa fase.",
     "aboveArchived": "«{name}» está archivada. Reábrela primero.",
     "notFound": "Esa meta ya no existe.",
     "holderNoRhythm": "Una meta con metas dentro no tiene ritmo propio.",

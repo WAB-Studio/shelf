@@ -407,3 +407,51 @@ test("createGoal inside a goal with no measure leaves the new goal with none", a
   const [child] = await sql<{ measure_unit: string | null }[]>`select measure_unit from goals.goals where id = ${result.goalId}`;
   assert.equal(child.measure_unit, null);
 });
+
+test("moveHorizon with moveBranch gives every goal under it that ends later the new end, in one transaction", async () => {
+  const { G, g1, p, g2 } = await tree("rama");
+  const end = horizonAt(3);
+  const refusedAlone = await plan.moveHorizon({ goalId: G, horizon: end });
+  assert.equal(refusedAlone.ok, false);
+  const { result, calls } = await counted(() => plan.moveHorizon({ goalId: G, horizon: end, moveBranch: true }));
+  assert.equal(result.ok, true);
+  for (const id of [G, g1, p, g2]) assert.equal((await rowOf(id)).horizon, end);
+  // Settle, tree, phases, then one write per level: small, large, general.
+  assert.ok(calls.length <= 8, calls.join(" | "));
+});
+
+test("moveHorizon with moveBranch leaves a goal under it that already ends before the new end", async () => {
+  const { G, g1, p, g2 } = await tree("rama2");
+  await sql`update goals.goals set horizon = ${horizonAt(3)} where id = ${p}`;
+  await sql`update goals.goals set horizon = ${horizonAt(4)} where id = ${g1}`;
+  const result = await plan.moveHorizon({ goalId: G, horizon: horizonAt(5), moveBranch: true });
+  assert.equal(result.ok, true);
+  assert.equal((await rowOf(g1)).horizon, horizonAt(4));
+  assert.equal((await rowOf(p)).horizon, horizonAt(3));
+  assert.equal((await rowOf(g2)).horizon, horizonAt(5));
+});
+
+test("moveHorizon with moveBranch refuses, naming the goal, when a phase of a goal under it passes the new end, and moves nothing", async () => {
+  const { G, g1, p, g2 } = await tree("rama3");
+  const [s] = await sql<{ ends: string }[]>`select (${horizonAt(5)}::date - 1)::text as ends`;
+  await sql`insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on) values (${userId}, ${p}, 'fase', ${horizonAt(4)}, ${s.ends})`;
+  const result = await plan.moveHorizon({ goalId: G, horizon: horizonAt(3), moveBranch: true });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error, "tree.errors.branchPhaseAfter");
+  assert.equal(result.values?.name, "867 rama3 p");
+  assert.equal(result.values?.date, s.ends);
+  assert.equal((await rowOf(G)).horizon, horizonAt(7));
+  assert.equal((await rowOf(g1)).horizon, horizonAt(6));
+  assert.equal((await rowOf(g2)).horizon, horizonAt(6));
+});
+
+test("moveHorizon with moveBranch still refuses an end past the goal above", async () => {
+  const { G, g1, g2 } = await tree("rama4");
+  const result = await plan.moveHorizon({ goalId: g1, horizon: horizonAt(8), moveBranch: true });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.error, "tree.errors.endPastAbove");
+  assert.equal((await rowOf(G)).horizon, horizonAt(7));
+  assert.equal((await rowOf(g2)).horizon, horizonAt(6));
+});
