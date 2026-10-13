@@ -133,21 +133,26 @@ function refusalsV1(draft: ImportDraftV1, today: string): DraftRefusal[] {
     const refuse = (path: string, key: string, values?: Record<string, string>) =>
       refusals.push({ path: `${at}.${path}`, key, ...(values ? { values } : {}) });
 
-    const past = goal.horizon <= today;
+    const horizon = goal.horizon;
+    const past = horizon !== null && horizon <= today;
     if (past) refuse("horizon", "import.errors.horizonPast");
 
     goal.phases.forEach((phase, p) => {
-      if (!phaseWithinHorizon(phase, goal.horizon)) refuse(`phases.${p}`, "plan.errors.phasePastHorizon");
+      if (horizon !== null && !phaseWithinHorizon(phase, horizon)) refuse(`phases.${p}`, "plan.errors.phasePastHorizon");
       else if (goal.phases.slice(0, p).some((earlier) => phasesOverlap(earlier, phase))) {
         refuse(`phases.${p}`, "plan.errors.phaseOverlap");
       }
     });
 
     // A goal whose end already passed has no span: it is refused whole.
-    const span = past ? null : new Set(monthsOfSpan(today, goal.horizon));
-    const lastDay = dayBefore(goal.horizon);
+    const span = past || horizon === null ? null : new Set(monthsOfSpan(today, horizon));
+    const lastDay = horizon === null ? "" : dayBefore(horizon);
     // Which side of the span a month falls on: before today's month or after the goal's last.
     const outsideSpan = (path: string, m: string) => {
+      if (horizon === null) {
+        if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
+        return;
+      }
       if (span === null || span.has(`${m}-01`)) return;
       if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
       else refuse(path, "import.errors.monthAfterEnd", { last: lastDay });
@@ -348,7 +353,7 @@ const goalV2 = z.strictObject({
   key: z.string(),
   parent: z.string().nullable(),
   name: z.string(),
-  horizon: z.string(),
+  horizon: z.string().nullable(),
   measure: measureV2.nullable(),
   rhythm: z.number().int().nullable(),
   note: z.string().nullable(),
@@ -395,9 +400,9 @@ const rawGoal = z.strictObject({
   key: z.string(),
   parent: z.string().nullable(),
   name: z.string(),
-  horizon: z.string(),
+  horizon: z.string().nullable(),
   measure: measureV2.nullable(),
-  rate: z.strictObject({ amount: z.number().int(), unit: z.enum(["minutes", "hours"]), per: z.enum(["week", "month"]) }).nullable(),
+  rate: z.strictObject({ amount: z.number().int(), unit: z.enum(["minutes", "hours", "units"]), per: z.enum(["week", "month"]) }).nullable(),
   noteSrc: src,
   noteText: z.string().nullable(),
   src,
@@ -535,7 +540,7 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
   const corrections: Correction[] = [];
   const add = (at: string, code: CorrectionCode, said: string, proposed: string, declined: Correction["declined"], values?: Record<string, string>) =>
     corrections.push({ id: `${at}:${code}`, at, code, said, proposed, declined, ...(values ? { values } : {}) });
-  const horizons = new Map<string, string>();
+  const horizons = new Map<string, string | null>();
   const names = new Map<string, string>();
   const holders = new Set(raw.goals.flatMap((goal) => (goal.parent === null ? [] : [goal.parent])));
   const rateSaid = new Map<string, string>();
@@ -563,12 +568,16 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
     const figure = (n: number | null) => (n === null ? null : n * times);
 
     let rhythm: number | null = null;
-    if (rg.rate !== null && measure !== null && isTimeUnit(measure.unit)) {
-      const minutes = rg.rate.amount * (rg.rate.unit === "hours" ? 60 : 1);
-      if (rg.rate.per === "month") rhythm = minutes;
+    if (rg.rate !== null && measure !== null && (rg.rate.unit === "units") !== isTimeUnit(measure.unit)) {
+      // "units" counts in the measure's own unit; hours and minutes need a time measure.
+      const amount = rg.rate.unit === "units" ? rg.rate.amount : rg.rate.amount * (rg.rate.unit === "hours" ? 60 : 1);
+      if (rg.rate.per === "month") rhythm = amount;
       else {
-        rhythm = Math.floor((minutes * 52) / 12);
-        const said = `${rg.rate.amount} ${rg.rate.unit === "hours" ? "h" : "min"} por semana`;
+        rhythm = Math.floor((amount * 52) / 12);
+        const said =
+          rg.rate.unit === "units"
+            ? `${rg.rate.amount} ${measure.unit} por semana`
+            : `${rg.rate.amount} ${rg.rate.unit === "hours" ? "h" : "min"} por semana`;
         // A goal with goals inside moves the rhythm to its note, which says the plan's words.
         if (holders.has(rg.key)) rateSaid.set(rg.key, said);
         else add(`${at}.rhythm`, "rateToRhythm", said, String(rhythm), "keepsPlan", { minutes: String(rhythm) });
@@ -581,7 +590,7 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
 
     let horizon = rg.horizon;
     const above = rg.parent === null ? undefined : horizons.get(rg.parent);
-    if (above !== undefined && horizon > above) {
+    if (above !== undefined && above !== null && horizon !== null && horizon > above) {
       add(at, "endWithinAbove", horizon, above, "leavesOut", { was: horizon, above: names.get(rg.parent!) ?? "" });
       horizon = above;
     }
@@ -838,7 +847,9 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
       const p = first.get(goal.parent);
       if (p === undefined || p >= g) refuse(".parent", "tree.errors.notFound");
       else if (levelOf(g) > 2) refuse(".parent", "tree.errors.tooDeep");
-      else if (goal.horizon > draft.goals[p].horizon) {
+      else if (draft.goals[p].horizon !== null && goal.horizon === null) {
+        refuse(".horizon", "tree.errors.belowNoEnd", { name: goal.name });
+      } else if (draft.goals[p].horizon !== null && goal.horizon !== null && goal.horizon > draft.goals[p].horizon) {
         refuse(".horizon", "tree.errors.endPastAbove", { name: draft.goals[p].name, date: draft.goals[p].horizon });
       }
     }
@@ -846,7 +857,7 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
     if (nameIssue) refuse(".name", nameIssue);
     const horizonIssue = firstIssue(createGoalSchema.shape.horizon, goal.horizon);
     if (horizonIssue) refuse(".horizon", horizonIssue);
-    else if (goal.horizon <= today) refuse(".horizon", "import.errors.horizonPast");
+    else if (goal.horizon !== null && goal.horizon <= today) refuse(".horizon", "import.errors.horizonPast");
     const measureIssue = goal.measure === null ? null : firstIssue(measure, goal.measure);
     if (measureIssue) refuse(".measure", measureIssue);
 
@@ -860,17 +871,22 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
     }
     if (goal.note !== null && goal.note.length > GOAL_NOTE_MAX) refuse(".note", "tree.errors.noteTooLong");
 
-    const horizonOk = horizonIssue === null && goal.horizon > today;
+    const horizon = goal.horizon;
+    const horizonOk = horizonIssue === null && horizon !== null && horizon > today;
     goal.phases.forEach((phaseValue, p) => {
       const issue = firstIssue(phase, { aim: phaseValue.aim, startsOn: phaseValue.startsOn, endsOn: phaseValue.endsOn });
       if (issue) refuse(`.phases.${p}`, issue);
-      else if (horizonOk && !phaseWithinHorizon(phaseValue, goal.horizon)) refuse(`.phases.${p}`, "plan.errors.phasePastHorizon");
+      else if (horizonOk && !phaseWithinHorizon(phaseValue, horizon)) refuse(`.phases.${p}`, "plan.errors.phasePastHorizon");
       else if (goal.phases.slice(0, p).some((earlier) => phasesOverlap(earlier, phaseValue))) refuse(`.phases.${p}`, "plan.errors.phaseOverlap");
     });
 
-    const span = horizonOk ? new Set(monthsOfSpan(today, goal.horizon)) : null;
-    const lastDay = horizonIssue === null ? dayBefore(goal.horizon) : goal.horizon;
+    const span = horizonOk ? new Set(monthsOfSpan(today, horizon)) : null;
+    const lastDay = horizonIssue === null && horizon !== null ? dayBefore(horizon) : (horizon ?? "");
     const outsideSpan = (path: string, m: string) => {
+      if (horizon === null) {
+        if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
+        return;
+      }
       if (span === null || span.has(`${m}-01`)) return;
       if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
       else refuse(path, "import.errors.monthAfterEnd", { last: lastDay });

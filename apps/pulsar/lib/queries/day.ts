@@ -10,6 +10,7 @@ import { latestFactByCommitment, type LoggedFact } from "@/lib/day/logged-fact";
 import type {
   Cadence,
   CommitmentPlan,
+  DaySlot,
   DayView,
   DeclaredFact,
   Phase,
@@ -57,7 +58,8 @@ import { branchOf, buildTree, rollUp, rootOf, type GoalMonths, type Level, type 
 type GoalRow = {
   id: string;
   name: string;
-  horizon: string;
+  // Null: a goal with no end (RP-99), open for good.
+  horizon: string | null;
   created_at: string;
   measure_name: string | null;
   measure_unit: string | null;
@@ -73,7 +75,7 @@ type GoalRow = {
 // `rows.ts`'s own `CommitmentRow` — nothing `CommitmentPlan`
 // reads, so `toCommitmentPlan` still ignores it; `DayScreen` is what
 // groups a slot by goal and names its row.
-type CommitmentRow = BaseCommitmentRow & { goal_id: string; source_label_key: string | null };
+type CommitmentRow = BaseCommitmentRow & { goal_id: string | null; source_label_key: string | null };
 
 type PhaseRow = BasePhaseRow & { goal_id: string };
 
@@ -176,10 +178,10 @@ type GoalsQueryRow = {
   first_goal_at: string | null;
 };
 
-// A goal is open on `day` while its horizon, the first day after it, lies
-// after `day`. The one rule every subquery below that asks "open" reuses.
+// A goal is open on `day` while it has no end or its horizon, the first day after it,
+// lies after `day`. The one rule every subquery below that asks "open" reuses.
 function openGoal(alias: string, day: string) {
-  return sql`${sql.raw(alias)}.archived_at is null and ${sql.raw(alias)}.horizon > ${day}::date`;
+  return sql`${sql.raw(alias)}.archived_at is null and (${sql.raw(alias)}.horizon is null or ${sql.raw(alias)}.horizon > ${day}::date)`;
 }
 
 export type EndedGoal = { id: string; name: string; lastDay: string };
@@ -220,8 +222,12 @@ async function queryGoalsRow(
     select
       (select coalesce(json_agg(to_jsonb(g) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
-         where g.archived_at is null and g.horizon > ${weekStart}::date) as goals,
-      (select min(g.created_at) from "goals"."goals" g) as first_goal_at,
+         where ${openGoal("g", weekStart)}) as goals,
+      (select min(t.created_at) from (
+         select g.created_at from "goals"."goals" g
+         union all
+         select c.created_at from "goals"."commitments" c where c.goal_id is null
+       ) t) as first_goal_at,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit,
@@ -255,7 +261,7 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
          from "goals"."month_budgets" b
          join "goals"."goals" g on g.id = b.goal_id
-           and g.archived_at is null and g.horizon > ${weekStart}::date
+           and ${openGoal("g", weekStart)}
          where b.month >= (date_trunc('month', ${day}::date) - interval '1 month')::date) as month_budgets,
       (select coalesce(json_agg(to_jsonb(o) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
@@ -311,7 +317,7 @@ async function queryGoalsRow(
            ))) as scheduled_count,
       (select jsonb_build_object('name', g.name, 'horizon', g.horizon)
          from "goals"."goals" g
-         where g.archived_at is null and g.horizon <= ${day}::date
+         where g.archived_at is null and g.horizon is not null and g.horizon <= ${day}::date
          order by g.horizon desc
          limit 1) as last_ended,
       (select coalesce(json_agg(jsonb_build_object(
@@ -321,6 +327,7 @@ async function queryGoalsRow(
                ) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where g.archived_at is null
+           and g.horizon is not null
            and g.horizon > ${weekStart}::date
            and g.horizon <= ${day}::date) as ended_this_week
   `);
@@ -368,7 +375,7 @@ function toPhaseInfo(row: PhaseRow): PhaseInfo {
 export type GoalSummary = {
   id: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   // The civil day the goal was written, in the person's zone.
   openedOn: string;
   measureName: string | null;
@@ -493,7 +500,8 @@ function toOneOffSummary(row: OneOffRow): OneOffSummary {
 // `toCadence` reads.
 export type CommitmentInfo = {
   id: string;
-  goalId: string;
+  // Null: a habit with no goal (RP-100).
+  goalId: string | null;
   name: string;
   kind: SatisfiedBy["kind"];
   target: number | null;
@@ -792,7 +800,9 @@ export async function loadDay(day: string): Promise<{
   // Each open goal's notice that a closed month moved its end; today only, `{}` on any other day.
   planNotice: Record<string, PlanNotice | null>;
   commitments: CommitmentInfo[];
-  // The civil day of the person's oldest goal, archived included; null without goals.
+  // Habits with no goal (RP-100), beside the goals: their commitments and the day's slots for them.
+  loose: { commitments: CommitmentInfo[]; slots: DaySlot[] };
+  // The civil day of the person's oldest goal or loose habit, archived included; null without either.
   firstGoalDay: string | null;
   phases: PhaseInfo[];
   // Each phase's place among its goal's phases, in every phase the goal has.
@@ -841,7 +851,7 @@ export async function loadDay(day: string): Promise<{
     ]),
   );
   const evidence = toEvidenceByCommitment(row.commitments, dayEvidence);
-  const goals = row.goals.filter((goal) => goal.horizon > day);
+  const goals = row.goals.filter((goal) => goal.horizon === null || goal.horizon > day);
   // The tree spans every goal the statement returns: one that ended this week
   // still counts in the sum of the general above it.
   const tree = treeOf(row.goals);
@@ -859,6 +869,8 @@ export async function loadDay(day: string): Promise<{
   const monthItems = isToday ? monthItemsOf(goals, row, day) : null;
 
   const view = deriveDay({ commitments, phases, facts, evidence, day });
+  const infos = row.commitments.map(toCommitmentInfo);
+  const looseIds = new Set(infos.filter((info) => info.goalId === null).map((info) => info.id));
   const periodDone: Record<string, number> = {};
   for (const plan of commitments) {
     const done = periodDoneOn(plan.cadence, plan.id, facts, day);
@@ -899,7 +911,11 @@ export async function loadDay(day: string): Promise<{
     monthTask: monthItems ? monthTaskOf(goals, monthItems) : {},
     monthTaskCounts: monthItems ? monthTaskCountsOf(monthItems) : {},
     planNotice: isToday ? planNoticeOf(goals.filter((goal) => !holders.has(goal.id)), row, day) : {},
-    commitments: row.commitments.map(toCommitmentInfo),
+    commitments: infos,
+    loose: {
+      commitments: infos.filter((info) => info.goalId === null),
+      slots: view.slots.filter((slot) => looseIds.has(slot.commitmentId)),
+    },
     firstGoalDay: row.first_goal_at ? civilDateInZone(new Date(row.first_goal_at)) : null,
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),

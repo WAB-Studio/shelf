@@ -803,3 +803,34 @@ test("903: declining the holder's rhythm correction takes its line out of the no
   assert.equal(back.goals[0].note, "Riesgos del plan\nSemana tipo");
   assert.equal(back.goals[0].rhythm, 2600);
 });
+
+// RP-102: no end, and a rhythm in any unit.
+test("915 a goal with no end passes the refusals and reaches no month outside a span", () => {
+  const { draft } = run([rawGoal({ horizon: null, months: [{ month: "2031-01", amount: 5, src: [] }] })]);
+  assert.equal(draft.goals[0].horizon, null);
+  assert.deepEqual(refusalKeys(draft), []);
+});
+
+test("915 a goal with no end under one with an end is refused by name; under one with none it passes", () => {
+  const under = run([rawGoal(), rawGoal({ key: "g2", parent: "g1", name: "Sin fin", horizon: null })]).draft;
+  assert.deepEqual(refusalKeys(under), ["goals.1.horizon tree.errors.belowNoEnd"]);
+  assert.deepEqual(refusalsOf(under, TODAY)[0].values, { name: "Sin fin" });
+  const open = run([rawGoal({ horizon: null }), rawGoal({ key: "g2", parent: "g1", horizon: null }), rawGoal({ key: "g3", parent: "g1" })]).draft;
+  assert.deepEqual(refusalKeys(open), []);
+});
+
+test("915 the model's «40 páginas al mes» is rhythm 40 in pages", () => {
+  const pages = { measure: { name: "lectura", unit: "páginas" } };
+  const monthly = run([rawGoal({ ...pages, rate: { amount: 40, unit: "units", per: "month" } })]).draft.goals[0];
+  assert.equal(monthly.rhythm, 40);
+  assert.equal(monthly.measure?.unit, "páginas");
+  const weekly = run([rawGoal({ ...pages, rate: { amount: 10, unit: "units", per: "week" } })]).draft.goals[0];
+  assert.equal(weekly.rhythm, 43);
+  assert.equal(run([rawGoal({ measure: null, rate: { amount: 40, unit: "units", per: "month" } })]).draft.goals[0].rhythm, null);
+});
+
+test("915 a rhythm outside time is not refused by the draft", () => {
+  const { draft } = run([rawGoal({ measure: { name: "distancia", unit: "km" }, rate: { amount: 30, unit: "units", per: "month" } })]);
+  assert.equal(draft.goals[0].rhythm, 30);
+  assert.deepEqual(refusalKeys(draft), []);
+});

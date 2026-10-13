@@ -118,10 +118,6 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   const [stray] = strayEstimates(draft).filter((entry) => entry.key === "import.notices.estimateDroppedNotTime");
   if (stray) return { ok: false, error: "import.errors.estimateNotTime", at: stray.path };
 
-  // RP-63: a rhythm is minutes, so it needs a time measure; a forged draft can carry one without.
-  const untimed = draft.goals.findIndex((goal) => goal.rhythm !== null && (goal.measure === null || !isTimeUnit(goal.measure.unit)));
-  if (untimed >= 0) return { ok: false, error: "roadmap.errors.rhythmNotTime", at: `goals.${untimed}.rhythm` };
-
   const person = await getPerson();
   if (!person) return { ok: false, error: "import.errors.signedOut" };
 
@@ -162,7 +158,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       sql`${goalId}::uuid, ${person.id}::uuid, ${goal.name}, ${goal.horizon}::date, ${parentId}::uuid, ${goal.note}::text, ${basePosition(goals)} + ${goalIndex}::integer`,
     );
     if (goal.measure !== null) {
-      measureRows.push(sql`${goalId}::uuid, ${goal.measure.name}, ${goal.measure.unit}, ${goal.rhythm}::integer`);
+      measureRows.push(sql`${goalId}::uuid, ${goal.measure.name}, ${goal.measure.unit}, ${goal.rhythm}::integer, ${isTimeUnit(goal.measure.unit)}::boolean`);
     }
     const at = `goals.${goalIds.length - 1}`;
     goal.phases.forEach((phase, p) => {
@@ -192,16 +188,17 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       });
     });
     // RP-67: with a rhythm the month only orders the tasks; Array.sort is stable, so a month keeps reading order.
-    const ordered = goal.rhythm === null ? goal.tasks.map((task, t) => ({ task, t })) : goal.tasks.map((task, t) => ({ task, t })).sort((a, b) => a.task.month.localeCompare(b.task.month));
+    const timed = goal.rhythm !== null && goal.measure !== null && isTimeUnit(goal.measure.unit);
+    const ordered = !timed ? goal.tasks.map((task, t) => ({ task, t })) : goal.tasks.map((task, t) => ({ task, t })).sort((a, b) => a.task.month.localeCompare(b.task.month));
     for (const { task, t } of ordered) {
       const taskId = randomUUID();
       taskIndex += 1;
       const parentIndex = taskIndex;
       // `in_plan` is named: the trigger sets it only for a row with a month or a parent.
-      const plannedMonth = goal.rhythm === null ? sql`${monthStart(task.month)}::date` : sql`null::date`;
+      const plannedMonth = !timed ? sql`${monthStart(task.month)}::date` : sql`null::date`;
       parentRows.push({
         taskId,
-        row: sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${plannedMonth}, ${goal.rhythm !== null}::boolean, ${task.estimate}::integer, ${task.note ?? null}::text, ${basePosition(oneOffs)} + ${parentIndex}::integer`,
+        row: sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${plannedMonth}, ${timed}::boolean, ${task.estimate}::integer, ${task.note ?? null}::text, ${basePosition(oneOffs)} + ${parentIndex}::integer`,
         path: `${at}.tasks.${t}`,
         name: task.name,
       });
@@ -234,9 +231,9 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       if (measureRows.length > 0) {
         await tx.execute(sql`
           update ${goals} set measure_name = m.name, measure_unit = m.unit, rhythm = m.rhythm,
-            plan_seen = case when m.rhythm is null then plan_seen
+            plan_seen = case when m.rhythm is null or not m.timed then plan_seen
               else (date_trunc('month', ${today}::date) - interval '1 month')::date end
-          from (values ${rows(measureRows)}) as m(id, name, unit, rhythm)
+          from (values ${rows(measureRows)}) as m(id, name, unit, rhythm, timed)
           where ${goals}.id = m.id
         `);
       }

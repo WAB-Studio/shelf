@@ -341,3 +341,14 @@ test("903: a blank row in a sheet is not a row", async () => {
   const draft = await draftOf(await book({ Metas: [[...HOURS]], Meses: [["Meta", "2026-10", "2 h"], [null, null, null], ["Meta", "2026-11", "3 h"]] }));
   assert.deepEqual(draft.goals[0].months.map((m) => m.src), [[{ from: 2, to: 2 }], [{ from: 3, to: 3 }]]);
 });
+
+test("915 an empty horizon cell is a goal with no end", async () => {
+  const draft = await draftOf(await book({ Metas: [["Meta", null, null, "estudio", "horas", null, null]] }));
+  assert.equal(draft.goals[0].horizon, null);
+});
+
+test("915 a rhythm in another unit reads as a whole number of it", async () => {
+  const draft = await draftOf(await book({ Metas: [["Meta", null, null, "lectura", "páginas", 40, null]] }));
+  assert.equal(draft.goals[0].rhythm, 40);
+  assert.equal(draft.goals[0].horizon, null);
+});

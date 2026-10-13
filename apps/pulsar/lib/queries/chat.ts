@@ -8,14 +8,14 @@ import { withGoalsDb } from "@/lib/session";
 export type ChangeNames = {
   goals: Map<
     string,
-    { name: string; unit: string | null; horizon: string; hasNote: boolean; months: Record<string, number> }
+    { name: string; unit: string | null; horizon: string | null; hasNote: boolean; months: Record<string, number> }
   >;
   tasks: Map<string, { name: string; month: string | null; day: string | null; hasNote: boolean }>;
   commitments: Map<string, { name: string; unit: string | null; target: number | null }>;
 };
 
 type NameRow =
-  | { kind: "goal"; id: string; name: string; unit: string | null; extra: { horizon: string; hasNote: boolean; months: Record<string, number> } }
+  | { kind: "goal"; id: string; name: string; unit: string | null; extra: { horizon: string | null; hasNote: boolean; months: Record<string, number> } }
   | { kind: "task"; id: string; name: string; unit: null; extra: { month: string | null; day: string | null; hasNote: boolean } }
   | { kind: "commitment"; id: string; name: string; unit: string | null; extra: { target: number | null } };
 

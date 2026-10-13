@@ -439,12 +439,31 @@ test("confirmImport: without ritmo: the rhythm and plan_seen stay null", async (
   assert.equal((await loadGoal(goalId, TODAY))?.roadmap.state, "noRhythm");
 });
 
-test("confirmImport: a rhythm on a measure that is not time is refused with its key and writes nothing", async () => {
-  const name = `RP-63 fixture: ritmo en km ${RUN}`;
+test("confirmImport: a rhythm on a measure that is not time is written (RP-102)", async () => {
+  const name = `RP-102 fixture: ritmo en km ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
-  draft.goals[0] = { ...draft.goals[0], rhythm: 720, measure: { name: "distancia", unit: "km" }, commitments: [], tasks: [], months: [] };
-  assert.deepEqual(await confirmImport(draft), { ok: false, error: "roadmap.errors.rhythmNotTime", at: "goals.0.rhythm" });
-  assert.equal(await countGoals(name), 0);
+  draft.goals[0] = { ...draft.goals[0], rhythm: 30, measure: { name: "distancia", unit: "km" }, commitments: [], tasks: [], months: [] };
+  const { goalIds: [goalId] } = await confirmed(draft);
+  const [row] = await sql`select rhythm, measure_unit, plan_seen from goals.goals where id = ${goalId}`;
+  assert.deepEqual({ ...row }, { rhythm: 30, measure_unit: "km", plan_seen: null });
+});
+
+test("confirmImport: a goal in pages with a rhythm keeps its tasks on their month", async () => {
+  const name = `RP-102 fixture: páginas ${RUN}`;
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  draft.goals[0] = { ...draft.goals[0], rhythm: 40, measure: { name: "lectura", unit: "páginas" }, commitments: [], months: [], tasks: draft.goals[0].tasks.map((task) => ({ ...task, estimate: null, children: [] })) };
+  const { goalIds: [goalId] } = await confirmed(draft);
+  const tasks = await sql`select planned_month::text as planned_month, in_plan from goals.one_offs where goal_id = ${goalId} and parent_id is null`;
+  assert.ok(tasks.length > 0 && tasks.every((t) => t.planned_month === `${M0}-01`));
+});
+
+test("confirmImport: a goal with no end is written with horizon null", async () => {
+  const name = `RP-102 fixture: sin final ${RUN}`;
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  draft.goals[0] = { ...draft.goals[0], horizon: null, phases: [], months: [], tasks: [] };
+  const { goalIds: [goalId] } = await confirmed(draft);
+  const [row] = await sql`select horizon from goals.goals where id = ${goalId}`;
+  assert.equal(row.horizon, null);
 });
 
 test("confirmImport: four goals with a rhythm pay the statements of one", async () => {
