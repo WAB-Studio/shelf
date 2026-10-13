@@ -57,6 +57,7 @@ let today: string;
 let claimModelCall: typeof import("@/lib/import/spend").claimModelCall;
 let settleModelCall: typeof import("@/lib/import/spend").settleModelCall;
 let cap: number;
+let chatCap: number;
 const claimed: string[] = [];
 
 async function person(email: string): Promise<Person> {
@@ -68,7 +69,7 @@ async function person(email: string): Promise<Person> {
 before(async () => {
   installStubs();
   ({ claimModelCall, settleModelCall } = await import("@/lib/import/spend"));
-  ({ MODEL_CALLS_DAILY_CAP: cap } = await import("@/lib/import/spend"));
+  ({ MODEL_CALLS_DAILY_CAP: cap, CHAT_CALLS_DAILY_CAP: chatCap } = await import("@/lib/import/spend"));
   const { todayInZone } = await import("@/lib/zone");
   today = todayInZone();
   first = await person(`harness-member${suffix}@example.invalid`);
@@ -92,7 +93,7 @@ beforeEach(async () => {
   claimed.length = 0;
 });
 
-async function claim(who: Person, source: "paste" | "file" = "paste"): Promise<{ id: string } | null> {
+async function claim(who: Person, source: "paste" | "file" | "chat" = "paste"): Promise<{ id: string } | null> {
   current = who;
   const call = await claimModelCall("RNP-13 fixture", source);
   if (call) claimed.push(call.id);
@@ -166,4 +167,60 @@ test("settleModelCall: another person's settle of that row touches 0 rows", asyn
   const [row] = await sql<{ i: number; o: number; outcome: string }[]>`
     select input_tokens as i, output_tokens as o, outcome from goals.model_calls where id = ${call.id}`;
   assert.deepEqual(row, { i: 120, o: 45, outcome: "ok" });
+});
+
+// RNP-21: the import and the chat each count their own kind under their own cap.
+async function plantToday(who: Person, source: string, n: number): Promise<void> {
+  const planted = await sql<{ id: string }[]>`
+    insert into goals.model_calls (user_id, model, source)
+    select ${who.id}, 'RNP-13 fixture', ${source} from generate_series(1, ${n}) returning id`;
+  claimed.push(...planted.map((row) => row.id));
+}
+
+test("claimModelCall chat: the cap is 50; fifty chat claims land and the fifty-first answers null", async () => {
+  assert.equal(chatCap, 50);
+  for (let i = 0; i < 50; i++) assert.ok(await claim(first, "chat"), `chat claim ${i + 1} landed`);
+  assert.equal(await claim(first, "chat"), null);
+  assert.ok(await claim(first, "paste"), "the import still claims");
+});
+
+test("claimModelCall: ten import claims land, the eleventh is null, the chat still claims", async () => {
+  for (let i = 0; i < 10; i++) assert.ok(await claim(first, "paste"));
+  assert.equal(await claim(first, "paste"), null);
+  assert.ok(await claim(first, "chat"));
+});
+
+test("claimModelCall: fifty chat rows today leave the import's cap untouched", async () => {
+  await plantToday(first, "chat", 50);
+  assert.ok(await claim(first, "paste"));
+});
+
+test("claimModelCall: a file claim counts as import (nine paste and one file stop the next paste)", async () => {
+  await plantToday(first, "paste", 9);
+  await plantToday(first, "file", 1);
+  assert.equal(await claim(first, "paste"), null);
+});
+
+test("claimModelCall chat: a chat row dated yesterday does not count", async () => {
+  const yesterday = new Date(`${today}T12:00:00Z`);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const planted = await sql<{ id: string }[]>`
+    insert into goals.model_calls (user_id, model, source, day)
+    select ${first.id}, 'RNP-13 fixture', 'chat', ${yesterday.toISOString().slice(0, 10)}::date from generate_series(1, 50)
+    returning id`;
+  claimed.push(...planted.map((row) => row.id));
+  assert.ok(await claim(first, "chat"));
+});
+
+test("claimModelCall chat: the row keeps its model and source, no outcome until settled", async () => {
+  current = first;
+  const call = await claimModelCall("gpt-5-mini", "chat");
+  assert.ok(call);
+  try {
+    const [row] = await sql<{ model: string; source: string; outcome: string | null }[]>`
+      select model, source, outcome from goals.model_calls where id = ${call.id}`;
+    assert.deepEqual(row, { model: "gpt-5-mini", source: "chat", outcome: null });
+  } finally {
+    await sql`delete from goals.model_calls where id = ${call.id}`;
+  }
 });
