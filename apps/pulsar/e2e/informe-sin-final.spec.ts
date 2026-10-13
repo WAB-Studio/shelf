@@ -69,19 +69,20 @@ for (const width of [360, 1280]) {
   });
 }
 
-test("the paper of a goal with no end has no «hasta el» and prints the same twelve months", async ({
+for (const query of ["", "?todo=1"]) {
+test(`the paper of a goal with no end has no «hasta el» and prints the same twelve months (/exportar${query})`, async ({
   person,
   browser,
   baseURL,
   db,
 }) => {
-  // Kills: the paper's own `dayBefore(goal.horizon)` or its month list running to a horizon (the screen is right, the PDF is not).
+  // Kills (also with `?todo=1`, RP-106: the closed months the screen opens leaking into the paper, or the «ver todo» link printed): the paper's own `dayBefore(goal.horizon)` or its month list running to a horizon (the screen is right, the PDF is not).
   const name = `Leer ${Date.now()}`;
   const goalId = await seedOpen(db, person.id, name, null);
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: A4 });
   try {
     const page = await context.newPage();
-    await visit(page, "/exportar");
+    await visit(page, `/exportar${query}`);
     await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
     await page.emulateMedia({ media: "print" });
     const dir = resolve(process.cwd(), "private/export-pdf");
@@ -98,11 +99,15 @@ test("the paper of a goal with no end has no «hasta el» and prints the same tw
     for (let offset = 0; offset <= 11; offset++) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
     expect(paper).not.toContain(monthLabel(12));
     expect(paper).not.toContain(monthLabel(-1));
+    // RP-106: the paper always prints the same 12, never the closed months, whatever the screen shows; and never the link.
+    for (const offset of [-2, -3]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
+    expect(paper).not.toContain("ver todo");
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
   }
 });
+}
 
 test("control: the same goal with an end says «hasta el» and ends its months at the horizon", async ({
   person,

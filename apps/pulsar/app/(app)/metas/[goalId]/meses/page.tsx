@@ -20,18 +20,26 @@ export default async function MonthsPage({
   searchParams,
 }: {
   params: Promise<{ goalId: string }>;
-  searchParams: Promise<{ planear?: string | string[]; volver?: string | string[] }>;
+  searchParams: Promise<{ planear?: string | string[]; volver?: string | string[]; todo?: string | string[] }>;
 }) {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
   const { goalId } = await params;
-  const { planear, volver } = await searchParams;
+  const { planear, volver, todo } = await searchParams;
+  const keep = [
+    typeof planear === "string" ? `planear=${encodeURIComponent(planear)}` : null,
+    typeof volver === "string" ? `volver=${encodeURIComponent(volver)}` : null,
+  ]
+    .filter((part) => part !== null)
+    .join("&");
   return (
     <MonthsScreen
       goalId={goalId}
       planning={typeof planear === "string" ? planear : null}
       returnPath={returnTo(typeof volver === "string" ? volver : null, goalId)}
+      all={todo === "1"}
+      keep={keep}
     />
   );
 }

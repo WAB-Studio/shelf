@@ -16,7 +16,6 @@ import {
   Text,
 } from "@/components/ui";
 import { GoalBranch, type BranchGoal } from "@/components/goal/goal-branch";
-import { CommitmentRow } from "@/components/goal/retire-sheet";
 import { dayBefore } from "@/lib/day/weeks";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import type {
@@ -48,7 +47,7 @@ export async function GoalsScreen({
 }) {
   const t = await getTranslations();
 
-  // `HabitosSueltos`: each live habit with its cadence and its note; tapping one asks to retire it.
+  // `HabitosSueltos`: each live habit with its cadence and its note; tapping one opens its screen.
   const cadenceNames = {
     weekdayShort: t.raw("day.cadence.weekdayName") as string[],
     weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
@@ -64,13 +63,10 @@ export async function GoalsScreen({
         ) : (
           <Flex direction="column">
             {liveHabits.map((habit) => (
-              <CommitmentRow
+              <Row
                 key={habit.id}
-                commitmentId={habit.id}
+                href={`/metas/habitos/${habit.id}`}
                 name={habit.name}
-                retired={false}
-                retiredLabel=""
-                factDayCount={habit.factDayCount}
                 meta={
                   <>
                     {cadencePhrase((key, values) => t(key, values), habit.cadence, cadenceNames) ?? t("day.cadence.everyDay")}
@@ -82,7 +78,9 @@ export async function GoalsScreen({
                     ) : null}
                   </>
                 }
+                metaVariant="sentence"
                 preview={habit.note}
+                trailing={<ChevronRight size={16} strokeWidth={1.5} aria-hidden />}
               />
             ))}
           </Flex>

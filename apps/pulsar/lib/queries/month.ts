@@ -2,7 +2,7 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { asksOn } from "@/lib/day/cadence";
+import { askedIn } from "@/lib/day/habit-months";
 import type { Cadence, EvidenceDay } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
@@ -30,7 +30,7 @@ import {
 } from "@/lib/queries/goal";
 import { toCadence, toDeclaredFact } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, todayInZone } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 
 export type MonthAcrossGoal = {
   id: string;
@@ -98,12 +98,7 @@ function looseHabit({ id, name, daysDone, row }: LooseRow, month: string, today:
   const counted = cadence.kind === "daily" || cadence.kind === "weekdays" || cadence.kind === "every_n_days";
   if (!counted) return { id, name, daysDone, cadence, asked: null };
   const plan = { id, cadence, satisfiedBy: { kind: "tap" as const }, retiredAt: row.retired_at, createdOn: civilDateInZone(new Date(row.created_at)) };
-  let asked = 0;
-  const cursor = civilDateToDate(month);
-  for (let day = month; day <= today; day = dateToCivilDate(cursor)) {
-    if (asksOn(plan, day, [])) asked += 1;
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
+  const asked = askedIn(plan, month, today);
   return { id, name, daysDone, cadence, asked };
 }
 

@@ -203,8 +203,8 @@ test.describe("the habit form", () => {
 test.describe("retiring a habit", () => {
   test.use({ viewport: { width: 360, height: 900 } });
 
-  test("tapping its name asks «¿Retirarlo?» with the days it was done; «Dejarlo como está» keeps it (RP-13, RP-100)", async ({ person, browser, baseURL, db }) => {
-    // Kills: a name that opens nothing; a cancel that retires.
+  test("its row opens its screen, whose «Retirarlo» asks «¿Retirarlo?» with the days it was done; «Dejarlo como está» keeps it (RP-13, RP-105)", async ({ person, browser, baseURL, db }) => {
+    // Kills: a row that opens nothing; a screen with no «Retirarlo»; a cancel that retires.
     const id = await seedHabit(db, person, { name: "Tomar agua", quantity: 2, unit: "litros" });
     for (let d = 1; d <= 12; d += 1) {
       await db`
@@ -215,6 +215,9 @@ test.describe("retiring a habit", () => {
     try {
       const posts = postCounter(page);
       await page.getByText("Tomar agua", { exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/metas/habitos/${id}$`));
+      await expect(page.getByRole("heading", { level: 1, name: "Tomar agua" })).toBeVisible();
+      await page.getByRole("button", { name: "Retirarlo", exact: true }).click();
       const sheet = dialog(page);
       await expect(sheet.getByRole("heading", { name: "¿Retirarlo?" })).toBeVisible();
       await expect(
@@ -229,7 +232,7 @@ test.describe("retiring a habit", () => {
     }
   });
 
-  test("«Retirarlo» takes it out of the section, keeps asking until tomorrow on Hoy, and keeps the row and its days (RP-13, RP-100)", async ({ person, browser, baseURL, db }) => {
+  test("«Retirarlo» from its screen takes it out of the section, keeps asking until tomorrow on Hoy, and keeps the row and its days (RP-13, RP-105)", async ({ person, browser, baseURL, db }) => {
     // Kills: deleting the row instead of retiring it; a retired habit still listed.
     const id = await seedHabit(db, person, { name: "Tomar agua", quantity: 2, unit: "litros" });
     await db`
@@ -240,8 +243,12 @@ test.describe("retiring a habit", () => {
       await expect(page.getByText("Tomar agua").first()).toBeVisible();
       await page.goto("/metas");
       await page.getByText("Tomar agua", { exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/metas/habitos/${id}$`));
+      await page.getByRole("button", { name: "Retirarlo", exact: true }).click();
       await dialog(page).getByRole("button", { name: "Retirarlo", exact: true }).click();
       await expect(dialog(page)).toHaveCount(0);
+      await expect(page).toHaveURL(new RegExp(`/metas/habitos/${id}$`));
+      await page.goto("/metas");
       await expect(page.getByText("Tomar agua", { exact: true })).toHaveCount(0);
       expect(await mainLower(page)).toContain("ninguno todavía.");
       const rows = await habitRows(db, person, "Tomar agua");

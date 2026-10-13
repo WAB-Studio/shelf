@@ -4,13 +4,14 @@ import { getTranslations } from "next-intl/server";
 
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
+import { tailOf } from "@/lib/lists/tail";
 import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
-import { Button, ListDetail, Page, ScreenHeader, Table, Text, type TableRow } from "@/components/ui";
+import { Button, ListDetail, Page, ScreenHeader, Table, Text, TextLink, type TableRow } from "@/components/ui";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 
@@ -30,9 +31,27 @@ function yearLabel(month: string): string {
  * The phone's stack is drawn at every width: the list lives in a 320px column
  * from 1024. A month's amount is set from its own page, never from the row.
  */
-export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open: string }) {
-  const goal = { ...loaded, months: settledMonths(loaded.months, loaded.endedOn !== null) };
+export async function MonthsList({
+  goal: loaded,
+  open,
+  all = false,
+  keep = "",
+}: {
+  goal: GoalView;
+  open: string;
+  // `?todo=1`: the whole span of a goal with no end, closed months included.
+  all?: boolean;
+  // The query the link keeps (`planear`, `volver`), already encoded.
+  keep?: string;
+}) {
   const t = await getTranslations();
+  const settled = settledMonths(loaded.months, loaded.endedOn !== null);
+  // A goal with no end shows its last 12 months; a month open outside them shows the whole list.
+  const cut = loaded.horizon === null ? tailOf(settled, all || !tailOf(settled, false).shown.some((row) => row.month === open)) : null;
+  const goal = { ...loaded, months: cut ? cut.shown : settled };
+  const seeAll = cut && cut.hidden > 0 ? (
+    <TextLink href={`/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}todo=1`}>{t("common.seeAll")}</TextLink>
+  ) : null;
   const hrefOf = (month: string) => `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
   const caption = t("month.months.caption", { count: goal.months.length });
   const currentIndex = goal.months.findIndex((row) => row.current);
@@ -74,6 +93,7 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
           open={openIndex === -1 ? undefined : openIndex}
         />
         {noEnd}
+        {seeAll}
       </>
     );
   }
@@ -143,6 +163,7 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
         open={openIndex === -1 ? undefined : openIndex}
       />
       {noEnd}
+      {seeAll}
     </>
   );
 }
@@ -158,10 +179,14 @@ export async function MonthsScreen({
   goalId,
   planning,
   returnPath,
+  all = false,
+  keep = "",
 }: {
   goalId: string;
   planning: string | null;
   returnPath: string;
+  all?: boolean;
+  keep?: string;
 }) {
   const loaded = await loadGoal(goalId);
   if (!loaded) notFound();
@@ -205,7 +230,7 @@ export async function MonthsScreen({
       {target ? (
         <ListDetail
           show="list"
-          list={<MonthsList goal={goal} open={target.month} />}
+          list={<MonthsList goal={goal} open={target.month} all={all} keep={keep} />}
           detail={<MonthDetail
               goal={goal}
               month={target.month.slice(0, 7)}

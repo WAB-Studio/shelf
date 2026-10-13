@@ -284,14 +284,15 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
       const updateFact = await attempt(tx, (sp) => sp`update goals.facts set note = 'x' where id = ${a.factId}`);
       assert("P11", updateFact.code === "42501", `update a fact at all, sqlstate = ${updateFact.code ?? "none"}`);
 
-      const updateCommitmentName = await attempt(
+      // `name` opened in 0022 (P274); `unit` is one of the columns still closed.
+      const updateCommitmentUnit = await attempt(
         tx,
-        (sp) => sp`update goals.commitments set name = 'renombrado' where id = ${a.commitmentId}`,
+        (sp) => sp`update goals.commitments set unit = 'km' where id = ${a.commitmentId}`,
       );
       assert(
         "P12",
-        updateCommitmentName.code === "42501",
-        `update commitment.name, sqlstate = ${updateCommitmentName.code ?? "none"}`,
+        updateCommitmentUnit.code === "42501",
+        `update commitment.unit, sqlstate = ${updateCommitmentUnit.code ?? "none"}`,
       );
 
       const retireCommitment = await attempt(
@@ -3109,6 +3110,57 @@ async function checkNoEndAndLoose0021(): Promise<void> {
   await sql.end();
 }
 
+// RP-104: `0022` opens `name` on a person's own commitment and no other column. Driven as `authenticated`;
+// `COMMITMENT_NAME_MUTANT_SQL` runs privileged inside the rollback.
+async function checkCommitmentName0022(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.COMMITMENT_NAME_MUTANT_SQL;
+  if (mutant) console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      if (mutant) await tx.unsafe(mutant);
+      await tx`insert into goals.commitments (user_id, name, cadence_kind, satisfaction)
+        values (${intruder}, 'hábito ajeno', 'daily', 'tap')`;
+
+      // No WHERE: one that reads `id` hides the other row behind the SELECT policy, `using (true)` or not.
+      await enterUserContext(tx, subject);
+      const foreign = await attemptShape(tx, (sp) => sp`update goals.commitments set name = 'tomado'`);
+      assert("P273", foreign.code === undefined && foreign.count === 0, `rename with only another person's row, ${shape(foreign)}`);
+
+      const [mine] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, name, cadence_kind, satisfaction)
+        values (${subject}, 'leer', 'daily', 'tap') returning id`;
+      const own = await attemptShape(tx, (sp) => sp`update goals.commitments set name = 'leer en voz alta' where id = ${mine.id}`);
+      const [after] = await tx<{ name: string }[]>`select name from goals.commitments where id = ${mine.id}`;
+      assert(
+        "P274",
+        own.code === undefined && own.count === 1 && after?.name === "leer en voz alta",
+        `rename my own commitment, ${shape(own)}, reads back ${after?.name ?? "nothing"}`,
+      );
+
+      const closed: [string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
+        ["P275", "cadence_kind", (sp) => sp`update goals.commitments set cadence_kind = 'weekdays' where id = ${mine.id}`],
+        ["P276", "target_quantity", (sp) => sp`update goals.commitments set target_quantity = 3 where id = ${mine.id}`],
+        ["P277", "goal_id", (sp) => sp`update goals.commitments set goal_id = null where id = ${mine.id}`],
+      ];
+      for (const [label, column, fn] of closed) {
+        const r = await attemptShape(tx, fn);
+        assert(label, r.code === "42501", `update commitment.${column} after 0022, ${shape(r)}`);
+      }
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -3142,6 +3194,7 @@ async function main(): Promise<void> {
   await checkGoalTree0018();
   await checkModelCallsChat0020();
   await checkNoEndAndLoose0021();
+  await checkCommitmentName0022();
 
   if (failed) process.exit(1);
 }

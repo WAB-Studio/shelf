@@ -248,7 +248,7 @@ for (const width of [360, 1280]) {
         await expect(sheet.getByRole("heading", { name: "¿Cuántas semanas?" })).toBeVisible();
         await expect(sheet.getByRole("button", { name: "Quitar el final", exact: true })).toHaveCount(0);
         await expect(sheet.getByRole("button", { name: "Dejarla sin final", exact: true })).toBeVisible();
-        await sheet.getByLabel(/^semanas, contando/).fill("12");
+        await sheet.getByLabel("semanas, contando esta", { exact: true }).fill("12");
         const hint = (await sheet.getByText(/^termina el /).innerText()).replace(/^termina el /, "").trim();
         expect(hint).toMatch(/^\d{1,2} \w{3} \d{4}$/);
         await holdActions(page, 1200);
@@ -272,11 +272,11 @@ for (const width of [360, 1280]) {
       try {
         await page.getByRole("button", { name: "ponerle final" }).click();
         const sheet = dialog(page);
-        await sheet.getByLabel(/^semanas, contando/).fill("20");
+        await sheet.getByLabel("semanas, contando esta", { exact: true }).fill("20");
         // Board 4: the refusal reads under the field as the weeks are typed, and «Ponerle final» stays unfilled.
         await expect(sheet.getByRole("button", { name: "Ponerle final", exact: true })).toBeDisabled();
         await expect(sheet.getByText(tree.errors.belowNoEnd.replace("{name}", "Dormir mejor"), { exact: true })).toBeVisible();
-        await expect(sheet.getByLabel(/^semanas, contando/)).toHaveAttribute("aria-invalid", "true");
+        await expect(sheet.getByLabel("semanas, contando esta", { exact: true })).toHaveAttribute("aria-invalid", "true");
         await expect(dialog(page)).toBeVisible();
         expect(await horizonOfGoal(db, salud)).toBeNull();
       } finally {
@@ -340,6 +340,8 @@ for (const width of [360, 1280]) {
         expect(hrefs).toContain(`/metas/${id}/meses/${monthsAhead(11).slice(0, 7)}`);
         expect(hrefs).not.toContain(`/metas/${id}/meses/${monthsAhead(12).slice(0, 7)}`);
         expect(await mainLower(page)).toContain("12 meses");
+        // RP-106: exactly 12 rows is not a long list.
+        await expect(page.getByRole("link", { name: "ver todo", exact: true })).toHaveCount(0);
       } finally {
         await context.close();
       }

@@ -10,7 +10,7 @@ import { movedExample, unfold } from "./importar-plan";
 const TUTOR_NOTE = ["Preguntar por la tarifa por hora.", "Pedir una clase de prueba antes de pagar."];
 const CHILD_NOTE = "Comparar tres perfiles.";
 
-const template = movedExample;
+const template = () => movedExample().split("\n\n# Leer\n")[0];
 
 type Fixtures = { person: { id: string; sessionFile: string }; browser: Browser; baseURL: string | undefined };
 async function asPerson({ person, browser, baseURL }: Fixtures, run: (page: Page) => Promise<void>) {

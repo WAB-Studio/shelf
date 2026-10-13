@@ -131,6 +131,7 @@
   "horizon": {
     "title": "¿Cuántas semanas?",
     "weeksLabel": "semanas, contando la del {date}",
+    "weeksFromThis": "semanas, contando esta",
     "endsOn": "termina el {date}",
     "confirm": "Moverlo",
     "cancel": "Dejarlo como está",
