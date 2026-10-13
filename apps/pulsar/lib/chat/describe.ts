@@ -72,12 +72,12 @@ const FIELDS: Record<string, Field[]> = {
     { as: "day", from: "ends_on", to: "to" },
   ],
   add_commitment: [
-    { as: "goal", from: "goal_id", to: "goal" },
+    { as: "goal", from: "goal_id", to: "goal", optional: true },
     { as: "text", from: "name", to: "name" },
   ],
   move_horizon: [
     { as: "goal", from: "goal_id", to: "goal" },
-    { as: "day", from: "horizon", to: "day" },
+    { as: "day", from: "horizon", to: "day", optional: true },
   ],
   fix_task: [
     { as: "task", from: "one_off_id", to: "task" },
@@ -87,7 +87,7 @@ const FIELDS: Record<string, Field[]> = {
   create_goal: [
     { as: "text", from: "name", to: "name" },
     { as: "goal", from: "parent_id", to: "parent", optional: true },
-    { as: "day", from: "horizon", to: "day" },
+    { as: "day", from: "horizon", to: "day", optional: true },
   ],
   move_goal: [
     { as: "goal", from: "goal_id", to: "goal" },
@@ -125,7 +125,10 @@ function replaced(change: Change, names: ChangeNames, values: Record<string, str
     case "set_goal_note":
       return { before: goal?.hasNote ? say("withNote") : say("noNote"), after: say("withNote") };
     case "move_horizon":
-      return { before: goal ? civilDayMonthShort(goal.horizon) : "", after: values.day };
+      return {
+        before: goal?.horizon ? civilDayMonthShort(goal.horizon) : say("noEnd"),
+        after: values.day ?? say("noEnd"),
+      };
     case "retire_commitment":
       return commitment?.target != null ? { before: quantity(commitment.target, commitment.unit) } : {};
     default:

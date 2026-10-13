@@ -163,7 +163,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
         <EvidenceNote title={t("week.unreadableTitle")} body={t("week.unreadableBody")} />
       ) : null}
 
-      {goals.length === 0 ? (
+      {goals.length === 0 && week.loose.commitments.length === 0 ? (
         <EmptyWeek title={t("week.empty.title")} action={t("week.empty.action")} />
       ) : null}
 

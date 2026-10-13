@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { dayBefore } from "@/lib/day/weeks";
-import { monthsOfSpan } from "@/lib/plan/months";
+import { lastMonthOf, monthsOfSpan, nextMonth } from "@/lib/plan/months";
 import { isEnglishMinuteUnit, isHourUnit, isTimeUnit } from "@/lib/units/time";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
 import { setRhythmSchema } from "@/lib/validation/rhythm";
@@ -148,14 +148,10 @@ function refusalsV1(draft: ImportDraftV1, today: string): DraftRefusal[] {
     });
 
     // A goal whose end already passed has no span: it is refused whole.
-    const span = past || horizon === null ? null : new Set(monthsOfSpan(today, horizon));
-    const lastDay = horizon === null ? "" : dayBefore(horizon);
+    const span = past ? null : new Set(monthsOfSpan(today, horizon));
+    const lastDay = dayBefore(horizon ?? nextMonth(lastMonthOf(today, null, today)));
     // Which side of the span a month falls on: before today's month or after the goal's last.
     const outsideSpan = (path: string, m: string) => {
-      if (horizon === null) {
-        if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
-        return;
-      }
       if (span === null || span.has(`${m}-01`)) return;
       if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
       else refuse(path, "import.errors.monthAfterEnd", { last: lastDay });
@@ -913,13 +909,9 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
       else if (goal.phases.slice(0, p).some((earlier) => phasesOverlap(earlier, phaseValue))) refuse(`.phases.${p}`, "plan.errors.phaseOverlap");
     });
 
-    const span = horizonOk ? new Set(monthsOfSpan(today, horizon)) : null;
-    const lastDay = horizonIssue === null && horizon !== null ? dayBefore(horizon) : (horizon ?? "");
+    const span = horizonOk || horizon === null ? new Set(monthsOfSpan(today, horizon)) : null;
+    const lastDay = horizon === null ? dayBefore(nextMonth(lastMonthOf(today, null, today))) : horizonIssue === null ? dayBefore(horizon) : horizon;
     const outsideSpan = (path: string, m: string) => {
-      if (horizon === null) {
-        if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
-        return;
-      }
       if (span === null || span.has(`${m}-01`)) return;
       if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
       else refuse(path, "import.errors.monthAfterEnd", { last: lastDay });

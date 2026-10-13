@@ -88,7 +88,7 @@ export function WeekTableFace({
   const say = (key: FlexibleKey, values?: Record<string, number | string>) =>
     t(past ? (PAST_KEY[key] ?? key) : key, values);
 
-  const commitmentRows = (goalId: string) =>
+  const commitmentRows = (goalId: string | null) =>
     commitments
       .filter((commitment) => commitment.goalId === goalId)
       .map((commitment) => {
@@ -137,9 +137,11 @@ export function WeekTableFace({
       rows: [...commitmentRows(goal.id), ...oneOffRows(goal.id)],
     };
   });
+  const habitRows = commitmentRows(null);
   const looseRows = oneOffRows(null);
   const foldGroups = [
     ...goalGroups,
+    ...(habitRows.length > 0 ? [{ key: "habits", label: t("week.habits.title"), rows: habitRows }] : []),
     ...(looseRows.length > 0 ? [{ key: "one-offs", label: t("week.oneOffs.title"), rows: looseRows }] : []),
   ];
   // Neither face heads a goal with nothing to mark; an ended note keeps its group.

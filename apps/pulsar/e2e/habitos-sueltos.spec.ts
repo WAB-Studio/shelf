@@ -12,7 +12,7 @@ import {
   seedHabit,
   seedOpenGoal,
   visit,
-} from "./sin-final-seed";
+} from "./metas-sin-final-seed";
 
 // A locator that never appears fails in 6 s with its own name, never as the test's 30 s timeout.
 test.use({ actionTimeout: 6000 });

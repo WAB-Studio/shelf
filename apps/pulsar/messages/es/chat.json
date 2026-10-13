@@ -35,7 +35,8 @@
     "inPlan": "al plan",
     "noNote": "sin nota",
     "withNote": "con nota",
-    "noDay": "sin día"
+    "noDay": "sin día",
+    "noEnd": "sin final"
   },
   "change": {
     "declare_fact": "Marcar «{commitment}» como cumplido",

@@ -233,15 +233,21 @@ function MeasureLine({
 }: {
   name: string | null;
   unit: string;
-  date: string;
+  // Null for a goal with no end: the line says nothing of one.
+  date: string | null;
   declared: boolean;
   t: Translator<"export">;
 }) {
   const words = useTimeWords();
   const unitWords = isTimeUnit(unit) ? t("timeUnit") : (words.unit?.(unit, 2) ?? unit);
-  const key = declared ? "measuresDeclared" : "measures";
   const measure = distinctMeasureName(name, unit, [words.unit?.(unit, 1) ?? unit, words.unit?.(unit, 2) ?? unit]);
-  return measure === null ? t(`${key}Unnamed`, { unit: unitWords, date }) : t(key, { measure, unit: unitWords, date });
+  return [
+    measure === null ? t("measuresUnnamed", { unit: unitWords }) : t("measures", { measure, unit: unitWords }),
+    date === null ? null : t("until", { date }),
+    declared ? t("declaredOnly") : null,
+  ]
+    .filter((part) => part !== null)
+    .join(" · ");
 }
 
 // One line per goal inside a general: its month and amount, then its last day.
@@ -257,7 +263,7 @@ function InsideRow({
   t: Translator<"export">;
 }) {
   const words = useTimeWords();
-  const until = dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
+  const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
   const planned =
     goal.endedOn === null && goal.unit !== null
       ? screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${today.slice(0, 7)}-01`))
@@ -266,13 +272,19 @@ function InsideRow({
     goal.endedOn !== null
       ? t("ended", { date: dateWithYear.format(civilDateToDate(goal.endedOn)) })
       : planned !== null
-        ? t("insideRow", {
-            month: monthOnly.format(civilDateToDate(today)),
-            done: formatQuantity(goal.thisMonth.reached, goal.unit as string, words),
-            planned: formatQuantity(planned, goal.unit as string, words),
-            date: until,
-          })
-        : t("insideRowNoAmount", { date: until });
+        ? [
+            t("insideRow", {
+              month: monthOnly.format(civilDateToDate(today)),
+              done: formatQuantity(goal.thisMonth.reached, goal.unit as string, words),
+              planned: formatQuantity(planned, goal.unit as string, words),
+            }),
+            until === null ? null : t("until", { date: until }),
+          ]
+            .filter((part) => part !== null)
+            .join(" · ")
+        : until === null
+          ? undefined
+          : t("until", { date: until });
   return <Row name={goal.name} meta={meta} href={`/metas/${goal.id}`} level={level} />;
 }
 
@@ -333,12 +345,12 @@ function GoalPart({
   const sections: (GoalSection | "inside")[] = goalSections(goal);
   if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
   if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
-  const until = dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
+  const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
   const thisMonth = monthOnly.format(civilDateToDate(today));
 
   const measureLine =
     unit === null ? (
-      t("noMeasure", { date: until })
+      until === null ? t("noMeasure") : `${t("noMeasure")} · ${t("until", { date: until })}`
     ) : (
       <MeasureLine
         name={goal.measureName}
@@ -625,7 +637,8 @@ function GoalPart({
         const weekDayOf = (day: string) => (civilDateToDate(day).getUTCDay() + 6) % 7;
         const weekNames = t.raw("weekDays") as string[];
         // `endsOn` runs to Sunday; the goal's last day cuts it.
-        const weekLast = week ? (week.endsOn < dayBefore(goal.horizon) ? week.endsOn : dayBefore(goal.horizon)) : null;
+        const lastDay = goal.horizon === null ? null : dayBefore(goal.horizon);
+        const weekLast = week ? (lastDay !== null && lastDay < week.endsOn ? lastDay : week.endsOn) : null;
         const weekEdges =
           week && weekLast
             ? {

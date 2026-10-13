@@ -130,7 +130,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       setEditing({ ...base, kind: "month", amount: node.figure?.amount ?? 0 });
     } else if (node.kind === "task" || node.kind === "subTask") {
       const task = goal.tasks[Number(node.path.split(".")[3])];
-      const span = goal.horizon > today ? monthsOfSpan(today, goal.horizon).map((entry) => entry.slice(0, 7)) : [];
+      const span = goal.horizon === null || goal.horizon > today ? monthsOfSpan(today, goal.horizon).map((entry) => entry.slice(0, 7)) : [];
       const months = span.includes(task.month) ? span : [task.month, ...span];
       setEditing({
         ...base,
@@ -170,7 +170,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         ...base,
         kind: "goal",
         name: node.label,
-        horizon: { current: goal.horizon, today, refuse: (horizon) => goalHorizonRefusal(stored!.draft, g, horizon, today) },
+        horizon: { current: goal.horizon, today, refuse: (horizon: string | null) => goalHorizonRefusal(stored!.draft, g, horizon, today) },
       });
     } else {
       setEditing({ ...base, kind: "phase", name: node.label });

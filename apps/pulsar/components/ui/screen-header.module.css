@@ -32,6 +32,12 @@
   min-inline-size: 0;
 }
 
+/* Beside an eyebrow the controls keep their width and the eyebrow wraps: a long
+   date must not push the toggle over the entry. */
+.eyebrow + .controls {
+  flex: 1 0 auto;
+}
+
 .controls > * {
   flex: 1 1 auto;
 }

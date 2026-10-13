@@ -104,6 +104,16 @@ function parseUnitAmount(text: string, unit: string): number | null {
   return m && m[2].trim().toLowerCase() === unit.trim().toLowerCase() ? Number(m[1]) : null;
 }
 
+// A rhythm outside time: a whole number, alone or followed by the measure's unit in its plural or singular.
+function parseRhythmUnits(text: string, unit: string): number | null {
+  const t = text.trim();
+  if (/^\d+$/.test(t)) return Number(t);
+  const plural = unit.trim().toLowerCase();
+  const singular = plural.length > 1 && plural.endsWith("s") ? plural.slice(0, -1) : plural;
+  const m = /^(\d+)\s+(\S.*)$/.exec(t);
+  return m && [plural, singular].includes(m[2].trim().toLowerCase()) ? Number(m[1]) : null;
+}
+
 type Spot = { line: number; expected: FormCode };
 
 // The parts of a goal that its head lines write.
@@ -264,7 +274,7 @@ export function parseTemplate(text: string): TemplateResult {
         followsMeasure && section === null && given && goal.measure
           ? isTimeUnit(goal.measure.unit)
             ? parseTime(given[1])
-            : /^\d+$/.test(given[1]) ? Number(given[1]) : null
+            : parseRhythmUnits(given[1], goal.measure.unit)
           : null;
       if (amount === null) {
         const expected =

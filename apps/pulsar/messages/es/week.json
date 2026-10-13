@@ -35,6 +35,9 @@
   "oneOffs": {
     "title": "Sueltas"
   },
+  "habits": {
+    "title": "Hábitos"
+  },
   "empty": {
     "title": "Todavía no tienes una meta abierta.",
     "action": "Crear una meta"

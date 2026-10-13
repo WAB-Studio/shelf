@@ -5,6 +5,7 @@ import messages from "../messages/es/import.json";
 import roadmap from "../messages/es/roadmap.json";
 import { todayInZone } from "../lib/zone";
 import { test, expect, settled as pageSettled } from "./fixtures";
+import { unfold } from "./importar-plan";
 
 // 686–689, part 4: a rhythm runs from 1 minute to 744 h (31 × 24) a month, and every
 // door to it — the plan's sheet, the review's sheet and the imported text — says the
@@ -115,6 +116,8 @@ for (const width of [360, 1440]) {
       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
       await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
       await pageSettled(page);
+      // The review arrives folded; the rhythm sits inside the goal's parts (902).
+      await unfold(page);
 
       await page.getByRole("button", { name: "Cambiar el ritmo, 12 h al mes", exact: true }).click();
       await page.getByRole("spinbutton", { name: "horas" }).fill("744");

@@ -12,7 +12,7 @@ import { phaseCuts, phaseDrops } from "@/lib/import/draft";
 import { dayBefore } from "@/lib/day/weeks";
 import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { shortMonth } from "@/lib/dates/short-month";
-import { formatQuantity } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { civilDateToDate } from "@/lib/zone";
 import { useTimeWords } from "@/components/ui/figure";
 import { Button, CheckRow, Figure, Flex, Fold, Panel, Section, Text } from "@/components/ui";
@@ -202,11 +202,11 @@ export function ReviewTree({
   const metaOf = (node: ReviewNode): string => {
     const parts: string[] = [classOf(node)];
     const goal = goalOf(node);
-    if (node.kind === "goal" || node.kind === "group") parts.push(t("import.review.horizonUntil", { date: dayShort(dayBefore(goal.horizon)) }));
+    if (node.kind === "goal" || node.kind === "group") parts.push(goal.horizon === null ? t("import.review.noEnd") : t("import.review.horizonUntil", { date: dayShort(dayBefore(goal.horizon)) }));
     else if (node.kind === "phase") {
       const phase = goal.phases[Number(node.path.split(".")[3])];
       parts.push(`${dayShort(phase.startsOn)} – ${dayShort(phase.endsOn)}`);
-    } else if (node.kind === "rhythm") parts.push(t("import.review.rhythmMeta"));
+    } else if (node.kind === "rhythm") parts.push(isTimeUnit(goal.measure?.unit ?? "") ? t("import.review.rhythmMeta") : t("import.review.rhythmMetaUnit"));
     else if (node.kind === "commitment") {
       const { commitment } = partOf(node.path);
       parts.push(cadenceText(commitment!));
