@@ -1430,3 +1430,9 @@ Three answers of the user, 2026-10-09.
   como ella.», only when the goal above has a rhythm) and `MetasUnidadArbol`. Words: `private/tableros-f1/NOTAS.md`.
 - **A file attached with text in the box:** «Leer el plan» reads the file, and one line under the file says «Se lee el archivo; el
   texto de la caja no se envía.»
+- **A plan created with parts that were not written** (RP-90), 2026-10-13, by the user: option A, `ImportarCreadoConFallos`
+  (page «Importar»). The review route becomes «Plan creado»: one sentence with the count, section «NO SE ESCRIBIÓ», one row per
+  part (its name, where it went, what to do), «Ir a Metas» full width. Corrected from the board: rows carry no checkbox, and each
+  reason says what happened and what to do in plain words, never «la tabla». With nothing failed, «Crear» goes to Metas as before.
+  The list lives in the tab (`sessionStorage`, from `lib/`) until «Ir a Metas»; a reload keeps it. `ImportarCreadoConFallos-B`
+  goes to «Archivo».
