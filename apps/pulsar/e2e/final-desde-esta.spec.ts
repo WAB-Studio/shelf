@@ -17,6 +17,12 @@ test.use({ actionTimeout: 6000 });
 const WEEKS_LABEL = "semanas, contando esta";
 const OPENED_LONG_AGO = new Date("2024-04-10T12:00:00Z");
 
+// Whole Mondays between the goal's opening week and this one.
+function weeksSinceOpening(opened: Date): number {
+  const monday = (d: string) => civilDateToDate(weekOf(d)[0]).getTime();
+  return Math.round((monday(todayInZone()) - monday(dateToCivilDate(opened))) / 86_400_000 / 7);
+}
+
 function plusDays(day: string, days: number): string {
   const date = civilDateToDate(day);
   date.setUTCDate(date.getUTCDate() + days);
@@ -116,7 +122,7 @@ test("a phase ending in week 20 from today refuses 12, names week 20 counted fro
     // The refusal may stand as the weeks are typed (button disabled) or after the tap: both end on the sentence.
     if (await put.isEnabled()) await put.click();
     await expect(
-      sheet.getByText(`La fase «${phase}» llega hasta la semana 20. El final no puede quedar antes.`, { exact: true }),
+      sheet.getByText(`La fase «${phase}» llega hasta la semana 20 (${20 + weeksSinceOpening(OPENED_LONG_AGO)} desde la apertura). El final no puede quedar antes.`, { exact: true }),
     ).toBeVisible();
     await expect(field).toHaveAttribute("aria-invalid", "true");
     await expect(dialog(page)).toBeVisible();
@@ -306,7 +312,7 @@ test("E2: 4 weeks ends before the phase: refused naming week 6 counted from this
     const move = sheet.getByRole("button", { name: "Moverlo", exact: true });
     if (await move.isEnabled()) await move.click();
     await expect(
-      sheet.getByText("La fase «Preparación» llega hasta la semana 6. El final no puede quedar antes.", { exact: true }),
+      sheet.getByText("La fase «Preparación» llega hasta la semana 6 (7 desde la apertura). El final no puede quedar antes.", { exact: true }),
     ).toBeVisible();
     await expect(moveField(sheet)).toHaveAttribute("aria-invalid", "true");
     await expect(dialog(page)).toBeVisible();
@@ -437,7 +443,7 @@ test("at 360 the move sheet with a refusal does not overflow the screen (RP-108)
     await moveField(sheet).fill("4");
     const move = sheet.getByRole("button", { name: "Moverlo", exact: true });
     if (await move.isEnabled()) await move.click();
-    await expect(sheet.getByText(/^La fase «Preparación» llega hasta la semana 6/)).toBeVisible();
+    await expect(sheet.getByText(/^La fase «Preparación» llega hasta la semana 6 \(7 desde la apertura\)/)).toBeVisible();
     const over = await page.evaluate(() => {
       const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
       const box = dlg.getBoundingClientRect();
