@@ -209,7 +209,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
     // A time goal with no rhythm has no amount to read a month by, so it reads tasks.
     const unit = row.goal.measure_unit;
     const countsTasks = unit === null || (isTimeUnit(unit) && (row.goal.rhythm ?? null) === null);
-    // A goal with no end lists the current month and the eleven after: the twelve its «Por mes» screen shows, no closed one.
+    // A goal with no end hands over every month, closed ones included, marked `endless` so the screen picks what to show (RP-106).
     const noEnd = row.goal.horizon === null;
 
     const report: GoalReport = {
@@ -257,18 +257,16 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
             children,
           };
         }),
-      months: figures.months
-        .filter((month) => !noEnd || !month.past)
-        .map((month) => {
-          const share = month.past ? planShare(planInput, month.month) : null;
-          const items = countsTasks ? planMonthList(planInput, month.month) : null;
-          return {
-            ...month,
-            ...(noEnd ? { endless: true as const } : {}),
-            carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
-            ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
-          };
-        }),
+      months: figures.months.map((month) => {
+        const share = month.past ? planShare(planInput, month.month) : null;
+        const items = countsTasks ? planMonthList(planInput, month.month) : null;
+        return {
+          ...month,
+          ...(noEnd ? { endless: true as const } : {}),
+          carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
+          ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
+        };
+      }),
       weeks: figures.weeks,
       weekPlanned: (() => {
         const week = figures.weeks.find((w) => w.current);
@@ -445,7 +443,7 @@ function holderOf(args: {
     unit: sum.unit,
     thisMonth: { planned, reached, underPace },
     toDate: toDate(everyMonth),
-    months: noEnd ? everyMonth.filter((month) => !month.past) : everyMonth,
+    months: everyMonth,
     weeks,
     weekSplits: weekSplitsOf(weeks, (startsOn, endsOn) => spanTotal(id, startsOn, endsOn)),
     weekPlanned: sum.unit === null ? null : weekPlanned,

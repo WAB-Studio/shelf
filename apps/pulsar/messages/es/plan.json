@@ -66,6 +66,7 @@
     "goalNotFound": "Esa meta ya no existe.",
     "sourceNotFound": "Esa fuente no existe.",
     "notFound": "Eso ya no existe.",
+    "habitRetired": "Ese hábito ya está retirado.",
     "goalInvalid": "Esa meta no es válida.",
     "commitmentInvalid": "Ese compromiso no es válido.",
     "nameEmpty": "Escribe un nombre.",
