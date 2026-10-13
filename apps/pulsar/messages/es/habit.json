@@ -11,6 +11,8 @@
     "current": "en curso",
     "line": "{count, plural, one {# día} other {# días}}",
     "lineOf": "{done} de {asked, plural, one {# día} other {# días}}",
+    "lineWeeks": "{met} de {counted, plural, one {# semana} other {# semanas}}",
+    "noWeeks": "aún sin semanas cerradas",
     "seeAll": "ver todo"
   },
   "sheet": {
