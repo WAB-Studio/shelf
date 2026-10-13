@@ -35,13 +35,14 @@ export type Editing = {
   // A commitment's cadence and what it counts, to change.
   commitment: { cadence: Cadence; entry: DraftGoal["commitments"][number]; read: string; saidDay: { word: string; day: string } | null } | null;
   // A goal's end, to change in whole weeks from `today`; `refuse` is the review's rule for an end.
-  horizon: { current: string; today: string; refuse: (horizon: string) => { key: string; values: Record<string, string> } | null } | null;
+  horizon: { current: string | null; today: string; refuse: (horizon: string | null) => { key: string; values: Record<string, string> } | null } | null;
 };
 
-export type Change = { name?: string; amount?: number; month?: string; horizon?: string; cadence?: Cadence };
+export type Change = { name?: string; amount?: number; month?: string; horizon?: string | null; cadence?: Cadence };
 
 const CADENCE_KINDS = ["daily", "weekdays", "times_per_week", "every_n_days", "times_per_month"] as const;
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+const DEFAULT_WEEKS = 52;
 const weeksSchema = z.coerce.number().int().positive().max(520);
 
 const nameSchema = {
@@ -86,8 +87,10 @@ export function EditSheet({
   const [nameError, setNameError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const horizon = editing.horizon;
-  const weeksNow = horizon ? horizonWeeksOf(horizon.today, horizon.current) : 0;
-  const [weeks, setWeeks] = useState(String(weeksNow));
+  const weeksNow = horizon?.current ? horizonWeeksOf(horizon.today, horizon.current) : 0;
+  // Whether the goal ends: «ponerle final» opens the weeks field, «Quitar el final» closes it.
+  const [ends, setEnds] = useState(horizon?.current != null);
+  const [weeks, setWeeks] = useState(String(weeksNow > 0 ? weeksNow : DEFAULT_WEEKS));
   const [kind, setKind] = useState<Cadence["kind"]>(editing.commitment?.cadence.kind ?? "daily");
   const [days, setDays] = useState<number[]>(editing.commitment?.cadence.weekdays ?? []);
   const [count, setCount] = useState(String(editing.commitment?.cadence.n ?? ""));
@@ -96,8 +99,10 @@ export function EditSheet({
 
   // The end the weeks field stands for: untouched, the end the draft holds.
   const typedWeeks = weeksSchema.safeParse(weeks);
-  const candidate = !horizon || !typedWeeks.success ? null : typedWeeks.data === weeksNow ? horizon.current : horizonForWeeks(horizon.today, typedWeeks.data);
-  const horizonRefusal = horizon && candidate ? horizon.refuse(candidate) : null;
+  const candidate = !horizon || !ends || !typedWeeks.success ? null : typedWeeks.data === weeksNow && horizon.current ? horizon.current : horizonForWeeks(horizon.today, typedWeeks.data);
+  // Taking the end away is judged too: a goal under one with an end cannot go without.
+  const dropped = horizon !== null && !ends && horizon.current !== null;
+  const horizonRefusal = horizon && (candidate || dropped) ? horizon.refuse(candidate) : null;
   const horizonSentence = horizonRefusal
     ? t(messageKey(horizonRefusal.key), { name: horizonRefusal.values.name ?? "", date: horizonRefusal.values.date ? civilDateLabel(horizonRefusal.values.date) : "" })
     : null;
@@ -167,7 +172,10 @@ export function EditSheet({
         if (kind !== was.kind || cadence.n !== was.n || days.join() !== was.weekdays.join()) change.cadence = cadence;
       }
     }
-    if (horizon) {
+    if (horizon && !ends) {
+      if (horizonSentence !== null) refused = true;
+      else if (dropped) change.horizon = null;
+    } else if (horizon) {
       if (!typedWeeks.success) {
         setAmountError(t("goal.errors.horizonWeeksInvalid"));
         refused = true;
@@ -251,7 +259,22 @@ export function EditSheet({
             {hasAmount ? <SectionLabel>{t("import.review.edit.eachTime")}</SectionLabel> : null}
           </Flex>
         ) : null}
-        {horizon ? (
+        {horizon && !ends ? (
+          <Flex align="center" justify="between" gap="3">
+            <Text as="p" variant="sentence" tone="muted">
+              {t("import.review.edit.noEnd")}
+            </Text>
+            <Button variant="ghost" tone="accent" onClick={() => setEnds(true)}>
+              {t("import.review.edit.putEnd")}
+            </Button>
+          </Flex>
+        ) : null}
+        {horizon && !ends && horizonSentence ? (
+          <Text as="p" variant="sentence" tone="ink">
+            {horizonSentence}
+          </Text>
+        ) : null}
+        {horizon && ends ? (
           <Field
             label={t("goal.horizon.weeksLabel", { date: civilDateLabel(horizon.today) })}
             type="number"
@@ -265,6 +288,11 @@ export function EditSheet({
             hint={horizonSentence ?? amountError ?? (candidate ? t("goal.horizon.endsOn", { date: civilDateLabel(dayBefore(candidate), true) }) : t("goal.errors.horizonWeeksInvalid"))}
             autoFocus={editing.name === null}
           />
+        ) : null}
+        {horizon && ends && horizon.current !== null ? (
+          <Button variant="ghost" tone="accent" onClick={() => setEnds(false)}>
+            {t("import.review.edit.dropEnd")}
+          </Button>
         ) : null}
         {hasAmount && timed ? (
           <FieldPair>

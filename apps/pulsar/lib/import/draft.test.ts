@@ -7,6 +7,7 @@ import { draftRefusals, importDraftJsonSchema, importDraftSchema, inMinutes, pha
 import { commitmentShapeKey, decide, draftRefusals as refusalsOf, draftV2Schema, normalize, rawDraftJsonSchema, rawDraftSchema, type DraftGoal, type ImportDraft, type RawGoal, type RawTask, type Source } from "./draft";
 
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
+import { lastMonthOf, nextMonth } from "@/lib/plan/months";
 
 const TODAY = "2026-10-15";
 
@@ -816,9 +817,11 @@ test("903: declining the holder's rhythm correction takes its line out of the no
 
 // RP-102: no end, and a rhythm in any unit.
 test("915 a goal with no end passes the refusals and reaches no month outside a span", () => {
-  const { draft } = run([rawGoal({ horizon: null, months: [{ month: "2031-01", amount: 5, src: [] }] })]);
+  const last = lastMonthOf(TODAY, null, TODAY).slice(0, 7);
+  const after = nextMonth(`${last}-01`).slice(0, 7);
+  const { draft } = run([rawGoal({ horizon: null, months: [{ month: last, amount: 5, src: [] }, { month: after, amount: 5, src: [] }] })]);
   assert.equal(draft.goals[0].horizon, null);
-  assert.deepEqual(refusalKeys(draft), []);
+  assert.deepEqual(refusalKeys(draft), ["goals.0.months.1 import.errors.monthAfterEnd"]);
 });
 
 test("915 a goal with no end under one with an end is refused by name; under one with none it passes", () => {
