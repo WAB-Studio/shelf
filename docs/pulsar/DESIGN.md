@@ -1412,3 +1412,15 @@ Three answers of the user, 2026-10-09.
   screen keeps the board's one line per goal inside.
 - **Boards that do not exist**: the dark face of every hierarchy board (the token table's); «Por mes» and «Mes» grouped at 1280
   (the list and the card they always had); the paper's note (drawn by no board; it prints as the screen's text, whole).
+
+## Decisions of 2026-10-13, the chat (RP-91–94, RNP-21), by the user
+
+- **P1 — The way in is an icon at the right end of every screen's header.** The four tabs and the rail stay as RNP-16 and
+  RNP-17 say; nothing is retired. No fifth tab, no floating button.
+- **P2 — «Hacer todo» makes every change it can.** A refused change stays marked with its reason; the others are made.
+  Never all-or-nothing.
+- **P3 — The chat proposes only over what exists.** A change never names a goal another change of the same message creates;
+  the person asks for the next step after «Hacer».
+- **P4 — One line under the field, always,** says the message and the parts of the plan it reads go to OpenAI.
+- **P5 — The chat answers questions about the plan too,** from the same reads (RP-39). Each question is one of the fifty.
+- **P6 — An untaken change lapses when the next message is sent:** it reads «sin hacer» and has no button.
