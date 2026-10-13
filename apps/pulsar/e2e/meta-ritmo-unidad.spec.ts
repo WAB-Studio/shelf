@@ -87,6 +87,22 @@ for (const width of [360, 1280]) {
       }
     });
 
+    test("a rhythm that is not a whole number, in pages, is refused with the unit-neutral format sentence (RP-101)", async ({ person, browser, baseURL, db }) => {
+      // Kills: the time format sentence («8 h, 1 h 30 min») answering a goal that is not measured in time.
+      const id = await seedOpenGoal(db, person, { name: "Leer", unit: PAGES, horizon: monthsAhead(5) });
+      const { page, context } = await visit(browser, baseURL, person, `/metas/${id}`, width);
+      try {
+        const sheet = await openRhythmSheet(page);
+        await sheet.getByLabel("páginas al mes").fill("12,5");
+        await sheet.getByRole("button", { name: SAVE, exact: true }).click();
+        await expect(sheet.getByText(roadmap.errors.rhythmFormatAny, { exact: true })).toBeVisible();
+        await expect(sheet.getByText(roadmap.errors.rhythmFormat, { exact: true })).toHaveCount(0);
+        expect(await rhythmOfGoal(db, id)).toBeNull();
+      } finally {
+        await context.close();
+      }
+    });
+
     for (const [typed, label] of [["0", "zero"], ["1000001", "one past the cap"]] as const) {
       test(`a rhythm of ${label} is refused under the field with the range, and nothing is stored (RP-101)`, async ({ person, browser, baseURL, db }) => {
         // Kills: a field with no `invalid`; a range check missing either end; the hours sentence for pages.

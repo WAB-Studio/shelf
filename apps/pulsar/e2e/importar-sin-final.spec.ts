@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { dayBefore, horizonForWeeks } from "../lib/day/weeks";
-import { todayInZone } from "../lib/zone";
+import { civilDayMonthYear, todayInZone } from "../lib/zone";
 import type { RawDraft } from "../lib/import/draft";
 import { test, expect } from "./fixtures";
 import { asPerson, createButton, months, plus, toOpenReview, toOpenSeededReview, word, type Seed } from "./importar-plan";
@@ -216,7 +216,7 @@ test.describe("the sheet of a goal with no end (board `ImportarSinFinal-2-hoja-3
       await sheet(page).getByRole("button", { name: PUT_END, exact: true }).click();
       await weeksField(page).fill("52");
       const last = dayBefore(end);
-      await expect(sheet(page).getByText(new RegExp(`^termina el .*${Number(last.slice(8, 10))} de ${word(last.slice(0, 7))}`))).toBeVisible();
+      await expect(sheet(page).getByText(`termina el ${civilDayMonthYear(last)}`)).toBeVisible();
       await sheet(page).getByRole("button", { name: messages.review.edit.save }).click();
       await expect(sheet(page)).toHaveCount(0);
       await expect(page.getByText(`meta · hasta el ${dayWord(dayBefore(end))}`, { exact: true })).toHaveCount(1);

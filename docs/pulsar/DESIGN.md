@@ -1498,3 +1498,14 @@ Three answers of the user, 2026-10-09.
 - **A goal with no end prints the same twelve months the screen shows** (the current one and eleven after).
 - The user's answers P1–P11 are at the end of `private/plan-pulsar-sin-final-2026-10-13.md`; the spec carries them (RP-99–102).
 - Faces not drawn: dark (the token table) and 700–1023.
+
+## Decisions of 2026-10-13, after the critic of slice s1 («sin final», hábitos), by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/s1-critic/CRITIC.md`.
+
+- Putting an end on a goal with no end counts weeks from this week («semanas desde esta»), never from the day it opened.
+- A loose habit edits its name and its note only. Its cadence and amount do not change; that keeps past weeks read as they were.
+- A habit has its own screen with its months, like «Por mes», reached from /metas and from Mes. «Retirarlo» lives inside it; tapping the row on /metas opens the habit, never the retire sheet.
+- Lists that grow without an end (Por semana, Por mes, the report) show the last 12 with «ver todo». Screen and paper use the same 12.
+- The template's example and the «PARA OTRA IA» text teach a goal without `horizonte:` and a `ritmo: 40 páginas`. Words only. Habits in the template and the report are a slice of their own, not taken.
+- Not decided, pending: create a goal «sin final» inside a goal with no end from its sheet; thousands written «1.000» accepted back by the rhythm sheet and the import.
