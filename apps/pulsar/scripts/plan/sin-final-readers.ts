@@ -91,6 +91,7 @@ let q: {
   week: typeof import("@/lib/queries/week");
   month: typeof import("@/lib/queries/month");
   goal: typeof import("@/lib/queries/goal");
+  oneOffs: typeof import("@/lib/queries/one-offs");
 };
 
 before(async () => {
@@ -100,6 +101,7 @@ before(async () => {
     week: await import("@/lib/queries/week"),
     month: await import("@/lib/queries/month"),
     goal: await import("@/lib/queries/goal"),
+    oneOffs: await import("@/lib/queries/one-offs"),
   };
   const { getPerson } = await import("@/lib/session");
   const { todayInZone } = await import("@/lib/zone");
@@ -211,6 +213,44 @@ test("a goal with no end that holds goals runs its months to eleven past today's
     assert.equal(months[months.length - 1], monthFrom(later, 11));
   } finally {
     await db`delete from goals.goals where parent_id = ${parent.id}`;
+    await db`delete from goals.goals where id = ${parent.id}`;
+  }
+});
+
+test("the tasks scheduled ahead on a goal with no end are listed; those on an ended goal are not", async () => {
+  const ahead = addDays(today, 3);
+  const [kept] = await db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, day) values (${userId}, ${goalId}, 'sin-final-readers.ts adelante', ${ahead}::date) returning id`;
+  const [dropped] = await db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, day) values (${userId}, ${endedId}, 'sin-final-readers.ts de la terminada', ${ahead}::date) returning id`;
+  try {
+    const scheduled = await q.oneOffs.listScheduledOneOffs(today);
+    assert.ok(scheduled.some((task) => task.id === kept.id), "the endless goal's task is listed");
+    assert.ok(!scheduled.some((task) => task.id === dropped.id), "the ended goal's task is not");
+  } finally {
+    await db`delete from goals.one_offs where id in (${kept.id}, ${dropped.id})`;
+  }
+});
+
+test("Mes: a goal with no end adds up the month of a goal inside it that has ended", async () => {
+  const firstOfMonth = `${today.slice(0, 7)}-01`;
+  const [parent] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${userId}, 'sin-final-readers.ts madre abierta', null, 'searches', 'searches', now() - interval '70 days') returning id`;
+  const [child] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, parent_id, measure_name, measure_unit, created_at)
+    values (${userId}, 'sin-final-readers.ts hija terminada', ${firstOfMonth}::date, ${parent.id}, 'searches', 'searches', now() - interval '60 days')
+    returning id`;
+  await db`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${userId}, ${child.id}, ${firstOfMonth}::date, 7)`;
+  try {
+    const month = await q.month.loadMonthAcross(today);
+    const holder = month.goals.find((entry) => entry.id === parent.id);
+    assert.ok(holder, "the open parent");
+    assert.ok(!month.goals.some((entry) => entry.id === child.id), "the ended goal is not drawn");
+    assert.equal(holder.line?.planned, 7, "what the ended goal planned this month adds to the one above");
+  } finally {
+    await db`delete from goals.month_budgets where goal_id = ${child.id}`;
+    await db`delete from goals.goals where id = ${child.id}`;
     await db`delete from goals.goals where id = ${parent.id}`;
   }
 });
