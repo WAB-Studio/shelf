@@ -290,5 +290,28 @@
       "name": "Revisa",
       "hint": "Comprueba que las cuentas cuadren."
     }
+  },
+  "created": {
+    "eyebrow": "importar · hecho",
+    "title": "Plan creado",
+    "count": "{goals, plural, one {Se creó # meta} other {Se crearon # metas}} con todo su plan, menos {parts, plural, one {# parte que no se pudo escribir} other {# partes que no se pudieron escribir}}.",
+    "section": "No se escribió",
+    "hint": "agrégalas a mano en su meta; lo demás de tu plan ya está en Metas",
+    "goTo": "Ir a Metas",
+    "kinds": {
+      "goal": "meta",
+      "phase": "fase",
+      "month": "mes",
+      "commitment": "compromiso",
+      "task": "tarea",
+      "subtask": "sub-tarea"
+    },
+    "reasons": {
+      "noteShape": "No se escribió: su nota estaba vacía. Agrégala otra vez en la meta, con su nota o sin ella.",
+      "cadenceWeekdays": "No se escribió: los días que tenía no van con su cadencia. Agrégala en la meta con otros días.",
+      "cadenceCount": "No se escribió: la cantidad de veces no iba con su cadencia. Agrégala en la meta con otra cantidad.",
+      "quantityNoAmount": "No se escribió: le faltaba el monto o la unidad. Agrégala en la meta con los dos.",
+      "partFailed": "No se pudo escribir. Agrégala en la meta a mano."
+    }
   }
 }
