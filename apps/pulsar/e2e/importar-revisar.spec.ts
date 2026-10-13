@@ -28,7 +28,8 @@ const word = (month: string, withYear = false) => {
 // months stay inside the goals' spans whatever day the suite runs.
 function template(extraMonth?: string): string {
   const { second } = monthsFromToday();
-  let text = movedExample();
+  // Without the closing «Leer» goal (`importar-sin-final.spec.ts`'s): these counts are of the three goals above it.
+  let text = movedExample().split("\n\n# Leer\n")[0];
   if (extraMonth) text = text.replace(`- ${second} · 20 h`, `- ${second} · 20 h\n- ${extraMonth} · 8 h`);
   return text;
 }

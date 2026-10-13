@@ -26,6 +26,23 @@ test("the text for another AI carries the template whole, its mark first", () =>
   assert.ok(instruction.endsWith(catalogue.template.example), "the template closes the text");
 });
 
+test("the example ends on a goal with no end, a rhythm in pages and its commitment", () => {
+  const result = parseTemplate(catalogue.template.example);
+  assert.ok(result.matched && "draft" in result);
+  const goal = result.draft.goals.at(-1)!;
+  assert.equal(goal.name, "Leer");
+  assert.equal(goal.horizon, null);
+  assert.equal(goal.measure?.unit, "páginas");
+  assert.equal(goal.rhythm, 40);
+  assert.ok(catalogue.template.example.endsWith("# Leer\nmedida: lectura · páginas\nritmo: 40 páginas\n\n## Compromisos\n- Leer · cada día · 10 páginas"));
+});
+
+test("the text for another AI says a goal without end goes without horizonte, and the rhythm's unit", () => {
+  const line = "Una meta que no termina va sin «horizonte:». El ritmo va en la unidad de su medida: «ritmo: 12 h», «ritmo: 40 páginas».";
+  const instruction: string = catalogue.entry.instruction;
+  assert.ok(instruction.includes(`Máximo tres niveles.\n${line}\n`));
+});
+
 // ICU through the one formatter the app uses.
 async function say(key: string, values: Record<string, string | number>): Promise<string> {
   const { createTranslator } = await import("next-intl");

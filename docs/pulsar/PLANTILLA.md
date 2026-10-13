@@ -63,6 +63,13 @@ nota: Empezar por lo que ya sé medir.
   - 1 h · Elegir tutor
     nota: Comparar tres perfiles.
   - 6 h · Sesiones 1–4
+
+# Leer
+medida: lectura · páginas
+ritmo: 40 páginas
+
+## Compromisos
+- Leer · cada día · 10 páginas
 ```
 
 ## En Excel
