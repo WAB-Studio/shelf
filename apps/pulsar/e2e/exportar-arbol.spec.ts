@@ -177,12 +177,13 @@ test.describe("/exportar groups by general goal (RP-84)", () => {
       const left = (name: string, heading: boolean) =>
         page.evaluate(
           ([text, isHeading]) => {
-            const found = [...document.querySelectorAll("main *")].find(
+            // The summary at the top lists each goal too; the card's row is the last.
+            const found = [...document.querySelectorAll("main *")].filter(
               (el) =>
                 el.children.length === 0 &&
                 el.textContent?.trim() === text &&
                 (el.tagName === "H2") === isHeading,
-            );
+            ).at(-1);
             if (!found) throw new Error(`no leaf for ${text}`);
             return found.getBoundingClientRect().left;
           },

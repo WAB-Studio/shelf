@@ -166,7 +166,8 @@ test.describe("the report page (RP-49, RP-35)", () => {
       await expect(page.locator("main")).toHaveCount(1);
       const seen = (text: string) =>
         page.getByText(text, { exact: true }).locator("visible=true");
-      await expect(seen(seeded.name)).toHaveCount(1);
+      // Once in the summary on page one, once as the goal's card.
+      await expect(seen(seeded.name)).toHaveCount(2);
       await expect(seen("1 h 30 min").first()).toBeVisible();
       await expect(seen("12 h").first()).toBeVisible();
       await expect(seen(seeded.taskName)).toHaveCount(1);
@@ -253,7 +254,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       await expect(page.locator("html")).toHaveClass(/\bdark\b/);
       const button = page.getByRole("button", { name: "Descargar PDF" });
       await expect(button).toBeVisible();
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
 
       const prints = () =>
         page.evaluate(
@@ -268,6 +269,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       const ink = () =>
         page.getByRole("main")
           .getByText(seeded.name, { exact: true })
+          .last()
           .evaluate((node) => getComputedStyle(node).color);
       expect(await ground(), "screen ground under dark").not.toBe(
         "rgb(255, 255, 255)",
@@ -276,7 +278,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       await page.emulateMedia({ media: "print" });
       await expect(button).toBeHidden();
       await expect(page.locator("nav").locator("visible=true")).toHaveCount(0);
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
       expect(await ground()).toBe("rgb(255, 255, 255)");
       expect(await ink()).toBe("rgb(0, 0, 0)");
 
@@ -333,7 +335,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
       await expect(page.getByText(phaseName)).toBeVisible();
       await expect(page.getByText(/^no mide nada · hasta el /)).toBeVisible();
       for (const absent of ["hasta hoy", "por semana"]) {
@@ -394,7 +396,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       try {
         const page = await context.newPage();
         await page.goto("/exportar");
-        await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+        await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
         await expect(page.locator("h1")).toHaveCount(1);
         await expect(page.locator("h1")).toHaveText("Tu plan");
 
@@ -501,7 +503,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       const seeded = await seedDown(db, person);
       const { context, page } = await openDown(browser, person, width);
       try {
-        await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
+        await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true }).first()).toBeVisible();
         await expect(
           page.getByText(
             "No pudimos leer una fuente. Las cifras que salen de ella son solo lo que dijiste tú.",
@@ -525,7 +527,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       const seeded = await seedDown(db, person);
       const { context, page } = await openDown(browser, person, width);
       try {
-        await expect(page.getByRole("main").getByText(seeded.plainName, { exact: true })).toBeVisible();
+        await expect(page.getByRole("main").getByText(seeded.plainName, { exact: true }).first()).toBeVisible();
         const panel = panelOf(page, seeded.plainName);
         await expect(panel.getByText(new RegExp(`^mide en km · hasta el ${DATE}$`))).toBeVisible();
         await expect(panel.getByText("solo lo que dijiste tú")).toHaveCount(0);
@@ -540,7 +542,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       const seeded = await seedDown(db, person);
       const { context, page } = await openDown(browser, person, width);
       try {
-        await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
+        await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true }).first()).toBeVisible();
         const panel = panelOf(page, seeded.fedName);
         await expect(
           panel.getByText(new RegExp(`^mide en búsquedas · hasta el ${DATE} · solo lo que dijiste tú$`)),
@@ -598,7 +600,7 @@ test.describe("the way in from /metas (RP-49, RP-37)", () => {
 
       await exportLink.click();
       await page.waitForURL(/\/exportar$/);
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
       await expect(
         page.getByRole("main").getByText(seeded.taskName, { exact: true }),
       ).toBeVisible();
@@ -842,7 +844,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
       );
       const onFirst = execFileSync(
         "pdftotext",
-        ["-f", "1", "-l", "1", file, "-"],
+        ["-f", "2", "-l", "2", file, "-"],
         { encoding: "utf8" },
       );
       testInfo.annotations.push({
@@ -850,16 +852,17 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
         description: String(pages),
       });
       expect(pages).toBe(A4_PAGES);
-      // Page 1 holds the head and the first goal's name with its first section.
-      expect(onFirst).toContain("Tu plan");
+      // Page 1 is the summary; the annex opens page 2 with the first goal's name and its first section.
+      expect(execFileSync("pdftotext", ["-f", "1", "-l", "1", file, "-"], { encoding: "utf8" })).toContain("Tu plan");
       expect(onFirst).toMatch(/Meta exportada \d+/);
       expect(onFirst.toLowerCase()).toContain("hasta hoy");
 
       // `-layout` keeps the table's reading order; the narrow label column wraps, so the text is read as one run.
       const all = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" });
       const flat = all.replace(/\s+/g, " ");
-      const from = flat.indexOf(first.name);
-      const to = flat.indexOf(second.name);
+      const annex = flat.toLowerCase().indexOf("el detalle de cada meta");
+      const from = flat.indexOf(first.name, annex);
+      const to = flat.indexOf(second.name, annex);
       expect(from).toBeGreaterThanOrEqual(0);
       expect(to).toBeGreaterThan(from);
       const block = flat.slice(from, to);
@@ -1040,7 +1043,7 @@ test.describe("the report's head, its ended goals and its width (RP-49)", () => 
       try {
         const page = await context.newPage();
         await page.goto("/exportar");
-        await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+        await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
         const sizes = await page.evaluate(() => ({
           page: [document.documentElement.scrollWidth, document.documentElement.clientWidth],
           main: [
@@ -1182,7 +1185,7 @@ test.describe("the report's head, its ended goals and its width (RP-49)", () => 
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
       await page.locator("summary", { hasText: /^Ver las \d+ semanas$/ }).click();
       const rows = await page
         .getByRole("main")
@@ -1213,7 +1216,7 @@ test.describe("the report's head, its ended goals and its width (RP-49)", () => 
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
       await expect(page.getByText("hasta hoy", { exact: true })).toBeVisible();
       // The block's own text: «de» and the figure may share no space in the DOM.
       const block = page.getByText("hasta hoy", { exact: true }).locator("xpath=..");
@@ -1251,7 +1254,7 @@ test.describe("the report's type and space", () => {
       try {
         const page = await context.newPage();
         await page.goto("/exportar");
-        await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+        await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
         const family = (text: string | RegExp) =>
           page
             .getByRole("main")
@@ -1343,7 +1346,7 @@ test.describe("a readable source", () => {
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(`Leída ${stamp}`, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(`Leída ${stamp}`, { exact: true }).first()).toBeVisible();
       const date = String.raw`\d{1,2} de [a-záéíóú]+( de \d{4})?`;
       const panelOf = (name: string) =>
         page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
@@ -1437,7 +1440,7 @@ test.describe("a task split across months", () => {
       try {
         const page = await context.newPage();
         await page.goto("/exportar");
-        await expect(page.getByRole("main").getByText(seeded.goalName, { exact: true })).toBeVisible();
+        await expect(page.getByRole("main").getByText(seeded.goalName, { exact: true }).first()).toBeVisible();
 
         const split = rowOf(page, seeded.long);
         await expect(split).toContainText(SIGUE, { useInnerText: true });
@@ -1497,7 +1500,7 @@ test.describe("a task split across months", () => {
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(seeded.goalName, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.goalName, { exact: true }).first()).toBeVisible();
       await page.emulateMedia({ media: "print" });
       const dir = resolve(process.cwd(), "private/export-pdf");
       mkdirSync(dir, { recursive: true });
@@ -1628,7 +1631,8 @@ test.describe("the report on A4, compact", () => {
       const file = await savePdf(page, "paginas");
       const pages = pageCount(file);
       testInfo.annotations.push({ type: "a4-pages", description: String(pages) });
-      expect(pages, `pages of the board's three goals (${file})`).toBeLessThanOrEqual(2);
+      // Two for the goals, one before them for the summary.
+      expect(pages, `pages of the board's three goals (${file})`).toBeLessThanOrEqual(3);
       // Fewer pages by dropping a goal would pass the count: every goal and every month must still print.
       const text = pageLines(file).flat();
       for (const goal of goals) {
@@ -1844,7 +1848,7 @@ test.describe("the report's last day, its ink and its share (RP-49)", () => {
       const page = await context.newPage();
       await page.addInitScript(() => localStorage.setItem("theme", "dark"));
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
       await page.emulateMedia({ media: "print" });
       const offenders = await page.evaluate(() => {
         const found: string[] = [];
@@ -2394,7 +2398,7 @@ test.describe("what closes a task's row on the report (RP-49)", () => {
     `;
     const { context, page } = await open(browser, baseURL!, person);
     try {
-      await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(goalName, { exact: true }).first()).toBeVisible();
       const row = rowOf(page, taskName);
       await expect(row).toContainText("hecha · 1 h", { useInnerText: true });
     } finally {
@@ -2430,7 +2434,7 @@ test.describe("what closes a task's row on the report (RP-49)", () => {
     `;
     const { context, page } = await open(browser, baseURL!, person);
     try {
-      await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(goalName, { exact: true }).first()).toBeVisible();
       const row = page
         .locator("main")
         .getByText(parentName, { exact: true })
@@ -2551,7 +2555,7 @@ test.describe("the paper leaves out the months that have not started and carry n
     const { ia, run } = await seedBoard(db, person, stamp);
     const { context, page } = await open(browser, baseURL!, person);
     try {
-      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(run.name, { exact: true }).first()).toBeVisible();
       const file = await printed(page, "km");
       testInfo.annotations.push({ type: "pdf", description: file });
       const table = tableOf(file, run.name);
@@ -2583,7 +2587,7 @@ test.describe("the paper leaves out the months that have not started and carry n
     });
     const { context, page } = await open(browser, baseURL!, person, { width: 390, height: 844 });
     try {
-      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(run.name, { exact: true }).first()).toBeVisible();
       const file = await printed(page, "telefono");
       testInfo.annotations.push({ type: "pdf", description: file });
       const table = tableOf(file, run.name);
@@ -2607,7 +2611,7 @@ test.describe("the paper leaves out the months that have not started and carry n
     });
     const { context, page } = await open(browser, baseURL!, person);
     try {
-      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(run.name, { exact: true }).first()).toBeVisible();
       const table = tableOf(await printed(page, "pasado-vacio"), run.name);
       for (const offset of [-2, -1, 0]) expect(table, `month ${offset}`).toContain(labelOf(offset));
       for (const offset of [1, 2]) expect(table, `month +${offset}`).not.toContain(labelOf(offset));
