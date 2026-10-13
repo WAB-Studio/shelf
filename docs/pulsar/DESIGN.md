@@ -1447,3 +1447,5 @@ Three answers of the user, 2026-10-09.
 - **A goal with corrections still to decide arrives open;** the others arrive folded.
 - **The goals under the general stay at their level, indented,** each with its summary; they never fold inside the general.
 - Words and structure: `private/tableros-revision/NOTAS.md` §A, with the three decisions above where it differs.
+- **Every plan's review arrives folded,** short or long, 2026-10-13, by the user: one rule, whatever the length. A goal opens on
+  its own only when it has corrections to decide. `ImportarArbol` (drawn unfolded) gives way to `ImportarRevisionLarga` for that.
