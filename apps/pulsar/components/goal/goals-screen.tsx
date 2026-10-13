@@ -16,6 +16,7 @@ import {
   Text,
 } from "@/components/ui";
 import { GoalBranch, type BranchGoal } from "@/components/goal/goal-branch";
+import { RetiredHabits } from "@/components/goal/retired-habits";
 import { dayBefore } from "@/lib/day/weeks";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import type {
@@ -24,7 +25,7 @@ import type {
   MetasMonth,
   MetasOpenGoal,
 } from "@/lib/queries/goal";
-import { civilDateInZone, civilDayMonthShort } from "@/lib/zone";
+import { civilDateInZone, civilDayMonthShort, civilDayMonthYear } from "@/lib/zone";
 
 /**
  * `MetasCentro`, `MetasCentroEscritorio` and `MetasVacio` (RP-11, RP-24, RP-27,
@@ -53,6 +54,15 @@ export async function GoalsScreen({
     weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
   };
   const liveHabits = habits.filter((habit) => habit.retiredAt === null);
+  // The latest retired first; the loader's order is the live order.
+  const retiredHabits = habits
+    .filter((habit) => habit.retiredAt !== null)
+    .sort((a, b) => Date.parse(b.retiredAt!) - Date.parse(a.retiredAt!))
+    .map((habit) => ({
+      id: habit.id,
+      name: habit.name,
+      retiredLine: t("habit.retiredOn", { date: civilDayMonthYear(civilDateInZone(new Date(habit.retiredAt!))) }),
+    }));
   const habitsSection = (
     <Panel as="div">
       <Section label={t("goal.habits.title")}>
@@ -85,6 +95,16 @@ export async function GoalsScreen({
             ))}
           </Flex>
         )}
+        {retiredHabits.length > 0 ? (
+          <Flex direction="column">
+            <RetiredHabits
+              habits={retiredHabits}
+              label={t("goal.habits.retired")}
+              foldLabel={t("goal.habits.foldRetired")}
+              unfoldLabel={t("goal.habits.unfoldRetired")}
+            />
+          </Flex>
+        ) : null}
         <Button asChild variant="outline" block>
           <Link href="/metas/habitos/nuevo">{t("goal.habits.add")}</Link>
         </Button>

@@ -11,7 +11,7 @@ import { countActionPosts, flat, openAs, seedGoal, MINUTES, today, type Db, MONT
 // its year; one tap moves them all; a phase past the new end refuses the whole move, naming the goal
 // and the phase's last day. Goals open today, so N weeks ends on `horizonForWeeks(today, N)`.
 
-const WEEKS_LABEL = /^semanas, contando la del /i;
+const WEEKS_LABEL = /^semanas, contando esta$/;
 const at = (n: number) => horizonForWeeks(today, n);
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

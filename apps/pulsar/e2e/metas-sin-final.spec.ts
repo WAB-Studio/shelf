@@ -4,6 +4,7 @@ import tree from "../messages/es/tree.json";
 import { test, expect } from "./fixtures";
 import { holdActions, monthsAhead } from "./meta-arbol-seed";
 import { destination, openMoveSheet } from "./mover-nota-ayuda";
+import { monthStartOf } from "./sin-final-seed";
 import {
   MINUTES,
   PAGES,
@@ -12,8 +13,6 @@ import {
   endLine,
   horizonOfGoal,
   mainLower,
-  monthLabel,
-  openedOnDay,
   postCounter,
   seedOpenGoal,
   seedTask,
@@ -323,24 +322,20 @@ for (const width of [360, 1280]) {
 
     // ---- «Por mes» ------------------------------------------------------------------------------
 
-    test("«Por mes» of an endless goal opened this month lists exactly the twelve months from this one, and says why (RP-99, P4)", async ({ person, browser, baseURL, db }) => {
-      // Kills: an empty list for a null horizon; a list that stops at the opening month.
-      const { at } = openedOnDay(5);
-      const id = await seedOpenGoal(db, person, { name: "Cuidado personal", unit: MINUTES, horizon: null, rhythm: 480, created: at });
+    test("«Por mes» of an endless goal opened 2 months ago lists its 3 months, folds the ones ahead into a line and has no «ver todo» (RP-99, RP-107)", async ({ person, browser, baseURL, db }) => {
+      // Kills: an empty list for a null horizon; the months ahead drawn as rows; «Sin final: se ven los 12…» left in; «ver todo» with nothing hidden.
+      const created = new Date(`${monthStartOf(-2).slice(0, 8)}05T12:00:00Z`);
+      const id = await seedOpenGoal(db, person, { name: "Cuidado personal", unit: MINUTES, horizon: null, rhythm: 480, created });
       const { page, context } = await visit(browser, baseURL, person, `/metas/${id}/meses`, width);
       try {
-        await expect(page.getByText("Sin final: se ven los 12 meses que vienen.", { exact: true })).toBeVisible();
-        // The table draws each month in a wide and a narrow cell: only the visible one counts.
-        await expect(page.locator(`main a[href="/metas/${id}/meses/${monthsAhead(11).slice(0, 7)}"]:visible`).first()).toContainText(monthLabel(monthsAhead(11)));
+        await expect(page.getByText("Sin final: se ven los 12 meses que vienen.", { exact: true })).toHaveCount(0);
+        await expect(page.getByRole("link", { name: /los meses que vienen: 8 h cada uno/i })).toBeVisible();
         const hrefs = await page.locator(`main a[href^="/metas/${id}/meses/"]`).evaluateAll((links) =>
           // The month's own «Escribir una tarea» link sits under the same path: only the month rows count.
           [...new Set(links.map((a) => (a as HTMLAnchorElement).getAttribute("href")))].filter((href) => /\/meses\/\d{4}-\d{2}$/.test(href ?? "")),
         );
-        expect(hrefs).toHaveLength(12);
-        expect(hrefs).toContain(`/metas/${id}/meses/${monthsAhead(11).slice(0, 7)}`);
-        expect(hrefs).not.toContain(`/metas/${id}/meses/${monthsAhead(12).slice(0, 7)}`);
-        expect(await mainLower(page)).toContain("12 meses");
-        // RP-106: exactly 12 rows is not a long list.
+        expect(hrefs.sort()).toEqual([-2, -1, 0].map((n) => `/metas/${id}/meses/${monthStartOf(n).slice(0, 7)}`).sort());
+        expect(await mainLower(page)).toContain("3 meses");
         await expect(page.getByRole("link", { name: "ver todo", exact: true })).toHaveCount(0);
       } finally {
         await context.close();

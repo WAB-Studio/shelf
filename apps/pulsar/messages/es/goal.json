@@ -110,7 +110,10 @@
   "habits": {
     "title": "Hábitos",
     "none": "Ninguno todavía.",
-    "add": "Agregar un hábito"
+    "add": "Agregar un hábito",
+    "retired": "Retirados",
+    "unfoldRetired": "Desplegar Retirados",
+    "foldRetired": "Plegar Retirados"
   },
   "none": {
     "title": "Todavía no hay metas",

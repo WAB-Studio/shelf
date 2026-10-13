@@ -11,7 +11,7 @@ import { countActionPosts, dateWords, expectTitle, openAs, seedGoal, MINUTES, to
 // same if the tree changed in between. Goals open today, so a count of N weeks ends on
 // `horizonForWeeks(today, N)`.
 
-const WEEKS_LABEL = /^semanas, contando la del /i;
+const WEEKS_LABEL = /^semanas, contando esta$/;
 
 async function seedWeeks(db: Db, person: Person, stamp: number, weeks: { G: number; g1: number; p: number; g2: number }) {
   const names = {

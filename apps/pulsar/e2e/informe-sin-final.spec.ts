@@ -5,11 +5,11 @@ import { resolve } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 
 import { test, expect, visit } from "./fixtures";
-import { MONTH_START, TODAY, drawn, monthLabel, seedGoal, seedTap, shift } from "./sin-final-seed";
+import { TODAY, drawn, monthLabel, monthStartOf, seedGoal, seedTap, shift } from "./sin-final-seed";
 
 // `InformeSinFinal` (RP-99; decisions of 2026-10-13: «a goal with no end prints the same twelve months the screen shows»,
-// the current one and eleven after): /exportar and its paper say nothing of an end for a goal that has none — no «hasta el …»,
-// no «terminada el …» — and list its months from the current one through the eleventh after, never the closed ones.
+// the last 11 closed and the current one, RP-107): /exportar and its paper say nothing of an end for a goal that has none — no «hasta el …»,
+// no «terminada el …» — and list its months up to the current one, never the ones ahead.
 // Every month is an offset from the real current month, so the spec runs any day.
 
 const A4 = { width: 794, height: 1123 };
@@ -18,20 +18,20 @@ const sectionOf = (page: Page, name: string) =>
 const rowOf = (section: Locator, offset: number) =>
   section.locator("li:visible, tbody tr:visible").filter({ hasText: new RegExp(monthLabel(offset), "i") });
 
-// Opened three months ago: the closed months are the trap — «the same twelve months» do not start at the opening.
+// Opened 20 months ago: the closed months are the trap — «the same twelve months» are the last 11 closed and the current one (RP-107).
 async function seedOpen(db: Parameters<typeof seedGoal>[0], personId: string, name: string, horizon: string | null) {
   const goalId = await seedGoal(db, personId, name, {
     horizon,
     unit: "páginas",
     budget: 34,
-    created: new Date(Date.parse(`${shift(MONTH_START, -80)}T12:00:00Z`)),
+    created: new Date(Date.parse(`${monthStartOf(-20).slice(0, 8)}01T12:00:00Z`)),
   });
   await seedTap(db, personId, goalId, `Leer diez ${name}`);
   return goalId;
 }
 
 for (const width of [360, 1280]) {
-  test(`at ${width} a goal with no end has no «hasta el» and lists the current month and eleven after, never a closed one`, async ({
+  test(`at ${width} a goal with no end has no «hasta el» and lists its last 11 closed months and the current one, nothing ahead`, async ({
     person,
     browser,
     baseURL,
@@ -54,14 +54,14 @@ for (const width of [360, 1280]) {
       expect(body).toContain("mide en páginas");
       expect(body).not.toContain("hasta el");
       expect(body).not.toContain("terminada");
-      expect(body).not.toContain("1969");
-      expect(body).not.toContain("1970");
+      expect(body).not.toMatch(/\b1969\b/);
+      expect(body).not.toMatch(/\b1970\b/);
 
       const section = sectionOf(page, name);
       await expect(section.getByText("12 meses", { exact: true }).locator("visible=true")).toHaveCount(1);
-      for (let offset = 0; offset <= 11; offset++) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(1);
-      await expect(rowOf(section, 12)).toHaveCount(0);
-      await expect(rowOf(section, -1)).toHaveCount(0);
+      for (let offset = -11; offset <= 0; offset++) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(1);
+      await expect(rowOf(section, 1)).toHaveCount(0);
+      await expect(rowOf(section, -12)).toHaveCount(0);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
@@ -70,7 +70,7 @@ for (const width of [360, 1280]) {
 }
 
 for (const query of ["", "?todo=1"]) {
-test(`the paper of a goal with no end has no «hasta el» and prints the same twelve months (/exportar${query})`, async ({
+test(`the paper of a goal with no end has no «hasta el» and prints the same twelve months, the last 11 closed and the current one (/exportar${query})`, async ({
   person,
   browser,
   baseURL,
@@ -94,13 +94,13 @@ test(`the paper of a goal with no end has no «hasta el» and prints the same tw
     expect(paper).toContain(`${name} · por mes · 12 meses`.toLowerCase());
     expect(paper).not.toContain("hasta el");
     expect(paper).not.toContain("terminada");
-    expect(paper).not.toContain("1969");
-    expect(paper).not.toContain("1970");
-    for (let offset = 0; offset <= 11; offset++) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
-    expect(paper).not.toContain(monthLabel(12));
-    expect(paper).not.toContain(monthLabel(-1));
-    // RP-106: the paper always prints the same 12, never the closed months, whatever the screen shows; and never the link.
-    for (const offset of [-2, -3]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
+    expect(paper).not.toMatch(/\b1969\b/);
+    expect(paper).not.toMatch(/\b1970\b/);
+    for (let offset = -11; offset <= 0; offset++) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
+    expect(paper).not.toContain(monthLabel(1));
+    expect(paper).not.toContain(monthLabel(-12));
+    // RP-107: the paper always prints the same 12, whatever the screen shows (`?todo=1` included); and never the link.
+    for (const offset of [-13, -20]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
     expect(paper).not.toContain("ver todo");
   } finally {
     await context.close();

@@ -11,7 +11,7 @@ import { horizonTreeRefusal, type PlacementRefusal } from "@/lib/goals/placement
 import { refusalKey } from "@/lib/goals/refusal-key";
 import { buildTree, type TreeRow } from "@/lib/goals/tree";
 import { horizonRefusal, moveHorizonSchema } from "@/lib/validation/horizon";
-import { civilDateLabel, civilDayMonthYear, todayInZone } from "@/lib/zone";
+import { civilDayMonthYear, todayInZone } from "@/lib/zone";
 import { Button, Field, Flex, Notice, Sheet, SheetActions } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
@@ -62,7 +62,6 @@ const row = (id: string, parentId: string | null, ref: { name: string; horizon: 
 export function MoveHorizonAction({
   goalId,
   name,
-  openedOn,
   horizon: storedHorizon,
   weeks,
   phases,
@@ -77,9 +76,8 @@ export function MoveHorizonAction({
   const [open, setOpen] = useState(false);
   const startWeeks = weeks ?? DEFAULT_WEEKS;
   const noEnd = storedHorizon === null;
-  // A goal with no end counts its weeks from the current one; the rest, from the day the goal opened.
-  const fromThis = noEnd && !reopening;
-  const anchor = fromThis ? todayInZone() : openedOn;
+  // Every end sheet counts its weeks from the current one; the goal screen counts from the opening.
+  const anchor = todayInZone();
   const [value, setValue] = useState(String(startWeeks));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +93,7 @@ export function MoveHorizonAction({
   const typed = weeksSchema.safeParse(value);
   // The opening count stands for the stored horizon itself, never for the
   // week's edge that count would write.
-  const untouched = !noEnd && !reopening && typed.success && typed.data === weeks;
+  const untouched = !noEnd && !reopening && typed.success && typed.data === startWeeks;
 
   const candidate = typed.success && !untouched ? horizonForWeeks(anchor, typed.data) : null;
   // The goals below that end after the typed end: «Mover también sus finales» takes them along.
@@ -222,7 +220,7 @@ export function MoveHorizonAction({
       </Button>
       <Sheet open={open} onOpenChange={setOpen} label={name} title={t("goal.horizon.title")}>
         <Field
-          label={fromThis ? t("goal.horizon.weeksFromThis") : t("goal.horizon.weeksLabel", { date: civilDateLabel(openedOn) })}
+          label={t("goal.horizon.weeksFromThis")}
           type="number"
           inputMode="numeric"
           min={1}

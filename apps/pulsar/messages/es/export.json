@@ -20,6 +20,7 @@
   "measures": "mide {measure}, en {unit}",
   "measuresUnnamed": "mide en {unit}",
   "timeUnit": "horas y minutos",
+  "ahead": "los meses que vienen: <fig>{planned}</fig> cada uno",
   "monthsOut": "{months}: sin monto",
   "monthsOutCount": "{months}: sin monto{count, plural, =0 {} one { · # tarea} other { · # tareas}}",
   "monthsOutTasks": "{months}: sin tareas",

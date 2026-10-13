@@ -166,8 +166,8 @@ test.describe("the screen of a habit (RP-105, RP-106)", () => {
     }
   });
 
-  test("weekly cadence counts days with no «de»: «3 días», «1 día»", async ({ person, browser, baseURL, db }) => {
-    // Kills: «N de M días» for a cadence that counts by week; «1 días».
+  test("weekly cadence counts weeks: «N de M semanas» on every closed month, never «N días»", async ({ person, browser, baseURL, db }) => {
+    // Kills: «N días» left on a cadence that counts by the week; «1 de 1 semanas»; a figure on a month with no week closed.
     const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, {
       created: noonOf(monthStartOf(-1)),
     });
@@ -179,9 +179,9 @@ test.describe("the screen of a habit (RP-105, RP-106)", () => {
       expect(text).toContain("1 vez por semana");
       const section = between(text, "por mes");
       expect(rowsOf(section)).toEqual([monthLabel(-1), monthLabel(0)]);
-      expect(section).toMatch(new RegExp(`${monthLabel(-1)}\\D*3 días`));
-      expect(section).toMatch(new RegExp(`${monthLabel(0)}[^\\d]*1 día(?!s)`));
-      expect(section).not.toMatch(/\d+ de \d+/);
+      expect(section).toMatch(new RegExp(`${monthLabel(-1)}\\D*\\d+ de \\d+ semanas`));
+      expect(section).not.toMatch(/\d+ días?/);
+      expect(section).not.toContain("0 de 0");
     } finally {
       await context.close();
     }

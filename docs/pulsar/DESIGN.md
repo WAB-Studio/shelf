@@ -1541,5 +1541,38 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/critic-
   sentence when built. The phase line keeps counting from the opening.
 - **A retired habit lives in a folded «Retirados» under «Hábitos» on /metas;** each row opens its screen. No «volver a pedirlo».
 - **A weekly habit's month reads «3 de 4 semanas»,** the weeks met. A week across two months needs its rule before it is built.
+- **A week across two months belongs to the month holding 4 or more of its days** (the month of its Thursday), 2026-10-13, by
+  the user. It is judged whole and counts once; a month has 4 or 5 weeks. The current week counts once it has ended.
+- **The s3 boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», board
+  `S3Propuesta` (`PorMesUltimos`, `InformeUltimos`, `FinalSemanasContando`, `HabitosRetirados`, `HabitoSemanas`). Words and
+  structure: `private/tableros-s3/NOTAS.md`. Approved with them:
+  - «los meses que vienen: 40 páginas cada uno» reads in «Por mes», on the report screen and on paper.
+  - A goal with no rhythm draws no such line.
+  - A month ahead with its own amount set by hand is not folded: it is a row above the line.
+  - «Retirados» sits above «Agregar un hábito».
+  - «Mover el final» counts weeks from this one (8) while the goal screen and its phases count from the opening (9). Both stand.
+  - A habit created this week reads «aún sin semanas cerradas».
+  - Where the board differs, this file wins: `PorMesUltimos-2-sin-ritmo` and `InformeUltimos-2-sin-ritmo` draw a «los meses que
+    vienen: sin monto» line that is not built, and the board folds a hand-set month that is built as its own row. Without a rhythm,
+    the months ahead with no amount are simply not listed.
+- **A weekly habit's first and last week count when it lived that week's Thursday** (2026-10-13, orchestrator, from the approved
+  board: «Llamar a mamá», created Wed 8 jul, reads July as 4 weeks). Same rule as the month a week belongs to.
+- **In «Mes», a weekly habit with no closed week yet this month reads «{cadencia} · aún sin semanas cerradas»** (2026-10-13,
+  orchestrator, module 933), the words the board approved for its own screen.
+- **A month ahead is reached from «ver todo»** (2026-10-13, orchestrator): it opens every month, those ahead included, and the
+  fold line links there.
 - **Paper folds the empty months ahead of a goal with no end into one line,** as a goal with an end does. Paper no longer matches the
   screen row for row there.
+
+## Decisions of 2026-10-13, after the critic of slice s3, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s3/REPORT.md`.
+
+- **Every goal with no end shows next month as its own row,** rhythm or not, so planning ahead is one tap. A goal with no rhythm
+  reaches it today only through `?todo=1` (the critic's «broken»).
+- **The end sheet says both counts under its field:** «contando desde esta semana; la meta lleva N semanas», and a phase refusal
+  names the week in both counts. The goal screen keeps counting from the opening.
+- **A weekly habit's retirement week counts whole when it was met before the retirement,** and its month shows «esta semana: N»
+  for the week in progress.
+- **The fold line goes right after the current month,** and the hand-set months follow it under «y estos meses con monto propio:».
+  Built in s3 the other way round, it reads as if a hand-set month were at the rhythm.

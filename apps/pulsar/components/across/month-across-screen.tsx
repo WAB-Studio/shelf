@@ -293,7 +293,11 @@ export async function MonthAcrossScreen() {
                     <TextLink href={`/metas/habitos/${habit.id}?volver=/mes`}>{habit.name}</TextLink>
                   </Text>
                   <Text as="p" variant="meta">
-                    {habit.asked === null
+                    {habit.weeks
+                      ? habit.weeks.counted === 0
+                        ? t("month.across.habits.noWeeks", { cadence })
+                        : t("month.across.habits.lineWeeks", { cadence, ...habit.weeks })
+                      : habit.asked === null
                       ? t("month.across.habits.line", { cadence, count: habit.daysDone })
                       : t("month.across.habits.lineOf", { cadence, done: habit.daysDone, asked: habit.asked })}
                   </Text>
