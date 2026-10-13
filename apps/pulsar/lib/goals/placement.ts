@@ -50,6 +50,17 @@ export function horizonTreeRefusal(t: Tree, goalId: string, horizon: string): Pl
   return null;
 }
 
+// The goals under `goalId` that end after `horizon`, in tree order: what "Mover también sus
+// finales" would move with it.
+export function branchEndsAfter(t: Tree, goalId: string, horizon: string): GoalRef[] {
+  const out: GoalRef[] = [];
+  for (const id of branchOf(t, goalId).slice(1)) {
+    const n = t.byId.get(id)!;
+    if (n.horizon > horizon) out.push(refOf(n));
+  }
+  return out;
+}
+
 export function reopenRefusal(t: Tree, goalId: string): PlacementRefusal | null {
   const goal = t.byId.get(goalId);
   if (!goal) return null;

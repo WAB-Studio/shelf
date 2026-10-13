@@ -5,6 +5,8 @@ import { isCivilDate } from "@/lib/zone";
 export const moveHorizonSchema = z.object({
   goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
   horizon: z.string().refine(isCivilDate, { error: "plan.errors.horizonInvalid" }),
+  // Also gives the new end to every goal under it that ends later (RP-79).
+  moveBranch: z.boolean().optional(),
 });
 
 export type MoveHorizonInput = z.infer<typeof moveHorizonSchema>;

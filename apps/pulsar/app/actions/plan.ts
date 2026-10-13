@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, isNull, max, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, max, sql } from "drizzle-orm";
 
 import { commitments, evidenceSources, goals, oneOffs, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
@@ -10,6 +10,7 @@ import { isHourUnit, isTimeUnit, storedMeasure } from "@/lib/units/time";
 import { buildTree, branchOf, type Tree, type TreeRow } from "@/lib/goals/tree";
 import {
   createInsideRefusal,
+  branchEndsAfter,
   horizonTreeRefusal,
   moveRefusal,
   type PlacementRefusal,
@@ -734,7 +735,7 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
-  const { goalId, horizon } = parsed.data;
+  const { goalId, horizon, moveBranch } = parsed.data;
 
   let touched: string[] = [];
   try {
@@ -755,10 +756,42 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
       });
       if (phaseRefusal) throw new NamedError(phaseRefusal);
 
-      const treeRefusal = horizonTreeRefusal(tree, goalId, horizon);
-      if (treeRefusal) return refused(treeRefusal);
+      const later = moveBranch ? branchEndsAfter(tree, goalId, horizon) : [];
+      if (moveBranch) {
+        // The branch moves with the goal: only the goal above can still refuse its new end.
+        const above = goal.parentId === null ? undefined : tree.byId.get(goal.parentId);
+        if (above && horizon > above.horizon) {
+          return refused({ code: "endPastAbove", above: { id: above.id, name: above.name, horizon: above.horizon } });
+        }
+        if (later.length > 0) {
+          const ends = await tx
+            .select({ goalId: phases.goalId, endsOn: max(phases.endsOn) })
+            .from(phases)
+            .where(inArray(phases.goalId, later.map((g) => g.id)))
+            .groupBy(phases.goalId);
+          const lastEnd = new Map(ends.map((e) => [e.goalId, e.endsOn]));
+          for (const g of later) {
+            const endsOn = lastEnd.get(g.id) ?? null;
+            if (endsOn !== null && endsOn > horizon) {
+              return { ok: false, error: "tree.errors.branchPhaseAfter", values: { name: g.name, date: endsOn } };
+            }
+          }
+        }
+      } else {
+        const treeRefusal = horizonTreeRefusal(tree, goalId, horizon);
+        if (treeRefusal) return refused(treeRefusal);
+      }
 
       touched = [...branchOf(tree, goalId), ...(goal.parentId ? [goal.parentId] : [])];
+      // Deepest first: the tree's trigger judges each row against the rows as they stand.
+      for (const depth of [2, 1]) {
+        const level = later.filter((g) => tree.byId.get(g.id)!.depth === depth);
+        if (level.length === 0) continue;
+        await tx
+          .update(goals)
+          .set({ horizon })
+          .where(and(inArray(goals.id, level.map((g) => g.id)), eq(goals.userId, person.id)));
+      }
       const moved = await tx
         .update(goals)
         .set({ horizon })
