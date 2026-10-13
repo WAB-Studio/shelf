@@ -28,7 +28,7 @@ export const modelCalls = goalsSchema.table(
   },
   (t) => [
     index("model_calls_user_id_day_idx").on(t.userId, t.day),
-    check("model_calls_source_known", sql`${t.source} in ('paste', 'file')`),
+    check("model_calls_source_known", sql`${t.source} in ('paste', 'file', 'chat')`),
     check("model_calls_input_tokens_non_negative", sql`${t.inputTokens} >= 0`),
     check("model_calls_output_tokens_non_negative", sql`${t.outputTokens} >= 0`),
     check(
