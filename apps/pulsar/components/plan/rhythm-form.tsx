@@ -120,7 +120,7 @@ export function RhythmForm({
     if (pending) return;
     // Text that reads as nothing is a format problem, not a range one.
     if (typed.trim() !== "" && parseTyped(typed) === null) {
-      setError(t("roadmap.errors.rhythmFormat"));
+      setError(t(time ? "roadmap.errors.rhythmFormat" : "roadmap.errors.rhythmFormatAny"));
       return;
     }
     if (!checked.success) {

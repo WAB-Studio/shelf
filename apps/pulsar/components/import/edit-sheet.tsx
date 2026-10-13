@@ -9,7 +9,7 @@ import { dayBefore, horizonForWeeks, horizonWeeksOf } from "@/lib/day/weeks";
 import { commitmentFormIssue, type DraftGoal } from "@/lib/import/draft";
 import type { Cadence } from "@/lib/import/review";
 import { isTimeUnit, splitMinutes } from "@/lib/units/time";
-import { civilDateLabel } from "@/lib/zone";
+import { civilDateLabel, civilDayMonthYear } from "@/lib/zone";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { addPhaseSchema, createGoalSchema } from "@/lib/validation/plan";
@@ -288,7 +288,7 @@ export function EditSheet({
             value={weeks}
             onChange={(event) => setWeeks(event.target.value)}
             invalid={horizonSentence !== null || amountError !== null || !typedWeeks.success}
-            hint={horizonSentence ?? amountError ?? (candidate ? t("goal.horizon.endsOn", { date: civilDateLabel(dayBefore(candidate), true) }) : t("goal.errors.horizonWeeksInvalid"))}
+            hint={horizonSentence ?? amountError ?? (candidate ? t("goal.horizon.endsOn", { date: civilDayMonthYear(dayBefore(candidate)) }) : t("goal.errors.horizonWeeksInvalid"))}
             autoFocus={editing.name === null}
           />
         ) : null}
