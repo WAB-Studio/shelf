@@ -272,15 +272,15 @@ for (const width of [360, 1280]) {
 test("at 1024 a closed month opened beside the list shows the whole list, that month marked, and no link (RP-106)", async ({ person, browser, baseURL, db }) => {
   // Kills: the 12-row cut hiding the month that is open; marking nothing; offering «ver todo» when everything is shown.
   const id = await seedOpenGoal(db, person, { name: "Cuidado", unit: PAGES, horizon: null, created: openedMonthsAgo(30) });
-  const { page, context } = await open(browser, baseURL, person.sessionFile, monthHref(id, -5), 1024);
+  const { page, context } = await open(browser, baseURL, person.sessionFile, monthHref(id, -15), 1024);
   try {
     const hrefs = await monthHrefs(page, id);
     expect(hrefs).toHaveLength(42);
-    expect(hrefs).toContain(monthHref(id, -5));
+    expect(hrefs).toContain(monthHref(id, -15));
     const marked = await page.locator(`main a[aria-current="page"][href^="/metas/${id}/meses/"]`).evaluateAll((links) =>
       [...new Set(links.map((a) => (a as HTMLAnchorElement).getAttribute("href")))],
     );
-    expect(marked).toEqual([monthHref(id, -5)]);
+    expect(marked).toEqual([monthHref(id, -15)]);
     await expect(seeAll(page.locator("main"))).toHaveCount(0);
   } finally {
     await context.close();

@@ -346,8 +346,9 @@ test("at 360 the line and «ver todo» fit in «Por mes» and in the report (RP-
 
 // ---- The report on screen -----------------------------------------------------------------------------------------
 
+// Panel, PrintBlock and Section nest: the innermost one holds the label, the rows, the line and «ver todo».
 const sectionOf = (page: Page, name: string) =>
-  page.locator("section").filter({ has: page.getByText(`${name} · por mes`, { exact: true }) });
+  page.locator("section").filter({ has: page.getByText(`${name} · por mes`, { exact: true }) }).last();
 const rowOf = (section: Locator, offset: number) =>
   section.locator("li:visible, tbody tr:visible").filter({ hasText: new RegExp(monthLabel(offset), "i") });
 
@@ -525,7 +526,9 @@ test("on paper a goal that measures nothing prints a month ahead that holds a ta
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Sin medida");
   expect(paper).toContain("sin medida · por mes · 4 meses");
   expect(paper).toContain(monthLabel(3));
-  const folded = paper.slice(paper.indexOf(": sin tareas") - 400);
+  const at = paper.indexOf(": sin tareas");
+  expect(at, "the «sin tareas» line").toBeGreaterThanOrEqual(0);
+  const folded = paper.slice(Math.max(0, at - 400), at);
   expect(folded).toContain(longMonth(1));
   expect(folded).not.toContain(longMonth(3));
 });
