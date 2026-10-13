@@ -1458,3 +1458,14 @@ Three answers of the user, 2026-10-09.
   reason says what happened and what to do in plain words, never «la tabla». With nothing failed, «Crear» goes to Metas as before.
   The list lives in the tab (`sessionStorage`, from `lib/`) until «Ir a Metas»; a reload keeps it. `ImportarCreadoConFallos-B`
   goes to «Archivo».
+
+## Decisions of 2026-10-13, the critic's «thin» items, by the user
+
+- **The PDF opens with a summary, then the annex.** Page one lists every goal in one line each (its month and its week); behind
+  it, the detail as today, whole (the 2026-10-12 «no cap» decision stands for the annex).
+- **An imported note is clean text.** The import strips list marks, `**` and headings from note lines; a line marked «HECHO» or
+  `- [x]` creates its task already done on its date, and the review shows it as done.
+- **The 1280 rail draws the tree:** each general goal with its goals indented under it, folding as `/metas` does.
+- **The review's sheets change more than names:** a commitment's cadence (days or times) and amount; a goal's horizon.
+- **Moving a general's end offers to move its branch:** the sheet says how many goals end after the new end and offers «Mover
+  también sus finales»; one tap moves them all. Every end date shows its year.
