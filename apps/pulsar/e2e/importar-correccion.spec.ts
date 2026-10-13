@@ -12,10 +12,11 @@ import {
   months,
   plus,
   planText,
-  toReview,
-  toSeededReview,
+  toOpenReview,
+  toOpenSeededReview,
   word,
   type Seed,
+  unfold,
 } from "./importar-plan";
 
 // The corrections the check and the normaliser propose, drawn under their part (RP-90, RP-97). The
@@ -71,7 +72,7 @@ test.describe("a correction hangs under its part and is accepted unless the pers
     const { first } = months();
     const month = word(first);
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await expect(amountButton(page, month)).toHaveText("9 h");
       await expect(page.getByText(messages.review.correction.said, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.review.correction.proposed, { exact: true })).toBeVisible();
@@ -99,7 +100,7 @@ test.describe("a correction hangs under its part and is accepted unless the pers
     // Kills: writing what the plan said while the screen showed the proposal.
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       expect(await db`select 1 from goals.goals where user_id = ${person.id}`).toHaveLength(0);
       await createButton(page).click();
       await expect(page).toHaveURL(/\/metas$/);
@@ -114,7 +115,7 @@ test.describe("a correction hangs under its part and is accepted unless the pers
     // Kills: writing the sum after the person said «Dejar como estaba» (ignoring `declined`).
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await page.getByRole("button", { name: messages.review.correction.decline }).click();
       await expect(amountButton(page, word(first))).toHaveText("10 h");
       await createButton(page).click();
@@ -130,11 +131,12 @@ test.describe("a correction hangs under its part and is accepted unless the pers
     // Kills: not saving the review (`saveReview`) when a correction or a mark changes.
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toReview(page, planText());
+      await toOpenReview(page, planText());
       await page.getByRole("button", { name: messages.review.correction.decline }).click();
       await page.getByRole("checkbox", { name: new RegExp(`^${TASK_A}`) }).uncheck();
       await page.reload();
       await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
+      await unfold(page);
       await expect(page.getByText("Se queda como decía el plan: 10 h.", { exact: true })).toBeVisible();
       await expect(amountButton(page, word(first))).toHaveText("10 h");
       await expect(page.getByRole("checkbox", { name: new RegExp(`^${TASK_A}`) })).not.toBeChecked();
@@ -147,7 +149,7 @@ test.describe("a name cut to 120, a week rule broken, a line with no place (RP-9
   test("nameShortened shows the short name in the tree and the whole one as «decía»; undoing it sends the task out, with its line", async ({ person, browser, baseURL }) => {
     // Kills: accepting without looking at `declined`: the long name would still be created.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toSeededReview(page, seededPlan());
+      await toOpenSeededReview(page, seededPlan());
       await expect(page.getByRole("checkbox", { name: new RegExp(`^${SHORT}`) })).toBeVisible();
       await expect(page.getByText(LONG, { exact: true })).toBeVisible();
       await expect(page.getByText(SHORT, { exact: true }).first()).toBeVisible();
@@ -168,7 +170,7 @@ test.describe("a name cut to 120, a week rule broken, a line with no place (RP-9
   test("the week rule broken is a notice in the box's own words, with no button", async ({ person, browser, baseURL }) => {
     // Kills: drawing «Aceptar» and «Dejar como estaba» on a notice.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toSeededReview(page, seededPlan());
+      await toOpenSeededReview(page, seededPlan());
       await expect(
         page.getByText("Semana 3 no tiene tareas de inglés. Tu plan pide 3 h de inglés cada semana.", { exact: true }),
       ).toBeVisible();
@@ -181,7 +183,7 @@ test.describe("a name cut to 120, a week rule broken, a line with no place (RP-9
   test("lines no part carries are listed with their text, their number and why, and counted as «fuera»", async ({ person, browser, baseURL }) => {
     // Kills: leaving `notPlaced` lines out of the list or of the count.
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toSeededReview(page, seededPlan());
+      await toOpenSeededReview(page, seededPlan());
       const count = await countOf(page);
       expect(count).toMatchObject({ total: 6, out: 2 });
       expect(count.plan + count.notes + count.out).toBe(6);
@@ -223,7 +225,7 @@ test.describe("a name cut to 120, a week rule broken, a line with no place (RP-9
       ],
     };
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await toSeededReview(page, { raw, source: { kind: "parts", lines: null }, sourceName: "plan.pdf" });
+      await toOpenSeededReview(page, { raw, source: { kind: "parts", lines: null }, sourceName: "plan.pdf" });
       await expect(page.getByText(/leído de un PDF/i).first()).toBeVisible();
       const count = await countOf(page, "partes");
       expect(count).toMatchObject({ total: 4, plan: 3, notes: 1, out: 0 });

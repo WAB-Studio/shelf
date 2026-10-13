@@ -95,6 +95,15 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     keep(stored!, next);
   }
 
+  function toggleMany(paths: string[], on: boolean) {
+    const next = new Set(review!.unmarked);
+    for (const path of paths) {
+      if (on) next.delete(path);
+      else next.add(path);
+    }
+    keep(stored!, next);
+  }
+
   function decide(id: string, decline: boolean) {
     const next = new Set(declined);
     if (decline) next.add(id);
@@ -241,6 +250,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         handlers={{
           disabled: pending,
           onToggle: toggle,
+          onToggleMany: toggleMany,
           onEdit: open,
           onDecline: (id) => decide(id, true),
           onUndo: (id) => decide(id, false),

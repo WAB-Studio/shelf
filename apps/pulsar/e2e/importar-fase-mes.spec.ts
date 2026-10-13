@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
+import { unfold } from "./importar-plan";
 
 // A proposed phase inside one month reads one month; one that crosses a year
 // names both years (RP-37). The board is `ImportarRevisar`.
@@ -19,6 +20,8 @@ async function review(page: Page, text: string) {
   await page.getByRole("button", { name: "Leer el plan" }).click();
   await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Sus partes/ }).first()).toBeVisible();
+  await unfold(page);
 }
 
 test.describe("the review's phase span (RP-37)", () => {

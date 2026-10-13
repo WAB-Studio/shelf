@@ -121,7 +121,15 @@
       "note": "nota · {count, plural, one {# línea} other {# líneas}}",
       "subTasks": "{count, plural, one {# sub-tarea} other {# sub-tareas}}",
       "editName": "Cambiar el nombre de {name}",
-      "goal": "meta"
+      "goal": "meta",
+      "parts": "Sus partes",
+      "summaryPhases": "{count, plural, one {# fase} other {# fases}}",
+      "summaryTasks": "{count, plural, one {# tarea} other {# tareas}}",
+      "summaryCommitments": "{count, plural, one {# compromiso} other {# compromisos}}",
+      "summaryMonths": "{count, plural, one {# mes} other {# meses}}",
+      "summaryPending": "{count} por revisar",
+      "monthTasks": "{count, plural, one {# tarea} other {# tareas}}",
+      "removeMonth": "{count, plural, one {Quitar la tarea de {month}} other {Quitar las # tareas de {month}}}"
     },
     "count": {
       "lines": "{total, plural, one {# línea} other {# líneas}}: {plan} en el plan, {notes} en notas, {out} fuera",
@@ -203,7 +211,9 @@
     },
     "unplaced": {
       "title": "sin lugar en el plan",
-      "hint": "ninguna meta, fase, mes ni tarea las lleva"
+      "hint": "ninguna meta, fase, mes ni tarea las lleva",
+      "group": "{heading} · {count}",
+      "noHeading": "Antes del primer título"
     },
     "left": {
       "title": "las dejaste fuera",
