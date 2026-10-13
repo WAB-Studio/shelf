@@ -183,6 +183,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   a missing env file there. Both checkouts share one database, so the number is the same.
 - Run the RNF-09 timing alone: it lives in `check:http` and `check:queries`, and a second lane inflates it.
 - Copy everything an agent left in the lane's `private/` before you drop it: reports, logs a handoff cites and captures (`cp -r ../finances-app-l<n>/private/{reportes,ux-*} private/`). `worktree remove --force` deletes them. Measured 2026-10-06: 144 captures of two UX critics went with lanes 3 and 6.
+- Copy the lane's `apps/*/private/` too: an agent's scripts land there, beside the app. Measured 2026-10-13: the canvas capture scripts in `apps/pulsar/private/cap/` went with lane 3.
 - Free the lane's port with `fuser -k <port>/tcp`. Never `pkill -f` a path: the pattern matches your own shell.
 - Drop the worktree when its branch lands: `git worktree remove ../finances-app-l<n> --force`.
 - Forbid a file to every live lane the moment you hand it out, not only to the lanes you open next.
