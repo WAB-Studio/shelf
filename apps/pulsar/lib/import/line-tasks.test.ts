@@ -90,3 +90,51 @@ test("a line a task already carries (task noteSrc) stays its step", () => {
   const { draft: out } = linesToTasks(base, source(lines), TODAY, { onlyDone: true });
   assert.equal(out.goals[0].tasks.length, 1);
 });
+
+// ---- 903c: a line shaped like a task is a task, with a correction that says so.
+
+test("903c: a box line and a duration-first line become tasks, never note, each with a correction", () => {
+  const lines = ["# G", "- [ ] Llamar al banco", "30 min Leer el capítulo", "Una regla sin forma de tarea"];
+  const base = placeLeftovers(draft(goal()), source(lines));
+  const { draft: out, corrections } = linesToTasks(base, source(lines), TODAY, { onlyDone: false });
+  assert.deepEqual(out.goals[0].tasks.map((t) => [t.name, t.estimate, t.month, t.doneOn ?? null]), [
+    ["Llamar al banco", null, "2026-10", null],
+    ["Leer el capítulo", 30, "2026-10", null],
+  ]);
+  assert.equal(out.goals[0].note, "Una regla sin forma de tarea");
+  assert.deepEqual(
+    corrections.map((c) => [c.id, c.at, c.code, c.said, c.proposed, c.values, c.declined]),
+    [
+      ["goals.0.tasks.0:lineToTask", "goals.0.tasks.0", "lineToTask", "Llamar al banco", "Llamar al banco", { line: "2" }, "keepsPlan"],
+      ["goals.0.tasks.1:lineToTask", "goals.0.tasks.1", "lineToTask", "30 min Leer el capítulo", "Leer el capítulo", { line: "3" }, "keepsPlan"],
+    ],
+  );
+});
+
+test("903c: the new tasks come after the tasks the model wrote, and their corrections say where", () => {
+  const lines = ["# G", "Tarea", "- [ ] Nueva"];
+  const own = { name: "Tarea", month: "2026-10", estimate: null, note: null, noteSrc: [], src: [{ from: 2, to: 2 }], week: null, rule: null, children: [] };
+  const base = placeLeftovers(draft(goal({ tasks: [own] })), source(lines));
+  const { draft: out, corrections } = linesToTasks(base, source(lines), TODAY, { onlyDone: false });
+  assert.deepEqual(out.goals[0].tasks.map((t) => t.name), ["Tarea", "Nueva"]);
+  assert.deepEqual(corrections.map((c) => c.at), ["goals.0.tasks.1"]);
+});
+
+test("903c: a done line is a task with no correction: the review shows it done", () => {
+  const { corrections } = linesToTasks(placed(), source(LINES), TODAY, { onlyDone: false });
+  assert.deepEqual(corrections.filter((c) => c.proposed.startsWith("EF SET")), []);
+});
+
+test("903c: a rate with a duration («10 h semanales») is no task by its duration, a box still is", () => {
+  const lines = ["# G", "10 h semanales: 5 de caso", "- [ ] 10 h semanales: 5 de caso"];
+  const { draft: out } = linesToTasks(placeLeftovers(draft(goal()), source(lines)), source(lines), TODAY, { onlyDone: false });
+  assert.deepEqual(out.goals[0].tasks.map((t) => [t.name, t.estimate]), [["10 h semanales: 5 de caso", null]]);
+  assert.equal(out.goals[0].note, "10 h semanales: 5 de caso");
+});
+
+test("903c: every taken line is plan in the count, and none is counted twice", () => {
+  const lines = ["# G", "- [ ] Llamar al banco", "Regla"];
+  const { draft: out } = linesToTasks(placeLeftovers(draft(goal()), source(lines)), source(lines), TODAY, { onlyDone: false });
+  const c = coverage(out, source(lines), new Set(), new Set());
+  assert.deepEqual([c.total, c.plan, c.notes, c.out], [3, 2, 1, 0]);
+});

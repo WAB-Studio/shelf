@@ -28,6 +28,8 @@ const CORRECTIONS = [
   "monthSumDiffers",
   "monthOverRhythm",
   "cadenceToWeekdays",
+  "lineToTask",
+  "taskMoved",
 ];
 const FORMS = [
   "import.errors.form.goal",

@@ -40,7 +40,7 @@ export function linesToTasks(
   if (lines === null) return { draft, corrections };
   const month = today.slice(0, 7);
 
-  const goals = draft.goals.map((goal): DraftGoal => {
+  const goals = draft.goals.map((goal, g): DraftGoal => {
     const tasks: DraftTask[] = [];
     let note = goal.note;
     const taken = new Set<number>();
@@ -64,6 +64,11 @@ export function linesToTasks(
         ...(found.doneOn === null ? {} : { doneOn: found.doneOn }),
         children: [],
       });
+      // A line already done shows done in the review; any other says it stopped being a note.
+      if (found.doneOn === null) {
+        const at = `goals.${g}.tasks.${goal.tasks.length + tasks.length - 1}`;
+        corrections.push({ id: `${at}:lineToTask`, at, code: "lineToTask", said: cleanLine(line), proposed: found.name, values: { line: String(n) }, declined: "keepsPlan" });
+      }
     }
     if (taken.size === 0) return goal;
     return {

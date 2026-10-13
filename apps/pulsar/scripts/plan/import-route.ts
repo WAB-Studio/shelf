@@ -610,3 +610,119 @@ test("906: a HECHO line the model left out becomes a done task on its day and le
   );
   assert.deepEqual(done.corrections, []);
 });
+
+// ---- 903c: a second, short pass sends the tasks of a general goal to the goals below it.
+
+const task903c = (name: string, estimate: number, line: number) => ({
+  name,
+  month: "2026-10",
+  estimate,
+  week: null,
+  rule: null,
+  noteSrc: [],
+  noteText: null,
+  src: [{ from: line, to: line }],
+  children: [],
+});
+
+function holderDraft() {
+  return [
+    rawGoal({ key: "g", name: "Carrera", months: [], tasks: [task903c("Wireframes del caso", 120, 2), task903c("Anki diario", 60, 3)] }),
+    rawGoal({ key: "c1", parent: "g", name: "Caso #1", src: [{ from: 4, to: 4 }], months: [{ month: "2026-10", amount: 600, src: [{ from: 5, to: 5 }] }] }),
+  ];
+}
+
+const PLAN_TEXT = "# Carrera\nwireframes\nanki\n# Caso 1\nmes";
+
+// The first call streams the read, the second answers the pass: what the fake model says to each.
+function twoCalls(second: () => Response) {
+  let n = 0;
+  modelAnswer = () => (++n === 1 ? sse(JSON.stringify({ context: [], goals: holderDraft() })) : second());
+}
+
+const completion = (content: unknown, usage = { prompt_tokens: 900, completion_tokens: 120 }) =>
+  new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) }, finish_reason: "stop" }], usage }), {
+    headers: { "content-type": "application/json" },
+  });
+
+test("903c: the pass proposes a move as a correction, the draft stays as read, and the check sees the move", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  twoCalls(() => completion({ moves: [{ holder: "g", task: 0, to: "c1" }] }));
+  const lines = await ndjson(await route.POST(request({ text: PLAN_TEXT })));
+  assert.deepEqual(lines.slice(0, 3), [{ step: "find" }, { step: "arrange" }, { step: "check" }]);
+  const done = lastLine(lines).done;
+  assert.deepEqual(done.draft.goals[0].tasks.map((t: { name: string }) => t.name), ["Wireframes del caso", "Anki diario"]);
+  const moved = done.corrections.filter((c: { code: string }) => c.code === "taskMoved");
+  assert.deepEqual(moved.map((c: { id: string; said: string; proposed: string }) => [c.id, c.said, c.proposed]), [["goals.0.tasks.0:taskMoved", "Carrera", "Caso #1"]]);
+  // «Caso #1» says 10 h a month and now holds a 2 h task: the check, run after the move, says so.
+  const sums = done.corrections.filter((c: { code: string }) => c.code === "monthSumDiffers");
+  assert.deepEqual(sums.map((c: { at: string; proposed: string }) => [c.at, c.proposed]), [["goals.1.months.0", "120"]]);
+});
+
+test("903c: the pass is claimed and settled like the read, as a row of its own", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  twoCalls(() => completion({ moves: [] }));
+  await ndjson(await route.POST(request({ text: PLAN_TEXT })));
+  assert.equal(modelCalls.length, 2);
+  assert.equal(modelCalls[1].rowsSeen.length, 2, "claimed before the pass was asked");
+  assert.equal(modelCalls[1].rowsSeen[1].outcome, null, "unsettled while it ran");
+  const after = await sql<{ model: string; source: string; outcome: string | null; input_tokens: number | null; output_tokens: number | null }[]>`
+    select model, source, outcome, input_tokens, output_tokens from goals.model_calls where user_id = ${userId} order by called_at`;
+  assert.deepEqual(after.map((r) => [r.model, r.source, r.outcome, r.input_tokens, r.output_tokens]), [
+    ["gpt-5.5", "paste", "ok", 120, 340],
+    ["gpt-5.5/arrange", "paste", "ok", 900, 120],
+  ]);
+});
+
+test("903c: the pass does not count against the daily reads: nine reads before, and the tenth still reads and arranges", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  await seedToday(9);
+  twoCalls(() => completion({ moves: [] }));
+  const lines = await ndjson(await route.POST(request({ text: PLAN_TEXT })));
+  assert.ok(lastLine(lines).done);
+  assert.equal(modelCalls.length, 2);
+  twoCalls(() => completion({ moves: [] }));
+  const eleventh = await route.POST(request({ text: PLAN_TEXT }));
+  assert.equal(eleventh.status, 429, "ten reads spent the cap, whatever the passes were");
+});
+
+test("903c: a pass that fails leaves the draft as read, with no move, and says nothing to the person", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  twoCalls(() => new Response("{}", { status: 500 }));
+  const done = lastLine(await ndjson(await route.POST(request({ text: PLAN_TEXT })))).done;
+  assert.deepEqual(done.corrections.filter((c: { code: string }) => c.code === "taskMoved"), []);
+  const after = await rows();
+  assert.deepEqual(after.map((r) => r.outcome), ["ok", "failed"]);
+});
+
+test("903c: a pass that answers a shape the schema refuses is settled invalid", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  twoCalls(() => completion({ moves: "todas" }));
+  const done = lastLine(await ndjson(await route.POST(request({ text: PLAN_TEXT })))).done;
+  assert.deepEqual(done.corrections.filter((c: { code: string }) => c.code === "taskMoved"), []);
+  assert.deepEqual((await rows()).map((r) => r.outcome), ["ok", "invalid"]);
+});
+
+test("903c: a plan with no goal that holds goals and tasks costs no second call", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  modelAnswer = () => sse(JSON.stringify({ context: "x", goals: [rawGoal()] }));
+  await ndjson(await route.POST(request({ text: "quiero aprender inglés este año" })));
+  assert.equal(modelCalls.length, 1);
+  assert.equal((await rows()).length, 1);
+});
+
+test("903c: with the seam standing in for the model there is no second call and no second row", async () => {
+  stubDraft(...holderDraft());
+  await ndjson(await route.POST(request({ text: PLAN_TEXT })));
+  assert.equal(modelCalls.length, 0);
+  assert.equal((await rows()).length, 1);
+});
+
+test("903c: a box line the model left out is a task in the draft, with its correction", async () => {
+  stubDraft(rawGoal({ src: [{ from: 1, to: 1 }], months: [] }));
+  const done = lastLine(await ndjson(await route.POST(request({ text: "# Plan\n- [ ] Llamar al banco\n30 min Leer\nRegla sin forma" })))).done;
+  const [goal] = done.draft.goals;
+  assert.deepEqual(goal.tasks.map((t: { name: string; estimate: number | null }) => [t.name, t.estimate]), [["Llamar al banco", null], ["Leer", 30]]);
+  assert.equal(goal.note, "Regla sin forma");
+  assert.deepEqual(done.corrections.filter((c: { code: string }) => c.code === "lineToTask").map((c: { at: string }) => c.at), ["goals.0.tasks.0", "goals.0.tasks.1"]);
+});

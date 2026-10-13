@@ -9,7 +9,7 @@ import { confirmImport } from "@/app/actions/import";
 import { srcLines, strayEstimates } from "@/lib/import/draft";
 import { clearCreated, describePart, readCreated, saveCreated, type CreatedResult } from "@/lib/import/created-store";
 import { clearDraft, readDraft, saveReview, storedText, type StoredDraft } from "@/lib/import/draft-store";
-import { edit, editedCorrections, goalHorizonRefusal, nameKey, reviewTree, weekdaysIn, type ReviewNode } from "@/lib/import/review";
+import { edit, editedCorrections, goalHorizonRefusal, nameKey, remapUnmarked, reviewTree, weekdaysIn, type ReviewNode } from "@/lib/import/review";
 import { monthsOfSpan } from "@/lib/plan/months";
 import { civilDateToDate } from "@/lib/zone";
 import { ActionBar, Button, Flex, ListDetail, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
@@ -108,7 +108,8 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     const next = new Set(declined);
     if (decline) next.add(id);
     else next.delete(id);
-    keep({ ...stored!, declined: [...next] }, review!.unmarked);
+    // A move taken or undone changes where its task lies, and the marks follow it.
+    keep({ ...stored!, declined: [...next] }, new Set(remapUnmarked(stored!, next, [...review!.unmarked])));
     setAccepted((now) => {
       const rest = new Set(now);
       rest.delete(id);
@@ -281,7 +282,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
       <ReviewTree
         review={review}
-        corrections={stored.corrections}
+        corrections={review.corrections}
         notices={stored.notices}
         declined={declined}
         accepted={accepted}

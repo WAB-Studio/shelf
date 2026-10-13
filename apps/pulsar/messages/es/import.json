@@ -203,6 +203,16 @@
         "proposed": "Termina el {proposed}",
         "why": "«{above}» termina el {proposed}: una meta no termina después de la que la lleva."
       },
+      "lineToTask": {
+        "said": "En la nota: «{said}»",
+        "proposed": "Tarea: «{proposed}»",
+        "why": "Una línea con casilla o con duración al frente es una tarea, no una nota."
+      },
+      "taskMoved": {
+        "said": "En «{said}»",
+        "proposed": "En «{proposed}»",
+        "why": "«{name}» sirve a una de las metas de abajo, no a «{said}» entera."
+      },
       "measureInHours": {
         "said": "Sin medida",
         "proposed": "Medida: horas",

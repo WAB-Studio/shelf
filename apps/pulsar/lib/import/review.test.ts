@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { draftRefusals, type DraftGoal, type DraftTask, type ImportDraft } from "./draft";
 import type { StoredDraft } from "./draft-store";
-import { edit, editedCorrections, goalHorizonRefusal, markedDraft, nameKey, reviewTree, weekdaysIn } from "./review";
+import { edit, editedCorrections, goalHorizonRefusal, markedDraft, nameKey, remapUnmarked, reviewTree, weekdaysIn } from "./review";
 
 const TODAY = "2026-10-15";
 
@@ -295,4 +295,38 @@ test("906: the weekday a plan line names is found, in any case and with or witho
 test("906: a task marked done shows its day in the review", () => {
   const { nodes } = review(draft(goal({ tasks: [task({ name: "EF SET", doneOn: "2026-10-09" }), task({ name: "Otra" })] })));
   assert.deepEqual(nodes.filter((n) => n.kind === "task").map((n) => [n.label, n.doneOn]), [["EF SET", "2026-10-09"], ["Otra", null]]);
+});
+
+// ---- 903c: tasks the second pass moved are drawn where they went, with their corrections.
+
+const movedDraft = () =>
+  draft(
+    goal({ key: "g", name: "General", tasks: [task({ name: "A" }), task({ name: "B" })] }),
+    goal({ key: "p", parent: "g", name: "Pilar", tasks: [task({ name: "D" })] }),
+  );
+const moveB = { id: "goals.0.tasks.1:taskMoved", at: "goals.0.tasks.1", code: "taskMoved" as const, said: "General", proposed: "Pilar", values: { to: "p", name: "B" }, declined: "keepsPlan" as const };
+
+test("903c: a moved task is a node of the goal it went to, and its correction hangs on it", () => {
+  const { nodes } = review(movedDraft(), { corrections: [moveB] });
+  assert.deepEqual(nodes.filter((n) => n.kind === "task").map((n) => [n.path, n.label]), [["goals.0.tasks.0", "A"], ["goals.1.tasks.0", "D"], ["goals.1.tasks.1", "B"]]);
+  assert.deepEqual(nodes.find((n) => n.path === "goals.1.tasks.1")?.corrections.map((c) => c.id), [moveB.id]);
+  assert.deepEqual(review(movedDraft(), { corrections: [moveB] }).corrections.map((c) => c.at), ["goals.1.tasks.1"]);
+});
+
+test("903c: a declined move leaves the task in the goal that held it, and its correction there", () => {
+  const { nodes } = review(movedDraft(), { corrections: [moveB], declined: [moveB.id] });
+  assert.deepEqual(nodes.filter((n) => n.kind === "task").map((n) => n.path), ["goals.0.tasks.0", "goals.0.tasks.1", "goals.1.tasks.0"]);
+  assert.deepEqual(nodes.find((n) => n.path === "goals.0.tasks.1")?.corrections.map((c) => c.id), [moveB.id]);
+});
+
+test("903c: what is sent has the task under the goal it went to", () => {
+  const { toSend } = review(movedDraft(), { corrections: [moveB] });
+  assert.deepEqual(toSend.goals.map((g) => g.tasks.map((t) => t.name)), [["A"], ["D", "B"]]);
+});
+
+test("903c: unmarked paths follow a task when a move is declined or accepted again", () => {
+  const withMove = stored(movedDraft(), { corrections: [moveB], declined: [], unmarked: ["goals.1.tasks.1"] });
+  assert.deepEqual(remapUnmarked(withMove, new Set([moveB.id]), ["goals.1.tasks.1"]), ["goals.0.tasks.1"]);
+  const without = stored(movedDraft(), { corrections: [moveB], declined: [moveB.id] });
+  assert.deepEqual(remapUnmarked(without, new Set(), ["goals.0.tasks.1", "goals.1"]), ["goals.1.tasks.1", "goals.1"]);
 });

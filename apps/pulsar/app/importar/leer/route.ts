@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { arrangeWanted, moveCorrections, proposeMoves } from "@/lib/import/arrange";
 import { check } from "@/lib/import/check";
 import { placeLeftovers } from "@/lib/import/coverage";
-import { normalize } from "@/lib/import/draft";
+import { decide, normalize, type Correction, type ImportDraft } from "@/lib/import/draft";
 import { linesToTasks } from "@/lib/import/line-tasks";
 import { MODEL_NAME, fileRoute, modelAvailable, readPlan, type PlanInput, type PlanReading } from "@/lib/import/model";
-import { claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
+import { claimFollowUp, claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
 import { parseTemplate, templateSource } from "@/lib/import/template";
 import { readWorkbook } from "@/lib/import/workbook";
 import { getPerson } from "@/lib/session";
@@ -38,6 +39,24 @@ function readingError(status: Exclude<PlanReading["status"], "ok">): string {
       return "import.errors.unreadableType";
     case "failed":
       return "import.errors.modelFailed";
+  }
+}
+
+// 903c: the second pass, claimed and settled like the read and apart from its cap. Whatever goes wrong
+// here costs the person nothing: the plan arrives as the read left it, with no move proposed.
+async function arrange(draft: ImportDraft, source: "paste" | "file"): Promise<Correction[]> {
+  if (!arrangeWanted(draft)) return [];
+  let claim: { id: string } | null = null;
+  try {
+    claim = await claimFollowUp(MODEL_NAME, source);
+    if (!claim) return [];
+    const reading = await proposeMoves(draft);
+    const outcome: ModelCallOutcome = reading.status === "none" ? "empty" : reading.status;
+    await settleModelCall(claim.id, { inputTokens: reading.status === "none" ? 0 : (reading.usage?.input ?? 0), outputTokens: reading.status === "none" ? 0 : (reading.usage?.output ?? 0), outcome });
+    return reading.status === "ok" ? moveCorrections(draft, reading.moves) : [];
+  } catch {
+    if (claim) await settleModelCall(claim.id, { inputTokens: 0, outputTokens: 0, outcome: "failed" }).catch(() => {});
+    return [];
   }
 }
 
@@ -128,16 +147,18 @@ export async function POST(request: NextRequest) {
           send({ error: readingError(reading.status) });
           return;
         }
-        send({ step: "check" });
         const normalized = normalize(reading.raw, reading.source);
         const placed = placeLeftovers(normalized.draft, reading.source);
-        const lined = linesToTasks(placed, reading.source, todayInZone(), { onlyDone: true });
-        const checked = check(lined.draft);
+        const lined = linesToTasks(placed, reading.source, todayInZone(), { onlyDone: false });
+        const arranged = await arrange(lined.draft, file ? "file" : "paste");
+        send({ step: "check" });
+        // The check reads the plan with the proposed moves applied: a goal's month adds up its own tasks.
+        const checked = check(decide(lined.draft, arranged, new Set()));
         send({
           done: {
             via: "model",
             draft: lined.draft,
-            corrections: [...normalized.corrections, ...lined.corrections, ...checked.corrections],
+            corrections: [...normalized.corrections, ...lined.corrections, ...arranged, ...checked.corrections],
             notices: checked.notices,
             source: reading.source,
           },

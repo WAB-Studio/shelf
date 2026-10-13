@@ -10,6 +10,7 @@ import { createOneOffSchema, noteSchema } from "@/lib/validation/one-off";
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
 import { cleanLine, shortenName as shorten } from "./clean";
+import { reshapeTasks } from "./reshape";
 
 // The forms' own schemas judge what the import carries; the model's answer
 // and the template are shaped around them, never a second set of rules.
@@ -435,7 +436,9 @@ export type CorrectionCode =
   | "endWithinAbove"
   | "measureInHours"
   | "monthSumDiffers"
-  | "monthOverRhythm";
+  | "monthOverRhythm"
+  | "lineToTask"
+  | "taskMoved";
 export type NoticeCode = "weekRuleBroken" | "rhythmWithoutTasks";
 
 // `id` is `at:code`. `declined` says what rejecting it does: keep what the plan said, or leave the part out.
@@ -696,6 +699,15 @@ function withoutAdded(note: string | null, added: string | undefined): string | 
 // applied unless declined; a fix `normalize` made is undone when declined, and the part is then
 // refused by name, or keeps what the plan said.
 export function decide(draft: ImportDraft, corrections: Correction[], declined: ReadonlySet<string>): ImportDraft {
+  return decideWithPaths(draft, corrections, declined).draft;
+}
+
+// `decide`, and where each path of the stored draft lies once tasks have moved.
+export function decideWithPaths(
+  draft: ImportDraft,
+  corrections: Correction[],
+  declined: ReadonlySet<string>,
+): { draft: ImportDraft; pathOf: (path: string) => string } {
   const next = structuredClone(draft);
   for (const c of corrections) {
     const parts = c.at.split(".");
@@ -752,10 +764,12 @@ export function decide(draft: ImportDraft, corrections: Correction[], declined: 
         if (refused) goal.horizon = c.values?.was ?? goal.horizon;
         break;
       case "measureInHours":
+      case "lineToTask":
+      case "taskMoved":
         break;
     }
   }
-  return next;
+  return reshapeTasks(next, corrections, declined);
 }
 
 // The note without the whole name `nameShortened` put at its head.

@@ -6,7 +6,7 @@ import { createGoalSchema } from "@/lib/validation/plan";
 
 import { coverage, outness } from "./coverage";
 import {
-  decide,
+  decideWithPaths,
   draftRefusals,
   withoutStrayEstimates,
   type Correction,
@@ -178,13 +178,38 @@ export function weekdaysIn(text: string): { word: string; day: number }[] {
 // Accents count: «Inglés» and «Ingles» differ, but one «é» composed or decomposed is the same.
 export const nameKey = (name: string) => name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
 
+const TASK_KEY = /^goals\.(\d+)\.tasks\.(\d+)(\..+)?$/;
+
+// The unmarked paths, which are paths of the review as drawn, for the review drawn once `declined` is the
+// decision: a move taken or undone changes where its task lies.
+export function remapUnmarked(stored: StoredDraft, declined: ReadonlySet<string>, unmarked: string[]): string[] {
+  const now = decideWithPaths(stored.draft, stored.corrections, new Set(stored.declined)).pathOf;
+  const next = decideWithPaths(stored.draft, stored.corrections, declined).pathOf;
+  const back = new Map<string, string>();
+  stored.draft.goals.forEach((goal, g) =>
+    goal.tasks.forEach((_, t) => {
+      const at = `goals.${g}.tasks.${t}`;
+      const there = now(at);
+      if (TASK_KEY.test(there)) back.set(there, at);
+    }),
+  );
+  return unmarked.map((path) => {
+    const hit = TASK_KEY.exec(path);
+    const own = hit ? back.get(`goals.${hit[1]}.tasks.${hit[2]}`) : undefined;
+    return own === undefined ? path : next(`${own}${hit![3] ?? ""}`);
+  });
+}
+
 const WRITTEN = new Set<ReviewNode["kind"]>(["goal", "group", "phase", "month", "commitment", "task", "subTask"]);
 
 // The review of a stored draft: the tree to draw, what the person is sent to confirm and what the
 // plan's lines came to. The corrections the person declined are undone, the check's proposals they
 // did not decline are applied, and a goal an open goal already names starts unmarked.
 export function reviewTree(stored: StoredDraft, today: string, openGoalNames: string[]) {
-  const work = withoutStrayEstimates(decide(stored.draft, stored.corrections, new Set(stored.declined)));
+  const decided = decideWithPaths(stored.draft, stored.corrections, new Set(stored.declined));
+  const work = withoutStrayEstimates(decided.draft);
+  // A correction is drawn where its part now lies: a task the second pass moved has gone to another goal.
+  const corrections = stored.corrections.map((c) => ({ ...c, at: decided.pathOf(c.at) }));
   const refusals = draftRefusals(work, today);
   const refused = new Set(refusals.map((refusal) => refusal.path));
   const open = new Set(openGoalNames.map(nameKey));
@@ -256,7 +281,7 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
     while (parts.length > 1 && !paths.has(parts.join("."))) parts.pop();
     return nodes.find((n) => n.path === parts.join("."));
   };
-  for (const correction of stored.corrections) nodeAt(correction.at)?.corrections.push(correction);
+  for (const correction of corrections) nodeAt(correction.at)?.corrections.push(correction);
   for (const notice of stored.notices) nodeAt(notice.at)?.notices.push(notice);
 
   const toSend = markedDraft(work, unmarked, refused);
@@ -266,6 +291,7 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
   );
   return {
     nodes,
+    corrections,
     work,
     unmarked,
     refused,
