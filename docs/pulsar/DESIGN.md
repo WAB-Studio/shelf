@@ -1576,3 +1576,15 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/critic-
   for the week in progress.
 - **The fold line goes right after the current month,** and the hand-set months follow it under «y estos meses con monto propio:».
   Built in s3 the other way round, it reads as if a hand-set month were at the rhythm.
+- **The s4 boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», board
+  `S4Propuesta` (`PorMesSiguiente`, `FinalDosCuentas`, `HabitoSemanaRetiro`). Words and structure: `private/tableros-s4/NOTAS.md`.
+  Approved with them:
+  - The order under the current month: next month as a row, then «los demás meses que vienen: N cada uno», then «y estos meses con
+    monto propio:» and their rows. Next month is not repeated there when it has its own amount.
+  - «la meta lleva N semanas» counts this week too: «Correr 10 km» reads 8 in the sheet and «lleva 2 semanas»; «Leer» lleva 102.
+  - A weekly habit's week in progress reads «1 de 2 esta semana», as Hoy does, for 1 a week too; «0 de 1 esta semana» with nothing done.
+  - A retired habit's last month never reads «en curso».
+- **Next month's row opens the amount sheet** (`?planear=<mes>`), 2026-10-13, by the user: planning ahead is one tap. The other rows
+  open the month's page as before.
+- **A habit retired in a met week whose Thursday falls next month counts that week in its retirement month** (2026-10-13,
+  orchestrator): the habit has no next month to put it in.
