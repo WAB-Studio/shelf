@@ -339,6 +339,19 @@ test("a template without ritmo: reads as before, rhythm null", () => {
   assert.equal(result.draft.goals[0].rhythm, null);
 });
 
+test("ritmo: outside time reads a whole number or one followed by the measure's unit, plural or singular", () => {
+  const read = (amount: string) => {
+    const result = parseTemplate(`${RHYTHM_HEAD}medida: lectura · páginas\nritmo: ${amount}\n`);
+    return result.matched && "draft" in result ? result.draft.goals[0].rhythm : "refused";
+  };
+  assert.equal(read("40"), 40);
+  assert.equal(read("40 páginas"), 40);
+  assert.equal(read("1 página"), 1);
+  assert.equal(read("40 Páginas"), 40);
+  assert.equal(read("40 km"), "refused");
+  assert.equal(read("40 páginas más"), "refused");
+});
+
 test("ritmo: stops with its line and form when not under a time measure, not placed after medida:, or not an amount", () => {
   const stops = (text: string, line: number) => assert.equal(errorOf(`${RHYTHM_HEAD}${text}`).line, line, text);
   stops("ritmo: 10\n", 4);

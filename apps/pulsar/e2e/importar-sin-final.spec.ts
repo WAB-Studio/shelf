@@ -9,19 +9,19 @@ import { asPerson, createButton, months, plus, toOpenReview, toOpenSeededReview,
 
 // The review of a goal with no end and of a rhythm in pages (RP-99, RP-102; module 918). The boards
 // are `ImportarSinFinal-1-revision-360` and `-2-hoja-360`. No model is called: the plan is the template
-// (`ritmo: 40`, no `horizonte:`) or a draft the model seam would have left in the tab's storage.
+// (`ritmo: 40 páginas`, no `horizonte:`) or a draft the model seam would have left in the tab's storage.
 
 const READ = "Leer";
 const DESIGNER = "Product Designer junior";
 const ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const dayWord = (date: string) => `${Number(date.slice(8, 10))} ${ABBR[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
-const NO_END = "meta general · sin final";
+const NO_END = "meta · sin final";
 const RHYTHM_LINE = "ritmo · cada mes sin monto lo toma";
 const TASKS_GO_TO_PLAN = "las tareas van al plan";
 const PUT_END = "ponerle final";
 
 const sheet = (page: Page) => page.getByRole("dialog");
-const pencil = (page: Page, name: string) => page.getByRole("button", { name: `Cambiar el nombre de ${name}` });
+const pencil = (page: Page, name: string) => page.getByRole("button", { name: `Cambiar el nombre de ${name}`, exact: true });
 const weeksField = (page: Page) => sheet(page).getByLabel(/^semanas, contando la del/);
 const rowOf = (page: Page, name: RegExp) => page.locator("div").filter({ has: page.getByRole("checkbox", { name }) }).last();
 const draftOf = (page: Page) => page.evaluate(() => sessionStorage.getItem("pulsar.import-draft"));
@@ -37,7 +37,7 @@ function boardPlan(extra = ""): string {
     "",
     `# ${READ}`,
     "medida: lectura · páginas",
-    "ritmo: 40",
+    "ritmo: 40 páginas",
     "",
     "## Meses",
     `- ${first} · 30 páginas`,
@@ -99,7 +99,7 @@ test.describe("the review of a goal with no end (RP-99)", () => {
       await expect(rowOf(page, new RegExp(`^${READ} meta`))).not.toContainText("hasta el");
       await expect(rowOf(page, new RegExp(`^${READ} meta`))).not.toContainText(/NaN|Invalid|undefined|null/);
       // The dated goal keeps its words, with the day before its horizon.
-      await expect(page.getByText(`meta general · hasta el ${dayWord(dayBefore(plus(400)))}`, { exact: true })).toBeVisible();
+      await expect(page.getByText(`meta · hasta el ${dayWord(dayBefore(plus(400)))}`, { exact: true })).toBeVisible();
       await expect(createButton(page)).toHaveText("Crear 2 metas");
     });
   });
@@ -116,11 +116,11 @@ test.describe("the review of a goal with no end (RP-99)", () => {
     const twelfth = shift(12);
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, boardPlan(`- ${later} · 20 páginas\n- ${eleventh} · 25 páginas\n- ${twelfth} · 5 páginas`));
-      await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(eleventh)}`) })).toHaveText("25 páginas");
-      await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(later)}`) })).toHaveText("20 páginas");
+      await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(eleventh)}`, "i") })).toHaveText("25 páginas");
+      await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(later)}`, "i") })).toHaveText("20 páginas");
       // The twelfth month after is outside the span: it is left out, with no amount button of its own.
       await expect(page.getByText(messages.review.blocked.title, { exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(twelfth)},? 5 páginas`) })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(twelfth)},? 5 páginas`, "i") })).toHaveCount(0);
     });
   });
 
@@ -215,10 +215,11 @@ test.describe("the sheet of a goal with no end (board `ImportarSinFinal-2-hoja-3
       await pencil(page, READ).click();
       await sheet(page).getByRole("button", { name: PUT_END, exact: true }).click();
       await weeksField(page).fill("52");
-      await expect(sheet(page).getByText(`termina el ${dayWord(dayBefore(end))}`, { exact: false })).toBeVisible();
+      const last = dayBefore(end);
+      await expect(sheet(page).getByText(new RegExp(`^termina el .*${Number(last.slice(8, 10))} de ${word(last.slice(0, 7))}`))).toBeVisible();
       await sheet(page).getByRole("button", { name: messages.review.edit.save }).click();
       await expect(sheet(page)).toHaveCount(0);
-      await expect(page.getByText(`meta general · hasta el ${dayWord(dayBefore(end))}`, { exact: true })).toHaveCount(2);
+      await expect(page.getByText(`meta · hasta el ${dayWord(dayBefore(end))}`, { exact: true })).toHaveCount(1);
       await expect(page.getByText(NO_END, { exact: true })).toHaveCount(0);
       expect(JSON.parse((await draftOf(page))!).draft.goals[0].horizon).toBe(end);
     });
