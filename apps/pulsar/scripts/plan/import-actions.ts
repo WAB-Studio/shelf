@@ -851,3 +851,24 @@ test("906: a done task with sub-tasks is refused, and writes nothing", async () 
   const draft = tree([full("a", null, "906 madre", { tasks: [{ ...task("Madre", M0, null, [child]), doneOn: TODAY }] })]);
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneWithSubtasks", at: "goals.0.tasks.0" });
 });
+
+test("906b: a sub-task with a doneOn is written done on that day, its parent and sister are not", async () => {
+  const day = shiftDay(TODAY, -2);
+  const child = (name: string, doneOn?: string) => ({ name, estimate: 30, note: null, noteSrc: [], src: [], rule: null, ...(doneOn ? { doneOn } : {}) });
+  const draft = tree([full("a", null, "906b hijas", { tasks: [task("Madre", M0, null, [child("Hecha", day), child("Pendiente")])] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await asPerson((tx) => tx<{ name: string; day: string | null }[]>`
+    select o.name, f.day::text as day from goals.one_offs o left join goals.facts f on f.one_off_id = o.id
+    where o.goal_id = ${ids[0]} order by o.name`);
+  assert.deepEqual(rows.map((row) => [row.name, row.day]), [["Hecha", day], ["Madre", null], ["Pendiente", null]]);
+});
+
+test("906b: a done sub-task adds the one statement a done task adds, and a future day is refused at the sub-task", async () => {
+  const child = (doneOn?: string) => ({ name: "Hija", estimate: 30, note: null, noteSrc: [], src: [], rule: null, ...(doneOn ? { doneOn } : {}) });
+  const pending = await confirmed(tree([full("a", null, "906b hija pendiente", { tasks: [task("Madre", M0, null, [child()])] })]));
+  const done = await confirmed(tree([full("a", null, "906b hija hecha", { tasks: [task("Madre", M0, null, [child(TODAY)])] })]));
+  assert.equal(done.statements, pending.statements + 1);
+  const name = `906b futura ${RUN}`;
+  const draft = tree([full("a", null, name, { tasks: [task("Madre", M0, null, [child(shiftDay(TODAY, 3))])] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneInFuture", at: "goals.0.tasks.0.children.0" });
+});

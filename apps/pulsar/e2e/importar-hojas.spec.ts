@@ -145,4 +145,28 @@ test.describe("a task the plan marked done (906)", () => {
     });
     void goalMessages;
   });
+
+  test("a sub-task marked done is done on its day, its parent and sister are not", async ({ person, browser, baseURL, db }) => {
+    // Kills: a done line the model made a sub-task of, written pending.
+    const day = todayInZone();
+    const seed = seedOf([
+      rawGoal("Meta con hija hecha", { measure: { name: "horas", unit: "minutos" }, tasks: [rawTask("Semana 1", { children: [{ name: "EF SET", estimate: 60, rule: null, noteSrc: [], noteText: null, src: [] }, { name: "Medir", estimate: 30, rule: null, noteSrc: [], noteText: null, src: [] }] })] }),
+    ]);
+    const value = stored(seed);
+    value.draft.goals[0].tasks[0].children[0].doneOn = day;
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await page.goto("/metas/importar");
+      await page.evaluate(([key, text]) => sessionStorage.setItem(key, text), ["pulsar.import-draft", JSON.stringify(value)] as const);
+      await page.goto("/metas/importar/revisar");
+      await settled(page);
+      await unfold(page);
+      await page.getByRole("button", { name: /sub-tareas?$/ }).first().click();
+      await expect(page.getByText(/sub-tarea · hecha el \d+ \S+ \d{4}/)).toHaveCount(1);
+      await createButton(page).click();
+      await expect(page).toHaveURL(/\/metas$/);
+      const rows = await db`select o.name, f.day::text as day from goals.one_offs o left join goals.facts f on f.one_off_id = o.id
+        where o.user_id = ${person.id} and o.name in ('Semana 1', 'EF SET', 'Medir') order by o.name`;
+      expect(rows.map((r) => [r.name, r.day])).toEqual([["EF SET", day], ["Medir", null], ["Semana 1", null]]);
+    });
+  });
 });

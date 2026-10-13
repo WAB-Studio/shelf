@@ -330,3 +330,9 @@ test("903c: unmarked paths follow a task when a move is declined or accepted aga
   const without = stored(movedDraft(), { corrections: [moveB], declined: [moveB.id] });
   assert.deepEqual(remapUnmarked(without, new Set(), ["goals.0.tasks.1", "goals.1"]), ["goals.1.tasks.1", "goals.1"]);
 });
+
+test("906b: a sub-task marked done shows its day too", () => {
+  const child = { name: "EF SET", estimate: 60, note: null, noteSrc: [], src: [], rule: null, doneOn: "2026-10-09" };
+  const { nodes } = review(draft(goal({ tasks: [task({ name: "Semana", children: [child] })] })));
+  assert.deepEqual(nodes.filter((n) => n.kind === "subTask").map((n) => [n.label, n.doneOn]), [["EF SET", "2026-10-09"]]);
+});

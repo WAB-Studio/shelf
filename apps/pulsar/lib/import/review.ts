@@ -269,7 +269,7 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
       const taskAt = `${at}.tasks.${t}`;
       push({ path: taskAt, kind: "task", depth: (d + 1) as 1, label: task.name, figure: task.estimate === null ? null : { amount: task.estimate, unit }, doneOn: task.doneOn ?? null });
       task.children.forEach((child, c) =>
-        push({ path: `${taskAt}.children.${c}`, kind: "subTask", depth: (d + 2) as 2, label: child.name, figure: child.estimate === null ? null : { amount: child.estimate, unit } }),
+        push({ path: `${taskAt}.children.${c}`, kind: "subTask", depth: (d + 2) as 2, label: child.name, figure: child.estimate === null ? null : { amount: child.estimate, unit }, doneOn: child.doneOn ?? null }),
       );
     });
   }

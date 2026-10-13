@@ -134,7 +134,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   const budgetRows: Part[] = [];
   const commitmentRows: Part[] = [];
   const parentRows: (Part & { taskId: string })[] = [];
-  const childRows: (Part & { taskId: string })[] = [];
+  const childRows: (Part & { taskId: string; childId: string })[] = [];
   const doneRows: (Part & { taskId: string })[] = [];
   const goalIds: string[] = [];
 
@@ -217,13 +217,23 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       }
       for (const [place, child] of task.children.entries()) {
         taskIndex += 1;
+        const childId = randomUUID();
         // The parent's own row already holds base + parentIndex.
         childRows.push({
           taskId,
-          row: sql`${person.id}::uuid, ${goalId}::uuid, ${taskId}::uuid, ${child.name}, ${child.estimate}::integer, ${child.note ?? null}::text, (select p.position from ${oneOffs} p where p.id = ${taskId}::uuid) + ${place + 1}::integer`,
+          childId,
+          row: sql`${childId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${taskId}::uuid, ${child.name}, ${child.estimate}::integer, ${child.note ?? null}::text, (select p.position from ${oneOffs} p where p.id = ${taskId}::uuid) + ${place + 1}::integer`,
           path: `${at}.tasks.${t}.children.${place}`,
           name: child.name,
         });
+        if (child.doneOn) {
+          doneRows.push({
+            taskId: childId,
+            row: sql`${person.id}::uuid, ${childId}::uuid, ${goalId}::uuid, ${child.doneOn}::date`,
+            path: `${at}.tasks.${t}.children.${place}`,
+            name: child.name,
+          });
+        }
       }
     }
   }
@@ -284,18 +294,20 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
         values ${values}
       `);
       const keptIds = new Set(keptParents.map((part) => part.taskId));
-      await put(
-        doneRows.filter((part) => keptIds.has(part.taskId)),
-        (values) => sql`
-          insert into ${facts} (user_id, one_off_id, goal_id, day) values ${values}
-        `,
-      );
       // A refused parent takes its sub-tasks with it, and they are not listed apart.
-      await put(
+      const keptChildren = await put(
         childRows.filter((part) => keptIds.has(part.taskId)),
         (values) => sql`
-          insert into ${oneOffs} (user_id, goal_id, parent_id, name, estimate, note, position)
+          insert into ${oneOffs} (id, user_id, goal_id, parent_id, name, estimate, note, position)
           values ${values}
+        `,
+      );
+      // RP-96: a task or sub-task the plan marked done is born done, on the day it names.
+      const keptDone = new Set([...keptIds, ...keptChildren.map((part) => part.childId)]);
+      await put(
+        doneRows.filter((part) => keptDone.has(part.taskId)),
+        (values) => sql`
+          insert into ${facts} (user_id, one_off_id, goal_id, day) values ${values}
         `,
       );
       return failed;

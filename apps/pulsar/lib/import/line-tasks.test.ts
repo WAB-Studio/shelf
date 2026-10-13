@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { coverage, placeLeftovers } from "./coverage";
-import type { DraftGoal, ImportDraft, Source } from "./draft";
+import type { DraftGoal, DraftTask, ImportDraft, Source } from "./draft";
 import { linesToTasks } from "./line-tasks";
 
 const goal = (over: Partial<DraftGoal> = {}): DraftGoal => ({
@@ -137,4 +137,38 @@ test("903c: every taken line is plan in the count, and none is counted twice", (
   const { draft: out } = linesToTasks(placeLeftovers(draft(goal()), source(lines)), source(lines), TODAY, { onlyDone: false });
   const c = coverage(out, source(lines), new Set(), new Set());
   assert.deepEqual([c.total, c.plan, c.notes, c.out], [3, 2, 1, 0]);
+});
+
+// ---- 906b, found on the real roadmap: the model made the HECHO line a sub-task, which is a task all the same.
+
+const leaf = (name: string, line: number, over: Partial<DraftTask> = {}): DraftTask => ({
+  name,
+  month: "2026-10",
+  estimate: null,
+  note: null,
+  noteSrc: [],
+  src: [{ from: line, to: line }],
+  week: null,
+  rule: null,
+  children: [],
+  ...over,
+});
+
+test("906b: a task or a sub-task the model made from a done line is born done on that day", () => {
+  const lines = ["# G", "Semana 1", "  - [ ] **1 h · EF SET.** ✅ HECHO el 9 oct 2026", "- [x] Leer", "- [ ] Pendiente"];
+  const child = { name: "EF SET", estimate: 60, note: null, noteSrc: [], src: [{ from: 3, to: 3 }], rule: null };
+  const base = draft(goal({ tasks: [leaf("Semana 1", 2, { children: [child] }), leaf("Leer", 4), leaf("Pendiente", 5)] }));
+  const { draft: out, corrections } = linesToTasks(base, source(lines), TODAY, { onlyDone: false });
+  const [week, read, pending] = out.goals[0].tasks;
+  assert.equal(week.doneOn ?? null, null, "a task holding sub-tasks is done by them");
+  assert.equal(week.children[0].doneOn, "2026-10-09");
+  assert.equal(read.doneOn, TODAY);
+  assert.equal(pending.doneOn ?? null, null);
+  assert.deepEqual(corrections, []);
+});
+
+test("906b: a task already marked done keeps its day", () => {
+  const lines = ["# G", "- [x] Leer HECHO el 3 ago 2026"];
+  const base = draft(goal({ tasks: [leaf("Leer", 2, { doneOn: "2026-08-01" })] }));
+  assert.equal(linesToTasks(base, source(lines), TODAY, { onlyDone: false }).draft.goals[0].tasks[0].doneOn, "2026-08-01");
 });

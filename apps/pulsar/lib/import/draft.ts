@@ -335,6 +335,7 @@ const childV2 = z.strictObject({
   noteSrc: src,
   src,
   rule: z.string().nullable(),
+  doneOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
 const taskV2 = z.strictObject({
   name: z.string(),
@@ -952,6 +953,7 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
         const childPath = `${path}.children.${c}`;
         const childIssue = firstIssue(createOneOffSchema.shape.name, child.name) ?? firstIssue(estimate.nullable(), child.estimate);
         if (childIssue) refuse(childPath, childIssue);
+        else if (child.doneOn && child.doneOn > today) refuse(childPath, "import.errors.doneInFuture");
         else if (goal.measure === null && child.estimate !== null) refuse(childPath, "month.errors.noMeasure");
         if (child.note !== null && child.note.length > TASK_NOTE_MAX) refuse(`${childPath}.note`, "day.errors.oneOffNoteTooLong");
       });

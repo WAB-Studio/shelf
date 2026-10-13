@@ -1,4 +1,4 @@
-import { cleanLine, taskFromLine } from "./clean";
+import { cleanLine, doneMark, taskFromLine } from "./clean";
 import { srcLines, type Correction, type DraftGoal, type DraftTask, type ImportDraft, type Source, type Src } from "./draft";
 
 // Consecutive line numbers as ranges, in order.
@@ -23,11 +23,20 @@ function withoutLine(note: string | null, text: string): string | null {
   return rest === "" ? null : rest;
 }
 
+// The day the line a part was written on says it was done, or the part's own when it has one.
+function bornDone<T extends { src: Src[]; doneOn?: string | null }>(part: T, lines: string[], today: string): T {
+  if (part.doneOn) return part;
+  const first = srcLines(part.src, lines.length)[0];
+  const mark = first === undefined ? null : doneMark(lines[first - 1], today);
+  return mark === null ? part : { ...part, doneOn: mark.on };
+}
+
 /**
  * RP-96: a line a goal's note holds that is a task — a box, «HECHO», and with `onlyDone` off a duration
  * first — becomes the goal's task and leaves the note, so it is never written twice. A line marked done
  * (`- [x]`, «HECHO el <fecha>») is a task already done on that day. The task sits in this month, the
  * earliest a goal's month can be; its done day is kept apart. Lines a task or a sub-task holds stay their steps.
+ * A task or a sub-task the model made from such a line is born done as well, unless it holds sub-tasks.
  */
 export function linesToTasks(
   draft: ImportDraft,
@@ -70,12 +79,16 @@ export function linesToTasks(
         corrections.push({ id: `${at}:lineToTask`, at, code: "lineToTask", said: cleanLine(line), proposed: found.name, values: { line: String(n) }, declined: "keepsPlan" });
       }
     }
-    if (taken.size === 0) return goal;
+    const marked = goal.tasks.map((task) => {
+      const children = task.children.map((child) => bornDone(child, lines, today));
+      return task.children.length > 0 ? { ...task, children } : bornDone(task, lines, today);
+    });
+    if (taken.size === 0) return { ...goal, tasks: marked };
     return {
       ...goal,
       note,
       noteSrc: rangesOf(srcLines(goal.noteSrc, lines.length).filter((n) => !taken.has(n))),
-      tasks: [...goal.tasks, ...tasks],
+      tasks: [...marked, ...tasks],
     };
   });
   return { draft: { ...draft, goals }, corrections };
