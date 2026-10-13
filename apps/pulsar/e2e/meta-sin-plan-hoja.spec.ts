@@ -181,3 +181,46 @@ for (const width of [390, 1440]) {
     }
   });
 }
+
+// DESIGN.md "scrim, never a blur": the overlay paints no ground of its own, so the page behind shows
+// through the scrim that its `::before` carries.
+const SCRIM = { light: "rgba(18, 23, 28, 0.34)", dark: "rgba(5, 7, 9, 0.62)" };
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`at 360 on ${scheme} the open sheet's overlay is transparent and only its ::before dims the page`, async ({ person, browser, baseURL, db }) => {
+    const { goalId, name } = await seed(db, person.id, "km");
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 360, height: 800 },
+      colorScheme: scheme,
+    });
+    const page = await context.newPage();
+    try {
+      await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
+      const behind = page.getByRole("button", { name: new RegExp(`^${name}`) });
+      await behind.click();
+      const sheet = page.getByRole("dialog", { name });
+      await expect(sheet).toBeVisible();
+      await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((animation) => animation.finished)));
+      const paint = await page.evaluate(() => {
+        const overlay = document.querySelector(".rt-BaseDialogOverlay")!;
+        const dialog = document.querySelector('[role="dialog"]')!;
+        return {
+          overlay: getComputedStyle(overlay).backgroundColor,
+          scrim: getComputedStyle(overlay, "::before").backgroundColor,
+          panel: getComputedStyle(dialog).backgroundColor,
+          root: getComputedStyle(document.querySelector(".radix-themes")!).backgroundColor,
+        };
+      });
+      console.log(`paint ${scheme}`, JSON.stringify(paint));
+      expect(paint.overlay).toBe("rgba(0, 0, 0, 0)");
+      expect(paint.scrim).toBe(SCRIM[scheme]);
+      expect(paint.panel).not.toBe("rgba(0, 0, 0, 0)");
+      expect(paint.root).not.toBe("rgba(0, 0, 0, 0)");
+      await expect(page.getByText(name).first()).toBeAttached();
+    } finally {
+      await context.close();
+    }
+  });
+}
