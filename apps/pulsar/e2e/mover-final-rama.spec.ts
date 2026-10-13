@@ -201,6 +201,7 @@ test("an end no goal passes shows no list and no «Mover también…», and «Mo
   const tree = await seedBranch(db, person, Date.now());
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
   try {
+    const before = await horizonsOf(db, Object.values(tree.ids));
     const sheet = await openSheet(page);
     // Lengthening the general: no goal can end after it.
     await sheet.getByLabel(WEEKS_LABEL).fill("60");
@@ -214,7 +215,7 @@ test("an end no goal passes shows no list and no «Mover también…», and «Mo
 
     const now = await horizonsOf(db, Object.values(tree.ids));
     expect(now[tree.G]).toBe(at(60));
-    for (const id of tree.late) expect(now[id]).toBe(at(52));
+    for (const id of Object.values(tree.ids)) if (id !== tree.G) expect(now[id]).toBe(before[id]);
     await expect(page.getByText(/^Se movió el final de la meta/)).toHaveCount(0);
   } finally {
     await context.close();
