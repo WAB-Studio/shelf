@@ -4,6 +4,7 @@ import type postgres from "postgres";
 
 import importMessages from "../messages/es/import.json";
 import { test, expect, visit } from "./fixtures";
+import { unfold } from "./importar-plan";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `/metas` (`MetasCentro`, `MetasCentroEscritorio`; RP-11, RP-24, RP-27, RP-49,
@@ -359,8 +360,10 @@ test("the import review ends the measure row in «búsquedas» for a unit writte
     await page.getByLabel(importMessages.textLabel).fill(text);
     await page.getByRole("button", { name: "Leer el plan" }).click();
     await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+    // The review arrives folded: the month's amount button sits inside the goal's parts (902).
+    await unfold(page);
     // The tree shows the unit where a figure carries it: the month's amount button.
-    await expect(page.getByRole("button", { name: /10 búsquedas/ })).toHaveText("10 búsquedas");
+    await expect(page.getByRole("button", { name: /^Cambiar el monto de .*10 búsquedas$/ })).toHaveText("10 búsquedas");
     await expect(page.getByText("searches", { exact: true })).toHaveCount(0);
   } finally {
     await context.close();
