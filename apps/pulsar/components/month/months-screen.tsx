@@ -169,6 +169,7 @@ export async function MonthsScreen({
   return (
     <Page width="full">
       <ScreenHeader
+        chat
         title={t("month.months.title")}
         back={{ href: `/metas/${goal.id}`, place: goal.name }}
       />

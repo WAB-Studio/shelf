@@ -12,6 +12,8 @@ export const env = createEnv({
     OPENAI_API_KEY: z.string().optional(),
     // Test servers only: answers the plan reader from a fixture, never the model.
     PULSAR_MODEL_STUB: z.string().optional(),
+    // Test servers only: answers the chat from a script, never the model.
+    PULSAR_CHAT_STUB: z.string().optional(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),

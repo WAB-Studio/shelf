@@ -38,7 +38,7 @@ test("Hoy holds 12 px between its title and the line under it", async ({ person,
   }
 });
 
-test("Hoy's controls row sits 12 px from the date, 6 px over the title, and its toggle ends the header's line", async ({
+test("Hoy's controls row sits 12 px from the date, 6 px over the title, and its toggle sits before the chat entry that ends the line", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 740 });
@@ -52,7 +52,10 @@ test("Hoy's controls row sits 12 px from the date, 6 px over the title, and its 
   expect(gap).toBeGreaterThanOrEqual(6);
   expect(gap).toBeLessThanOrEqual(8);
   expect(await row.evaluate((el) => getComputedStyle(el).columnGap)).toBe("12px");
-  // The controls take the rest of the line and the toggle sits at its end.
+  // The chat entry ends the line (`ChatEntrada`); the toggle sits right before it.
   const toggle = (await header.getByRole("button", { name: /modo (oscuro|claro)/ }).boundingBox())!;
-  expect(toggle.x + toggle.width).toBeGreaterThan(rowBox.x + rowBox.width - 12);
+  const chat = (await header.getByRole("link", { name: "Abrir el chat" }).boundingBox())!;
+  expect(chat.x + chat.width).toBeGreaterThan(rowBox.x + rowBox.width - 12);
+  expect(toggle.x + toggle.width).toBeGreaterThan(chat.x - 12);
+  expect(toggle.x + toggle.width).toBeLessThanOrEqual(chat.x + 1);
 });

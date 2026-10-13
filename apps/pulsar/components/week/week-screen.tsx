@@ -136,6 +136,8 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
   return (
     <Page width="full">
       <ScreenHeader
+        chat
+        steps
         title={formatWeekRange(view.start, view.days[6]?.day ?? view.start, t)}
         eyebrowFill
         eyebrow={

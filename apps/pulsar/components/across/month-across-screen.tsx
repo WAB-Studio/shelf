@@ -276,7 +276,7 @@ export async function MonthAcrossScreen() {
 
   return (
     <Page width="full">
-      <ScreenHeader title={thisName.charAt(0).toUpperCase() + thisName.slice(1)} meta={dateLine} />
+      <ScreenHeader chat title={thisName.charAt(0).toUpperCase() + thisName.slice(1)} meta={dateLine} />
       {across.goals.length === 0 ? (
         <Section as="div">
           <Text as="p" variant="sentence">

@@ -1,0 +1,58 @@
+{
+  "title": "Chat",
+  "back": "Hoy",
+  "open": "Abrir el chat",
+  "field": "Mensaje",
+  "placeholder": "Pide un cambio o pregunta por tu plan",
+  "send": "Enviar",
+  "retry": "Intentar otra vez",
+  "privacy": "Tu mensaje y las partes de tu plan que lee se envían a OpenAI.",
+  "you": "TÚ",
+  "chat": "PULSAR",
+  "tryWith": "PRUEBA CON",
+  "examples": {
+    "month": "¿Cómo voy este mes?",
+    "amount": "Pon 4 h de inglés para noviembre"
+  },
+  "pending": "Pensando tu mensaje…",
+  "proposes": "Esto cambiaría tu plan:",
+  "do": "Hacer",
+  "doAll": "Hacer todo",
+  "made": "hecho",
+  "lapsed": "sin hacer",
+  "unavailable": "El chat no está disponible ahora. Tu plan sigue igual en las demás pantallas.",
+  "errors": {
+    "signedOut": "Entra de nuevo para usar el chat.",
+    "blank": "Escribe tu mensaje.",
+    "noKey": "El chat no está disponible ahora. Tu plan sigue igual en las demás pantallas.",
+    "cap": "Ya enviaste 50 mensajes hoy. Mañana puedes enviar otros 50. Lo que pedías aquí también se hace desde las pantallas.",
+    "failed": "No pudimos responder. Tu mensaje sigue aquí.",
+    "notAllowed": "Ese cambio no se puede hacer desde el chat.",
+    "notInPlan": "Ese cambio nombra algo que no es de tu plan."
+  },
+  "before": {
+    "noAmount": "sin monto",
+    "inPlan": "al plan",
+    "noNote": "sin nota",
+    "withNote": "con nota",
+    "noDay": "sin día"
+  },
+  "change": {
+    "declare_fact": "Cumplido · «{commitment}»",
+    "complete_task": "Tarea hecha · «{task}»",
+    "create_task": "Tarea nueva · «{name}»",
+    "set_task_note": "Nota de la tarea · «{task}»",
+    "schedule_task": "Día de la tarea · «{task}»",
+    "set_month_amount": "Monto de {month} · «{goal}»",
+    "rename_goal": "Nombre de la meta · «{goal}»",
+    "add_phase": "Fase nueva · «{goal}»",
+    "add_commitment": "Compromiso nuevo · «{name}»",
+    "move_horizon": "Plazo de la meta · «{goal}»",
+    "fix_task": "Tarea fijada a {month} · «{task}»",
+    "unfix_task": "Tarea al plan · «{task}»",
+    "create_goal": "Meta nueva · «{name}»",
+    "move_goal": "Meta movida · «{goal}»",
+    "set_goal_note": "Nota de la meta · «{goal}»",
+    "retire_commitment": "Compromiso retirado · «{commitment}»"
+  }
+}

@@ -29,6 +29,8 @@ type PulsarTextProps = {
   link?: boolean;
   // A word inside a sentence that carries the sentence's point (a host): ink-weight 500, broken anywhere rather than overflow.
   strong?: boolean;
+  // Text a person or a model wrote: a word longer than the line breaks rather than overflow it.
+  breakWords?: boolean;
 };
 
 const variants: Record<Variant, string | undefined> = {
@@ -55,8 +57,8 @@ const tones: Record<Tone, string> = {
 // union over the element it renders and a plain `Omit` would collapse it to one.
 type Narrowed<T> = T extends unknown ? Omit<T, "color" | "highContrast" | "size"> : never;
 
-export function Text({ variant = "body", tone, end, plainWide, rule, note, link, strong, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
-  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, rule ? styles.rule : undefined, note ? styles.note : undefined, link ? styles.link : undefined, strong ? styles.strong : undefined, className]
+export function Text({ variant = "body", tone, end, plainWide, rule, note, link, strong, breakWords, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
+  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, rule ? styles.rule : undefined, note ? styles.note : undefined, link ? styles.link : undefined, strong ? styles.strong : undefined, breakWords ? styles.breakWords : undefined, className]
     .filter(Boolean)
     .join(" ");
   return <ThemesText {...props} className={merged || undefined} />;

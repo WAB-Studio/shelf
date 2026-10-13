@@ -334,7 +334,8 @@ test.describe("the connections screen (RP-38)", () => {
       // 318: a key's row is a row (56 px, padded), and the header carries no second eyebrow over the title.
       const row = page.getByText(NAME, { exact: true }).locator("xpath=ancestor::div[2]");
       expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(56);
-      await expect(page.locator("main > header > div")).toHaveCount(1);
+      // The chat entry's row (`ChatEntrada`) is not an eyebrow.
+      await expect(page.locator('main > header > div:not(:has(a[href="/chat"]))')).toHaveCount(1);
       await expect(
         page.getByText("Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.", { exact: true }),
       ).toBeVisible();

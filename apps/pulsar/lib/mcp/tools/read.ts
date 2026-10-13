@@ -1,27 +1,13 @@
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
-import { z } from "zod";
 
 import { pgCode } from "@/lib/db-error";
 import { errorOf } from "@/lib/mcp/errors";
-import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "@/lib/mcp/shape";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
-import { planMonthList } from "@/lib/plan/roadmap-read";
-import { loadDay } from "@/lib/queries/day";
-import { listGoalsForMetas, loadGoal } from "@/lib/queries/goal";
-import { listDaylessOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
-import { loadReport } from "@/lib/queries/report";
 import { actAs } from "@/lib/session";
-import { todayInZone } from "@/lib/zone";
+import { readTools, type ToolOutcome } from "@/lib/tools/catalogue";
 
-import mcp from "../../../messages/es/mcp.json";
-
-const goalId = z.uuid();
-const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "month is YYYY-MM");
-
-type Outcome = { value: Record<string, unknown> } | { error: string };
-
-function answer(outcome: Outcome): CallToolResult {
-  if ("error" in outcome) {
+function answer(outcome: ToolOutcome): CallToolResult {
+  if (!outcome.ok) {
     return { content: [{ type: "text", text: JSON.stringify(errorOf(outcome.error)) }], isError: true };
   }
   return { content: [{ type: "text", text: JSON.stringify(outcome.value) }], structuredContent: outcome.value };
@@ -34,80 +20,26 @@ function personOf(ctx: ServerContext): ResolvedPerson | null {
   return typeof person?.id === "string" && typeof person.email === "string" ? (person as ResolvedPerson) : null;
 }
 
-async function run(ctx: ServerContext, load: () => Promise<Outcome>): Promise<CallToolResult> {
+async function run(ctx: ServerContext, load: () => Promise<ToolOutcome>): Promise<CallToolResult> {
   const person = personOf(ctx);
-  if (person === null) return answer({ error: "mcp.errors.unauthorized" });
+  if (person === null) return answer({ ok: false, error: "mcp.errors.unauthorized" });
   try {
     return answer(await actAs(person, load));
   } catch (error) {
     // The name and the SQLSTATE only: a driver's message carries the query and its parameters (RNP-15).
     console.error("mcp read tool failed:", error instanceof Error ? error.name : "unknown", pgCode(error) ?? "");
-    return answer({ error: "mcp.errors.unknown" });
+    return answer({ ok: false, error: "mcp.errors.unknown" });
   }
 }
 
 export function registerReadTools(server: McpServer): void {
   const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true } as const;
 
-  server.registerTool(
-    "list_goals",
-    { description: mcp.tools.list_goals, inputSchema: z.object({}), annotations: readOnly },
-    (_input, ctx) => run(ctx, async () => ({ value: shapeGoalList(await listGoalsForMetas()) })),
-  );
-
-  server.registerTool(
-    "get_goal",
-    {
-      description: mcp.tools.get_goal,
-      inputSchema: z.object({ goal_id: goalId }),
-      annotations: readOnly,
-    },
-    ({ goal_id }, ctx) =>
-      run(ctx, async () => {
-        const view = await loadGoal(goal_id);
-        return view === null ? { error: "mcp.errors.goalNotFound" } : { value: shapeGoal(view) };
-      }),
-  );
-
-  server.registerTool(
-    "get_month",
-    {
-      description: mcp.tools.get_month,
-      inputSchema: z.object({ goal_id: goalId, month }),
-      annotations: readOnly,
-    },
-    (input, ctx) =>
-      run(ctx, async () => {
-        const view = await loadGoal(input.goal_id);
-        if (view === null) return { error: "mcp.errors.goalNotFound" };
-        const first = `${input.month}-01`;
-        const items = planMonthList(view.plan, first);
-        return { value: shapeMonth({ goalId: view.id, month: first, unit: view.measureUnit, items }) };
-      }),
-  );
-
-  server.registerTool(
-    "get_today",
-    { description: mcp.tools.get_today, inputSchema: z.object({}), annotations: readOnly },
-    (_input, ctx) => run(ctx, async () => ({ value: shapeDay(await loadDay(todayInZone())) })),
-  );
-
-  server.registerTool(
-    "get_report",
-    { description: mcp.tools.get_report, inputSchema: z.object({}), annotations: readOnly },
-    (_input, ctx) => run(ctx, async () => ({ value: shapeReport(await loadReport(todayInZone())) })),
-  );
-
-  server.registerTool(
-    "list_loose_one_offs",
-    { description: mcp.tools.list_loose_one_offs, inputSchema: z.object({}), annotations: readOnly },
-    (_input, ctx) =>
-      run(ctx, async () => {
-        const [dayless, scheduled] = await Promise.all([
-          listDaylessOneOffs(),
-          listScheduledOneOffs(todayInZone()),
-        ]);
-        return { value: shapeLoose({ dayless, scheduled }) };
-      }),
-  );
+  for (const spec of readTools) {
+    server.registerTool(
+      spec.name,
+      { description: spec.description, inputSchema: spec.input, annotations: readOnly },
+      (input: Record<string, unknown>, ctx) => run(ctx, () => spec.run(input)),
+    );
+  }
 }

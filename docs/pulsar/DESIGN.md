@@ -1413,6 +1413,28 @@ Three answers of the user, 2026-10-09.
 - **Boards that do not exist**: the dark face of every hierarchy board (the token table's); «Por mes» and «Mes» grouped at 1280
   (the list and the card they always had); the paper's note (drawn by no board; it prints as the screen's text, whole).
 
+## Decisions of 2026-10-13, the chat (RP-91–94, RNP-21), by the user
+
+- **P1 — The way in is an icon at the right end of every screen's header.** The four tabs and the rail stay as RNP-16 and
+  RNP-17 say; nothing is retired. No fifth tab, no floating button.
+- **P2 — «Hacer todo» makes every change it can.** A refused change stays marked with its reason; the others are made.
+  Never all-or-nothing.
+- **P3 — The chat proposes only over what exists.** A change never names a goal another change of the same message creates;
+  the person asks for the next step after «Hacer».
+- **P4 — One line under the field, always,** says the message and the parts of the plan it reads go to OpenAI.
+- **P5 — The chat answers questions about the plan too,** from the same reads (RP-39). Each question is one of the fifty.
+- **P6 — An untaken change lapses when the next message is sent:** it reads «sin hacer» and has no button.
+- **The chat boards are approved** (RP-91–94), 2026-10-13, by the user: «Apruebo tal cual». Page «Chat» of the canvas, 15
+  captures of a prototype: `ChatVacio`, `ChatEnviando`, `ChatRespuesta`, `ChatPropuesta`, `ChatPropuestas`, `ChatHecho`,
+  `ChatRechazada`, `ChatFallo`, `ChatTope`, `ChatSinClave`, `ChatEscritorio` (1280) and `ChatEntrada` (Hoy and Metas, 360 and
+  1280). Words and structure: `private/tableros-chat/NOTAS.md`.
+- **On a screen whose header carries a steps row** (Semana, a day), the chat icon sits at the right end of the title row; the steps keep their two edges. 2026-10-13.
+- **The field lives in the flow,** below the last turn, never fixed to the foot. The tab bar stays the only fixed thing.
+- **A failed message stays as a turn;** the button reads «Intentar otra vez» and nothing is retyped.
+- **A refused change has no button.** Its row carries the act's reason; the person asks again in a new message.
+- **Turns are labelled «TÚ» and «PULSAR»,** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
+  changes open. A change reads in two lines: what, in the person's own names; then «antes → después» in mono.
+- **Faces not drawn for the chat:** dark (the token table says it) and 700–1023 (between the two drawn).
 ## Decisions of 2026-10-13, after the critic of the hierarchy and the import, by the user
 
 - **A goal that holds goals and measures nothing reads in its goals' unit on `/metas`,** as its own screen already does
