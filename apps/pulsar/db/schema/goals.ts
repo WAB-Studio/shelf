@@ -24,7 +24,8 @@ export const goals = goalsSchema.table(
       .notNull()
       .references(() => authUsers.id, { onDelete: "cascade" }),
     name: text().notNull(),
-    horizon: date().notNull(),
+    // Null: a goal with no end (RP-99). The tree trigger keeps one above a dated goal from lacking it.
+    horizon: date(),
     // Null until the first commitment that measures something is created: the
     // new-goal screen asks for the name and the horizon alone.
     measureName: text(),
