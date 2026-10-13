@@ -12,7 +12,7 @@ import {
   printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
-import { tailOf } from "@/lib/lists/tail";
+import { endlessCut } from "@/lib/lists/endless-cut";
 import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { screenPlanned } from "@/lib/plan/screen-planned";
@@ -343,17 +343,40 @@ function GoalPart({
     );
   }
 
-  // Paper always prints the twelve a goal with no end lists; `?todo=1` only widens the screen.
-  const paperMonths = goal.horizon === null ? tailOf(goal.months, false).shown : goal.months;
+  // Paper never opens «ver todo»: a goal with no end prints its last 12 months and those ahead set by hand, folds the
+  // rest ahead into the rhythm's line and, when it has none, into the «sin monto» line. `?todo=1` only widens the screen.
+  const cut = goal.horizon === null ? endlessCut(goal.months, { all: false, rhythm: goal.rhythm ?? null }) : null;
+  const paperMonths = cut ? [...cut.shown, ...cut.empty.filter((month) => printsOnPaper(month, goal.unit))].sort((a, b) => a.month.localeCompare(b.month)) : goal.months;
+  const foldedMonths = cut ? cut.empty.filter((month) => !printsOnPaper(month, goal.unit)) : goal.months.filter((month) => !printsOnPaper(month, goal.unit));
   const paperKeys = new Set(paperMonths.map((month) => month.month));
   const screenMonths = all ? goal.months : paperMonths;
   const paperGoal: GoalReport = { ...goal, months: paperMonths };
+  const aheadLine = cut?.line
+    ? t.rich("ahead", {
+        planned: cut.line.planned,
+        fig: () => <Figure variant="meta" value={cut.line!.planned} unit={goal.unit as string} />,
+      })
+    : null;
   const seeAll =
-    goal.horizon === null && !all && goal.months.length > paperMonths.length ? (
+    cut && !all && cut.hidden > 0 ? (
       <PrintHidden>
         <TextLink href="/exportar?todo=1">{commonT("seeAll")}</TextLink>
       </PrintHidden>
     ) : null;
+  // On screen the line is a link to the whole list; on paper it sits in the table's `after`.
+  const screenAhead =
+    aheadLine && !all ? (
+      <PrintHidden>
+        <Text as="p" variant="line">
+          <TextLink href="/exportar?todo=1">{aheadLine}</TextLink>
+        </Text>
+      </PrintHidden>
+    ) : null;
+  const paperAhead = aheadLine ? (
+    <Text as="p" variant="line">
+      {aheadLine}
+    </Text>
+  ) : null;
 
   const held = inside !== undefined && inside.length > 0;
   // The screen lists every task of the group naming its goal; paper keeps each goal's own.
@@ -510,11 +533,11 @@ function GoalPart({
               printed: paperKeys.has(month.month) && printsOnPaper(month, goal.unit),
             };
           });
-          const out = paperMonths.filter((m) => !printsOnPaper(m, goal.unit));
+          const out = foldedMonths;
           return (
             <Section
               label={t("byMonth", { goal: goal.name })}
-              printSuffix={t("monthsCaption", { count: paperMonths.length - out.length })}
+              printSuffix={t("monthsCaption", { count: paperMonths.filter((m) => printsOnPaper(m, goal.unit)).length })}
             >
               <Table
                 caption={t("monthsCaption", { count: screenMonths.length })}
@@ -634,7 +657,7 @@ function GoalPart({
             printed: paperKeys.has(month.month) && printsOnPaper(month, goal.unit),
           };
         });
-        const out = paperMonths.filter((m) => !printsOnPaper(m, goal.unit));
+        const out = foldedMonths;
         const outNames = format.list(
           out.map((m) => monthYear.format(civilDateToDate(m.month))),
           { type: "conjunction" },
@@ -682,7 +705,7 @@ function GoalPart({
           <Flex direction="column" gap="6">
             <Section
               label={t("byMonth", { goal: goal.name })}
-              printSuffix={t("monthsCaption", { count: paperMonths.length - out.length })}
+              printSuffix={t("monthsCaption", { count: paperMonths.filter((m) => printsOnPaper(m, goal.unit)).length })}
             >
               <Table
                 caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", {
@@ -706,7 +729,10 @@ function GoalPart({
                 current={current === -1 ? undefined : current}
                 afterPrintOnly
                 after={
-                  out.length > 0 ? (
+                  out.length > 0 || paperAhead ? (
+                    <>
+                      {paperAhead}
+                      {out.length > 0 ? (
                     outGroups ? (
                       <>
                         {outGroups.map((group) => (
@@ -726,9 +752,12 @@ function GoalPart({
                         {t("monthsOut", { months: outNames })}
                       </Text>
                     )
+                      ) : null}
+                    </>
                   ) : undefined
                 }
               />
+              {screenAhead}
               {seeAll}
             </Section>
             {goal.weeks.length > 0 ? (

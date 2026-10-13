@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
-import { tailOf } from "@/lib/lists/tail";
+import { endlessCut } from "@/lib/lists/endless-cut";
 import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { screenPlanned } from "@/lib/plan/screen-planned";
@@ -46,23 +46,18 @@ export async function MonthsList({
 }) {
   const t = await getTranslations();
   const settled = settledMonths(loaded.months, loaded.endedOn !== null);
-  // A goal with no end shows its last 12 months; a month open outside them shows the whole list.
-  const cut = loaded.horizon === null ? tailOf(settled, all || !tailOf(settled, false).shown.some((row) => row.month === open)) : null;
+  const noEnd = loaded.horizon === null;
+  // A goal with no end shows its months up to this one (last 12) and those ahead set by hand; the rest ahead fold into a line.
+  // A month open outside the last 12 shows the whole list.
+  const openOutside = noEnd && !endlessCut(settled, { all: false, rhythm: loaded.rhythm }).shown.some((row) => row.month === open);
+  const cut = noEnd ? endlessCut(settled, { all: all || openOutside, rhythm: loaded.rhythm }) : null;
   const goal = { ...loaded, months: cut ? cut.shown : settled };
-  const seeAll = cut && cut.hidden > 0 ? (
-    <TextLink href={`/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}todo=1`}>{t("common.seeAll")}</TextLink>
-  ) : null;
+  const allHref = `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}todo=1`;
+  const seeAll = cut && cut.hidden > 0 ? <TextLink href={allHref}>{t("common.seeAll")}</TextLink> : null;
   const hrefOf = (month: string) => `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
   const caption = t("month.months.caption", { count: goal.months.length });
   const currentIndex = goal.months.findIndex((row) => row.current);
   const openIndex = goal.months.findIndex((row) => row.month === open);
-  // A goal with no end lists the months that come, so the list says where it stops.
-  const noEnd = goal.horizon === null ? (
-    <Text as="p" variant="sentence" tone="muted">
-      {t("month.months.noEnd")}
-    </Text>
-  ) : null;
-
   // A holder measures through its goals: its own measure name may be empty (RP-80).
   if (!goal.measureUnit || (!goal.measureName && !goal.holdsGoals)) {
     const bare: TableRow[] = goal.months.map((row) => {
@@ -92,7 +87,6 @@ export async function MonthsList({
           current={currentIndex === -1 ? undefined : currentIndex}
           open={openIndex === -1 ? undefined : openIndex}
         />
-        {noEnd}
         {seeAll}
       </>
     );
@@ -101,6 +95,11 @@ export async function MonthsList({
   const unit = goal.measureUnit;
   const timed = isTimeUnit(unit);
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
+  const ahead = cut?.line ? (
+    <Text as="p" variant="line">
+      <TextLink href={allHref}>{t("month.months.ahead", { planned: formatQuantity(cut.line.planned, unit, words) })}</TextLink>
+    </Text>
+  ) : null;
 
   const rows: TableRow[] = goal.months.map((row) => {
     const started = row.past || row.current;
@@ -162,7 +161,7 @@ export async function MonthsList({
         current={currentIndex === -1 ? undefined : currentIndex}
         open={openIndex === -1 ? undefined : openIndex}
       />
-      {noEnd}
+      {ahead}
       {seeAll}
     </>
   );

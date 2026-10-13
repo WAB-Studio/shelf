@@ -19,7 +19,7 @@
     "caption": "{count, plural, one {# mes} other {# meses}}",
     "planned": "planeado",
     "noAmount": "sin monto",
-    "noEnd": "Sin final: se ven los 12 meses que vienen.",
+    "ahead": "los meses que vienen: {planned} cada uno",
     "tasksCount": "{count, plural, one {# tarea} other {# tareas}}",
     "of": "de {planned}",
     "ofFigure": "de <fig>{planned}</fig>",
