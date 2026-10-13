@@ -30,6 +30,13 @@
     "notAllowed": "Ese cambio no se puede hacer desde el chat.",
     "notInPlan": "Ese cambio nombra algo que no es de tu plan."
   },
+  "before": {
+    "noAmount": "sin monto",
+    "inPlan": "al plan",
+    "noNote": "sin nota",
+    "withNote": "con nota",
+    "noDay": "sin día"
+  },
   "change": {
     "declare_fact": "Cumplido · «{commitment}»",
     "complete_task": "Tarea hecha · «{task}»",

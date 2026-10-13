@@ -15,11 +15,11 @@ const OTHER = "99999999-9999-4999-8999-999999999999";
 
 const names: ChangeNames = {
   goals: new Map([
-    [G, { name: "EF SET 36+", unit: "minutos" }],
-    ["44444444-4444-4444-8444-444444444444", { name: "Inglés B1", unit: null }],
+    [G, { name: "EF SET 36+", unit: "minutos", horizon: "2027-03-01", hasNote: false, months: { "2026-12": 90 } }],
+    ["44444444-4444-4444-8444-444444444444", { name: "Inglés B1", unit: null, horizon: "2027-01-01", hasNote: true, months: {} as Record<string, number> }],
   ]),
-  tasks: new Map([[T, { name: "Maze" }]]),
-  commitments: new Map([[C, { name: "Repasar vocabulario", unit: null }]]),
+  tasks: new Map([[T, { name: "Maze", month: null, day: null, hasNote: false }]]),
+  commitments: new Map([[C, { name: "Repasar vocabulario", unit: null, target: null }]]),
 };
 
 const change = (tool: string, input: Record<string, unknown>) => ({ id: "c1", tool, input });
@@ -33,7 +33,8 @@ test("the catalogue holds one sentence per write tool", () => {
 
 test("a sentence's names come from the app, never from the model's text", () => {
   const out = describeChange(change("fix_task", { one_off_id: T, month: "2026-11" }), names);
-  assert.deepEqual(out, { key: "chat.change.fix_task", values: { task: "Maze", month: "noviembre de 2026" } });
+  assert.deepEqual(out, { key: "chat.change.fix_task", values: { task: "Maze", month: "noviembre de 2026", before: "al plan", after: "noviembre de 2026" },
+  });
 });
 
 test("an amount reads in its goal's unit", () => {
@@ -41,6 +42,19 @@ test("an amount reads in its goal's unit", () => {
   assert.ok("key" in out);
   assert.equal(out.values.amount, "2 h");
   assert.equal(out.values.goal, "EF SET 36+");
+});
+
+test("set_month_amount on a month with no amount reads «sin monto → 4 h»", () => {
+  const out = describeChange(change("set_month_amount", { goal_id: G, month: "2026-11", amount: 240 }), names);
+  assert.ok("key" in out);
+  assert.equal(out.values.before, "sin monto");
+  assert.equal(out.values.after, "4 h");
+});
+
+test("set_month_amount on a month that holds one reads that amount as before", () => {
+  const out = describeChange(change("set_month_amount", { goal_id: G, month: "2026-12", amount: 240 }), names);
+  assert.ok("key" in out);
+  assert.equal(out.values.before, "1 h 30 min");
 });
 
 test("a day reads as the app's short day", () => {

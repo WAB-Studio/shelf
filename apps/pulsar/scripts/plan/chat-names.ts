@@ -35,7 +35,7 @@ let session: typeof import("@/lib/session");
 let chat: typeof import("@/lib/queries/chat");
 let subject: Person;
 let other: Person;
-const ids = { goal: "", task: "", commitment: "", foreignGoal: "", foreignTask: "", foreignCommitment: "" };
+const ids = { month: "", goal: "", task: "", commitment: "", foreignGoal: "", foreignTask: "", foreignCommitment: "" };
 
 const asResolved = (person: Person): ResolvedPerson => ({ id: person.id, email: person.email }) as ResolvedPerson;
 
@@ -45,7 +45,10 @@ async function seed(owner: Person, label: string) {
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
     values (${owner.id}, ${`${label} meta`}, ${horizon}, 'Medida', 'min') returning id`;
   const [task] = await admin<{ id: string }[]>`
-    insert into goals.one_offs (user_id, name) values (${owner.id}, ${`${label} tarea`}) returning id`;
+    insert into goals.one_offs (user_id, name, note) values (${owner.id}, ${`${label} tarea`}, 'una nota') returning id`;
+  await admin`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${owner.id}, ${goal.id}, ${`${ids.month}-01`}, 90)`;
   const [commitment] = await admin<{ id: string }[]>`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
     values (${owner.id}, ${goal.id}, ${`${label} compromiso`}, 'daily', 'quantity', 10, 'min') returning id`;
@@ -53,6 +56,8 @@ async function seed(owner: Person, label: string) {
 }
 
 before(async () => {
+  const now = new Date();
+  ids.month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
   installStubs();
   session = await import("@/lib/session");
   chat = await import("@/lib/queries/chat");
@@ -94,9 +99,16 @@ test("loadChangeNames: three kinds of ids are one statement (plus the settle)", 
   wire.length = 0;
   const names = await run(read);
   assert.equal(wire.filter((q) => !/^\s*(begin|commit)\s*$/i.test(q)).length, 2);
-  assert.deepEqual(names.goals.get(ids.goal), { name: "chat-names mía meta", unit: "min" });
-  assert.deepEqual(names.tasks.get(ids.task), { name: "chat-names mía tarea" });
-  assert.deepEqual(names.commitments.get(ids.commitment), { name: "chat-names mía compromiso", unit: "min" });
+  const horizon = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
+  assert.deepEqual(names.goals.get(ids.goal), {
+    name: "chat-names mía meta",
+    unit: "min",
+    horizon,
+    hasNote: false,
+    months: { [ids.month]: 90 },
+  });
+  assert.deepEqual(names.tasks.get(ids.task), { name: "chat-names mía tarea", month: null, day: null, hasNote: true });
+  assert.deepEqual(names.commitments.get(ids.commitment), { name: "chat-names mía compromiso", unit: "min", target: 10 });
 });
 
 test("loadChangeNames: another person's ids are absent", async () => {

@@ -1,5 +1,6 @@
 import { createTranslator } from "next-intl";
 
+import chat from "../../messages/es/chat.json";
 import units from "../../messages/es/units.json";
 import { monthNameWithYear } from "../plan/month-name";
 import { formatQuantity, type TimeWords } from "../units/time";
@@ -15,7 +16,7 @@ const REFUSED = { refused: "chat.errors.notInPlan" } as const;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 // Read straight from the catalogue: a change is described outside any request.
-const translate = createTranslator({ locale: "es", messages: { units } });
+const translate = createTranslator({ locale: "es", messages: { units, chat } });
 const words: TimeWords = {
   h: (h) => translate("units.h", { h }),
   min: (min) => translate("units.min", { min }),
@@ -96,6 +97,42 @@ const FIELDS: Record<string, Field[]> = {
   retire_commitment: [{ as: "commitment", from: "commitment_id", to: "commitment" }],
 };
 
+const say = (key: keyof typeof chat.before): string => translate(`chat.before.${key}` as Parameters<typeof translate>[0]);
+
+function quantity(n: number, unit: string | null): string {
+  return unit === null ? String(n) : formatQuantity(n, unit, words);
+}
+
+// «antes → después» of the tools that replace a value the person already holds.
+function replaced(change: Change, names: ChangeNames, values: Record<string, string>): Record<string, string> {
+  const goal = typeof change.input.goal_id === "string" ? names.goals.get(change.input.goal_id) : undefined;
+  const task = typeof change.input.one_off_id === "string" ? names.tasks.get(change.input.one_off_id) : undefined;
+  const commitment =
+    typeof change.input.commitment_id === "string" ? names.commitments.get(change.input.commitment_id) : undefined;
+  switch (change.tool) {
+    case "set_month_amount": {
+      const was = goal?.months[String(change.input.month).slice(0, 7)];
+      return { before: was === undefined ? say("noAmount") : quantity(was, goal?.unit ?? null), after: values.amount };
+    }
+    case "fix_task":
+      return { before: task?.month ? monthNameWithYear(task.month) : say("inPlan"), after: values.month };
+    case "unfix_task":
+      return { before: task?.month ? monthNameWithYear(task.month) : say("inPlan"), after: say("inPlan") };
+    case "schedule_task":
+      return { before: task?.day ? civilDayMonthShort(task.day) : say("noDay"), after: values.day };
+    case "set_task_note":
+      return { before: task?.hasNote ? say("withNote") : say("noNote"), after: say("withNote") };
+    case "set_goal_note":
+      return { before: goal?.hasNote ? say("withNote") : say("noNote"), after: say("withNote") };
+    case "move_horizon":
+      return { before: goal ? civilDayMonthShort(goal.horizon) : "", after: values.day };
+    case "retire_commitment":
+      return commitment?.target != null ? { before: quantity(commitment.target, commitment.unit) } : {};
+    default:
+      return {};
+  }
+}
+
 // The sentence of a change, from its tool and the person's own names. The
 // model's text never reaches it; an id the person does not own refuses it.
 export function describeChange(change: Change, names: ChangeNames): Described {
@@ -148,5 +185,5 @@ export function describeChange(change: Change, names: ChangeNames): Described {
       }
     }
   }
-  return { key: `chat.change.${change.tool}`, values };
+  return { key: `chat.change.${change.tool}`, values: { ...values, ...replaced(change, names, values) } };
 }
