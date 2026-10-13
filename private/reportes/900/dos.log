@@ -1,0 +1,71 @@
+supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322
+e2e-run: opened run a17305db-8924-4386-8afc-0a815b484476
+wrote /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/private/session-4.json (1 cookie(s), origin http://localhost:3203)
+minted a session for harness-pulsar-5b300a11-e00f-4c29-aaeb-719a9c11c866@example.invalid (5b300a11-e00f-4c29-aaeb-719a9c11c866), lane 4
+seeding as harness-pulsar-5b300a11-e00f-4c29-aaeb-719a9c11c866@example.invalid (5b300a11-e00f-4c29-aaeb-719a9c11c866)
+goal 81637e57-4ec5-46a5-98e6-f339c6894482
+phase 6104bac8-5d5c-4027-ac63-d8bd777036b9 — Desbloquear la boca: perder el miedo a hablar y pasar de 2 a 4 minutos de monólogo sin congelarse.
+phase be96692b-68f4-4594-aacd-4f0ebb8636a9 — Precisión: corregir los 3-4 errores que se repiten siempre y subir a 2 conversaciones humanas por semana.
+phase 55ecdb46-f001-4177-a9f5-aad8242553ba — Contexto laboral: convertir el monólogo en respuestas STAR, preparar 6-8 historias y aplicar a vacantes.
+commitment 5ccc22cf-b603-47d7-a3e1-442b6150deb7 — Anki
+commitment d6858d31-be06-4fe1-9b79-50a8a71e3638 — Shadowing
+commitment 032c040f-59fa-4a13-8e9d-d145c7a4a668 — Monólogo grabado
+commitment 01c579b7-a73d-4781-97e4-7aae49ead6b5 — Cerrar el ciclo: tarjetas de los errores
+commitment f2463556-e35f-49bf-b37e-ba0370ee29b7 — Bloque variable del día
+commitment c39f78f9-31f1-4cb3-a295-b3bf3ec7c184 — Buscar palabras nuevas mientras leo
+one-off e5e5f565-9f7c-455d-aafe-1dcb9058a310
+
+Running 3 tests using 1 worker
+
+  ✓  1 [mobile] › e2e/metas-arbol.spec.ts:240:5 › folding G's arrow hides every goal under it, unfolding shows them; no request leaves, nothing is stored, the name still opens the goal (2.1s)
+  ✘  2 [mobile] › e2e/varias-metas.spec.ts:16:5 › the Metas tab opens the goals list, and a second goal is opened from it, not typed (RP-11) (30.0s)
+  ✓  3 [mobile] › e2e/varias-metas.spec.ts:74:5 › an empty week says what to do and links to opening one (RP-11, RP-16) (452ms)
+REPORT  e2e-run — dropped 3 identity(ies), 0 OAuth client(s), run closed.
+
+
+  1) [mobile] › e2e/varias-metas.spec.ts:16:5 › the Metas tab opens the goals list, and a second goal is opened from it, not typed (RP-11) 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('navigation').getByRole('link', { name: 'Metas', exact: true })
+        - locator resolved to <a href="/metas" class="bottom-nav-module__e36fZq__link">Metas</a>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <nextjs-portal></nextjs-portal> from <script data-nextjs-dev-overlay="true">…</script> subtree intercepts pointer events
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <nextjs-portal></nextjs-portal> from <script data-nextjs-dev-overlay="true">…</script> subtree intercepts pointer events
+        - retrying click action
+          - waiting 100ms
+        57 × waiting for element to be visible, enabled and stable
+           - element is visible, enabled and stable
+           - scrolling into view if needed
+           - done scrolling
+           - <nextjs-portal></nextjs-portal> from <script data-nextjs-dev-overlay="true">…</script> subtree intercepts pointer events
+         - retrying click action
+           - waiting 500ms
+
+
+      20 | }) => {
+      21 |   await page.goto("/");
+    > 22 |   await page.getByRole("navigation").getByRole("link", { name: "Metas", exact: true }).click();
+         |                                                                                        ^
+      23 |   await page.waitForURL("**/metas");
+      24 |
+      25 |   // The seeded goal is already listed — this list never redirects past it —
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/varias-metas.spec.ts:22:88
+
+    Error Context: private/playwright-results/varias-metas-the-Metas-tab-f7164-ed-from-it-not-typed-RP-11--mobile/error-context.md
+
+  1 failed
+    [mobile] › e2e/varias-metas.spec.ts:16:5 › the Metas tab opens the goals list, and a second goal is opened from it, not typed (RP-11) 
+  2 passed (34.6s)

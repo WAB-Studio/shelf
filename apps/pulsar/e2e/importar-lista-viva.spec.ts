@@ -309,6 +309,7 @@ test.describe("the error list is always what the box has now (board ImportarErro
       await boxOf(page).fill("Quiero correr más este año.");
       const fileText = plan();
       await page.getByLabel(messages.upload).setInputFiles({ name: "plan.md", mimeType: "text/markdown", buffer: Buffer.from(fileText) });
+      await page.getByRole("button", { name: messages.read }).click();
       const alert = alertOf(page);
       await expect(alert.getByText(count(3), { exact: true })).toBeVisible();
       await expect(boxOf(page)).toHaveValue(fileText);
