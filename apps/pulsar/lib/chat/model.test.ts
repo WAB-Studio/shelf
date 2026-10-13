@@ -54,6 +54,10 @@ mock.module("@/lib/queries/goal", {
       reads.push("listGoalsForMetas");
       return { open: [], ended: [], archived: [] };
     },
+    listLooseCommitments: async () => {
+      reads.push("listLooseCommitments");
+      return [];
+    },
     loadGoal: async () => {
       reads.push("loadGoal");
       return null;

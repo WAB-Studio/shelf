@@ -32,7 +32,7 @@ export type WeekSplit = { index: number; month: string; startsOn: string; endsOn
 export type GoalReport = {
   id: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   endedOn: string | null;
   unit: string | null;
   // The word the person gave the measure; «mide {measureName}» reads it, never the unit.
@@ -49,7 +49,7 @@ export type GoalReport = {
   tasks: ReportTask[];
   carried: CarriedReport[];
   // `tasks` is read for a goal that measures nothing: the months it prints on paper are its tasks' (RP-71).
-  months: (MonthRow & { carried: number | null; tasks?: { done: number; total: number } })[];
+  months: (MonthRow & { carried: number | null; endless?: true; tasks?: { done: number; total: number } })[];
   weeks: ReviewWeek[];
   // The current week's planned minutes (RP-58); null when it has no amount.
   weekPlanned?: number | null;

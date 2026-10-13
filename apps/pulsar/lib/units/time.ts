@@ -8,6 +8,9 @@ const TIME_UNIT_SET: ReadonlySet<string> = new Set(TIME_UNITS);
 // total of 1.234 h has to read as grouped as the figures beside it.
 const grouped = new Intl.NumberFormat("es", { useGrouping: "always" });
 
+// A count with no unit: «34», «1 000».
+export const formatCount = (n: number): string => grouped.format(n);
+
 // The words come from the caller's translator; this file never names one.
 export type TimeWords = {
   h: (h: string) => string;

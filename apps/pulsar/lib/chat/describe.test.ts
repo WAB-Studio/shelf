@@ -234,3 +234,21 @@ test("every change phrase opens with an infinitive and keeps its placeholders", 
     assert.deepEqual(used, PLACEHOLDERS[tool], tool);
   }
 });
+
+test("a goal with no end is shown as «sin final», before and after", () => {
+  const given = describeChange(change("move_horizon", { goal_id: G, horizon: null }), names);
+  assert.ok("key" in given);
+  assert.equal(given.values.after, "sin final");
+  const endless: ChangeNames = {
+    ...names,
+    goals: new Map([[G, { name: "Leer", unit: null, horizon: null, hasNote: false, months: {} }]]),
+  };
+  const gives = describeChange(change("move_horizon", { goal_id: G, horizon: "2027-03-01" }), endless);
+  assert.ok("key" in gives);
+  assert.equal(gives.values.before, "sin final");
+  const created = describeChange(change("create_goal", { name: "Leer" }), names);
+  assert.ok("key" in created);
+  assert.equal(created.values.name, "Leer");
+  const habit = describeChange(change("add_commitment", { name: "Bañarse", cadence_kind: "daily", satisfaction: "tap" }), names);
+  assert.ok("key" in habit);
+});

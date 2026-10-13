@@ -8,8 +8,8 @@ import { REFUSAL_CODES, refusalKey, refusalName } from "./refusal-key";
 const tree = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "messages", "es", "tree.json"), "utf8"));
 const read = (key: string): unknown => key.split(".").slice(1).reduce((n, p) => (n as Record<string, unknown> | undefined)?.[p], tree);
 
-test("the table names all seven placement codes", () => {
-  assert.deepEqual([...REFUSAL_CODES].sort(), ["aboveArchived", "aboveClosed", "belowEndsLater", "closed", "cycle", "endPastAbove", "tooDeep"]);
+test("the table names all eight placement codes", () => {
+  assert.deepEqual([...REFUSAL_CODES].sort(), ["aboveArchived", "aboveClosed", "belowEndsLater", "belowNoEnd", "closed", "cycle", "endPastAbove", "tooDeep"]);
 });
 
 test("every placement code maps to a message in tree.json", () => {

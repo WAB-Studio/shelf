@@ -12,12 +12,12 @@ export type WeekProgress = { week: number; total: number };
  * horizon draws no overline rather than a number nobody asked for.
  */
 export function goalWeekProgress(
-  goal: { horizon: string; createdAt: string },
+  goal: { horizon: string | null; createdAt: string },
   weekStart: string,
 ): WeekProgress | null {
   const createdCivil = civilDateInZone(new Date(goal.createdAt));
   const total = horizonWeeksOf(createdCivil, goal.horizon);
-  if (total <= 0) return null;
+  if (total === null || total <= 0) return null;
 
   // The queried week starting before the goal existed floors to week 1.
   const week = Math.max(1, weekIndexOf(createdCivil, weekStart));
@@ -31,8 +31,8 @@ export function goalWeekProgress(
  * still on or before it. The week only draws goals whose horizon is past its
  * Monday, so a returned day never falls before the week.
  */
-export function endedLastDay(horizon: string, today: string): string | null {
-  if (horizon > today) return null;
+export function endedLastDay(horizon: string | null, today: string): string | null {
+  if (horizon === null || horizon > today) return null;
   const date = civilDateToDate(horizon);
   date.setUTCDate(date.getUTCDate() - 1);
   return dateToCivilDate(date);

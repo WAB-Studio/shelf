@@ -10,6 +10,7 @@
     "closed": "Está archivada o terminada. Reábrela primero.",
     "aboveClosed": "«{name}» está archivada o terminada.",
     "endPastAbove": "Pasa del final de «{name}», el {date}.",
+    "belowNoEnd": "“{name}” no tiene final: dale uno antes.",
     "belowEndsLater": "«{name}» termina el {date}, después de ese día. Mueve primero su final.",
     "branchPhaseAfter": "«{name}» tiene una fase que llega hasta el {date}. Mueve primero esa fase.",
     "aboveArchived": "«{name}» está archivada. Reábrela primero.",
@@ -28,6 +29,7 @@
     "month": "{month} · {done} de {goal}",
     "until": "hasta el {date}",
     "untilInside": "hasta el {date} · {count, plural, one {# meta} other {# metas}}",
+    "noEndInside": "sin final · {count, plural, one {# meta} other {# metas}}",
     "openAnother": "Abrir otra meta"
   },
   "goal": {
@@ -38,6 +40,7 @@
     "otherUnit": "«{name}» mide en {unit} y no suma aquí.",
     "back": "Metas",
     "levelUntil": "{level} · hasta el {date}",
+    "levelNoEnd": "{level} · sin final",
     "addBig": "Agregar meta grande",
     "addSmall": "Agregar meta pequeña",
     "moveEnd": "mover el final",

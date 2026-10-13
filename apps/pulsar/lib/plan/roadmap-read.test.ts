@@ -271,7 +271,7 @@ test("planShare: what was carried never passes what the month planned, task by t
 test("rhythmToMeet: a plan that ends on the goal's last day asks for no faster rhythm (RP-52, RP-53)", () => {
   const tasks = [task("all-october", { estimate: 12 })];
   const fits = input(tasks, { rhythm: 12, horizon: NOV, today: "2026-10-02" });
-  assert.equal(dayBefore(fits.horizon), "2026-10-31");
+  assert.equal(dayBefore(fits.horizon as string), "2026-10-31");
   assert.equal(fillPlan(fits).end, "2026-10-31");
   assert.equal(rhythmToMeet(fits, 12), null);
 });

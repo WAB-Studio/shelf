@@ -2942,6 +2942,148 @@ async function checkModelCallsChat0020(): Promise<void> {
   await sql.end();
 }
 
+// RP-99, RP-100: `0021` lets a goal lack its end and a commitment lack its goal, and the tree trigger keeps
+// what RP-99 forbids. Driven as `authenticated`; `GOAL_END_MUTANT_SQL` runs privileged inside the rollback.
+async function checkNoEndAndLoose0021(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.GOAL_END_MUTANT_SQL;
+  if (mutant) console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      if (mutant) await tx.unsafe(mutant);
+      const [theirs] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2027-12-31') returning id`;
+      await tx`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${intruder}, null, 'hábito ajeno', 'daily', 'tap')`;
+
+      await enterUserContext(tx, subject);
+      const endless = await attemptRows<{ id: string; horizon: string | null }>(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name) values (${subject}, 'sin final') returning id, horizon`,
+      );
+      assert(
+        "P254",
+        endless.code === undefined && endless.rows.length === 1 && endless.rows[0].horizon === null,
+        `insert a goal with no horizon, sqlstate = ${endless.code ?? "none"}, rows = ${endless.rows.length}`,
+      );
+      const E = endless.rows[0]?.id ?? randomUUID();
+
+      const loose = await attemptRows<{ id: string; goal_id: string | null }>(
+        tx,
+        (sp) => sp`insert into goals.commitments (user_id, name, cadence_kind, satisfaction)
+          values (${subject}, 'suelto', 'daily', 'tap') returning id, goal_id`,
+      );
+      const retire = loose.rows[0]
+        ? await attemptShape(tx, (sp) => sp`update goals.commitments set retired_at = now() where id = ${loose.rows[0].id}`)
+        : { count: 0, code: "no row" };
+      assert(
+        "P255",
+        loose.code === undefined && loose.rows.length === 1 && loose.rows[0].goal_id === null && retire.count === 1 && !retire.code,
+        `insert a commitment with no goal, sqlstate = ${loose.code ?? "none"}, retire ${shape(retire)}`,
+      );
+
+      const [dated] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'con final', '2027-12-31') returning id`;
+      const D = dated.id;
+      const endlessUnder = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, parent_id) values (${subject}, 'sin final abajo', ${D})`,
+      );
+      assert(
+        "P256",
+        endlessUnder.code === "23514" && endlessUnder.constraint === "goals_tree_end" && endlessUnder.detail === D,
+        `insert with no horizon under a goal that has one, ${shape(endlessUnder)}, detail = ${endlessUnder.detail ?? "none"}`,
+      );
+
+      const [inside] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'dentro', '2027-06-30', ${D}) returning id`;
+      const clear = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = null where id = ${inside.id}`);
+      assert(
+        "P257",
+        clear.code === "23514" && clear.constraint === "goals_tree_end" && clear.detail === D,
+        `clear the horizon of a goal inside one that has one, ${shape(clear)}, detail = ${clear.detail ?? "none"}`,
+      );
+
+      const datedUnder = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'con final abajo', '2030-01-31', ${E})`,
+      );
+      assert("P258", datedUnder.code === undefined && datedUnder.count === 1, `a goal with a horizon under one with none, ${shape(datedUnder)}`);
+
+      const [holder] = await tx<{ id: string }[]>`insert into goals.goals (user_id, name) values (${subject}, 'abierta') returning id`;
+      const [open] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, parent_id) values (${subject}, 'abierta dentro', ${holder.id}) returning id`;
+      await tx`update goals.goals set archived_at = now() where id = ${open.id}`;
+      const give = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = '2027-01-01' where id = ${holder.id}`);
+      assert(
+        "P259",
+        give.code === "23514" && give.constraint === "goals_tree_no_end" && give.detail === open.id,
+        `give an end to a goal holding one with none, archived or not, ${shape(give)}, detail = ${give.detail ?? "none"}`,
+      );
+
+      const [bare] = await tx<{ id: string }[]>`insert into goals.goals (user_id, name) values (${subject}, 'sola') returning id`;
+      const giveBare = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = '2027-01-01' where id = ${bare.id}`);
+      assert("P260", giveBare.code === undefined && giveBare.count === 1, `give an end to a goal holding none, ${shape(giveBare)}`);
+
+      const [priv] = await tx<{ goal: boolean; note: boolean; noteInsert: boolean }[]>`
+        select has_column_privilege('authenticated', 'goals.commitments', 'goal_id', 'UPDATE') as goal,
+               has_column_privilege('authenticated', 'goals.commitments', 'note', 'UPDATE') as note,
+               has_column_privilege('authenticated', 'goals.commitments', 'note', 'INSERT') as "noteInsert"`;
+      assert(
+        "P261",
+        priv.goal === false && priv.note === true && priv.noteInsert === true,
+        `commitments grants: goal_id update ${priv.goal}, note update ${priv.note}, note insert ${priv.noteInsert}`,
+      );
+
+      const [mine] = await tx<{ id: string }[]>`insert into goals.goals (user_id, name, horizon) values (${subject}, 'mía', '2027-01-31') returning id`;
+      const own = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+          values (${subject}, ${mine.id}, 'con meta', 'daily', 'tap')`,
+      );
+      assert("P262", own.code === undefined && own.count === 1, `a commitment under my own goal, ${shape(own)}`);
+      const alien = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+          values (${subject}, ${theirs.id}, 'con meta ajena', 'daily', 'tap')`,
+      );
+      assert("P263", alien.code === "42501", `a commitment under another person's goal, ${shape(alien)}`);
+
+      const notes: [string, string, boolean][] = [
+        ["P264", "", false],
+        ["P265", "  \n ", false],
+        ["P266", "a".repeat(2000), true],
+        ["P267", "a".repeat(2001), false],
+      ];
+      for (const [label, note, admitted] of notes) {
+        const r = await attemptShape(
+          tx,
+          (sp) => sp`insert into goals.commitments (user_id, name, cadence_kind, satisfaction, note)
+            values (${subject}, 'con nota', 'daily', 'tap', ${note})`,
+        );
+        assert(
+          label,
+          admitted ? r.code === undefined && r.count === 1 : r.code === "23514" && r.constraint === "commitments_note_shape",
+          `commitment note of ${note.length} chars (${note.trim() === "" ? "blank" : "text"}), ${shape(r)}`,
+        );
+      }
+
+      const seen = await tx<{ name: string }[]>`select name from goals.commitments where name = 'hábito ajeno'`;
+      assert("P268", seen.length === 0, `another person's loose commitment seen as mine, rows = ${seen.length}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -2974,6 +3116,7 @@ async function main(): Promise<void> {
   await checkConnectionHost0016();
   await checkGoalTree0018();
   await checkModelCallsChat0020();
+  await checkNoEndAndLoose0021();
 
   if (failed) process.exit(1);
 }

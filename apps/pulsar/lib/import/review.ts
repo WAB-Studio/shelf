@@ -76,7 +76,7 @@ export type EditChange =
   | { name: string }
   | { amount: number }
   | { month: string }
-  | { horizon: string }
+  | { horizon: string | null }
   | { cadence: Cadence };
 
 // A copy of the draft with one part changed, at the part's path: a name, an amount or a month, a goal's
@@ -128,10 +128,12 @@ export function editedCorrections(corrections: Correction[], path: string, chang
 
 // Why a goal's end cannot be `horizon`, as a catalogue key and its values, or null: the form's own rule, a day
 // already gone, and the goals around it. The tree is the draft's own, so a goal inside that ends later is named.
-export function goalHorizonRefusal(draft: ImportDraft, g: number, horizon: string, today: string): { key: string; values: Record<string, string> } | null {
-  const issue = createGoalSchema.shape.horizon.safeParse(horizon);
-  if (!issue.success) return { key: issue.error.issues[0].message, values: {} };
-  if (horizon <= today) return { key: "import.errors.horizonPast", values: {} };
+export function goalHorizonRefusal(draft: ImportDraft, g: number, horizon: string | null, today: string): { key: string; values: Record<string, string> } | null {
+  if (horizon !== null) {
+    const issue = createGoalSchema.shape.horizon.safeParse(horizon);
+    if (!issue.success) return { key: issue.error.issues[0].message, values: {} };
+    if (horizon <= today) return { key: "import.errors.horizonPast", values: {} };
+  }
   const first = new Map<string, number>();
   draft.goals.forEach((goal, i) => {
     if (!first.has(goal.key)) first.set(goal.key, i);
@@ -152,7 +154,7 @@ export function goalHorizonRefusal(draft: ImportDraft, g: number, horizon: strin
   const refusal = horizonTreeRefusal(buildTree(rows), String(g), horizon);
   if (!refusal) return null;
   const named = "above" in refusal ? refusal.above : "below" in refusal ? refusal.below : null;
-  return { key: refusalKey(refusal.code), values: named ? { name: named.name, date: dayBefore(named.horizon) } : {} };
+  return { key: refusalKey(refusal.code), values: named ? { name: named.name, date: named.horizon === null ? "" : dayBefore(named.horizon) } : {} };
 }
 
 const WEEKDAY_WORDS: [RegExp, number][] = [

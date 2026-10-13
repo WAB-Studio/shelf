@@ -4,7 +4,8 @@ import { isCivilDate } from "@/lib/zone";
 
 export const moveHorizonSchema = z.object({
   goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
-  horizon: z.string().refine(isCivilDate, { error: "plan.errors.horizonInvalid" }),
+  // Null takes the end off (RP-99).
+  horizon: z.string().refine(isCivilDate, { error: "plan.errors.horizonInvalid" }).nullable(),
   // Also gives the new end to every goal under it that ends later (RP-79).
   moveBranch: z.boolean().optional(),
 });
@@ -21,10 +22,11 @@ export function horizonRefusal({
   today,
   lastPhaseEndsOn,
 }: {
-  horizon: string;
+  horizon: string | null;
   today: string;
   lastPhaseEndsOn: string | null;
 }): HorizonRefusal | null {
+  if (horizon === null) return null;
   if (horizon <= today) return "goal.errors.horizonPast";
   if (lastPhaseEndsOn != null && lastPhaseEndsOn > horizon) return "goal.errors.horizonBeforePhase";
   return null;

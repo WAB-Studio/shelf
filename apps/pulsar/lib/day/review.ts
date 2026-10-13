@@ -36,7 +36,7 @@ export function totalInSpan(
  */
 export function measureByWeek(args: {
   openedOn: string;
-  horizon: string;
+  horizon: string | null;
   today: string;
   unit: string | null;
   facts: DeclaredFact[];
@@ -46,7 +46,8 @@ export function measureByWeek(args: {
   const { openedOn, horizon, today, unit, facts, evidence, phases } = args;
 
   const todayWeek = weekIndexOf(openedOn, today);
-  const lastIndex = Math.max(1, Math.min(todayWeek, horizonWeeksOf(openedOn, horizon)));
+  const endWeek = horizonWeeksOf(openedOn, horizon);
+  const lastIndex = Math.max(1, endWeek === null ? todayWeek : Math.min(todayWeek, endWeek));
 
   const rows: ReviewWeek[] = [];
   for (let index = 1; index <= lastIndex; index++) {
@@ -57,7 +58,7 @@ export function measureByWeek(args: {
       endsOn,
       total: totalInSpan(unit, facts, evidence, startsOn, endsOn),
       phaseName: phaseOn(phases, startsOn)?.name ?? null,
-      current: index === todayWeek && today < horizon,
+      current: index === todayWeek && (horizon === null || today < horizon),
     });
   }
   return rows;

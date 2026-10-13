@@ -25,8 +25,8 @@ export const commitments = goalsSchema.table(
     userId: uuid()
       .notNull()
       .references(() => authUsers.id, { onDelete: "cascade" }),
+    // Null: a habit with no goal (RP-100).
     goalId: uuid()
-      .notNull()
       .references(() => goals.id, { onDelete: "cascade" }),
     name: text().notNull(),
     cadenceKind: text({
@@ -57,6 +57,8 @@ export const commitments = goalsSchema.table(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     // The plan's order among this person's own rows. A trigger fills it at insert when none is named; no UPDATE grant (RP-47).
     position: integer().notNull(),
+    // Only a goalless habit is given one; plain text, as a task's note (RP-88).
+    note: text(),
   },
   (t) => [
     // The day's screen reads the live commitments of one person.
@@ -91,6 +93,10 @@ export const commitments = goalsSchema.table(
       "commitments_source_for_evidence",
       sql`(${t.satisfaction} = 'evidence') = (${t.sourceId} is not null and ${t.threshold} is not null and ${t.threshold} >= 1)`,
     ),
+    check(
+      "commitments_note_shape",
+      sql`${t.note} is null or (char_length(${t.note}) between 1 and 2000 and ${t.note} ~ '\\S')`,
+    ),
     pgPolicy("commitments_select_self", {
       for: "select",
       to: authenticatedRole,
@@ -99,7 +105,10 @@ export const commitments = goalsSchema.table(
     pgPolicy("commitments_insert_self", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`${authUid} = ${t.userId}`,
+      // The FK alone would take another person's goal; under RLS `g` sees only the caller's.
+      withCheck: sql`${authUid} = ${t.userId} and (${t.goalId} is null or exists (
+        select 1 from "goals"."goals" g where g.id = ${t.goalId}
+      ))`,
     }),
     // The grant narrows this to `retired_at`; `using` alone would let a caller
     // hand their commitment to someone else's id.

@@ -16,9 +16,12 @@ import {
   Text,
 } from "@/components/ui";
 import { GoalBranch, type BranchGoal } from "@/components/goal/goal-branch";
+import { CommitmentRow } from "@/components/goal/retire-sheet";
 import { dayBefore } from "@/lib/day/weeks";
+import { cadencePhrase } from "@/lib/day/row-phrases";
 import type {
   GoalSummary,
+  LooseCommitment,
   MetasMonth,
   MetasOpenGoal,
 } from "@/lib/queries/goal";
@@ -33,14 +36,63 @@ export async function GoalsScreen({
   open,
   ended,
   archived,
+  habits,
   connect,
 }: {
   open: MetasOpenGoal[];
   ended: GoalSummary[];
   archived: GoalSummary[];
+  // The commitments that belong to no goal, retired ones included (RP-100).
+  habits: LooseCommitment[];
   connect?: ReactNode;
 }) {
   const t = await getTranslations();
+
+  // `HabitosSueltos`: each live habit with its cadence and its note; tapping one asks to retire it.
+  const cadenceNames = {
+    weekdayShort: t.raw("day.cadence.weekdayName") as string[],
+    weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
+  };
+  const liveHabits = habits.filter((habit) => habit.retiredAt === null);
+  const habitsSection = (
+    <Panel as="div">
+      <Section label={t("goal.habits.title")}>
+        {liveHabits.length === 0 ? (
+          <Text as="p" variant="sentence" tone="muted">
+            {t("goal.habits.none")}
+          </Text>
+        ) : (
+          <Flex direction="column">
+            {liveHabits.map((habit) => (
+              <CommitmentRow
+                key={habit.id}
+                commitmentId={habit.id}
+                name={habit.name}
+                retired={false}
+                retiredLabel=""
+                factDayCount={habit.factDayCount}
+                meta={
+                  <>
+                    {cadencePhrase((key, values) => t(key, values), habit.cadence, cadenceNames) ?? t("day.cadence.everyDay")}
+                    {habit.satisfiedBy.kind === "quantity" ? (
+                      <>
+                        {" · "}
+                        <Figure value={habit.satisfiedBy.target} unit={habit.satisfiedBy.unit} variant="meta" />
+                      </>
+                    ) : null}
+                  </>
+                }
+                preview={habit.note}
+              />
+            ))}
+          </Flex>
+        )}
+        <Button asChild variant="outline" block>
+          <Link href="/metas/habitos/nuevo">{t("goal.habits.add")}</Link>
+        </Button>
+      </Section>
+    </Panel>
+  );
 
   if (open.length === 0 && ended.length === 0 && archived.length === 0) {
     return (
@@ -52,6 +104,7 @@ export async function GoalsScreen({
         <Button asChild block>
           <Link href="/metas/nueva">{t("goal.none.action")}</Link>
         </Button>
+        {habitsSection}
         <Section label={t("export.entry.section")}>
           <Button asChild variant="outline" block stack>
             <Link href="/metas/importar">
@@ -65,7 +118,9 @@ export async function GoalsScreen({
     );
   }
 
+  // Null: a goal with no end, which is never among the ended.
   const lastDay = (goal: GoalSummary) => {
+    if (goal.horizon === null) return null;
     const day = dayBefore(goal.horizon);
     return `${civilDayMonthShort(day)} ${day.slice(0, 4)}`;
   };
@@ -125,9 +180,15 @@ export async function GoalsScreen({
   const branch: BranchGoal[] = open.map((goal) => {
     const count = inside.get(goal.id) ?? 0;
     const depth = depthOf(goal);
-    const until = count > 0
-      ? t("tree.list.untilInside", { date: lastDay(goal), count })
-      : t("goal.list.untilShort", { date: lastDay(goal) });
+    const last = lastDay(goal);
+    const until =
+      last === null
+        ? count > 0
+          ? t("tree.list.noEndInside", { count })
+          : t("goal.list.noEnd")
+        : count > 0
+          ? t("tree.list.untilInside", { date: last, count })
+          : t("goal.list.untilShort", { date: last });
     return {
       id: goal.id,
       parentId: depth > 0 ? goal.parentId : null,
@@ -172,6 +233,8 @@ export async function GoalsScreen({
               )}
             </Panel>
 
+            {habitsSection}
+
             {ended.length > 0 ? (
               <Panel>
                 <Section label={t("goal.list.endedTitle")}>
@@ -182,7 +245,7 @@ export async function GoalsScreen({
                       href={`/metas/${goal.id}`}
                       name={goal.name}
                       meta={t("goal.list.endedOnShort", {
-                        date: lastDay(goal),
+                        date: lastDay(goal) ?? "",
                       })}
                       metaVariant="sentence"
                       trailing={chevron}

@@ -2400,6 +2400,7 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runWeekAcrossMonthEvidenceCheck();
   await runSharedMonthLineCheck();
   await runAiZeroPartCheck();
+  await runEndlessAndLooseCheck();
 }
 
 // RP-76: a share of the rhythm that rounds to 0 stays 0 for the AI; only the
@@ -3289,6 +3290,58 @@ async function runWeekAcrossMonthEvidenceCheck(): Promise<void> {
       await db`delete from goals.commitments where goal_id = ${goalId} and user_id = ${userId}`;
       await db`delete from goals.goals where id = ${goalId} and user_id = ${userId}`;
     }
+    await db.end();
+  }
+}
+
+// RP-99, RP-100: Hoy and Semana read a goal with no end as open and a habit with no goal apart,
+// in the statements they already spend.
+async function runEndlessAndLooseCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runEndlessAndLooseCheck: no verified session");
+  const today = todayInZone();
+  console.log(`\nmodule 913 check — ${new Date().toISOString()} (today ${today})`);
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId: string | null = null;
+  let habitId: string | null = null;
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, 'check-913 endless', null, now() - interval '3 days')
+      returning id
+    `;
+    goalId = goal.id;
+    const [habit] = await db<{ id: string }[]>`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${person.id}, null, 'check-913 loose', 'daily', 'tap', now() - interval '3 days')
+      returning id
+    `;
+    habitId = habit.id;
+    const day = await loadDay(today);
+    assert(
+      "913: Hoy draws a goal with no end as open, and no goal groups the loose habit",
+      day.goals.some((g) => g.id === goalId && g.horizon === null) &&
+        day.loose.commitments.some((c) => c.id === habitId && c.goalId === null) &&
+        day.loose.slots.some((slot) => slot.commitmentId === habitId),
+      `goals=${day.goals.length} loose=${JSON.stringify(day.loose.commitments.map((c) => c.id))}`,
+    );
+    const week = await loadWeek(today);
+    assert(
+      "913: Semana draws the goal with no end and the loose habit, with a tally for each day",
+      week.goals.some((g) => g.id === goalId) &&
+        week.loose.commitments.some((c) => c.id === habitId) &&
+        week.loose.days.length === 7,
+      `goals=${week.goals.length} loose=${week.loose.commitments.length}`,
+    );
+  } finally {
+    if (habitId) await db`delete from goals.commitments where id = ${habitId}`;
+    if (goalId) await db`delete from goals.goals where id = ${goalId}`;
     await db.end();
   }
 }

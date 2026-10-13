@@ -75,7 +75,8 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
 
   let lead: string | null = null;
   let late = false;
-  if (unit && roadmap.state === "planned" && roadmap.end !== null) {
+  // `end` is null for a goal with no end, so this reads only a goal that has one.
+  if (unit && roadmap.state === "planned" && roadmap.end !== null && roadmap.lastDay !== null) {
     const days = daysBetween(roadmap.end, roadmap.lastDay);
     const pending = [...roadmap.months.flatMap((m) => m.items), ...roadmap.unplaced].filter((item) => !item.done);
     if (pending.length > 0 && pending.every((item) => item.hours === 0)) {

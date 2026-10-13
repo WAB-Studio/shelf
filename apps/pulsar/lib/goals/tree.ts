@@ -6,7 +6,7 @@ export type TreeRow = {
   position: number;
   createdAt: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   archivedAt: string | null;
   measureUnit: string | null;
 };

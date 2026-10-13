@@ -948,3 +948,24 @@ test("addCommitment: hours written on a quantity commitment are stored as minute
   const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from goals.goals where user_id = ${personId} and name like 'RP-66 %'`;
   assert.equal(n, 0);
 });
+
+test("sin final: a goal made with no end stores null, takes a rhythm in km, and a loose habit stores no goal", async () => {
+  const endless = await createGoal({ name: "RP-99 abierta", horizon: null });
+  if (!endless.ok) throw new Error(endless.error);
+  try {
+    const [row] = await sql<{ horizon: string | null }[]>`select horizon::text as horizon from goals.goals where id = ${endless.goalId}`;
+    assert.equal(row.horizon, null);
+    const run = await addCommitment({
+      goalId: endless.goalId, name: "correr", cadenceKind: "daily", satisfaction: "quantity", unit: "km", targetQuantity: 5,
+    });
+    if (!run.ok) throw new Error(run.error);
+    assert.deepEqual(await setRhythm({ goalId: endless.goalId, amount: 44_641 }), { ok: true });
+    const loose = await addCommitment({ name: "RP-100 suelto", cadenceKind: "daily", satisfaction: "tap" } as never);
+    if (!loose.ok) throw new Error(loose.error);
+    const [kept] = await sql<{ goal_id: string | null }[]>`select goal_id from goals.commitments where id = ${loose.commitmentId}`;
+    assert.equal(kept.goal_id, null);
+    await sql`delete from goals.commitments where id = ${loose.commitmentId}`;
+  } finally {
+    await sql`delete from goals.goals where id = ${endless.goalId}`;
+  }
+});

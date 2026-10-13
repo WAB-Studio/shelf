@@ -49,8 +49,11 @@ export function WeekTableFace({
   const { view, goals, commitments, oneOffFacts } = week;
   const weekdayLong = t.raw("week.weekdayLong") as string[];
   const horizonOf = new Map(goals.map((goal) => [goal.id, goal.horizon]));
-  const live = (goalId: string | null, day: string) =>
-    goalId === null || day < (horizonOf.get(goalId) ?? "");
+  // A goal with no end has a null horizon: every day from its opening is live.
+  const live = (goalId: string | null, day: string) => {
+    const horizon = goalId === null ? null : horizonOf.get(goalId);
+    return horizon == null || day < horizon;
+  };
 
   function mark(
     name: string,
@@ -88,7 +91,7 @@ export function WeekTableFace({
   const say = (key: FlexibleKey, values?: Record<string, number | string>) =>
     t(past ? (PAST_KEY[key] ?? key) : key, values);
 
-  const commitmentRows = (goalId: string) =>
+  const commitmentRows = (goalId: string | null) =>
     commitments
       .filter((commitment) => commitment.goalId === goalId)
       .map((commitment) => {
@@ -137,9 +140,11 @@ export function WeekTableFace({
       rows: [...commitmentRows(goal.id), ...oneOffRows(goal.id)],
     };
   });
+  const habitRows = commitmentRows(null);
   const looseRows = oneOffRows(null);
   const foldGroups = [
     ...goalGroups,
+    ...(habitRows.length > 0 ? [{ key: "habits", label: t("week.habits.title"), rows: habitRows }] : []),
     ...(looseRows.length > 0 ? [{ key: "one-offs", label: t("week.oneOffs.title"), rows: looseRows }] : []),
   ];
   // Neither face heads a goal with nothing to mark; an ended note keeps its group.

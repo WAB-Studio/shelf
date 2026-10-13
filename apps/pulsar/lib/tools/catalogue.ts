@@ -22,7 +22,7 @@ import {
 import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "@/lib/mcp/shape";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import { loadDay } from "@/lib/queries/day";
-import { listGoalsForMetas, loadGoal } from "@/lib/queries/goal";
+import { listGoalsForMetas, listLooseCommitments, loadGoal } from "@/lib/queries/goal";
 import { listDaylessOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
 import { loadReport } from "@/lib/queries/report";
 import { todayInZone } from "@/lib/zone";
@@ -74,7 +74,10 @@ function read(
 }
 
 export const readTools: readonly ToolSpec[] = [
-  read("list_goals", z.object({}), async () => ({ ok: true, value: shapeGoalList(await listGoalsForMetas()) })),
+  read("list_goals", z.object({}), async () => {
+    const [list, loose] = await Promise.all([listGoalsForMetas(), listLooseCommitments()]);
+    return { ok: true, value: shapeGoalList(list, loose) };
+  }),
   read("get_goal", z.object({ goal_id: goalId }), async (input) => {
     const view = await loadGoal(input.goal_id as string);
     return view === null ? { ok: false, error: "mcp.errors.goalNotFound" } : { ok: true, value: shapeGoal(view) };
@@ -163,7 +166,7 @@ export const writeTools: readonly ToolSpec[] = [
   write(
     "add_commitment",
     {
-      goal_id: id,
+      goal_id: id.optional(),
       name: text,
       cadence_kind: z.enum(["daily", "weekdays", "times_per_week", "every_n_days", "times_per_month"]),
       cadence_weekdays: z.array(count).optional(),
@@ -176,8 +179,11 @@ export const writeTools: readonly ToolSpec[] = [
     },
     (input) => addCommitment(input as Parameters<typeof addCommitment>[0]),
   ),
-  write("move_horizon", { goal_id: id, horizon: day }, (input) =>
-    moveHorizon(input as Parameters<typeof moveHorizon>[0]),
+  // The AI gives and moves an end, never removes one (RP-56): a null is refused before the act.
+  write("move_horizon", { goal_id: id, horizon: day.nullable() }, (input) =>
+    input.horizon === null || input.horizon === undefined
+      ? Promise.resolve({ ok: false, error: "mcp.errors.endKept" })
+      : moveHorizon(input as Parameters<typeof moveHorizon>[0]),
   ),
   // Fixing never changes the goal's rhythm (RP-56): the act takes a task and a month alone.
   write("fix_task", { one_off_id: id, month: looseMonth }, (input) =>
@@ -186,7 +192,7 @@ export const writeTools: readonly ToolSpec[] = [
   write("unfix_task", { one_off_id: id }, (input) =>
     fixTask({ oneOffId: input.oneOffId, month: null } as Parameters<typeof fixTask>[0]),
   ),
-  write("create_goal", { name: text, horizon: day, parent_id: id.optional() }, (input) =>
+  write("create_goal", { name: text, horizon: day.optional(), parent_id: id.optional() }, (input) =>
     createGoal(input as Parameters<typeof createGoal>[0]),
   ),
   write("move_goal", { goal_id: id, parent_id: id.nullable() }, (input) =>

@@ -13,7 +13,7 @@ export type PlanInput = {
   budgets: MonthBudget[];
   tasks: PlanTask[];
   openedOn: string;
-  horizon: string;
+  horizon: string | null;
   today: string;
   doneBy?: string;
 };
@@ -39,7 +39,8 @@ export type Roadmap = {
   months: PlanMonth[];
   unplaced: PlanItem[];
   end: string | null;
-  lastDay: string;
+  // The goal's last day; null for a goal with no end.
+  lastDay: string | null;
 };
 
 // Filling stops this many months past the current one.
@@ -51,7 +52,7 @@ export function amountOf(
   month: string,
   input: Pick<PlanInput, "budgets" | "rhythm" | "openedOn" | "horizon">,
 ): number | null {
-  if (month > monthOf(dayBefore(input.horizon))) {
+  if (input.horizon !== null && month > monthOf(dayBefore(input.horizon))) {
     return input.budgets.find((budget) => budget.month === month)?.amount ?? input.rhythm ?? null;
   }
   return plannedOf(month, input);
@@ -85,8 +86,11 @@ function sum(tasks: PlanTask[]): number {
 
 // The days of `month` its amount spreads over: the goal's own in it, or the
 // whole month outside the goal.
-function spanOf(month: string, openedOn: string, lastDay: string): [number, number] {
+function spanOf(month: string, openedOn: string, lastDay: string | null): [number, number] {
   const days = daysBetween(month, nextMonth(month));
+  if (lastDay === null) {
+    return [monthOf(openedOn) === month ? Number(openedOn.slice(8, 10)) : 1, days];
+  }
   if (month > lastDay || monthOf(openedOn) > month) return [1, days];
   const first = monthOf(openedOn) === month ? Number(openedOn.slice(8, 10)) : 1;
   const last = monthOf(lastDay) === month ? Number(lastDay.slice(8, 10)) : days;
@@ -127,7 +131,7 @@ export function fillPlan(input: PlanInput): Roadmap {
   const { today, horizon } = input;
   const doneBy = input.doneBy ?? today;
   const current = monthOf(today);
-  const lastDay = dayBefore(horizon);
+  const lastDay = horizon === null ? null : dayBefore(horizon);
   const amounts = (month: string) => amountOf(month, input);
 
   // What the reading day sees: nothing created later, nothing done later. A task fixed to
@@ -170,7 +174,7 @@ export function fillPlan(input: PlanInput): Roadmap {
   const ends: string[] = [];
   const endOf = (month: string, filled: number) =>
     endDay(month, filled, amounts(month) ?? 0, spanOf(month, input.openedOn, lastDay));
-  const pastEndOf = (day: string | null) => day !== null && day > lastDay;
+  const pastEndOf = (day: string | null) => day !== null && lastDay !== null && day > lastDay;
 
   // Done items sit whole in their fixed month, else in their done day's month.
   for (const entry of entries) {
@@ -272,6 +276,6 @@ export function fillPlan(input: PlanInput): Roadmap {
   }
 
   const state = undone.length === 0 ? "empty" : input.rhythm === null ? "noRhythm" : "planned";
-  const end = unplaced.length > 0 || ends.length === 0 ? null : ends.reduce((a, b) => (a > b ? a : b));
+  const end = lastDay === null || unplaced.length > 0 || ends.length === 0 ? null : ends.reduce((a, b) => (a > b ? a : b));
   return { state, months: planMonths, unplaced, end, lastDay };
 }

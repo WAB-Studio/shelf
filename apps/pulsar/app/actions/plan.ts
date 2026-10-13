@@ -84,7 +84,7 @@ type RawTreeRow = {
   position: number;
   created_at: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   archived_at: string | null;
   measure_name: string | null;
   measure_unit: string | null;
@@ -124,8 +124,13 @@ function refused(refusal: PlacementRefusal): TreeRefusal {
   const error = refusalKey(refusal.code);
   const name = refusalName(refusal);
   if (name === null) return { ok: false, error };
-  if (refusal.code === "endPastAbove") return { ok: false, error, values: { name, date: dayBefore(refusal.above.horizon) } };
-  if (refusal.code === "belowEndsLater") return { ok: false, error, values: { name, date: dayBefore(refusal.below.horizon) } };
+  // Only a goal with an end can be outlasted, so the end read here is never null.
+  if (refusal.code === "endPastAbove" && refusal.above.horizon !== null) {
+    return { ok: false, error, values: { name, date: dayBefore(refusal.above.horizon) } };
+  }
+  if (refusal.code === "belowEndsLater" && refusal.below.horizon !== null) {
+    return { ok: false, error, values: { name, date: dayBefore(refusal.below.horizon) } };
+  }
   return { ok: false, error, values: { name } };
 }
 
@@ -133,6 +138,7 @@ const TREE_CONSTRAINTS: Record<string, MessageKey> = {
   goals_tree_cycle: "tree.errors.cycle",
   goals_tree_depth: "tree.errors.tooDeep",
   goals_tree_end: "tree.errors.endPastAbove",
+  goals_tree_no_end: "tree.errors.belowNoEnd",
   goals_tree_rhythm: "tree.errors.holderNoRhythm",
   month_budgets_holder: "tree.errors.holderNoBudget",
 };
@@ -160,11 +166,11 @@ async function treeConstraintRefusal(error: unknown): Promise<TreeRefusal | null
   const detail = causeField(error, "detail");
   const [named] = detail && UUID.test(detail)
     ? await withGoalsDb((tx) =>
-        tx.execute<{ name: string; horizon: string }>(sql`select name, horizon::text as horizon from ${goals} where id = ${detail}`),
+        tx.execute<{ name: string; horizon: string | null }>(sql`select name, horizon::text as horizon from ${goals} where id = ${detail}`),
       )
     : [];
   if (!named) return { ok: false, error: key };
-  const date = constraint === "goals_tree_end" ? { date: dayBefore(named.horizon) } : {};
+  const date = constraint === "goals_tree_end" && named.horizon !== null ? { date: dayBefore(named.horizon) } : {};
   return { ok: false, error: key, values: { name: named.name, ...date } };
 }
 
@@ -180,7 +186,7 @@ function revalidateTreeScreens(ids: Iterable<string>): void {
 async function fixHolderTasks(tx: Transaction, goalId: string): Promise<void> {
   const [row] = await tx.execute<{
     created_at: string;
-    horizon: string;
+    horizon: string | null;
     rhythm: number | null;
     budgets: { month: string; amount: number }[];
     tasks: {
@@ -422,17 +428,23 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
 
   try {
     const commitmentId = await withGoalsDb(async (tx) => {
-      const [goal] = await tx
-        .select({
-          id: goals.id,
-          horizon: goals.horizon,
-          archivedAt: goals.archivedAt,
-          measureUnit: goals.measureUnit,
-        })
-        .from(goals)
-        .where(eq(goals.id, data.goalId));
-      // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
-      if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
+      // A habit with no goal reads and touches no goal (RP-100).
+      const goalId = data.goalId;
+      let goalUnit: string | null = null;
+      if (goalId !== undefined) {
+        const [goal] = await tx
+          .select({
+            id: goals.id,
+            horizon: goals.horizon,
+            archivedAt: goals.archivedAt,
+            measureUnit: goals.measureUnit,
+          })
+          .from(goals)
+          .where(eq(goals.id, goalId));
+        // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
+        if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
+        goalUnit = goal.measureUnit;
+      }
 
       let sourceId: string | null = null;
       if (data.satisfaction === "evidence") {
@@ -451,7 +463,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       let unit: string | null = null;
       let targetQuantity: number | null = null;
       if ("unit" in data && "targetQuantity" in data) {
-        const base = goal.measureUnit ?? data.unit;
+        const base = goalUnit ?? data.unit;
         if (isTimeUnit(base) && isHourUnit(data.unit) && !isHourUnit(base)) {
           unit = base;
           targetQuantity = data.targetQuantity * 60;
@@ -464,19 +476,19 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${commitments}
           (user_id, goal_id, name, cadence_kind, cadence_n, cadence_weekdays,
-           satisfaction, target_quantity, unit, source_id, threshold)
+           satisfaction, target_quantity, unit, source_id, threshold, note)
         values
-          (${person.id}, ${data.goalId}, ${data.name}, ${data.cadenceKind}, ${cadenceN},
+          (${person.id}, ${goalId ?? null}, ${data.name}, ${data.cadenceKind}, ${cadenceN},
            ${cadenceWeekdays}, ${data.satisfaction}, ${targetQuantity}, ${unit},
-           ${sourceId}, ${threshold})
+           ${sourceId}, ${threshold}, ${goalId === undefined ? (data.note ?? null) : null})
         returning id
       `);
 
-      if (data.satisfaction === "quantity") {
+      if (goalId !== undefined && data.satisfaction === "quantity") {
         await tx
           .update(goals)
           .set({ measureName: data.name, measureUnit: unit })
-          .where(and(eq(goals.id, data.goalId), isNull(goals.measureName)));
+          .where(and(eq(goals.id, goalId), isNull(goals.measureName)));
       }
 
       return inserted.id;
@@ -760,10 +772,10 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
       if (moveBranch) {
         // The branch moves with the goal: only the goal above can still refuse its new end.
         const above = goal.parentId === null ? undefined : tree.byId.get(goal.parentId);
-        if (above && horizon > above.horizon) {
+        if (above && above.horizon !== null && (horizon === null || horizon > above.horizon)) {
           return refused({ code: "endPastAbove", above: { id: above.id, name: above.name, horizon: above.horizon } });
         }
-        if (later.length > 0) {
+        if (horizon !== null && later.length > 0) {
           const ends = await tx
             .select({ goalId: phases.goalId, endsOn: max(phases.endsOn) })
             .from(phases)

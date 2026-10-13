@@ -1,6 +1,6 @@
 import { dayBefore, daysBetween } from "@/lib/day/weeks";
 import { monthOfTask } from "./carry";
-import { monthOf, nextMonth } from "./months";
+import { lastMonthOf, monthOf, nextMonth } from "./months";
 import { amountOf, doneDayOf, fillPlan, type PlanInput, type PlanItem, type PlanTask } from "./roadmap";
 
 export type PlanNotice = {
@@ -125,6 +125,8 @@ export function planMoved(input: PlanInput & { seen: string | null }): PlanNotic
 }
 
 export function rhythmToMeet(input: PlanInput, step: number): number | null {
+  // A goal with no end has no day to meet.
+  if (input.horizon === null) return null;
   const lastDay = dayBefore(input.horizon);
   const plan = fillPlan(input);
   if (plan.state === "empty") return null;
@@ -155,8 +157,8 @@ export function planMonthOf(input: PlanInput, taskId: string): string | null {
 
 // "YYYY-MM" of every month a task can still be fixed to: from this one to the goal's last.
 export function openMonthsOf(input: Pick<PlanInput, "openedOn" | "horizon" | "today">): string[] {
-  if (input.horizon <= input.today) return [];
-  const last = monthOf(dayBefore(input.horizon));
+  if (input.horizon !== null && input.horizon <= input.today) return [];
+  const last = lastMonthOf(input.openedOn, input.horizon, input.today);
   const first = monthOf(input.openedOn) > monthOf(input.today) ? monthOf(input.openedOn) : monthOf(input.today);
   const months: string[] = [];
   for (let month = first; month <= last && months.length < 240; month = nextMonth(month)) {

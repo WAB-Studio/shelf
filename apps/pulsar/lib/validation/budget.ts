@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-import { dayBefore } from "@/lib/day/weeks";
-import { monthOf } from "@/lib/plan/months";
+import { lastMonthOf, monthOf } from "@/lib/plan/months";
 
 // The month the URL and the sheet speak in, never a day: `/meses/2026-10`.
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -39,11 +38,13 @@ export function monthOutsideSpan({
   month,
   openedOn,
   horizon,
+  today,
 }: {
   month: string;
   openedOn: string;
-  horizon: string;
+  horizon: string | null;
+  today?: string;
 }): boolean {
   const start = monthStart(month);
-  return start < monthOf(openedOn) || start > monthOf(dayBefore(horizon));
+  return start < monthOf(openedOn) || start > lastMonthOf(openedOn, horizon, today);
 }

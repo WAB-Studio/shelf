@@ -290,7 +290,7 @@ test("each tree tool issues the statements of its act or loader and no more", as
     {
       tool: "list_goals",
       input: () => ({}),
-      direct: () => queries.listGoalsForMetas(),
+      direct: () => Promise.all([queries.listGoalsForMetas(), queries.listLooseCommitments()]),
     },
     {
       tool: "create_goal",

@@ -24,7 +24,13 @@
     "unitLabel": "unidad",
     "noMeasureYet": "Esta meta todavía no tiene cifra: «{unit}» se la pone.",
     "thresholdLabel": "cuenta desde",
-    "submit": "Añadirlo"
+    "submit": "Añadirlo",
+    "submitting": "Añadiéndolo…"
+  },
+  "habitForm": {
+    "title": "Hábito nuevo",
+    "noteLabel": "nota, si quieres",
+    "notePlaceholder": "Lo que quieras recordar de este hábito"
   },
   "phaseForm": {
     "title": "Añadir una fase",
@@ -64,6 +70,7 @@
     "commitmentInvalid": "Ese compromiso no es válido.",
     "nameEmpty": "Escribe un nombre.",
     "nameTooLong": "El nombre es muy largo. Escribe máximo 120 caracteres.",
+    "noteTooLong": "La nota pasa de 2 000 caracteres.",
     "horizonInvalid": "Esa fecha no es válida.",
     "aimEmpty": "Escribe un objetivo.",
     "aimTooLong": "El objetivo es muy largo. Escribe máximo 200 caracteres.",

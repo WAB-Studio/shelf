@@ -24,10 +24,12 @@ export const SYSTEM_PROMPT = [
     `The steps of a task go in its noteSrc. For a file with no numbered lines, number its parts yourself and write a note's text in "noteText".`,
   `A name is 120 characters or fewer: shorten it and let its note keep the whole line.`,
   `Give hours only to a task with no sub-tasks. Measure a goal in hours when the plan counts hours, and write figures in the plan's own unit.`,
-  `Write a rhythm the plan states as "rate": an amount, its unit and its period (per week or per month).`,
+  `Write a rhythm the plan states as "rate": an amount, its unit and its period (per week or per month). ` +
+    `Use "units" when the goal's measure is not time ("40 pages a month" with a measure in pages is 40 "units").`,
   `Write each week the plan lists as a task, with its sub-tasks where the plan writes them.`,
   `Write a rule the plan sets («3 hours of English every week») under "rules" with its quantity per week, and name it on the tasks it governs.`,
   `A commitment's cadence stays in range: times per week from 1 to 7.`,
-  `Write every date as YYYY-MM-DD and every month as YYYY-MM. A goal's horizon is the day after its last day. ` +
+  `Write every date as YYYY-MM-DD and every month as YYYY-MM. A goal's horizon is the day after its last day; ` +
+    `it is null when the plan sets no end for the goal. ` +
     `Keep the plan's own language for names.`,
 ].join(" ");

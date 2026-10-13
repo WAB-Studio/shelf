@@ -5,13 +5,13 @@ import type { Cadence, DayView, WeekView } from "@/lib/day/types";
 // file stays pure and DB-free.
 type TallyInput = {
   view: WeekView;
-  goals: { id: string; horizon: string; createdAt: string }[];
-  commitments: { id: string; goalId: string; cadence?: Cadence }[];
+  goals: { id: string; horizon: string | null; createdAt: string }[];
+  commitments: { id: string; goalId: string | null; cadence?: Cadence }[];
 };
 
 export type DayTally = { day: string; done: number; total: number; partial: number };
 
-type OpenGoal = { id: string; openedOn: string; horizon: string };
+type OpenGoal = { id: string; openedOn: string; horizon: string | null };
 
 // One day's tally: the commitment slots of goals open that day
 // (`openedOn <= d < horizon`), flexible and evidence rows included. One-off
@@ -21,18 +21,20 @@ type OpenGoal = { id: string; openedOn: string; horizon: string };
 export function tallyDay(input: {
   view: DayView;
   goals: OpenGoal[];
-  commitments: { id: string; goalId: string; cadence?: Cadence }[];
+  commitments: { id: string; goalId: string | null; cadence?: Cadence }[];
 }): DayTally {
   const { view } = input;
   const goalOf = new Map(input.commitments.map((c) => [c.id, c.goalId]));
   const goals = new Map(input.goals.map((g) => [g.id, g]));
   const openOn = (goalId: string): boolean => {
     const goal = goals.get(goalId);
-    return goal !== undefined && goal.openedOn <= view.day && view.day < goal.horizon;
+    return goal !== undefined && goal.openedOn <= view.day && (goal.horizon === null || view.day < goal.horizon);
   };
 
   const slots = view.slots.filter((slot) => {
     const goalId = goalOf.get(slot.commitmentId);
+    // A habit with no goal (RP-100) counts every day it has a slot.
+    if (goalId === null) return true;
     return goalId !== undefined && openOn(goalId);
   });
   return {
