@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, isNull, max, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, max, sql } from "drizzle-orm";
 
 import { commitments, evidenceSources, goals, oneOffs, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
@@ -10,6 +10,7 @@ import { isHourUnit, isTimeUnit, storedMeasure } from "@/lib/units/time";
 import { buildTree, branchOf, type Tree, type TreeRow } from "@/lib/goals/tree";
 import {
   createInsideRefusal,
+  branchEndsAfter,
   horizonTreeRefusal,
   moveRefusal,
   type PlacementRefusal,
@@ -83,17 +84,20 @@ type RawTreeRow = {
   position: number;
   created_at: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   archived_at: string | null;
+  measure_name: string | null;
   measure_unit: string | null;
   rhythm: number | null;
 };
 
 // Every goal of the person in one statement; RLS narrows it. `rhythms` rides along because the
-// tree's rows carry none.
-async function readTree(tx: Transaction): Promise<{ tree: Tree; rhythms: Map<string, number | null> }> {
+// tree's rows carry none; `measureNames` likewise.
+async function readTree(
+  tx: Transaction,
+): Promise<{ tree: Tree; rhythms: Map<string, number | null>; measureNames: Map<string, string | null> }> {
   const rows = await tx.execute<RawTreeRow>(sql`
-    select id, parent_id, position, name, horizon::text as horizon, measure_unit, rhythm,
+    select id, parent_id, position, name, horizon::text as horizon, measure_name, measure_unit, rhythm,
            to_char(created_at at time zone 'UTC', ${sql.raw(INSTANT)}) as created_at,
            to_char(archived_at at time zone 'UTC', ${sql.raw(INSTANT)}) as archived_at
     from ${goals}
@@ -109,15 +113,24 @@ async function readTree(tx: Transaction): Promise<{ tree: Tree; rhythms: Map<str
     archivedAt: row.archived_at,
     measureUnit: row.measure_unit,
   }));
-  return { tree: buildTree(treeRows), rhythms: new Map(list.map((row) => [row.id, row.rhythm])) };
+  return {
+    tree: buildTree(treeRows),
+    rhythms: new Map(list.map((row) => [row.id, row.rhythm])),
+    measureNames: new Map(list.map((row) => [row.id, row.measure_name])),
+  };
 }
 
 function refused(refusal: PlacementRefusal): TreeRefusal {
   const error = refusalKey(refusal.code);
   const name = refusalName(refusal);
   if (name === null) return { ok: false, error };
-  if (refusal.code === "endPastAbove") return { ok: false, error, values: { name, date: dayBefore(refusal.above.horizon) } };
-  if (refusal.code === "belowEndsLater") return { ok: false, error, values: { name, date: dayBefore(refusal.below.horizon) } };
+  // Only a goal with an end can be outlasted, so the end read here is never null.
+  if (refusal.code === "endPastAbove" && refusal.above.horizon !== null) {
+    return { ok: false, error, values: { name, date: dayBefore(refusal.above.horizon) } };
+  }
+  if (refusal.code === "belowEndsLater" && refusal.below.horizon !== null) {
+    return { ok: false, error, values: { name, date: dayBefore(refusal.below.horizon) } };
+  }
   return { ok: false, error, values: { name } };
 }
 
@@ -125,6 +138,7 @@ const TREE_CONSTRAINTS: Record<string, MessageKey> = {
   goals_tree_cycle: "tree.errors.cycle",
   goals_tree_depth: "tree.errors.tooDeep",
   goals_tree_end: "tree.errors.endPastAbove",
+  goals_tree_no_end: "tree.errors.belowNoEnd",
   goals_tree_rhythm: "tree.errors.holderNoRhythm",
   month_budgets_holder: "tree.errors.holderNoBudget",
 };
@@ -152,11 +166,11 @@ async function treeConstraintRefusal(error: unknown): Promise<TreeRefusal | null
   const detail = causeField(error, "detail");
   const [named] = detail && UUID.test(detail)
     ? await withGoalsDb((tx) =>
-        tx.execute<{ name: string; horizon: string }>(sql`select name, horizon::text as horizon from ${goals} where id = ${detail}`),
+        tx.execute<{ name: string; horizon: string | null }>(sql`select name, horizon::text as horizon from ${goals} where id = ${detail}`),
       )
     : [];
   if (!named) return { ok: false, error: key };
-  const date = constraint === "goals_tree_end" ? { date: dayBefore(named.horizon) } : {};
+  const date = constraint === "goals_tree_end" && named.horizon !== null ? { date: dayBefore(named.horizon) } : {};
   return { ok: false, error: key, values: { name: named.name, ...date } };
 }
 
@@ -172,7 +186,7 @@ function revalidateTreeScreens(ids: Iterable<string>): void {
 async function fixHolderTasks(tx: Transaction, goalId: string): Promise<void> {
   const [row] = await tx.execute<{
     created_at: string;
-    horizon: string;
+    horizon: string | null;
     rhythm: number | null;
     budgets: { month: string; amount: number }[];
     tasks: {
@@ -287,7 +301,7 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
   try {
     const outcome = await withGoalsDb(async (tx): Promise<TreeRefusal | { goalId: string }> => {
       await tx.execute(personLock(person.id));
-      const { tree } = await readTree(tx);
+      const { tree, measureNames } = await readTree(tx);
       const above = tree.byId.get(parentId);
       if (!above) return { ok: false, error: "tree.errors.notFound" };
       const refusal = createInsideRefusal(tree, parentId, horizon, todayInZone());
@@ -299,6 +313,14 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
         values (${person.id}, ${name}, ${horizon}, ${parentId})
         returning id
       `);
+      // The new goal measures what the one above measures, so its rhythm can add up into it. The INSERT grant
+      // does not list the measure columns: they land by their own UPDATE.
+      const measureName = measureNames.get(parentId);
+      if (above.measureUnit !== null && measureName != null) {
+        await tx.execute(sql`
+          update ${goals} set measure_name = ${measureName}, measure_unit = ${above.measureUnit} where id = ${inserted.id}
+        `);
+      }
       if (holder) await fixHolderTasks(tx, parentId);
       return { goalId: inserted.id };
     });
@@ -406,17 +428,23 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
 
   try {
     const commitmentId = await withGoalsDb(async (tx) => {
-      const [goal] = await tx
-        .select({
-          id: goals.id,
-          horizon: goals.horizon,
-          archivedAt: goals.archivedAt,
-          measureUnit: goals.measureUnit,
-        })
-        .from(goals)
-        .where(eq(goals.id, data.goalId));
-      // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
-      if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
+      // A habit with no goal reads and touches no goal (RP-100).
+      const goalId = data.goalId;
+      let goalUnit: string | null = null;
+      if (goalId !== undefined) {
+        const [goal] = await tx
+          .select({
+            id: goals.id,
+            horizon: goals.horizon,
+            archivedAt: goals.archivedAt,
+            measureUnit: goals.measureUnit,
+          })
+          .from(goals)
+          .where(eq(goals.id, goalId));
+        // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
+        if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
+        goalUnit = goal.measureUnit;
+      }
 
       let sourceId: string | null = null;
       if (data.satisfaction === "evidence") {
@@ -435,7 +463,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       let unit: string | null = null;
       let targetQuantity: number | null = null;
       if ("unit" in data && "targetQuantity" in data) {
-        const base = goal.measureUnit ?? data.unit;
+        const base = goalUnit ?? data.unit;
         if (isTimeUnit(base) && isHourUnit(data.unit) && !isHourUnit(base)) {
           unit = base;
           targetQuantity = data.targetQuantity * 60;
@@ -448,19 +476,19 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${commitments}
           (user_id, goal_id, name, cadence_kind, cadence_n, cadence_weekdays,
-           satisfaction, target_quantity, unit, source_id, threshold)
+           satisfaction, target_quantity, unit, source_id, threshold, note)
         values
-          (${person.id}, ${data.goalId}, ${data.name}, ${data.cadenceKind}, ${cadenceN},
+          (${person.id}, ${goalId ?? null}, ${data.name}, ${data.cadenceKind}, ${cadenceN},
            ${cadenceWeekdays}, ${data.satisfaction}, ${targetQuantity}, ${unit},
-           ${sourceId}, ${threshold})
+           ${sourceId}, ${threshold}, ${goalId === undefined ? (data.note ?? null) : null})
         returning id
       `);
 
-      if (data.satisfaction === "quantity") {
+      if (goalId !== undefined && data.satisfaction === "quantity") {
         await tx
           .update(goals)
           .set({ measureName: data.name, measureUnit: unit })
-          .where(and(eq(goals.id, data.goalId), isNull(goals.measureName)));
+          .where(and(eq(goals.id, goalId), isNull(goals.measureName)));
       }
 
       return inserted.id;
@@ -719,7 +747,7 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
-  const { goalId, horizon } = parsed.data;
+  const { goalId, horizon, moveBranch } = parsed.data;
 
   let touched: string[] = [];
   try {
@@ -740,10 +768,42 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
       });
       if (phaseRefusal) throw new NamedError(phaseRefusal);
 
-      const treeRefusal = horizonTreeRefusal(tree, goalId, horizon);
-      if (treeRefusal) return refused(treeRefusal);
+      const later = moveBranch ? branchEndsAfter(tree, goalId, horizon) : [];
+      if (moveBranch) {
+        // The branch moves with the goal: only the goal above can still refuse its new end.
+        const above = goal.parentId === null ? undefined : tree.byId.get(goal.parentId);
+        if (above && above.horizon !== null && (horizon === null || horizon > above.horizon)) {
+          return refused({ code: "endPastAbove", above: { id: above.id, name: above.name, horizon: above.horizon } });
+        }
+        if (horizon !== null && later.length > 0) {
+          const ends = await tx
+            .select({ goalId: phases.goalId, endsOn: max(phases.endsOn) })
+            .from(phases)
+            .where(inArray(phases.goalId, later.map((g) => g.id)))
+            .groupBy(phases.goalId);
+          const lastEnd = new Map(ends.map((e) => [e.goalId, e.endsOn]));
+          for (const g of later) {
+            const endsOn = lastEnd.get(g.id) ?? null;
+            if (endsOn !== null && endsOn > horizon) {
+              return { ok: false, error: "tree.errors.branchPhaseAfter", values: { name: g.name, date: endsOn } };
+            }
+          }
+        }
+      } else {
+        const treeRefusal = horizonTreeRefusal(tree, goalId, horizon);
+        if (treeRefusal) return refused(treeRefusal);
+      }
 
       touched = [...branchOf(tree, goalId), ...(goal.parentId ? [goal.parentId] : [])];
+      // Deepest first: the tree's trigger judges each row against the rows as they stand.
+      for (const depth of [2, 1]) {
+        const level = later.filter((g) => tree.byId.get(g.id)!.depth === depth);
+        if (level.length === 0) continue;
+        await tx
+          .update(goals)
+          .set({ horizon })
+          .where(and(inArray(goals.id, level.map((g) => g.id)), eq(goals.userId, person.id)));
+      }
       const moved = await tx
         .update(goals)
         .set({ horizon })

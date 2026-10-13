@@ -1,0 +1,59 @@
+{
+  "title": "Chat",
+  "back": "Hoy",
+  "open": "Abrir el chat",
+  "field": "Mensaje",
+  "placeholder": "Pide un cambio o pregunta por tu plan",
+  "send": "Enviar",
+  "retry": "Intentar otra vez",
+  "privacy": "Tu mensaje y las partes de tu plan que lee se envían a OpenAI.",
+  "you": "TÚ",
+  "chat": "PULSAR",
+  "tryWith": "PRUEBA CON",
+  "examples": {
+    "month": "¿Cómo voy este mes?",
+    "amount": "Pon 4 h de inglés para noviembre"
+  },
+  "pending": "Pensando tu mensaje…",
+  "proposes": "Esto cambiaría tu plan:",
+  "do": "Hacer",
+  "doAll": "Hacer todo",
+  "made": "hecho",
+  "lapsed": "sin hacer",
+  "unavailable": "El chat no está disponible ahora. Tu plan sigue igual en las demás pantallas.",
+  "errors": {
+    "signedOut": "Entra de nuevo para usar el chat.",
+    "blank": "Escribe tu mensaje.",
+    "noKey": "El chat no está disponible ahora. Tu plan sigue igual en las demás pantallas.",
+    "cap": "Ya enviaste 50 mensajes hoy. Mañana puedes enviar otros 50. Lo que pedías aquí también se hace desde las pantallas.",
+    "failed": "No pudimos responder. Tu mensaje sigue aquí.",
+    "notAllowed": "Ese cambio no se puede hacer desde el chat.",
+    "notInPlan": "Ese cambio nombra algo que no es de tu plan."
+  },
+  "before": {
+    "noAmount": "sin monto",
+    "inPlan": "al plan",
+    "noNote": "sin nota",
+    "withNote": "con nota",
+    "noDay": "sin día",
+    "noEnd": "sin final"
+  },
+  "change": {
+    "declare_fact": "Marcar «{commitment}» como cumplido",
+    "complete_task": "Marcar la tarea «{task}» como hecha",
+    "create_task": "Crear la tarea «{name}»",
+    "set_task_note": "Cambiar la nota de la tarea «{task}»",
+    "schedule_task": "Cambiar el día de la tarea «{task}»",
+    "set_month_amount": "Poner el monto de {month} en «{goal}»",
+    "rename_goal": "Renombrar la meta «{goal}»",
+    "add_phase": "Agregar una fase a «{goal}»",
+    "add_commitment": "Crear el compromiso «{name}»",
+    "move_horizon": "Mover el plazo de «{goal}»",
+    "fix_task": "Fijar «{task}» a {month}",
+    "unfix_task": "Devolver «{task}» al plan",
+    "create_goal": "Crear la meta «{name}»",
+    "move_goal": "Mover la meta «{goal}»",
+    "set_goal_note": "Cambiar la nota de la meta «{goal}»",
+    "retire_commitment": "Retirar el compromiso «{commitment}»"
+  }
+}

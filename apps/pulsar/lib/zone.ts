@@ -142,6 +142,11 @@ export function civilDayMonthShort(day: string): string {
   return `${part("day")} ${part("month").slice(0, 3)}`;
 }
 
+// "4 jul 2027": `civilDayMonthShort` with the year of the day itself.
+export function civilDayMonthYear(day: string): string {
+  return `${civilDayMonthShort(day)} ${day.slice(0, 4)}`;
+}
+
 // An instant as the 24-hour "HH:mm" a person in the zone read on their clock.
 // `h23` keeps midnight "00:05", never "24:05".
 export function timeInZone(instant: string): string {

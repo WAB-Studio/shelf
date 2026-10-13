@@ -1,13 +1,16 @@
 import { z } from "zod";
 
 import { dayBefore } from "@/lib/day/weeks";
-import { monthsOfSpan } from "@/lib/plan/months";
-import { isHourUnit, isTimeUnit } from "@/lib/units/time";
+import { lastMonthOf, monthsOfSpan, nextMonth } from "@/lib/plan/months";
+import { isEnglishMinuteUnit, isHourUnit, isTimeUnit } from "@/lib/units/time";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
-import { setRhythmSchema } from "@/lib/validation/rhythm";
+import { MAX_TIME_RHYTHM, setRhythmSchema } from "@/lib/validation/rhythm";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema, noteSchema } from "@/lib/validation/one-off";
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
+
+import { cleanLine, shortenName as shorten } from "./clean";
+import { reshapeTasks } from "./reshape";
 
 // The forms' own schemas judge what the import carries; the model's answer
 // and the template are shaped around them, never a second set of rules.
@@ -100,7 +103,14 @@ function draftSchema(withNote: boolean) {
     months: z.array(month),
     commitments: z.array(commitment),
     tasks: z.array(task),
-  });
+  }).refine(
+    // A month holds 44 640 minutes: the cap a time unit keeps whatever the column allows.
+    (g) => {
+      const rate = (g as { rhythm?: number | null }).rhythm ?? null;
+      return rate === null || g.measure === null || !isTimeUnit(g.measure.unit) || rate <= MAX_TIME_RHYTHM;
+    },
+    { error: "roadmap.errors.rhythmRange", path: ["rhythm"] },
+  );
 
   return z.strictObject({
     goals: z
@@ -133,19 +143,20 @@ function refusalsV1(draft: ImportDraftV1, today: string): DraftRefusal[] {
     const refuse = (path: string, key: string, values?: Record<string, string>) =>
       refusals.push({ path: `${at}.${path}`, key, ...(values ? { values } : {}) });
 
-    const past = goal.horizon <= today;
+    const horizon = goal.horizon;
+    const past = horizon !== null && horizon <= today;
     if (past) refuse("horizon", "import.errors.horizonPast");
 
     goal.phases.forEach((phase, p) => {
-      if (!phaseWithinHorizon(phase, goal.horizon)) refuse(`phases.${p}`, "plan.errors.phasePastHorizon");
+      if (horizon !== null && !phaseWithinHorizon(phase, horizon)) refuse(`phases.${p}`, "plan.errors.phasePastHorizon");
       else if (goal.phases.slice(0, p).some((earlier) => phasesOverlap(earlier, phase))) {
         refuse(`phases.${p}`, "plan.errors.phaseOverlap");
       }
     });
 
     // A goal whose end already passed has no span: it is refused whole.
-    const span = past ? null : new Set(monthsOfSpan(today, goal.horizon));
-    const lastDay = dayBefore(goal.horizon);
+    const span = past ? null : new Set(monthsOfSpan(today, horizon));
+    const lastDay = dayBefore(horizon ?? nextMonth(lastMonthOf(today, null, today)));
     // Which side of the span a month falls on: before today's month or after the goal's last.
     const outsideSpan = (path: string, m: string) => {
       if (span === null || span.has(`${m}-01`)) return;
@@ -332,6 +343,7 @@ const childV2 = z.strictObject({
   noteSrc: src,
   src,
   rule: z.string().nullable(),
+  doneOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
 const taskV2 = z.strictObject({
   name: z.string(),
@@ -342,13 +354,15 @@ const taskV2 = z.strictObject({
   src,
   week: z.string().nullable(),
   rule: z.string().nullable(),
+  // The day a task the plan marked done was done: it is written already done. Absent on a draft that predates it.
+  doneOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   children: z.array(childV2),
 });
 const goalV2 = z.strictObject({
   key: z.string(),
   parent: z.string().nullable(),
   name: z.string(),
-  horizon: z.string(),
+  horizon: z.string().nullable(),
   measure: measureV2.nullable(),
   rhythm: z.number().int().nullable(),
   note: z.string().nullable(),
@@ -395,9 +409,9 @@ const rawGoal = z.strictObject({
   key: z.string(),
   parent: z.string().nullable(),
   name: z.string(),
-  horizon: z.string(),
+  horizon: z.string().nullable(),
   measure: measureV2.nullable(),
-  rate: z.strictObject({ amount: z.number().int(), unit: z.enum(["minutes", "hours"]), per: z.enum(["week", "month"]) }).nullable(),
+  rate: z.strictObject({ amount: z.number().int(), unit: z.enum(["minutes", "hours", "units"]), per: z.enum(["week", "month"]) }).nullable(),
   noteSrc: src,
   noteText: z.string().nullable(),
   src,
@@ -424,14 +438,17 @@ export type CorrectionCode =
   | "parentEstimateDropped"
   | "parentEstimateDiffers"
   | "cadenceClamped"
+  | "cadenceToWeekdays"
   | "rateToRhythm"
   | "holderRhythmToNote"
   | "holderMonthsToNote"
   | "endWithinAbove"
   | "measureInHours"
   | "monthSumDiffers"
-  | "monthOverRhythm";
-export type NoticeCode = "weekRuleBroken";
+  | "monthOverRhythm"
+  | "lineToTask"
+  | "taskMoved";
+export type NoticeCode = "weekRuleBroken" | "rhythmWithoutTasks";
 
 // `id` is `at:code`. `declined` says what rejecting it does: keep what the plan said, or leave the part out.
 export type Correction = {
@@ -446,7 +463,6 @@ export type Correction = {
 export type Notice = { at: string; code: NoticeCode; values: Record<string, string> };
 
 export const TASK_NOTE_MAX = 2000;
-const NAME_MAX = 120;
 const CADENCE_CEILING: Record<string, number> = { times_per_week: 7, times_per_month: 31, every_n_days: 365 };
 
 // The line numbers a list of ranges names, in order, once each, inside `total`.
@@ -464,22 +480,13 @@ export function srcLines(ranges: Src[], total: number): number[] {
   return out;
 }
 
-// Up to `cap` characters, ending on a whole word.
-function shorten(full: string): string {
-  if (full.length <= NAME_MAX) return full;
-  const cut = full.slice(0, NAME_MAX);
-  if (/\s/.test(full[NAME_MAX])) return cut.trimEnd();
-  const space = cut.search(/\s\S*$/);
-  return (space > 0 ? cut.slice(0, space) : cut).trimEnd();
-}
-
 // The note of a part. With lines it is their literal text, whole lines up to `cap`, never the
 // answer's words; a source with no lines takes the answer's `noteText`.
 function buildNote(source: Source, ranges: Src[], noteText: string | null, cap: number, head: string | null): string | null {
   let body = "";
   if (source.kind === "parts") body = (noteText ?? "").trim();
   else if (source.lines !== null) {
-    const texts = srcLines(ranges, source.lines.length).map((n) => source.lines![n - 1]);
+    const texts = srcLines(ranges, source.lines.length).map((n) => cleanLine(source.lines![n - 1]));
     const room = cap - (head === null ? 0 : head.length + 2);
     for (let k = 1; k <= texts.length; k++) {
       const candidate = texts.slice(0, k).join("\n").trim();
@@ -491,13 +498,50 @@ function buildNote(source: Source, ranges: Src[], noteText: string | null, cap: 
   return note === "" ? null : note;
 }
 
+const DAY_WORDS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+
+function cadenceSaid(c: { cadenceKind: string; cadenceN: number | null }): string {
+  const n = c.cadenceN ?? 1;
+  switch (c.cadenceKind) {
+    case "times_per_week":
+      return `${n} por semana`;
+    case "times_per_month":
+      return `${n} al mes`;
+    case "every_n_days":
+      return `cada ${n} días`;
+    default:
+      return "cada día";
+  }
+}
+
+// The days live in `weekdays` alone and a count in the counted kinds alone, as the table holds them
+// (`commitments_weekdays_for_weekdays`, `commitments_n_for_counted_kinds`). A model that names days on
+// another kind meant those days: the plan's «Domingo» stays Sunday.
+function cadenceShape<C extends { cadenceKind: string; cadenceWeekdays: number[] | null; cadenceN: number | null }>(
+  c: C,
+  at: string,
+  add: (at: string, code: CorrectionCode, said: string, proposed: string, declined: Correction["declined"], values?: Record<string, string>) => unknown,
+): C {
+  const days = [...new Set(c.cadenceWeekdays ?? [])].filter((day) => day >= 1 && day <= 7).sort((a, b) => a - b);
+  if (c.cadenceKind === "weekdays") return { ...c, cadenceN: null };
+  if (days.length > 0) {
+    add(at, "cadenceToWeekdays", cadenceSaid(c), days.map((day) => DAY_WORDS[day - 1]).join(", "), "leavesOut", {
+      kind: c.cadenceKind,
+      n: c.cadenceN === null ? "" : String(c.cadenceN),
+      days: JSON.stringify(c.cadenceWeekdays),
+    });
+    return { ...c, cadenceKind: "weekdays", cadenceWeekdays: days, cadenceN: null };
+  }
+  return { ...c, cadenceWeekdays: null, cadenceN: c.cadenceKind === "daily" ? null : c.cadenceN };
+}
+
 const append = (note: string | null, text: string) => (note === null ? text : `${note}\n\n${text}`);
 
 export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; corrections: Correction[] } {
   const corrections: Correction[] = [];
   const add = (at: string, code: CorrectionCode, said: string, proposed: string, declined: Correction["declined"], values?: Record<string, string>) =>
     corrections.push({ id: `${at}:${code}`, at, code, said, proposed, declined, ...(values ? { values } : {}) });
-  const horizons = new Map<string, string>();
+  const horizons = new Map<string, string | null>();
   const names = new Map<string, string>();
   const holders = new Set(raw.goals.flatMap((goal) => (goal.parent === null ? [] : [goal.parent])));
   const rateSaid = new Map<string, string>();
@@ -519,16 +563,22 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
     } else if (measure !== null && isHourUnit(measure.unit)) {
       measure = { ...measure, unit: "minutos" };
       times = 60;
+    } else if (measure !== null && isEnglishMinuteUnit(measure.unit)) {
+      measure = { ...measure, unit: "minutos" };
     }
     const figure = (n: number | null) => (n === null ? null : n * times);
 
     let rhythm: number | null = null;
-    if (rg.rate !== null && measure !== null && isTimeUnit(measure.unit)) {
-      const minutes = rg.rate.amount * (rg.rate.unit === "hours" ? 60 : 1);
-      if (rg.rate.per === "month") rhythm = minutes;
+    if (rg.rate !== null && measure !== null && (rg.rate.unit === "units") !== isTimeUnit(measure.unit)) {
+      // "units" counts in the measure's own unit; hours and minutes need a time measure.
+      const amount = rg.rate.unit === "units" ? rg.rate.amount : rg.rate.amount * (rg.rate.unit === "hours" ? 60 : 1);
+      if (rg.rate.per === "month") rhythm = amount;
       else {
-        rhythm = Math.floor((minutes * 52) / 12);
-        const said = `${rg.rate.amount} ${rg.rate.unit === "hours" ? "h" : "min"} por semana`;
+        rhythm = Math.floor((amount * 52) / 12);
+        const said =
+          rg.rate.unit === "units"
+            ? `${rg.rate.amount} ${measure.unit} por semana`
+            : `${rg.rate.amount} ${rg.rate.unit === "hours" ? "h" : "min"} por semana`;
         // A goal with goals inside moves the rhythm to its note, which says the plan's words.
         if (holders.has(rg.key)) rateSaid.set(rg.key, said);
         else add(`${at}.rhythm`, "rateToRhythm", said, String(rhythm), "keepsPlan", { minutes: String(rhythm) });
@@ -541,7 +591,7 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
 
     let horizon = rg.horizon;
     const above = rg.parent === null ? undefined : horizons.get(rg.parent);
-    if (above !== undefined && horizon > above) {
+    if (above !== undefined && above !== null && horizon !== null && horizon > above) {
       add(at, "endWithinAbove", horizon, above, "leavesOut", { was: horizon, above: names.get(rg.parent!) ?? "" });
       horizon = above;
     }
@@ -557,8 +607,10 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
       }
       if (next.unit !== null && isHourUnit(next.unit)) {
         next = { ...next, unit: "minutos", targetQuantity: next.targetQuantity === null ? null : next.targetQuantity * 60 };
+      } else if (next.unit !== null && isEnglishMinuteUnit(next.unit)) {
+        next = { ...next, unit: "minutos" };
       }
-      return next;
+      return cadenceShape(next, `${at}.commitments.${i}`, add);
     });
 
     const tasks = rg.tasks.map((t, ti) => {
@@ -650,7 +702,9 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
 
 function withoutAdded(note: string | null, added: string | undefined): string | null {
   if (note === null || added === undefined) return note;
-  const stripped = note.endsWith(added) ? note.slice(0, note.length - added.length).replace(/\n*$/, "") : note;
+  const at = note.lastIndexOf(added);
+  if (at < 0) return note;
+  const stripped = `${note.slice(0, at).replace(/\n*$/, "")}\n\n${note.slice(at + added.length).replace(/^\n+/, "")}`.replace(/^\n+|\n+$/g, "");
   return stripped === "" ? null : stripped;
 }
 
@@ -658,6 +712,15 @@ function withoutAdded(note: string | null, added: string | undefined): string | 
 // applied unless declined; a fix `normalize` made is undone when declined, and the part is then
 // refused by name, or keeps what the plan said.
 export function decide(draft: ImportDraft, corrections: Correction[], declined: ReadonlySet<string>): ImportDraft {
+  return decideWithPaths(draft, corrections, declined).draft;
+}
+
+// `decide`, and where each path of the stored draft lies once tasks have moved.
+export function decideWithPaths(
+  draft: ImportDraft,
+  corrections: Correction[],
+  declined: ReadonlySet<string>,
+): { draft: ImportDraft; pathOf: (path: string) => string } {
   const next = structuredClone(draft);
   for (const c of corrections) {
     const parts = c.at.split(".");
@@ -687,6 +750,14 @@ export function decide(draft: ImportDraft, corrections: Correction[], declined: 
       case "cadenceClamped":
         if (refused) goal.commitments[Number(parts[3])].cadenceN = Number(c.values?.was);
         break;
+      case "cadenceToWeekdays":
+        if (refused) {
+          const entry = goal.commitments[Number(parts[3])];
+          entry.cadenceKind = (c.values?.kind ?? entry.cadenceKind) as typeof entry.cadenceKind;
+          entry.cadenceN = c.values?.n ? Number(c.values.n) : null;
+          entry.cadenceWeekdays = JSON.parse(c.values?.days ?? "null") as number[] | null;
+        }
+        break;
       case "rateToRhythm":
         if (refused) goal.rhythm = null;
         break;
@@ -706,10 +777,12 @@ export function decide(draft: ImportDraft, corrections: Correction[], declined: 
         if (refused) goal.horizon = c.values?.was ?? goal.horizon;
         break;
       case "measureInHours":
+      case "lineToTask":
+      case "taskMoved":
         break;
     }
   }
-  return next;
+  return reshapeTasks(next, corrections, declined);
 }
 
 // The note without the whole name `nameShortened` put at its head.
@@ -725,6 +798,51 @@ function withoutHead(note: string | null, full: string): string | null {
 function firstIssue(schema: z.ZodType, value: unknown): string | null {
   const parsed = schema.safeParse(value);
   return parsed.success ? null : parsed.error.issues[0].message;
+}
+
+// The table's three checks on a commitment's columns, as one key or null: days only on `weekdays`,
+// a count only on the counted kinds, a target and a unit only on a quantity.
+export function commitmentShapeKey(c: {
+  cadenceKind: string;
+  cadenceWeekdays: number[] | null;
+  cadenceN: number | null;
+  satisfaction: string;
+  targetQuantity: number | null;
+  unit: string | null;
+}): string | null {
+  if (c.cadenceKind === "weekdays" ? (c.cadenceWeekdays?.length ?? 0) === 0 : c.cadenceWeekdays !== null) {
+    return c.cadenceKind === "weekdays" ? "plan.errors.weekdaysEmpty" : "import.errors.cadenceWeekdays";
+  }
+  const counted = c.cadenceKind === "times_per_week" || c.cadenceKind === "every_n_days" || c.cadenceKind === "times_per_month";
+  if (counted !== (c.cadenceN !== null && c.cadenceN > 0)) return "import.errors.cadenceCount";
+  if ((c.satisfaction === "quantity") !== (c.targetQuantity !== null && c.unit !== null)) {
+    return c.satisfaction === "quantity" ? "import.errors.quantityNoAmount" : "import.errors.tapWithAmount";
+  }
+  return null;
+}
+
+// The key of the first thing the commitment form's schema or the table's shape refuses in a commitment, or
+// null. The review's sheet asks it of what the person typed, the server of what it is sent.
+export function commitmentFormIssue(entry: {
+  name: string;
+  cadenceKind: "daily" | "weekdays" | "times_per_week" | "every_n_days" | "times_per_month";
+  cadenceWeekdays: number[] | null;
+  cadenceN: number | null;
+  satisfaction: "tap" | "quantity";
+  targetQuantity: number | null;
+  unit: string | null;
+}): string | null {
+  return (
+    firstIssue(commitment, {
+      name: entry.name,
+      cadenceKind: entry.cadenceKind,
+      cadenceWeekdays: entry.cadenceWeekdays,
+      cadenceN: entry.cadenceN,
+      satisfaction: entry.satisfaction,
+      targetQuantity: entry.targetQuantity,
+      unit: entry.unit,
+    }) ?? commitmentShapeKey(entry)
+  );
 }
 
 // The refusals that leave a whole goal out, with the goals inside it (RP-90).
@@ -765,7 +883,9 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
       const p = first.get(goal.parent);
       if (p === undefined || p >= g) refuse(".parent", "tree.errors.notFound");
       else if (levelOf(g) > 2) refuse(".parent", "tree.errors.tooDeep");
-      else if (goal.horizon > draft.goals[p].horizon) {
+      else if (draft.goals[p].horizon !== null && goal.horizon === null) {
+        refuse(".horizon", "tree.errors.belowNoEnd", { name: goal.name });
+      } else if (draft.goals[p].horizon !== null && goal.horizon !== null && goal.horizon > draft.goals[p].horizon) {
         refuse(".horizon", "tree.errors.endPastAbove", { name: draft.goals[p].name, date: draft.goals[p].horizon });
       }
     }
@@ -773,7 +893,7 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
     if (nameIssue) refuse(".name", nameIssue);
     const horizonIssue = firstIssue(createGoalSchema.shape.horizon, goal.horizon);
     if (horizonIssue) refuse(".horizon", horizonIssue);
-    else if (goal.horizon <= today) refuse(".horizon", "import.errors.horizonPast");
+    else if (goal.horizon !== null && goal.horizon <= today) refuse(".horizon", "import.errors.horizonPast");
     const measureIssue = goal.measure === null ? null : firstIssue(measure, goal.measure);
     if (measureIssue) refuse(".measure", measureIssue);
 
@@ -787,16 +907,17 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
     }
     if (goal.note !== null && goal.note.length > GOAL_NOTE_MAX) refuse(".note", "tree.errors.noteTooLong");
 
-    const horizonOk = horizonIssue === null && goal.horizon > today;
+    const horizon = goal.horizon;
+    const horizonOk = horizonIssue === null && horizon !== null && horizon > today;
     goal.phases.forEach((phaseValue, p) => {
       const issue = firstIssue(phase, { aim: phaseValue.aim, startsOn: phaseValue.startsOn, endsOn: phaseValue.endsOn });
       if (issue) refuse(`.phases.${p}`, issue);
-      else if (horizonOk && !phaseWithinHorizon(phaseValue, goal.horizon)) refuse(`.phases.${p}`, "plan.errors.phasePastHorizon");
+      else if (horizonOk && !phaseWithinHorizon(phaseValue, horizon)) refuse(`.phases.${p}`, "plan.errors.phasePastHorizon");
       else if (goal.phases.slice(0, p).some((earlier) => phasesOverlap(earlier, phaseValue))) refuse(`.phases.${p}`, "plan.errors.phaseOverlap");
     });
 
-    const span = horizonOk ? new Set(monthsOfSpan(today, goal.horizon)) : null;
-    const lastDay = horizonIssue === null ? dayBefore(goal.horizon) : goal.horizon;
+    const span = horizonOk || horizon === null ? new Set(monthsOfSpan(today, horizon)) : null;
+    const lastDay = horizon === null ? dayBefore(nextMonth(lastMonthOf(today, null, today))) : horizonIssue === null ? dayBefore(horizon) : horizon;
     const outsideSpan = (path: string, m: string) => {
       if (span === null || span.has(`${m}-01`)) return;
       if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
@@ -819,16 +940,8 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
 
     goal.commitments.forEach((entry, c) => {
       const path = `.commitments.${c}`;
-      const issue = firstIssue(commitment, {
-        name: entry.name,
-        cadenceKind: entry.cadenceKind,
-        cadenceWeekdays: entry.cadenceWeekdays,
-        cadenceN: entry.cadenceN,
-        satisfaction: entry.satisfaction,
-        targetQuantity: entry.targetQuantity,
-        unit: entry.unit,
-      });
-      if (issue) refuse(path, issue);
+      const formIssue = commitmentFormIssue(entry);
+      if (formIssue) refuse(path, formIssue);
       else if (entry.satisfaction === "quantity" && goal.measure === null) refuse(path, "import.errors.quantityNoMeasure");
       else if (entry.satisfaction === "tap" && (entry.targetQuantity !== null || entry.unit !== null)) refuse(path, "import.errors.tapWithAmount");
     });
@@ -846,10 +959,16 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
         else if (goal.measure === null && task.estimate !== null) refuse(path, "month.errors.noMeasure");
       }
       if (task.note !== null && task.note.length > TASK_NOTE_MAX) refuse(`${path}.note`, "day.errors.oneOffNoteTooLong");
+      if (task.doneOn) {
+        // A parent is done by its sub-tasks, and nothing is done after today.
+        if (task.children.length > 0) refuse(path, "import.errors.doneWithSubtasks");
+        else if (task.doneOn > today) refuse(path, "import.errors.doneInFuture");
+      }
       task.children.forEach((child, c) => {
         const childPath = `${path}.children.${c}`;
         const childIssue = firstIssue(createOneOffSchema.shape.name, child.name) ?? firstIssue(estimate.nullable(), child.estimate);
         if (childIssue) refuse(childPath, childIssue);
+        else if (child.doneOn && child.doneOn > today) refuse(childPath, "import.errors.doneInFuture");
         else if (goal.measure === null && child.estimate !== null) refuse(childPath, "month.errors.noMeasure");
         if (child.note !== null && child.note.length > TASK_NOTE_MAX) refuse(`${childPath}.note`, "day.errors.oneOffNoteTooLong");
       });

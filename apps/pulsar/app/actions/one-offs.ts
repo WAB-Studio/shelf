@@ -8,6 +8,7 @@ import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthOutsideSpan, monthStart } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
+import { ENDLESS_MONTHS_AHEAD } from "@/lib/plan/months";
 import { isTimeUnit, TIME_UNITS } from "@/lib/units/time";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import {
@@ -67,7 +68,7 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
       // The month the task counts in: its own, or its parent's.
       let month = plannedMonth ?? null;
       let goal: {
-        horizon: string;
+        horizon: string | null;
         archivedAt: Date | null;
         measureUnit: string | null;
         createdAt: Date;
@@ -98,7 +99,6 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
           parent.estimate !== null ||
           parent.hasFact ||
           parent.goalId === null ||
-          parent.horizon === null ||
           parent.createdAt === null
         ) {
           throw new NamedError("month.errors.parentInvalid");
@@ -417,14 +417,18 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
                 when ${month ?? null}::text is null and ${touchesMonth}::boolean and exists (
                   select 1 from goals c where c.parent_id = t.goal_id and c.archived_at is null
                 ) then 'holderTaskFixed'
-                when archived_at is not null or horizon <= ${today}::date then 'closed'
+                when archived_at is not null or (horizon is not null and horizon <= ${today}::date) then 'closed'
                 when ${estimate ?? null}::int is not null and has_children then 'parentEstimate'
                 when ${estimate ?? null}::int is not null and measure_unit is null then 'noMeasure'
                 when ${estimate ?? null}::int is not null
                   and lower(trim(measure_unit)) <> all(${timeUnits}) then 'estimateNotTime'
                 when ${month ?? null}::text is not null and (
                   ${month ? monthStart(month) : null}::date < date_trunc('month', opened)
-                  or ${month ? monthStart(month) : null}::date > date_trunc('month', horizon - 1)
+                  or ${month ? monthStart(month) : null}::date > (
+                    case when horizon is not null then date_trunc('month', horizon - 1)
+                    else greatest(date_trunc('month', opened),
+                                  date_trunc('month', ${today}::date) + ${ENDLESS_MONTHS_AHEAD} * interval '1 month') end
+                  )
                 ) then 'monthOutsideSpan'
                 when ${month ?? null}::text is not null and ${month ?? null}::text < ${today.slice(0, 7)}::text then 'monthEnded'
               end

@@ -156,11 +156,12 @@ function toReportTask(item: PlanItem): ReportTask {
 function withinGoal(
   bySourceKey: Record<string, EvidenceDay[]>,
   openedOn: string,
-  horizon: string,
+  horizon: string | null,
+  today: string,
 ): Record<string, EvidenceDay[]> {
   const bounded: Record<string, EvidenceDay[]> = {};
   for (const [key, days] of Object.entries(bySourceKey)) {
-    bounded[key] = days.filter((day) => day.day >= openedOn && day.day < horizon);
+    bounded[key] = days.filter((day) => day.day >= openedOn && (horizon === null ? day.day <= today : day.day < horizon));
   }
   return bounded;
 }
@@ -198,7 +199,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       tasks: row.tasks,
       evidence:
         evidenceOutcome.status === "read"
-          ? withinGoal(evidenceOutcome.bySourceKey, openedOn, row.goal.horizon)
+          ? withinGoal(evidenceOutcome.bySourceKey, openedOn, row.goal.horizon, today)
           : null,
       today,
     });
@@ -208,12 +209,14 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
     // A time goal with no rhythm has no amount to read a month by, so it reads tasks.
     const unit = row.goal.measure_unit;
     const countsTasks = unit === null || (isTimeUnit(unit) && (row.goal.rhythm ?? null) === null);
+    // A goal with no end lists the current month and the eleven after: the twelve its «Por mes» screen shows, no closed one.
+    const noEnd = row.goal.horizon === null;
 
     const report: GoalReport = {
       id: row.goal.id,
       name: row.goal.name,
       horizon: row.goal.horizon,
-      endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
+      endedOn: row.goal.horizon !== null && row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
       unit: row.goal.measure_unit,
       measureName: row.goal.measure_name,
       note: row.goal.note ?? null,
@@ -254,15 +257,18 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
             children,
           };
         }),
-      months: figures.months.map((row) => {
-        const share = row.past ? planShare(planInput, row.month) : null;
-        const items = countsTasks ? planMonthList(planInput, row.month) : null;
-        return {
-          ...row,
-          carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
-          ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
-        };
-      }),
+      months: figures.months
+        .filter((month) => !noEnd || !month.past)
+        .map((month) => {
+          const share = month.past ? planShare(planInput, month.month) : null;
+          const items = countsTasks ? planMonthList(planInput, month.month) : null;
+          return {
+            ...month,
+            ...(noEnd ? { endless: true as const } : {}),
+            carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
+            ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
+          };
+        }),
       weeks: figures.weeks,
       weekPlanned: (() => {
         const week = figures.weeks.find((w) => w.current);
@@ -407,7 +413,8 @@ function holderOf(args: {
   const kept = new Map(report.months.map((m) => [m.month, m]));
   const branch = branchOf(tree, id);
   const countsTasks = sum.unit === null || isTimeUnit(sum.unit);
-  const months = monthsOfSpan(spanStartOn, row.goal.horizon).map((month) => {
+  const noEnd = row.goal.horizon === null;
+  const everyMonth = monthsOfSpan(spanStartOn, row.goal.horizon, today).map((month) => {
     const figure = sum.months.get(month);
     const old = kept.get(month);
     const items = countsTasks ? branch.flatMap((goalId) => planMonthList(byId.get(goalId)!.planInput, month)) : null;
@@ -417,6 +424,7 @@ function holderOf(args: {
       reached: figure?.reached ?? 0,
       current: month === current,
       past: month < current,
+      ...(noEnd ? { endless: true as const } : {}),
       carried: old?.carried ?? null,
       ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
     };
@@ -436,8 +444,8 @@ function holderOf(args: {
     ...report,
     unit: sum.unit,
     thisMonth: { planned, reached, underPace },
-    toDate: toDate(months),
-    months,
+    toDate: toDate(everyMonth),
+    months: noEnd ? everyMonth.filter((month) => !month.past) : everyMonth,
     weeks,
     weekSplits: weekSplitsOf(weeks, (startsOn, endsOn) => spanTotal(id, startsOn, endsOn)),
     weekPlanned: sum.unit === null ? null : weekPlanned,

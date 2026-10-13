@@ -425,3 +425,93 @@ test("under VERCEL the stub is off: the real call is made and the key rules", as
   assert.equal((await readText()).status, "ok");
   assert.equal(calls.length, 1);
 });
+
+test("898: a failed read logs the status and the error, never the plan or the key", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-secret-key";
+  const logged: unknown[][] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]) => void logged.push(args);
+  try {
+    replyWith(() => new Response('{"error":{"type":"insufficient_quota","code":"quota","message":"Incorrect API key provided: sk-secret-key"}}', { status: 429 }));
+    assert.equal((await readText("el texto del plan de la persona")).status, "failed");
+    replyWith(() => {
+      throw new TypeError("fetch failed");
+    });
+    assert.equal((await readText("el texto del plan de la persona")).status, "failed");
+  } finally {
+    console.error = realError;
+  }
+  const text = JSON.stringify(logged);
+  assert.equal(logged.length, 2);
+  assert.match(text, /429/);
+  assert.match(text, /insufficient_quota/);
+  assert.match(text, /TypeError|fetch failed/);
+  assert.doesNotMatch(text, /sk-secret-key|el texto del plan/);
+});
+
+// ---- 903
+
+// The same events as `streamOf`, cut into the byte pieces the network hands over.
+function rawStream(text: string, cuts: number[]): Response {
+  const bytes = new TextEncoder().encode(text);
+  const edges = [0, ...cuts, bytes.length];
+  let i = 0;
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        if (i + 1 >= edges.length) return controller.close();
+        controller.enqueue(bytes.slice(edges[i], edges[i + 1]));
+        i++;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return new Response(body, { headers: { "content-type": "text/event-stream" } });
+}
+
+const eventsOf = (content: string, usage: object | null = { prompt_tokens: 12, completion_tokens: 34 }, end = "\n\n") =>
+  `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n` +
+  `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n` +
+  (usage ? `data: ${JSON.stringify({ choices: [], usage })}${end}` : "");
+
+test("903: an event cut across two chunks is read whole", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  const text = eventsOf(JSON.stringify(answer));
+  replyWith(() => rawStream(text, [10, 40, text.indexOf("finish_reason") + 3]));
+  const result = await readText();
+  assert.equal(result.status, "ok");
+  assert.deepEqual(result.usage, { input: 12, output: 34 });
+});
+
+test("903: a keep-alive comment line between events is ignored", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(() => rawStream(`: keep-alive\n\n${eventsOf(JSON.stringify(answer))}`, []));
+  assert.equal((await readText()).status, "ok");
+});
+
+test("903: a last event with no newline after it still counts", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(() => rawStream(eventsOf(JSON.stringify(answer), { prompt_tokens: 5, completion_tokens: 6 }, ""), []));
+  const result = await readText();
+  assert.equal(result.status, "ok");
+  assert.deepEqual(result.usage, { input: 5, output: 6 });
+});
+
+test("903: a usage chunk with only the prompt side settles the output as 0", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(() => whole(answer, { usage: { prompt_tokens: 5 } }));
+  assert.deepEqual((await readText()).usage, { input: 5, output: 0 });
+});
+
+test("903: the read waits four minutes before it aborts", async () => {
+  const { REQUEST_TIMEOUT_MS } = await import("./model");
+  assert.equal(REQUEST_TIMEOUT_MS, 240_000);
+});
+
+test("903: the schema bounds 40 goals and a cadence count from 1 to 365", async () => {
+  const { rawDraftStrictSchema } = await import("./model");
+  const goals = (rawDraftStrictSchema as { properties: { goals: { maxItems: number; items: { properties: { commitments: { items: { properties: { cadenceN: { anyOf: { type: string; minimum?: number; maximum?: number }[] } } } } } } } } }).properties.goals;
+  assert.equal(goals.maxItems, 40);
+  const integer = goals.items.properties.commitments.items.properties.cadenceN.anyOf.find((branch) => branch.type === "integer");
+  assert.deepEqual([integer?.minimum, integer?.maximum], [1, 365]);
+});

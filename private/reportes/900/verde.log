@@ -1,0 +1,59 @@
+supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322
+e2e-run: opened run 2a155e2d-bb97-4b1c-9a6c-792ddc8ddcf7
+wrote /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/private/session-4.json (1 cookie(s), origin http://localhost:3203)
+minted a session for harness-pulsar-de38283c-7d67-4422-9433-a4a77412c999@example.invalid (de38283c-7d67-4422-9433-a4a77412c999), lane 4
+seeding as harness-pulsar-de38283c-7d67-4422-9433-a4a77412c999@example.invalid (de38283c-7d67-4422-9433-a4a77412c999)
+goal 7072bfe8-c140-49f3-aa3f-a85cf272b5d5
+phase c0534e9f-2ab0-44ad-84a1-a07dfec1ba89 — Desbloquear la boca: perder el miedo a hablar y pasar de 2 a 4 minutos de monólogo sin congelarse.
+phase c01934f4-8903-44f9-9119-519131dd369f — Precisión: corregir los 3-4 errores que se repiten siempre y subir a 2 conversaciones humanas por semana.
+phase 0a609465-86d6-4450-a8c9-628ec0f02524 — Contexto laboral: convertir el monólogo en respuestas STAR, preparar 6-8 historias y aplicar a vacantes.
+commitment c8c41f4a-ca9a-42e6-9f4e-0838e0dc7594 — Anki
+commitment a24c7012-a247-40b2-8d9d-3fe2d9a1175e — Shadowing
+commitment 3319b55f-ab81-44db-a3d8-156b8eabe097 — Monólogo grabado
+commitment 6ef8a778-374d-4358-b16f-793916bf0e2e — Cerrar el ciclo: tarjetas de los errores
+commitment 46fdc0c3-64ae-4ded-9e10-cb47d726f706 — Bloque variable del día
+commitment 8bf8a535-cf43-4cce-92c9-68195aebd761 — Buscar palabras nuevas mientras leo
+one-off f572ff16-7339-4065-8a08-d21d39241258
+
+Running 7 tests using 1 worker
+
+  ✘  1 [mobile] › e2e/crear-dentro-aviso.spec.ts:37:5 › on a goal with a rhythm the sheet says it stops counting, above «Abrirla»; the new goal measures in the parent's unit (7.7s)
+  ✓  2 [mobile] › e2e/crear-dentro-aviso.spec.ts:60:5 › on a goal with no rhythm the sheet draws no such line (796ms)
+  ✓  3 [mobile] › e2e/importar-adjunto.spec.ts:45:5 › picking a PDF sends nothing; the file shows named with «Quitar»; «Leer el plan» sends it (1.1s)
+  ✓  4 [mobile] › e2e/importar-adjunto.spec.ts:59:5 › «Quitar» drops the file: its name goes, the picker returns, and nothing was sent (640ms)
+  ✓  5 [mobile] › e2e/importar-adjunto.spec.ts:75:5 › after a refused type the file stays named, the type's sentence stays, and a second «Leer el plan» never says «No pegaste nada» (793ms)
+  ✓  6 [mobile] › e2e/importar-adjunto.spec.ts:94:5 › a file plus text in the box: the line says only the file is read, and the request carries the file, not the text (624ms)
+  ✓  7 [mobile] › e2e/metas-unidad-hijas.spec.ts:43:5 › /metas: a holder that measures nothing reads «0 min de 11 h», its goals' sum in their unit, never «0 de 660» (615ms)
+REPORT  e2e-run — dropped 3 identity(ies), 0 OAuth client(s), run closed.
+
+
+  1) [mobile] › e2e/crear-dentro-aviso.spec.ts:37:5 › on a goal with a rhythm the sheet says it stops counting, above «Abrirla»; the new goal measures in the parent's unit 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('esta meta no mide nada')
+    Expected: 0
+    Received: 1
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 5000ms
+      - waiting for getByText('esta meta no mide nada')
+        14 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      52 |     await page.waitForURL((url) => /\/metas\/[0-9a-f-]{36}$/.test(url.pathname) && !url.pathname.endsWith(parentId));
+      53 |     await expect(page.getByRole("main").getByText(child, { exact: true })).toBeVisible();
+    > 54 |     await expect(page.getByText("esta meta no mide nada")).toHaveCount(0);
+         |                                                            ^
+      55 |   } finally {
+      56 |     await context.close();
+      57 |   }
+        at /home/cxrkeyb/projects/finances-app-l4/apps/pulsar/e2e/crear-dentro-aviso.spec.ts:54:60
+
+    Error Context: private/playwright-results/crear-dentro-aviso-on-a-go-787c8-asures-in-the-parent-s-unit-mobile/error-context.md
+
+  1 failed
+    [mobile] › e2e/crear-dentro-aviso.spec.ts:37:5 › on a goal with a rhythm the sheet says it stops counting, above «Abrirla»; the new goal measures in the parent's unit 
+  6 passed (15.0s)

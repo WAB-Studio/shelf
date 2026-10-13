@@ -18,7 +18,7 @@ const MAX_OUTPUT_TOKENS = 32_000;
 
 const REASONING_EFFORT = "medium";
 
-const REQUEST_TIMEOUT_MS = 240_000;
+export const REQUEST_TIMEOUT_MS = 240_000;
 
 export type Step = "find" | "arrange";
 
@@ -75,6 +75,14 @@ function buildSchema(): Node {
   integer.minimum = 1;
   integer.maximum = 365;
   cadence.description = "times_per_week: 1 to 7. times_per_month: 1 to 31. every_n_days: 1 to 365. null for the other cadences.";
+  goal.commitments.items.properties.cadenceWeekdays.description = "weekdays only: the days it asks, 1 = Monday to 7 = Sunday. null for the other cadences.";
+
+  const rule = goal.rules.items.properties;
+  rule.id.description = "A short key of your choosing; each task the rule governs names it in its \"rule\".";
+  rule.perWeek.description = "What the rule asks each week, in the plan's own unit.";
+  task.week.description = "The week the plan lists the task under, as the plan names it; every task of one week carries the same text. null when the plan lists no weeks.";
+  task.rule.description = "The \"id\" of the goal's rule that governs this task, or null.";
+  child.rule.description = "The \"id\" of the rule that governs this sub-task, or null to take its task's.";
 
   return {
     ...schema,
@@ -323,12 +331,26 @@ export async function readPlan(input: PlanInput, onStep: (step: Step) => void): 
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!response.ok || !response.body) return { status: "failed" };
+    if (!response.ok || !response.body) {
+      console.error("import model read failed: status", response.status, await errorOf(response));
+      return { status: "failed" };
+    }
 
     const answer = await readStream(response.body, onStep);
     if (answer.finish === "length" || answer.refusal) return { status: "failed", usage: answer.usage };
     return judge(answer.content, answer.usage, source);
-  } catch {
+  } catch (error) {
+    console.error("import model read failed:", error instanceof Error ? `${error.name}: ${error.message}` : "unknown");
     return { status: "failed" };
+  }
+}
+
+// The provider's error type and code. Never its message: a rejected key is echoed there.
+async function errorOf(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: { type?: unknown; code?: unknown } };
+    return [body.error?.type, body.error?.code].filter((part) => typeof part === "string").join(" ");
+  } catch {
+    return "";
   }
 }

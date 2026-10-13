@@ -11,6 +11,7 @@ const KEYS = {
   aboveClosed: "tree.errors.aboveClosed",
   endPastAbove: "tree.errors.endPastAbove",
   belowEndsLater: "tree.errors.belowEndsLater",
+  belowNoEnd: "tree.errors.belowNoEnd",
   aboveArchived: "tree.errors.aboveArchived",
 } as const satisfies Record<PlacementRefusal["code"], MessageKey>;
 

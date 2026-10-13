@@ -91,6 +91,7 @@ async function open(page: Page) {
 async function upload(page: Page, text = plan(), name = "plan.md") {
   await open(page);
   await page.getByLabel(messages.upload).setInputFiles({ name, mimeType: "text/markdown", buffer: Buffer.from(text) });
+  await page.getByRole("button", { name: messages.read }).click();
   await expect(page.getByText(count(3), { exact: true })).toBeVisible();
 }
 
@@ -211,6 +212,7 @@ test.describe("a file's template errors are corrected in the box (board Importar
         await route.continue();
       });
       await page.getByLabel(messages.upload).setInputFiles({ name: "plan.md", mimeType: "text/markdown", buffer: Buffer.from(plan()) });
+      await page.getByRole("button", { name: messages.read }).click();
       await expect(boxOf(page)).toBeDisabled();
       await expect(page.getByText("líneas por corregir")).toHaveCount(0);
       release();
@@ -236,9 +238,11 @@ test.describe("a file's template errors are corrected in the box (board Importar
       ]) {
         const answered = page.waitForResponse("**/importar/leer");
         await page.getByLabel(messages.upload).setInputFiles(file);
+        await page.getByRole("button", { name: messages.read }).click();
         await answered;
         await expect(boxOf(page)).toHaveValue("Quiero correr más este año.");
         await expect(page.getByText(/Leído de/)).toHaveCount(0);
+        await page.getByRole("button", { name: messages.remove }).click();
       }
     });
   });

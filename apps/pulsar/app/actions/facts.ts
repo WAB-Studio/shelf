@@ -80,7 +80,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
             retiredAt: commitments.retiredAt,
           })
           .from(commitments)
-          .innerJoin(goals, eq(goals.id, commitments.goalId))
+          .leftJoin(goals, eq(goals.id, commitments.goalId))
           .where(eq(commitments.id, commitmentId));
 
         if (!commitment) throw new NamedError("day.errors.notFound");
@@ -100,7 +100,8 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           .superRefine(
             requireDayForSubject({
               kind: "commitment",
-              openedDay: civilDateInZone(commitment.openedAt),
+              // A habit with no goal opens the day it was made.
+              openedDay: civilDateInZone(commitment.openedAt ?? commitment.createdAt),
               createdDay: civilDateInZone(commitment.createdAt),
               retiredDay: commitment.retiredAt ? civilDateInZone(commitment.retiredAt) : null,
             }),

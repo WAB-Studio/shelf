@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { addCommitment } from "@/app/actions/plan";
 import { addCommitmentSchema, type AddCommitmentInput } from "@/lib/validation/plan";
-import { Button, Chip, ChipRow, Field, FieldPair, Page, ScreenHeader, Section, Text } from "@/components/ui";
+import { Button, Chip, ChipRow, Field, FieldPair, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
 import { messageKey, type MessageKey, type SourceKey } from "@/i18n/translator";
 
 export type CommitmentFormProps = {
-  goalId: string;
+  // Null: a habit that belongs to no goal (RP-100), which carries a note and has no source.
+  goalId: string | null;
   goalName: string;
   // Whether the goal already names a measure (§0.3, 3): only matters while
   // `satisfaction === "quantity"`, to say the unit typed here is the one
@@ -49,7 +50,7 @@ const THRESHOLD_ERRORS: MessageKey[] = ["plan.errors.thresholdInvalid"];
 
 /**
  * `CompromisoNuevo.dc.html` (RP-12): what it is, how often, what gives it for
- * done. Drives `addCommitment` over its own Zod schema
+ * done — and, for a habit with no goal (RP-100), a note. Drives `addCommitment` over its own Zod schema
  * (`lib/validation/plan.ts`), parsed here first so a bound the server would
  * refuse never leaves the device — the same shape `NewGoalForm` already
  * takes. No new server code.
@@ -57,10 +58,13 @@ const THRESHOLD_ERRORS: MessageKey[] = ["plan.errors.thresholdInvalid"];
 export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sources }: CommitmentFormProps) {
   const t = useTranslations();
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  // Held until the answer: a transition would end before it, and a second tap would write a second row.
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState<MessageKey | null>(null);
+  const habit = goalId === null;
 
   const [name, setName] = useState("");
+  const [note, setNote] = useState("");
   const [cadenceKind, setCadenceKind] = useState<CadenceKind>("daily");
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [cadenceN, setCadenceN] = useState("");
@@ -97,7 +101,12 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
           ? ({ satisfaction: "quantity", targetQuantity: Number(targetQuantity), unit: measureUnit ?? unit } as const)
           : ({ satisfaction: "evidence", sourceKey, threshold: Number(threshold) } as const);
 
-    const parsed = addCommitmentSchema.safeParse({ goalId, name, ...cadence, ...done });
+    const parsed = addCommitmentSchema.safeParse({
+      ...(goalId === null ? { note } : { goalId }),
+      name,
+      ...cadence,
+      ...done,
+    });
     if (!parsed.success) {
       setError(messageKey(parsed.error.issues[0].message));
       return null;
@@ -112,15 +121,15 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
     const input = buildInput();
     if (!input) return;
 
-    startTransition(() => {
-      void addCommitment(input).then((result) => {
-        if (result.ok) {
-          router.push(`/metas/${goalId}`);
-          router.refresh();
-        } else {
-          setError(result.error);
-        }
-      });
+    setPending(true);
+    void addCommitment(input).then((result) => {
+      if (result.ok) {
+        router.push(habit ? "/metas" : `/metas/${goalId}`);
+        router.refresh();
+      } else {
+        setPending(false);
+        setError(result.error);
+      }
     });
   }
 
@@ -137,7 +146,10 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
 
   return (
     <Page>
-      <ScreenHeader title={t("plan.commitmentForm.title")} back={{ href: `/metas/${goalId}`, place: goalName }} />
+      <ScreenHeader
+        title={t(habit ? "plan.habitForm.title" : "plan.commitmentForm.title")}
+        back={{ href: habit ? "/metas" : `/metas/${goalId}`, place: goalName }}
+      />
 
       <Field
         label={t("plan.commitmentForm.whatLabel")}
@@ -146,6 +158,16 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
         invalid={nameRefusal !== undefined}
         hint={nameRefusal}
       />
+
+      {habit ? (
+        <TextArea
+          label={t("plan.habitForm.noteLabel")}
+          placeholder={t("plan.habitForm.notePlaceholder")}
+          rows={3}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+        />
+      ) : null}
 
       <Section label={t("plan.commitmentForm.whenLabel")}>
         <ChipRow>
@@ -261,7 +283,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
                 {quantityRefusal ?? unitRefusal}
               </Text>
             ) : null}
-            {!hasMeasure && trimmedUnit.length > 0 ? (
+            {!habit && !hasMeasure && trimmedUnit.length > 0 ? (
               <Text as="p" variant="sentence" tone="muted">
                 {t("plan.commitmentForm.noMeasureYet", { unit: trimmedUnit })}
               </Text>
@@ -300,7 +322,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
       ) : null}
 
       <Button block onClick={handleSubmit} disabled={pending}>
-        {t("plan.commitmentForm.submit")}
+        {t(pending ? "plan.commitmentForm.submitting" : "plan.commitmentForm.submit")}
       </Button>
     </Page>
   );

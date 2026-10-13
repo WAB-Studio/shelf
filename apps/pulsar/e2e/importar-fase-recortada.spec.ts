@@ -2,6 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
+import { unfold } from "./importar-plan";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 
 // The review says what the import does to a phase that starts before the goal
@@ -66,6 +67,8 @@ async function review(
     await expect(
       page.getByRole("heading", { name: messages.review.title }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Sus partes/ }).first()).toBeVisible();
+    await unfold(page);
     await run(page);
   } finally {
     await context.close();

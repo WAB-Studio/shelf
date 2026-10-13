@@ -162,7 +162,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   // The tally's figures in mono, each word between them in the line's own Archivo.
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const tally =
-    goals.length === 0 || lastEnded || counted.total === 0
+    lastEnded || counted.total === 0
       ? undefined
       : counted.partial > 0
         ? t.rich("day.tallyPartial", { done: counted.done, total: counted.total, partial: counted.partial, ...fig })
@@ -234,6 +234,32 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
 
   type SectionItem = (typeof sections)[number];
 
+  // Habits with no goal (RP-100): the same rows, in a group of their own after the goals.
+  const looseOwn = commitments
+    .filter((commitment) => commitment.goalId === null)
+    .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }));
+  const looseRows = looseOwn.filter(
+    (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } => entry.slot !== undefined,
+  );
+  const looseMet = looseOwn
+    .filter(
+      (entry) =>
+        entry.slot === undefined &&
+        metPhrase((key, values) => t(key, values), {
+          cadence: entry.commitment.cadence,
+          periodDone: periodDone[entry.commitment.id],
+        }) !== null,
+    )
+    .map((entry) => entry.commitment);
+  const habitsGroup =
+    looseRows.length > 0 || looseMet.length > 0 ? (
+      <Panel as="div">
+        <Section label={t("day.habits.title")}>
+          <Flex direction="column">{commitmentRows(looseRows, looseMet, undefined)}</Flex>
+        </Section>
+      </Panel>
+    ) : null;
+
   // `naming` is the goal a row of a large or a small goal names; the
   // general's own rows and a loose goal's name nothing.
   function itemBody(item: SectionItem, naming: string | undefined) {
@@ -249,6 +275,18 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             {phaseLine((key, values) => t(key, values), goalPhase.name, phasePositions[goalPhase.id])}
           </Text>
         ) : null}
+        {commitmentRows(rows, met, naming)}
+      </>
+    );
+  }
+
+  function commitmentRows(
+    rows: { commitment: CommitmentInfo; slot: DaySlot }[],
+    met: CommitmentInfo[],
+    naming: string | undefined,
+  ) {
+    return (
+      <>
         {rows.map(({ commitment, slot }) => {
           const logged = factsByCommitment[commitment.id];
           return (
@@ -462,7 +500,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   };
 
   // One block, so the past day's two columns never split the title from its line.
-  const goalsMain = past && sections.length === 0 ? (
+  const goalsMain = past && sections.length === 0 && !habitsGroup ? (
     <Flex direction="column" gap="2">
       <Text as="p" variant="title">
         {t("day.past.nothingTitle")}
@@ -495,7 +533,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       </Button>
     </Panel>
   ) : goals.length === 0 ? (
-    <EmptyDay />
+    habitsGroup ? null : <EmptyDay />
   ) : (
     <>
       {groupBlocks.map(({ rootId, items, asks, tree }) => {
@@ -679,7 +717,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         <EvidenceNote title={t("day.unreadableTitle")} body={t("day.unreadableBody")} />
       ) : null}
 
-      <Split main={<>{notices}{goalsMain}</>} after={goalless} even={past} />
+      <Split main={<>{notices}{goalsMain}{habitsGroup}</>} after={goalless} even={past} />
     </Page>
   );
 }

@@ -66,7 +66,7 @@ test("a past day of the week is a link to its own screen, today and a future day
     await page.goto("/semana");
     await expect(page.getByText("Meta semana pasada").locator("visible=true").first()).toBeVisible();
 
-    const links = page.getByRole("link", { name: /^Abrir el/ });
+    const links = page.getByRole("link", { name: /^Abrir el (?!chat$)/ });
     await expect(links).toHaveCount(pastDays.length);
     for (const day of pastDays) {
       await expect(page.getByRole("link", { name: openName(day) })).toHaveAttribute("href", `/dia/${day}`);
@@ -93,7 +93,7 @@ test("a tap on a past day from the week fills that day's dot on return (RP-06)",
     await page.goto("/semana");
     const marks = page.getByRole("img", { name: new RegExp(`^${name}, `) });
     await expect(marks).toHaveCount(weekDays.length);
-    await expect(page.getByRole("link", { name: /^Abrir el/ })).toHaveCount(pastDays.length);
+    await expect(page.getByRole("link", { name: /^Abrir el (?!chat$)/ })).toHaveCount(pastDays.length);
     await expect(page.getByRole("link", { name: openName(today) })).toHaveCount(0);
 
     if (day !== undefined) {
@@ -130,7 +130,7 @@ test("the week holds at 360px with its links, every day link and every commitmen
     expect(scrollWidth).toBeLessThanOrEqual(360);
 
     const links = await page
-      .getByRole("link", { name: /^Abrir el/ })
+      .getByRole("link", { name: /^Abrir el (?!chat$)/ })
       .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
     expect(links.length).toBe(pastDays.length);
     for (const height of links) expect(height).toBeGreaterThanOrEqual(48);

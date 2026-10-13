@@ -37,6 +37,12 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
   const caption = t("month.months.caption", { count: goal.months.length });
   const currentIndex = goal.months.findIndex((row) => row.current);
   const openIndex = goal.months.findIndex((row) => row.month === open);
+  // A goal with no end lists the months that come, so the list says where it stops.
+  const noEnd = goal.horizon === null ? (
+    <Text as="p" variant="sentence" tone="muted">
+      {t("month.months.noEnd")}
+    </Text>
+  ) : null;
 
   // A holder measures through its goals: its own measure name may be empty (RP-80).
   if (!goal.measureUnit || (!goal.measureName && !goal.holdsGoals)) {
@@ -58,14 +64,17 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
       };
     });
     return (
-      <Table
-        narrow
-        caption={caption}
-        columns={[t("month.months.columns.month"), t("month.months.withoutMeasure.columnTasks")]}
-        rows={bare}
-        current={currentIndex === -1 ? undefined : currentIndex}
-        open={openIndex === -1 ? undefined : openIndex}
-      />
+      <>
+        <Table
+          narrow
+          caption={caption}
+          columns={[t("month.months.columns.month"), t("month.months.withoutMeasure.columnTasks")]}
+          rows={bare}
+          current={currentIndex === -1 ? undefined : currentIndex}
+          open={openIndex === -1 ? undefined : openIndex}
+        />
+        {noEnd}
+      </>
     );
   }
 
@@ -114,24 +123,27 @@ export async function MonthsList({ goal: loaded, open }: { goal: GoalView; open:
   });
 
   return (
-    <Table
-      narrow
-      // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») never splits and drops whole under its month when it does not fit.
-      wrapNote={!timed}
-      wholeNote={timed}
-      caption={caption}
-      columns={[
-        t("month.months.columns.month"),
-        t("month.months.columns.reached"),
-        t("month.months.columns.planned"),
-      ]}
-      rows={rows}
-      figures={[1]}
-      // A unit that is not time rides in each row's note («0 de 60 búsquedas»), once.
-      unit={timed ? unit : undefined}
-      current={currentIndex === -1 ? undefined : currentIndex}
-      open={openIndex === -1 ? undefined : openIndex}
-    />
+    <>
+      <Table
+        narrow
+        // «0 de 60 búsquedas» may break before its unit; a time note («de 12 h», «sin monto») never splits and drops whole under its month when it does not fit.
+        wrapNote={!timed}
+        wholeNote={timed}
+        caption={caption}
+        columns={[
+          t("month.months.columns.month"),
+          t("month.months.columns.reached"),
+          t("month.months.columns.planned"),
+        ]}
+        rows={rows}
+        figures={[1]}
+        // A unit that is not time rides in each row's note («0 de 60 búsquedas»), once.
+        unit={timed ? unit : undefined}
+        current={currentIndex === -1 ? undefined : currentIndex}
+        open={openIndex === -1 ? undefined : openIndex}
+      />
+      {noEnd}
+    </>
   );
 }
 
@@ -169,6 +181,7 @@ export async function MonthsScreen({
   return (
     <Page width="full">
       <ScreenHeader
+        chat
         title={t("month.months.title")}
         back={{ href: `/metas/${goal.id}`, place: goal.name }}
       />

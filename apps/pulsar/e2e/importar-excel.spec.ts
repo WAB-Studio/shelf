@@ -42,6 +42,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
       await page.getByLabel(messages.upload).setInputFiles(file);
+      await page.getByRole("button", { name: messages.read }).click();
 
       await expect(page.getByText("3 filas por corregir", { exact: true })).toBeVisible();
       const alert = page.getByRole("alert").filter({ hasText: "3 filas por corregir" });
@@ -67,6 +68,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
       await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-pulsar.xlsx", await bytes(wb)));
+      await page.getByRole("button", { name: messages.read }).click();
       await expect(page.getByText("1 fila por corregir", { exact: true })).toBeVisible();
       await expect(page.getByText(/^Meses, fila 1: /)).toBeVisible();
       await expect(page.getByText(/^Meses, fila 4: /)).toHaveCount(0);
@@ -83,6 +85,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
       await page.getByLabel(messages.upload).setInputFiles(upload("gastos-octubre.xlsx", await bytes(wb)));
+      await page.getByRole("button", { name: messages.read }).click();
 
       await expect(page.getByText(messages.errors.workbookNotTemplate, { exact: true })).toBeVisible();
       await expect(page.getByText("Leído de gastos-octubre.xlsx.", { exact: true })).toBeVisible();
@@ -99,6 +102,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
       await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-pulsar.xlsx", await bytes(await load())));
+      await page.getByRole("button", { name: messages.read }).click();
       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
       await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
       const count = await countOf(page, "filas");

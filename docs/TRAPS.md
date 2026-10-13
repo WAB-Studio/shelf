@@ -3173,3 +3173,17 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - Measured 2026-10-11: CI at 22:52 Bogotá set a goal's horizon to «today» in UTC, the app read it as tomorrow, and
   `check:mcp` `read-tools.ts` went 2 red on a train that never touched it. Locally the same hour: 16/2 before, 18/0 after.
 - Count a check's days from `todayInZone()`, never from `Date.now()`.
+
+### A hand-written savepoint does not recover a postgres-js transaction
+
+Measured 2026-10-13, module 898 (`apps/pulsar/app/actions/import.ts`). Writing `savepoint p` / `rollback to savepoint p` by hand
+inside `db.transaction` looks right and fails: postgres-js remembers the first error and re-raises it when the outer `begin`
+ends, so the whole import still rolls back. Nest `tx.transaction(async (sp) => …)` instead: drizzle issues the savepoint and the
+driver forgets the error it caught. The fast path stays one transaction; the nested ones run only after a class-23 refusal.
+
+### `supabase-local.sh exec` blanks the app's OpenAI key
+
+Measured 2026-10-13, module 903. The wrapper exports `OPENAI_API_KEY=` (empty) so no suite reaches OpenAI, and an exported
+variable wins over `.env.local`: a dev server started through it answers 503 `noKey` even with the key in the lane's
+`apps/pulsar/.env.local`. A deliberate paid read needs the server started with the key read from `.env.local` inside the exec.
+That 503 calls no model, so a forgotten key costs nothing but the confusion.

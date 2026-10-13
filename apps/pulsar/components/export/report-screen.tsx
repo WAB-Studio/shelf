@@ -34,6 +34,7 @@ import {
   Section,
   SectionLabel,
   Separator,
+  SummaryList,
   Table,
   Text,
   type TableRow,
@@ -232,15 +233,21 @@ function MeasureLine({
 }: {
   name: string | null;
   unit: string;
-  date: string;
+  // Null for a goal with no end: the line says nothing of one.
+  date: string | null;
   declared: boolean;
   t: Translator<"export">;
 }) {
   const words = useTimeWords();
   const unitWords = isTimeUnit(unit) ? t("timeUnit") : (words.unit?.(unit, 2) ?? unit);
-  const key = declared ? "measuresDeclared" : "measures";
   const measure = distinctMeasureName(name, unit, [words.unit?.(unit, 1) ?? unit, words.unit?.(unit, 2) ?? unit]);
-  return measure === null ? t(`${key}Unnamed`, { unit: unitWords, date }) : t(key, { measure, unit: unitWords, date });
+  return [
+    measure === null ? t("measuresUnnamed", { unit: unitWords }) : t("measures", { measure, unit: unitWords }),
+    date === null ? null : t("until", { date }),
+    declared ? t("declaredOnly") : null,
+  ]
+    .filter((part) => part !== null)
+    .join(" · ");
 }
 
 // One line per goal inside a general: its month and amount, then its last day.
@@ -256,7 +263,7 @@ function InsideRow({
   t: Translator<"export">;
 }) {
   const words = useTimeWords();
-  const until = dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
+  const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
   const planned =
     goal.endedOn === null && goal.unit !== null
       ? screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${today.slice(0, 7)}-01`))
@@ -265,13 +272,19 @@ function InsideRow({
     goal.endedOn !== null
       ? t("ended", { date: dateWithYear.format(civilDateToDate(goal.endedOn)) })
       : planned !== null
-        ? t("insideRow", {
-            month: monthOnly.format(civilDateToDate(today)),
-            done: formatQuantity(goal.thisMonth.reached, goal.unit as string, words),
-            planned: formatQuantity(planned, goal.unit as string, words),
-            date: until,
-          })
-        : t("insideRowNoAmount", { date: until });
+        ? [
+            t("insideRow", {
+              month: monthOnly.format(civilDateToDate(today)),
+              done: formatQuantity(goal.thisMonth.reached, goal.unit as string, words),
+              planned: formatQuantity(planned, goal.unit as string, words),
+            }),
+            until === null ? null : t("until", { date: until }),
+          ]
+            .filter((part) => part !== null)
+            .join(" · ")
+        : until === null
+          ? undefined
+          : t("until", { date: until });
   return <Row name={goal.name} meta={meta} href={`/metas/${goal.id}`} level={level} />;
 }
 
@@ -332,12 +345,12 @@ function GoalPart({
   const sections: (GoalSection | "inside")[] = goalSections(goal);
   if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
   if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
-  const until = dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
+  const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
   const thisMonth = monthOnly.format(civilDateToDate(today));
 
   const measureLine =
     unit === null ? (
-      t("noMeasure", { date: until })
+      until === null ? t("noMeasure") : `${t("noMeasure")} · ${t("until", { date: until })}`
     ) : (
       <MeasureLine
         name={goal.measureName}
@@ -624,7 +637,8 @@ function GoalPart({
         const weekDayOf = (day: string) => (civilDateToDate(day).getUTCDay() + 6) % 7;
         const weekNames = t.raw("weekDays") as string[];
         // `endsOn` runs to Sunday; the goal's last day cuts it.
-        const weekLast = week ? (week.endsOn < dayBefore(goal.horizon) ? week.endsOn : dayBefore(goal.horizon)) : null;
+        const lastDay = goal.horizon === null ? null : dayBefore(goal.horizon);
+        const weekLast = week ? (lastDay !== null && lastDay < week.endsOn ? lastDay : week.endsOn) : null;
         const weekEdges =
           week && weekLast
             ? {
@@ -765,6 +779,64 @@ function GoalPart({
   );
 }
 
+// `ExportarResumen`: page one, a line per open goal in the tree's order. The screen draws rows
+// (a figure pair does not fit a line at 360), paper a table with «—» where a goal has no amount.
+function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> }) {
+  const words = useTimeWords();
+  const month = monthOnly.format(civilDateToDate(report.today));
+  const monday = civilDateToDate(report.today);
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  const sunday = new Date(monday);
+  sunday.setUTCDate(sunday.getUTCDate() + 6);
+  const weekHead = t("summary.weekHead", { from: monday.getUTCDate(), to: sunday.getUTCDate() });
+
+  const lines = report.goals
+    .filter((goal) => goal.endedOn === null)
+    .map((goal) => {
+      const unit = goal.unit;
+      const planned =
+        unit === null
+          ? null
+          : screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${report.today.slice(0, 7)}-01`));
+      if (unit === null || planned === null) return { goal, month: null, week: null };
+      const quantity = (value: number) => formatQuantity(value, unit, words);
+      const done = goal.weeks.find((w) => w.current)?.total ?? 0;
+      const weekPlanned = goal.weekPlanned ?? null;
+      return {
+        goal,
+        month: t("summary.of", { done: quantity(goal.thisMonth.reached), planned: quantity(planned) }),
+        week: weekPlanned === null ? quantity(done) : t("summary.of", { done: quantity(done), planned: quantity(weekPlanned) }),
+      };
+    });
+  const depth = new Map<string, 0 | 1 | 2>();
+  const levelOf = (goal: GoalReport): 0 | 1 | 2 => {
+    const above = goal.parentId ? depth.get(goal.parentId) : undefined;
+    const level = (above === undefined ? 0 : Math.min(above + 1, 2)) as 0 | 1 | 2;
+    depth.set(goal.id, level);
+    return level;
+  };
+  const levels = lines.map((line) => levelOf(line.goal));
+
+  return (
+    <Section label={t("summary.title")}>
+      <SummaryList
+        head={{ goal: t("summary.goal"), month, week: weekHead }}
+        noAmount={t("summary.noAmount")}
+        rows={lines.map((line, index) => ({
+          key: line.goal.id,
+          href: `/metas/${line.goal.id}`,
+          name: line.goal.name,
+          level: levels[index],
+          month: line.month === null ? null : `${month} ${line.month}`,
+          week: line.week === null ? null : t("summary.week", { value: line.week }),
+          monthCell: line.month,
+          weekCell: line.week,
+        }))}
+      />
+    </Section>
+  );
+}
+
 /**
  * `ReporteTareas.dc.html`, `ReporteMesesSemanas.dc.html`,
  * `ReporteImpresoTareas.dc.html`, `ReporteMarcoEscritorio.dc.html` and
@@ -783,7 +855,7 @@ export async function ReportScreen({ report }: { report: Report }) {
     return (
       <Page width="full" print="full">
         <PrintPage>
-          <ScreenHeader title={t("title")} back={back} eyebrow={t("eyebrowEmpty")} />
+          <ScreenHeader chat title={t("title")} back={back} eyebrow={t("eyebrowEmpty")} />
           <Text as="p" variant="sentence" tone="secondary">
             {t("empty")}
           </Text>
@@ -817,6 +889,7 @@ export async function ReportScreen({ report }: { report: Report }) {
       <PrintPage>
         <Flex direction="column" gap="3">
           <ScreenHeader
+            chat
             title={t("title")}
             back={back}
             eyebrow={
@@ -849,6 +922,10 @@ export async function ReportScreen({ report }: { report: Report }) {
             </Text>
           ) : null}
         </Flex>
+        <ReportSummary report={report} t={t} />
+        <PrintBlock newPage>
+          <Section label={t("summary.annex")} />
+        </PrintBlock>
         <PanelGrid print="stack">
           {groups.map(({ root, inside }) => (
             <Panel key={root.id} print="plain">

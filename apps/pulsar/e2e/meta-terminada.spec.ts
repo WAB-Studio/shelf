@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 
 import { dayBefore, weekIndexOf } from "@/lib/day/weeks";
-import { addWeeksToCivilDate, civilDateInZone, civilDateLabel, todayInZone, weekOf } from "@/lib/zone";
+import { addWeeksToCivilDate, civilDateInZone, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
@@ -82,7 +82,7 @@ test("moving the end of an ended goal opens on a count that ends this Sunday and
     const weeks = weekIndexOf(openedOn, todayInZone());
     await expect(field).toHaveValue(String(weeks));
     const sunday = weekOf(todayInZone())[6];
-    await expect(sheet.getByText(`termina el ${civilDateLabel(sunday, true)}`)).toBeVisible();
+    await expect(sheet.getByText(`termina el ${civilDayMonthYear(sunday)}`)).toBeVisible();
 
     await sheet.getByRole("button", { name: "Moverlo" }).click();
     await expect(sheet).toBeHidden();

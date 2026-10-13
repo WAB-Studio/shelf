@@ -16,6 +16,8 @@
   "uploadHint": "PDF, texto, imagen o Excel · hasta 4 MB",
   "privacy": "Lo que pegues o subas se envía a OpenAI para leerlo. Un plan escrito en la plantilla, o en su libro de Excel, se lee aquí, sin IA.",
   "read": "Leer el plan",
+  "remove": "Quitar",
+  "onlyFile": "Se lee el archivo; el texto de la caja no se envía.",
   "fileNote": "Leído de {name}. Corrige aquí y vuelve a leer.",
   "notTemplate": "Ya no es la plantilla: la primera línea no empieza por «pulsar ·». «Leer el plan» lo mandará a la IA.",
   "size": "{value} MB",
@@ -40,11 +42,13 @@
     "droppedPhase": "La fase «{aim}» termina antes de abrirla y no se crea.",
     "horizon": "horizonte",
     "horizonUntil": "hasta el {date}",
+    "noEnd": "sin final",
     "measure": "medida",
     "measureTime": "horas y minutos",
     "rhythmOf": "Ritmo al mes, {amount}",
     "rhythmName": "Ritmo al mes",
     "rhythmMeta": "las tareas van al plan",
+    "rhythmMetaUnit": "cada mes sin monto lo toma",
     "rhythmAmountOf": "Cambiar el ritmo, {amount} al mes",
     "toPlan": "va al plan",
     "sumAlone": "la suma de lo marcado",
@@ -71,10 +75,16 @@
       "rhythmTitle": "Cambiar el ritmo",
       "rhythmEyebrow": "ritmo al mes · {goal}",
       "name": "nombre",
+      "noEnd": "sin final",
+      "putEnd": "ponerle final",
+      "dropEnd": "Quitar el final",
       "amount": "monto",
       "hours": "horas",
       "minutes": "minutos",
       "month": "mes",
+      "when": "cada cuándo",
+      "eachTime": "cada vez",
+      "saidDay": "Tu plan decía «{word}». Se leyó como {read}: elige «días sueltos» para dejarlo en {day}.",
       "save": "Guardar",
       "cancel": "Cancelar",
       "titleOf": {
@@ -119,7 +129,15 @@
       "note": "nota · {count, plural, one {# línea} other {# líneas}}",
       "subTasks": "{count, plural, one {# sub-tarea} other {# sub-tareas}}",
       "editName": "Cambiar el nombre de {name}",
-      "goal": "meta"
+      "goal": "meta",
+      "parts": "Sus partes",
+      "summaryPhases": "{count, plural, one {# fase} other {# fases}}",
+      "summaryTasks": "{count, plural, one {# tarea} other {# tareas}}",
+      "summaryCommitments": "{count, plural, one {# compromiso} other {# compromisos}}",
+      "summaryMonths": "{count, plural, one {# mes} other {# meses}}",
+      "summaryPending": "{count} por revisar",
+      "monthTasks": "{count, plural, one {# tarea} other {# tareas}}",
+      "removeMonth": "{count, plural, one {Quitar la tarea de {month}} other {Quitar las # tareas de {month}}}"
     },
     "count": {
       "lines": "{total, plural, one {# línea} other {# líneas}}: {plan} en el plan, {notes} en notas, {out} fuera",
@@ -131,7 +149,7 @@
       "decline": "Dejar como estaba",
       "acceptDeclined": "Aceptar la corrección",
       "keepsPlan": "Se queda como decía el plan: {said}.",
-      "leavesOut": "Se queda fuera: {code, select, nameShortened {con 120 caracteres o menos no cabía} cadenceClamped {la cadencia pasaba del tope} endWithinAbove {terminaba después de la meta que la lleva} other {no cabía como estaba}}.",
+      "leavesOut": "Se queda fuera: {code, select, nameShortened {con 120 caracteres o menos no cabía} cadenceClamped {la cadencia pasaba del tope} cadenceToWeekdays {la cadencia y los días no van juntos} endWithinAbove {terminaba después de la meta que la lleva} other {no cabía como estaba}}.",
       "said": "decía",
       "proposed": "se propone",
       "why": "porque",
@@ -175,6 +193,11 @@
         "proposed": "{proposed}",
         "why": "Una cadencia no pasa de {proposed}."
       },
+      "cadenceToWeekdays": {
+        "said": "{said}, con días",
+        "proposed": "Los días: {proposed}",
+        "why": "Un compromiso con días se repite esos días de la semana, no un número de veces."
+      },
       "rateToRhythm": {
         "said": "{said}",
         "proposed": "{proposed} al mes",
@@ -185,6 +208,16 @@
         "proposed": "Termina el {proposed}",
         "why": "«{above}» termina el {proposed}: una meta no termina después de la que la lleva."
       },
+      "lineToTask": {
+        "said": "En la nota: «{said}»",
+        "proposed": "Tarea: «{proposed}»",
+        "why": "Una línea con casilla o con duración al frente es una tarea, no una nota."
+      },
+      "taskMoved": {
+        "said": "En «{said}»",
+        "proposed": "En «{proposed}»",
+        "why": "«{name}» sirve a una de las metas de abajo, no a «{said}» entera."
+      },
       "measureInHours": {
         "said": "Sin medida",
         "proposed": "Medida: horas",
@@ -192,17 +225,21 @@
       }
     },
     "notice": {
-      "weekRuleBroken": "{found, select, 0 {{week} no tiene tareas de {rule}.} other {{week} lleva {foundAmount} de {rule}.}} Tu plan pide {expected} de {rule} cada semana."
+      "weekRuleBroken": "{found, select, 0 {{week} no tiene tareas de {rule}.} other {{week} lleva {foundAmount} de {rule}.}} Tu plan pide {expected} de {rule} cada semana.",
+      "rhythmWithoutTasks": "«{name}» lleva un ritmo y no tiene tareas; sus tareas están en «{above}»."
     },
     "unplaced": {
       "title": "sin lugar en el plan",
-      "hint": "ninguna meta, fase, mes ni tarea las lleva"
+      "hint": "ninguna meta, fase, mes ni tarea las lleva",
+      "group": "{heading} · {count}",
+      "noHeading": "Antes del primer título"
     },
     "left": {
       "title": "las dejaste fuera",
       "hint": "márcalas para volver a ponerlas en el plan"
     },
     "lineAt": "línea {line}",
+    "doneOn": "hecha el {date}",
     "nothing": "Nada que crear. Ninguna parte de este plan se puede escribir."
   },
   "notices": {
@@ -210,6 +247,8 @@
     "estimateDroppedNotTime": "se crea sin cifra: esta meta no mide tiempo"
   },
   "errors": {
+    "doneInFuture": "Una tarea hecha no puede tener un día por venir. Pon hoy o un día anterior.",
+    "doneWithSubtasks": "Una tarea con sub-tareas se da por hecha con ellas. Quita el día.",
     "estimateNotTime": "Quita la cifra de esta línea: esta meta no mide tiempo.",
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "tooBig": "El archivo pesa más de 4 MB. Pega su texto en la caja.",
@@ -221,7 +260,7 @@
     "form": {
       "goal": "Falta el nombre de la meta: «# nombre».",
       "goalLong": "El nombre de la meta va en 120 caracteres o menos.",
-      "horizon": "La meta termina con «horizonte: AAAA-MM-DD», justo después del nombre.",
+      "horizon": "El final de la meta va como «horizonte: AAAA-MM-DD».",
       "measure": "La medida va como «medida: nombre · unidad».",
       "firstLine": "La primera línea va como «pulsar · plantilla 2».",
       "section": "Las secciones son «## Fases», «## Meses», «## Compromisos» y «## Tareas».",
@@ -238,9 +277,9 @@
       "child": "Una sub-tarea va como «  - nombre» o «  - monto · nombre».",
       "note": "La nota va bajo una tarea, con dos espacios, o bajo una sub-tarea, con cuatro.",
       "rhythmPlace": "El ritmo va justo después de «medida:», una sola vez por meta.",
-      "rhythmUnit": "El ritmo solo va con una medida en tiempo.",
-      "rhythmAmount": "El ritmo es un tiempo por mes, como «12 h».",
-      "inside": "«dentro de:» va después de «horizonte:», una sola vez por meta.",
+      "rhythmUnit": "El ritmo va con una medida: ponla en «medida:» y el ritmo justo debajo.",
+      "rhythmAmount": "El ritmo es un monto por mes: un tiempo como «12 h», o un entero en la unidad de la medida.",
+      "inside": "«dentro de:» va después del nombre, una sola vez por meta.",
       "insideUnknown": "«dentro de:» nombra una meta que aparece antes en el archivo.",
       "insideTooDeep": "Una meta dentro de otra llega a tres niveles: más hondo no cabe.",
       "goalNameRepeated": "Dos metas no llevan el mismo nombre.",
@@ -255,6 +294,11 @@
     "horizonPast": "El final de la meta ya pasó. Pon una fecha por venir.",
     "duplicateMonth": "Hay dos montos para un mismo mes.",
     "parentWithAmount": "Una tarea con sub-tareas no lleva monto propio. Quítalo o quita las sub-tareas.",
+    "cadenceWeekdays": "Los días solo van con la cadencia de días de la semana. Quítalos o cambia la cadencia.",
+    "cadenceCount": "Una cadencia de días no lleva cantidad y una de veces sí. Corrígela.",
+    "quantityNoAmount": "Un compromiso con cantidad lleva monto y unidad. Ponlos.",
+    "noteShape": "La nota de esta parte está vacía. Quítala o escríbela.",
+    "partFailed": "No se pudo escribir. El resto del plan sí se creó.",
     "tapWithAmount": "Un compromiso de una vez no lleva monto ni unidad. Quítalos.",
     "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez.",
     "workbookRows": "{count, plural, one {# fila por corregir} other {# filas por corregir}}",
@@ -277,6 +321,29 @@
     "check": {
       "name": "Revisa",
       "hint": "Comprueba que las cuentas cuadren."
+    }
+  },
+  "created": {
+    "eyebrow": "importar · hecho",
+    "title": "Plan creado",
+    "count": "{goals, plural, one {Se creó # meta} other {Se crearon # metas}} con todo su plan, menos {parts, plural, one {# parte que no se pudo escribir} other {# partes que no se pudieron escribir}}.",
+    "section": "No se escribió",
+    "hint": "agrégalas a mano en su meta; lo demás de tu plan ya está en Metas",
+    "goTo": "Ir a Metas",
+    "kinds": {
+      "goal": "meta",
+      "phase": "fase",
+      "month": "mes",
+      "commitment": "compromiso",
+      "task": "tarea",
+      "subtask": "sub-tarea"
+    },
+    "reasons": {
+      "noteShape": "No se escribió: su nota estaba vacía. Agrégala otra vez en la meta, con su nota o sin ella.",
+      "cadenceWeekdays": "No se escribió: los días que tenía no van con su cadencia. Agrégala en la meta con otros días.",
+      "cadenceCount": "No se escribió: la cantidad de veces no iba con su cadencia. Agrégala en la meta con otra cantidad.",
+      "quantityNoAmount": "No se escribió: le faltaba el monto o la unidad. Agrégala en la meta con los dos.",
+      "partFailed": "No se pudo escribir. Agrégala en la meta a mano."
     }
   }
 }

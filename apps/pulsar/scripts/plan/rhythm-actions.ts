@@ -192,15 +192,12 @@ test("setRhythm: a goal with no measure, an archived one and an ended one are re
   }
 });
 
-test("setRhythm: a goal measured in km is refused and keeps no rhythm; minutes and «Minutos » land", async () => {
+test("setRhythm: a goal measured in km receives a rhythm; minutes and «Minutos » land", async () => {
   const km = await goal(owner, "kilometros", true, "km");
   const upper = await goal(owner, "mayusculas", true, "Minutos ");
   goalIds.push(km, upper);
-  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: km, amount: 60 })), {
-    ok: false,
-    error: "roadmap.errors.rhythmNotTime",
-  });
-  assert.equal(await rhythmOf(km), null);
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: km, amount: 40 })), { ok: true });
+  assert.equal(await rhythmOf(km), 40);
   assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: upper, amount: 60 })), { ok: true });
   assert.equal(await rhythmOf(upper), 60);
 });
@@ -219,6 +216,58 @@ test("setRhythm: 0 and 44 641 are refused, 1 and 44 640 land", async () => {
     assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount })), { ok: true });
     assert.equal(await rhythmOf(goalId), amount);
   }
+});
+
+test("setRhythm: 44 641 lands in km, and a first rhythm in km leaves fixed tasks and plan_seen alone", async () => {
+  const km = await goal(owner, "kilometros tope", true, "km");
+  goalIds.push(km);
+  const next = monthFrom(today, 1);
+  const fixed = [await task(owner, km, "fija uno", next), await task(owner, km, "fija dos", next)];
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: km, amount: 44_641 })), { ok: true });
+  assert.equal(await rhythmOf(km), 44_641);
+  for (const id of fixed) assert.equal(await monthOfTask(id), `${next}-01`);
+  const [row] = await admin<{ seen: string | null }[]>`select plan_seen::text as seen from goals.goals where id = ${km}`;
+  assert.equal(row.seen, null);
+});
+
+test("setRhythm: a goal with goals inside is refused with holderNoRhythm in any unit", async () => {
+  const holder = await goal(owner, "madre km", true, "km");
+  goalIds.push(holder);
+  const child = await as(owner, () => plan.createGoal({ name: "hija", horizon: horizonOf(), parentId: holder }));
+  assert.ok(child.ok);
+  goalIds.push(child.goalId);
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: holder, amount: 5 })), {
+    ok: false,
+    error: "tree.errors.holderNoRhythm",
+  });
+});
+
+test("setRhythm: past a million, km says the plain range and minutes say hours", async () => {
+  const km = await goal(owner, "kilometros tope alto", true, "km");
+  const min = await goal(owner, "minutos tope alto", true);
+  goalIds.push(km, min);
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: km, amount: 1_000_001 })), {
+    ok: false,
+    error: "roadmap.errors.rhythmRangeAny",
+  });
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: min, amount: 1_000_001 })), {
+    ok: false,
+    error: "roadmap.errors.rhythmRange",
+  });
+});
+
+test("setRhythm: 0 in km says the plain range, 0 in minutes says hours", async () => {
+  const km = await goal(owner, "kilometros cero", true, "km");
+  const min = await goal(owner, "minutos cero", true);
+  goalIds.push(km, min);
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: km, amount: 0 })), {
+    ok: false,
+    error: "roadmap.errors.rhythmRangeAny",
+  });
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: min, amount: 0 })), {
+    ok: false,
+    error: "roadmap.errors.rhythmRange",
+  });
 });
 
 test("setRhythm: an input that is not an object is refused with a key, not thrown", async () => {

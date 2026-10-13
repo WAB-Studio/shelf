@@ -179,8 +179,7 @@ test("a sub-task with no task above it, or in another section, is refused", () =
   assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-10 · A\n## Meses\n  - Elegir\n`).line, 9);
 });
 
-test("a goal with no horizon, and a line outside a goal, name their line", () => {
-  assert.equal(errorOf("pulsar · plantilla 1\n# A\nmedida: a · b\n").line, 2);
+test("a line outside a goal names its line", () => {
   assert.equal(errorOf("pulsar · plantilla 1\n\nhola\n").line, 3);
   assert.equal(errorOf("pulsar · plantilla 1\n").line, 2);
 });
@@ -340,9 +339,22 @@ test("a template without ritmo: reads as before, rhythm null", () => {
   assert.equal(result.draft.goals[0].rhythm, null);
 });
 
+test("ritmo: outside time reads a whole number or one followed by the measure's unit, plural or singular", () => {
+  const read = (amount: string) => {
+    const result = parseTemplate(`${RHYTHM_HEAD}medida: lectura · páginas\nritmo: ${amount}\n`);
+    return result.matched && "draft" in result ? result.draft.goals[0].rhythm : "refused";
+  };
+  assert.equal(read("40"), 40);
+  assert.equal(read("40 páginas"), 40);
+  assert.equal(read("1 página"), 1);
+  assert.equal(read("40 Páginas"), 40);
+  assert.equal(read("40 km"), "refused");
+  assert.equal(read("40 páginas más"), "refused");
+});
+
 test("ritmo: stops with its line and form when not under a time measure, not placed after medida:, or not an amount", () => {
   const stops = (text: string, line: number) => assert.equal(errorOf(`${RHYTHM_HEAD}${text}`).line, line, text);
-  stops("medida: carrera · km\nritmo: 10\n", 5);
+  stops("ritmo: 10\n", 4);
   stops("medida: carrera · km\nritmo: 10 h\n", 5);
   stops("ritmo: 12 h\n", 4);
   stops("ritmo: 12 h\nmedida: horas · minutos\n", 4);
@@ -373,26 +385,26 @@ test("a line out of form names its cause by a catalogue key, never by Spanish ty
   assert.match(key(`${HEAD}## Meses\n- 2026-13 · 20 h\n`), /^[A-Za-z0-9_.]+$/);
   // Different causes, different keys.
   assert.notEqual(key(`${HEAD}## Meses\n- 2026-13 · 20 h\n`), key(`${HEAD}## Compromisos\n- x · cuando pueda · toque\n`));
-  assert.notEqual(key("pulsar · plantilla 1\n\nhola\n"), key("pulsar · plantilla 1\n# A\nmedida: a · b\n"));
+  assert.notEqual(key("pulsar · plantilla 1\n\nhola\n"), key(`${HEAD}## Meses\n- 2026-13 · 20 h\n`));
 });
 
 test("ritmo: in the wrong place or with the wrong measure says which cause, in the board's words", () => {
   const misplaced = errorOf(`${RHYTHM_HEAD}medida: horas de estudio · minutos\n\n## Meses\n- 2026-10 · 12 h\nritmo: 10 h\n`);
   assert.equal(sentenceOf(misplaced.expected), "El ritmo va justo después de «medida:», una sola vez por meta.");
-  const notTime = errorOf(`${RHYTHM_HEAD}medida: carrera · km\nritmo: 10 h\n`);
-  assert.notEqual(notTime.expected, misplaced.expected);
-  assert.match(sentenceOf(notTime.expected), /tiempo/);
-  assert.doesNotMatch(sentenceOf(notTime.expected), /justo después/);
+  const noMeasure = errorOf(`${RHYTHM_HEAD}ritmo: 10 h\n`);
+  assert.notEqual(noMeasure.expected, misplaced.expected);
+  assert.match(sentenceOf(noMeasure.expected), /medida/);
+  assert.doesNotMatch(sentenceOf(noMeasure.expected), /justo después/);
 });
 
 test("no sentence repeats the line the person wrote", () => {
   const written: [string, string][] = [
     [`${RHYTHM_HEAD}medida: horas · minutos\n## Meses\nritmo: 12 h\n`, "ritmo: 12 h"],
-    [`${RHYTHM_HEAD}medida: carrera · km\nritmo: 12 h\n`, "ritmo: 12 h"],
+    [`${RHYTHM_HEAD}ritmo: 12 h\n`, "ritmo: 12 h"],
     [`${RHYTHM_HEAD}medida: horas · minutos\nritmo: 12 h\nritmo: 12 h\n`, "ritmo: 12 h"],
     [`${HEAD}## Meses\n- 2026-13 · 20 h\n`, "- 2026-13 · 20 h"],
     [`${HEAD}## Tareas\n- 2026-10 · Tutor\n  - abc · Nombre\n`, "- abc · Nombre"],
-    ["pulsar · plantilla 1\n\n# X\nmedida: a · b\n", "# X"],
+    ["pulsar · plantilla 1\n\n# X\nhola\n", "hola"],
     ["pulsar · plantilla 1\n# A\nhorizonte: 2027-02-31\n", "horizonte: 2027-02-31"],
   ];
   for (const [text, line] of written) {
@@ -403,7 +415,7 @@ test("no sentence repeats the line the person wrote", () => {
 
 test("ritmo: in its place with an amount that is not a time says the amount is the fault", () => {
   const text = `${RHYTHM_HEAD}medida: horas de estudio · minutos\nritmo: doce\n`;
-  assert.equal(sentenceOf(errorOf(text).expected), "El ritmo es un tiempo por mes, como «12 h».");
+  assert.equal(sentenceOf(errorOf(text).expected), "El ritmo es un monto por mes: un tiempo como «12 h», o un entero en la unidad de la medida.");
 });
 
 test("a measure in hours is stored in minutes, its amounts and rhythm in the time forms", () => {
@@ -427,11 +439,15 @@ test("a bare integer amount under a measure in hours stops the reading", () => {
   assert.equal(result.error.line, 6);
 });
 
-test("ritmo: under a measure that is not time says the rhythm needs a time measure, not that its amount is wrong", () => {
-  // «10 h» is a well-formed time: the amount is not the fault, the measure is.
+test("ritmo: with no measure says the rhythm needs one, not that its amount is wrong", () => {
+  const { expected } = errorOf(`${RHYTHM_HEAD}ritmo: 10 h\n`);
+  assert.equal(sentenceOf(expected), "El ritmo va con una medida: ponla en «medida:» y el ritmo justo debajo.");
+});
+
+test("ritmo: outside time takes a whole number, and a time under it says the amount is the fault", () => {
   for (const unit of ["km", "páginas"]) {
     const { expected } = errorOf(`${RHYTHM_HEAD}medida: carrera · ${unit}\nritmo: 10 h\n`);
-    assert.equal(sentenceOf(expected), "El ritmo solo va con una medida en tiempo.");
+    assert.match(sentenceOf(expected), /entero/);
   }
 });
 
@@ -679,16 +695,16 @@ test("801 first line: «pulsar ·» in the middle of the first line still goes t
   assert.deepEqual(parseTemplate("mi pulsar · plantilla 1\n# A\n"), { matched: false });
 });
 
-test("801 cut: a goal with no horizon followed by another goal names the horizon sentence on the first goal's line", () => {
-  const result = cutOf("pulsar · plantilla 1\n# A\n# B\nhorizonte: 2026-12-17\n");
-  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[2, "import.errors.form.horizon"]]);
-  assert.equal(result.cut, true);
+test("801 a goal with no horizon followed by another goal is read, the first has no end", () => {
+  const result = parseTemplate("pulsar · plantilla 1\n# A\n# B\nhorizonte: 2026-12-17\n");
+  assert.ok(result.matched && "draft" in result);
+  assert.deepEqual(result.draft.goals.map((g) => g.horizon), [null, "2026-12-17"]);
 });
 
-test("801 cut: a stray text line under a goal with no horizon cuts there with the horizon sentence", () => {
-  const result = cutOf(`pulsar · plantilla 1\n# A\nhola\n${BROKEN_MONTH}`);
-  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[3, "import.errors.form.horizon"]]);
-  assert.equal(result.cut, true);
+test("801 a stray text line under a goal with no horizon is a section error, not a horizon one", () => {
+  const found = mistakesOf(`pulsar · plantilla 1\n# A\nhola\n${BROKEN_MONTH}`);
+  assert.equal(found[0].line, 3);
+  assert.notEqual(found[0].expected, "import.errors.form.horizon");
 });
 
 // Module 803: a goal name past the schema's limit says so, instead of «Falta el nombre».
@@ -1014,4 +1030,99 @@ test("880 limit: plantilla 1 keeps its 12", () => {
   const goals = (n: number) => Array.from({ length: n }, (_, i) => `# Meta ${i}\nhorizonte: 2027-10-01\n`).join("");
   assert.equal(parseV2(`pulsar · plantilla 1\n${goals(12)}`).matched && "draft" in parseV2(`pulsar · plantilla 1\n${goals(12)}`), true);
   assert.deepEqual(errors2(`pulsar · plantilla 1\n${goals(13)}`).errors.map((e) => e.line), [2 + 12 * 2]);
+});
+
+// ---- 903: survivors of the tren-i1 mutator in the second template's reader.
+
+test("903 dentro de: a second line naming a goal above is an error on the second line", () => {
+  const text = `${H2}# A\nhorizonte: 2027-10-01\n# B\nhorizonte: 2027-10-01\n# C\nhorizonte: 2027-10-01\ndentro de: A\ndentro de: B\n`;
+  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[9, "inside"]]);
+});
+
+test("903 dentro de: a line with no name cuts the read at that line", () => {
+  const result = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de:\n## Tareas\n- mal\n`);
+  assert.equal(result.cut, true);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[4, "inside"]]);
+});
+
+test("903 dentro de: a goal cannot be inside itself", () => {
+  const result = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de: A\n`);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[4, "insideUnknown"]]);
+});
+
+test("903 dentro de: with no horizon above it is read, the goal has no end", () => {
+  const draft = read2(`${H2}# A\nhorizonte: 2027-10-01\n# B\ndentro de: A\n`);
+  assert.deepEqual(draft.goals.map((g) => [g.parent, g.horizon]), [[null, "2027-10-01"], ["g1", null]]);
+});
+
+test("903 a line two things are wrong with is listed once", () => {
+  const text = `${H2}# A\nhorizonte: 2027-10-01\nmedida: m · h\n## Tareas\n- 2026-13 · 0 h · ${"x".repeat(130)}\n`;
+  assert.deepEqual(errors2(text).errors.map((e) => e.line), [6]);
+});
+
+test("903 a schema refusal in the 14th goal lands on that goal's own line", () => {
+  const goals = Array.from({ length: 13 }, (_, i) => `# Meta ${i}\nhorizonte: 2027-10-01\n`).join("");
+  const text = `${H2}${goals}# Última\nhorizonte: 2027-10-01\n## Tareas\n- 2026-13 · T\n`;
+  const lastLine = text.split("\n").length - 1;
+  assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[lastLine, "import.errors.form.monthReal"]]);
+});
+
+test("903 a goal name of exactly the ceiling reads, one more stops at its line", () => {
+  assert.equal(read2(`${H2}# ${"n".repeat(GOAL_NAME_MAX)}\nhorizonte: 2027-10-01\n`).goals.length, 1);
+  const over = errors2(`${H2}# ${"n".repeat(GOAL_NAME_MAX + 1)}\nhorizonte: 2027-10-01\n`);
+  assert.deepEqual(over.errors.map((e) => [e.line, e.expected]), [[2, "import.errors.form.goalLong"]]);
+});
+
+// RP-102: a goal may have no end, and a rhythm counts in the measure's own unit.
+const OPEN = "pulsar · plantilla 2\n";
+
+test("915 horizonte: is optional, a goal without it has no end", () => {
+  const result = parseV2(`${OPEN}# A\nmedida: horas · minutos\n`);
+  assert.ok("draft" in result);
+  assert.equal(result.draft.goals[0].horizon, null);
+  const both = parseV2(`${OPEN}# A\n\n# B\nhorizonte: 2027-10-01\n`);
+  assert.ok("draft" in both);
+  assert.deepEqual(both.draft.goals.map((g) => g.horizon), [null, "2027-10-01"]);
+});
+
+test("915 horizonte: still stops when it is written wrong", () => {
+  const result = parseV2(`${OPEN}# A\nhorizonte: pronto\n`);
+  assert.ok("error" in result);
+  assert.equal(result.error.line, 3);
+});
+
+test("915 dentro de: a goal with no end under one with an end is refused with its name", () => {
+  const result = parseV2(`${OPEN}# A\nhorizonte: 2027-10-01\n\n# B\ndentro de: A\n`);
+  assert.ok("draft" in result);
+  const refusals = draftRefusals(result.draft, "2026-10-15");
+  assert.deepEqual(refusals.map((r) => `${r.path} ${r.key}`), ["goals.1.horizon tree.errors.belowNoEnd"]);
+  assert.deepEqual(refusals[0].values, { name: "B" });
+  const open = parseV2(`${OPEN}# A\n\n# B\nhorizonte: 2027-10-01\ndentro de: A\n`);
+  assert.ok("draft" in open);
+  assert.deepEqual(draftRefusals(open.draft, "2026-10-15"), []);
+});
+
+test("915 ritmo: reads a whole number in the measure's own unit", () => {
+  const result = parseV2(`${OPEN}# A\nmedida: lectura · páginas\nritmo: 40\n\n## Tareas\n- 2026-10 · Capítulo 1\n- 2026-11 · Capítulo 2\n`);
+  assert.ok("draft" in result);
+  assert.equal(result.draft.goals[0].rhythm, 40);
+  assert.equal(result.draft.goals[0].horizon, null);
+  const km = parseV2(`${OPEN}# A\nhorizonte: 2027-10-01\nmedida: carrera · km\nritmo: 10\n`);
+  assert.ok("draft" in km);
+  assert.equal(km.draft.goals[0].rhythm, 10);
+});
+
+test("915 ritmo: outside time stops on a time amount, on zero and on no measure", () => {
+  for (const [rest, line] of [["medida: carrera · km\nritmo: 10 h\n", 5], ["medida: carrera · km\nritmo: 0\n", 5], ["ritmo: 10\n", 4]] as const) {
+    const result = parseV2(`${OPEN}# A\nhorizonte: 2027-10-01\n${rest}`);
+    assert.ok("error" in result, rest);
+    assert.equal(result.error.line, line, rest);
+  }
+});
+
+test("915 the template's own words say both things", () => {
+  const doc = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
+  assert.match(doc, /sin `horizonte:`/);
+  assert.match(doc, /entero en la unidad de la medida/);
+  assert.match(doc, /pulsar · plantilla 2/);
 });

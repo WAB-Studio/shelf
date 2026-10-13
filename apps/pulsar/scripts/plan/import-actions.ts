@@ -379,23 +379,12 @@ test("confirmImport: a tap commitment with a target is refused at the commitment
   assert.equal(await countGoals(name), 0);
 });
 
-test("confirmImport: a commitment the table refuses leaves no goal behind", async () => {
+test("confirmImport: a commitment whose days sit on a counted cadence is refused before the table, and writes no goal", async () => {
   const name = `RP-37 fixture: atómica ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
-  // A daily commitment with a count passes the form's schema and meets
-  // `commitments_n_for_counted_kinds` at the commitments insert, after the goals.
+  // The review's own invariant (898) now closes what `commitments_n_for_counted_kinds` used to meet at the insert.
   draft.goals[0].commitments[1] = { ...draft.goals[0].commitments[1], cadenceN: 3 };
-  // The table's own refusal, not any throw: a check violation naming the constraint.
-  const { pgCode } = await import("@/lib/db-error");
-  await assert.rejects(
-    () => confirmImport(draft),
-    (error: unknown) => {
-      assert.equal(pgCode(error), "23514");
-      const cause = (error as { cause?: { constraint_name?: string } }).cause;
-      assert.equal(cause?.constraint_name, "commitments_n_for_counted_kinds");
-      return true;
-    },
-  );
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.cadenceCount", at: "goals.0.commitments.1" });
   assert.equal(await countGoals(name), 0);
 });
 
@@ -450,12 +439,31 @@ test("confirmImport: without ritmo: the rhythm and plan_seen stay null", async (
   assert.equal((await loadGoal(goalId, TODAY))?.roadmap.state, "noRhythm");
 });
 
-test("confirmImport: a rhythm on a measure that is not time is refused with its key and writes nothing", async () => {
-  const name = `RP-63 fixture: ritmo en km ${RUN}`;
+test("confirmImport: a rhythm on a measure that is not time is written (RP-102)", async () => {
+  const name = `RP-102 fixture: ritmo en km ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
-  draft.goals[0] = { ...draft.goals[0], rhythm: 720, measure: { name: "distancia", unit: "km" }, commitments: [], tasks: [], months: [] };
-  assert.deepEqual(await confirmImport(draft), { ok: false, error: "roadmap.errors.rhythmNotTime", at: "goals.0.rhythm" });
-  assert.equal(await countGoals(name), 0);
+  draft.goals[0] = { ...draft.goals[0], rhythm: 30, measure: { name: "distancia", unit: "km" }, commitments: [], tasks: [], months: [] };
+  const { goalIds: [goalId] } = await confirmed(draft);
+  const [row] = await sql`select rhythm, measure_unit, plan_seen from goals.goals where id = ${goalId}`;
+  assert.deepEqual({ ...row }, { rhythm: 30, measure_unit: "km", plan_seen: null });
+});
+
+test("confirmImport: a goal in pages with a rhythm keeps its tasks on their month", async () => {
+  const name = `RP-102 fixture: páginas ${RUN}`;
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  draft.goals[0] = { ...draft.goals[0], rhythm: 40, measure: { name: "lectura", unit: "páginas" }, commitments: [], months: [], tasks: draft.goals[0].tasks.map((task) => ({ ...task, estimate: null, children: [] })) };
+  const { goalIds: [goalId] } = await confirmed(draft);
+  const tasks = await sql`select planned_month::text as planned_month, in_plan from goals.one_offs where goal_id = ${goalId} and parent_id is null`;
+  assert.ok(tasks.length > 0 && tasks.every((t) => t.planned_month === `${M0}-01`));
+});
+
+test("confirmImport: a goal with no end is written with horizon null", async () => {
+  const name = `RP-102 fixture: sin final ${RUN}`;
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  draft.goals[0] = { ...draft.goals[0], horizon: null, phases: [], months: [], tasks: [] };
+  const { goalIds: [goalId] } = await confirmed(draft);
+  const [row] = await sql`select horizon from goals.goals where id = ${goalId}`;
+  assert.equal(row.horizon, null);
 });
 
 test("confirmImport: four goals with a rhythm pay the statements of one", async () => {
@@ -711,4 +719,175 @@ test("confirmImport: a goal ending after the one above it is refused, and so is 
   const reversed = tree([bare("b", "a", "RP-79 orden hijo", `${M6}-01`), bare("a", null, "RP-79 orden", `${M12}-01`)]);
   assert.deepEqual(await confirmImport(reversed), { ok: false, error: "tree.errors.notFound", at: "goals.0.parent" });
   assert.equal(await countGoals(`RP-79 fin ${RUN}`), 0);
+});
+
+// ---- 898: the roadmap that broke «Crear», and a part that fails after everything is checked.
+
+function rawCommitment(name: string, over: Record<string, unknown> = {}) {
+  return { name, cadenceKind: "times_per_week" as const, cadenceWeekdays: null, cadenceN: 1, satisfaction: "tap" as const, targetQuantity: null, unit: null, src: [], ...over };
+}
+
+function rawGoalOf(key: string, parent: string | null, name: string, commitments: ReturnType<typeof rawCommitment>[]): import("@/lib/import/draft").RawGoal {
+  return {
+    key, parent, name, horizon: `${M12}-01`, measure: null, rate: null, noteSrc: [], noteText: null, src: [],
+    phases: [], months: [], commitments, rules: [], tasks: [],
+  };
+}
+
+test("confirmImport: the model's roadmap — eight times_per_week commitments with days — creates 5 goals and 8 weekdays commitments", async () => {
+  const { normalize } = await import("@/lib/import/draft");
+  const names = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map((d) => `898 ${d} ${RUN}`);
+  const raw = {
+    goals: [
+      rawGoalOf("g0", null, `898 carrera ${RUN}`, [rawCommitment(names[0], { cadenceWeekdays: [1] }), rawCommitment(names[1], { cadenceWeekdays: [2] })]),
+      rawGoalOf("g1", "g0", `898 pilar uno ${RUN}`, [rawCommitment(names[2], { cadenceWeekdays: [3] }), rawCommitment(names[3], { cadenceWeekdays: [4] })]),
+      rawGoalOf("g2", "g0", `898 pilar dos ${RUN}`, [rawCommitment(names[4], { cadenceWeekdays: [5] }), rawCommitment(names[5], { cadenceWeekdays: [6] })]),
+      rawGoalOf("g3", "g0", `898 pilar tres ${RUN}`, [rawCommitment(names[6], { cadenceWeekdays: [7] }), rawCommitment(`898 Inglés ${RUN}`, { cadenceWeekdays: [] })]),
+      rawGoalOf("g4", "g0", `898 pilar cuatro ${RUN}`, []),
+    ],
+  };
+  const { draft, corrections } = normalize(raw, { kind: "parts", lines: null });
+  assert.equal(corrections.filter((c) => c.code === "cadenceToWeekdays").length, 7);
+  const result = await confirmImport(draft);
+  if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
+  goalIds.push(...result.goalIds);
+  assert.equal(result.goalIds.length, 5);
+  assert.deepEqual(result.failed, []);
+  const rows = await sql<{ name: string; cadence_kind: string; cadence_n: number | null; cadence_weekdays: number[] | null }[]>`
+    select name, cadence_kind, cadence_n, cadence_weekdays from goals.commitments where goal_id in ${sql(result.goalIds)} order by name`;
+  assert.equal(rows.length, 8);
+  const sunday = rows.find((r) => r.name === names[6])!;
+  assert.deepEqual([sunday.cadence_kind, sunday.cadence_n, [...sunday.cadence_weekdays!]], ["weekdays", null, [7]]);
+  assert.equal(rows.filter((r) => r.cadence_kind === "weekdays").length, 7);
+  const english = rows.find((r) => r.name === `898 Inglés ${RUN}`)!;
+  assert.deepEqual([english.cadence_kind, english.cadence_n, english.cadence_weekdays], ["times_per_week", 1, null]);
+});
+
+test("confirmImport: a forged commitment with days on a counted cadence is refused with its path, and nothing is written", async () => {
+  const name = `898 forjada ${RUN}`;
+  const draft = tree([full("a", null, name, { commitments: [{ name: "Domingo", cadenceKind: "times_per_week", cadenceWeekdays: [7], cadenceN: 1, satisfaction: "tap", targetQuantity: null, unit: null, src: [] }] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.cadenceWeekdays", at: "goals.0.commitments.0" });
+  assert.equal(await countGoals(name), 0);
+});
+
+test("confirmImport: a task the table refuses is named and left out; the rest of the plan is written (RP-90)", async () => {
+  const name = `898 parte ${RUN}`;
+  // A note of blanks passes every check of the review and meets `one_offs_note_shape` at the insert.
+  const broken = { ...task("Tarea rota", M0, null, [{ name: "Hija rota", estimate: 30, note: null, noteSrc: [], src: [], rule: null }]), note: "   " };
+  const draft = tree([
+    full("a", null, name, { tasks: [task("Tarea buena uno", M0, 60), broken, task("Tarea buena dos", M1, 30)] }),
+    full("b", null, `${name} hermana`),
+  ]);
+  const result = await confirmImport(draft);
+  if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
+  goalIds.push(...result.goalIds);
+  assert.deepEqual(result.failed, [{ path: "goals.0.tasks.1", name: "Tarea rota", reason: "import.errors.noteShape" }]);
+  assert.equal(result.goalIds.length, 2);
+  const tasks = await sql<{ name: string }[]>`select name from goals.one_offs where goal_id = ${result.goalIds[0]} order by name`;
+  assert.deepEqual(tasks.map((t) => t.name), ["Tarea buena dos", "Tarea buena uno"]);
+  const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from goals.commitments where goal_id in ${sql(result.goalIds)}`;
+  assert.equal(count, 2);
+  const [{ sister }] = await sql<{ sister: number }[]>`select count(*)::int as sister from goals.one_offs where goal_id = ${result.goalIds[1]}`;
+  assert.equal(sister, 3);
+});
+
+test("confirmImport: a clean plan still pays the same statements and lists nothing failed", async () => {
+  const { statements } = await confirmed(draftOf(EXAMPLE.replace("# IA aplicada", `# 898 limpia ${RUN}`)));
+  assert.equal(statements, 8);
+});
+
+// ---- 903: survivors of the f1 and i1 mutators.
+
+test("903: a sub-task the table refuses is named by its place under its task, and its sister is written", async () => {
+  const name = `903 hija ${RUN}`;
+  const child = (childName: string, note: string | null) => ({ name: childName, estimate: 30, note, noteSrc: [], src: [], rule: null });
+  const draft = tree([full("a", null, name, { tasks: [task("Madre", M0, null, [child("Hija 1", null), child("Hija 2", "   "), child("Hija 3", null)])] })]);
+  const result = await confirmImport(draft);
+  if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
+  goalIds.push(...result.goalIds);
+  assert.deepEqual(result.failed, [{ path: "goals.0.tasks.0.children.1", name: "Hija 2", reason: "import.errors.noteShape" }]);
+  const kept = await sql<{ name: string }[]>`select name from goals.one_offs where goal_id = ${result.goalIds[0]} and parent_id is not null order by name`;
+  assert.deepEqual(kept.map((row) => row.name), ["Hija 1", "Hija 3"]);
+});
+
+test("903: an error that is not the draft's fault surfaces; it is not retried as a partial write", async () => {
+  const name = `903 infraestructura ${RUN}`;
+  // A NUL byte passes every check of the review and meets the server as class 22, not 23.
+  const draft = tree([full("a", null, name, { tasks: [{ ...task("Con NUL", M0, null), note: "a\u0000b" }] })]);
+  try {
+    await assert.rejects(confirmImport(draft));
+    assert.equal(await countGoals(`${name} ${RUN}`), 0);
+  } finally {
+    await sql`delete from goals.goals where user_id = ${personId} and name like ${`%${name}%`}`;
+  }
+});
+
+test("903: two goals with one key: a goal inside it goes under the first", async () => {
+  const draft = tree([bare("dup", null, "903 clave uno", `${M14}-01`), bare("dup", null, "903 clave dos", `${M14}-01`), bare("dup", "dup", "903 hija", `${M6}-01`)]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await sql<{ id: string; parent_id: string | null }[]>`select id, parent_id from goals.goals where id in ${sql(ids)}`;
+  assert.equal(rows.find((row) => row.id === ids[2])?.parent_id, ids[0]);
+});
+
+test("903: with a rhythm the tasks are in the plan with no month, in the order of their months", async () => {
+  const draft = tree([full("a", null, "903 ritmo", { rhythm: 600, months: [], tasks: [task("Tarde", M1, 60), task("Pronto", M0, 30)] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await sql<{ name: string; in_plan: boolean; planned_month: string | null }[]>`
+    select name, in_plan, planned_month::text as planned_month from goals.one_offs where goal_id = ${ids[0]} order by position`;
+  assert.deepEqual(rows.map((row) => [row.name, row.in_plan, row.planned_month]), [["Pronto", true, null], ["Tarde", true, null]]);
+});
+
+// ---- 906: a task the plan marks done is written already done.
+
+test("906: a task with a doneOn is written with its fact on that day, and the sister task is not done", async () => {
+  const day = shiftDay(TODAY, -3);
+  const draft = tree([full("a", null, "906 hecha", { tasks: [{ ...task("Hecha", M0, 60), doneOn: day }, task("Pendiente", M0, 30)] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await asPerson((tx) => tx<{ name: string; day: string | null; goal_id: string | null }[]>`
+    select o.name, f.day::text as day, f.goal_id from goals.one_offs o
+    left join goals.facts f on f.one_off_id = o.id where o.goal_id = ${ids[0]} order by o.name`);
+  assert.deepEqual(rows.map((row) => [row.name, row.day]), [["Hecha", day], ["Pendiente", null]]);
+  assert.equal(rows[0].goal_id, ids[0]);
+});
+
+test("906: done tasks add one statement to the import, whatever their number", async () => {
+  const plain = await confirmed(tree([full("a", null, "906 ninguna", { tasks: [task("Pendiente", M0, 60)] })]));
+  const one = await confirmed(tree([full("a", null, "906 una", { tasks: [{ ...task("Hecha", M0, 60), doneOn: TODAY }] })]));
+  const three = await confirmed(tree([full("a", null, "906 tres", { tasks: [1, 2, 3].map((n) => ({ ...task(`Hecha ${n}`, M0, 60), doneOn: TODAY })) })]));
+  assert.equal(one.statements, plain.statements + 1);
+  assert.equal(three.statements, one.statements);
+});
+
+test("906: a done day after today is refused with its key and path, and writes nothing", async () => {
+  const name = `906 futura ${RUN}`;
+  const draft = tree([full("a", null, name, { tasks: [{ ...task("Hecha", M0, 60), doneOn: shiftDay(TODAY, 2) }] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneInFuture", at: "goals.0.tasks.0" });
+  assert.equal(await countGoals(`${name} ${RUN}`), 0);
+});
+
+test("906: a done task with sub-tasks is refused, and writes nothing", async () => {
+  const child = { name: "Hija", estimate: 30, note: null, noteSrc: [], src: [], rule: null };
+  const draft = tree([full("a", null, "906 madre", { tasks: [{ ...task("Madre", M0, null, [child]), doneOn: TODAY }] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneWithSubtasks", at: "goals.0.tasks.0" });
+});
+
+test("906b: a sub-task with a doneOn is written done on that day, its parent and sister are not", async () => {
+  const day = shiftDay(TODAY, -2);
+  const child = (name: string, doneOn?: string) => ({ name, estimate: 30, note: null, noteSrc: [], src: [], rule: null, ...(doneOn ? { doneOn } : {}) });
+  const draft = tree([full("a", null, "906b hijas", { tasks: [task("Madre", M0, null, [child("Hecha", day), child("Pendiente")])] })]);
+  const { goalIds: ids } = await confirmed(draft);
+  const rows = await asPerson((tx) => tx<{ name: string; day: string | null }[]>`
+    select o.name, f.day::text as day from goals.one_offs o left join goals.facts f on f.one_off_id = o.id
+    where o.goal_id = ${ids[0]} order by o.name`);
+  assert.deepEqual(rows.map((row) => [row.name, row.day]), [["Hecha", day], ["Madre", null], ["Pendiente", null]]);
+});
+
+test("906b: a done sub-task adds the one statement a done task adds, and a future day is refused at the sub-task", async () => {
+  const child = (doneOn?: string) => ({ name: "Hija", estimate: 30, note: null, noteSrc: [], src: [], rule: null, ...(doneOn ? { doneOn } : {}) });
+  const pending = await confirmed(tree([full("a", null, "906b hija pendiente", { tasks: [task("Madre", M0, null, [child()])] })]));
+  const done = await confirmed(tree([full("a", null, "906b hija hecha", { tasks: [task("Madre", M0, null, [child(TODAY)])] })]));
+  assert.equal(done.statements, pending.statements + 1);
+  const name = `906b futura ${RUN}`;
+  const draft = tree([full("a", null, name, { tasks: [task("Madre", M0, null, [child(shiftDay(TODAY, 3))])] })]);
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.doneInFuture", at: "goals.0.tasks.0.children.0" });
 });

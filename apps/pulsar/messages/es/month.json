@@ -19,6 +19,7 @@
     "caption": "{count, plural, one {# mes} other {# meses}}",
     "planned": "planeado",
     "noAmount": "sin monto",
+    "noEnd": "Sin final: se ven los 12 meses que vienen.",
     "tasksCount": "{count, plural, one {# tarea} other {# tareas}}",
     "of": "de {planned}",
     "ofFigure": "de <fig>{planned}</fig>",
@@ -45,6 +46,7 @@
     "ownMonth": "de {month} · {planned}",
     "owes": "de {month} · falta <fig>{owes}</fig>",
     "closed": "cerrado",
+    "rhythmTaken": "el ritmo: {amount} al mes",
     "thisMonth": "este mes",
     "closedLineTo": "cerrado · <fig>{share} %</fig> pasó a {next} · <fig>{owed}</fig> de <fig>{planned}</fig>",
     "includesDone": "incluye <fig>{done}</fig> de tareas hechas",
@@ -111,6 +113,11 @@
     "measuresNothing": "no mide nada · solo sus tareas",
     "measuresNothingCount": "no mide nada · {done} de {total} tareas hechas",
     "addTask": "Añadir una tarea",
+    "habits": {
+      "title": "Hábitos",
+      "line": "{cadence} · {count, plural, one {# día} other {# días}}",
+      "lineOf": "{cadence} · {done} de {asked, plural, one {# día} other {# días}}"
+    },
     "unreadableTitle": "No pudimos leer una fuente.",
     "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
     "empty": {

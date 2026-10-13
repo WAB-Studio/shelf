@@ -271,7 +271,7 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
 
   return (
     <Page>
-      <ScreenHeader title={t("title")} back={place} />
+      <ScreenHeader chat title={t("title")} back={place} />
       <Text as="p">{t("intro")}</Text>
       {keys.length > 0 ? (
         <Keys

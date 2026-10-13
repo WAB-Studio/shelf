@@ -2,7 +2,7 @@ import type { Browser, Locator, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
-import { rawGoal, seedOf, toSeededReview } from "./importar-plan";
+import { rawGoal, seedOf, toOpenSeededReview, unfold } from "./importar-plan";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 
 // What the import leaves out is listed under «No se puede crear», one row for a part and the
@@ -49,6 +49,7 @@ async function review(
     await page.getByRole("button", { name: "Leer el plan" }).click();
     await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
     await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
+    await unfold(page);
     // The bar is the confirm button's own container.
     const bar = page.getByRole("button", { name: /^Crear \d+ metas?$/ }).locator("xpath=..");
     await run(page, bar);
@@ -187,7 +188,7 @@ test.describe("what stays out is listed, and the bar is the button alone (RP-37,
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 390, height: 844 } });
     try {
       const page = await context.newPage();
-      await toSeededReview(
+      await toOpenSeededReview(
         page,
         seedOf([
           rawGoal("Meta del compromiso", {

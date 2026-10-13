@@ -153,6 +153,7 @@ test.describe("the import screen (RP-37)", () => {
         mimeType: "text/plain",
         buffer: Buffer.from(EXAMPLE),
       });
+      await page.getByRole("button", { name: messages.read }).click();
       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
 
       await page.goto("/metas/importar");
@@ -200,6 +201,7 @@ test.describe("the import screen (RP-37)", () => {
         mimeType: "text/plain",
         buffer: Buffer.from(EXAMPLE.replace("- 2026-11 · 20 h", "- 2026-13 · 20 h")),
       });
+      await page.getByRole("button", { name: messages.read }).click();
       await expectLineError(page, BROKEN_LINE, "- 2026-13 · 20 h");
     } finally {
       await context.close();
@@ -267,6 +269,7 @@ test.describe("the import screen (RP-37)", () => {
         mimeType: "application/pdf",
         buffer: Buffer.alloc(5 * 1024 * 1024, 1),
       });
+      await page.getByRole("button", { name: messages.read }).click();
       await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(
         "«roadmap-escaneado.pdf» pesa 5 MB y el tope es 4 MB. Pega su texto en la caja.",
       );

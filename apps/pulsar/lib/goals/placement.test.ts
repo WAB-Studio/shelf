@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createInsideRefusal, horizonTreeRefusal, moveRefusal, moveTargets, reopenRefusal } from "./placement";
+import { branchEndsAfter, createInsideRefusal, horizonTreeRefusal, moveRefusal, moveTargets, reopenRefusal } from "./placement";
 import { buildTree } from "./tree";
 import type { TreeRow } from "./tree";
 
@@ -151,4 +151,12 @@ test("a closed goal moved under a closed goal is refused as closed, not aboveClo
   // Kills: checking aboveClosed before closed.
   assert.deepEqual(moveRefusal(tree(), "A", "E", TODAY), { code: "closed" });
   assert.deepEqual(moveRefusal(tree(), "E", "A", TODAY), { code: "closed" });
+});
+
+test("branchEndsAfter lists the goals under one that end after the day, in tree order, never the goal itself", () => {
+  // Kills: including the goal, comparing with >=, or listing goals outside the branch.
+  assert.deepEqual(branchEndsAfter(tree(), "G", "2026-12-01"), [ref("g2")]);
+  assert.deepEqual(branchEndsAfter(tree(), "G", "2026-10-20").map((g) => g.id), ["g1", "p", "g2", "s"]);
+  assert.deepEqual(branchEndsAfter(tree(), "G", "2026-12-15"), []);
+  assert.deepEqual(branchEndsAfter(tree(), "R2", "2026-01-01"), []);
 });

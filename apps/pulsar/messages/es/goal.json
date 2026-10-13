@@ -4,6 +4,10 @@
     "title": "¿Qué quieres sostener?",
     "nameLabel": "nombre",
     "horizonLabel": "horizonte",
+    "withEnd": "con final",
+    "noEnd": "sin final",
+    "noEndSentence": "No termina nunca. Se le puede dar un final después.",
+    "submitting": "Abriéndola…",
     "horizonHint": "cuántas semanas le das. Se puede mover después.",
     "submit": "Abrirla",
     "explain": "Los compromisos se añaden después, uno a uno, y el primero que mida algo —minutos, páginas— le pone la cifra a la meta. Ninguno es obligatorio para abrirla."
@@ -17,6 +21,8 @@
     "measureSince": "en total, desde el <fig>{date}</fig>",
     "measureSinceYear": "{date} de {year}",
     "moveHorizon": "mover el final",
+    "putEnd": "ponerle final",
+    "noEnd": "sin final",
     "commitmentsCount": "{count, plural, =0 {} one {{word} compromiso} other {{word} compromisos}}",
     "phasesCount": "{count, plural, =0 {} one {{word} fase} other {{word} fases}}",
     "phaseSpan": "semanas <fig>{start}–{end}</fig>",
@@ -101,6 +107,11 @@
     "diecinueve",
     "veinte"
   ],
+  "habits": {
+    "title": "Hábitos",
+    "none": "Ninguno todavía.",
+    "add": "Agregar un hábito"
+  },
   "none": {
     "title": "Todavía no hay metas",
     "body": "Abre una meta a mano, o trae el plan que ya tienes escrito.",
@@ -113,6 +124,7 @@
     "archivedTitle": "Archivadas",
     "openTitle": "abiertas",
     "untilShort": "hasta el {date}",
+    "noEnd": "sin final",
     "monthTasks": "{month} · {done} de {total} tareas",
     "archivedOnShort": "archivada el {date}"
   },
@@ -121,7 +133,16 @@
     "weeksLabel": "semanas, contando la del {date}",
     "endsOn": "termina el {date}",
     "confirm": "Moverlo",
-    "cancel": "Dejarlo como está"
+    "cancel": "Dejarlo como está",
+    "removeEnd": "Quitar el final",
+    "putConfirm": "Ponerle final",
+    "keepNoEnd": "Dejarla sin final",
+    "putDone": "{name} termina el {date}.",
+    "moveBranch": "Mover también sus finales",
+    "laterTitle": "{count, plural, one {# meta termina después de esta fecha} other {# metas terminan después de esta fecha}}",
+    "laterRow": "{name} · hasta el {date}",
+    "laterAside": "Con «Mover también sus finales» {count, plural, one {la meta termina} other {las # terminan}} el {date}.",
+    "moved": "Se movió el final de la meta y el de {count, plural, one {# meta} other {# metas}} dentro."
   },
   "errors": {
     "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520.",

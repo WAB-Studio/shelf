@@ -12,7 +12,7 @@ import {
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
-import { partOf } from "@/lib/plan/months";
+import { partOf, partWords } from "@/lib/plan/months";
 import { showsPaceLine } from "@/lib/plan/pace-line";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { planMonthList } from "@/lib/plan/roadmap-read";
@@ -49,7 +49,8 @@ import {
 import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { CreateInsideAction } from "./create-inside-sheet";
-import { MoveHorizonAction } from "./horizon-sheet";
+import { MoveEndRow, MoveHorizonAction } from "./horizon-sheet";
+import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import { GoalNote } from "./goal-note-sheet";
 import { MoveGoalAction } from "./move-sheet";
 import { RenameGoalAction } from "./rename-sheet";
@@ -110,17 +111,20 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const t = await getTranslations();
   const today = todayInZone();
-  const endDay = dayBefore(goal.horizon);
-  const endLabel = `${civilDayMonthShort(endDay)} ${endDay.slice(0, 4)}`;
+  // A goal with no end has no last day: nothing below reads one.
+  const endDay = goal.horizon === null ? null : dayBefore(goal.horizon);
+  const endLabel = endDay === null ? null : `${civilDayMonthShort(endDay)} ${endDay.slice(0, 4)}`;
   const openedOn = civilDateInZone(new Date(goal.createdAt));
   const totalWeeks = horizonWeeks(openedOn, goal.horizon);
   const currentPhase = phaseOn(goal.phases, today);
 
+  const levelName =
+    goal.level === null ? "" : t(`tree.levels.${goal.level === "large" ? "grande" : goal.level === "small" ? "pequena" : "general"}`);
   const archived = goal.archivedAt !== null;
   const ended = goal.endedOn !== null && !archived;
   // An ended goal's sheet opens on the count that ends this Sunday.
   const sheetWeeks = ended
-    ? Math.max(totalWeeks, weekIndex(openedOn, today))
+    ? Math.max(totalWeeks ?? 0, weekIndex(openedOn, today))
     : totalWeeks;
   const holds = goal.holdsGoals;
   const insideAction =
@@ -130,6 +134,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         name={goal.name}
         horizon={goal.horizon}
         kind={goal.level === "large" ? "small" : "big"}
+        rhythm={goal.rhythm !== null}
       />
     );
   // The open goals under this one, in plan order: what archiving it takes along.
@@ -137,19 +142,20 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     .filter((node) => node.archivedAt === null && node.ancestors.includes(goal.id))
     .map((node) => node.name);
   const archiveBranch = { branchCount: goal.branchOpenCount, branchNames };
-  const moveAction = (
-    <MoveHorizonAction
-      goalId={goal.id}
-      name={goal.name}
-      openedOn={openedOn}
-      horizon={goal.horizon}
-      weeks={sheetWeeks}
-      phases={goal.phases}
-      reopening={ended}
-      above={goal.above}
-      latestBelow={goal.latestBelow}
-    />
-  );
+  const moveProps = {
+    goalId: goal.id,
+    name: goal.name,
+    openedOn,
+    horizon: goal.horizon,
+    weeks: sheetWeeks,
+    phases: goal.phases,
+    reopening: ended,
+    above: goal.above,
+    below: goal.tree
+      .filter((node) => node.ancestors.includes(goal.id))
+      .map((node) => ({ id: node.id, name: node.name, horizon: node.horizon })),
+  };
+  const moveAction = <MoveHorizonAction {...moveProps} />;
 
   const phoneActs = ended ? (
     <Face on="phone">
@@ -168,7 +174,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const monthName = (t.raw("day.monthLong") as string[])[Number(today.slice(5, 7)) - 1];
   // Days to the month's end, or to the goal's own last day when that comes first.
   const monthEnd = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).toISOString().slice(0, 10);
-  const lastDay = endDay < monthEnd ? endDay : monthEnd;
+  const lastDay = endDay !== null && endDay < monthEnd ? endDay : monthEnd;
   const daysLeft = Math.round((Date.parse(`${lastDay}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
   const planned = screenPlanned(month?.planned ?? null, goal.plan.budgets.some((budget) => budget.month === `${today.slice(0, 7)}-01`));
   const percent = month && planned ? Math.floor((month.reached * 100) / planned) : 0;
@@ -233,6 +239,42 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         />
       </Section>
     );
+  // A unit other than time has no plan, only the rhythm every month without an amount of its own takes (RP-101).
+  const rhythmUnit = goal.measureUnit;
+  const rhythmSection =
+    measuresOther && rhythmUnit !== null && !holds && (goal.rhythm !== null || (!archived && !ended)) ? (
+      <Section label={t("roadmap.meta.rhythmLabel")}>
+        {goal.rhythm === null ? (
+          <RhythmSheet
+            goalId={goal.id}
+            goalName={goal.name}
+            unit={rhythmUnit}
+            plan={goal.plan}
+            initial={null}
+            name={t("roadmap.meta.rhythmOffer")}
+            meta={t("roadmap.meta.rhythmOfferHint", { unit: unitWord(rhythmUnit) })}
+          />
+        ) : archived || ended ? (
+          <Row
+            card
+            name={t("roadmap.meta.rhythmOtherLine", { amount: formatQuantity(goal.rhythm, rhythmUnit, words) })}
+            meta={t("roadmap.meta.rhythmOtherHint")}
+            metaVariant="sentence"
+            disabled
+          />
+        ) : (
+          <RhythmSheet
+            goalId={goal.id}
+            goalName={goal.name}
+            unit={rhythmUnit}
+            plan={goal.plan}
+            initial={goal.rhythm}
+            name={t("roadmap.meta.rhythmOtherLine", { amount: formatQuantity(goal.rhythm, rhythmUnit, words) })}
+            meta={t("roadmap.meta.rhythmOtherHint")}
+          />
+        )}
+      </Section>
+    ) : null;
   const monthsLink = (
     <TextLink href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</TextLink>
   );
@@ -282,9 +324,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         {part ? (
           <Text as="p" variant="sentence" tone="muted">
             {t.rich("goal.detail.monthPart", {
-              ...part,
-              share: formatQuantity(part.share, goal.measureUnit ?? "", words),
-              rhythm: formatQuantity(part.rhythm, goal.measureUnit ?? "", words),
+              ...partWords(part, monthKey, goal.measureUnit ?? "", (n) => formatQuantity(n, goal.measureUnit ?? "", words)),
               ...fig,
             })}
           </Text>
@@ -337,15 +377,16 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             {endedOnWords(goal.endedOn, t)}
           </Text>
         ) : (
-          <Flex justify="between" align="center">
+          <MoveEndRow {...moveProps} reopening={archived || ended}>
             <Text as="p" variant="sentence" tone="muted">
-              {t("goal.detail.horizonUntil", {
-                weeks: totalWeeks,
-                date: endLabel,
-              })}
+              {endLabel === null
+                ? t("goal.detail.noEnd")
+                : t("goal.detail.horizonUntil", {
+                    weeks: totalWeeks ?? 0,
+                    date: endLabel,
+                  })}
             </Text>
-            {archived ? null : moveAction}
-          </Flex>
+          </MoveEndRow>
         )}
         {goal.measureUnit ? null : (
           <Text as="p" variant="sentence" tone="muted">
@@ -443,10 +484,17 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           <Flex direction="column">
             {openChildren.map((child) => {
               const node = goal.tree.find((entry) => entry.id === child.id);
-              const last = dayLabel(dayBefore(node?.horizon ?? goal.horizon));
+              const end = node ? node.horizon : goal.horizon;
+              const last = end === null ? null : dayLabel(dayBefore(end));
               const count = openBelow(child.id);
               const until =
-                count > 0 ? t("tree.list.untilInside", { date: last, count }) : t("tree.list.until", { date: last });
+                last === null
+                  ? count > 0
+                    ? t("tree.list.noEndInside", { count })
+                    : t("goal.list.noEnd")
+                  : count > 0
+                    ? t("tree.list.untilInside", { date: last, count })
+                    : t("tree.list.until", { date: last });
               return (
                 <Row
                   key={child.id}
@@ -475,6 +523,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   ) : (
     <>
       {planSection}
+      {rhythmSection}
       {endPanel}
       {measurePanel}
     </>
@@ -546,6 +595,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   return (
     <Page width="full">
       <ScreenHeader
+        chat
         title={goal.name}
         back={
           goal.parent
@@ -555,10 +605,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         metaVariant="sentence"
         meta={
           goal.level && !archived
-            ? t("tree.goal.levelUntil", {
-                level: t(`tree.levels.${goal.level === "large" ? "grande" : goal.level === "small" ? "pequena" : "general"}`),
-                date: endLabel,
-              })
+            ? endLabel === null
+              ? t("tree.goal.levelNoEnd", { level: levelName })
+              : t("tree.goal.levelUntil", { level: levelName, date: endLabel })
             : t.rich(archived ? "goal.detail.archivedOverline" : "goal.detail.overline", {
                 date: longDateLabel(goal.archivedAt ?? goal.createdAt),
                 ...fig,

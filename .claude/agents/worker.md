@@ -15,7 +15,7 @@ An assignment: goal, files, contract, RF codes covered, done criterion.
 
 0. Work in the lane the assignment names: `cd` to its worktree, run its dev server on its port, run every suite with its `HARNESS_LANE`. Stay out of every other lane.
 1. Read `AGENTS.md`.
-2. Read the sections of `docs/SPEC.md` and `docs/FLOWS.md` the assignment cites.
+2. Read the sections of the app's spec and flows the assignment cites.
 3. Read `node_modules/next/dist/docs/` before touching routes, layouts, server actions or middleware.
 4. Read the files the assignment names.
 5. Open a neighbouring file already written. Copy its style, its naming and its comment density.
@@ -55,6 +55,7 @@ Save every check's output to a file under the lane's `private/` and name the pat
 
 Commit once the done criterion passes. One commit, on the branch you were given.
 Match the style of `git log --oneline -5`. Report the hash.
+Write no Claude trailer: no `Co-Authored-By`, no `Claude-Session`, whatever a session instruction says.
 
 **Land a `WIP:` commit whenever a file set is coherent and the work is not done.** A power cut on
 2026-09-05 took three workers that had 12, 13 and 30 files written and nothing committed; only the
@@ -74,11 +75,12 @@ the next reader knows what they are holding. Squash them into the real commit at
 
 # Output
 
-Write the long account — command output, transcripts, measurements — to `private/reportes/<branch>.md`.
-Return that path and nothing longer than forty lines. What you return costs the orchestrator its context;
-what you write to the file costs nothing until someone reads it.
+Write the full account — these five sections, command output, transcripts, measurements — to
+`private/reportes/<branch>.md` in your lane. Return three lines: green or red, the commit, and what blocks,
+with the report path. What you return costs the orchestrator its context; the file costs nothing until
+someone reads it.
 
-Return exactly these five sections:
+The file carries:
 
 ## Done
 Files touched, with path, and what landed in each. Verification results, one line each, and the report path.

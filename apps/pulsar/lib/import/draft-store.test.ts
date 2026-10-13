@@ -161,6 +161,12 @@ test("v2: saveReview keeps the draft, the unmarked paths and the declined correc
   assert.deepEqual(read?.source, source);
 });
 
+test("906: saveReview given corrections keeps those, so an edit that settled one stays settled on reload", () => {
+  saveDraft({ ...base, corrections: [{ id: "goals.0:nameShortened", at: "goals.0", code: "nameShortened", said: "s", proposed: "p", declined: "leavesOut" }] });
+  saveReview(draft2(), [], [], []);
+  assert.deepEqual(readDraft()?.corrections, []);
+});
+
 test("v2: a value without version 2 reads null, the older shape included", () => {
   memory.set("pulsar.import-draft", JSON.stringify({ via: "template", draft: { goals: [] }, source: null, unmarked: null }));
   assert.equal(readDraft(), null);
@@ -206,4 +212,54 @@ test("v2: the box gets back the text as written; a file leaves it empty; a draft
   memory.set("pulsar.import-draft", JSON.stringify(stored));
   assert.equal(readText(), "a\nb\nc");
   assert.equal(readDraft()?.text, undefined);
+});
+
+// ---- 903: what a stored draft of an unexpected shape reads as.
+
+const v2goal = (over: Partial<DraftGoal> = {}): DraftGoal => ({
+  key: "g1", parent: null, name: "Meta", horizon: "2027-10-01", measure: null, rhythm: null, note: null, noteSrc: [], src: [],
+  phases: [], months: [], commitments: [], rules: [], tasks: [], ...over,
+});
+const stored2 = (over: Record<string, unknown> = {}) => ({
+  version: 2, via: "model", draft: { version: 2, goals: [v2goal()] }, corrections: [], notices: [],
+  source: { kind: "lines", lines: ["a"] }, sourceName: null, unmarked: null, declined: [], ...over,
+});
+const put = (value: unknown) => memory.set("pulsar.import-draft", JSON.stringify(value));
+
+test("903: a stored draft read back by every way it can have been read, and by none other", () => {
+  for (const via of ["template", "workbook", "model"]) {
+    put(stored2({ via }));
+    assert.equal(readDraft()?.via, via, via);
+  }
+  put(stored2({ via: "pdf" }));
+  assert.equal(readDraft(), null);
+  put(stored2({ version: 1 }));
+  assert.equal(readDraft(), null);
+});
+
+test("903: a draft the schema refuses, or a source of an unknown kind, reads as nothing", () => {
+  put(stored2({ draft: { version: 2, goals: [{ name: "x" }] } }));
+  assert.equal(readDraft(), null);
+  put(stored2({ source: { kind: "pdf", lines: null } }));
+  assert.equal(readDraft(), null);
+  put(stored2({ source: { kind: "lines", lines: "texto" } }));
+  assert.equal(readDraft(), null);
+  put(stored2({ source: null }));
+  assert.equal(readDraft(), null);
+});
+
+test("903: a source of parts or rows with no lines is kept", () => {
+  put(stored2({ source: { kind: "parts", lines: null } }));
+  assert.deepEqual(readDraft()?.source, { kind: "parts", lines: null });
+  put(stored2({ source: { kind: "rows", lines: null } }));
+  assert.deepEqual(readDraft()?.source, { kind: "rows", lines: null });
+});
+
+test("903: the lists read back keep what is the right kind and drop the rest", () => {
+  put(stored2({ unmarked: ["goals.0", 3, null], declined: ["a", {}, "b"], corrections: [{ id: "x" }, null, 5], notices: [null, { at: "y" }] }));
+  const read = readDraft();
+  assert.deepEqual(read?.unmarked, ["goals.0"]);
+  assert.deepEqual(read?.declined, ["a", "b"]);
+  assert.equal(read?.corrections.length, 1);
+  assert.equal(read?.notices.length, 1);
 });

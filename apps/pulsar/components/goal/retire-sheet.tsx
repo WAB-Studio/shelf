@@ -87,13 +87,16 @@ export type CommitmentRowProps = {
   retiredLabel: string;
   factDayCount: number;
   trailing?: ReactNode;
+  // A habit with no goal says its cadence under the name and its note under that.
+  meta?: ReactNode;
+  preview?: string | null;
 };
 
 /**
  * The goal screen's own commitment row: a retired one stays disabled — never
  * hidden, never tappable (RP-13) — an active one opens `RetireSheet`.
  */
-export function CommitmentRow({ commitmentId, name, retired, retiredLabel, factDayCount, trailing }: CommitmentRowProps) {
+export function CommitmentRow({ commitmentId, name, retired, retiredLabel, factDayCount, trailing, meta, preview }: CommitmentRowProps) {
   const [open, setOpen] = useState(false);
 
   if (retired) {
@@ -102,7 +105,7 @@ export function CommitmentRow({ commitmentId, name, retired, retiredLabel, factD
 
   return (
     <>
-      <Row name={name} trailing={trailing} onClick={() => setOpen(true)} />
+      <Row name={name} meta={meta} metaVariant="sentence" preview={preview} trailing={trailing} onClick={() => setOpen(true)} />
       <RetireSheet
         open={open}
         onOpenChange={setOpen}

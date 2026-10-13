@@ -3,7 +3,7 @@ import type { Browser, Page } from "@playwright/test";
 import messages from "../messages/es/import.json";
 import { test, expect, settled as pageSettled } from "./fixtures";
 import { todayInZone } from "../lib/zone";
-import { rawGoal, rawTask, seedOf, stored } from "./importar-plan";
+import { rawGoal, rawTask, seedOf, stored, unfold } from "./importar-plan";
 
 // 689 (1): a figure falls for a reason, and the review says the true one. In a goal
 // measured in something that is not time the reason is «esta meta no mide tiempo»;
@@ -25,7 +25,7 @@ const goal = (name: string, measure: { name: string; unit: string } | null, task
     tasks: tasks.map((task) => rawTask(task.name, { month: first, estimate: task.estimate, children: task.children.map((child) => ({ name: child.name, estimate: child.estimate, rule: null, noteSrc: [], noteText: null, src: [] })) })),
   });
 
-async function toReview(page: Page) {
+async function toOpenReview(page: Page) {
   const seeded = stored(
     seedOf([
       goal("Correr", { name: "distancia", unit: "km" }, [
@@ -46,6 +46,7 @@ async function toReview(page: Page) {
   await page.goto("/metas/importar/revisar");
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await pageSettled(page);
+  await unfold(page);
 }
 
 type Fixtures = { person: { id: string; sessionFile: string }; browser: Browser; baseURL: string | undefined };
@@ -60,7 +61,7 @@ for (const width of [360, 1440]) {
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 1400 } });
     const page = await context.newPage();
     try {
-      await toReview(page);
+      await toOpenReview(page);
       for (const fold of await page.getByRole("button", { name: "1 sub-tarea" }).all()) await fold.click();
 
       // The task says its month and the reason; the sub-task its own class and the same reason.

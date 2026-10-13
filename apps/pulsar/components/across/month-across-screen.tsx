@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
 import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
+import { cadencePhrase } from "@/lib/day/row-phrases";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
@@ -274,10 +275,40 @@ export async function MonthAcrossScreen() {
     return root && members.length > 1 ? groupBlock(root, members) : block(members[0]);
   });
 
+  // Habits with no goal (RP-100): what the month counted of each, never a mark.
+  const habitsGroup =
+    across.loose.length > 0 ? (
+      <Panel key="habits">
+        <Section as="div" label={t("month.across.habits.title")}>
+          <Flex direction="column" gap="4">
+            {across.loose.map((habit) => {
+              const cadence =
+                cadencePhrase((key, values) => t(key, values), habit.cadence, {
+                  weekdayShort: t.raw("day.cadence.weekdayName") as string[],
+                  weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
+                }) ?? t("day.cadence.everyDay");
+              return (
+                <Flex key={habit.id} direction="column">
+                  <Text as="p" variant="name">
+                    {habit.name}
+                  </Text>
+                  <Text as="p" variant="meta">
+                    {habit.asked === null
+                      ? t("month.across.habits.line", { cadence, count: habit.daysDone })
+                      : t("month.across.habits.lineOf", { cadence, done: habit.daysDone, asked: habit.asked })}
+                  </Text>
+                </Flex>
+              );
+            })}
+          </Flex>
+        </Section>
+      </Panel>
+    ) : null;
+
   return (
     <Page width="full">
-      <ScreenHeader title={thisName.charAt(0).toUpperCase() + thisName.slice(1)} meta={dateLine} />
-      {across.goals.length === 0 ? (
+      <ScreenHeader chat title={thisName.charAt(0).toUpperCase() + thisName.slice(1)} meta={dateLine} />
+      {across.goals.length === 0 && across.loose.length === 0 ? (
         <Section as="div">
           <Text as="p" variant="sentence">
             {t("month.across.empty.title")}
@@ -296,6 +327,7 @@ export async function MonthAcrossScreen() {
           ) : null}
           <Grid columns={{ initial: "1", lg: "3" }} gap={{ initial: "6", md: "4" }} align="start">
             {blocks}
+            {habitsGroup}
           </Grid>
         </>
       )}

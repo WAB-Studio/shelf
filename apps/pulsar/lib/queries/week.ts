@@ -3,6 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { deriveWeek } from "@/lib/day/derive";
+import { tallyDays, type DayTally } from "@/lib/day/tally";
 import type { Cadence, CommitmentPlan, WeekView } from "@/lib/day/types";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
@@ -33,7 +34,8 @@ import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
 type GoalRow = {
   id: string;
   name: string;
-  horizon: string;
+  // Null: a goal with no end (RP-99).
+  horizon: string | null;
   created_at: string;
   archived_at: string | null;
 };
@@ -42,7 +44,7 @@ type GoalRow = {
 // neither column exists on `commitments` itself. `goal_id` widens `rows.ts`'s
 // own `CommitmentRow` — `WeekScreen` is what groups a commitment's own
 // dot under the goal it belongs to; `deriveWeek` never learns it.
-type CommitmentRow = BaseCommitmentRow & { goal_id: string };
+type CommitmentRow = BaseCommitmentRow & { goal_id: string | null };
 
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
 // bare quantity, never its own unit. `one_off_id` and `goal_id` ride in from
@@ -100,7 +102,7 @@ type WeekQueryRow = {
  * its Sunday — so an archive since keeps the past week it lived through, and
  * a goal opened later never enters it. A goal that ended mid-week stays, it
  * lived through the days before. `first_monday` is the Monday of the oldest
- * goal's creation, archived included: the bound of the screen's ‹.
+ * goal's or loose habit's creation, archived included: the bound of the screen's ‹.
  * `WeekScreen` only ever groups a dot under a goal it finds here, and
  * `goals.length === 0` is what decides the week's own empty state (`empty-week.tsx`).
  */
@@ -115,10 +117,14 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(g) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where (g.created_at at time zone ${TIME_ZONE})::date <= ${weekEnd}::date
-           and g.horizon > ${weekStart}::date
+           and (g.horizon is null or g.horizon > ${weekStart}::date)
            and (g.archived_at is null or (g.archived_at at time zone ${TIME_ZONE})::date > ${weekEnd}::date)) as goals,
-      (select date_trunc('week', min(g.created_at at time zone ${TIME_ZONE}))::date::text
-         from "goals"."goals" g) as first_monday,
+      (select date_trunc('week', min(t.created_at at time zone ${TIME_ZONE}))::date::text
+         from (
+           select g.created_at from "goals"."goals" g
+           union all
+           select c.created_at from "goals"."commitments" c where c.goal_id is null
+         ) t) as first_monday,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit
@@ -165,7 +171,7 @@ function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
 export type GoalSummary = {
   id: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   createdAt: string;
   // Set only on a goal archived after the week read (RP-24).
   archivedAt: string | null;
@@ -187,7 +193,8 @@ function toGoalSummary(row: GoalRow): GoalSummary {
 // goal section it draws under.
 export type CommitmentGoal = {
   id: string;
-  goalId: string;
+  // Null: a habit with no goal (RP-100).
+  goalId: string | null;
   name: string;
   cadence: Cadence;
   // Distinct days with a fact inside the cadence's own period (this week for
@@ -249,6 +256,8 @@ export async function loadWeek(anyDayInIt: string): Promise<{
   goals: GoalSummary[];
   firstMonday: string | null;
   commitments: CommitmentGoal[];
+  // Habits with no goal (RP-100): their commitments and the week's tally for them, a day each.
+  loose: { commitments: CommitmentGoal[]; days: DayTally[] };
   oneOffFacts: OneOffFact[];
 }> {
   const person = await getPerson();
@@ -294,12 +303,19 @@ export async function loadWeek(anyDayInIt: string): Promise<{
     }),
   };
 
+  const placed = row.commitments.map((c) => toCommitmentGoal(c, row.period_facts, week, anyDayInIt.slice(0, 7)));
+  const looseCommitments = placed.filter((c) => c.goalId === null);
+
   return {
     view,
     evidence: evidenceOutcome.status,
     goals: row.goals.map(toGoalSummary),
     firstMonday: row.first_monday,
-    commitments: row.commitments.map((c) => toCommitmentGoal(c, row.period_facts, week, anyDayInIt.slice(0, 7))),
+    commitments: placed,
+    loose: {
+      commitments: looseCommitments,
+      days: tallyDays({ view, goals: [], commitments: looseCommitments }),
+    },
     // Unfiltered by `commitment_id`, unlike `facts` above: a one-off's fact
     // is exactly the row `facts` throws away (RP-19's own shape — "one
     // subject" means never both), read back out here instead.

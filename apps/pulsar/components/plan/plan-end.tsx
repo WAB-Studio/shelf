@@ -69,7 +69,9 @@ export function PlanEnd({
         trailing={<ChevronRight size={20} aria-hidden />}
         onClick={() => setOpen(true)}
       />
-      <MoveEndSheet goalId={goalId} from={dayBefore(plan.horizon)} to={planEnd} moveTo={moveTo} open={open} onOpenChange={setOpen} />
+      {plan.horizon !== null ? (
+        <MoveEndSheet goalId={goalId} from={dayBefore(plan.horizon)} to={planEnd} moveTo={moveTo} open={open} onOpenChange={setOpen} />
+      ) : null}
       <Text as="p" variant="sentence">
         {t("roadmap.pasaElFinal.removeTasks")}
       </Text>

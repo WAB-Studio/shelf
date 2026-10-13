@@ -247,3 +247,108 @@ test("a commitment row reads its cadence and its tap", async () => {
   const draft = await draftOf(await book({ Metas: [GOAL], Compromisos: [["Meta", "Inglés", "cada día", "toque"]] }));
   assert.equal(draft.goals[0].commitments[0].satisfaction, "tap");
 });
+
+// ---- 903: survivors of the tren-i1 mutator in the workbook reader.
+
+async function errorsOf(bytes: Uint8Array) {
+  const result = await read(bytes);
+  assert.ok("errors" in result, JSON.stringify(result));
+  return result.errors.map((e) => [e.sheet, e.row, e.expected]);
+}
+
+test("903: a bare number is hours in a goal in hours and minutes in a goal in minutes; a decimal point reads", async () => {
+  const hours = await draftOf(await book({ Metas: [["Meta", null, "2027-01-01", "estudio", "horas", 2, null]], Meses: [["Meta", "2026-10", 12], ["Meta", "2026-11", "1.5"]] }));
+  assert.equal(hours.goals[0].rhythm, 120);
+  assert.deepEqual(hours.goals[0].months.map((m) => m.amount), [720, 90]);
+  const minutes = await draftOf(await book({ Metas: [["Meta", null, "2027-01-01", "estudio", "minutos", 45, null]], Meses: [["Meta", "2026-10", 30]] }));
+  assert.equal(minutes.goals[0].rhythm, 45);
+  assert.equal(minutes.goals[0].months[0].amount, 30);
+});
+
+test("903: the headers match whatever their case or spaces", async () => {
+  const wb = new ExcelJS.Workbook();
+  for (const [name, headers] of Object.entries(HEADERS)) {
+    const sheet = wb.addWorksheet(name);
+    if (name === "Metas") sheet.addRow([TEMPLATE_HEADER]);
+    sheet.addRow(headers.map((h) => `  ${h.toUpperCase()} `));
+    if (name === "Metas") sheet.addRow([...GOAL]);
+  }
+  const draft = await draftOf(new Uint8Array(await wb.xlsx.writeBuffer()));
+  assert.equal(draft.goals[0].name, "Meta");
+});
+
+test("903: a book with no goal row answers the first row of Metas; a broken header answers its own row", async () => {
+  assert.deepEqual(await errorsOf(await book({})), [["Metas", 3, "import.errors.form.goal"]]);
+  const wb = new ExcelJS.Workbook();
+  for (const [name, headers] of Object.entries(HEADERS)) {
+    const sheet = wb.addWorksheet(name);
+    if (name === "Metas") sheet.addRow([TEMPLATE_HEADER]);
+    sheet.addRow(name === "Meses" ? ["meta", "otro", "monto"] : [...headers]);
+  }
+  assert.deepEqual(await errorsOf(new Uint8Array(await wb.xlsx.writeBuffer())), [["Meses", 1, "import.errors.form.month"]]);
+  const metas = new ExcelJS.Workbook();
+  for (const [name, headers] of Object.entries(HEADERS)) {
+    const sheet = metas.addWorksheet(name);
+    if (name === "Metas") sheet.addRow([TEMPLATE_HEADER]);
+    sheet.addRow(name === "Metas" ? ["otro", ...headers.slice(1)] : [...headers]);
+  }
+  assert.deepEqual(await errorsOf(new Uint8Array(await metas.xlsx.writeBuffer())), [["Metas", 2, "import.errors.form.goal"]]);
+});
+
+test("903: a goal row with no name and a row naming no goal are errors on their own rows", async () => {
+  assert.deepEqual(await errorsOf(await book({ Metas: [[null, null, "2027-01-01", null, null, null, null]] })), [["Metas", 3, "import.errors.form.goal"]]);
+  assert.deepEqual(
+    await errorsOf(await book({ Metas: [[...GOAL]], Fases: [["Otra", "2026-10-01", "2026-12-31", "Fase"]] })),
+    [["Fases", 2, "import.errors.form.phase"]],
+  );
+});
+
+test("903: errors come by sheet in the book's order, then by row, each row once", async () => {
+  const bytes = await book({
+    Metas: [[...GOAL]],
+    Fases: [["Meta", "mal", "mal", "Fase"], ["Meta", "mal", "mal", "Otra"]],
+    Tareas: [["Meta", "2026-13", "T", null, null, null]],
+  });
+  assert.deepEqual(await errorsOf(bytes), [
+    ["Fases", 2, "import.errors.form.phase"],
+    ["Fases", 3, "import.errors.form.phase"],
+    ["Tareas", 2, "import.errors.form.monthReal"],
+  ]);
+  const twice = await book({ Metas: [["Meta", null, "no-fecha", "m", "", "xx", null]] });
+  const rows = (await errorsOf(twice)).map((e) => `${e[0]}:${e[1]}`);
+  assert.deepEqual(rows, [...new Set(rows)]);
+});
+
+test("903: the draft's parts name the rows they came from", async () => {
+  const draft = await draftOf(
+    await book({
+      Metas: [[...HOURS]],
+      Fases: [["Meta", "2026-10-01", "2026-12-31", "Fase"]],
+      Meses: [["Meta", "2026-10", "2 h"]],
+      Compromisos: [["Meta", "Leer", "cada día", "toque"]],
+      Tareas: [["Meta", "2026-10", "Tarea", null, "1 h", null]],
+    }),
+  );
+  const [goal] = draft.goals;
+  assert.deepEqual(goal.src, [{ from: 1, to: 1 }]);
+  assert.deepEqual(goal.phases[0].src, [{ from: 2, to: 2 }]);
+  assert.deepEqual(goal.months[0].src, [{ from: 3, to: 3 }]);
+  assert.deepEqual(goal.commitments[0].src, [{ from: 4, to: 4 }]);
+  assert.deepEqual(goal.tasks[0].src, [{ from: 5, to: 5 }]);
+});
+
+test("903: a blank row in a sheet is not a row", async () => {
+  const draft = await draftOf(await book({ Metas: [[...HOURS]], Meses: [["Meta", "2026-10", "2 h"], [null, null, null], ["Meta", "2026-11", "3 h"]] }));
+  assert.deepEqual(draft.goals[0].months.map((m) => m.src), [[{ from: 2, to: 2 }], [{ from: 3, to: 3 }]]);
+});
+
+test("915 an empty horizon cell is a goal with no end", async () => {
+  const draft = await draftOf(await book({ Metas: [["Meta", null, null, "estudio", "horas", null, null]] }));
+  assert.equal(draft.goals[0].horizon, null);
+});
+
+test("915 a rhythm in another unit reads as a whole number of it", async () => {
+  const draft = await draftOf(await book({ Metas: [["Meta", null, null, "lectura", "páginas", 40, null]] }));
+  assert.equal(draft.goals[0].rhythm, 40);
+  assert.equal(draft.goals[0].horizon, null);
+});

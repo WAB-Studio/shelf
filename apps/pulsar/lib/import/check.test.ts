@@ -108,3 +108,61 @@ test("a goal with goals inside is not checked for months", () => {
   const d = draft(goal({ key: "g1", tasks: [task({ estimate: H(5) })], months: [{ month: "2026-10", amount: H(1), src: [] }] }), goal({ key: "g2", parent: "g1" }));
   assert.deepEqual(check(d).corrections, []);
 });
+
+// ---- 903
+
+const under = (over: Partial<DraftGoal> = {}) =>
+  draft(
+    goal({ key: "g", parent: null, name: "General", tasks: [task()] }),
+    goal({ key: "h", parent: "g", name: "Inglés", rhythm: H(13), tasks: [], ...over }),
+  );
+
+test("903: a goal with a rhythm and no tasks under a goal that has tasks is a notice naming both, and changes nothing", () => {
+  const d = under({ note: "algo" });
+  const { corrections, notices } = check(d);
+  assert.deepEqual(corrections, []);
+  assert.deepEqual(notices, [{ at: "goals.1", code: "rhythmWithoutTasks", values: { name: "Inglés", above: "General" } }]);
+  const decided = decide(d, corrections, new Set());
+  assert.equal(decided.goals[1].rhythm, H(13));
+  assert.equal(decided.goals[1].note, "algo");
+});
+
+test("903: no word when the goal has tasks, has no rhythm, has no parent, or the goal above has none", () => {
+  const codes = (d: ImportDraft) => check(d).notices.filter((n) => n.code === "rhythmWithoutTasks").length;
+  assert.equal(codes(under({ tasks: [task()] })), 0);
+  assert.equal(codes(under({ rhythm: null })), 0);
+  assert.equal(codes(draft(goal({ rhythm: H(5) }))), 0);
+  assert.equal(codes(draft(goal({ key: "g", tasks: [] }), goal({ key: "h", parent: "g", rhythm: H(5) }))), 0);
+});
+
+test("903: a holder with a rhythm is not asked about; the one named by key, not by position", () => {
+  const d = draft(
+    goal({ key: "other", name: "Otra", tasks: [] }),
+    goal({ key: "g", name: "General", tasks: [task()] }),
+    goal({ key: "h", parent: "g", rhythm: H(2), tasks: [] }),
+  );
+  const found = check(d).notices.filter((n) => n.code === "rhythmWithoutTasks");
+  assert.deepEqual(found.map((n) => n.at), ["goals.2"]);
+  assert.equal(found[0].values.above, "General");
+});
+
+test("903: a sub-task with no rule of its own counts toward its task's rule", () => {
+  const rules = [{ id: "ingles", label: "Inglés", perWeek: H(3) }];
+  const d = draft(
+    goal({
+      rules,
+      tasks: [task({ week: "2026-W41", rule: "ingles", children: [{ name: "c", estimate: H(3), note: null, noteSrc: [], src: [], rule: null }] })],
+    }),
+  );
+  assert.deepEqual(check(d).notices, []);
+});
+
+test("903: the corrections of two months come in month order, whatever order the tasks are in", () => {
+  const d = draft(
+    goal({
+      months: [{ month: "2026-10", amount: H(1), src: [] }, { month: "2026-11", amount: H(1), src: [] }],
+      tasks: [task({ month: "2026-11", estimate: H(2) }), task({ month: "2026-10", estimate: H(2) })],
+    }),
+  );
+  assert.deepEqual(check(d).corrections.map((c) => c.values?.month), ["2026-10", "2026-11"]);
+});

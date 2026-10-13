@@ -91,6 +91,8 @@ export function DayHeader({
   return (
     <>
       <ScreenHeader
+        chat
+        steps={title === undefined}
         title={title ?? date}
         eyebrow={title ? date : undefined}
         controls={controls}

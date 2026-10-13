@@ -22,6 +22,29 @@ type ChatCompletionsPayload = {
   choices?: Array<{ message?: { content?: string } }>;
 };
 
+// Strict structured outputs take `maxItems` but no string length: those ride in
+// `description`, and `notesResponseSchema` still judges them.
+const NOTES_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    notes: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          term: { type: "string", description: "Copied verbatim from the English sentence; at most 64 characters." },
+          note: { type: "string", description: "In Spanish; at most 280 characters." },
+        },
+        required: ["term", "note"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["notes"],
+  additionalProperties: false,
+};
+
 // The two hints the server computes and hands over as hints, never as
 // instructions — the contract's own example (`black minorca`) is the case
 // neither hint touches, and only the model's read of the whole sentence
@@ -51,9 +74,7 @@ function buildSystemPrompt(survivors: string[], unindexed: string[]): string {
     `each explaining what the thing is, never how the word translates: a note on "black minorca" ` +
     `says it is a chicken breed, not that "minorca" means "menorca".${hintBlock} Zero notes is a ` +
     `correct answer when nothing in the sentence needs one — never invent a term to fill three ` +
-    `slots. Reply with strict JSON only, shaped exactly as ` +
-    `{"notes": [{"term": string, "note": string}]}, at most 3 entries, "term" copied verbatim from ` +
-    `the English sentence and "note" written in Spanish.`
+    `slots. Copy each "term" verbatim from the English sentence and write each "note" in Spanish.`
   );
 }
 
@@ -75,7 +96,10 @@ export async function generateNotes(
     model: NOTES_MODEL_NAME,
     reasoning_effort: REASONING_EFFORT,
     max_completion_tokens: MAX_OUTPUT_TOKENS,
-    response_format: { type: "json_object" },
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "phrase_notes", schema: NOTES_JSON_SCHEMA, strict: true },
+    },
     messages: [
       { role: "system", content: buildSystemPrompt(survivors, unindexed) },
       { role: "user", content: `English: ${source}\nSpanish: ${translation}` },

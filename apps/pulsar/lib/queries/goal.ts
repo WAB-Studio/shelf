@@ -59,7 +59,8 @@ import {
 export type GoalRow = {
   id: string;
   name: string;
-  horizon: string;
+  // Null: a goal with no end (RP-99).
+  horizon: string | null;
   measure_name: string | null;
   measure_unit: string | null;
   created_at: string;
@@ -76,7 +77,7 @@ export type GoalRow = {
   note?: string | null;
 };
 
-export type GoalRef = { id: string; name: string; horizon: string };
+export type GoalRef = { id: string; name: string; horizon: string | null };
 
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
 // `evidence_sources`. `source_key` feeds `evidenceMeasureTotal` below, the
@@ -122,7 +123,7 @@ type TreeSqlRow = {
   parent_id: string | null;
   position: number;
   created_at: string;
-  horizon: string;
+  horizon: string | null;
   archived_at: string | null;
   measure_unit: string | null;
 };
@@ -198,9 +199,9 @@ export type GoalCommitment = {
 export type GoalView = {
   id: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   // The last day the goal counted: `dayBefore(horizon)` once `horizon` is
-  // today or past, null while it still runs. Archived or not — the screen
+  // today or past, null while it still runs and for a goal with no end. Archived or not — the screen
   // decides which wins.
   endedOn: string | null;
   // When the goal was opened (§0.3, 3), in the person's own zone — the goal
@@ -297,7 +298,7 @@ function toPlanTask(task: TaskRow, openedOn: string): PlanTask {
 export type GoalSummary = {
   id: string;
   name: string;
-  horizon: string;
+  horizon: string | null;
   measureName: string | null;
   measureUnit: string | null;
   archivedAt: string | null;
@@ -432,7 +433,7 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
  * second round trip: the subquery runs inside the reading statement itself,
  * the same one statement `queryEvidenceBySource` always sent.
  */
-function goalSpan(goalId: string): { from: SQL; to: SQL } {
+function goalSpan(goalId: string, today: string): { from: SQL; to: SQL } {
   return {
     // The earliest civil day of the goal's non-archived branch (`spanStart`,
     // `lib/goals/tree.ts`): the goal's own, alone. The table is named once, in
@@ -448,8 +449,8 @@ function goalSpan(goalId: string): { from: SQL; to: SQL } {
                          at time zone ${TIME_ZONE})::date
                  from t join b on b.id = t.id)`,
     // `horizon` is the first day after the goal (RP-11), already a civil date:
-    // the span ends the day before it.
-    to: sql`(select g.horizon - 1 from "goals"."goals" g where g.id = ${goalId})`,
+    // the span ends the day before it, or today for a goal with no end.
+    to: sql`(select coalesce(g.horizon - 1, ${today}::date) from "goals"."goals" g where g.id = ${goalId})`,
   };
 }
 
@@ -628,7 +629,7 @@ export async function loadGoal(
   const [row, evidenceOutcome] = await Promise.all([
     withGoalsDb((tx) => queryGoalRow(tx, goalId)),
     withReadingDb((tx) => {
-      const { from, to } = goalSpan(goalId);
+      const { from, to } = goalSpan(goalId, today);
       return queryEvidenceBySource(tx, person.id, from, to);
     }).then(
       (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
@@ -691,7 +692,7 @@ export async function loadGoal(
     own.set(row.goal.id, { unit: row.goal.measure_unit, months: monthFigures(figures.months, []) });
     for (const entry of row.branch) {
       const from = spanStart(tree, entry.goal.id);
-      const f = figuresOf(entry, from, within(from, dayBefore(entry.goal.horizon)));
+      const f = figuresOf(entry, from, within(from, entry.goal.horizon === null ? today : dayBefore(entry.goal.horizon)));
       own.set(entry.goal.id, { unit: entry.goal.measure_unit, months: monthFigures(f.months, []) });
     }
     up = rollUp(tree, own);
@@ -716,7 +717,7 @@ export async function loadGoal(
   let measureUnit = row.goal.measure_unit;
   if (rolled) {
     measureUnit = rolled.unit;
-    months = monthsOfSpan(spanFrom, row.goal.horizon).map((m) => ({
+    months = monthsOfSpan(spanFrom, row.goal.horizon, today).map((m) => ({
       month: m,
       planned: rolled.months.get(m)?.planned ?? null,
       reached: rolled.months.get(m)?.reached ?? 0,
@@ -745,7 +746,11 @@ export async function loadGoal(
   const parent = node?.parentId ? tree.byId.get(node.parentId) : undefined;
   const below = node ? branchOf(tree, node.id).slice(1).map((id) => tree.byId.get(id)!) : [];
   let latest: TreeNode | null = null;
-  for (const n of below) if (latest === null || n.horizon > latest.horizon) latest = n;
+  for (const n of below) {
+    // A goal with no end ends last.
+    const later = latest === null || (n.horizon === null ? latest.horizon !== null : latest.horizon !== null && n.horizon > latest.horizon);
+    if (later) latest = n;
+  }
   const unitOf = (n: TreeNode): string | null => up.get(n.id)?.unit ?? n.measureUnit;
 
   const children = (node?.children ?? []).map((id) => {
@@ -767,7 +772,7 @@ export async function loadGoal(
       inUnit: unit !== null && unit === measureUnit,
       month: unit === null || !f ? null : { planned: f.planned, reached: f.reached },
       firstPlanned,
-      endedOn: n.horizon <= today ? dayBefore(n.horizon) : null,
+      endedOn: n.horizon !== null && n.horizon <= today ? dayBefore(n.horizon) : null,
       archivedAt: n.archivedAt,
     };
   });
@@ -776,7 +781,7 @@ export async function loadGoal(
     id: row.goal.id,
     name: row.goal.name,
     horizon: row.goal.horizon,
-    endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
+    endedOn: row.goal.horizon !== null && row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
     createdAt: row.goal.created_at,
     measureName: row.goal.measure_name,
     measureUnit,
@@ -794,7 +799,7 @@ export async function loadGoal(
     planSeen: row.goal.plan_seen ?? null,
     plan: figures.plan,
     roadmap: holdsGoals
-      ? { state: "noRhythm", months: [], unplaced: [], end: null, lastDay: dayBefore(row.goal.horizon) }
+      ? { state: "noRhythm", months: [], unplaced: [], end: null, lastDay: row.goal.horizon === null ? null : dayBefore(row.goal.horizon) }
       : fillPlan(figures.plan),
     note: row.goal.note ?? null,
     parent: parent ? ref(parent) : null,
@@ -856,6 +861,31 @@ export async function loadGoalPlace(goalId: string): Promise<GoalPlace | null> {
   };
 }
 
+// A habit with no goal (RP-100), as the «Hábitos sin meta» section draws it.
+export type LooseCommitment = GoalCommitment & { note: string | null };
+
+/**
+ * The person's habits with no goal, live and retired, in their own order: one
+ * transaction, one statement. RLS alone scopes it.
+ */
+export async function listLooseCommitments(): Promise<LooseCommitment[]> {
+  const rows = await withGoalsDb((tx) =>
+    tx.execute<{ row: CommitmentRow & { fact_day_count: number } }>(sql`
+      select to_jsonb(c) || jsonb_build_object(
+               'source_key', s.key,
+               'source_unit', s.unit,
+               'source_label_key', s.label_key,
+               'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id)
+             ) as row
+        from "goals"."commitments" c
+        left join "goals"."evidence_sources" s on s.id = c.source_id
+        where c.goal_id is null
+        order by c.position, c.created_at, c.id
+    `),
+  );
+  return rows.map(({ row }) => ({ ...toGoalCommitment(row, row.fact_day_count), note: row.note ?? null }));
+}
+
 function toGoalSummary(row: GoalRow): GoalSummary {
   return {
     id: row.id,
@@ -878,11 +908,17 @@ function toGoalSummary(row: GoalRow): GoalSummary {
  * `cache()`-wrapped: the layout's rail and the screen's `otherGoals` read it in
  * one render, so a page pays this statement once (RNP-18). It takes no
  * argument, so the one entry is the whole request's.
+ *
+ * The rows come in the tree's preorder (siblings by position, a goal's goals
+ * right after it), each with its parent among the open ones: the rail draws
+ * the tree from this list.
  */
-export const listGoals = cache(async function listGoals(): Promise<GoalSummary[]> {
+export type OpenGoal = GoalSummary & { parentId: string | null };
+
+export const listGoals = cache(async function listGoals(): Promise<OpenGoal[]> {
   const rows = await withGoalsDb((tx) =>
-    tx.execute<GoalRow>(sql`
-      select id, name, horizon, measure_name, measure_unit, archived_at
+    tx.execute<GoalRow & { parent_id: string | null; position: number }>(sql`
+      select id, name, horizon, measure_name, measure_unit, archived_at, created_at, parent_id, position
       from "goals"."goals"
       where archived_at is null
       order by position, created_at, id
@@ -892,7 +928,24 @@ export const listGoals = cache(async function listGoals(): Promise<GoalSummary[]
   // The civil day is the person's, so the cut is JS against `todayInZone()`,
   // never `current_date`: an ended goal is refused like an archived one.
   const today = todayInZone();
-  return rows.filter((row) => row.horizon > today).map(toGoalSummary);
+  const open = rows.filter((row) => row.horizon === null || row.horizon > today);
+  const tree = buildTree(
+    open.map((row) => ({
+      id: row.id,
+      parentId: row.parent_id,
+      position: row.position,
+      createdAt: row.created_at,
+      name: row.name,
+      horizon: row.horizon,
+      archivedAt: row.archived_at,
+      measureUnit: row.measure_unit,
+    })),
+  );
+  const byId = new Map(open.map((row) => [row.id, row]));
+  return tree.order.map((node) => ({
+    ...toGoalSummary(byId.get(node.id)!),
+    parentId: node.ancestors.length > 0 ? node.ancestors[0] : null,
+  }));
 });
 
 // An open goal's current month, as `/metas` draws it beside the goal: the
@@ -909,6 +962,8 @@ export type MetasSummary = GoalSummary & { parentId: string | null; level: Level
 // `outOfUnit` is the goals under it in another unit, which add nothing to its month.
 export type MetasOpenGoal = MetasSummary & {
   month: MetasMonth | null;
+  // The unit `month` is drawn in: the goals' own when it holds goals, else its measure's.
+  monthUnit: string | null;
   outOfUnit: { id: string; name: string; unit: string }[];
 };
 
@@ -1059,13 +1114,14 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
   return {
     open: tree.order
       .map((n) => live.get(n.id))
-      .filter((row): row is MetasRow => row !== undefined && row.horizon > today)
+      .filter((row): row is MetasRow => row !== undefined && (row.horizon === null || row.horizon > today))
       .map((row) => ({
         ...placed(row),
         month: toMonth(row),
+        monthUnit: (holds(row.id) ? rolled.get(row.id)?.unit : null) ?? row.measure_unit,
         outOfUnit: holds(row.id) ? (rolled.get(row.id)?.outOfUnit ?? []) : [],
       })),
-    ended: [...live.values()].filter((row) => row.horizon <= today).map(placed),
+    ended: [...live.values()].filter((row) => row.horizon !== null && row.horizon <= today).map(placed),
     archived,
   };
 }

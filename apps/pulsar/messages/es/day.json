@@ -44,6 +44,9 @@
     "toLight": "Cambiar a modo claro",
     "toDark": "Cambiar a modo oscuro"
   },
+  "habits": {
+    "title": "Hábitos"
+  },
   "empty": {
     "title": "Todavía no hay nada que anotar.",
     "body": "Una meta dice qué cuenta y cada cuánto. Lo que pase después lo anotas tocando su marca, o lo anota sola la app que ya lo sabe.",

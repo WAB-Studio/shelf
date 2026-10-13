@@ -104,6 +104,16 @@ function parseUnitAmount(text: string, unit: string): number | null {
   return m && m[2].trim().toLowerCase() === unit.trim().toLowerCase() ? Number(m[1]) : null;
 }
 
+// A rhythm outside time: a whole number, alone or followed by the measure's unit in its plural or singular.
+function parseRhythmUnits(text: string, unit: string): number | null {
+  const t = text.trim();
+  if (/^\d+$/.test(t)) return Number(t);
+  const plural = unit.trim().toLowerCase();
+  const singular = plural.length > 1 && plural.endsWith("s") ? plural.slice(0, -1) : plural;
+  const m = /^(\d+)\s+(\S.*)$/.exec(t);
+  return m && [plural, singular].includes(m[2].trim().toLowerCase()) ? Number(m[1]) : null;
+}
+
 type Spot = { line: number; expected: FormCode };
 
 // The parts of a goal that its head lines write.
@@ -200,7 +210,6 @@ export function parseTemplate(text: string): TemplateResult {
   let lastTaskPath = "";
   // Where a `nota:` line may land: the task just read, or its latest sub-task.
   let noteOwner: { depth: 2 | 4; into: { note?: string | null }; lines: number[] } | null = null;
-  let needsHorizon: { line: number } | null = null;
   // Whether the line just read was `medida:`, the only place `ritmo:` may follow.
   let afterMeasure = false;
   // After a bad `## ` line, its items are not read: each would repeat one mistake.
@@ -237,9 +246,8 @@ export function parseTemplate(text: string): TemplateResult {
     const at = `goals.${g}`;
 
     if (line.startsWith("# ")) {
-      if (needsHorizon) return stop(needsHorizon.line, FORMS.horizon);
       const name = line.slice(2).trim();
-      goals.push({ name, horizon: "", measure: null, rhythm: null, phases: [], months: [], commitments: [], tasks: [] });
+      goals.push({ name, horizon: null, measure: null, rhythm: null, phases: [], months: [], commitments: [], tasks: [] });
       spots.set(`goals.${g + 1}`, { line: n, expected: FORMS.goal });
       metas.push({
         parent: null, depth: 0, insideLine: null, lines: g === -1 ? [first + 1, n] : [n], noteLines: [], noteTexts: [],
@@ -249,7 +257,6 @@ export function parseTemplate(text: string): TemplateResult {
       if (nameAt.has(name)) report(n, FORMS.goalNameRepeated);
       else nameAt.set(name, g + 1);
       if (name.length > GOAL_NAME_MAX) spots.set(`goals.${g + 1}.name`, { line: n, expected: FORMS.goalLong });
-      needsHorizon = { line: n };
       section = null;
       skipping = false;
       brokenTask = false;
@@ -261,11 +268,17 @@ export function parseTemplate(text: string): TemplateResult {
     if (!goal) return stop(n, FORMS.goal);
 
     if (line.startsWith("ritmo:")) {
-      const minutes = goal.measure !== null && isTimeUnit(goal.measure.unit) ? /^ritmo: (.+)$/.exec(line) : null;
-      const amount = followsMeasure && section === null && minutes ? parseTime(minutes[1]) : null;
+      // In time the amount reads as hours or minutes; in any other unit it is a whole number of that unit.
+      const given = goal.measure === null ? null : /^ritmo: (.+)$/.exec(line);
+      const amount =
+        followsMeasure && section === null && given && goal.measure
+          ? isTimeUnit(goal.measure.unit)
+            ? parseTime(given[1])
+            : parseRhythmUnits(given[1], goal.measure.unit)
+          : null;
       if (amount === null) {
         const expected =
-          goal.measure === null || !isTimeUnit(goal.measure.unit)
+          goal.measure === null
             ? FORMS.rhythmUnit
             : followsMeasure && section === null ? FORMS.rhythmAmount : FORMS.rhythmPlace;
         // Only a `ritmo:` among the head lines cuts; one under a section is a stray line like any other.
@@ -301,7 +314,6 @@ export function parseTemplate(text: string): TemplateResult {
         goal.horizon = horizon[1];
         meta!.lines.push(n);
         spots.set(`${at}.horizon`, { line: n, expected: FORMS.horizon });
-        needsHorizon = null;
         continue;
       }
       const measure = /^medida: (.+?) · (.+)$/.exec(line);
@@ -312,7 +324,7 @@ export function parseTemplate(text: string): TemplateResult {
         afterMeasure = true;
         continue;
       }
-      if (version === 2 && !needsHorizon && !skipping) {
+      if (version === 2 && !skipping) {
         const inside = line.startsWith("dentro de:") ? /^dentro de: (.+)$/.exec(line) : null;
         if (line.startsWith("dentro de:") && !inside) return stop(n, FORMS.inside);
         if (inside) {
@@ -342,7 +354,6 @@ export function parseTemplate(text: string): TemplateResult {
     if (line.startsWith("## ")) {
       meta!.lines.push(n);
       const next = SECTIONS[line as keyof typeof SECTIONS];
-      if (needsHorizon) return stop(needsHorizon.line, FORMS.horizon);
       lastTask = null;
       noteOwner = null;
       brokenTask = false;
@@ -363,7 +374,6 @@ export function parseTemplate(text: string): TemplateResult {
       continue;
     }
     if (section === null) {
-      if (needsHorizon) return stop(n, FORMS.horizon);
       report(n, FORMS.section);
       continue;
     }
@@ -492,7 +502,6 @@ export function parseTemplate(text: string): TemplateResult {
     }
   }
 
-  if (needsHorizon) return stop(needsHorizon.line, FORMS.horizon);
   if (goals.length === 0) return cut(first + 2, FORMS.goal);
 
   // A goal's note is its `nota:` lines, whole and trimmed; over the ceiling it is the first line's error.

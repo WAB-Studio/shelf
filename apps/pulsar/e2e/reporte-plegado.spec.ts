@@ -80,7 +80,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
         const page = await context.newPage();
         await page.goto("/exportar");
         const main = page.getByRole("main");
-        await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+        await expect(main.getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
         // The label and the table the board draws.
         await expect(main.getByText(`${seeded.name} · por mes`, { exact: true })).toBeVisible();
         if (width === 1280) {
@@ -132,7 +132,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(first.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByRole("heading", { name: first.name, exact: true })).toBeVisible();
       // Open on screen: the print rule, not the fold's state, keeps the weeks off the sheet.
       for (const summary of await page.locator("summary", { hasText: /^Ver las \d+ semanas$/ }).all()) {
         await summary.click();
@@ -159,12 +159,13 @@ test.describe("the report folds its weeks (RP-49)", () => {
       expect(text).not.toContain("Ver las");
       expect(text.toLowerCase()).toContain(`${first.name} · por mes`.toLowerCase());
 
-      // Page 1's last word sits in the lower quarter of the sheet: no section jumped a page and left a gap.
-      const box = execFileSync("pdftotext", ["-bbox", "-f", "1", "-l", "1", file, "-"], { encoding: "utf8" });
+      // Page 1 is the summary and the annex opens on page 2 (ExportarResumen, 2026-10-13). Page 2's last word
+      // sits in the lower quarter of the sheet: no section jumped a page and left a gap.
+      const box = execFileSync("pdftotext", ["-bbox", "-f", "2", "-l", "2", file, "-"], { encoding: "utf8" });
       const height = Number(/<page width="[\d.]+" height="([\d.]+)"/.exec(box)![1]);
       const bottoms = [...box.matchAll(/yMax="([\d.]+)"/g)].map((found) => Number(found[1]));
       const last = Math.max(...bottoms);
-      expect(last, `page 1 ends at ${last} of ${height}`).toBeGreaterThanOrEqual(height * 0.75);
+      expect(last, `page 2 ends at ${last} of ${height}`).toBeGreaterThanOrEqual(height * 0.75);
     } finally {
       await context.close();
       await remove(db, person, [first.goalId, second.goalId]);
@@ -240,7 +241,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(`Meta larga ${stamp}`, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByRole("heading", { name: `Meta larga ${stamp}`, exact: true })).toBeVisible();
       const lines = await printTo(page, resolve(process.cwd(), "private/export-pdf", `379-filas-${goalId}.pdf`));
       const pages = Math.max(...lines.map((line) => line.page));
       expect(pages, "the table crosses several pages").toBeGreaterThan(2);
@@ -434,7 +435,7 @@ test.describe("the report's week says what was planned for it (RP-58)", () => {
         const page = await context.newPage();
         await page.goto("/exportar");
         const main = page.getByRole("main");
-        await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+        await expect(main.getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
 
         const planned = plannedByRule(
           Object.fromEntries(seeded.months.map((month) => [month, 720])),
@@ -477,7 +478,7 @@ test.describe("the report's week says what was planned for it (RP-58)", () => {
       const page = await context.newPage();
       await page.goto("/exportar");
       const main = page.getByRole("main");
-      await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(main.getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
       const line = main.getByText(/^Esta semana: /).locator("visible=true");
       await expect(line).toHaveCount(1);
       const text = ((await line.textContent()) ?? "").replace(/\s+/g, " ").trim();
@@ -538,7 +539,7 @@ async function weekLine(browser: Browser, baseURL: string, person: Person, name:
     const page = await context.newPage();
     await page.goto("/exportar");
     const main = page.getByRole("main");
-    await expect(main.getByText(name, { exact: true })).toBeVisible();
+    await expect(main.getByRole("heading", { name, exact: true })).toBeVisible();
     const line = main.getByText(/^Esta semana/).locator("visible=true");
     await expect(line).toHaveCount(1);
     return ((await line.textContent()) ?? "").replace(/\s+/g, " ").trim();
@@ -595,7 +596,9 @@ test.describe("the report's week names the days the goal does not fill", () => {
     const seeded = await seedPartial(db, person, { opens: true, ends: true });
     try {
       const text = await weekLine(browser, baseURL!, person, seeded.name);
-      expect(text).toMatch(new RegExp(`^Esta semana, del martes al ${DAY_NAMES[weekday]}: 1 h 30 min de .+\\.$`));
+      // On a Tuesday the goal's first and last day are one: said as «el martes», like Monday's «el lunes».
+      const span = weekday === 1 ? "el martes" : `del martes al ${DAY_NAMES[weekday]}`;
+      expect(text).toMatch(new RegExp(`^Esta semana, ${span}: 1 h 30 min de .+\\.$`));
     } finally {
       await remove(db, person, [seeded.goalId]);
     }
@@ -632,7 +635,7 @@ test.describe("the report's week names the days the goal does not fill", () => {
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
       await page.emulateMedia({ media: "print" });
       const file = resolve(process.cwd(), "private/export-pdf", `804-week-${seeded.goalId}.pdf`);
       mkdirSync(dirname(file), { recursive: true });
@@ -671,7 +674,7 @@ test("a goal ending this week counts its planned figure up to its last day, not 
     const page = await context.newPage();
     await page.goto("/exportar");
     const main = page.getByRole("main");
-    await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+    await expect(main.getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
     const amounts = Object.fromEntries(seeded.months.map((month) => [month, 720]));
     const planned = plannedByRule(amounts, seeded.openedOn, seeded.horizon);
     expect(planned).toBeLessThan(plannedByRule(amounts, seeded.openedOn, "9999-12-31"));
@@ -701,7 +704,7 @@ test("a goal of one week still reads «Esta semana» and holds its weeks table (
     const page = await context.newPage();
     await page.goto("/exportar");
     const main = page.getByRole("main");
-    await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+    await expect(main.getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
     await expect(main.getByText(/^Esta semana/).locator("visible=true")).toHaveCount(1);
     await expect(main.getByText("por semana", { exact: true })).toBeVisible();
     await expect(main.getByText("Ver la semana", { exact: true })).toBeVisible();
@@ -729,7 +732,7 @@ test("on a phone a month not yet started shows no figure of its own, a started o
     const page = await context.newPage();
     await page.goto("/exportar");
     const main = page.getByRole("main");
-    await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+    await expect(main.getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
     const rows = (await main.getByRole("listitem").allInnerTexts())
       .map((text) => text.replace(/\s+/g, " ").trim())
       .filter((text) => MONTH_ROW.test(text));
@@ -761,7 +764,7 @@ test("the weeks table marks «en curso» on the current week's row and on no oth
     const page = await context.newPage();
     await page.goto("/exportar");
     const main = page.getByRole("main");
-    await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+    await expect(main.getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
     await main.locator("summary", { hasText: /^Ver las \d+ semanas$/ }).click();
     const rows = main.locator("table", { has: page.locator("caption", { hasText: /semanas$/ }) }).locator("tbody tr");
     const count = await rows.count();

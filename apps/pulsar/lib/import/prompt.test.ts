@@ -39,3 +39,8 @@ test("the prompt says the bounds the answer keeps", () => {
   assert.match(SYSTEM_PROMPT, /120/);
   assert.match(SYSTEM_PROMPT, /three levels/i);
 });
+
+test("903: the prompt asks the tasks under the goal they serve", () => {
+  assert.match(SYSTEM_PROMPT, /task under the goal it serves/i);
+  assert.match(SYSTEM_PROMPT, /rhythm[\s\S]*tasks/i);
+});

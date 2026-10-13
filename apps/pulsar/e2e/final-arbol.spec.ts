@@ -46,13 +46,13 @@ const belowEndsLater = (name: string) =>
   new RegExp(`^«${escape(name)}» termina el .+, después de ese día\\. Mueve primero su final\\.$`);
 const endPastAbove = (name: string) => new RegExp(`^Pasa del final de «${escape(name)}», el .+\\.$`);
 
-test("shortening a general's end before a goal inside it is refused on the sheet, naming the goal that ends last, and nothing leaves (RP-79)", async ({
+test("shortening a general's end before a goal inside it lists that goal on the sheet, «Moverlo» is not available, and nothing leaves (RP-79)", async ({
   person,
   browser,
   baseURL,
   db,
 }) => {
-  // Kills: not composing `horizonTreeRefusal` after `horizonRefusal` (no sentence; «Moverlo» stays enabled and writes).
+  // Kills: not listing the goal that ends after (no recuadro), listing one that ends before, or leaving «Moverlo» enabled to write.
   const tree = await seedWeeks(db, person, Date.now(), { G: 30, g1: 12, p: 8, g2: 20 });
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
   try {
@@ -62,10 +62,10 @@ test("shortening a general's end before a goal inside it is refused on the sheet
     await expect(weeks).toHaveValue("30");
     await weeks.fill("15");
 
-    // g1 ends in week 12 and does not block 15; g2 ends in week 20 and does.
-    const sentence = sheet.getByText(belowEndsLater(tree.names.g2));
-    await expect(sentence).toBeVisible();
-    expect(dateWords(dayBefore(tree.at(20))).test(await sentence.innerText())).toBe(true);
+    // g1 ends in week 12 and does not pass 15; g2 ends in week 20 and does.
+    await expect(sheet.getByText("1 meta termina después de esta fecha", { exact: true })).toBeVisible();
+    await expect(sheet).toContainText(tree.names.g2);
+    expect(dateWords(dayBefore(tree.at(20))).test(await sheet.innerText())).toBe(true);
     await expect(sheet.getByText(tree.names.g1)).toHaveCount(0);
     await expect(weeks).toHaveAttribute("aria-invalid", "true");
     const confirm = sheet.getByRole("button", { name: "Moverlo", exact: true });
@@ -106,20 +106,26 @@ test("a count ending exactly where the last goal inside ends is accepted and wri
   }
 });
 
-test("when two goals end on the same last day, the sentence names the first of the plan (RP-79)", async ({
+test("when two goals end on the same last day, the list names the first of the plan first (RP-79)", async ({
   person,
   browser,
   baseURL,
   db,
 }) => {
-  // Kills: naming the last of the plan on a tie (here Alfa instead of Zeta).
+  // Kills: listing the goals out of plan order on a tie (here Alfa before Zeta).
   const tree = await seedWeeks(db, person, Date.now(), { G: 30, g1: 20, p: 8, g2: 20 });
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
   try {
+    const calls = countActionPosts(page);
     const sheet = await openHorizon(page);
     await sheet.getByLabel(WEEKS_LABEL).fill("15");
-    await expect(sheet.getByText(belowEndsLater(tree.names.g1))).toBeVisible();
-    await expect(sheet.getByText(tree.names.g2)).toHaveCount(0);
+    await expect(sheet.getByText("2 metas terminan después de esta fecha", { exact: true })).toBeVisible();
+    const text = await sheet.innerText();
+    expect(text.indexOf(tree.names.g1)).toBeGreaterThan(-1);
+    expect(text.indexOf(tree.names.g1)).toBeLessThan(text.indexOf(tree.names.g2));
+    await expect(sheet.getByRole("button", { name: "Moverlo", exact: true })).toBeDisabled();
+    expect(calls).toEqual([]);
+    expect(await horizonOf(db, tree.G)).toBe(tree.at(30));
   } finally {
     await context.close();
   }

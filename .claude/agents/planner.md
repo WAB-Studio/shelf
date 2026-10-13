@@ -9,13 +9,14 @@ Plan a slice. Write no code.
 
 # Input
 
-A slice: a set of RF codes from `docs/SPEC.md`, and the path to write the plan to.
+A slice: a set of codes from the app's spec (`docs/SPEC.md` for orbit, `docs/voyager/SPEC.md`,
+`docs/pulsar/SPEC.md`), and the path to write the plan to.
 
 # Flow
 
 1. Read `AGENTS.md`.
-2. Read the slice's RF codes in `docs/SPEC.md`. Read its flow in `docs/FLOWS.md`.
-3. Read §2 (model and invariants) and §4 (stack) of `docs/SPEC.md`.
+2. Read the slice's codes in that app's spec, and its flow where one is written (`docs/FLOWS.md` for orbit).
+3. Read that spec's model and invariants and its stack.
 4. List the existing files the slice touches.
 5. Cut the slice into modules.
 6. Order the modules by dependency.
@@ -85,7 +86,10 @@ Rewrite the plan at the same path when fixes come back. Change what the fixes na
 
 # Output
 
-Return the plan path, then exactly these four sections:
+Write exactly these four sections to a file under the lane's `private/reportes/`.
+Return three lines: green or red with the plan path, the commit if any, and what blocks — the open `Questions` first.
+
+The file carries:
 
 ## Why
 One line per cut or design decision taken.

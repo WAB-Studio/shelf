@@ -1412,3 +1412,100 @@ Three answers of the user, 2026-10-09.
   screen keeps the board's one line per goal inside.
 - **Boards that do not exist**: the dark face of every hierarchy board (the token table's); «Por mes» and «Mes» grouped at 1280
   (the list and the card they always had); the paper's note (drawn by no board; it prints as the screen's text, whole).
+
+## Decisions of 2026-10-13, the chat (RP-91–94, RNP-21), by the user
+
+- **P1 — The way in is an icon at the right end of every screen's header.** The four tabs and the rail stay as RNP-16 and
+  RNP-17 say; nothing is retired. No fifth tab, no floating button.
+- **P2 — «Hacer todo» makes every change it can.** A refused change stays marked with its reason; the others are made.
+  Never all-or-nothing.
+- **P3 — The chat proposes only over what exists.** A change never names a goal another change of the same message creates;
+  the person asks for the next step after «Hacer».
+- **P4 — One line under the field, always,** says the message and the parts of the plan it reads go to OpenAI.
+- **P5 — The chat answers questions about the plan too,** from the same reads (RP-39). Each question is one of the fifty.
+- **P6 — An untaken change lapses when the next message is sent:** it reads «sin hacer» and has no button.
+- **The chat boards are approved** (RP-91–94), 2026-10-13, by the user: «Apruebo tal cual». Page «Chat» of the canvas, 15
+  captures of a prototype: `ChatVacio`, `ChatEnviando`, `ChatRespuesta`, `ChatPropuesta`, `ChatPropuestas`, `ChatHecho`,
+  `ChatRechazada`, `ChatFallo`, `ChatTope`, `ChatSinClave`, `ChatEscritorio` (1280) and `ChatEntrada` (Hoy and Metas, 360 and
+  1280). Words and structure: `private/tableros-chat/NOTAS.md`.
+- **On a screen whose header carries a steps row** (Semana, a day), the chat icon sits at the right end of the title row; the steps keep their two edges. 2026-10-13.
+- **The field lives in the flow,** below the last turn, never fixed to the foot. The tab bar stays the only fixed thing.
+- **A failed message stays as a turn;** the button reads «Intentar otra vez» and nothing is retyped.
+- **A refused change has no button.** Its row carries the act's reason; the person asks again in a new message.
+- **Turns are labelled «TÚ» and «PULSAR»,** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
+  changes open. A change reads in two lines: what, in the person's own names; then «antes → después» in mono.
+- **Faces not drawn for the chat:** dark (the token table says it) and 700–1023 (between the two drawn).
+## Decisions of 2026-10-13, after the critic of the hierarchy and the import, by the user
+
+- **A goal that holds goals and measures nothing reads in its goals' unit on `/metas`,** as its own screen already does
+  («0 min de 11 h», never «0 de 660»). Nothing stored changes.
+- **Picking a file on `/metas/importar` only attaches it.** «Leer el plan» sends it; no paid read starts on a pick.
+- **Creating a goal inside one with a rhythm says so in one line before «Abrirla»,** and the new goal takes the measure of the
+  goal above it, so its rhythm can carry the sum.
+- **«Loses nothing» (RP-96) means every line the model leaves out goes, verbatim, into the general goal's note before the
+  review.** Built 2026-10-13, module 903.
+- **The model puts tasks under the goal they serve,** and the check step flags a goal with a rhythm and no tasks while the goal
+  above holds tasks; the person decides. Measured again on the real roadmap (one paid read). Built 2026-10-13, module 903.
+- **The fix boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Page «Importar»: `ImportarAdjunto` (a picked file
+  named with «Quitar», nothing sent until «Leer el plan»; after a refused type the file stays named and the type's sentence stays);
+  page «Metas»: `CrearDentroAviso` (muted line before the buttons: «El ritmo al mes de «{name}» deja de contar; la meta nueva mide
+  como ella.», only when the goal above has a rhythm) and `MetasUnidadArbol`. Words: `private/tableros-f1/NOTAS.md`.
+- **A file attached with text in the box:** «Leer el plan» reads the file, and one line under the file says «Se lee el archivo; el
+  texto de la caja no se envía.»
+- **A plan created with parts that were not written** (RP-90), 2026-10-13, by the user: option A, `ImportarCreadoConFallos`
+  (page «Importar»). The review route becomes «Plan creado»: one sentence with the count, section «NO SE ESCRIBIÓ», one row per
+  part (its name, where it went, what to do), «Ir a Metas» full width. Corrected from the board: rows carry no checkbox, and each
+  reason says what happened and what to do in plain words, never «la tabla». With nothing failed, «Crear» goes to Metas as before.
+  The list lives in the tab (`sessionStorage`, from `lib/`) until «Ir a Metas»; a reload keeps it. `ImportarCreadoConFallos-B`
+  goes to «Archivo».
+
+## Decisions of 2026-10-13, the critic's «thin» items, by the user
+
+- **The PDF opens with a summary, then the annex.** Page one lists every goal in one line each (its month and its week); behind
+  it, the detail as today, whole (the 2026-10-12 «no cap» decision stands for the annex).
+- **An imported note is clean text.** The import strips list marks, `**` and headings from note lines; a line marked «HECHO» or
+  `- [x]` creates its task already done on its date, and the review shows it as done.
+- **The 1280 rail draws the tree:** each general goal with its goals indented under it, folding as `/metas` does.
+- **The review's sheets change more than names:** a commitment's cadence (days or times) and amount; a goal's horizon.
+- **Moving a general's end offers to move its branch:** the sheet says how many goals end after the new end and offers «Mover
+  también sus finales»; one tap moves them all. Every end date shows its year.
+- **The five boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». `ExportarResumen` (page «Informe»),
+  `ImportarHojas` and `ImportarNotaLimpia` («Importar»), `MoverFinalRama` («Metas»), `RielArbol` («Armazón»). Words and structure:
+  `private/tableros-delgado/NOTAS.md`.
+- **The day chips are 40 px,** so the seven fit one row at 360 (7 × 40 + 6 × 4 = 304), everywhere `Chip day` is used.
+- **A general's end never moves alone past its goals' ends** (RP-79): «Mover también sus finales» is the only way to shorten it.
+- **An imported «HECHO» line becomes a done task and leaves the note;** it is never written twice.
+## Decisions of 2026-10-13, the review of a long plan (module 902), by the user
+
+- **Option A,** `ImportarRevisionLarga` (page «Importar»): every goal is one row with its summary (tasks, commitments, months,
+  «N por revisar») and «Sus partes» folded under it; inside, each month folded. 1 632 px at 360 for the real roadmap, from
+  74 690. Option B (one goal at a time behind chips) goes to «Archivo».
+- **«SIN LUGAR EN EL PLAN» is grouped by the section of the person's own text** (its heading: «Presupuesto de horas por mes»,
+  «Fuentes»…), each group folded with its count. Never by form (table row, link, title).
+- **A goal with corrections still to decide arrives open;** the others arrive folded.
+- **The goals under the general stay at their level, indented,** each with its summary; they never fold inside the general.
+- Words and structure: `private/tableros-revision/NOTAS.md` §A, with the three decisions above where it differs.
+- **Every plan's review arrives folded,** short or long, 2026-10-13, by the user: one rule, whatever the length. A goal opens on
+  its own only when it has corrections to decide. `ImportarArbol` (drawn unfolded) gives way to `ImportarRevisionLarga` for that.
+
+## Decisions of 2026-10-13, goals with no end, loose habits, a rhythm in any unit (RP-99–102), by the user
+
+- **The boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», four boards by
+  area (`SinFinalMetas`, `SinFinalPlan`, `SinFinalDias`, `SinFinalInformeImportar`), holding `MetasSinFinal`, `MetaNuevaSinFinal`,
+  `MetaSinFinal`, `FinalQuitarPoner`, `HabitosSueltos`, `MetaRitmoUnidad`, `PorMesRitmoUnidad`, `PorMesSinFinal`, `HoyHabitoSuelto`,
+  `HoySinFinal`, `SemanaHabitoSuelto`, `MesHabitoSuelto`, `InformeSinFinal`, `ImportarSinFinal`. Words: `private/tableros-sin-final/NOTAS.md`.
+- **The loose habits are «Hábitos» everywhere:** the group on Hoy, Semana and «Mes», and the section on `/metas`. Never «Sin meta».
+- **A goal with no end prints the same twelve months the screen shows** (the current one and eleven after).
+- The user's answers P1–P11 are at the end of `private/plan-pulsar-sin-final-2026-10-13.md`; the spec carries them (RP-99–102).
+- Faces not drawn: dark (the token table) and 700–1023.
+
+## Decisions of 2026-10-13, after the critic of slice s1 («sin final», hábitos), by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/s1-critic/CRITIC.md`.
+
+- Putting an end on a goal with no end counts weeks from this week («semanas desde esta»), never from the day it opened.
+- A loose habit edits its name and its note only. Its cadence and amount do not change; that keeps past weeks read as they were.
+- A habit has its own screen with its months, like «Por mes», reached from /metas and from Mes. «Retirarlo» lives inside it; tapping the row on /metas opens the habit, never the retire sheet.
+- Lists that grow without an end (Por semana, Por mes, the report) show the last 12 with «ver todo». Screen and paper use the same 12.
+- The template's example and the «PARA OTRA IA» text teach a goal without `horizonte:` and a `ritmo: 40 páginas`. Words only. Habits in the template and the report are a slice of their own, not taken.
+- Not decided, pending: create a goal «sin final» inside a goal with no end from its sheet; thousands written «1.000» accepted back by the rhythm sheet and the import.
