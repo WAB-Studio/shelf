@@ -66,6 +66,12 @@ test("a rate is not a duration: «10 h semanales» is no task by its hours", () 
   assert.equal(taskFromLine("10 h semanales: 5 de caso, 3 de inglés", "2026-10-12"), null);
 });
 
+test("903d: a rate line is no task even with a box or a done mark", () => {
+  for (const line of ["- [ ] 10 h semanales: 5 de caso", "- [x] 10 h semanales: 5", "- [ ] 2 h al mes: x", "- [ ] 30 min por día", "- [ ] 3 h a la semana", "- [ ] 1 h diarios", "10 h semanales HECHO"]) {
+    assert.equal(taskFromLine(line, "2026-10-12"), null, line);
+  }
+});
+
 test("HECHO alone makes a plain line a done task", () => {
   assert.deepEqual(taskFromLine("Publicar el caso 1 HECHO el 9 oct 2026", "2026-10-12"), {
     name: "Publicar el caso 1",

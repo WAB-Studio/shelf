@@ -125,11 +125,11 @@ test("903c: a done line is a task with no correction: the review shows it done",
   assert.deepEqual(corrections.filter((c) => c.proposed.startsWith("EF SET")), []);
 });
 
-test("903c: a rate with a duration («10 h semanales») is no task by its duration, a box still is", () => {
-  const lines = ["# G", "10 h semanales: 5 de caso", "- [ ] 10 h semanales: 5 de caso"];
+test("903d: a line that states a rate is never a task, box or not; the note keeps it", () => {
+  const lines = ["# G", "10 h semanales: 5 de caso", "- [ ] 10 h semanales: 5 de caso", "- [ ] 2 h al mes: revisar", "- [ ] 30 min por día", "- [ ] 3 h a la semana", "- [ ] 1 h diarios", "- [x] 10 h semanales: hecho", "- [ ] 2 h: llamar"];
   const { draft: out } = linesToTasks(placeLeftovers(draft(goal()), source(lines)), source(lines), TODAY, { onlyDone: false });
-  assert.deepEqual(out.goals[0].tasks.map((t) => [t.name, t.estimate]), [["10 h semanales: 5 de caso", null]]);
-  assert.equal(out.goals[0].note, "10 h semanales: 5 de caso");
+  assert.deepEqual(out.goals[0].tasks.map((t) => [t.name, t.estimate]), [["llamar", 120]]);
+  assert.equal(out.goals[0].note?.split("\n").length, 7);
 });
 
 test("903c: every taken line is plan in the count, and none is counted twice", () => {

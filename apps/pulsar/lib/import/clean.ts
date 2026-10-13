@@ -58,11 +58,11 @@ export function doneMark(line: string, today: string): { on: string } | null {
 const BOX = /^\s*[-*+]\s+\[[ xX]\]/;
 const DURATION = /^(?:(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hora|horas)\b\.?)?\s*(?:(\d+)\s*(?:min|mins|minutos?)\b\.?)?/i;
 // «10 h semanales» is a rate the plan sets, not the length of a task.
-const RATE = /^(?:semanales?|mensuales?|diarias?|al mes|por semana|a la semana|por mes|\/)/i;
+const RATE = /^(?:semanales?|mensuales?|diari[oa]s?|al mes|al día|por (?:día|semana|mes)|a la semana|\/)/i;
 
 export type LineTask = { name: string; minutes: number | null; doneOn: string | null; note: string | null };
 
-// The task a line stands for, or null when it is not task-shaped: a box, a duration first, or HECHO.
+// The task a line stands for, or null when it is not task-shaped (a rate never is): a box, a duration first, or HECHO.
 export function taskFromLine(line: string, today: string): LineTask | null {
   const done = doneMark(line, today);
   const boxed = BOX.test(line);
@@ -76,10 +76,9 @@ export function taskFromLine(line: string, today: string): LineTask | null {
   const duration = DURATION.exec(text);
   if (duration && (duration[1] !== undefined || duration[2] !== undefined)) {
     const rest = text.slice(duration[0].length).trimStart();
-    if (!RATE.test(rest)) {
-      minutes = Math.round(Number((duration[1] ?? "0").replace(",", ".")) * 60) + Number(duration[2] ?? 0);
-      text = rest.replace(/^[·:\-–—]\s*/, "");
-    } else if (!boxed && !done) return null;
+    if (RATE.test(rest)) return null;
+    minutes = Math.round(Number((duration[1] ?? "0").replace(",", ".")) * 60) + Number(duration[2] ?? 0);
+    text = rest.replace(/^[·:\-–—]\s*/, "");
   }
   if (minutes === null && !boxed && !done) return null;
   if (minutes === 0) minutes = null;
