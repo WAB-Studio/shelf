@@ -7,6 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
 import { strayEstimates } from "@/lib/import/draft";
+import { clearCreated, describePart, readCreated, saveCreated, type CreatedResult } from "@/lib/import/created-store";
 import { clearDraft, readDraft, saveReview, storedText, type StoredDraft } from "@/lib/import/draft-store";
 import { edit, nameKey, reviewTree, type ReviewNode } from "@/lib/import/review";
 import { monthsOfSpan } from "@/lib/plan/months";
@@ -14,6 +15,7 @@ import { civilDateToDate } from "@/lib/zone";
 import { ActionBar, Button, Flex, ListDetail, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
+import { CreatedScreen } from "./created-screen";
 import { EditSheet, type Change, type Editing } from "./edit-sheet";
 import { ReviewTree } from "./review-tree";
 
@@ -41,6 +43,8 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const [accepted, setAccepted] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // Set once the create left parts out; kept in the tab so a reload draws it again.
+  const [created, setCreated] = useState<CreatedResult | null>(null);
   // The names the draft is first measured against; a server refresh never re-reads it.
   const [startNames] = useState(openGoalNames);
   const confirmed = useRef(false);
@@ -50,6 +54,12 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     let live = true;
     queueMicrotask(() => {
       if (!live || confirmed.current) return;
+      const left = readCreated();
+      if (left) {
+        confirmed.current = true;
+        setCreated(left);
+        return;
+      }
       const read = readDraft();
       if (!read) {
         router.replace("/metas/importar");
@@ -70,6 +80,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     return new Set(review ? review.work.goals.flatMap((goal, g) => (open.has(nameKey(goal.name)) ? [g] : [])) : []);
   }, [review, startNames]);
 
+  if (created) return <CreatedScreen result={created} />;
   if (!stored || !review) return <Page width="full" />;
 
   function keep(next: StoredDraft, unmarked: ReadonlySet<string>) {
@@ -149,6 +160,13 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       if (result.ok) {
         confirmed.current = true;
         clearDraft();
+        if (result.failed.length > 0) {
+          const left = { goals: result.goalIds.length, parts: result.failed.map((part) => describePart(review!.toSend, part)) };
+          saveCreated(left);
+          setCreated(left);
+          return;
+        }
+        clearCreated();
         router.push("/metas");
         return;
       }

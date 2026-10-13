@@ -85,15 +85,18 @@ type RawTreeRow = {
   name: string;
   horizon: string;
   archived_at: string | null;
+  measure_name: string | null;
   measure_unit: string | null;
   rhythm: number | null;
 };
 
 // Every goal of the person in one statement; RLS narrows it. `rhythms` rides along because the
-// tree's rows carry none.
-async function readTree(tx: Transaction): Promise<{ tree: Tree; rhythms: Map<string, number | null> }> {
+// tree's rows carry none; `measureNames` likewise.
+async function readTree(
+  tx: Transaction,
+): Promise<{ tree: Tree; rhythms: Map<string, number | null>; measureNames: Map<string, string | null> }> {
   const rows = await tx.execute<RawTreeRow>(sql`
-    select id, parent_id, position, name, horizon::text as horizon, measure_unit, rhythm,
+    select id, parent_id, position, name, horizon::text as horizon, measure_name, measure_unit, rhythm,
            to_char(created_at at time zone 'UTC', ${sql.raw(INSTANT)}) as created_at,
            to_char(archived_at at time zone 'UTC', ${sql.raw(INSTANT)}) as archived_at
     from ${goals}
@@ -109,7 +112,11 @@ async function readTree(tx: Transaction): Promise<{ tree: Tree; rhythms: Map<str
     archivedAt: row.archived_at,
     measureUnit: row.measure_unit,
   }));
-  return { tree: buildTree(treeRows), rhythms: new Map(list.map((row) => [row.id, row.rhythm])) };
+  return {
+    tree: buildTree(treeRows),
+    rhythms: new Map(list.map((row) => [row.id, row.rhythm])),
+    measureNames: new Map(list.map((row) => [row.id, row.measure_name])),
+  };
 }
 
 function refused(refusal: PlacementRefusal): TreeRefusal {
@@ -287,7 +294,7 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
   try {
     const outcome = await withGoalsDb(async (tx): Promise<TreeRefusal | { goalId: string }> => {
       await tx.execute(personLock(person.id));
-      const { tree } = await readTree(tx);
+      const { tree, measureNames } = await readTree(tx);
       const above = tree.byId.get(parentId);
       if (!above) return { ok: false, error: "tree.errors.notFound" };
       const refusal = createInsideRefusal(tree, parentId, horizon, todayInZone());
@@ -299,6 +306,14 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
         values (${person.id}, ${name}, ${horizon}, ${parentId})
         returning id
       `);
+      // The new goal measures what the one above measures, so its rhythm can add up into it. The INSERT grant
+      // does not list the measure columns: they land by their own UPDATE.
+      const measureName = measureNames.get(parentId);
+      if (above.measureUnit !== null && measureName != null) {
+        await tx.execute(sql`
+          update ${goals} set measure_name = ${measureName}, measure_unit = ${above.measureUnit} where id = ${inserted.id}
+        `);
+      }
       if (holder) await fixHolderTasks(tx, parentId);
       return { goalId: inserted.id };
     });

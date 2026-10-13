@@ -425,3 +425,26 @@ test("under VERCEL the stub is off: the real call is made and the key rules", as
   assert.equal((await readText()).status, "ok");
   assert.equal(calls.length, 1);
 });
+
+test("898: a failed read logs the status and the error, never the plan or the key", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-secret-key";
+  const logged: unknown[][] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]) => void logged.push(args);
+  try {
+    replyWith(() => new Response('{"error":{"type":"insufficient_quota","code":"quota","message":"Incorrect API key provided: sk-secret-key"}}', { status: 429 }));
+    assert.equal((await readText("el texto del plan de la persona")).status, "failed");
+    replyWith(() => {
+      throw new TypeError("fetch failed");
+    });
+    assert.equal((await readText("el texto del plan de la persona")).status, "failed");
+  } finally {
+    console.error = realError;
+  }
+  const text = JSON.stringify(logged);
+  assert.equal(logged.length, 2);
+  assert.match(text, /429/);
+  assert.match(text, /insufficient_quota/);
+  assert.match(text, /TypeError|fetch failed/);
+  assert.doesNotMatch(text, /sk-secret-key|el texto del plan/);
+});

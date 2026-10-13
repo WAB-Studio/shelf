@@ -909,6 +909,8 @@ export type MetasSummary = GoalSummary & { parentId: string | null; level: Level
 // `outOfUnit` is the goals under it in another unit, which add nothing to its month.
 export type MetasOpenGoal = MetasSummary & {
   month: MetasMonth | null;
+  // The unit `month` is drawn in: the goals' own when it holds goals, else its measure's.
+  monthUnit: string | null;
   outOfUnit: { id: string; name: string; unit: string }[];
 };
 
@@ -1063,6 +1065,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
       .map((row) => ({
         ...placed(row),
         month: toMonth(row),
+        monthUnit: (holds(row.id) ? rolled.get(row.id)?.unit : null) ?? row.measure_unit,
         outOfUnit: holds(row.id) ? (rolled.get(row.id)?.outOfUnit ?? []) : [],
       })),
     ended: [...live.values()].filter((row) => row.horizon <= today).map(placed),

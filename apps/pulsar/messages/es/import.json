@@ -16,6 +16,8 @@
   "uploadHint": "PDF, texto, imagen o Excel · hasta 4 MB",
   "privacy": "Lo que pegues o subas se envía a OpenAI para leerlo. Un plan escrito en la plantilla, o en su libro de Excel, se lee aquí, sin IA.",
   "read": "Leer el plan",
+  "remove": "Quitar",
+  "onlyFile": "Se lee el archivo; el texto de la caja no se envía.",
   "fileNote": "Leído de {name}. Corrige aquí y vuelve a leer.",
   "notTemplate": "Ya no es la plantilla: la primera línea no empieza por «pulsar ·». «Leer el plan» lo mandará a la IA.",
   "size": "{value} MB",
@@ -131,7 +133,7 @@
       "decline": "Dejar como estaba",
       "acceptDeclined": "Aceptar la corrección",
       "keepsPlan": "Se queda como decía el plan: {said}.",
-      "leavesOut": "Se queda fuera: {code, select, nameShortened {con 120 caracteres o menos no cabía} cadenceClamped {la cadencia pasaba del tope} endWithinAbove {terminaba después de la meta que la lleva} other {no cabía como estaba}}.",
+      "leavesOut": "Se queda fuera: {code, select, nameShortened {con 120 caracteres o menos no cabía} cadenceClamped {la cadencia pasaba del tope} cadenceToWeekdays {la cadencia y los días no van juntos} endWithinAbove {terminaba después de la meta que la lleva} other {no cabía como estaba}}.",
       "said": "decía",
       "proposed": "se propone",
       "why": "porque",
@@ -174,6 +176,11 @@
         "said": "{said}",
         "proposed": "{proposed}",
         "why": "Una cadencia no pasa de {proposed}."
+      },
+      "cadenceToWeekdays": {
+        "said": "{said}, con días",
+        "proposed": "Los días: {proposed}",
+        "why": "Un compromiso con días se repite esos días de la semana, no un número de veces."
       },
       "rateToRhythm": {
         "said": "{said}",
@@ -255,6 +262,11 @@
     "horizonPast": "El final de la meta ya pasó. Pon una fecha por venir.",
     "duplicateMonth": "Hay dos montos para un mismo mes.",
     "parentWithAmount": "Una tarea con sub-tareas no lleva monto propio. Quítalo o quita las sub-tareas.",
+    "cadenceWeekdays": "Los días solo van con la cadencia de días de la semana. Quítalos o cambia la cadencia.",
+    "cadenceCount": "Una cadencia de días no lleva cantidad y una de veces sí. Corrígela.",
+    "quantityNoAmount": "Un compromiso con cantidad lleva monto y unidad. Ponlos.",
+    "noteShape": "La nota de esta parte está vacía. Quítala o escríbela.",
+    "partFailed": "No se pudo escribir. El resto del plan sí se creó.",
     "tapWithAmount": "Un compromiso de una vez no lleva monto ni unidad. Quítalos.",
     "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez.",
     "workbookRows": "{count, plural, one {# fila por corregir} other {# filas por corregir}}",
@@ -277,6 +289,29 @@
     "check": {
       "name": "Revisa",
       "hint": "Comprueba que las cuentas cuadren."
+    }
+  },
+  "created": {
+    "eyebrow": "importar · hecho",
+    "title": "Plan creado",
+    "count": "{goals, plural, one {Se creó # meta} other {Se crearon # metas}} con todo su plan, menos {parts, plural, one {# parte que no se pudo escribir} other {# partes que no se pudieron escribir}}.",
+    "section": "No se escribió",
+    "hint": "agrégalas a mano en su meta; lo demás de tu plan ya está en Metas",
+    "goTo": "Ir a Metas",
+    "kinds": {
+      "goal": "meta",
+      "phase": "fase",
+      "month": "mes",
+      "commitment": "compromiso",
+      "task": "tarea",
+      "subtask": "sub-tarea"
+    },
+    "reasons": {
+      "noteShape": "No se escribió: su nota estaba vacía. Agrégala otra vez en la meta, con su nota o sin ella.",
+      "cadenceWeekdays": "No se escribió: los días que tenía no van con su cadencia. Agrégala en la meta con otros días.",
+      "cadenceCount": "No se escribió: la cantidad de veces no iba con su cadencia. Agrégala en la meta con otra cantidad.",
+      "quantityNoAmount": "No se escribió: le faltaba el monto o la unidad. Agrégala en la meta con los dos.",
+      "partFailed": "No se pudo escribir. Agrégala en la meta a mano."
     }
   }
 }

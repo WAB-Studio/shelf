@@ -337,8 +337,8 @@ test("a goal with a stored rhythm that receives a goal has its planned tasks fix
     values (${userId}, ${h.id}, '867 tarea 1', 1000, true, ${opened}), (${userId}, ${h.id}, '867 tarea 2', 1000, true, ${opened}) returning id`;
   const { result, calls } = await counted(() => plan.createGoal({ name: "867 ritmo hija", horizon: horizonAt(6), parentId: h.id }));
   assert.equal(result.ok, true);
-  // Settle, lock, tree, insert, then the plan's read and the one write that fixes.
-  assert.equal(calls.length, 6, calls.join(" | "));
+  // Settle, lock, tree, insert, the measure it inherits, then the plan's read and the one write that fixes.
+  assert.equal(calls.length, 7, calls.join(" | "));
   const rows = await sql<{ name: string; planned_month: string | null; in_plan: boolean }[]>`
     select name, planned_month::text as planned_month, in_plan from goals.one_offs where id in ${sql(tasks.map((t) => t.id))} order by name`;
   assert.deepEqual(rows.map((row) => ({ ...row })), [
@@ -386,4 +386,24 @@ test("a tree trigger's 23514 reached through a race names the goal that blocks, 
     values: { name: "867 gatillo hija", date: new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10) },
   });
   assert.equal((await rowOf(G)).horizon, horizonAt(7));
+});
+
+test("createGoal inside a goal that has a measure: the new goal measures the same, so its rhythm can add up", async () => {
+  const above = await mk("867 medida arriba", 7);
+  await sql`update goals.goals set measure_name = 'horas de estudio', measure_unit = 'minutos' where id = ${above}`;
+  const result = await plan.createGoal({ name: "867 medida hija", horizon: horizonAt(6), parentId: above });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const [child] = await sql<{ measure_name: string | null; measure_unit: string | null }[]>`
+    select measure_name, measure_unit from goals.goals where id = ${result.goalId}`;
+  assert.deepEqual({ ...child }, { measure_name: "horas de estudio", measure_unit: "minutos" });
+});
+
+test("createGoal inside a goal with no measure leaves the new goal with none", async () => {
+  const above = await mk("867 sin medida arriba", 7);
+  const result = await plan.createGoal({ name: "867 sin medida hija", horizon: horizonAt(6), parentId: above });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const [child] = await sql<{ measure_unit: string | null }[]>`select measure_unit from goals.goals where id = ${result.goalId}`;
+  assert.equal(child.measure_unit, null);
 });
