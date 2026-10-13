@@ -48,6 +48,10 @@ async function horizonOf(db: postgres.Sql, goalId: string): Promise<string> {
   return row.horizon;
 }
 
+// «4 jul 2027»: the sheet's end date, the year always there.
+function shortWithYear(day: string): string {
+  return spanishDay(day, false).split(" de ").map((p, i) => (i === 1 ? p.slice(0, 3) : p)).join(" ") + ` ${day.slice(0, 4)}`;
+}
 function spanishDay(day: string, weekday: boolean): string {
   return new Intl.DateTimeFormat("es-CO", {
     weekday: weekday ? "long" : undefined,
@@ -180,7 +184,7 @@ test("520 weeks reads as a horizon and 521 is refused with the column unchanged 
 
     await field.fill("520");
     await expect(
-      sheet.getByText(`termina el ${spanishDay(shiftDay(horizonAfterWeeks(openedOn, 520), -1), true)}`),
+      sheet.getByText(`termina el ${shortWithYear(shiftDay(horizonAfterWeeks(openedOn, 520), -1))}`),
     ).toBeVisible();
 
     await field.fill("521");

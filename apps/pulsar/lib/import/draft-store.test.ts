@@ -161,6 +161,12 @@ test("v2: saveReview keeps the draft, the unmarked paths and the declined correc
   assert.deepEqual(read?.source, source);
 });
 
+test("906: saveReview given corrections keeps those, so an edit that settled one stays settled on reload", () => {
+  saveDraft({ ...base, corrections: [{ id: "goals.0:nameShortened", at: "goals.0", code: "nameShortened", said: "s", proposed: "p", declined: "leavesOut" }] });
+  saveReview(draft2(), [], [], []);
+  assert.deepEqual(readDraft()?.corrections, []);
+});
+
 test("v2: a value without version 2 reads null, the older shape included", () => {
   memory.set("pulsar.import-draft", JSON.stringify({ via: "template", draft: { goals: [] }, source: null, unmarked: null }));
   assert.equal(readDraft(), null);

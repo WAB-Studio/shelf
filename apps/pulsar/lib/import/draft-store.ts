@@ -41,11 +41,12 @@ export function saveDraft(input: {
   write({ version: 2, ...input, sourceName: input.sourceName ?? null, text: input.text ?? null, unmarked: null, declined: [] });
 }
 
-// Rewrites the draft, the unmarked paths and the declined corrections; the rest stays.
-export function saveReview(draft: ImportDraft, unmarked: string[], declined: string[]): void {
+// Rewrites the draft, the unmarked paths and the declined corrections, and the corrections themselves when
+// given (an edit settles some); the rest stays.
+export function saveReview(draft: ImportDraft, unmarked: string[], declined: string[], corrections?: Correction[]): void {
   const current = readDraft();
   if (!current) return;
-  write({ ...current, draft, unmarked, declined });
+  write({ ...current, draft, unmarked, declined, ...(corrections ? { corrections } : {}) });
 }
 
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((p): p is string => typeof p === "string") : []);

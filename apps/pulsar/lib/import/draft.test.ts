@@ -576,6 +576,16 @@ test("the note is the source's own lines, never the answer's text", () => {
   assert.equal(draft.goals[0].tasks[0].note, "l1\nl2");
 });
 
+test("906: a note line is clean text: no list mark, box, bold, underline, backtick or heading", () => {
+  const lines = ["# Reglas", "- [ ] **10 h semanales:** `5` de caso", "__Un caso__ no se publica", "1. segunda prueba"];
+  const { draft } = run(
+    [rawGoal({ noteSrc: [{ from: 1, to: 2 }], tasks: [rawTask({ noteSrc: [{ from: 3, to: 4 }] })] })],
+    { kind: "lines", lines },
+  );
+  assert.equal(draft.goals[0].note, "Reglas\n10 h semanales: 5 de caso");
+  assert.equal(draft.goals[0].tasks[0].note, "Un caso no se publica\nsegunda prueba");
+});
+
 test("from parts the note is the answer's text", () => {
   const { draft } = run([rawGoal({ noteText: "texto del modelo" })], { kind: "parts", lines: null });
   assert.equal(draft.goals[0].note, "texto del modelo");
