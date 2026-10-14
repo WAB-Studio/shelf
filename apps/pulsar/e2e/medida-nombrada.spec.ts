@@ -181,3 +181,15 @@ test("at 360 the goal and its «Por semana», with the long line «mide Cajas em
     }
   }
 });
+
+test("a name that repeats the word the goal prints for its unit stays silent: «búsquedas» over the stored «searches» reads «mide en búsquedas»", async ({ person, browser, baseURL, db }) => {
+  // Kills: `distinctMeasureName` on the goal without the printed unit word among its comparisons («mide búsquedas, en búsquedas»).
+  const id = await seedOpenGoal(db, person, { name: "Investigar", unit: { measure: "búsquedas", unit: "searches" }, created: ago(10) });
+  const { page, context } = await open(browser, baseURL, person, goalPath(id));
+  try {
+    await expectOnlyLine(page, "mide en búsquedas");
+    await expect(page.getByText(/mide búsquedas/)).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
