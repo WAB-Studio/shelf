@@ -136,6 +136,8 @@
     "weeksLabel": "semanas, contando la del {date}",
     "weeksFromThis": "semanas, contando esta",
     "endsOn": "termina el {date}",
+    "endsOnTotal": "termina el {date} · {total, plural, one {# semana} other {# semanas}} en total",
+    "bothCountsTotal": "contando desde esta semana; la meta lleva {n, plural, one {# semana} other {# semanas}} · {total, plural, one {# semana} other {# semanas}} en total",
     "bothCounts": "contando desde esta semana; la meta lleva {n, plural, one {# semana} other {# semanas}}",
     "confirm": "Moverlo",
     "cancel": "Dejarlo como está",

@@ -149,7 +149,7 @@ test("E2: 4 weeks is refused naming the phase's week in both counts, nothing is 
     const refusal = sheet.getByText("La fase «Preparación» llega hasta la semana 6 (7 desde la apertura). El final no puede quedar antes.", { exact: true });
     await expect(refusal).toBeVisible();
     await expect(field(sheet)).toHaveAttribute("aria-invalid", "true");
-    await expect(sheet.getByText(line(2), { exact: true })).toBeVisible();
+    await expect(sheet.getByText(`${line(2)} · 5 semanas en total`, { exact: true })).toBeVisible();
     await expect(refusal).not.toContainText("contando desde");
     await expect(dialog(page)).toBeVisible();
     expect(posts).toEqual([]);
@@ -172,7 +172,7 @@ test("a phase lengthened between load and send: the server's refusal carries the
     // The phase now ends the Sunday of week 7 from this one: 8 from the opening, a week ahead of the page's own.
     const refusal = sheet.getByText("La fase «Preparación» llega hasta la semana 7 (8 desde la apertura). El final no puede quedar antes.", { exact: true });
     await expect(refusal).toBeVisible();
-    await expect(sheet.getByText(line(2), { exact: true })).toBeVisible();
+    await expect(sheet.getByText(`${line(2)} · 6 semanas en total`, { exact: true })).toBeVisible();
     expect(await horizonOfGoal(db, correr)).toBe(fromThis(8));
   } finally {
     await context.close();
@@ -247,7 +247,7 @@ test("at 360 the sheet with the line and the phase refusal does not overflow the
     const move = sheet.getByRole("button", { name: "Moverlo", exact: true });
     if (await move.isEnabled()) await move.click();
     await expect(sheet.getByText(/^La fase «Preparación» llega hasta la semana 6 \(7 desde la apertura\)/)).toBeVisible();
-    await expect(sheet.getByText(line(2), { exact: true })).toBeVisible();
+    await expect(sheet.getByText(`${line(2)} · 5 semanas en total`, { exact: true })).toBeVisible();
     const over = await page.evaluate(() => {
       const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
       const box = dlg.getBoundingClientRect();
