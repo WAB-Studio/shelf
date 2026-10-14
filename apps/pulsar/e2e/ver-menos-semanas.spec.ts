@@ -5,6 +5,7 @@ import { todayInZone, weekOf } from "@/lib/zone";
 import { test, expect } from "./fixtures";
 import { between, mainLower, PAGES, seedOpenGoal, visit } from "./metas-sin-final-seed";
 import { monthLabel, monthStartOf, seedHabit, shift } from "./sin-final-seed";
+import { boxOf } from "./box";
 
 // Module 966, RP-118: «Por semana» of a goal with no end and a habit's months, opened whole with `?todo=1`, say
 // «ver menos» under the label and again where «ver todo» was; it returns to the same screen without `todo=1`,
@@ -15,12 +16,6 @@ test.use({ actionTimeout: 6000 });
 
 const noonOf = (day: string) => new Date(`${day}T12:00:00-05:00`);
 const MONTH_RE = /(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre) \d{4}/g;
-
-// `boundingBox()` answers null while the element is not drawn yet; wait for it first.
-const boxOf = async (loc: Locator) => {
-  await expect(loc).toBeVisible();
-  return (await loc.boundingBox())!;
-};
 
 const seeLess = (scope: Page | Locator) => scope.getByRole("link", { name: "ver menos", exact: true });
 const seeAll = (scope: Page | Locator) => scope.getByRole("link", { name: "ver todo", exact: true });

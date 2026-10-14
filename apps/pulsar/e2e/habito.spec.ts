@@ -13,6 +13,7 @@ import {
   visit,
 } from "./metas-sin-final-seed";
 import { TODAY, monthLabel, monthStartOf, seedFact, seedHabit, shift } from "./sin-final-seed";
+import { boxOf } from "./box";
 
 // Module 924, RP-104, RP-105, RP-106: the screen of a loose habit, `/metas/habitos/{habitId}`. Board:
 // HabitoPantalla (private/tableros-s2/NOTAS.md §1). Written from the contract before `editHabit` (922) and
@@ -199,8 +200,8 @@ test.describe("the screen of a habit (RP-105, RP-106)", () => {
       const more = page.getByRole("link", { name: "ver todo", exact: true });
       await expect(more).toHaveCount(1);
       // Under the table, on the left.
-      const box = (await more.boundingBox())!;
-      const last = (await page.getByText(monthLabel(0), { exact: false }).first().boundingBox())!;
+      const box = (await boxOf(more));
+      const last = (await boxOf(page.getByText(monthLabel(0), { exact: false }).first()));
       expect(box.y).toBeGreaterThan(last.y);
       expect(box.x).toBeLessThan(60);
       await more.click();

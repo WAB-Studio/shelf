@@ -3,6 +3,7 @@ import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
+import { boxOf } from "./box";
 
 // `MetaMes.dc.html`, `MetaMesSinPlan.dc.html`, `MetaMesBajo.dc.html`
 //: the goal says this month's amount in hours and minutes, the
@@ -84,8 +85,8 @@ test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, an
       await page.goto(`/metas/${goalId}`);
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-      const month = (await page.getByRole("link", { name: "Ver por mes", exact: true }).boundingBox())!;
-      const week = (await page.getByRole("link", { name: "Ver por semana", exact: true }).boundingBox())!;
+      const month = (await boxOf(page.getByRole("link", { name: "Ver por mes", exact: true })));
+      const week = (await boxOf(page.getByRole("link", { name: "Ver por semana", exact: true })));
       expect(Math.abs(month.y - week.y)).toBeLessThan(2);
       expect(week.x).toBeGreaterThan(month.x);
       // One row gap apart, the links' own boxes touching no one else's.

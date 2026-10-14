@@ -4,6 +4,7 @@ import type postgres from "postgres";
 import { test, expect, settled, type Person } from "./fixtures";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // 848, board `ParteExplicada` (RP-76): a month that is only a share of the
 // goal's rhythm says so in one muted line under its figure, «desde el 7: 8 h 03
@@ -59,7 +60,7 @@ const visible = (page: Page, text: string | RegExp, exact = false) =>
   page.getByText(text, { exact }).locator("visible=true");
 
 const color = (locator: Locator) => locator.evaluate((el) => getComputedStyle(el).color);
-const top = async (locator: Locator) => (await locator.boundingBox())!.y;
+const top = async (locator: Locator) => (await boxOf(locator)).y;
 
 const horizonFar = `${year + 2}-${String(monthIndex).padStart(2, "0")}-01`;
 

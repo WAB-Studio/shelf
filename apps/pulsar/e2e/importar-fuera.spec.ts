@@ -4,6 +4,7 @@ import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
 import { rawGoal, seedOf, toOpenSeededReview, unfold } from "./importar-plan";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
+import { boxOf } from "./box";
 
 // What the import leaves out is listed under «No se puede crear», one row for a part and the
 // parts it drags with it, and the bar holds the button alone (RP-37, RP-97). The boards are
@@ -108,8 +109,8 @@ test.describe("what stays out is listed, and the bar is the button alone (RP-37,
     ];
     await review({ person, browser, baseURL }, plan(goal("Con tres fuera", { tasks })), async (page, bar) => {
       const title = page.getByText(messages.review.blocked.title, { exact: true });
-      const last = (await page.getByRole("checkbox", { name: /^Libre 14/ }).boundingBox())!;
-      expect((await title.boundingBox())!.y).toBeGreaterThan(last.y);
+      const last = (await boxOf(page.getByRole("checkbox", { name: /^Libre 14/ })));
+      expect((await boxOf(title)).y).toBeGreaterThan(last.y);
       await expect(bar.getByRole("link")).toHaveCount(0);
       await expect(blocked(page)).toContainText("Uno");
       await expect(blocked(page)).toContainText("Tres");
@@ -132,8 +133,8 @@ test.describe("what stays out is listed, and the bar is the button alone (RP-37,
       { person, browser, baseURL },
       plan(goal("Una sola", { tasks: [parentWithAmount(OUT)] })),
       async (page, bar) => {
-        const card = (await page.getByRole("region", { name: messages.review.title }).boundingBox())!;
-        const box = (await bar.boundingBox())!;
+        const card = (await boxOf(page.getByRole("region", { name: messages.review.title })));
+        const box = (await boxOf(bar));
         expect(Math.abs(card.width - box.width)).toBeLessThanOrEqual(1);
       },
       { width: 1440, height: 900 },

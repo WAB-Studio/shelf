@@ -5,6 +5,7 @@ import { weekSpan } from "@/lib/day/weeks";
 import { civilDateInZone, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect, laneNumber } from "./fixtures";
+import { boxOf } from "./box";
 
 // The civil day `days` after `openedOn`, in the same midday-UTC arithmetic
 // `weekSpan` itself runs (`lib/day/weeks.ts`) — never a second, independent
@@ -189,7 +190,7 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     await expect.soft(week3Row.getByRole("cell").nth(2)).toHaveText("");
 
     // From 1024 the table spans the main column, past the old 1020 cap.
-    const tableWidth = (await table.boundingBox())!.width;
+    const tableWidth = (await boxOf(table)).width;
     expect(tableWidth).toBeGreaterThan(1020);
     const mainWidth = await page.evaluate(() => document.querySelector("main")?.getBoundingClientRect().width);
     expect(tableWidth).toBeGreaterThan(mainWidth! * 0.8);

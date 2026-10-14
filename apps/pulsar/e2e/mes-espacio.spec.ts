@@ -3,6 +3,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 import monthMessages from "../messages/es/month.json";
+import { boxOf } from "./box";
 
 const owesLine = (month: string, owes: string) =>
   monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
@@ -61,7 +62,7 @@ test("«Mes» sets a mixed line's sentence in Archivo and its figure in mono; it
     const own = page.getByText(/^de .* · 1 h$/);
     await expect(carried).toBeVisible();
     await expect(own).toBeVisible();
-    const gap = (await own.boundingBox())!.y - ((await page.getByText(`Vieja Espacio ${stamp}`).boundingBox())!.y + (await page.getByText(`Vieja Espacio ${stamp}`).boundingBox())!.height);
+    const gap = (await boxOf(own)).y - ((await boxOf(page.getByText(`Vieja Espacio ${stamp}`))).y + (await boxOf(page.getByText(`Vieja Espacio ${stamp}`))).height);
     expect(gap, "carried rows → next section label").toBeGreaterThanOrEqual(32);
     expect(await labels.count()).toBeGreaterThan(0);
   } finally {
@@ -93,7 +94,7 @@ for (const width of [1024, 1440] as const) {
         }),
       );
       expect(rects.length).toBeGreaterThanOrEqual(3);
-      const title = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
+      const title = (await boxOf(page.getByRole("heading", { level: 1 })));
       expect(rects[0].left, "first block on the title's edge").toBeCloseTo(title.x, 0);
       for (let i = 1; i < rects.length; i += 1) {
         // Side by side or stacked, the cards stand 16 apart and never touch.
@@ -131,8 +132,8 @@ test("a task's empty name is refused under its own field, with the ring, one hin
       await expect(field).toHaveAttribute("aria-invalid", "true");
       const refusal = page.getByText("Escribe qué hay que hacer.");
       await expect(refusal).toBeVisible();
-      const control = (await field.boundingBox())!;
-      const hint = (await refusal.boundingBox())!;
+      const control = (await boxOf(field));
+      const hint = (await boxOf(refusal));
       expect(hint.y - (control.y + control.height), `hint under its control at ${width}`).toBeLessThanOrEqual(10);
       expect(hint.y).toBeGreaterThan(control.y);
       // One eyebrow, in the one eyebrow style: the goal and the month, not a repeat of the title or the back.

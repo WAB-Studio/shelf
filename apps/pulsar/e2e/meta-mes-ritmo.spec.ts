@@ -3,6 +3,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { todayInZone } from "../lib/zone";
+import { boxOf } from "./box";
 
 // 687: the goal's month block names where its amount comes from when it is the
 // month's own and a rhythm stands beside it: «en lugar del ritmo», under the figure.
@@ -39,8 +40,8 @@ for (const width of [360, 1440]) {
       try {
         await page.goto(`/metas/${goalId}`);
         await expect(line(page)).toHaveCount(1);
-        const figure = (await page.getByText(/ de 20 h/).locator("visible=true").first().boundingBox())!;
-        const meta = (await line(page).boundingBox())!;
+        const figure = (await boxOf(page.getByText(/ de 20 h/).locator("visible=true").first()));
+        const meta = (await boxOf(line(page)));
         expect(meta.y).toBeGreaterThan(figure.y);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       } finally {

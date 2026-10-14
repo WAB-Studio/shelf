@@ -6,6 +6,7 @@ import { test, expect, visit, type Person } from "./fixtures";
 import { holdActions } from "./meta-arbol-seed";
 import type { Db } from "./meta-arbol-seed";
 import { MINUTES, dialog, horizonOfGoal, postCounter, seedOpenGoal } from "./metas-sin-final-seed";
+import { boxOf } from "./box";
 
 // Module 938, RP-111: the end sheet says both counts under its field, «contando desde esta semana; la meta lleva N
 // semanas» (this week counts too), and a phase refusal names its week in both. Board FinalDosCuentas
@@ -80,7 +81,7 @@ test("E2: «mover el final» draws «contando desde esta semana; la meta lleva 2
     await expect(sheet.getByText(line(2), { exact: true })).toBeVisible();
     await expect(hint).not.toContainText("lleva");
     // Under the field, not above it.
-    const box = async (l: Locator) => (await l.boundingBox())!;
+    const box = async (l: Locator) => (await boxOf(l));
     expect((await box(sheet.getByText(line(2), { exact: true }))).y).toBeGreaterThan((await box(field(sheet))).y);
   } finally {
     await context.close();

@@ -6,6 +6,7 @@ import postgres from "postgres";
 
 import oauth from "../messages/es/oauth.json";
 import { test, expect, appAlerts, type Person } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-60: the signed-in consent line names where the person returns, «al permitir,
 // vuelves a <host>». The words are written here, not read from `oauth.json`:
@@ -177,7 +178,7 @@ for (const width of [390, 1280]) {
       try {
         await page.goto(consentPath(CLAUDE));
         await expect(lineOf(page)).toBeVisible();
-        const top = async (locator: Locator) => (await locator.boundingBox())!;
+        const top = async (locator: Locator) => (await boxOf(locator));
         const eyebrow = await top(page.getByText(oauth.eyebrow, { exact: true }));
         const h1 = await top(page.getByRole("heading", { level: 1 }));
         const line = await top(lineOf(page));
@@ -272,9 +273,9 @@ test("at 360 a 63-character host breaks inside the column", async ({ person, bro
     const line = lineOf(page);
     await expect(line).toHaveText(`${LEAD} ${LONG_HOST}`);
     await noOverflow(page, 360);
-    const box = (await line.boundingBox())!;
+    const box = (await boxOf(line));
     expect(box.x + box.width).toBeLessThanOrEqual(360);
-    const host = (await line.locator("strong").boundingBox())!;
+    const host = (await boxOf(line.locator("strong")));
     expect(host.x + host.width).toBeLessThanOrEqual(360);
     // Broken onto more than one line, not shrunk to fit.
     expect(host.height).toBeGreaterThan(30);

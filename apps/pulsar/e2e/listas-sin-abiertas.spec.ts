@@ -3,6 +3,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import goal from "../messages/es/goal.json";
 
 import { test, expect } from "./fixtures";
+import { boxOf } from "./box";
 
 // `/sueltas` is a 640px column and `/metas` names no empty group (RP-59,
 // RP-11, RNP-17; DESIGN «An empty section draws no label»).
@@ -29,12 +30,12 @@ test("at 1440 a /sueltas row is at most 640px wide and its note button sits with
     await page.goto("/sueltas");
     const row = page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row).toBeVisible();
-    const rowBox = (await row.boundingBox())!;
+    const rowBox = (await boxOf(row));
     expect(rowBox.width).toBeLessThanOrEqual(640);
 
     const note = page.getByRole("button", { name: /nota/i }).first();
     await expect(note).toBeVisible();
-    const noteBox = (await note.boundingBox())!;
+    const noteBox = (await boxOf(note));
     expect(noteBox.x + noteBox.width - rowBox.x).toBeLessThanOrEqual(640);
   } finally {
     await context.close();

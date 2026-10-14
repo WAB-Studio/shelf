@@ -2,6 +2,7 @@ import { request as playwrightRequest, type APIResponse, type Page } from "@play
 
 import messages from "../messages/es/connections.json";
 import { test, expect, type Person } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-38, RNP-17 (`ConexionesVacio`, `ConexionesUna`, `ConexionesCreada`,
 // `ConexionesRevocada`, `ConexionesFallo`): the key is drawn once, right after
@@ -333,7 +334,7 @@ test.describe("the connections screen (RP-38)", () => {
       expect(await page.locator("main").innerText()).not.toContain("usada sin usar");
       // 318: a key's row is a row (56 px, padded), and the header carries no second eyebrow over the title.
       const row = page.getByText(NAME, { exact: true }).locator("xpath=ancestor::div[2]");
-      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(56);
+      expect((await boxOf(row)).height).toBeGreaterThanOrEqual(56);
       // The chat entry's row (`ChatEntrada`) is not an eyebrow.
       await expect(page.locator('main > header > div:not(:has(a[href="/chat"]))')).toHaveCount(1);
       await expect(

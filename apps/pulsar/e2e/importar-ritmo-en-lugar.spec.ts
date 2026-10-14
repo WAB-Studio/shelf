@@ -4,6 +4,7 @@ import messages from "../messages/es/import.json";
 import { test, expect, settled as pageSettled } from "./fixtures";
 import { unfold } from "./importar-plan";
 import { todayInZone } from "../lib/zone";
+import { boxOf } from "./box";
 
 // 687, redrawn by `ImportarArbol` (RP-89): a month row is «Mes» and its amount, under a rhythm
 // or not. The line «en lugar del ritmo» no longer exists; the rhythm is its own row.
@@ -77,10 +78,10 @@ for (const width of [360, 1440]) {
         const row = monthRow(page, by);
         const line = row.getByText("mes", { exact: true });
         await expect(line).toBeVisible();
-        const [name, meta] = [(await row.getByText(new RegExp(`^${word(by)}`, "i")).first().boundingBox())!, (await line.boundingBox())!];
+        const [name, meta] = [(await boxOf(row.getByText(new RegExp(`^${word(by)}`, "i")).first())), (await boxOf(line))];
         expect(meta.y).toBeGreaterThan(name.y);
         expect(meta.y - name.y).toBeLessThan(40);
-        expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        expect((await boxOf(row)).height).toBeGreaterThanOrEqual(44);
         await expect(page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(by)}`, "i") })).toBeVisible();
       }
       await expect(page.getByText(IN_LIEU)).toHaveCount(0);

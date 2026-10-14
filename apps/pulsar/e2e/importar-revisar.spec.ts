@@ -5,6 +5,7 @@ import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 import { dayBefore } from "../lib/day/weeks";
 import { civilDateToDate, todayInZone } from "../lib/zone";
 import { movedExample, unfold } from "./importar-plan";
+import { boxOf } from "./box";
 
 // Against the ordinary server, which holds no model key (`OPENAI_API_KEY=""`):
 // the draft comes from the template path, so no model is ever called
@@ -173,8 +174,8 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
         page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first, true)), { exact: true }),
       ).toBeVisible();
       // The list stands after the tree, not above it.
-      const above = (await title.boundingBox())!.y;
-      expect(above).toBeGreaterThan((await box(page, /^IA aplicada/).boundingBox())!.y);
+      const above = (await boxOf(title)).y;
+      expect(above).toBeGreaterThan((await boxOf(box(page, /^IA aplicada/))).y);
 
       await page.getByRole("button", { name: "Crear 3 metas" }).click();
       await expect(page).toHaveURL(/\/metas$/);
@@ -316,20 +317,20 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
 
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
           for (const checkbox of await page.getByRole("checkbox").all()) {
-            const row = (await checkbox.locator("xpath=ancestor::label").boundingBox())!;
+            const row = (await boxOf(checkbox.locator("xpath=ancestor::label")));
             expect(row.height).toBeGreaterThanOrEqual(44);
           }
           const amounts = await page.getByRole("button", { name: /^Cambiar el monto de/ }).all();
           expect(amounts.length).toBeGreaterThan(0);
-          for (const amount of amounts) expect((await amount.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+          for (const amount of amounts) expect((await boxOf(amount)).height).toBeGreaterThanOrEqual(44);
 
           // The confirm stays in the viewport while the list scrolls.
-          const at = (await page.getByRole("button", { name: "Crear 3 metas" }).boundingBox())!;
+          const at = (await boxOf(page.getByRole("button", { name: "Crear 3 metas" })));
           expect(at.y + at.height).toBeLessThanOrEqual(800);
           // A sub-task sits one level, 16px, in.
           await openSubTasks(page);
-          const parent = (await box(page, /^Tutor/).boundingBox())!;
-          const child = (await box(page, /^Elegir tutor/).boundingBox())!;
+          const parent = (await boxOf(box(page, /^Tutor/)));
+          const child = (await boxOf(box(page, /^Elegir tutor/)));
           expect(Math.abs(child.x - parent.x - 16)).toBeLessThanOrEqual(1);
         },
         { width, height: 800 },
@@ -354,8 +355,8 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
             await expect(source).toBeVisible();
             await expect(source).toHaveValue(text);
             await expect(page.getByRole("link", { name: messages.review.change, exact: true })).toBeVisible();
-            const left = (await source.boundingBox())!;
-            const right = (await box(page, /^IA aplicada/).boundingBox())!;
+            const left = (await boxOf(source));
+            const right = (await boxOf(box(page, /^IA aplicada/)));
             expect(left.x + left.width).toBeLessThanOrEqual(right.x);
             expect(Math.abs(left.y - right.y)).toBeLessThan(400);
           } else {

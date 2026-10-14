@@ -3,6 +3,7 @@ import type { Browser, Locator, Page } from "@playwright/test";
 import messages from "../messages/es/import.json";
 import { todayInZone } from "../lib/zone";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
+import { boxOf } from "./box";
 
 // Module 801. Boards `ImportarCabeceraRota`, `ImportarPrimeraLinea`, `ImportarErrorMarcaLinea`.
 // The refusal that never reaches the model is asserted in scripts/plan/import-route.ts, where the model is a spy.
@@ -128,7 +129,7 @@ test.describe("a broken header cuts the reading (board ImportarCabeceraRota)", (
       const cut = alert.getByText(CUT_LINE, { exact: true });
       await expect(cut).toBeVisible();
       const row = alert.getByText("Línea 5:", { exact: false }).first();
-      const [cutBox, rowBox] = [(await cut.boundingBox())!, (await row.boundingBox())!];
+      const [cutBox, rowBox] = [(await boxOf(cut)), (await boxOf(row))];
       expect(cutBox.y).toBeGreaterThanOrEqual(rowBox.y + rowBox.height - 1);
       const colour = (el: Locator) => el.evaluate((node) => getComputedStyle(node).color);
       expect(await colour(cut)).not.toBe(await colour(alert.getByText("1 línea por corregir", { exact: true })));
@@ -179,7 +180,7 @@ for (const size of SIZES) {
         await expect(alert.getByText("3 líneas por corregir", { exact: true })).toBeVisible();
         await expect(rowsOf(alert)).toHaveCount(3);
         for (const row of await rowsOf(alert).all()) {
-          expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+          expect((await boxOf(row)).height).toBeGreaterThanOrEqual(44);
         }
       });
     });
@@ -272,7 +273,7 @@ for (const size of SIZES) {
         const alert = alertOf(page);
         const row = rowsOf(alert).first();
         await expect(row).toBeVisible();
-        expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        expect((await boxOf(row)).height).toBeGreaterThanOrEqual(44);
       });
     });
 

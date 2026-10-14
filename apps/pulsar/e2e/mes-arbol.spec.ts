@@ -3,6 +3,7 @@ import type postgres from "postgres";
 
 import { test, expect, visit } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `JerarquiaMes` (RP-84, RP-43): «Mes» draws one block per general goal, its
 // tasks in tree order, and the loose goal its own block after. It runs on any
@@ -135,17 +136,17 @@ test("one block per general goal in tree order, the loose goal its own block aft
   const general = page.getByRole("heading", { level: 2, name: G, exact: true });
   const loose = page.getByRole("heading", { level: 2, name: LOOSE, exact: true });
   await expect(general.getByRole("link")).toHaveAttribute("href", new RegExp(`/metas/[0-9a-f-]+/meses/${MONTH.slice(0, 7)}$`));
-  expect((await general.boundingBox())!.y).toBeLessThan((await loose.boundingBox())!.y);
+  expect((await boxOf(general)).y).toBeLessThan((await boxOf(loose)).y);
 
   // Every task of the tree sits between G's heading and the loose goal's.
-  const gY = (await general.boundingBox())!.y;
-  const looseY = (await loose.boundingBox())!.y;
+  const gY = (await boxOf(general)).y;
+  const looseY = (await boxOf(loose)).y;
   for (const { name } of ROWS) {
-    const y = (await page.getByText(name, { exact: true }).first().boundingBox())!.y;
+    const y = (await boxOf(page.getByText(name, { exact: true }).first())).y;
     expect(y, name).toBeGreaterThan(gY);
     expect(y, name).toBeLessThan(looseY);
   }
-  const looseTask = (await page.getByText("Grabar el audio de referencia (semana 1)", { exact: true }).first().boundingBox())!.y;
+  const looseTask = (await boxOf(page.getByText("Grabar el audio de referencia (semana 1)", { exact: true }).first())).y;
   expect(looseTask).toBeGreaterThan(looseY);
 
   // Tree order: G's own, g1, p, g2, g3; the done ones last.
@@ -230,8 +231,8 @@ test("an inner goal's «sin monto» notice is not printed inside the general's b
   // g3 has a task and no amount this month; only the loose goal says so.
   const notice = page.getByText(/sin monto este mes/);
   await expect(notice).toHaveCount(1);
-  const looseY = (await page.getByRole("heading", { level: 2, name: LOOSE, exact: true }).boundingBox())!.y;
-  expect((await notice.boundingBox())!.y).toBeGreaterThan(looseY);
+  const looseY = (await boxOf(page.getByRole("heading", { level: 2, name: LOOSE, exact: true }))).y;
+  expect((await boxOf(notice)).y).toBeGreaterThan(looseY);
   const text = await mainText(page);
   const block = text.slice(text.indexOf(lc(G)), text.indexOf(lc(LOOSE)));
   expect(block).not.toContain("sin monto");
@@ -254,9 +255,9 @@ test("a task of the small goal is marked done in one tap from the general's bloc
     if (request.method() === "POST") posts.push(request.url());
   });
   const mark = page.getByRole("button", { name: "Marcar hecha: Entrevistar a 5 usuarios", exact: true });
-  const generalY = (await page.getByRole("heading", { level: 2, name: G, exact: true }).boundingBox())!.y;
-  const looseY = (await page.getByRole("heading", { level: 2, name: LOOSE, exact: true }).boundingBox())!.y;
-  const markY = (await mark.boundingBox())!.y;
+  const generalY = (await boxOf(page.getByRole("heading", { level: 2, name: G, exact: true }))).y;
+  const looseY = (await boxOf(page.getByRole("heading", { level: 2, name: LOOSE, exact: true }))).y;
+  const markY = (await boxOf(mark)).y;
   expect(markY).toBeGreaterThan(generalY);
   expect(markY).toBeLessThan(looseY);
 
@@ -264,7 +265,7 @@ test("a task of the small goal is marked done in one tap from the general's bloc
   const undo = page.getByRole("button", { name: "Deshacer: Entrevistar a 5 usuarios", exact: true });
   await expect(undo).toBeVisible();
   expect(posts).toHaveLength(1);
-  const undoY = (await undo.boundingBox())!.y;
+  const undoY = (await boxOf(undo)).y;
   expect(undoY).toBeGreaterThan(generalY);
   expect(undoY).toBeLessThan(looseY);
   const [fact] = await db<{ n: number }[]>`

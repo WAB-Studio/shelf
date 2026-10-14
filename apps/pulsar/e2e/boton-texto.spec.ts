@@ -2,6 +2,7 @@ import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // From 1024 a button or link-button standing alone in a `Page`
 // column is as wide as its text (160 at least), at the column's start; below
@@ -46,14 +47,14 @@ test("a goal's /meses with no amount: «Planear» is its text wide at 1440 and t
     await page.goto(`/metas/${goal.id}/meses`);
     const plan = page.getByRole("link", { name: `Planear ${NAMES[Number(thisMonth.slice(5, 7)) - 1]}` });
     await expect(plan).toBeVisible();
-    const box = (await plan.boundingBox())!;
+    const box = (await boxOf(plan));
     expect(box.width).toBeGreaterThanOrEqual(160);
     expect(box.width).toBeLessThanOrEqual(320);
-    const header = (await page.locator("main > header").first().boundingBox())!;
+    const header = (await boxOf(page.locator("main > header").first()));
     expect(Math.abs(box.x - header.x)).toBeLessThanOrEqual(1);
 
     await page.setViewportSize({ width: 390, height: 900 });
-    const narrow = (await plan.boundingBox())!;
+    const narrow = (await boxOf(plan));
     expect(narrow.width).toBeGreaterThanOrEqual(349);
   } finally {
     await context.close();
@@ -68,7 +69,7 @@ test("/entrar's button is its text wide at 1440", async ({ browser, baseURL }) =
     await page.goto("/entrar");
     const button = page.getByRole("button", { name: "Enviar enlace" });
     await expect(button).toBeVisible();
-    const box = (await button.boundingBox())!;
+    const box = (await boxOf(button));
     expect(box.width).toBeGreaterThanOrEqual(160);
     expect(box.width).toBeLessThanOrEqual(320);
   } finally {

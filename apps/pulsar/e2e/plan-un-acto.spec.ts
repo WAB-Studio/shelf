@@ -4,6 +4,7 @@ import type postgres from "postgres";
 import { todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-50, RNP-07: a plan with no rhythm draws one solid act,
 // «Armar el plan»; «Añadir una tarea» stands outlined beneath it. With a
@@ -163,7 +164,7 @@ test("at 1440 both buttons are sized to their text, 160 px at least, never the c
     await expect(page.getByRole("button", { name: "Añadir una tarea", exact: true })).toBeVisible();
     expect((await paint(page, "Añadir una tarea")).fill).toBe(TRANSPARENT);
     for (const name of ["Armar el plan", "Añadir una tarea"]) {
-      const box = (await page.getByRole("button", { name, exact: true }).boundingBox())!;
+      const box = (await boxOf(page.getByRole("button", { name, exact: true })));
       expect(box.width).toBeGreaterThanOrEqual(160);
       expect(box.width).toBeLessThan(400);
     }

@@ -2,6 +2,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // Hoy: the marks of «este mes» stand on
 // the same edge as the day's rows and its groups are spaced as sections; an
@@ -95,9 +96,9 @@ test("at 360 the goal groups of «este mes» stand a section apart", async ({ pe
     await page.goto("/");
     const block = page.locator("section").filter({ hasText: "este mes" }).locator("visible=true").last();
     await expect(block.getByRole("button", { name: `Marcar hecha: Tarea A ${stamp}` })).toBeVisible();
-    const a = (await block.getByText(first, { exact: true }).boundingBox())!;
-    const b = (await block.getByText(second, { exact: true }).boundingBox())!;
-    const taskA = (await block.getByRole("button", { name: `Marcar hecha: Tarea A ${stamp}` }).boundingBox())!;
+    const a = (await boxOf(block.getByText(first, { exact: true })));
+    const b = (await boxOf(block.getByText(second, { exact: true })));
+    const taskA = (await boxOf(block.getByRole("button", { name: `Marcar hecha: Tarea A ${stamp}` })));
     expect(a.y).toBeLessThan(b.y);
     // The ghost button's own margin takes a few px of the 32 the group gap sets.
     expect(b.y - (taskA.y + taskA.height)).toBeGreaterThanOrEqual(28);
@@ -130,8 +131,8 @@ test("an ended goal's lines are sentences in Archivo and stand together", async 
     await expect(line(ended[0])).toBeVisible();
     const family = await line(ended[0]).evaluate((node) => getComputedStyle(node).fontFamily);
     expect(family).not.toMatch(/mono/i);
-    const one = (await line(ended[0]).boundingBox())!;
-    const two = (await line(ended[1]).boundingBox())!;
+    const one = (await boxOf(line(ended[0])));
+    const two = (await boxOf(line(ended[1])));
     // One block: the lines are a link's height apart, never a section's worth of air.
     expect(Math.abs(two.y - one.y)).toBeLessThanOrEqual(56);
   } finally {

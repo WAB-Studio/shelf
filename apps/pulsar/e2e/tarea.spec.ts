@@ -2,6 +2,7 @@ import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (RP-30, RP-31,
 // RP-35): the form that writes a task of a month and a sub-task under a
@@ -340,7 +341,7 @@ for (const width of [360, 1280]) {
       }
       for (const name of ["Guardar la tarea", "Cancelar"]) {
         const target = name === "Cancelar" ? page.getByRole("link", { name }) : page.getByRole("button", { name });
-        const box = (await target.boundingBox())!;
+        const box = (await boxOf(target));
         expect(box.height, name).toBeGreaterThanOrEqual(52);
         expect(box.x + box.width, name).toBeLessThanOrEqual(width);
       }
@@ -397,11 +398,11 @@ test("«Otra sub-tarea» closes each open parent's children and is offered under
       await expect(link.last()).toHaveAttribute("href", `${newHref(goalId, thisMonth)}?padre=${bare}`);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
-      const child = (await page.getByText(`Hijo abierto ${stamp}`).boundingBox())!;
+      const child = (await boxOf(page.getByText(`Hijo abierto ${stamp}`)));
       const row = (await link.first().evaluate((el) => el.getBoundingClientRect()))!;
       expect(row.height).toBeGreaterThanOrEqual(48);
       const circle = (await link.first().evaluate((el) => el.querySelector("[data-state]")!.getBoundingClientRect()))!;
-      const mark = (await page.locator("[data-done]").first().boundingBox())!;
+      const mark = (await boxOf(page.locator("[data-done]").first()));
       expect(circle.x - mark.x).toBeGreaterThanOrEqual(30);
       expect(row.y).toBeGreaterThan(child.y);
     }
