@@ -107,11 +107,12 @@ test("confirmImport: the example's notes land on the goals, the task and the sub
   const result = await confirmImport(draft);
   assert.ok(result.ok, JSON.stringify(result));
   goalIds.push(...result.goalIds);
-  const goalNotes = await sql<{ note: string | null }[]>`select note from goals.goals where id in ${sql(result.goalIds)} order by position`;
-  assert.deepEqual(goalNotes.map((g) => g.note), [
+  const goalNotes = await sql<{ id: string; note: string | null }[]>`select id, note from goals.goals where id in ${sql(result.goalIds)}`;
+  assert.deepEqual(result.goalIds.map((id) => goalNotes.find((g) => g.id === id)!.note), [
     "Lo que busco en dos años.\nUn ritmo que pueda sostener.",
     null,
     "Empezar por lo que ya sé medir.",
+    null,
   ]);
   const rows = await sql<{ name: string; note: string | null }[]>`
     select name, note from goals.one_offs where goal_id = ${result.goalIds[2]} order by name`;

@@ -183,6 +183,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   a missing env file there. Both checkouts share one database, so the number is the same.
 - Run the RNF-09 timing alone: it lives in `check:http` and `check:queries`, and a second lane inflates it.
 - Copy everything an agent left in the lane's `private/` before you drop it: reports, logs a handoff cites and captures (`cp -r ../finances-app-l<n>/private/{reportes,ux-*} private/`). `worktree remove --force` deletes them. Measured 2026-10-06: 144 captures of two UX critics went with lanes 3 and 6.
+- Copy the lane's `apps/*/private/` too: an agent's scripts land there, beside the app. Measured 2026-10-13: the canvas capture scripts in `apps/pulsar/private/cap/` went with lane 3.
 - Free the lane's port with `fuser -k <port>/tcp`. Never `pkill -f` a path: the pattern matches your own shell.
 - Drop the worktree when its branch lands: `git worktree remove ../finances-app-l<n> --force`.
 - Forbid a file to every live lane the moment you hand it out, not only to the lanes you open next.
@@ -245,6 +246,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   get a PR of their own, so the rule above never fires for them. Measured 2026-10-12: 98 branches alive, ~95
   of them module branches already inside a merged train; one held a fix that never landed.
 - Leave `delete_branch_on_merge` on in the repo. It deletes the PR's own branch; a module branch is still yours.
+- Restore `integracion` right after merging it into `main`: `delete_branch_on_merge` deletes it too.
+  `git push origin origin/main:refs/heads/integracion`. Measured 2026-10-13 on #592.
 - Delete it only after `gh pr view <n> --json state` reads `MERGED`. Never chain the delete after `gh pr merge` in one
   command: on 2026-10-09 a merge refused on a conflict still deleted #526's branch, and GitHub closed the PR.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.

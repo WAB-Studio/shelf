@@ -33,7 +33,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
   test("broken rows are all said at once, in sheet and row order, with their count, and the text box stays empty", async ({ person, browser, baseURL, db }) => {
     // Kills: showing only the first broken row, or leaving the generic failure.
     const wb = await load();
-    // Meses row 4: a month that does not exist. Tareas row 6: an amount in words. Compromisos row 4: a cadence in words.
+    // Meses row 4: a month that does not exist. Tareas row 6: an amount in words. Compromisos row 5: a cadence in words.
     wb.getWorksheet("Meses")!.addRow([GOAL, "2026-13", "37 h"]);
     wb.getWorksheet("Tareas")!.addRow([GOAL, "2026-10", "Semana 3", null, "tres horas", null]);
     wb.getWorksheet("Compromisos")!.addRow([GOAL, "Inglés", "de lunes a viernes y domingo", "1 h"]);
@@ -49,7 +49,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
       const rows = alert.getByText(/^(Meses|Tareas|Compromisos), fila \d+: /);
       await expect(rows).toHaveCount(3);
       await expect(rows.nth(0)).toHaveText(`Meses, fila 4: ${messages.errors.form.monthReal}`);
-      await expect(rows.nth(1)).toHaveText(/^Compromisos, fila 4: /);
+      await expect(rows.nth(1)).toHaveText(/^Compromisos, fila 5: /);
       await expect(rows.nth(2)).toHaveText(/^Tareas, fila 6: /);
       await expect(page.getByText("Leído de plantilla-pulsar.xlsx. Corrige el libro y vuelve a subirlo.", { exact: true })).toBeVisible();
       await expect(page.getByLabel(messages.textLabel, { exact: true })).toHaveValue("");

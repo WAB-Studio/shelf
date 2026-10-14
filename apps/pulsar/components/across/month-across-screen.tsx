@@ -12,6 +12,7 @@ import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
+import { civilDayMonthShort } from "@/lib/zone";
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -191,9 +192,12 @@ export async function MonthAcrossScreen() {
             <Flex align="baseline" gap="2">
               <Figure value={goal.line.reached} unit={unit ?? undefined} bare={goal.line.planned !== null} />
               {goal.line.planned !== null ? (
-                <Text variant="sentence">
-                  {t.rich("month.months.ofFigure", { planned: say(goal.line.planned), ...fig })}
-                </Text>
+                <>
+                  {" "}
+                  <Text variant="sentence">
+                    {t.rich("month.months.ofFigure", { planned: say(goal.line.planned), ...fig })}
+                  </Text>
+                </>
               ) : null}
             </Flex>
           ) : null}
@@ -252,9 +256,12 @@ export async function MonthAcrossScreen() {
             <Flex align="baseline" gap="2">
               <Figure value={root.line.reached} unit={root.unit ?? undefined} bare={root.line.planned !== null} />
               {root.line.planned !== null ? (
-                <Text variant="sentence">
-                  {t.rich("month.months.ofFigure", { planned: say(root.line.planned), ...fig })}
-                </Text>
+                <>
+                  {" "}
+                  <Text variant="sentence">
+                    {t.rich("month.months.ofFigure", { planned: say(root.line.planned), ...fig })}
+                  </Text>
+                </>
               ) : null}
             </Flex>
           ) : null}
@@ -290,13 +297,23 @@ export async function MonthAcrossScreen() {
               return (
                 <Flex key={habit.id} direction="column">
                   <Text as="p" variant="name">
-                    {habit.name}
+                    <TextLink href={`/metas/habitos/${habit.id}?volver=/mes`}>{habit.name}</TextLink>
                   </Text>
                   <Text as="p" variant="meta">
-                    {habit.asked === null
+                    {habit.weeks
+                      ? habit.weeks.counted === 0
+                        ? t("month.across.habits.noWeeks", { cadence })
+                        : t("month.across.habits.lineWeeks", { cadence, ...habit.weeks })
+                      : habit.asked === null
                       ? t("month.across.habits.line", { cadence, count: habit.daysDone })
                       : t("month.across.habits.lineOf", { cadence, done: habit.daysDone, asked: habit.asked })}
+                    {habit.thisWeek ? ` · ${t("week.flexible.weekProgress", { done: habit.thisWeek.done, total: habit.thisWeek.count })}` : ""}
                   </Text>
+                  {habit.retiredOn ? (
+                    <Text as="p" variant="meta">
+                      {t("habit.retiredOn", { date: civilDayMonthShort(habit.retiredOn) })}
+                    </Text>
+                  ) : null}
                 </Flex>
               );
             })}

@@ -111,7 +111,7 @@ test_("«Por mes» of a goal measured in time: every row reads «<mes> <año>»,
 }) => {
   const goalId = await seedMeasured(db, person.id, `Meta con año ${Date.now()}`);
   await page.setViewportSize({ width: 360, height: 740 });
-  await page.goto(`/metas/${goalId}/meses`);
+  await page.goto(`/metas/${goalId}/meses?todo=1`);
   await expect(rowsOf(page)).toHaveCount(16);
 
   const labels = await labelsOf(page);
@@ -132,7 +132,7 @@ test_("«Por mes» of a goal that measures nothing: the tasks table reads «<mes
 }) => {
   const goalId = await seedGoal(db, person.id, `Meta sin medida con año ${Date.now()}`, { unit: null });
   await page.setViewportSize({ width: 360, height: 740 });
-  await page.goto(`/metas/${goalId}/meses`);
+  await page.goto(`/metas/${goalId}/meses?todo=1`);
   await expect(rowsOf(page)).toHaveCount(16);
   const labels = await labelsOf(page);
   expect(labels).toEqual(span.map(withYear));
@@ -185,7 +185,7 @@ for (const width of [360, 1024]) {
   }) => {
     const goalId = await seedMeasured(db, person.id, `Meta sin salto ${width} ${Date.now()}`);
     await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/metas/${goalId}/meses`);
+    await page.goto(`/metas/${goalId}/meses?todo=1`);
     await expect(rowsOf(page)).toHaveCount(16);
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);

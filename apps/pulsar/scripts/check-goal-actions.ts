@@ -969,3 +969,34 @@ test("sin final: a goal made with no end stores null, takes a rhythm in km, and 
     await sql`delete from goals.goals where id = ${endless.goalId}`;
   }
 });
+
+test("moveHorizon: with two phases the refusal judges the last one, names it, and the column holds", async () => {
+  const created = await createGoal({ name: "RP-114 dos fases", horizon: shiftDay(today, 90) });
+  if (!created.ok) throw new Error(created.error);
+  const goalId = created.goalId;
+  try {
+    await sql`
+      insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+      values (${personId}, ${goalId}, 'Base', ${shiftDay(today, 1)}, ${shiftDay(today, 10)}),
+             (${personId}, ${goalId}, 'Pico', ${shiftDay(today, 11)}, ${shiftDay(today, 40)})`;
+
+    const refused = await moveHorizon({ goalId, horizon: shiftDay(today, 20) });
+    assert.deepEqual(refused, {
+      ok: false,
+      error: "goal.errors.horizonBeforePhase",
+      values: { name: "Pico", date: shiftDay(today, 40) },
+    });
+    assert.equal(await goalHorizon(goalId), shiftDay(today, 90));
+
+    const past = await moveHorizon({ goalId, horizon: today });
+    assert.equal(past.ok, false);
+    if (!past.ok) assert.equal(past.error, "goal.errors.horizonPast");
+    assert.equal(await goalHorizon(goalId), shiftDay(today, 90));
+
+    const after = await moveHorizon({ goalId, horizon: shiftDay(today, 50) });
+    assert.equal(after.ok, true);
+    assert.equal(await goalHorizon(goalId), shiftDay(today, 50));
+  } finally {
+    await sql`delete from goals.goals where id = ${goalId}`;
+  }
+});

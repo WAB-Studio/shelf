@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-import { dayBefore, weekIndexOf } from "@/lib/day/weeks";
+import { dayBefore } from "@/lib/day/weeks";
 import { addWeeksToCivilDate, civilDateInZone, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
@@ -73,18 +73,18 @@ test("moving the end of an ended goal opens on a count that ends this Sunday and
   db,
   personId,
 }) => {
-  const { goalId, openedOn } = await seedEnded(db, personId, `Meta mover ${Date.now()}`);
+  const { goalId } = await seedEnded(db, personId, `Meta mover ${Date.now()}`);
   try {
     await page.goto(`/metas/${goalId}`);
     await page.getByRole("button", { name: "mover el final", exact: true }).click();
     const sheet = page.getByRole("dialog");
-    const field = sheet.getByLabel(/^semanas, contando la del /i);
-    const weeks = weekIndexOf(openedOn, todayInZone());
-    await expect(field).toHaveValue(String(weeks));
+    // RP-108: counted from this week, so an ended goal reopens on 1 however long ago it opened.
+    const field = sheet.getByLabel(/^semanas, contando esta$/);
+    await expect(field).toHaveValue("1");
     const sunday = weekOf(todayInZone())[6];
     await expect(sheet.getByText(`termina el ${civilDayMonthYear(sunday)}`)).toBeVisible();
 
-    await sheet.getByRole("button", { name: "Moverlo" }).click();
+    await sheet.getByRole("button", { name: "Ponerle final" }).click();
     await expect(sheet).toBeHidden();
     await expect(page.getByText(/^terminó el /)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toBeVisible();

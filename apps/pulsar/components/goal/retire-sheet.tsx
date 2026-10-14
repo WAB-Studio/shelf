@@ -80,6 +80,24 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
   );
 }
 
+/**
+ * `HabitoPantalla`: the habit screen's own «Retirarlo», a block button that
+ * opens the same sheet the row once did. Done, the screen refreshes into its
+ * retired state; it does not leave.
+ */
+export function RetireAction({ label, ...sheet }: Omit<RetireSheetProps, "open" | "onOpenChange"> & { label: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button block variant="outline" onClick={() => setOpen(true)}>
+        {label}
+      </Button>
+      <RetireSheet open={open} onOpenChange={setOpen} {...sheet} />
+    </>
+  );
+}
+
 export type CommitmentRowProps = {
   commitmentId: string;
   name: string;

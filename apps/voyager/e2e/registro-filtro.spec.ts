@@ -270,7 +270,12 @@ test("offline: filtering still works and sends no request", async ({ page }) => 
   await open800(page);
   await page.context().setOffline(true);
   const requests: string[] = [];
-  page.on("request", (r) => requests.push(r.url()));
+  // Next's router prefetches the nav links when they enter the viewport; they land in the
+  // window by timing alone and carry this header. Anything else the filter sends still counts.
+  page.on("request", (r) => {
+    if (r.headers()["next-router-prefetch"] === "1") return;
+    requests.push(r.url());
+  });
   await field(page).fill("ling");
   await expect(rows(page)).toHaveCount(2);
   await field(page).fill("zzz");

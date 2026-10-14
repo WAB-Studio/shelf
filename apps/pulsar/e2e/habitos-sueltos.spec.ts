@@ -67,7 +67,9 @@ for (const width of [360, 1280]) {
         expect(section).toContain("llamar a mamá 1 vez por semana los domingos, después de almorzar.");
         expect(section).not.toContain("estirar lun, mié y vie · 10 min un vaso");
         expect(section).not.toContain("bañarse");
-        expect(section).not.toContain("retirado");
+        // The retired one sits folded in «Retirados» (RP-109): counted, never listed among the live.
+        expect(section).not.toContain("hábito retirado");
+        expect(section).toContain("retirados");
         expect(section).not.toContain("ninguno todavía");
         expect(text.indexOf(SECTION)).toBeGreaterThan(text.indexOf("cuidado personal"));
         expect(text).not.toContain("sin meta");
@@ -203,8 +205,8 @@ test.describe("the habit form", () => {
 test.describe("retiring a habit", () => {
   test.use({ viewport: { width: 360, height: 900 } });
 
-  test("tapping its name asks «¿Retirarlo?» with the days it was done; «Dejarlo como está» keeps it (RP-13, RP-100)", async ({ person, browser, baseURL, db }) => {
-    // Kills: a name that opens nothing; a cancel that retires.
+  test("its row opens its screen, whose «Retirarlo» asks «¿Retirarlo?» with the days it was done; «Dejarlo como está» keeps it (RP-13, RP-105)", async ({ person, browser, baseURL, db }) => {
+    // Kills: a row that opens nothing; a screen with no «Retirarlo»; a cancel that retires.
     const id = await seedHabit(db, person, { name: "Tomar agua", quantity: 2, unit: "litros" });
     for (let d = 1; d <= 12; d += 1) {
       await db`
@@ -215,6 +217,9 @@ test.describe("retiring a habit", () => {
     try {
       const posts = postCounter(page);
       await page.getByText("Tomar agua", { exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/metas/habitos/${id}$`));
+      await expect(page.getByRole("heading", { level: 1, name: "Tomar agua" })).toBeVisible();
+      await page.getByRole("button", { name: "Retirarlo", exact: true }).click();
       const sheet = dialog(page);
       await expect(sheet.getByRole("heading", { name: "¿Retirarlo?" })).toBeVisible();
       await expect(
@@ -229,7 +234,7 @@ test.describe("retiring a habit", () => {
     }
   });
 
-  test("«Retirarlo» takes it out of the section, keeps asking until tomorrow on Hoy, and keeps the row and its days (RP-13, RP-100)", async ({ person, browser, baseURL, db }) => {
+  test("«Retirarlo» from its screen takes it out of the section, keeps asking until tomorrow on Hoy, and keeps the row and its days (RP-13, RP-105)", async ({ person, browser, baseURL, db }) => {
     // Kills: deleting the row instead of retiring it; a retired habit still listed.
     const id = await seedHabit(db, person, { name: "Tomar agua", quantity: 2, unit: "litros" });
     await db`
@@ -240,10 +245,19 @@ test.describe("retiring a habit", () => {
       await expect(page.getByText("Tomar agua").first()).toBeVisible();
       await page.goto("/metas");
       await page.getByText("Tomar agua", { exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/metas/habitos/${id}$`));
+      await page.getByRole("button", { name: "Retirarlo", exact: true }).click();
       await dialog(page).getByRole("button", { name: "Retirarlo", exact: true }).click();
       await expect(dialog(page)).toHaveCount(0);
+      await expect(page).toHaveURL(new RegExp(`/metas/habitos/${id}$`));
+      await page.goto("/metas");
       await expect(page.getByText("Tomar agua", { exact: true })).toHaveCount(0);
       expect(await mainLower(page)).toContain("ninguno todavía.");
+      // It lives on in the folded group (RP-109): out of the live ones, one tap from its screen.
+      const retired = page.getByRole("button", { name: "Desplegar Retirados", exact: true }).locator("visible=true");
+      await expect(retired).toHaveCount(1);
+      await retired.click();
+      await expect(page.locator(`main a[href="/metas/habitos/${id}"]:visible`)).toHaveCount(1);
       const rows = await habitRows(db, person, "Tomar agua");
       expect(rows).toHaveLength(1);
       expect(rows[0].retired_at).not.toBeNull();

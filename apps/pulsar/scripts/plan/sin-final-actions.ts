@@ -50,6 +50,7 @@ after(async () => {
 
 let oneOffs: typeof import("@/app/actions/one-offs");
 let budgets: typeof import("@/app/actions/budgets");
+let roadmap: typeof import("@/app/actions/roadmap");
 let thisMonth: string;
 
 function monthFrom(delta: number): string {
@@ -63,6 +64,7 @@ before(async () => {
   plan = await import("@/app/actions/plan");
   oneOffs = await import("@/app/actions/one-offs");
   budgets = await import("@/app/actions/budgets");
+  roadmap = await import("@/app/actions/roadmap");
   const { todayInZone } = await import("@/lib/zone");
   today = todayInZone();
   thisMonth = today.slice(0, 7);
@@ -151,4 +153,33 @@ test("a subtask under a task of an endless goal lands", async () => {
   if (!parent.ok) return;
   const child = await as(owner, () => oneOffs.createOneOff({ name: "hija", day: null, parentId: parent.oneOffId }));
   assert.equal(child.ok, true);
+});
+
+async function measured(name: string, unit: string): Promise<string> {
+  const goalId = await create(name);
+  const commitment = await as(owner, () =>
+    plan.addCommitment({ goalId, name: "medida", cadenceKind: "daily", satisfaction: "quantity", targetQuantity: 10, unit }),
+  );
+  assert.equal(commitment.ok, true);
+  if (commitment.ok) commitmentIds.push(commitment.commitmentId);
+  return goalId;
+}
+
+test("setRhythm on a goal with no end and a measure lands, in any unit (RP-99, RP-101)", async () => {
+  const goalId = await measured("Leer sin final", "paginas");
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount: 40 })), { ok: true });
+  const [row] = await admin<{ rhythm: number | null }[]>`select rhythm from goals.goals where id = ${goalId}`;
+  assert.equal(row.rhythm, 40);
+});
+
+test("a task of a goal with no end moves to any month of the twelve it shows, and not to the thirteenth", async () => {
+  const goalId = await create("Doce meses");
+  const made = await as(owner, () => oneOffs.createOneOff({ name: "mover", day: null, goalId, plannedMonth: thisMonth }));
+  assert.equal(made.ok, true);
+  if (!made.ok) return;
+  const move = (month: string) => as(owner, () => oneOffs.editTask({ oneOffId: made.oneOffId, name: "mover", month }));
+  assert.deepEqual(await move(monthFrom(11)), { ok: true });
+  assert.deepEqual(await move(monthFrom(12)), { ok: false, error: "roadmap.errors.monthOutsideSpan" });
+  const [row] = await admin<{ m: string }[]>`select to_char(planned_month, 'YYYY-MM') as m from goals.one_offs where id = ${made.oneOffId}`;
+  assert.equal(row.m, monthFrom(11));
 });

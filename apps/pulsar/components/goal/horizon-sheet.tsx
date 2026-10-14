@@ -7,12 +7,13 @@ import { z } from "zod";
 
 import { moveHorizon } from "@/app/actions/plan";
 import { dayBefore, horizonForWeeks, weekIndexOf } from "@/lib/day/weeks";
+import { horizonWeeks } from "./phase-weeks";
 import { horizonTreeRefusal, type PlacementRefusal } from "@/lib/goals/placement";
 import { refusalKey } from "@/lib/goals/refusal-key";
 import { buildTree, type TreeRow } from "@/lib/goals/tree";
 import { horizonRefusal, moveHorizonSchema } from "@/lib/validation/horizon";
-import { civilDateLabel, civilDayMonthYear, todayInZone } from "@/lib/zone";
-import { Button, Field, Flex, Notice, Sheet, SheetActions } from "@/components/ui";
+import { civilDayMonthYear, todayInZone } from "@/lib/zone";
+import { Button, Field, Flex, Notice, Sheet, SheetActions, Text } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 // The new-goal rule (`new-goal-form.tsx`): a whole number of weeks, 1 to 520.
@@ -77,6 +78,10 @@ export function MoveHorizonAction({
   const [open, setOpen] = useState(false);
   const startWeeks = weeks ?? DEFAULT_WEEKS;
   const noEnd = storedHorizon === null;
+  // A reopened goal is offered what a goal with no end is: put an end on it, or leave it without one.
+  const putMode = noEnd || reopening;
+  // Every end sheet counts its weeks from the current one; the goal screen counts from the opening.
+  const anchor = todayInZone();
   const [value, setValue] = useState(String(startWeeks));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,9 +97,9 @@ export function MoveHorizonAction({
   const typed = weeksSchema.safeParse(value);
   // The opening count stands for the stored horizon itself, never for the
   // week's edge that count would write.
-  const untouched = !noEnd && !reopening && typed.success && typed.data === weeks;
+  const untouched = !noEnd && !reopening && typed.success && typed.data === startWeeks;
 
-  const candidate = typed.success && !untouched ? horizonForWeeks(openedOn, typed.data) : null;
+  const candidate = typed.success && !untouched ? horizonForWeeks(anchor, typed.data) : null;
   // The goals below that end after the typed end: «Mover también sus finales» takes them along.
   const later =
     candidate === null
@@ -118,13 +123,15 @@ export function MoveHorizonAction({
     return t(refusalKey(refusal.code), { name: ref.name, date: ref.horizon ? civilDayMonthYear(dayBefore(ref.horizon)) : "" });
   }
 
-  const treeSentence = typed.success && !untouched ? treeSentenceFor(horizonForWeeks(openedOn, typed.data)) : null;
+  const treeSentence = typed.success && !untouched ? treeSentenceFor(horizonForWeeks(anchor, typed.data)) : null;
 
-  function refusalText(key: MessageKey, count: number): string {
+  // The phase the refusal names: the page's, or the server's when it judged a longer one.
+  function refusalText(key: MessageKey, count: number, phase: { name: string; endsOn: string } | null = lastPhase): string {
     return t(key, {
       weeks: count,
-      name: lastPhase?.name ?? "",
-      week: lastPhase ? weekIndexOf(openedOn, lastPhase.endsOn) : 0,
+      name: phase?.name ?? "",
+      week: phase ? weekIndexOf(anchor, phase.endsOn) : 0,
+      fromOpening: phase ? weekIndexOf(openedOn, phase.endsOn) : 0,
     });
   }
 
@@ -157,7 +164,7 @@ export function MoveHorizonAction({
       return;
     }
 
-    await commit(horizonForWeeks(openedOn, typed.data), moveBranch);
+    await commit(horizonForWeeks(anchor, typed.data), moveBranch);
   }
 
   async function commit(horizon: string | null, moveBranch = false) {
@@ -193,7 +200,8 @@ export function MoveHorizonAction({
       if (noEnd && horizon !== null) onPut?.(dayBefore(horizon));
       router.refresh();
     } else if (result.error.startsWith("goal.errors.")) {
-      setError(refusalText(result.error, count));
+      const served = "values" in result && result.values?.date ? { name: result.values.name, endsOn: result.values.date } : null;
+      setError(refusalText(result.error, count, served ?? lastPhase));
     } else if ("values" in result && result.values) {
       setError(
         t(result.error, {
@@ -206,11 +214,15 @@ export function MoveHorizonAction({
     }
   }
 
-  const endsOn = typed.success
-    ? t("goal.horizon.endsOn", {
-        date: civilDayMonthYear(dayBefore(untouched && storedHorizon ? storedHorizon : horizonForWeeks(openedOn, typed.data))),
-      })
-    : t("goal.errors.horizonWeeksInvalid");
+  // The weeks the goal's own screen will read: the stored end when untouched, else the one the count writes.
+  const shownHorizon = typed.success ? (untouched && storedHorizon ? storedHorizon : horizonForWeeks(anchor, typed.data)) : null;
+  const total = shownHorizon === null ? null : horizonWeeks(openedOn, shownHorizon);
+  const endsOn =
+    shownHorizon === null || total === null
+      ? t("goal.errors.horizonWeeksInvalid")
+      : t("goal.horizon.endsOnTotal", { date: civilDayMonthYear(dayBefore(shownHorizon)), total });
+  // A refusal takes the hint; the total moves to the muted line.
+  const refused = treeSentence !== null || error !== null;
 
   return (
     <>
@@ -219,7 +231,7 @@ export function MoveHorizonAction({
       </Button>
       <Sheet open={open} onOpenChange={setOpen} label={name} title={t("goal.horizon.title")}>
         <Field
-          label={t("goal.horizon.weeksLabel", { date: civilDateLabel(openedOn) })}
+          label={t("goal.horizon.weeksFromThis")}
           type="number"
           inputMode="numeric"
           min={1}
@@ -234,6 +246,11 @@ export function MoveHorizonAction({
           hint={treeSentence ?? error ?? endsOn}
           autoFocus
         />
+        <Text as="p" variant="sentence" tone="muted">
+          {refused && total !== null
+            ? t("goal.horizon.bothCountsTotal", { n: weekIndexOf(openedOn, anchor), total })
+            : t("goal.horizon.bothCounts", { n: weekIndexOf(openedOn, anchor) })}
+        </Text>
         {later.length > 0 && candidate !== null ? (
           <Notice
             role="note"
@@ -244,7 +261,7 @@ export function MoveHorizonAction({
             aside={t("goal.horizon.laterAside", { count: later.length, date: civilDayMonthYear(dayBefore(candidate)) })}
           />
         ) : null}
-        {noEnd ? null : (
+        {putMode ? null : (
           <Flex>
             <Button variant="ghost" tone="accent" tap={44} onClick={handleRemove} disabled={pending}>
               {t("goal.horizon.removeEnd")}
@@ -263,10 +280,10 @@ export function MoveHorizonAction({
             onClick={() => handleMove()}
             disabled={pending || treeSentence !== null || later.length > 0}
           >
-            {t(noEnd ? "goal.horizon.putConfirm" : "goal.horizon.confirm")}
+            {t(putMode ? "goal.horizon.putConfirm" : "goal.horizon.confirm")}
           </Button>
-          <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-            {t(noEnd ? "goal.horizon.keepNoEnd" : "goal.horizon.cancel")}
+          <Button block variant="outline" onClick={reopening ? handleRemove : () => setOpen(false)} disabled={pending}>
+            {t(putMode ? "goal.horizon.keepNoEnd" : "goal.horizon.cancel")}
           </Button>
         </SheetActions>
       </Sheet>

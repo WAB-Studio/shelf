@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ENDLESS_MONTHS_AHEAD, lastMonthOf, monthLine, monthRows, monthsOfSpan, partOf, plannedOf } from "./months";
-import { fillPlan, type PlanInput, type PlanTask } from "./roadmap";
+import { amountOf, fillPlan, type PlanInput, type PlanTask } from "./roadmap";
 import { openMonthsOf, planMonthList, rhythmToMeet } from "./roadmap-read";
 import { weekPlanned } from "./week-planned";
 
@@ -97,4 +97,17 @@ test("roadmap-read: no end reads", () => {
   const months = openMonthsOf({ openedOn: "2026-08-01", horizon: null, today: TODAY });
   assert.equal(months[0], "2026-10");
   assert.equal(months[months.length - 1], "2027-09");
+});
+
+test("lastMonthOf: a goal with no end never ends before the month it opened", () => {
+  assert.equal(lastMonthOf("2028-03-05", null, TODAY), "2028-03-01");
+});
+
+test("amountOf: a goal with no end opened mid-month plans only the days it is open, as a dated goal does", () => {
+  // 3100 a month over 31 days is 100 a day; opened on the 20th, October holds 12 days of it.
+  const input = { budgets: [], rhythm: 3100, openedOn: "2026-10-20", horizon: null };
+  assert.equal(amountOf("2026-10-01", input), 1200);
+  assert.equal(amountOf("2026-10-01", { ...input, horizon: "2027-06-01" }), 1200);
+  assert.equal(amountOf("2026-11-01", input), 3100);
+  assert.equal(amountOf("2026-11-01", { ...input, budgets: [{ month: "2026-11-01", amount: 5 }] }), 5);
 });

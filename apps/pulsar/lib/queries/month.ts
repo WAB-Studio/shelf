@@ -2,7 +2,8 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { asksOn } from "@/lib/day/cadence";
+import { askedIn } from "@/lib/day/habit-months";
+import { habitThisWeek, habitWeeks, weeksOfMonth } from "@/lib/day/habit-weeks";
 import type { Cadence, EvidenceDay } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
@@ -30,7 +31,7 @@ import {
 } from "@/lib/queries/goal";
 import { toCadence, toDeclaredFact } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, todayInZone } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 export type MonthAcrossGoal = {
   id: string;
@@ -72,9 +73,22 @@ export type MonthAcross = {
 };
 
 // `asked` is how many days of the month through today the cadence asked on; null for a cadence counted by the week or the month.
-export type MonthLooseHabit = { id: string; name: string; daysDone: number; cadence: Cadence; asked: number | null };
+// `weeks` is the weeks met of the weeks lived by the Thursday rule; null unless the cadence is counted by the week.
+// `thisWeek` is the week in progress, whatever month its Thursday falls in; null unless the cadence is weekly and the habit alive.
+export type MonthLooseHabit = {
+  id: string;
+  name: string;
+  daysDone: number;
+  cadence: Cadence;
+  asked: number | null;
+  weeks: { met: number; counted: number } | null;
+  thisWeek: { done: number; count: number } | null;
+  // The civil day in Bogotá the habit was retired; null while it lives.
+  retiredOn: string | null;
+};
 
-type LooseRow = { id: string; name: string; daysDone: number; row: CommitmentRow };
+// `byWeek` holds the done days per Monday from the first week of the month, or the week of today when that is earlier.
+type LooseRow = { id: string; name: string; daysDone: number; row: CommitmentRow; byWeek: { week: string; days: number }[] };
 
 type Row = {
   // Null on the one row a person with no open goal gets, which still carries `loose`.
@@ -93,21 +107,26 @@ type PlanTaskRow = TaskRow & { in_plan: boolean; created_at: string; position: n
 // month so a past month never reaches the process; tasks and budgets are not,
 // since the plan fills from every task through every month of the goal. A goal that ended under
 // an open goal is read too, for its part of the month's sum. RLS narrows it to the caller (RNP-05).
-function looseHabit({ id, name, daysDone, row }: LooseRow, month: string, today: string): MonthLooseHabit {
+function looseHabit({ id, name, daysDone, row, byWeek }: LooseRow, month: string, today: string): MonthLooseHabit {
   const cadence = toCadence(row);
+  const retiredOn = row.retired_at ? civilDateInZone(new Date(row.retired_at)) : null;
+  const daysDoneByWeek = new Map(byWeek.map((entry) => [entry.week, entry.days]));
+  const weeks =
+    cadence.kind === "times_per_week"
+      ? habitWeeks({ count: cadence.count, createdOn: civilDateInZone(new Date(row.created_at)), retiredOn, daysDoneByWeek, month, today })
+      : null;
+  const thisWeek = cadence.kind === "times_per_week" ? habitThisWeek({ count: cadence.count, retiredOn, daysDoneByWeek, today }) : null;
   const counted = cadence.kind === "daily" || cadence.kind === "weekdays" || cadence.kind === "every_n_days";
-  if (!counted) return { id, name, daysDone, cadence, asked: null };
+  if (!counted) return { id, name, daysDone, cadence, asked: null, weeks, thisWeek, retiredOn };
   const plan = { id, cadence, satisfiedBy: { kind: "tap" as const }, retiredAt: row.retired_at, createdOn: civilDateInZone(new Date(row.created_at)) };
-  let asked = 0;
-  const cursor = civilDateToDate(month);
-  for (let day = month; day <= today; day = dateToCivilDate(cursor)) {
-    if (asksOn(plan, day, [])) asked += 1;
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return { id, name, daysDone, cadence, asked };
+  const asked = askedIn(plan, month, today);
+  return { id, name, daysDone, cadence, asked, weeks, thisWeek, retiredOn };
 }
 
 async function queryRows(tx: Transaction, month: string, today: string): Promise<Row[]> {
+  const firstWeek = weeksOfMonth(month)[0] ?? month;
+  const todayWeek = weekOf(today)[0];
+  const weekFrom = todayWeek < firstWeek ? todayWeek : firstWeek;
   const rows = await tx.execute<Row>(sql`
     select
       to_jsonb(g) as goal,
@@ -116,7 +135,13 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
                  'name', h.name,
                  'row', to_jsonb(h),
                  'daysDone', (select count(distinct f.day)::int from "goals"."facts" f
-                               where f.commitment_id = h.id and f.day between ${month}::date and ${today}::date)
+                               where f.commitment_id = h.id and f.day between ${month}::date and ${today}::date),
+                 'byWeek', (select coalesce(json_agg(jsonb_build_object('week', to_char(w.week, 'YYYY-MM-DD'), 'days', w.days)), '[]'::json)
+                              from (select date_trunc('week', f.day)::date as week, count(distinct f.day)::int as days
+                                      from "goals"."facts" f
+                                     where f.commitment_id = h.id
+                                       and f.day between ${weekFrom}::date and ${today}::date
+                                     group by 1) w)
                ) order by h.position, h.created_at, h.id), '[]'::json)
          from "goals"."commitments" h
          where h.goal_id is null

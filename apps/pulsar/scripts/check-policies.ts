@@ -284,14 +284,15 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
       const updateFact = await attempt(tx, (sp) => sp`update goals.facts set note = 'x' where id = ${a.factId}`);
       assert("P11", updateFact.code === "42501", `update a fact at all, sqlstate = ${updateFact.code ?? "none"}`);
 
-      const updateCommitmentName = await attempt(
+      // `name` opened in 0022 (P274); `unit` is one of the columns still closed.
+      const updateCommitmentUnit = await attempt(
         tx,
-        (sp) => sp`update goals.commitments set name = 'renombrado' where id = ${a.commitmentId}`,
+        (sp) => sp`update goals.commitments set unit = 'km' where id = ${a.commitmentId}`,
       );
       assert(
         "P12",
-        updateCommitmentName.code === "42501",
-        `update commitment.name, sqlstate = ${updateCommitmentName.code ?? "none"}`,
+        updateCommitmentUnit.code === "42501",
+        `update commitment.unit, sqlstate = ${updateCommitmentUnit.code ?? "none"}`,
       );
 
       const retireCommitment = await attempt(
@@ -2652,6 +2653,8 @@ async function checkGoalTree0018(): Promise<void> {
     .begin(async (tx) => {
       await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
       if (mutant) await tx.unsafe(mutant);
+      // 0021 rewrote the tree guard whole: a mutant of its body must meet these probes too.
+      if (process.env.GOAL_END_MUTANT_SQL) await tx.unsafe(process.env.GOAL_END_MUTANT_SQL);
       const [theirs] = await tx<{ id: string }[]>`
         insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2027-12-31') returning id`;
 
@@ -3076,6 +3079,153 @@ async function checkNoEndAndLoose0021(): Promise<void> {
       const seen = await tx<{ name: string }[]>`select name from goals.commitments where name = 'hábito ajeno'`;
       assert("P268", seen.length === 0, `another person's loose commitment seen as mine, rows = ${seen.length}`);
 
+      // A person writes only under their own id, with a goal or without one (RP-100).
+      const foreignLoose = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.commitments (user_id, name, cadence_kind, satisfaction)
+          values (${intruder}, 'a nombre de otro', 'daily', 'tap')`,
+      );
+      assert("P269", foreignLoose.code === "42501", `a loose commitment written under another person's id, ${shape(foreignLoose)}`);
+      const foreignOnMine = await attemptShape(
+        tx,
+        (sp) => sp`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+          values (${intruder}, ${mine.id}, 'a nombre de otro, en mi meta', 'daily', 'tap')`,
+      );
+      assert("P270", foreignOnMine.code === "42501", `a commitment on my goal written under another person's id, ${shape(foreignOnMine)}`);
+
+      // The goal above may end the very day a goal inside it ends; only a later end is refused.
+      const [top] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'arriba', '2028-12-31') returning id`;
+      await tx`insert into goals.goals (user_id, name, horizon, parent_id) values (${subject}, 'abajo', '2028-06-30', ${top.id})`;
+      const meet = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = '2028-06-30' where id = ${top.id}`);
+      assert("P271", meet.code === undefined && meet.count === 1, `the goal above moved to the day the goal inside ends, ${shape(meet)}`);
+      const pass = await attemptShape(tx, (sp) => sp`update goals.goals set horizon = '2028-06-29' where id = ${top.id}`);
+      assert("P272", pass.code === "23514" && pass.constraint === "goals_tree_end", `the goal above moved to the day before the goal inside ends, ${shape(pass)}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
+// RP-104: `0022` opens `name` on a person's own commitment and no other column. Driven as `authenticated`;
+// `COMMITMENT_NAME_MUTANT_SQL` runs privileged inside the rollback.
+async function checkCommitmentName0022(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.COMMITMENT_NAME_MUTANT_SQL;
+  if (mutant) console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      if (mutant) await tx.unsafe(mutant);
+      await tx`insert into goals.commitments (user_id, name, cadence_kind, satisfaction)
+        values (${intruder}, 'hábito ajeno', 'daily', 'tap')`;
+
+      // No WHERE: one that reads `id` hides the other row behind the SELECT policy, `using (true)` or not.
+      await enterUserContext(tx, subject);
+      const foreign = await attemptShape(tx, (sp) => sp`update goals.commitments set name = 'tomado'`);
+      assert("P273", foreign.code === undefined && foreign.count === 0, `rename with only another person's row, ${shape(foreign)}`);
+
+      const [mine] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, name, cadence_kind, satisfaction)
+        values (${subject}, 'leer', 'daily', 'tap') returning id`;
+      const own = await attemptShape(tx, (sp) => sp`update goals.commitments set name = 'leer en voz alta' where id = ${mine.id}`);
+      const [after] = await tx<{ name: string }[]>`select name from goals.commitments where id = ${mine.id}`;
+      assert(
+        "P274",
+        own.code === undefined && own.count === 1 && after?.name === "leer en voz alta",
+        `rename my own commitment, ${shape(own)}, reads back ${after?.name ?? "nothing"}`,
+      );
+
+      const closed: [string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
+        ["P275", "cadence_kind", (sp) => sp`update goals.commitments set cadence_kind = 'weekdays' where id = ${mine.id}`],
+        ["P276", "target_quantity", (sp) => sp`update goals.commitments set target_quantity = 3 where id = ${mine.id}`],
+        ["P277", "goal_id", (sp) => sp`update goals.commitments set goal_id = null where id = ${mine.id}`],
+      ];
+      for (const [label, column, fn] of closed) {
+        const r = await attemptShape(tx, fn);
+        assert(label, r.code === "42501", `update commitment.${column} after 0022, ${shape(r)}`);
+      }
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
+// Every `goals.commitments` column `authenticated` may not update, each proved closed on the person's own row:
+// a grant is the only guard, since the update policy passes the owner. `user_id` is set to its own value so
+// only the grant can refuse it. Reads `COMMITMENT_NAME_MUTANT_SQL`, run privileged inside the rollback.
+async function checkCommitmentClosedColumns(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.COMMITMENT_NAME_MUTANT_SQL;
+  if (mutant) console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject})`;
+      if (mutant) await tx.unsafe(mutant);
+      const [first] = await tx<{ id: string }[]>`select id from goals.evidence_sources where key = 'reading_lookups'`;
+      const [second] = await tx<{ id: string }[]>`
+        insert into goals.evidence_sources (key, label_key, unit) values ('check_policies_second', 'sources.second', 'searches')
+        returning id`;
+      const [tap] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, name, cadence_kind, satisfaction)
+        values (${subject}, 'tocar', 'daily', 'tap') returning id`;
+      const [counted] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, name, cadence_kind, cadence_n, satisfaction, source_id, threshold)
+        values (${subject}, 'buscar', 'times_per_week', 3, 'evidence', ${first.id}, 2) returning id`;
+      const [weekdays] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, name, cadence_kind, cadence_weekdays, satisfaction)
+        values (${subject}, 'correr', 'weekdays', '{1,3}', 'tap') returning id`;
+
+      await enterUserContext(tx, subject);
+      const row = async (id: string) =>
+        (await tx<{ row: string }[]>`select to_jsonb(c)::text as row from goals.commitments c where id = ${id}`)[0]?.row;
+
+      // Each value would pass every check on its row, so a grant alone decides the outcome.
+      const closed: [string, string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
+        ["P278", "created_at", tap.id, (sp) => sp`update goals.commitments set created_at = '2020-01-01T00:00:00Z' where id = ${tap.id}`],
+        ["P279", "satisfaction", tap.id, (sp) => sp`update goals.commitments set satisfaction = 'tap' where id = ${tap.id}`],
+        ["P280", "cadence_n", counted.id, (sp) => sp`update goals.commitments set cadence_n = 4 where id = ${counted.id}`],
+        ["P281", "cadence_weekdays", weekdays.id, (sp) => sp`update goals.commitments set cadence_weekdays = '{2,4}' where id = ${weekdays.id}`],
+        ["P282", "threshold", counted.id, (sp) => sp`update goals.commitments set threshold = 5 where id = ${counted.id}`],
+        ["P283", "source_id", counted.id, (sp) => sp`update goals.commitments set source_id = ${second.id} where id = ${counted.id}`],
+        ["P284", "position", tap.id, (sp) => sp`update goals.commitments set position = 99 where id = ${tap.id}`],
+        ["P285", "user_id", tap.id, (sp) => sp`update goals.commitments set user_id = ${subject} where id = ${tap.id}`],
+        ["P286", "id", tap.id, (sp) => sp`update goals.commitments set id = ${randomUUID()} where id = ${tap.id}`],
+      ];
+      for (const [label, column, id, fn] of closed) {
+        const before = await row(id);
+        const r = await attemptShape(tx, fn);
+        const after = await row(id);
+        assert(
+          label,
+          r.code === "42501" && before !== undefined && after === before,
+          `update my own commitment.${column}, ${shape(r)}, row ${after === before ? "unchanged" : "changed"}`,
+        );
+      }
+
+      const open: [string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
+        ["P287", "name", (sp) => sp`update goals.commitments set name = 'tocar dos veces' where id = ${tap.id}`],
+        ["P288", "note", (sp) => sp`update goals.commitments set note = 'antes de dormir' where id = ${tap.id}`],
+        ["P289", "retired_at", (sp) => sp`update goals.commitments set retired_at = now() where id = ${tap.id}`],
+      ];
+      for (const [label, column, fn] of open) {
+        const r = await attemptShape(tx, fn);
+        assert(label, r.code === undefined && r.count === 1, `update my own commitment.${column}, ${shape(r)}`);
+      }
+
       throw forcedRollback;
     })
     .catch((error: unknown) => {
@@ -3117,6 +3267,8 @@ async function main(): Promise<void> {
   await checkGoalTree0018();
   await checkModelCallsChat0020();
   await checkNoEndAndLoose0021();
+  await checkCommitmentName0022();
+  await checkCommitmentClosedColumns();
 
   if (failed) process.exit(1);
 }

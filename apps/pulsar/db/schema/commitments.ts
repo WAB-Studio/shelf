@@ -16,8 +16,8 @@ import { evidenceSources } from "./evidence-sources";
 import { goals } from "./goals";
 
 // What counts, how often, and what satisfies it. Retired, never deleted: the
-// only column the grant layer lets anyone update is `retired_at`, so a week
-// already lived keeps the shape it was lived in.
+// grant layer lets anyone update only `retired_at`, `name` and `note`, so a
+// week already lived keeps the shape it was lived in.
 export const commitments = goalsSchema.table(
   "commitments",
   {
@@ -110,7 +110,7 @@ export const commitments = goalsSchema.table(
         select 1 from "goals"."goals" g where g.id = ${t.goalId}
       ))`,
     }),
-    // The grant narrows this to `retired_at`; `using` alone would let a caller
+    // The grant narrows this to `retired_at`, `name` and `note`; `using` alone would let a caller
     // hand their commitment to someone else's id.
     pgPolicy("commitments_update_self", {
       for: "update",

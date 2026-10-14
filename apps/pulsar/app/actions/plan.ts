@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, inArray, isNull, max, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, max, sql } from "drizzle-orm";
 
 import { commitments, evidenceSources, goals, oneOffs, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
@@ -27,6 +27,7 @@ import {
   addPhaseSchema,
   archiveGoalSchema,
   createGoalSchema,
+  editHabitSchema,
   moveGoalSchema,
   phasesOverlap,
   phaseWithinHorizon,
@@ -38,6 +39,7 @@ import {
   type AddPhaseInput,
   type ArchiveGoalInput,
   type CreateGoalInput,
+  type EditHabitInput,
   type MoveGoalInput,
   type RenameGoalInput,
   type ReopenGoalInput,
@@ -55,6 +57,7 @@ export type CreateGoalResult = { ok: true; goalId: string } | TreeRefusal;
 export type MoveGoalResult = { ok: true } | TreeRefusal;
 export type SetGoalNoteResult = { ok: true } | { ok: false; error: MessageKey };
 export type AddPhaseResult = { ok: true; phaseId: string } | { ok: false; error: MessageKey };
+export type EditHabitResult = { ok: true } | { ok: false; error: MessageKey };
 export type AddCommitmentResult =
   | { ok: true; commitmentId: string }
   | { ok: false; error: MessageKey };
@@ -512,6 +515,51 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
 }
 
 /**
+ * Renames a loose habit and rewrites its note (RP-104). One statement: the UPDATE names `name`
+ * and `note` alone, and a sibling CTE reads the same row without the `retired_at` filter, so
+ * «retired» and «missing» are told apart without a second round trip. A goal's commitment,
+ * another person's and a missing id all read as not found.
+ */
+export async function editHabit(input: EditHabitInput): Promise<EditHabitResult> {
+  const parsed = editHabitSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const { commitmentId, name, note } = parsed.data;
+
+  const [outcome] = await withGoalsDb((tx) =>
+    tx.execute<{ changed: number; retired: boolean | null }>(sql`
+      with found as (
+        select retired_at is not null as retired
+        from ${commitments}
+        where id = ${commitmentId} and user_id = ${person.id} and goal_id is null
+      ),
+      changed as (
+        update ${commitments}
+        set name = ${name}, note = ${note}
+        where id = ${commitmentId} and user_id = ${person.id}
+          and goal_id is null and retired_at is null
+        returning id
+      )
+      select (select count(*) from changed)::int as changed, (select retired from found) as retired
+    `),
+  );
+
+  if (outcome.changed === 0) {
+    return { ok: false, error: outcome.retired ? "plan.errors.habitRetired" : "plan.errors.notFound" };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/semana");
+  revalidatePath("/mes");
+  revalidatePath("/metas");
+  revalidatePath(`/metas/habitos/${commitmentId}`);
+  return { ok: true };
+}
+
+/**
  * Retires a commitment (RP-13). One UPDATE of `retired_at` alone — the grant
  * lets nothing else move, so there is no `deleteCommitment` to write in the
  * first place. Scoped by `(id, userId)` in the query itself, the way
@@ -757,15 +805,21 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
       if (!goal) throw new NamedError("plan.errors.notFound");
 
       const [last] = await tx
-        .select({ endsOn: max(phases.endsOn) })
+        .select({ name: phases.aim, endsOn: phases.endsOn })
         .from(phases)
-        .where(eq(phases.goalId, goalId));
+        .where(eq(phases.goalId, goalId))
+        .orderBy(desc(phases.endsOn))
+        .limit(1);
 
       const phaseRefusal = horizonRefusal({
         horizon,
         today: todayInZone(),
         lastPhaseEndsOn: last?.endsOn ?? null,
       });
+      if (phaseRefusal === "goal.errors.horizonBeforePhase" && last) {
+        // The phase as it stands now, so the sentence names its real end, not the page's.
+        return { ok: false, error: phaseRefusal, values: { name: last.name, date: last.endsOn } };
+      }
       if (phaseRefusal) throw new NamedError(phaseRefusal);
 
       const later = moveBranch ? branchEndsAfter(tree, goalId, horizon) : [];

@@ -847,3 +847,18 @@ test("915 a rhythm outside time is not refused by the draft", () => {
   assert.equal(draft.goals[0].rhythm, 30);
   assert.deepEqual(refusalKeys(draft), []);
 });
+
+// A month holds 44 640 minutes: a rhythm in time past it is refused, whatever the column allows; any other unit is not capped there.
+test("importDraftSchema: a time rhythm of 44 640 passes and of 44 641 is refused for its range", () => {
+  for (const unit of ["minutos", "min"]) {
+    assert.deepEqual(errorsOf(draft(goal({ measure: { name: "estudio", unit }, rhythm: 44_640 }))), [], `${unit} 44 640`);
+    assert.deepEqual(errorsOf(draft(goal({ measure: { name: "estudio", unit }, rhythm: 44_641 }))), ["roadmap.errors.rhythmRange"], `${unit} 44 641`);
+  }
+});
+
+test("importDraftSchema: a rhythm past 44 640 in a unit that is not time passes, up to the column's million", () => {
+  const pages = (rhythm: number) => draft(goal({ measure: { name: "lectura", unit: "páginas" }, rhythm }));
+  assert.deepEqual(errorsOf(pages(44_641)), []);
+  assert.deepEqual(errorsOf(pages(1_000_000)), []);
+  assert.notDeepEqual(errorsOf(pages(1_000_001)), []);
+});

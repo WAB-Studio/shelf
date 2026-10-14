@@ -1435,6 +1435,7 @@ Three answers of the user, 2026-10-09.
 - **Turns are labelled «TÚ» and «PULSAR»,** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
   changes open. A change reads in two lines: what, in the person's own names; then «antes → después» in mono.
 - **Faces not drawn for the chat:** dark (the token table says it) and 700–1023 (between the two drawn).
+- **A change's line keeps the screens' words:** «Mover el final de «Meta»», «Fijar «Tarea» en noviembre». The other 14 stay as they read. 2026-10-13.
 ## Decisions of 2026-10-13, after the critic of the hierarchy and the import, by the user
 
 - **A goal that holds goals and measures nothing reads in its goals' unit on `/metas`,** as its own screen already does
@@ -1509,3 +1510,118 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/s1-crit
 - Lists that grow without an end (Por semana, Por mes, the report) show the last 12 with «ver todo». Screen and paper use the same 12.
 - The template's example and the «PARA OTRA IA» text teach a goal without `horizonte:` and a `ritmo: 40 páginas`. Words only. Habits in the template and the report are a slice of their own, not taken.
 - Not decided, pending: create a goal «sin final» inside a goal with no end from its sheet; thousands written «1.000» accepted back by the rhythm sheet and the import.
+
+## Decisions of 2026-10-13, the boards of slice s2 (RP-103–106), by the user
+
+Boards, approved 2026-10-13 on the page «Sin final y hábitos»: `HabitoPantalla.dc.html`, `VerTodoListas.dc.html`,
+`PonerFinalDesdeEsta.dc.html`. Words and structure: `private/tableros-s2/NOTAS.md`.
+
+- **A habit has its own screen,** `/metas/habitos/{id}`: «HÁBITO · DESDE EL {fecha}» above its name, its cadence, its note, «Editar»
+  (outline), «POR MES» as a bare table, and «Retirarlo» at the foot. No card. The tab reads «Hábito».
+- **A habit month reads «25 de 27 días»;** «0 de 1 día» takes the catalogue's plural. A cadence by week or month reads «3 días», never «de M».
+- **A retired habit says «retirado el {fecha}»** under its name and keeps its months. It shows neither «Editar» nor «Retirarlo».
+- **«Editarlo» edits the name and the note only:** «Guardarlo», «Guardando…», «Cancelar».
+- **The /metas row of a habit opens its screen,** with a chevron. In «Mes», a habit's name is a link to it.
+- **«ver todo»** sits under the table, on the left, once a list that grows with no end passes 12 rows. It has no «ver menos»: leaving the
+  screen brings back the 12. Only goals with no end, and a habit's months, are cut (D1). Paper prints the same 12.
+- **Putting an end on a goal with no end counts from this week:** the field reads «semanas, contando esta», 12 by default. A refused phase
+  is named by its week counted the same way («semana 19»), the number the person changes in the field. A goal with an end keeps «semanas,
+  contando la del {fecha}».
+- **Faces not drawn for s2:** dark (the token table says it) and 700–1023 (between the two drawn). The habit screen at 1280 is the same
+  640 column, drawn once. «ver todo» opened in «Por mes» and in the report is the list as it reads today, not drawn again.
+
+## Decisions of 2026-10-13, after the critic of slice s2, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s2/REPORT.md`.
+
+- **A goal with no end shows its last 11 closed months and the current one** in «Por mes», the report and paper. The months ahead fold
+  into one line («los meses que vienen: 40 páginas cada uno»). The cut built in s2, the current month and 11 ahead, is a defect against
+  «the last 12».
+- **Every end sheet counts «semanas, contando esta»,** on any goal: «ponerle final» and «mover el final» alike. Retires RP-103's last
+  sentence when built. The phase line keeps counting from the opening.
+- **A retired habit lives in a folded «Retirados» under «Hábitos» on /metas;** each row opens its screen. No «volver a pedirlo».
+- **A weekly habit's month reads «3 de 4 semanas»,** the weeks met. A week across two months needs its rule before it is built.
+- **A week across two months belongs to the month holding 4 or more of its days** (the month of its Thursday), 2026-10-13, by
+  the user. It is judged whole and counts once; a month has 4 or 5 weeks. The current week counts once it has ended.
+- **The s3 boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», board
+  `S3Propuesta` (`PorMesUltimos`, `InformeUltimos`, `FinalSemanasContando`, `HabitosRetirados`, `HabitoSemanas`). Words and
+  structure: `private/tableros-s3/NOTAS.md`. Approved with them:
+  - «los meses que vienen: 40 páginas cada uno» reads in «Por mes», on the report screen and on paper.
+  - A goal with no rhythm draws no such line.
+  - A month ahead with its own amount set by hand is not folded: it is a row above the line.
+  - «Retirados» sits above «Agregar un hábito».
+  - «Mover el final» counts weeks from this one (8) while the goal screen and its phases count from the opening (9). Both stand.
+  - A habit created this week reads «aún sin semanas cerradas».
+  - Where the board differs, this file wins: `PorMesUltimos-2-sin-ritmo` and `InformeUltimos-2-sin-ritmo` draw a «los meses que
+    vienen: sin monto» line that is not built, and the board folds a hand-set month that is built as its own row. Without a rhythm,
+    the months ahead with no amount are simply not listed.
+- **A weekly habit's first and last week count when it lived that week's Thursday** (2026-10-13, orchestrator, from the approved
+  board: «Llamar a mamá», created Wed 8 jul, reads July as 4 weeks). Same rule as the month a week belongs to.
+- **In «Mes», a weekly habit with no closed week yet this month reads «{cadencia} · aún sin semanas cerradas»** (2026-10-13,
+  orchestrator, module 933), the words the board approved for its own screen.
+- **A month ahead is reached from «ver todo»** (2026-10-13, orchestrator): it opens every month, those ahead included, and the
+  fold line links there.
+- **Paper folds the empty months ahead of a goal with no end into one line,** as a goal with an end does. Paper no longer matches the
+  screen row for row there.
+
+## Decisions of 2026-10-13, after the critic of slice s3, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s3/REPORT.md`.
+
+- **Every goal with no end shows next month as its own row,** rhythm or not, so planning ahead is one tap. A goal with no rhythm
+  reaches it today only through `?todo=1` (the critic's «broken»).
+- **The end sheet says both counts under its field:** «contando desde esta semana; la meta lleva N semanas», and a phase refusal
+  names the week in both counts. The goal screen keeps counting from the opening.
+- **A weekly habit's retirement week counts whole when it was met before the retirement,** and its month shows «esta semana: N»
+  for the week in progress.
+- **The fold line goes right after the current month,** and the hand-set months follow it under «y estos meses con monto propio:».
+  Built in s3 the other way round, it reads as if a hand-set month were at the rhythm.
+- **The s4 boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», board
+  `S4Propuesta` (`PorMesSiguiente`, `FinalDosCuentas`, `HabitoSemanaRetiro`). Words and structure: `private/tableros-s4/NOTAS.md`.
+  Approved with them:
+  - The order under the current month: next month as a row, then «los demás meses que vienen: N cada uno», then «y estos meses con
+    monto propio:» and their rows. Next month is not repeated there when it has its own amount.
+  - «la meta lleva N semanas» counts this week too: «Correr 10 km» reads 8 in the sheet and «lleva 2 semanas»; «Leer» lleva 102.
+  - A weekly habit's week in progress reads «1 de 2 esta semana», as Hoy does, for 1 a week too; «0 de 1 esta semana» with nothing done.
+  - A retired habit's last month never reads «en curso».
+- **Next month's row opens the amount sheet** (`?planear=<mes>`), 2026-10-13, by the user: planning ahead is one tap. The other rows
+  open the month's page as before.
+- **A habit retired in a met week whose Thursday falls next month counts that week in its retirement month** (2026-10-13,
+  orchestrator): the habit has no next month to put it in.
+
+## Decisions of 2026-10-13, after the critic of slice s4, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s4/REPORT.md`.
+
+- **A retired habit in «Mes» reads «retirado el 7 oct»** in the «Hábitos» group of the month it was retired in; today it is drawn
+  as a live line.
+- **The end sheet shows the total the goal's screen will read:** «113 semanas en total» beside «termina el …», under the two counts.
+- **Goals with an end fold «Por mes» as goals with no end do** (the last rows and «ver todo»), in a later slice: «Leer» with an end
+  lists 27 rows today.
+- **Reopening an ended goal offers «Ponerle final» and «Dejarla sin final»,** as the approved board `FinalDosCuentas` draws; the
+  build shows «Quitar el final» and «Moverlo».
+- Not a decision, a defect found by the same critic: «Leer» with a hand-set December reads «13 MESES» over 14 rows on /meses and the
+  report screen, and «14 MESES» on paper. Every count must match its rows.
+- **The s5 boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», board
+  `S5Propuesta` (`PorMesConFinal`, `CuentaMeses`, `FinalTotal`, `MesRetirado`). Words and structure: `private/tableros-s5/NOTAS.md`.
+  Approved with them:
+  - A long goal with an end shows its last 11 closed months, the current one and the next, then «N meses más, hasta el 3 ene 2027»
+    with no amount (its last month is partial), then «ver todo». A goal with an end of 12 rows or fewer reads as before.
+  - The total reads «termina el 3 ene 2027 · 113 semanas en total»; while a refusal holds the hint, the total moves to the line of
+    the two counts so it never disappears.
+  - Every «N MESES» equals the month rows drawn, own-amount rows included, on screen and on paper.
+  - A retired habit appears in «Mes» only in the month it was retired in, with «retirado el 7 oct».
+- **«Dejarla sin final» takes the end off** an ended goal being reopened, 2026-10-13, by the user: the goal reopens with no end, as
+  «Quitar el final» did. To leave it ended, close the sheet.
+
+## Decisions of 2026-10-13, after the critic of slice s5, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s5/REPORT.md`.
+
+- **A folded goal with an end always draws «ver todo»** under its line «N meses más, hasta el …»; the line stops being a link
+  where both would open the same list. «Escribir» with hidden months ahead and no hidden closed ones has no «ver todo» today.
+- **The line «N meses más, hasta el …» follows the own-amount table,** so the list reads in time order. It keeps no amount: the
+  months' amounts live behind «ver todo».
+- **On paper a goal's header stays with its «por mes» table, and the table may split across pages.** Today «Leer»'s 14-row table
+  jumps whole to page 3 and leaves page 2 with its header alone: 5 pages, two of them ~60 % and ~85 % blank.
+- **The end sheet keeps «contando desde esta semana; la meta lleva N semanas»** beside the total: it says what the field counts.

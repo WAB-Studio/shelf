@@ -189,7 +189,8 @@ for (const width of [360, 1280]) {
       // Kills: `monthRows` that ignores the rhythm for a unit other than time.
       const opened = openedOnDay(5);
       const id = await seedOpenGoal(db, person, { name: "Leer", unit: PAGES, horizon: null, rhythm: 40, created: opened.at });
-      const { page, context } = await visit(browser, baseURL, person, `/metas/${id}/meses`, width);
+      // The months ahead fold into one line (RP-107); «ver todo» lists them, each at the rhythm.
+      const { page, context } = await visit(browser, baseURL, person, `/metas/${id}/meses?todo=1`, width);
       try {
         const next = page.locator(`main a[href="/metas/${id}/meses/${monthsAhead(1).slice(0, 7)}"]`).first();
         await expect(next).toContainText("40 páginas");

@@ -16,12 +16,15 @@ export async function generateMetadata(): Promise<Metadata> {
 // `ReviewScreen` owns the fetch and the screen both.
 export default async function ReviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ goalId: string }>;
+  searchParams: Promise<{ todo?: string | string[] }>;
 }) {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
   const { goalId } = await params;
-  return <ReviewScreen goalId={goalId} />;
+  const { todo } = await searchParams;
+  return <ReviewScreen goalId={goalId} all={todo === "1"} />;
 }

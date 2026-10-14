@@ -19,7 +19,10 @@
     "caption": "{count, plural, one {# mes} other {# meses}}",
     "planned": "planeado",
     "noAmount": "sin monto",
-    "noEnd": "Sin final: se ven los 12 meses que vienen.",
+    "ahead": "los demás meses que vienen: {planned} cada uno",
+    "rest": "{count, plural, one {# mes más} other {# meses más}}, hasta el {date}",
+    "andOwn": "y estos meses con monto propio:",
+    "own": "estos meses con monto propio:",
     "tasksCount": "{count, plural, one {# tarea} other {# tareas}}",
     "of": "de {planned}",
     "ofFigure": "de <fig>{planned}</fig>",
@@ -116,7 +119,9 @@
     "habits": {
       "title": "Hábitos",
       "line": "{cadence} · {count, plural, one {# día} other {# días}}",
-      "lineOf": "{cadence} · {done} de {asked, plural, one {# día} other {# días}}"
+      "lineOf": "{cadence} · {done} de {asked, plural, one {# día} other {# días}}",
+      "lineWeeks": "{cadence} · {met} de {counted, plural, one {# semana} other {# semanas}}",
+      "noWeeks": "{cadence} · aún sin semanas cerradas"
     },
     "unreadableTitle": "No pudimos leer una fuente.",
     "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",

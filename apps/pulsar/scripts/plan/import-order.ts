@@ -200,3 +200,33 @@ test("import order: the confirm pays the statements it paid before position was 
   // Settle, goals, measure, commitments, parents, children: phases and budgets are absent.
   assert.equal(imported.statements, 6);
 });
+
+// RP-67 orders a plan's tasks by month only where the rhythm is in time; RP-101: any other unit fixes each task to its own month, in reading order.
+async function tasksInOrder(measure: string, rhythm: string): Promise<string[]> {
+  const text = `pulsar · plantilla 1
+
+# RP-101 fixture: ${measure}
+horizonte: 2099-12-01
+medida: lectura · ${measure}
+ritmo: ${rhythm}
+
+## Tareas
+- 2099-08 · Tarde
+- 2099-06 · Temprano
+- 2099-07 · Medio
+`;
+  const result = await confirmImport(draftOf(text));
+  if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
+  goalIds.push(...result.goalIds);
+  const rows = await sql<{ name: string }[]>`
+    select name from goals.one_offs where goal_id in ${sql(result.goalIds)} order by position`;
+  return rows.map((r) => r.name);
+}
+
+test("import order: tasks of a goal with a rhythm in pages keep the plan's reading order, not their months'", async () => {
+  assert.deepEqual(await tasksInOrder("páginas", "40 páginas"), ["Tarde", "Temprano", "Medio"]);
+});
+
+test("import order: tasks of a goal with a rhythm in time are ordered by month", async () => {
+  assert.deepEqual(await tasksInOrder("minutos", "600 minutos"), ["Temprano", "Medio", "Tarde"]);
+});

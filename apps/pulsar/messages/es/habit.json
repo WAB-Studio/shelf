@@ -1,0 +1,26 @@
+{
+  "title": "Hábito",
+  "overline": "hábito · desde el {date}",
+  "retiredOn": "retirado el {date}",
+  "edit": "Editar",
+  "retire": "Retirarlo",
+  "months": {
+    "title": "Por mes",
+    "columns": { "month": "mes", "days": "días" },
+    "caption": "{count, plural, one {# mes} other {# meses}}",
+    "current": "en curso",
+    "line": "{count, plural, one {# día} other {# días}}",
+    "lineOf": "{done} de {asked, plural, one {# día} other {# días}}",
+    "lineWeeks": "{met} de {counted, plural, one {# semana} other {# semanas}}",
+    "noWeeks": "aún sin semanas cerradas",
+    "seeAll": "ver todo"
+  },
+  "sheet": {
+    "title": "Editarlo",
+    "nameLabel": "nombre",
+    "noteLabel": "nota, si quieres",
+    "save": "Guardarlo",
+    "saving": "Guardando…",
+    "cancel": "Cancelar"
+  }
+}

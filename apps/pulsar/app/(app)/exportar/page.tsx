@@ -15,10 +15,15 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // Inside the shell: the nav hides itself in print (`print.module.css`) and the
 // skeleton never prints, so the paper stays as `ReporteImpreso.dc.html` draws it.
-export default async function ExportPage() {
+export default async function ExportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ todo?: string | string[] }>;
+}) {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
+  const { todo } = await searchParams;
   const report = await loadReport(todayInZone());
-  return <ReportScreen report={report} />;
+  return <ReportScreen report={report} showAll={todo === "1"} />;
 }
