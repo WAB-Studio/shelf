@@ -10,6 +10,7 @@ export function foldsMonths(horizon: string | null, rows: readonly unknown[]): b
 // A goal with no end shows four pieces: its months up to the current one (last 12, `upTo`), the month
 // after it (`next`, always a row, amount or not), the coming months with an amount set by hand (`handSet`),
 // and a line for those at the goal's rhythm; those with none are `empty`. `next` is never counted in the last three.
+// `seeAll` says whether «ver todo» is drawn: something is hidden or counted in `rest`.
 // With `ends` the line and `empty` give way to `rest`, the count of months after `handSet`; the last month is a
 // partial one and never counts as an amount of its own.
 export function endlessCut<T extends CutRow>(
@@ -24,8 +25,9 @@ export function endlessCut<T extends CutRow>(
   line: { planned: number } | null;
   empty: T[];
   rest: { count: number; lastDay: string } | null;
+  seeAll: boolean;
 } {
-  if (opts.all) return { shown: [...rows], upTo: [...rows], next: null, handSet: [], hidden: 0, line: null, empty: [], rest: null };
+  if (opts.all) return { shown: [...rows], upTo: [...rows], next: null, handSet: [], hidden: 0, line: null, empty: [], rest: null, seeAll: false };
   const tail = tailOf(rows.filter((row) => row.past || row.current), false);
   const coming = rows.filter((row) => !row.past && !row.current);
   const next = rows.some((row) => row.current) ? (coming[0] ?? null) : null;
@@ -46,5 +48,6 @@ export function endlessCut<T extends CutRow>(
     line: !opts.ends && folds && opts.rhythm !== null ? { planned: opts.rhythm } : null,
     empty: opts.ends ? [] : beyond.filter((row) => row.planned === null),
     rest,
+    seeAll: tail.hidden > 0 || rest !== null,
   };
 }

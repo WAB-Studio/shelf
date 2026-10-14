@@ -179,8 +179,8 @@ test("803 keepsHeadWithTable: months that print nothing do not count", () => {
   assert.equal(keepsHeadWithTable([...Array(7).fill(planned), ...Array(5).fill(silent)], "horas"), false);
 });
 
-test("803 isLongTable: 14 printed rows stay whole, 15 flow", () => {
+test("RP-116 isLongTable: 7 printed rows stay whole, 8 flow", () => {
   const rows = (count: number) =>
     Array.from({ length: count }, (_, i) => ({ month: `2026-${String(i % 12 + 1).padStart(2, "0")}-01`, planned: 10, reached: 0, current: false, past: false, carried: null }));
-  assert.deepEqual([14, 15].map((count) => isLongTable(rows(count), "horas")), [false, true]);
+  assert.deepEqual([7, 8, 14, 15].map((count) => isLongTable(rows(count), "horas")), [false, true, true, true]);
 });

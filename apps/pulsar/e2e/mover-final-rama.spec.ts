@@ -36,7 +36,7 @@ async function seedBranch(db: Db, person: Person, stamp: number) {
     ings: `Pequeña tardía ${stamp}`,
     emp: `Primer empleo ${stamp}`,
   };
-  const opened = new Date();
+  const opened = new Date(`${today}T12:00:00-05:00`);
   const goal = (name: string, weeks: number, parent?: string) =>
     seedGoal(db, person, { name, parent, unit: MINUTES, horizon: at(weeks), created: opened });
   const G = await goal(names.G, 52);
@@ -127,14 +127,14 @@ test("«Mover también sus finales» moves every goal past the new end to it, le
     await expect(sheet).toBeHidden();
 
     expect(calls).toHaveLength(1);
+    await expect(page.getByText("Se movió el final de la meta y el de 5 metas dentro.", { exact: true })).toBeVisible();
+    await expect(page.locator("main").first()).toContainText(`hasta el ${dmy(dayBefore(at(40)))}`);
+
     const now = await horizonsOf(db, Object.values(tree.ids));
     expect(now[tree.G]).toBe(at(40));
     for (const id of tree.late) expect(now[id]).toBe(at(40));
     expect(now[tree.c1]).toBe(at(8));
     expect(now[tree.c1s]).toBe(at(6));
-
-    await expect(page.getByText("Se movió el final de la meta y el de 5 metas dentro.", { exact: true })).toBeVisible();
-    expect(flat(await page.locator("main").first().innerText())).toContain(`hasta el ${dmy(dayBefore(at(40)))}`);
   } finally {
     await context.close();
   }

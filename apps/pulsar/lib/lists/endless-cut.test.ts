@@ -274,3 +274,72 @@ test("with an end and all: every row, no rest, no hand-set", () => {
   assert.equal(cut.rest, null);
   assert.deepEqual(cut.handSet, []);
 });
+
+const V1_ENDS = { lastDay: "2027-01-03" };
+const v1Rows = (december = 40) => synth("2024-11", 27, 23, (month) => (month === "2027-01" ? 3 : month === "2026-12" ? december : 40));
+
+test("seeAll: an end with closed months hidden and a rest", () => {
+  const cut = endlessCut(v1Rows(), { all: false, rhythm: 40, ends: V1_ENDS });
+  assert.equal(cut.hidden, 12);
+  assert.deepEqual(cut.rest, { count: 2, lastDay: "2027-01-03" });
+  assert.equal(cut.seeAll, true);
+});
+
+test("seeAll: an end with nothing closed hidden but a rest", () => {
+  const cut = endlessCut(synth("2026-10", 120, 0, () => 10), { all: false, rhythm: 10, ends: { lastDay: "2036-09-28" } });
+  assert.equal(cut.hidden, 0);
+  assert.equal(cut.rest?.count, 118);
+  assert.equal(cut.seeAll, true);
+});
+
+test("seeAll: no end with hidden closed months", () => {
+  const cut = endlessCut(rowsFor("2024-11-05"), { all: false, rhythm: 40 });
+  assert.equal(cut.hidden, 12);
+  assert.equal(cut.seeAll, true);
+});
+
+test("seeAll: no end and nothing hidden is false", () => {
+  const cut = endlessCut(rowsFor("2026-10-06"), { all: false, rhythm: 40 });
+  assert.equal(cut.hidden, 0);
+  assert.equal(cut.rest, null);
+  assert.equal(cut.seeAll, false);
+});
+
+test("seeAll: the end is this month, closed months hidden, no rest", () => {
+  const cut = endlessCut(synth("2025-09", 14, 13, () => 40), { all: false, rhythm: 40, ends: { lastDay: "2026-10-31" } });
+  assert.equal(cut.rest, null);
+  assert.equal(cut.hidden, 2);
+  assert.equal(cut.seeAll, true);
+});
+
+test("seeAll: an ended goal with 20 months past", () => {
+  const cut = endlessCut(synth("2025-03", 20, 20, () => null), { all: false, rhythm: null });
+  assert.equal(cut.hidden, 8);
+  assert.equal(cut.seeAll, true);
+});
+
+test("seeAll: everything in view is false", () => {
+  const cut = endlessCut(synth("2025-11", 13, 11, () => 40), { all: false, rhythm: 40, ends: { lastDay: "2026-11-20" } });
+  assert.equal(cut.hidden, 0);
+  assert.equal(cut.rest, null);
+  assert.equal(cut.seeAll, false);
+});
+
+test("seeAll: all is false", () => {
+  const cut = endlessCut(v1Rows(), { all: true, rhythm: 40, ends: V1_ENDS });
+  assert.equal(cut.seeAll, false);
+});
+
+test("u5: a single month beyond next and beyond the hand-set is a rest of one", () => {
+  const cut = endlessCut(v1Rows(60), { all: false, rhythm: 40, ends: V1_ENDS });
+  assert.deepEqual(ids(cut.handSet), ["2026-12"]);
+  assert.deepEqual(cut.rest, { count: 1, lastDay: "2027-01-03" });
+  assert.equal(cut.seeAll, true);
+});
+
+test("a rest of one: the last month alone after next, with no amount of its own", () => {
+  const cut = endlessCut(synth("2025-11", 14, 11, () => 40), { all: false, rhythm: 40, ends: { lastDay: "2026-12-09" } });
+  assert.equal(cut.next?.month, "2026-11");
+  assert.deepEqual(cut.handSet, []);
+  assert.deepEqual(cut.rest, { count: 1, lastDay: "2026-12-09" });
+});

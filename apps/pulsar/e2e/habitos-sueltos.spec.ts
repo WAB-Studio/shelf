@@ -1,6 +1,7 @@
 import plan from "../messages/es/plan.json";
 import { test, expect } from "./fixtures";
 import { holdActions } from "./meta-arbol-seed";
+import { TODAY, shift } from "./sin-final-seed";
 import {
   MINUTES,
   between,
@@ -239,7 +240,7 @@ test.describe("retiring a habit", () => {
     const id = await seedHabit(db, person, { name: "Tomar agua", quantity: 2, unit: "litros" });
     await db`
       insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
-      values (${person.id}, ${id}, null, (now() at time zone 'America/Bogota')::date - 1, 2)`;
+      values (${person.id}, ${id}, null, ${shift(TODAY, -1)}::date, 2)`;
     const { page, context } = await visit(browser, baseURL, person, "/", 360);
     try {
       await expect(page.getByText("Tomar agua").first()).toBeVisible();
@@ -264,6 +265,8 @@ test.describe("retiring a habit", () => {
       const [{ n }] = await db<{ n: string }[]>`select count(*)::text as n from goals.facts where commitment_id = ${id}`;
       expect(Number(n)).toBe(1);
       // «Deja de pedirse desde mañana» (RP-13, `asksOn`): the day it is retired on still asks.
+      // The server stamped `retired_at` with SQL `now()`; put it on the pinned clock's day so «the day it is retired on» is today's.
+      await db`update goals.commitments set retired_at = ${new Date(`${TODAY}T12:00:00-05:00`)} where id = ${id}`;
       await page.goto("/");
       await expect(page.getByText("Tomar agua", { exact: true }).first()).toBeVisible();
     } finally {

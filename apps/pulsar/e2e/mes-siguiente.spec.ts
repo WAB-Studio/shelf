@@ -262,7 +262,7 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("an end of 30 months folds as a goal with no end: 2 rows, the line «28 meses más, hasta el …», no label (RP-110, RP-115)", async ({ person, browser, baseURL, db }) => {
+    test("an end of 30 months folds as a goal with no end: 2 rows, the line «28 meses más, hasta el …» as text, «ver todo», no label (RP-110, RP-115, RP-116)", async ({ person, browser, baseURL, db }) => {
       // Kills: the cut left for a goal with no end alone (the s4 rule); the sheet link missing on a goal with an end.
       const horizon = monthStartOf(30);
       const id = await seedOpenGoal(db, person, {
@@ -280,7 +280,8 @@ for (const width of [360, 1280]) {
         expect(targets[monthKey(1)]?.[0]).toMatch(planearOf(1));
         expect(await mainLower(page)).toMatch(/28 meses más, hasta el \d{1,2} \p{L}{3} \d{4}/u);
         expect(await mainLower(page)).not.toMatch(/cada uno|monto propio/);
-        await expect(seeAll(page.locator("main"))).toHaveCount(0);
+        await expect(page.getByRole("link", { name: /\d+ meses más, hasta el/, includeHidden: true })).toHaveCount(0);
+        await expect(seeAll(page.locator("main"))).toBeVisible();
       } finally {
         await context.close();
       }

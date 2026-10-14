@@ -123,6 +123,29 @@ function locate(file: string, name: string, months: number): Where {
   return { pages, namePage, labelPage, labelAt, rows };
 }
 
+// RP-116: the months-left-out line closes the LAST table of the goal, so it follows its last row and nothing else; every
+// line of that kind after the goal's label is found.
+const LEFT_OUT = /\d+ mes(es)? más, hasta el/;
+function leftOutLines(w: Where): { page: number; at: number }[] {
+  const found: { page: number; at: number }[] = [];
+  w.pages.forEach((lines, page) =>
+    lines.forEach((text, at) => {
+      const after = page > w.labelPage || (page === w.labelPage && at > w.labelAt);
+      if (after && LEFT_OUT.test(text)) found.push({ page, at });
+    }),
+  );
+  return found;
+}
+function expectLineAfterLastRow(w: Where, label: string) {
+  const last = w.rows[w.rows.length - 1];
+  const lines = leftOutLines(w);
+  expect(lines, `${label}: exactly one «N meses más» line`).toHaveLength(1);
+  expect(lines[0].page, `${label}: the line on page ${last.page + 1}, where the table's last row is`).toBe(last.page);
+  expect(lines[0].at, `${label}: the line after the last row`).toBeGreaterThan(last.at);
+  // And glued to it: only the row's own cells sit between the last row's name and the line.
+  expect(lines[0].at - last.at, `${label}: the line right behind the last row's cells`).toBeLessThanOrEqual(3);
+}
+
 const remove = (db: postgres.Sql, person: Person, id: string) =>
   db`delete from goals.goals where id = ${id} and user_id = ${person.id}`;
 
@@ -197,29 +220,23 @@ test.describe("the paper report: a «por mes» table of 15 rows or more starts w
     });
   });
 
-  // A goal with an end folds (RP-115): «N meses más» closes the first table (current and next month); the months set by hand follow it.
-  test("a 46-month table keeps the «N meses más» line with the first table's last row, on the same page and after it", async ({
+  // A goal with an end folds (RP-115) and RP-116 puts the line last: «N meses más» closes the second table (the months set by hand).
+  test("a 46-month table keeps the «N meses más» line with the LAST row of its second table, on the same page and after it (RP-116)", async ({
     person, browser, baseURL, db,
   }) => {
     await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 46, measured: true, tag: "m46d" }, (w) => {
-      const last = w.rows[1];
-      const line = w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("meses más, hasta el"));
-      expect(line, `«N meses más» on page ${last.page + 1}, where the row is`).toBeGreaterThan(last.at);
+      expectLineAfterLastRow(w, "46 months");
       expect(w.labelPage, "and the table still starts on the goal's page").toBe(w.namePage);
     });
   });
 
   // Open tasks above the table slide the page cut along it; across enough of them the cut falls between the last row and the line.
   for (const tasks of range(26))
-  test(`a 46-month table with ${tasks} open tasks above it never leaves the «N meses más» line alone on a page`, async ({
+  test(`a 46-month table with ${tasks} open tasks above it never leaves the «N meses más» line away from the last row of its second table (RP-116)`, async ({
     person, browser, baseURL, db,
   }) => {
     await withGoal({ person, browser, baseURL: baseURL! , db }, { months: 46, measured: true, tag: `m46e${tasks}`, tasks }, (w) => {
-      const last = w.rows[1];
-      expect(
-        w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("meses más, hasta el")),
-        `«N meses más» follows the first table's last row on page ${last.page + 1}`,
-      ).toBeGreaterThan(last.at);
+      expectLineAfterLastRow(w, `46 months, ${tasks} tasks`);
     });
   });
 
