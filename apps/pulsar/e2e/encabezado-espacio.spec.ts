@@ -1,4 +1,5 @@
 import { test, expect, visit } from "./fixtures";
+import { boxOf } from "./box";
 
 // The header spaces eyebrow -> title at 6 px and title -> lead at 12 px (`SistemaEspacio.dc.html`).
 
@@ -7,8 +8,8 @@ for (const path of ["/metas/nueva", "/semana"]) {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    const eyebrow = (await page.locator("main > header > div").first().boundingBox())!;
-    const title = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
+    const eyebrow = (await boxOf(page.locator("main > header > div").first()));
+    const title = (await boxOf(page.getByRole("heading", { level: 1 })));
     const gap = title.y - (eyebrow.y + eyebrow.height);
     expect(gap).toBeGreaterThanOrEqual(6);
     expect(gap).toBeLessThanOrEqual(8);
@@ -30,8 +31,8 @@ test("Hoy holds 12 px between its title and the line under it", async ({ person,
   try {
     const page = await context.newPage();
     await visit(page, "/");
-    const title = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
-    const lead = (await page.getByText(/^hechos \d+ de \d+/).boundingBox())!;
+    const title = (await boxOf(page.getByRole("heading", { level: 1 })));
+    const lead = (await boxOf(page.getByText(/^hechos \d+ de \d+/)));
     expect(lead.y - (title.y + title.height)).toBeCloseTo(12, 0);
   } finally {
     await context.close();
@@ -46,15 +47,15 @@ test("Hoy's controls row sits 12 px from the date, 6 px over the title, and its 
   const header = page.locator("main > header:visible").first();
   await expect(header.getByRole("heading", { level: 1 })).toBeVisible();
   const row = header.locator("> div").first();
-  const title = (await header.getByRole("heading", { level: 1 }).boundingBox())!;
-  const rowBox = (await row.boundingBox())!;
+  const title = (await boxOf(header.getByRole("heading", { level: 1 })));
+  const rowBox = (await boxOf(row));
   const gap = title.y - (rowBox.y + rowBox.height);
   expect(gap).toBeGreaterThanOrEqual(6);
   expect(gap).toBeLessThanOrEqual(8);
   expect(await row.evaluate((el) => getComputedStyle(el).columnGap)).toBe("12px");
   // The chat entry ends the line (`ChatEntrada`); the toggle sits right before it.
-  const toggle = (await header.getByRole("button", { name: /modo (oscuro|claro)/ }).boundingBox())!;
-  const chat = (await header.getByRole("link", { name: "Abrir el chat" }).boundingBox())!;
+  const toggle = (await boxOf(header.getByRole("button", { name: /modo (oscuro|claro)/ })));
+  const chat = (await boxOf(header.getByRole("link", { name: "Abrir el chat" })));
   expect(chat.x + chat.width).toBeGreaterThan(rowBox.x + rowBox.width - 12);
   expect(toggle.x + toggle.width).toBeGreaterThan(chat.x - 12);
   expect(toggle.x + toggle.width).toBeLessThanOrEqual(chat.x + 1);

@@ -4,6 +4,7 @@ import messages from "../messages/es/import.json";
 import { todayInZone } from "../lib/zone";
 import { unfold } from "./importar-plan";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-72, board `ImportarTodosLosErrores`: one reading answers every line that cannot be read.
 
@@ -88,9 +89,9 @@ test.describe("one reading lists every mistake (RP-72)", () => {
       expect(whole).not.toContain(FONDO);
       expect(whole).not.toContain(TASK_LAST);
 
-      const alertBox = (await alert.boundingBox())!;
-      const show = (await page.getByText(messages.template.show, { exact: true }).boundingBox())!;
-      const read = (await page.getByRole("button", { name: "Leer el plan" }).boundingBox())!;
+      const alertBox = (await boxOf(alert));
+      const show = (await boxOf(page.getByText(messages.template.show, { exact: true })));
+      const read = (await boxOf(page.getByRole("button", { name: "Leer el plan" })));
       expect(show.y).toBeGreaterThan(alertBox.y + alertBox.height - 1);
       expect(read.y).toBeGreaterThan(alertBox.y + alertBox.height - 1);
       await expect(page).toHaveURL(/\/metas\/importar$/);

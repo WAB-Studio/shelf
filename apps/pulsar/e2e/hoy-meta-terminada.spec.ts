@@ -3,6 +3,7 @@ import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // Hoy says when a goal ended (`HoyMetaTerminada.dc.html`): «X terminó ayer ·
 // ver» for the day after, the weekday later in the same week, nothing once
@@ -154,7 +155,7 @@ test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser
     await open(page);
     const line = page.getByText(`${name} terminó ayer`);
     await expect(line).toHaveCount(1);
-    const box = async (locator: Locator) => (await locator.boundingBox())!;
+    const box = async (locator: Locator) => (await boxOf(locator));
     const t = await box(page.getByRole("main").getByText("Hoy", { exact: true }));
     const g = await box(page.getByText(openName).first());
     expect(g.y).toBeGreaterThanOrEqual(t.y + t.height - 1);

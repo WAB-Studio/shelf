@@ -6,6 +6,7 @@ import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
+import { boxOf } from "./box";
 
 // Decision of 2026-10-11, after the train-10 critic saw «Sprint / terminada el …» end page 6 and
 // «AL TERMINAR …» open page 7: an ended goal's name, its «terminada el …» line and its «al terminar»
@@ -171,7 +172,7 @@ test.describe("the paper report: an ended goal is never cut between pages", () =
         .locator("section")
         .filter({ has: page.getByRole("heading", { name: sprint }) })
         .last();
-      const box = (await block.boundingBox())!;
+      const box = (await boxOf(block));
       // Reference measured here: the extent of the block's own children, which is what its height was before.
       const kids = await block.locator(":scope > *").evaluateAll((els) => {
         const rects = els.map((el) => el.getBoundingClientRect());

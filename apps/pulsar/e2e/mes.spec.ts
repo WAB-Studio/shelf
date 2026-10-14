@@ -5,6 +5,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 import monthMessages from "../messages/es/month.json";
+import { boxOf } from "./box";
 
 const owesLine = (month: string, owes: string) =>
   monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
@@ -266,11 +267,11 @@ test("a goal with no measure's empty month promises no time; the back and «Todo
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
       const back = page.getByRole("link", { name: `Volver a Meta lisa ${stamp}` });
-      const arrow = (await back.boundingBox())!;
+      const arrow = (await boxOf(back));
       expect(arrow.width).toBeGreaterThanOrEqual(44);
       expect(arrow.height).toBeGreaterThanOrEqual(44);
       const all = page.getByRole("link", { name: "Todos los meses" });
-      expect((await all.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await boxOf(all)).height).toBeGreaterThanOrEqual(44);
 
       await back.click();
       await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
@@ -310,14 +311,14 @@ test("from 1024 the goal's months stand beside the month and tapping another swa
       }
       await expect(rows).toHaveCount(3);
       for (const row of await rows.all()) {
-        expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+        expect((await boxOf(row)).height).toBeGreaterThanOrEqual(48);
         expect(await row.evaluate((node) => getComputedStyle(node).color)).not.toBe("rgb(0, 0, 238)");
       }
       const opened = page.locator("main ol a[aria-current=page]");
       await expect(opened).toContainText(label(thisMonth));
       await expect(page.getByText(`Propia ${stamp}`)).toBeVisible();
-      const listBox = (await rows.first().boundingBox())!;
-      const detailBox = (await page.getByText(`Propia ${stamp}`).boundingBox())!;
+      const listBox = (await boxOf(rows.first()));
+      const detailBox = (await boxOf(page.getByText(`Propia ${stamp}`)));
       expect(listBox.x + listBox.width).toBeLessThan(detailBox.x);
 
       await page.locator("main ol a", { hasText: label(lastMonth) }).click();

@@ -6,6 +6,7 @@ import type postgres from "postgres";
 import { test, expect, visit, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 import sources from "../messages/es/sources.json";
+import { boxOf } from "./box";
 
 // RP-08, RP-09, board `HoyDia`: an evidence row's one meta line says how much
 // it asks until it is met, and what it got plus its source once met. The
@@ -144,7 +145,7 @@ for (const width of [390, 1440]) {
         await expect(row).toBeDisabled();
 
         // A real pointer press on the row's box: it opens nothing and writes nothing (RP-05).
-        const box = (await row.boundingBox())!;
+        const box = (await boxOf(row));
         const url = page.url();
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
         await expect(page.getByRole("dialog")).toHaveCount(0);

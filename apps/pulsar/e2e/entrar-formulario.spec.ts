@@ -7,6 +7,7 @@ import postgres from "postgres";
 import account from "../messages/es/account.json";
 import oauth from "../messages/es/oauth.json";
 import { test, expect, type Person } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-18 and RP-60: `/entrar` and the consent signed out are one
 // form, and the consent signed in is centred where `/entrar` is. Nothing here
@@ -70,8 +71,8 @@ async function open(
 
 // The column's content sits as far from the top of the viewport as from the bottom.
 async function expectCentred(page: Page, height: number) {
-  const top = (await page.locator("main > header").boundingBox())!;
-  const last = (await page.locator("main > :last-child").boundingBox())!;
+  const top = (await boxOf(page.locator("main > header")));
+  const last = (await boxOf(page.locator("main > :last-child")));
   const above = top.y;
   const below = height - (last.y + last.height);
   expect(Math.abs(above - below)).toBeLessThanOrEqual(24);
@@ -84,8 +85,8 @@ async function expectOneForm(page: Page, label: string, button: string, lead: st
   await expect(page.getByRole("main").getByRole("button")).toHaveCount(1);
   await expect(page.getByRole("button", { name: button, exact: true })).toBeVisible();
   await expect(page.getByText(lead, { exact: true })).toBeVisible();
-  const field = (await page.locator("main form > div").boundingBox())!;
-  const action = (await page.getByRole("button", { name: button, exact: true }).boundingBox())!;
+  const field = (await boxOf(page.locator("main form > div")));
+  const action = (await boxOf(page.getByRole("button", { name: button, exact: true })));
   expect(Math.round(action.y - (field.y + field.height))).toBe(20);
 }
 
@@ -134,7 +135,7 @@ for (const size of WIDTHS) {
       const allow = page.getByRole("button", { name: oauth.allow, exact: true });
       const deny = page.getByRole("button", { name: oauth.deny, exact: true });
       await expect(allow).toBeVisible();
-      const [a, d] = [(await allow.boundingBox())!, (await deny.boundingBox())!];
+      const [a, d] = [(await boxOf(allow)), (await boxOf(deny))];
       expect(d.y).toBeGreaterThanOrEqual(a.y + a.height);
       if (size.width >= 1024) await expectCentred(page, size.height);
     } finally {

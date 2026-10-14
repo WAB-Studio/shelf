@@ -4,6 +4,7 @@ import { horizonForWeeks } from "@/lib/day/weeks";
 import { civilDateInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
+import { boxOf } from "./box";
 
 // The page's column spaces its children 32 apart (40 from 1024) by
 // its own gap, and the header's controls sit on the eyebrow's line.
@@ -69,8 +70,8 @@ for (const width of [360, 390]) {
       const dateLocator = page.locator("main > header:visible").getByText(WEEKDAY_DATE).first();
       await expect(dateLocator).toBeVisible();
       if (longest) await dateLocator.evaluate((node, text) => void (node.textContent = text), LONGEST_DATE);
-      const toggle = (await page.getByRole("button", { name: /modo (oscuro|claro)/ }).boundingBox())!;
-      const date = (await dateLocator.boundingBox())!;
+      const toggle = (await boxOf(page.getByRole("button", { name: /modo (oscuro|claro)/ })));
+      const date = (await boxOf(dateLocator));
       // The toggle and the date share one line, the toggle at its end.
       expect(Math.abs(toggle.y + toggle.height / 2 - (date.y + date.height / 2))).toBeLessThan(6);
       expect(toggle.x).toBeGreaterThan(date.x + date.width);

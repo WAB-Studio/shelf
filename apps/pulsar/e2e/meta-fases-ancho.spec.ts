@@ -5,6 +5,7 @@ import { civilDateInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 import goalMessages from "../messages/es/goal.json";
+import { boxOf } from "./box";
 
 // From 1024 the goal's phases stand under the two columns at the
 // content's full width; a phase stored before its goal opened reads from week
@@ -116,8 +117,8 @@ test("at 390 «Renombrar» spans the column", async ({ page, db, personId }) => 
     await page.goto(`/metas/${goalId}`);
     const rename = page.getByRole("button", { name: "Renombrar" });
     await expect(rename).toBeVisible();
-    const box = (await rename.boundingBox())!;
-    const header = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
+    const box = (await boxOf(rename));
+    const header = (await boxOf(page.getByRole("heading", { level: 1 })));
     expect(box.width).toBeGreaterThanOrEqual(header.width - 1);
     expect(box.width).toBeGreaterThan(300);
     // An outlined block, never the ghost that floats centred on the phone.

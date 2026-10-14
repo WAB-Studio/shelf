@@ -5,6 +5,7 @@ import postgres from "postgres";
 import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 import plan from "../messages/es/plan.json";
+import { boxOf } from "./box";
 
 // RNP-17 across the app (`HoyEscritorio`, `SemanaEscritorio`, `MetaEscritorio`,
 // `RevisionEscritorio`, `HojaEscritorio`): at 1280 × 800 every route is the
@@ -268,7 +269,7 @@ worldTest("the quantity sheet on Hoy opens centred at 480 px at 1280 (RNP-17)", 
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveCSS("width", "480px");
     await settled(dialog);
-    const box = (await dialog.boundingBox())!;
+    const box = (await boxOf(dialog));
     expect(Math.abs(box.x + box.width / 2 - 640)).toBeLessThanOrEqual(1);
     expect(Math.abs(box.y + box.height / 2 - 400)).toBeLessThanOrEqual(1);
     await expectHolds(page, 1280, 3, '[role="dialog"]');
@@ -286,7 +287,7 @@ worldTest("the rename sheet on the goal opens centred at 480 px at 1280 (RNP-17)
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveCSS("width", "480px");
     await settled(dialog);
-    const box = (await dialog.boundingBox())!;
+    const box = (await boxOf(dialog));
     expect(Math.abs(box.x + box.width / 2 - 640)).toBeLessThanOrEqual(1);
     expect(Math.abs(box.y + box.height / 2 - 400)).toBeLessThanOrEqual(1);
     await expectHolds(page, 1280, 3, '[role="dialog"]');
@@ -304,7 +305,7 @@ worldTest("the move sheet on /sueltas opens centred at 480 px at 1280 (RNP-17)",
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveCSS("width", "480px");
     await settled(dialog);
-    const box = (await dialog.boundingBox())!;
+    const box = (await boxOf(dialog));
     expect(Math.abs(box.x + box.width / 2 - 640)).toBeLessThanOrEqual(1);
     expect(Math.abs(box.y + box.height / 2 - 400)).toBeLessThanOrEqual(1);
     await expectHolds(page, 1280, 3, '[role="dialog"]');

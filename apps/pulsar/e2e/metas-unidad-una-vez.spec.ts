@@ -2,6 +2,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `/metas` (`MetasConCifra`, `UnidadUnaVez`): every open goal's row carries this
 // month's figure, the unit said once, under the name and above «hasta el …».
@@ -225,7 +226,7 @@ test("/metas at 360: the month figure sits under the name and above «hasta el �
     const until = row.getByText(/^hasta el /).locator("visible=true");
     const name = row.getByText(measured, { exact: true });
     await expect(figure).toBeVisible();
-    const y = async (locator: typeof figure) => (await locator.boundingBox())!.y;
+    const y = async (locator: typeof figure) => (await boxOf(locator)).y;
     expect(await y(name)).toBeLessThan(await y(figure));
     expect(await y(figure)).toBeLessThan(await y(until));
 

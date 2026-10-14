@@ -2,6 +2,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `DiaPasado.dc.html`, `DiaPasadoPasos.dc.html`: a past day's goal heading
 // counts what «hechos» counts (docs/pulsar/DESIGN.md, «A past day's heading
@@ -160,7 +161,7 @@ test("at 390 the «este mes» groups on Hoy stand one gap apart (RP-28)", async 
     for (const name of names) {
       const heading = page.getByText(name, { exact: true }).locator("visible=true").last();
       await expect(heading).toBeVisible();
-      boxes.push((await heading.locator("xpath=..").boundingBox())!);
+      boxes.push((await boxOf(heading.locator("xpath=.."))));
     }
     const gaps = boxes.slice(1).map((box, i) => box.y - (boxes[i].y + boxes[i].height));
     expect(gaps.length).toBe(2);

@@ -6,6 +6,7 @@ import { civilDayMonthYear, todayInZone } from "../lib/zone";
 import type { RawDraft } from "../lib/import/draft";
 import { test, expect } from "./fixtures";
 import { asPerson, createButton, months, plus, toOpenReview, toOpenSeededReview, word, type Seed } from "./importar-plan";
+import { boxOf } from "./box";
 
 // The review of a goal with no end and of a rhythm in pages (RP-99, RP-102; module 918). The boards
 // are `ImportarSinFinal-1-revision-360` and `-2-hoja-360`. No model is called: the plan is the template
@@ -199,8 +200,8 @@ test.describe("the sheet of a goal with no end (board `ImportarSinFinal-2-hoja-3
       await expect(weeksField(page)).toHaveCount(0);
       // «sin final» sits left of «ponerle final» (board 2).
       const [said, button] = [
-        (await sheet(page).getByText("sin final", { exact: true }).boundingBox())!,
-        (await sheet(page).getByRole("button", { name: PUT_END, exact: true }).boundingBox())!,
+        (await boxOf(sheet(page).getByText("sin final", { exact: true }))),
+        (await boxOf(sheet(page).getByRole("button", { name: PUT_END, exact: true }))),
       ];
       expect(said.x).toBeLessThan(button.x);
     });
