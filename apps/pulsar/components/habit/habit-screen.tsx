@@ -4,7 +4,7 @@ import { EditHabitAction } from "@/components/habit/habit-edit-sheet";
 import { RetireAction } from "@/components/goal/retire-sheet";
 import { Figure, Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
-import { tailOf } from "@/lib/lists/tail";
+import { LIST_TAIL, tailOf } from "@/lib/lists/tail";
 import type { HabitView } from "@/lib/queries/habit";
 import { civilDayMonthYear } from "@/lib/zone";
 
@@ -17,11 +17,13 @@ export async function HabitScreen({
   habit,
   back,
   seeAllHref,
+  seeLessHref,
   all,
 }: {
   habit: HabitView;
   back: { href: string; place: string };
   seeAllHref: string;
+  seeLessHref: string;
   all: boolean;
 }) {
   const t = await getTranslations();
@@ -34,6 +36,8 @@ export async function HabitScreen({
   const retired = habit.retiredOn !== null;
 
   const { shown, hidden } = tailOf(habit.months, all);
+  const seeLess =
+    all && habit.months.length > LIST_TAIL ? <TextLink href={seeLessHref}>{t("common.seeLess")}</TextLink> : null;
   const rows: TableRow[] = shown.map((month) => {
     const line = month.weeks
       ? month.weeks.counted === 0
@@ -89,6 +93,7 @@ export async function HabitScreen({
       ) : null}
       {retired ? null : <EditHabitAction habitId={habit.id} name={habit.name} note={habit.note} />}
       <Section label={t("habit.months.title")}>
+        {seeLess}
         <Table
           narrow
           caption={t("habit.months.caption", { count: habit.months.length })}
@@ -97,6 +102,7 @@ export async function HabitScreen({
           current={currentIndex === -1 ? undefined : currentIndex}
         />
         {hidden > 0 ? <TextLink href={seeAllHref}>{t("habit.months.seeAll")}</TextLink> : null}
+        {seeLess}
       </Section>
       {retired ? null : (
         <RetireAction

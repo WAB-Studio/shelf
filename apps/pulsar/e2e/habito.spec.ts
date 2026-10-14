@@ -209,7 +209,10 @@ test.describe("the screen of a habit (RP-105, RP-106)", () => {
       const all = await monthsText(page);
       expect(rowsOf(all)).toEqual(Array.from({ length: 20 }, (_, i) => monthLabel(i - 19)));
       expect(all).not.toContain("ver todo");
-      expect(all).not.toContain("ver menos");
+      // Two «ver menos» (above and under the table) that return without `todo=1`.
+      const less = page.getByRole("link", { name: /ver menos/i });
+      await expect(less).toHaveCount(2);
+      for (const link of await less.all()) expect(await link.getAttribute("href")).not.toContain("todo=1");
     } finally {
       await context.close();
     }

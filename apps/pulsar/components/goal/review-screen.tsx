@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import type { MessageKey } from "@/i18n/translator";
 import { civilSpan } from "@/lib/export/sections";
-import { tailOf } from "@/lib/lists/tail";
+import { LIST_TAIL, tailOf } from "@/lib/lists/tail";
 import { loadGoal } from "@/lib/queries/goal";
 import { isTimeUnit } from "@/lib/units/time";
 import { Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
@@ -69,6 +69,10 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
   });
 
   const currentIndex = shown.findIndex((week) => week.current);
+  const seeLess =
+    all && goal.horizon === null && goal.weeks.length > LIST_TAIL ? (
+      <TextLink href={`/metas/${goal.id}/revision`}>{t("common.seeLess")}</TextLink>
+    ) : null;
 
   return (
     <Page width="full">
@@ -78,6 +82,7 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
           ? t("goal.review.measureTime")
           : t("goal.review.measure", { unit: unitWord(goal.measureUnit) })}
       </Text>
+      {seeLess}
       <Table
         caption={t("goal.review.caption")}
         columns={columns}
@@ -90,6 +95,7 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
       {hidden > 0 ? (
         <TextLink href={`/metas/${goal.id}/revision?todo=1`}>{t("common.seeAll")}</TextLink>
       ) : null}
+      {seeLess}
     </Page>
   );
 }
