@@ -300,6 +300,7 @@ export async function MonthAcrossScreen() {
                       : habit.asked === null
                       ? t("month.across.habits.line", { cadence, count: habit.daysDone })
                       : t("month.across.habits.lineOf", { cadence, done: habit.daysDone, asked: habit.asked })}
+                    {habit.thisWeek ? ` · ${t("week.flexible.weekProgress", { done: habit.thisWeek.done, total: habit.thisWeek.count })}` : ""}
                   </Text>
                 </Flex>
               );
