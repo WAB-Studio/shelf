@@ -1630,3 +1630,15 @@ meses que vienen: …») stays a link in s6. A goal that fits whole on one page 
 - **On paper a goal's header stays with its «por mes» table, and the table may split across pages.** Today «Leer»'s 14-row table
   jumps whole to page 3 and leaves page 2 with its header alone: 5 pages, two of them ~60 % and ~85 % blank.
 - **The end sheet keeps «contando desde esta semana; la meta lleva N semanas»** beside the total: it says what the field counts.
+
+## Decisions of 2026-10-14, after the critic of slice s6, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/s6-critic.md`.
+
+- **The count over a folded «Por mes» says the drawn rows out of the goal's months: «2 de 120 meses».** Today «Piano» reads
+  «2 MESES» over «118 meses más, hasta el 28 sep 2036». Changes RP-116's count clause: it retires for a new code when built.
+- **Paper keeps every goal's detail on its own page, and never opens a page with a single task.** At 12 open tasks «Leer»'s
+  task «Leer el epílogo» opens page 3 alone. The summary page stays ~35 % full; the detail never starts under it.
+- **The end sheet of a goal with a phase warns while the person picks the date, not after «Moverlo».** Today the field, the
+  refusal and the fine line read 6, 6 and 7 weeks for one clash, and nothing shows until the press.
+- **A connected AI sets a goal's measure and rhythm (RP-117).** Today a whole roadmap can only come in through the import.
