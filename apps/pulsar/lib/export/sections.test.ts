@@ -13,6 +13,7 @@ function goal(patch: Partial<GoalReport> = {}): GoalReport {
     unit: "horas",
     measureName: null,
     measureFed: false,
+    rhythm: null,
     thisMonth: { planned: 44, reached: 20, underPace: false },
     tasks: [
       { name: "Tutor", from: "2026-09-01", done: false, doneOn: null, estimate: null, part: null, continuesIn: null, owes: 12, hasAmount: true, note: null, children: [] },

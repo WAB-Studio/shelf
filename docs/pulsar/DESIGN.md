@@ -1576,3 +1576,29 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/critic-
   for the week in progress.
 - **The fold line goes right after the current month,** and the hand-set months follow it under «y estos meses con monto propio:».
   Built in s3 the other way round, it reads as if a hand-set month were at the rhythm.
+- **The s4 boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», board
+  `S4Propuesta` (`PorMesSiguiente`, `FinalDosCuentas`, `HabitoSemanaRetiro`). Words and structure: `private/tableros-s4/NOTAS.md`.
+  Approved with them:
+  - The order under the current month: next month as a row, then «los demás meses que vienen: N cada uno», then «y estos meses con
+    monto propio:» and their rows. Next month is not repeated there when it has its own amount.
+  - «la meta lleva N semanas» counts this week too: «Correr 10 km» reads 8 in the sheet and «lleva 2 semanas»; «Leer» lleva 102.
+  - A weekly habit's week in progress reads «1 de 2 esta semana», as Hoy does, for 1 a week too; «0 de 1 esta semana» with nothing done.
+  - A retired habit's last month never reads «en curso».
+- **Next month's row opens the amount sheet** (`?planear=<mes>`), 2026-10-13, by the user: planning ahead is one tap. The other rows
+  open the month's page as before.
+- **A habit retired in a met week whose Thursday falls next month counts that week in its retirement month** (2026-10-13,
+  orchestrator): the habit has no next month to put it in.
+
+## Decisions of 2026-10-13, after the critic of slice s4, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s4/REPORT.md`.
+
+- **A retired habit in «Mes» reads «retirado el 7 oct»** in the «Hábitos» group of the month it was retired in; today it is drawn
+  as a live line.
+- **The end sheet shows the total the goal's screen will read:** «113 semanas en total» beside «termina el …», under the two counts.
+- **Goals with an end fold «Por mes» as goals with no end do** (the last rows and «ver todo»), in a later slice: «Leer» with an end
+  lists 27 rows today.
+- **Reopening an ended goal offers «Ponerle final» and «Dejarla sin final»,** as the approved board `FinalDosCuentas` draws; the
+  build shows «Quitar el final» and «Moverlo».
+- Not a decision, a defect found by the same critic: «Leer» with a hand-set December reads «13 MESES» over 14 rows on /meses and the
+  report screen, and «14 MESES» on paper. Every count must match its rows.

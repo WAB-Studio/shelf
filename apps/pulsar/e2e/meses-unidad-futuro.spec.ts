@@ -244,14 +244,16 @@ test("the month page of a time goal says «2 h de 8 h», the time keeps «h», n
 });
 
 test("/mes says «2 h de 8 h» for a time goal, the time keeps «h», never «2 de 8 h»", async ({ person, browser, baseURL, db }) => {
-  const goalId = await seedGoal(db, person, { name: "Inglés", unit: MINUTES, budgets: [[thisMonth, 480]], fact: [today, 120] });
+  const name = `Inglés mes ${Date.now()}`;
+  const goalId = await seedGoal(db, person, { name, unit: MINUTES, budgets: [[thisMonth, 480]], fact: [today, 120] });
   const { page, close } = await visit(browser, baseURL, person, "/mes", 360);
   try {
-    const section = page.locator("section", { hasText: "Inglés" }).first();
+    const section = page.locator("section", { has: page.getByRole("heading", { name }) });
     await expect(section).toContainText(/2\s*h\s*de\s*8\s*h/);
     const text = flat(await section.innerText());
     expect(text).toMatch(/2 h de 8 h/);
     expect(text).not.toMatch(/\b2 de 8 h/);
+    expect(text).not.toMatch(/hde\b/);
   } finally {
     await close();
     await drop(db, person, goalId);

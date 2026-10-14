@@ -41,8 +41,8 @@ export type GoalReport = {
   note?: string | null;
   // A source feeds the measure (RP-14): an evidence commitment in the goal's unit.
   measureFed: boolean;
-  // The goal's own monthly rhythm; null for a goal with none and for one that holds goals (RP-80). Absent on a hand-built report.
-  rhythm?: number | null;
+  // The goal's own monthly rhythm; null for a goal with none and for one that holds goals (RP-80).
+  rhythm: number | null;
   thisMonth: { planned: number | null; reached: number; underPace: boolean };
   toDate: { planned: number; reached: number };
   // Months whose amount the person typed: paper prints every planned 0, the screen only these (RP-76).

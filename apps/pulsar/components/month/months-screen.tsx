@@ -54,8 +54,14 @@ export async function MonthsList({
   const goal = { ...loaded, months: cut ? cut.shown : settled };
   const allHref = `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}todo=1`;
   const seeAll = cut && cut.hidden > 0 ? <TextLink href={allHref}>{t("common.seeAll")}</TextLink> : null;
-  const hrefOf = (month: string) => `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
-  const caption = t("month.months.caption", { count: goal.months.length });
+  const sheetFor = (month: string) =>
+    cut?.next?.month === month && Boolean(loaded.measureUnit) && !loaded.holdsGoals && loaded.endedOn === null && loaded.archivedAt === null;
+  const hrefOf = (month: string) =>
+    sheetFor(month)
+      ? `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}planear=${month.slice(0, 7)}`
+      : `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
+  const ownKeys = new Set(cut ? cut.handSet.map((row) => row.month) : []);
+  const caption = t("month.months.caption", { count: goal.months.filter((row) => !ownKeys.has(row.month)).length });
   const currentIndex = goal.months.findIndex((row) => row.current);
   const openIndex = goal.months.findIndex((row) => row.month === open);
   // A holder measures through its goals: its own measure name may be empty (RP-80).
@@ -95,10 +101,19 @@ export async function MonthsList({
   const unit = goal.measureUnit;
   const timed = isTimeUnit(unit);
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
-  const ahead = cut?.line ? (
-    <Text as="p" variant="line">
-      <TextLink href={allHref}>{t("month.months.ahead", { planned: formatQuantity(cut.line.planned, unit, words) })}</TextLink>
-    </Text>
+  const ahead = cut?.line || ownKeys.size > 0 ? (
+    <>
+      {cut?.line ? (
+        <Text as="p" variant="line">
+          <TextLink href={allHref}>{t("month.months.ahead", { planned: formatQuantity(cut.line.planned, unit, words) })}</TextLink>
+        </Text>
+      ) : null}
+      {ownKeys.size > 0 ? (
+        <Text as="p" variant="line">
+          {cut?.line ? t("month.months.andOwn") : t("month.months.own")}
+        </Text>
+      ) : null}
+    </>
   ) : null;
 
   const rows: TableRow[] = goal.months.map((row) => {
@@ -141,6 +156,8 @@ export async function MonthsList({
     };
   });
 
+  const firstRows = rows.filter((row) => !ownKeys.has(row.key));
+  const ownRows = rows.filter((row) => ownKeys.has(row.key));
   return (
     <>
       <Table
@@ -154,14 +171,30 @@ export async function MonthsList({
           t("month.months.columns.reached"),
           t("month.months.columns.planned"),
         ]}
-        rows={rows}
+        rows={firstRows}
         figures={[1]}
         // A unit that is not time rides in each row's note («0 de 60 búsquedas»), once.
         unit={timed ? unit : undefined}
         current={currentIndex === -1 ? undefined : currentIndex}
         open={openIndex === -1 ? undefined : openIndex}
+        after={ahead}
       />
-      {ahead}
+      {ownRows.length > 0 ? (
+        <Table
+          narrow
+          wrapNote={!timed}
+          wholeNote={timed}
+          caption=""
+          columns={[
+            t("month.months.columns.month"),
+            t("month.months.columns.reached"),
+            t("month.months.columns.planned"),
+          ]}
+          rows={ownRows}
+          figures={[1]}
+          unit={timed ? unit : undefined}
+        />
+      ) : null}
       {seeAll}
     </>
   );

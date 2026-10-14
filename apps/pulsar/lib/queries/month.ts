@@ -3,7 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { askedIn } from "@/lib/day/habit-months";
-import { habitWeeks, weeksOfMonth } from "@/lib/day/habit-weeks";
+import { habitThisWeek, habitWeeks, weeksOfMonth } from "@/lib/day/habit-weeks";
 import type { Cadence, EvidenceDay } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
@@ -31,7 +31,7 @@ import {
 } from "@/lib/queries/goal";
 import { toCadence, toDeclaredFact } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 export type MonthAcrossGoal = {
   id: string;
@@ -74,6 +74,7 @@ export type MonthAcross = {
 
 // `asked` is how many days of the month through today the cadence asked on; null for a cadence counted by the week or the month.
 // `weeks` is the weeks met of the weeks lived by the Thursday rule; null unless the cadence is counted by the week.
+// `thisWeek` is the week in progress, whatever month its Thursday falls in; null unless the cadence is weekly and the habit alive.
 export type MonthLooseHabit = {
   id: string;
   name: string;
@@ -81,9 +82,10 @@ export type MonthLooseHabit = {
   cadence: Cadence;
   asked: number | null;
   weeks: { met: number; counted: number } | null;
+  thisWeek: { done: number; count: number } | null;
 };
 
-// `byWeek` holds the done days per Monday from the first week of the month, which can start in the month before.
+// `byWeek` holds the done days per Monday from the first week of the month, or the week of today when that is earlier.
 type LooseRow = { id: string; name: string; daysDone: number; row: CommitmentRow; byWeek: { week: string; days: number }[] };
 
 type Row = {
@@ -105,26 +107,24 @@ type PlanTaskRow = TaskRow & { in_plan: boolean; created_at: string; position: n
 // an open goal is read too, for its part of the month's sum. RLS narrows it to the caller (RNP-05).
 function looseHabit({ id, name, daysDone, row, byWeek }: LooseRow, month: string, today: string): MonthLooseHabit {
   const cadence = toCadence(row);
+  const retiredOn = row.retired_at ? civilDateInZone(new Date(row.retired_at)) : null;
+  const daysDoneByWeek = new Map(byWeek.map((entry) => [entry.week, entry.days]));
   const weeks =
     cadence.kind === "times_per_week"
-      ? habitWeeks({
-          count: cadence.count,
-          createdOn: civilDateInZone(new Date(row.created_at)),
-          retiredOn: row.retired_at ? civilDateInZone(new Date(row.retired_at)) : null,
-          daysDoneByWeek: new Map(byWeek.map((entry) => [entry.week, entry.days])),
-          month,
-          today,
-        })
+      ? habitWeeks({ count: cadence.count, createdOn: civilDateInZone(new Date(row.created_at)), retiredOn, daysDoneByWeek, month, today })
       : null;
+  const thisWeek = cadence.kind === "times_per_week" ? habitThisWeek({ count: cadence.count, retiredOn, daysDoneByWeek, today }) : null;
   const counted = cadence.kind === "daily" || cadence.kind === "weekdays" || cadence.kind === "every_n_days";
-  if (!counted) return { id, name, daysDone, cadence, asked: null, weeks };
+  if (!counted) return { id, name, daysDone, cadence, asked: null, weeks, thisWeek };
   const plan = { id, cadence, satisfiedBy: { kind: "tap" as const }, retiredAt: row.retired_at, createdOn: civilDateInZone(new Date(row.created_at)) };
   const asked = askedIn(plan, month, today);
-  return { id, name, daysDone, cadence, asked, weeks };
+  return { id, name, daysDone, cadence, asked, weeks, thisWeek };
 }
 
 async function queryRows(tx: Transaction, month: string, today: string): Promise<Row[]> {
-  const weekFrom = weeksOfMonth(month)[0] ?? month;
+  const firstWeek = weeksOfMonth(month)[0] ?? month;
+  const todayWeek = weekOf(today)[0];
+  const weekFrom = todayWeek < firstWeek ? todayWeek : firstWeek;
   const rows = await tx.execute<Row>(sql`
     select
       to_jsonb(g) as goal,

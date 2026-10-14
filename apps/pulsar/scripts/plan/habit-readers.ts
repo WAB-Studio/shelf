@@ -9,6 +9,7 @@ import { after, before, test } from "node:test";
 
 import postgres from "postgres";
 
+import type { MonthLooseHabit } from "@/lib/queries/month";
 import { readWire, wrapPostgres, type DebugCall, type PostgresFactory } from "./wire";
 
 function laneNumber(): number {
@@ -78,6 +79,10 @@ let monthStart: string;
 let mes: Record<string, string> = {};
 let e4Id: string;
 let weeklyMesId: string;
+let e3Id: string;
+let e4NadarId: string;
+let e5Id: string;
+let e5cId: string;
 let q: {
   habit: typeof import("@/lib/queries/habit");
   month: typeof import("@/lib/queries/month");
@@ -141,6 +146,30 @@ before(async () => {
     n: 1,
   });
   await done(weeklyMesId, ["2026-09-28"]);
+
+  // E3, E6: a weekly habit made every week since July, done Mon 26 Oct and Mon 12 Oct.
+  e3Id = await plant(userId, "habit-readers.ts E3 llamar", { createdAt: "2026-07-08T12:00:00-05:00", kind: "times_per_week", n: 1 });
+  await done(e3Id, ["2026-09-29", "2026-10-06", "2026-10-12", "2026-10-26"]);
+  // E4: made and done on the day.
+  e4NadarId = await plant(userId, "habit-readers.ts E4 nadar", { createdAt: "2026-10-13T08:00:00-05:00", kind: "times_per_week", n: 2 });
+  await done(e4NadarId, ["2026-10-13"]);
+  // E5: retired Wed 7 Oct 2026, the week of the 5th met before it.
+  e5Id = await plant(userId, "habit-readers.ts E5 yoga", {
+    createdAt: "2026-08-17T12:00:00-05:00",
+    kind: "times_per_week",
+    n: 2,
+    retiredAt: "2026-10-07T12:00:00-05:00",
+  });
+  await done(e5Id, ["2026-08-17", "2026-08-18", "2026-08-24", "2026-08-25", "2026-08-31", "2026-09-01", "2026-09-07", "2026-09-08",
+    "2026-09-14", "2026-09-15", "2026-09-29", "2026-09-30", "2026-10-05", "2026-10-06"]);
+  // E5c: retired Tue 29 Sep, whose week's Thursday is October's but which was met.
+  e5cId = await plant(userId, "habit-readers.ts E5c retiro", {
+    createdAt: "2026-09-07T12:00:00-05:00",
+    kind: "times_per_week",
+    n: 1,
+    retiredAt: "2026-09-29T12:00:00-05:00",
+  });
+  await done(e5cId, ["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"]);
 
   // Opened on the 1st at Bogotá's midnight, so day d of the month asks d times of a daily habit.
   const opened = `${monthStart}T00:00:00-05:00`;
@@ -293,4 +322,75 @@ test("Mes: still one statement on the goals schema, whatever the habits", async 
   const calls = wireCalls.slice(before);
   const reads = calls.filter((call) => /\bselect\b/i.test(call.query) && /"goals"\."/.test(call.query));
   assert.equal(reads.length, 1);
+});
+
+const loose = (month: { loose: MonthLooseHabit[] }, id: string) => month.loose.find((entry) => entry.id === id);
+
+test("Mes E6: the week in progress starts in the month before and is not closed", async () => {
+  const habit = loose(await q.month.loadMonthAcross("2026-11-01"), e3Id);
+  assert.ok(habit);
+  assert.deepEqual(habit.thisWeek, { done: 1, count: 1 });
+  assert.deepEqual(habit.weeks, { met: 0, counted: 0 });
+});
+
+test("Mes E3: this week beside the weeks of the month", async () => {
+  const habit = loose(await q.month.loadMonthAcross(AT), e3Id);
+  assert.ok(habit);
+  assert.deepEqual(habit.thisWeek, { done: 1, count: 1 });
+  assert.deepEqual(habit.weeks, { met: 2, counted: 2 });
+});
+
+test("E5: a retired habit counts the week it was retired in, on Mes and on its screen", async () => {
+  const habit = loose(await q.month.loadMonthAcross(AT), e5Id);
+  assert.ok(habit);
+  assert.deepEqual(habit.weeks, { met: 2, counted: 2 });
+  assert.equal(habit.thisWeek, null);
+  // The day after the retirement the week is still running, and counts anyway.
+  const running = loose(await q.month.loadMonthAcross("2026-10-08"), e5Id);
+  assert.deepEqual(running?.weeks, { met: 2, counted: 2 });
+  const screen = await q.habit.loadHabit(e5Id, AT);
+  assert.ok(screen);
+  const october = screen.months.at(-1)!;
+  assert.equal(october.month, "2026-10-01");
+  assert.deepEqual(october.weeks, { met: 2, counted: 2 });
+  assert.equal(october.thisWeek, null);
+  assert.equal(october.current, false);
+});
+
+test("E5c: the retirement week whose Thursday is next month counts in the month of the retirement", async () => {
+  const screen = await q.habit.loadHabit(e5cId, AT);
+  assert.ok(screen);
+  const last = screen.months.at(-1)!;
+  assert.equal(last.month, "2026-09-01");
+  assert.deepEqual(last.weeks, { met: 4, counted: 4 });
+});
+
+test("Mes and the screen hold one week in progress", async () => {
+  const month = await q.month.loadMonthAcross(AT);
+  for (const [id, expected] of [[e3Id, { done: 1, count: 1 }], [e4NadarId, { done: 1, count: 2 }]] as const) {
+    const screen = await q.habit.loadHabit(id, AT);
+    assert.ok(screen);
+    assert.deepEqual(loose(month, id)?.thisWeek, expected);
+    assert.deepEqual(screen.months.at(-1)!.thisWeek, expected);
+  }
+  assert.deepEqual(loose(month, e4NadarId)?.weeks, { met: 0, counted: 0 });
+});
+
+test("a daily habit has no week in progress, and Mes's days are as before", async () => {
+  const habit = loose(await q.month.loadMonthAcross(AT), habitId);
+  assert.ok(habit);
+  assert.equal(habit.thisWeek, null);
+  assert.equal(habit.daysDone, 1);
+});
+
+test("the week in progress costs no statement: loadHabit one, Mes one", async () => {
+  await q.habit.loadHabit(e3Id, AT);
+  await q.month.loadMonthAcross(AT);
+  const before = wireCalls.length;
+  await q.habit.loadHabit(e3Id, AT);
+  const mid = wireCalls.length;
+  await q.month.loadMonthAcross(AT);
+  const goalsReads = (calls: DebugCall[]) => calls.filter((call) => /\bselect\b/i.test(call.query) && /"goals"\."/.test(call.query)).length;
+  assert.equal(goalsReads(wireCalls.slice(before, mid)), 1);
+  assert.equal(goalsReads(wireCalls.slice(mid)), 1);
 });

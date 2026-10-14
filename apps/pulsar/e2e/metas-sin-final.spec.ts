@@ -3,6 +3,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import tree from "../messages/es/tree.json";
 import { test, expect } from "./fixtures";
 import { holdActions, monthsAhead } from "./meta-arbol-seed";
+import { rowMonths } from "./mes-siguiente-seed";
 import { destination, openMoveSheet } from "./mover-nota-ayuda";
 import { monthStartOf } from "./sin-final-seed";
 import {
@@ -322,20 +323,18 @@ for (const width of [360, 1280]) {
 
     // ---- «Por mes» ------------------------------------------------------------------------------
 
-    test("«Por mes» of an endless goal opened 2 months ago lists its 3 months, folds the ones ahead into a line and has no «ver todo» (RP-99, RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("«Por mes» of an endless goal opened 2 months ago lists its 3 months and next month, folds the rest ahead into a line and has no «ver todo» (RP-99, RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: an empty list for a null horizon; the months ahead drawn as rows; «Sin final: se ven los 12…» left in; «ver todo» with nothing hidden.
       const created = new Date(`${monthStartOf(-2).slice(0, 8)}05T12:00:00Z`);
       const id = await seedOpenGoal(db, person, { name: "Cuidado personal", unit: MINUTES, horizon: null, rhythm: 480, created });
       const { page, context } = await visit(browser, baseURL, person, `/metas/${id}/meses`, width);
       try {
         await expect(page.getByText("Sin final: se ven los 12 meses que vienen.", { exact: true })).toHaveCount(0);
-        await expect(page.getByRole("link", { name: /los meses que vienen: 8 h cada uno/i })).toBeVisible();
-        const hrefs = await page.locator(`main a[href^="/metas/${id}/meses/"]`).evaluateAll((links) =>
-          // The month's own «Escribir una tarea» link sits under the same path: only the month rows count.
-          [...new Set(links.map((a) => (a as HTMLAnchorElement).getAttribute("href")))].filter((href) => /\/meses\/\d{4}-\d{2}$/.test(href ?? "")),
-        );
-        expect(hrefs.sort()).toEqual([-2, -1, 0].map((n) => `/metas/${id}/meses/${monthStartOf(n).slice(0, 7)}`).sort());
-        expect(await mainLower(page)).toContain("3 meses");
+        await expect(page.getByRole("link", { name: /los demás meses que vienen: 8 h cada uno/i })).toBeVisible();
+        // Next month's row leads to its sheet, the others to the page; every row names its month and year.
+        const rows = await rowMonths(page, id);
+        expect(rows).toEqual([-2, -1, 0, 1].map((n) => monthStartOf(n).slice(0, 7)).sort());
+        expect(await mainLower(page)).toContain("4 meses");
         await expect(page.getByRole("link", { name: "ver todo", exact: true })).toHaveCount(0);
       } finally {
         await context.close();
