@@ -253,10 +253,21 @@
   color: var(--pulsar-muted);
 }
 
-/* `printTitle` is paper's alone. */
+/* `printTitle` and `printLead` are paper's alone. */
 .printTitle,
-.titleRow {
+.titleRow,
+.printLead {
   display: none;
+}
+
+/* `above` under the wide face's caption, in the caption's own box, in the line's type. */
+.captionAbove {
+  display: block;
+  margin-block-start: 8px;
+  font-family: var(--font-sans);
+  font-size: var(--pulsar-text-line-size);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .titleCell {
@@ -537,6 +548,12 @@
   .printTitle {
     display: block;
     margin-block-end: 12px;
+    break-after: avoid;
+  }
+
+  .printLead {
+    display: block;
+    margin-block-end: 6px;
     break-after: avoid;
   }
 

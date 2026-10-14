@@ -63,6 +63,12 @@ export async function MonthsList({
     all && folded?.seeAll ? (
       <TextLink href={`/metas/${goal.id}/meses${keep ? `?${keep}` : ""}`}>{t("common.seeLess")}</TextLink>
     ) : null;
+  // A folded list names the closed months it hides before its table; the line opens what «ver todo» opens.
+  const earlier = cut && cut.hidden > 0 ? (
+    <Text as="p" variant="line">
+      <TextLink href={allHref}>{t("month.months.earlier", { count: cut.hidden })}</TextLink>
+    </Text>
+  ) : null;
   // A goal with an end counts the months after the last shown; the line names them and opens nothing.
   const rest = cut?.rest ? (
     <Text as="p" variant="line">
@@ -112,7 +118,7 @@ export async function MonthsList({
           current={currentIndex === -1 ? undefined : currentIndex}
           open={openIndex === -1 ? undefined : openIndex}
           after={rest ?? undefined}
-          above={seeLess}
+          above={seeLess ?? earlier}
         />
         {seeAll}
         {seeLess}
@@ -195,7 +201,7 @@ export async function MonthsList({
           t("month.months.columns.planned"),
         ]}
         rows={firstRows}
-        above={seeLess}
+        above={seeLess ?? earlier}
         figures={[1]}
         // A unit that is not time rides in each row's note («0 de 60 búsquedas»), once.
         unit={timed ? unit : undefined}
