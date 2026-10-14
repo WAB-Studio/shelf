@@ -169,7 +169,7 @@ for (const width of [360, 1280]) {
         const folded = await yOf(lineOf(page.locator("main")));
         expect(folded.top).toBeGreaterThanOrEqual(next.bottom - 1);
         expect(mine.top).toBeGreaterThanOrEqual(folded.bottom - 1);
-        expect(await mainLower(page)).toContain("13 meses");
+        expect(await mainLower(page)).toContain("14 meses");
       } finally {
         await context.close();
       }
@@ -268,8 +268,8 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("a goal with an end of 30 months lists all 30, with no line and no link (control, RP-107)", async ({ person, browser, baseURL, db }) => {
-      // Kills: the cut applied to a goal with an end.
+    test("a goal with an end of 30 months folds into the current month, next month and «N meses más» (RP-115)", async ({ person, browser, baseURL, db }) => {
+      // Kills: the fold decided by `horizon === null`.
       const id = await seedOpenGoal(db, person, {
         name: "Con final",
         unit: PAGES,
@@ -279,7 +279,8 @@ for (const width of [360, 1280]) {
       });
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
-        expect((await monthHrefs(page, id)).length).toBe(30);
+        expect((await monthHrefs(page, id)).length).toBe(2);
+        await expect(page.getByRole("link", { name: /\d+ meses más, hasta el/, includeHidden: true }).first()).toBeAttached();
         await expect(page.getByRole("link", { name: ANY_LINE, includeHidden: true })).toHaveCount(0);
         await expect(seeAll(page.locator("main"))).toHaveCount(0);
       } finally {

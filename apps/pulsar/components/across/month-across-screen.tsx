@@ -12,6 +12,7 @@ import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
+import { civilDayMonthShort } from "@/lib/zone";
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -308,6 +309,11 @@ export async function MonthAcrossScreen() {
                       : t("month.across.habits.lineOf", { cadence, done: habit.daysDone, asked: habit.asked })}
                     {habit.thisWeek ? ` · ${t("week.flexible.weekProgress", { done: habit.thisWeek.done, total: habit.thisWeek.count })}` : ""}
                   </Text>
+                  {habit.retiredOn ? (
+                    <Text as="p" variant="meta">
+                      {t("habit.retiredOn", { date: civilDayMonthShort(habit.retiredOn) })}
+                    </Text>
+                  ) : null}
                 </Flex>
               );
             })}

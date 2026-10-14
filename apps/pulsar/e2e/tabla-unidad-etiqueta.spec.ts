@@ -240,7 +240,8 @@ for (const width of [360, 1024]) {
     db,
   }) => {
     const goalId = await seedGoal(db, person, { name: "Inglés B2+ laboral", unit: MINUTES, months: 16, amount: 720 });
-    const { page, close } = await visit(browser, baseURL, person, "/exportar", width);
+    // A goal with an end of more than 12 months folds (RP-115): «ver todo» draws all 16.
+    const { page, close } = await visit(browser, baseURL, person, "/exportar?todo=1", width);
     try {
       const labels = page.locator("ol > li:visible > span:first-child");
       await expect(labels.first()).toBeVisible();

@@ -83,6 +83,8 @@ let e3Id: string;
 let e4NadarId: string;
 let e5Id: string;
 let e5cId: string;
+let h2Id: string;
+let h3Id: string;
 let q: {
   habit: typeof import("@/lib/queries/habit");
   month: typeof import("@/lib/queries/month");
@@ -170,6 +172,15 @@ before(async () => {
     retiredAt: "2026-09-29T12:00:00-05:00",
   });
   await done(e5cId, ["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"]);
+  // H2: daily, made Mon 5 Oct, nothing done, retired Tue 6 Oct.
+  h2Id = await plant(userId, "habit-readers.ts H2 leer", { createdAt: "2026-10-05T12:00:00-05:00", retiredAt: "2026-10-06T12:00:00-05:00" });
+  // H3: weekly, retired Tue 13 Oct at 23:30 Bogotá, which is the 14th in UTC.
+  h3Id = await plant(userId, "habit-readers.ts H3 tarde", {
+    createdAt: "2026-09-07T12:00:00-05:00",
+    kind: "times_per_week",
+    n: 1,
+    retiredAt: "2026-10-13T23:30:00-05:00",
+  });
 
   // Opened on the 1st at Bogotá's midnight, so day d of the month asks d times of a daily habit.
   const opened = `${monthStart}T00:00:00-05:00`;
@@ -393,4 +404,35 @@ test("the week in progress costs no statement: loadHabit one, Mes one", async ()
   const goalsReads = (calls: DebugCall[]) => calls.filter((call) => /\bselect\b/i.test(call.query) && /"goals"\."/.test(call.query)).length;
   assert.equal(goalsReads(wireCalls.slice(before, mid)), 1);
   assert.equal(goalsReads(wireCalls.slice(mid)), 1);
+});
+
+test("Mes H1: the day a loose habit was retired, null while it lives", async () => {
+  const month = await q.month.loadMonthAcross(AT);
+  assert.equal(loose(month, e5Id)?.retiredOn, "2026-10-07");
+  assert.equal(loose(month, e3Id)?.retiredOn, null);
+  assert.equal(loose(month, habitId)?.retiredOn, null);
+});
+
+test("Mes H3: the retirement day is Bogotá's, not UTC's", async () => {
+  assert.equal(loose(await q.month.loadMonthAcross(AT), h3Id)?.retiredOn, "2026-10-13");
+});
+
+test("Mes and the screen hold one retirement day", async () => {
+  const month = await q.month.loadMonthAcross(AT);
+  for (const id of [e5Id, h2Id]) {
+    const screen = await q.habit.loadHabit(id, AT);
+    assert.ok(screen);
+    assert.equal(screen.retiredOn, loose(month, id)?.retiredOn);
+  }
+  assert.equal(loose(month, h2Id)?.retiredOn, "2026-10-06");
+});
+
+test("Mes H1, H2: the rest of a retired habit is as before", async () => {
+  const month = await q.month.loadMonthAcross(AT);
+  const yoga = loose(month, e5Id);
+  assert.deepEqual(yoga?.weeks, { met: 2, counted: 2 });
+  assert.equal(yoga?.thisWeek, null);
+  const read = loose(month, h2Id);
+  assert.equal(read?.asked, 2);
+  assert.equal(read?.daysDone, 0);
 });

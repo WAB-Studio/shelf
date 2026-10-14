@@ -105,6 +105,10 @@ const LONG_GOAL = "Meta de medición a 360 con un nombre bastante largo para for
 const QUANTITY = "Leer páginas del libro con un nombre largo";
 const TAP = "Repasar tarjetas";
 
+// Rows are stamped by SQL on the real clock; under PULSAR_CLOCK a commitment
+// created «now» would not exist yet on the server's today.
+const createdBefore = (daysAgo: number) => new Date(`${dayFromToday(-daysAgo)}T12:00:00-05:00`);
+
 type Seed = { goalId: string; oneOffName: string };
 
 // A goal with a phase, a quantity commitment, a tap commitment and a
@@ -115,9 +119,10 @@ async function withSeed(
   run: (seed: Seed) => Promise<void>,
 ): Promise<void> {
   const stamp = Date.now();
+  const created = createdBefore(7);
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon)
-    values (${personId}, ${`${LONG_GOAL} ${stamp}`}, ${dayFromToday(90)}) returning id
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, ${`${LONG_GOAL} ${stamp}`}, ${dayFromToday(90)}, ${created}) returning id
   `;
   const oneOffName = `Suelta de medición ${stamp}`;
   try {
@@ -127,12 +132,12 @@ async function withSeed(
     `;
     await db`
       insert into goals.commitments
-        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
-      values (${personId}, ${goal.id}, ${QUANTITY}, 'daily', 'quantity', 20, 'páginas')
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${personId}, ${goal.id}, ${QUANTITY}, 'daily', 'quantity', 20, 'páginas', ${created})
     `;
     await db`
-      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
-      values (${personId}, ${goal.id}, ${TAP}, 'daily', 'tap')
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${personId}, ${goal.id}, ${TAP}, 'daily', 'tap', ${created})
     `;
     await db`insert into goals.one_offs (user_id, name, day) values (${personId}, ${oneOffName}, ${todayInZone()})`;
     await run({ goalId: goal.id, oneOffName });

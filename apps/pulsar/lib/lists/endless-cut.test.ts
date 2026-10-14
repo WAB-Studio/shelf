@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { endlessCut } from "./endless-cut";
+import { endlessCut, foldsMonths } from "./endless-cut";
 import { monthRows } from "@/lib/plan/months";
 
 type Row = ReturnType<typeof monthRows>[number];
@@ -169,4 +169,108 @@ test("next at the rhythm is not the line: with every later month by hand, there 
   assert.equal(ym(cut.next), "2026-11");
   assert.equal(cut.next?.planned, 40);
   assert.equal(cut.line, null);
+});
+
+// Synthetic rows: `count` consecutive months from `from`, the first `past` ones closed, then one current.
+function synth(from: string, count: number, pastCount: number, planned: (month: string, i: number) => number | null) {
+  const [y, m] = from.split("-").map(Number);
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(Date.UTC(y, m - 1 + i, 1));
+    const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    return { month, past: i < pastCount, current: i === pastCount, planned: planned(month, i) };
+  });
+}
+const ids = (rows: { month: string }[]) => rows.map((row) => row.month);
+
+test("foldsMonths: no end folds; an end folds only past 12 rows", () => {
+  const rows = (n: number) => Array.from({ length: n }, () => ({}));
+  assert.equal(foldsMonths(null, rows(3)), true);
+  assert.equal(foldsMonths("2027-01-04", rows(12)), false);
+  assert.equal(foldsMonths("2027-01-04", rows(13)), true);
+  assert.equal(foldsMonths("2027-01-04", rows(27)), true);
+  assert.equal(foldsMonths("2036-09-29", rows(120)), true);
+  assert.equal(foldsMonths("2026-12-31", rows(4)), false);
+  assert.equal(foldsMonths("2026-12-07", rows(11)), false);
+});
+
+test("e1: no current month means no next, even with months to come", () => {
+  const rows = [
+    ...synth("2026-08", 3, 3, () => null),
+    ...synth("2026-11", 1, -1, () => 40),
+    ...synth("2026-12", 1, -1, () => 60),
+  ];
+  const cut = endlessCut(rows, { all: false, rhythm: 40 });
+  assert.equal(cut.next, null);
+  assert.deepEqual(cut.line, { planned: 40 });
+  assert.deepEqual(ids(cut.handSet), ["2026-12"]);
+});
+
+test("E5: a settled long goal shows its last 12, hides the rest, no next, line, hand-set or rest", () => {
+  const cut = endlessCut(synth("2025-03", 20, 20, () => null), { all: false, rhythm: null });
+  assert.equal(cut.upTo.length, 12);
+  assert.equal(cut.hidden, 8);
+  assert.equal(cut.next, null);
+  assert.equal(cut.line, null);
+  assert.deepEqual(cut.handSet, []);
+  assert.equal(cut.rest, null);
+});
+
+test("no ends: rest is always null", () => {
+  const cut = endlessCut(synth("2024-11", 27, 12, (_, i) => (i > 12 ? 40 : null)), { all: false, rhythm: 40 });
+  assert.equal(cut.rest, null);
+});
+
+test("E2: an end 27 months in; the partial last month is not a hand-set row, the rest is counted", () => {
+  const rows = synth("2024-11", 27, 23, (month) => (month === "2027-01" ? 3 : 40));
+  const cut = endlessCut(rows, { all: false, rhythm: 40, ends: { lastDay: "2027-01-03" } });
+  assert.equal(cut.upTo.length, 12);
+  assert.equal(cut.upTo[0].month, "2025-11");
+  assert.equal(cut.upTo[11].month, "2026-10");
+  assert.equal(cut.next?.month, "2026-11");
+  assert.deepEqual(cut.handSet, []);
+  assert.deepEqual(cut.rest, { count: 2, lastDay: "2027-01-03" });
+  assert.equal(cut.line, null);
+  assert.deepEqual(cut.empty, []);
+  assert.equal(cut.hidden, 12);
+});
+
+test("E2b: December by hand stays a row; the partial last month goes in the rest", () => {
+  const rows = synth("2024-11", 33, 23, (month) => (month === "2026-12" ? 60 : month === "2027-07" ? 25 : 40));
+  const cut = endlessCut(rows, { all: false, rhythm: 40, ends: { lastDay: "2027-07-25" } });
+  assert.deepEqual(ids(cut.handSet), ["2026-12"]);
+  assert.deepEqual(cut.rest, { count: 7, lastDay: "2027-07-25" });
+  assert.deepEqual(ids(cut.shown).slice(-3), ["2026-10", "2026-11", "2026-12"]);
+});
+
+test("with an end and no rhythm, empty months are counted in the rest, never in empty", () => {
+  const rows = synth("2026-08", 8, 2, () => null);
+  const cut = endlessCut(rows, { all: false, rhythm: null, ends: { lastDay: "2027-03-31" } });
+  assert.deepEqual(cut.empty, []);
+  assert.equal(cut.next?.month, "2026-11");
+  assert.deepEqual(cut.rest, { count: 4, lastDay: "2027-03-31" });
+  assert.equal(cut.line, null);
+});
+
+test("E7: ten years; the rest does not count next", () => {
+  const rows = synth("2026-10", 120, 0, () => 10);
+  const cut = endlessCut(rows, { all: false, rhythm: 10, ends: { lastDay: "2036-09-28" } });
+  assert.deepEqual(ids(cut.upTo), ["2026-10"]);
+  assert.equal(cut.next?.month, "2026-11");
+  assert.deepEqual(cut.rest, { count: 118, lastDay: "2036-09-28" });
+  assert.equal(cut.hidden, 0);
+});
+
+test("E8: the last month is the current one, so no next and no rest", () => {
+  const cut = endlessCut(synth("2025-09", 14, 13, () => 40), { all: false, rhythm: 40, ends: { lastDay: "2026-10-31" } });
+  assert.equal(cut.next, null);
+  assert.equal(cut.rest, null);
+  assert.equal(cut.hidden, 2);
+});
+
+test("with an end and all: every row, no rest, no hand-set", () => {
+  const rows = synth("2024-11", 27, 23, (month) => (month === "2027-01" ? 3 : 60));
+  const cut = endlessCut(rows, { all: true, rhythm: 40, ends: { lastDay: "2027-01-03" } });
+  assert.equal(cut.shown.length, 27);
+  assert.equal(cut.rest, null);
+  assert.deepEqual(cut.handSet, []);
 });

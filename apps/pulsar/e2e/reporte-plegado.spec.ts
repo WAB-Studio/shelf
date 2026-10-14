@@ -203,7 +203,8 @@ test.describe("the report folds its weeks (RP-49)", () => {
   }
 
   // Past months, every row with a label, a long figure that wraps, a planned figure and «cerrado».
-  async function seedMonths(db: postgres.Sql, person: Person, name: string, months: number, unit: string) {
+  // `ahead` months from the one after next carry an amount by hand: they print in the second table, which never folds.
+  async function seedMonths(db: postgres.Sql, person: Person, name: string, months: number, unit: string, ahead = 0) {
     const today = todayInZone();
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
@@ -216,6 +217,14 @@ test.describe("the report folds its weeks (RP-49)", () => {
       select ${person.id}, ${goal.id}, (date_trunc('month', ${today}::date) - (n || ' months')::interval)::date, 777
       from generate_series(1, ${months}) n
     `;
+    if (ahead > 0) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        select ${person.id}, ${goal.id}, (date_trunc('month', ${today}::date) + (n || ' months')::interval)::date, 777
+        from generate_series(2, ${ahead + 1}) n
+      `;
+      await db`update goals.goals set horizon = ${plusDays(31 * (ahead + 3))} where id = ${goal.id}`;
+    }
     return goal.id;
   }
 
@@ -236,7 +245,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
     db,
   }) => {
     const stamp = Date.now();
-    const goalId = await seedMonths(db, person, `Meta larga ${stamp}`, 40, LONG_UNIT);
+    const goalId = await seedMonths(db, person, `Meta larga ${stamp}`, 40, LONG_UNIT, 29);
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
     try {
       const page = await context.newPage();
@@ -246,22 +255,24 @@ test.describe("the report folds its weeks (RP-49)", () => {
       const pages = Math.max(...lines.map((line) => line.page));
       expect(pages, "the table crosses several pages").toBeGreaterThan(2);
 
-      // Every row is one label, one «cerrado» and one planned figure («777»): a row cut by a
-      // page leaves a page with more of one than of another.
-      const closedLabels = new Set(
-        Array.from({ length: 40 }, (_, i) => {
-          const day = civilDateToDate(`${todayInZone().slice(0, 7)}-01`);
-          day.setUTCMonth(day.getUTCMonth() - (i + 1));
-          return new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric", timeZone: "UTC" })
-            .format(day)
-            .replace(" de ", " ");
-        }),
-      );
+      // A goal with an end folds its closed months to the last 11 (RP-115); the 29 months set by hand ahead print in
+      // a table of their own. Every printed row is one label and one planned figure («777»), and a closed one adds
+      // a «cerrado»: a row cut by a page leaves a page with more of one than of another.
+      const monthLabel = (offset: number) => {
+        const day = civilDateToDate(`${todayInZone().slice(0, 7)}-01`);
+        day.setUTCMonth(day.getUTCMonth() + offset);
+        return new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric", timeZone: "UTC" })
+          .format(day)
+          .replace(" de ", " ");
+      };
+      const closedLabels = new Set(Array.from({ length: 11 }, (_, i) => monthLabel(-(i + 1))));
+      const handLabels = new Set(Array.from({ length: 29 }, (_, i) => monthLabel(i + 2)));
       const rowsOn = (n: number) => {
         const on = lines.filter((line) => line.page === n);
         const count = (test: (text: string) => boolean) => on.filter((line) => test(line.text)).length;
         return {
-          labels: count((text) => closedLabels.has(text)),
+          closedLabels: count((text) => closedLabels.has(text)),
+          labels: count((text) => closedLabels.has(text) || handLabels.has(text)),
           closed: on.flatMap((line) => line.text.split(" ")).filter((word) => word === "cerrado").length,
           planned: on.flatMap((line) => line.text.split(" ")).filter((word) => word === "777").length,
         };
@@ -270,7 +281,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
       for (let n = 1; n <= pages; n += 1) {
         const found = rowsOn(n);
         labelsTotal += found.labels;
-        expect(found.closed, `page ${n}: «cerrado» per label`).toBe(found.labels);
+        expect(found.closed, `page ${n}: «cerrado» per closed label`).toBe(found.closedLabels);
         expect(found.planned, `page ${n}: planned figure per label`).toBe(found.labels);
       }
       expect(labelsTotal).toBe(40);
