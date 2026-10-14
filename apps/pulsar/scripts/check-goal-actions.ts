@@ -1121,3 +1121,18 @@ test("setGoalMeasure: one statement reaches the wire between the begin and the c
     await sql`delete from goals.goals where id = ${goal.id}`;
   }
 });
+
+test("setGoalMeasure: the statement itself scopes the goal to the person, not the policy alone", async () => {
+  // The row policy already hides another person's goal; the filter is the second lock, so it is read off the wire.
+  const [goal] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${personId}, 'RP-117 filtro', ${shiftDay(today, 60)}) returning id`;
+  try {
+    const from = wire.length;
+    await setGoalMeasure({ goalId: goal.id, name: "Pasos", unit: "pasos" });
+    const statement = wire.slice(from).find((q) => /update\s+"?goals"?\."?goals"?\s+set\s+measure_name/i.test(q));
+    assert.ok(statement, wire.slice(from).join(" | "));
+    assert.match(statement, /from\s+"?goals"?\."?goals"?\s+where\s+id\s*=\s*\$\d+\s+and\s+user_id\s*=\s*\$\d+/i);
+  } finally {
+    await sql`delete from goals.goals where id = ${goal.id}`;
+  }
+});

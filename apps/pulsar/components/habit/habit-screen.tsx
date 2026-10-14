@@ -93,9 +93,9 @@ export async function HabitScreen({
       ) : null}
       {retired ? null : <EditHabitAction habitId={habit.id} name={habit.name} note={habit.note} />}
       <Section label={t("habit.months.title")}>
-        {seeLess}
         <Table
           narrow
+          above={seeLess}
           caption={t("habit.months.caption", { count: habit.months.length })}
           columns={[t("habit.months.columns.month"), t("habit.months.columns.days")]}
           rows={rows}

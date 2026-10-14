@@ -129,3 +129,13 @@ test("T2 control: a goal in minutes with no rhythm and no end keeps «enero de �
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Estudiar");
   expect(paper).toContain(`${longMonth(3)}: sin monto · 1 tarea`);
 });
+
+test("T2 no measure: a goal with no end and no measure prints no «…: sin tareas» line for months ahead with no task", async ({ person, browser, baseURL, db }) => {
+  // Kills: the guard on `horizon === null` in the line of months out of a goal with no measure (Q6 (c)).
+  await seedOpenGoal(db, person, { name: "Vivir mejor", unit: null, horizon: null, rhythm: null, created: openedIn(-4) });
+  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Vivir mejor");
+  expect(paper).toContain("vivir mejor");
+  expect(paper).not.toContain(": sin tareas");
+  expect(paper).not.toContain(": sin monto");
+  for (const offset of [2, 5, 11]) expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
+});
