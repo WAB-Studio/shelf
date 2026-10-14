@@ -123,6 +123,16 @@ export function MoveHorizonAction({
     return t(refusalKey(refusal.code), { name: ref.name, date: ref.horizon ? civilDayMonthYear(dayBefore(ref.horizon)) : "" });
   }
 
+  const liveKey =
+    typed.success && !untouched
+      ? horizonRefusal({
+          horizon: horizonForWeeks(anchor, typed.data),
+          today: todayInZone(),
+          lastPhaseEndsOn: lastPhase?.endsOn ?? null,
+        })
+      : null;
+  const liveRefusal = liveKey && typed.success ? refusalText(liveKey, typed.data) : null;
+
   const treeSentence = typed.success && !untouched ? treeSentenceFor(horizonForWeeks(anchor, typed.data)) : null;
 
   // The phase the refusal names: the page's, or the server's when it judged a longer one.
@@ -222,7 +232,7 @@ export function MoveHorizonAction({
       ? t("goal.errors.horizonWeeksInvalid")
       : t("goal.horizon.endsOnTotal", { date: civilDayMonthYear(dayBefore(shownHorizon)), total });
   // A refusal takes the hint; the total moves to the muted line.
-  const refused = treeSentence !== null || error !== null;
+  const refused = treeSentence !== null || error !== null || liveRefusal !== null;
 
   return (
     <>
@@ -242,8 +252,8 @@ export function MoveHorizonAction({
             setValue(event.target.value);
             setError(null);
           }}
-          invalid={error !== null || !typed.success || treeSentence !== null || later.length > 0}
-          hint={treeSentence ?? error ?? endsOn}
+          invalid={liveRefusal !== null || error !== null || !typed.success || treeSentence !== null || later.length > 0}
+          hint={treeSentence ?? error ?? liveRefusal ?? endsOn}
           autoFocus
         />
         <Text as="p" variant="sentence" tone="muted">
@@ -278,7 +288,7 @@ export function MoveHorizonAction({
             block
             variant={later.length > 0 ? "ghost" : "solid"}
             onClick={() => handleMove()}
-            disabled={pending || treeSentence !== null || later.length > 0}
+            disabled={pending || treeSentence !== null || liveRefusal !== null || later.length > 0}
           >
             {t(putMode ? "goal.horizon.putConfirm" : "goal.horizon.confirm")}
           </Button>
