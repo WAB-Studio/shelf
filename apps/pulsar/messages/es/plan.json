@@ -64,6 +64,8 @@
   "errors": {
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "goalNotFound": "Esa meta ya no existe.",
+    "measureKept": "Esa meta ya mide {name}. La medida puesta no cambia.",
+    "holderNoMeasure": "Una meta con metas dentro no tiene medida propia.",
     "sourceNotFound": "Esa fuente no existe.",
     "notFound": "Eso ya no existe.",
     "habitRetired": "Ese hábito ya está retirado.",

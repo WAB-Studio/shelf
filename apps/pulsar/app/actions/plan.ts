@@ -46,6 +46,7 @@ import {
   type RetireCommitmentInput,
   type SetGoalNoteInput,
 } from "@/lib/validation/plan";
+import { setGoalMeasureSchema } from "@/lib/validation/measure";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
 
@@ -66,6 +67,7 @@ export type RenameGoalResult = { ok: true } | { ok: false; error: MessageKey };
 export type ArchiveGoalResult = { ok: true; archived: number } | { ok: false; error: MessageKey };
 export type ReopenGoalResult = { ok: true; reopened: number } | TreeRefusal;
 export type MoveHorizonResult = { ok: true } | TreeRefusal;
+export type SetGoalMeasureResult = { ok: true } | { ok: false; error: MessageKey; values?: { name?: string } };
 
 // Never a bare array parameter — drizzle expands a JS array inside a `sql`
 // template into a parenthesised comma list, not a Postgres array literal
@@ -877,5 +879,57 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
   revalidateGoalScreens(goalId);
   revalidateTreeScreens(touched);
   revalidatePath(`/metas/${goalId}/revision`);
+  return { ok: true };
+}
+
+/**
+ * Gives a goal that measures nothing yet its name and unit (RP-117): the same act for the screen
+ * and the AI. A measure once put never changes, so the update runs `where measure_name is null`
+ * and the same statement reads back why it did not write. Only the goal's two columns move: no
+ * commitment, rhythm or amount is created. Hours are kept as minutes, as a commitment keeps them (RP-66).
+ */
+export async function setGoalMeasure(input: unknown): Promise<SetGoalMeasureResult> {
+  const parsed = setGoalMeasureSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const { goalId, name } = parsed.data;
+  const { unit } = storedMeasure(parsed.data.unit, null);
+  const today = todayInZone();
+
+  const rows = await withGoalsDb((tx) =>
+    tx.execute<{ measured: string | null; open: boolean; holder: boolean }>(sql`
+      with g as (
+        select id, measure_name, measure_unit, archived_at, horizon,
+               exists (select 1 from ${goals} c where c.parent_id = ${goals}.id and c.archived_at is null) as holder
+        from ${goals} where id = ${goalId} and user_id = ${person.id}
+      ),
+      upd as (
+        update ${goals} set measure_name = ${name}, measure_unit = ${unit}
+        where id in (
+          select id from g
+          where archived_at is null and (horizon is null or horizon > ${today}::date) and not holder
+        ) and measure_name is null
+        returning id
+      )
+      select case when measure_name is null then null else coalesce(measure_unit, measure_name) end as measured,
+             archived_at is null and (horizon is null or horizon > ${today}::date) as open,
+             holder
+      from g
+    `),
+  );
+
+  const goal = rows[0];
+  if (!goal) return { ok: false, error: "plan.errors.notFound" };
+  if (!goal.open) return { ok: false, error: "plan.errors.goalNotFound" };
+  if (goal.holder) return { ok: false, error: "plan.errors.holderNoMeasure" };
+  if (goal.measured !== null) {
+    return { ok: false, error: "plan.errors.measureKept", values: { name: goal.measured } };
+  }
+
+  revalidatePath(`/metas/${goalId}`, "layout");
+  revalidatePath("/");
   return { ok: true };
 }
