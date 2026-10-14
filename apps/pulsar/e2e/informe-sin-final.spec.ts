@@ -31,7 +31,7 @@ async function seedOpen(db: Parameters<typeof seedGoal>[0], personId: string, na
 }
 
 for (const width of [360, 1280]) {
-  test(`at ${width} a goal with no end has no «hasta el» and lists its last 11 closed months and the current one, nothing ahead`, async ({
+  test(`at ${width} a goal with no end has no «hasta el» and lists its last 11 closed months, the current one and next month, nothing else ahead`, async ({
     person,
     browser,
     baseURL,
@@ -58,9 +58,9 @@ for (const width of [360, 1280]) {
       expect(body).not.toMatch(/\b1970\b/);
 
       const section = sectionOf(page, name);
-      await expect(section.getByText("12 meses", { exact: true }).locator("visible=true")).toHaveCount(1);
-      for (let offset = -11; offset <= 0; offset++) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(1);
-      await expect(rowOf(section, 1)).toHaveCount(0);
+      await expect(section.getByText("13 meses", { exact: true }).locator("visible=true")).toHaveCount(1);
+      for (let offset = -11; offset <= 1; offset++) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(1);
+      await expect(rowOf(section, 2)).toHaveCount(0);
       await expect(rowOf(section, -12)).toHaveCount(0);
     } finally {
       await context.close();
@@ -70,7 +70,7 @@ for (const width of [360, 1280]) {
 }
 
 for (const query of ["", "?todo=1"]) {
-test(`the paper of a goal with no end has no «hasta el» and prints the same twelve months, the last 11 closed and the current one (/exportar${query})`, async ({
+test(`the paper of a goal with no end has no «hasta el» and prints the same twelve months, the last 11 closed and the current one, and next month (/exportar${query})`, async ({
   person,
   browser,
   baseURL,
@@ -91,13 +91,13 @@ test(`the paper of a goal with no end has no «hasta el» and prints the same tw
     writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
     const paper = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ").toLowerCase();
 
-    expect(paper).toContain(`${name} · por mes · 12 meses`.toLowerCase());
+    expect(paper).toContain(`${name} · por mes · 13 meses`.toLowerCase());
     expect(paper).not.toContain("hasta el");
     expect(paper).not.toContain("terminada");
     expect(paper).not.toMatch(/\b1969\b/);
     expect(paper).not.toMatch(/\b1970\b/);
-    for (let offset = -11; offset <= 0; offset++) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
-    expect(paper).not.toContain(monthLabel(1));
+    for (let offset = -11; offset <= 1; offset++) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
+    expect(paper).not.toContain(monthLabel(2));
     expect(paper).not.toContain(monthLabel(-12));
     // RP-107: the paper always prints the same 12, whatever the screen shows (`?todo=1` included); and never the link.
     for (const offset of [-13, -20]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));

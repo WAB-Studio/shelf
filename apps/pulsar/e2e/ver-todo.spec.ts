@@ -1,9 +1,10 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 
-import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { civilDateToDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect, visit } from "./fixtures";
 import { monthsAhead } from "./meta-arbol-seed";
+import { rowMonths } from "./mes-siguiente-seed";
 import { PAGES, seedOpenGoal } from "./metas-sin-final-seed";
 import { monthLabel, monthStartOf, seedGoal, seedTap, shift } from "./sin-final-seed";
 
@@ -27,10 +28,9 @@ async function open(browser: Browser, baseURL: string | undefined, sessionFile: 
 // A table draws each row twice (stack and wide); only the visible one counts.
 const weekRows = (page: Page) => page.locator("main ol > li:visible, main tbody tr:visible");
 
+// The month rows as the page of the month each names: next month's row leads to its sheet (RP-110).
 async function monthHrefs(page: Page, id: string): Promise<string[]> {
-  return page.locator(`main a[href^="/metas/${id}/meses/"]`).evaluateAll((links) =>
-    [...new Set(links.map((a) => (a as HTMLAnchorElement).getAttribute("href") ?? ""))].filter((href) => /\/meses\/\d{4}-\d{2}$/.test(href)),
-  );
+  return (await rowMonths(page, id)).map((month) => `/metas/${id}/meses/${month}`);
 }
 
 const monthHref = (id: string, offset: number) => `/metas/${id}/meses/${monthStartOf(offset).slice(0, 7)}`;
@@ -143,20 +143,21 @@ for (const width of [360, 1280]) {
 
     // ---- Por mes -----------------------------------------------------------------------------------------------
 
-    test("«Por mes» of a goal with no end opened 30 months ago lists its last 12 months, this one last, folds the ones ahead and offers «ver todo» (RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("«Por mes» of a goal with no end opened 30 months ago lists its last 12 months, this one and next month, folds the rest ahead and offers «ver todo» (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: listing from the opening (42 rows); the months ahead drawn as rows; the sentence «Sin final…» kept; no line; no link.
       const id = await seedOpenGoal(db, person, { name: "Cuidado", unit: PAGES, horizon: null, rhythm: 40, created: openedMonthsAgo(30) });
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
         await expect(page.getByText("Sin final: se ven los 12 meses que vienen.", { exact: true })).toHaveCount(0);
-        await expect(page.getByRole("link", { name: /los meses que vienen: 40 páginas cada uno/i })).toBeVisible();
+        await expect(page.getByRole("link", { name: /los demás meses que vienen: 40 páginas cada uno/i })).toBeVisible();
         await expect(seeAll(page.locator("main"))).toBeVisible();
         const hrefs = await monthHrefs(page, id);
-        expect(hrefs).toHaveLength(12);
+        expect(hrefs).toHaveLength(13);
         expect(hrefs).toContain(monthHref(id, -11));
         expect(hrefs).toContain(monthHref(id, 0));
+        expect(hrefs).toContain(monthHref(id, 1));
         expect(hrefs).not.toContain(monthHref(id, -12));
-        expect(hrefs).not.toContain(monthHref(id, 1));
+        expect(hrefs).not.toContain(monthHref(id, 2));
       } finally {
         await context.close();
       }
@@ -188,26 +189,26 @@ for (const width of [360, 1280]) {
         await expect(page.getByRole("link", { name: SEE_ALL, exact: true, includeHidden: true })).toHaveCount(0);
         await expect(page.getByRole("link", { name: /ver menos/i, includeHidden: true })).toHaveCount(0);
         // Everything is listed: the line that folds the months ahead is gone.
-        await expect(page.getByRole("link", { name: /los meses que vienen/i, includeHidden: true })).toHaveCount(0);
+        await expect(page.getByRole("link", { name: /meses que vienen/i, includeHidden: true })).toHaveCount(0);
       } finally {
         await context.close();
       }
     });
 
-    test("«Por mes» with 12 months up to this one has no link and with 13 it has (RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("«Por mes» with 12 months up to this one has no link and with 13 it has; next month is never hidden (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: the boundary of the cut (`>= 12`, `> 13`); the months ahead counted as hidden rows.
       const exactly = await seedOpenGoal(db, person, { name: "Doce", unit: PAGES, horizon: null, rhythm: 40, created: openedMonthsAgo(11) });
       const one = await seedOpenGoal(db, person, { name: "Trece", unit: PAGES, horizon: null, rhythm: 40, created: openedMonthsAgo(12) });
       const a = await open(browser, baseURL, person.sessionFile, `/metas/${exactly}/meses`, width);
       try {
-        expect(await monthHrefs(a.page, exactly)).toHaveLength(12);
+        expect(await monthHrefs(a.page, exactly)).toHaveLength(13);
         await expect(seeAll(a.page.locator("main"))).toHaveCount(0);
       } finally {
         await a.context.close();
       }
       const b = await open(browser, baseURL, person.sessionFile, `/metas/${one}/meses`, width);
       try {
-        expect(await monthHrefs(b.page, one)).toHaveLength(12);
+        expect(await monthHrefs(b.page, one)).toHaveLength(13);
         await expect(seeAll(b.page.locator("main"))).toBeVisible();
         expect(await monthHrefs(b.page, one)).not.toContain(monthHref(one, -12));
       } finally {
@@ -248,8 +249,8 @@ for (const width of [360, 1280]) {
       try {
         await expect(first.page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
         await expect(seeAll(section(first.page))).toBeVisible();
-        for (let offset = -11; offset <= 0; offset++) await expect(row(first.page, offset), monthLabel(offset)).toHaveCount(1);
-        for (const offset of [-12, 1, 11]) await expect(row(first.page, offset), monthLabel(offset)).toHaveCount(0);
+        for (let offset = -11; offset <= 1; offset++) await expect(row(first.page, offset), monthLabel(offset)).toHaveCount(1);
+        for (const offset of [-12, 2, 11]) await expect(row(first.page, offset), monthLabel(offset)).toHaveCount(0);
       } finally {
         await first.context.close();
       }
@@ -292,7 +293,7 @@ test("at 1024 the current month beside the list keeps the 12-row cut and the lin
   const id = await seedOpenGoal(db, person, { name: "Cuidado", unit: PAGES, horizon: null, created: openedMonthsAgo(30) });
   const { page, context } = await open(browser, baseURL, person.sessionFile, monthHref(id, 0), 1024);
   try {
-    expect(await monthHrefs(page, id)).toHaveLength(12);
+    expect(await monthHrefs(page, id)).toHaveLength(13);
     await expect(seeAll(page.locator("main"))).toBeVisible();
   } finally {
     await context.close();

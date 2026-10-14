@@ -6,16 +6,18 @@ import type { Browser, Locator, Page } from "@playwright/test";
 
 import { test, expect, visit, type Person } from "./fixtures";
 import { PAGES, seedOpenGoal } from "./metas-sin-final-seed";
+import { rowLink, rowMonths } from "./mes-siguiente-seed";
 import { monthLabel, monthStartOf } from "./sin-final-seed";
 
 import type postgres from "postgres";
 
-// Module 932, RP-107: a goal with no end shows its last 11 closed months and the current one in «Por mes», in the
-// report and on paper. A month ahead with an amount set by hand follows them as a row; the rest ahead fold into one
-// line, «los meses que vienen: 40 páginas cada uno», which opens the whole list (`?todo=1`). A goal with no rhythm
-// draws no line, and on screen no month ahead with nothing planned. Paper never opens «ver todo» and folds the
-// empty months ahead into the line a goal with an end prints. Boards: PorMesUltimos, InformeUltimos
-// (private/tableros-s3/NOTAS.md §1–2; docs/pulsar/DESIGN.md wins where the two differ).
+// Module 932, RP-107, as module 939 (RP-110) leaves it: a goal with no end shows its last 11 closed months and the
+// current one in «Por mes», in the report and on paper, then next month as a row. The rest ahead fold into one line,
+// «los demás meses que vienen: 40 páginas cada uno», which opens the whole list (`?todo=1`); the months set by hand
+// follow it, under a label (that order is asserted in mes-siguiente.spec.ts). A goal with no rhythm draws no line,
+// and on screen no month ahead with nothing planned beyond next month. Paper never opens «ver todo» and folds the
+// empty months ahead into the line a goal with an end prints. Boards: PorMesUltimos, InformeUltimos, PorMesSiguiente
+// (private/tableros-s3/NOTAS.md §1–2, private/tableros-s4/NOTAS.md §1; docs/pulsar/DESIGN.md wins where they differ).
 // Every month is an offset from the real current month. Each test names the mutation that kills it.
 
 test.use({ actionTimeout: 6000 });
@@ -24,9 +26,9 @@ type Db = postgres.Sql;
 
 const SEE_ALL = "ver todo";
 const seeAll = (scope: Page | Locator) => scope.getByRole("link", { name: SEE_ALL, exact: true });
-const LINE = /los meses que vienen: 40 páginas cada uno/i;
+const LINE = /los demás meses que vienen: 40 páginas cada uno/i;
 const lineOf = (scope: Page | Locator) => scope.getByRole("link", { name: LINE });
-const ANY_LINE = /los meses que vienen/i;
+const ANY_LINE = /meses que vienen/i;
 const NO_END = "Sin final: se ven los 12 meses que vienen.";
 
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
@@ -48,10 +50,9 @@ async function open(browser: Browser, baseURL: string | undefined, sessionFile: 
   return { page, context };
 }
 
+// The month rows, as the page of the month they name: next month's row leads to its sheet (RP-110), the others to the page.
 async function monthHrefs(page: Page, id: string): Promise<string[]> {
-  return page.locator(`main a[href^="/metas/${id}/meses/"]`).evaluateAll((links) =>
-    [...new Set(links.map((a) => (a as HTMLAnchorElement).getAttribute("href") ?? ""))].filter((href) => /\/meses\/\d{4}-\d{2}$/.test(href)),
-  );
+  return (await rowMonths(page, id)).map((month) => `/metas/${id}/meses/${month}`);
 }
 const hrefsFor = (id: string, offsets: number[]) => offsets.map((offset) => monthHref(id, offset)).sort();
 
@@ -83,13 +84,13 @@ async function yOf(locator: Locator): Promise<{ top: number; bottom: number }> {
 
 for (const width of [360, 1280]) {
   test.describe(`«Por mes» at ${width}`, () => {
-    test("E1 lists the last 11 closed months and the current one, and nothing ahead (RP-107)", async ({ person, browser, baseURL, db }) => {
-      // Kills: the cut taking the whole span (current + 11 ahead, s2); the cut taking the first 12; no «en curso».
+    test("E1 lists the last 11 closed months, the current one and next month, and nothing else ahead (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
+      // Kills: the cut taking the whole span (current + 11 ahead, s2); the cut taking the first 12; no «en curso»; no next month.
       const id = await seedLeer(db, person);
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
-        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, range(-11, 0)));
-        expect(await mainLower(page)).toContain("12 meses");
+        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, range(-11, 1)));
+        expect(await mainLower(page)).toContain("13 meses");
         const first = page.locator(`main a[href="${monthHref(id, -11)}"]:visible`).first();
         await expect(first).toContainText(new RegExp(monthLabel(-11), "i"));
         const current = page.locator(`main a[href="${monthHref(id, 0)}"]:visible`).first();
@@ -99,15 +100,15 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("E1 folds the months ahead into «los meses que vienen: 40 páginas cada uno», under the table, with «ver todo» below it (RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("E1 folds the months after next into «los demás meses que vienen: 40 páginas cada uno», under the table, with «ver todo» below it (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: drawing the folded months as rows; the line missing or above the last row; the unit dropped from the line.
       const id = await seedLeer(db, person);
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
         const line = lineOf(page.locator("main"));
         await expect(line).toBeVisible();
-        expect(await monthHrefs(page, id)).not.toContain(monthHref(id, 1));
-        const last = await yOf(page.locator(`main a[href="${monthHref(id, 0)}"]:visible`).first());
+        expect(await monthHrefs(page, id)).not.toContain(monthHref(id, 2));
+        const last = await yOf(rowLink(page, id, 1));
         const folded = await yOf(line);
         expect(folded.top).toBeGreaterThanOrEqual(last.bottom - 1);
         const all = await yOf(seeAll(page.locator("main")));
@@ -131,7 +132,7 @@ for (const width of [360, 1280]) {
       );
       try {
         // The amount sheet is open over the list: the links behind it are read from the DOM.
-        const href = (await page.getByRole("link", { name: LINE, includeHidden: true }).getAttribute("href")) ?? "";
+        const href = (await page.getByRole("link", { name: LINE, includeHidden: true }).first().getAttribute("href")) ?? "";
         expect(href).toContain("todo=1");
         expect(href).toContain(`planear=${planned}`);
         expect(href).toContain(`volver=${encodeURIComponent(volver)}`);
@@ -153,21 +154,21 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("a month ahead with 60 pages set by hand is a row between this month and the line, and the line stays at 40 (RP-107)", async ({ person, browser, baseURL, db }) => {
-      // Kills: folding every month ahead; the hand-set amount replacing the rhythm in the line.
+    test("a month ahead with 60 pages set by hand is a row under the line, and the line stays at 40 (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
+      // Kills: folding every month ahead; the hand-set amount replacing the rhythm in the line; the order of s3.
       const id = await seedLeer(db, person);
       await budget(db, person, id, 2, 60);
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
-        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, [...range(-11, 0), 2]));
+        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, [...range(-11, 1), 2]));
         const row = page.locator(`main a[href="${monthHref(id, 2)}"]:visible`).first();
         await expect(row).toContainText(new RegExp(monthLabel(2), "i"));
         await expect(row).toContainText("60");
-        const current = await yOf(page.locator(`main a[href="${monthHref(id, 0)}"]:visible`).first());
+        const next = await yOf(rowLink(page, id, 1));
         const mine = await yOf(row);
         const folded = await yOf(lineOf(page.locator("main")));
-        expect(mine.top).toBeGreaterThanOrEqual(current.bottom - 1);
-        expect(folded.top).toBeGreaterThanOrEqual(mine.bottom - 1);
+        expect(folded.top).toBeGreaterThanOrEqual(next.bottom - 1);
+        expect(mine.top).toBeGreaterThanOrEqual(folded.bottom - 1);
         expect(await mainLower(page)).toContain("13 meses");
       } finally {
         await context.close();
@@ -226,42 +227,42 @@ for (const width of [360, 1280]) {
       });
     }
 
-    test("a goal opened 2 months ago lists 3 rows and the line, with no «ver todo» (E1)", async ({ person, browser, baseURL, db }) => {
+    test("a goal opened 2 months ago lists 4 rows (next month among them) and the line, with no «ver todo» (E1, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: «ver todo» drawn when nothing is hidden; the line dropped when the list is short.
       const id = await seedLeer(db, person, { opened: -2 });
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
-        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, [-2, -1, 0]));
+        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, [-2, -1, 0, 1]));
         await expect(lineOf(page.locator("main"))).toBeVisible();
         await expect(seeAll(page.locator("main"))).toHaveCount(0);
-        expect(await mainLower(page)).toContain("3 meses");
+        expect(await mainLower(page)).toContain("4 meses");
       } finally {
         await context.close();
       }
     });
 
-    test("with no rhythm: the 12 months and, ahead, only the month set by hand; no line, no empty month (RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("with no rhythm: the 12 months, next month and the month set by hand; no line, no other empty month (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: drawing `empty` months ahead; a line for a goal with no rhythm.
       const id = await seedLeer(db, person, { rhythm: null });
-      await budget(db, person, id, 2, 60);
+      await budget(db, person, id, 3, 60);
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
-        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, [...range(-11, 0), 2]));
+        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, [...range(-11, 1), 3]));
         await expect(page.getByRole("link", { name: ANY_LINE, includeHidden: true })).toHaveCount(0);
-        expect(await mainLower(page)).not.toContain("los meses que vienen");
+        expect(await mainLower(page)).not.toContain("meses que vienen");
         await expect(seeAll(page.locator("main"))).toBeVisible();
       } finally {
         await context.close();
       }
     });
 
-    test("with no rhythm and nothing set by hand, no month ahead and no line (RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("with no rhythm and nothing set by hand, only next month ahead and no line (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: a line «sin monto» (the rejected board); empty months drawn as rows.
       const id = await seedLeer(db, person, { rhythm: null });
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
-        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, range(-11, 0)));
-        expect(await mainLower(page)).not.toContain("los meses que vienen");
+        expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, range(-11, 1)));
+        expect(await mainLower(page)).not.toContain("meses que vienen");
       } finally {
         await context.close();
       }
@@ -286,7 +287,7 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("a group with no end lists its closed months and the months ahead its goals set by hand, with no line of its own (RP-80, RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("a group with no end lists its closed months, next month and the months ahead its goals set by hand, with no line of its own (RP-80, RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: folding the group's months ahead into a rhythm line it does not have; dropping its closed months.
       const group = await seedOpenGoal(db, person, { name: "Grupo", horizon: null, created: openedIn(-2) });
       const child = await seedOpenGoal(db, person, { name: "Hijo", parent: group, unit: PAGES, horizon: null, rhythm: null, created: openedIn(-2) });
@@ -294,8 +295,7 @@ for (const width of [360, 1280]) {
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${group}/meses`, width);
       try {
         const hrefs = (await monthHrefs(page, group)).sort();
-        for (const offset of [-2, -1, 0, 2]) expect(hrefs, monthLabel(offset)).toContain(monthHref(group, offset));
-        expect(hrefs).not.toContain(monthHref(group, 1));
+        for (const offset of [-2, -1, 0, 1, 2]) expect(hrefs, monthLabel(offset)).toContain(monthHref(group, offset));
         expect(hrefs).not.toContain(monthHref(group, 3));
         await expect(page.getByRole("link", { name: ANY_LINE, includeHidden: true })).toHaveCount(0);
       } finally {
@@ -354,7 +354,7 @@ const rowOf = (section: Locator, offset: number) =>
 
 for (const width of [360, 1280]) {
   test.describe(`the report at ${width}`, () => {
-    test("E1 lists 12 months, the line and «ver todo», with nothing ahead (RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("E1 lists 12 months and next month, the line and «ver todo», with nothing else ahead (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: `tailOf(goal.months)` over the whole span (current + 11 ahead); the line or the link missing.
       const name = "Leer";
       await seedLeer(db, person, { name });
@@ -362,9 +362,9 @@ for (const width of [360, 1280]) {
       try {
         await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
         const section = sectionOf(page, name);
-        for (const offset of range(-11, 0)) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(1);
-        for (const offset of [-12, 1, 2]) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(0);
-        await expect(section.getByText("12 meses", { exact: true }).locator("visible=true")).toHaveCount(1);
+        for (const offset of range(-11, 1)) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(1);
+        for (const offset of [-12, 2, 3]) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(0);
+        await expect(section.getByText("13 meses", { exact: true }).locator("visible=true")).toHaveCount(1);
         const line = lineOf(section);
         await expect(line).toBeVisible();
         expect((await line.getAttribute("href")) ?? "").toContain("/exportar?todo=1");
@@ -392,7 +392,7 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("a month ahead with 60 pages set by hand is a row on screen and the line stays at 40 (RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("a month ahead with 60 pages set by hand is a row on screen and the line stays at 40 (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: ignoring the rhythm of 930 (every month ahead with an amount folded or every one drawn).
       const name = "Leer";
       const id = await seedLeer(db, person, { name });
@@ -403,7 +403,7 @@ for (const width of [360, 1280]) {
         const section = sectionOf(page, name);
         await expect(rowOf(section, 2)).toHaveCount(1);
         await expect(rowOf(section, 2)).toContainText("60");
-        await expect(rowOf(section, 1)).toHaveCount(0);
+        await expect(rowOf(section, 1)).toHaveCount(1);
         await expect(rowOf(section, 3)).toHaveCount(0);
         await expect(lineOf(section)).toBeVisible();
       } finally {
@@ -411,7 +411,7 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("with no rhythm the report draws the 12 months, the month set by hand and no line (RP-107)", async ({ person, browser, baseURL, db }) => {
+    test("with no rhythm the report draws the 12 months, next month, the month set by hand and no line (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
       // Kills: a line for a goal with no rhythm; empty months ahead listed on screen.
       const name = "Leer";
       const id = await seedLeer(db, person, { name, rhythm: null });
@@ -420,10 +420,10 @@ for (const width of [360, 1280]) {
       try {
         await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
         const section = sectionOf(page, name);
-        for (const offset of [...range(-11, 0), 2]) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(1);
-        for (const offset of [1, 3, 4]) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(0);
+        for (const offset of [...range(-11, 1), 2]) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(1);
+        for (const offset of [3, 4]) await expect(rowOf(section, offset), monthLabel(offset)).toHaveCount(0);
         await expect(section.getByRole("link", { name: ANY_LINE })).toHaveCount(0);
-        expect((await section.innerText()).toLowerCase()).not.toContain("los meses que vienen");
+        expect((await section.innerText()).toLowerCase()).not.toContain("meses que vienen");
       } finally {
         await context.close();
       }
@@ -458,63 +458,65 @@ async function paperOf(browser: Browser, baseURL: string | undefined, sessionFil
   }
 }
 
-const LINE_TEXT = "los meses que vienen: 40 páginas cada uno";
+const LINE_TEXT = "los demás meses que vienen: 40 páginas cada uno";
 
 for (const query of ["", "?todo=1"]) {
-  test(`E1 on paper prints the 12 months and the line, never the months ahead nor «ver todo» (/exportar${query}) (RP-107)`, async ({ person, browser, baseURL, db }) => {
+  test(`E1 on paper prints the 12 months, next month and the line, never the other months ahead nor «ver todo» (/exportar${query}) (RP-107, RP-110)`, async ({ person, browser, baseURL, db }) => {
     // Kills: printing `screenMonths` (the whole list under `?todo=1`); the line missing on paper; the link printed.
     await seedLeer(db, person);
     const paper = await paperOf(browser, baseURL, person.sessionFile, `/exportar${query}`, "Leer");
-    expect(paper).toContain("leer · por mes · 12 meses");
-    for (const offset of range(-11, 0)) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
-    for (const offset of [-12, 1, 2]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
+    expect(paper).toContain("leer · por mes · 13 meses");
+    for (const offset of range(-11, 1)) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
+    for (const offset of [-12, 2, 3]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
     expect(paper).toContain(LINE_TEXT);
     expect(paper).not.toContain("ver todo");
     expect(paper).not.toContain("sin final");
   });
 }
 
-test("on paper a month ahead set by hand is a row before the line, and the count says 13 (RP-107)", async ({ person, browser, baseURL, db }) => {
-  // Kills: the rhythm of 930 ignored on paper; the count taking the screen's rows.
+test("on paper a month ahead set by hand is a row after the line, and next month before it (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
+  // Kills: the rhythm of 930 ignored on paper; the hand-set month printed in month order, above the line.
   const id = await seedLeer(db, person);
   await budget(db, person, id, 2, 60);
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Leer");
-  expect(paper).toContain("leer · por mes · 13 meses");
+  expect(paper).toContain(monthLabel(1));
   expect(paper).toContain(monthLabel(2));
-  expect(paper).not.toContain(monthLabel(1));
   expect(paper).not.toContain(monthLabel(3));
   const line = paper.indexOf(LINE_TEXT);
-  expect(line).toBeGreaterThan(paper.indexOf(monthLabel(2)));
-  expect(paper.indexOf(monthLabel(2))).toBeGreaterThan(paper.indexOf(monthLabel(0)));
+  expect(line, "the line").toBeGreaterThanOrEqual(0);
+  expect(paper.indexOf(monthLabel(1))).toBeGreaterThan(paper.indexOf(monthLabel(0)));
+  expect(paper.indexOf(monthLabel(1))).toBeLessThan(line);
+  expect(paper.lastIndexOf(monthLabel(2))).toBeGreaterThan(line);
 });
 
-test("on paper a goal with no rhythm folds the empty months ahead into «…: sin monto», with no rhythm line (RP-107)", async ({ person, browser, baseURL, db }) => {
-  // Kills: printing no line for the empty months; printing them as rows; a rhythm line without a rhythm.
+test("on paper a goal with no rhythm prints next month and folds the empty months after it into «…: sin monto», with no rhythm line (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
+  // Kills: printing no line for the empty months; printing them as rows; a rhythm line without a rhythm; next month folded.
   const id = await seedLeer(db, person, { rhythm: null, opened: -2 });
-  await budget(db, person, id, 2, 60);
+  await budget(db, person, id, 3, 60);
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Leer");
-  expect(paper).toContain("leer · por mes · 4 meses");
-  for (const offset of [-2, -1, 0, 2]) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
+  for (const offset of [-2, -1, 0, 1, 3]) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
   expect(paper).not.toContain("cada uno");
-  expect(paper).not.toContain("los meses que vienen");
+  expect(paper).not.toContain("meses que vienen");
   const line = paper.indexOf(": sin monto");
   expect(line, "the «sin monto» line").toBeGreaterThanOrEqual(0);
-  const folded = paper.slice(Math.max(0, paper.lastIndexOf(monthLabel(2)) + monthLabel(2).length));
-  for (const offset of [1, 3, 11]) expect(folded, longMonth(offset)).toContain(longMonth(offset));
-  // The month with an amount is a row, never named by the line.
-  expect(folded).not.toContain(longMonth(2));
+  const folded = paper.slice(Math.max(0, paper.lastIndexOf(monthLabel(3)) + monthLabel(3).length));
+  for (const offset of [2, 4, 11]) expect(folded, longMonth(offset)).toContain(longMonth(offset));
+  // The months with an amount, and next month, are rows, never named by the line.
+  expect(folded).not.toContain(longMonth(1));
+  expect(folded).not.toContain(longMonth(3));
 });
 
-test("on paper a goal that measures nothing, with no task ahead, folds the 11 months into «…: sin tareas» (RP-107)", async ({ person, browser, baseURL, db }) => {
+test("on paper a goal that measures nothing, with no task ahead, prints next month and folds the 10 after it into «…: sin tareas» (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
   // Kills: `printsOnPaper` keeping an `endless` month ahead; the paper without the folded line.
   const id = await seedOpenGoal(db, person, { name: "Sin medida", unit: null, horizon: null, created: openedIn(-2) });
   await db`insert into goals.one_offs (user_id, goal_id, name, planned_month) values (${person.id}, ${id}, 'Una tarea', ${monthStartOf(0)}::date)`;
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Sin medida");
-  expect(paper).toContain("sin medida · por mes · 3 meses");
-  for (const offset of [-2, -1, 0]) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
-  for (const offset of [1, 2, 11]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
+  expect(paper).toContain("sin medida · por mes · 4 meses");
+  for (const offset of [-2, -1, 0, 1]) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
+  for (const offset of [2, 3, 11]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
   expect(paper).toContain(": sin tareas");
-  for (const offset of [1, 6, 11]) expect(paper, longMonth(offset)).toContain(longMonth(offset));
+  for (const offset of [2, 6, 11]) expect(paper, longMonth(offset)).toContain(longMonth(offset));
+  expect(paper, longMonth(1)).not.toContain(longMonth(1));
   expect(paper).not.toContain("cada uno");
 });
 
@@ -524,12 +526,14 @@ test("on paper a goal that measures nothing prints a month ahead that holds a ta
   await db`insert into goals.one_offs (user_id, goal_id, name, planned_month) values (${person.id}, ${id}, 'Una tarea', ${monthStartOf(0)}::date)`;
   await db`insert into goals.one_offs (user_id, goal_id, name, planned_month) values (${person.id}, ${id}, 'Otra tarea', ${monthStartOf(3)}::date)`;
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Sin medida");
-  expect(paper).toContain("sin medida · por mes · 4 meses");
+  expect(paper).toContain("sin medida · por mes · 5 meses");
+  expect(paper).toContain(monthLabel(1));
   expect(paper).toContain(monthLabel(3));
   const at = paper.indexOf(": sin tareas");
   expect(at, "the «sin tareas» line").toBeGreaterThanOrEqual(0);
   const folded = paper.slice(Math.max(0, at - 400), at);
-  expect(folded).toContain(longMonth(1));
+  expect(folded).toContain(longMonth(2));
+  expect(folded).not.toContain(longMonth(1));
   expect(folded).not.toContain(longMonth(3));
 });
 
