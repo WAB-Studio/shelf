@@ -85,7 +85,7 @@ for (const [width, height] of WIDTHS) {
     try {
       const page = await context.newPage();
       await page.goto(`/metas/${goalId}`);
-      await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+      await expect(page.getByText("mide Estudio, en horas y minutos", { exact: true })).toBeVisible();
       await expect(page.getByText("mide en minutos", { exact: true })).toHaveCount(0);
 
       // Names the total, with the board's words.
@@ -145,7 +145,7 @@ test("a measured goal with nothing done keeps «0 min» and its line", async ({ 
   try {
     const page = await context.newPage();
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide Estudio, en horas y minutos", { exact: true })).toBeVisible();
     await expect(page.getByText("mide en minutos", { exact: true })).toHaveCount(0);
     await expect(page.getByText(/^0 min$/).locator("visible=true").first()).toBeVisible();
     await expect(totalLine(page)).toHaveText("en total, desde el 1 de enero");
@@ -215,7 +215,7 @@ test("a goal whose unit is stored as «min» says «mide en horas y minutos»", 
   try {
     const page = await context.newPage();
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide Estudio, en horas y minutos", { exact: true })).toBeVisible();
     await expect(page.getByText("mide en min", { exact: true })).toHaveCount(0);
   } finally {
     await context.close();
@@ -230,7 +230,7 @@ test("a goal measured in km keeps «mide en km» (guard, green today)", async ({
   try {
     const page = await context.newPage();
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText("mide en km", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide Estudio, en km", { exact: true })).toBeVisible();
     await expect(page.getByText("mide en horas y minutos")).toHaveCount(0);
   } finally {
     await context.close();

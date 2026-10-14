@@ -198,7 +198,7 @@ test("«Cancelar» with both fields full closes the sheet and writes nothing, se
   }
 });
 
-test("saving «Cajas embaladas» / «cajas» closes the sheet and, without reloading, the goal says «mide en cajas», offers the rhythm and no longer the measure (RP-117)", async ({ person, browser, baseURL, db }) => {
+test("saving «Cajas embaladas» / «cajas» closes the sheet and, without reloading, the goal says «mide Cajas embaladas, en cajas», offers the rhythm and no longer the measure (RP-117)", async ({ person, browser, baseURL, db }) => {
   // Kills: not refreshing after the save (the screen still says «esta meta no mide nada»); writing only the unit.
   const id = await mudanza(db, person);
   const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}`);
@@ -208,7 +208,8 @@ test("saving «Cajas embaladas» / «cajas» closes the sheet and, without reloa
     await unitField(sheet).fill("cajas");
     await save(sheet).click();
     await expect(dialog(page)).toHaveCount(0);
-    await expect(page.getByText("mide en cajas", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide Cajas embaladas, en cajas", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en cajas", { exact: true })).toHaveCount(0);
     await expect(page.getByText("esta meta no mide nada", { exact: true })).toHaveCount(0);
     await expect(offer(page)).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Poner un ritmo/ })).toBeVisible();
@@ -219,7 +220,7 @@ test("saving «Cajas embaladas» / «cajas» closes the sheet and, without reloa
   }
 });
 
-test("«horas» is stored in minutes and the goal reads «mide en horas y minutos» (RP-117, RP-66)", async ({ person, browser, baseURL, db }) => {
+test("«horas» is stored in minutes and the goal reads «mide Horas de estudio, en horas y minutos» (RP-117, RP-66, RP-121)", async ({ person, browser, baseURL, db }) => {
   // Kills: storing the unit as typed (the goal would read «mide en horas»).
   const id = await seedOpenGoal(db, person, { name: "Estudio", unit: null, created: DAY_BACK(3) });
   const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}`);
@@ -229,7 +230,7 @@ test("«horas» is stored in minutes and the goal reads «mide en horas y minuto
     await unitField(sheet).fill("horas");
     await save(sheet).click();
     await expect(dialog(page)).toHaveCount(0);
-    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide Horas de estudio, en horas y minutos", { exact: true })).toBeVisible();
     expect((await measureOf(db, id)).unit).toBe("minutos");
   } finally {
     await context.close();

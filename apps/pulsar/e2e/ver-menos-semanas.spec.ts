@@ -16,6 +16,12 @@ test.use({ actionTimeout: 6000 });
 const noonOf = (day: string) => new Date(`${day}T12:00:00-05:00`);
 const MONTH_RE = /(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre) \d{4}/g;
 
+// `boundingBox()` answers null while the element is not drawn yet; wait for it first.
+const boxOf = async (loc: Locator) => {
+  await expect(loc).toBeVisible();
+  return (await loc.boundingBox())!;
+};
+
 const seeLess = (scope: Page | Locator) => scope.getByRole("link", { name: "ver menos", exact: true });
 const seeAll = (scope: Page | Locator) => scope.getByRole("link", { name: "ver todo", exact: true });
 const weekRows = (page: Page) => page.locator("main ol > li:visible, main tbody tr:visible");
@@ -54,10 +60,10 @@ test.describe("«Por semana» in `?todo=1` (RP-118)", () => {
       await expect(links).toHaveCount(2);
       const rows = weekRows(page);
       await expect(rows).toHaveCount(146);
-      const first = (await rows.first().boundingBox())!;
-      const last = (await rows.last().boundingBox())!;
-      const top = (await links.first().boundingBox())!;
-      const bottom = (await links.last().boundingBox())!;
+      const first = await boxOf(rows.first());
+      const last = await boxOf(rows.last());
+      const top = await boxOf(links.first());
+      const bottom = await boxOf(links.last());
       expect(top.y + top.height).toBeLessThanOrEqual(first.y);
       expect(bottom.y).toBeGreaterThanOrEqual(last.y + last.height);
     } finally {
@@ -132,7 +138,7 @@ test.describe("«Por semana» in `?todo=1` (RP-118)", () => {
       await expect(links).toHaveCount(2);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       for (const i of [0, 1]) {
-        const box = (await links.nth(i).boundingBox())!;
+        const box = await boxOf(links.nth(i));
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(360);
         expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(32);
@@ -165,10 +171,10 @@ test.describe("a habit's months in `?todo=1` (RP-118)", () => {
     try {
       const links = seeLess(page.locator("main"));
       await expect(links).toHaveCount(2);
-      const first = (await page.getByText(monthLabel(-19), { exact: false }).first().boundingBox())!;
-      const last = (await page.getByText(monthLabel(0), { exact: false }).first().boundingBox())!;
-      const top = (await links.first().boundingBox())!;
-      const bottom = (await links.last().boundingBox())!;
+      const first = await boxOf(page.getByText(monthLabel(-19), { exact: false }).first());
+      const last = await boxOf(page.getByText(monthLabel(0), { exact: false }).first());
+      const top = await boxOf(links.first());
+      const bottom = await boxOf(links.last());
       expect(top.y + top.height).toBeLessThanOrEqual(first.y);
       expect(bottom.y).toBeGreaterThanOrEqual(last.y + last.height);
     } finally {
@@ -247,7 +253,7 @@ test.describe("a habit's months in `?todo=1` (RP-118)", () => {
       await expect(links).toHaveCount(2);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
       for (const i of [0, 1]) {
-        const box = (await links.nth(i).boundingBox())!;
+        const box = await boxOf(links.nth(i));
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(360);
         expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(32);
@@ -264,9 +270,9 @@ test.describe("the order under the label (board VerMenos 3 and 4)", () => {
     const id = await noEnd(db, person, "Escribir", 146);
     const { page, context } = await visit(browser, baseURL, person, weekPath(id, "?todo=1"), 360);
     try {
-      const label = (await page.locator("main").getByText("por semana", { exact: true }).locator("visible=true").first().boundingBox())!;
-      const link = (await seeLess(page.locator("main")).first().boundingBox())!;
-      const first = (await weekRows(page).first().boundingBox())!;
+      const label = await boxOf(page.locator("main").getByText("por semana", { exact: true }).locator("visible=true").first());
+      const link = await boxOf(seeLess(page.locator("main")).first());
+      const first = await boxOf(weekRows(page).first());
       expect(label.y + label.height).toBeLessThanOrEqual(link.y);
       expect(link.y + link.height).toBeLessThanOrEqual(first.y);
       // Tight under the label, as the board draws it: no gap of a whole line.
@@ -281,10 +287,10 @@ test.describe("the order under the label (board VerMenos 3 and 4)", () => {
     const id = await habit20(db, person, 20);
     const { page, context } = await visit(browser, baseURL, person, habitPath(id, "?todo=1"), 360);
     try {
-      const label = (await page.locator("main").getByText("Por mes", { exact: true }).first().boundingBox())!;
-      const count = (await page.locator("main").getByText("20 meses", { exact: true }).first().boundingBox())!;
-      const link = (await seeLess(page.locator("main")).first().boundingBox())!;
-      const first = (await page.getByText(monthLabel(-19), { exact: false }).first().boundingBox())!;
+      const label = await boxOf(page.locator("main").getByText("Por mes", { exact: true }).first());
+      const count = await boxOf(page.locator("main").getByText("20 meses", { exact: true }).first());
+      const link = await boxOf(seeLess(page.locator("main")).first());
+      const first = await boxOf(page.getByText(monthLabel(-19), { exact: false }).first());
       expect(label.y + label.height).toBeLessThanOrEqual(count.y);
       expect(count.y + count.height).toBeLessThanOrEqual(link.y);
       expect(link.y + link.height).toBeLessThanOrEqual(first.y);

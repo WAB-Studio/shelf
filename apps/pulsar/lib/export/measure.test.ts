@@ -42,3 +42,9 @@ test("a name that only starts with a unit word stays named", () => {
   assert.equal(distinctMeasureName("Horas de sueño", "min", []), "Horas de sueño");
   assert.equal(distinctMeasureName("Minutos hablados", "min", []), "Minutos hablados");
 });
+
+test("a blank name is no name, so the line never reads «mide  , en km»", () => {
+  assert.equal(distinctMeasureName("", "km", ["km"]), null);
+  assert.equal(distinctMeasureName("   ", "km", ["km"]), null);
+  assert.equal(distinctMeasureName(".", "km", ["km"]), null);
+});

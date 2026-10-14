@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { addWeeksToCivilDate, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { addWeeksToCivilDate, civilDateInZone, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
@@ -207,11 +207,15 @@ test("a goal typed as 8 weeks lands on the Monday after its week 8 (RP-11)", asy
     await page.getByRole("button", { name: "Abrirla" }).click();
     await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
 
-    const [row] = await db<{ horizon: string }[]>`
-      select horizon::text as horizon from goals.goals where user_id = ${personId} and name = ${name}
+    const [row] = await db<{ horizon: string; created_at: Date }[]>`
+      select horizon::text as horizon, created_at from goals.goals where user_id = ${personId} and name = ${name}
     `;
     expect(row.horizon).toBe(horizonAfterWeeks(todayInZone(), 8));
-    await expect(page.getByText(/^8 semanas · hasta el /)).toBeVisible();
+    // `created_at` is the database's clock, which `PULSAR_CLOCK` does not pin: the screen counts weeks from that opening.
+    const weeks = Math.round(
+      (civilDateToDate(row.horizon).getTime() - civilDateToDate(weekOf(civilDateInZone(row.created_at))[0]).getTime()) / 86_400_000 / 7,
+    );
+    await expect(page.getByText(new RegExp(`^${weeks} semanas · hasta el `))).toBeVisible();
   } finally {
     await db`delete from goals.goals where user_id = ${personId} and name = ${name}`;
   }

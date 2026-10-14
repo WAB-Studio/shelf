@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
-import { addWeeksToCivilDate, civilDateInZone, civilDateToDate, todayInZone, weekOf } from "@/lib/zone";
+import { addWeeksToCivilDate, civilDateInZone, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect, visit } from "./fixtures";
 
@@ -23,8 +23,9 @@ async function seedGoal(
   name: string,
   opts: { openedDaysAgo?: number; weeks: number; archived?: boolean },
 ): Promise<{ goalId: string; openedOn: string }> {
-  const createdAt = new Date(Date.now() - (opts.openedDaysAgo ?? 0) * DAY_MS);
-  const openedOn = civilDateInZone(createdAt);
+  // The opening comes from the day the server reads (`PULSAR_CLOCK` pins it), at noon in Bogotá: never from this process's `Date.now()`.
+  const openedOn = dateToCivilDate(new Date(civilDateToDate(todayInZone()).getTime() - (opts.openedDaysAgo ?? 0) * DAY_MS));
+  const createdAt = new Date(`${openedOn}T17:00:00Z`);
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at, archived_at)
     values (${personId}, ${name}, ${horizonForWeeks(openedOn, opts.weeks)}, ${createdAt},
@@ -165,8 +166,13 @@ test("a new goal opened with 12 reads «12 semanas» and «semana 1 de 12» on S
     await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
     goalId = page.url().split("/metas/")[1];
 
-    await expect(page.getByText(/^12 semanas · hasta el /)).toBeVisible();
     expect(await horizonOf(db, goalId)).toBe(horizonForWeeks(monday, 12));
+    // The row's own `created_at` is written by the database's clock, which `PULSAR_CLOCK` does not pin: the screen counts from that day.
+    const [{ created_at }] = await db<{ created_at: Date }[]>`select created_at from goals.goals where id = ${goalId}`;
+    const openedMonday = weekOf(civilDateInZone(created_at))[0];
+    const total = weeksBetweenMondays(openedMonday, horizonForWeeks(monday, 12));
+    const current = weeksBetweenMondays(openedMonday, monday) + 1;
+    await expect(page.getByText(new RegExp(`^${total} semanas · hasta el `))).toBeVisible();
 
     await db`
       insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
@@ -174,7 +180,7 @@ test("a new goal opened with 12 reads «12 semanas» and «semana 1 de 12» on S
     `;
     await page.goto("/semana");
     // Both faces are in the DOM; only the phone's label is drawn at 360.
-    await expect(page.getByText(`${name} · semana 1 de 12`).locator("visible=true")).toHaveCount(1);
+    await expect(page.getByText(`${name} · semana ${current} de ${total}`).locator("visible=true")).toHaveCount(1);
   } finally {
     if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }

@@ -492,7 +492,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       if (goalId !== undefined && data.satisfaction === "quantity") {
         await tx
           .update(goals)
-          .set({ measureName: data.name, measureUnit: unit })
+          .set({ measureName: unit, measureUnit: unit })
           .where(and(eq(goals.id, goalId), isNull(goals.measureName)));
       }
 

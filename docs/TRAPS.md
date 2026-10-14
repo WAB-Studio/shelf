@@ -3199,3 +3199,19 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   GitHub answered `remote rejected (Internal Server Error)`; the `;` after the `&&` chain ran the deletes anyway, local and remote,
   and two lanes were cut from the train without 936. The commit survived only in the shared object store (`git branch pulsar-936 d1c232a7`).
 - Push, then read the remote back (`git fetch && git log -1 origin/<train>`), and only in a separate command delete the module branch.
+
+## Two `<main>` while a client redirect lands
+- 2026-10-14, module 975, `apps/pulsar/e2e/metas-sin-final-seed.ts` (`visit`). CI run 38620980911, `meta-ritmo-unidad.spec.ts:159` at 360:
+  `/metas/{id}/plan` redirects to `/metas/{id}`, and for a moment the old and the new `main` are both in the DOM. `toHaveCount(1)` passed
+  on one instant and `toBeVisible()` ran on the next, strict-mode failing on two. The two lines are not atomic. It failed once in CI and 1 in 20 locally (`--repeat-each=10` at both widths).
+- Waiting for the final URL alone did not cure it: the 1-in-20 still failed with two `main` after `toHaveURL`, both carrying the goal's content.
+- Count `main:visible` in one assertion (`toHaveCount(1)`) after awaiting the final URL; `visit` takes `lands` for a route that redirects.
+  Never answer it with a retry or a sleep.
+
+## `boundingBox()` does not wait
+- 2026-10-14, slice s8, `apps/pulsar/e2e/ver-menos-semanas.spec.ts:279` («a habit: «Por mes», the count, then «ver menos»…»).
+  CI run 38645166115, `pulsar-e2e (4)`: `TypeError: Cannot read properties of null (reading 'y')`. The same test passed in run 38640702463 on the same screen code.
+  `locator.boundingBox()` returns `null` when the element is not drawn yet; `(await loc.boundingBox())!` turns that into a crash, and the
+  test failed on the race between the page and the measurement, not on the screen.
+- Await `expect(loc).toBeVisible()` before `boundingBox()` (the spec's `boxOf`). Never answer it with a retry, a sleep or a looser comparison.
+- The same `boundingBox())!` pattern stands in ~70 other specs under `apps/pulsar/e2e/`; they are not fixed.

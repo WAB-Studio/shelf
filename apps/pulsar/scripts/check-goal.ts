@@ -792,7 +792,7 @@ async function runMeasureRenameCheck(): Promise<void> {
   );
   assert(
     "a goal's measure is named once, by its first quantity commitment, and a second one in another unit never renames it (RP-14)",
-    row?.measure_name === "check-goal.ts probe — minutos" && row?.measure_unit === "min",
+    row?.measure_name === "min" && row?.measure_unit === "min",
     `measure_name=${row?.measure_name} measure_unit=${row?.measure_unit}`,
   );
 

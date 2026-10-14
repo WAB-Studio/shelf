@@ -21,6 +21,7 @@
   "measuresUnnamed": "mide en {unit}",
   "timeUnit": "horas y minutos",
   "ahead": "los demás meses que vienen: <fig>{planned}</fig> cada uno",
+  "earlier": "{count, plural, one {# mes anterior} other {# meses anteriores}}",
   "rest": "{count, plural, one {# mes más} other {# meses más}}, hasta el {date}",
   "andOwn": "y estos meses con monto propio:",
   "own": "estos meses con monto propio:",

@@ -389,6 +389,19 @@ function GoalPart({
         <TextLink href="/exportar">{commonT("seeLess")}</TextLink>
       </PrintHidden>
     ) : null;
+  // A folded list names the closed months it hides before its first table: a link to «ver todo» on screen, text on paper.
+  // Opened whole, neither face draws it.
+  const earlierText = cut && !all && cut.hidden > 0 ? t("earlier", { count: cut.hidden }) : null;
+  const earlierLine = earlierText ? (
+    <Text as="p" variant="line">
+      <TextLink href="/exportar?todo=1">{earlierText}</TextLink>
+    </Text>
+  ) : null;
+  const earlierPaper = earlierText ? (
+    <Text as="p" variant="line">
+      {earlierText}
+    </Text>
+  ) : null;
   // A goal with an end whose list folds says its rows out of its months, on both faces.
   const ofMonths = (shown: number) => goal.horizon !== null && cut !== null && shown < goal.months.length;
   const captionOf = (shown: number, declared = false) =>
@@ -608,6 +621,7 @@ function GoalPart({
                 rows={rows}
                 nowrapLabel
                 stackInCard
+                printLead={earlierPaper ?? undefined}
                 after={
                   restLine || out.length > 0 ? (
                     <>
@@ -816,7 +830,8 @@ function GoalPart({
               <Table
                 caption={captionOf(list.length, declaredOnly)}
                 showCaption={ofMonths(list.length)}
-                above={seeLess}
+                above={seeLess ?? (paperFace ? earlierLine : null)}
+                printLead={paperFace ? earlierPaper : undefined}
                 columns={[t("columns.month"), t("columns.done"), t("columns.planned")]}
                 rows={rowsOf(first)}
                 figures={[1]}
@@ -936,7 +951,13 @@ function GoalPart({
       </PrintBlock>
       {sections.map((section) => (
         // A tall «por mes» breaks between its rows, so the goal's head never waits alone for a table that jumps a sheet.
-        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(paperMonths, goal.unit)} only={section === "months" && unit === null}>
+        // A goal's figures never part: each block stays whole, so «ESTE MES» and «HASTA HOY» share their row and their sheet.
+        <PrintBlock
+          key={section}
+          span={spans(section)}
+          whole={section === "month" || section === "toDate" || (section === "months" && !isLongTable(paperMonths, goal.unit))}
+          only={section === "months" && unit === null}
+        >
           {render(section)}
         </PrintBlock>
       ))}

@@ -144,9 +144,9 @@ async function main(): Promise<void> {
 
   // "Bloque fijo diario" — `plan-ingles-dev.md`'s four daily items. Anki is
   // added first, so it is the quantity commitment the goal takes its own
-  // measure from (§0.3, 3): `addCommitment` names `goals.measure_name` /
-  // `measure_unit` after whichever quantity commitment lands first, and never
-  // again once that column is no longer null.
+  // measure from (§0.3, 3): `addCommitment` sets `goals.measure_unit` from
+  // whichever quantity commitment lands first, names the measure after that
+  // unit, and never again once `measure_name` is no longer null.
   const commitments: Parameters<typeof addCommitment>[0][] = [
     {
       goalId: goal.goalId,

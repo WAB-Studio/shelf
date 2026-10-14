@@ -1136,3 +1136,43 @@ test("setGoalMeasure: the statement itself scopes the goal to the person, not th
     await sql`delete from goals.goals where id = ${goal.id}`;
   }
 });
+
+// RP-121: the first quantity commitment gives the goal its unit, never its own name as the measure's name.
+test("addCommitment: the first quantity commitment measures the goal in its unit and names the measure after that unit, not after itself", async () => {
+  const mk = async (name: string, measure?: [string, string]) => {
+    const [row] = await sql<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+      values (${personId}, ${name}, ${shiftDay(today, 60)}, ${measure?.[0] ?? null}, ${measure?.[1] ?? null}) returning id`;
+    return row.id;
+  };
+  const measureOf = async (goalId: string) => {
+    const [row] = await sql<{ measure_name: string | null; measure_unit: string | null }[]>`
+      select measure_name, measure_unit from goals.goals where id = ${goalId}`;
+    return row;
+  };
+  const run = await mk("RP-121 Correr 10 km");
+  const study = await mk("RP-121 Estudio");
+  const read = await mk("RP-121 Leer", ["Páginas", "páginas"]);
+  const yesNo = await mk("RP-121 Sí o no");
+  try {
+    const quantity = (goalId: string, name: string, unit: string, targetQuantity: number) =>
+      addCommitment({ goalId, name, cadenceKind: "daily", satisfaction: "quantity", unit, targetQuantity });
+    assert.equal((await quantity(run, "Rodaje suave", "km", 5)).ok, true);
+    assert.deepEqual(await measureOf(run), { measure_name: "km", measure_unit: "km" });
+
+    assert.equal((await quantity(study, "Repaso", "horas", 2)).ok, true);
+    assert.deepEqual(await measureOf(study), { measure_name: "minutos", measure_unit: "minutos" });
+    const [target] = await sql<{ target_quantity: number }[]>`
+      select target_quantity from goals.commitments where goal_id = ${study}`;
+    assert.equal(target.target_quantity, 120);
+
+    assert.equal((await quantity(read, "Rodaje suave", "km", 5)).ok, true);
+    assert.deepEqual(await measureOf(read), { measure_name: "Páginas", measure_unit: "páginas" });
+
+    assert.equal((await addCommitment({ goalId: yesNo, name: "Estirar", cadenceKind: "daily", satisfaction: "tap" })).ok, true);
+    assert.deepEqual(await measureOf(yesNo), { measure_name: null, measure_unit: null });
+  } finally {
+    await sql`delete from goals.commitments where goal_id in ${sql([run, study, read, yesNo])}`;
+    await sql`delete from goals.goals where id in ${sql([run, study, read, yesNo])}`;
+  }
+});

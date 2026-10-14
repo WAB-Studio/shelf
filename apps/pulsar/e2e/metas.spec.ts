@@ -305,9 +305,9 @@ for (const [screen, path] of [
 // A stored unit reads through the catalogue only when it is one plain word the catalogue has, whatever its case;
 // anything else prints as typed.
 const MEASURE_LINE_CASES = [
-  ["Searches", "mide en búsquedas", "a unit stored with a capital reads in the catalogue's word"],
-  ["repeticiones", "mide en repeticiones", "a word the catalogue lacks prints as typed"],
-  ["searches.length", "mide en searches.length", "a unit with a dot is never looked up in the catalogue"],
+  ["Searches", "mide cosas, en búsquedas", "a unit stored with a capital reads in the catalogue's word"],
+  ["repeticiones", "mide cosas, en repeticiones", "a word the catalogue lacks prints as typed"],
+  ["searches.length", "mide cosas, en searches.length", "a unit with a dot is never looked up in the catalogue"],
 ] as const;
 for (const [screen, path] of [
   ["the goal", ""],

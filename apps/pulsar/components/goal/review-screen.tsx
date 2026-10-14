@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import type { MessageKey } from "@/i18n/translator";
+import { distinctMeasureName } from "@/lib/export/measure";
 import { civilSpan } from "@/lib/export/sections";
 import { LIST_TAIL, tailOf } from "@/lib/lists/tail";
 import { loadGoal } from "@/lib/queries/goal";
@@ -46,6 +47,7 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
     );
   }
 
+  const measureName = distinctMeasureName(goal.measureName, goal.measureUnit, [unitWord(goal.measureUnit)]);
   const columns = [
     t("goal.review.columns.week"),
     t("goal.review.columns.total"),
@@ -74,13 +76,20 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
       <TextLink href={`/metas/${goal.id}/revision`}>{t("common.seeLess")}</TextLink>
     ) : null;
 
+  const earlier =
+    hidden > 0 ? <TextLink href={`/metas/${goal.id}/revision?todo=1`}>{t("goal.review.earlier", { count: hidden })}</TextLink> : null;
+
   return (
     <Page width="full">
       <ScreenHeader title={t("goal.review.title")} back={back} />
       <Text as="p" variant="sentence">
-        {isTimeUnit(goal.measureUnit)
-          ? t("goal.review.measureTime")
-          : t("goal.review.measure", { unit: unitWord(goal.measureUnit) })}
+        {measureName !== null
+          ? isTimeUnit(goal.measureUnit)
+            ? t("goal.review.measureNamedTime", { name: measureName })
+            : t("goal.review.measureNamed", { name: measureName, unit: unitWord(goal.measureUnit) })
+          : isTimeUnit(goal.measureUnit)
+            ? t("goal.review.measureTime")
+            : t("goal.review.measure", { unit: unitWord(goal.measureUnit) })}
       </Text>
       <Table
         caption={t("goal.review.caption")}
@@ -90,7 +99,7 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
         unit={goal.measureUnit}
         current={currentIndex === -1 ? undefined : currentIndex}
         fitDetail
-        above={seeLess}
+        above={seeLess ?? earlier}
       />
       {hidden > 0 ? (
         <TextLink href={`/metas/${goal.id}/revision?todo=1`}>{t("common.seeAll")}</TextLink>

@@ -68,7 +68,7 @@ async function deleteGoal(db: postgres.Sql, personId: string, goalId: string): P
   await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
 }
 
-test("a weekdays commitment with an untyped goal's first quantity lands in goals.commitments and names the goal's measure (RP-12, RP-14)", async ({
+test("a weekdays commitment with an untyped goal's first quantity lands in goals.commitments and names the goal's measure by its unit (RP-12, RP-14, RP-121)", async ({
   page,
   db,
   personId,
@@ -109,7 +109,7 @@ test("a weekdays commitment with an untyped goal's first quantity lands in goals
     const [goal] = await db<{ measure_name: string | null; measure_unit: string | null }[]>`
       select measure_name, measure_unit from goals.goals where id = ${goalId}
     `;
-    expect(goal.measure_name).toBe(commitmentName);
+    expect(goal.measure_name).toBe("minutos");
     expect(goal.measure_unit).toBe("minutos");
   } finally {
     await deleteGoal(db, personId, goalId);
