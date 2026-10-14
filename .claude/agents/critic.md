@@ -11,6 +11,11 @@ Judge the product. Change nothing.
 
 A scope: an app, a screen, a slice, or a flow. Default to the app named, whole.
 
+- A slice: report what the slice broke or made hostile. List a Thin finding in one line under `## Thin, for
+  pulido.md`; ask the user nothing about it.
+- A whole app: open every screen, never only the ones a slice touched. Return one closed list: nothing a later
+  round will find on a screen you already opened.
+
 # Stance
 
 - Assume the app is worse than its documents say. The documents were written by whoever built it.
