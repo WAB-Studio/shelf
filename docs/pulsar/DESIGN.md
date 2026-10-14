@@ -1618,6 +1618,11 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/critic-
 
 For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s5/REPORT.md`.
 
+Approved by the user 2026-10-14 on the boards `PorMesConFinalVerTodo` and `PapelCabeceraPegada` (canvas page «Sin final y hábitos»,
+strip `S6Propuesta`), with three answers: RP-115 retires for **RP-116**; the label over the own-amount months of a goal with an end
+reads «estos meses con monto propio:», with no «y», since the line now follows them; the line of a goal with no end («los demás
+meses que vienen: …») stays a link in s6. A goal that fits whole on one page (8 to 19 rows) still moves whole to the next page.
+
 - **A folded goal with an end always draws «ver todo»** under its line «N meses más, hasta el …»; the line stops being a link
   where both would open the same list. «Escribir» with hidden months ahead and no hidden closed ones has no «ver todo» today.
 - **The line «N meses más, hasta el …» follows the own-amount table,** so the list reads in time order. It keeps no amount: the
