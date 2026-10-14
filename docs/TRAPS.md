@@ -3207,3 +3207,11 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - Waiting for the final URL alone did not cure it: the 1-in-20 still failed with two `main` after `toHaveURL`, both carrying the goal's content.
 - Count `main:visible` in one assertion (`toHaveCount(1)`) after awaiting the final URL; `visit` takes `lands` for a route that redirects.
   Never answer it with a retry or a sleep.
+
+## `boundingBox()` does not wait
+- 2026-10-14, slice s8, `apps/pulsar/e2e/ver-menos-semanas.spec.ts:279` («a habit: «Por mes», the count, then «ver menos»…»).
+  CI run 38645166115, `pulsar-e2e (4)`: `TypeError: Cannot read properties of null (reading 'y')`. The same test passed in run 38640702463 on the same screen code.
+  `locator.boundingBox()` returns `null` when the element is not drawn yet; `(await loc.boundingBox())!` turns that into a crash, and the
+  test failed on the race between the page and the measurement, not on the screen.
+- Await `expect(loc).toBeVisible()` before `boundingBox()` (the spec's `boxOf`). Never answer it with a retry, a sleep or a looser comparison.
+- The same `boundingBox())!` pattern stands in ~70 other specs under `apps/pulsar/e2e/`; they are not fixed.
