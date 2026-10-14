@@ -94,12 +94,14 @@ export async function countCommitments(db: Db, person: Person): Promise<number> 
   return Number(row.n);
 }
 
-export async function visit(browser: Browser, baseURL: string | undefined, person: Person, path: string, width: number) {
+export async function visit(browser: Browser, baseURL: string | undefined, person: Person, path: string, width: number, lands?: RegExp) {
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
   await page.goto(path);
-  await expect(page.locator("main")).toHaveCount(1);
-  await expect(page.locator("main")).toBeVisible();
+  // A client redirect leaves two `main` (the old and the new) for a moment, even after the URL changes:
+  // wait for the final URL, then count the visible `main` in one assertion, never `toHaveCount` then `toBeVisible`.
+  if (lands) await expect(page).toHaveURL(lands);
+  await expect(page.locator("main:visible")).toHaveCount(1);
   return { page, context };
 }
 

@@ -3199,3 +3199,11 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   GitHub answered `remote rejected (Internal Server Error)`; the `;` after the `&&` chain ran the deletes anyway, local and remote,
   and two lanes were cut from the train without 936. The commit survived only in the shared object store (`git branch pulsar-936 d1c232a7`).
 - Push, then read the remote back (`git fetch && git log -1 origin/<train>`), and only in a separate command delete the module branch.
+
+## Two `<main>` while a client redirect lands
+- 2026-10-14, module 975, `apps/pulsar/e2e/metas-sin-final-seed.ts` (`visit`). CI run 38620980911, `meta-ritmo-unidad.spec.ts:159` at 360:
+  `/metas/{id}/plan` redirects to `/metas/{id}`, and for a moment the old and the new `main` are both in the DOM. `toHaveCount(1)` passed
+  on one instant and `toBeVisible()` ran on the next, strict-mode failing on two. The two lines are not atomic. It failed once in CI and 1 in 20 locally (`--repeat-each=10` at both widths).
+- Waiting for the final URL alone did not cure it: the 1-in-20 still failed with two `main` after `toHaveURL`, both carrying the goal's content.
+- Count `main:visible` in one assertion (`toHaveCount(1)`) after awaiting the final URL; `visit` takes `lands` for a route that redirects.
+  Never answer it with a retry or a sleep.
