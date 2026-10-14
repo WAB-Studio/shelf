@@ -89,7 +89,7 @@ test("the week's figure carries its unit on Hoy, the goal and the review, and is
   try {
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
-      values (${personId}, ${goalName}, ${dateToCivilDate(new Date(Date.now() + 60 * 86_400_000))}, ${first}, ${KM}, ${new Date(Date.now() - 12 * 86_400_000)})
+      values (${personId}, ${goalName}, ${dateToCivilDate(new Date(Date.now() + 60 * 86_400_000))}, ${KM}, ${KM}, ${new Date(Date.now() - 12 * 86_400_000)})
       returning id
     `;
     const commitmentIds: string[] = [];
