@@ -437,8 +437,9 @@ test("E1d on paper: a goal with no unit prints its months with tasks in month or
     }
   }
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Vivir mejor");
-  expect(paper).toContain("vivir mejor · por mes · 5 meses");
-  expectInOrder(paper, [monthLabel(-2), monthLabel(0), monthLabel(1), monthLabel(3), monthLabel(5), ": sin tareas"]);
+  expect(paper).toContain("vivir mejor · por mes · 6 meses");
+  // The six printed rows, by name and in month order, so the count cannot pass on other rows.
+  expectInOrder(paper, [monthLabel(-2), monthLabel(-1), monthLabel(0), monthLabel(1), monthLabel(3), monthLabel(5), ": sin tareas"]);
   const fold = paper.slice(paper.indexOf(monthLabel(5)) + monthLabel(5).length, paper.indexOf(": sin tareas"));
   for (const offset of [2, 4]) expect(fold, monthName(offset)).toContain(monthName(offset));
   for (const offset of [1, 3, 5]) expect(fold, longMonth(offset)).not.toContain(longMonth(offset));
