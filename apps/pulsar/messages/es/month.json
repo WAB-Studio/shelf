@@ -17,6 +17,7 @@
   "months": {
     "title": "Por mes",
     "caption": "{count, plural, one {# mes} other {# meses}}",
+    "captionOf": "{count} de {total} meses",
     "planned": "planeado",
     "noAmount": "sin monto",
     "ahead": "los demás meses que vienen: {planned} cada uno",

@@ -44,7 +44,9 @@
   },
   "ended": "terminada el {date}",
   "monthsCaption": "{count, plural, one {# mes} other {# meses}}",
+  "monthsCaptionOf": "{count} de {total} meses",
   "monthsCaptionDeclared": "{count, plural, one {# mes} other {# meses}} · solo lo dicho",
+  "monthsCaptionOfDeclared": "{count} de {total} meses · solo lo dicho",
   "columns": {
     "month": "mes",
     "week": "semana",

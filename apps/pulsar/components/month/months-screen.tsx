@@ -52,11 +52,17 @@ export async function MonthsList({
   const ends = loaded.horizon === null ? undefined : { lastDay: dayBefore(loaded.horizon) };
   // A goal with no end, or an end past 12 months, shows its months up to this one (last 12), the next and those ahead set by hand; the rest ahead fold into a line.
   // A month open outside the last 12 shows the whole list.
-  const openOutside = folds && !endlessCut(settled, { all: false, rhythm: loaded.rhythm, ends }).shown.some((row) => row.month === open);
+  const folded = folds ? endlessCut(settled, { all: false, rhythm: loaded.rhythm, ends }) : null;
+  const openOutside = folded !== null && !folded.shown.some((row) => row.month === open);
   const cut = folds ? endlessCut(settled, { all: all || openOutside, rhythm: loaded.rhythm, ends }) : null;
   const goal = { ...loaded, months: cut ? cut.shown : settled };
   const allHref = `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}todo=1`;
   const seeAll = cut?.seeAll ? <TextLink href={allHref}>{t("common.seeAll")}</TextLink> : null;
+  // Opened whole with `?todo=1`, a list that folds goes back to its fold: the same screen, `keep` intact.
+  const seeLess =
+    all && folded?.seeAll ? (
+      <TextLink href={`/metas/${goal.id}/meses${keep ? `?${keep}` : ""}`}>{t("common.seeLess")}</TextLink>
+    ) : null;
   // A goal with an end counts the months after the last shown; the line names them and opens nothing.
   const rest = cut?.rest ? (
     <Text as="p" variant="line">
@@ -70,7 +76,11 @@ export async function MonthsList({
       ? `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}planear=${month.slice(0, 7)}`
       : `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
   const ownKeys = new Set(cut ? cut.handSet.map((row) => row.month) : []);
-  const caption = t("month.months.caption", { count: goal.months.length });
+  // A goal with an end whose list folds says its rows out of its months.
+  const caption =
+    loaded.horizon !== null && goal.months.length < settled.length
+      ? t("month.months.captionOf", { count: goal.months.length, total: settled.length })
+      : t("month.months.caption", { count: goal.months.length });
   const currentIndex = goal.months.findIndex((row) => row.current);
   const openIndex = goal.months.findIndex((row) => row.month === open);
   // A holder measures through its goals: its own measure name may be empty (RP-80).
@@ -102,8 +112,10 @@ export async function MonthsList({
           current={currentIndex === -1 ? undefined : currentIndex}
           open={openIndex === -1 ? undefined : openIndex}
           after={rest ?? undefined}
+          above={seeLess}
         />
         {seeAll}
+        {seeLess}
       </>
     );
   }
@@ -183,6 +195,7 @@ export async function MonthsList({
           t("month.months.columns.planned"),
         ]}
         rows={firstRows}
+        above={seeLess}
         figures={[1]}
         // A unit that is not time rides in each row's note («0 de 60 búsquedas»), once.
         unit={timed ? unit : undefined}
@@ -215,6 +228,7 @@ export async function MonthsList({
         />
       ) : null}
       {seeAll}
+      {seeLess}
     </>
   );
 }

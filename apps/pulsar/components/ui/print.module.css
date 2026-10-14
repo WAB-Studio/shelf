@@ -13,6 +13,13 @@
   display: none;
 }
 
+/* `together`: the flex column it sits in, once more, its gap inherited, so the screen reads as if it were not there. */
+.together {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+}
+
 .goal {
   display: flex;
   flex-direction: column;
@@ -95,6 +102,10 @@
   }
 
   .whole {
+    break-inside: avoid;
+  }
+
+  .together {
     break-inside: avoid;
   }
 

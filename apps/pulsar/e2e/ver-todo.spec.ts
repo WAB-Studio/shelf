@@ -167,7 +167,7 @@ for (const width of [360, 1280]) {
     });
 
     test("`?todo=1` on «Por mes» lists the 30 closed months, this one and the 11 after, keeps `planear` and `volver`, and has no link (RP-106)", async ({ person, browser, baseURL, db }) => {
-      // Kills: ignoring `todo`; the link dropping `planear` or `volver`; the amount sheet closing when the list opens.
+      // Kills: ignoring `todo`; the link dropping `planear` or `volver`; the amount sheet closing when the list opens; «ver menos» missing.
       const id = await seedOpenGoal(db, person, { name: "Cuidado", unit: PAGES, horizon: null, rhythm: 40, created: openedMonthsAgo(30) });
       const planned = monthsAhead(2).slice(0, 7);
       const volver = `/metas/${id}/meses`;
@@ -190,7 +190,13 @@ for (const width of [360, 1280]) {
         expect(hrefs).toContain(monthHref(id, -1));
         expect(hrefs).toContain(monthHref(id, 11));
         await expect(page.getByRole("link", { name: SEE_ALL, exact: true, includeHidden: true })).toHaveCount(0);
-        await expect(page.getByRole("link", { name: /ver menos/i, includeHidden: true })).toHaveCount(0);
+        // RP-118: the whole list goes back to its fold, behind the open sheet, `planear` and `volver` kept.
+        const less = page.getByRole("link", { name: "ver menos", exact: true, includeHidden: true }).locator("visible=true");
+        await expect(less).toHaveCount(2);
+        for (const index of [0, 1]) {
+          const back = (await less.nth(index).getAttribute("href")) ?? "";
+          expect(back, `«ver menos» ${index}`).toBe(`/metas/${id}/meses?planear=${planned}&volver=${encodeURIComponent(volver)}`);
+        }
         // Everything is listed: the line that folds the months ahead is gone.
         await expect(page.getByRole("link", { name: /meses que vienen/i, includeHidden: true })).toHaveCount(0);
       } finally {
