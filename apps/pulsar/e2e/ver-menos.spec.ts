@@ -48,7 +48,8 @@ for (const width of [360, 1280]) {
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses?${query}`, width);
       try {
         await expect(rowLink(page, id, 0).first()).toBeVisible();
-        const links = seeLess(page.locator("main"));
+        // The amount sheet opened by `planear` marks the rest `aria-hidden`: the links stay behind it, drawn; the other face's copy is `display: none` and stays out.
+        const links = page.locator("main").getByRole("link", { name: "ver menos", exact: true, includeHidden: true }).locator("visible=true");
         await expect(links).toHaveCount(2);
         for (const index of [0, 1]) {
           const href = (await links.nth(index).getAttribute("href")) ?? "";
