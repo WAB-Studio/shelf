@@ -1673,3 +1673,16 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/s7-crit
   the report and paper. Today the goal reads «mide en cajas» and the name is never seen again.
 - Also from the critic, not yet put to the user: on paper at 9 open tasks «Escribir»'s figures split across two sheets («0» at
   the foot of sheet 3, «de 17 páginas» on sheet 4); «Poner un ritmo» reads «cuántas km al mes» for a masculine unit.
+
+## Decisions of 2026-10-14, the boards of slice s8, by the user
+
+Approved by the user 2026-10-14 «tal cual» on the canvas «Bitácora de metas», strip `S8Propuesta` of the page «Sin final y hábitos».
+
+- **Approved boards:** `MesesAnteriores` and `MideQueCuenta`, with two accepted differences: in «Por semana» and the habit the
+  «… anteriores» line follows the label; on the goal, «el ritmo» stays above the measure's panel, as today.
+- **Paper prints «12 meses anteriores» as text stuck to the first row**, without a link. «Por semana» too: «134 semanas anteriores».
+- **A measure taken from the first commitment reads «mide en km»**; a name the person wrote goes as written («mide Cajas embaladas, en cajas»).
+- **RP-118 gives way to RP-120**; «Por mes» draws no measure line (RP-121).
+- **A goal's figures never split between sheets on paper.**
+- **«¿Cuánto al mes, en km?»**: the rhythm's sentence takes no gender.
+- **Boards that do not exist:** dark mode; the paper figures kept together (cut rule); `MesesAnteriores` at 1280 but the report.
