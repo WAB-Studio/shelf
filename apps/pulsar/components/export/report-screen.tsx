@@ -345,11 +345,15 @@ function GoalPart({
 
   // Paper never opens «ver todo»: a goal with no end prints its last 12 months and those ahead set by hand, folds the
   // rest ahead into the rhythm's line and, when it has none, into the «sin monto» line. `?todo=1` only widens the screen.
-  const cut = goal.horizon === null ? endlessCut(goal.months, { all: false, rhythm: goal.rhythm ?? null }) : null;
+  const cut = goal.horizon === null ? endlessCut(goal.months, { all: false, rhythm: goal.rhythm }) : null;
   const paperMonths = cut ? [...cut.shown, ...cut.empty.filter((month) => printsOnPaper(month, goal.unit))].sort((a, b) => a.month.localeCompare(b.month)) : goal.months;
+  // Next month prints as a row though it is empty (RP-110).
+  const printed = (month: GoalReport["months"][number]) => printsOnPaper(month, goal.unit, cut?.next?.month === month.month);
   const foldedMonths = cut ? cut.empty.filter((month) => !printsOnPaper(month, goal.unit)) : goal.months.filter((month) => !printsOnPaper(month, goal.unit));
   const paperKeys = new Set(paperMonths.map((month) => month.month));
   const screenMonths = all ? goal.months : paperMonths;
+  // Months set by hand sit under the line, in a table of their own; «ver todo» lists every month in order.
+  const paperOwn = new Set(cut ? cut.handSet.map((month) => month.month) : []);
   const paperGoal: GoalReport = { ...goal, months: paperMonths };
   const aheadLine = cut?.line
     ? t.rich("ahead", {
@@ -366,17 +370,37 @@ function GoalPart({
   // On screen the line is a link to the whole list; on paper it sits in the table's `after`.
   const screenAhead =
     aheadLine && !all ? (
+      <Text as="p" variant="line">
+        <TextLink href="/exportar?todo=1">{aheadLine}</TextLink>
+      </Text>
+    ) : null;
+  const ownLabel = paperOwn.size > 0 ? (aheadLine ? t("andOwn") : t("own")) : null;
+  const screenLabel =
+    screenAhead || ownLabel ? (
       <PrintHidden>
-        <Text as="p" variant="line">
-          <TextLink href="/exportar?todo=1">{aheadLine}</TextLink>
-        </Text>
+        {screenAhead}
+        {ownLabel ? (
+          <Text as="p" variant="line">
+            {ownLabel}
+          </Text>
+        ) : null}
       </PrintHidden>
     ) : null;
-  const paperAhead = aheadLine ? (
-    <Text as="p" variant="line">
-      {aheadLine}
-    </Text>
-  ) : null;
+  const paperAhead =
+    aheadLine || ownLabel ? (
+      <>
+        {aheadLine ? (
+          <Text as="p" variant="line">
+            {aheadLine}
+          </Text>
+        ) : null}
+        {ownLabel ? (
+          <Text as="p" variant="line">
+            {ownLabel}
+          </Text>
+        ) : null}
+      </>
+    ) : null;
 
   const held = inside !== undefined && inside.length > 0;
   // The screen lists every task of the group naming its goal; paper keeps each goal's own.
@@ -530,14 +554,14 @@ function GoalPart({
                     : t("tasksToDo", { count: tasks.total }),
                 month.current ? t("current") : started ? t("closed") : t("upcoming"),
               ],
-              printed: paperKeys.has(month.month) && printsOnPaper(month, goal.unit),
+              printed: paperKeys.has(month.month) && printed(month),
             };
           });
           const out = foldedMonths;
           return (
             <Section
               label={t("byMonth", { goal: goal.name })}
-              printSuffix={t("monthsCaption", { count: paperMonths.filter((m) => printsOnPaper(m, goal.unit)).length })}
+              printSuffix={t("monthsCaption", { count: paperMonths.filter(printed).length })}
             >
               <Table
                 caption={t("monthsCaption", { count: screenMonths.length })}
@@ -568,7 +592,7 @@ function GoalPart({
           return monthOnly.format(day);
         };
         const timed = isTimeUnit(unit as string);
-        const rows: TableRow[] = screenMonths.map((month) => {
+        const rowsOf = (list: GoalReport["months"]): TableRow[] => list.map((month) => {
           const started = month.current || month.past;
           const share = month.carried;
           const screenAmount = screenPlanned(month.planned, (goal.ownMonths ?? []).includes(month.month));
@@ -654,7 +678,7 @@ function GoalPart({
               ) : (
                 (paperNote ?? phoneNote)
               ),
-            printed: paperKeys.has(month.month) && printsOnPaper(month, goal.unit),
+            printed: paperKeys.has(month.month) && printed(month),
           };
         });
         const out = foldedMonths;
@@ -672,7 +696,6 @@ function GoalPart({
               return groups;
             }, [])
           : null;
-        const current = screenMonths.findIndex((m) => m.current);
         const week = goal.weeks.find((w) => w.current);
         const weekPlanned = goal.weekPlanned ?? null;
         // A week the goal does not fill says from or to which day it counts.
@@ -701,22 +724,47 @@ function GoalPart({
           ],
           note: w.current ? t("current") : undefined,
         }));
-        return (
-          <Flex direction="column" gap="6">
-            <Section
-              label={t("byMonth", { goal: goal.name })}
-              printSuffix={t("monthsCaption", { count: paperMonths.filter((m) => printsOnPaper(m, goal.unit)).length })}
-            >
+        const outNode =
+          out.length > 0 ? (
+            outGroups ? (
+              <>
+                {outGroups.map((group) => (
+                  <Text as="p" variant="line" key={group.total}>
+                    {t("monthsOutCount", {
+                      months: format.list(
+                        group.months.map((m) => monthYear.format(civilDateToDate(m.month))),
+                        { type: "conjunction" },
+                      ),
+                      count: group.total,
+                    })}
+                  </Text>
+                ))}
+              </>
+            ) : (
+              <Text as="p" variant="line">
+                {t("monthsOut", { months: outNames })}
+              </Text>
+            )
+          ) : null;
+        // The line and its label sit in the first table's `after` on paper, between the tables on screen.
+        const monthTables = (list: GoalReport["months"], own: ReadonlySet<string>) => {
+          const first = list.filter((month) => !own.has(month.month));
+          const ownList = list.filter((month) => own.has(month.month));
+          const current = first.findIndex((m) => m.current);
+          const paperFace = list === paperMonths;
+          const tail = ownList.length > 0 ? null : outNode;
+          const firstAfter = paperFace && (paperAhead || tail) ? (
+            <>
+              {paperAhead}
+              {tail}
+            </>
+          ) : undefined;
+          return (
+            <>
               <Table
-                caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", {
-                  count: screenMonths.length,
-                })}
-                columns={[
-                  t("columns.month"),
-                  t("columns.done"),
-                  t("columns.planned"),
-                ]}
-                rows={rows}
+                caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", { count: first.length })}
+                columns={[t("columns.month"), t("columns.done"), t("columns.planned")]}
+                rows={rowsOf(first)}
                 figures={[1]}
                 unit={unit as string}
                 nowrapLabel
@@ -728,36 +776,46 @@ function GoalPart({
                 wholeNote={timed}
                 current={current === -1 ? undefined : current}
                 afterPrintOnly
-                after={
-                  out.length > 0 || paperAhead ? (
-                    <>
-                      {paperAhead}
-                      {out.length > 0 ? (
-                    outGroups ? (
-                      <>
-                        {outGroups.map((group) => (
-                          <Text as="p" variant="line" key={group.total}>
-                            {t("monthsOutCount", {
-                              months: format.list(
-                                group.months.map((m) => monthYear.format(civilDateToDate(m.month))),
-                                { type: "conjunction" },
-                              ),
-                              count: group.total,
-                            })}
-                          </Text>
-                        ))}
-                      </>
-                    ) : (
-                      <Text as="p" variant="line">
-                        {t("monthsOut", { months: outNames })}
-                      </Text>
-                    )
-                      ) : null}
-                    </>
-                  ) : undefined
-                }
+                after={firstAfter}
               />
-              {screenAhead}
+              {ownList.length > 0 ? (
+                <>
+                  {paperFace ? screenLabel : null}
+                  <Table
+                    caption=""
+                    columns={[t("columns.month"), t("columns.done"), t("columns.planned")]}
+                    rows={rowsOf(ownList)}
+                    figures={[1]}
+                    unit={unit as string}
+                    nowrapLabel
+                    stackInCard
+                    wrapDetail
+                    wrapNote={!timed}
+                    wholeNote={timed}
+                    afterPrintOnly
+                    after={outNode ?? undefined}
+                  />
+                </>
+              ) : (
+                paperFace ? screenLabel : null
+              )}
+            </>
+          );
+        };
+        return (
+          <Flex direction="column" gap="6">
+            <Section
+              label={t("byMonth", { goal: goal.name })}
+              printSuffix={t("monthsCaption", { count: paperMonths.filter(printed).length })}
+            >
+              {all ? (
+                <>
+                  <PrintHidden>{monthTables(screenMonths, new Set())}</PrintHidden>
+                  <PrintOnly>{monthTables(paperMonths, paperOwn)}</PrintOnly>
+                </>
+              ) : (
+                monthTables(paperMonths, paperOwn)
+              )}
               {seeAll}
             </Section>
             {goal.weeks.length > 0 ? (
