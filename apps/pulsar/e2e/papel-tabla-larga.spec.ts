@@ -129,7 +129,7 @@ const remove = (db: postgres.Sql, person: Person, id: string) =>
 // Runs one goal through the printer; `check` reads where everything landed.
 async function withGoal(
   ctx: { person: Person; browser: Browser; baseURL: string; db: postgres.Sql },
-  spec: { months: number; measured: boolean; tag: string; tasks?: number },
+  spec: { months: number; measured: boolean; tag: string; tasks?: number; printed?: number },
   check: (where: Where, name: string) => void,
 ) {
   const name = `Inglés ${spec.tag} ${Date.now()}`;
@@ -137,7 +137,7 @@ async function withGoal(
   const { context, page } = await open(ctx.browser, ctx.baseURL, ctx.person, name);
   try {
     const file = await printed(page, spec.tag);
-    check(locate(file, name, spec.months), name);
+    check(locate(file, name, spec.printed ?? spec.months), name);
   } finally {
     await context.close();
     await remove(ctx.db, ctx.person, id);
@@ -197,38 +197,39 @@ test.describe("the paper report: a «por mes» table of 15 rows or more starts w
     });
   });
 
-  test("a 46-month table keeps the months-left-out line with its last row, on the same page and after it", async ({
+  // A goal with an end folds (RP-115): «N meses más» closes the first table (current and next month); the months set by hand follow it.
+  test("a 46-month table keeps the «N meses más» line with the first table's last row, on the same page and after it", async ({
     person, browser, baseURL, db,
   }) => {
     await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 46, measured: true, tag: "m46d" }, (w) => {
-      const last = w.rows[45];
-      const line = w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("sin monto"));
-      expect(line, `«…: sin monto» on page ${last.page + 1}, where the last row is`).toBeGreaterThan(last.at);
+      const last = w.rows[1];
+      const line = w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("meses más, hasta el"));
+      expect(line, `«N meses más» on page ${last.page + 1}, where the row is`).toBeGreaterThan(last.at);
       expect(w.labelPage, "and the table still starts on the goal's page").toBe(w.namePage);
     });
   });
 
   // Open tasks above the table slide the page cut along it; across enough of them the cut falls between the last row and the line.
   for (const tasks of range(26))
-  test(`a 46-month table with ${tasks} open tasks above it never leaves the months-left-out line alone on a page`, async ({
+  test(`a 46-month table with ${tasks} open tasks above it never leaves the «N meses más» line alone on a page`, async ({
     person, browser, baseURL, db,
   }) => {
     await withGoal({ person, browser, baseURL: baseURL! , db }, { months: 46, measured: true, tag: `m46e${tasks}`, tasks }, (w) => {
-      const last = w.rows[45];
+      const last = w.rows[1];
       expect(
-        w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("sin monto")),
-        `«…: sin monto» follows the last row on page ${last.page + 1}`,
+        w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("meses más, hasta el")),
+        `«N meses más» follows the first table's last row on page ${last.page + 1}`,
       ).toBeGreaterThan(last.at);
     });
   });
 
   // The boundary: 14 printed rows keep today's whole block; 15 flow.
-  test("14 printed rows stay whole: label, every row and the months-left-out line on one page", async ({
+  test("14 printed rows stay whole: label, every row and the «N meses más» line on one page", async ({
     person, browser, baseURL, db,
   }) => {
     await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 14, measured: true, tag: "m14" }, (w) => {
       expect(new Set(w.rows.map((row) => row.page)), "all 14 rows on one page").toEqual(new Set([w.labelPage]));
-      expect(w.pages[w.labelPage].some((text) => text.includes("sin monto")), "months-left-out line on that page").toBe(true);
+      expect(w.pages[w.labelPage].some((text) => text.includes("meses más, hasta el")), "«N meses más» line on that page").toBe(true);
     });
   });
 
@@ -242,30 +243,22 @@ test.describe("the paper report: a «por mes» table of 15 rows or more starts w
   });
 
   // A goal with no measure: MES / TAREAS / ESTADO.
-  test("a no-measure goal of 22 months flows the same way: label on the goal's page, head TAREAS repeated, rows whole, line with the last row", async ({
+  test("a no-measure goal of 22 months folds: label on the goal's page, current and next month as rows, «N meses más» after them", async ({
     person, browser, baseURL, db,
   }) => {
-    await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 22, measured: false, tag: "s22" }, (w) => {
+    await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 22, measured: false, tag: "s22", printed: 2 }, (w) => {
       expect(w.labelPage, `label on page ${w.labelPage + 1}, the goal's name on page ${w.namePage + 1}`).toBe(w.namePage);
       expect(w.rows[0].page).toBe(w.labelPage);
-      const later = [...new Set(w.rows.map((row) => row.page))].filter((page) => page > w.labelPage);
-      expect(later.length, "the table continues on a later page").toBeGreaterThan(0);
-      for (const page of later) {
-        const first = Math.min(...w.rows.filter((row) => row.page === page).map((row) => row.at));
-        expect(w.pages[page].slice(0, first).join(" "), `page ${page + 1} repeats its head (MES / TAREAS / ESTADO)`).toMatch(
-          new RegExp(`${spaced("mes")} ?${spaced("tareas")} ?${spaced("estado")}`, "i"),
-        );
-      }
-      const last = w.rows[21];
+      const last = w.rows[1];
       expect(
-        w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("sin tareas")),
-        "«…: sin tareas» after the last row, on its page",
+        w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("22 meses más, hasta el")),
+        "«22 meses más» after the last row, on its page",
       ).toBeGreaterThan(last.at);
     });
   });
 
-  test("a no-measure goal of 14 months stays whole on one page", async ({ person, browser, baseURL, db }) => {
-    await withGoal({ person, browser, baseURL: baseURL! , db }, { months: 14, measured: false, tag: "s14" }, (w) => {
+  test("a no-measure goal of 10 months stays whole on one page", async ({ person, browser, baseURL, db }) => {
+    await withGoal({ person, browser, baseURL: baseURL! , db }, { months: 10, measured: false, tag: "s14" }, (w) => {
       expect(new Set(w.rows.map((row) => row.page))).toEqual(new Set([w.labelPage]));
       expect(w.pages[w.labelPage].some((text) => text.includes("sin tareas"))).toBe(true);
     });

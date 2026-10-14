@@ -1563,7 +1563,8 @@ test.describe("the report on A4, compact", () => {
     const labels = starts.map(
       (month) => `${MONTH_NAMES[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`,
     );
-    return { goalId: goal.id, name: spec.name, months: labels };
+    // A goal past 12 months folds (RP-115): its last, partial month goes into «N meses más» and prints no row.
+    return { goalId: goal.id, name: spec.name, months: labels.length > 12 ? labels.slice(0, -1) : labels };
   }
 
   // The board's three goals: 6 months of 12 h, 3 months of km, 2 months of searches.

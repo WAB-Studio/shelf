@@ -367,16 +367,16 @@ test.describe("a time goal with no rhythm says its left-out months' tasks (835, 
     }
   });
 
-  test("13 months out, one with a task: the line sits whole on the table's page", async ({
+  test("10 months out, one with a task: the line sits whole on the table's page", async ({
     person, browser, baseURL, db,
   }) => {
     const name = `Certificacion ${Date.now()}`;
-    const id = await seed(db, person, { name, ...TIMED, from: 0, to: 13, budgets: {}, tasks: { 5: 1 } });
+    const id = await seed(db, person, { name, ...TIMED, from: 0, to: 11, budgets: {}, tasks: { 5: 1 } });
     const { context, page } = await open(browser, baseURL!, person, A4);
     try {
       await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
       const file = await printed(page, "certificacion");
-      const bare = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13].map(yearName);
+      const bare = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11].map(yearName);
       const lines = [`${listed(bare)}: sin monto`, `${yearName(5)}: sin monto · 1 tarea`];
       const pages = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" })
         .split("\f")

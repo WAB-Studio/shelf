@@ -4,12 +4,14 @@ import { getTranslations } from "next-intl/server";
 
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
-import { endlessCut } from "@/lib/lists/endless-cut";
+import { dayBefore } from "@/lib/day/weeks";
+import { endlessCut, foldsMonths } from "@/lib/lists/endless-cut";
 import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { civilDayMonthYear } from "@/lib/zone";
 import { timeWordsOf } from "@/lib/units/time-words";
 import { Button, ListDetail, Page, ScreenHeader, Table, Text, TextLink, type TableRow } from "@/components/ui";
 
@@ -39,29 +41,30 @@ export async function MonthsList({
 }: {
   goal: GoalView;
   open: string;
-  // `?todo=1`: the whole span of a goal with no end, closed months included.
+  // `?todo=1`: the whole span of a folded goal, closed months included.
   all?: boolean;
   // The query the link keeps (`planear`, `volver`), already encoded.
   keep?: string;
 }) {
   const t = await getTranslations();
   const settled = settledMonths(loaded.months, loaded.endedOn !== null);
-  const noEnd = loaded.horizon === null;
-  // A goal with no end shows its months up to this one (last 12) and those ahead set by hand; the rest ahead fold into a line.
+  const folds = foldsMonths(loaded.horizon, settled);
+  const ends = loaded.horizon === null ? undefined : { lastDay: dayBefore(loaded.horizon) };
+  // A goal with no end, or an end past 12 months, shows its months up to this one (last 12), the next and those ahead set by hand; the rest ahead fold into a line.
   // A month open outside the last 12 shows the whole list.
-  const openOutside = noEnd && !endlessCut(settled, { all: false, rhythm: loaded.rhythm }).shown.some((row) => row.month === open);
-  const cut = noEnd ? endlessCut(settled, { all: all || openOutside, rhythm: loaded.rhythm }) : null;
+  const openOutside = folds && !endlessCut(settled, { all: false, rhythm: loaded.rhythm, ends }).shown.some((row) => row.month === open);
+  const cut = folds ? endlessCut(settled, { all: all || openOutside, rhythm: loaded.rhythm, ends }) : null;
   const goal = { ...loaded, months: cut ? cut.shown : settled };
   const allHref = `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}todo=1`;
   const seeAll = cut && cut.hidden > 0 ? <TextLink href={allHref}>{t("common.seeAll")}</TextLink> : null;
   const sheetFor = (month: string) =>
-    cut?.next?.month === month && Boolean(loaded.measureUnit) && !loaded.holdsGoals && loaded.endedOn === null && loaded.archivedAt === null;
+    cut?.next?.month === month && Boolean(loaded.measureUnit) && !loaded.holdsGoals && loaded.archivedAt === null;
   const hrefOf = (month: string) =>
     sheetFor(month)
       ? `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}planear=${month.slice(0, 7)}`
       : `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
   const ownKeys = new Set(cut ? cut.handSet.map((row) => row.month) : []);
-  const caption = t("month.months.caption", { count: goal.months.filter((row) => !ownKeys.has(row.month)).length });
+  const caption = t("month.months.caption", { count: goal.months.length });
   const currentIndex = goal.months.findIndex((row) => row.current);
   const openIndex = goal.months.findIndex((row) => row.month === open);
   // A holder measures through its goals: its own measure name may be empty (RP-80).
@@ -101,8 +104,15 @@ export async function MonthsList({
   const unit = goal.measureUnit;
   const timed = isTimeUnit(unit);
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
-  const ahead = cut?.line || ownKeys.size > 0 ? (
+  const ahead = cut?.line || cut?.rest || ownKeys.size > 0 ? (
     <>
+      {cut?.rest ? (
+        <Text as="p" variant="line">
+          <TextLink href={allHref}>
+            {t("month.months.rest", { count: cut.rest.count, date: civilDayMonthYear(cut.rest.lastDay) })}
+          </TextLink>
+        </Text>
+      ) : null}
       {cut?.line ? (
         <Text as="p" variant="line">
           <TextLink href={allHref}>{t("month.months.ahead", { planned: formatQuantity(cut.line.planned, unit, words) })}</TextLink>
@@ -110,7 +120,7 @@ export async function MonthsList({
       ) : null}
       {ownKeys.size > 0 ? (
         <Text as="p" variant="line">
-          {cut?.line ? t("month.months.andOwn") : t("month.months.own")}
+          {cut?.line || cut?.rest ? t("month.months.andOwn") : t("month.months.own")}
         </Text>
       ) : null}
     </>
@@ -226,7 +236,9 @@ export async function MonthsScreen({
 
   const t = await getTranslations();
   const open = goal.archivedAt === null && goal.endedOn === null;
-  const target = goal.months.find((row) => row.current) ?? goal.months[0];
+  // A goal with every month behind it opens on its last one, inside the folded list.
+  const target =
+    goal.months.find((row) => row.current) ?? (goal.months.every((row) => row.past) ? goal.months.at(-1) : goal.months[0]);
   const empty = !goal.holdsGoals && Boolean(goal.measureUnit && goal.measureName) && goal.budgets.length === 0 && goal.rhythm === null;
   const planHref = (month: string) => `/metas/${goal.id}/meses?planear=${month.slice(0, 7)}`;
 

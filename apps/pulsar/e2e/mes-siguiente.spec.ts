@@ -49,7 +49,7 @@ for (const width of [360, 1280]) {
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
         expect(await rowMonths(page, id)).toEqual(keysFor(range(-11, 2)));
-        expect(await mainLower(page)).toContain("13 meses");
+        expect(await mainLower(page)).toContain("14 meses");
         await expect(rowLink(page, id, 0)).toContainText("en curso");
         const next = rowLink(page, id, 1);
         await expect(next).toContainText("planeado");
@@ -262,21 +262,24 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("control: a goal with an end of 30 months lists 30 rows, each to its page, with no line and no label (RP-110)", async ({ person, browser, baseURL, db }) => {
-      // Kills: the cut, the sheet link or the label applied to a goal with an end.
+    test("an end of 30 months folds as a goal with no end: 2 rows, the line «28 meses más, hasta el …», no label (RP-110, RP-115)", async ({ person, browser, baseURL, db }) => {
+      // Kills: the cut left for a goal with no end alone (the s4 rule); the sheet link missing on a goal with an end.
+      const horizon = monthStartOf(30);
       const id = await seedOpenGoal(db, person, {
         name: "Con final",
         unit: PAGES,
-        horizon: monthStartOf(30),
+        horizon,
         rhythm: 40,
         created: openedIn(0) > new Date() ? new Date() : openedIn(0),
       });
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
         const targets = await monthTargets(page, id);
-        expect(Object.keys(targets)).toHaveLength(30);
-        for (const [month, hrefs] of Object.entries(targets)) expect(hrefs, month).toEqual([`/metas/${id}/meses/${month}`]);
-        expect(await mainLower(page)).not.toMatch(/meses que vienen|monto propio/);
+        expect(Object.keys(targets).sort()).toEqual(keysFor([0, 1]));
+        expect(targets[monthKey(0)]).toEqual([monthHref(id, 0)]);
+        expect(targets[monthKey(1)]?.[0]).toMatch(planearOf(1));
+        expect(await mainLower(page)).toMatch(/28 meses más, hasta el \d{1,2} \p{L}{3} \d{4}/u);
+        expect(await mainLower(page)).not.toMatch(/cada uno|monto propio/);
         await expect(seeAll(page.locator("main"))).toHaveCount(0);
       } finally {
         await context.close();
