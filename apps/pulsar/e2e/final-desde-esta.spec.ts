@@ -57,7 +57,7 @@ test("a goal with no end, opened long ago, offers 12 weeks counted from this one
     const sheet = await openPutSheet(page);
     const field = sheet.getByLabel(WEEKS_LABEL, { exact: true });
     await expect(field).toHaveValue("12");
-    await expect(sheet.getByText(`termina el ${endWords(12)}`, { exact: true })).toBeVisible();
+    await expect(sheet.getByText(new RegExp(`^termina el ${escape(endWords(12))} · \\d+ semanas? en total$`))).toBeVisible();
     await sheet.getByRole("button", { name: "Ponerle final", exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
     expect(await horizonOfGoal(db, id)).toBe(horizonFromThisWeek(12));
@@ -79,9 +79,9 @@ test("the hint follows the weeks typed and carries the year (RP-103)", async ({ 
     await sheet.getByLabel(WEEKS_LABEL, { exact: true }).fill("60");
     const expected = endWords(60);
     expect(expected).toMatch(/ \d{4}$/);
-    await expect(sheet.getByText(`termina el ${expected}`, { exact: true })).toBeVisible();
+    await expect(sheet.getByText(new RegExp(`^termina el ${escape(expected)} · \\d+ semanas? en total$`))).toBeVisible();
     await sheet.getByLabel(WEEKS_LABEL, { exact: true }).fill("1");
-    await expect(sheet.getByText(`termina el ${endWords(1)}`, { exact: true })).toBeVisible();
+    await expect(sheet.getByText(new RegExp(`^termina el ${escape(endWords(1))} · \\d+ semanas? en total$`))).toBeVisible();
   } finally {
     await context.close();
   }
@@ -221,7 +221,7 @@ test("E2: «mover el final» opens on 8, labelled «semanas, contando esta», en
     const sheet = await openMove(page);
     await expect(moveField(sheet)).toHaveValue("8");
     await expect(sheet.getByLabel(/contando la del/)).toHaveCount(0);
-    await expect(sheet.getByText(`termina el ${lastDay(8)}`, { exact: true })).toBeVisible();
+    await expect(sheet.getByText(new RegExp(`^termina el ${escape(lastDay(8))} · \\d+ semanas? en total$`))).toBeVisible();
   } finally {
     await context.close();
   }
@@ -267,7 +267,7 @@ test("E2: writing 10 hints the end with its year, writes the Monday after week 1
     const sheet = await openMove(page);
     await moveField(sheet).fill("10");
     const hint = sheet.getByText(/^termina el /);
-    await expect(hint).toHaveText(`termina el ${lastDay(10)}`);
+    await expect(hint).toHaveText(new RegExp(`^termina el ${escape(lastDay(10))} · \\d+ semanas? en total$`));
     expect(lastDay(10)).toMatch(/ \d{4}$/);
     await sheet.getByRole("button", { name: "Moverlo", exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
@@ -423,10 +423,10 @@ test("u7: a goal that ended reopens on 1 counted from this week, ending this Sun
     const sheet = await openMove(page);
     await expect(moveField(sheet)).toHaveValue("1");
     await expect(sheet.getByLabel(/contando la del/)).toHaveCount(0);
-    await expect(sheet.getByText(`termina el ${lastDay(1)}`, { exact: true })).toBeVisible();
+    await expect(sheet.getByText(new RegExp(`^termina el ${escape(lastDay(1))} · \\d+ semanas? en total$`))).toBeVisible();
     await moveField(sheet).fill("4");
-    await expect(sheet.getByText(`termina el ${lastDay(4)}`, { exact: true })).toBeVisible();
-    await sheet.getByRole("button", { name: "Moverlo", exact: true }).click();
+    await expect(sheet.getByText(new RegExp(`^termina el ${escape(lastDay(4))} · \\d+ semanas? en total$`))).toBeVisible();
+    await sheet.getByRole("button", { name: "Ponerle final", exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
     expect(await horizonOfGoal(db, id)).toBe(fromThis(4));
   } finally {

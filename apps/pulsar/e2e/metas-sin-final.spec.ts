@@ -249,7 +249,7 @@ for (const width of [360, 1280]) {
         await expect(sheet.getByRole("button", { name: "Quitar el final", exact: true })).toHaveCount(0);
         await expect(sheet.getByRole("button", { name: "Dejarla sin final", exact: true })).toBeVisible();
         await sheet.getByLabel("semanas, contando esta", { exact: true }).fill("12");
-        const hint = (await sheet.getByText(/^termina el /).innerText()).replace(/^termina el /, "").trim();
+        const hint = (await sheet.getByText(/^termina el /).innerText()).replace(/^termina el /, "").replace(/ · .*$/, "").trim();
         expect(hint).toMatch(/^\d{1,2} \w{3} \d{4}$/);
         await holdActions(page, 1200);
         await sheet.getByRole("button", { name: "Ponerle final", exact: true }).click();

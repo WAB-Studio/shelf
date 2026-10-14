@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { moveHorizon } from "@/app/actions/plan";
 import { dayBefore, horizonForWeeks, weekIndexOf } from "@/lib/day/weeks";
+import { horizonWeeks } from "./phase-weeks";
 import { horizonTreeRefusal, type PlacementRefusal } from "@/lib/goals/placement";
 import { refusalKey } from "@/lib/goals/refusal-key";
 import { buildTree, type TreeRow } from "@/lib/goals/tree";
@@ -77,6 +78,8 @@ export function MoveHorizonAction({
   const [open, setOpen] = useState(false);
   const startWeeks = weeks ?? DEFAULT_WEEKS;
   const noEnd = storedHorizon === null;
+  // A reopened goal is offered what a goal with no end is: put an end on it, or leave it without one.
+  const putMode = noEnd || reopening;
   // Every end sheet counts its weeks from the current one; the goal screen counts from the opening.
   const anchor = todayInZone();
   const [value, setValue] = useState(String(startWeeks));
@@ -211,11 +214,15 @@ export function MoveHorizonAction({
     }
   }
 
-  const endsOn = typed.success
-    ? t("goal.horizon.endsOn", {
-        date: civilDayMonthYear(dayBefore(untouched && storedHorizon ? storedHorizon : horizonForWeeks(anchor, typed.data))),
-      })
-    : t("goal.errors.horizonWeeksInvalid");
+  // The weeks the goal's own screen will read: the stored end when untouched, else the one the count writes.
+  const shownHorizon = typed.success ? (untouched && storedHorizon ? storedHorizon : horizonForWeeks(anchor, typed.data)) : null;
+  const total = shownHorizon === null ? null : horizonWeeks(openedOn, shownHorizon);
+  const endsOn =
+    shownHorizon === null || total === null
+      ? t("goal.errors.horizonWeeksInvalid")
+      : t("goal.horizon.endsOnTotal", { date: civilDayMonthYear(dayBefore(shownHorizon)), total });
+  // A refusal takes the hint; the total moves to the muted line.
+  const refused = treeSentence !== null || error !== null;
 
   return (
     <>
@@ -240,7 +247,9 @@ export function MoveHorizonAction({
           autoFocus
         />
         <Text as="p" variant="sentence" tone="muted">
-          {t("goal.horizon.bothCounts", { n: weekIndexOf(openedOn, anchor) })}
+          {refused && total !== null
+            ? t("goal.horizon.bothCountsTotal", { n: weekIndexOf(openedOn, anchor), total })
+            : t("goal.horizon.bothCounts", { n: weekIndexOf(openedOn, anchor) })}
         </Text>
         {later.length > 0 && candidate !== null ? (
           <Notice
@@ -252,7 +261,7 @@ export function MoveHorizonAction({
             aside={t("goal.horizon.laterAside", { count: later.length, date: civilDayMonthYear(dayBefore(candidate)) })}
           />
         ) : null}
-        {noEnd ? null : (
+        {putMode ? null : (
           <Flex>
             <Button variant="ghost" tone="accent" tap={44} onClick={handleRemove} disabled={pending}>
               {t("goal.horizon.removeEnd")}
@@ -271,10 +280,10 @@ export function MoveHorizonAction({
             onClick={() => handleMove()}
             disabled={pending || treeSentence !== null || later.length > 0}
           >
-            {t(noEnd ? "goal.horizon.putConfirm" : "goal.horizon.confirm")}
+            {t(putMode ? "goal.horizon.putConfirm" : "goal.horizon.confirm")}
           </Button>
-          <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-            {t(noEnd ? "goal.horizon.keepNoEnd" : "goal.horizon.cancel")}
+          <Button block variant="outline" onClick={reopening ? handleRemove : () => setOpen(false)} disabled={pending}>
+            {t(putMode ? "goal.horizon.keepNoEnd" : "goal.horizon.cancel")}
           </Button>
         </SheetActions>
       </Sheet>

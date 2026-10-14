@@ -84,7 +84,7 @@ test("moving the end of an ended goal opens on a count that ends this Sunday and
     const sunday = weekOf(todayInZone())[6];
     await expect(sheet.getByText(`termina el ${civilDayMonthYear(sunday)}`)).toBeVisible();
 
-    await sheet.getByRole("button", { name: "Moverlo" }).click();
+    await sheet.getByRole("button", { name: "Ponerle final" }).click();
     await expect(sheet).toBeHidden();
     await expect(page.getByText(/^terminó el /)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toBeVisible();
