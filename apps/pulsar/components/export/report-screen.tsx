@@ -7,7 +7,6 @@ import { dayBefore } from "@/lib/day/weeks";
 import {
   civilSpan,
   goalSections,
-  isLongTable,
   keepsHeadWithTable,
   printsOnPaper,
   type Section as GoalSection,
@@ -365,19 +364,20 @@ function GoalPart({
     : null;
   const restLine = cut?.rest ? t("rest", { count: cut.rest.count, date: civilDayMonthYear(cut.rest.lastDay) }) : null;
   const seeAll =
-    cut && !all && cut.hidden > 0 ? (
+    cut && !all && cut.seeAll ? (
       <PrintHidden>
         <TextLink href="/exportar?todo=1">{commonT("seeAll")}</TextLink>
       </PrintHidden>
     ) : null;
-  // On screen the line is a link to the whole list; on paper it sits in the table's `after`.
+  // The rhythm's line (no end) opens the whole list on screen and comes before the months set by hand; `rest` opens nothing
+  // and closes the last table, on both faces.
   const screenAhead =
-    (aheadLine || restLine) && !all ? (
+    aheadLine && !all ? (
       <Text as="p" variant="line">
-        <TextLink href="/exportar?todo=1">{aheadLine ?? restLine}</TextLink>
+        <TextLink href="/exportar?todo=1">{aheadLine}</TextLink>
       </Text>
     ) : null;
-  const ownLabel = paperOwn.size > 0 ? (aheadLine || restLine ? t("andOwn") : t("own")) : null;
+  const ownLabel = paperOwn.size > 0 ? (aheadLine ? t("andOwn") : t("own")) : null;
   const screenLabel =
     screenAhead || ownLabel ? (
       <PrintHidden>
@@ -389,12 +389,20 @@ function GoalPart({
         ) : null}
       </PrintHidden>
     ) : null;
+  const screenRest =
+    restLine && !all ? (
+      <PrintHidden>
+        <Text as="p" variant="line">
+          {restLine}
+        </Text>
+      </PrintHidden>
+    ) : null;
   const paperAhead =
-    aheadLine || restLine || ownLabel ? (
+    aheadLine || ownLabel ? (
       <>
-        {aheadLine || restLine ? (
+        {aheadLine ? (
           <Text as="p" variant="line">
-            {aheadLine ?? restLine}
+            {aheadLine}
           </Text>
         ) : null}
         {ownLabel ? (
@@ -404,6 +412,11 @@ function GoalPart({
         ) : null}
       </>
     ) : null;
+  const paperRest = restLine ? (
+    <Text as="p" variant="line">
+      {restLine}
+    </Text>
+  ) : null;
 
   const held = inside !== undefined && inside.length > 0;
   // The screen lists every task of the group naming its goal; paper keeps each goal's own.
@@ -575,20 +588,8 @@ function GoalPart({
                 after={
                   restLine || out.length > 0 ? (
                     <>
-                      {restLine && !all ? (
-                        <PrintHidden>
-                          <Text as="p" variant="line">
-                            <TextLink href="/exportar?todo=1">{restLine}</TextLink>
-                          </Text>
-                        </PrintHidden>
-                      ) : null}
-                      {restLine ? (
-                        <PrintOnly>
-                          <Text as="p" variant="line">
-                            {restLine}
-                          </Text>
-                        </PrintOnly>
-                      ) : null}
+                      {screenRest}
+                      {paperRest ? <PrintOnly>{paperRest}</PrintOnly> : null}
                       {out.length > 0 ? (
                         <Text as="p" variant="line">
                           {t("monthsOutTasks", {
@@ -767,17 +768,23 @@ function GoalPart({
               </Text>
             )
           ) : null;
-        // The line and its label sit in the first table's `after` on paper, between the tables on screen.
+        // On paper the rhythm's line and the label sit in the first table's `after`, `rest` in the last one's, with its last row.
+        // On screen they sit between the tables and under the last one.
         const monthTables = (list: GoalReport["months"], own: ReadonlySet<string>) => {
           const first = list.filter((month) => !own.has(month.month));
           const ownList = list.filter((month) => own.has(month.month));
           const current = first.findIndex((m) => m.current);
           const paperFace = list === paperMonths;
-          const tail = ownList.length > 0 ? null : outNode;
-          const firstAfter = paperFace && (paperAhead || tail) ? (
+          const closing = paperFace && (paperRest || outNode) ? (
+            <>
+              {paperRest}
+              {outNode}
+            </>
+          ) : null;
+          const firstAfter = paperFace && (paperAhead || (ownList.length === 0 && closing)) ? (
             <>
               {paperAhead}
-              {tail}
+              {ownList.length === 0 ? closing : null}
             </>
           ) : undefined;
           return (
@@ -814,12 +821,13 @@ function GoalPart({
                     wrapNote={!timed}
                     wholeNote={timed}
                     afterPrintOnly
-                    after={outNode ?? undefined}
+                    after={closing ?? undefined}
                   />
                 </>
               ) : (
                 paperFace ? screenLabel : null
               )}
+              {paperFace ? screenRest : null}
             </>
           );
         };
@@ -899,7 +907,8 @@ function GoalPart({
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
-        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(paperMonths, goal.unit)} only={section === "months" && unit === null}>
+        // «por mes» breaks between its rows, so the goal's head never waits alone for a table that jumps a sheet.
+        <PrintBlock key={section} span={spans(section)} only={section === "months" && unit === null}>
           {render(section)}
         </PrintBlock>
       ))}

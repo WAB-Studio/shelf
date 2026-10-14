@@ -56,7 +56,13 @@ export async function MonthsList({
   const cut = folds ? endlessCut(settled, { all: all || openOutside, rhythm: loaded.rhythm, ends }) : null;
   const goal = { ...loaded, months: cut ? cut.shown : settled };
   const allHref = `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}todo=1`;
-  const seeAll = cut && cut.hidden > 0 ? <TextLink href={allHref}>{t("common.seeAll")}</TextLink> : null;
+  const seeAll = cut?.seeAll ? <TextLink href={allHref}>{t("common.seeAll")}</TextLink> : null;
+  // A goal with an end counts the months after the last shown; the line names them and opens nothing.
+  const rest = cut?.rest ? (
+    <Text as="p" variant="line">
+      {t("month.months.rest", { count: cut.rest.count, date: civilDayMonthYear(cut.rest.lastDay) })}
+    </Text>
+  ) : null;
   const sheetFor = (month: string) =>
     cut?.next?.month === month && Boolean(loaded.measureUnit) && !loaded.holdsGoals && loaded.archivedAt === null;
   const hrefOf = (month: string) =>
@@ -95,6 +101,7 @@ export async function MonthsList({
           rows={bare}
           current={currentIndex === -1 ? undefined : currentIndex}
           open={openIndex === -1 ? undefined : openIndex}
+          after={rest ?? undefined}
         />
         {seeAll}
       </>
@@ -104,15 +111,9 @@ export async function MonthsList({
   const unit = goal.measureUnit;
   const timed = isTimeUnit(unit);
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
-  const ahead = cut?.line || cut?.rest || ownKeys.size > 0 ? (
+  // The rhythm's line (no end) opens the whole list and comes before the months set by hand; `rest` closes the last table.
+  const ahead = cut?.line || ownKeys.size > 0 ? (
     <>
-      {cut?.rest ? (
-        <Text as="p" variant="line">
-          <TextLink href={allHref}>
-            {t("month.months.rest", { count: cut.rest.count, date: civilDayMonthYear(cut.rest.lastDay) })}
-          </TextLink>
-        </Text>
-      ) : null}
       {cut?.line ? (
         <Text as="p" variant="line">
           <TextLink href={allHref}>{t("month.months.ahead", { planned: formatQuantity(cut.line.planned, unit, words) })}</TextLink>
@@ -120,7 +121,7 @@ export async function MonthsList({
       ) : null}
       {ownKeys.size > 0 ? (
         <Text as="p" variant="line">
-          {cut?.line || cut?.rest ? t("month.months.andOwn") : t("month.months.own")}
+          {cut?.line ? t("month.months.andOwn") : t("month.months.own")}
         </Text>
       ) : null}
     </>
@@ -187,7 +188,14 @@ export async function MonthsList({
         unit={timed ? unit : undefined}
         current={currentIndex === -1 ? undefined : currentIndex}
         open={openIndex === -1 ? undefined : openIndex}
-        after={ahead}
+        after={
+          ahead || (rest && ownRows.length === 0) ? (
+            <>
+              {ahead}
+              {ownRows.length === 0 ? rest : null}
+            </>
+          ) : undefined
+        }
       />
       {ownRows.length > 0 ? (
         <Table
@@ -203,6 +211,7 @@ export async function MonthsList({
           rows={ownRows}
           figures={[1]}
           unit={timed ? unit : undefined}
+          after={rest ?? undefined}
         />
       ) : null}
       {seeAll}
