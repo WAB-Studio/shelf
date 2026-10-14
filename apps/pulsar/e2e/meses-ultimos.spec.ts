@@ -169,7 +169,7 @@ for (const width of [360, 1280]) {
         const folded = await yOf(lineOf(page.locator("main")));
         expect(folded.top).toBeGreaterThanOrEqual(next.bottom - 1);
         expect(mine.top).toBeGreaterThanOrEqual(folded.bottom - 1);
-        expect(await mainLower(page)).toContain("13 meses");
+        expect(await mainLower(page)).toContain("14 meses");
       } finally {
         await context.close();
       }
