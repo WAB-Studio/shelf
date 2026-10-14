@@ -7,6 +7,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import {
   civilSpan,
   goalSections,
+  isLongTable,
   keepsHeadWithTable,
   printsOnPaper,
   type Section as GoalSection,
@@ -907,8 +908,8 @@ function GoalPart({
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
-        // «por mes» breaks between its rows, so the goal's head never waits alone for a table that jumps a sheet.
-        <PrintBlock key={section} span={spans(section)} only={section === "months" && unit === null}>
+        // A tall «por mes» breaks between its rows, so the goal's head never waits alone for a table that jumps a sheet.
+        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(paperMonths, goal.unit)} only={section === "months" && unit === null}>
           {render(section)}
         </PrintBlock>
       ))}

@@ -46,12 +46,11 @@ export const HEAD_WITH_TABLE_ROWS = 8;
 // Past this many rows a table is too long for its goal to keep to one page.
 export const HEAD_WITH_TABLE_MAX_ROWS = 20;
 
-// A «por mes» table of this many printed rows or more flows across pages
-// instead of keeping to one (`ReporteImpresoTablaLarga.dc.html`).
-export const LONG_TABLE_ROWS = 15;
-
+// A «por mes» table tall enough to keep its goal's head flows across pages between its rows,
+// so a goal that does not fit a page never leaves its head alone (`PapelCabeceraPegada.dc.html`).
+// A shorter one keeps to one page.
 export function isLongTable(months: GoalReport["months"], unit: string | null): boolean {
-  return months.filter((month) => printsOnPaper(month, unit)).length >= LONG_TABLE_ROWS;
+  return months.filter((month) => printsOnPaper(month, unit)).length >= HEAD_WITH_TABLE_ROWS;
 }
 
 // A week as one month holds it: the whole week, or its days in that month.
