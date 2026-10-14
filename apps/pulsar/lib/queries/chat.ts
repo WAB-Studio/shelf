@@ -8,14 +8,21 @@ import { withGoalsDb } from "@/lib/session";
 export type ChangeNames = {
   goals: Map<
     string,
-    { name: string; unit: string | null; horizon: string | null; hasNote: boolean; months: Record<string, number> }
+    {
+      name: string;
+      unit: string | null;
+      horizon: string | null;
+      hasNote: boolean;
+      months: Record<string, number>;
+      rhythm: number | null;
+    }
   >;
   tasks: Map<string, { name: string; month: string | null; day: string | null; hasNote: boolean }>;
   commitments: Map<string, { name: string; unit: string | null; target: number | null }>;
 };
 
 type NameRow =
-  | { kind: "goal"; id: string; name: string; unit: string | null; extra: { horizon: string | null; hasNote: boolean; months: Record<string, number> } }
+  | { kind: "goal"; id: string; name: string; unit: string | null; extra: { horizon: string | null; hasNote: boolean; months: Record<string, number>; rhythm: number | null } }
   | { kind: "task"; id: string; name: string; unit: null; extra: { month: string | null; day: string | null; hasNote: boolean } }
   | { kind: "commitment"; id: string; name: string; unit: string | null; extra: { target: number | null } };
 
@@ -42,6 +49,7 @@ export async function loadChangeNames(ids: {
              jsonb_build_object(
                'horizon', g.horizon::text,
                'hasNote', g.note is not null,
+               'rhythm', g.rhythm,
                'months', (select coalesce(jsonb_object_agg(to_char(b.month, 'YYYY-MM'), b.amount), '{}'::jsonb)
                             from "goals"."month_budgets" b where b.goal_id = g.id)
              ) as extra

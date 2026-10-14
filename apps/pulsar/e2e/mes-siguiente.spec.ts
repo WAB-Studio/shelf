@@ -420,19 +420,18 @@ test("E1 on paper with nothing set by hand: the count says 13 and there is no la
   expect(paper).not.toContain("monto propio");
 });
 
-test("E1b on paper: next month is printed «sin monto» though empty, and the fold names the rest without it (RP-110)", async ({ person, browser, baseURL, db }) => {
-  // Kills: `printsOnPaper` without `next`.
+test("E1b on paper: next month is printed «sin monto» though empty, and a goal with no end names none of the rest (RP-110, RP-118)", async ({ person, browser, baseURL, db }) => {
+  // Kills: `printsOnPaper` without `next`; the «…: sin monto» line of a goal with no end.
   await seedLeer(db, person, { rhythm: null, opened: -2 });
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Leer");
   expect(paper).toContain("leer · por mes · 4 meses");
-  expectInOrder(paper, [monthLabel(-2), monthLabel(0), monthLabel(1), ": sin monto"]);
-  const fold = paper.slice(paper.indexOf(monthLabel(1)) + monthLabel(1).length, paper.indexOf(": sin monto"));
-  expect(fold, "next month is a row, not in the fold").not.toContain(monthName(1));
-  expect(fold).toContain(String(monthStartOf(11).slice(0, 4)));
+  expectInOrder(paper, [monthLabel(-2), monthLabel(0), monthLabel(1), "sin monto"]);
+  expect(paper, "no fold line").not.toContain(": sin monto");
+  for (const offset of [2, 11]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
 });
 
-test("E1d on paper: a goal with no unit prints its months with tasks in month order, and the empty ones in «…: sin tareas» (b13, RP-110)", async ({ person, browser, baseURL, db }) => {
-  // Kills: months with tasks printed out of order (Jan 2027 after Mar 2027).
+test("E1d on paper: a goal with no unit prints its months with tasks in month order, and with no end no line for the empty ones (b13, RP-110, RP-118)", async ({ person, browser, baseURL, db }) => {
+  // Kills: months with tasks printed out of order (Jan 2027 after Mar 2027); the «…: sin tareas» line of a goal with no end.
   const id = await seedOpenGoal(db, person, { name: "Vivir mejor", unit: null, horizon: null, created: openedIn(-2) });
   // Written out of order on purpose: the later month first.
   for (const [offset, count] of [[5, 1], [1, 1], [3, 2]] as const) {
@@ -443,10 +442,12 @@ test("E1d on paper: a goal with no unit prints its months with tasks in month or
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Vivir mejor");
   expect(paper).toContain("vivir mejor · por mes · 6 meses");
   // The six printed rows, by name and in month order, so the count cannot pass on other rows.
-  expectInOrder(paper, [monthLabel(-2), monthLabel(-1), monthLabel(0), monthLabel(1), monthLabel(3), monthLabel(5), ": sin tareas"]);
-  const fold = paper.slice(paper.indexOf(monthLabel(5)) + monthLabel(5).length, paper.indexOf(": sin tareas"));
-  for (const offset of [2, 4]) expect(fold, monthName(offset)).toContain(monthName(offset));
-  for (const offset of [1, 3, 5]) expect(fold, longMonth(offset)).not.toContain(longMonth(offset));
+  expectInOrder(paper, [monthLabel(-2), monthLabel(-1), monthLabel(0), monthLabel(1), monthLabel(3), monthLabel(5)]);
+  expect(paper, "no «sin tareas» line").not.toContain(": sin tareas");
+  for (const offset of [2, 4]) {
+    expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
+    expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
+  }
 });
 
 test("a group with no end prints, on paper, its closed months, the current one and the one that comes (RP-80, RP-110)", async ({ person, browser, baseURL, db }) => {

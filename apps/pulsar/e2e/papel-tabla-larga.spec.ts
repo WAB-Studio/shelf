@@ -99,12 +99,13 @@ type Where = {
   rows: { page: number; at: number }[];
 };
 
-function locate(file: string, name: string, months: number): Where {
+// `total`: the goal's months. RP-118: a goal with an end whose list folds (more than 12) counts its printed rows out of them.
+function locate(file: string, name: string, months: number, total: number): Where {
   const pages = pageLines(file);
   const lowered = name.toLowerCase();
   const namePage = pages.findIndex((lines) => lines.includes(lowered));
   expect(namePage, `goal name in the PDF (${file})`).toBeGreaterThanOrEqual(0);
-  const label = `${lowered} · por mes · ${months} meses`;
+  const label = `${lowered} · por mes · ${total > 12 ? `${months} de ${total}` : months} meses`;
   const labelPage = pages.findIndex((lines) => lines.includes(label));
   expect(labelPage, `«${label}» in the PDF (${file})`).toBeGreaterThanOrEqual(0);
   const labelAt = pages[labelPage].indexOf(label);
@@ -160,7 +161,8 @@ async function withGoal(
   const { context, page } = await open(ctx.browser, ctx.baseURL, ctx.person, name);
   try {
     const file = await printed(page, spec.tag);
-    check(locate(file, name, spec.printed ?? spec.months), name);
+    // `seed` ends the goal two months after its last amount or task.
+    check(locate(file, name, spec.printed ?? spec.months, spec.months + 2), name);
   } finally {
     await context.close();
     await remove(ctx.db, ctx.person, id);

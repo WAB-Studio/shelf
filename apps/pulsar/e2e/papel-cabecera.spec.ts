@@ -84,7 +84,7 @@ async function printedPages(browser: Browser, baseURL: string | undefined, perso
 const spaced = (word: string) => word.split("").join(" ?");
 const HEAD = new RegExp(`^${spaced("mes")} .*${spaced("hecho")}.*${spaced("planeado")}`, "i");
 const ROW = new RegExp(`^(${NAMES.join("|")}) \\d{4}\\b`);
-const LABEL = "leer · por mes · 14 meses";
+const LABEL = "leer · por mes · 14 de 27 meses";
 const MONTHS_LEFT = lineWords();
 
 function lineWords() {
@@ -131,7 +131,7 @@ function locate(pages: string[][]) {
 
 // The text the check below reads as the head of a goal that must never end a sheet.
 const ORPHAN = new RegExp(
-  `^(${GOALS.map((goal) => goal.toLowerCase()).join("|")})( · por mes( · \\d+ meses?)?)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
+  `^(${GOALS.map((goal) => goal.toLowerCase()).join("|")})( · por mes( · \\d+( de \\d+)? meses?)?)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$|^(y )?estos meses con monto propio:$`,
   "i",
 );
 
@@ -180,12 +180,14 @@ function checkPaper(pages: string[][], tag: string, tasks: number) {
   const left = pages[december.page].findIndex((line) => line.startsWith(MONTHS_LEFT));
   expect(left, `${tag}: «${MONTHS_LEFT}» on sheet ${december.page + 1}, where December is`).toBeGreaterThan(december.at);
   expect(left - december.at, `${tag}: the line right behind December's cells`).toBeLessThanOrEqual(3);
-  if (label >= 0) expect(label, `${tag}: the label before December`).toBeLessThan(december.at);
-  else {
-    // The label closes the sheet before: December starts the next one, with the label right above the table's head.
-    const before = pages[december.page - 1];
-    expect(before?.some((line) => line === "estos meses con monto propio:"), `${tag}: «estos meses con monto propio:» printed`).toBe(true);
-  }
+  // RP-118: the label travels with the first row of the second table, so it is on December's sheet, right above December's row.
+  expect(label, `${tag}: «estos meses con monto propio:» on sheet ${december.page + 1}, the sheet of December`).toBeGreaterThanOrEqual(0);
+  expect(label, `${tag}: the label before December`).toBeLessThan(december.at);
+  expect(december.at - label, `${tag}: December's row right under the label (at most the repeated head between)`).toBeLessThanOrEqual(2);
+  expect(
+    pages.flatMap((lines, page) => lines.map((line) => ({ line, page }))).filter((entry) => entry.line === "estos meses con monto propio:"),
+    `${tag}: the label printed once`,
+  ).toHaveLength(1);
   return w;
 }
 

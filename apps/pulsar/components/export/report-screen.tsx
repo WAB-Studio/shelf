@@ -290,6 +290,18 @@ function InsideRow({
   return <Row name={goal.name} meta={meta} href={`/metas/${goal.id}`} level={level} />;
 }
 
+// The first two tasks of a goal, and its last two, share a sheet: paper never opens or closes one on a task alone.
+function inPairs(tasks: ReactNode[]): ReactNode[] {
+  if (tasks.length < 2) return tasks;
+  const pair = (key: string, run: ReactNode[]) => (
+    <PrintBlock key={key} together>
+      {run}
+    </PrintBlock>
+  );
+  if (tasks.length <= 4) return [pair("all", tasks)];
+  return [pair("first", tasks.slice(0, 2)), ...tasks.slice(2, -2), pair("last", tasks.slice(-2))];
+}
+
 function GoalPart({
   goal,
   declaredOnly,
@@ -370,6 +382,19 @@ function GoalPart({
         <TextLink href="/exportar?todo=1">{commonT("seeAll")}</TextLink>
       </PrintHidden>
     ) : null;
+  // Opened whole, a list that folds goes back to its fold; paper never draws it.
+  const seeLess =
+    cut && all && cut.seeAll ? (
+      <PrintHidden>
+        <TextLink href="/exportar">{commonT("seeLess")}</TextLink>
+      </PrintHidden>
+    ) : null;
+  // A goal with an end whose list folds says its rows out of its months, on both faces.
+  const ofMonths = (shown: number) => goal.horizon !== null && cut !== null && shown < goal.months.length;
+  const captionOf = (shown: number, declared = false) =>
+    ofMonths(shown)
+      ? t(declared ? "monthsCaptionOfDeclared" : "monthsCaptionOf", { count: shown, total: goal.months.length })
+      : t(declared ? "monthsCaptionDeclared" : "monthsCaption", { count: shown });
   // The rhythm's line (no end) opens the whole list on screen and comes before the months set by hand; `rest` opens nothing
   // and closes the last table, on both faces.
   const screenAhead =
@@ -398,21 +423,17 @@ function GoalPart({
         </Text>
       </PrintHidden>
     ) : null;
-  const paperAhead =
-    aheadLine || ownLabel ? (
-      <>
-        {aheadLine ? (
-          <Text as="p" variant="line">
-            {aheadLine}
-          </Text>
-        ) : null}
-        {ownLabel ? (
-          <Text as="p" variant="line">
-            {ownLabel}
-          </Text>
-        ) : null}
-      </>
-    ) : null;
+  const paperAhead = aheadLine ? (
+    <Text as="p" variant="line">
+      {aheadLine}
+    </Text>
+  ) : null;
+  // On paper the label is the title of the own-amount table, held to its first row.
+  const paperLabel = ownLabel ? (
+    <Text as="p" variant="line">
+      {ownLabel}
+    </Text>
+  ) : null;
   const paperRest = restLine ? (
     <Text as="p" variant="line">
       {restLine}
@@ -493,7 +514,7 @@ function GoalPart({
       case "tasks": {
         const list = (items: { task: ReportTask; of?: string }[]) => (
           <Section label={t("sections.tasks", { month: thisMonth })}>
-            {items.map(({ task, of }, index) => (
+            {inPairs(items.map(({ task, of }, index) => (
               <Flex key={`${task.name}-${task.from ?? ""}-${index}`} direction="column">
                 {index > 0 ? <Separator /> : null}
                 <TaskLine
@@ -544,7 +565,7 @@ function GoalPart({
                   </Flex>
                 ))}
               </Flex>
-            ))}
+            )))}
           </Section>
         );
         if (!held) return list(goal.tasks.map((task) => ({ task })));
@@ -574,14 +595,15 @@ function GoalPart({
               printed: paperKeys.has(month.month) && printed(month),
             };
           });
-          const out = foldedMonths;
+          // Paper only (`PrintBlock only`): a goal with no end names no month ahead that holds no task.
+          const out = goal.horizon === null ? [] : foldedMonths;
           return (
             <Section
               label={t("byMonth", { goal: goal.name })}
-              printSuffix={t("monthsCaption", { count: paperMonths.filter(printed).length })}
+              printSuffix={captionOf(paperMonths.filter(printed).length)}
             >
               <Table
-                caption={t("monthsCaption", { count: screenMonths.length })}
+                caption={captionOf(screenMonths.length)}
                 columns={[t("columns.month"), t("columns.tasks"), t("columns.status")]}
                 rows={rows}
                 nowrapLabel
@@ -704,7 +726,8 @@ function GoalPart({
             printed: paperKeys.has(month.month) && printed(month),
           };
         });
-        const out = foldedMonths;
+        // A goal with no end prints no line for its months ahead with neither an amount nor a task.
+        const out = goal.horizon === null ? foldedMonths.filter((month) => (month.tasks?.total ?? 0) > 0) : foldedMonths;
         const outNames = format.list(
           out.map((m) => monthYear.format(civilDateToDate(m.month))),
           { type: "conjunction" },
@@ -791,7 +814,9 @@ function GoalPart({
           return (
             <>
               <Table
-                caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", { count: list.length })}
+                caption={captionOf(list.length, declaredOnly)}
+                showCaption={ofMonths(list.length)}
+                above={seeLess}
                 columns={[t("columns.month"), t("columns.done"), t("columns.planned")]}
                 rows={rowsOf(first)}
                 figures={[1]}
@@ -812,6 +837,7 @@ function GoalPart({
                   {paperFace ? screenLabel : null}
                   <Table
                     caption=""
+                    printTitle={paperFace ? paperLabel : undefined}
                     columns={[t("columns.month"), t("columns.done"), t("columns.planned")]}
                     rows={rowsOf(ownList)}
                     figures={[1]}
@@ -836,7 +862,7 @@ function GoalPart({
           <Flex direction="column" gap="6">
             <Section
               label={t("byMonth", { goal: goal.name })}
-              printSuffix={t("monthsCaption", { count: paperMonths.filter(printed).length })}
+              printSuffix={captionOf(paperMonths.filter(printed).length)}
             >
               {all ? (
                 <>
@@ -847,6 +873,7 @@ function GoalPart({
                 monthTables(paperMonths, paperOwn)
               )}
               {seeAll}
+              {seeLess}
             </Section>
             {goal.weeks.length > 0 ? (
               <PrintHidden>

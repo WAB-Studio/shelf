@@ -322,7 +322,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
     }
   }
 
-  const SECTION_LABEL = /^(este mes · |hasta hoy$|fases$|tareas de |al terminar$)|· por mes · \d+ mes(es)?$/i;
+  const SECTION_LABEL = /^(este mes · |hasta hoy$|fases$|tareas de |al terminar$)|· por mes · \d+( de \d+)? mes(es)?$/i;
 
   test("on paper a goal's heading and a section label are never the last line of a page", async ({ person, browser, baseURL, db }) => {
     await sweepOnPaper({ person, browser, baseURL, db }, (lines, names) => {
@@ -342,7 +342,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
     await sweepOnPaper({ person, browser, baseURL, db }, (lines) => {
       let checked = 0;
       for (const [index, line] of lines.entries()) {
-        if (!/· por mes · \d+ mes(es)?$/i.test(line.text)) continue;
+        if (!/· por mes · \d+( de \d+)? mes(es)?$/i.test(line.text)) continue;
         checked += 1;
         const firstRow = lines.slice(index + 1).find((later) => MONTH_LABEL.test(later.text));
         expect(firstRow?.page, `«${line.text}» is parted from its first month`).toBe(line.page);

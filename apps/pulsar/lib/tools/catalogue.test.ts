@@ -31,9 +31,11 @@ mock.module("@/app/actions/plan", {
     moveHorizon: act("moveHorizon"),
     renameGoal: act("renameGoal"),
     retireCommitment: act("retireCommitment"),
+    setGoalMeasure: act("setGoalMeasure"),
     setGoalNote: act("setGoalNote"),
   },
 });
+mock.module("@/app/actions/roadmap", { namedExports: { setRhythm: act("setRhythm") } });
 mock.module("@/lib/queries/day", { namedExports: { loadDay: async () => ({}) } });
 mock.module("@/lib/queries/goal", {
   namedExports: { listGoalsForMetas: async () => [], loadGoal: async () => null },
@@ -50,16 +52,16 @@ beforeEach(() => {
   calls.length = 0;
 });
 
-test("the catalogue holds the 22 names of mcp.json and no more", async () => {
+test("the catalogue holds the 24 names of mcp.json and no more", async () => {
   const { readTools, writeTools } = await catalogue();
   const names = [...readTools, ...writeTools].map((tool) => tool.name).sort();
   assert.deepEqual(names, Object.keys(mcp.tools).sort());
 });
 
-test("the 6 reads are reads and the 16 writes are writes", async () => {
+test("the 6 reads are reads and the 18 writes are writes", async () => {
   const { readTools, writeTools } = await catalogue();
   assert.equal(readTools.length, 6);
-  assert.equal(writeTools.length, 16);
+  assert.equal(writeTools.length, 18);
   assert.ok(readTools.every((tool) => tool.kind === "read"));
   assert.ok(writeTools.every((tool) => tool.kind === "write"));
   assert.ok(!readTools.some((tool) => tool.name === "declare_fact"));
@@ -139,4 +141,23 @@ test("move_goal moves a goal under another, and to the top with a null parent_id
     { act: "moveGoal", input: { goalId: "g1", parentId: ABOVE } },
     { act: "moveGoal", input: { goalId: "g1", parentId: null } },
   ]);
+});
+
+test("set_rhythm calls setRhythm with the goal and the amount, and nothing else (RP-119)", async () => {
+  await call("set_rhythm", { goal_id: "g1", amount: 40 });
+  assert.deepEqual(calls, [{ act: "setRhythm", input: { goalId: "g1", amount: 40 } }]);
+});
+
+test("set_measure calls setGoalMeasure with the goal, the name and the unit (RP-117)", async () => {
+  await call("set_measure", { goal_id: "g1", name: "Cajas embaladas", unit: "cajas" });
+  assert.deepEqual(calls, [{ act: "setGoalMeasure", input: { goalId: "g1", name: "Cajas embaladas", unit: "cajas" } }]);
+});
+
+test("set_rhythm takes no null and no text: the AI never removes a rhythm (RP-119)", async () => {
+  const { writeTool } = await catalogue();
+  const spec = writeTool("set_rhythm")!;
+  for (const amount of [null, "40", undefined]) {
+    assert.equal(spec.input.safeParse({ goal_id: "g1", amount }).success, false, String(amount));
+  }
+  assert.equal(spec.input.safeParse({ goal_id: "g1", amount: 40 }).success, true);
 });

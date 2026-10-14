@@ -33,5 +33,6 @@ export default async function HabitPage({
   const back = toMonth ? { href: "/mes", place: nav("month") } : { href: "/metas", place: nav("goals") };
   const base = `/metas/habitos/${habit.id}`;
   const seeAllHref = toMonth ? `${base}?volver=/mes&todo=1` : `${base}?todo=1`;
-  return <HabitScreen habit={habit} back={back} seeAllHref={seeAllHref} all={todo === "1"} />;
+  const seeLessHref = toMonth ? `${base}?volver=/mes` : base;
+  return <HabitScreen habit={habit} back={back} seeAllHref={seeAllHref} seeLessHref={seeLessHref} all={todo === "1"} />;
 }

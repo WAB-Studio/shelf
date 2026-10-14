@@ -37,9 +37,11 @@ mock.module("@/app/actions/plan", {
     moveHorizon: act("moveHorizon"),
     renameGoal: act("renameGoal"),
     retireCommitment: act("retireCommitment"),
+    setGoalMeasure: act("setGoalMeasure"),
     setGoalNote: act("setGoalNote"),
   },
 });
+mock.module("@/app/actions/roadmap", { namedExports: { setRhythm: act("setRhythm") } });
 mock.module("@/lib/queries/day", {
   namedExports: {
     loadDay: async () => {
@@ -147,7 +149,7 @@ test("a two-round conversation: a read runs, a write becomes one change and neve
   assert.ok(sent.every((request) => request.url === "https://api.openai.com/v1/chat/completions"));
 });
 
-test("the tools offered are the 22 of the catalogue", async () => {
+test("the tools offered are the 24 of the catalogue", async () => {
   script(() => saying("hola"));
   await answer();
   assert.deepEqual(sent[0].body.tools.map((tool) => tool.function.name).sort(), Object.keys(mcp.tools).sort());

@@ -89,6 +89,16 @@ type TableProps = {
   after?: ReactNode;
   // Shows `after` on paper only; the screen draws nothing for it.
   afterPrintOnly?: boolean;
+  // A link before the first row, on screen only («ver menos»): under the phone's
+  // caption, above the wide face's table.
+  above?: ReactNode;
+  // Draws the caption over the wide face too, on screen; paper says it in the
+  // section label's own suffix.
+  showCaption?: boolean;
+  // The table's title on paper only («estos meses con monto propio:»): the first
+  // row of the wide face's head, over the column names, so it stays with the first
+  // row as the head does and comes back with the head on every sheet it runs onto.
+  printTitle?: ReactNode;
 };
 
 function isEmpty(cell: ReactNode): boolean {
@@ -101,7 +111,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, wholeNote, fold, after, afterPrintOnly }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, wholeNote, fold, after, afterPrintOnly, above, showCaption, printTitle }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -152,6 +162,8 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     <>
       <div className={styles.phone}>
         <span className={styles.caption}>{caption}</span>
+        {above ? <div className={styles.above}>{above}</div> : null}
+        {printTitle ? <div className={styles.printTitle}>{printTitle}</div> : null}
         <ol className={styles.stack}>
           {rows.map((row, index) => (
             <li
@@ -182,9 +194,17 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
         {after && !afterPrintOnly ? <div className={styles.after}>{after}</div> : null}
       </div>
 
+      {above ? <div className={styles.wideAbove}>{above}</div> : null}
       <table className={styles.wide}>
-        <caption className={styles.hidden}>{caption}</caption>
+        <caption className={showCaption ? styles.wideCaption : styles.hidden}>{caption}</caption>
         <thead>
+          {printTitle ? (
+            <tr className={styles.titleRow}>
+              <td colSpan={columns.length} className={styles.titleCell}>
+                {printTitle}
+              </td>
+            </tr>
+          ) : null}
           <tr>
             {columns.map((header, column) => (
               <th key={column} scope="col" className={join(styles.header, widthClass(column))}>

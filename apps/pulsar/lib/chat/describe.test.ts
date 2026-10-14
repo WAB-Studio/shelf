@@ -15,8 +15,8 @@ const OTHER = "99999999-9999-4999-8999-999999999999";
 
 const names: ChangeNames = {
   goals: new Map([
-    [G, { name: "EF SET 36+", unit: "minutos", horizon: "2027-03-01", hasNote: false, months: { "2026-12": 90 } }],
-    ["44444444-4444-4444-8444-444444444444", { name: "Inglés B1", unit: null, horizon: "2027-01-01", hasNote: true, months: {} as Record<string, number> }],
+    [G, { name: "EF SET 36+", unit: "minutos", horizon: "2027-03-01", hasNote: false, months: { "2026-12": 90 }, rhythm: 600 }],
+    ["44444444-4444-4444-8444-444444444444", { name: "Inglés B1", unit: null, horizon: "2027-01-01", hasNote: true, months: {} as Record<string, number>, rhythm: null }],
   ]),
   tasks: new Map([[T, { name: "Maze", month: null, day: null, hasNote: false }]]),
   commitments: new Map([[C, { name: "Repasar vocabulario", unit: null, target: null }]]),
@@ -25,7 +25,7 @@ const names: ChangeNames = {
 const change = (tool: string, input: Record<string, unknown>) => ({ id: "c1", tool, input });
 
 test("the catalogue holds one sentence per write tool", () => {
-  assert.equal(WRITES.length, 16);
+  assert.equal(WRITES.length, 18);
   for (const name of WRITES) {
     assert.equal(typeof (chat.change as Record<string, unknown>)[name], "string", name);
   }
@@ -97,6 +97,8 @@ test("every tool describes itself over its own ids", () => {
     move_goal: { goal_id: G, parent_id: null },
     set_goal_note: { goal_id: G, note: "x" },
     retire_commitment: { commitment_id: C },
+    set_rhythm: { goal_id: G, amount: 600 },
+    set_measure: { goal_id: G, name: "Cajas", unit: "cajas" },
   };
   assert.deepEqual(Object.keys(inputs).sort(), [...WRITES].sort());
   for (const name of WRITES) {
@@ -223,13 +225,15 @@ const PLACEHOLDERS: Record<string, string[]> = {
   move_goal: ["goal"],
   set_goal_note: ["goal"],
   retire_commitment: ["commitment"],
+  set_rhythm: ["goal"],
+  set_measure: ["goal"],
 };
 
 test("every change phrase opens with an infinitive and keeps its placeholders", () => {
   const phrases = chat.change as Record<string, string>;
   assert.deepEqual(Object.keys(phrases).sort(), Object.keys(PLACEHOLDERS).sort());
   for (const [tool, phrase] of Object.entries(phrases)) {
-    assert.match(phrase.split(" ")[0], /^\p{L}+(ar|er|ir)$/u, tool);
+    assert.match(phrase.split(" ")[0], /^\p{L}+(ar|er|ir)(le|la|lo|se)?$/u, tool);
     const used = [...phrase.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
     assert.deepEqual(used, PLACEHOLDERS[tool], tool);
   }
@@ -241,7 +245,7 @@ test("a goal with no end is shown as «sin final», before and after", () => {
   assert.equal(given.values.after, "sin final");
   const endless: ChangeNames = {
     ...names,
-    goals: new Map([[G, { name: "Leer", unit: null, horizon: null, hasNote: false, months: {} }]]),
+    goals: new Map([[G, { name: "Leer", unit: null, horizon: null, hasNote: false, months: {}, rhythm: null }]]),
   };
   const gives = describeChange(change("move_horizon", { goal_id: G, horizon: "2027-03-01" }), endless);
   assert.ok("key" in gives);
@@ -251,4 +255,60 @@ test("a goal with no end is shown as «sin final», before and after", () => {
   assert.equal(created.values.name, "Leer");
   const habit = describeChange(change("add_commitment", { name: "Bañarse", cadence_kind: "daily", satisfaction: "tap" }), names);
   assert.ok("key" in habit);
+});
+
+const READING = "55555555-5555-4555-8555-555555555555";
+const MOVING = "66666666-6666-4666-8666-666666666666";
+const withGoals: ChangeNames = {
+  ...names,
+  goals: new Map([
+    ...names.goals,
+    [READING, { name: "Leer", unit: "páginas", horizon: null, hasNote: false, months: {}, rhythm: null }],
+    [MOVING, { name: "Mudanza", unit: null, horizon: null, hasNote: false, months: {}, rhythm: null }],
+  ]),
+};
+
+test("set_rhythm reads «sin ritmo → 40 páginas al mes» on a goal with none (RP-119)", () => {
+  const out = describeChange(change("set_rhythm", { goal_id: READING, amount: 40 }), withGoals);
+  assert.deepEqual(out, {
+    key: "chat.change.set_rhythm",
+    values: { goal: "Leer", amount: "40 páginas", before: "sin ritmo", after: "40 páginas al mes" },
+  });
+  assert.equal((chat.change as Record<string, string>).set_rhythm, "Cambiar el ritmo de «{goal}»");
+});
+
+test("set_rhythm reads the rhythm the goal holds as «antes»", () => {
+  const held: ChangeNames = {
+    ...withGoals,
+    goals: new Map([[READING, { name: "Leer", unit: "páginas", horizon: null, hasNote: false, months: {}, rhythm: 40 }]]),
+  };
+  const out = describeChange(change("set_rhythm", { goal_id: READING, amount: 55 }), held);
+  assert.ok("key" in out);
+  assert.equal(out.values.before, "40 páginas al mes");
+  assert.equal(out.values.after, "55 páginas al mes");
+});
+
+test("set_rhythm in time reads in hours", () => {
+  const out = describeChange(change("set_rhythm", { goal_id: G, amount: 600 }), names);
+  assert.ok("key" in out);
+  assert.equal(out.values.before, "10 h al mes");
+  assert.equal(out.values.after, "10 h al mes");
+});
+
+test("set_measure reads «sin medida → cajas» and names the goal (RP-117)", () => {
+  const out = describeChange(change("set_measure", { goal_id: MOVING, name: " Cajas embaladas ", unit: " cajas " }), withGoals);
+  assert.deepEqual(out, {
+    key: "chat.change.set_measure",
+    values: { goal: "Mudanza", name: "Cajas embaladas", unit: "cajas", before: "sin medida", after: "cajas" },
+  });
+  assert.equal((chat.change as Record<string, string>).set_measure, "Ponerle medida a «{goal}»");
+});
+
+test("set_rhythm and set_measure on a goal the person has not are refused; a blank unit too", () => {
+  assert.deepEqual(describeChange(change("set_rhythm", { goal_id: OTHER, amount: 40 }), withGoals), REFUSED);
+  assert.deepEqual(describeChange(change("set_measure", { goal_id: OTHER, name: "x", unit: "y" }), withGoals), REFUSED);
+  assert.deepEqual(describeChange(change("set_measure", { goal_id: MOVING, name: "x", unit: "  " }), withGoals), REFUSED);
+  for (const amount of [null, -1, 1.5, "40"]) {
+    assert.deepEqual(describeChange(change("set_rhythm", { goal_id: READING, amount }), withGoals), REFUSED, String(amount));
+  }
 });

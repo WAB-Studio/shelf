@@ -89,6 +89,7 @@ let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
 let addPhase: typeof import("@/app/actions/plan").addPhase;
 let addCommitment: typeof import("@/app/actions/plan").addCommitment;
 let setRhythm: typeof import("@/app/actions/roadmap").setRhythm;
+let setGoalMeasure: typeof import("@/app/actions/plan").setGoalMeasure;
 let reopenGoal: typeof import("@/app/actions/plan").reopenGoal;
 let archiveGoal: typeof import("@/app/actions/plan").archiveGoal;
 let retireCommitment: typeof import("@/app/actions/plan").retireCommitment;
@@ -131,9 +132,20 @@ let retiredCommitmentId: string;
 let oneOffId: string;
 let fixtureGoalId: string;
 
+// Every statement the app's own pool sends, in order: `db/client.ts` takes `globalThis.sql` when it
+// stands, so the pool installed here is the one the actions run on.
+const wire: string[] = [];
+let appPool: ReturnType<typeof postgres>;
+
 before(async () => {
   installStubs(loadCookies());
-  ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal, archiveGoal, retireCommitment } = await import("@/app/actions/plan"));
+  appPool = postgres(process.env.DATABASE_URL!, {
+    prepare: false,
+    max: 2,
+    debug: (_id, query) => void wire.push(String(query)),
+  });
+  (globalThis as unknown as { sql: unknown }).sql = appPool;
+  ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal, archiveGoal, retireCommitment, setGoalMeasure } = await import("@/app/actions/plan"));
   ({ setRhythm } = await import("@/app/actions/roadmap"));
   ({ createOneOff, scheduleOneOff, deleteOneOff, fixTask } = await import("@/app/actions/one-offs"));
   ({ declareFact, undoFact } = await import("@/app/actions/facts"));
@@ -184,6 +196,7 @@ after(async () => {
   // Cascades to the fixture's commitments, one-off and facts.
   if (fixtureGoalId) await sql`delete from goals.goals where id = ${fixtureGoalId}`;
   await sql.end();
+  await appPool?.end();
 });
 
 test("renameGoal: a goalId that names no goal is reported notFound, not a false ok:true", async () => {
@@ -998,5 +1011,128 @@ test("moveHorizon: with two phases the refusal judges the last one, names it, an
     assert.equal(await goalHorizon(goalId), shiftDay(today, 50));
   } finally {
     await sql`delete from goals.goals where id = ${goalId}`;
+  }
+});
+
+// RP-117: the act that gives a goal its measure, the same for the screen and the AI.
+test("setGoalMeasure: a goal with no measure takes the name and the unit asked, hours kept as minutes, and nothing else is written", async () => {
+  const [move] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${personId}, 'RP-117 Mudanza', ${shiftDay(today, 60)}) returning id`;
+  const [study] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${personId}, 'RP-117 Estudio', ${shiftDay(today, 60)}) returning id`;
+  const measureOf = async (goalId: string) => {
+    const [row] = await sql<{ measure_name: string | null; measure_unit: string | null; rhythm: number | null }[]>`
+      select measure_name, measure_unit, rhythm from goals.goals where id = ${goalId}`;
+    return row;
+  };
+  const footprint = async (goalId: string) => {
+    const [row] = await sql<{ commitments: number; budgets: number }[]>`
+      select (select count(*)::int from goals.commitments where goal_id = ${goalId}) as commitments,
+             (select count(*)::int from goals.month_budgets where goal_id = ${goalId}) as budgets`;
+    return row;
+  };
+  try {
+    const before = await footprint(move.id);
+    revalidated.length = 0;
+    assert.deepEqual(await setGoalMeasure({ goalId: move.id, name: "Cajas embaladas", unit: "cajas" }), { ok: true });
+    assert.deepEqual(await measureOf(move.id), { measure_name: "Cajas embaladas", measure_unit: "cajas", rhythm: null });
+    assert.deepEqual(await footprint(move.id), before);
+    assert.deepEqual(revalidated, [`/metas/${move.id}`, "/"]);
+
+    assert.deepEqual(await setGoalMeasure({ goalId: study.id, name: "Estudio", unit: "horas" }), { ok: true });
+    assert.deepEqual(await measureOf(study.id), { measure_name: "Estudio", measure_unit: "minutos", rhythm: null });
+  } finally {
+    await sql`delete from goals.goals where id in ${sql([move.id, study.id])}`;
+  }
+});
+
+test("setGoalMeasure: a measure once put never changes, and the refusal names the unit it keeps", async () => {
+  const [read] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+    values (${personId}, 'RP-117 Leer', ${shiftDay(today, 60)}, 'Leer', 'páginas') returning id`;
+  try {
+    assert.deepEqual(await setGoalMeasure({ goalId: read.id, name: "Km", unit: "km" }), {
+      ok: false,
+      error: "plan.errors.measureKept",
+      values: { name: "páginas" },
+    });
+    const [row] = await sql<{ measure_name: string; measure_unit: string }[]>`
+      select measure_name, measure_unit from goals.goals where id = ${read.id}`;
+    assert.deepEqual(row, { measure_name: "Leer", measure_unit: "páginas" });
+  } finally {
+    await sql`delete from goals.goals where id = ${read.id}`;
+  }
+});
+
+test("setGoalMeasure: a closed goal, a holder, another person's goal and a bad input are each refused with their key and write nothing", async () => {
+  const [archived] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, archived_at)
+    values (${personId}, 'RP-117 archivada', ${shiftDay(today, 60)}, now()) returning id`;
+  const [ended] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, 'RP-117 terminada', ${today}, now() - interval '20 days') returning id`;
+  const [holder] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${personId}, 'RP-117 madre', ${shiftDay(today, 90)}) returning id`;
+  await sql`
+    insert into goals.goals (user_id, name, horizon, parent_id)
+    values (${personId}, 'RP-117 hija', ${shiftDay(today, 60)}, ${holder.id})`;
+  const [foreign] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon)
+    values (${await memberId()}, 'RP-117 ajena', ${shiftDay(today, 60)}) returning id`;
+  const ids = [archived.id, ended.id, holder.id, foreign.id];
+  const measured = async () => {
+    const [row] = await sql<{ n: number }[]>`
+      select count(*)::int as n from goals.goals where id in ${sql(ids)} and (measure_name is not null or measure_unit is not null)`;
+    return row.n;
+  };
+  const ask = (goalId: string, name = "Km", unit = "km") => setGoalMeasure({ goalId, name, unit });
+  try {
+    revalidated.length = 0;
+    assert.deepEqual(await ask(archived.id), { ok: false, error: "plan.errors.goalNotFound" });
+    assert.deepEqual(await ask(ended.id), { ok: false, error: "plan.errors.goalNotFound" });
+    assert.deepEqual(await ask(holder.id), { ok: false, error: "plan.errors.holderNoMeasure" });
+    assert.deepEqual(await ask(foreign.id), { ok: false, error: "plan.errors.notFound" });
+    assert.deepEqual(await ask(randomUUID()), { ok: false, error: "plan.errors.notFound" });
+    assert.equal((await ask(holder.id, "   ")).ok, false);
+    assert.deepEqual(await ask(holder.id, "   "), { ok: false, error: "plan.errors.nameEmpty" });
+    assert.deepEqual(await ask(holder.id, "a".repeat(121)), { ok: false, error: "plan.errors.nameTooLong" });
+    assert.deepEqual(await ask(holder.id, "Km", ""), { ok: false, error: "plan.errors.unitEmpty" });
+    assert.deepEqual(await ask(holder.id, "Km", "u".repeat(41)), { ok: false, error: "plan.errors.unitTooLong" });
+    assert.deepEqual(revalidated, []);
+    assert.equal(await measured(), 0);
+  } finally {
+    await sql`delete from goals.goals where id = ${holder.id} or parent_id = ${holder.id}`;
+    await sql`delete from goals.goals where id in ${sql([archived.id, ended.id, foreign.id])}`;
+  }
+});
+
+test("setGoalMeasure: one statement reaches the wire between the begin and the commit", async () => {
+  const [goal] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${personId}, 'RP-117 un viaje', ${shiftDay(today, 60)}) returning id`;
+  const body = (from: number) =>
+    wire.slice(from).filter((q) => !/^\s*(begin|commit|rollback)\b/i.test(q) && !/set_config/i.test(q));
+  try {
+    for (const [name, unit] of [["Pasos", "pasos"], ["Otra", "otra"]]) {
+      const from = wire.length;
+      await setGoalMeasure({ goalId: goal.id, name, unit });
+      assert.equal(body(from).length, 1, `${name}: ${body(from).join(" | ")}`);
+    }
+  } finally {
+    await sql`delete from goals.goals where id = ${goal.id}`;
+  }
+});
+
+test("setGoalMeasure: the statement itself scopes the goal to the person, not the policy alone", async () => {
+  // The row policy already hides another person's goal; the filter is the second lock, so it is read off the wire.
+  const [goal] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${personId}, 'RP-117 filtro', ${shiftDay(today, 60)}) returning id`;
+  try {
+    const from = wire.length;
+    await setGoalMeasure({ goalId: goal.id, name: "Pasos", unit: "pasos" });
+    const statement = wire.slice(from).find((q) => /update\s+"?goals"?\."?goals"?\s+set\s+measure_name/i.test(q));
+    assert.ok(statement, wire.slice(from).join(" | "));
+    assert.match(statement, /from\s+"?goals"?\."?goals"?\s+where\s+id\s*=\s*\$\d+\s+and\s+user_id\s*=\s*\$\d+/i);
+  } finally {
+    await sql`delete from goals.goals where id = ${goal.id}`;
   }
 });

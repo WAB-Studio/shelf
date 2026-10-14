@@ -42,8 +42,8 @@ const asResolved = (person: Person): ResolvedPerson => ({ id: person.id, email: 
 async function seed(owner: Person, label: string) {
   const horizon = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
   const [goal] = await admin<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
-    values (${owner.id}, ${`${label} meta`}, ${horizon}, 'Medida', 'min') returning id`;
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
+    values (${owner.id}, ${`${label} meta`}, ${horizon}, 'Medida', 'min', 120) returning id`;
   const [task] = await admin<{ id: string }[]>`
     insert into goals.one_offs (user_id, name, note) values (${owner.id}, ${`${label} tarea`}, 'una nota') returning id`;
   await admin`
@@ -106,6 +106,7 @@ test("loadChangeNames: three kinds of ids are one statement (plus the settle)", 
     horizon,
     hasNote: false,
     months: { [ids.month]: 90 },
+    rhythm: 120,
   });
   assert.deepEqual(names.tasks.get(ids.task), { name: "chat-names mía tarea", month: null, day: null, hasNote: true });
   assert.deepEqual(names.commitments.get(ids.commitment), { name: "chat-names mía compromiso", unit: "min", target: 10 });

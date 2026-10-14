@@ -24,6 +24,12 @@
   color: var(--pulsar-muted);
 }
 
+/* `above`: the link under the caption, 8px over the first row's rule. */
+.above,
+.wideAbove {
+  margin-block-end: 8px;
+}
+
 .stack {
   margin: 0;
   padding: 0;
@@ -202,12 +208,24 @@
   }
 }
 
+/* The wide face's `above` shows and hides with its table. */
+.wideAbove {
+  display: none;
+}
+
+@media (min-width: 700px) {
+  .wideAbove {
+    display: block;
+  }
+}
+
 /* Inside a narrow column the phone's stack stays at every width. */
 .narrow .phone {
   display: block;
 }
 
-.narrow .wide {
+.narrow .wide,
+.narrow .wideAbove {
   display: none;
 }
 
@@ -216,9 +234,33 @@
     display: block;
   }
 
-  .stackInCard .wide {
+  .stackInCard .wide,
+  .stackInCard .wideAbove {
     display: none;
   }
+}
+
+/* `showCaption`: the phone's caption, over the wide face's header. */
+.wideCaption {
+  caption-side: top;
+  padding-block-end: 8px;
+  text-align: start;
+  font-family: var(--font-mono);
+  font-size: var(--pulsar-text-label-size);
+  letter-spacing: var(--pulsar-text-label-tracking);
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--pulsar-muted);
+}
+
+/* `printTitle` is paper's alone. */
+.printTitle,
+.titleRow {
+  display: none;
+}
+
+.titleCell {
+  padding: 0 0 12px;
 }
 
 .hidden {
@@ -486,6 +528,22 @@
 
   .wide .afterRow[data-print-only] {
     display: table-row;
+  }
+
+  .wide .titleRow {
+    display: table-row;
+  }
+
+  .printTitle {
+    display: block;
+    margin-block-end: 12px;
+    break-after: avoid;
+  }
+
+  .above,
+  .wideAbove,
+  .wideCaption {
+    display: none;
   }
 
   .phone .after {

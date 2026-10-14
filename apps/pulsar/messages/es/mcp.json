@@ -22,7 +22,9 @@
     "create_goal": "Abre una meta nueva con su nombre (hasta 120 caracteres) y, si lo tiene, su plazo: el día siguiente a su último día, como AAAA-MM-DD; sin plazo la meta no termina nunca; mide lo que mida su primer compromiso con cantidad. Con parent_id la abre dentro de otra meta: caben tres niveles y su plazo no pasa del de la de arriba. Nunca borra.",
     "move_goal": "Mueve una meta bajo otra (parent_id) o la deja arriba, sin meta encima (parent_id nulo), con las metas que tiene dentro. Se rechaza lo que cierra un ciclo, pasa de tres niveles o termina después que la de arriba. Una meta con metas dentro no tiene ritmo ni monto propios. Nunca borra ni archiva.",
     "set_goal_note": "Escribe la nota de una meta, o la reemplaza por una nueva: texto plano de hasta 100 000 caracteres, con saltos de línea. Nunca la vacía: una nota en blanco se rechaza. Nunca borra.",
-    "retire_commitment": "Retira un compromiso: deja de preguntar desde hoy y los días ya hechos quedan hechos. Para cambiarlo, retíralo y agrega otro. Nunca borra."
+    "retire_commitment": "Retira un compromiso: deja de preguntar desde hoy y los días ya hechos quedan hechos. Para cambiarlo, retíralo y agrega otro. Nunca borra.",
+    "set_rhythm": "Pone o cambia el ritmo de una meta que mide algo: amount es un entero en la unidad de la meta, y en minutos si mide tiempo (de 1 a 44 640). Una meta con metas dentro no tiene ritmo propio. El primer ritmo de una meta en tiempo devuelve al plan sus tareas fijas sin hacer; cambiarlo no toca los meses ya cerrados. Nunca lo quita: eso lo hace solo la persona. Nunca borra.",
+    "set_measure": "Le da su medida a una meta que todavía no mide: name es lo que cuenta (hasta 120 caracteres) y unit su unidad (hasta 40); «horas» se guarda en minutos. Una meta que ya mide nunca cambia su medida, y una con metas dentro no tiene medida propia. Nunca borra."
   },
   "errors": {
     "goalNotFound": "Esa meta no existe o no es de esta persona.",

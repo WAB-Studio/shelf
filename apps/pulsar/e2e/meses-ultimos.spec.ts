@@ -176,7 +176,7 @@ for (const width of [360, 1280]) {
     });
 
     test("«ver todo» opens the 24 months up to this one and the 11 ahead, without the line, keeping `planear` (RP-107)", async ({ person, browser, baseURL, db }) => {
-      // Kills: `?todo=1` without the months ahead; `keep` lost; the line or «ver todo» left on the full list.
+      // Kills: `?todo=1` without the months ahead; `keep` lost; the line or «ver todo» left on the full list; «ver menos» missing.
       const id = await seedLeer(db, person);
       const planned = monthStartOf(3).slice(0, 7);
       const volver = `/metas/${id}/meses`;
@@ -193,7 +193,15 @@ for (const width of [360, 1280]) {
         expect((await monthHrefs(page, id)).sort()).toEqual(hrefsFor(id, range(-23, 11)));
         await expect(page.getByRole("link", { name: ANY_LINE, includeHidden: true })).toHaveCount(0);
         await expect(page.getByRole("link", { name: SEE_ALL, exact: true, includeHidden: true })).toHaveCount(0);
-        await expect(page.getByText(/ver menos/i)).toHaveCount(0);
+        // RP-118: the whole list goes back to its fold, behind the open sheet, `planear` and `volver` kept.
+        const less = page.getByRole("link", { name: "ver menos", exact: true, includeHidden: true }).locator("visible=true");
+        await expect(less).toHaveCount(2);
+        for (const index of [0, 1]) {
+          const back = (await less.nth(index).getAttribute("href")) ?? "";
+          expect(back, `«ver menos» ${index}`).not.toContain("todo");
+          expect(back, `«ver menos» ${index}`).toContain(`planear=${planned}`);
+          expect(back, `«ver menos» ${index}`).toContain(`volver=${encodeURIComponent(volver)}`);
+        }
       } finally {
         await context.close();
       }
@@ -491,39 +499,36 @@ test("on paper a month ahead set by hand is a row after the line, and next month
   expect(paper.lastIndexOf(monthLabel(2))).toBeGreaterThan(line);
 });
 
-test("on paper a goal with no rhythm prints next month and folds the empty months after it into «…: sin monto», with no rhythm line (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
-  // Kills: printing no line for the empty months; printing them as rows; a rhythm line without a rhythm; next month folded.
+test("on paper a goal with no rhythm prints next month and its months set by hand, and no line for the empty months, with no rhythm line (RP-107, RP-110, RP-118)", async ({ person, browser, baseURL, db }) => {
+  // Kills: printing the empty months as rows; a rhythm line without a rhythm; next month folded; the «…: sin monto» line of a goal with no end.
   const id = await seedLeer(db, person, { rhythm: null, opened: -2 });
   await budget(db, person, id, 3, 60);
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Leer");
   for (const offset of [-2, -1, 0, 1, 3]) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
   expect(paper).not.toContain("cada uno");
   expect(paper).not.toContain("meses que vienen");
-  const line = paper.indexOf(": sin monto");
-  expect(line, "the «sin monto» line").toBeGreaterThanOrEqual(0);
-  const folded = paper.slice(Math.max(0, paper.lastIndexOf(monthLabel(3)) + monthLabel(3).length));
-  for (const offset of [2, 4, 11]) expect(folded, longMonth(offset)).toContain(longMonth(offset));
-  // The months with an amount, and next month, are rows, never named by the line.
-  expect(folded).not.toContain(longMonth(1));
-  expect(folded).not.toContain(longMonth(3));
+  expect(paper, "no «sin monto» line").not.toContain(": sin monto");
+  for (const offset of [2, 4, 11]) {
+    expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
+    expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
+  }
 });
 
-test("on paper a goal that measures nothing, with no task ahead, prints next month and folds the 10 after it into «…: sin tareas» (RP-107, RP-110)", async ({ person, browser, baseURL, db }) => {
-  // Kills: `printsOnPaper` keeping an `endless` month ahead; the paper without the folded line.
+test("on paper a goal that measures nothing, with no task ahead and no end, prints next month and no line for the 10 after it (RP-107, RP-110, RP-118)", async ({ person, browser, baseURL, db }) => {
+  // Kills: `printsOnPaper` keeping an `endless` month ahead; the «…: sin tareas» line of a goal with no end.
   const id = await seedOpenGoal(db, person, { name: "Sin medida", unit: null, horizon: null, created: openedIn(-2) });
   await db`insert into goals.one_offs (user_id, goal_id, name, planned_month) values (${person.id}, ${id}, 'Una tarea', ${monthStartOf(0)}::date)`;
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Sin medida");
   expect(paper).toContain("sin medida · por mes · 4 meses");
   for (const offset of [-2, -1, 0, 1]) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
   for (const offset of [2, 3, 11]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
-  expect(paper).toContain(": sin tareas");
-  for (const offset of [2, 6, 11]) expect(paper, longMonth(offset)).toContain(longMonth(offset));
-  expect(paper, longMonth(1)).not.toContain(longMonth(1));
+  expect(paper, "no «sin tareas» line").not.toContain(": sin tareas");
+  for (const offset of [1, 2, 6, 11]) expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
   expect(paper).not.toContain("cada uno");
 });
 
-test("on paper a goal that measures nothing prints a month ahead that holds a task as a row (RP-71, RP-107)", async ({ person, browser, baseURL, db }) => {
-  // Kills: the fold swallowing a month ahead with tasks.
+test("on paper a goal that measures nothing prints a month ahead that holds a task as a row, and with no end no line for the others (RP-71, RP-107, RP-118)", async ({ person, browser, baseURL, db }) => {
+  // Kills: the fold swallowing a month ahead with tasks; the «…: sin tareas» line of a goal with no end.
   const id = await seedOpenGoal(db, person, { name: "Sin medida", unit: null, horizon: null, created: openedIn(-2) });
   await db`insert into goals.one_offs (user_id, goal_id, name, planned_month) values (${person.id}, ${id}, 'Una tarea', ${monthStartOf(0)}::date)`;
   await db`insert into goals.one_offs (user_id, goal_id, name, planned_month) values (${person.id}, ${id}, 'Otra tarea', ${monthStartOf(3)}::date)`;
@@ -531,12 +536,8 @@ test("on paper a goal that measures nothing prints a month ahead that holds a ta
   expect(paper).toContain("sin medida · por mes · 5 meses");
   expect(paper).toContain(monthLabel(1));
   expect(paper).toContain(monthLabel(3));
-  const at = paper.indexOf(": sin tareas");
-  expect(at, "the «sin tareas» line").toBeGreaterThanOrEqual(0);
-  const folded = paper.slice(Math.max(0, at - 400), at);
-  expect(folded).toContain(longMonth(2));
-  expect(folded).not.toContain(longMonth(1));
-  expect(folded).not.toContain(longMonth(3));
+  expect(paper, "no «sin tareas» line").not.toContain(": sin tareas");
+  for (const offset of [1, 2, 3]) expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
 });
 
 test("on paper a group with no end prints its closed months (RP-80, RP-107)", async ({ person, browser, baseURL, db }) => {

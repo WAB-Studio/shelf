@@ -14,19 +14,23 @@ export function PrintPage({ children }: { children?: ReactNode }) {
 // `whole` keeps it on one page; a block taller than a page still breaks.
 // `newPage` opens a sheet on paper: the block starts at the top of one.
 // `only` takes the block off the screen altogether, gap included.
+// `together` keeps a run of a flex column's items on one sheet; on screen they keep the column's gap.
 export function PrintBlock({
   children,
   span,
   whole,
   only,
   newPage,
+  together,
 }: {
   children?: ReactNode;
   span?: "all" | "lead";
   whole?: boolean;
   only?: boolean;
   newPage?: boolean;
+  together?: boolean;
 }) {
+  if (together) return <div className={styles.together}>{children}</div>;
   const classes = [styles.block];
   if (span) classes.push(styles.all);
   if (span === "lead") classes.push(styles.lead);

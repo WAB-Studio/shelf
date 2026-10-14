@@ -24,7 +24,8 @@ import exportMessages from "../messages/es/export.json";
 // (spaced sections and the months printed alone keep a section from running across pages).
 // Measured with `page.pdf({ preferCSSPageSize: true })`: the sheet is the app's own `@page`, never the test's.
 // Remeasured after RP-70 (empty future months off paper): `pdfinfo` still reads 5 pages for the seeded report.
-const A4_PAGES = 5;
+// Remeasured after RP-118: the first task, a note taller than a sheet, shares a sheet with the second, so each goal's tasks open a sheet: 6.
+const A4_PAGES = 6;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 // The page as the PDF the person prints, its words on one line.
@@ -1530,7 +1531,10 @@ test.describe("the report on A4, compact", () => {
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
   ];
 
-  type Planned = { goalId: string; name: string; months: string[] };
+  type Planned = { goalId: string; name: string; months: string[]; total: number };
+  // RP-118: a goal with an end whose list folds counts its printed rows out of its months.
+  const porMes = (goal: Planned) =>
+    `${goal.name} · por mes · ${goal.months.length < goal.total ? `${goal.months.length} de ${goal.total}` : goal.months.length} meses`.toLowerCase();
 
   // A goal that opens this month and runs `months` months, a planned amount in each, one open task and no activity.
   async function seedCompact(
@@ -1564,7 +1568,7 @@ test.describe("the report on A4, compact", () => {
       (month) => `${MONTH_NAMES[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`,
     );
     // A goal past 12 months folds (RP-115): its last, partial month goes into «N meses más» and prints no row.
-    return { goalId: goal.id, name: spec.name, months: labels.length > 12 ? labels.slice(0, -1) : labels };
+    return { goalId: goal.id, name: spec.name, months: labels.length > 12 ? labels.slice(0, -1) : labels, total: labels.length };
   }
 
   // The board's three goals: 6 months of 12 h, 3 months of km, 2 months of searches.
@@ -1704,17 +1708,17 @@ test.describe("the report on A4, compact", () => {
       const pages = pageLines(file);
       const monthRow = new RegExp(`^(${MONTH_NAMES.join("|")}) \\d{4}\\b`);
       for (const goal of goals) {
-        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase()));
+        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === porMes(goal)));
         expect(at, `${goal.name}: «por mes» label in the PDF`).toBeGreaterThanOrEqual(0);
         const lines = pages[at];
-        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase()) + 1);
+        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === porMes(goal)) + 1);
         expect(
           after.some((line) => line.startsWith(goal.months[0]) || monthRow.test(line)),
           `${goal.name}: label on page ${at + 1} of ${pages.length}, its first row is not there`,
         ).toBe(true);
       }
       const orphan = new RegExp(
-        `^(${goals.map((goal) => goal.name).join("|")})( · por mes( · \\d+ meses?)?)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
+        `^(${goals.map((goal) => goal.name).join("|")})( · por mes( · \\d+( de \\d+)? meses?)?)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
         "i",
       );
       for (const [index, lines] of pages.entries()) {
@@ -1753,7 +1757,7 @@ test.describe("the report on A4, compact", () => {
       const pages = pageLines(file);
       // Every line of the PDF with the page it is on, so a goal's rows are read between its label and the next goal.
       const run = pages.flatMap((lines, index) => lines.map((line) => ({ line, page: index })));
-      const lowered = (goal: Planned) => `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase();
+      const lowered = porMes;
       let split = 0;
       for (const [position, goal] of goals.entries()) {
         const from = run.findIndex((entry) => entry.line.toLowerCase() === lowered(goal));
