@@ -20,6 +20,7 @@
     "planned": "planeado",
     "noAmount": "sin monto",
     "ahead": "los demás meses que vienen: {planned} cada uno",
+    "rest": "{count, plural, one {# mes más} other {# meses más}}, hasta el {date}",
     "andOwn": "y estos meses con monto propio:",
     "own": "estos meses con monto propio:",
     "tasksCount": "{count, plural, one {# tarea} other {# tareas}}",

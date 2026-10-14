@@ -184,19 +184,20 @@ test.describe("the paper report: months out carry their year, and each goal's bl
   test("clause 3: a table longer than a page still breaks: every row prints, over more than one page", async ({
     person, browser, baseURL, db,
   }) => {
+    // A goal with an end folds past 12 months (RP-115): the long table is its months set by hand, all but the last.
     const name = `Larga ${Date.now()}`;
-    const id = await seedGoal(db, person, { name, from: -59, to: 0, budgets: [0], tasks: 0 });
+    const id = await seedGoal(db, person, { name, from: 0, to: 59, budgets: range(0, 58), tasks: 0 });
     const { context, page } = await open(browser, baseURL!, person);
     try {
       await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
       const pages = pagesOf(await printed(page, "larga"));
-      const withRows = pages.filter((p) => range(-59, 0).some((o) => p.flat.includes(labelOf(o))));
+      const withRows = pages.filter((p) => range(0, 58).some((o) => p.flat.includes(labelOf(o))));
       expect(withRows.length, "the rows run over more than one page").toBeGreaterThan(1);
       const flat = pages.map((p) => p.flat).join(" ");
-      for (const offset of range(-59, 0)) expect(flat, `row ${labelOf(offset)}`).toContain(labelOf(offset));
+      for (const offset of range(0, 58)) expect(flat, `row ${labelOf(offset)}`).toContain(labelOf(offset));
       // The label stays with the first rows.
       const holder = pages.find((p) => p.flat.includes(`${name} · por mes`.toLowerCase()))!;
-      expect(range(-59, 0).some((o) => holder.flat.includes(labelOf(o))), "label shares a page with rows").toBe(true);
+      expect(range(0, 58).some((o) => holder.flat.includes(labelOf(o))), "label shares a page with rows").toBe(true);
     } finally {
       await context.close();
       await remove(db, person, [id]);

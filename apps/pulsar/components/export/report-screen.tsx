@@ -12,12 +12,12 @@ import {
   printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
-import { endlessCut } from "@/lib/lists/endless-cut";
+import { endlessCut, foldsMonths } from "@/lib/lists/endless-cut";
 import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
-import { civilDateToDate } from "@/lib/zone";
+import { civilDateToDate, civilDayMonthYear } from "@/lib/zone";
 import {
   Figure,
   Flex,
@@ -345,7 +345,9 @@ function GoalPart({
 
   // Paper never opens «ver todo»: a goal with no end prints its last 12 months and those ahead set by hand, folds the
   // rest ahead into the rhythm's line and, when it has none, into the «sin monto» line. `?todo=1` only widens the screen.
-  const cut = goal.horizon === null ? endlessCut(goal.months, { all: false, rhythm: goal.rhythm }) : null;
+  const cut = foldsMonths(goal.horizon, goal.months)
+    ? endlessCut(goal.months, { all: false, rhythm: goal.rhythm, ends: goal.horizon === null ? undefined : { lastDay: dayBefore(goal.horizon) } })
+    : null;
   const paperMonths = cut ? [...cut.shown, ...cut.empty.filter((month) => printsOnPaper(month, goal.unit))].sort((a, b) => a.month.localeCompare(b.month)) : goal.months;
   // Next month prints as a row though it is empty (RP-110).
   const printed = (month: GoalReport["months"][number]) => printsOnPaper(month, goal.unit, cut?.next?.month === month.month);
@@ -361,6 +363,7 @@ function GoalPart({
         fig: () => <Figure variant="meta" value={cut.line!.planned} unit={goal.unit as string} />,
       })
     : null;
+  const restLine = cut?.rest ? t("rest", { count: cut.rest.count, date: civilDayMonthYear(cut.rest.lastDay) }) : null;
   const seeAll =
     cut && !all && cut.hidden > 0 ? (
       <PrintHidden>
@@ -369,12 +372,12 @@ function GoalPart({
     ) : null;
   // On screen the line is a link to the whole list; on paper it sits in the table's `after`.
   const screenAhead =
-    aheadLine && !all ? (
+    (aheadLine || restLine) && !all ? (
       <Text as="p" variant="line">
-        <TextLink href="/exportar?todo=1">{aheadLine}</TextLink>
+        <TextLink href="/exportar?todo=1">{aheadLine ?? restLine}</TextLink>
       </Text>
     ) : null;
-  const ownLabel = paperOwn.size > 0 ? (aheadLine ? t("andOwn") : t("own")) : null;
+  const ownLabel = paperOwn.size > 0 ? (aheadLine || restLine ? t("andOwn") : t("own")) : null;
   const screenLabel =
     screenAhead || ownLabel ? (
       <PrintHidden>
@@ -387,11 +390,11 @@ function GoalPart({
       </PrintHidden>
     ) : null;
   const paperAhead =
-    aheadLine || ownLabel ? (
+    aheadLine || restLine || ownLabel ? (
       <>
-        {aheadLine ? (
+        {aheadLine || restLine ? (
           <Text as="p" variant="line">
-            {aheadLine}
+            {aheadLine ?? restLine}
           </Text>
         ) : null}
         {ownLabel ? (
@@ -570,15 +573,33 @@ function GoalPart({
                 nowrapLabel
                 stackInCard
                 after={
-                  out.length > 0 ? (
-                    <Text as="p" variant="line">
-                      {t("monthsOutTasks", {
-                        months: format.list(
-                          out.map((m) => monthYear.format(civilDateToDate(m.month))),
-                          { type: "conjunction" },
-                        ),
-                      })}
-                    </Text>
+                  restLine || out.length > 0 ? (
+                    <>
+                      {restLine && !all ? (
+                        <PrintHidden>
+                          <Text as="p" variant="line">
+                            <TextLink href="/exportar?todo=1">{restLine}</TextLink>
+                          </Text>
+                        </PrintHidden>
+                      ) : null}
+                      {restLine ? (
+                        <PrintOnly>
+                          <Text as="p" variant="line">
+                            {restLine}
+                          </Text>
+                        </PrintOnly>
+                      ) : null}
+                      {out.length > 0 ? (
+                        <Text as="p" variant="line">
+                          {t("monthsOutTasks", {
+                            months: format.list(
+                              out.map((m) => monthYear.format(civilDateToDate(m.month))),
+                              { type: "conjunction" },
+                            ),
+                          })}
+                        </Text>
+                      ) : null}
+                    </>
                   ) : undefined
                 }
               />
@@ -762,7 +783,7 @@ function GoalPart({
           return (
             <>
               <Table
-                caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", { count: first.length })}
+                caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", { count: list.length })}
                 columns={[t("columns.month"), t("columns.done"), t("columns.planned")]}
                 rows={rowsOf(first)}
                 figures={[1]}

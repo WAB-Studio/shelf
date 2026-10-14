@@ -216,15 +216,15 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("«Por mes» of a goal with an end lists its months as before and has no link (control, RP-106)", async ({ person, browser, baseURL, db }) => {
-      // Kills: the cut applied to a goal with an end (it opened 30 months ago and ends in 3 months: 34 months).
+    test("«Por mes» of a goal with an end past 12 months folds as one with no end (RP-115)", async ({ person, browser, baseURL, db }) => {
+      // Kills: the fold decided by `horizon === null` (it opened 30 months ago and ends in 3 months: 34 months).
       const id = await seedOpenGoal(db, person, { name: "Con final", unit: PAGES, horizon: monthsAhead(3), created: openedMonthsAgo(30) });
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, width);
       try {
         const hrefs = await monthHrefs(page, id);
-        expect(hrefs.length).toBeGreaterThan(12);
-        expect(hrefs).toContain(monthHref(id, -30));
-        await expect(seeAll(page.locator("main"))).toHaveCount(0);
+        expect(hrefs).toHaveLength(13);
+        expect(hrefs).not.toContain(monthHref(id, -30));
+        await expect(seeAll(page.locator("main"))).toBeVisible();
       } finally {
         await context.close();
       }
