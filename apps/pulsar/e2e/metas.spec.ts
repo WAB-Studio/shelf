@@ -10,6 +10,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 // `/metas` (`MetasCentro`, `MetasCentroEscritorio`; RP-11, RP-24, RP-27, RP-49,
 // RP-37; RNP-16, RNP-17, RNP-07): the open goals as rows with their last day,
 // «Abrir otra meta» in a group of its own, and «el plan» beside or below them.
+const MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 function plusDays(days: number): string {
@@ -337,7 +338,9 @@ test("the /metas row says the unit once after a figure of 1, «1 de 10 búsqueda
   try {
     const page = await context.newPage();
     await visit(page, "/metas");
-    await expect(page.locator("main").locator("a", { hasText: name })).toContainText(/octubre\s+·\s+1\s+de\s+10\s*búsquedas/);
+    await expect(page.locator("main").locator("a", { hasText: name })).toContainText(
+      new RegExp(`${MONTH_NAMES[Number(todayInZone().slice(5, 7)) - 1]}\\s+·\\s+1\\s+de\\s+10\\s*búsquedas`),
+    );
   } finally {
     await context.close();
   }
