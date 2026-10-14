@@ -8,13 +8,13 @@
     "write": "abrir metas, escribir tareas y sus notas",
     "rename": "renombrar una meta y mover su final",
     "phases": "agregar fases y compromisos, y retirar un compromiso",
-    "plan": "darle mes o día a una tarea, devolverla al plan y cambiar el monto de un mes"
+    "plan": "darle mes o día a una tarea, devolverla al plan y cambiar el monto de un mes",
+    "measure": "poner la medida y el ritmo de una meta"
   },
   "neverLabel": "nunca",
   "never": {
     "delete": "borrar ni archivar nada",
-    "undo": "desmarcar lo que ya hiciste",
-    "rhythm": "cambiar el ritmo"
+    "undo": "desmarcar lo que ya hiciste"
   },
   "consentLead": "Podrá leer tus metas y anotar lo que hagas.",
   "returnsTo": "al permitir, vuelves a <host>{address}</host>",

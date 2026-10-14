@@ -131,6 +131,18 @@
     "monthTasks": "{month} · {done} de {total} tareas",
     "archivedOnShort": "archivada el {date}"
   },
+  "measure": {
+    "offer": "Ponerle medida",
+    "title": "¿Qué mide?",
+    "nameLabel": "qué cuenta",
+    "namePlaceholder": "Cajas embaladas",
+    "unitLabel": "en qué unidad",
+    "unitPlaceholder": "cajas",
+    "nameEmpty": "Escribe qué cuenta.",
+    "kept": "Esta meta ya mide en {unit}.",
+    "confirm": "Guardar",
+    "cancel": "Cancelar"
+  },
   "horizon": {
     "title": "¿Cuántas semanas?",
     "weeksLabel": "semanas, contando la del {date}",

@@ -1642,3 +1642,22 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/s6-crit
 - **The end sheet of a goal with a phase warns while the person picks the date, not after «Moverlo».** Today the field, the
   refusal and the fine line read 6, 6 and 7 weeks for one clash, and nothing shows until the press.
 - **A connected AI sets a goal's measure and rhythm (RP-117).** Today a whole roadmap can only come in through the import.
+
+
+## Decisions of 2026-10-14, the boards of slice s7, by the user
+
+Approved by the user 2026-10-14 («sí a todo») on the canvas «Bitácora de metas», strip `S7Propuesta` of the page «Sin final y hábitos».
+
+- **Approved boards:** `PorMesDeN`, `VerMenos`, `PapelTareasPares`, `PapelEtiquetaPegada`, `PapelSinMontoSinFinal`, `FinalFaseEnVivo`,
+  `PonerMedida`, `PermisoRitmo`.
+- **The panel of a goal with no measure keeps «esta meta no mide nada» and offers «Ponerle medida».** «Esta meta todavía no tiene cifra.»
+  belongs to «Por semana».
+- **The first two and the last two tasks of a goal never separate on paper, even at the cost of a sheet.** «Leer» with 12 tasks goes from
+  3 to 4 sheets.
+- **«estos meses con monto propio:» is the title of the second table on paper and never closes a sheet.**
+- **A goal with no end prints no line for its months ahead with no amount and no tasks; a month with tasks keeps its line** («enero de 2027:
+  sin monto · 1 tarea»).
+- **Answers Q1–Q6 of s7:** «de N» only with an end; RP-65 unchanged; «ver menos» on the four lists; RP-119 succeeds RP-56; «Ponerle medida»:
+  a measure once set never changes; Q6 (c).
+- **Boards that do not exist:** dark mode; `VerMenos` at 1280; the long finished goal («12 de 20 meses»); `/exportar?todo=1` at 1280; the
+  «before» of `PapelEtiquetaPegada` (the prototype's seed did not reproduce the defect).
