@@ -3,7 +3,8 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { expectedMonths, figure, labelOf } from "./habit-weeks";
 import { between, mainLower, visit } from "./metas-sin-final-seed";
-import { TODAY, WEEK_START, seedFact, seedHabit, shift } from "./sin-final-seed";
+import { type Days, serverDays } from "./server-day";
+import { seedFact, seedHabit, shift } from "./sin-final-seed";
 
 // Module 940, RP-112: a weekly habit reads «{done} de {count} esta semana» for the week in progress, on its own
 // screen and in «Mes»; a retired habit keeps the retirement week it had met and never reads «en curso» nor «esta
@@ -44,17 +45,20 @@ async function fits360(page: Page): Promise<string[]> {
   });
 }
 
-// A Monday 8 weeks back: a weekly habit made then has closed weeks in this month on most days and none on a few.
-const EIGHT_WEEKS_AGO = shift(WEEK_START, -56);
+// A Monday 8 weeks back, and the Mondays since: read from the server's day in `beforeEach`.
+let D: Days;
+test.beforeEach(async ({ browser, baseURL, person }) => {
+  D = await serverDays(browser, baseURL, person);
+});
 const mondaysUntilNow = () => {
   const mondays: string[] = [];
-  for (let monday = EIGHT_WEEKS_AGO; monday <= WEEK_START; monday = shift(monday, 7)) mondays.push(monday);
+  for (let monday = D.eightWeeksAgo; monday <= D.weekStart; monday = shift(monday, 7)) mondays.push(monday);
   return mondays;
 };
 
 // The «{met} de {counted} semanas» or «aún sin semanas cerradas» that `facts` give this month, by the reference of the rule.
 function monthMiddle(created: string, facts: Set<string>, n: number): string {
-  const found = expectedMonths(created, null, TODAY, facts, n).get(TODAY.slice(0, 7));
+  const found = expectedMonths(created, null, D.today, facts, n).get(D.today.slice(0, 7));
   return found && found.counted > 0 ? figure(found.met, found.counted) : NONE_YET;
 }
 
@@ -63,20 +67,20 @@ test.describe("a weekly habit's week in progress (RP-112)", () => {
 
   test("E3, screen: the month in progress reads «en curso», its closed weeks and below them «1 de 1 esta semana»; no other month says «esta semana»", async ({ person, browser, baseURL, db }) => {
     // Kills: the week in progress drawn on every month; not drawn; drawn above the closed weeks; «esta semana: 1».
-    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(EIGHT_WEEKS_AGO) });
+    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(D.eightWeeksAgo) });
     const facts = new Set(mondaysUntilNow());
     for (const day of facts) await seedFact(db, person.id, id, null, day);
     const { page, context } = await visit(browser, baseURL, person, path(id), 360);
     try {
       const section = await monthsText(page);
-      const current = rowText(section, labelOf(TODAY.slice(0, 7)));
+      const current = rowText(section, labelOf(D.today.slice(0, 7)));
       expect(current).toContain("en curso");
       expect(current).toContain(thisWeekOf(1, 1));
-      expect(current).toContain(monthMiddle(EIGHT_WEEKS_AGO, facts, 1));
-      expect(current.indexOf(thisWeekOf(1, 1))).toBeGreaterThan(current.indexOf(monthMiddle(EIGHT_WEEKS_AGO, facts, 1)));
+      expect(current).toContain(monthMiddle(D.eightWeeksAgo, facts, 1));
+      expect(current.indexOf(thisWeekOf(1, 1))).toBeGreaterThan(current.indexOf(monthMiddle(D.eightWeeksAgo, facts, 1)));
       expect(section.split("esta semana").length - 1).toBe(1);
       expect(section).not.toContain("esta semana:");
-      expect(rowsOf(section).at(-1)).toBe(labelOf(TODAY.slice(0, 7)));
+      expect(rowsOf(section).at(-1)).toBe(labelOf(D.today.slice(0, 7)));
       expect(await fits360(page)).toEqual([]);
     } finally {
       await context.close();
@@ -85,12 +89,12 @@ test.describe("a weekly habit's week in progress (RP-112)", () => {
 
   test("E3 with nothing done this week: «0 de 1 esta semana» is said, not hidden", async ({ person, browser, baseURL, db }) => {
     // Kills: hiding the line when the count is 0.
-    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(EIGHT_WEEKS_AGO) });
-    const facts = new Set(mondaysUntilNow().filter((day) => day < WEEK_START));
+    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(D.eightWeeksAgo) });
+    const facts = new Set(mondaysUntilNow().filter((day) => day < D.weekStart));
     for (const day of facts) await seedFact(db, person.id, id, null, day);
     const { page, context } = await visit(browser, baseURL, person, path(id), 360);
     try {
-      const current = rowText(await monthsText(page), labelOf(TODAY.slice(0, 7)));
+      const current = rowText(await monthsText(page), labelOf(D.today.slice(0, 7)));
       expect(current).toContain(thisWeekOf(0, 1));
       expect(current).toContain("en curso");
     } finally {
@@ -101,13 +105,13 @@ test.describe("a weekly habit's week in progress (RP-112)", () => {
   test("E3 and E6, «Mes»: «1 vez por semana · {closed weeks} · 1 de 1 esta semana»; the name links to the habit and comes back to /mes; 360 fits", async ({ person, browser, baseURL, db }) => {
     // Kills: reading `daysDone` for the weekly line; the week in progress left out of «Mes»; the name drawn as plain text; a line past 360. Run under PULSAR_CLOCK=2026-11-01 (E6): the Monday's fact of the month before is the week in progress,
     // so it reads «aún sin semanas cerradas · 1 de 1 esta semana»; kills a facts window that starts at the 1st.
-    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(EIGHT_WEEKS_AGO) });
+    const id = await seedHabit(db, person.id, "Llamar a mamá", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(D.eightWeeksAgo) });
     const facts = new Set(mondaysUntilNow());
     for (const day of facts) await seedFact(db, person.id, id, null, day);
     const { page, context } = await visit(browser, baseURL, person, "/mes", 360);
     try {
       const text = await mainLower(page);
-      expect(text).toContain(`llamar a mamá 1 vez por semana · ${monthMiddle(EIGHT_WEEKS_AGO, facts, 1)} · ${thisWeekOf(1, 1)}`);
+      expect(text).toContain(`llamar a mamá 1 vez por semana · ${monthMiddle(D.eightWeeksAgo, facts, 1)} · ${thisWeekOf(1, 1)}`);
       await expect(page.locator("main").getByRole("link", { name: "Llamar a mamá", exact: true })).toHaveAttribute("href", `/metas/habitos/${id}?volver=/mes`);
       expect(await fits360(page)).toEqual([]);
     } finally {
@@ -118,9 +122,9 @@ test.describe("a weekly habit's week in progress (RP-112)", () => {
   test("E4, created today (b20): the screen and «Mes» say «aún sin semanas cerradas» and the week in progress, never «0 de 0 semanas»", async ({ person, browser, baseURL, db }) => {
     // Kills: `habit.weeks.counted === 0` turned into `=== -1` (b20: «0 de 0 semanas»); the `noWeeks` branch inverted; the week in
     // progress left out when no week has closed.
-    const swim = await seedHabit(db, person.id, "Nadar", { kind: "times_per_week", n: 2 }, { kind: "tap" }, { created: noonOf(TODAY) });
-    const rest = await seedHabit(db, person.id, "Descansar", { kind: "times_per_week", n: 2 }, { kind: "tap" }, { created: noonOf(TODAY) });
-    await seedFact(db, person.id, swim, null, TODAY);
+    const swim = await seedHabit(db, person.id, "Nadar", { kind: "times_per_week", n: 2 }, { kind: "tap" }, { created: noonOf(D.today) });
+    const rest = await seedHabit(db, person.id, "Descansar", { kind: "times_per_week", n: 2 }, { kind: "tap" }, { created: noonOf(D.today) });
+    await seedFact(db, person.id, swim, null, D.today);
     const own = await visit(browser, baseURL, person, path(swim), 360);
     try {
       const section = await monthsText(own.page);
@@ -155,13 +159,13 @@ test.describe("a weekly habit's week in progress (RP-112)", () => {
   test("the count is the week from Monday to today: the last days of the week before do not count, whatever day of the week it is", async ({ person, browser, baseURL, db }) => {
     // Kills: the Monday taken a day late (a Sunday's fact counted on Monday); the running week counted from today only; counting a week
     // ahead. Run under PULSAR_CLOCK on a Monday and on a Sunday: «2 de 2» the Sunday, «0 de 2» the Monday.
-    const id = await seedHabit(db, person.id, "Ejercicio", { kind: "times_per_week", n: 2 }, { kind: "tap" }, { created: noonOf(shift(WEEK_START, -35)) });
-    for (const day of [shift(WEEK_START, -2), shift(WEEK_START, -1)]) await seedFact(db, person.id, id, null, day);
-    const mine = TODAY === WEEK_START ? [] : [WEEK_START, TODAY];
+    const id = await seedHabit(db, person.id, "Ejercicio", { kind: "times_per_week", n: 2 }, { kind: "tap" }, { created: noonOf(shift(D.weekStart, -35)) });
+    for (const day of [shift(D.weekStart, -2), shift(D.weekStart, -1)]) await seedFact(db, person.id, id, null, day);
+    const mine = D.today === D.weekStart ? [] : [D.weekStart, D.today];
     for (const day of mine) await seedFact(db, person.id, id, null, day);
     const screen = await visit(browser, baseURL, person, path(id), 360);
     try {
-      expect(rowText(await monthsText(screen.page), labelOf(TODAY.slice(0, 7)))).toContain(thisWeekOf(mine.length, 2));
+      expect(rowText(await monthsText(screen.page), labelOf(D.today.slice(0, 7)))).toContain(thisWeekOf(mine.length, 2));
     } finally {
       await screen.context.close();
     }
@@ -176,13 +180,13 @@ test.describe("a weekly habit's week in progress (RP-112)", () => {
 
   test("the day-counting cadences say nothing of this week, on their screen and in «Mes»", async ({ person, browser, baseURL, db }) => {
     // Kills: the week in progress computed for every cadence (a daily «12 de 13 días» followed by «esta semana»).
-    const created = { created: noonOf(shift(TODAY, -20)) };
+    const created = { created: noonOf(shift(D.today, -20)) };
     const daily = await seedHabit(db, person.id, "Meditar", { kind: "daily" }, { kind: "tap" }, created);
     const days = await seedHabit(db, person.id, "Estirar", { kind: "weekdays", days: [1, 3, 5] }, { kind: "tap" }, created);
     const [{ id: monthly }] = await db<{ id: string }[]>`
       insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
       values (${person.id}, null, 'Ir al cine', 'times_per_month', 3, 'tap', ${created.created}) returning id`;
-    for (const id of [daily, days, monthly]) await seedFact(db, person.id, id, null, TODAY);
+    for (const id of [daily, days, monthly]) await seedFact(db, person.id, id, null, D.today);
     for (const id of [daily, days, monthly]) {
       const screen = await visit(browser, baseURL, person, path(id), 360);
       try {
@@ -276,10 +280,10 @@ test.describe("a retired weekly habit (RP-112)", () => {
   test("E5b, retired today after meeting this week: the month of today counts the week in progress whole, reads no «en curso» and no «esta semana» — screen and «Mes»", async ({ person, browser, baseURL, db }) => {
     // Kills: waiting for Sunday to count the retirement week; «en curso» on the last month of a retired habit; the week in progress said
     // of a retired habit in «Mes»; `thisWeek` not looking at the retirement.
-    const id = await seedHabit(db, person.id, "Llamar retirado", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(EIGHT_WEEKS_AGO), retired: noonOf(TODAY) });
+    const id = await seedHabit(db, person.id, "Llamar retirado", { kind: "times_per_week", n: 1 }, { kind: "tap" }, { created: noonOf(D.eightWeeksAgo), retired: noonOf(D.today) });
     for (const day of mondaysUntilNow()) await seedFact(db, person.id, id, null, day);
-    const month = TODAY.slice(0, 7);
-    const earlier = mondaysUntilNow().filter((monday) => monday < WEEK_START && shift(monday, 3).slice(0, 7) === month).length;
+    const month = D.today.slice(0, 7);
+    const earlier = mondaysUntilNow().filter((monday) => monday < D.weekStart && shift(monday, 3).slice(0, 7) === month).length;
     const counted = earlier + 1;
     const screen = await visit(browser, baseURL, person, path(id), 360);
     try {
