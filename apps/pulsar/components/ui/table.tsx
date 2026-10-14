@@ -29,6 +29,8 @@ export type TableRow = {
   phoneBare?: boolean;
   // A second line under the row label, on both faces: the week's dates.
   detail?: ReactNode;
+  // A mark after the dates on the wide face only («en curso»): the phone says it in `note`.
+  wideMark?: ReactNode;
   // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
   // The lead cell must then be plain text: it is what the link names, so a
   // link of its own there would nest. Every other cell stays text.
@@ -246,7 +248,10 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
                     row.cells[column]
                   )}
                   {column === 0 && row.detail ? (
-                    <span className={styles.detailWide}>{row.detail}</span>
+                    <span className={styles.detailWide}>
+                      {row.detail}
+                      {row.wideMark ? <span className={styles.wideMark}>{` · ${row.wideMark}`}</span> : null}
+                    </span>
                   ) : null}
                 </td>
               ))}

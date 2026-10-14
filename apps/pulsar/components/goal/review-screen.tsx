@@ -48,24 +48,31 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
   }
 
   const measureName = distinctMeasureName(goal.measureName, goal.measureUnit, [unitWord(goal.measureUnit)]);
-  const columns = [
-    t("goal.review.columns.week"),
-    t("goal.review.columns.total"),
-    t("goal.review.columns.phase"),
-    t("goal.review.columns.note"),
-  ];
 
   // The phase is named where it starts, not on every week it spans.
   // A goal with no end shows its last 12 weeks, the current one last, unless asked for all.
   const { shown, hidden } = goal.horizon === null ? tailOf(goal.weeks, all) : { shown: goal.weeks, hidden: 0 };
 
+  // A column shows only when some row has something in it; the current week's mark rides its label.
+  // Weeks carry no note today, so NOTA never draws until `ReviewWeek` does.
+  const phases = shown.map((week, index) => (week.phaseName !== shown[index - 1]?.phaseName ? (week.phaseName ?? "") : ""));
+  const notes = shown.map(() => "");
+  const hasPhase = phases.some(Boolean);
+  const hasNote = notes.some(Boolean);
+  const columns = [
+    t("goal.review.columns.week"),
+    t("goal.review.columns.total"),
+    ...(hasPhase ? [t("goal.review.columns.phase")] : []),
+    ...(hasNote ? [t("goal.review.columns.note")] : []),
+  ];
+
   const rows: TableRow[] = shown.map((week, index) => {
-    const phase = week.phaseName !== shown[index - 1]?.phaseName ? (week.phaseName ?? "") : "";
-    const note = week.current ? t("goal.review.current") : "";
+    const mark = week.current ? t("goal.review.current") : "";
     return {
       key: String(week.index),
-      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, phase, note],
-      note: note || undefined,
+      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, ...(hasPhase ? [phases[index]] : []), ...(hasNote ? [notes[index]] : [])],
+      note: mark || undefined,
+      wideMark: mark || undefined,
       detail: civilSpan(week.startsOn, week.endsOn),
     };
   });

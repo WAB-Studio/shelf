@@ -89,6 +89,10 @@
   color: var(--pulsar-quiet);
 }
 
+.wideMark {
+  color: var(--pulsar-muted);
+}
+
 /* Pushed to the end, and the one piece that wraps, so a long note never
    pushes the row past a 360px viewport. */
 .stackNote {

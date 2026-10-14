@@ -181,7 +181,9 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     const week3Row = rows.nth(3);
     await expect(week3Row.getByRole("cell").nth(0)).toContainText("semana 3");
     await expect(week3Row.getByRole("cell").nth(1)).toHaveText("0 min");
-    await expect(week3Row.getByRole("cell").nth(3)).toHaveText("en curso");
+    // «en curso» is a mark after the week's dates, not a cell: SEMANA, TOTAL and FASE are the columns.
+    await expect(week3Row.getByRole("cell")).toHaveCount(3);
+    await expect(week3Row.getByRole("cell").nth(0)).toContainText("en curso");
     await expect(week3Row).toHaveAttribute("data-current", "");
 
     // A phase is named on the week it starts, not again on each week it spans.

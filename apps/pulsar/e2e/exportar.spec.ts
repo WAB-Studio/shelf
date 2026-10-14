@@ -1292,7 +1292,7 @@ test.describe("the report's type and space", () => {
         expect(gaps.filter((gap) => gap.own).length).toBeGreaterThan(0);
         // The months table's cell padding is the screen's own (18): the compact paper rule must not reach it.
         const cellPadding = await page.evaluate(() => {
-          const cell = document.querySelector("main table td");
+          const cell = document.querySelector("main table:has(thead th:nth-child(2)) td");
           if (!cell) return null;
           const style = getComputedStyle(cell);
           return [style.paddingTop, style.paddingBottom];

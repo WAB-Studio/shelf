@@ -72,7 +72,7 @@
   /* A section runs across pages between its rows (table.module.css); its
      label and its goal's heading stay with what follows. */
   .block h2,
-  .block section > :first-child {
+  .block section > :first-child:not(table) {
     break-after: avoid;
   }
 
