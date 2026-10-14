@@ -110,12 +110,13 @@ test("a count ending before a phase is refused with its message and the column s
     });
     const field = sheet.getByLabel(/^semanas, contando esta$/);
     await field.fill("11");
-    await sheet.getByRole("button", { name: "Moverlo" }).click();
 
+    // The refusal is read before anything is pressed, and «Moverlo» is already off.
     await expect(
       sheet.getByText(`La fase «${phaseName}» llega hasta la semana 12 (12 desde la apertura). El final no puede quedar antes.`),
     ).toBeVisible();
     await expect(field).toHaveAttribute("aria-invalid", "true");
+    await expect(sheet.getByRole("button", { name: "Moverlo" })).toBeDisabled();
     await expect(sheet).toBeVisible();
     expect(actionCalls).toEqual([]);
     expect(await horizonOf(db, goalId)).toBe(before);

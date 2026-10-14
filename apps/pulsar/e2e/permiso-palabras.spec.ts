@@ -20,8 +20,9 @@ const MAY = [
   "renombrar una meta y mover su final",
   "agregar fases y compromisos, y retirar un compromiso",
   "darle mes o día a una tarea, devolverla al plan y cambiar el monto de un mes",
+  "poner la medida y el ritmo de una meta",
 ];
-const NEVER = ["borrar ni archivar nada", "desmarcar lo que ya hiciste", "cambiar el ritmo"];
+const NEVER = ["borrar ni archivar nada", "desmarcar lo que ya hiciste"];
 const REVOKE = "Metas › Conectar una IA";
 
 // HARNESS_RUN_ID reaches this process, not the server: the spec notes its own client.
@@ -97,6 +98,8 @@ for (const width of [360, 1280]) {
       await expect(page.getByRole("button", { name: "No permitir", exact: true })).toBeVisible();
 
       const text = await main.innerText();
+      // The rhythm moved from «nunca» to «podrá»: it is said once, in the may list.
+      expect(text).not.toContain("cambiar el ritmo");
       // Words for tools that do not exist (`reorganize`'s old line).
       expect(text).not.toMatch(/correr el plan/i);
       expect(text).not.toMatch(/mover tareas de mes/i);
