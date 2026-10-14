@@ -1588,3 +1588,17 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/critic-
   open the month's page as before.
 - **A habit retired in a met week whose Thursday falls next month counts that week in its retirement month** (2026-10-13,
   orchestrator): the habit has no next month to put it in.
+
+## Decisions of 2026-10-13, after the critic of slice s4, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s4/REPORT.md`.
+
+- **A retired habit in «Mes» reads «retirado el 7 oct»** in the «Hábitos» group of the month it was retired in; today it is drawn
+  as a live line.
+- **The end sheet shows the total the goal's screen will read:** «113 semanas en total» beside «termina el …», under the two counts.
+- **Goals with an end fold «Por mes» as goals with no end do** (the last rows and «ver todo»), in a later slice: «Leer» with an end
+  lists 27 rows today.
+- **Reopening an ended goal offers «Ponerle final» and «Dejarla sin final»,** as the approved board `FinalDosCuentas` draws; the
+  build shows «Quitar el final» and «Moverlo».
+- Not a decision, a defect found by the same critic: «Leer» with a hand-set December reads «13 MESES» over 14 rows on /meses and the
+  report screen, and «14 MESES» on paper. Every count must match its rows.
