@@ -115,6 +115,7 @@ test("each open goal draws its month: the line, the carried task first, the task
     await expect(timedBlock.getByText("2 h", { exact: true }).first()).toBeVisible();
     await expect(timedBlock.getByText("de 10 h", { exact: true })).toBeVisible();
     await expect(timedBlock.getByText("incluye 2 h de tareas hechas")).toBeVisible();
+    expect((await timedBlock.innerText()).replace(/\s+/g, " ")).toContain("2 h de 10 h");
     const carriedLabel = timedBlock.getByText(`de ${label(lastMonth)}`, { exact: true });
     const ownLabel = timedBlock.getByText(/^de .* · 3 h$/);
     await expect(carriedLabel).toBeVisible();
