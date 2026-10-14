@@ -346,7 +346,8 @@ for (const width of [360, 1280]) {
       for (const offset of [-12, 2, 3]) await expect(reportRow(section, offset), monthLabel(offset)).toHaveCount(0);
       await expect(reportRow(section, 0)).toContainText("en curso");
       await expect(reportRow(section, 1)).toContainText("40");
-      await expect(reportRow(section, 1)).toContainText("planeado");
+      // The wide face says «planeado» once, in the header.
+      if (width < 700) await expect(reportRow(section, 1)).toContainText("planeado");
       const line = lineOf(section, 2, 3);
       await expect(line).toBeVisible();
       const href = (await line.getAttribute("href")) ?? "";
