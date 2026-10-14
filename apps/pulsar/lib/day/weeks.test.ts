@@ -5,7 +5,7 @@ import { civilDateToDate } from "@/lib/zone";
 
 import { goalWeekProgress } from "@/components/week/week-progress";
 
-import { horizonForWeeks, horizonWeeksOf, weekIndexOf, weekSpan } from "./weeks";
+import { dayBefore, horizonForWeeks, horizonWeeksOf, weekIndexOf, weekSpan } from "./weeks";
 
 // One goal opened on each weekday that matters: its first Sunday and the
 // Monday after it differ in every case.
@@ -86,4 +86,20 @@ test("weekSpan: a horizon falling on a Monday closes the week before it on its S
 
 test("weekSpan: a horizon falling mid-week closes that week on the goal's last day", () => {
   assert.deepEqual(weekSpan("2026-09-28", 2, 2, "2026-10-08"), { startsOn: "2026-10-05", endsOn: "2026-10-07" });
+});
+
+// The horizon sheet judges a typed week count by re-reading the stored horizon through these two functions. A horizon that is
+// still ahead must read back at or after itself: the Monday after the week of its last day is never earlier than the horizon.
+test("horizonForWeeks(today, weekIndexOf(today, dayBefore(h))) never lands before h, for every today and every open horizon", () => {
+  let checked = 0;
+  for (let t = 0; t <= 91; t++) {
+    const today = plusDays("2026-10-12", t);
+    for (let ahead = 1; ahead <= 400; ahead++) {
+      const horizon = plusDays(today, ahead);
+      const readBack = horizonForWeeks(today, weekIndexOf(today, dayBefore(horizon)));
+      assert.ok(readBack >= horizon, `today ${today}, horizon ${horizon}: read back ${readBack}`);
+      checked++;
+    }
+  }
+  assert.equal(checked, 92 * 400);
 });
