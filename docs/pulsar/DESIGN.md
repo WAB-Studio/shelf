@@ -1686,3 +1686,13 @@ Approved by the user 2026-10-14 «tal cual» on the canvas «Bitácora de metas�
 - **A goal's figures never split between sheets on paper.**
 - **«¿Cuánto al mes, en km?»**: the rhythm's sentence takes no gender.
 - **Boards that do not exist:** dark mode; the paper figures kept together (cut rule); `MesesAnteriores` at 1280 but the report.
+
+## Decisions of 2026-10-14, after the critic of slice s8, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/s8-critic.md`.
+
+- **The count stays as chosen in s7:** «13 de 27 meses» on a goal with an end; «13 meses» and «12 meses anteriores» on one with
+  no end. The critic's «N de total» for every goal was put to the user and refused.
+- **«Por semana» at 1280 gets its own board,** and its empty FASE and NOTA columns go. Today no board draws the wide face.
+- **On paper a task list that continues on the next sheet repeats its label** («TAREAS DE OCTUBRE»). A lone table row at the top
+  of a sheet is tolerated.
