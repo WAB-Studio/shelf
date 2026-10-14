@@ -230,7 +230,7 @@ test("«Mes» counts a habit's days from the day it was created, not from the 1s
   // Kills: `createdOn: month` in `looseHabit` (a habit created today reads «0 de 13 días»).
   const dayOfMonth = Number(TODAY.slice(8, 10));
   const name = `Recién ${Date.now()}`;
-  await seedHabit(db, person.id, name, { kind: "daily" }, { kind: "tap" }, { created: new Date() });
+  await seedHabit(db, person.id, name, { kind: "daily" }, { kind: "tap" }, { created: noonOf(TODAY) });
   const context = await browser.newContext({
     storageState: person.sessionFile,
     baseURL: baseURL!,

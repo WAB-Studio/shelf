@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { civilDayMonthYear } from "@/lib/zone";
+import { civilDateInZone, civilDayMonthYear } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 import { holdActions } from "./meta-arbol-seed";
@@ -154,7 +154,7 @@ test.describe("the screen of a habit (RP-105, RP-106)", () => {
 
   test("empty: created today → one row, «0 de 1 día» (the catalogue's singular)", async ({ person, browser, baseURL, db }) => {
     // Kills: a plural that ignores «1 día»; a first row before the creation month; the month counted whole.
-    const id = await seedHabit(db, person.id, "Recién", { kind: "daily" }, { kind: "tap" }, { created: new Date() });
+    const id = await seedHabit(db, person.id, "Recién", { kind: "daily" }, { kind: "tap" }, { created: noonOf(TODAY) });
     const { page, context } = await visit(browser, baseURL, person, habitPath(id), 360);
     try {
       const section = await monthsText(page);
@@ -461,12 +461,13 @@ test.describe("«Retirarlo» from the screen (RP-105)", () => {
       await sheet.getByRole("button", { name: "Retirarlo", exact: true }).click();
       await expect(dialog(page)).toHaveCount(0);
       await expect(page).toHaveURL(new RegExp(`/metas/habitos/${id}$`));
-      await expect(page.getByText(`retirado el ${civilDayMonthYear(TODAY)}`, { exact: false })).toBeVisible();
       await expect(page.getByRole("button", { name: "Editar", exact: true })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Retirarlo", exact: true })).toHaveCount(0);
       const rows = await habitRows(db, person, "Meditar");
       expect(rows).toHaveLength(1);
       expect(rows[0].retired_at).not.toBeNull();
+      // The server stamps `retired_at` with SQL `now()`: the day it reads is the real one, not the pinned clock's.
+      await expect(page.getByText(`retirado el ${civilDayMonthYear(civilDateInZone(new Date(rows[0].retired_at!)))}`, { exact: false })).toBeVisible();
       await page.goto("/metas");
       expect(await mainLower(page)).toContain("ninguno todavía.");
     } finally {
