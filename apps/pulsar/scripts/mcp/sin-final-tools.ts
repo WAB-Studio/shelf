@@ -161,8 +161,8 @@ test("list_goals shows a goal with no end as horizon null", async () => {
   assert.equal(listed.open.find((goal) => goal.id === noEnd.goalId)?.horizon, null);
 });
 
-test("no tool changes a rhythm (RP-56)", () => {
-  assert.deepEqual([...handlers.keys()].filter((name) => /rhythm|ritmo/.test(name)), []);
+test("one tool gives or changes a rhythm and none takes it away (RP-119)", () => {
+  assert.deepEqual([...handlers.keys()].filter((name) => /rhythm|ritmo/.test(name)), ["set_rhythm"]);
 });
 
 test("the tools' input schemas accept no horizon, a null horizon and no goal_id", async () => {

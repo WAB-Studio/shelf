@@ -273,9 +273,9 @@ test("set_goal_note and get_goal.note round-trip, line breaks included, and a bl
   assert.equal((await read(g1)).note, note);
 });
 
-test("the tools are twenty-two and none deletes, archives, removes, undoes or revokes", () => {
+test("the tools are twenty-four and none deletes, archives, removes, undoes or revokes", () => {
   const names = [...handlers.keys()];
-  assert.equal(names.length, 22, names.join(","));
+  assert.equal(names.length, 24, names.join(","));
   assert.deepEqual(names.filter((name) => /delete|archive|remove|undo|revoke/.test(name)), []);
   for (const name of ["move_goal", "set_goal_note"]) assert.ok(names.includes(name), `${name} missing`);
 });

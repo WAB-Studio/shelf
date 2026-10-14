@@ -33,7 +33,7 @@ type ReportTask = {
 };
 
 // Twenty-two tools here; this file adds none.
-const TOOL_COUNT = 22;
+const TOOL_COUNT = 24;
 let subject: Person;
 let goal: string;
 const today = todayInZone();

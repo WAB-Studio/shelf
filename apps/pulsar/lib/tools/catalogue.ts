@@ -17,8 +17,10 @@ import {
   moveHorizon,
   renameGoal,
   retireCommitment,
+  setGoalMeasure,
   setGoalNote,
 } from "@/app/actions/plan";
+import { setRhythm } from "@/app/actions/roadmap";
 import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "@/lib/mcp/shape";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import { loadDay } from "@/lib/queries/day";
@@ -204,6 +206,14 @@ export const writeTools: readonly ToolSpec[] = [
   ),
   write("retire_commitment", { commitment_id: id }, (input) =>
     retireCommitment(input as Parameters<typeof retireCommitment>[0]),
+  ),
+  // Gives or changes a rhythm, never takes it away (RP-119): the amount has no null.
+  write("set_rhythm", { goal_id: id, amount: count }, (input) =>
+    setRhythm(input as Parameters<typeof setRhythm>[0]),
+  ),
+  // Only a goal that does not measure yet; a measure set never changes (RP-119).
+  write("set_measure", { goal_id: id, name: text, unit: text }, (input) =>
+    setGoalMeasure(input as Parameters<typeof setGoalMeasure>[0]),
   ),
 ];
 

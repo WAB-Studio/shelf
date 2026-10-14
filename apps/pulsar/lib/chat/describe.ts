@@ -95,9 +95,19 @@ const FIELDS: Record<string, Field[]> = {
   ],
   set_goal_note: [{ as: "goal", from: "goal_id", to: "goal" }],
   retire_commitment: [{ as: "commitment", from: "commitment_id", to: "commitment" }],
+  set_rhythm: [
+    { as: "goal", from: "goal_id", to: "goal" },
+    { as: "amount", from: "amount", to: "amount", goal: "goal_id" },
+  ],
+  set_measure: [
+    { as: "goal", from: "goal_id", to: "goal" },
+    { as: "text", from: "name", to: "name" },
+    { as: "text", from: "unit", to: "unit" },
+  ],
 };
 
 const say = (key: keyof typeof chat.before): string => translate(`chat.before.${key}` as Parameters<typeof translate>[0]);
+const perMonth = (amount: string): string => translate("chat.perMonth", { amount });
 
 function quantity(n: number, unit: string | null): string {
   return unit === null ? String(n) : formatQuantity(n, unit, words);
@@ -129,6 +139,13 @@ function replaced(change: Change, names: ChangeNames, values: Record<string, str
         before: goal?.horizon ? civilDayMonthShort(goal.horizon) : say("noEnd"),
         after: values.day ?? say("noEnd"),
       };
+    case "set_rhythm":
+      return {
+        before: goal?.rhythm == null ? say("noRhythm") : perMonth(quantity(goal.rhythm, goal.unit)),
+        after: perMonth(values.amount),
+      };
+    case "set_measure":
+      return { before: goal?.unit == null ? say("noMeasure") : goal.unit, after: values.unit };
     case "retire_commitment":
       return commitment?.target != null ? { before: quantity(commitment.target, commitment.unit) } : {};
     default:
