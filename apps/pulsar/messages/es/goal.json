@@ -18,6 +18,8 @@
     "horizonUntil": "{weeks, plural, one {# semana} other {# semanas}} · hasta el {date}",
     "measures": "mide en {unit}",
     "measuresTime": "mide en horas y minutos",
+    "measuresNamed": "mide {name}, en {unit}",
+    "measuresNamedTime": "mide {name}, en horas y minutos",
     "measureSince": "en total, desde el <fig>{date}</fig>",
     "measureSinceYear": "{date} de {year}",
     "moveHorizon": "mover el final",
@@ -51,6 +53,9 @@
     "title": "Por semana",
     "measure": "mide en {unit}",
     "measureTime": "mide en horas y minutos",
+    "measureNamed": "mide {name}, en {unit}",
+    "measureNamedTime": "mide {name}, en horas y minutos",
+    "earlier": "{count, plural, one {# semana anterior} other {# semanas anteriores}}",
     "caption": "por semana",
     "columns": {
       "week": "semana",

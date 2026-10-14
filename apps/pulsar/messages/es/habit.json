@@ -8,6 +8,8 @@
     "title": "Por mes",
     "columns": { "month": "mes", "days": "días" },
     "caption": "{count, plural, one {# mes} other {# meses}}",
+    "captionOf": "{shown} de {count, plural, one {# mes} other {# meses}}",
+    "earlier": "{count, plural, one {# mes anterior} other {# meses anteriores}}",
     "current": "en curso",
     "line": "{count, plural, one {# día} other {# días}}",
     "lineOf": "{done} de {asked, plural, one {# día} other {# días}}",

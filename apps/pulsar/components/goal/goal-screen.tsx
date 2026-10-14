@@ -10,6 +10,7 @@ import {
   ReopenGoalButton,
 } from "@/components/goal/archive-sheet";
 import { EvidenceNote } from "@/components/day/evidence-note";
+import { distinctMeasureName } from "@/lib/export/measure";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
 import { partOf, partWords } from "@/lib/plan/months";
@@ -406,13 +407,20 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     </Notice>
   ));
 
+  const measureName = goal.measureUnit
+    ? distinctMeasureName(goal.measureName, goal.measureUnit, [unitWord(goal.measureUnit)])
+    : null;
   const measurePanel = (
       goal.measureUnit ? (
         <Panel>
           <Text as="p" variant="sentence" tone="muted">
-            {isTimeUnit(goal.measureUnit)
-              ? t("goal.detail.measuresTime")
-              : t("goal.detail.measures", { unit: unitWord(goal.measureUnit) })}
+            {measureName !== null
+              ? isTimeUnit(goal.measureUnit)
+                ? t("goal.detail.measuresNamedTime", { name: measureName })
+                : t("goal.detail.measuresNamed", { name: measureName, unit: unitWord(goal.measureUnit) })
+              : isTimeUnit(goal.measureUnit)
+                ? t("goal.detail.measuresTime")
+                : t("goal.detail.measures", { unit: unitWord(goal.measureUnit) })}
           </Text>
           {phoneActs}
 

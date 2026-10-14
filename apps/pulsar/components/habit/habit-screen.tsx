@@ -38,6 +38,8 @@ export async function HabitScreen({
   const { shown, hidden } = tailOf(habit.months, all);
   const seeLess =
     all && habit.months.length > LIST_TAIL ? <TextLink href={seeLessHref}>{t("common.seeLess")}</TextLink> : null;
+  const earlier =
+    hidden > 0 ? <TextLink href={seeAllHref}>{t("habit.months.earlier", { count: hidden })}</TextLink> : null;
   const rows: TableRow[] = shown.map((month) => {
     const line = month.weeks
       ? month.weeks.counted === 0
@@ -95,8 +97,12 @@ export async function HabitScreen({
       <Section label={t("habit.months.title")}>
         <Table
           narrow
-          above={seeLess}
-          caption={t("habit.months.caption", { count: habit.months.length })}
+          above={seeLess ?? earlier}
+          caption={
+            hidden > 0
+              ? t("habit.months.captionOf", { shown: shown.length, count: habit.months.length })
+              : t("habit.months.caption", { count: habit.months.length })
+          }
           columns={[t("habit.months.columns.month"), t("habit.months.columns.days")]}
           rows={rows}
           current={currentIndex === -1 ? undefined : currentIndex}
