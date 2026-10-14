@@ -1,3 +1,7 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { test, expect } from "./fixtures";
 import { dayBefore } from "./meta-arbol-seed";
 import { MINUTES, PAGES, openedOnDay, seedOpenGoal } from "./metas-sin-final-seed";
@@ -471,5 +475,29 @@ test("at 360 «Por mes» and the report of a goal with an end fit with the line,
     } finally {
       await context.close();
     }
+  }
+});
+
+test("S31: on paper at the phone's width the label «estos meses con monto propio:» heads the second table, before its month", async ({ person, browser, baseURL, db }) => {
+  // Kills: the table's title dropped from the phone face (`printTitle` of the narrow stack).
+  const id = await seedLeer(db, person, { endsIn: 9 });
+  await budget(db, person, id, 2, 60);
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 360, height: 900 } });
+  try {
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    await expect(page.getByRole("main").getByText("Leer", { exact: true }).first()).toBeVisible();
+    await page.emulateMedia({ media: "print" });
+    const dir = resolve(process.cwd(), "private/export-pdf");
+    mkdirSync(dir, { recursive: true });
+    const file = resolve(dir, `s31-${Date.now()}.pdf`);
+    // A sheet narrower than 700px prints the stack, the phone's face.
+    writeFileSync(file, await page.pdf({ width: "360px", height: "1400px", preferCSSPageSize: false }));
+    const paper = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ").toLowerCase();
+    const from = paper.indexOf("leer · por mes");
+    expect(from, "«leer · por mes» in the PDF").toBeGreaterThanOrEqual(0);
+    expectInOrder(paper.slice(from), [monthLabel(1), "estos meses con monto propio:", monthLabel(2)]);
+  } finally {
+    await context.close();
   }
 });

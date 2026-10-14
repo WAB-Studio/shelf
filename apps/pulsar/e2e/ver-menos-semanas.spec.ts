@@ -257,3 +257,39 @@ test.describe("a habit's months in `?todo=1` (RP-118)", () => {
     }
   });
 });
+
+test.describe("the order under the label (board VerMenos 3 and 4)", () => {
+  test("«Por semana»: the label, then «ver menos», then the first row", async ({ person, browser, baseURL, db }) => {
+    // Kills: «ver menos» drawn above the label; the label drawn after the link.
+    const id = await noEnd(db, person, "Escribir", 146);
+    const { page, context } = await visit(browser, baseURL, person, weekPath(id, "?todo=1"), 360);
+    try {
+      const label = (await page.locator("main").getByText("por semana", { exact: true }).locator("visible=true").first().boundingBox())!;
+      const link = (await seeLess(page.locator("main")).first().boundingBox())!;
+      const first = (await weekRows(page).first().boundingBox())!;
+      expect(label.y + label.height).toBeLessThanOrEqual(link.y);
+      expect(link.y + link.height).toBeLessThanOrEqual(first.y);
+      // Tight under the label, as the board draws it: no gap of a whole line.
+      expect(link.y - (label.y + label.height)).toBeLessThanOrEqual(16);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a habit: «Por mes», the count, then «ver menos», then the first month", async ({ person, browser, baseURL, db }) => {
+    // Kills: «ver menos» between the label and the count.
+    const id = await habit20(db, person, 20);
+    const { page, context } = await visit(browser, baseURL, person, habitPath(id, "?todo=1"), 360);
+    try {
+      const label = (await page.locator("main").getByText("Por mes", { exact: true }).first().boundingBox())!;
+      const count = (await page.locator("main").getByText("20 meses", { exact: true }).first().boundingBox())!;
+      const link = (await seeLess(page.locator("main")).first().boundingBox())!;
+      const first = (await page.getByText(monthLabel(-19), { exact: false }).first().boundingBox())!;
+      expect(label.y + label.height).toBeLessThanOrEqual(count.y);
+      expect(count.y + count.height).toBeLessThanOrEqual(link.y);
+      expect(link.y + link.height).toBeLessThanOrEqual(first.y);
+    } finally {
+      await context.close();
+    }
+  });
+});

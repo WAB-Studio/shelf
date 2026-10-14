@@ -82,7 +82,6 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
           ? t("goal.review.measureTime")
           : t("goal.review.measure", { unit: unitWord(goal.measureUnit) })}
       </Text>
-      {seeLess}
       <Table
         caption={t("goal.review.caption")}
         columns={columns}
@@ -91,6 +90,7 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
         unit={goal.measureUnit}
         current={currentIndex === -1 ? undefined : currentIndex}
         fitDetail
+        above={seeLess}
       />
       {hidden > 0 ? (
         <TextLink href={`/metas/${goal.id}/revision?todo=1`}>{t("common.seeAll")}</TextLink>
