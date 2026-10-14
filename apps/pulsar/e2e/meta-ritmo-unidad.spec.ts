@@ -29,7 +29,7 @@ const SAVE = "Guardar el ritmo";
 async function openRhythmSheet(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: /Poner un ritmo/ }).click();
   const sheet = dialog(page);
-  await expect(sheet.getByRole("heading", { name: "¿Cuántas páginas al mes?" })).toBeVisible();
+  await expect(sheet.getByRole("heading", { name: "¿Cuánto al mes, en páginas?" })).toBeVisible();
   return sheet;
 }
 
@@ -44,7 +44,7 @@ for (const width of [360, 1280]) {
         await expect(page.getByText(/^el ritmo$/i)).toBeVisible();
         const row = page.getByRole("button", { name: /Poner un ritmo/ });
         await expect(row).toBeVisible();
-        await expect(row).toContainText("cuántas páginas al mes; cada mes sin monto lo toma");
+        await expect(row).toContainText("cuánto al mes, en páginas; cada mes sin monto lo toma");
         await expect(page.getByText(/^el plan$/i)).toHaveCount(0);
         await expect(page.getByRole("button", { name: SAVE })).toHaveCount(0);
       } finally {
@@ -160,7 +160,7 @@ for (const width of [360, 1280]) {
       // Kills: dropping the redirect; drawing «A este ritmo terminas el …» for a unit other than time.
       const id = await seedOpenGoal(db, person, { name: "Leer", unit: PAGES, horizon: null, rhythm: 40, created: openedOnDay(5).at });
       await seedTask(db, person, id, "Terminar un libro", false);
-      const { page, context } = await visit(browser, baseURL, person, `/metas/${id}/plan`, width);
+      const { page, context } = await visit(browser, baseURL, person, `/metas/${id}/plan`, width, new RegExp(`/metas/${id}$`));
       try {
         await expect(page).toHaveURL(new RegExp(`/metas/${id}$`));
         const text = await mainLower(page);
