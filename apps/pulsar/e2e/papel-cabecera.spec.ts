@@ -135,14 +135,23 @@ const ORPHAN = new RegExp(
   "i",
 );
 
-function checkPaper(pages: string[][], tag: string) {
+function checkPaper(pages: string[][], tag: string, tasks: number) {
   const w = locate(pages);
-  // Head, figures, label and first row on one sheet.
-  expect(w.label.page, `${tag}: «${LABEL}» on sheet ${w.label.page + 1}, «Leer»'s heading on sheet ${w.name.page + 1}`).toBe(w.name.page);
+  // Head, figures, label and first row on one sheet. With open tasks the head and its tasks may fill the sheet: then the label opens the
+  // next one, among its first lines, and the heading's sheet ends on a task line, never on the head, the figures or a label.
+  const sameSheet = w.label.page === w.name.page;
+  const nextSheet = w.label.page === w.name.page + 1 && w.label.at <= 3;
+  const lastOfHead = pages[w.name.page].at(-1) ?? "";
+  if (tasks === 0) expect(sameSheet, `${tag}: «${LABEL}» on sheet ${w.label.page + 1}, «Leer»'s heading on sheet ${w.name.page + 1}`).toBe(true);
+  expect(
+    sameSheet || (nextSheet && /^tarea abierta \d+/.test(lastOfHead)),
+    `${tag}: the label shares the heading's sheet ${w.name.page + 1}, or opens the next (now on sheet ${w.label.page + 1}, line ${w.label.at + 1}) behind a task line (sheet ends on «${lastOfHead}»)`,
+  ).toBe(true);
   expect(w.rows[0].page, `${tag}: first row «${monthLabel(-11)}» on the sheet of the label`).toBe(w.label.page);
   const figures = pages[w.name.page].findIndex((line, at) => at > w.name.at && /^(este mes|hasta hoy)/.test(line));
   expect(figures, `${tag}: Leer's figures on its sheet`).toBeGreaterThan(w.name.at);
-  expect(figures, `${tag}: the figures above the label`).toBeLessThan(w.label.at);
+  // Reading order: sheet, then line.
+  expect(w.label.page > w.name.page || figures < w.label.at, `${tag}: the figures come before the label in reading order`).toBe(true);
   // No sheet ends on a heading, a figure line, a label or a table head.
   pages.forEach((lines, index) => {
     if (index === pages.length - 1) return;
@@ -185,7 +194,7 @@ test("P1: Leer's head, figures, label and first row share a sheet; the table con
 }) => {
   // Kills: the «por mes» block `whole` as before (`!isLongTable`): the head alone on one sheet, the table whole on the next.
   await seedCritic(db, person, 0);
-  checkPaper(await printedPages(browser, baseURL, person, "p1"), "p1");
+  checkPaper(await printedPages(browser, baseURL, person, "p1"), "p1", 0);
 });
 
 test("P1: the critic's paper takes fewer sheets than the six it took on b50f3fea", async ({ person, browser, baseURL, db }) => {
@@ -202,5 +211,5 @@ for (const tasks of range(1, 15))
   }) => {
     // Kills: the «por mes» block `whole`; the head without its table (`PrintGoal whole` only for 8–19 rows); the line outside the last table's `after`.
     await seedCritic(db, person, tasks);
-    checkPaper(await printedPages(browser, baseURL, person, `sw${tasks}`), `${tasks} tasks`);
+    checkPaper(await printedPages(browser, baseURL, person, `sw${tasks}`), `${tasks} tasks`, tasks);
   });
