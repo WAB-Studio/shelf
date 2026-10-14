@@ -1602,3 +1602,14 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/critic-
   build shows «Quitar el final» and «Moverlo».
 - Not a decision, a defect found by the same critic: «Leer» with a hand-set December reads «13 MESES» over 14 rows on /meses and the
   report screen, and «14 MESES» on paper. Every count must match its rows.
+- **The s5 boards are approved,** 2026-10-13, by the user: «Apruebo tal cual». Canvas page «Sin final y hábitos», board
+  `S5Propuesta` (`PorMesConFinal`, `CuentaMeses`, `FinalTotal`, `MesRetirado`). Words and structure: `private/tableros-s5/NOTAS.md`.
+  Approved with them:
+  - A long goal with an end shows its last 11 closed months, the current one and the next, then «N meses más, hasta el 3 ene 2027»
+    with no amount (its last month is partial), then «ver todo». A goal with an end of 12 rows or fewer reads as before.
+  - The total reads «termina el 3 ene 2027 · 113 semanas en total»; while a refusal holds the hint, the total moves to the line of
+    the two counts so it never disappears.
+  - Every «N MESES» equals the month rows drawn, own-amount rows included, on screen and on paper.
+  - A retired habit appears in «Mes» only in the month it was retired in, with «retirado el 7 oct».
+- **«Dejarla sin final» takes the end off** an ended goal being reopened, 2026-10-13, by the user: the goal reopens with no end, as
+  «Quitar el final» did. To leave it ended, close the sheet.
