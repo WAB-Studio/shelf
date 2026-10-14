@@ -4,7 +4,7 @@ import type { BrowserContext } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
-import { dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-14: the goal's total sums every fact in its unit, so the screens name the
 // figure by that unit, never by the first commitment's name. Hoy's card
@@ -69,6 +69,13 @@ async function dropPerson(db: postgres.Sql, id: string) {
   await db`delete from harness.identities where user_id = ${id}`;
 }
 
+// A day offset from the app's «today» (the pinned clock when the server has one), at noon in Bogota.
+function dayFromToday(days: number): Date {
+  const date = civilDateToDate(todayInZone());
+  date.setUTCDate(date.getUTCDate() + days);
+  return new Date(`${dateToCivilDate(date)}T17:00:00Z`);
+}
+
 const KM = "kilómetros";
 const FIRST = 6;
 const SECOND = 14;
@@ -89,7 +96,7 @@ test("the week's figure carries its unit on Hoy, the goal and the review, and is
   try {
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
-      values (${personId}, ${goalName}, ${dateToCivilDate(new Date(Date.now() + 60 * 86_400_000))}, ${KM}, ${KM}, ${new Date(Date.now() - 12 * 86_400_000)})
+      values (${personId}, ${goalName}, ${dateToCivilDate(dayFromToday(60))}, ${KM}, ${KM}, ${dayFromToday(-12)})
       returning id
     `;
     const commitmentIds: string[] = [];
@@ -97,7 +104,7 @@ test("the week's figure carries its unit on Hoy, the goal and the review, and is
       const [row] = await db<{ id: string }[]>`
         insert into goals.commitments
           (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
-        values (${personId}, ${goal.id}, ${name}, 'daily', 'quantity', 5, ${KM}, ${new Date(Date.now() - 12 * 86_400_000)})
+        values (${personId}, ${goal.id}, ${name}, 'daily', 'quantity', 5, ${KM}, ${dayFromToday(-12)})
         returning id
       `;
       commitmentIds.push(row.id);
