@@ -50,6 +50,7 @@ import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { CreateInsideAction } from "./create-inside-sheet";
 import { MoveEndRow, MoveHorizonAction } from "./horizon-sheet";
+import { MeasureAction } from "./measure-sheet";
 import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import { GoalNote } from "./goal-note-sheet";
 import { MoveGoalAction } from "./move-sheet";
@@ -391,6 +392,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             {t("month.list.noMeasure")}
           </Text>
         )}
+        {goal.measureUnit || holds || archived || ended ? null : <MeasureAction goalId={goal.id} goalName={goal.name} />}
         {ended ? <Face on="desktop">{moveAction}</Face> : null}
       </Panel>
   );
