@@ -75,7 +75,7 @@ test("E2: «mover el final» draws «contando desde esta semana; la meta lleva 2
   try {
     const sheet = await openSheet(page, "mover el final");
     await expect(field(sheet)).toHaveValue("8");
-    const hint = sheet.getByText(`termina el ${lastDay(8)}`, { exact: true });
+    const hint = sheet.getByText(new RegExp(`^termina el ${escape(lastDay(8))} · \\d+ semanas? en total$`));
     await expect(hint).toBeVisible();
     await expect(sheet.getByText(line(2), { exact: true })).toBeVisible();
     await expect(hint).not.toContainText("lleva");
@@ -109,7 +109,7 @@ test("E2b: «Leer», no end, opened 5 nov 2024: «ponerle final» says the weeks
   try {
     const sheet = await openSheet(page, "ponerle final");
     await expect(field(sheet)).toHaveValue("12");
-    await expect(sheet.getByText(`termina el ${lastDay(12)}`, { exact: true })).toBeVisible();
+    await expect(sheet.getByText(new RegExp(`^termina el ${escape(lastDay(12))} · \\d+ semanas? en total$`))).toBeVisible();
     await expect(sheet.getByText(line(n), { exact: true })).toBeVisible();
     await sheet.getByRole("button", { name: "Ponerle final", exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
@@ -128,7 +128,7 @@ test("E2b: «Pintar la sala», ended, reopens at 1280 on 1, ending this Sunday, 
   try {
     const sheet = await openSheet(page, "mover el final");
     await expect(field(sheet)).toHaveValue("1");
-    await expect(sheet.getByText(`termina el ${lastDay(1)}`, { exact: true })).toBeVisible();
+    await expect(sheet.getByText(new RegExp(`^termina el ${escape(lastDay(1))} · \\d+ semanas? en total$`))).toBeVisible();
     await expect(sheet.getByText(line(8), { exact: true })).toBeVisible();
   } finally {
     await context.close();
