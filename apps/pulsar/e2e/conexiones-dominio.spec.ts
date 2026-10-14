@@ -2,6 +2,7 @@ import type { Browser, Locator, Page } from "@playwright/test";
 import type { Sql } from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-38, RP-60, RP-64, RNP-20: boards `ConexionesConDominio`, `ConexionesPlegadas`,
 // `ConexionesPlegadasAbiertas`, `ConexionesVencidaCreaOtra`, `ConexionesSeccionConexiones`, `ConexionesDesktopConector`.
@@ -294,10 +295,10 @@ for (const width of [390, 1440]) {
         await expect(keys).toHaveAttribute("aria-expanded", "false");
         await expect(conns).toHaveAttribute("aria-expanded", "false");
         // Keys' fold sits above the «conexiones» label, the connections' fold below it.
-        const y = async (l: Locator) => (await l.boundingBox())!.y;
+        const y = async (l: Locator) => (await boxOf(l)).y;
         // The host in a row is a <strong>; the section label is the one that is not.
         await expect(page.getByText("claude.ai", { exact: true }).and(page.locator(":not(strong)"))).toHaveCount(0);
-        const label = (await page.getByText("conexiones", { exact: true }).boundingBox())!.y;
+        const label = (await boxOf(page.getByText("conexiones", { exact: true }))).y;
         expect(await y(keys)).toBeLessThan(label);
         expect(await y(conns)).toBeGreaterThan(label);
 
@@ -332,7 +333,7 @@ for (const width of [390, 1440]) {
         await page.getByText("crea otra", { exact: true }).click();
         await expect(field).toBeFocused();
         await expect(field).toHaveValue("portátil de la casa");
-        expect((await field.boundingBox())!.y).toBeLessThan(page.viewportSize()!.height);
+        expect((await boxOf(field)).y).toBeLessThan(page.viewportSize()!.height);
 
         // A folded lapsed key offers the same step, with its own name.
         await expect(fold(page, "1 llave que ya no entra")).toBeVisible();
@@ -449,7 +450,7 @@ for (const width of [390, 1440]) {
         const label = page.getByText("conexiones", { exact: true });
         await expect(label).toHaveCount(1);
         await expect(page.getByText("claude.ai", { exact: true }).and(page.locator(":not(strong)"))).toHaveCount(0);
-        const y = async (l: Locator) => (await l.boundingBox())!.y;
+        const y = async (l: Locator) => (await boxOf(l)).y;
         const keysLabel = await y(page.getByText("llaves", { exact: true }));
         const conns = await y(label);
         const another = await y(page.getByText("otra llave", { exact: true }));
@@ -547,7 +548,7 @@ for (const width of [390, 1440]) {
         await expect(page.getByText(/inglés/)).toHaveCount(0);
         await expect(page.getByText(/queda conectado/)).toHaveCount(0);
 
-        const y = async (l: Locator) => (await l.boundingBox())!.y;
+        const y = async (l: Locator) => (await boxOf(l)).y;
         const terminal = await y(page.getByText("claude code · pégalo en tu terminal", { exact: true }));
         const line = await y(sentence);
         const done = await y(page.getByRole("button", { name: "Listo", exact: true }));
@@ -586,16 +587,16 @@ test.describe("/conexiones at 360", () => {
       await expect(rowOfButton(button).getByText(host)).toBeVisible();
       for (const toggle of [fold(page, "1 llave que ya no entra"), fold(page, "1 conexión que ya no entra")]) {
         await expect(toggle).toBeVisible();
-        const box = (await toggle.boundingBox())!;
+        const box = (await boxOf(toggle));
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(360);
         expect(box.height).toBeGreaterThanOrEqual(44);
       }
-      const row = (await rowOfButton(button).boundingBox())!;
+      const row = (await boxOf(rowOfButton(button)));
       expect(row.x + row.width).toBeLessThanOrEqual(360);
-      const hostBox = (await rowOfButton(button).getByText(host).boundingBox())!;
+      const hostBox = (await boxOf(rowOfButton(button).getByText(host)));
       expect(hostBox.x + hostBox.width).toBeLessThanOrEqual(360);
-      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await boxOf(button)).height).toBeGreaterThanOrEqual(44);
       expect(await overflow(page)).toBeLessThanOrEqual(0);
 
       await fold(page, "1 llave que ya no entra").click();

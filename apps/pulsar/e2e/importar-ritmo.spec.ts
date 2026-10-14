@@ -5,6 +5,7 @@ import roadmap from "../messages/es/roadmap.json";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 import { todayInZone } from "../lib/zone";
 import { movedExample, unfold } from "./importar-plan";
+import { boxOf } from "./box";
 
 // RP-63: the review says each goal's rhythm before the person confirms (board `ImportarRevisarRitmo`).
 // RP-67: the row is «Ritmo al mes · las tareas van al plan» with an amount button (board `ImportarRitmoPlan`).
@@ -79,11 +80,11 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
         await expect(main).toBeVisible();
         await expect(meta).toBeVisible();
         // The meta line sits under its main line, in the same row.
-        const [mainBox, metaBox] = [(await main.boundingBox())!, (await meta.boundingBox())!];
+        const [mainBox, metaBox] = [(await boxOf(main)), (await boxOf(meta))];
         expect(metaBox.y).toBeGreaterThan(mainBox.y);
         expect(metaBox.y - mainBox.y).toBeLessThan(40);
         // And the row follows its goal's own row.
-        const goal = (await box(page, new RegExp(`^${GOAL} meta`)).boundingBox())!;
+        const goal = (await boxOf(box(page, new RegExp(`^${GOAL} meta`))));
         expect(mainBox.y).toBeGreaterThan(goal.y);
         // Like the other rows of the board, it is a marked checkbox.
         await expect(rhythmBox(page)).toBeChecked();
@@ -217,10 +218,10 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
       await toOpenReview(page, withKmGoal());
       await expect(page.getByText(RHYTHM_LINE, { exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      const row = (await rhythmBox(page).locator("xpath=ancestor::label").boundingBox())!;
+      const row = (await boxOf(rhythmBox(page).locator("xpath=ancestor::label")));
       expect(row.height).toBeGreaterThanOrEqual(44);
       expect(row.x + row.width).toBeLessThanOrEqual(360);
-      const button = (await rhythmButton(page, "12 h").boundingBox())!;
+      const button = (await boxOf(rhythmButton(page, "12 h")));
       expect(button.height).toBeGreaterThanOrEqual(44);
       expect(button.width).toBeGreaterThanOrEqual(44);
       expect(button.x + button.width).toBeLessThanOrEqual(360);

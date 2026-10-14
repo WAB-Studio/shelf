@@ -8,6 +8,7 @@ import account from "../messages/es/account.json";
 import connections from "../messages/es/connections.json";
 import oauth from "../messages/es/oauth.json";
 import { test, expect, type Person } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-60, RNP-01, RNP-07: the consent screen. The person is signed in through
 // the fixture's session, never the form; a client registers itself through
@@ -252,7 +253,7 @@ test.describe("the consent screen (RP-60)", () => {
       await expect(button).toBeVisible();
       await expectNoOverflow(page);
       // 640px column centred in 1280: its left edge is 320px, never the rail's.
-      const box = (await page.getByRole("main").boundingBox())!;
+      const box = (await boxOf(page.getByRole("main")));
       expect(Math.abs(box.x - 320)).toBeLessThanOrEqual(1);
       expect(box.width).toBeLessThanOrEqual(640);
     } finally {

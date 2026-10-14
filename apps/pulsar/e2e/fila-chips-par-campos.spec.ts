@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 
 import { test, expect, visit } from "./fixtures";
 import plan from "../messages/es/plan.json";
+import { boxOf } from "./box";
 
 // UX 362: chips and paired fields are spaced by `ChipRow` and `FieldPair`,
 // never by `Flex gap` or an inline `style`.
@@ -68,7 +69,7 @@ for (const viewport of [
         await expect(page.getByTestId("commitment-unit")).toHaveText(unit);
         const view = page.viewportSize()!.width;
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(view);
-        const long = (await page.getByTestId("commitment-unit").boundingBox())!;
+        const long = (await boxOf(page.getByTestId("commitment-unit")));
         expect(long.x + long.width).toBeLessThanOrEqual(view);
       } finally {
         await db`delete from goals.goals where id = ${goal.id} and user_id = ${personId}`;
@@ -78,8 +79,8 @@ for (const viewport of [
     test("the cadence chips wrap inside the page at 360 and none leaves it", async ({ page }) => {
       const goalId = await createGoal(page, `Meta chips ${Date.now()}`);
       await visit(page, `/metas/${goalId}/compromisos/nuevo`);
-      const first = (await page.getByRole("button", { name: "todos los días", exact: true }).boundingBox())!;
-      const last = (await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true }).boundingBox())!;
+      const first = (await boxOf(page.getByRole("button", { name: "todos los días", exact: true })));
+      const last = (await boxOf(page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true })));
       const view = page.viewportSize()!.width;
       expect(last.x + last.width).toBeLessThanOrEqual(view);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(view);

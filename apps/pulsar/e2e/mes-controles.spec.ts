@@ -2,6 +2,7 @@ import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `MesTodas`, `Mes`, `MesSubtarea` (RP-43, RP-30): the goal's name
 // is a heading link in ink with no underline, and every control on a month
@@ -84,7 +85,7 @@ test("the goal's name in «Mes» is an ink heading link with no underline that o
 
     // The add row is one link the row's full 48 px.
     const add = page.getByRole("link", { name: /^Otra tarea de / });
-    expect((await add.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+    expect((await boxOf(add)).height).toBeGreaterThanOrEqual(48);
   } finally {
     await context.close();
   }

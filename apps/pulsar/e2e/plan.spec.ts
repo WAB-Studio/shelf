@@ -7,6 +7,7 @@ import { todayInZone } from "@/lib/zone";
 import roadmap from "../messages/es/roadmap.json";
 
 import { test, expect } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-50, RP-53, RP-54: the plan's month sections, its tramo medio, the end
 // against the goal's end, and «Añadir una tarea». Calendar-bound: «this month»
@@ -119,7 +120,7 @@ for (const width of [390, 1440]) {
         await page.goto(`/metas/${goalId}/plan`);
         const bar = section(page, `${name(m0)} · en curso`).locator("span[aria-hidden]").first();
         await expect(bar).toBeVisible();
-        expect((await bar.boundingBox())!.height).toBe(6);
+        expect((await boxOf(bar)).height).toBe(6);
       } finally {
         await drop(db, personId, goalId);
       }

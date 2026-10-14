@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect, laneNumber, settled } from "./fixtures";
+import { boxOf } from "./box";
 
 // RNP-17 at the kit's level: what `components/ui` does at 1024px and does not
 // do below it. `Face`, `Split` and `WeekTable` have no consumer yet; the
@@ -119,8 +120,8 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
     // The actions are one row at the right edge, the secondary before the primary.
     const actions = dialog.getByRole("button");
     await expect(actions).toHaveCount(2);
-    const primary = (await actions.filter({ hasText: "Guardarlo" }).boundingBox())!;
-    const secondary = (await actions.filter({ hasText: "Dejarlo como está" }).boundingBox())!;
+    const primary = (await boxOf(actions.filter({ hasText: "Guardarlo" })));
+    const secondary = (await boxOf(actions.filter({ hasText: "Dejarlo como está" })));
     expect(Math.abs(secondary.y - primary.y)).toBeLessThanOrEqual(1);
     expect(secondary.x + secondary.width).toBeLessThan(primary.x);
     expect(primary.width).toBeLessThan(240);

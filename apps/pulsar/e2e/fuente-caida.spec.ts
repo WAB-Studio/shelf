@@ -3,6 +3,7 @@ import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
+import { boxOf } from "./box";
 
 // Against `PULSAR_FAULT_BASE_URL`: a `next start` of the same build with
 // `PULSAR_FAULT_SEAM=reading_lookups`, so every read of that source rejects
@@ -143,8 +144,8 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       // `MetaTotal` (399): the total's own line stays, and today's note sits under it.
       const since = page.locator("p", { hasText: /^en total, desde el / }).locator("visible=true");
       await expect(since).toHaveCount(1);
-      const sinceBox = (await since.boundingBox())!;
-      const noteBox = (await page.getByRole("status").filter({ hasText: NOTE_TITLE }).boundingBox())!;
+      const sinceBox = (await boxOf(since));
+      const noteBox = (await boxOf(page.getByRole("status").filter({ hasText: NOTE_TITLE })));
       expect(noteBox.y).toBeGreaterThanOrEqual(sinceBox.y + sinceBox.height - 1);
     } finally {
       await context.close();

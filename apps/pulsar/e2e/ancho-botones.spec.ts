@@ -1,4 +1,5 @@
 import { test, expect, visit } from "./fixtures";
+import { boxOf } from "./box";
 
 // Content stops at 1200 from 1024, and a link shaped as a button
 // follows the same width rule as a `<button>` (`SistemaEspacio.dc.html`).
@@ -15,12 +16,12 @@ test("at 2000 a link-button and a button are sized to their text, never the colu
     const page = await context.newPage();
     await visit(page, "/");
     for (const name of ["Abrir una meta", "Importar un plan"]) {
-      const box = (await page.getByRole("link", { name }).boundingBox())!;
+      const box = (await boxOf(page.getByRole("link", { name })));
       expect(box.width).toBeGreaterThanOrEqual(160);
       expect(box.width).toBeLessThan(400);
     }
     await visit(page, "/metas/nueva");
-    const save = (await page.getByRole("button", { name: "Abrirla" }).boundingBox())!;
+    const save = (await boxOf(page.getByRole("button", { name: "Abrirla" })));
     expect(save.width).toBeGreaterThanOrEqual(160);
     expect(save.width).toBeLessThan(400);
   } finally {
@@ -32,7 +33,7 @@ test("at 2000 a full-width screen's content stops at 1200", async ({ page }) => 
   await page.setViewportSize({ width: 2000, height: 900 });
   await visit(page, "/semana");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  const header = (await page.locator("main > header:visible").first().boundingBox())!;
+  const header = (await boxOf(page.locator("main > header:visible").first()));
   expect(header.width).toBeLessThanOrEqual(1200);
 });
 
@@ -44,7 +45,7 @@ test("at 390 a block button still spans the column", async ({ person, browser })
   try {
     const page = await context.newPage();
     await visit(page, "/");
-    const box = (await page.getByRole("link", { name: "Abrir una meta" }).boundingBox())!;
+    const box = (await boxOf(page.getByRole("link", { name: "Abrir una meta" })));
     expect(box.width).toBeGreaterThanOrEqual(349);
   } finally {
     await context.close();
@@ -68,8 +69,8 @@ test("a block button in a sheet's actions follows the width rule: sized to text 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.getByRole("button", { name: "Renombrar" }).click();
     await expect(dialog).toBeVisible();
-    await expect.poll(async () => (await primary.boundingBox())!.width).toBeGreaterThanOrEqual(160);
-    expect((await primary.boundingBox())!.width).toBeLessThan(240);
+    await expect.poll(async () => (await boxOf(primary)).width).toBeGreaterThanOrEqual(160);
+    expect((await boxOf(primary)).width).toBeLessThan(240);
     await page.keyboard.press("Escape");
 
     await page.setViewportSize({ width: 390, height: 800 });
@@ -77,8 +78,8 @@ test("a block button in a sheet's actions follows the width rule: sized to text 
     await expect(dialog).toBeVisible();
     await expect
       .poll(async () => {
-        const sheet = (await dialog.boundingBox())!;
-        return sheet.width - (await primary.boundingBox())!.width;
+        const sheet = (await boxOf(dialog));
+        return sheet.width - (await boxOf(primary)).width;
       })
       .toBeLessThan(60);
   } finally {

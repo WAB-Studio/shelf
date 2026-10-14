@@ -4,6 +4,7 @@ import type postgres from "postgres";
 import { dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { test, expect, type Person } from "./fixtures";
+import { boxOf } from "./box";
 
 // RP-14, RP-28: the figure beside «mide en horas y minutos» (RP-35, RP-66) is the goal's total since
 // it opened, and a quiet line under it says so: «en total, desde el 1 de
@@ -96,8 +97,8 @@ for (const [width, height] of WIDTHS) {
       // Sits under the figure, not above it or beside the sentence.
       const figure = page.getByText(/^14 h 50 min$/).locator("visible=true").first();
       await expect(figure).toBeVisible();
-      const figureBox = (await figure.boundingBox())!;
-      const lineBox = (await line.boundingBox())!;
+      const figureBox = (await boxOf(figure));
+      const lineBox = (await boxOf(line));
       expect(lineBox.y).toBeGreaterThanOrEqual(figureBox.y + figureBox.height - 1);
 
       // The date is mono, the rest of the sentence is not.

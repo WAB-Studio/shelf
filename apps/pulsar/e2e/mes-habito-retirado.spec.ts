@@ -5,6 +5,7 @@ import { figure } from "./habit-weeks";
 import { mainLower, visit } from "./metas-sin-final-seed";
 import { type Days, serverDays } from "./server-day";
 import { seedFact, seedHabit, shift } from "./sin-final-seed";
+import { boxOf } from "./box";
 
 // Module 948, RP-113: in «Mes», a habit retired this month keeps its line and gets «retirado el {d mmm}» on its own line
 // under it, in the month it was retired and no other. Board MesRetirado (H1–H4 of private/contrato-948.md), decision of
@@ -85,8 +86,8 @@ test.describe("a habit retired this month in «Mes» (RP-113)", () => {
       await expect(retired).toHaveCount(1);
       const lineOfYoga = line(page, weekly);
       await expect(lineOfYoga).toHaveCount(1);
-      const upper = (await lineOfYoga.boundingBox())!;
-      const lower = (await retired.boundingBox())!;
+      const upper = (await boxOf(lineOfYoga));
+      const lower = (await boxOf(retired));
       expect(lower.y).toBeGreaterThanOrEqual(upper.y + upper.height - 1);
       const holder = retired.locator("xpath=..");
       expect((await holder.innerText()).toLowerCase()).not.toContain("esta semana");
@@ -146,7 +147,7 @@ test.describe("a habit retired this month in «Mes» (RP-113)", () => {
       expect(text).toMatch(new RegExp(`leer antes de dormir todos los días · 0 de \\d+ días? ${retiredLine(D.today)}`));
       const retired = line(page, retiredLine(D.today));
       await expect(retired).toHaveCount(1);
-      expect((await line(page, "todos los días · 0 de \\d+ días?").boundingBox())!.y).toBeLessThan((await retired.boundingBox())!.y);
+      expect((await boxOf(line(page, "todos los días · 0 de \\d+ días?"))).y).toBeLessThan((await boxOf(retired)).y);
     } finally {
       await context.close();
     }

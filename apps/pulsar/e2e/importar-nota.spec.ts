@@ -3,6 +3,7 @@ import type { Browser, Page } from "@playwright/test";
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
 import { movedExample, unfold } from "./importar-plan";
+import { boxOf } from "./box";
 
 // The review draws a template task's and sub-task's note, whole and read-only
 // (RP-45); the template path needs no model key. Board `ImportarRevisarNota`.
@@ -53,7 +54,7 @@ test.describe("the review shows each task's note (RP-45)", () => {
       await expect(tutorNote).toHaveCSS("white-space", /pre-line/);
       await expect(tutorNote).toHaveCSS("font-size", "13px");
       // Whole: two lines of text, not clipped to one.
-      expect((await tutorNote.boundingBox())!.height).toBeGreaterThan(2 * 13);
+      expect((await boxOf(tutorNote)).height).toBeGreaterThan(2 * 13);
 
       await page.getByRole("button", { name: "2 sub-tareas" }).click();
       await rowOf(/^Elegir tutor/).getByRole("button", { name: "nota · 1 línea" }).click();

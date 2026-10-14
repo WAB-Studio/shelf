@@ -2,6 +2,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // RP-06 from the week (`Semana.dc.html`): a past day's label is the way into
 // that day's own screen; today's is plain text, a future day's is too. Each
@@ -136,7 +137,7 @@ test("the week holds at 360px with its links, every day link and every commitmen
     for (const height of links) expect(height).toBeGreaterThanOrEqual(48);
 
     const row = page.locator("p", { hasText: name }).locator("xpath=..");
-    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+    expect((await boxOf(row)).height).toBeGreaterThanOrEqual(48);
   } finally {
     await deleteGoal(db, personId, goalId);
   }

@@ -3,6 +3,7 @@ import type { Browser, Locator, Page } from "@playwright/test";
 import messages from "../messages/es/import.json";
 import { todayInZone } from "../lib/zone";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
+import { boxOf as visibleBox } from "./box";
 
 // Module 819. Board `ImportarArchivoYAviso` (RP-37, RP-72): a text file whose reading lists template errors
 // lands in the box and is corrected there like a pasted text; a text that stops being a template says so.
@@ -109,7 +110,7 @@ test.describe("a file's template errors are corrected in the box (board Importar
       await expect(rowsOf(listOf(page))).toHaveCount(3);
       const note = page.getByText(FILE_NOTE, { exact: true });
       await expect(note).toBeVisible();
-      const y = async (l: Locator) => (await l.boundingBox())!.y;
+      const y = async (l: Locator) => (await visibleBox(l)).y;
       expect(await y(note)).toBeGreaterThan(await y(boxOf(page)));
       expect(await y(note)).toBeLessThan(await y(listOf(page)));
     });

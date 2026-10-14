@@ -5,6 +5,7 @@ import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `HoyCuenta.dc.html`: Hoy counts «hechos N de M» over the rows
 // the Semana counts, and a flexible met in its period stays as a quiet row.
@@ -318,11 +319,11 @@ test(`at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the them
     const eyebrow = page.locator("main > header:visible").getByText(/^[a-zñáéíóú]+ \d{1,2} de [a-zñ]+$/).first();
     if (longest) await eyebrow.evaluate((node, text) => void (node.textContent = text), LONGEST_DATE);
     const boxes = {
-      eyebrow: (await eyebrow.boundingBox())!,
-      h1: (await h1.boundingBox())!,
-      count: (await count.boundingBox())!,
-      link: (await link.boundingBox())!,
-      theme: (await theme.boundingBox())!,
+      eyebrow: (await boxOf(eyebrow)),
+      h1: (await boxOf(h1)),
+      count: (await boxOf(count)),
+      link: (await boxOf(link)),
+      theme: (await boxOf(theme)),
     };
     for (const [name, box] of Object.entries(boxes)) {
       expect(box.x, `${name} left`).toBeGreaterThanOrEqual(0);

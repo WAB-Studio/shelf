@@ -18,6 +18,7 @@ import {
   seedGoal as seedDayGoal,
 } from "./hoy-arbol-seed";
 import { destination, openMoveSheet, topDestination } from "./mover-nota-ayuda";
+import { boxOf } from "./box";
 
 // What the tree's screens owe that the other specs of the tree leave unasserted (RP-79, RP-83, RP-84):
 // a goal already archived is not among the goals an archive takes along nor a place to move to, and the
@@ -139,7 +140,7 @@ test("on paper the goals inside a general step in by level: the large one, then 
     await expect(page.getByRole("main").getByText(tree.names.G, { exact: true }).first()).toBeVisible();
     await page.emulateMedia({ media: "print" });
     // Each goal's name appears twice on paper: in the general's list of what is inside, and above its own part, last.
-    const left = async (name: string) => (await page.getByText(name, { exact: true }).locator("visible=true").last().boundingBox())!.x;
+    const left = async (name: string) => (await boxOf(page.getByText(name, { exact: true }).locator("visible=true").last())).x;
     const [general, large, small] = [await left(tree.names.G), await left(tree.names.g1), await left(tree.names.p)];
     expect(large, "the large goal steps in from the general").toBeGreaterThan(general);
     expect(small, "the small goal steps in further than the large one").toBeGreaterThan(large);

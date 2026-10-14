@@ -6,6 +6,7 @@ import importMessages from "../messages/es/import.json";
 import { test, expect, visit } from "./fixtures";
 import { unfold } from "./importar-plan";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `/metas` (`MetasCentro`, `MetasCentroEscritorio`; RP-11, RP-24, RP-27, RP-49,
 // RP-37; RNP-16, RNP-17, RNP-07): the open goals as rows with their last day,
@@ -207,7 +208,7 @@ for (const width of [390, 1440]) {
         await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`).locator("visible=true")).toBeVisible();
         await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`).locator("visible=true")).toBeVisible();
 
-        const y = async (locator: ReturnType<typeof page.getByText>) => (await locator.boundingBox())!.y;
+        const y = async (locator: ReturnType<typeof page.getByText>) => (await boxOf(locator)).y;
         const addAnother = await y(page.getByRole("link", { name: "Abrir otra meta" }));
         const plan = await y(page.getByText("el plan", { exact: true }));
         const archived = await y(page.getByText("Archivadas", { exact: true }));

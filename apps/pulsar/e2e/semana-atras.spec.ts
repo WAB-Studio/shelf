@@ -4,6 +4,7 @@ import type postgres from "postgres";
 import day from "../messages/es/day.json";
 import { test, expect, visit, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // RP-44, RP-16, RP-06 on Semana: ‹ › step a week at a time, read-only beyond
 // seven days (`SemanaPasada.dc.html`, `SemanaPrimera.dc.html`,
@@ -202,12 +203,12 @@ for (const width of [360, 390, 1280, 1440]) {
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(mondayAgo(4)));
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       for (const link of [prev(page), next(page)]) {
-        const box = (await link.boundingBox())!;
+        const box = (await boxOf(link));
         expect(box.width).toBeGreaterThanOrEqual(48);
         expect(box.height).toBeGreaterThanOrEqual(48);
       }
       if (width >= 1024) {
-        const table = (await page.getByRole("table").boundingBox())!;
+        const table = (await boxOf(page.getByRole("table")));
         if (width === 1440) expect(table.width).toBeGreaterThan(1000);
         expect(table.width).toBeGreaterThan(width * 0.6);
       }
@@ -242,7 +243,7 @@ for (const width of [390, 1440]) {
       await expect(prev(page)).toHaveAttribute("href", `/semana?semana=${mondayAgo(3)}`);
       await expect(next(page)).toHaveAttribute("href", `/semana?semana=${mondayAgo(1)}`);
       for (const link of [prev(page), next(page)]) {
-        const box = (await link.boundingBox())!;
+        const box = (await boxOf(link));
         expect(box.height).toBeGreaterThanOrEqual(48);
       }
       await page.goto(`/semana?semana=${mondayAgo(1)}`);
@@ -259,9 +260,9 @@ test("at 390 the steps sit on their own row above the title, one at each edge (R
 }) => {
   await withWeeks(browser, baseURL, db, person, 390, async (page) => {
     await visit(page, `/semana?semana=${mondayAgo(2)}`);
-    const h1 = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
-    const p = (await prev(page).boundingBox())!;
-    const n = (await next(page).boundingBox())!;
+    const h1 = (await boxOf(page.getByRole("heading", { level: 1 })));
+    const p = (await boxOf(prev(page)));
+    const n = (await boxOf(next(page)));
     expect(p.y + p.height).toBeLessThanOrEqual(h1.y);
     expect(n.y + n.height).toBeLessThanOrEqual(h1.y);
     expect(Math.abs(p.y - n.y)).toBeLessThanOrEqual(2);
@@ -281,9 +282,9 @@ test("at 1280 the steps sit to the right of the title, on the header row (RP-44)
 }) => {
   await withWeeks(browser, baseURL, db, person, 1280, async (page) => {
     await visit(page, `/semana?semana=${mondayAgo(2)}`);
-    const h1 = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
-    const p = (await prev(page).boundingBox())!;
-    const n = (await next(page).boundingBox())!;
+    const h1 = (await boxOf(page.getByRole("heading", { level: 1 })));
+    const p = (await boxOf(prev(page)));
+    const n = (await boxOf(next(page)));
     expect(p.x).toBeGreaterThan(h1.x + h1.width);
     expect(n.x).toBeGreaterThan(p.x);
     expect(p.y).toBeLessThan(h1.y + h1.height);
@@ -301,7 +302,7 @@ test("the first week with a goal has no back step; › stays at the right edge (
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(mondayAgo(6)));
     await expect(page.getByRole("link", { name: /semana anterior/i })).toHaveCount(0);
     expect(await page.getByText(/semana anterior/i).count()).toBe(0);
-    const n = (await next(page).boundingBox())!;
+    const n = (await boxOf(next(page)));
     expect(n.x + n.width).toBeGreaterThanOrEqual(390 - 40);
   });
 });
@@ -316,7 +317,7 @@ test("this week has no next step; the back step stays at the left edge (RP-44)",
     await page.goto("/semana");
     await expect(next(page)).toHaveCount(0);
     expect(await page.getByText(/semana siguiente/i).count()).toBe(0);
-    const p = (await prev(page).boundingBox())!;
+    const p = (await boxOf(prev(page)));
     expect(p.x).toBeLessThanOrEqual(40);
   });
 });
@@ -336,7 +337,7 @@ for (const width of [360, 390, 1440]) {
       await expect(next(page)).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       for (const link of [prev(page), next(page)]) {
-        const box = (await link.boundingBox())!;
+        const box = (await boxOf(link));
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(width);
       }

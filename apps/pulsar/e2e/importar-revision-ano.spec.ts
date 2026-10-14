@@ -5,6 +5,7 @@ import { test, expect, settled as pageSettled } from "./fixtures";
 import { dayBefore } from "../lib/day/weeks";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 import { rawGoal, rawTask, seedOf, stored, unfold } from "./importar-plan";
+import { boxOf } from "./box";
 
 // RP-37, RP-63, RP-67: the review of an imported plan never says a month or a
 // date without its year, and says the goal's end once, in the horizon's row.
@@ -192,7 +193,7 @@ test.describe("the review fits", () => {
   test("at 1024 two goals lay out as at 1280: the tree's one card is not squeezed to a sliver", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, 1024, async (page) => {
       await toOpenReview(page, plan(hoursGoal, otherGoal));
-      expect((await page.getByRole("region", { name: messages.review.title }).boundingBox())!.width).toBeGreaterThanOrEqual(240);
+      expect((await boxOf(page.getByRole("region", { name: messages.review.title }))).width).toBeGreaterThanOrEqual(240);
       for (const name of [HOURS, OTHER]) await expect(page.getByRole("checkbox", { name: new RegExp(`^${name}`) })).toBeVisible();
     });
   });
