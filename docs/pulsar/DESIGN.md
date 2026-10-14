@@ -1613,3 +1613,15 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/critic-
   - A retired habit appears in «Mes» only in the month it was retired in, with «retirado el 7 oct».
 - **«Dejarla sin final» takes the end off** an ended goal being reopened, 2026-10-13, by the user: the goal reopens with no end, as
   «Quitar el final» did. To leave it ended, close the sheet.
+
+## Decisions of 2026-10-13, after the critic of slice s5, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/critic-s5/REPORT.md`.
+
+- **A folded goal with an end always draws «ver todo»** under its line «N meses más, hasta el …»; the line stops being a link
+  where both would open the same list. «Escribir» with hidden months ahead and no hidden closed ones has no «ver todo» today.
+- **The line «N meses más, hasta el …» follows the own-amount table,** so the list reads in time order. It keeps no amount: the
+  months' amounts live behind «ver todo».
+- **On paper a goal's header stays with its «por mes» table, and the table may split across pages.** Today «Leer»'s 14-row table
+  jumps whole to page 3 and leaves page 2 with its header alone: 5 pages, two of them ~60 % and ~85 % blank.
+- **The end sheet keeps «contando desde esta semana; la meta lleva N semanas»** beside the total: it says what the field counts.
