@@ -3187,3 +3187,9 @@ Measured 2026-10-13, module 903. The wrapper exports `OPENAI_API_KEY=` (empty) s
 variable wins over `.env.local`: a dev server started through it answers 503 `noKey` even with the key in the lane's
 `apps/pulsar/.env.local`. A deliberate paid read needs the server started with the key read from `.env.local` inside the exec.
 That 503 calls no model, so a forgotten key costs nothing but the confusion.
+
+## A push that fails does not stop the delete chained after it
+- 2026-10-13, slice s4, module 936: `git merge … && git push origin HEAD:pulsar-tren-s4 && git log …; …; git branch -D pulsar-936; git push origin --delete pulsar-936`.
+  GitHub answered `remote rejected (Internal Server Error)`; the `;` after the `&&` chain ran the deletes anyway, local and remote,
+  and two lanes were cut from the train without 936. The commit survived only in the shared object store (`git branch pulsar-936 d1c232a7`).
+- Push, then read the remote back (`git fetch && git log -1 origin/<train>`), and only in a separate command delete the module branch.

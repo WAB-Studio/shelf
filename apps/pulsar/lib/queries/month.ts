@@ -83,6 +83,8 @@ export type MonthLooseHabit = {
   asked: number | null;
   weeks: { met: number; counted: number } | null;
   thisWeek: { done: number; count: number } | null;
+  // The civil day in Bogotá the habit was retired; null while it lives.
+  retiredOn: string | null;
 };
 
 // `byWeek` holds the done days per Monday from the first week of the month, or the week of today when that is earlier.
@@ -115,10 +117,10 @@ function looseHabit({ id, name, daysDone, row, byWeek }: LooseRow, month: string
       : null;
   const thisWeek = cadence.kind === "times_per_week" ? habitThisWeek({ count: cadence.count, retiredOn, daysDoneByWeek, today }) : null;
   const counted = cadence.kind === "daily" || cadence.kind === "weekdays" || cadence.kind === "every_n_days";
-  if (!counted) return { id, name, daysDone, cadence, asked: null, weeks, thisWeek };
+  if (!counted) return { id, name, daysDone, cadence, asked: null, weeks, thisWeek, retiredOn };
   const plan = { id, cadence, satisfiedBy: { kind: "tap" as const }, retiredAt: row.retired_at, createdOn: civilDateInZone(new Date(row.created_at)) };
   const asked = askedIn(plan, month, today);
-  return { id, name, daysDone, cadence, asked, weeks, thisWeek };
+  return { id, name, daysDone, cadence, asked, weeks, thisWeek, retiredOn };
 }
 
 async function queryRows(tx: Transaction, month: string, today: string): Promise<Row[]> {
