@@ -57,6 +57,8 @@ const lineOf = (scope: Page | Locator, count: number, offset: number) => scope.g
 const lineAsLink = (scope: Page | Locator, count: number, offset: number) =>
   scope.getByRole("link", { name: lineRe(count, offset), includeHidden: true });
 const captionRe = (count: number) => new RegExp(`(?<!\\d)${count} meses(?! más)`);
+// RP-118: a goal with an end whose list folds says «{drawn} de {the goal's months} meses».
+const ofRe = (shown: number, total: number) => new RegExp(`(?<!\\d)${shown} de ${total} meses(?! más)`);
 
 async function seedLeer(db: Db, person: Person, o: { endsIn: number | null; name?: string; rhythm?: number | null; opened?: number }) {
   return seedOpenGoal(db, person, {
@@ -87,7 +89,7 @@ for (const width of [360, 1280]) {
       try {
         const main = page.locator("main");
         expect(await rowMonths(page, id)).toEqual(keysFor(range(-11, 2)));
-        expect(await mainLower(page)).toMatch(captionRe(14));
+        expect(await mainLower(page)).toMatch(ofRe(14, 27));
         const line = lineOf(main, 1, 3);
         await expect(line).toBeVisible();
         await expect(lineAsLink(main, 1, 3)).toHaveCount(0);
@@ -109,7 +111,7 @@ for (const width of [360, 1280]) {
       try {
         await expect(page.getByRole("main").getByText("Leer", { exact: true }).first()).toBeVisible();
         const section = sectionOf(page, "Leer");
-        expect((await section.innerText()).toLowerCase()).toMatch(captionRe(14));
+        expect((await section.innerText()).toLowerCase()).toMatch(ofRe(14, 27));
         const line = lineOf(section, 1, 3);
         await expect(line).toBeVisible();
         await expect(lineAsLink(section, 1, 3)).toHaveCount(0);
@@ -147,7 +149,7 @@ for (const width of [360, 1280]) {
       try {
         const main = page.locator("main");
         expect(await rowMonths(page, id)).toEqual(keysFor([0, 1]));
-        expect(await mainLower(page)).toMatch(captionRe(2));
+        expect(await mainLower(page)).toMatch(ofRe(2, 15));
         await expect(rowLink(page, id, 0)).toContainText("en curso");
         await expect(rowLink(page, id, 0)).toContainText("sin tareas");
         await expect(rowLink(page, id, 1)).toContainText("1 tarea");
@@ -290,7 +292,7 @@ for (const query of ["", "?todo=1"]) {
     // Kills: the paper dropping the line of a goal with no unit; the paper changing with `?todo=1`; «ver todo» printed.
     await seedMudanza(db, person);
     const paper = await paperOf(browser, baseURL, person.sessionFile, `/exportar${query}`, "Mudanza");
-    expect(paper).toContain("mudanza · por mes · 2 meses");
+    expect(paper).toContain("mudanza · por mes · 2 de 15 meses");
     expectInOrder(paper, [monthLabel(0), monthLabel(1), lineWords(13, 14)]);
     expect(paper, monthLabel(2)).not.toContain(monthLabel(2));
     expect(paper).not.toContain("ver todo");
@@ -302,7 +304,7 @@ test("V3 on paper: 14 MESES, the label, the month set by hand, then «1 mes más
   const id = await seedLeer(db, person, { endsIn: 3 });
   await budget(db, person, id, 2, 60);
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Leer");
-  expect(paper).toContain("leer · por mes · 14 meses");
+  expect(paper).toContain("leer · por mes · 14 de 27 meses");
   expectInOrder(paper, [monthLabel(-11), monthLabel(1), "estos meses con monto propio:", monthLabel(2), lineWords(1, 3)]);
   expect(paper).not.toContain("ver todo");
 });

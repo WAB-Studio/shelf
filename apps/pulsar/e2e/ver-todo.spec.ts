@@ -77,7 +77,7 @@ for (const width of [360, 1280]) {
     });
 
     test("«ver todo» on «Por semana» opens every week from week 1 and leaves no link behind (RP-106)", async ({ person, browser, baseURL, db }) => {
-      // Kills: the link not carrying `?todo=1`; the full list still cut; a «ver menos» (or the link) left on the full list.
+      // Kills: the link not carrying `?todo=1`; the full list still cut; the link left on the full list; «ver menos» missing or not to `/revision`.
       const id = await seedOpenGoal(db, person, { name: "Leer", unit: PAGES, horizon: null, created: new Date(`${OPENED_MONDAY}T12:00:00Z`) });
       const n = weekNumberOf(OPENED_MONDAY);
       const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/revision`, width);
@@ -89,7 +89,10 @@ for (const width of [360, 1280]) {
         await expect(rows.first()).toContainText(/semana 1\b/i, { useInnerText: true });
         await expect(rows.last()).toContainText("en curso");
         await expect(seeAll(page.locator("main"))).toHaveCount(0);
-        await expect(page.getByRole("link", { name: /ver menos/i })).toHaveCount(0);
+        // RP-118 (board VerMenos, file 3): the whole list that folds says «ver menos» twice, to the same screen without `todo=1`.
+        const less = page.getByRole("link", { name: "ver menos", exact: true }).locator("visible=true");
+        await expect(less).toHaveCount(2);
+        for (const index of [0, 1]) expect(await less.nth(index).getAttribute("href"), `link ${index}`).toBe(`/metas/${id}/revision`);
       } finally {
         await context.close();
       }

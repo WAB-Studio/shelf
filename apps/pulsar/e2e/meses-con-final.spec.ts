@@ -60,6 +60,8 @@ const lineAsLink = (scope: Page | Locator, count: number, offset: number) =>
   scope.getByRole("link", { name: lineRe(count, offset), includeHidden: true });
 // «13 meses» but not the «2 meses más» of the line.
 const captionRe = (count: number) => new RegExp(`(?<!\\d)${count} meses(?! más)`);
+// RP-118: a goal with an end whose list folds says «{drawn} de {the goal's months} meses».
+const ofRe = (shown: number, total: number) => new RegExp(`(?<!\\d)${shown} de ${total} meses(?! más)`);
 
 async function seedLeer(
   db: Db,
@@ -84,7 +86,7 @@ for (const width of [360, 1280]) {
       try {
         const main = page.locator("main");
         expect(await rowMonths(page, id)).toEqual(keysFor(range(-11, 1)));
-        expect(await mainLower(page)).toMatch(captionRe(13));
+        expect(await mainLower(page)).toMatch(ofRe(13, 27));
         await expect(rowLink(page, id, 0)).toContainText("en curso");
         const next = rowLink(page, id, 1);
         await expect(next).toContainText("planeado");
@@ -113,7 +115,7 @@ for (const width of [360, 1280]) {
       try {
         const main = page.locator("main");
         expect(await rowMonths(page, id)).toEqual(keysFor(range(-11, 2)));
-        expect(await mainLower(page)).toMatch(captionRe(14));
+        expect(await mainLower(page)).toMatch(ofRe(14, 33));
         const line = lineOf(main, 7, 9);
         const label = textOf(main, OWN);
         await expect(line).toBeVisible();
@@ -188,7 +190,7 @@ test("E7: ten years: 2 MESES, «118 meses más, hasta el …», and «ver todo»
   const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, 360);
   try {
     expect(await rowMonths(page, id)).toEqual(keysFor([0, 1]));
-    expect(await mainLower(page)).toMatch(captionRe(2));
+    expect(await mainLower(page)).toMatch(ofRe(2, 120));
     await expect(lineOf(page.locator("main"), 118, 119)).toBeVisible();
     await expect(lineAsLink(page.locator("main"), 118, 119)).toHaveCount(0);
     await expect(seeAll(page.locator("main"))).toBeVisible();
@@ -217,7 +219,7 @@ test("E8: the end falls this month: the current month, no next month, no line (R
     expect(await rowMonths(page, id)).toEqual(keysFor(range(-11, 0)));
     await expect(rowLink(page, id, 0)).toContainText("en curso");
     const lower = await mainLower(page);
-    expect(lower).toMatch(captionRe(12));
+    expect(lower).toMatch(ofRe(12, 14));
     expect(lower).not.toMatch(/meses más|mes más/);
     await expect(seeAll(page.locator("main"))).toBeVisible();
   } finally {
@@ -270,7 +272,7 @@ test("E5: an ended goal of 20 months: 12 MESES, «ver todo», every row to its p
     const targets = await monthTargets(page, id);
     expect(Object.keys(targets).sort()).toEqual(keysFor(range(last - 11, last)));
     for (const [month, hrefs] of Object.entries(targets)) expect(hrefs, month).toEqual([`/metas/${id}/meses/${month}`]);
-    expect(await mainLower(page)).toMatch(captionRe(12));
+    expect(await mainLower(page)).toMatch(ofRe(12, 20));
     await expect(page.locator(`main a[href*="planear="]`)).toHaveCount(0);
     await expect(rowLink(page, id, last)).not.toContainText("en curso");
     await expect(seeAll(page.locator("main"))).toBeVisible();
@@ -366,7 +368,7 @@ for (const width of [360, 1280]) {
       expect(href).toContain("/exportar");
       expect(href).toContain("todo=1");
       const text = (await section.innerText()).toLowerCase();
-      expect(text).toMatch(captionRe(13));
+      expect(text).toMatch(ofRe(13, 27));
       expect(text).not.toContain("cada uno");
       const [n, l, s] = [await yOf(reportRow(section, 1)), await yOf(line), await yOf(seeAll(section))];
       expect(l.top).toBeGreaterThanOrEqual(n.bottom - 1);
@@ -402,7 +404,7 @@ test("E2d: the report with an end and a month set by hand: the label, the second
     expect(o.top, "the own-amount month under the label").toBeGreaterThanOrEqual(r.bottom - 1);
     expect(l.top, "the line after the own-amount months").toBeGreaterThanOrEqual(o.bottom - 1);
     expect(s.top, "«ver todo» under the line").toBeGreaterThanOrEqual(l.bottom - 1);
-    expect((await section.innerText()).toLowerCase()).toMatch(captionRe(14));
+    expect((await section.innerText()).toLowerCase()).toMatch(ofRe(14, 33));
   } finally {
     await context.close();
   }
@@ -415,7 +417,7 @@ for (const query of ["", "?todo=1"]) {
     // Kills: printing the whole stretch; repeating the rest in a «…: sin monto»; the paper changing with `?todo=1`.
     await seedLeer(db, person, { endsIn: 3 });
     const paper = await paperOf(browser, baseURL, person.sessionFile, `/exportar${query}`, "Leer");
-    expect(paper).toContain("leer · por mes · 13 meses");
+    expect(paper).toContain("leer · por mes · 13 de 27 meses");
     expectInOrder(paper, [monthLabel(-11), monthLabel(0), monthLabel(1), lineText(2, 3)]);
     for (const offset of [-12, 2, 3]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
     expect(paper).not.toContain(": sin monto");
@@ -429,7 +431,7 @@ test("E2b on paper: 14 MESES, the label, the month set by hand, then the line of
   const id = await seedLeer(db, person, { endsIn: 9 });
   await budget(db, person, id, 2, 60);
   const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Leer");
-  expect(paper).toContain("leer · por mes · 14 meses");
+  expect(paper).toContain("leer · por mes · 14 de 33 meses");
   expectInOrder(paper, [monthLabel(-11), monthLabel(0), monthLabel(1), "estos meses con monto propio:", monthLabel(2), lineText(7, 9)]);
   expect(paper).not.toContain("y estos meses con monto propio");
   expect(paper).not.toContain(monthLabel(9));
