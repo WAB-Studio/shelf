@@ -1661,3 +1661,15 @@ Approved by the user 2026-10-14 («sí a todo») on the canvas «Bitácora de me
   a measure once set never changes; Q6 (c).
 - **Boards that do not exist:** dark mode; `VerMenos` at 1280; the long finished goal («12 de 20 meses»); `/exportar?todo=1` at 1280; the
   «before» of `PapelEtiquetaPegada` (the prototype's seed did not reproduce the defect).
+
+## Decisions of 2026-10-14, after the critic of slice s7, by the user
+
+For the next slice; nothing here is built yet. Critic: `private/reportes/s7-critic.md`.
+
+- **A folded list names its hidden closed months in a line before the table — «12 meses anteriores» — that opens «ver todo».**
+  Today «Leer» reads «13 DE 27 MESES» over 13 rows and «2 meses más»: 12 closed months are said nowhere. The habit's count
+  aligns: «12 de 21 meses» and the same line. Needs a board and a successor to RP-118.
+- **«Ponerle medida»'s «qué cuenta» is shown wherever the measure is**: «mide cajas embaladas, en cajas» on the goal, «Por mes»,
+  the report and paper. Today the goal reads «mide en cajas» and the name is never seen again.
+- Also from the critic, not yet put to the user: on paper at 9 open tasks «Escribir»'s figures split across two sheets («0» at
+  the foot of sheet 3, «de 17 páginas» on sheet 4); «Poner un ritmo» reads «cuántas km al mes» for a masculine unit.
