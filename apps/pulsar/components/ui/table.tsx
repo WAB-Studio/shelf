@@ -90,7 +90,7 @@ type TableProps = {
   // Shows `after` on paper only; the screen draws nothing for it.
   afterPrintOnly?: boolean;
   // A link before the first row, on screen only («ver menos»): under the phone's
-  // caption, above the wide face's table.
+  // caption, above the wide face's table, or under its caption with `showCaption`.
   above?: ReactNode;
   // Draws the caption over the wide face too, on screen; paper says it in the
   // section label's own suffix.
@@ -99,6 +99,9 @@ type TableProps = {
   // row of the wide face's head, over the column names, so it stays with the first
   // row as the head does and comes back with the head on every sheet it runs onto.
   printTitle?: ReactNode;
+  // A line before the wide face's head on paper only, printed once («12 meses anteriores»):
+  // it never repeats with the head on a later sheet and never closes one.
+  printLead?: ReactNode;
 };
 
 function isEmpty(cell: ReactNode): boolean {
@@ -111,7 +114,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, wholeNote, fold, after, afterPrintOnly, above, showCaption, printTitle }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, wholeNote, fold, after, afterPrintOnly, above, showCaption, printTitle, printLead }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -194,9 +197,13 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
         {after && !afterPrintOnly ? <div className={styles.after}>{after}</div> : null}
       </div>
 
-      {above ? <div className={styles.wideAbove}>{above}</div> : null}
+      {above && !showCaption ? <div className={styles.wideAbove}>{above}</div> : null}
+      {printLead ? <div className={styles.printLead}>{printLead}</div> : null}
       <table className={styles.wide}>
-        <caption className={showCaption ? styles.wideCaption : styles.hidden}>{caption}</caption>
+        <caption className={showCaption ? styles.wideCaption : styles.hidden}>
+          {caption}
+          {showCaption && above ? <span className={styles.captionAbove}>{above}</span> : null}
+        </caption>
         <thead>
           {printTitle ? (
             <tr className={styles.titleRow}>
