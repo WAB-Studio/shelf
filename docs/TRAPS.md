@@ -2795,6 +2795,12 @@ branch could pass until it was restored.
   and assert a `[outbound]` line. Nothing in the app writes it: the server must start with the fetch hook
   `NODE_OPTIONS='--import data:text/javascript,const%20f=fetch;globalThis.fetch=(i,o)=>{console.log(%22[outbound]%22,String(i.url??i));return%20f(i,o)}'`.
   Without it, 23 tests fail with «the server log does not show outbound calls»; without the server, 39 fail with `fetch failed`.
+- `oauth-flow.ts` also runs green against `next build` + `next start`, measured 2026-10-14 (11 of 11). `next build` bakes
+  `NEXT_PUBLIC_SITE_URL` in as the issuer, so build with it set to the server's own origin, inside `scripts/supabase-local.sh
+  exec` (outside, the remote Supabase URL is baked in): `NEXT_PUBLIC_SITE_URL=http://localhost:3208 npx next build`, then
+  `npx next start -p 3208 > private/967/server.log 2>&1` with the same `NODE_OPTIONS` hook, then run the file with
+  `PULSAR_SERVER_LOG=private/967/server.log NEXT_PUBLIC_SITE_URL=http://localhost:3208`. A server built with another issuer fails the
+  metadata test and names `NEXT_PUBLIC_SITE_URL`; a missing log fails its first test and names `PULSAR_SERVER_LOG`.
 - `scripts/harness/checks-run.ts` runs `check:day`, `check:goal`, `check:goal-actions`, `check:plan` — not `check:mcp`.
   CI's `pulsar-checks` runs it in a step of its own, after a bare `harness:mint-session` (`route.ts` reads
   `private/session-<lane>.json`, which `checks-run.ts` drops with its run). Locally, mint the session the same way first.

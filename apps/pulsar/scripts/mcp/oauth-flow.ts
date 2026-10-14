@@ -2,7 +2,13 @@
 // consent act, exchange, list, refresh, revoke, and the replay that revokes.
 // Drives the lane's running server (`PULSAR_BASE_URL`, else :3200 + lane - 1)
 // started as `route.ts`'s header says; its log is `PULSAR_SERVER_LOG`.
-// `NEXT_PUBLIC_SITE_URL` must be the server's own.
+// `NEXT_PUBLIC_SITE_URL` must be the server's own, and under `next start` it is
+// the one `next build` baked in, so build with it set. Against `next start` on
+// :3200 + lane - 1, inside `scripts/supabase-local.sh exec`:
+//   NEXT_PUBLIC_SITE_URL=http://localhost:<port> npx next build
+//   NODE_OPTIONS='<fetch hook of route.ts>' npx next start -p <port> > <log> 2>&1
+//   PULSAR_SERVER_LOG=<log> NEXT_PUBLIC_SITE_URL=http://localhost:<port> npm run check:mcp
+// A missing log or another issuer fails one test that names the variable.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -49,7 +55,15 @@ function installStubs(): void {
   };
 }
 
-const serverLog = () => readFileSync(logPath, "utf8").slice(logStart);
+function readLog(): string {
+  try {
+    return readFileSync(logPath, "utf8");
+  } catch {
+    assert.fail(`PULSAR_SERVER_LOG: no server log at ${logPath}; start the server with its output there and the fetch hook of route.ts`);
+  }
+}
+
+const serverLog = () => readLog().slice(logStart);
 const challengeOf = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
 const newVerifier = () => randomBytes(32).toString("base64url");
 
@@ -130,8 +144,6 @@ before(async () => {
   // The control: a call known to reach Auth must show in the log, or the
   // closing assertion reads a log that records nothing.
   await fetch(`${base}/auth/confirm?token_hash=control&type=magiclink`, { redirect: "manual" });
-  assert.match(readFileSync(logPath, "utf8"), /\[outbound\].*\/auth\/v1\/verify/, "the server log does not show outbound calls");
-  logStart = readFileSync(logPath, "utf8").length;
 });
 
 let closed = false;
@@ -150,13 +162,18 @@ async function close(): Promise<void> {
 
 after(close);
 
+test("the environment is the server's: its log sees Auth", () => {
+  assert.match(readLog(), /\[outbound\].*\/auth\/v1\/verify/, "PULSAR_SERVER_LOG: the server log does not show outbound calls; start the server with the fetch hook of route.ts");
+  logStart = readLog().length;
+});
+
 test("the metadata parses, names this origin, and its URLs answer", async () => {
   const response = await fetch(`${base}/.well-known/oauth-authorization-server`);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
   assert.equal(response.headers.get("cache-control"), "max-age=3600");
   const document = await response.json();
-  assert.equal(document.issuer, siteUrl);
+  assert.equal(document.issuer, siteUrl, `NEXT_PUBLIC_SITE_URL is not the issuer this server was built with (${document.issuer}); rebuild with it set, or export the server's`);
   assert.equal(document.authorization_endpoint, `${siteUrl}/oauth/autorizar`);
   assert.equal(document.token_endpoint, `${siteUrl}/oauth/token`);
   assert.equal(document.registration_endpoint, `${siteUrl}/oauth/registro`);
