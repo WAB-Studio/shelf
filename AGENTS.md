@@ -320,6 +320,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - **Pulsar's `pulsar-e2e` runs on the push only, never on a pull request.** Decided by the user 2026-10-05,
   twice: the second time with the suite at ~2 min on the runner's stack. Merge on `typecheck`, `lint`,
   `pulsar-unit`, `pulsar-policies` and `pulsar-checks`.
+- Never wait on CI. Fire it on the train each time a module lands, and keep dispatching: cut the next train from the one
+  in review, fix a red on its own branch, rebase what sits on top. Merge the PR once CI on the train's branch is green on the
+  same commit; do not wait for the PR to run it again. Decided by the user 2026-10-14: «eso de que me trabo por 10 mins».
 - **Fire the suite on a train's branch before merging it:** `gh workflow run ci.yml --ref <branch>`, and merge only
   when that run's `pulsar-e2e` is green. Measured 2026-10-05: it caught tren 4's rail duplicates after the merge and
   tren 5's `week.today` before it. Fix a red on `integracion` before anything else. **`integracion` → `main` only
