@@ -231,13 +231,13 @@ test("N3 on paper: LEER · POR MES · 14 DE 33 MESES, the label, December, the l
   expectInOrder(paper, [monthLabel(-11), monthLabel(1), "estos meses con monto propio:", monthLabel(2), lineWords(7, 9)]);
 });
 
-test("N6 on paper: a goal of 10 months with 5 months left out «sin monto» and not folded counts the printed rows, «5 meses»", async ({ person, browser, baseURL, db }) => {
-  // Kills: counting the months that are not printed («de 10»); `printSuffix` with a «de» on a list that does not fold.
+test("N6 on paper: a goal of 10 months whose rows are all «sin monto» prints no «por mes» at all (RP-124)", async ({ person, browser, baseURL, db }) => {
+  // Kills: the hide rule dropped, so the heading and a «5 meses» count print over rows that hold nothing.
   await seedLeer(db, person, { endsIn: 5, rhythm: null, opened: -4, name: "Inglés" });
-  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Inglés");
-  expect(paper).toContain("inglés · por mes · 5 meses");
+  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Inglés", false);
+  expect(paper).toContain("inglés");
+  expect(paper).not.toContain("inglés · por mes");
   expect(paper).not.toMatch(anyOfRe);
-  expect(paper).toContain(": sin monto");
 });
 
 test("S16: a month set by hand and one month left out print «1 mes más, hasta el …» once", async ({ person, browser, baseURL, db }) => {
