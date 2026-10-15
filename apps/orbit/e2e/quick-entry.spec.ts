@@ -33,11 +33,18 @@ test("reads the amount and the category out of one line and records the movement
   await page.goto("/es");
 
   // The dashboard's one tap into the sheet: the pill reads like the field it raises.
-  await page
-    .getByRole("button", { name: transactions.quickPlaceholder, exact: true })
-    .click();
+  const pill = page.getByRole("button", { name: transactions.quickPlaceholder, exact: true });
+  await pill.click();
 
   const sheet = page.getByRole("dialog");
+  await expect(sheet).toBeVisible();
+
+  // Escape gives focus back to the pill that raised the sheet, then reopens it.
+  await sheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await expect(pill).toBeFocused();
+  await pill.click();
   await expect(sheet).toBeVisible();
 
   await sheet
