@@ -117,7 +117,7 @@ function isEmpty(cell: ReactNode): boolean {
 function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords): ReactNode {
   if (isEmpty(cell)) return <span className={styles.pending}>—</span>;
   const formatted = formatFigureValue(cell, unit, words);
-  return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
+  return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} unitPart="table-unit" /> : formatted;
 }
 
 export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, wholeNote, fold, after, afterPrintOnly, above, showCaption, printTitle, printLead }: TableProps) {
@@ -148,7 +148,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     const figure = lead === undefined ? null : row.phoneFigure === undefined ? row.cells[lead] : row.phoneFigure;
     return (
     <>
-      <span className={styles.stackLabel}>
+      <span className={styles.stackLabel} data-part="table-stack-label">
         {row.cells[0]}
         {row.detail ? (
           <span className={styles.detail}>
@@ -159,14 +159,14 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
         {row.phoneUnder ? <span className={styles.detail}>{row.phoneUnder}</span> : null}
       </span>
       {lead === undefined ? null : (
-        <span className={styles.stackFigure}>
+        <span className={styles.stackFigure} data-part="table-stack-figure">
           {figureCell(figure, unit, words)}
           {unitWord && !isEmpty(figure) && !row.phoneBare ? (
-            <span className={styles.unit}>{words.unit?.(unitWord, typeof figure === "number" ? figure : 2) ?? unitWord}</span>
+            <span className={styles.unit} data-part="table-unit">{words.unit?.(unitWord, typeof figure === "number" ? figure : 2) ?? unitWord}</span>
           ) : null}
         </span>
       )}
-      {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
+      {row.note ? <span className={styles.stackNote} data-part="table-stack-note">{row.note}</span> : null}
     </>
     );
   };
@@ -198,7 +198,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
                   aria-current={index === open ? "page" : undefined}
                 >
                   {phoneRow(row)}
-                  <ChevronRight size={16} strokeWidth={1.5} aria-hidden className={styles.chevron} />
+                  <ChevronRight size={16} strokeWidth={1.5} aria-hidden className={styles.chevron} data-part="table-chevron" />
                 </Link>
               ) : (
                 phoneRow(row)
@@ -229,7 +229,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
               <th key={column} scope="col" className={join(styles.header, widthClass(column))}>
                 {header}
                 {column === lead && unitWord ? (
-                  <span className={styles.headerUnit}>{words.unit?.(unitWord, 2) ?? unitWord}</span>
+                  <span className={styles.headerUnit} data-part="table-header-unit">{words.unit?.(unitWord, 2) ?? unitWord}</span>
                 ) : null}
               </th>
             ))}

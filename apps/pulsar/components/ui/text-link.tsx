@@ -8,5 +8,5 @@ import styles from "./text-link.module.css";
 // `nowrap` keeps a short label on one line and out of a flex row's squeeze.
 export function TextLink({ className, nowrap, ...props }: ComponentProps<typeof Link> & { nowrap?: boolean }) {
   const own = nowrap ? `${styles.link} ${styles.nowrap}` : styles.link;
-  return <Link {...props} className={className ? `${own} ${className}` : own} />;
+  return <Link {...props} data-part="text-link" className={className ? `${own} ${className}` : own} />;
 }

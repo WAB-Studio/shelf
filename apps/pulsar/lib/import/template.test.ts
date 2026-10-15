@@ -1306,3 +1306,14 @@ test("992 task unit: a sub-task keeps its sentence (the contract changes tasks, 
   const read = listOf(`${TIME_GOAL}\n## Tareas\n- 2026-10 · Madre\n  - 3 páginas · Hija\n`);
   assert.deepEqual(read.errors, [{ line: 9, expected: "import.errors.form.child" }]);
 });
+
+test("992 task unit: a task in the wrong unit is named, and the lines under it are still read", () => {
+  const read = listOf(`${KM_GOAL}\n## Tareas\n- 2026-10 · 3 h · Algo\n  - 2 km · Hija\n`);
+  assert.deepEqual(
+    read.errors.map((e) => [e.line, e.expected]),
+    [
+      [8, "import.errors.form.taskUnit"],
+      [9, "import.errors.form.child"],
+    ],
+  );
+});

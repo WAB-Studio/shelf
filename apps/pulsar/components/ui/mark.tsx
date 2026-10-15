@@ -50,6 +50,7 @@ export function Mark({
   return (
     <span
       className={className}
+      data-part="mark"
       data-state={state}
       role={label ? "img" : undefined}
       aria-label={label}

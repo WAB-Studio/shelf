@@ -92,7 +92,7 @@ test("a goal with no measure shows «N de M tareas» and its next task in «este
     await expect(card.getByRole("button", { name: `Marcar hecha: Siguiente ${stamp}` }).locator("visible=true")).toBeVisible();
     await expect(
       page
-        .locator("[class*='section-label']", { hasText: moving })
+        .locator("[data-part='section-label']", { hasText: moving })
         .locator("visible=true")
         .locator("xpath=following-sibling::*[1]")
         .filter({ hasText: /^este mes$/i }),
@@ -124,8 +124,8 @@ test("at 1280 the side card of a goal with no month plan is titled by the goal's
       .getByText("esta semana", { exact: true })
       .locator("xpath=ancestor::div[.//a][1]")
       .filter({ hasText: name });
-    await expect(card.locator("[class*='section-label']").first()).toHaveText(name);
-    await expect(page.locator("[class*='section-label']").filter({ hasText: /^kilómetros$/i })).toHaveCount(0);
+    await expect(card.locator("[data-part='section-label']").first()).toHaveText(name);
+    await expect(page.locator("[data-part='section-label']").filter({ hasText: /^kilómetros$/i })).toHaveCount(0);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
