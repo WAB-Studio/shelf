@@ -4486,4 +4486,20 @@ async function recurringRuleCategoryScopeSuite(
     refused?.serverError === "recurringRules.errors.scopeViolation" && stored === 0,
     `serverError = ${refused?.serverError ?? "none"}, ${stored} rule(s) stored`,
   );
+
+  const created = await asUser(groupless, () =>
+    createRecurringRule({ ...rule(ownCategoryId), amountCents: 1000 }),
+  );
+  const ruleId = created.recurringRuleId;
+  const rewritten = await asUser(groupless, () =>
+    updateRecurringRuleAction({ id: ruleId, ...rule(scope.categoryId) }),
+  );
+  const [kept] = await fixtureSql<{ category_id: string }[]>`
+    select category_id from recurring_rules where from_account_id = ${accountId}`;
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Rewriting a rule onto another person's category is refused and keeps the old category"),
+    rewritten?.serverError === "recurringRules.errors.scopeViolation" && kept?.category_id === ownCategoryId,
+    `serverError = ${rewritten?.serverError ?? "none"}, stored category is own = ${kept?.category_id === ownCategoryId}`,
+  );
 }
