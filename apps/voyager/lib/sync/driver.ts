@@ -133,7 +133,7 @@ async function runSyncLocked(): Promise<SyncOutcome> {
 // just written. Without Web Locks the in-flight share still covers one realm.
 function runSync(): Promise<SyncOutcome> {
   if (typeof navigator === "undefined" || !navigator.locks) return runSyncLocked();
-  return navigator.locks.request(SYNC_LOCK, runSyncLocked);
+  return navigator.locks.request(SYNC_LOCK, runSyncLocked).then((outcome) => outcome);
 }
 
 export const syncNow = shareInFlight(runSync);

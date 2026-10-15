@@ -110,7 +110,7 @@ function enabledState(overrides: Partial<SyncState> = {}): SyncState {
     pulledThroughCursor: null,
     lastSyncedAt: null,
     enabled: true,
-    readerId: null,
+    readerId: randomUUID(),
     retired: false,
     ...overrides,
   };
