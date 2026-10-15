@@ -18,7 +18,7 @@ const MAY = [
   "marcar hecho y anotar cantidades",
   "abrir metas, escribir tareas y sus notas",
   "renombrar una meta y mover su final",
-  "agregar fases y compromisos, y retirar un compromiso",
+  "añadir fases y compromisos, y retirar un compromiso",
   "darle mes o día a una tarea, devolverla al plan y cambiar el monto de un mes",
   "poner la medida y el ritmo de una meta",
 ];

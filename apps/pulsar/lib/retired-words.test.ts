@@ -20,7 +20,7 @@ const retired: { word: RegExp; allowed: string[] }[] = [
   { word: /correr el plan/i, allowed: [] },
   { word: /mover tareas de mes/i, allowed: [] },
   { word: /aceptar que el plan corra/i, allowed: [] },
-  { word: /\bagregar\b/i, allowed: ["oauth.may.phases"] },
+  { word: /\bagregar\b/i, allowed: [] },
   { word: /no mide horas/i, allowed: [] },
   { word: /este teléfono/i, allowed: [] },
 ];
