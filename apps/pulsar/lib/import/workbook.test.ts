@@ -390,3 +390,34 @@ test("the delivered workbook's example rows carry exactly this text", async () =
     [goal, "2026-10", null, "Sesiones 1–4", "6 h", null],
   ]);
 });
+
+// An archive of empty files whose central directory declares the sizes the test names.
+function zipDeclaring(sizes: number[]): Uint8Array {
+  const names = sizes.map((_, i) => Buffer.from(`f${i}.xml`));
+  const central = Buffer.concat(
+    sizes.map((size, i) => {
+      const h = Buffer.alloc(46 + names[i].length);
+      h.writeUInt32LE(0x02014b50, 0);
+      h.writeUInt32LE(size, 24);
+      h.writeUInt16LE(names[i].length, 28);
+      names[i].copy(h, 46);
+      return h;
+    }),
+  );
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(sizes.length, 8);
+  end.writeUInt16LE(sizes.length, 10);
+  end.writeUInt32LE(central.length, 12);
+  return new Uint8Array(Buffer.concat([central, end]));
+}
+
+test("zipTooBig: a template passes, an archive that declares past the cap or holds too many entries does not", async () => {
+  const { zipTooBig } = await import("./workbook");
+  assert.equal(zipTooBig(await templateWorkbook(say)), false);
+  const bomb = zipDeclaring([60 * 1024 * 1024]);
+  assert.equal(zipTooBig(bomb), true);
+  assert.deepEqual(await readWorkbook(bomb), { matched: false });
+  assert.equal(zipTooBig(zipDeclaring(Array(201).fill(1))), true);
+  assert.equal(zipTooBig(zipDeclaring(Array(200).fill(1))), false);
+});
