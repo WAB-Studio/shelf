@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import { accounts, recurringRules, transactions } from "@/db/schema";
+import { accounts, categories, recurringRules, transactions } from "@/db/schema";
 import type { RecurringRule } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
@@ -118,6 +118,46 @@ export async function createRecurringRule({
     );
 
     return { recurringRuleId: row.id };
+  });
+}
+
+// Whether the category shares the scope of the rule's one account and the kind its
+// side implies (a source is an expense, a destination income) — the pair the
+// generator's split trigger asserts. A category the caller cannot read answers
+// false, like one that does not exist.
+export async function categoryFitsRuleAccount({
+  categoryId,
+  fromAccountId,
+  toAccountId,
+}: {
+  categoryId: string;
+  fromAccountId: string | null;
+  toAccountId: string | null;
+}): Promise<boolean> {
+  const accountId = fromAccountId ?? toAccountId;
+  if (accountId === null) return false;
+
+  return withUserDb(async (tx) => {
+    const rows = await tx
+      .select({ id: categories.id })
+      .from(categories)
+      .innerJoin(
+        accounts,
+        and(
+          eq(accounts.id, accountId),
+          sql`${categories.ownerUserId} is not distinct from ${accounts.ownerUserId}`,
+          sql`${categories.groupId} is not distinct from ${accounts.groupId}`,
+        ),
+      )
+      .where(
+        and(
+          eq(categories.id, categoryId),
+          eq(categories.kind, fromAccountId !== null ? "expense" : "income"),
+        ),
+      )
+      .limit(1);
+
+    return rows.length > 0;
   });
 }
 

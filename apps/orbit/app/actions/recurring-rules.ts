@@ -5,6 +5,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 
 import {
+  categoryFitsRuleAccount,
   createRecurringRule,
   deleteRecurringRule,
   markTransactionReviewed,
@@ -60,15 +61,28 @@ function dayForFrequency(frequency: string, dayOfMonth?: number | null): number 
 
 // The scope trigger raises 23514 when the account disagrees on scope; a denied
 // write reads as an absent rule, and a deleted account lands there too — the
-// policy names the accounts, so it refuses before any foreign key. Nothing guards
-// the category, so 23503 is the one it left: a category picked from the list and
-// deleted before the rule was saved.
+// policy names the accounts, so it refuses before any foreign key. The category is
+// guarded by `assertCategoryFits` before the write, so 23503 is the one left: a
+// category picked from the list and deleted before the rule was saved.
 function mapRecurringRuleError(error: unknown): never {
   const code = pgErrorCode(error);
   if (code === "42501") throw new ActionError("errors.notFound");
   if (code === "23514") throw new ActionError("recurringRules.errors.scopeViolation");
   if (code === "23503") throw new ActionError("errors.referenceGone");
   throw error;
+}
+
+// The generator inserts the rule's split under the split trigger, which refuses a
+// category of another scope or kind; checking here keeps such a rule from ever
+// being stored.
+async function assertCategoryFits(rule: {
+  categoryId: string;
+  fromAccountId: string | null;
+  toAccountId: string | null;
+}): Promise<void> {
+  if (!(await categoryFitsRuleAccount(rule))) {
+    throw new ActionError("recurringRules.errors.scopeViolation");
+  }
 }
 
 /**
@@ -79,7 +93,7 @@ function mapRecurringRuleError(error: unknown): never {
 export const createRecurringRuleAction = authActionClient
   .inputSchema(createRecurringRuleSchema)
   .action(async ({ parsedInput: { amount, frequency, dayOfMonth, description, endsOn, ...rule } }) => {
-    const amountCents = await toMinor(amount, rule);
+    const [amountCents] = await Promise.all([toMinor(amount, rule), assertCategoryFits(rule)]);
 
     let recurringRuleId: string;
     try {
@@ -107,7 +121,7 @@ export const createRecurringRuleAction = authActionClient
 export const updateRecurringRuleAction = authActionClient
   .inputSchema(updateRecurringRuleSchema)
   .action(async ({ parsedInput: { amount, frequency, dayOfMonth, description, endsOn, ...rule } }) => {
-    const amountCents = await toMinor(amount, rule);
+    const [amountCents] = await Promise.all([toMinor(amount, rule), assertCategoryFits(rule)]);
 
     let updated: boolean;
     try {

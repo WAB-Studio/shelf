@@ -224,6 +224,7 @@ async function main() {
   await checkRecurringRuleGeneratorScope();
   await checkAccountStatementShape();
   await checkAccountReconciliations();
+  await checkRecurringRuleIsolation();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -9479,6 +9480,90 @@ async function checkAccountReconciliations() {
     tailLabel,
     afterUser === "postgres" && probeCount === "0",
     `current_user = ${afterUser}, rows named 'rls reconcile%' = ${probeCount}`,
+  );
+}
+
+// Assertions 318-320: one bad recurring rule cannot stop the rest. A rule whose category belongs to
+// another scope is inserted directly (the FK admits it; the action now refuses it), and the cron's own
+// unscoped call must still generate the good rule's movement, skip the bad one and pause it, leaving the
+// pause in the audit trail. Every fixture is seeded through the app's own policies and rolled back.
+async function checkRecurringRuleIsolation() {
+  console.log("");
+  const userA = randomUUID();
+  const userB = randomUUID();
+
+  const labels = [
+    "318. the unscoped generator still runs a good rule when another user's rule carries a category of the wrong scope",
+    "319. the bad rule produced no movement and was paused, not left due to fail again",
+    "320. the pause is recorded in the audit log",
+  ];
+  const tailLabel = "321. the rolled-back recurring-rule-isolation transaction leaves no trace";
+
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${userA}), (${userB})`;
+      await tx`insert into app_users (id) values (${userA}), (${userB})`;
+
+      await enterUserContext(tx, userA);
+      const [{ id: accountA }] = await tx<{ id: string }[]>`
+        insert into accounts (owner_user_id, name, kind, initial_balance_on)
+        values (${userA}, 'rls recurring isolation a cash', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+      const [{ id: catA }] = await tx<{ id: string }[]>`
+        insert into categories (owner_user_id, name, kind)
+        values (${userA}, 'rls recurring isolation a expense', 'expense') returning id`;
+      const [{ id: goodRule }] = await tx<{ id: string }[]>`
+        insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on)
+        values (${accountA}, 3000, ${catA}, 'weekly', 1, (now() at time zone 'America/Bogota')::date) returning id`;
+
+      // B's expense rule points at A's category: another scope, which the split trigger refuses on generation.
+      await tx`reset role`;
+      await enterUserContext(tx, userB);
+      const [{ id: accountB }] = await tx<{ id: string }[]>`
+        insert into accounts (owner_user_id, name, kind, initial_balance_on)
+        values (${userB}, 'rls recurring isolation b cash', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+      const [{ id: badRule }] = await tx<{ id: string }[]>`
+        insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on)
+        values (${accountB}, 4500, ${catA}, 'weekly', 1, (now() at time zone 'America/Bogota')::date) returning id`;
+
+      await tx`reset role`;
+      await tx`select set_config('request.jwt.claims', '', true)`;
+      await tx`select private.run_due_recurring_rules()`;
+      await tx`set constraints all immediate`;
+
+      const [{ count: goodRan }] = await tx<{ count: string }[]>`
+        select count(*)::text as count from transactions where recurring_rule_id = ${goodRule}`;
+      assert(labels[0], goodRan === "1", `the good rule's movements = ${goodRan} (expected 1)`);
+
+      const [{ count: badRan }] = await tx<{ count: string }[]>`
+        select count(*)::text as count from transactions where recurring_rule_id = ${badRule}`;
+      const [bad] = await tx<{ is_active: boolean }[]>`
+        select is_active from recurring_rules where id = ${badRule}`;
+      assert(
+        labels[1],
+        badRan === "0" && bad.is_active === false,
+        `the bad rule's movements = ${badRan} (expected 0), is_active = ${bad.is_active} (expected false)`,
+      );
+
+      const [{ count: audited }] = await tx<{ count: string }[]>`
+        select count(*)::text as count from audit_log
+        where entity = 'recurring_rules' and record_id = ${badRule} and actor_user_id is null`;
+      assert(labels[2], audited !== "0", `unattributed audit rows on the bad rule = ${audited} (expected at least 1)`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ count: probeCount }] = await sql<{ count: string }[]>`
+    select count(*)::text as count from accounts where name like 'rls recurring isolation%'`;
+  assert(
+    tailLabel,
+    afterUser === "postgres" && probeCount === "0",
+    `current_user = ${afterUser}, rows named 'rls recurring isolation%' = ${probeCount}`,
   );
 }
 

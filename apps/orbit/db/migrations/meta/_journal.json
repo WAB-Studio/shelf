@@ -365,6 +365,13 @@
       "when": 1792037005283,
       "tag": "0051_an_account_reconciles_with_an_adjustment",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792123405283,
+      "tag": "0052_one_bad_recurring_rule_cannot_stop_the_rest",
+      "breakpoints": true
     }
   ]
 }
