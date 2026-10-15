@@ -1,10 +1,10 @@
 /**
  * Breaks the lines a branch actually changed, one at a time, and proves
  * `check:unit` notices — never asserted from the catalog, driven against
- * the real suite (AGENTS.md, "Verification"). Restores every file from git
+ * the real suite (docs/agentes/verificacion.md, "Judging"). Restores every file from git
  * the instant its mutant is judged, never with `git stash`: this worktree
- * shares one `refs/stash` with every other lane (AGENTS.md, "Parallel
- * tracks"), and a `pop` here can carry off another lane's tree.
+ * shares one `refs/stash` with every other lane (AGENTS.md, "Git"),
+ * and a `pop` here can carry off another lane's tree.
  *
  * File selection: `git log <merge-base>..HEAD --name-only` against the
  * branch named by `--base` (default `integracion`), never the whole repo.

@@ -41,7 +41,7 @@ function laneNumber(): number {
 }
 
 // `apps/<app>` on `:3<a>0<n-1>`. Overridable for a lane pointed at someone
-// else's already-running server (`AGENTS.md`, "Harness lanes").
+// else's already-running server (`docs/agentes/lanes.md`, "Harness lanes").
 function baseUrl(): string {
   return process.env.HARNESS_BASE_URL ?? `http://localhost:${3100 + laneNumber() - 1}`;
 }

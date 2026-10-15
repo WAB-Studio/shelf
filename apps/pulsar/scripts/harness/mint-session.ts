@@ -53,7 +53,7 @@ async function registeringRunId(): Promise<string> {
 }
 
 // `apps/pulsar` on `:320<n-1>` (`scripts/worktree.sh`'s own table). Overridable
-// for a lane pointed at someone else's already-running server (`AGENTS.md`,
+// for a lane pointed at someone else's already-running server (`docs/agentes/lanes.md`,
 // "Harness lanes").
 function baseUrl(): string {
   return process.env.PULSAR_BASE_URL ?? `http://localhost:${3200 + lane - 1}`;

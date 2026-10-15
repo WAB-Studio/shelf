@@ -1,6 +1,6 @@
 /**
  * Drives `reading.word_texts` and `reading.model_spend` instead of asserting
- * them from the migration (AGENTS.md, "Verification").
+ * them from the migration (AGENTS.md, "Code").
  *
  * Eight savepoints inside one `sql.begin`, forced to ROLLBACK at the end, so
  * the permission checks touch nothing: no policy exists on either table, so
