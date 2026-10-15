@@ -88,3 +88,16 @@ test("a name past 120 characters is cut on a word and the whole line goes to its
   assert.ok(task.name.length <= 120);
   assert.equal(task.note, "palabra ".repeat(25).trim());
 });
+
+test("a day-month with no year is the latest such day not after today, on both sides of the year", () => {
+  assert.deepEqual(doneMark("x HECHO 28 dic", "2027-01-03"), { on: "2026-12-28" });
+  assert.deepEqual(doneMark("x HECHO 28 dic", "2026-12-28"), { on: "2026-12-28" });
+  assert.deepEqual(doneMark("x HECHO 28 dic", "2026-12-30"), { on: "2026-12-28" });
+  assert.deepEqual(doneMark("x HECHO 3 ene", "2027-01-03"), { on: "2027-01-03" });
+  assert.deepEqual(doneMark("x HECHO 2 oct", "2026-10-12"), { on: "2026-10-02" });
+  assert.deepEqual(doneMark("x HECHO 29 feb", "2027-03-01"), { on: "2024-02-29" });
+});
+
+test("an explicit future year is still clamped to today", () => {
+  assert.deepEqual(doneMark("x HECHO 28 dic 2027", "2027-01-03"), { on: "2027-01-03" });
+});

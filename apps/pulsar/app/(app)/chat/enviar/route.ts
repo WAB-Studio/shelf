@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { CHAT_MODEL, answerChat, chatAvailable } from "@/lib/chat/model";
 import { describeChange } from "@/lib/chat/describe";
 import { REQUEST_BYTES_MAX, chatRequestSchema, type Change } from "@/lib/chat/types";
-import { claimModelCall, settleModelCall } from "@/lib/import/spend";
+import { appCapReached, claimModelCall, settleModelCall } from "@/lib/import/spend";
 import { loadChangeNames } from "@/lib/queries/chat";
 import { getPerson } from "@/lib/session";
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   if (!chatAvailable()) return fail(503, "chat.errors.noKey");
 
   const claim = await claimModelCall(CHAT_MODEL, "chat");
-  if (!claim) return fail(429, "chat.errors.cap");
+  if (!claim) return fail(429, (await appCapReached()) ? "chat.errors.capApp" : "chat.errors.cap");
 
   const answer = await answerChat(body.data.turns).catch((): Awaited<ReturnType<typeof answerChat>> => ({ status: "failed" }));
   await settleModelCall(claim.id, {

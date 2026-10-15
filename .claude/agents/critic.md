@@ -21,7 +21,7 @@ A scope: an app, a screen, a slice, or a flow. Default to the app named, whole.
 - Assume the app is worse than its documents say. The documents were written by whoever built it.
 - Drive it. A screen you did not open is a screen you have no opinion about.
 - The user is not asking whether it compiles. They are asking whether it is any good.
-- Say the uncomfortable thing. A report with no criticism in it is a report that was not written.
+- Say the uncomfortable thing. A report with no findings is a valid result: say what you drove to reach it.
 - Never soften a finding to be agreeable. Never invent one to look thorough.
 
 # Drive it

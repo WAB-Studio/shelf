@@ -6,7 +6,8 @@ import { env } from "@/lib/env";
 
 import { rawDraftJsonSchema, rawDraftSchema, type RawDraft, type Source } from "./draft";
 import { modelStub, type ModelStub } from "./model-seam";
-import { numberLines, splitLines, SYSTEM_PROMPT } from "./prompt";
+import { importSystemPrompt, numberLines, splitLines } from "./prompt";
+import { todayInZone } from "@/lib/zone";
 
 export const MODEL_NAME = "gpt-5.5";
 
@@ -372,7 +373,7 @@ export async function readPlan(input: PlanInput, onStep: (step: Step) => void): 
       json_schema: { name: "import_draft", schema: rawDraftStrictSchema, strict: true },
     },
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: importSystemPrompt(todayInZone()) },
       { role: "user", content: userContent(input, route, text) },
     ],
   };

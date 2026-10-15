@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { numberLines, SYSTEM_PROMPT } from "./prompt";
+import { importSystemPrompt, numberLines, SYSTEM_PROMPT } from "./prompt";
 
 test("numberLines puts the line number and a bar before each line", () => {
   assert.equal(numberLines("a\nb\r\nc"), "1|a\n2|b\n3|c");
@@ -43,4 +43,9 @@ test("the prompt says the bounds the answer keeps", () => {
 test("903: the prompt asks the tasks under the goal they serve", () => {
   assert.match(SYSTEM_PROMPT, /task under the goal it serves/i);
   assert.match(SYSTEM_PROMPT, /rhythm[\s\S]*tasks/i);
+});
+
+test("the built prompt tells the model today's date", () => {
+  assert.match(importSystemPrompt("2026-10-15"), /Today is 2026-10-15 \(America\/Bogota\)/);
+  assert.match(importSystemPrompt("2027-01-03"), /2027-01-03/);
 });

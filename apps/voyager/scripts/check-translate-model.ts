@@ -11,7 +11,7 @@
  *
  * `reading.model_spend` is one global row per day, shared by every lane:
  * today's row is snapshotted and put back at the end, and no other agent may
- * spend it while this runs (AGENTS.md). Callers are TEST-NET addresses hashed
+ * spend it while this runs (docs/agentes/voyager.md). Callers are TEST-NET addresses hashed
  * with this script's own salt; their `client_spend` rows are deleted.
  */
 import Module from "node:module";

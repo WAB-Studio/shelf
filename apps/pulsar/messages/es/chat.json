@@ -25,6 +25,7 @@
     "blank": "Escribe tu mensaje.",
     "tooLong": "Acorta el mensaje a 2.000 caracteres.",
     "noKey": "El chat no está disponible ahora. Tu plan sigue igual en las demás pantallas.",
+    "capApp": "El chat llegó hoy a su límite. Mañana vuelve a estar disponible. Lo que pedías aquí también se hace desde las pantallas.",
     "cap": "Ya enviaste 50 mensajes hoy. Mañana puedes enviar otros 50. Lo que pedías aquí también se hace desde las pantallas.",
     "failed": "No pudimos responder. Tu mensaje sigue aquí.",
     "notAllowed": "Ese cambio no se puede hacer desde el chat.",

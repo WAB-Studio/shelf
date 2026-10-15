@@ -1,12 +1,13 @@
-# Drives the specs that assert per weekday (modules 106, 107, 108) and per day
-# of the month (135: the pace line from the 20th) once a day.
-# A push only ever meets today's weekday and date; this run is what meets the rest over
-# a week. 08:00 UTC is 03:00 in Bogota (UTC-5): before the working day, and the
-# same calendar date in UTC and in Bogota, so the weekday the specs read is
-# the one the schedule means. Lane 6: local lanes are 1-5, `pulsar-checks` is
-# 7, `pulsar-e2e` is 8, orbit's `e2e` is 9. Its own concurrency group, never
-# `pulsar-e2e`'s, and never cancelled. The stack is the runner's own, so the
-# group no longer protects a shared database.
+# The calendar-sensitive specs (those that skip by weekday, day of the month or
+# month: modules 106, 107, 108, 135 and the later «parte» and «semana» ones),
+# once per pinned day. `PULSAR_CLOCK` (`apps/pulsar/lib/zone.ts`) pins the day
+# the server and the spec both read, so every branch runs each night, not
+# whichever weekday a push happens to meet. It runs on the
+# nightly schedule and on manual dispatch of this workflow alone, never from
+# `ci.yml`; the `real` cell reads the true date, as a net for what no pin names.
+# 08:00 UTC is 03:00 in Bogota (UTC-5): the same calendar date in both, so the
+# `real` cell reads the day the schedule means. Not cancelled by a newer run:
+# each cell owns a runner, a stack and a database.
 name: pulsar-calendario
 
 on:
@@ -21,30 +22,57 @@ permissions:
   issues: write
 
 jobs:
-  weekday-specs:
+  dates:
+    name: dates (${{ matrix.name }})
     runs-on: ubuntu-latest
     # The suite is about two minutes; `playwright install --with-deps` alone
     # took eight on 2026-09-30, when apt was slow.
     timeout-minutes: 20
-    concurrency:
-      group: pulsar-calendario
-      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: monday, clock: "2026-10-12" }
+          - { name: tuesday, clock: "2026-10-13" }
+          - { name: sunday, clock: "2026-10-11" }
+          - { name: day-20, clock: "2026-10-20" }
+          - { name: dec-31, clock: "2026-12-31" }
+          - { name: jan-1, clock: "2027-01-01" }
+          # Unpinned: the real date, which only a schedule or a dispatch meets
+          # on a day nobody chose.
+          - { name: real, clock: "" }
     env:
       HARNESS_LANE: 6
       SPECS: >-
         e2e/dia-pasado.spec.ts
+        e2e/exportar-filas-sin-monto.spec.ts
+        e2e/habito-esta-semana.spec.ts
+        e2e/habito-semanas.spec.ts
         e2e/hoy-cuenta.spec.ts
         e2e/hoy-dijiste-tu.spec.ts
         e2e/hoy-mes.spec.ts
-        e2e/meta-mes.spec.ts
-        e2e/mes.spec.ts
         e2e/hoy-meta-terminada.spec.ts
         e2e/hoy-palabras.spec.ts
+        e2e/hoy-parte-cero.spec.ts
+        e2e/hoy-sistema.spec.ts
+        e2e/meta-mes.spec.ts
+        e2e/meta-ritmo-unidad.spec.ts
+        e2e/meta-terminada-sin-ritmo.spec.ts
+        e2e/mes.spec.ts
+        e2e/parte-cero-pantallas.spec.ts
+        e2e/parte-explicada.spec.ts
+        e2e/plan.spec.ts
+        e2e/reporte-plegado.spec.ts
         e2e/semana-creada.spec.ts
+        e2e/semana-en-parte.spec.ts
         e2e/semana-escritorio.spec.ts
         e2e/semana-flexible.spec.ts
+        e2e/semana-mes-cumplido.spec.ts
+        e2e/semana-mes-habito.spec.ts
         e2e/semana-meta-terminada.spec.ts
         e2e/semana-pasado.spec.ts
+        e2e/semana-sistema.spec.ts
+        e2e/siempre-el-ano.spec.ts
         e2e/sobrevivientes-hoy.spec.ts
         e2e/sobrevivientes-la-critica.spec.ts
         e2e/sueltas-programadas.spec.ts
@@ -68,12 +96,17 @@ jobs:
         run: npm run harness:token -w apps/orbit
 
       - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get install -y poppler-utils
 
       - run: npm run build -w apps/pulsar
 
       # `--port` explicitly: the `start` script is a bare `next start`, which
       # defaults to 3000 — only `dev` carries `--port ${PORT:-3200}`.
+      # The pin goes to the server and to the spec alone, never to the build.
+      # Empty on `real`; `clockOverride` reads an empty pin as none.
       - name: Start the app and wait for it to answer
+        env:
+          PULSAR_CLOCK: ${{ matrix.clock }}
         run: |
           npm run start -w apps/pulsar -- --port 3206 > /tmp/pulsar.log 2>&1 &
           for _ in $(seq 1 60); do
@@ -88,29 +121,37 @@ jobs:
       # run, mints and seeds lane 8's person under it — no typed address, no
       # email sent (RNP-09) — and its teardown drops every identity and closes
       # the run, so the run is left closed.
-      - run: npm run check:e2e -w apps/pulsar -- $SPECS
+      # `sobrevivientes-la-critica` counts weeks from `created_at`, which the
+      # database's clock writes and `PULSAR_CLOCK` cannot pin: it runs on `real` alone.
+      - name: Run the specs
+        env:
+          PULSAR_CLOCK: ${{ matrix.clock }}
+        run: |
+          specs="$SPECS"
+          if [ -n "$PULSAR_CLOCK" ]; then specs="${specs//e2e\/sobrevivientes-la-critica.spec.ts/}"; fi
+          npm run check:e2e -w apps/pulsar -- $specs
 
       - name: Upload the server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: pulsar-calendario-log
+          name: pulsar-calendario-log-${{ matrix.name }}
           path: /tmp/pulsar.log
 
       - name: Upload the Playwright artefacts
         if: failure()
         uses: actions/upload-artifact@v5
         with:
-          name: pulsar-calendario-playwright-results
+          name: pulsar-calendario-playwright-results-${{ matrix.name }}
           path: apps/pulsar/private/playwright-results
 
       - name: Open an issue for the failed run
-        if: failure()
+        if: failure() && github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh issue create \
             --repo "$GITHUB_REPOSITORY" \
-            --title "pulsar-calendario failed $(date -u +%F)" \
-            --body "The daily weekday-bound specs failed: $RUN_URL"
+            --title "pulsar-calendario (${{ matrix.name }}) failed $(date -u +%F)" \
+            --body "The daily calendar-bound specs failed: $RUN_URL"

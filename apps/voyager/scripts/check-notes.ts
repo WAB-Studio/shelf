@@ -1,12 +1,12 @@
 /**
  * Drives `POST /api/phrase/notes` against a real running server and the
  * real `reading.phrase_notes`, `reading.model_spend` and `reading.client_spend`
- * — never asserted from the migration (AGENTS.md, "Verification").
+ * — never asserted from the migration (AGENTS.md, "Code").
  *
  * Two passes, never one, and never a spawned second server: this app
  * refuses a second `next dev` in the same directory even on another port
- * ("Another next dev server is already running" — AGENTS.md, "Run one
- * instance per worktree. Take ... as: one is up, use it."), so the
+ * ("Another next dev server is already running" — docs/agentes/lanes.md,
+ * "Run one dev server per worktree"), so the
  * `check-decoration.ts` T17 shape of spawning a short-lived child does not
  * apply here — the lane's own persistent server already occupies this
  * directory's lock.
@@ -19,7 +19,7 @@
  *   2. `CHECK_NOTES_PAID=1 npm run check:notes` — against that same server
  *      restarted once with `CLIENT_KEY_SALT`, `PHRASE_NOTES_DAILY_CALL_CAP`
  *      and `PHRASE_NOTES_DAILY_CLIENT_CAP=1` exported in the shell that
- *      started it, never written to `.env.local` (AGENTS.md, "Leave
+ *      started it, never written to `.env.local` (docs/agentes/voyager.md, "Leave
  *      apps/voyager/.env.local alone"). Runs the real model calls, the
  *      cache-repeat check, the no-leak check and the per-caller cap check,
  *      then restores `model_spend` and deletes every row it wrote.

@@ -6,7 +6,7 @@ import { placeLeftovers } from "@/lib/import/coverage";
 import { decide, normalize, type Correction, type ImportDraft } from "@/lib/import/draft";
 import { linesToTasks } from "@/lib/import/line-tasks";
 import { MODEL_NAME, fileRefused, fileRoute, modelAvailable, readPlan, type PlanInput, type PlanReading } from "@/lib/import/model";
-import { claimFollowUp, claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
+import { appCapReached, claimFollowUp, claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
 import { parseTemplate, templateSource } from "@/lib/import/template";
 import { readWorkbook } from "@/lib/import/workbook";
 import { getPerson } from "@/lib/session";
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
   if (!modelAvailable()) return fail(503, "import.errors.noKey");
 
   const claim = await claimModelCall(MODEL_NAME, file ? "file" : "paste");
-  if (!claim) return fail(429, "import.errors.cap");
+  if (!claim) return fail(429, (await appCapReached()) ? "import.errors.capApp" : "import.errors.cap");
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

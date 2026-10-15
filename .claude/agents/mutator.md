@@ -22,6 +22,8 @@ Only the files the branch itself changed:
 `git log $(git merge-base <base> HEAD)..HEAD --name-only --format=`.
 Never the whole repository. The risk is in the change.
 
+Run `npm run mutate:pure -- --changed <base>` in `apps/pulsar` first on the pure `lib/` files the branch changed, and spend your own budget on screens, policies and actions, which Stryker cannot reach.
+
 Skip generated files, fixtures, migrations and anything under `e2e/` or `scripts/check-*`: you
 mutate the app, never the thing that judges it.
 

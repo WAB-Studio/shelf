@@ -22,6 +22,7 @@ const KNOWN_ERRORS = new Set([
   "import.errors.unreadableType",
   "import.errors.noKey",
   "import.errors.cap",
+  "import.errors.capApp",
   "import.errors.blank",
   "import.errors.empty",
   "import.errors.modelFailed",
@@ -108,6 +109,7 @@ function placement(failure: Failure) {
   switch (failure.key) {
     case "import.errors.noKey":
     case "import.errors.cap":
+    case "import.errors.capApp":
       return { place: "top", template: true } as const;
     case "import.errors.workbookNotTemplate":
       return { place: "upload", template: true } as const;
@@ -199,7 +201,7 @@ export function ImportScreen() {
   );
   // The key and the cap shut the model; the template still reads.
   const modelShut =
-    failure?.kind === "key" && (failure.key === "import.errors.noKey" || failure.key === "import.errors.cap");
+    failure?.kind === "key" && (failure.key === "import.errors.noKey" || failure.key === "import.errors.cap" || failure.key === "import.errors.capApp");
   const retry = failure?.kind === "key" && failure.key.startsWith("import.errors.model");
 
   function fail(next: Failure) {

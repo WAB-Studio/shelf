@@ -3,11 +3,24 @@
 // `Date`'s local-offset behaviour or the process's own `TZ`.
 export const TIME_ZONE = "America/Bogota";
 
+// One formatter per locale and options: building one per call piled up GBs
+// of native memory in loops over thousands of days.
+const formatters = new Map<string, Intl.DateTimeFormat>();
+function formatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${JSON.stringify(options)}`;
+  let cached = formatters.get(key);
+  if (!cached) {
+    cached = new Intl.DateTimeFormat(locale, options);
+    formatters.set(key, cached);
+  }
+  return cached;
+}
+
 // Any instant, read back as its calendar day in the person's zone. `Intl`
 // takes the zone as an argument, so this never depends on the process's own
 // `TZ` — a suite run under `TZ=UTC` reads the same day as one run without it.
 export function civilDateInZone(instant: Date): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(instant);
+  return formatter("en-CA", { timeZone: TIME_ZONE }).format(instant);
 }
 
 // The day every reader calls «today». `PULSAR_CLOCK` pins it on a test
@@ -73,7 +86,7 @@ export function civilDateToDate(value: string): Date {
 
 // Reads a midday-UTC instant back as its own calendar day, never a shifted one.
 export function dateToCivilDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
+  return formatter("en-CA", { timeZone: "UTC" }).format(date);
 }
 
 // The civil date `weeks` weeks after `day`, in the same midday-UTC arithmetic
@@ -104,7 +117,7 @@ export function weekOf(day: string): string[] {
 // "13 de diciembre", or "domingo 13 de diciembre" with `weekday`: a civil day
 // in words, read from its own midday-UTC instant so no offset shifts it.
 export function civilDateLabel(day: string, weekday = false): string {
-  return new Intl.DateTimeFormat("es-CO", {
+  return formatter("es-CO", {
     weekday: weekday ? "long" : undefined,
     day: "numeric",
     month: "long",
@@ -114,7 +127,7 @@ export function civilDateLabel(day: string, weekday = false): string {
 
 // "13 de diciembre de 2026": the year always comes from the day itself.
 export function civilDateWithYear(day: string): string {
-  return new Intl.DateTimeFormat("es-CO", {
+  return formatter("es-CO", {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -126,7 +139,7 @@ export function civilDateWithYear(day: string): string {
 // punctuation. The month is cut from its long name because ICU's own short
 // form is "sept" for September.
 export function civilDateShort(day: string): string {
-  const parts = new Intl.DateTimeFormat("es-CO", {
+  const parts = formatter("es-CO", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -138,7 +151,7 @@ export function civilDateShort(day: string): string {
 
 // "13 sep": `civilDateShort` without the weekday.
 export function civilDayMonthShort(day: string): string {
-  const parts = new Intl.DateTimeFormat("es-CO", {
+  const parts = formatter("es-CO", {
     day: "numeric",
     month: "long",
     timeZone: "UTC",
@@ -155,7 +168,7 @@ export function civilDayMonthYear(day: string): string {
 // An instant as the 24-hour "HH:mm" a person in the zone read on their clock.
 // `h23` keeps midnight "00:05", never "24:05".
 export function timeInZone(instant: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return formatter("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",

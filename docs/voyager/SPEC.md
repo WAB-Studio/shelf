@@ -32,7 +32,7 @@ Interface language: Spanish. Source language of the dictionary: English.
 This slice is the box and the answer: look a word up, look a sentence up, and
 have the dictionary on the device.
 
-**Out of scope:** books, reading sessions, spaced repetition and notes. None of
+**Out of scope:** books, reading sessions and notes. None of
 this gets built, and no schema, table or column is "prepared for" it.
 
 ### Functional requirements
@@ -154,6 +154,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   screen never calls a link invalid on the strength of a timeout, and nothing verifies again on the
   reader's behalf: `verifyOtp` is not idempotent and a timeout says nothing about whether the token
   was spent.
+- [ ] **RL-67** — When sending a sign-in link times out, the screen says the link may have been sent, before the reader asks for another. A board is drawn before it is built. Decided by the user 2026-10-15.
+- [ ] **RL-69** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
 
 - [ ] **RL-07** — Autocomplete appears only while the string is being treated as a word. A sentence never raises it.
 - [x] **RL-26** — A headword's answer can be heard. The device speaks it with the voice the browser
@@ -244,13 +246,14 @@ this gets built, and no schema, table or column is "prepared for" it.
   «No se pudo traducir». The paid model's answer is not filtered. Decided by the user 2026-10-15.
   - Measured 2026-09-20, `i love you`, `en|es`: `translatedText` held an explicit sentence at `match: 1`, `quality: 74`,
     which passed every other gate; `te quiero` sat in `matches[1]` with the same score.
+- [ ] **RL-66** — A row of `/registro` is deleted with a ✕ on its row. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-10-15.
 - [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: an entry in the dictionary, a translation for a
   sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that
   answer arrived. A word whose network answer failed or never arrived, and a sentence that could not
   be translated, leave no row. A row holds what was typed, whether it was answered as a word or a
   sentence, the headword it actually reached when an inflected form was typed, and when. The record gains rows on its own and nothing edits one, but the reader can
-  empty it whole: on this device alone, or in the copy their account holds as well. Emptying this
+  delete a row (RL-66) or empty it whole: on this device alone, or in the copy their account holds as well. Emptying this
   device alone leaves the account's copy standing, and a device that signs in afterwards sees it
   again. No screen on the read path shows the record. It is read to take it off the device — to a
   file, or to the copy held by the reader's account — and to bring back what the same reader's other
@@ -282,13 +285,11 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside
   the app.
-- [x] **RL-20** — The log can be exported from the app as a single file the reader saves onto their
-  device: every recorded search, with its date and the headword it reached, in a documented and
-  versioned shape. The export is deliberate: it is reached from outside the search screen and
-  nothing triggers it on its own.
 - [ ] **RL-27** — A local server, which the reader starts on their own machine, offers the exported
   file to an MCP client: the most looked-up words, the most recent ones, and the full history of one
   word. It only ever reads the file; no tool modifies it. The server is not part of the deployed app.
+- [ ] **RL-65** *(successor of RL-20)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The export also offers a CSV for Anki beside it. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-15.
+- [ ] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Boards are drawn before any work. Decided by the user 2026-10-15.
 - [x] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
   has, the answer offers the words it might have been, and reaching one of them is a tap. The
   suggestion is computed on the device and touches the network on no keystroke.
@@ -382,6 +383,10 @@ Dead codes. The number stays burned and the tick stays as it was.
   - Not built. No board drawn for the state a reader sees when every candidate is refused.
   _Retired 2026-10-15. Successor: RL-64. The user overturned the 2026-09-20 pick of the model as judge for a word list: the model costs a call per answer and a list is deterministic._
 
+- [x] **RL-20** — The log can be exported from the app as a single file the reader saves onto their
+  device: every recorded search, with its date and the headword it reached, in a documented and
+  versioned shape. The export is deliberate: it is reached from outside the search screen and
+  nothing triggers it on its own. _Retired 2026-10-15, by the user. Successor: RL-65 (the export adds a CSV for Anki beside the JSON, which stays the complete copy)._
 - [x] **RL-53** — When the provider's best pick for a sentence is unusable — empty, the quota warning, or an echo of
   what was typed — the route does not give up on the reply: it reads the provider's other candidates (`matches`)
   through the same gate and answers with the usable one of highest `match` score, whatever its position. Only when
@@ -605,7 +610,7 @@ Rules the model must always guarantee, regardless of how they are implemented:
 - The interface never asserts a browser capability it has not asked for at
   runtime.
 - The device holds exactly one copy of the payload.
-- The record only ever gains rows, on the device and in the copy alike. A row is identified by the
+- The record gains rows on its own; only the reader removes one (RL-66) or empties it, on the device and in the copy alike. A row is identified by the
   device that wrote it and the number it carried there.
 
 ---

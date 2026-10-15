@@ -7,7 +7,8 @@ import { z } from "zod";
 import { env } from "@/lib/env";
 import { readTools, writeTools, type ToolSpec } from "@/lib/tools/catalogue";
 
-import { SYSTEM_PROMPT } from "./prompt";
+import { chatSystemPrompt } from "./prompt";
+import { todayInZone } from "@/lib/zone";
 import { chatStub, type ChatStub } from "./seam";
 import { CHAT_TURNS_SENT, type Change, type ChatTurn } from "./types";
 
@@ -55,7 +56,7 @@ function toolsOffered() {
 
 function messagesOf(turns: ChatTurn[]): Message[] {
   return [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: chatSystemPrompt(todayInZone()) },
     ...turns.slice(-CHAT_TURNS_SENT).map((turn) => ({
       role: turn.role === "person" ? "user" : "assistant",
       content: turn.text,

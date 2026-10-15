@@ -2,7 +2,7 @@
  * Drives the grant layer of `reading.word_answers`, `reading.phrase_notes`
  * and `reading.client_spend` against the real database — DELETE never even
  * attempted, because SELECT and INSERT alone already prove the REVOKE
- * (AGENTS.md, "Verification"). No policy exists on these three, so no
+ * (AGENTS.md, "Code"). No policy exists on these three, so no
  * `auth.users` row is needed for a role switch to mean anything, unlike
  * `check-sync.ts`'s subjects — the block is at the GRANT/REVOKE layer alone.
  *

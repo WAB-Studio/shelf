@@ -21,15 +21,25 @@ function earliestPastDay(today: string): string {
   return dateToCivilDate(date);
 }
 
+function shiftDay(day: string, days: number): string {
+  const date = civilDateToDate(day);
+  date.setUTCDate(date.getUTCDate() + days);
+  return dateToCivilDate(date);
+}
+
 // Needs only today's own date, never the subject's: a day the person could
 // never have meant, whatever it explains. `requireDayForSubject` below
 // carries what only the subject itself can say.
-function requireDayInRange(data: { day?: string | null }, ctx: z.RefinementCtx) {
+function requireDayInRange(data: { day?: string | null; onHoy?: boolean }, ctx: z.RefinementCtx) {
   if (data.day == null) return;
 
   const today = todayInZone();
   if (data.day > today) {
     ctx.addIssue({ code: "custom", message: "day.errors.dayFuture", path: ["day"] });
+    return;
+  }
+  if (data.onHoy && data.day < shiftDay(today, -1)) {
+    ctx.addIssue({ code: "custom", message: "day.errors.dayStale", path: ["day"] });
     return;
   }
   if (data.day < earliestPastDay(today)) {
@@ -94,6 +104,9 @@ export const declareFactSchema = z
     // today — the action still decides that from the person's own zone, never
     // from the client (RNP-06); this is only ever a day already past.
     day: civilDate("day.errors.dayInvalid").optional(),
+    // Set by a tap on Hoy, whose `day` is the one the screen was drawn for:
+    // more than a day behind the server's own today, that screen is stale.
+    onHoy: z.boolean().optional(),
   })
   .superRefine(requireOneSubject)
   .superRefine(requireDayInRange);

@@ -69,3 +69,4 @@ testmodelsphoto/
 supabase/.temp/
 supabase/.branches/
 supabase/signing_keys.json
+.stryker-tmp/

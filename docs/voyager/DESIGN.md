@@ -122,7 +122,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
 - When a board and this file disagree, **this file wins**.
 - **The canvas is 149 boards**, counted 2026-10-08 from **version 39**'s own `appifact-doc` block (150 `.dc.html`
   files plus `canvas.json`). The five added are module 525's, in one row of the `cuenta` page under one annotation,
-  primary face only. **The canvas has no index page yet**, which `AGENTS.md` asks of every canvas: a gap, written here.
+  primary face only.
 - **The canvas is 144 boards**, counted 2026-09-13 from **version 34**'s own `appifact-doc` block
   (145 `.dc.html` files plus `canvas.json`). The two added are RL-49's, `CuentaEnlaceNoVerificado`
   and `CuentaEnlaceInvalido`, side by side on the `cuenta` page so the pair reads as the comparison
@@ -147,7 +147,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   rebuild. Verified 2026-09-11 by round-tripping 142 files back through the page's own parse.
 - **The canvas was 126 boards**, counted 2026-09-10 from the published file's `appifact-doc` block.
   It was 168 that morning. **42 dark boards were deleted the same day**, on the user's decision, and
-  the four-faces-per-state rule went with them (`AGENTS.md`, "Design").
+  the four-faces-per-state rule went with them (`docs/agentes/canvas.md`, "The rule").
 - **What was deleted, and how it was chosen.** A dark board was deleted when it is an exact colour
   substitution of its light twin under this file's own token table — `#9A3B24`→`#D9805F`,
   `#17160F`→`#F0EBDD`, `#FAF8F2`→`#14130F`, `#FFFFFF`→`#1C1B16`, `#DED8C8`→`#302E25`,
@@ -1699,3 +1699,12 @@ Taken by the user («2. b 3. b»).
 - **RL-50: a word list filters what MyMemory returns;** a blocked answer reads «No se pudo traducir». Overturns the 2026-09-20 pick of the model as judge.
 - **Touch targets: 44 px minimum**, raised from 32 px; the search box's clear ✕ included.
 - **«No se pudo …»** for a failure, never «No pude» or «No pudimos».
+
+## Decisions of 2026-10-15 (pending list), by the user
+
+- **The export adds a CSV for Anki beside the JSON.** The JSON stays the complete copy (RL-20). Not built yet.
+- **A row of `/registro` can be deleted with a ✕ per row.** Replaces the premise that the record only gains rows. Not built yet.
+- **When sending a sign-in link times out, the screen says it may have been sent:** a new line, with a board drawn before it is built. Not built yet.
+- **The dead RL-45 «swishing» path is deleted.** No visible behaviour changes.
+- **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/voyager/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Needs boards before any work. Not built yet.
+- **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
