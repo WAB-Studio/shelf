@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import { AlertDialog, Button, Flex, Spinner } from "@radix-ui/themes";
 
+import { returnFocus, useFocusOrigin } from "./dialog";
+
 type BaseProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,9 +45,11 @@ export function ConfirmDialog({
   tone = "danger",
   dismissOnly = false,
 }: ConfirmDialogProps) {
+  const origin = useFocusOrigin(open);
+
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
-      <AlertDialog.Content>
+      <AlertDialog.Content onCloseAutoFocus={(event) => returnFocus(origin, event)}>
         <AlertDialog.Title>{title}</AlertDialog.Title>
         <AlertDialog.Description>{description}</AlertDialog.Description>
         <Flex gap="3" justify="end" mt="4">

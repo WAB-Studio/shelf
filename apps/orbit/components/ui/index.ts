@@ -39,7 +39,6 @@ export { Toaster } from "./toaster";
 
 export {
   Avatar,
-  Dialog,
   DropdownMenu,
   Badge,
   type BadgeProps,
@@ -53,6 +52,7 @@ export { Button, IconButton } from "./button";
 export { Switch } from "./switch";
 
 export { ConfirmDialog } from "./confirm-dialog";
+export { Dialog } from "./dialog";
 
 export { EmptyState } from "./empty-state";
 
