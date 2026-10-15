@@ -1,10 +1,6 @@
 import { dayBefore } from "@/lib/day/weeks";
-import type { MonthBudget } from "@/lib/plan/months";
+import { daysInMonth, type MonthBudget } from "@/lib/plan/months";
 import { civilDateToDate, dateToCivilDate } from "@/lib/zone";
-
-function daysInMonth(day: string): number {
-  return new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate();
-}
 
 /**
  * RP-58: each month's planned amount spread evenly over the month's days,

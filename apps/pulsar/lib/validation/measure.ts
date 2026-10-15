@@ -18,4 +18,3 @@ export const setGoalMeasureSchema = z.object(
   { error: "plan.errors.goalInvalid" },
 );
 
-export type SetGoalMeasureInput = z.infer<typeof setGoalMeasureSchema>;

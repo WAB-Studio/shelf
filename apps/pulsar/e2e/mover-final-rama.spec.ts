@@ -3,7 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
 
 import { test, expect, type Person } from "./fixtures";
-import { countActionPosts, flat, openAs, seedGoal, MINUTES, today, type Db, MONTH_LONG } from "./meta-arbol-seed";
+import { countActionPosts, openAs, seedGoal, MINUTES, today, type Db, MONTH_LONG } from "./meta-arbol-seed";
 
 // Module 908 (RP-79), board `MoverFinalRama`: shortening a general's end past the ends of its goals
 // offers «Mover también sus finales», the only way to shorten it (a general's end never moves alone

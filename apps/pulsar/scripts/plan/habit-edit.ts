@@ -41,7 +41,7 @@ let standing: StoredCookie[] = [];
 
 type PostgresFactory = (url: string, options: Record<string, unknown>) => unknown;
 
-function installStubs(cookies: StoredCookie[]): void {
+function installStubs(): void {
   const untyped = Module as unknown as {
     _load: (request: string, parent: unknown, isMain: boolean) => unknown;
   };
@@ -112,7 +112,7 @@ async function habit(name: string, extra = sql`null`): Promise<string> {
 before(async () => {
   sessionCookies = loadCookies();
   standing = sessionCookies;
-  installStubs(sessionCookies);
+  installStubs();
   const plan = await import("@/app/actions/plan");
   editHabit = plan.editHabit;
   createGoal = plan.createGoal;
@@ -146,9 +146,9 @@ test("editHabit: name and note change in one statement; cadence, quantity, creat
   const after = await rowOf(id);
   assert.equal(after.name, "RP-104 nuevo");
   assert.equal(after.note, "nota nueva");
-  const { name: _n, note: _o, ...restBefore } = before;
-  const { name: _n2, note: _o2, ...restAfter } = after;
-  assert.deepEqual(restAfter, restBefore);
+  const untouched = (row: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(row).filter(([key]) => key !== "name" && key !== "note"));
+  assert.deepEqual(untouched(after), untouched(before));
   assert.equal(await factCount(id), 1);
   for (const path of ["/", "/semana", "/mes", "/metas", `/metas/habitos/${id}`]) {
     assert.ok(revalidated.includes(path), `${path} not revalidated: ${revalidated.join(", ")}`);

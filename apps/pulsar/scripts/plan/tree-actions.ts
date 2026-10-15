@@ -610,7 +610,7 @@ test("moveHorizon with moveBranch refuses, naming the goal, when a phase of a go
 });
 
 test("moveHorizon with moveBranch to no end under a goal that has one is endPastAbove, refused before any write", async () => {
-  const { G, g1 } = await tree("rama5");
+  const { g1 } = await tree("rama5");
   const { result, calls } = await counted(() => plan.moveHorizon({ goalId: g1, horizon: null, moveBranch: true }));
   assert.equal(result.ok, false);
   if (result.ok) return;

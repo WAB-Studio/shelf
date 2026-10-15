@@ -222,7 +222,7 @@ export function shapeGoal(view: GoalView) {
         : { month: monthKey(view.month.month), ...shapeLine(view.month, unit) },
     phases: view.phases.map(shapePhase),
     commitments: view.commitments.map(shapeGoalCommitment),
-    // The goal's units per month (RP-50); the AI reads it, never sets it (RP-56). Null for a goal that holds goals.
+    // The goal's units per month (RP-50); the AI sets it with `set_rhythm` (RP-119). Null for a goal that holds goals.
     rhythm: amountOrNull(view.rhythm, unit),
     // The day the plan's last task fills, null while it cannot say.
     end: view.roadmap.end,

@@ -15,7 +15,6 @@ export const setRhythmSchema = z.object({
     .max(1_000_000, { error: "roadmap.errors.rhythmRange" }),
 }, { error: "month.errors.invalid" });
 
-export type SetRhythmInput = z.infer<typeof setRhythmSchema>;
 
 const noticeMonth = z
   .string({ error: "month.errors.monthInvalid" })
