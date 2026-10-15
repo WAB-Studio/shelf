@@ -44,9 +44,10 @@ async function named(db: Db, personId: string, name: string) {
     select id, parent_id, horizon::text as horizon from goals.goals where user_id = ${personId} and name = ${name}`;
 }
 
-async function open(browser: Browser, baseURL: string, sessionFile: string, path: string) {
+async function open(browser: Browser, baseURL: string, sessionFile: string, path: string, clock = false) {
   const context = await browser.newContext({ storageState: sessionFile, baseURL, viewport: { width: 390, height: 900 } });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   await page.goto(path);
   return { context, page };
 }
@@ -141,7 +142,7 @@ test("weeks past the upper goal's end are refused on the client, naming it, with
   // Kills: not comparing the weeks with the upper goal's end (the sentence never shows, «Abrirla» stays enabled).
   const stamp = Date.now();
   const { largeId, largeName } = await seedLarge(db, person.id, stamp);
-  const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
+  const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`, true);
   try {
     const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
@@ -166,8 +167,7 @@ test("weeks past the upper goal's end are refused on the client, naming it, with
     await expect(confirm).toBeDisabled();
     await confirm.dispatchEvent("click");
 
-    // Give a stray request time to leave before counting.
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(calls).toEqual([]);
     expect(await named(db, person.id, name)).toHaveLength(0);
   } finally {
@@ -209,7 +209,7 @@ test("«No abrirla» closes the sheet and creates nothing (RP-82)", async ({ per
   // Kills: creating the goal when the sheet closes.
   const stamp = Date.now();
   const { largeId } = await seedLarge(db, person.id, stamp);
-  const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
+  const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`, true);
   try {
     const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
@@ -222,7 +222,7 @@ test("«No abrirla» closes the sheet and creates nothing (RP-82)", async ({ per
     await sheet.getByRole("button", { name: "No abrirla" }).click();
 
     await expect(sheet).toBeHidden();
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(page.url()).toMatch(new RegExp(`/metas/${largeId}$`));
     expect(calls).toEqual([]);
     expect(await named(db, person.id, name)).toHaveLength(0);

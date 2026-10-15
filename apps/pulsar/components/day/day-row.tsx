@@ -168,9 +168,14 @@ export function DayRow({
       // Done already: this tap undoes it, never declares a second fact
       // beside it.
       const action = done && factId ? undoFact({ factId }) : declareFact({ commitmentId, day: day ?? drawnToday, onHoy: day === undefined && drawnToday !== undefined ? true : undefined });
-      void action.then((result) => {
-        if (!result.ok) setError(result.error);
-      });
+      // A request that never arrived rejects: nothing was written, the row
+      // stays as it was and free to tap again.
+      action.then(
+        (result) => {
+          if (!result.ok) setError(result.error);
+        },
+        () => {},
+      );
     });
   }
 

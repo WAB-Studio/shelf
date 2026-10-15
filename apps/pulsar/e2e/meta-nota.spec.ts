@@ -231,7 +231,7 @@ test("saving sends one request and locks the sheet; closing without saving sends
 }) => {
   // Kills: a double send; saving on close; a sheet that keeps what was typed after «Cancelar».
   const { id } = await seedOne(db, person, "Texto anterior");
-  const { page, context } = await openAs(browser, baseURL, person, `/metas/${id}`);
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${id}`, 360, true);
   try {
     const calls = countActionPosts(page);
     await page.getByRole("button", { name: "Nota", exact: true }).click();
@@ -239,7 +239,7 @@ test("saving sends one request and locks the sheet; closing without saving sends
     await field(sheet).fill("Escrito y descartado");
     await sheet.getByRole("button", { name: "Cancelar" }).click();
     await expect(sheet).toBeHidden();
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(calls.length).toBe(0);
     expect(await noteOf(db, id)).toBe("Texto anterior");
     const reopened = await openSheet(page, "Cambiar la nota");

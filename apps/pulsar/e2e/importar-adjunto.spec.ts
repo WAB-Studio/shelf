@@ -21,10 +21,12 @@ async function asPerson(
   { person, browser, baseURL }: { person: { sessionFile: string }; browser: Browser; baseURL: string | undefined },
   run: (page: Page, leer: Request[]) => Promise<void>,
   answer: { status: number; json: unknown } = { status: 415, json: { error: "import.errors.unreadableType" } },
+  clock = false,
 ) {
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 360, height: 800 } });
   try {
     const page = await context.newPage();
+    if (clock) await page.clock.install();
     const leer: Request[] = [];
     await page.route("**/importar/leer", (route) => {
       leer.push(route.request());
@@ -48,12 +50,14 @@ test("picking a PDF sends nothing; the file shows named with «Quitar»; «Leer 
     await pick(page, PDF);
     await expect(page.getByText(PDF.name, { exact: true })).toBeVisible();
     await expect(quit(page)).toBeVisible();
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(leer).toHaveLength(0);
     await page.getByRole("button", { name: READ }).click();
     await expect.poll(() => leer.length).toBe(1);
     expect(leer[0].postDataBuffer()!.toString("latin1")).toContain(`filename="${PDF.name}"`);
-  });
+    await page.clock.runFor(30_000);
+    expect(leer).toHaveLength(1);
+  }, undefined, true);
 });
 
 test("«Quitar» drops the file: its name goes, the picker returns, and nothing was sent", async ({ person, browser, baseURL }) => {

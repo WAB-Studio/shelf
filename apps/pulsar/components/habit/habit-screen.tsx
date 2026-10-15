@@ -64,7 +64,7 @@ export async function HabitScreen({
   const currentIndex = shown.findIndex((month) => month.current);
 
   return (
-    <Page>
+    <Page width="column">
       <ScreenHeader
         title={habit.name}
         back={back}

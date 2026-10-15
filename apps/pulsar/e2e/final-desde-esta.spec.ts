@@ -41,9 +41,10 @@ async function openPutSheet(page: Page) {
   return sheet;
 }
 
-async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360) {
+async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360, clock = false) {
   const context = await browser.newContext({ storageState: sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   await visit(page, path);
   return { page, context };
 }
@@ -243,14 +244,14 @@ test("E2: the goal's screen still counts from the opening: 9 weeks and the phase
 test("E2: leaving the 8 as it is and tapping «Moverlo» closes the sheet and sends nothing (RP-108)", async ({ person, browser, baseURL, db }) => {
   // Kills: removing `untouched` (the untouched 8 is sent and rewrites the horizon from this week, or the sheet stays open).
   const { correr } = await seedE2(db, person);
-  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${correr}`);
+  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${correr}`, 360, true);
   try {
     const posts = postCounter(page);
     const sheet = await openMove(page);
     await expect(moveField(sheet)).toHaveValue("8");
     await sheet.getByRole("button", { name: "Moverlo", exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
-    await page.waitForTimeout(400);
+    await page.clock.runFor(30_000);
     expect(posts).toEqual([]);
     expect(await horizonOfGoal(db, correr)).toBe(fromThis(8));
     await expect(page.getByText(new RegExp(`^9 semanas · hasta el ${escape(lastDay(8))}$`))).toBeVisible();
@@ -374,14 +375,14 @@ test("E2: with the action held, «Moverlo», «Quitar el final» and «Dejarlo c
 test("E2: «Dejarlo como está» after typing 10 closes the sheet, keeps the end and the screen as they were (RP-108)", async ({ person, browser, baseURL, db }) => {
   // Kills: sending the typed number when the sheet is dismissed.
   const { correr } = await seedE2(db, person);
-  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${correr}`);
+  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${correr}`, 360, true);
   try {
     const posts = postCounter(page);
     const sheet = await openMove(page);
     await moveField(sheet).fill("10");
     await sheet.getByRole("button", { name: "Dejarlo como está", exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
-    await page.waitForTimeout(400);
+    await page.clock.runFor(30_000);
     expect(posts).toEqual([]);
     expect(await horizonOfGoal(db, correr)).toBe(fromThis(8));
     await expect(page.getByText(new RegExp(`^9 semanas · hasta el ${escape(lastDay(8))}$`))).toBeVisible();

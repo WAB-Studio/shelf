@@ -43,9 +43,10 @@ const OPENED_LAST_MONDAY = plusDays(MONDAY, -7);
 const OPENED_8_WEEKS_AGO = plusDays(MONDAY, -49);
 const INVALID = "Escribe un número entero de semanas, entre 1 y 520.";
 
-async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360) {
+async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360, clock = false) {
   const context = await browser.newContext({ storageState: sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   await visit(page, path);
   return { page, context };
 }
@@ -329,14 +330,14 @@ test("F4: with the action held, both reopen buttons are disabled, a second tap s
 test("«Dejarlo como está» after typing 10 closes the sheet and the horizon stays (RP-114)", async ({ person, browser, baseURL, db }) => {
   // Kills: sending the typed number when the sheet is dismissed.
   const { correr } = await seedF2(db, person);
-  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${correr}`);
+  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${correr}`, 360, true);
   try {
     const posts = postCounter(page);
     const sheet = await openSheet(page, "mover el final");
     await field(sheet).fill("10");
     await button(sheet, "Dejarlo como está").click();
     await expect(dialog(page)).toHaveCount(0);
-    await page.waitForTimeout(400);
+    await page.clock.runFor(30_000);
     expect(posts).toEqual([]);
     expect(await horizonOfGoal(db, correr)).toBe(fromThis(8));
   } finally {

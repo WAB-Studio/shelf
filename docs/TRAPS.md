@@ -3250,3 +3250,17 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - The spec reads the pinned day (`todayInZone()`) and the screen prints the real one (jueves 15): something that stamps «anotado» (the fact's written-at) does not go through `PULSAR_CLOCK` (`apps/pulsar/lib/zone.ts`). Other reds in the same cell: `dia-pasado.spec.ts:145` and `:204`, `hoy-palabras.spec.ts:92`, `hoy-sistema.spec.ts:144`, `meta-mes.spec.ts:373` and `:421`, `meta-ritmo-unidad.spec.ts:175`.
 - The red cells took 12 min each on 5 s timeouts. Chase it with one date and one spec, locally, with `PULSAR_CLOCK=2026-10-12`. Log: `private/ci/infra-38757787894.log`, grep `dates (monday)`.
 - Until fixed, the nightly run (`pulsar-calendario.yml`) is red by design of the bug, not of the night.
+
+## A migration in `main` that production never got (2026-10-15)
+- GoalLog's `0022_nombre_del_habito` (a `GRANT UPDATE (name)` on `goals.commitments`) shipped in #597 on 2026-10-13 and was never applied to
+  the remote: renaming a habit failed in production for two days. Measured: `main`'s journal 23 entries, `drizzle.__drizzle_migrations_goals` 22 rows.
+- Count journal against the applied table for every app at each deploy, before and after (`A handoff's list of pending migrations can be short`).
+
+## `node --test` runs a check's files in parallel over one shared table (2026-10-15)
+- `check:plan` raced RP-126: `chat-route.ts` and `import-route.ts` wrote `goals.model_calls` between `withAppCap`'s count and its claims.
+  Green on one run, red on the next, same code (CI 38764237192, 38767286327).
+- Serialize only the files that write the table a test counts (`scripts/harness/plan-run.ts`); `checks-run.ts` accepts only a bare `node` command.
+
+## CI serves orbit with `next dev`, and a race hides under `next start` (2026-10-15)
+- `reconcile.spec.ts:634` (B7) passed 7/7 on `next build` + `next start` and failed in CI: the dialog toasted before the list behind it re-rendered,
+  and `next dev` is slow enough to open that window. Reproduce an orbit e2e red the way `check:e2e` serves it before calling it local-green.
