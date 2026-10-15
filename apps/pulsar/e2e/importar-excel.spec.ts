@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { createTranslator } from "next-intl";
 import type postgres from "postgres";
 
 import messages from "../messages/es/import.json";
@@ -9,11 +10,14 @@ import { asPerson, countOf } from "./importar-plan";
 // A workbook uploaded on /metas/importar (RP-98): read on the server with no key, no claim and no
 // model. The boards are `ImportarExcelFilas` and `ImportarExcelAjeno`.
 
+const say = (key: string) =>
+  (createTranslator({ locale: "es", messages: { import: messages }, namespace: "import" }) as unknown as (k: string) => string)(key);
+
 const GOAL = "Evals y harness";
 
 async function load(): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load((await templateWorkbook()) as never);
+  await wb.xlsx.load((await templateWorkbook(say)) as never);
   return wb;
 }
 
