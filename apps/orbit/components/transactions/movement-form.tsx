@@ -49,7 +49,13 @@ import {
   OFFERED_CURRENCIES,
 } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
-import { amountToInput, deriveRate, formatMoney, parseAmount } from "@/lib/money";
+import {
+  amountToInput,
+  convertMinor,
+  deriveRate,
+  formatMoney,
+  parseAmount,
+} from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   acceptDeliverySchema,
@@ -509,7 +515,7 @@ export function MovementForm({
       setRateUnavailable(false);
       form.setValue(
         "counterAmount",
-        amountToInput(Math.round(amountMinor * data.rate), foreign),
+        amountToInput(convertMinor(amountMinor, data.rate), foreign),
         { shouldValidate: true },
       );
     },
