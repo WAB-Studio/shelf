@@ -18,7 +18,12 @@ import { civilDateToDate } from "@/lib/dates";
 
 // A transfer carries neither category nor sign; an income and an expense read
 // their first split's category and lean on the kind word only when none is set.
-export type KindLabels = { transfer: string; income: string; expense: string };
+export type KindLabels = {
+  transfer: string;
+  income: string;
+  expense: string;
+  adjustment: string;
+};
 
 // The row grid of the Inicio artboard: tile, title over account, date, amount.
 const COLUMNS = "36px 1fr 110px 160px";
@@ -113,7 +118,15 @@ export function RecentMovements({
                 <Money
                   minor={row.amountCents}
                   currency={row.currency}
-                  tone={rowTone(row)}
+                  // A transfer-toned figure writes no sign; an adjustment's leg
+                  // names it, in the plain ink the other rows share.
+                  tone={
+                    row.reconciliationId !== null
+                      ? row.toAccountId !== null
+                        ? "income"
+                        : "expense"
+                      : rowTone(row)
+                  }
                 />
               ),
             },
@@ -131,6 +144,7 @@ export function rowTitle(
   categoryNames: Map<string, string>,
   kindLabels: KindLabels,
 ): string {
+  if (row.reconciliationId !== null) return kindLabels.adjustment;
   if (row.kind === "transfer") return kindLabels.transfer;
   const first = row.splits[0]?.categoryId;
   const fallback = row.kind === "income" ? kindLabels.income : kindLabels.expense;
@@ -143,6 +157,10 @@ export function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
 ): string | undefined {
+  if (row.reconciliationId !== null) {
+    const accountId = row.toAccountId ?? row.fromAccountId;
+    return (accountId && accountNames.get(accountId)) ?? undefined;
+  }
   if (row.kind === "transfer") {
     const from = (row.fromAccountId && accountNames.get(row.fromAccountId)) ?? "";
     const to = (row.toAccountId && accountNames.get(row.toAccountId)) ?? "";
@@ -157,7 +175,7 @@ export function rowColor(
   row: TransactionListRow,
   categoryColors: Map<string, string | null>,
 ): string | null {
-  if (row.kind === "transfer") return null;
+  if (row.reconciliationId !== null || row.kind === "transfer") return null;
   const first = row.splits[0]?.categoryId;
   return (first && categoryColors.get(first)) ?? null;
 }
@@ -167,6 +185,7 @@ export function rowColor(
 export function rowTone(
   row: TransactionListRow,
 ): "income" | "transfer" | "expense" {
+  if (row.reconciliationId !== null) return "transfer";
   if (row.kind === "income") return "income";
   if (row.kind === "transfer") return "transfer";
   return "expense";

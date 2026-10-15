@@ -119,8 +119,18 @@ export function MovementDetail({
   const kind = movement.kind;
   const firstSplit = movement.splits[0]?.categoryId;
 
-  const tone: MoneyTone =
-    kind === "income" ? "income" : kind === "transfer" ? "transfer" : "expense";
+  // An adjustment books one account: a destination leg adds, a source leg takes.
+  const isAdjustment = movement.reconciliationId !== null;
+
+  const tone: MoneyTone = isAdjustment
+    ? movement.toAccountId !== null
+      ? "income"
+      : "expense"
+    : kind === "income"
+      ? "income"
+      : kind === "transfer"
+        ? "transfer"
+        : "expense";
 
   // The other side of a movement whose account settles elsewhere: the figure it
   // is expected to cost there while a statement is still to come, and the rate
@@ -142,17 +152,21 @@ export function MovementDetail({
 
   // A transfer names no category, so its heading subtitle is the kind word; an
   // income or expense reads its first split's category (RF-19).
-  const caption =
-    kind === "transfer"
+  const caption = isAdjustment
+    ? null
+    : kind === "transfer"
       ? t("kindTransfer")
       : (firstSplit && categoryNames.get(firstSplit)) ||
         (kind === "income" ? t("kindIncome") : t("kindExpense"));
-  const tileColor = kind === "transfer" ? null : (firstSplit && categoryColors.get(firstSplit)) ?? null;
+  const tileColor = isAdjustment || kind === "transfer" ? null : (firstSplit && categoryColors.get(firstSplit)) ?? null;
 
   // A transfer reads "origin → destination"; an income names its destination, an
   // expense its source.
-  const account =
-    kind === "transfer"
+  const account = isAdjustment
+    ? ((movement.toAccountId ?? movement.fromAccountId) &&
+        accountNames.get((movement.toAccountId ?? movement.fromAccountId) as string)) ??
+      ""
+    : kind === "transfer"
       ? `${(movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? ""} → ${(movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""}`
       : kind === "income"
         ? (movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""
@@ -239,7 +253,7 @@ export function MovementDetail({
             </LocaleLink>
           </IconButton>
           <Heading size="5" style={{ flex: 1 }}>
-            {t("detailTitle")}
+            {isAdjustment ? t("kindAdjustment") : t("detailTitle")}
           </Heading>
         </Flex>
 
@@ -251,9 +265,11 @@ export function MovementDetail({
             tone={tone}
             size="hero"
           />
-          <Text size="3" color="gray">
-            {caption}
-          </Text>
+          {caption !== null && (
+            <Text size="3" color="gray">
+              {caption}
+            </Text>
+          )}
         </Flex>
 
         <Card>
@@ -418,6 +434,13 @@ export function MovementDetail({
           </Button>
         )}
 
+        {isAdjustment && (
+          <Text size="2" color="gray" align="center">
+            {t("adjustmentFix")}
+          </Text>
+        )}
+
+        {!isAdjustment && (
         <Flex gap="3">
           <Button
             type="button"
@@ -442,6 +465,7 @@ export function MovementDetail({
             {t("delete")}
           </Button>
         </Flex>
+        )}
 
         <Dialog.Root open={editOpen} onOpenChange={setEditOpen}>
           <Dialog.Content maxWidth={movementFormDialogWidth}>

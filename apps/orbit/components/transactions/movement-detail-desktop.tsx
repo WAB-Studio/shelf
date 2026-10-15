@@ -116,11 +116,22 @@ export function MovementDetailDesktop({
   const kind = movement.kind;
   const firstSplit = movement.splits[0]?.categoryId;
 
-  const tone: MoneyTone =
-    kind === "income" ? "income" : kind === "transfer" ? "transfer" : "expense";
+  // An adjustment books one account: a destination leg adds, a source leg takes.
+  const isAdjustment = movement.reconciliationId !== null;
 
-  const kindLabel =
-    kind === "income"
+  const tone: MoneyTone = isAdjustment
+    ? movement.toAccountId !== null
+      ? "income"
+      : "expense"
+    : kind === "income"
+      ? "income"
+      : kind === "transfer"
+        ? "transfer"
+        : "expense";
+
+  const kindLabel = isAdjustment
+    ? t("kindAdjustment")
+    : kind === "income"
       ? t("kindIncome")
       : kind === "transfer"
         ? t("kindTransfer")
@@ -128,12 +139,15 @@ export function MovementDetailDesktop({
 
   // A transfer names no category, so its tile stays the neutral surface (RF-69).
   const tileColor =
-    kind === "transfer" ? null : (firstSplit && categoryColors.get(firstSplit)) ?? null;
+    isAdjustment || kind === "transfer" ? null : (firstSplit && categoryColors.get(firstSplit)) ?? null;
 
   // A transfer reads "origin → destination"; an income names its destination, an
   // expense its source.
-  const account =
-    kind === "transfer"
+  const account = isAdjustment
+    ? ((movement.toAccountId ?? movement.fromAccountId) &&
+        accountNames.get((movement.toAccountId ?? movement.fromAccountId) as string)) ??
+      ""
+    : kind === "transfer"
       ? `${(movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? ""} → ${(movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""}`
       : kind === "income"
         ? (movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""
@@ -251,7 +265,7 @@ export function MovementDetailDesktop({
   return (
     <Flex direction="column">
       <ScreenHeader
-        title={t("detailTitle")}
+        title={isAdjustment ? t("kindAdjustment") : t("detailTitle")}
         meta={shortDate}
         back={{ href: "/movements", label: t("listTitle") }}
       />
@@ -439,6 +453,13 @@ export function MovementDetailDesktop({
             </Button>
           )}
 
+          {isAdjustment && (
+            <Text size="2" color="gray">
+              {t("adjustmentFix")}
+            </Text>
+          )}
+
+          {!isAdjustment && (
           <Flex gap="3">
             <Flex asChild align="center" justify="center" gap="2" flexGrow="1">
               <Button type="button" size="3" onClick={() => setEditOpen(true)}>
@@ -459,6 +480,7 @@ export function MovementDetailDesktop({
               </Button>
             </Flex>
           </Flex>
+          )}
         </Flex>
       </Flex>
 
