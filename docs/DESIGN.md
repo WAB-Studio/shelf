@@ -64,3 +64,5 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   card and in reports only when not zero, and as rows in the movements list, never in the six-month chart; the history lives in
   the «Cuadrar» dialog; a reconciliation is final (no undo, no day before the latest, a mistake is corrected by reconciling
   again); the export leaves adjustments out in this slice; the real figure is typed as a magnitude, its sign from the account's kind.
+- **Boards approved by the user, 2026-10-15:** the 14 reconciliation boards (B1–B12) on the HomeFund canvas,
+  https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj.
