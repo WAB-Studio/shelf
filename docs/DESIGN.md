@@ -58,3 +58,9 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - **The adjustment is its own line, «Descuadre»** (RF-138), outside expense and income totals and budgets.
 - **When:** after pulsar's s10 and the folder rename. HomeFund has no canvas yet: this slice opens it with its boards
   (the reconcile sheet, the gap, the history, «Descuadre» in reports), and names it in `AGENTS.md`.
+- **The plan's questions, 2026-10-14** (the user: «elige lo mejor»; the session's picks): the adjustment carries a mark
+  (`reconciliation_id`) and its kind still derives from the accounts; a reconciliation with no gap is recorded with no movement
+  and reads «Cuadró»; «Neto del mes» stays income − expense with «Descuadre del mes» beside it; «Descuadre» shows on the month
+  card and in reports only when not zero, and as rows in the movements list, never in the six-month chart; the history lives in
+  the «Cuadrar» dialog; a reconciliation is final (no undo, no day before the latest, a mistake is corrected by reconciling
+  again); the export leaves adjustments out in this slice; the real figure is typed as a magnitude, its sign from the account's kind.
