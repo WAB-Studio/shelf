@@ -9,7 +9,7 @@ import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `PapelSigueLaPantalla` caras 2 y 3 (RP-124; Q2 = a, 2026-10-14): after a goal's measure, «COMPROMISOS» and one line per
-// live commitment, in its order, «{nombre} · {cadencia}» and «· {cantidad}» for one that counts; a goal with none has no
+// live commitment, in its order (days in full, «martes y jueves», RP-133; Hoy keeps «mar y jue»), «{nombre} · {cadencia}» and «· {cantidad}» for one that counts; a goal with none has no
 // label. A «POR MES» whose every row holds no task and no amount is not drawn, on screen and on paper; one that holds a
 // task is drawn on both, its row saying «1 tarea». Every assertion is made on the screen at 1280 and on the PDF.
 const MONTHS = [
@@ -190,11 +190,12 @@ test.describe("commitments and «por mes» on the export screen and on paper (RP
       for (const [where, text] of [["screen", screen], ["paper", paper]] as const) {
         const at = text.indexOf("metas dentro · 2");
         expect(at, `${where}: the «dentro» section`).toBeGreaterThanOrEqual(0);
-        const first = text.indexOf("tema técnico · mar y jue · 2 h");
+        const first = text.indexOf("tema técnico · martes y jueves · 2 h");
         const second = text.indexOf("inglés pasivo · todos los días");
-        expect(first, `${where}: «Tema técnico · mar y jue · 2 h»`).toBeGreaterThan(at);
+        expect(first, `${where}: «Tema técnico · martes y jueves · 2 h»`).toBeGreaterThan(at);
         expect(second, `${where}: «Inglés pasivo · todos los días»`).toBeGreaterThan(first);
-        expect(count(text, "tema técnico · mar y jue · 2 h"), `${where}: once`).toBe(1);
+        expect(count(text, "tema técnico · martes y jueves · 2 h"), `${where}: once`).toBe(1);
+        expect(text, `${where}: no short days`).not.toContain("mar y jue");
         const row = text.slice(text.indexOf("metas dentro"), first);
         expect(row, `${where}: the unit once`).toMatch(/octubre · 0 de 6\.000 palabras/);
         expect(row, `${where}: the unit not twice`).not.toMatch(/palabras de [\d.]+ palabras/);
