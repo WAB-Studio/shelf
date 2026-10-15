@@ -188,8 +188,7 @@ export function MovementsScreen({
     category: rowCategory(row, categoryNames, categoryColors),
     account: rowSubtitle(row, accountNames) ?? "",
     label: row.labels[0]?.name ?? null,
-    // An adjustment is signed in plain ink; the table's Money takes the sign of a
-    // negative figure, and only an income tone writes a plus.
+    // The table's Money signs by tone: only an income tone writes a plus.
     amountMinor:
       row.reconciliationId !== null && row.toAccountId === null
         ? -row.amountCents
@@ -581,19 +580,17 @@ export function MovementsScreen({
                       color={rowColor(row, categoryColors)}
                       amount={
                         row.reconciliationId !== null ? (
-                          <>
-                            {row.toAccountId !== null && "+"}
-                            <Money
-                              minor={
-                                row.toAccountId !== null
-                                  ? row.amountCents
-                                  : -row.amountCents
-                              }
-                              currency={row.currency}
-                              tone="plain"
-                              size="inherit"
-                            />
-                          </>
+                          <Money
+                            minor={
+                              row.toAccountId !== null
+                                ? row.amountCents
+                                : -row.amountCents
+                            }
+                            currency={row.currency}
+                            tone="transfer"
+                            signed="always"
+                            size="inherit"
+                          />
                         ) : (
                           <Money
                             minor={row.amountCents}

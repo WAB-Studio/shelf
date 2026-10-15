@@ -116,17 +116,14 @@ export function RecentMovements({
               // (RF-121); the second amount belongs to the detail screen.
               content: (
                 <Money
-                  minor={row.amountCents}
-                  currency={row.currency}
-                  // A transfer-toned figure writes no sign; an adjustment's leg
-                  // names it, in the plain ink the other rows share.
-                  tone={
-                    row.reconciliationId !== null
-                      ? row.toAccountId !== null
-                        ? "income"
-                        : "expense"
-                      : rowTone(row)
+                  minor={
+                    row.reconciliationId !== null && row.toAccountId === null
+                      ? -row.amountCents
+                      : row.amountCents
                   }
+                  currency={row.currency}
+                  tone={rowTone(row)}
+                  signed={row.reconciliationId !== null ? "always" : true}
                 />
               ),
             },

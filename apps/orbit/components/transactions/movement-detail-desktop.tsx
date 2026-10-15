@@ -120,9 +120,7 @@ export function MovementDetailDesktop({
   const isAdjustment = movement.reconciliationId !== null;
 
   const tone: MoneyTone = isAdjustment
-    ? movement.toAccountId !== null
-      ? "income"
-      : "expense"
+    ? "transfer"
     : kind === "income"
       ? "income"
       : kind === "transfer"
@@ -276,9 +274,10 @@ export function MovementDetailDesktop({
             <Flex direction="column" align="center" gap="2" px="4" py="7">
               <CategoryTile color={tileColor} size={60} />
               <Money
-                minor={movement.amountCents}
+                minor={isAdjustment && movement.toAccountId === null ? -movement.amountCents : movement.amountCents}
                 currency={movement.currency}
                 tone={tone}
+                signed={isAdjustment ? "always" : true}
                 size="hero"
               />
               {/* The same movement in what the account settles in, marked as
