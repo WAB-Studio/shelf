@@ -48,7 +48,7 @@ test.describe("figures keep their line (RP-35, RP-49)", () => {
 
       const measured = await page.evaluate(() => {
         const visible = (el: Element) => (el as HTMLElement).getClientRects().length > 0;
-        const figures = [...document.querySelectorAll<HTMLElement>("[class*='figure-module'][class*='__figure']")].filter(visible);
+        const figures = [...document.querySelectorAll<HTMLElement>("[data-part='figure']")].filter(visible);
         // The report is wide enough to hide a break, so squeeze each figure to a
         // sliver as a block, the way a host that is not a flex box would hold it.
         for (const el of figures) {

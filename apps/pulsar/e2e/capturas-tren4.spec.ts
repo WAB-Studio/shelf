@@ -111,7 +111,7 @@ test.describe("the plan screen at 390 (RoadmapMesCifras, RoadmapMoverFinalFallo)
     try {
       await page.goto(`/metas/${goalId}/plan`);
       await expect(page.getByText(roadmap.pasaElFinal.afterEnd, { exact: false }).first()).toBeVisible();
-      const figures = await lines(page, "main [class*='figure-module'][class*='__figure']");
+      const figures = await lines(page, "main [data-part='figure']");
       expect(figures.length).toBeGreaterThan(4);
       // Section labels write «48 h» as plain text, not as a Figure: measure it by its characters.
       const plain = await page.evaluate(() => {
@@ -228,7 +228,7 @@ test("E. the report's months table in print: «hecho» holds the reached figure 
       const doneCol = heads.findIndex((th) => lower(th) === doneHeader);
       const plannedCol = heads.findIndex((th) => lower(th) === plannedHeader);
       const figuresOf = (td: Element | undefined) =>
-        [...(td?.querySelectorAll<HTMLElement>("[class*='figure-module'][class*='__figure']") ?? [])].map((f) => ({
+        [...(td?.querySelectorAll<HTMLElement>("[data-part='figure']") ?? [])].map((f) => ({
           size: parseFloat(getComputedStyle(f).fontSize),
           own: getComputedStyle(f).fontFamily,
         }));

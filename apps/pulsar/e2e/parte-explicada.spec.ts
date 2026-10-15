@@ -80,7 +80,7 @@ for (const width of [360, 1280]) {
 
       // Figure, then the line, then the bar, then «llevas».
       const figure = page.getByText(new RegExp(`de ${say(firstShare)}$`)).locator("visible=true").first();
-      const bar = page.locator("[class*='progress-module'][class*='__track']").locator("visible=true");
+      const bar = page.locator("[data-part='progress-track']").locator("visible=true");
       const lleva = visible(page, /^(llevas \d+ %|día \d+ ·)/);
       await expect(bar).toHaveCount(1);
       const [y0, y1, y2, y3] = [await top(figure), await top(line), await top(bar), await top(lleva)];
@@ -89,7 +89,7 @@ for (const width of [360, 1280]) {
       expect(y3).toBeGreaterThan(y2);
 
       // The share and the rhythm are figure spans, the day is plain text.
-      const figures = await line.locator("[class*='figure-module'][class*='__figure']").allTextContents();
+      const figures = await line.locator("[data-part='figure']").allTextContents();
       expect(figures).toEqual([say(firstShare), "10 h"]);
 
       // Muted like «llevas…» (or, from the 20th when the pace line replaces it, like «en total…»).
@@ -125,7 +125,7 @@ test("360 · «Este mes» of the month's page says the share under its figure, b
     expect(y1).toBeGreaterThan(y0);
     expect(y2).toBeGreaterThan(y1);
     expect(y3).toBeGreaterThan(y2);
-    const figures = await line.locator("[class*='figure-module'][class*='__figure']").allTextContents();
+    const figures = await line.locator("[data-part='figure']").allTextContents();
     expect(figures).toEqual([say(firstShare), "10 h"]);
     const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
     expect(await color(line)).not.toBe(await color(ink));
@@ -189,7 +189,7 @@ test("360 · a last month that stops before the month's end reads «hasta el N: 
     const tasks = visible(page, new RegExp(`^tareas · ${say(share)}$`, "i"));
     await expect(tasks).toHaveCount(1);
     expect(await top(line)).toBeLessThan(await top(tasks));
-    const figures = await line.locator("[class*='figure-module'][class*='__figure']").allTextContents();
+    const figures = await line.locator("[data-part='figure']").allTextContents();
     expect(figures).toEqual([say(share), "10 h"]);
     const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
     expect(await color(line)).not.toBe(await color(ink));
@@ -220,7 +220,7 @@ test("360 · a goal opened and ended inside one month reads «del N al M: …» 
   try {
     const line = visible(page, `del 7 al 20: ${say(share)} de tus 10 h`, true);
     await expect(line).toHaveCount(1);
-    const figures = await line.locator("[class*='figure-module'][class*='__figure']").allTextContents();
+    const figures = await line.locator("[data-part='figure']").allTextContents();
     expect(figures).toEqual([say(share), "10 h"]);
     const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
     expect(await color(line)).not.toBe(await color(ink));
