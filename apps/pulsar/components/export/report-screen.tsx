@@ -617,7 +617,7 @@ function GoalPart({
             const tasks = month.tasks ?? { done: 0, total: 0 };
             const count =
               tasks.total === 0
-                ? t("noTasks")
+                ? null
                 : started
                   ? t("tasksDone", { done: tasks.done, total: tasks.total })
                   : t("tasksToDo", { count: tasks.total });
@@ -626,7 +626,7 @@ function GoalPart({
               key: month.month,
               cells: [monthLabel(month.month), count, state],
               // The stacked face has no columns to hold them.
-              note: `${count} · ${state}`,
+              note: count === null ? state : `${count} · ${state}`,
               printed: paperKeys.has(month.month) && printed(month),
             };
           });

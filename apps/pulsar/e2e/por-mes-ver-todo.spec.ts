@@ -151,7 +151,7 @@ for (const width of [360, 1280]) {
         expect(await rowMonths(page, id)).toEqual(keysFor([0, 1]));
         expect(await mainLower(page)).toMatch(ofRe(2, 15));
         await expect(rowLink(page, id, 0)).toContainText("en curso");
-        await expect(rowLink(page, id, 0)).toContainText("sin tareas");
+        await expect(rowLink(page, id, 0)).not.toContainText("tarea");
         await expect(rowLink(page, id, 1)).toContainText("1 tarea");
         const line = lineOf(main, 13, 14);
         await expect(line).toBeVisible();

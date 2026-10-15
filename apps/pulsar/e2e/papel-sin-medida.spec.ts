@@ -288,7 +288,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
       expect(section).toContain(`${name} · por mes · 3 meses`.toLowerCase());
       for (const offset of [-2, -1]) {
         expect(section, `closed month ${offset} is a row`).toMatch(
-          new RegExp(`${labelOf(offset)} (?:0 de 0 hechas|sin tareas) cerrado`),
+          new RegExp(`${labelOf(offset)} cerrado`),
         );
         expect(section, `closed month ${offset} is not in the line`).not.toMatch(new RegExp(`${withYear(offset)}(?:,| y |:)`));
       }
@@ -427,7 +427,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
     });
   }
 
-  test("clause 5 on screen: the goal's «Por mes» keeps its rows: a count of tasks or «sin tareas», nothing of done or to do", async ({
+  test("clause 5 on screen: the goal's «Por mes» keeps its rows: a count of tasks or nothing, never «sin tareas», nor of done or to do", async ({
     person, browser, baseURL, db,
   }) => {
     const name = `Mudanza meses ${Date.now()}`;
@@ -439,8 +439,8 @@ test.describe("the paper report prints the months of a goal that measures nothin
       await expect(items.nth(0)).toContainText("3 tareas");
       await expect(items.nth(1)).toContainText("en curso");
       await expect(items.nth(2)).toContainText("1 tarea");
-      await expect(items.nth(3)).toContainText("sin tareas");
-      await expect(items.nth(4)).toContainText("sin tareas");
+      await expect(items.nth(3)).not.toContainText("tarea");
+      await expect(items.nth(4)).not.toContainText("tarea");
       await expect(page.getByText(/hechas|por hacer|por venir/)).toHaveCount(0);
     } finally {
       await context.close();

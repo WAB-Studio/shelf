@@ -282,7 +282,7 @@ test("a goal with no measure lists every month of its span with its task count, 
     // The sub-task is no row of its own; last month's undone task rides into this one (RP-31).
     await expect(current).toContainText("3 tareas");
     await expect(items.nth(2)).toContainText(label(followingMonth));
-    await expect(items.nth(2)).toContainText("sin tareas");
+    await expect(items.nth(2)).not.toContainText("tarea");
     // No figure, no amount, no door to the sheet.
     await expect(page.getByText(/sin monto|planeado|%/)).toHaveCount(0);
     for (const href of await page.locator("main a").evaluateAll((links) =>

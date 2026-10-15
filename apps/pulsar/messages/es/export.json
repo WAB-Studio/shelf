@@ -28,7 +28,6 @@
   "monthsOut": "{months}: sin monto",
   "monthsOutCount": "{months}: sin monto{count, plural, =0 {} one { · # tarea} other { · # tareas}}",
   "monthsOutTasks": "{months}: sin tareas",
-  "noTasks": "sin tareas",
   "noAmount": "sin monto",
   "tasksCount": "{count, plural, one {# tarea} other {# tareas}}",
   "tasksDone": "{done} de {total} hechas",
