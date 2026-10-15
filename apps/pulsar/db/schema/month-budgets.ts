@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, date, integer, pgPolicy, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { check, date, index, integer, pgPolicy, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { goalsSchema } from "./_schema";
@@ -23,6 +23,7 @@ export const monthBudgets = goalsSchema.table(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    index("month_budgets_user_id_idx").on(t.userId),
     unique("month_budgets_goal_id_month_unique").on(t.goalId, t.month),
     check("month_budgets_month_first_day", sql`${t.month} = date_trunc('month', ${t.month})::date`),
     // Zero is a plan: a month the person means to spend on nothing.

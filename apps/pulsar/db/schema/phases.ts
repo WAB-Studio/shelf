@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, date, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, date, index, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { goalsSchema } from "./_schema";
@@ -23,6 +23,8 @@ export const phases = goalsSchema.table(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    index("phases_user_id_idx").on(t.userId),
+    index("phases_goal_id_idx").on(t.goalId),
     // A one-day phase is legal; a backwards one is not.
     check("phases_ends_on_after_starts_on", sql`${t.endsOn} >= ${t.startsOn}`),
     pgPolicy("phases_select_self", {

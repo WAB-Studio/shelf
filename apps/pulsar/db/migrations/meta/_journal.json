@@ -162,6 +162,13 @@
       "when": 1791914968565,
       "tag": "0022_nombre_del_habito",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792040661809,
+      "tag": "0024_indices",
+      "breakpoints": true
     }
   ]
 }

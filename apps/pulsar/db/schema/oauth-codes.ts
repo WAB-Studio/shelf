@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { goalsSchema } from "./_schema";
@@ -31,6 +31,9 @@ export const oauthCodes = goalsSchema.table(
     accessTokenId: uuid().references(() => accessTokens.id, { onDelete: "set null" }),
   },
   (t) => [
+    index("oauth_codes_user_id_idx").on(t.userId),
+    index("oauth_codes_client_id_idx").on(t.clientId),
+    index("oauth_codes_access_token_id_idx").on(t.accessTokenId),
     pgPolicy("oauth_codes_select_self", {
       for: "select",
       to: authenticatedRole,

@@ -42,6 +42,7 @@ export const facts = goalsSchema.table(
   (t) => [
     // The day's screen reads one person's facts for one day.
     index("facts_user_id_day_idx").on(t.userId, t.day),
+    index("facts_goal_id_day_idx").on(t.goalId, t.day),
     // A commitment holds at most one fact a day, whatever the device: a `tap`
     // row never doubles under two taps and a `quantity` row's "Cambiar"
     // deletes the old one first, so this is never in their way, only in a

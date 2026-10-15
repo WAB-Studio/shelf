@@ -70,6 +70,8 @@ export const goals = goalsSchema.table(
       sql`${t.note} is null or (char_length(${t.note}) between 1 and 100000 and ${t.note} ~ '\\S')`,
     ),
     index("goals_parent_id_idx").on(t.parentId),
+    // Every read is one person's; leading with `position` makes the fill-position `max` an index lookup.
+    index("goals_user_id_position_idx").on(t.userId, t.position),
     // `auth.uid()` bare, never `authUid`'s `(select auth.uid())`: the insert and update checks read
     // this table again, and Postgres refuses as infinite recursion (42P17) a self-read whose select
     // policy holds a subquery. The other policies keep `authUid`, evaluated once per query.

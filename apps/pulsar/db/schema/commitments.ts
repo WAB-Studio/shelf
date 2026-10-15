@@ -63,6 +63,7 @@ export const commitments = goalsSchema.table(
   (t) => [
     // The day's screen reads the live commitments of one person.
     index("commitments_user_id_retired_at_idx").on(t.userId, t.retiredAt),
+    index("commitments_goal_id_idx").on(t.goalId),
     // A CASE, not an equality between two predicates: `array_length` on an
     // empty array is NULL, and a CHECK that evaluates to NULL admits the row.
     // `'{}'` is refused on both sides of the case — a week of no days for
