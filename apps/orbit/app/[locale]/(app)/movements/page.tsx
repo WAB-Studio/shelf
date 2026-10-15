@@ -1,16 +1,22 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { MovementsScreen } from "@/components/transactions/movements-screen";
 import { Page } from "@/components/ui";
 import { getRecurringRuleName } from "@/db/queries/recurring-rules";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
-import { listTransactions } from "@/db/queries/transactions";
+import { getTransactionTotals, listTransactions } from "@/db/queries/transactions";
 import type { TransactionListFilters } from "@/db/queries/transactions";
 import { movementFiltersSchema } from "@/lib/validation/transaction";
 import { routing } from "@/i18n/routing";
+
+// Server-side ceiling: the screen pages the rows on the client but counts and
+// nets every row it receives, so an unbounded read grows with the ledger's whole
+// history. Far above a household's month; the count and net come from SQL, so
+// they stay exact past it.
+const MOVEMENTS_LIMIT = 2000;
 
 export async function generateMetadata(
   props: PageProps<"/[locale]/movements">,
@@ -29,7 +35,6 @@ export default async function MovementsPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   const parsed = movementFiltersSchema.parse(await props.searchParams);
 
@@ -48,8 +53,9 @@ export default async function MovementsPage(
     recurringRuleId: parsed.rule,
   };
 
-  const [rows, options, ruleName] = await Promise.all([
-    listTransactions(filters),
+  const [rows, totals, options, ruleName] = await Promise.all([
+    listTransactions(filters, { limit: MOVEMENTS_LIMIT }),
+    getTransactionTotals(filters),
     getTransactionFormOptions(),
     parsed.rule ? getRecurringRuleName({ id: parsed.rule }) : Promise.resolve(null),
   ]);
@@ -58,6 +64,7 @@ export default async function MovementsPage(
     <Page gutter="flush-lg">
       <MovementsScreen
         rows={rows}
+        totals={totals}
         options={options}
         ruleName={ruleName}
         filters={{

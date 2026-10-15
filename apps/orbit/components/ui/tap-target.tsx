@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Flex, type FlexProps } from "@radix-ui/themes";
 
 // A link's content has no intrinsic control height, unlike a Radix control
-// sized "2"; this pins the same 32px floor onto whatever sits inside a link.
+// sized "2"; this pins the same 44px floor onto whatever sits inside a link.
 export function TapTarget({
   align,
   justify,
@@ -21,8 +21,8 @@ export function TapTarget({
       gap={gap}
       px={px}
       width={width}
-      minWidth="32px"
-      minHeight="32px"
+      minWidth="44px"
+      minHeight="44px"
     >
       {children}
     </Flex>

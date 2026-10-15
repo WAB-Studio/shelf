@@ -7,7 +7,6 @@ import { webhookPayloadSchema } from "@/lib/validation/webhook";
 // The caller is iPhone Shortcuts or a bridge, never the app UI; runs on Node
 // (the resolver and ingest are server-only) and re-authenticates every hit.
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 const BEARER_PREFIX = "Bearer ";
 

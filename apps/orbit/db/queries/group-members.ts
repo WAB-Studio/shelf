@@ -6,7 +6,8 @@ import { insertRow } from "@/db/insert-row";
 import { callerGroupId } from "@/db/queries/groups";
 import { groupMembers } from "@/db/schema";
 import type { GroupMember } from "@/db/schema";
-import { withUserDb } from "@/db/session";
+import type { Transaction } from "@/db/session";
+import { withUserDb, withUserDbOrTx } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
 
 type GroupMemberRole = GroupMember["role"];
@@ -57,6 +58,7 @@ export async function listMembers(
 export async function listCallerMembers(
   userId: string,
   options: { archived: boolean | "all" },
+  outerTx?: Transaction,
 ): Promise<MemberRow[]> {
   const archivedFilter =
     options.archived === "all"
@@ -65,7 +67,7 @@ export async function listCallerMembers(
         ? isNotNull(groupMembers.archivedAt)
         : isNull(groupMembers.archivedAt);
 
-  return withUserDb(async (tx) =>
+  return withUserDbOrTx(outerTx, async (tx) =>
     tx
       .select({
         id: groupMembers.id,

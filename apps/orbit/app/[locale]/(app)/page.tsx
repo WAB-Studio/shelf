@@ -1,7 +1,7 @@
 import { Banknote, CreditCard, Landmark, Plus, Wallet } from "lucide-react";
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { WithdrawCashCard } from "@/components/cash/withdraw-dialog";
@@ -86,7 +86,6 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
@@ -217,6 +216,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     transfer: t("kindTransfer"),
     income: t("kindIncome"),
     expense: t("kindExpense"),
+    adjustment: t("kindAdjustment"),
   };
 
   // The withdrawal's destination read-only: the caller's resolved cash by name,
@@ -319,6 +319,15 @@ function AccountClassIcon({
 // card takes a string, which is why this calls `formatMoney` rather than compose
 // `Money` — the one other door from a stored integer to a figure.
 function rowAmount(row: TransactionListRow, locale: Locale): string {
-  const sign = row.kind === "income" ? "+" : row.kind === "expense" ? "−" : "";
+  const sign =
+    row.reconciliationId !== null
+      ? row.toAccountId !== null
+        ? "+"
+        : "−"
+      : row.kind === "income"
+        ? "+"
+        : row.kind === "expense"
+          ? "−"
+          : "";
   return `${sign}${formatMoney(row.amountCents, row.currency, locale)}`;
 }

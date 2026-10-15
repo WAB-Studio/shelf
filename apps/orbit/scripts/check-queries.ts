@@ -24,6 +24,11 @@ import {
 } from "@/app/actions/installment-plans";
 import { getAccountBalances } from "@/db/queries/account-balances";
 import {
+  getReconcileSheet,
+  listAccountReconciliations,
+  reconcileAccount,
+} from "@/db/queries/account-reconciliations";
+import {
   getAccountStatementHistory,
   listAccountStatements,
   recordAccountStatement,
@@ -117,24 +122,38 @@ import {
   createTransaction,
   deleteTransaction,
   getTransactionById,
+  getTransactionTotals,
   listTransactions,
   updateTransaction,
 } from "@/db/queries/transactions";
+import { updateAccountAction } from "@/app/actions/accounts";
+import { updateRecurringRuleAction } from "@/app/actions/recurring-rules";
+import { recordBilledAmount } from "@/db/queries/debt-statements";
+import { updateRecurringRule } from "@/db/queries/recurring-rules";
+import {
+  buildEffectiveRefs,
+  processRow,
+  type RawRow,
+} from "@/lib/spreadsheet/import-pipeline";
+import { commitImport } from "@/db/queries/import-commit";
+import type { CommitInput } from "@/db/queries/import-commit";
 import { getUserLocale, upsertUserLocale } from "@/db/queries/user-locale";
 import {
   getWebhookCredentialOptions,
   issueWebhookCredential,
   listWebhookCredentials,
 } from "@/db/queries/webhook-credentials";
-import { withUserDb } from "@/db/session";
+import { getSessionUser, withUserDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import {
   addCivilMonths,
+  budgetAnchor,
   currentMonthRange,
   lastSixMonthStarts,
   todayInBogota,
 } from "@/lib/dates";
 import { pgErrorCode } from "@/lib/db-error";
+import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { SEED_CATEGORIES } from "@/lib/fund/seed";
 import {
   accountRowSchema,
@@ -730,9 +749,11 @@ async function writeSuite(
       }),
     async ({ transactionId }) => {
       keep("transactions", transactionId);
+      const currency = await readColumn<string>("transactions", "id", transactionId, "currency");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, currency = ${await readColumn("transactions", "id", transactionId, "currency")}`,
+        ok: currency === "USD" && Number(stored) === USD_EXPENSE_CENTS,
+        detail: `movement ${transactionId}, currency = ${currency}, amount_cents = ${stored}`,
       };
     },
   );
@@ -783,9 +804,11 @@ async function writeSuite(
       }),
     async ({ transactionId }) => {
       keep("transactions", transactionId);
+      const counter = await readColumn<string | number>("transactions", "id", transactionId, "counter_amount_cents");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, counter_amount_cents = ${await readColumn("transactions", "id", transactionId, "counter_amount_cents")}`,
+        ok: Number(counter) === CONTRIBUTION_USD_CENTS && Number(stored) === CONTRIBUTION_COP_CENTS,
+        detail: `movement ${transactionId}, amount_cents = ${stored}, counter_amount_cents = ${counter}`,
       };
     },
   );
@@ -1110,9 +1133,10 @@ async function writeSuite(
     () => addGoalContribution({ goalId, amountCents: 1500000 }),
     async ({ contributionId }) => {
       keep("goal_contributions", contributionId);
+      const stored = await readColumn<string | number>("goal_contributions", "id", contributionId, "amount_cents");
       return {
-        ok: true,
-        detail: `contribution ${contributionId}, amount_cents = ${await readColumn("goal_contributions", "id", contributionId, "amount_cents")}`,
+        ok: Number(stored) === 1500000,
+        detail: `contribution ${contributionId}, amount_cents = ${stored}`,
       };
     },
   );
@@ -1358,9 +1382,10 @@ async function writeSuite(
       }),
     async ({ planId }) => {
       keep("installment_plans", planId);
+      const stored = await readColumn<string | number>("installment_plans", "id", planId, "n_installments");
       return {
-        ok: true,
-        detail: `plan ${planId}, n_installments = ${await readColumn("installment_plans", "id", planId, "n_installments")}`,
+        ok: Number(stored) === 3,
+        detail: `plan ${planId}, n_installments = ${stored}`,
       };
     },
   );
@@ -1376,9 +1401,11 @@ async function writeSuite(
       }),
     async ({ transactionId, paidLineIds }) => {
       keep("transactions", transactionId);
+      const kind = await readColumn<string>("transactions", "id", transactionId, "kind");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, lines paid = ${paidLineIds.length}, kind = ${await readColumn("transactions", "id", transactionId, "kind")}`,
+        ok: kind === "transfer" && Number(stored) === CARD_LINE_CENTS && paidLineIds.length === 1,
+        detail: `movement ${transactionId}, lines paid = ${paidLineIds.length}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
@@ -1559,9 +1586,11 @@ async function writeSuite(
       }),
     async ({ transactionId }) => {
       keep("transactions", transactionId);
+      const estimate = await readColumn<boolean>("transactions", "id", transactionId, "counter_is_estimate");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, counter_is_estimate = ${await readColumn("transactions", "id", transactionId, "counter_is_estimate")}`,
+        ok: estimate === true && Number(stored) === CARD_FOREIGN_CENTS,
+        detail: `movement ${transactionId}, amount_cents = ${stored}, counter_is_estimate = ${estimate}`,
       };
     },
   );
@@ -1596,9 +1625,11 @@ async function writeSuite(
       }),
     async ({ transactionId }) => {
       keep("transactions", transactionId);
+      const kind = await readColumn<string>("transactions", "id", transactionId, "kind");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, kind = ${await readColumn("transactions", "id", transactionId, "kind")}`,
+        ok: kind === "expense" && Number(stored) === 2500000,
+        detail: `movement ${transactionId}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
@@ -1618,19 +1649,25 @@ async function writeSuite(
         splits: [{ categoryId: scope.categoryId, amountCents: 2700000 }],
         labelIds: [],
       }),
-    async (updated) => ({
-      ok: updated,
-      detail: `updated = ${updated}, amount_cents = ${await readColumn("transactions", "id", transactionId, "amount_cents")}`,
-    }),
+    async (updated) => {
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
+      return {
+        ok: updated === "done" && Number(stored) === 2700000,
+        detail: `updated = ${updated}, amount_cents = ${stored}`,
+      };
+    },
   );
 
   await checkWrite(
     "deleteTransaction",
     () => deleteTransaction({ transactionId }),
-    async (deleted) => ({
-      ok: deleted,
-      detail: `deleted = ${deleted}, row still there = ${(await readColumn("transactions", "id", transactionId, "id")) !== undefined}`,
-    }),
+    async (deleted) => {
+      const stillThere = (await readColumn("transactions", "id", transactionId, "id")) !== undefined;
+      return {
+        ok: deleted === "done" && !stillThere,
+        detail: `deleted = ${deleted}, row still there = ${stillThere}`,
+      };
+    },
   );
 
   const withdrawal = await checkWrite(
@@ -1644,9 +1681,11 @@ async function writeSuite(
     async (result) => {
       keep("transactions", result.transactionId);
       if (result.createdCashAccount) keep("accounts", result.targetCashAccountId);
+      const kind = await readColumn<string>("transactions", "id", result.transactionId, "kind");
+      const stored = await readColumn<string | number>("transactions", "id", result.transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${result.transactionId}, cash account created = ${result.createdCashAccount}, kind = ${await readColumn("transactions", "id", result.transactionId, "kind")}`,
+        ok: kind === "transfer" && Number(stored) === 500000,
+        detail: `movement ${result.transactionId}, cash account created = ${result.createdCashAccount}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
@@ -3046,6 +3085,592 @@ async function timingSuite(): Promise<void> {
   });
 }
 
+/**
+ * RF-137, RF-138: the sums an adjustment must stay out of, the sheet that reads the derived
+ * figure for a day, and the write that books the gap. Its own suite, last, on accounts it opens
+ * itself: the fixtures above keep every figure they asserted on. Every flow figure is compared
+ * with what the same read said before the first adjustment, never against a constant.
+ */
+async function reconcileSuite(
+  userId: string,
+  scope: HarnessScope,
+  fellow: HarnessUser,
+): Promise<void> {
+  const today = todayInBogota();
+  const openedOn = shiftDate(today, -10);
+  const range = currentMonthRange();
+  const thisMonth = today.slice(0, 7);
+
+  const open = async (
+    name: string,
+    kind: "asset" | "liability",
+    currency: string,
+    amountMinor: number,
+    placement: "personal" | "group" = "personal",
+  ): Promise<string> => {
+    const { accountId } = await createAccount({
+      name,
+      kind,
+      subtype: kind === "asset" ? "bancaria" : "tarjeta",
+      ownerUserId: placement === "personal" ? userId : null,
+      groupId: placement === "group" ? scope.groupId : null,
+      isShared: placement === "group",
+      institution: null,
+      lastFour: null,
+      settlementCurrency: currency,
+      amountMinor,
+      balanceOn: openedOn,
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+
+  const cop = await open("Harness cuadre COP", "asset", "COP", 1_000_000);
+  const usd = await open("Harness cuadre USD", "asset", "USD", 0);
+  const card = await open("Harness cuadre tarjeta", "liability", "COP", 300_000);
+  const pot = await open("Harness cuadre fondo", "asset", "COP", 0, "group");
+  const closed = await open("Harness cuadre archivada", "asset", "COP", 0);
+  await archiveAccount({ accountId: closed });
+
+  // A spend on the account a budget narrows to, so "spent" has something an adjustment could leak into.
+  const spend = await createTransaction({
+    fromAccountId: cop,
+    toAccountId: null,
+    amountCents: 300_000,
+    occurredAt: today,
+    description: "Harness cuadre gasto",
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 300_000 }],
+    labelIds: [],
+  });
+  keep("transactions", spend.transactionId);
+  const { budgetId } = await createBudget({
+    ownerUserId: userId,
+    groupId: null,
+    categoryId: scope.categoryId,
+    accountId: cop,
+    labelId: null,
+    period: "monthly",
+    limitCents: 90_000_000,
+    thresholdPct: 80,
+    name: "Harness cuadre presupuesto",
+  });
+  keep("budgets", budgetId);
+
+  const snapshot = async () => {
+    const [flow, six, budgets, byCategory, contributions, exported] = await Promise.all([
+      getMonthlyFlow(range),
+      getSixMonthFlow(),
+      listBudgetsWithStatus(),
+      getExpensesByCategory(range),
+      getMemberContributions(range),
+      readExport({ entityKeys: ["transactions"] }),
+    ]);
+    return { flow, six, budgets, byCategory, contributions, exported: exported.transactions ?? [] };
+  };
+  const before = await snapshot();
+  const flowOf = (rows: Awaited<ReturnType<typeof getMonthlyFlow>>, currency: string) =>
+    rows.find((row) => row.currency === currency);
+
+  // Sheet reads, before anything is booked.
+  const derivedToday = await getReconcileSheet(cop, today);
+  const derivedYesterday = await getReconcileSheet(cop, shiftDate(today, -1));
+  assert(
+    next("The sheet's derived figure is the day's: opening + legs up to it, none after"),
+    derivedToday?.account.derivedCents === 700_000 &&
+      derivedYesterday?.account.derivedCents === 1_000_000,
+    `derived on ${today} = ${derivedToday?.account.derivedCents}, on the day before = ${derivedYesterday?.account.derivedCents}; expected 700000 and 1000000 (the spend is dated ${today})`,
+  );
+
+  // The unit is the history read alone, warmed once for the driver's connection.
+  await listAccountReconciliations(cop);
+  const unitBefore = roundTrips();
+  await listAccountReconciliations(cop);
+  const unit = roundTrips() - unitBefore;
+  const sheetBefore = roundTrips();
+  await getReconcileSheet(cop, today);
+  const sheetTrips = roundTrips() - sheetBefore;
+  assert(
+    next("The sheet costs two round trips, one per Promise.all read"),
+    unit > 0 && sheetTrips === unit * 2,
+    `${sheetTrips} round trips for the sheet, ${unit} for a single read`,
+  );
+
+  // Book two adjustments on the peso account in the current month: +1 200 000, then -800 000.
+  const up = await reconcileAccount({
+    accountId: cop,
+    reconciledOn: today,
+    realMagnitudeCents: 1_900_000,
+    expectedDerivedCents: 700_000,
+  });
+  const down = await reconcileAccount({
+    accountId: cop,
+    reconciledOn: today,
+    realMagnitudeCents: 1_100_000,
+    expectedDerivedCents: 1_900_000,
+  });
+  const zero = await reconcileAccount({
+    accountId: cop,
+    reconciledOn: today,
+    realMagnitudeCents: 1_100_000,
+    expectedDerivedCents: 1_100_000,
+  });
+  const usdUp = await reconcileAccount({
+    accountId: usd,
+    reconciledOn: today,
+    realMagnitudeCents: 50_000,
+    expectedDerivedCents: 0,
+  });
+  const potUp = await reconcileAccount({
+    accountId: pot,
+    reconciledOn: today,
+    realMagnitudeCents: 500_000,
+    expectedDerivedCents: 0,
+  });
+  assert(
+    next("reconcileAccount books a gap, signed, and reports it"),
+    up.ok && up.gapCents === 1_200_000 && down.ok && down.gapCents === -800_000 &&
+      zero.ok && zero.gapCents === 0 && usdUp.ok && potUp.ok,
+    `gaps ${[up, down, zero].map((r) => (r.ok ? r.gapCents : r.reason)).join(", ")}`,
+  );
+  const ids = [up, down, zero].flatMap((r) => (r.ok ? [r.id] : []));
+
+  const after = await snapshot();
+  const copBefore = flowOf(before.flow, "COP");
+  const copAfter = flowOf(after.flow, "COP");
+  const usdBefore = flowOf(before.flow, "USD");
+  const usdAfter = flowOf(after.flow, "USD");
+  // The pot's +500 000 is a COP adjustment too, so the peso row carries 400 000 + 500 000.
+  const COP_ADJUSTMENT = 400_000 + 500_000;
+
+  assert(
+    next("The month's income and expense leave adjustments out"),
+    copAfter?.incomeCents === (copBefore?.incomeCents ?? 0) &&
+      copAfter?.expenseCents === (copBefore?.expenseCents ?? 0),
+    `income ${copBefore?.incomeCents} -> ${copAfter?.incomeCents}, expense ${copBefore?.expenseCents} -> ${copAfter?.expenseCents}`,
+  );
+  assert(
+    next("The month's adjustment is its own signed sum"),
+    (copAfter?.adjustmentCents ?? 0) - (copBefore?.adjustmentCents ?? 0) === COP_ADJUSTMENT,
+    `adjustment ${copBefore?.adjustmentCents ?? 0} -> ${copAfter?.adjustmentCents}; expected +${COP_ADJUSTMENT}`,
+  );
+  assert(
+    next("The month's net leaves adjustments out"),
+    copAfter?.netCents === (copBefore?.netCents ?? 0),
+    `net ${copBefore?.netCents} -> ${copAfter?.netCents}`,
+  );
+
+  const monthRow = (rows: typeof after.six, currency: string, month: string) =>
+    rows.find((row) => row.currency === currency && row.monthStart.startsWith(month));
+  const sixOthers = after.six.every((row) => {
+    const prior = before.six.find(
+      (entry) => entry.currency === row.currency && entry.monthStart === row.monthStart,
+    );
+    return row.monthStart.startsWith(thisMonth) || row.adjustmentCents === (prior?.adjustmentCents ?? 0);
+  });
+  const sixNow = monthRow(after.six, "COP", thisMonth);
+  const sixWas = monthRow(before.six, "COP", thisMonth);
+  assert(
+    next("The six-month trend leaves adjustments out and carries them"),
+    sixNow?.incomeCents === sixWas?.incomeCents &&
+      sixNow?.expenseCents === sixWas?.expenseCents &&
+      (sixNow?.adjustmentCents ?? 0) - (sixWas?.adjustmentCents ?? 0) === COP_ADJUSTMENT &&
+      sixOthers,
+    `this month: income ${sixWas?.incomeCents} -> ${sixNow?.incomeCents}, expense ${sixWas?.expenseCents} -> ${sixNow?.expenseCents}, adjustment ${sixWas?.adjustmentCents} -> ${sixNow?.adjustmentCents}; other months unchanged = ${sixOthers}`,
+  );
+  assert(
+    next("A dollar account's adjustment lands in the dollar row only"),
+    (usdAfter?.adjustmentCents ?? 0) - (usdBefore?.adjustmentCents ?? 0) === 50_000 &&
+      usdAfter?.incomeCents === (usdBefore?.incomeCents ?? 0) &&
+      (copAfter?.adjustmentCents ?? 0) - (copBefore?.adjustmentCents ?? 0) === COP_ADJUSTMENT,
+    `usd adjustment ${usdBefore?.adjustmentCents ?? 0} -> ${usdAfter?.adjustmentCents}, cop +${(copAfter?.adjustmentCents ?? 0) - (copBefore?.adjustmentCents ?? 0)}`,
+  );
+
+  const budgetBefore = before.budgets.find((row) => row.id === budgetId);
+  const budgetAfter = after.budgets.find((row) => row.id === budgetId);
+  assert(
+    next("A budget's spent is untouched by an adjustment on its account"),
+    budgetBefore !== undefined && budgetBefore.spentCents === 300_000 &&
+      budgetAfter?.spentCents === budgetBefore.spentCents,
+    `spent ${budgetBefore?.spentCents} -> ${budgetAfter?.spentCents}`,
+  );
+  assert(
+    next("The category breakdown is untouched by an adjustment"),
+    JSON.stringify(after.byCategory) === JSON.stringify(before.byCategory),
+    `${before.byCategory.length} categories before, ${after.byCategory.length} after`,
+  );
+  assert(
+    next("Member contributions are untouched by an adjustment on a group account"),
+    JSON.stringify(after.contributions) === JSON.stringify(before.contributions),
+    `${before.contributions.length} rows before, ${after.contributions.length} after`,
+  );
+  assert(
+    next("The export carries adjustments as movements, signed by their legs"),
+    (() => {
+      const adjustmentRows = (name: string) =>
+        after.exported.filter(
+          (row) =>
+            row.description !== "Harness cuadre gasto" &&
+            (row.toAccount === name || row.fromAccount === name),
+        );
+      const copRows = adjustmentRows("Harness cuadre COP");
+      const gained = copRows.find((row) => row.toAccount === "Harness cuadre COP" && row.fromAccount === null);
+      const lost = copRows.find((row) => row.fromAccount === "Harness cuadre COP" && row.toAccount === null);
+      return (
+        after.exported.length === before.exported.length + 4 &&
+        gained?.amount === 1_200_000 &&
+        lost?.amount === 800_000
+      );
+    })(),
+    `${before.exported.length} transaction rows before, ${after.exported.length} after; expected +4 (up, down, dollar, pot; the zero gap books none)`,
+  );
+
+  // History.
+  const history = await listAccountReconciliations(cop);
+  const [newest, middle, oldest] = history;
+  assert(
+    next("The history derives «Según HomeFund» as counted minus gap"),
+    middle?.gapCents === -800_000 && middle.countedCents === 1_100_000 && middle.derivedCents === 1_900_000 &&
+      oldest?.derivedCents === 700_000 && newest?.gapCents === 0 && newest.transactionId === null &&
+      newest.derivedCents === 1_100_000,
+    `rows ${history.map((row) => `${row.derivedCents}/${row.countedCents}/${row.gapCents}`).join(" | ")}`,
+  );
+  assert(
+    next("The history lists the newest first"),
+    JSON.stringify(history.map((row) => row.id)) === JSON.stringify([...ids].reverse()),
+    `order ${history.map((row) => row.id.slice(0, 4)).join(",")} against ${[...ids].reverse().map((id) => id.slice(0, 4)).join(",")}`,
+  );
+
+  // Refusals, each leaving the count of rows where it was.
+  const countRows = async (accountId: string): Promise<number> => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from account_reconciliations where account_id = ${accountId}`;
+    return row.n;
+  };
+  const rowsBefore = await countRows(cop);
+  const stale = await reconcileAccount({
+    accountId: cop,
+    reconciledOn: today,
+    realMagnitudeCents: 2_000_000,
+    expectedDerivedCents: 1_100_001,
+  });
+  assert(
+    next("A stale derived figure is refused and nothing is written"),
+    !stale.ok && stale.reason === "stale" && (await countRows(cop)) === rowsBefore,
+    `${JSON.stringify(stale)}, rows ${rowsBefore} -> ${await countRows(cop)}`,
+  );
+
+  const tomorrow = shiftDate(today, 1);
+  const beforeOpen = shiftDate(openedOn, -1);
+  const [tomorrowSheet, openSheet, yesterdaySheet, closedSheet] = await Promise.all([
+    getReconcileSheet(cop, tomorrow),
+    getReconcileSheet(cop, beforeOpen),
+    getReconcileSheet(cop, shiftDate(today, -1)),
+    getReconcileSheet(closed, today),
+  ]);
+  const attempt = (accountId: string, on: string, sheet: typeof tomorrowSheet) =>
+    reconcileAccount({
+      accountId,
+      reconciledOn: on,
+      realMagnitudeCents: 10_000,
+      expectedDerivedCents: sheet?.account.derivedCents ?? 0,
+    });
+  const [future, early, late, archived, denied] = await Promise.all([
+    attempt(cop, tomorrow, tomorrowSheet),
+    attempt(cop, beforeOpen, openSheet),
+    attempt(cop, shiftDate(today, -1), yesterdaySheet),
+    attempt(closed, today, closedSheet),
+    asUser(fellow, () => reconcileAccount({
+      accountId: cop,
+      reconciledOn: today,
+      realMagnitudeCents: 10_000,
+      expectedDerivedCents: 1_100_000,
+    })),
+  ]);
+  assert(
+    next("Each refusal is mapped, with the day it names"),
+    !future.ok && future.reason === "future" &&
+      !early.ok && early.reason === "beforeOpening" && early.date === openedOn &&
+      !late.ok && late.reason === "beforeLatest" && late.date === today &&
+      !archived.ok && archived.reason === "archived" &&
+      !denied.ok && denied.reason === "denied" &&
+      (await countRows(cop)) === rowsBefore,
+    [future, early, late, archived, denied].map((r) => (r.ok ? "ok" : `${r.reason}${r.date ? `@${r.date}` : ""}`)).join(", "),
+  );
+
+  // A liability's magnitude is signed by its kind.
+  const cardSheet = await getReconcileSheet(card, today);
+  const owed = await reconcileAccount({
+    accountId: card,
+    reconciledOn: today,
+    realMagnitudeCents: 450_000,
+    expectedDerivedCents: cardSheet?.account.derivedCents ?? 0,
+  });
+  const counted = owed.ok
+    ? await readColumn<string>("account_reconciliations", "id", owed.id, "counted_balance_cents")
+    : undefined;
+  assert(
+    next("A card's typed magnitude is stored negative"),
+    owed.ok && counted === "-450000" && owed.gapCents === -150_000,
+    `counted_balance_cents = ${counted}, derived ${cardSheet?.account.derivedCents}, ${JSON.stringify(owed)}`,
+  );
+
+  // The listing and the write paths see the mark.
+  const adjustment = history.find((row) => row.gapCents === -800_000);
+  const listed = await listTransactions({ accountId: cop });
+  const markedRow = listed.find((row) => row.id === adjustment?.transactionId);
+  const spendRow = listed.find((row) => row.id === spend.transactionId);
+  assert(
+    next("The listing marks the adjustment and only it"),
+    markedRow?.reconciliationId === adjustment?.id && spendRow?.reconciliationId === null,
+    `adjustment row mark = ${markedRow?.reconciliationId}, spend mark = ${spendRow?.reconciliationId}`,
+  );
+
+  const adjustmentId = adjustment?.transactionId ?? randomUUID();
+  const edited = await updateTransaction({
+    transactionId: adjustmentId,
+    fromAccountId: cop,
+    toAccountId: null,
+    amountCents: 1,
+    occurredAt: today,
+    description: "editado",
+    splits: [{ categoryId: scope.categoryId, amountCents: 1 }],
+    labelIds: [],
+  });
+  const removed = await deleteTransaction({ transactionId: adjustmentId });
+  const kept = await readColumn<string>("transactions", "id", adjustmentId, "amount_cents");
+  const missing = await deleteTransaction({ transactionId: randomUUID() });
+  assert(
+    next("Editing or deleting an adjustment is refused with its own reason"),
+    edited === "adjustment" && removed === "adjustment" && kept === "800000" && missing === "missing",
+    `update = ${edited}, delete = ${removed}, amount_cents still ${kept}, unknown id = ${missing}`,
+  );
+
+  // Round trips of the dashboard and the reports read-models, against the sum of their parts.
+  const trips = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = roundTrips();
+    await run();
+    return roundTrips() - started;
+  };
+  await getReportsData();
+  const group = await getUserGroup();
+  const parts =
+    (await trips(() => getExpensesByCategory(range))) +
+    (await trips(() => getSixMonthFlow())) +
+    (await trips(() => getMemberContributions(range))) +
+    (await trips(() => getUserGroup())) +
+    (await trips(() => getSessionUser())) +
+    (group ? await trips(() => listMembers(group.id, { archived: false })) : 0);
+  const reportsTrips = await trips(() => getReportsData());
+  const flowTrips = await trips(() => getMonthlyFlow(range));
+  const sixTrips = await trips(() => getSixMonthFlow());
+  const readUnit = await trips(() => getMemberContributions(range));
+  assert(
+    next("The flow sums and the reports read keep their round trips"),
+    flowTrips === readUnit && sixTrips === readUnit && reportsTrips === parts,
+    `getMonthlyFlow ${flowTrips}, getSixMonthFlow ${sixTrips} against one read ${readUnit}; getReportsData ${reportsTrips} against its parts ${parts}`,
+  );
+}
+
+// Export -> import into a fresh scope reproduces every balance and keeps adjustments out of income
+// and expense (RF-50, RF-138). The import is `commitImport` itself, fed the rows `readExport` wrote.
+async function reimportSuite(userId: string, scope: HarnessScope): Promise<void> {
+  const today = todayInBogota();
+  const importer = await createMembershipFreeUser();
+  const prefix = "Harness reimport";
+
+  const open = async (name: string, kind: "asset" | "liability", amountMinor: number) => {
+    const { accountId } = await createAccount({
+      name,
+      kind,
+      subtype: kind === "asset" ? "bancaria" : "tarjeta",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor,
+      balanceOn: shiftDate(today, -10),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const savings = await open(`${prefix} ahorros`, "asset", 1_000_000);
+  const card = await open(`${prefix} tarjeta`, "liability", 300_000);
+
+  const spend = async (amountCents: number, occurredAt: string) => {
+    const { transactionId } = await createTransaction({
+      fromAccountId: savings,
+      toAccountId: null,
+      amountCents,
+      occurredAt,
+      description: `${prefix} gasto`,
+      externalRef: null,
+      splits: [{ categoryId: scope.categoryId, amountCents }],
+      labelIds: [],
+    });
+    keep("transactions", transactionId);
+  };
+  await spend(300_000, shiftDate(today, -5));
+  await reconcileAccount({
+    accountId: savings,
+    reconciledOn: shiftDate(today, -2),
+    realMagnitudeCents: 1_900_000,
+    expectedDerivedCents: 700_000,
+  });
+  await spend(100_000, today);
+  await reconcileAccount({
+    accountId: savings,
+    reconciledOn: today,
+    realMagnitudeCents: 1_700_000,
+    expectedDerivedCents: 1_800_000,
+  });
+  await reconcileAccount({
+    accountId: card,
+    reconciledOn: today,
+    realMagnitudeCents: 450_000,
+    expectedDerivedCents: -300_000,
+  });
+
+  // What a person would export: the fixture's own accounts and the movements that touch them.
+  const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
+  const sheetAccounts = (exported.accounts ?? []).filter((row) => String(row.name).startsWith(prefix));
+  const sheetMovements = (exported.transactions ?? []).filter(
+    (row) =>
+      String(row.fromAccount ?? "").startsWith(prefix) || String(row.toAccount ?? "").startsWith(prefix),
+  );
+
+  const pesos = (cents: number) => `${Math.trunc(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+  const placeholder = new Map(sheetAccounts.map((row) => [String(row.name), randomUUID()]));
+  const categoryPlaceholder = randomUUID();
+  const idOf = (name: unknown) => (name == null ? null : placeholder.get(String(name)) ?? null);
+
+  const input: CommitInput = {
+    members: [],
+    categories: [
+      {
+        status: "new",
+        index: 0,
+        sheetRow: 2,
+        externalRef: null,
+        placeholderId: categoryPlaceholder,
+        object: { name: `${prefix} categoria`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] },
+      },
+    ],
+    accounts: sheetAccounts.map((row, index) => ({
+      status: "new" as const,
+      index,
+      sheetRow: index + 2,
+      externalRef: row.externalRef as string | null,
+      placeholderId: placeholder.get(String(row.name)) ?? null,
+      object: {
+        name: String(row.name),
+        kind: row.kind as "asset" | "liability",
+        subtype: row.subtype as never,
+        placement: "personal" as const,
+        institution: null,
+        settlementCurrency: "COP" as const,
+        // A liability exports its debt signed; the form takes the magnitude.
+        amount: pesos(Math.abs(row.amount as number)),
+        balanceOn: String(row.balanceOn),
+      },
+    })),
+    recurringRules: [],
+    transactions: [],
+    adjustments: [],
+  };
+  sheetMovements.forEach((row, index) => {
+    const common = {
+      status: "new" as const,
+      index,
+      sheetRow: index + 2,
+      externalRef: row.externalRef as string | null,
+      placeholderId: null,
+    };
+    if ((row as Record<string, unknown>).adjustment === true) {
+      input.adjustments!.push({
+        ...common,
+        object: {
+          adjustment: true,
+          accountId: (idOf(row.fromAccount) ?? idOf(row.toAccount))!,
+          direction: row.fromAccount == null ? "up" : "down",
+          amount: pesos(row.amount as number),
+          occurredAt: String(row.occurredAt),
+        },
+      });
+    } else {
+      input.transactions.push({
+        ...common,
+        object: {
+          fromAccountId: idOf(row.fromAccount),
+          toAccountId: idOf(row.toAccount),
+          amount: pesos(row.amount as number),
+          occurredAt: String(row.occurredAt),
+          description: (row.description as string | null) ?? null,
+          externalRef: common.externalRef,
+          splits: [{ categoryId: categoryPlaceholder, amount: pesos(row.amount as number) }],
+          labelIds: [],
+        },
+      });
+    }
+  });
+
+  let imported = "ok";
+  try {
+    await asUser(importer, () =>
+      withUserDb((tx) => commitImport(tx, input, { userId: importer.id, groupId: null })),
+    );
+  } catch (error) {
+    imported = rootMessage(error);
+  }
+
+  const figures = (owner: string) =>
+    fixtureSql<{ name: string; balance: string; income: string; expense: string; adjusted: string }[]>`
+      select a.name,
+        private.account_settlement_balance_on(a.id, ${today}::date)::text as balance,
+        coalesce((select sum(t.amount_cents) from transactions t
+          where t.to_account_id = a.id and t.from_account_id is null and t.reconciliation_id is null), 0)::text as income,
+        coalesce((select sum(t.amount_cents) from transactions t
+          where t.from_account_id = a.id and t.to_account_id is null and t.reconciliation_id is null), 0)::text as expense,
+        coalesce((select sum(case when t.to_account_id = a.id then t.amount_cents else -t.amount_cents end)
+          from transactions t where t.reconciliation_id is not null
+          and (t.to_account_id = a.id or t.from_account_id = a.id)), 0)::text as adjusted
+      from accounts a where a.owner_user_id = ${owner} and a.name like ${prefix + "%"}
+      order by a.name`;
+  const [source, copy] = [await figures(userId), await figures(importer.id)];
+  const same = (key: "balance" | "income" | "expense" | "adjusted") =>
+    source.length === 2 && JSON.stringify(source.map((r) => r[key])) === JSON.stringify(copy.map((r) => r[key]));
+  const brief = (rows: typeof source) =>
+    rows.map((r) => `${r.name}: balance ${r.balance}, income ${r.income}, expense ${r.expense}, adjusted ${r.adjusted}`).join(" | ");
+
+  assert(
+    next("Export then import gives every account the balance it had"),
+    imported === "ok" && same("balance"),
+    `import ${imported}; source [${brief(source)}]; copy [${brief(copy)}]`,
+  );
+  assert(
+    next("A re-imported adjustment stays out of income and expense and is still an adjustment"),
+    imported === "ok" && same("income") && same("expense") && same("adjusted") &&
+      copy.find((r) => r.name.endsWith("ahorros"))?.adjusted === "1100000",
+    `source [${brief(source)}]; copy [${brief(copy)}]`,
+  );
+
+  const keys = async (owner: string) =>
+    (await fixtureSql<{ external_ref: string }[]>`
+      select t.external_ref from transactions t
+      join accounts a on a.id = coalesce(t.to_account_id, t.from_account_id)
+      where t.reconciliation_id is not null and t.owner_user_id = ${owner} and a.name like ${prefix + "%"}
+      order by t.external_ref`).map((r) => r.external_ref);
+  const [sourceKeys, copyKeys] = [await keys(userId), await keys(importer.id)];
+  assert(
+    next("A re-imported adjustment keeps the key its backup row carried"),
+    sourceKeys.length > 0 && copyKeys.length === sourceKeys.length &&
+      JSON.stringify(copyKeys) === JSON.stringify(sheetMovements.filter((r) => (r as Record<string, unknown>).adjustment === true).map((r) => r.externalRef).sort()),
+    `copy keys ${copyKeys.length}, source adjustments ${sourceKeys.length}`,
+  );
+}
+
 async function main(): Promise<void> {
   // Opened before the first identity, so a kill between the two still leaves a
   // registry row a reaper can find dead: `createHarnessUser` would open the same
@@ -3100,6 +3725,227 @@ async function main(): Promise<void> {
   await statementSuite(debt, scope);
   console.log("");
   await timingSuite();
+  console.log("");
+  await reconcileSuite(userId, scope, fellow);
+  console.log("");
+  await reimportSuite(userId, scope);
+  console.log("");
+  await roundTripSuite(scope, userId);
+  console.log("");
+  await weeklyBudgetSuite(scope, userId);
+  console.log("");
+  await ledgerGuardSuite(userId, scope);
+}
+
+// The screens' round-trip budgets after the performance pass: the shared form
+// options fan out inside ONE transaction, a movement edit pays one statement for
+// its cause and none when it is unchanged, and the movements list takes a limit.
+async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void> {
+  const today = todayInBogota();
+  const trips = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = roundTrips();
+    await run();
+    return roundTrips() - started;
+  };
+
+  // The first call of a lane opens its connection, which the driver counts too.
+  await listAccounts({ archived: false });
+  const single = await trips(() => listAccounts({ archived: false }));
+  await getTransactionFormOptions();
+  const form = await trips(() => getTransactionFormOptions());
+  // One transaction: the single read's BEGIN, settle and COMMIT once, plus the
+  // other six reads as statements. Seven transactions cost seven times `single`.
+  assert(
+    next("getTransactionFormOptions opens one transaction, not seven"),
+    form === single + 6,
+    `${form} round trips for the form options, ${single} for one read of them`,
+  );
+
+  const created = await createTransaction({
+    fromAccountId: scope.assetAccountId,
+    toAccountId: null,
+    amountCents: 1100,
+    occurredAt: today,
+    description: "Harness rendimiento",
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 1100 }],
+    labelIds: [],
+  });
+  keep("transactions", created.transactionId);
+  const edit = (causedByTransactionId?: string | null) =>
+    updateTransaction({
+      transactionId: created.transactionId,
+      fromAccountId: scope.assetAccountId,
+      toAccountId: null,
+      amountCents: 1100,
+      occurredAt: today,
+      description: "Harness rendimiento",
+      splits: [{ categoryId: scope.categoryId, amountCents: 1100 }],
+      labelIds: [],
+      causedByTransactionId,
+    });
+  await edit();
+  const bare = await trips(() => edit());
+  const unchanged = await trips(() => edit(null));
+  assert(
+    next("An edit that leaves the cause alone pays one statement for it, in its own transaction"),
+    unchanged === bare + 1,
+    `${unchanged} round trips with the cause sent, ${bare} without it`,
+  );
+
+  const other = await createTransaction({
+    fromAccountId: scope.assetAccountId,
+    toAccountId: null,
+    amountCents: 1200,
+    occurredAt: today,
+    description: "Harness causa",
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 1200 }],
+    labelIds: [],
+  });
+  keep("transactions", other.transactionId);
+  await edit(other.transactionId);
+  const set = await readColumn<string | null>(
+    "transactions",
+    "id",
+    created.transactionId,
+    "caused_by_transaction_id",
+  );
+  await edit(other.transactionId);
+  await edit(null);
+  const cleared = await readColumn<string | null>(
+    "transactions",
+    "id",
+    created.transactionId,
+    "caused_by_transaction_id",
+  );
+  assert(
+    next("An edit sets, keeps and clears the cause inside the update"),
+    set === other.transactionId && cleared === null,
+    `cause after setting = ${set}, after clearing = ${cleared}`,
+  );
+
+  const capped = await listTransactions({}, { limit: 1 });
+  const second = await listTransactions({}, { limit: 1, offset: 1 });
+  assert(
+    next("listTransactions honours a limit and an offset"),
+    capped.length === 1 && second.length <= 1 && second[0]?.id !== capped[0].id,
+    `${capped.length} rows at limit 1, offset 1 answered ${second[0]?.id ?? "none"} against ${capped[0]?.id}`,
+  );
+  // The movements screen caps the rows it draws but never its figures: a
+  // 2 001-row set answers a limit of 2 000 and the full count and net.
+  const SEEDED = 2001;
+  const marker = `Harness tope ${randomUUID()}`;
+  // One transaction: the split rule is checked at commit, so the movements and
+  // their splits must land together.
+  const seeded = await fixtureSql.begin(async (trx) => {
+    const rows = await trx<{ id: string }[]>`
+      insert into transactions (from_account_id, amount_cents, occurred_at, description, created_by, owner_user_id, group_id)
+      select a.id, 100, ${today}::date, ${marker}, ${userId}, a.owner_user_id, a.group_id
+      from accounts a, generate_series(1, ${SEEDED})
+      where a.id = ${scope.cashAccountId}
+      returning transactions.id
+    `;
+    await trx`
+      insert into transaction_splits (transaction_id, category_id, amount_cents)
+      select id, ${scope.categoryId}, 100 from transactions where description = ${marker}
+    `;
+    return rows;
+  });
+  for (const row of seeded) keep("transactions", row.id);
+  const [truth] = await fixtureSql<{ count: number; net: string }[]>`
+    select count(*)::int as count, (-sum(amount_cents))::text as net
+    from transactions where description = ${marker}
+  `;
+  const filter = { accountId: scope.cashAccountId };
+  const [drawn, totals] = await Promise.all([
+    listTransactions(filter, { limit: 2000 }),
+    getTransactionTotals(filter),
+  ]);
+  const [sql_] = await fixtureSql<{ count: number; net: string }[]>`
+    select count(*)::int as count,
+      coalesce(sum(case kind when 'income' then amount_cents when 'expense' then -amount_cents else 0 end), 0)::text as net
+    from transactions where from_account_id = ${scope.cashAccountId} or to_account_id = ${scope.cashAccountId}
+  `;
+  const netTotal = totals.nets.reduce((sum, n) => sum + n.netCents, 0);
+  assert(
+    next("A capped movements list keeps the full count and net"),
+    drawn.length === 2000 &&
+      totals.count === sql_.count &&
+      totals.count > 2000 &&
+      String(netTotal) === sql_.net &&
+      truth.count === SEEDED,
+    `${drawn.length} rows drawn, count ${totals.count} against ${sql_.count}, net ${netTotal} against ${sql_.net}`,
+  );
+}
+
+// A weekly budget on /planning/budgets spans the same Monday-to-Sunday week /planning
+// shows (RF-72): today's in the current month, the month's last day's in a past one.
+// Dates are fixed and the clock is passed in, so the proof holds on any run day.
+async function weeklyBudgetSuite(scope: HarnessScope, userId: string): Promise<void> {
+  const book = async (day: string, amountCents: number): Promise<void> => {
+    const { transactionId } = await createTransaction({
+      fromAccountId: scope.cashAccountId,
+      toAccountId: null,
+      amountCents,
+      occurredAt: day,
+      description: "Harness semana gasto",
+      externalRef: null,
+      splits: [{ categoryId: scope.categoryId, amountCents }],
+      labelIds: [],
+    });
+    keep("transactions", transactionId);
+  };
+  const { budgetId } = await createBudget({
+    ownerUserId: userId,
+    groupId: null,
+    categoryId: scope.categoryId,
+    accountId: scope.cashAccountId,
+    labelId: null,
+    period: "weekly",
+    limitCents: 90_000_000,
+    thresholdPct: 80,
+    name: "Harness semana presupuesto",
+  });
+  keep("budgets", budgetId);
+
+  const spentOn = async (today: string, month: string): Promise<number> => {
+    const rows = await listBudgetsWithStatus(budgetAnchor(month, today), { today });
+    return rows.find((row) => row.id === budgetId)?.spentCents ?? -1;
+  };
+
+  // 2026-10-15 is a Thursday: its week is 12-18 Oct; the month's first week is 28 Sep-4 Oct.
+  const midWeek = 700_00;
+  const firstWeek = 3_000_00;
+  const lastWeek = 90_000_00;
+  // Other fixtures may book on the same account in these weeks, so each case reads a delta.
+  const base = [
+    await spentOn("2026-10-15", "2026-10"),
+    await spentOn("2026-10-15", "2026-09"),
+    await spentOn("2026-10-31", "2026-10"),
+  ];
+  await book("2026-10-14", midWeek);
+  await book("2026-10-02", firstWeek);
+  await book("2026-10-28", lastWeek);
+
+  assert(
+    next("A weekly budget in the current month spans today's week, not the month's first"),
+    (await spentOn("2026-10-15", "2026-10")) - base[0] === midWeek,
+    `spent ${(await spentOn("2026-10-15", "2026-10")) - base[0]}, expected ${midWeek} (12-18 Oct, not 28 Sep-4 Oct = ${firstWeek})`,
+  );
+  assert(
+    next("A weekly budget in a past month spans the week of the month's last day"),
+    (await spentOn("2026-10-15", "2026-09")) - base[1] === firstWeek &&
+      budgetAnchor("2026-09", "2026-10-15") === "2026-09-30",
+    `spent ${(await spentOn("2026-10-15", "2026-09")) - base[1]}, anchor ${budgetAnchor("2026-09", "2026-10-15")}`,
+  );
+  // 2026-10-31 is a Saturday: the month's last day still sits in the week of 26 Oct-1 Nov.
+  assert(
+    next("On the month's last day the weekly window is still that day's week"),
+    budgetAnchor("2026-10", "2026-10-31") === "2026-10-31" &&
+      (await spentOn("2026-10-31", "2026-10")) - base[2] === lastWeek,
+    `anchor ${budgetAnchor("2026-10", "2026-10-31")}, spent ${(await spentOn("2026-10-31", "2026-10")) - base[2]}, expected ${lastWeek}`,
+  );
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile
@@ -3121,3 +3967,388 @@ void (async () => {
 
   report();
 })();
+
+// The currency of an account is fixed once it has history, a backup keeps each row's currency, a
+// foreign purchase on an asset account is confirmed like a card's, and a recurring rule's cursor never
+// moves back over what it booked. Each is driven through the app's own function and read back.
+async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<void> {
+  const today = todayInBogota();
+  const prefix = "Harness guard";
+
+  const open = async (
+    name: string,
+    settlementCurrency: "COP" | "USD",
+    amountMinor = 1_000_000,
+  ) => {
+    const { accountId } = await createAccount({
+      name,
+      kind: "asset",
+      subtype: "bancaria",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency,
+      amountMinor,
+      balanceOn: shiftDate(today, -30),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const edit = (accountId: string, settlementCurrency: "COP" | "USD", name: string) =>
+    updateAccount({
+      accountId,
+      name,
+      subtype: "bancaria",
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency,
+      amountMinor: 1_000_000,
+      balanceOn: shiftDate(today, -30),
+    });
+  const currencyOf = (accountId: string) =>
+    readColumn<string>("accounts", "id", accountId, "settlement_currency");
+
+  // 1. An account's currency holds once it has a movement or a count.
+  const fresh = await open(`${prefix} vacia`, "COP");
+  await edit(fresh, "USD", `${prefix} vacia`);
+  const emptyChanged = await currencyOf(fresh);
+  assert(
+    next("An account with no history may change its settlement currency"),
+    emptyChanged === "USD",
+    `currency after the edit = ${emptyChanged}`,
+  );
+
+  const used = await open(`${prefix} usada`, "COP");
+  const spent = await createTransaction({
+    fromAccountId: used,
+    toAccountId: null,
+    amountCents: 10_000,
+    occurredAt: shiftDate(today, -3),
+    description: `${prefix} gasto`,
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 10_000 }],
+    labelIds: [],
+  });
+  keep("transactions", spent.transactionId);
+  let movementCode = "none";
+  try {
+    await edit(used, "USD", `${prefix} usada`);
+  } catch (error) {
+    movementCode = pgErrorCode(error) ?? "none";
+  }
+  assert(
+    next("An account with a movement refuses a new settlement currency"),
+    movementCode === "AC001" && (await currencyOf(used)) === "COP",
+    `sqlstate ${movementCode}, currency ${await currencyOf(used)}`,
+  );
+
+  const action = await updateAccountAction({
+    accountId: used,
+    name: `${prefix} usada`,
+    kind: "asset",
+    subtype: "bancaria",
+    isShared: false,
+    institution: "",
+    lastFour: "",
+    settlementCurrency: "USD",
+    amount: "10000",
+    balanceOn: shiftDate(today, -30),
+  });
+  assert(
+    next("updateAccountAction answers a locked currency with its own key"),
+    action?.serverError === "accounts.errors.currencyLocked" && (await currencyOf(used)) === "COP",
+    `serverError = ${action?.serverError ?? "none"}`,
+  );
+  assert(
+    next("The locked-currency message exists in both languages"),
+    typeof en.accounts.errors.currencyLocked === "string" &&
+      typeof es.accounts.errors.currencyLocked === "string",
+    "accounts.errors.currencyLocked",
+  );
+
+  await edit(used, "COP", `${prefix} renombrada`);
+  assert(
+    next("An account with history still takes every other edit"),
+    (await readColumn<string>("accounts", "id", used, "name")) === `${prefix} renombrada`,
+    "renamed with the currency unchanged",
+  );
+
+  const counted = await open(`${prefix} contada`, "COP");
+  await reconcileAccount({
+    accountId: counted,
+    reconciledOn: shiftDate(today, -1),
+    realMagnitudeCents: 1_000_000,
+    expectedDerivedCents: 1_000_000,
+  });
+  let countCode = "none";
+  try {
+    await edit(counted, "USD", `${prefix} contada`);
+  } catch (error) {
+    countCode = pgErrorCode(error) ?? "none";
+  }
+  assert(
+    next("An account with a count and no movement refuses a new settlement currency"),
+    countCode === "AC001" && (await currencyOf(counted)) === "COP",
+    `sqlstate ${countCode}, currency ${await currencyOf(counted)}`,
+  );
+
+  // 3. A foreign purchase on an asset account is confirmed with what was charged (RF-123).
+  const debit = await open(`${prefix} debito`, "COP", 100_000_000);
+  const purchase = await createTransaction({
+    fromAccountId: debit,
+    toAccountId: null,
+    amountCents: 10_000,
+    currency: "USD",
+    counterAmountCents: 40_000_000,
+    counterIsEstimate: true,
+    occurredAt: shiftDate(today, -2),
+    description: `${prefix} compra en dolares`,
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 10_000 }],
+    labelIds: [],
+  });
+  keep("transactions", purchase.transactionId);
+  const balanceOf = async (accountId: string) =>
+    (await fixtureSql<{ balance: string }[]>`
+      select private.account_settlement_balance_on(${accountId}, ${today}::date)::text as balance`)[0].balance;
+  const before = await balanceOf(debit);
+  const confirmed = await recordBilledAmount({
+    transactionId: purchase.transactionId,
+    accountId: debit,
+    currency: "COP",
+    billedCents: 41_500_000,
+  });
+  const after = await balanceOf(debit);
+  const [row] = await fixtureSql<{ counter: string; estimate: boolean }[]>`
+    select counter_amount_cents::text as counter, counter_is_estimate as estimate
+    from transactions where id = ${purchase.transactionId}`;
+  assert(
+    next("A foreign purchase on an asset account is confirmed with the amount charged"),
+    confirmed && row.counter === "41500000" && row.estimate === false &&
+      before === "100000000" && after === "58500000",
+    `confirmed ${confirmed}, counter ${row.counter}, estimate ${row.estimate}, balance ${before} then ${after}`,
+  );
+  const again = await recordBilledAmount({
+    transactionId: purchase.transactionId,
+    accountId: debit,
+    currency: "COP",
+    billedCents: 1,
+  });
+  assert(
+    next("A confirmed purchase is not confirmed twice"),
+    again === false,
+    `second confirmation answered ${again}`,
+  );
+
+  // 5. A recurring rule's cursor never moves back over a period it booked.
+  const { recurringRuleId } = await createRecurringRule({
+    fromAccountId: scope.assetAccountId,
+    toAccountId: null,
+    amountCents: 1_000,
+    categoryId: scope.categoryId,
+    description: `${prefix} semanal`,
+    frequency: "weekly",
+    intervalN: 1,
+    dayOfMonth: null,
+    nextRunOn: shiftDate(today, -14),
+    endsOn: null,
+  });
+  keep("recurring_rules", recurringRuleId);
+  await fixtureSql`select private.run_due_recurring_rules(${userId}::uuid)`;
+  const booked = await fixtureSql<{ id: string; occurred_at: string }[]>`
+    select id, occurred_at::text from transactions where recurring_rule_id = ${recurringRuleId} order by occurred_at`;
+  for (const generated of booked) keep("transactions", generated.id);
+  const rule = (nextRunOn: string) => ({
+    id: recurringRuleId,
+    fromAccountId: scope.assetAccountId,
+    toAccountId: null,
+    amountCents: 1_000,
+    categoryId: scope.categoryId,
+    description: `${prefix} semanal`,
+    frequency: "weekly" as const,
+    intervalN: 1,
+    dayOfMonth: null,
+    nextRunOn,
+    endsOn: null,
+  });
+  const tryNext = async (nextRunOn: string) => {
+    try {
+      await updateRecurringRule(rule(nextRunOn));
+      return "ok";
+    } catch (error) {
+      return pgErrorCode(error) ?? "none";
+    }
+  };
+  const rewound = await tryNext(booked[0]?.occurred_at ?? "");
+  const atLast = await tryNext(booked[booked.length - 1]?.occurred_at ?? "");
+  const [cursor] = await fixtureSql<{ next_run_on: string }[]>`
+    select next_run_on::text from recurring_rules where id = ${recurringRuleId}`;
+  assert(
+    next("A recurring rule refuses a next run at or before the last period it booked"),
+    booked.length === 3 && rewound === "RR001" && atLast === "RR001" && cursor.next_run_on === shiftDate(today, 7),
+    `${booked.length} booked, rewind ${rewound}, at last ${atLast}, cursor ${cursor.next_run_on}`,
+  );
+  const forward = await tryNext(shiftDate(today, 14));
+  await fixtureSql`select private.run_due_recurring_rules(${userId}::uuid)`;
+  const [still] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where recurring_rule_id = ${recurringRuleId}`;
+  assert(
+    next("A recurring rule may still skip ahead, and the cron books nothing twice"),
+    forward === "ok" && still.n === 3,
+    `forward ${forward}, ${still.n} movements`,
+  );
+  const ruleAction = await updateRecurringRuleAction({
+    ...rule(booked[0].occurred_at),
+    amount: "10",
+  });
+  assert(
+    next("updateRecurringRuleAction answers a rewound cursor with its own key"),
+    ruleAction?.serverError === "recurringRules.errors.nextRunOnBooked",
+    `serverError = ${ruleAction?.serverError ?? "none"}`,
+  );
+  assert(
+    next("The rewound-cursor message exists in both languages"),
+    typeof en.recurringRules.errors.nextRunOnBooked === "string" &&
+      typeof es.recurringRules.errors.nextRunOnBooked === "string",
+    "recurringRules.errors.nextRunOnBooked",
+  );
+
+  // 2. A backup keeps each row's currency, and refuses a row its account does not settle in.
+  const usdAccount = await open(`${prefix} dolares`, "USD", 500_000);
+  const copCard = await open(`${prefix} peso`, "COP");
+  const usdSpend = await createTransaction({
+    fromAccountId: usdAccount,
+    toAccountId: null,
+    amountCents: 2_500,
+    occurredAt: shiftDate(today, -4),
+    description: `${prefix} gasto usd`,
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 2_500 }],
+    labelIds: [],
+  });
+  keep("transactions", usdSpend.transactionId);
+  const foreignOnPeso = await createTransaction({
+    fromAccountId: copCard,
+    toAccountId: null,
+    amountCents: 10_000,
+    currency: "USD",
+    counterAmountCents: 40_000_000,
+    counterIsEstimate: false,
+    occurredAt: shiftDate(today, -4),
+    description: `${prefix} compra en dolares`,
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 10_000 }],
+    labelIds: [],
+  });
+  keep("transactions", foreignOnPeso.transactionId);
+
+  const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
+  const sheetAccounts = (exported.accounts ?? []).filter((r) => String(r.name).startsWith(prefix));
+  const sheetMovements = (exported.transactions ?? []).filter(
+    (r) => String(r.fromAccount ?? "").startsWith(prefix) || String(r.toAccount ?? "").startsWith(prefix),
+  );
+  const exportedUsd = sheetAccounts.find((r) => r.name === `${prefix} dolares`);
+  assert(
+    next("The export writes each account's settlement currency"),
+    exportedUsd?.settlementCurrency === "USD" &&
+      sheetAccounts.find((r) => r.name === `${prefix} peso`)?.settlementCurrency === "COP",
+    `usd account exported as ${exportedUsd?.settlementCurrency}`,
+  );
+
+  const importer = await createMembershipFreeUser();
+  const categoryName = String(
+    sheetMovements.find((r) => r.description === `${prefix} gasto usd`)?.category,
+  );
+  const fileCategory: RawRow = {
+    externalRef: null,
+    name: categoryName,
+    kind: "expense",
+    parent: null,
+    color: CATEGORY_COLORS[0],
+  };
+  const fileAccounts = sheetAccounts as unknown as RawRow[];
+  const fileMovements = sheetMovements as unknown as RawRow[];
+  const importScope = await asUser(importer, () => readImportScope());
+  const records = (entity: string): RawRow[] =>
+    entity === "accounts" ? fileAccounts : entity === "categories" ? [fileCategory] : fileMovements;
+  const refs = buildEffectiveRefs(importScope, records);
+  const run = (entity: "accounts" | "categories" | "transactions", raw: RawRow, index: number) =>
+    processRow(entity, raw, index, index + 2, refs, importScope.existingRefs[entity]);
+
+  const category = run("categories", fileCategory, 0);
+  const accountRows = fileAccounts.map((raw, index) => run("accounts", raw, index));
+  const movementRows = fileMovements.map((raw, index) => run("transactions", raw, index));
+  const rowOf = (description: string) =>
+    movementRows[fileMovements.findIndex((raw) => raw.description === description)];
+  const usdRow = rowOf(`${prefix} gasto usd`);
+  const foreignRow = rowOf(`${prefix} compra en dolares`);
+  const keys = (row: { errors: { key: string }[] }) => row.errors.map((e) => e.key).join(",");
+  assert(
+    next("A backup row in the account's own currency passes, whatever that currency is"),
+    category.errors.length === 0 && accountRows.every((r) => r.errors.length === 0) && usdRow.errors.length === 0,
+    `category [${keys(category)}], accounts [${accountRows.map(keys)}], usd movement [${keys(usdRow)}]`,
+  );
+  assert(
+    next("A foreign purchase on a peso account is refused by the import, not booked as pesos"),
+    foreignRow.errors.some((e) => e.key === "transactions.errors.currencyMismatch" && e.column === "currency") &&
+      foreignRow.object === null,
+    `errors [${keys(foreignRow)}]`,
+  );
+  const blank = run("transactions", { ...fileMovements.find((r) => r.description === `${prefix} gasto usd`)!, currency: null }, 9);
+  assert(
+    next("A blank currency cell on a foreign account is refused, not read as pesos"),
+    blank.errors.some((e) => e.key === "errors.foreignCurrencyUnsupported"),
+    `errors [${keys(blank)}]`,
+  );
+
+  const input: CommitInput = {
+    members: [],
+    categories: [{ ...category, object: category.object as never }],
+    accounts: accountRows.map((r) => ({ ...r, object: r.object as never })),
+    recurringRules: [],
+    transactions: [{ ...usdRow, object: usdRow.object as never }],
+    adjustments: [],
+  };
+  let imported = "ok";
+  try {
+    await asUser(importer, () =>
+      withUserDb((tx) => commitImport(tx, input, { userId: importer.id, groupId: null })),
+    );
+  } catch (error) {
+    imported = rootMessage(error);
+  }
+  const restored = await fixtureSql<{ name: string; currency: string; opening: string; movement: string | null; mcurrency: string | null }[]>`
+    select a.name, a.settlement_currency as currency, a.initial_balance_cents::text as opening,
+      (select t.amount_cents::text from transactions t where t.from_account_id = a.id limit 1) as movement,
+      (select t.currency from transactions t where t.from_account_id = a.id limit 1) as mcurrency
+    from accounts a where a.owner_user_id = ${importer.id} order by a.name`;
+  const usdCopy = restored.find((r) => r.name === `${prefix} dolares`);
+  assert(
+    next("A restored dollar account keeps its currency, its opening and its movement in dollars"),
+    imported === "ok" && usdCopy?.currency === "USD" && usdCopy.opening === "500000" &&
+      usdCopy.movement === "2500" && usdCopy.mcurrency === "USD" &&
+      restored.find((r) => r.name === `${prefix} peso`)?.currency === "COP",
+    `import ${imported}; ${JSON.stringify(restored)}`,
+  );
+
+  const freshScope = await asUser(importer, () => readImportScope());
+  const freshRefs = buildEffectiveRefs(freshScope, (entity) => (entity === "accounts" ? fileAccounts : []));
+  const usdRaw = fileAccounts.find((r) => r.name === `${prefix} dolares`)!;
+  const recurrent = processRow(
+    "accounts",
+    { ...usdRaw, settlementCurrency: "COP" },
+    0,
+    2,
+    freshRefs,
+    freshScope.existingRefs.accounts,
+  );
+  assert(
+    next("A file row cannot change the currency of an account the scope already holds"),
+    recurrent.status === "update" &&
+      recurrent.errors.some((e) => e.key === "accounts.errors.currencyLocked" && e.column === "settlementCurrency"),
+    `status ${recurrent.status}, errors [${keys(recurrent)}]`,
+  );
+}

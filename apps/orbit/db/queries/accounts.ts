@@ -6,7 +6,7 @@ import { insertRow } from "@/db/insert-row";
 import { accounts } from "@/db/schema";
 import type { Account } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb } from "@/db/session";
+import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 
 type AccountKind = Account["kind"];
@@ -41,6 +41,7 @@ export type AccountRow = {
 // round trip, as before.
 export async function listAccounts(
   options: { archived: boolean },
+  outerTx?: Transaction,
 ): Promise<AccountRow[]> {
   // The outer references are written qualified, once each: drizzle renders an
   // embedded column bare inside a projection, and a bare `id` binds to the view
@@ -60,7 +61,7 @@ export async function listAccounts(
     from account_balances b where b.id = ${outerId}
   ), '[]'::jsonb)`;
 
-  return withUserDb(async (tx) => {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx
       .select({
         id: accounts.id,

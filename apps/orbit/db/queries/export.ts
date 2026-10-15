@@ -128,6 +128,7 @@ type ColumnView =
       readonly key: string;
       readonly field: string;
       readonly ref?: { readonly entity: "accounts" | "categories" };
+      readonly flag?: true;
     }
   | {
       readonly key: string;
@@ -266,6 +267,11 @@ function toExportRows<E extends SheetEntity>(
 
       const value = row[column.field];
 
+      if (column.flag) {
+        cell[column.key] = value == null ? null : true;
+        continue;
+      }
+
       if (column.ref) {
         // A reference presents the referenced row's name; a null id (a one-sided
         // movement) or a name outside the caller's scope yields null.
@@ -316,6 +322,8 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
           entity,
           input.from,
           input.to,
+          // An adjustment is a movement like any other here: the list shows it (RF-118) and a
+          // re-import must reproduce each reconciled account's balance (RF-50).
           entity === "transactions" ? listed : [],
         ),
       ),

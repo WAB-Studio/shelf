@@ -1,7 +1,8 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
+  accountReconciliations,
   accounts,
   categories,
   groupMembers,
@@ -12,11 +13,13 @@ import {
 } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
+import { insertRow } from "@/db/insert-row";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
 import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import type { CreateAccountInput } from "@/lib/validation/account";
+import type { ImportedAdjustment } from "@/lib/validation/account-reconciliation";
 import type { CreateCategoryInput } from "@/lib/validation/category";
 import type { CreateMemberInput } from "@/lib/validation/member";
 import type { CreateRecurringRuleInput } from "@/lib/validation/recurring-rule";
@@ -101,6 +104,8 @@ export type CommitInput = {
   accounts: CommitRow<CreateAccountInput>[];
   recurringRules: CommitRow<CreateRecurringRuleInput>[];
   transactions: CommitRow<CreateTransactionInput>[];
+  // A backup's reconciliation adjustments (RF-50): booked as reconciliations, never as movements.
+  adjustments?: CommitRow<ImportedAdjustment>[];
 };
 
 export type CommitOutcome = { inserted: number; updated: number };
@@ -194,15 +199,13 @@ export async function commitImport(
   // Then accounts, so a movement or rule that names one can link to its real id.
   const accountMap = await commitAccounts(tx, input.accounts, scope);
 
-  // Reject before a single recurring rule or transaction lands (RF-121):
-  // `toCents` below still reads every amount as pesos, which only an account
-  // settling in BASE_CURRENCY makes correct.
+  // Reject before a single recurring rule lands (RF-121): a rule's generator
+  // books in the account's currency, which the sheet does not carry. A transaction
+  // row is held to its account's currency by the pipeline and, at write time, by
+  // `assert_transaction_currency`.
   await assertBaseCurrencyAccounts(
     tx,
-    [
-      ...input.recurringRules.map((row) => row.object),
-      ...input.transactions.map((row) => row.object),
-    ],
+    input.recurringRules.map((row) => row.object),
     accountMap,
   );
 
@@ -210,8 +213,10 @@ export async function commitImport(
   // account and category. After remap, no written reference may be one of these.
   const placeholders = new Set<string>([...accountMap.keys(), ...categoryMap.keys()]);
 
-  await commitRecurringRules(tx, input.recurringRules, accountMap, categoryMap, placeholders);
-  await commitTransactions(tx, input.transactions, accountMap, categoryMap, placeholders);
+  await commitRecurringRules(tx, input.recurringRules, accountMap, categoryMap, placeholders, scope);
+  await commitTransactions(tx, input.transactions, accountMap, categoryMap, placeholders, scope);
+
+  await commitAdjustments(tx, input.adjustments ?? [], accountMap, placeholders);
 
   for (const bucket of [
     input.members,
@@ -219,6 +224,7 @@ export async function commitImport(
     input.accounts,
     input.recurringRules,
     input.transactions,
+    input.adjustments ?? [],
   ]) {
     for (const row of bucket) count(row);
   }
@@ -368,6 +374,7 @@ async function commitAccounts(
     "is_shared",
     "initial_balance_cents",
     "initial_balance_on",
+    "settlement_currency",
     "external_ref",
   ];
 
@@ -390,6 +397,7 @@ async function commitAccounts(
           scoped.isShared,
           row.object.kind === "liability" ? -cents : cents,
           row.object.balanceOn,
+          row.object.settlementCurrency,
           row.externalRef,
         ];
       }),
@@ -435,9 +443,8 @@ function link(value: string | null, map: Map<string, string>): string | null {
 
 // The settlement currency of every account a recurring rule or transaction row names,
 // read back in one round trip now that a file-new account has a real row (RF-121). A
-// file-new account is never foreign here — `commitAccounts` writes none of them a
-// settlement currency of their own, so the column default (BASE_CURRENCY) holds — but
-// the check still walks it like any other, per row, and stops at the first mismatch.
+// file-new account carries the settlement currency its sheet row named — but the
+// check still walks it like any other, per row, and stops at the first mismatch.
 async function assertBaseCurrencyAccounts(
   tx: Transaction,
   rows: { fromAccountId: string | null; toAccountId: string | null }[],
@@ -480,6 +487,7 @@ async function commitRecurringRules(
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
+  scope: CommitScope,
 ): Promise<void> {
   if (rows.length === 0) return;
 
@@ -549,8 +557,26 @@ async function commitRecurringRules(
         nextRunOn: row.object.nextRunOn,
         endsOn: row.object.endsOn ?? null,
       })
-      .where(eq(recurringRules.externalRef, row.externalRef!));
+      .where(
+        and(
+          eq(recurringRules.externalRef, row.externalRef!),
+          scopeMatch(recurringRules.groupId, recurringRules.ownerUserId, scope),
+        ),
+      );
   }
+}
+
+// An `external_ref` is unique per scope, not globally: leading the filter with a
+// scope column lets the `(group_id, external_ref)` / `(owner_user_id, external_ref)`
+// unique indexes serve the lookup instead of a scan per updated row. The trigger
+// resolves a new row's scope from its accounts, so a row may sit in either.
+function scopeMatch(
+  groupColumn: Parameters<typeof eq>[0],
+  ownerColumn: Parameters<typeof eq>[0],
+  scope: CommitScope,
+): SQL {
+  const own = eq(ownerColumn, scope.userId);
+  return (scope.groupId ? or(eq(groupColumn, scope.groupId), own) : own) as SQL;
 }
 
 // A new row's write, resolved once: the real account and category ids a placeholder
@@ -595,6 +621,7 @@ async function commitTransactions(
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
+  scope: CommitScope,
 ): Promise<void> {
   const newRows = rows.filter((row) => row.status === "new");
   const updateRows = rows.filter((row) => row.status === "update");
@@ -628,7 +655,12 @@ async function commitTransactions(
           // confirms it, while a manual or already-reviewed row's stamp stays put (RF-31).
           reviewedAt: sql`case when ${transactions.recurringRuleId} is not null and ${transactions.reviewedAt} is null then now() else ${transactions.reviewedAt} end`,
         })
-        .where(eq(transactions.externalRef, row.externalRef!))
+        .where(
+          and(
+            eq(transactions.externalRef, row.externalRef!),
+            scopeMatch(transactions.groupId, transactions.ownerUserId, scope),
+          ),
+        )
         .returning({ id: transactions.id });
 
       if (!updated) continue;
@@ -758,4 +790,47 @@ async function writeSplits(
   await tx.execute(
     sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents) values ${values}`,
   );
+}
+
+// Reconciliation refusals a backup row can meet: the day, the opening, the latest count, an archived account.
+const ADJUSTMENT_REFUSALS = new Set(["RC001", "RC002", "RC003", "RC004"]);
+
+/**
+ * Books each backup adjustment as the reconciliation that produces it (RF-137, RF-138), after
+ * every ordinary movement has landed. The count is the account's balance that day plus the
+ * exported gap, so the database books exactly that gap and the balance re-derives equal (RF-50).
+ * In day order, since a reconciliation may not predate the account's latest. A row that already
+ * exists in scope (`update`) is left alone: a reconciliation is final.
+ */
+async function commitAdjustments(
+  tx: Transaction,
+  rows: CommitRow<ImportedAdjustment>[],
+  accountMap: Map<string, string>,
+  placeholders: Set<string>,
+): Promise<void> {
+  const ordered = rows
+    .filter((row) => row.status === "new")
+    .sort((a, b) => a.object.occurredAt.localeCompare(b.object.occurredAt) || a.index - b.index);
+
+  for (const row of ordered) {
+    try {
+      const accountId = link(row.object.accountId, accountMap)!;
+      assertLinked(accountId, placeholders);
+      const gap = toCents(row.object.amount) * (row.object.direction === "up" ? 1 : -1);
+
+      await insertRow(tx, accountReconciliations, {
+        accountId,
+        reconciledOn: row.object.occurredAt,
+        countedBalanceCents: sql`private.account_settlement_balance_on(${accountId}, ${row.object.occurredAt}::date) + ${gap}::bigint`,
+        externalRef: row.externalRef,
+      });
+    } catch (error) {
+      const code = pgErrorCode(error);
+      const reasonKey =
+        code !== undefined && ADJUSTMENT_REFUSALS.has(code)
+          ? "data.import.errors.adjustmentRefused"
+          : transactionReasonKey(error);
+      throw rowFailure("transactions", row.sheetRow, reasonKey, error);
+    }
+  }
 }

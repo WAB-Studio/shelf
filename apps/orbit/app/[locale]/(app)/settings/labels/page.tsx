@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { LabelsScreen } from "@/components/labels/labels-screen";
@@ -27,7 +27,6 @@ export default async function LabelsPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   // The screen presents both scopes (RF-70), so the caller's group is resolved
   // first: it names the second scope the reads below key off. The group reads

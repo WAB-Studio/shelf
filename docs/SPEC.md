@@ -72,7 +72,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-80** — A revolving card exposes its available credit — its limit less its derived balance — its statement cut-off and payment due day, and its minimum payment for the period. Interest, when charged, is a real movement, so the balance stays derived.
 - [x] **RF-83** — Consolidated debt view: total owed across all debts, each card's available credit, the summed estimated monthly interest, and the next payment due — each debt's minimum.
 - [x] **RF-117** — The consolidated debt view shows the summed available credit across the liability accounts that carry a credit limit.
-- [ ] **RF-129** — Every account, asset or liability, keeps a statement history: one immutable record per period with its bounds, the closing balance the statement printed and the opening balance, credits and debits it printed. The difference between that closing balance and the balance derived from the account's own movements, in its own settlement currency, is derived on read and shown, never stored.
+- [x] **RF-129** — Every account, asset or liability, keeps a statement history: one immutable record per period with its bounds, the closing balance the statement printed and the opening balance, credits and debits it printed. The difference between that closing balance and the balance derived from the account's own movements, in its own settlement currency, is derived on read and shown, never stored.
 - [x] **RF-130** — A liability's statement record also carries what the statement charged for that period: interest, fees and the minimum, as printed. A closed period's statement history shows this charged figure, or that none was recorded; it never estimates a closed period. This does not change how the app estimates the current, still-open period's interest (RF-79).
 - [x] **RF-131** — A liability's next payment due derives from its latest statement's cut-off and due dates when one exists; the cut-off and due days on its terms are used only until a statement exists.
 - [ ] **RF-136** — A purchase may be deferred into a number of instalments. Its whole amount joins the balance the month it is billed, never fractioned; what the instalment fractions is that line's contribution to the minimum payment. A payment covering the balance extinguishes the plan without penalty, and the statement publishes it already extinguished. The app never concludes on its own that a purchase was deferred: it proposes it and a person confirms.
@@ -92,7 +92,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-24** — Edit and delete transactions.
 - [x] **RF-25** — Every transaction records which user created it.
 - [x] **RF-69** — Every income or expense splits into one or more (category, amount_cents) rows summing to its amount; a single-category income or expense is one split. A transfer has no splits and no category.
-- [ ] **RF-132** — A movement may name the movement that caused it. A caused charge is shown with its cause and is removed with it.
+- [x] **RF-132** — A movement may name the movement that caused it. A caused charge is shown with its cause and is removed with it.
 - [ ] **RF-133** — A movement whose counterparty is not known is recorded with the side that is known and waits for review; it counts in every balance, and a person completes it later by naming the other account.
 
 #### Categories
@@ -290,6 +290,9 @@ erDiagram
     accounts ||--o| debt_terms : "if liability"
     accounts ||--o{ installment_plans : "schedules"
     accounts ||--o{ account_statements : "closes"
+    accounts ||--o{ account_reconciliations : "reconciles"
+    account_reconciliations ||--o| transactions : "adjusts (one-legged, when the gap is not zero)"
+    app_users ||--o{ account_reconciliations : "counts"
     transactions ||--o{ transaction_sources : "references"
     account_statements ||--o{ transaction_sources : "names"
     installment_plans ||--o{ installment_lines : "generates"
@@ -423,6 +426,15 @@ erDiagram
         timestamptz closed_at
     }
 
+    account_reconciliations {
+        uuid id PK
+        uuid account_id FK
+        date reconciled_on
+        bigint counted_balance_cents "a person's input, signed like the account"
+        uuid created_by FK
+        timestamptz created_at
+    }
+
     categories {
         uuid id PK
         uuid owner_user_id FK "null = group category"
@@ -453,6 +465,7 @@ erDiagram
         boolean awaiting_counterparty "true until the ingest-unknown side is named"
         text external_ref "import reference"
         uuid caused_by_transaction_id FK "null unless another movement caused this one"
+        uuid reconciliation_id FK "null unless it is a reconciliation's adjustment"
         uuid created_by FK
     }
 
@@ -680,7 +693,8 @@ Rules the model must always guarantee, regardless of how they are implemented:
   accounts it touches, never chosen by the user.
 - Every income or expense has at least one split, whose amounts sum to the
   transaction's amount and whose category shares the transaction's scope and
-  kind. A transfer has no splits and no category.
+  kind, except a reconciliation's adjustment. A transfer and an adjustment have
+  no splits and no category.
 - A movement may name the movement that caused it; deleting the cause deletes
   the charge, and a movement is never its own cause.
 - A category belongs to exactly one of a user or a group (XOR), mirroring an
@@ -723,6 +737,10 @@ Rules the model must always guarantee, regardless of how they are implemented:
   computed on read and never stored.
 - A movement carries at most one source reference per account leg; a
   statement's rows are replaced as a unit.
+- A reconciliation is immutable; its adjustment is the one movement marked with
+  it, one-legged, in the settlement currency, with no split, and counts in no
+  income or expense total and no budget.
+- The counted figure is a person's input; the derived balance is never stored.
 - A group's `cash_mode` is `shared` (a single group cash account) or
   `per_member` (one cash account per member).
 - Money is an integer number of cents.

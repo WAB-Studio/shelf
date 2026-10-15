@@ -49,7 +49,13 @@ import {
   OFFERED_CURRENCIES,
 } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
-import { amountToInput, deriveRate, formatMoney, parseAmount } from "@/lib/money";
+import {
+  amountToInput,
+  convertMinor,
+  deriveRate,
+  formatMoney,
+  parseAmount,
+} from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   acceptDeliverySchema,
@@ -509,7 +515,7 @@ export function MovementForm({
       setRateUnavailable(false);
       form.setValue(
         "counterAmount",
-        amountToInput(Math.round(amountMinor * data.rate), foreign),
+        amountToInput(convertMinor(amountMinor, data.rate), foreign),
         { shouldValidate: true },
       );
     },
@@ -783,7 +789,11 @@ export function MovementForm({
                   weight="medium"
                   style={{ fontVariantNumeric: "tabular-nums" }}
                 >
-                  {`1 ${currency} = ${format.number(rate, RATE_FORMAT)} ${foreign}`}
+                  {t("rateLine", {
+                    currency,
+                    rate: format.number(rate, RATE_FORMAT),
+                    foreign: foreign ?? "",
+                  })}
                 </Text>
               </Flex>
               <Text size="1" color="gray">

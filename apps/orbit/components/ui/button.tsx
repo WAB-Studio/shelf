@@ -13,7 +13,7 @@ import styles from "./button.module.css";
 // The one door onto Radix Themes' two buttons, so a screen that needs the floor
 // asks for it here instead of drawing one.
 type TapProp = {
-  // Holds the control to 32px on both sides, which is what a ghost variant
+  // Holds the control to 44px on both sides, which is what a ghost variant
   // otherwise falls under.
   // A text label inside a table cell is not a control the floor applies to: the
   // row it sits in is the tap target, so the ledger's title link stays as tall

@@ -144,6 +144,7 @@ test("offers no hand-over on a row that has nowhere to hand it", async ({ page }
   // three actions it always had and gains nothing.
   await expect(page.getByRole("menu").getByRole("menuitem")).toHaveText([
     common.edit,
+    messages.accounts.reconcile,
     common.archive,
     common.delete,
   ]);

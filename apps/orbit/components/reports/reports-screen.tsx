@@ -12,6 +12,7 @@ import {
   Text,
 } from "@/components/ui";
 import type { BarChartDatum } from "@/components/ui";
+import type { CategoryExpense } from "@/db/queries/reports/expenses-by-category";
 import type { MonthFlow } from "@/db/queries/reports/monthly-flow";
 import type { ReportsData } from "@/db/queries/reports/reports-screen";
 import type { MemberContributionNamed } from "@/db/queries/reports/reports-screen";
@@ -54,35 +55,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           <Flex direction="column" gap="3" asChild>
             <section>
               <Heading as="h2" size="4">{t("byCategoryTitle")}</Heading>
-              {expensesByCategory.length === 0 ? (
-                <Text size="2" color="gray">
-                  {t("byCategoryEmpty")}
-                </Text>
-              ) : (
-                byCurrency(expensesByCategory).map(([currency, rows]) => (
-                  <Flex key={currency} direction="column" gap="3">
-                    <Text size="2" color="gray">
-                      {t("inCurrency", { currency })}
-                    </Text>
-                    {rows.map((row) => (
-                      <Flex key={row.categoryId} align="center" gap="3">
-                        <CategoryTile color={row.color} size={28} />
-                        <Text as="div" size="3" style={{ flex: 1, minWidth: 0 }} truncate>
-                          {row.name}
-                        </Text>
-                        <Text size="3" weight="medium">
-                          <Money
-                            minor={row.totalCents}
-                            currency={row.currency}
-                            signed={false}
-                            size="inherit"
-                          />
-                        </Text>
-                      </Flex>
-                    ))}
-                  </Flex>
-                ))
-              )}
+              <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} />
             </section>
           </Flex>
 
@@ -143,35 +116,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
             <div className={styles.lowerRow}>
               <div className={styles.card}>
                 <Heading as="h2" size="4">{t("byCategoryTitle")}</Heading>
-                {expensesByCategory.length === 0 ? (
-                  <Text size="2" color="gray">
-                    {t("byCategoryEmpty")}
-                  </Text>
-                ) : (
-                  byCurrency(expensesByCategory).map(([currency, rows]) => (
-                    <Flex key={currency} direction="column" gap="3">
-                      <Text size="2" color="gray">
-                        {t("inCurrency", { currency })}
-                      </Text>
-                      {rows.map((row) => (
-                        <Flex key={row.categoryId} align="center" gap="3">
-                          <CategoryTile color={row.color} size={28} />
-                          <Text as="div" size="3" style={{ flex: 1, minWidth: 0 }} truncate>
-                            {row.name}
-                          </Text>
-                          <Text size="3" weight="medium">
-                            <Money
-                              minor={row.totalCents}
-                              currency={row.currency}
-                              signed={false}
-                              size="inherit"
-                            />
-                          </Text>
-                        </Flex>
-                      ))}
-                    </Flex>
-                  ))
-                )}
+                <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} />
               </div>
 
               <div className={styles.card}>
@@ -219,6 +164,84 @@ function byCurrency<T extends { currency: CurrencyCode }>(
   }
 
   return [...groups];
+}
+
+// The expenses by category, one band per currency, each closed by that
+// currency's «Descuadre del mes» line when the month has one (RF-124). A currency
+// whose only figure is its adjustment still gets a band to say what it counts.
+function ExpenseBands({
+  expenses,
+  months,
+}: {
+  expenses: CategoryExpense[];
+  months: MonthFlow[];
+}) {
+  const t = useTranslations("reports");
+
+  // The window's last month per currency; the chart never draws the adjustment.
+  const adjustments = new Map<CurrencyCode, MonthFlow>();
+  for (const [currency, rows] of byCurrency(months)) {
+    const last = rows[rows.length - 1];
+    if (last && last.adjustmentCents !== 0) adjustments.set(currency, last);
+  }
+
+  const bands = new Map<CurrencyCode, CategoryExpense[]>(byCurrency(expenses));
+  for (const currency of adjustments.keys()) {
+    if (!bands.has(currency)) bands.set(currency, []);
+  }
+
+  if (bands.size === 0) {
+    return (
+      <Text size="2" color="gray">
+        {t("byCategoryEmpty")}
+      </Text>
+    );
+  }
+
+  return [...bands].map(([currency, rows]) => {
+    const adjustment = adjustments.get(currency);
+
+    return (
+      <Flex key={currency} direction="column" gap="3">
+        <Text size="2" color="gray">
+          {t("inCurrency", { currency })}
+        </Text>
+        {rows.map((row) => (
+          <Flex key={row.categoryId} align="center" gap="3">
+            <CategoryTile color={row.color} size={28} />
+            <Text as="div" size="3" style={{ flex: 1, minWidth: 0 }} truncate>
+              {row.name}
+            </Text>
+            <Text size="3" weight="medium">
+              <Money
+                minor={row.totalCents}
+                currency={row.currency}
+                signed={false}
+                size="inherit"
+              />
+            </Text>
+          </Flex>
+        ))}
+        {adjustment && (
+          <Flex align="center" gap="3">
+            <Box asChild flexGrow="1" minWidth="0">
+              <Text as="div" size="3" truncate>
+                {t("monthAdjustment")}
+              </Text>
+            </Box>
+            <Text size="3" weight="medium">
+              <Money
+                minor={adjustment.adjustmentCents}
+                currency={adjustment.currency}
+                signed="always"
+                size="inherit"
+              />
+            </Text>
+          </Flex>
+        )}
+      </Flex>
+    );
+  });
 }
 
 // One currency's six-month trend: its own chart and its own legend, both naming

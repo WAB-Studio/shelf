@@ -12,7 +12,10 @@ export type MonthlyFlow = {
   currency: CurrencyCode;
   incomeCents: number;
   expenseCents: number;
+  // Income minus expense; «Descuadre» stays out of it (RF-138).
   netCents: number;
+  // Every reconciliation adjustment in the window, signed: + into an account, − out of one.
+  adjustmentCents: number;
 };
 
 export type MonthFlow = {
@@ -20,6 +23,7 @@ export type MonthFlow = {
   currency: CurrencyCode;
   incomeCents: number;
   expenseCents: number;
+  adjustmentCents: number;
 };
 
 // What a window with no movement reads as. A fund that has not moved yet still
@@ -30,7 +34,9 @@ const EMPTY_CURRENCIES: CurrencyCode[] = [BASE_CURRENCY];
 /**
  * Income, expense and net for one half-open window, one row per currency, in ONE
  * aggregate read (RF-88, RNF-09). A transfer is never summed (RF-19): only the
- * `income` and `expense` generated kinds feed the two totals. `currency` joins
+ * `income` and `expense` generated kinds feed the two totals, and a reconciliation
+ * adjustment — one-legged, so `income` or `expense` by its kind — rides the same
+ * scan as its own signed sum, never inside either (RF-138). `currency` joins
  * the `group by` as a HashAggregate over the same tuples — the movement is
  * counted in the currency it happened in and no row adds two of them (RF-124).
  * `occurred_at` is compared as a `YYYY-MM-DD` string against string bounds,
@@ -46,11 +52,14 @@ export async function getMonthlyFlow(range: {
       currency: string;
       income_cents: string;
       expense_cents: string;
+      adjustment_cents: string;
     }>(sql`
       select
         currency,
-        coalesce(sum(amount_cents) filter (where kind = 'income'), 0) as income_cents,
-        coalesce(sum(amount_cents) filter (where kind = 'expense'), 0) as expense_cents
+        coalesce(sum(amount_cents) filter (where kind = 'income' and reconciliation_id is null), 0) as income_cents,
+        coalesce(sum(amount_cents) filter (where kind = 'expense' and reconciliation_id is null), 0) as expense_cents,
+        coalesce(sum(case when kind = 'income' then amount_cents else -amount_cents end)
+          filter (where reconciliation_id is not null), 0) as adjustment_cents
       from transactions
       where occurred_at >= ${range.start} and occurred_at < ${range.endExclusive}
       group by currency
@@ -63,6 +72,7 @@ export async function getMonthlyFlow(range: {
         incomeCents: 0,
         expenseCents: 0,
         netCents: 0,
+        adjustmentCents: 0,
       }));
     }
 
@@ -76,6 +86,7 @@ export async function getMonthlyFlow(range: {
         incomeCents,
         expenseCents,
         netCents: incomeCents - expenseCents,
+        adjustmentCents: Number(row.adjustment_cents),
       };
     });
   });
@@ -103,12 +114,15 @@ export async function getSixMonthFlow(): Promise<MonthFlow[]> {
       currency: string;
       income_cents: string;
       expense_cents: string;
+      adjustment_cents: string;
     }>(sql`
       select
         to_char(occurred_at, 'YYYY-MM') as month_key,
         currency,
-        coalesce(sum(amount_cents) filter (where kind = 'income'), 0) as income_cents,
-        coalesce(sum(amount_cents) filter (where kind = 'expense'), 0) as expense_cents
+        coalesce(sum(amount_cents) filter (where kind = 'income' and reconciliation_id is null), 0) as income_cents,
+        coalesce(sum(amount_cents) filter (where kind = 'expense' and reconciliation_id is null), 0) as expense_cents,
+        coalesce(sum(case when kind = 'income' then amount_cents else -amount_cents end)
+          filter (where reconciliation_id is not null), 0) as adjustment_cents
       from transactions
       where occurred_at >= ${sixMonthStart} and occurred_at < ${endExclusive}
       group by to_char(occurred_at, 'YYYY-MM'), currency
@@ -134,6 +148,7 @@ export async function getSixMonthFlow(): Promise<MonthFlow[]> {
             currency,
             incomeCents: Number(row?.income_cents ?? 0),
             expenseCents: Number(row?.expense_cents ?? 0),
+            adjustmentCents: Number(row?.adjustment_cents ?? 0),
           };
         }),
     );

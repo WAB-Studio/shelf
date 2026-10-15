@@ -54,6 +54,9 @@ type FieldColumn<Model> = {
   readonly field: keyof Model & string;
   readonly money?: MoneyBoundary;
   readonly ref?: { readonly entity: RefEntity };
+  // The cell says only whether `field` is set (TRUE or blank), never its value: a reconciliation id
+  // means nothing after a restore, the fact that the row is an adjustment does.
+  readonly flag?: true;
 };
 
 // A cell with no backing `$inferSelect` column: the export derives it from a
@@ -125,7 +128,8 @@ const accountRowFields = createAccountSchema.extend({ externalRef: externalRefSc
 export const accountRowSchema = z
   .object({
     ...accountRowFields.shape,
-    settlementCurrency: accountCurrencySchema.default(BASE_CURRENCY),
+    // A blank cell is a sheet from before the column, or a template row nobody filled.
+    settlementCurrency: accountCurrencySchema.nullish().transform((value) => value ?? BASE_CURRENCY),
   })
   .pipe(accountRowFields);
 export type AccountRow = z.infer<typeof accountRowSchema>;
@@ -195,6 +199,11 @@ export const transactionRowSchema = z.object({
     .trim()
     .max(200, { error: "transactions.errors.descriptionTooLong" })
     .nullable(),
+  // TRUE marks a reconciliation adjustment (RF-137, RF-138): the import books it as one, never as
+  // income or expense. Blank for every other movement.
+  adjustment: z.literal(true).nullish(),
+  // Blank in a sheet written before the column existed: the account's own currency then.
+  currency: accountCurrencySchema.nullish(),
 });
 export type TransactionRow = z.infer<typeof transactionRowSchema>;
 
@@ -213,6 +222,7 @@ export const accountSheetDescriptor = {
     { key: "institution", field: "institution" },
     { key: "amount", field: "initialBalanceCents", money: moneyBoundary },
     { key: "balanceOn", field: "initialBalanceOn" },
+    { key: "settlementCurrency", field: "settlementCurrency" },
   ],
   rowSchema: accountRowSchema,
 } satisfies SheetDescriptor<AccountModel, typeof accountRowSchema>;
@@ -263,10 +273,10 @@ export const recurringRuleSheetDescriptor = {
 // Splits and labels are nested, not flat cells: a later import module bridges
 // them, so they carry no column here and stay out of the flat row schema.
 //
-// `currency` names what the row's `amount` is written in (RF-121, RF-124): read-only
-// here, since the row schema below never declares it — an import still books every
-// row in BASE_CURRENCY, correct only when the accounts it names settle in it, so a
-// re-import drops the cell rather than acting on it.
+// `currency` names what the row's `amount` is written in (RF-121, RF-124). The import
+// books a row in its account's own currency and never converts, so a row whose cell
+// differs from the account it names is refused: a foreign purchase on a peso card
+// carries a second amount the sheet does not hold.
 export const transactionSheetDescriptor = {
   entity: "transactions",
   refField: "externalRef",
@@ -279,6 +289,7 @@ export const transactionSheetDescriptor = {
     { key: "category", synthetic: true, ref: { entity: "categories" } },
     { key: "occurredAt", field: "occurredAt" },
     { key: "description", field: "description" },
+    { key: "adjustment", field: "reconciliationId", flag: true },
   ],
   rowSchema: transactionRowSchema,
 } satisfies SheetDescriptor<TransactionModel, typeof transactionRowSchema>;

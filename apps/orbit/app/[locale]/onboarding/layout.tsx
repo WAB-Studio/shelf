@@ -1,6 +1,6 @@
 import { ChevronLeft } from "lucide-react";
 import { hasLocale } from "next-intl";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { Box, Flex, IconButton } from "@/components/ui";
@@ -15,7 +15,6 @@ export default async function OnboardingLayout(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   const t = await getTranslations("onboarding");
 

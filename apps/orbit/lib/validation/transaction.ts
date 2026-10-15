@@ -461,7 +461,7 @@ export const createTransactionSchema = z
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 
 export const updateTransactionSchema = z
-  .object({ transactionId: z.uuid(), ...transactionFields })
+  .object({ transactionId: z.uuid({ error: "errors.notFound" }), ...transactionFields })
   .superRefine(requireAnAccount)
   .superRefine(refineEstimate)
   .superRefine(refineSplits)
@@ -470,7 +470,7 @@ export const updateTransactionSchema = z
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 
 export const deleteTransactionSchema = z.object({
-  transactionId: z.uuid(),
+  transactionId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type DeleteTransactionInput = z.infer<typeof deleteTransactionSchema>;
@@ -480,7 +480,7 @@ export type DeleteTransactionInput = z.infer<typeof deleteTransactionSchema>;
 // action's write and the DB's own writable-scope policy are the only judges
 // of whether it may land.
 export const completeCounterpartySchema = z.object({
-  transactionId: z.uuid(),
+  transactionId: z.uuid({ error: "errors.notFound" }),
   accountId: z.uuid({ error: "transactions.errors.accountInvalid" }),
 });
 

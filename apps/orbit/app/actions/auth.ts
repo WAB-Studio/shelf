@@ -7,17 +7,12 @@ import { z } from "zod";
 import { redirect } from "@/i18n/navigation";
 import { env } from "@/lib/env";
 import { ActionError } from "@/lib/errors";
+import { isInternalPath } from "@/lib/internal-path";
 import { actionClient, authActionClient } from "@/lib/safe-action";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { signInSchema } from "@/lib/validation/auth";
 
 const POST_LOGIN_REDIRECT_MAX_AGE = 60 * 15;
-
-// A path, never a URL. `//host` and `/\host` are protocol-relative: a browser
-// reads them as another origin, which would make the login an open redirect.
-function isInternalPath(value: string): boolean {
-  return value.startsWith("/") && !/^\/[/\\]/.test(value);
-}
 
 /**
  * Sends the sign-in link (RF-01). The bind argument carries the destination the

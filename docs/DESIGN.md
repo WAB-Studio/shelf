@@ -17,8 +17,8 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   Add `xs`, `sm`, `md`, `lg` or `xl` only for what changes above it.
 - Treat the narrow viewport as the base case, never as a fallback.
 - A screen is done only once it holds at the narrow viewport: no horizontal
-  overflow, no overlapping controls, no tap target under 32 px on its shorter side.
-- Hold the floor at 32 px: it is Radix Themes' own default control height.
+  overflow, no overlapping controls, no tap target under 44 px on its shorter side.
+- Hold the floor at 44 px (decided by the user 2026-10-15, raised from 32 px). Enforce it in the `components/ui` primitives, never in a screen.
 - `TapTarget` in `components/ui` owns that floor for a link's content.
 
 ## Navigation
@@ -63,7 +63,7 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   and reads «Cuadró»; «Neto del mes» stays income − expense with «Descuadre del mes» beside it; «Descuadre» shows on the month
   card and in reports only when not zero, and as rows in the movements list, never in the six-month chart; the history lives in
   the «Cuadrar» dialog; a reconciliation is final (no undo, no day before the latest, a mistake is corrected by reconciling
-  again); the export leaves adjustments out in this slice; the real figure is typed as a magnitude, its sign from the account's kind.
+  again); the export carries adjustments as movements, like the list (decided 2026-10-15, RF-50 and RF-118); the real figure is typed as a magnitude, its sign from the account's kind.
 - **Boards approved by the user, 2026-10-15:** the 14 reconciliation boards (B1–B12) on the HomeFund canvas,
   https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj.
 
@@ -74,6 +74,15 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - **Only the owner unshares a shared account** (security review M1).
 - **Touch targets: 44 px minimum**, raised from 32 px, in `components/ui`.
 - **«fondo», never «grupo»**, for the shared fund on every screen; «Propietario», never «Líder».
+
+## Decisions of 2026-10-15: after the cuadre critic, by the user
+
+- **The export keeps adjustments, flagged in the «Descuadre» column**, so a restored backup keeps every reconciliation. A total
+  made by hand filters that column.
+- **A real figure below zero is typed with a minus sign** («-5000»): an overdrawn asset or an overpaid card. No switch, no new
+  control; one line of help under the field. Replaces «typed as a magnitude» above for that case. Not built yet.
+- **«Gastos» and «Ingresos» in /movements leave adjustments out.** They show in «Todos» and under a fourth option «Descuadre» of
+  the type filter. Not built yet.
 
 ## Decisions of 2026-10-15 (pending list), by the user
 

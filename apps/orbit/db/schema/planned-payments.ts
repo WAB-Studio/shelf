@@ -81,6 +81,19 @@ export const plannedPayments = finances.table(
       .where(sql`${table.groupId} is not null`),
     index("planned_payments_due_date_idx").on(table.dueDate),
     index("planned_payments_settled_transaction_id_idx").on(table.settledTransactionId),
+    // Parent deletes check these foreign keys; without an index each one scans this table.
+    index("planned_payments_from_account_id_idx")
+      .on(table.fromAccountId)
+      .where(sql`${table.fromAccountId} is not null`),
+    index("planned_payments_to_account_id_idx")
+      .on(table.toAccountId)
+      .where(sql`${table.toAccountId} is not null`),
+    index("planned_payments_category_id_idx")
+      .on(table.categoryId)
+      .where(sql`${table.categoryId} is not null`),
+    index("planned_payments_created_by_idx")
+      .on(table.createdBy)
+      .where(sql`${table.createdBy} is not null`),
     // Universal read inside the group: your own personal payments, plus every payment of the group you belong to.
     pgPolicy("planned_payments_select_member", {
       for: "select",

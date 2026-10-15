@@ -40,11 +40,11 @@
   box-shadow: var(--shadow-2);
 }
 
-/* The 32px floor Radix's own controls hold. */
+/* The 44px floor Radix's own controls hold. */
 .button {
   flex: 0 0 auto;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 /* The copied and failed reports are announced, never painted: the glyph is the

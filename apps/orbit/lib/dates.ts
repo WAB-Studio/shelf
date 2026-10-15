@@ -154,3 +154,11 @@ export function periodRange(
       return monthRange(`${reference.slice(0, 7)}-01`);
   }
 }
+
+// The day `/planning/budgets` windows its budgets around for a browsed `YYYY-MM`:
+// today in the current month, so a weekly row is today's week as on `/planning`,
+// else the month's last day.
+export function budgetAnchor(month: string, today: string = todayInBogota()): string {
+  if (month >= today.slice(0, 7)) return today;
+  return addCivilDays(shiftMonthStart(`${month}-01`, 1), -1);
+}

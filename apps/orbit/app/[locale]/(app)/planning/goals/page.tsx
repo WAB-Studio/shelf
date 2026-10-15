@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { GoalsScreen } from "@/components/planning/goals-screen";
@@ -27,7 +27,6 @@ export default async function GoalsPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   // The archived tab lists exactly the goals the active one leaves out (RF-120).
   const { tab } = await props.searchParams;

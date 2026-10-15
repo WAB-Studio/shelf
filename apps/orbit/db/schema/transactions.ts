@@ -15,6 +15,7 @@ import {
 import { authenticatedRole, authUid } from "drizzle-orm/supabase";
 
 import { finances } from "./_schema";
+import { accountReconciliations } from "./account-reconciliations";
 import { accounts } from "./accounts";
 import { appUsers } from "./app-users";
 import { groups } from "./groups";
@@ -66,6 +67,10 @@ export const transactions = finances.table(
     // The movement that produced this one — a tax or a fee a transfer generated (RF-132). Self-
     // referencing, so the foreign key is declared below, one hop only: nothing here reads a chain.
     causedByTransactionId: uuid(),
+    // The reconciliation this movement adjusts the ledger for (RF-137, RF-138). Written only by the
+    // trigger that books it — no grant names the column — and it is what reports read to keep the
+    // adjustment out of every income, expense and budget figure; `kind` still derives from the legs.
+    reconciliationId: uuid().references(() => accountReconciliations.id, { onDelete: "cascade" }),
     createdBy: uuid()
       .notNull()
       .references(() => appUsers.id, { onDelete: "restrict" }),
@@ -114,6 +119,15 @@ export const transactions = finances.table(
       "transactions_caused_by_not_self",
       sql`${table.causedByTransactionId} is null or ${table.causedByTransactionId} <> ${table.id}`,
     ),
+    // An adjustment touches one account, in its own settlement currency, so no second amount.
+    check(
+      "transactions_adjustment_one_leg",
+      sql`${table.reconciliationId} is null or (num_nonnulls(${table.fromAccountId}, ${table.toAccountId}) = 1 and ${table.counterAmountCents} is null)`,
+    ),
+    // A reconciliation books at most one movement.
+    uniqueIndex("transactions_reconciliation_id_unique")
+      .on(table.reconciliationId)
+      .where(sql`${table.reconciliationId} is not null`),
     index("transactions_occurred_at_idx").on(table.occurredAt),
     // `account_balances` sums each side of an account with no scope column in the
     // predicate, so the scope-leading composites below cannot serve it; without
@@ -125,6 +139,18 @@ export const transactions = finances.table(
       .on(table.toAccountId)
       .where(sql`to_account_id is not null`),
     index("transactions_created_by_idx").on(table.createdBy),
+    // The layout reads the caller's newest movement on every route (`getLastUsedAccountId`).
+    index("transactions_created_by_recent_idx").on(
+      table.createdBy,
+      table.occurredAt.desc(),
+      table.createdAt.desc(),
+    ),
+    // The order every movement list sorts by, so a `limit` stops early instead of sorting the ledger.
+    index("transactions_recent_idx").on(table.occurredAt.desc(), table.createdAt.desc(), table.id),
+    // `countUnreviewedGenerated` and the unreviewed filter: generated movements still awaiting a look.
+    index("transactions_unreviewed_generated_idx")
+      .on(table.id)
+      .where(sql`${table.recurringRuleId} is not null and ${table.reviewedAt} is null`),
     index("transactions_recurring_rule_id_idx").on(table.recurringRuleId),
     index("transactions_caused_by_idx")
       .on(table.causedByTransactionId)
@@ -162,16 +188,18 @@ export const transactions = finances.table(
       to: authenticatedRole,
       withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId}))`,
     }),
+    // An adjustment is refused here, never by a trigger: the harness deletes ledgers as the owner
+    // role, and a trigger would strand its rows.
     pgPolicy("transactions_update_writable", {
       for: "update",
       to: authenticatedRole,
-      using: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId}))`,
+      using: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and ${table.reconciliationId} is null`,
       withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId}))`,
     }),
     pgPolicy("transactions_delete_writable", {
       for: "delete",
       to: authenticatedRole,
-      using: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId}))`,
+      using: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and ${table.reconciliationId} is null`,
     }),
   ],
 );

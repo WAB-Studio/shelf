@@ -13,9 +13,8 @@ import { movementFiltersSchema } from "@/lib/validation/transaction";
 import { routing } from "@/i18n/routing";
 
 // ExcelJS writes with Node streams and zlib, so the workbook build stays on the
-// Node runtime; the read is user-scoped, so nothing here is prerendered.
+// Node runtime.
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 const SPREADSHEET_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

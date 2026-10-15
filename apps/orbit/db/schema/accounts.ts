@@ -100,6 +100,13 @@ export const accounts = finances.table(
       using: sql`(select private.can_write_account(${table.id}))`,
       withCheck: sql`(select private.can_write_account(${table.id}))`,
     }),
+    // The leader re-shares a group account a leader un-shared; `can_write_account` is false for it.
+    pgPolicy("accounts_update_leader_reshare", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`(${table.groupId} is not null and not ${table.isShared} and (select private.is_group_leader(${table.groupId})))`,
+      withCheck: sql`(${table.groupId} is not null and (select private.is_group_leader(${table.groupId})))`,
+    }),
     pgPolicy("accounts_delete_writable", {
       for: "delete",
       to: authenticatedRole,

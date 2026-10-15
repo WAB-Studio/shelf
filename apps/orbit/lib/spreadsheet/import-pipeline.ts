@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   readImportScope,
   type ImportScope,
+  type ScopedAccount,
   type ScopedCategory,
   type ScopedEntity,
 } from "@/db/queries/import-preview";
@@ -15,6 +16,7 @@ import { ActionError } from "@/lib/errors";
 import { centsToPesos } from "@/lib/money";
 import { SHEET_ENTITIES, sheetDescriptors, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { parseWorkbook, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
+import { importedAdjustmentSchema } from "@/lib/validation/account-reconciliation";
 import { createAccountSchema } from "@/lib/validation/account";
 import { createCategorySchema } from "@/lib/validation/category";
 import { createMemberSchema } from "@/lib/validation/member";
@@ -40,6 +42,12 @@ const CATEGORY_KIND_MISMATCH = "data.import.errors.categoryKindMismatch";
 // this module's `data.import.errors` namespace: the same key names the same reason
 // wherever a pesos-only path meets an account outside BASE_CURRENCY.
 const FOREIGN_CURRENCY_UNSUPPORTED = "errors.foreignCurrencyUnsupported";
+const ADJUSTMENT_ONE_ACCOUNT = "data.import.errors.adjustmentOneAccount";
+// The row names a currency its account does not settle in: the import books in the account's own
+// and holds no second amount, so it refuses instead of re-denominating (RF-50, RF-121).
+const ROW_CURRENCY_MISMATCH = "transactions.errors.currencyMismatch";
+// A file row for an existing account that names another settlement currency than the one it has.
+const ACCOUNT_CURRENCY_CHANGE = "accounts.errors.currencyLocked";
 
 // A catalogue key is a dotted identifier with no spaces; a raw Zod default is an
 // English sentence. The light guard's number/enum/date fields carry no custom key,
@@ -63,7 +71,7 @@ const createSchemas = {
 } as const;
 
 // A raw parsed record holds a name, a scalar, integer cents or nothing.
-type RawRow = Record<string, string | number | boolean | null>;
+export type RawRow = Record<string, string | number | boolean | null>;
 
 // One problem on one row, traced back to the cell it came from (RF-51). `column`
 // is the sheet's own column key (the screen translates it) — null for the rare
@@ -120,10 +128,12 @@ export type ImportResult = {
 // currency (RF-121), keyed by its real id so a resolved reference checks it straight
 // off. A file-new account (a placeholder) is never in it — `commitAccounts` writes it
 // none, so the column default (BASE_CURRENCY) already holds — so an absent id passes.
-type EffectiveRefs = {
+export type EffectiveRefs = {
   accounts: Map<string, string[]>;
   categories: Map<string, string[]>;
   accountCurrencies: Map<string, string>;
+  // An existing account's settlement currency by its stable key, for the file row that updates it.
+  accountCurrencyByRef: Map<string, string>;
   // A resolved category's kind, by its effective id, existing rows unioned with the
   // file's own new categories — never trusted from the file's `kind` cell alone,
   // since a stray typo there is caught by the category row's own schema, not here.
@@ -210,6 +220,26 @@ function buildEffectiveMap(
     map.set(entity.name, ids);
   }
   return map;
+}
+
+// Every account's settlement currency by its effective id: an existing account keeps the one it has
+// (a file row never changes it), a file-new account takes its own cell, blank meaning the base one.
+// Same ids `buildEffectiveMap` mints, so a resolved reference reads the entity it resolved to.
+function buildAccountCurrencies(
+  existing: ScopedAccount[],
+  fileRows: RawRow[],
+): Map<string, string> {
+  const currencyById = new Map(existing.map((row) => [row.id, row.settlementCurrency]));
+  const existingRefs = new Set(existing.flatMap((row) => (row.externalRef != null ? [row.externalRef] : [])));
+
+  fileRows.forEach((raw, rowIndex) => {
+    const ref = text(raw.externalRef);
+    if (ref.length > 0 && existingRefs.has(ref)) return;
+    const cell = text(raw.settlementCurrency);
+    currencyById.set(placeholderFor("accounts", ref, rowIndex), cell.length > 0 ? cell : BASE_CURRENCY);
+  });
+
+  return currencyById;
 }
 
 // The effective post-import id→kind map for categories, over the same ids
@@ -399,6 +429,32 @@ function checkBaseCurrency(
   }
 }
 
+// A transaction row's `currency` cell read against both accounts it names (RF-50, RF-121). A named
+// cell must be the settlement currency of every account the row touches; a blank one is a sheet
+// from before the column and passes only on base-currency accounts, as every such sheet was.
+function checkRowCurrency(
+  entity: SheetEntity,
+  raw: RawRow,
+  rowCurrency: string | null | undefined,
+  accountIds: (string | null)[],
+  currencies: Map<string, string>,
+  errors: RowFieldError[],
+): void {
+  for (const id of accountIds) {
+    const currency = id !== null ? currencies.get(id) : undefined;
+    if (currency === undefined) continue;
+    if (rowCurrency == null) {
+      if (currency !== BASE_CURRENCY) {
+        errors.push({ key: FOREIGN_CURRENCY_UNSUPPORTED, column: "currency", value: null });
+        return;
+      }
+    } else if (currency !== rowCurrency) {
+      errors.push({ key: ROW_CURRENCY_MISMATCH, column: "currency", value: rawCellValue(entity, raw, "currency") });
+      return;
+    }
+  }
+}
+
 // The guard's output (names, all references still names) turned id-shaped for the
 // authoritative schema, gathering a per-row error for every reference that does not
 // resolve to exactly one entity in the effective set. The object is only meaningful
@@ -428,7 +484,19 @@ function resolveAndShape(
   };
 
   switch (entity) {
-    case "accounts":
+    case "accounts": {
+      const ref = text(raw.externalRef);
+      const existing = ref.length > 0 ? refs.accountCurrencyByRef.get(ref) : undefined;
+      if (existing !== undefined && existing !== data.settlementCurrency) {
+        errors.push({
+          key: ACCOUNT_CURRENCY_CHANGE,
+          column: "settlementCurrency",
+          value: rawCellValue(entity, raw, "settlementCurrency"),
+        });
+      }
+      return { object: data, errors };
+    }
+
     case "members":
       // No cross-entity reference: the guard's output is already id-shaped.
       return { object: data, errors };
@@ -467,8 +535,32 @@ function resolveAndShape(
     case "transactions": {
       const fromAccountId = resolveInto(data.fromAccount, refs.accounts, "fromAccount");
       const toAccountId = resolveInto(data.toAccount, refs.accounts, "toAccount");
-      checkBaseCurrency(entity, raw, fromAccountId, "fromAccount", refs.accountCurrencies, errors);
-      checkBaseCurrency(entity, raw, toAccountId, "toAccount", refs.accountCurrencies, errors);
+      const rowCurrency = data.currency as string | null | undefined;
+      checkRowCurrency(
+        entity,
+        raw,
+        rowCurrency,
+        [fromAccountId, toAccountId],
+        refs.accountCurrencies,
+        errors,
+      );
+
+      // An adjustment is one account's gap: one leg, no category, never a split (RF-138).
+      if (data.adjustment === true) {
+        if ((data.fromAccount == null) === (data.toAccount == null)) {
+          errors.push({ key: ADJUSTMENT_ONE_ACCOUNT, column: "adjustment", value: "true" });
+        }
+        return {
+          object: {
+            adjustment: true,
+            accountId: fromAccountId ?? toAccountId,
+            direction: data.fromAccount == null ? "up" : "down",
+            amount: data.amount,
+            occurredAt: data.occurredAt,
+          },
+          errors,
+        };
+      }
 
       // The kind follows the account pair: both names present is a transfer, which
       // carries no category and no splits (RF-20/RF-69). An income or expense builds
@@ -502,6 +594,8 @@ function resolveAndShape(
           fromAccountId,
           toAccountId,
           amount: data.amount,
+          // Amounts and splits are read in the row's own currency; blank keeps the base one.
+          ...(rowCurrency != null ? { currency: rowCurrency } : {}),
           occurredAt: data.occurredAt,
           description: data.description,
           externalRef: data.externalRef,
@@ -518,7 +612,7 @@ function resolveAndShape(
 // resolution against the effective set, then the authoritative schema. Errors are
 // collected, never thrown; each gate feeds the next only on success, and the row is
 // classified regardless. The resolved object rides along for a later commit.
-function processRow(
+export function processRow(
   entity: SheetEntity,
   raw: RawRow,
   index: number,
@@ -547,7 +641,11 @@ function processRow(
   const resolved = resolveAndShape(entity, guarded.data as Record<string, unknown>, refs, raw);
   if (resolved.errors.length > 0) return { ...carried, errors: resolved.errors, object: null };
 
-  const checked = createSchemas[entity].safeParse(resolved.object);
+  const isAdjustment =
+    entity === "transactions" && (guarded.data as { adjustment?: unknown }).adjustment === true;
+  const checked = (isAdjustment ? importedAdjustmentSchema : createSchemas[entity]).safeParse(
+    resolved.object,
+  );
   if (!checked.success) {
     return {
       ...carried,
@@ -582,6 +680,23 @@ async function reverseLabels(): Promise<ReverseSheetLabels> {
   return { entityBySheetName, columnKeyByHeader };
 }
 
+export function buildEffectiveRefs(
+  scope: ImportScope,
+  recordsOf: (entity: SheetEntity) => RawRow[],
+): EffectiveRefs {
+  return {
+    accounts: buildEffectiveMap(scope.accounts, recordsOf("accounts"), "accounts"),
+    categories: buildEffectiveMap(scope.categories, recordsOf("categories"), "categories"),
+    accountCurrencies: buildAccountCurrencies(scope.accounts, recordsOf("accounts")),
+    accountCurrencyByRef: new Map(
+      scope.accounts.flatMap((account) =>
+        account.externalRef != null ? [[account.externalRef, account.settlementCurrency] as const] : [],
+      ),
+    ),
+    categoryKinds: buildCategoryKinds(scope.categories, recordsOf("categories")),
+  };
+}
+
 /**
  * The import pipeline (RF-51/52), the single validation path both `preview` and a
  * later `commit` run so they agree to the row: parse the upload, enforce the cap,
@@ -605,14 +720,7 @@ export async function runImportPipeline(input: { buffer: ArrayBuffer }): Promise
   const recordsOf = (entity: SheetEntity) =>
     (parsed[entity] ?? []).map((row) => row.record) as RawRow[];
 
-  const refs: EffectiveRefs = {
-    accounts: buildEffectiveMap(scope.accounts, recordsOf("accounts"), "accounts"),
-    categories: buildEffectiveMap(scope.categories, recordsOf("categories"), "categories"),
-    accountCurrencies: new Map(
-      scope.accounts.map((account) => [account.id, account.settlementCurrency]),
-    ),
-    categoryKinds: buildCategoryKinds(scope.categories, recordsOf("categories")),
-  };
+  const refs = buildEffectiveRefs(scope, recordsOf);
 
   const totals = { new: 0, update: 0, error: 0 };
   const perEntity: ImportEntityResult[] = SHEET_ENTITIES.map((entity) => {

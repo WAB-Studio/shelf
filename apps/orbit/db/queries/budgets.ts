@@ -48,11 +48,11 @@ export type BudgetStatus = {
  */
 export async function listBudgetsWithStatus(
   anchorDate?: string,
-  options?: { archived?: boolean },
+  options?: { archived?: boolean; today?: string },
 ): Promise<BudgetStatus[]> {
   // The clock is read once, so an anchor cannot be compared against one Bogotá
   // day and windowed against the next.
-  const today = todayInBogota();
+  const today = options?.today ?? todayInBogota();
   // No future period is served: an anchor past today collapses onto today. Both
   // sides are civil `YYYY-MM-DD`, so the ordering is the calendar's (RNF-06) and
   // no instant — hence no zone offset — enters the comparison.

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  index,
   pgPolicy,
   smallint,
   text,
@@ -80,6 +81,13 @@ export const ingestCounterparties = finances.table(
       table.patternKey,
       table.side,
     ),
+    // Parent deletes check these foreign keys; without an index each one scans this table.
+    index("ingest_counterparties_candidate_account_id_idx")
+      .on(table.candidateAccountId)
+      .where(sql`${table.candidateAccountId} is not null`),
+    index("ingest_counterparties_trusted_account_id_idx")
+      .on(table.trustedAccountId)
+      .where(sql`${table.trustedAccountId} is not null`),
     pgPolicy("ingest_counterparties_select", {
       for: "select",
       to: authenticatedRole,

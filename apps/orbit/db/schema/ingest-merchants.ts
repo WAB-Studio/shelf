@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  index,
   pgPolicy,
   smallint,
   text,
@@ -70,6 +71,13 @@ export const ingestMerchants = finances.table(
       table.ownerUserId,
       table.merchantKey,
     ),
+    // Parent deletes check these foreign keys; without an index each one scans this table.
+    index("ingest_merchants_candidate_category_id_idx")
+      .on(table.candidateCategoryId)
+      .where(sql`${table.candidateCategoryId} is not null`),
+    index("ingest_merchants_trusted_category_id_idx")
+      .on(table.trustedCategoryId)
+      .where(sql`${table.trustedCategoryId} is not null`),
     pgPolicy("ingest_merchants_select", {
       for: "select",
       to: authenticatedRole,

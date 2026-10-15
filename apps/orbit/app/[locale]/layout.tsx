@@ -1,5 +1,5 @@
 import { hasLocale, NextIntlClientProvider } from "next-intl";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Instrument_Sans } from "next/font/google";
 import { notFound } from "next/navigation";
@@ -75,9 +75,6 @@ export async function generateMetadata(
 export default async function LocaleLayout(props: LayoutProps<"/[locale]">) {
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
-
-  // Opts the tree into static rendering; without it every page turns dynamic.
-  setRequestLocale(locale);
 
   return (
     <html

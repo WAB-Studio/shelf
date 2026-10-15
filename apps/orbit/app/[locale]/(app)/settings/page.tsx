@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { SettingsScreen } from "@/components/fund/settings-screen";
@@ -26,7 +26,6 @@ export default async function SettingsPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   // Miembros only exists inside a fund (RF-55), so the list is built from the
   // caller's group; the auth guard rides beside that read, never ahead of it.

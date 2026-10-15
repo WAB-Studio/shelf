@@ -358,6 +358,48 @@
       "when": 1791584095524,
       "tag": "0050_harness_oauth_clients",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792037005283,
+      "tag": "0051_an_account_reconciles_with_an_adjustment",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792123405283,
+      "tag": "0052_one_bad_recurring_rule_cannot_stop_the_rest",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792130000000,
+      "tag": "0053_foreign_keys_get_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792140000000,
+      "tag": "0054_an_adjustment_keeps_its_import_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792150000000,
+      "tag": "0055_only_the_leader_shares_a_group_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792160000000,
+      "tag": "0056_two_invariants_the_ledger_keeps",
+      "breakpoints": true
     }
   ]
 }

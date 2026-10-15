@@ -79,4 +79,18 @@
   .monthStats > * + * {
     border-left: 1px solid var(--gray-a3);
   }
+
+  /* A fourth figure no longer fits the row beside the other three: the figures
+     wrap into as many columns as the card is wide enough for, one at the
+     narrowest, with no hairline since a wrapped row has no fixed seam. */
+  .monthStats[data-stats="4"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 14px 20px;
+  }
+
+  .monthStats[data-stats="4"] > * {
+    padding-left: 0;
+    border-left: 0;
+  }
 }

@@ -26,7 +26,7 @@ export const createMemberSchema = z.object({
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 
 export const updateMemberSchema = z.object({
-  memberId: z.uuid(),
+  memberId: z.uuid({ error: "errors.notFound" }),
   name: memberNameSchema,
 });
 
@@ -35,19 +35,19 @@ export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
 // Accounts name a user or the group, never a member (RF-61), so archiving one
 // carries no per-account decision: it only flags the member.
 export const archiveMemberSchema = z.object({
-  memberId: z.uuid(),
+  memberId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type ArchiveMemberInput = z.infer<typeof archiveMemberSchema>;
 
 export const restoreMemberSchema = z.object({
-  memberId: z.uuid(),
+  memberId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type RestoreMemberInput = z.infer<typeof restoreMemberSchema>;
 
 export const deleteMemberSchema = z.object({
-  memberId: z.uuid(),
+  memberId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type DeleteMemberInput = z.infer<typeof deleteMemberSchema>;
@@ -55,7 +55,7 @@ export type DeleteMemberInput = z.infer<typeof deleteMemberSchema>;
 // RF-59: only the member who takes the role travels. The outgoing leader is the
 // caller, read from the session, and the swap is one call the engine makes.
 export const transferLeadershipSchema = z.object({
-  memberId: z.uuid(),
+  memberId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type TransferLeadershipInput = z.infer<typeof transferLeadershipSchema>;

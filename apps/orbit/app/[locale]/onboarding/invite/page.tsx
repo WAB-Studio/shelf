@@ -1,5 +1,5 @@
 import { hasLocale } from "next-intl";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -32,7 +32,6 @@ export default async function OnboardingInvitePage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   const [user, group] = await Promise.all([requireUser(), getUserGroup()]);
 

@@ -23,7 +23,7 @@ import {
   transactions,
 } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb } from "@/db/session";
+import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
 import type { SettlementCurrencies } from "@/lib/validation/transaction";
@@ -65,6 +65,8 @@ export type UpdateTransactionArgs = {
   description: string | null;
   splits: TransactionSplitInput[];
   labelIds: string[];
+  // `undefined` leaves the cause alone; `null` clears it.
+  causedByTransactionId?: string | null;
 };
 
 export type TransactionListFilters = {
@@ -113,6 +115,9 @@ export type TransactionListRow = {
   labels: { id: string; name: string; color: string | null }[];
   // The movement that produced this one, one hop only (RF-132); null for most rows.
   causedByTransactionId: string | null;
+  // The reconciliation that booked this movement as its adjustment (RF-138); null for every
+  // movement a person made.
+  reconciliationId: string | null;
 };
 
 /**
@@ -196,6 +201,24 @@ export async function insertTransaction(
   return { transactionId };
 }
 
+// `adjustment` is a movement a reconciliation booked: the policy admits no edit or delete of it,
+// and the row stays readable, so a screen can say why instead of reporting it gone (RF-138).
+export type TransactionWriteOutcome = "done" | "missing" | "adjustment";
+
+// Only on a refused write, so the common path pays nothing for it.
+async function refusedWrite(
+  tx: Transaction,
+  transactionId: string,
+): Promise<TransactionWriteOutcome> {
+  const [row] = await tx
+    .select({ reconciliationId: transactions.reconciliationId })
+    .from(transactions)
+    .where(eq(transactions.id, transactionId))
+    .limit(1);
+
+  return row?.reconciliationId ? "adjustment" : "missing";
+}
+
 /**
  * Edit the movement's fields, then replace its splits and label joins wholesale
  * (delete + one multi-row insert each). The transaction update's affected-row
@@ -214,7 +237,8 @@ export async function updateTransaction({
   description,
   splits,
   labelIds,
-}: UpdateTransactionArgs): Promise<boolean> {
+  causedByTransactionId,
+}: UpdateTransactionArgs): Promise<TransactionWriteOutcome> {
   return withUserDb(async (tx) => {
     const updated = await tx
       .update(transactions)
@@ -237,7 +261,7 @@ export async function updateTransaction({
       .where(eq(transactions.id, transactionId))
       .returning({ id: transactions.id });
 
-    if (updated.length === 0) return false;
+    if (updated.length === 0) return refusedWrite(tx, transactionId);
 
     await tx
       .delete(transactionSplits)
@@ -265,38 +289,39 @@ export async function updateTransaction({
       );
     }
 
-    return true;
+    // Its own column grant (migration 0040) keeps it out of the `.set` above. The
+    // `is distinct from` guard writes nothing when the cause did not change, and
+    // it rides this transaction rather than costing one of its own.
+    if (causedByTransactionId !== undefined) {
+      await tx.execute(sql`
+        update transactions set caused_by_transaction_id = ${causedByTransactionId}
+        where id = ${transactionId}
+          and caused_by_transaction_id is distinct from ${causedByTransactionId}
+      `);
+    }
+
+    return "done";
   });
 }
 
-// The cascade removes the splits and label joins; the boolean reports whether the
+// The cascade removes the splits and label joins; the outcome reports whether the
 // policy admitted the delete (RF-24).
 export async function deleteTransaction({
   transactionId,
 }: {
   transactionId: string;
-}): Promise<boolean> {
+}): Promise<TransactionWriteOutcome> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .delete(transactions)
       .where(eq(transactions.id, transactionId))
       .returning({ id: transactions.id });
 
-    return rows.length > 0;
+    return rows.length > 0 ? "done" : refusedWrite(tx, transactionId);
   });
 }
 
-/**
- * Every matching movement with its splits and labels in ONE round trip: the two
- * child sets ride along as correlated jsonb subselects, never an N+1 follow-up
- * (RF-23). Filters compose in the WHERE; `occurredAt` stays a YYYY-MM-DD string
- * end to end, its bounds compared against the date column with no JS Date. A
- * `limit` caps the newest rows for a preview list; without it every match returns.
- */
-export async function listTransactions(
-  filters: TransactionListFilters,
-  options?: { limit?: number },
-): Promise<TransactionListRow[]> {
+function transactionConditions(filters: TransactionListFilters): SQL[] {
   const conditions: SQL[] = [];
 
   if (filters.id) conditions.push(eq(transactions.id, filters.id));
@@ -353,6 +378,53 @@ export async function listTransactions(
     );
   }
 
+  return conditions;
+}
+
+/**
+ * The count and the net per currency over EVERY movement the filter matches, in
+ * one statement and independent of any limit the list applies. A transfer moves
+ * the net by nothing (RF-19) but still counts; so does an adjustment, which the
+ * net leaves out (RF-137).
+ */
+export async function getTransactionTotals(
+  filters: TransactionListFilters,
+  outerTx?: Transaction,
+): Promise<{ count: number; nets: { currency: CurrencyCode; netCents: number }[] }> {
+  const conditions = transactionConditions(filters);
+
+  return withUserDbOrTx(outerTx, async (tx) => {
+    const rows = await tx
+      .select({
+        currency: transactions.currency,
+        count: sql<number>`count(*)::int`,
+        netCents: sql<string>`coalesce(sum(case when ${transactions.reconciliationId} is not null then 0 else case ${transactions.kind} when 'income' then ${transactions.amountCents} when 'expense' then -${transactions.amountCents} else 0 end end), 0)::text`,
+      })
+      .from(transactions)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(transactions.currency);
+
+    return {
+      count: rows.reduce((sum, row) => sum + row.count, 0),
+      nets: rows
+        .map((row) => ({ currency: row.currency as CurrencyCode, netCents: Number(row.netCents) })),
+    };
+  });
+}
+
+/**
+ * Every matching movement with its splits and labels in ONE round trip: the two
+ * child sets ride along as correlated jsonb subselects, never an N+1 follow-up
+ * (RF-23). Filters compose in the WHERE; `occurredAt` stays a YYYY-MM-DD string
+ * end to end, its bounds compared against the date column with no JS Date. A
+ * `limit` caps the newest rows for a preview list; without it every match returns.
+ */
+export async function listTransactions(
+  filters: TransactionListFilters,
+  options?: { limit?: number; offset?: number; tx?: Transaction },
+): Promise<TransactionListRow[]> {
+  const conditions = transactionConditions(filters);
+
   // The outer reference is written qualified: drizzle renders an embedded column
   // bare inside a projection, and a bare `id` binds to the subquery's own table,
   // which turns the correlation into a constant and empties both sets.
@@ -369,7 +441,7 @@ export async function listTransactions(
     where tl.transaction_id = ${outerId}
   ), '[]'::jsonb)`;
 
-  return withUserDb(async (tx) => {
+  return withUserDbOrTx(options?.tx, async (tx) => {
     const query = tx
       .select({
         id: transactions.id,
@@ -387,6 +459,7 @@ export async function listTransactions(
         recurringRuleId: transactions.recurringRuleId,
         reviewedAt: transactions.reviewedAt,
         causedByTransactionId: transactions.causedByTransactionId,
+        reconciliationId: transactions.reconciliationId,
         // Written with the joined alias, never a Drizzle column reference: a
         // reference inside a projection fragment renders bare and binds inward.
         fromSettlementCurrency: sql<
@@ -413,7 +486,8 @@ export async function listTransactions(
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(transactions.occurredAt), desc(transactions.createdAt));
 
-    return options?.limit === undefined ? query : query.limit(options.limit);
+    if (options?.limit === undefined) return query;
+    return options.offset ? query.limit(options.limit).offset(options.offset) : query.limit(options.limit);
   });
 }
 

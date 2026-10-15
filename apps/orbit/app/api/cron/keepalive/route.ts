@@ -3,9 +3,6 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { env } from "@/lib/env";
 
-// Never prerendered: the header check has to run on every invocation.
-export const dynamic = "force-dynamic";
-
 // A daily touch so free-tier inactivity cannot pause the project (RNF-12).
 // No user context and no table: this is deliberately outside `withUserDb`.
 export async function GET(request: Request) {

@@ -92,11 +92,15 @@ type DayGroup = { key: string; label: string; rows: TransactionListRow[] };
  */
 export function MovementsScreen({
   rows,
+  totals,
   options,
   filters,
   ruleName,
 }: {
   rows: TransactionListRow[];
+  // Counted in SQL over every movement the filter matches: `rows` stops at the
+  // server's cap, these figures never do.
+  totals: { count: number; nets: { currency: CurrencyCode; netCents: number }[] };
   options: TransactionFormOptions;
   filters: MovementsFilters;
   ruleName: string | null;
@@ -184,26 +188,22 @@ export function MovementsScreen({
     category: rowCategory(row, categoryNames, categoryColors),
     account: rowSubtitle(row, accountNames) ?? "",
     label: row.labels[0]?.name ?? null,
-    amountMinor: row.amountCents,
+    amountMinor:
+      row.reconciliationId !== null && row.toAccountId === null
+        ? -row.amountCents
+        : row.amountCents,
     currency: row.currency,
     tone: rowTone(row),
+    adjustment: row.reconciliationId !== null,
     auto: row.recurringRuleId !== null,
   }));
 
   // A transfer moves money between the caller's own accounts, so it moves the net
   // by nothing (RF-19). One net per currency, and no figure that adds two of them
   // (RF-124); each spans every filtered row, not just this page.
-  const netByCurrency = new Map<CurrencyCode, number>();
-  for (const row of rows) {
-    if (row.kind === "transfer") continue;
-    const signed = row.kind === "income" ? row.amountCents : -row.amountCents;
-    netByCurrency.set(
-      row.currency,
-      (netByCurrency.get(row.currency) ?? 0) + signed,
-    );
-  }
-  // Nothing filtered in is still a net: one zero, in the currency the fund
-  // reports in, rather than a heading that names no figure at all.
+  const netByCurrency = new Map<CurrencyCode, number>(
+    totals.nets.map(({ currency, netCents }) => [currency, netCents]),
+  );
   const nets: [CurrencyCode, number][] =
     netByCurrency.size === 0
       ? [[BASE_CURRENCY, 0]]
@@ -312,7 +312,7 @@ export function MovementsScreen({
           title={t("listTitle")}
           meta={
             <>
-              {t("listMeta", { count: rows.length })}{" "}
+              {t("listMeta", { count: totals.count })}{" "}
               {/* One figure per currency, each naming the one it counts: no
                   total on this screen is the sum of two of them (RF-124). */}
               {nets.map(([currency, net], index) => (
@@ -574,12 +574,26 @@ export function MovementsScreen({
                       subtitle={rowSubtitle(row, accountNames)}
                       color={rowColor(row, categoryColors)}
                       amount={
-                        <Money
-                          minor={row.amountCents}
-                          currency={row.currency}
-                          tone={rowTone(row)}
-                          size="inherit"
-                        />
+                        row.reconciliationId !== null ? (
+                          <Money
+                            minor={
+                              row.toAccountId !== null
+                                ? row.amountCents
+                                : -row.amountCents
+                            }
+                            currency={row.currency}
+                            tone="transfer"
+                            signed="always"
+                            size="inherit"
+                          />
+                        ) : (
+                          <Money
+                            minor={row.amountCents}
+                            currency={row.currency}
+                            tone={rowTone(row)}
+                            size="inherit"
+                          />
+                        )
                       }
                       badge={
                         row.recurringRuleId !== null ? t("autoBadge") : undefined
@@ -691,6 +705,7 @@ function rowTitle(
   categoryNames: Map<string, string>,
   t: ReturnType<typeof useTranslations>,
 ): string {
+  if (row.reconciliationId !== null) return t("kindAdjustment");
   if (row.kind === "transfer") return t("kindTransfer");
   const first = row.splits[0]?.categoryId;
   const fallback = row.kind === "income" ? t("kindIncome") : t("kindExpense");
@@ -703,6 +718,10 @@ function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
 ): string | undefined {
+  if (row.reconciliationId !== null) {
+    const accountId = row.toAccountId ?? row.fromAccountId;
+    return (accountId && accountNames.get(accountId)) ?? undefined;
+  }
   if (row.kind === "transfer") {
     const from = (row.fromAccountId && accountNames.get(row.fromAccountId)) ?? "";
     const to = (row.toAccountId && accountNames.get(row.toAccountId)) ?? "";
@@ -716,7 +735,7 @@ function rowColor(
   row: TransactionListRow,
   categoryColors: Map<string, string | null>,
 ): string | null {
-  if (row.kind === "transfer") return null;
+  if (row.reconciliationId !== null || row.kind === "transfer") return null;
   const first = row.splits[0]?.categoryId;
   return (first && categoryColors.get(first)) ?? null;
 }
@@ -728,7 +747,7 @@ function rowCategory(
   categoryNames: Map<string, string>,
   categoryColors: Map<string, string | null>,
 ): { name: string; color: string | null } | null {
-  if (row.kind === "transfer") return null;
+  if (row.reconciliationId !== null || row.kind === "transfer") return null;
   const first = row.splits[0]?.categoryId;
   const name = first && categoryNames.get(first);
   return name ? { name, color: categoryColors.get(first) ?? null } : null;
@@ -739,6 +758,7 @@ function rowCategory(
 function rowTone(
   row: TransactionListRow,
 ): "income" | "transfer" | "expense" {
+  if (row.reconciliationId !== null) return "transfer";
   if (row.kind === "income") return "income";
   if (row.kind === "transfer") return "transfer";
   return "expense";

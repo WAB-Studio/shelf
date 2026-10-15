@@ -82,8 +82,13 @@ export const updateAccountAction = authActionClient
     try {
       updated = await updateAccount({ ...account, amountMinor });
     } catch (error) {
+      // Only the leader flips `is_shared` on a group account; the trigger raises 42501.
+      if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
       if (pgErrorCode(error) === "23514")
         throw new ActionError("accounts.errors.currencyInvalid");
+      // AC001: an account with movements or a count keeps the currency they are in.
+      if (pgErrorCode(error) === "AC001")
+        throw new ActionError("accounts.errors.currencyLocked");
       throw error;
     }
     if (!updated) throw new ActionError("errors.notFound");

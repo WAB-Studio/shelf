@@ -10,6 +10,7 @@ import { seedPersonalCategories } from "@/db/queries/personal-space";
 import { appUsers } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { routing } from "@/i18n/routing";
+import { isInternalPath } from "@/lib/internal-path";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/locales";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -22,11 +23,6 @@ const confirmSchema = z.object({
   token_hash: z.string().min(1),
   type: z.enum(["magiclink", "signup", "email"]),
 });
-
-// A path, never a URL: `//host` and `/\host` are read as another origin.
-function isInternalPath(value: string): boolean {
-  return value.startsWith("/") && !/^\/[/\\]/.test(value);
-}
 
 function applyHeaders(response: NextResponse, headers: Headers): NextResponse {
   headers.forEach((value, name) => response.headers.set(name, value));
