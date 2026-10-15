@@ -920,7 +920,7 @@ async function runEvidenceRefusalCheck(): Promise<void> {
  * nothing` on purpose: it is the negative control for the index itself,
  * proved as the person under RLS (`withGoalsDb`, never a privileged
  * connection) rather than asserted from the migration (`AGENTS.md`
- * «## Verification»).
+ * «## Code»).
  */
 async function runFactUniqueCheck(): Promise<void> {
   const { createGoal, addCommitment } = await import("@/app/actions/plan");

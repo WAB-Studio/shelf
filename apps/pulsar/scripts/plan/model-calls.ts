@@ -282,3 +282,52 @@ test("claimModelCall: cap + 5 concurrent chat claims land exactly the chat cap",
   for (const call of results) if (call) claimed.push(call.id);
   assert.equal(results.filter(Boolean).length, chatCap);
 });
+
+// RP-126: the whole app's day. The cap is set to what the table already holds plus a few, so rows other
+// lanes left today do not move the count the test asserts.
+async function withAppCap<T>(room: number, run: () => Promise<T>): Promise<T> {
+  const [{ count }] = await sql<{ count: string }[]>`
+    select count(*) from goals.model_calls where day = (now() at time zone 'America/Bogota')::date`;
+  const before = process.env.APP_MODEL_CALLS_DAILY_CAP;
+  process.env.APP_MODEL_CALLS_DAILY_CAP = String(Number(count) + room);
+  try {
+    return await run();
+  } finally {
+    if (before === undefined) delete process.env.APP_MODEL_CALLS_DAILY_CAP;
+    else process.env.APP_MODEL_CALLS_DAILY_CAP = before;
+  }
+}
+
+test("RP-126: the app cap defaults to ten import caps and five chat caps", async () => {
+  const spend = await import("@/lib/import/spend");
+  assert.equal(spend.APP_MODEL_CALLS_DAILY_CAP_DEFAULT, 350);
+  delete process.env.APP_MODEL_CALLS_DAILY_CAP;
+  assert.equal(spend.appModelCallsDailyCap(), 350);
+});
+
+test("RP-126: two persons claiming at once land exactly the app cap between them", async () => {
+  const room = 7;
+  await withAppCap(room, async () => {
+    const results = await Promise.all(
+      Array.from({ length: 16 }, (_, i) => {
+        current = i % 2 === 0 ? first : second;
+        return claimModelCall("RNP-13 fixture", "paste");
+      }),
+    );
+    for (const call of results) if (call) claimed.push(call.id);
+    assert.equal(results.filter(Boolean).length, room);
+  });
+});
+
+test("RP-126: a chat claim is refused by the spent app while the person is under their own cap", async () => {
+  await withAppCap(2, async () => {
+    assert.ok(await claim(first, "paste"));
+    assert.ok(await claim(second, "chat"));
+    assert.equal(await claim(first, "chat"), null);
+    assert.equal(await claim(second, "paste"), null);
+    const { appCapReached } = await import("@/lib/import/spend");
+    assert.equal(await appCapReached(), true);
+  });
+  const { appCapReached } = await import("@/lib/import/spend");
+  assert.equal(await appCapReached(), false);
+});

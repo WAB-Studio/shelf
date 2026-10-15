@@ -1,8 +1,7 @@
 /**
  * Drives every policy and grant on `goals` against the real database — and the
  * guard-and-settle body `lib/session.ts`'s `withGoalsDb` runs before every
- * query — instead of reading either from a migration (AGENTS.md,
- * "Verification").
+ * query — instead of reading either from a migration (AGENTS.md, "Code").
  *
  * Three parts, in the shape of `apps/voyager/scripts/check-sync.ts`:
  *

@@ -29,6 +29,7 @@ export type QuantitySheetProps = {
   loggedNote?: string | null;
   // The past day the row stands on (RP-06); absent on Hoy.
   day?: string;
+  drawnToday?: string;
 };
 
 // Four consecutive integers, the target second — `HoyCantidad.dc.html`'s own
@@ -66,6 +67,7 @@ export function QuantitySheet({
   loggedQuantity,
   loggedNote,
   day,
+  drawnToday,
 }: QuantitySheetProps) {
   const t = useTranslations();
   const words = useTimeWords();
@@ -142,7 +144,8 @@ export function QuantitySheet({
         // second `declareFact` beside the first (25 and 30 would both land
         // in `goals.facts`).
         replace: factId != null,
-        day,
+        day: day ?? drawnToday,
+        onHoy: day === undefined && drawnToday !== undefined ? true : undefined,
       });
       settle(result);
     });

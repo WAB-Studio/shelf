@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 
 import { test, expect, visit } from "./fixtures";
+import { todayInZone } from "@/lib/zone";
 
 // The sweep of `/metas` and the goal screen (RNP-07, RNP-17).
 async function seedGoal(db: postgres.Sql, personId: string, name: string) {
@@ -89,7 +90,7 @@ test("a goal with no measure at 1280: its month sits in a card and «Ver por mes
   const goalId = await seedGoal(db, person.id, `Sin medida ${stamp}`);
   await db`
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
-    values (${person.id}, ${goalId}, ${`Tarea ${stamp}`}, date_trunc('month', current_date)::date)
+    values (${person.id}, ${goalId}, ${`Tarea ${stamp}`}, ${`${todayInZone().slice(0, 7)}-01`}::date)
   `;
   const { context, page } = await open(browser, person.sessionFile, 1280, 900);
   try {

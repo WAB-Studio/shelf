@@ -1,7 +1,7 @@
 // What the harness holds, read-only. Writes nothing — `scripts/harness/reap.ts`
 // is the only command in this pair that deletes, and it reads its own plan
 // straight off `harness.runs`/`harness.identities`, never off this script's
-// output. Run this before and after a session (`AGENTS.md` §«Verification»):
+// output. Run this before and after a session (`docs/agentes/verificacion.md` § Harness accounting):
 // the two numbers are the session's footprint.
 import { fixtureSql } from "./fixtures";
 

@@ -8,6 +8,12 @@ on:
   # or to re-run it without an empty commit.
   workflow_dispatch:
 
+# A newer run on the same ref cancels the older one in progress; `main` is never
+# cancelled, so every deploy gets its full proof.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
@@ -149,13 +155,33 @@ jobs:
           fetch-depth: 0
       - id: filter
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
         run: |
           # `packages/` and the lockfile reach both apps; so does this workflow.
           orbit_paths="apps/orbit packages package-lock.json .github/workflows/ci.yml"
           pulsar_paths="apps/pulsar packages package-lock.json .github/workflows/ci.yml"
           voyager_paths="apps/voyager packages package-lock.json .github/workflows/ci.yml"
-          if [ -z "$BASE_SHA" ]; then
+          # Pull request: against its base. Push to `integracion`: against the
+          # tip before it. Dispatch on a branch: against where it left
+          # `integracion`. `main` (the deploy) and anything unresolvable run all.
+          BASE_SHA=""
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE_SHA="$PR_BASE_SHA"
+          elif [ "$REF" = "refs/heads/main" ]; then
+            BASE_SHA=""
+          elif [ "$EVENT" = "push" ]; then
+            BASE_SHA="$PUSH_BEFORE"
+          elif [ "$EVENT" = "workflow_dispatch" ] && [ "$REF" != "refs/heads/integracion" ]; then
+            git fetch --quiet origin integracion || true
+            BASE_SHA="$(git merge-base origin/integracion HEAD 2>/dev/null || true)"
+          fi
+          if [ -n "$BASE_SHA" ] && ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            BASE_SHA=""
+          fi
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
             echo "orbit=true" >> "$GITHUB_OUTPUT"
             echo "pulsar=true" >> "$GITHUB_OUTPUT"
             echo "voyager=true" >> "$GITHUB_OUTPUT"
@@ -189,9 +215,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: >-
-      github.event_name != 'pull_request' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-       needs.changes.outputs.orbit == 'true')
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      needs.changes.outputs.orbit == 'true'
     timeout-minutes: 15
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -232,9 +258,11 @@ jobs:
   # with no sibling paths feeding it, so the fork check is the only gate.
   build-pulsar:
     runs-on: ubuntu-latest
+    needs: changes
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      needs.changes.outputs.pulsar == 'true'
     timeout-minutes: 15
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -270,26 +298,26 @@ jobs:
   # never `next dev`, for the reason `playwright.config.ts`'s own head gives.
   # Its own lane (8: local lanes are 1-5, orbit's CI lane is 9). The stack is
   # the runner's own, so no group serialises its runs.
-  # Push only: on a pull request it is informative. A newer push to the same
-  # branch cancels the older run, so only the branch's newest tip is proved.
+  # Push only: on a pull request it is informative. The workflow's concurrency
+  # group cancels the older run of a ref, so only its newest tip is proved.
   pulsar-e2e:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && needs.changes.outputs.pulsar == 'true'
     # The suite is about two minutes; `playwright install --with-deps` alone
     # took eight on 2026-09-30, when apt was slow.
     timeout-minutes: 30
     # Each shard owns a runner and so a stack and a database of its own; the
-    # lane stays 8 in all four. `pulsar-e2e-report` merges what they leave.
+    # lane stays 8 in all six. Four shards finished 4 to 8 minutes apart
+    # (run 38662737576); past six, `pulsar-checks` and orbit's `e2e` set the
+    # wall time. `pulsar-e2e-report` merges what they leave.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-    concurrency:
-      group: pulsar-e2e-${{ github.ref }}-${{ matrix.shard }}
-      cancel-in-progress: true
+        shard: [1, 2, 3, 4, 5, 6]
     env:
       HARNESS_LANE: 8
+      SHARD_TOTAL: 6
       PULSAR_BASE_URL: http://localhost:3207
     steps:
       - uses: actions/checkout@v7
@@ -358,11 +386,11 @@ jobs:
       # run, mints and seeds lane 8's person under it — no typed address, no
       # email sent (RNP-09) — and its teardown drops every identity and closes
       # the run.
-      - name: Run shard ${{ matrix.shard }} of 4, caida and fuente projects included
+      - name: Run shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }}, caida and fuente projects included
         env:
           PULSAR_DOWN_BASE_URL: http://localhost:3217
           PULSAR_FAULT_BASE_URL: http://localhost:3227
-        run: npm run check:e2e -w apps/pulsar -- --shard=${{ matrix.shard }}/4 --reporter=blob,list
+        run: npm run check:e2e -w apps/pulsar -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
 
       - name: Upload the blob report
         if: always()
@@ -405,7 +433,7 @@ jobs:
   pulsar-e2e-report:
     runs-on: ubuntu-latest
     needs: pulsar-e2e
-    if: always() && github.event_name != 'pull_request'
+    if: always() && needs.pulsar-e2e.result != 'skipped'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -446,9 +474,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: >-
-      github.event_name != 'pull_request' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-       needs.changes.outputs.pulsar == 'true')
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      needs.changes.outputs.pulsar == 'true'
     timeout-minutes: 25
     env:
       HARNESS_LANE: 7
@@ -507,6 +535,68 @@ jobs:
           name: pulsar-checks-log
           path: apps/pulsar/private/dev3206.log
 
+  # HomeFund's three scripts against the local stack, none of them in any other
+  # job. `db:check-rls` and `check:queries` open their own connection;
+  # `check:http` drives a dev server like the `e2e` job's. Its RNF-09 verdict is
+  # a SKIP here by design: it needs a year of movements (`seed:year`) and
+  # `HARNESS_TARGET`, and neither is set, so the timing is only reported. Lane 10:
+  # 7 is pulsar-checks, 8 pulsar-e2e, 9 e2e. Not required by `main`.
+  orbit-checks:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      needs.changes.outputs.orbit == 'true'
+    timeout-minutes: 25
+    env:
+      HARNESS_LANE: 10
+      HARNESS_BASE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx next typegen
+        working-directory: apps/orbit
+
+      - uses: ./.github/actions/supabase-local
+        with:
+          apps: orbit
+
+      - run: npm run harness:token -w apps/orbit
+
+      # Each check runs whatever the one before did, so a red names itself.
+      - run: npm run check:unit --if-present -w apps/orbit
+      - run: npm run db:check-rls -w apps/orbit
+
+      - run: npm run check:queries -w apps/orbit
+        if: ${{ !cancelled() }}
+
+      - name: Start the dev server and wait for it to answer
+        if: ${{ !cancelled() }}
+        run: |
+          npm run dev -w apps/orbit > /tmp/next-dev.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3000/es; then
+              echo "up after ${SECONDS}s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "the dev server never answered"; tail -50 /tmp/next-dev.log; exit 1
+
+      - run: npm run check:http -w apps/orbit
+        if: ${{ !cancelled() }}
+
+      - name: Upload the dev server log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: orbit-checks-log
+          path: /tmp/next-dev.log
+
   e2e:
     runs-on: ubuntu-latest
     needs: changes
@@ -518,8 +608,8 @@ jobs:
     if: >-
       vars.E2E_IN_CI == 'true' &&
       (github.event_name != 'pull_request' ||
-       (github.event.pull_request.head.repo.full_name == github.repository &&
-        needs.changes.outputs.orbit == 'true'))
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      needs.changes.outputs.orbit == 'true'
     timeout-minutes: 40
     env:
       # Its own harness identities and seeded rows, so a CI run never touches the
@@ -581,12 +671,19 @@ jobs:
   # `apps/voyager`'s own browser suite. It ran nowhere until 2026-09-08, and
   # that is how two seeded specs sat red on `main` unnoticed: they opened
   # `reading-log` pinned at version 1 after module 6 raised the store to 2.
-  voyager-e2e:
+  voyager-e2e-shard:
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.voyager == 'true'
+    if: needs.changes.outputs.voyager == 'true'
     timeout-minutes: 30
+    # Each shard owns a runner and so a stack of its own. `voyager-e2e` below
+    # is the one check name for the suite.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
+      SHARD_TOTAL: 3
       VOYAGER_BASE_URL: http://localhost:3100
       # Arms `app/layout.tsx`'s test hook for this job's own build alone.
       # `apps/voyager/vercel.json` names no such variable, so a Vercel build
@@ -630,18 +727,63 @@ jobs:
           done
           echo "the server never answered"; tail -50 /tmp/voyager.log; exit 1
 
-      - run: npm run check:e2e -w apps/voyager
+      - name: Run shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }}
+        run: npm run check:e2e -w apps/voyager -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
+
+      - name: Upload the blob report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: voyager-blob-${{ matrix.shard }}
+          path: apps/voyager/blob-report
+          retention-days: 3
 
       - name: Upload the server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: voyager-log
+          name: voyager-log-${{ matrix.shard }}
           path: /tmp/voyager.log
 
       - name: Upload the Playwright artefacts
         if: failure()
         uses: actions/upload-artifact@v5
         with:
-          name: voyager-playwright-results
+          name: voyager-playwright-results-${{ matrix.shard }}
           path: apps/voyager/private/playwright-results
+
+  # Red when any shard is, green when all are; skipped when the shards were.
+  voyager-e2e:
+    runs-on: ubuntu-latest
+    needs: voyager-e2e-shard
+    if: always() && needs.voyager-e2e-shard.result != 'skipped'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: voyager-blob-*
+          path: apps/voyager/all-blobs
+          merge-multiple: true
+
+      - name: Merge the shards' reports
+        run: npx playwright merge-reports --reporter html,list ./all-blobs
+        working-directory: apps/voyager
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: voyager-e2e-report
+          path: apps/voyager/playwright-report
+
+      - name: Fail when a shard failed
+        if: needs.voyager-e2e-shard.result != 'success'
+        run: |
+          echo "voyager-e2e: ${{ needs.voyager-e2e-shard.result }}"
+          exit 1

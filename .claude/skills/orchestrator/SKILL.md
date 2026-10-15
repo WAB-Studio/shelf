@@ -13,49 +13,109 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
 
 ## Start
 
-1. Read `AGENTS.md`.
+1. Read `AGENTS.md`, `docs/agentes/lanes.md` and `docs/agentes/verificacion.md`. Before a screen, `docs/agentes/canvas.md`.
 2. Read the spec of the app the goal names: `docs/SPEC.md` and `docs/FLOWS.md` for orbit,
    `docs/voyager/SPEC.md`, `docs/pulsar/SPEC.md`.
 3. Take the goal from the user's request. Ask only when it names none.
+4. Start the dev server on :3000 and keep it running. Restart it when you must.
 
 ## Plan
 
-1. Turn the goal into a slice: the RF codes that ship together.
+1. Turn the goal into a slice: the RF codes that ship together. Ship one slice at a time; run a second beside it
+   only when it depends on nothing but what the first already landed.
 2. Pick a plan path: `private/plan-<slice>.md`.
 3. Dispatch `planner` with the slice and that path.
 4. Read the plan. Check every module is bounded, ordered, tied to RF codes, and has a done criterion.
+   Check each carries its risk level (`AGENTS.md` § Modules) and fits the size cap (400 lines of code, tests not counted).
+   Check the slice is cut by layer, not by function: all its loaders in one module, the screens of one area in one
+   module. About eight modules a slice, never seventeen. Split only what shares no file and needs no other module's result.
 5. Put any `Questions` to the user. Wait for the answers.
 6. Send the answers and any fixes back to the same planner with SendMessage. Take the second plan as final.
+7. Fix the slice's list there. What a judge finds after that goes to the handoff as pending, never into a new train
+   in the same session. A module that ends red leaves the train for the next session.
 
 ## Ship
 
 1. Group the plan's modules into assignments. One assignment per worker.
 2. Take every assignment that depends on nothing pending. Open a lane for each: `scripts/worktree.sh <lane> <branch> <base>`.
-3. For a module that draws or changes a screen, dispatch the `tester` first, on the module's branch: it writes the
-   Done table's tests from the contract, red. Then the `worker` makes them green. A words-only module goes to one
-   worker that writes its Done table red first, then makes it green. Pure-function modules go straight to the
-   worker. Decided by the user 2026-10-06 and 2026-10-10.
-   Dispatch one agent per lane, all in one message.
+3. Dispatch each module's chain by its risk level (`AGENTS.md` § Modules). Level 3: the `tester` first, on the
+   module's branch, writes the Done table's tests from the contract, red; then the `worker` makes them green.
+   Level 2, a new screen or a new state of one: the same chain, `tester` then `worker`. Level 2, a change to an
+   existing screen or a query: one `worker` writes its Done table red first, then makes it green. Level 1: one `worker`.
+   Before a screen: the user approved its board (`docs/agentes/canvas.md`), and the query that feeds it exists.
+   Measure what the module's claim includes, in real rows, before dispatching it.
+   Dispatch one agent per lane, all in one message. Mark the plan's module `## [~]` the moment you dispatch it.
 4. Take each report the moment it lands. Never wait for the batch: a lane that finished gets its next agent
    while the others still run. Resolve its `Unresolved`. Collect its `Deferred`.
 5. Put any `Questions` to the user. Re-dispatch that assignment with the answers.
-6. Merge each finished branch into its train and mark its modules done. When every module of a train has landed, dispatch one `validator` and one `mutator` over the train, together. On `FAIL` or a survivor, re-dispatch the module's worker with the `Fixes`. Decided by the user 2026-10-12.
-7. Repeat with the assignments the merged ones unblocked.
-8. Run `npm run typecheck` (tsgo) and `npm run lint` (eslint cache).
-9. Tick the slice's RF codes in `docs/SPEC.md`.
-10. Drop every lane's worktree.
-11. Report to the user.
+6. Merge each finished branch into its train and mark its module `## [x]`. Judge per train, never per module: when
+   every module of a train has landed, dispatch one `validator` over the train and one `mutator` over its level-3
+   lines, together. On `FAIL`, re-dispatch the module's worker with the `Fixes`. A mutator survivor goes to the handoff.
+7. Append one row per judge to `docs/agentes/rendimiento-jueces.tsv` (see § Judges).
+8. Repeat with the assignments the merged ones unblocked.
+9. Run `npm run typecheck` (tsgo) and `npm run lint` (eslint cache).
+10. Dispatch the `critic` before calling the slice done. Tick the slice's RF codes in `docs/SPEC.md`.
+11. Drop every lane's worktree, after copying its `private/` (`docs/agentes/lanes.md`).
+12. Report to the user.
+
+## Keep moving
+
+- Never ask whether to keep going or close the handoff. The `Stop` hook says when the window is full.
+- Never ask permission for the next step the plan already names. Take it and report it.
+- Never end a turn on a report while a module is ready to dispatch. Take it.
+- Leave `**Bloqueado:** <reason>` at the head of a plan that waits on something outside itself: the `Stop` hook stays
+  quiet on it and names no module.
+- Take the module the `Stop` hook names. It reads the plan's boxes and the `Depende de:` line, so it names only what
+  is takeable and says nothing while every module is in flight or blocked.
+- Say who or what blocks a module, in one line, when one is blocked. Never go quiet.
+
+## Judges
+
+- `validator` judges one train against its contracts. `mutator` breaks the lines the train changed and reports what no
+  suite noticed. `auditor` judges the code. `critic` drives the app and judges the product. `test-critic` judges a
+  suite, never a branch: which assertions cannot fail, which surfaces nobody drives, which facts are paid twice.
+- Give the `mutator` 30 minutes a train: about 40 mutations, one build for all, on the lines that cost most in
+  production. Never block the train's PR on it.
+- Scope a slice's `critic` to what the slice broke. It reports Broken and Hostile there; a Thin finding goes to
+  `private/pulido.md`, never into the next slice.
+- Run one whole-app `critic` before opening a polish slice: every screen, 360 and 1280, and paper, in one closed list.
+  The user picks from it once; one slice ships the picks; then polish stops.
+- Put the critic's questions to the user, in their own words. Never answer one for them.
+- A slice is reviewed when a reviewer read it in a clean context. A reviewer with no findings is a valid result.
+- Append one row per judge per train to `docs/agentes/rendimiento-jueces.tsv`: date, train, judge, findings, findings
+  no other judge found, fixed, tokens if known. Count CI too when it caught what no judge did.
+- Read the table at a model change and every 5 trains. Merge or space out a judge that found nothing another judge
+  did not. Report the change to the user,
+  and mark the review with a row whose judge is `review`.
+
+## Git
+
+- Verify before every merge: `git log <base>..HEAD --format='%h %an <%ae>%n%(trailers)'`.
+- Let `gh pr merge --squash` sign its own squash with the GitHub account. Only the branch's commits must be wilson's.
+- Read `gh auth status` before blaming a PR. Two accounts live on this machine and only one can merge: a
+  `does not have the correct permissions` on a green, mergeable PR is the account, not the branch.
+- Ask GitHub whether a branch landed: `gh pr list --state merged --limit 300 --json number,headRefName,baseRefName`.
+  `git merge-base --is-ancestor` answers only whether a branch merged without a pull request.
+- Check a branch with no merged PR for content before deleting it.
+- Compare against the branch its PR targets: `gh pr view <n> --json baseRefName`. Never HEAD, never a hardcoded name.
+- Delete a branch the day its PR merges, and a train's module branches, local and remote, the moment the train's PR
+  reads `MERGED`. Report it. Leave `delete_branch_on_merge` on.
+- Delete only after `gh pr view <n> --json state` reads `MERGED`.
+- Restore `integracion` right after merging it into `main`: `git push origin origin/main:refs/heads/integracion`.
+- Commit and push a worker's branch yourself when the environment denied it. A working branch only, never `main` or
+  `integracion`; say it in the report.
+- Take `integracion` to `main` through a pull request merged with `--merge`, once per slice, at most once a day, after
+  asking. Every app but `apps/portal` ships from `main` alone, and every push there spends a deployment of a quota.
 
 ## Parallel tracks
 
-- Lanes 2 to 6 take e2e work, 7 and up work with no e2e (`AGENTS.md` § Parallel tracks). Lane 1 is yours: you merge, you tick, you run the suites the branches share.
+- Lanes 2 to 6 take e2e work, 7 and up work with no e2e (`docs/agentes/lanes.md`). Lane 1 is yours: you merge, you tick, you run the suites the branches share.
 - Give each dispatch its lane number, its worktree path, its port and its branch.
 - Never put two workers on one lane, and never two on one file.
 - Cap the suites running at once at five.
 - Serialize only what a dependency forces. Nothing else.
 - Never hold work behind a judge. Run the `validator`, `mutator` and `critic` beside the next module's worker,
-  and cut the next train from the branch of the one in review. Decided by the user 2026-10-11: «esperar a los
-  agentes multiplica el tiempo».
+  and cut the next train from the branch of the one in review.
 
 ## What a dispatch costs
 
@@ -86,7 +146,8 @@ dispatch sits after all of it. So a rule written in `worker.md` is read back at 
 the input price on every later worker, and the same rule pasted into five dispatches is paid
 five times at full price.
 
-- Write anything every worker needs in `worker.md` or `AGENTS.md`. Never repeat it per dispatch.
+- Write anything every worker needs in `worker.md` or `AGENTS.md`; what one kind of work needs in `docs/agentes/`.
+  Never repeat it per dispatch.
 - Keep in the dispatch only what this one worker needs: its goal, its files, its lane, its criterion.
 - Never vary a worker's tool list. A tool that changes invalidates the whole prefix.
 
@@ -108,6 +169,8 @@ Send: goal, files with path, contract, RF codes and the `docs/` sections to read
 builds on, done criterion, the decisions you already took.
 
 Name the branch, the lane, the worktree path and the port. It commits its own work.
+Say the `/cuenta` rule in every dispatch that drives WordBook: never type an address into it
+(`docs/agentes/voyager.md`).
 Say that the database is remote and shared: it never migrates, never touches a trigger, a policy or a grant,
 and never runs a suite on a lane that is not its own.
 State the done criterion as a fact to prove. Never as a command to run.

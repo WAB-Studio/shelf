@@ -37,11 +37,17 @@ function dayAfter(text: string, today: string): string | null {
   if (!match) return null;
   const month = MONTHS[match[2].slice(0, 3).toLowerCase()];
   if (month === undefined) return null;
-  const year = match[3] ?? today.slice(0, 4);
-  const day = `${year}-${String(month).padStart(2, "0")}-${match[1].padStart(2, "0")}`;
-  if (!isCivilDate(day)) return null;
-  // Round trip: «31 feb» must not roll into March.
-  return civilDateToDate(day).toISOString().slice(0, 10) === day ? day : null;
+  const dayText = String(match[1]).padStart(2, "0");
+  const monthText = String(month).padStart(2, "0");
+  // A year left out names the latest such day not after today: «28 dic» in January is last year's.
+  const years = match[3] ? [Number(match[3])] : [0, 1, 2, 3, 4].map((back) => Number(today.slice(0, 4)) - back);
+  for (const year of years) {
+    const day = `${year}-${monthText}-${dayText}`;
+    // Round trip: «31 feb» must not roll into March.
+    if (!isCivilDate(day) || civilDateToDate(day).toISOString().slice(0, 10) !== day) continue;
+    if (match[3] || day <= today) return day;
+  }
+  return null;
 }
 
 const CHECKED = /^\s*[-*+]\s+\[[xX]\]/;
