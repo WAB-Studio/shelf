@@ -3,6 +3,7 @@ import "server-only";
 import { normaliseHeadword } from "@/lib/dictionary/format";
 import { groupFor, type DictionaryIndex } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { claimDailyCall } from "@/lib/word/spend";
@@ -44,6 +45,9 @@ function unindexedTokens(index: DictionaryIndex, sourceTokens: string[]): string
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
+
   let raw: unknown;
   try {
     raw = await request.json();

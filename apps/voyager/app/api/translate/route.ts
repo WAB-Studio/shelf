@@ -1,6 +1,7 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { providerFetch } from "@/lib/provider/fetch";
 import { translateRequestSchema, type TranslationResult } from "@/lib/translate/types";
 import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
@@ -184,6 +185,9 @@ async function translateWithModel(text: string): Promise<string | null> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
+
   let raw: unknown;
   try {
     raw = await request.json();

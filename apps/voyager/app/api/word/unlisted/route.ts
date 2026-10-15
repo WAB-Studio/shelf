@@ -2,6 +2,7 @@ import "server-only";
 
 import { lookupWord } from "@/lib/dictionary/lookup";
 import { env } from "@/lib/env";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { admitWord } from "@/lib/word/admit";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
@@ -30,6 +31,9 @@ function empty(status: 204 | 400): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
+
   let raw: unknown;
   try {
     raw = await request.json();

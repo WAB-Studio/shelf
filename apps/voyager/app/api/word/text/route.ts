@@ -3,6 +3,7 @@ import "server-only";
 import { normaliseHeadword } from "@/lib/dictionary/format";
 import { groupFor } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { generateWordText, MODEL_NAME } from "@/lib/word/model";
@@ -51,6 +52,9 @@ async function claimModelCall(request: Request, dailyCap: number): Promise<boole
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
+
   let raw: unknown;
   try {
     raw = await request.json();
