@@ -53,3 +53,7 @@ test("normalize stores the cadence and the days as codes the words read back", (
   assert.equal(cadenceWords(translate, c), "3 por semana");
   assert.equal(daysWords(translate, c.proposed, dayNames), "lun, mié, dom");
 });
+
+test("days outside Monday to Sunday are not days: 0 is printed as it came", () => {
+  assert.equal(daysWords(translate, "0,1", dayNames), "0,1");
+});

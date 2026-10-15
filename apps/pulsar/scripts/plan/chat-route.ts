@@ -93,11 +93,11 @@ function stubScript(script: Record<string, unknown>): void {
   envHandle.PULSAR_CHAT_STUB = `script:${STUB_FILE}`;
 }
 
-function request(body: unknown) {
+function request(body: unknown, headers: Record<string, string> = {}) {
   return new Request("http://localhost/chat/enviar", {
     method: "POST",
     body: typeof body === "string" ? body : JSON.stringify(body),
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
   }) as unknown as Parameters<typeof route.POST>[0];
 }
 
@@ -353,4 +353,14 @@ test("an id the model made up, no uuid, refuses its own change and costs the oth
   assert.equal(changes[1].words.values.task, "chat-route Maze");
   assert.equal(changes[2].refused, "chat.errors.notInPlan");
   assert.equal((await chatRows())[0].outcome, "ok");
+});
+
+test("a body that declares more than 1 MiB is refused before anything is claimed; exactly 1 MiB is read", async () => {
+  const over = await route.POST(request(say("¿Cómo voy?"), { "content-length": String(1024 * 1024 + 1) }));
+  assert.equal(over.status, 422);
+  assert.equal((await body(over)).error, "chat.errors.blank");
+  assert.equal((await chatRows()).length, 0);
+  const at = await route.POST(request(say("¿Cómo voy?"), { "content-length": String(1024 * 1024) }));
+  assert.equal(at.status, 200);
+  assert.equal((await chatRows()).length, 1);
 });
