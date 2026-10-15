@@ -24,7 +24,7 @@ const startOf = (offset: number) => {
 const nameOf = (offset: number) => NAMES[Number(startOf(offset).slice(5, 7)) - 1];
 const yearOf = (offset: number) => startOf(offset).slice(0, 4);
 const labelOf = (offset: number) => `${nameOf(offset)} ${yearOf(offset)}`;
-const withYear = (offset: number) => `${nameOf(offset)} de ${yearOf(offset)}`;
+const withYear = (offset: number) => `${nameOf(offset)} ${yearOf(offset)}`;
 // «31 de enero de 2027»: the last day of a goal whose span ends at month `to`.
 const lastDay = (to: number) => {
   const date = civilDateToDate(startOf(to + 1));
