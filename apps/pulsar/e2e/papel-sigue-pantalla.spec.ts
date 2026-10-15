@@ -162,8 +162,10 @@ test.describe("the paper follows the screen (RP-84, RP-124)", () => {
       const paper = await paperText(browser, baseURL!, person, "Escribir", "k5");
       for (const [where, text] of [["screen", screen], ["paper", paper]] as const) {
         expect(count(text, "2.100 de 6.000 palabras"), `${where}: the summary line`).toBeGreaterThanOrEqual(1);
-        expect(text, `${where}: no unit after the figure`).not.toMatch(/2\.100 palabras de/);
-        expect(text, `${where}: no unit after the figure`).not.toMatch(/palabras de 6\.000/);
+        // The detail below the summary sets two figure columns side by side, which the PDF reads across.
+        const summary = text.slice(0, text.indexOf("el detalle de cada meta"));
+        expect(summary, `${where}: no unit after the figure`).not.toMatch(/2\.100 palabras de/);
+        expect(summary, `${where}: no unit after the figure`).not.toMatch(/palabras de 6\.000/);
       }
     } finally {
       await clear(db, person);

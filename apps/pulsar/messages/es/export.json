@@ -15,7 +15,7 @@
   "declaredOnly": "solo lo que dijiste tú",
   "endedCount": "{ended, plural, one {# terminada} other {# terminadas}}",
   "download": "Descargar PDF",
-  "printBrand": "Bitácora de metas",
+  "printBrand": "GoalLog",
   "printHead": "{brand} · {date}",
   "measures": "mide {measure}, en {unit}",
   "measuresUnnamed": "mide en {unit}",
