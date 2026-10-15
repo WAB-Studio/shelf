@@ -2,7 +2,12 @@ import { z } from "zod";
 
 import type { CurrencyCode } from "@/lib/currency";
 import { isCivilDate, todayInBogota } from "@/lib/dates";
-import { minorAmountSchema, anyCurrencyAmountSchema } from "@/lib/validation/transaction";
+import {
+  minorAmountSchema,
+  anyCurrencyAmountSchema,
+  occurredAtSchema,
+  pesoAmountSchema,
+} from "@/lib/validation/transaction";
 
 const realAmountKeys = {
   required: "errors.reconcileRealRequired",
@@ -49,3 +54,22 @@ export function checkRealAmount(
     ? { ok: false, messageKey: messageKey ?? "errors.unexpected" }
     : { ok: true, cents };
 }
+
+/**
+ * An adjustment row of a backup (RF-50, RF-137): the gap one account was booked, on the day
+ * it was counted. `direction` says which way the account moved; the amount is its magnitude.
+ * The import books it as a reconciliation, so it stays out of income and expense (RF-138).
+ */
+export const importedAdjustmentSchema = z.object({
+  adjustment: z.literal(true),
+  accountId: z.uuid({ error: "transactions.errors.accountInvalid" }),
+  direction: z.enum(["up", "down"]),
+  amount: pesoAmountSchema({
+    required: "transactions.errors.amountRequired",
+    invalid: "transactions.errors.amountInvalid",
+    tooLarge: "transactions.errors.amountTooLarge",
+  }),
+  occurredAt: occurredAtSchema,
+});
+
+export type ImportedAdjustment = z.infer<typeof importedAdjustmentSchema>;

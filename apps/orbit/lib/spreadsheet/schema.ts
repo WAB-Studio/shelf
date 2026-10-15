@@ -54,6 +54,9 @@ type FieldColumn<Model> = {
   readonly field: keyof Model & string;
   readonly money?: MoneyBoundary;
   readonly ref?: { readonly entity: RefEntity };
+  // The cell says only whether `field` is set (TRUE or blank), never its value: a reconciliation id
+  // means nothing after a restore, the fact that the row is an adjustment does.
+  readonly flag?: true;
 };
 
 // A cell with no backing `$inferSelect` column: the export derives it from a
@@ -195,6 +198,9 @@ export const transactionRowSchema = z.object({
     .trim()
     .max(200, { error: "transactions.errors.descriptionTooLong" })
     .nullable(),
+  // TRUE marks a reconciliation adjustment (RF-137, RF-138): the import books it as one, never as
+  // income or expense. Blank for every other movement.
+  adjustment: z.literal(true).nullish(),
 });
 export type TransactionRow = z.infer<typeof transactionRowSchema>;
 
@@ -279,6 +285,7 @@ export const transactionSheetDescriptor = {
     { key: "category", synthetic: true, ref: { entity: "categories" } },
     { key: "occurredAt", field: "occurredAt" },
     { key: "description", field: "description" },
+    { key: "adjustment", field: "reconciliationId", flag: true },
   ],
   rowSchema: transactionRowSchema,
 } satisfies SheetDescriptor<TransactionModel, typeof transactionRowSchema>;

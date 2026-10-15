@@ -5062,6 +5062,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "counted_balance_cents",
     "created_at",
     "created_by",
+    "external_ref",
     "id",
     "reconciled_on",
   ],
