@@ -19,7 +19,8 @@ const downBaseURL = process.env.PULSAR_DOWN_BASE_URL;
 // A third `next start` of the same build with `PULSAR_FAULT_SEAM` set, so
 // every evidence source reads as unreadable (`e2e/fuente-caida.spec.ts`) and
 // the model and the chat are stubs (`e2e/importar-modelo.spec.ts`, RNP-13; `e2e/chat-modelo.spec.ts`, RNP-21).
-// Absent, the project does not exist.
+// Absent, the project does not exist. Locally: `PULSAR_FAULT_PORT=<free port> npm run start:fault`
+// beside the ordinary server, then `PULSAR_FAULT_BASE_URL=http://localhost:<that port>`.
 const faultBaseURL = process.env.PULSAR_FAULT_BASE_URL;
 
 const phone = {

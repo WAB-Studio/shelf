@@ -9,6 +9,7 @@
     "dev": "next dev --port ${PORT:-3200}",
     "build": "next build",
     "start": "next start",
+    "start:fault": "PULSAR_FAULT_SEAM=reading_lookups PULSAR_MODEL_STUB=draft:$PWD/e2e/data/modelo-borrador.json PULSAR_CHAT_STUB=script:$PWD/e2e/data/chat-guion.json OPENAI_API_KEY=sk-stub next start --port ${PULSAR_FAULT_PORT:?set PULSAR_FAULT_PORT to a free port}",
     "lint": "eslint --cache",
     "typecheck": "tsgo --noEmit --incremental false",
     "db:generate": "drizzle-kit generate",
