@@ -1715,3 +1715,8 @@ The one whole-app pass (AGENTS.md); critic: `private/reportes/critic-app-complet
   «Ábrelo en este teléfono» at 1280, the export's month names.
 - **Left out by the user's scope** (the critic's Thin 1, 3 but commitments, 4, 6, 8, 11): to `private/pulido.md`. The NOTA column
   of «Por semana» stays dormant: nothing writes a week's note.
+- **Answers of 2026-10-14 to the s10 plan's questions, by the user («todo lo que elegiste»):** 1 = a, paper equals the
+  export screen: a nested goal's note, phases and «POR MES» stop printing; 2 = a, the export screen shows commitments and
+  every «POR MES» paper prints (RP-124 widened); 3 = a, months named as their rows («noviembre 2026») go into RP-124, RP-77
+  is not retired; 4 = a, a correction nobody touched is not announced in the folded month. The note's character counter
+  («2 001 de 2000») stays out of «one number format».
