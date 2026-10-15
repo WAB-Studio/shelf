@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect } from "@playwright/test";
 
+import { addCivilDays, todayInBogota } from "@/lib/dates";
 import messages from "@/messages/es.json";
 import { TIME_ZONE } from "@/lib/locales";
 
@@ -366,5 +367,256 @@ test.describe("a rule's row opens what it generated, not the whole account (RF-1
         }),
       ).toBeVisible();
     }
+  });
+});
+
+// RF-137, RF-138: an adjustment (a «Descuadre») reads the same wherever a
+// movement is listed or opened, is signed in plain ink, stays out of the
+// list's net and is never editable. Written from boards B9 and B10 of the
+// cuadre plan; the adjustment is booked by the database's own trigger from a
+// seeded reconciliation, never inserted by hand.
+test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
+  const MINUS = "−";
+  const BASE_STAMP = randomUUID().slice(0, 8);
+  const REC_DAY = addCivilDays(todayInBogota(), -1);
+  const OPENING = 50_000_000; // $ 500.000
+  const errorsText = messages.errors;
+
+  let accountId = "";
+  let accountName = "";
+  let adjustmentId = "";
+
+  // Intl separates symbol and figure with a no-break space.
+  const flat = (text: string) => text.replace(/[\u00a0\u202f]/g, " ").replace(/\s+/g, " ").trim();
+
+  async function seedAdjustment(gapCents: number) {
+    accountId = randomUUID();
+    accountName = `Banco ${BASE_STAMP}-${Math.abs(gapCents)}`;
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (
+          id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (
+          ${accountId}, ${scope.userId}, ${accountName}, 'asset', 'bancaria',
+          ${OPENING}, ${addCivilDays(todayInBogota(), -30)})`;
+      await tx`
+        insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+        values (${accountId}, ${REC_DAY}, ${OPENING + gapCents})`;
+    });
+    const [row] = await fixtureSql<{ id: string }[]>`
+      select id from transactions
+      where reconciliation_id is not null
+        and (from_account_id = ${accountId} or to_account_id = ${accountId})`;
+    adjustmentId = row.id;
+  }
+
+  test.afterEach(async () => {
+    if (!accountId) return;
+    await fixtureSql`
+      delete from transactions
+      where from_account_id = ${accountId} or to_account_id = ${accountId}`;
+    await fixtureSql`delete from account_reconciliations where account_id = ${accountId}`;
+    await fixtureSql`delete from accounts where id = ${accountId}`;
+    accountId = "";
+  });
+
+  // The row a viewport draws: the laptop's table row, the phone's card link.
+  function adjustmentRow(page: import("@playwright/test").Page, desktop: boolean) {
+    return desktop
+      ? page
+          .getByRole("table", { name: transactions.listTitle })
+          .getByRole("row")
+          .filter({ hasText: transactions.kindAdjustment })
+      : page.getByRole("link").filter({ hasText: transactions.kindAdjustment });
+  }
+
+  test("a positive adjustment reads «Descuadre», the account and +$ 12.000 in the list", async ({
+    page,
+  }, testInfo) => {
+    const desktop = testInfo.project.name === "desktop";
+    await seedAdjustment(1_200_000);
+
+    await page.goto("/es/movements");
+
+    const row = adjustmentRow(page, desktop);
+    await expect(row).toHaveCount(1);
+    const text = flat(await row.innerText());
+    expect(text).toContain(transactions.kindAdjustment);
+    expect(text).toContain(accountName);
+    expect(text).toContain("+$ 12.000");
+    expect(text).not.toContain(transactions.kindExpense);
+    expect(text).not.toContain(transactions.kindIncome);
+    expect(text).not.toContain(transactions.kindTransfer);
+  });
+
+  test("a negative adjustment reads −$ 8.000 in the list", async ({ page }, testInfo) => {
+    const desktop = testInfo.project.name === "desktop";
+    await seedAdjustment(-800_000);
+
+    await page.goto("/es/movements");
+
+    const row = adjustmentRow(page, desktop);
+    await expect(row).toHaveCount(1);
+    const text = flat(await row.innerText());
+    expect(text).toContain(transactions.kindAdjustment);
+    expect(text).toContain(accountName);
+    expect(text).toContain(`${MINUS}$ 8.000`);
+    expect(text).not.toContain("+$");
+  });
+
+  test("on the laptop's table the adjustment's category cell is empty and its amount signed", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the table is the laptop's");
+    await seedAdjustment(1_200_000);
+
+    await page.goto("/es/movements");
+
+    const ledger = page.getByRole("table", { name: transactions.listTitle });
+    const headers = await ledger.getByRole("row").first().locator(":scope > *").allInnerTexts();
+    const categoryAt = headers.findIndex(
+      (h) => flat(h).toLowerCase() === transactions.categoryLabel.toLowerCase(),
+    );
+    expect(categoryAt).toBeGreaterThanOrEqual(0);
+
+    const row = ledger.getByRole("row").filter({ hasText: transactions.kindAdjustment });
+    await expect(row).toHaveCount(1);
+    const cells = await row.getByRole("cell").allInnerTexts();
+    expect(flat(cells[categoryAt] ?? "x")).toBe("");
+    expect(flat(cells.join(" | "))).toContain("+$ 12.000");
+  });
+
+  test("the list's net is income minus expense of the ordinary rows, the adjustment left out", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the net sits in the laptop's header");
+    await seedAdjustment(1_200_000);
+
+    await page.goto("/es/movements");
+
+    // Seeded: income $ 71.000, expense $ 32.000. Counting the +$ 12.000 as
+    // income reads $ 51.000; as an expense, $ 27.000.
+    const meta = page.getByText(/· neto/).filter({ visible: true }).first();
+    const text = flat(await meta.innerText());
+    expect(text).toContain("+$ 39.000");
+    expect(text).not.toContain("51.000");
+    expect(text).not.toContain("27.000");
+  });
+
+  test("ordinary rows keep their category and sign beside an adjustment", async ({
+    page,
+  }, testInfo) => {
+    const desktop = testInfo.project.name === "desktop";
+    await seedAdjustment(1_200_000);
+
+    await page.goto("/es/movements");
+
+    const rowFor = (category: string) =>
+      desktop
+        ? page
+            .getByRole("table", { name: transactions.listTitle })
+            .getByRole("row")
+            .filter({ hasText: category })
+        : page.getByRole("link").filter({ hasText: category });
+
+    const expense = flat(await rowFor(scope.categoryName).innerText());
+    expect(expense).toContain(`${MINUS}$ 32.000`);
+    expect(expense).not.toContain(transactions.kindAdjustment);
+
+    const income = flat(await rowFor(incomeCategoryName).innerText());
+    expect(income).toContain("+$ 71.000");
+    expect(income).not.toContain(transactions.kindAdjustment);
+  });
+
+  test("the dashboard's recent lines read «Descuadre» and +$ 12.000", async ({ page }) => {
+    await seedAdjustment(1_200_000);
+
+    await page.goto("/es");
+
+    const line = page
+      .getByRole("link")
+      .filter({ hasText: transactions.kindAdjustment })
+      .filter({ visible: true });
+    await expect(line).toHaveCount(1);
+    const text = flat(await line.innerText());
+    expect(text).toContain(accountName);
+    expect(text).toContain("+$ 12.000");
+    expect(text).not.toContain(transactions.kindIncome);
+  });
+
+  test("the detail is B10: «Descuadre», the figure, the fix line, no Editar and no Eliminar", async ({
+    page,
+  }) => {
+    await seedAdjustment(1_200_000);
+
+    await page.goto(`/es/movements/${adjustmentId}`);
+
+    await expect(
+      page
+        .getByRole("heading", { name: transactions.kindAdjustment, exact: true })
+        .filter({ visible: true }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByText(transactions.adjustmentFix, { exact: true }).filter({ visible: true }),
+    ).toHaveCount(1);
+    await expect(page.getByText(accountName).filter({ visible: true }).first()).toBeVisible();
+    expect(flat(await page.locator("main").innerText())).toContain("+$ 12.000");
+
+    await expect(
+      page.getByRole("button", { name: transactions.edit, exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: transactions.delete, exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("menuitem", { name: transactions.edit, exact: true }),
+    ).toHaveCount(0);
+  });
+
+  test("a forged delete of the adjustment surfaces the read-only refusal and deletes nothing", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the row menu is the laptop's");
+    await seedAdjustment(1_200_000);
+
+    // The interface offers no way to delete an adjustment, so the delete of an
+    // ordinary row is sent with the adjustment's id swapped in.
+    const [expense] = await fixtureSql<{ id: string }[]>`
+      select id from transactions
+      where owner_user_id = ${scope.userId} and description = ${EXPENSE_DESCRIPTION}`;
+    let forged = 0;
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      const body = request.postData();
+      if (
+        request.method() === "POST" &&
+        request.headers()["next-action"] &&
+        body?.includes(expense.id)
+      ) {
+        forged += 1;
+        await route.continue({ postData: body.replaceAll(expense.id, adjustmentId) });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/es/movements");
+    await page
+      .getByRole("button", {
+        name: common.actionsFor.replace("{name}", EXPENSE_DESCRIPTION),
+        exact: true,
+      })
+      .click();
+    await page.getByRole("menuitem", { name: transactions.delete, exact: true }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: transactions.delete, exact: true })
+      .click();
+
+    await expect(page.getByText(errorsText.adjustmentReadOnly)).toBeVisible();
+    expect(forged).toBe(1);
+    const [left] = await fixtureSql<{ n: string }[]>`
+      select count(*)::text as n from transactions where id in (${adjustmentId}, ${expense.id})`;
+    expect(left.n).toBe("2");
   });
 });
