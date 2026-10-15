@@ -3,3 +3,5 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-15	homefund-tren-cuadre	mutator	8	8	0	101034
 2026-10-15	homefund-tren-cuadre	critic	13	12	3	150765
 2026-10-15	homefund-tren-cuadre	ci	4	3	4	
+2026-10-15	goallog-tren-998	validator	0	0	0	68584
+2026-10-15	goallog-tren-998	mutator	22	22	14	111926
