@@ -159,7 +159,9 @@ function SignedOutForm() {
       </Flex>
 
       {state.kind === "sent" ? (
-        <Text size="2">{t("sent")}</Text>
+        <Text size="2" role="status">
+          {t("sent")}
+        </Text>
       ) : (
         <Flex direction="column" gap="3" maxWidth="400px">
           <TextField.Root
@@ -183,7 +185,7 @@ function SignedOutForm() {
               <Separator size="4" />
               <Flex gap="2" align="center">
                 {state.error === "offline" && <OfflineGlyph />}
-                <Text size="2" weight="bold">
+                <Text size="2" weight="bold" role="alert">
                   {t(`errors.${state.error}`)}
                 </Text>
               </Flex>

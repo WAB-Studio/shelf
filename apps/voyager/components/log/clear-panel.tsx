@@ -142,7 +142,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
             </Text>
             {stage.kind === "failed" && stage.scope === "local" && (
               <Flex direction="column" gap="2" align="start">
-                <Text size="2" weight="bold">
+                <Text size="2" weight="bold" role="alert">
                   {t("failed")}
                 </Text>
                 <Button size="2" tap onClick={() => void wipeLocal()}>
@@ -165,7 +165,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
             </Text>
             {stage.kind === "failed" && stage.scope === "account" && (
               <Flex direction="column" gap="2" align="start">
-                <Text size="2" weight="bold">
+                <Text size="2" weight="bold" role="alert">
                   {t("failed")}
                 </Text>
                 <Button size="2" tap onClick={() => void wipeAccount()}>
@@ -189,7 +189,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
           </Link>
           {stage.kind === "failed" && (
             <Flex direction="column" gap="2" align="start">
-              <Text size="2" weight="bold">
+              <Text size="2" weight="bold" role="alert">
                 {t("failed")}
               </Text>
               <Button size="2" tap onClick={() => void wipeLocal()}>

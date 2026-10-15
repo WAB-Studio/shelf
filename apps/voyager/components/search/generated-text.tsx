@@ -68,7 +68,7 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
           </Flex>
           <Flex direction="column" gap="2">
             {hasDefinition && (
-              <Text variant="generatedProse" serif muted>
+              <Text variant="generatedProse" serif muted english>
                 {text.definition}
               </Text>
             )}
@@ -77,7 +77,7 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
                   for a screen reader without drawing a fourth caption line —
                   skipped when the heading above already says "Ejemplo". */}
               {hasDefinition && <VisuallyHidden>{t("example")}</VisuallyHidden>}
-              <Text variant="generatedProse" serif>
+              <Text variant="generatedProse" serif english>
                 {text.example.en}
               </Text>
               <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>

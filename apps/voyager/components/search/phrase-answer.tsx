@@ -57,7 +57,7 @@ export function PhraseAnswer({
       {state.kind === "done" && (
         <Flex direction="column" gap="1">
           <Text variant="translation">{state.result.text}</Text>
-          <Text size="2" color="gray">
+          <Text size="2" color="gray" english>
             {state.source}
           </Text>
           <MetaLabel>
@@ -88,10 +88,10 @@ export function PhraseAnswer({
             {t("downloadingModel")}
           </Text>
           {offer.fraction === null ? (
-            <Progress />
+            <Progress aria-label={t("progressLabel")} />
           ) : (
             <>
-              <Progress value={Math.round(offer.fraction * 100)} />
+              <Progress value={Math.round(offer.fraction * 100)} aria-label={t("progressLabel")} />
               <Text size="1" color="gray">
                 {t("downloadProgress", { percent: Math.round(offer.fraction * 100) })}
               </Text>

@@ -40,6 +40,8 @@ type SerifProps = {
   // own `color="gray"`. `"quietest"` is the second, dimmer muted role the
   // same table names — first needed by `RegistroVaciarConfirmar`'s captions.
   muted?: boolean | "quietest";
+  // English text, so a screen reader switches to an English voice.
+  english?: boolean;
 };
 
 function withSerif(
@@ -66,6 +68,12 @@ function withSerif(
   return classes.length > 0 ? classes.join(" ") : undefined;
 }
 
-export function Text({ serif, variant, muted, className, ...props }: TextProps & SerifProps) {
-  return <ThemesText {...props} className={withSerif(serif, variant, muted, className)} />;
+export function Text({ serif, variant, muted, english, className, ...props }: TextProps & SerifProps) {
+  return (
+    <ThemesText
+      {...props}
+      lang={english ? "en" : props.lang}
+      className={withSerif(serif, variant, muted, className)}
+    />
+  );
 }

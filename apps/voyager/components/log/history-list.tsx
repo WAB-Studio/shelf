@@ -76,7 +76,7 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
               align="center"
             >
               <Flex gridColumn="1" gridRow="1" minWidth="0" overflow="hidden">
-                <Text serif truncate>
+                <Text serif truncate english>
                   {lemmaless ? row.display : row.key}
                 </Text>
               </Flex>

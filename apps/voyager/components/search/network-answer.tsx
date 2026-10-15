@@ -91,7 +91,7 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
               <Text variant="definitionLabel" muted>
                 {t("definitionEnglish")}
               </Text>
-              <Text variant="generatedProse" serif muted>
+              <Text variant="generatedProse" serif muted english>
                 {answer.definition}
               </Text>
             </Flex>
@@ -100,7 +100,7 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
             <Text variant="definitionLabel" muted>
               {t("example")}
             </Text>
-            <Text variant="generatedProse" serif>
+            <Text variant="generatedProse" serif english>
               {answer.example.en}
             </Text>
             <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>

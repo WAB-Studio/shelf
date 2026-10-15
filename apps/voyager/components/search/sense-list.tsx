@@ -216,7 +216,7 @@ function SenseDetail({
               <Text variant="definitionLabel" muted>
                 {t("definitionEnglish")}
               </Text>
-              <Text size="2" serif muted>
+              <Text size="2" serif muted english>
                 {sense.definition}
               </Text>
             </Flex>
@@ -407,7 +407,7 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
           <Link asChild underline="always" key={word}>
             <NextLink href={correctionHref(word)}>
               <TapTarget align="center" gap="1">
-                <Text size="3" serif>
+                <Text size="3" serif english>
                   {word}
                 </Text>
                 <ChevronGlyph />
