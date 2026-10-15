@@ -57,6 +57,16 @@ async function cut(mode: Mode, context: BrowserContext, page: Page): Promise<() 
   };
 }
 
+// An unhandled rejection in the page surfaces as a pageerror; none may come out of a refused write.
+function pageErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  return errors;
+}
+
+// Lets a rejection that is still queued reach the page before the absence is asserted.
+const quiet = (page: Page) => page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 300)));
+
 const markOf = (page: Page, name: string) => page.locator("button", { hasText: name }).first();
 
 for (const mode of MODES) {
@@ -65,11 +75,15 @@ for (const mode of MODES) {
       const { tap } = await seed(db, person);
       const { page, context } = await openAs(browser, baseURL, person, "/");
       try {
+        const errors = pageErrors(page);
         const row = markOf(page, TAP);
         await expect(row.locator("svg")).toHaveCount(0);
         const restore = await cut(mode, context, page);
         await row.click();
         await expect(row).toBeEnabled();
+        await quiet(page);
+        expect(errors).toEqual([]);
+        await expect(page.getByText("No se pudo abrir")).toHaveCount(0);
         await expect(row.locator("svg")).toHaveCount(0);
         expect(await factsOf(db, tap)).toHaveLength(0);
 
@@ -89,9 +103,13 @@ for (const mode of MODES) {
       try {
         const row = markOf(page, TAP);
         await expect(row.locator("svg")).toBeVisible();
+        const errors = pageErrors(page);
         await cut(mode, context, page);
         await row.click();
         await expect(row).toBeEnabled();
+        await quiet(page);
+        expect(errors).toEqual([]);
+        await expect(page.getByText("No se pudo abrir")).toHaveCount(0);
         await expect(row.locator("svg")).toBeVisible();
         expect(await factsOf(db, tap)).toHaveLength(1);
       } finally {
@@ -121,6 +139,28 @@ for (const mode of MODES) {
         const rows = await factsOf(db, qty);
         expect(rows).toHaveLength(1);
         expect(rows[0].quantity).toBe(TYPED);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("undoing a quantity from the sheet keeps the sheet, the fact and the page", async ({ person, browser, baseURL, db }) => {
+      const { goalId, qty } = await seed(db, person);
+      await db`insert into goals.facts (user_id, commitment_id, goal_id, day, quantity) values (${person.id}, ${qty}, ${goalId}, ${todayInZone()}::date, ${TYPED})`;
+      const { page, context } = await openAs(browser, baseURL, person, "/");
+      try {
+        const errors = pageErrors(page);
+        await markOf(page, QTY).click();
+        const sheet = page.getByRole("dialog");
+        await expect(sheet).toBeVisible();
+        await cut(mode, context, page);
+        await sheet.getByRole("button", { name: "Deshacer", exact: true }).click();
+        await expect(sheet.getByRole("button", { name: "Deshacer", exact: true })).toBeEnabled();
+        await quiet(page);
+        await expect(page.getByText("No se pudo abrir")).toHaveCount(0);
+        expect(errors).toEqual([]);
+        await expect(sheet).toBeVisible();
+        expect(await factsOf(db, qty)).toHaveLength(1);
       } finally {
         await context.close();
       }
