@@ -39,7 +39,7 @@ if not plans:
 plan = plans[0]
 text = plan.read_text(encoding="utf-8", errors="replace")
 
-header = re.compile(r"^## \[([ x~])\] (\d+) — (.+)$", re.M)
+header = re.compile(r"^## \[([ x~])\] ([A-Z]?\d+) [—·] (.+)$", re.M)
 modules = [
     {"state": m.group(1), "number": m.group(2), "title": m.group(3).strip(), "at": m.end()}
     for m in header.finditer(text)
@@ -53,7 +53,7 @@ bounds = [m["at"] for m in modules[1:]] + [len(text)]
 def dependencies(module, end):
     body = text[module["at"]:end]
     line = re.search(r"\*\*Depende de:\*\*(.+)", body)
-    return re.findall(r"\d+", line.group(1).split(".")[0]) if line else []
+    return re.findall(r"\b[A-Z]?\d+\b", line.group(1).split(".")[0]) if line else []
 
 waiting = [m for m in modules if m["state"] == " "]
 flight = [m for m in modules if m["state"] == "~"]
