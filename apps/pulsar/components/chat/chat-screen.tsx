@@ -18,7 +18,7 @@ import {
 } from "@/lib/chat/conversation";
 import { chatTurnSchema } from "@/lib/chat/types";
 
-type Shut = "noKey" | "cap";
+type Shut = "noKey" | "cap" | "capApp";
 
 // What `POST /chat/enviar` answers for a change: its words, or the reason it names nothing of the person's.
 type Proposed = { id: string; tool: string; input: Record<string, unknown>; words?: StoredChange["words"]; refused?: string };
@@ -80,7 +80,7 @@ export function ChatScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ turns: requestTurns(readTurns()) }),
       });
-      const body = (await response.json().catch(() => null)) as { reply?: string; changes?: Proposed[] } | null;
+      const body = (await response.json().catch(() => null)) as { reply?: string; changes?: Proposed[]; error?: string } | null;
       if (response.ok && typeof body?.reply === "string" && Array.isArray(body.changes)) {
         const changes: StoredChange[] = body.changes.map(({ id, tool, input, words, refused }) =>
           refused ? { id, tool, input, state: "refused", reason: { key: refused } } : { id, tool, input, state: "open", words },
@@ -89,7 +89,7 @@ export function ChatScreen() {
       } else if (response.status === 503 || response.status === 429) {
         // The chat is shut: the message was never answered, so it leaves no turn.
         updateTurns(dropUnanswered);
-        setShut(response.status === 503 ? "noKey" : "cap");
+        setShut(response.status === 503 ? "noKey" : body?.error === "chat.errors.capApp" ? "capApp" : "cap");
       } else if (response.status === 422) {
         // The server refused the message: it leaves no turn, or every later message would carry it.
         updateTurns(dropUnanswered);
@@ -134,7 +134,7 @@ export function ChatScreen() {
     await makeAll(at, [id]);
   }
 
-  const cap = shut === "cap" ? <Notice role="note">{t("errors.cap")}</Notice> : null;
+  const cap = shut === "cap" || shut === "capApp" ? <Notice role="note">{t(`errors.${shut}`)}</Notice> : null;
 
   return (
     <Page width="column">
