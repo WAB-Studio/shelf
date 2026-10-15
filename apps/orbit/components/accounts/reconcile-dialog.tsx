@@ -86,33 +86,15 @@ function ReconcileForm({ account }: { account: AccountRow }) {
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   // Bumped to read the same day again after the ledger moved under the dialog.
   const [reads, setReads] = useState(0);
+  // Counts confirmations the server accepted.
+  const [booked, setBooked] = useState(0);
 
   const onActionError = useActionErrorToast();
-
-  useEffect(() => {
-    if (!isCivilDate(day) || day > todayInBogota()) return;
-
-    let current = true;
-    void readReconcileSheetAction({ accountId: account.id, on: day }).then((result) => {
-      if (!current) return;
-      if (result?.data) {
-        setSheet(result.data);
-        return;
-      }
-      toast.error(tKey((result?.serverError ?? "errors.unexpected") as MessageKey));
-    });
-
-    return () => {
-      current = false;
-    };
-  }, [account.id, day, reads, tKey]);
 
   const reconcile = useAction(reconcileAccountAction, {
     onSuccess({ data }) {
       if (data?.ok) {
-        toast.success(t("reconciled"));
-        form.setValue("realAmount", "");
-        setReads((n) => n + 1);
+        setBooked((n) => n + 1);
         return;
       }
 
@@ -135,6 +117,34 @@ function ReconcileForm({ account }: { account: AccountRow }) {
   });
 
   const isPending = reconcile.isPending;
+
+  // The action's `refresh()` commits the list behind the dialog in the transition that wraps the
+  // call, after the result lands. A confirmation counts as landed once that commit is done, so the
+  // toast and the fresh history never show while the list still reads the old balance.
+  const landed = reconcile.isTransitioning && booked > 0 ? booked - 1 : booked;
+  useEffect(() => {
+    if (landed === 0) return;
+    toast.success(t("reconciled"));
+    form.setValue("realAmount", "");
+  }, [landed, form, t]);
+
+  useEffect(() => {
+    if (!isCivilDate(day) || day > todayInBogota()) return;
+
+    let current = true;
+    void readReconcileSheetAction({ accountId: account.id, on: day }).then((result) => {
+      if (!current) return;
+      if (result?.data) {
+        setSheet(result.data);
+        return;
+      }
+      toast.error(tKey((result?.serverError ?? "errors.unexpected") as MessageKey));
+    });
+
+    return () => {
+      current = false;
+    };
+  }, [account.id, day, reads, landed, tKey]);
 
   const typed = realAmount === "" ? null : checkRealAmount(realAmount, currency);
   const gapCents =
