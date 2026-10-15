@@ -43,9 +43,9 @@ for (const [width, height] of [
 
       const measured = await page.evaluate(() => {
         const visible = (el: Element) => (el as HTMLElement).getClientRects().length > 0;
-        const figures = [...document.querySelectorAll<HTMLElement>("[class*='figure-module'][class*='__figure']")].filter(visible);
+        const figures = [...document.querySelectorAll<HTMLElement>("[data-part='figure']")].filter(visible);
         return figures.flatMap((figure) => {
-          const unit = figure.querySelector<HTMLElement>("[class*='__unit']");
+          const unit = figure.querySelector<HTMLElement>("[data-part='figure-unit']");
           if (!unit) return [];
           const range = document.createRange();
           range.selectNodeContents(figure.firstChild!);

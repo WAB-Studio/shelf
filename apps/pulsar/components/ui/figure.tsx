@@ -29,11 +29,12 @@ export function useTimeWords(): TimeWords {
 // Each figure in mono, each word after it in the caller's quiet class. The
 // spaces are flex-collapsed where the parent is a flex box and keep the
 // text reading «12 h 30 min» wherever it is copied or read aloud.
-export function TimeParts({ time, unitClass }: { time: TimeFigure; unitClass: string }) {
+// `unitPart` is the `data-part` the unit words carry, the hook a spec reads them by.
+export function TimeParts({ time, unitClass, unitPart }: { time: TimeFigure; unitClass: string; unitPart: string }) {
   return time.tokens.map((token, index) => (
     <Fragment key={index}>
       {index > 0 ? " " : null}
-      {token.figure ? token.text : <span className={unitClass}>{token.text}</span>}
+      {token.figure ? token.text : <span className={unitClass} data-part={unitPart}>{token.text}</span>}
     </Fragment>
   ));
 }
@@ -66,12 +67,12 @@ export function Figure({
   const wordUnit = unit && !bare && !isTimeFigure(formatted) ? unit : null;
   const breaks = Boolean(breakUnit && wordUnit);
   return (
-    <span className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""}`}>
-      {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted}
+    <span data-part="figure" className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""}`}>
+      {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} unitPart="figure-unit" /> : formatted}
       {/* A no-break space for copy and a screen reader to hear «20 páginas»; it draws no width, the spacer's padding does. */}
       {wordUnit ? <span className={styles.space}>{breaks ? " " : "\u00a0"}</span> : null}
       {wordUnit ? (
-        <span className={styles.unit}>{typeof value === "number" ? (words.unit?.(wordUnit, value) ?? wordUnit) : wordUnit}</span>
+        <span className={styles.unit} data-part="figure-unit">{typeof value === "number" ? (words.unit?.(wordUnit, value) ?? wordUnit) : wordUnit}</span>
       ) : null}
     </span>
   );

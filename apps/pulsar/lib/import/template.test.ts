@@ -422,7 +422,8 @@ test("no sentence repeats the line the person wrote", () => {
 
 test("ritmo: in its place with an amount that is not a time says the amount is the fault", () => {
   const text = `${RHYTHM_HEAD}medida: horas de estudio · minutos\nritmo: doce\n`;
-  assert.equal(sentenceOf(errorOf(text).expected), "El ritmo es un monto por mes: un tiempo como «12 h», o un entero en la unidad de la medida.");
+  // 992: a goal measured in time is no longer told it could write «un entero en la unidad de la medida».
+  assert.doesNotMatch(sentenceOf(errorOf(text).expected), /un entero en la unidad/);
 });
 
 test("a measure in hours is stored in minutes, its amounts and rhythm in the time forms", () => {
@@ -532,11 +533,13 @@ const at = (written: string) => BOARD.indexOf(written) + 1;
 test("RP-72 row 1: every unreadable line comes back at once, in the text's order, with its number and its sentence", () => {
   const found = mistakesOf(BOARD.join("\n"));
   assert.deepEqual(found.map((m) => m.line), [at("- 2026-11 · 8 h"), at("- Series · martes · 30 min"), at("- 2026-10 · 2 h · Comprar zapatillas")]);
-  assert.deepEqual(found.map(said), [
+  assert.deepEqual(found.map(said).slice(0, 2), [
     "Esa unidad no es km. Escribe el monto en km, como «- AAAA-MM · 8 km».",
     "Esa unidad no es km. Escribe la cantidad en km, como «- nombre · cadencia · 8 km».",
-    "Quita la cifra de esta línea: esta meta no mide tiempo.",
   ]);
+  // 992: a task written in another unit than the goal's gets the unit that goes, as a month and a commitment do.
+  assert.match(said(found[2]), /^Esa unidad no es km\./);
+  assert.equal(found[2].unit, "km");
 });
 
 test("RP-72 row 1: the list keeps the text's order when a later kind of line breaks first", () => {
@@ -636,9 +639,10 @@ test("801 cut: the header's other lines cut too — a bad horizon hides the brok
   assert.deepEqual(found.map((m) => m.line), [3]);
 });
 
-test("801 cut: a «ritmo:» the reader cannot take is a header error and cuts the reading", () => {
+test("992 all at once: a «ritmo:» the reader cannot take is reported and the reading goes on to the month below", () => {
   const found = mistakesOf(`${HEAD_OK}medida: distancia · km\nritmo: 12 h\n\n## Meses\n- 2026-11 · 8 h\n`);
-  assert.deepEqual(found.map((m) => m.line), [6]);
+  assert.deepEqual(found.map((m) => m.line), [6, 9]);
+  assert.equal(cutOf(`${HEAD_OK}medida: distancia · km\nritmo: 12 h\n\n## Meses\n- 2026-11 · 8 h\n`).cut, false);
 });
 
 test("801 cut: after a sound header every broken line is still listed at once", () => {
@@ -1046,10 +1050,10 @@ test("903 dentro de: a second line naming a goal above is an error on the second
   assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[9, "inside"]]);
 });
 
-test("903 dentro de: a line with no name cuts the read at that line", () => {
+test("903 dentro de: a line with no name is reported and the read goes on to the lines below", () => {
   const result = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de:\n## Tareas\n- mal\n`);
-  assert.equal(result.cut, true);
-  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[4, "inside"]]);
+  assert.equal(result.cut, false);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[4, "inside"], [6, "import.errors.form.task"]]);
 });
 
 test("903 dentro de: a goal cannot be inside itself", () => {
@@ -1132,4 +1136,184 @@ test("915 the template's own words say both things", () => {
   assert.match(doc, /sin `horizonte:`/);
   assert.match(doc, /entero en la unidad de la medida/);
   assert.match(doc, /pulsar · plantilla 2/);
+});
+
+// ---- 992 (RP-72): every error says what fails, and all of them come in one reading.
+
+const V2 = "pulsar · plantilla 2\n\n";
+const TIME_GOAL = `${V2}# Estudio\nhorizonte: 2027-10-01\nmedida: Práctica · horas\n`;
+const KM_GOAL = `${V2}# Correr\nhorizonte: 2027-10-01\nmedida: distancia · km\n`;
+const GENERIC_COMMITMENT = "import.errors.form.commitment";
+
+function listOf(text: string) {
+  const result = parseV2(text);
+  assert.ok(result.matched && "errors" in result, JSON.stringify(result));
+  return result;
+}
+const sayOf = (m: Mistake) => sentenceOf(m.expected).replaceAll("{unit}", m.unit ?? "");
+
+// The board `ImportarErroresClaros` (K6): four lines in four ways, in the text's order.
+const K6 = [
+  "pulsar · plantilla 2", // 1
+  "", // 2
+  "# Aprender", // 3
+  "horizonte: 2027-10-01", // 4
+  "medida: Práctica · horas", // 5
+  "", // 6
+  "## Compromisos", // 7
+  "- Hablar · cada dia · 30 min", // 8
+  "- Leer · 8 veces por semana · toque", // 9
+  "", // 10
+  "# Escribir", // 11
+  "horizonte: 2027-10-01", // 12
+  "medida: Práctica · horas", // 13
+  "ritmo: 10", // 14
+  "", // 15
+  "## Tareas", // 16
+  "- 2026-10 · 3 páginas · Algo", // 17
+].join("\n");
+
+test("992 K6: four broken lines of four kinds come back together, in the text's order, none cutting the others", () => {
+  const read = listOf(K6);
+  assert.deepEqual(read.errors.map((e) => e.line), [8, 9, 14, 17]);
+  assert.equal(read.cut, false);
+  assert.deepEqual(read.error, read.errors[0]);
+});
+
+test("992 K6: each of the four says what fails in its own words, and none is the generic form it replaces", () => {
+  const [tilde, cap, rhythm, task] = listOf(K6).errors;
+  assert.equal(sayOf(tilde), "Falta la tilde: «cada día».");
+  assert.equal(sayOf(cap), "Una semana tiene 7 días: hasta «7 veces por semana».");
+  assert.equal(sayOf(rhythm), "Esta meta mide en horas: escribe el ritmo con su unidad, como «ritmo: 10 h».");
+  assert.match(sayOf(task), /^Esa unidad no es de tiempo\. Escribe el monto en horas o minutos, como «- /);
+  const keys = [tilde, cap, rhythm, task].map((e) => e.expected);
+  assert.equal(new Set(keys).size, 4);
+  assert.ok(!keys.includes(GENERIC_COMMITMENT));
+  assert.ok(!keys.includes("import.errors.form.task"));
+  assert.ok(!keys.includes("import.errors.form.rhythmAmount"));
+});
+
+test("992 head: a «ritmo:» among the head lines is reported and the reading goes on to the lines below it", () => {
+  const read = listOf(`${TIME_GOAL}ritmo: 10\n\n## Meses\n- 2026-10 · 8 km\n`);
+  assert.deepEqual(read.errors.map((e) => e.line), [6, 9]);
+  assert.equal(read.cut, false);
+});
+
+test("992 head: a «dentro de:» written wrong is reported, the goal is read above it, and the lines below are judged", () => {
+  const read = listOf(`${V2}# Arriba\nhorizonte: 2028-10-01\n\n# Abajo\nhorizonte: 2027-10-01\ndentro de:\nmedida: d · km\n\n## Meses\n- 2026-10 · 8 h\n`);
+  assert.deepEqual(read.errors.map((e) => e.line), [8, 12]);
+  assert.equal(read.cut, false);
+});
+
+test("992 cuts that stay: a wrong first line is one error and cuts; so is a text with no goal", () => {
+  const first = listOf("pulsar · plantilla 3\n\n# A\nhorizonte: pronto\n## Meses\n- x\n");
+  assert.deepEqual(first.errors.map((e) => e.line), [1]);
+  assert.equal(first.cut, true);
+  const none = listOf(`${V2}horizonte: 2027-10-01\n## Meses\n- 2026-10 · x\n`);
+  assert.equal(none.errors.length, 1);
+  assert.equal(none.errors[0].line, 3);
+  assert.equal(none.cut, true);
+});
+
+test("992 cuts that stay: a broken «medida:» still cuts at its line, whatever the lines below say", () => {
+  const read = listOf(`${V2}# A\nhorizonte: 2027-10-01\nmedida: distancia\nritmo: 10\n## Meses\n- x\n`);
+  assert.deepEqual(read.errors.map((e) => e.line), [5]);
+  assert.equal(read.cut, true);
+});
+
+test("992 tilde: a cadence that reads once its accents are put on answers the tilde sentence, and is not accepted", () => {
+  for (const cadence of ["cada dia", "todos los dias", "cada 2 dias", "cada 1 dia"]) {
+    const text = `${TIME_GOAL}\n## Compromisos\n- Hablar · ${cadence} · 30 min\n`;
+    const read = listOf(text);
+    assert.equal(read.errors.length, 1, cadence);
+    assert.equal(read.errors[0].line, 8, cadence);
+    assert.match(sayOf(read.errors[0]), /^Falta la tilde: «cada /, cadence);
+    assert.notEqual(read.errors[0].expected, GENERIC_COMMITMENT, cadence);
+  }
+  assert.equal(sayOf(listOf(`${TIME_GOAL}\n## Compromisos\n- Hablar · cada dia · 30 min\n`).errors[0]), "Falta la tilde: «cada día».");
+});
+
+test("992 tilde: the cadences that already read (with accents, or weekday names without) are still accepted, and a nonsense one stays generic", () => {
+  for (const cadence of ["cada día", "todos los días", "cada 2 días", "miercoles", "martes y sabado"]) {
+    const read = parseV2(`${TIME_GOAL}\n## Compromisos\n- Hablar · ${cadence} · 30 min\n`);
+    assert.ok(read.matched && "draft" in read, cadence);
+  }
+  const nonsense = listOf(`${TIME_GOAL}\n## Compromisos\n- Hablar · cuando pueda · 30 min\n`);
+  assert.equal(nonsense.errors[0].expected, GENERIC_COMMITMENT);
+});
+
+test("992 cap: eight times a week answers the cap of 7, thirty-two a month the cap of 31, and the caps themselves read", () => {
+  const week = listOf(`${TIME_GOAL}\n## Compromisos\n- Leer · 8 veces por semana · toque\n`).errors;
+  assert.equal(week.length, 1);
+  assert.equal(sayOf(week[0]), "Una semana tiene 7 días: hasta «7 veces por semana».");
+  const month = listOf(`${TIME_GOAL}\n## Compromisos\n- Leer · 32 veces al mes · toque\n`).errors;
+  assert.equal(month.length, 1);
+  assert.match(sayOf(month[0]), /31/);
+  assert.match(sayOf(month[0]), /mes/);
+  assert.notEqual(month[0].expected, week[0].expected);
+  for (const cadence of ["7 veces por semana", "31 veces al mes", "1 vez por semana"]) {
+    const ok = parseV2(`${TIME_GOAL}\n## Compromisos\n- Leer · ${cadence} · toque\n`);
+    assert.ok(ok.matched && "draft" in ok, cadence);
+  }
+});
+
+test("992 rhythm in time: «ritmo: 10» under a measure in hours, or in minutes, asks for the unit and shows the form", () => {
+  for (const unit of ["horas", "minutos"]) {
+    const read = listOf(`${V2}# A\nhorizonte: 2027-10-01\nmedida: Práctica · ${unit}\nritmo: 10\n`);
+    assert.equal(read.errors.length, 1, unit);
+    assert.equal(read.errors[0].line, 6, unit);
+    assert.equal(sayOf(read.errors[0]), "Esta meta mide en horas: escribe el ritmo con su unidad, como «ritmo: 10 h».", unit);
+  }
+  const ok = parseV2(`${V2}# A\nhorizonte: 2027-10-01\nmedida: Práctica · horas\nritmo: 10 h\n`);
+  assert.ok(ok.matched && "draft" in ok);
+});
+
+test("992 rhythm outside time: a bare integer still reads, and a time there keeps the sentence that names the unit's integer", () => {
+  const ok = parseV2(`${V2}# A\nhorizonte: 2027-10-01\nmedida: lectura · páginas\nritmo: 10\n`);
+  assert.ok(ok.matched && "draft" in ok);
+  const bad = listOf(`${V2}# A\nhorizonte: 2027-10-01\nmedida: lectura · páginas\nritmo: 10 h\n`);
+  assert.match(sayOf(bad.errors[0]), /entero/);
+});
+
+test("992 task unit: a task in pages in a goal measured in time says the unit is not time, and shows the form with a time", () => {
+  const read = listOf(`${TIME_GOAL}\n## Tareas\n- 2026-10 · 3 páginas · Algo\n`);
+  assert.equal(read.errors.length, 1);
+  assert.equal(read.errors[0].line, 8);
+  assert.match(sayOf(read.errors[0]), /^Esa unidad no es de tiempo\. Escribe el monto en horas o minutos, como «- /);
+  assert.notEqual(read.errors[0].expected, "import.errors.form.task");
+  assert.notEqual(read.errors[0].expected, "import.errors.form.monthTime");
+});
+
+test("992 task unit: a task in hours in a goal measured in km names km, with the unit for the sentence", () => {
+  const read = listOf(`${KM_GOAL}\n## Tareas\n- 2026-10 · 3 h · Algo\n`);
+  assert.equal(read.errors.length, 1);
+  assert.equal(read.errors[0].line, 8);
+  assert.equal(read.errors[0].unit, "km");
+  assert.match(sayOf(read.errors[0]), /^Esa unidad no es km\./);
+  assert.notEqual(read.errors[0].expected, "import.errors.form.task");
+  assert.notEqual(read.errors[0].expected, "import.errors.estimateNotTime");
+});
+
+test("992 task unit: a bare figure in a km goal keeps its own sentence, and a task with no figure reads", () => {
+  assert.deepEqual(listOf(`${KM_GOAL}\n## Tareas\n- 2026-10 · 3 · Algo\n`).errors, [{ line: 8, expected: "import.errors.estimateNotTime" }]);
+  const ok = parseV2(`${KM_GOAL}\n## Tareas\n- 2026-10 · Algo\n`);
+  assert.ok(ok.matched && "draft" in ok);
+  const timed = parseV2(`${TIME_GOAL}\n## Tareas\n- 2026-10 · 3 h · Algo\n`);
+  assert.ok(timed.matched && "draft" in timed);
+});
+
+test("992 task unit: a sub-task keeps its sentence (the contract changes tasks, not sub-tasks)", () => {
+  const read = listOf(`${TIME_GOAL}\n## Tareas\n- 2026-10 · Madre\n  - 3 páginas · Hija\n`);
+  assert.deepEqual(read.errors, [{ line: 9, expected: "import.errors.form.child" }]);
+});
+
+test("992 task unit: a task in the wrong unit is named, and the lines under it are still read", () => {
+  const read = listOf(`${KM_GOAL}\n## Tareas\n- 2026-10 · 3 h · Algo\n  - 2 km · Hija\n`);
+  assert.deepEqual(
+    read.errors.map((e) => [e.line, e.expected]),
+    [
+      [8, "import.errors.form.taskUnit"],
+      [9, "import.errors.form.child"],
+    ],
+  );
 });

@@ -5,7 +5,7 @@ import { check } from "@/lib/import/check";
 import { placeLeftovers } from "@/lib/import/coverage";
 import { decide, normalize, type Correction, type ImportDraft } from "@/lib/import/draft";
 import { linesToTasks } from "@/lib/import/line-tasks";
-import { MODEL_NAME, fileRoute, modelAvailable, readPlan, type PlanInput, type PlanReading } from "@/lib/import/model";
+import { MODEL_NAME, fileRefused, fileRoute, modelAvailable, readPlan, type PlanInput, type PlanReading } from "@/lib/import/model";
 import { claimFollowUp, claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
 import { parseTemplate, templateSource } from "@/lib/import/template";
 import { readWorkbook } from "@/lib/import/workbook";
@@ -117,6 +117,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (file && fileRoute(file.name, file.type) === null) return fail(415, "import.errors.unreadableType");
+  if (file && fileRefused(fileRoute(file.name, file.type), input.kind === "file" ? input.bytes : new Uint8Array())) {
+    return fail(415, "import.errors.unreadableType");
+  }
 
   if (!modelAvailable()) return fail(503, "import.errors.noKey");
 

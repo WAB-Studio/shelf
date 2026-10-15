@@ -73,7 +73,7 @@ async function measure(page: Page, figure: string): Promise<Measure> {
   const row = page.locator("main ol li:visible").filter({ hasText: /en curso/i }).first();
   await expect(row).toBeVisible();
   return row.evaluate((li, wanted) => {
-    const note = li.querySelector<HTMLElement>("[class*=stackNote]")!;
+    const note = li.querySelector<HTMLElement>('[data-part="table-stack-note"]')!;
     const rect = (el: Element) => el.getBoundingClientRect();
     // The card is the nearest ancestor that paints its own box.
     let card: Element = li;
@@ -94,7 +94,7 @@ async function measure(page: Page, figure: string): Promise<Measure> {
       }
       return null;
     };
-    const label = li.querySelector<HTMLElement>("[class*=stackLabel]")!;
+    const label = li.querySelector<HTMLElement>('[data-part="table-stack-label"]')!;
     return {
       noteTop: rect(note).top,
       labelTop: rect(label).top,

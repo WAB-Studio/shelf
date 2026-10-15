@@ -669,8 +669,8 @@ Principles, not recipes:
 
 | Need | Choice | What it saves |
 |---|---|---|
-| Framework | **Next 16.3.3** | Routing, the static export of the payload, and the one route handler the sentence path needs. |
-| UI | **React 19.2.8** | The version Next 16.3.3 pairs with. |
+| Framework | **Next 16.4.1** | Routing (bumped from 16.3.3 on 2026-10-15: CVE set in 16.0.0–16.3.7), the static export of the payload, and the one route handler the sentence path needs. |
+| UI | **React 19.2.8** | The version Next 16.4.1 pairs with. |
 | Language | **next-intl 4** | The Spanish catalogue RNL-02 requires, with date and number formatting. |
 | Validation | **Zod 4** | One schema serves the translate route's input and its types. |
 | Components | **Radix Themes 3** | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |

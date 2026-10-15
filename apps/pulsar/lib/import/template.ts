@@ -45,6 +45,12 @@ const FORMS = {
   commitment: "import.errors.form.commitment",
   commitmentUnit: "import.errors.form.commitmentUnit",
   commitmentTime: "import.errors.form.commitmentTime",
+  cadenceTilde: "import.errors.form.cadenceTilde",
+  cadenceWeekCap: "import.errors.form.cadenceWeekCap",
+  cadenceMonthCap: "import.errors.form.cadenceMonthCap",
+  rhythmTime: "import.errors.form.rhythmTime",
+  taskTime: "import.errors.form.taskTime",
+  taskUnit: "import.errors.form.taskUnit",
   estimateNotTime: "import.errors.estimateNotTime",
   task: "import.errors.form.task",
   child: "import.errors.form.child",
@@ -112,6 +118,19 @@ function parseRhythmUnits(text: string, unit: string): number | null {
   const singular = plural.length > 1 && plural.endsWith("s") ? plural.slice(0, -1) : plural;
   const m = /^(\d+)\s+(\S.*)$/.exec(t);
   return m && [plural, singular].includes(m[2].trim().toLowerCase()) ? Number(m[1]) : null;
+}
+
+// What a cadence cannot be, told apart from one that is no cadence at all: it reads once its accents are
+// put on, or it asks for more times than the week or the month has days (RP-12).
+function cadenceFault(text: string): FormCode | null {
+  const t = text.trim().toLowerCase();
+  const accented = t.replace(/\bdia(s?)\b/, "día$1");
+  if (accented !== t && parseCadence(accented) !== null) return FORMS.cadenceTilde;
+  const week = /^(\d+) (?:vez|veces) por semana$/.exec(t);
+  if (week && Number(week[1]) > 7) return FORMS.cadenceWeekCap;
+  const month = /^(\d+) (?:vez|veces) al mes$/.exec(t);
+  if (month && Number(month[1]) > 31) return FORMS.cadenceMonthCap;
+  return null;
 }
 
 type Spot = { line: number; expected: FormCode };
@@ -280,9 +299,9 @@ export function parseTemplate(text: string): TemplateResult {
         const expected =
           goal.measure === null
             ? FORMS.rhythmUnit
-            : followsMeasure && section === null ? FORMS.rhythmAmount : FORMS.rhythmPlace;
-        // Only a `ritmo:` among the head lines cuts; one under a section is a stray line like any other.
-        if (section === null) return stop(n, expected);
+            : followsMeasure && section === null
+              ? isTimeUnit(goal.measure.unit) ? FORMS.rhythmTime : FORMS.rhythmAmount
+              : FORMS.rhythmPlace;
         report(n, expected);
         continue;
       }
@@ -326,7 +345,11 @@ export function parseTemplate(text: string): TemplateResult {
       }
       if (version === 2 && !skipping) {
         const inside = line.startsWith("dentro de:") ? /^dentro de: (.+)$/.exec(line) : null;
-        if (line.startsWith("dentro de:") && !inside) return stop(n, FORMS.inside);
+        if (line.startsWith("dentro de:") && !inside) {
+          report(n, FORMS.inside);
+          meta!.lines.push(n);
+          continue;
+        }
         if (inside) {
           meta!.lines.push(n);
           const above = nameAt.get(inside[1].trim());
@@ -447,7 +470,12 @@ export function parseTemplate(text: string): TemplateResult {
     } else if (section === "commitments") {
       const cadence = parts.length === 3 ? parseCadence(parts[1]) : null;
       if (cadence === null) {
-        report(n, FORMS.commitment);
+        report(n, (parts.length === 3 && cadenceFault(parts[1])) || FORMS.commitment);
+        continue;
+      }
+      const capped = parts.length === 3 ? cadenceFault(parts[1]) : null;
+      if (capped) {
+        report(n, capped);
         continue;
       }
       const tap = parts[2].toLowerCase() === "toque";
@@ -476,14 +504,25 @@ export function parseTemplate(text: string): TemplateResult {
     } else {
       const stray = !timeUnit && goal.measure !== null && parts.length > 2 && isFigure(parts[1]);
       const amount = parts.length > 2 ? parseAmount(parts[1], timeUnit) : null;
-      if (parts.length < 2 || (parts.length > 2 && amount === null && !stray)) {
+      // A figure with a unit that is not the goal's: the sentence names the unit that goes. A bare figure or the goal's own unit keeps its sentence.
+      const taskUnit = goal.measure === null || parts.length < 3 ? null : goal.measure.unit;
+      const figured = taskUnit !== null && amount === null && /^\d+\s*\S/.test(parts[1]) && (timeUnit || parseUnitAmount(parts[1], taskUnit) === null);
+      if (figured) {
+        report(n, timeUnit ? FORMS.taskTime : FORMS.taskUnit, taskUnit!);
+        if (!stray) {
+          lastTask = null;
+          noteOwner = null;
+          brokenTask = true;
+          continue;
+        }
+      } else if (stray) report(n, FORMS.estimateNotTime);
+      if (parts.length < 2 || (parts.length > 2 && amount === null && !stray && !figured)) {
         report(n, FORMS.task);
         lastTask = null;
         noteOwner = null;
         brokenTask = true;
         continue;
       }
-      if (stray) report(n, FORMS.estimateNotTime);
       brokenTask = false;
       brokenChild = false;
       const task: Task = {

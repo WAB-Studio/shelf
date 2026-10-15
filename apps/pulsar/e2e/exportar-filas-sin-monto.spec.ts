@@ -330,7 +330,7 @@ test.describe("/exportar rows say «sin monto» and the month's tasks (RP-77)", 
       const section = paperSection(await printed(page, "sinmedida"), name);
       expect(section).toContain("0 de 1 hechas");
       expect(section).toContain("1 por hacer");
-      expect(section).toContain(`${yearName(2)} y ${yearName(3)}: sin tareas`);
+      expect(section).not.toContain("sin tareas");
       expect(section).not.toContain("sin monto");
     } finally {
       await context.close();

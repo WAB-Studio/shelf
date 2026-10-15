@@ -81,7 +81,7 @@
     "endsOnInvalid": "Esa fecha de fin no es válida.",
     "phaseBackwards": "La fase termina antes de empezar.",
     "phaseOverlap": "Esas semanas ya tienen una fase. Elige otras.",
-    "phasePastHorizon": "Esa fase pasa del horizonte de la meta. Elige semanas dentro de él.",
+    "phasePastHorizon": "Esa fase pasa del final de la meta. Elige semanas antes de él.",
     "weekInvalid": "Escribe un número entero de semana, mayor que cero.",
     "weekdayInvalid": "Ese día no es válido.",
     "weekdaysEmpty": "Elige al menos un día.",

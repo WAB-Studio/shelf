@@ -46,12 +46,12 @@ export function Split({
 
   return (
     <div className={className}>
-      {before ? <div className={styles.before}>{before}</div> : null}
-      <div className={styles.main}>
+      {before ? <div className={styles.before} data-part="split-before">{before}</div> : null}
+      <div className={styles.main} data-part="split-main">
         {main}
-        {tail ? <div className={styles.tail}>{tail}</div> : null}
+        {tail ? <div className={styles.tail} data-part="split-tail">{tail}</div> : null}
       </div>
-      {after ? <div className={styles.after}>{after}</div> : null}
+      {after ? <div className={styles.after} data-part="split-after">{after}</div> : null}
     </div>
   );
 }

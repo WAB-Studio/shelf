@@ -5,7 +5,7 @@ import { isHourUnit, isTimeUnit } from "@/lib/units/time";
 import type { ImportDraft, Source, Src } from "./draft";
 import { parseTemplate, TEMPLATE_HEADER, type FormCode } from "./template";
 
-export const WORKBOOK_NAME = "plantilla-pulsar.xlsx";
+export const WORKBOOK_NAME = "plantilla-goallog.xlsx";
 
 // A broken row, named by its sheet and the row number Excel shows.
 export type WorkbookError = { sheet: string; row: number; expected: FormCode };
@@ -114,9 +114,42 @@ function toRanges(ids: number[]): Src[] {
   return out;
 }
 
+export const ZIP_ENTRIES_MAX = 200;
+export const ZIP_INFLATED_MAX = 50 * 1024 * 1024;
+
+/**
+ * Whether the archive's own directory promises more than a template can hold, read before ExcelJS
+ * inflates anything. A directory can lie; the library checks the sizes only after inflating, so this
+ * stops the honest bomb, not a forged one.
+ */
+export function zipTooBig(bytes: Uint8Array): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let end = -1;
+  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 0xffff); at--) {
+    if (view.getUint32(at, true) === 0x06054b50) {
+      end = at;
+      break;
+    }
+  }
+  if (end < 0) return false;
+  const entries = view.getUint16(end + 10, true);
+  let at = view.getUint32(end + 16, true);
+  if (entries === 0xffff || at === 0xffffffff) return true;
+  if (entries > ZIP_ENTRIES_MAX) return true;
+  let inflated = 0;
+  for (let i = 0; i < entries; i++) {
+    if (at + 46 > bytes.length || view.getUint32(at, true) !== 0x02014b50) return false;
+    inflated += view.getUint32(at + 24, true);
+    if (inflated > ZIP_INFLATED_MAX) return true;
+    at += 46 + view.getUint16(at + 28, true) + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
+  }
+  return false;
+}
+
 export async function readWorkbook(
   bytes: Uint8Array,
 ): Promise<{ matched: false } | { matched: true; draft: ImportDraft; source: Source } | { matched: true; errors: WorkbookError[] }> {
+  if (zipTooBig(bytes)) return { matched: false };
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(Buffer.from(bytes) as never);
@@ -249,24 +282,33 @@ export async function readWorkbook(
   return { matched: true, draft, source: { kind: "rows", lines: null } };
 }
 
-export async function templateWorkbook(): Promise<Uint8Array> {
+// The parser's keyword for a commitment with no amount: grammar, like the dates, not interface copy.
+const TAP = "toque";
+
+// `say` reads `import.template.workbook.*`: the example's words are the interface's, the grammar is not.
+export async function templateWorkbook(say: (key: string) => string): Promise<Uint8Array> {
   const wb = new ExcelJS.Workbook();
-  const goal = "Evals y harness";
+  const w = (key: string) => say(`template.workbook.${key}`);
+  const goal = w("evalsName");
   const rows: Record<SheetName, (string | null)[][]> = {
     Metas: [
-      ["Carrera en IA", null, "2028-10-01", null, null, null, "Lo que busco en dos años.\nUn ritmo que pueda sostener."],
-      ["IA aplicada", "Carrera en IA", "2027-10-01", null, null, null, null],
-      [goal, "IA aplicada", "2027-03-01", "horas de estudio", "minutos", "12 h", "Empezar por lo que ya sé medir."],
-      ["Leer", null, null, "lectura", "páginas", "40 páginas", null],
+      [w("careerName"), null, "2028-10-01", null, null, null, w("careerNote")],
+      [w("appliedName"), w("careerName"), "2027-10-01", null, null, null, null],
+      [goal, w("appliedName"), "2027-03-01", w("evalsMeasure"), w("evalsUnit"), w("evalsRhythm"), w("evalsNote")],
+      [w("readName"), null, null, w("readMeasure"), w("readUnit"), w("readRhythm"), null],
     ],
     Fases: [[goal, "2026-10-01", "2026-12-31", goal]],
-    Meses: [[goal, "2026-10", "12 h"], [goal, "2026-11", "20 h"]],
-    Compromisos: [[goal, "Tema técnico", "martes y jueves", "2 h"], [goal, "Inglés pasivo", "cada día", "toque"], ["Leer", "Leer", "cada día", "10 páginas"]],
+    Meses: [[goal, "2026-10", w("monthAmountOct")], [goal, "2026-11", w("monthAmountNov")]],
+    Compromisos: [
+      [goal, w("technicalName"), w("technicalCadence"), w("technicalAmount")],
+      [goal, w("passiveName"), w("everyDay"), TAP],
+      [w("readName"), w("readName"), w("everyDay"), w("readAmount")],
+    ],
     Tareas: [
-      [goal, "2026-10", "Leer AI Engineering cap. 1–4", null, "4 h", null],
-      [goal, "2026-10", "Tutor", null, null, "Preguntar por la tarifa por hora.\nPedir una clase de prueba antes de pagar."],
-      [goal, "2026-10", null, "Elegir tutor", "1 h", "Comparar tres perfiles."],
-      [goal, "2026-10", null, "Sesiones 1–4", "6 h", null],
+      [goal, "2026-10", w("bookTask"), null, w("bookAmount"), null],
+      [goal, "2026-10", w("tutorTask"), null, null, w("tutorNote")],
+      [goal, "2026-10", null, w("pickChild"), w("pickAmount"), w("pickNote")],
+      [goal, "2026-10", null, w("sessionsChild"), w("sessionsAmount"), null],
     ],
   };
   for (const name of SHEETS) {

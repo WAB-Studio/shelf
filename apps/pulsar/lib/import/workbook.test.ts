@@ -3,10 +3,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import ExcelJS from "exceljs";
+import { createTranslator } from "next-intl";
 
 import { coverage } from "./coverage";
 import { parseTemplate, TEMPLATE_HEADER } from "./template";
-import { readWorkbook, templateWorkbook, WORKBOOK_NAME } from "./workbook";
+import { readWorkbook, templateWorkbook, WORKBOOK_NAME, ZIP_ENTRIES_MAX, ZIP_INFLATED_MAX } from "./workbook";
+
+const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
+const say = (key: string) =>
+  (createTranslator({ locale: "es", messages: { import: catalogue }, namespace: "import" }) as unknown as (k: string) => string)(key);
 
 const DOC = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
 const DOC_EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
@@ -53,19 +58,19 @@ async function draftOf(bytes: Uint8Array) {
 }
 
 test("the workbook's name is the file the app hands out", () => {
-  assert.equal(WORKBOOK_NAME, "plantilla-pulsar.xlsx");
+  assert.equal(WORKBOOK_NAME, "plantilla-goallog.xlsx");
 });
 
 test("the delivered workbook, read back, is the draft of PLANTILLA.md's example", async () => {
   const expected = parseTemplate(DOC_EXAMPLE);
   assert.ok(expected.matched && "draft" in expected);
-  const draft = await draftOf(await templateWorkbook());
+  const draft = await draftOf(await templateWorkbook(say));
   assert.deepEqual(strip(draft), strip(expected.draft));
 });
 
 test("the delivered workbook has the mark in Metas!A1 and its headers where the document says", async () => {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(Buffer.from(await templateWorkbook()) as never);
+  await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
   assert.deepEqual(wb.worksheets.map((s) => s.name), Object.keys(HEADERS));
   assert.equal(wb.getWorksheet("Metas")!.getCell("A1").value, TEMPLATE_HEADER);
   const header = (name: string, row: number) =>
@@ -75,7 +80,7 @@ test("the delivered workbook has the mark in Metas!A1 and its headers where the 
 });
 
 test("the workbook loses nothing: its coverage counts 0 rows out, as rows", async () => {
-  const result = await read(await templateWorkbook());
+  const result = await read(await templateWorkbook(say));
   assert.ok("draft" in result);
   const counted = coverage(result.draft, result.source, new Set(), new Set());
   assert.equal(result.source.kind, "rows");
@@ -351,4 +356,93 @@ test("915 a rhythm in another unit reads as a whole number of it", async () => {
   const draft = await draftOf(await book({ Metas: [["Meta", null, null, "lectura", "páginas", 40, null]] }));
   assert.equal(draft.goals[0].rhythm, 40);
   assert.equal(draft.goals[0].horizon, null);
+});
+
+test("the delivered workbook's example rows carry exactly this text", async () => {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
+  const rows = (name: string) => {
+    const sheet = wb.getWorksheet(name)!;
+    const out: unknown[][] = [];
+    sheet.eachRow((row, n) => {
+      if (n > (name === "Metas" ? 2 : 1)) out.push(Array.from({ length: sheet.columnCount }, (_, i) => row.getCell(i + 1).value ?? null));
+    });
+    return out;
+  };
+  const goal = "Evals y harness";
+  assert.deepEqual(rows("Metas"), [
+    ["Carrera en IA", null, "2028-10-01", null, null, null, "Lo que busco en dos años.\nUn ritmo que pueda sostener."],
+    ["IA aplicada", "Carrera en IA", "2027-10-01", null, null, null, null],
+    [goal, "IA aplicada", "2027-03-01", "horas de estudio", "minutos", "12 h", "Empezar por lo que ya sé medir."],
+    ["Leer", null, null, "lectura", "páginas", "40 páginas", null],
+  ]);
+  assert.deepEqual(rows("Fases"), [[goal, "2026-10-01", "2026-12-31", goal]]);
+  assert.deepEqual(rows("Meses"), [[goal, "2026-10", "12 h"], [goal, "2026-11", "20 h"]]);
+  assert.deepEqual(rows("Compromisos"), [
+    [goal, "Tema técnico", "martes y jueves", "2 h"],
+    [goal, "Inglés pasivo", "cada día", "toque"],
+    ["Leer", "Leer", "cada día", "10 páginas"],
+  ]);
+  assert.deepEqual(rows("Tareas"), [
+    [goal, "2026-10", "Leer AI Engineering cap. 1–4", null, "4 h", null],
+    [goal, "2026-10", "Tutor", null, null, "Preguntar por la tarifa por hora.\nPedir una clase de prueba antes de pagar."],
+    [goal, "2026-10", null, "Elegir tutor", "1 h", "Comparar tres perfiles."],
+    [goal, "2026-10", null, "Sesiones 1–4", "6 h", null],
+  ]);
+});
+
+// An archive of empty files whose central directory declares the sizes the test names.
+function zipDeclaring(sizes: number[]): Uint8Array {
+  const names = sizes.map((_, i) => Buffer.from(`f${i}.xml`));
+  const central = Buffer.concat(
+    sizes.map((size, i) => {
+      const h = Buffer.alloc(46 + names[i].length);
+      h.writeUInt32LE(0x02014b50, 0);
+      h.writeUInt32LE(size, 24);
+      h.writeUInt16LE(names[i].length, 28);
+      names[i].copy(h, 46);
+      return h;
+    }),
+  );
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(sizes.length, 8);
+  end.writeUInt16LE(sizes.length, 10);
+  end.writeUInt32LE(central.length, 12);
+  return new Uint8Array(Buffer.concat([central, end]));
+}
+
+test("zipTooBig: a template passes, an archive that declares past the cap or holds too many entries does not", async () => {
+  const { zipTooBig } = await import("./workbook");
+  assert.equal(zipTooBig(await templateWorkbook(say)), false);
+  const bomb = zipDeclaring([60 * 1024 * 1024]);
+  assert.equal(zipTooBig(bomb), true);
+  assert.deepEqual(await readWorkbook(bomb), { matched: false });
+  assert.equal(zipTooBig(zipDeclaring(Array(201).fill(1))), true);
+  assert.equal(zipTooBig(zipDeclaring(Array(200).fill(1))), false);
+});
+
+test("readWorkbook refuses a real workbook that holds more entries than a template, before it inflates anything", async () => {
+  const { default: JSZip } = await import("jszip");
+  const honest = await book({ Metas: [GOAL] });
+  const padded = async (extra: number) => {
+    const zip = await JSZip.loadAsync(honest);
+    for (let i = 0; i < extra; i++) zip.file(`padding/f${i}.txt`, "");
+    return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
+  };
+  assert.equal((await readWorkbook(await padded(100))).matched, true);
+  const bomb = await padded(ZIP_ENTRIES_MAX + 100);
+  assert.deepEqual(await readWorkbook(bomb), { matched: false });
+});
+
+test("zipTooBig: the byte at the cap passes, the next does not; a zip64 marker or a broken directory is read as the gate defines", async () => {
+  const { zipTooBig } = await import("./workbook");
+  assert.equal(zipTooBig(zipDeclaring([ZIP_INFLATED_MAX])), false);
+  assert.equal(zipTooBig(zipDeclaring([ZIP_INFLATED_MAX, 1])), true);
+  const zip64 = Buffer.from(zipDeclaring([1]));
+  zip64.writeUInt32LE(0xffffffff, zip64.length - 22 + 16);
+  assert.equal(zipTooBig(new Uint8Array(zip64)), true);
+  const broken = Buffer.from(zipDeclaring([60 * 1024 * 1024]));
+  broken.writeUInt32LE(0, 0);
+  assert.equal(zipTooBig(new Uint8Array(broken)), false);
 });

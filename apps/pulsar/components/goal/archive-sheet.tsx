@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { archiveGoal, reopenGoal } from "@/app/actions/plan";
 import { Button, Sheet, SheetActions, Text } from "@/components/ui";
@@ -38,6 +38,7 @@ export function ArchiveGoalAction({
   branchNames = [],
 }: ArchiveGoalActionProps) {
   const t = useTranslations();
+  const format = useFormatter();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -73,7 +74,10 @@ export function ArchiveGoalAction({
           withBranch
             ? t("tree.archive.withInside", {
                 count: branchCount,
-                names: branchNames.map((branch) => `«${branch}»`).join(", "),
+                names: format.list(
+                  branchNames.map((branch) => t("tree.archive.branchName", { name: branch })),
+                  { type: "conjunction" },
+                ),
               })
             : t("plan.archiveSheet.description")
         }

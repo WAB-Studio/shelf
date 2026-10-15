@@ -94,13 +94,9 @@ export async function MonthsList({
   if (!goal.measureUnit || (!goal.measureName && !goal.holdsGoals)) {
     const bare: TableRow[] = goal.months.map((row) => {
       const count = planMonthList(goal.plan, row.month).length;
-      const tasks = (
-        <Text tone="secondary">
-          {count === 0
-            ? t("month.months.withoutMeasure.none")
-            : t("month.months.withoutMeasure.tasks", { count })}
-        </Text>
-      );
+      // A month with no task says nothing of tasks (RP-73).
+      const tasks =
+        count === 0 ? null : <Text tone="secondary">{t("month.months.withoutMeasure.tasks", { count })}</Text>;
       return {
         key: row.month,
         href: hrefOf(row.month),

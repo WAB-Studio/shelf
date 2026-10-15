@@ -1,9 +1,8 @@
 "use server";
 
-import { z } from "zod";
-
 import { isDomainDeliverable } from "@/lib/auth/deliverability";
 import { consentReturnPath } from "@/lib/validation/oauth";
+import { signInEmailSchema } from "@/lib/validation/sign-in";
 
 // `@repo/supabase-auth` starts with `import "server-only"`, and `@/lib/env`
 // throws when its required vars are unset — both resolvable only inside
@@ -21,8 +20,6 @@ async function supabaseClient() {
   });
 }
 
-const emailSchema = z.email();
-
 export type SendSignInLinkResult =
   | { ok: true }
   | { ok: false; error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "rateLimited" };
@@ -33,7 +30,7 @@ export type SendSignInLinkResult =
  * JWT — there is no row of this app's own for state to live in instead.
  */
 export async function sendSignInLink(email: string, next?: string): Promise<SendSignInLinkResult> {
-  const parsed = emailSchema.safeParse(email);
+  const parsed = signInEmailSchema.safeParse(email);
   if (!parsed.success) return { ok: false, error: "emailInvalid" };
 
   const domain = parsed.data.slice(parsed.data.lastIndexOf("@") + 1);

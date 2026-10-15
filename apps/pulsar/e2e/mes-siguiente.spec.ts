@@ -420,14 +420,14 @@ test("E1 on paper with nothing set by hand: the count says 13 and there is no la
   expect(paper).not.toContain("monto propio");
 });
 
-test("E1b on paper: next month is printed «sin monto» though empty, and a goal with no end names none of the rest (RP-110, RP-118)", async ({ person, browser, baseURL, db }) => {
-  // Kills: `printsOnPaper` without `next`; the «…: sin monto» line of a goal with no end.
+test("E1b on paper: a goal with no end whose rows are all «sin monto», next month's included, prints no «por mes» (RP-110, RP-118, RP-124)", async ({ person, browser, baseURL, db }) => {
+  // Kills: the hide rule dropped; next month printed «sin monto» under a heading nothing else fills.
   await seedLeer(db, person, { rhythm: null, opened: -2 });
-  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Leer");
-  expect(paper).toContain("leer · por mes · 4 meses");
-  expectInOrder(paper, [monthLabel(-2), monthLabel(0), monthLabel(1), "sin monto"]);
-  expect(paper, "no fold line").not.toContain(": sin monto");
-  for (const offset of [2, 11]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
+  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Leer", false);
+  expect(paper).toContain("leer");
+  expect(paper).not.toContain("leer · por mes");
+  expect(paper).not.toContain(": sin monto");
+  for (const offset of [-2, 0, 1]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
 });
 
 test("E1d on paper: a goal with no unit prints its months with tasks in month order, and with no end no line for the empty ones (b13, RP-110, RP-118)", async ({ person, browser, baseURL, db }) => {
