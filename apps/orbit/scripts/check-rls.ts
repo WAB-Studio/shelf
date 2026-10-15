@@ -223,6 +223,7 @@ async function main() {
   await checkCounterAmountWriteScope();
   await checkRecurringRuleGeneratorScope();
   await checkAccountStatementShape();
+  await checkAccountReconciliations();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -4939,6 +4940,8 @@ function schemaTables(): { name: string; columns: string[] }[] {
 // and has to change this map on purpose. An empty array is a table whose every
 // column may be written; a table absent from the app's schema is a failure too.
 const INSERT_GRANT_GAPS: Record<string, string[]> = {
+  // `created_by` is stamped by the trigger; the counted figure, the day and the account are the input.
+  account_reconciliations: ["created_at", "created_by", "id"],
   account_statements: ["closed_at", "id"],
   accounts: ["archived_at", "created_at", "id", "updated_at"],
   app_users: ["created_at", "updated_at"],
@@ -5031,6 +5034,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "kind",
     "owner_user_id",
+    "reconciliation_id",
     "recurring_rule_id",
     "reviewed_at",
     "updated_at",
@@ -5052,6 +5056,15 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
 // grant, so it is no gap here — the trigger alone writes it on the way in, which is why
 // the INSERT map above lists it.
 const UPDATE_GRANT_GAPS: Record<string, string[]> = {
+  // A reconciliation is final: no column is writable.
+  account_reconciliations: [
+    "account_id",
+    "counted_balance_cents",
+    "created_at",
+    "created_by",
+    "id",
+    "reconciled_on",
+  ],
   account_statements: [
     "account_id",
     "closed_at",
@@ -5178,6 +5191,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "kind",
     "owner_user_id",
+    "reconciliation_id",
     "recurring_rule_id",
     "updated_at",
   ],
@@ -9049,6 +9063,423 @@ async function checkAccountStatementShape() {
     );
     await tx`reset role`;
   });
+}
+
+// Assertions 296-317: a reconciliation (RF-137, RF-138). The database books the gap as one marked,
+// one-legged movement in the settlement currency, refuses every write the model forbids and audits
+// both rows. Every probe runs as `authenticated`; fixtures land as the owner with the claims settled,
+// and the whole section is one transaction forced to roll back.
+async function checkAccountReconciliations() {
+  console.log("");
+  const owner = randomUUID();
+  const member = randomUUID();
+  const outsider = randomUUID();
+  const groupId = randomUUID();
+
+  const labels = [
+    "296. a positive gap books one destination-only movement of the gap, on the day",
+    "297. a negative gap books one source-only movement of the gap",
+    "298. a liability's counted debt books its gap with the account's sign",
+    "299. a zero gap records the reconciliation and books no movement",
+    "300. the balance on the day and the account's settlement pocket equal the counted figure",
+    "301. the adjustment is booked in the settlement currency and leaves the foreign pocket alone",
+    "302. a split on an adjustment is refused when the constraint fires",
+    "303. the owner's update of an adjustment touches nothing, while a plain movement still updates",
+    "304. the owner's delete of an adjustment touches nothing",
+    "305. a caller cannot name reconciliation_id on a movement",
+    "306. a reconciliation refuses UPDATE and DELETE outright",
+    "307. the owner and a member read the history, a user of another fund reads none",
+    "308. a member who cannot write another member's personal account cannot reconcile it",
+    "309. a day after today in Bogota is refused with RC001",
+    "310. a day before the opening balance is refused with RC002",
+    "311. a day before the latest reconciliation is refused with RC003, the same day is not",
+    "312. an archived account is refused with RC004",
+    "313. the reconciliation and its movement are each audited with the owner as actor",
+    "314. anon and service_role hold nothing on the table, authenticated holds no UPDATE or DELETE",
+    "315. the reconciliation is stamped with the caller and the movement takes the account's scope",
+    "316. deleting an account an adjustment points at is still refused",
+  ];
+  const tailLabel = "317. the rolled-back reconciliation transaction leaves no trace";
+
+  const forcedRollback = Symbol("forced rollback");
+
+  // 314: read off the live catalogue, outside the transaction.
+  const privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"];
+  const held = await sql<{ role: string; priv: string; holds: boolean }[]>`
+    select r.role, p.priv,
+      -- A column grant is invisible to has_table_privilege; the column form reads both.
+      case when p.priv in ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
+        then has_any_column_privilege(r.role, 'finances.account_reconciliations', p.priv)
+        else has_table_privilege(r.role, 'finances.account_reconciliations', p.priv)
+      end as holds
+    from unnest(array['anon', 'service_role', 'authenticated']) as r(role)
+    cross join unnest(${privileges}::text[]) as p(priv)`;
+  const strayColumns = await sql<{ role: string; priv: string }[]>`
+    select a.grantee::regrole::text as role, a.privilege_type as priv
+    from pg_attribute att
+    cross join lateral aclexplode(att.attacl) a
+    where att.attrelid = 'finances.account_reconciliations'::regclass
+      and att.attnum > 0 and not att.attisdropped
+      and a.grantee::regrole::text in ('anon', 'service_role')`;
+  const [fn] = await sql<{ anon: boolean; service: boolean; authenticated: boolean }[]>`
+    select
+      has_function_privilege('anon', 'private.account_settlement_balance_on(uuid, date)', 'execute') as anon,
+      has_function_privilege('service_role', 'private.account_settlement_balance_on(uuid, date)', 'execute') as service,
+      has_function_privilege('authenticated', 'private.account_settlement_balance_on(uuid, date)', 'execute') as authenticated`;
+  const strangers = held.filter((row) => row.role !== "authenticated" && row.holds);
+  const authHeld = held.filter((row) => row.role === "authenticated" && row.holds).map((row) => row.priv);
+  assert(
+    labels[18],
+    strangers.length === 0 &&
+      strayColumns.length === 0 &&
+      authHeld.sort().join(",") === "INSERT,SELECT" &&
+      !fn.anon &&
+      !fn.service &&
+      fn.authenticated,
+    `anon and service_role hold [${
+      [...strangers.map((row) => `${row.role}:${row.priv}`), ...strayColumns.map((row) => `${row.role}:${row.priv}:column`)].join(", ") || "nothing"
+    }], authenticated holds [${authHeld.join(", ")}], balance function execute anon=${fn.anon} service_role=${fn.service} authenticated=${fn.authenticated}`,
+  );
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${owner}), (${member}), (${outsider})`;
+      await tx`insert into app_users (id) values (${owner}), (${member}), (${outsider})`;
+
+      // The fixtures land as the owner role with the owner's claims, so every stamping trigger fires.
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: owner, role: "authenticated", aud: "authenticated" })}, true)`;
+      const [d] = await tx<{ today: string; tomorrow: string; opened: string; before_open: string; m10: string; m6: string; m5: string; m3: string; m2: string }[]>`
+        select
+          to_char(t, 'YYYY-MM-DD') as today,
+          to_char(t + 1, 'YYYY-MM-DD') as tomorrow,
+          to_char(t - 30, 'YYYY-MM-DD') as opened,
+          to_char(t - 31, 'YYYY-MM-DD') as before_open,
+          to_char(t - 10, 'YYYY-MM-DD') as m10,
+          to_char(t - 6, 'YYYY-MM-DD') as m6,
+          to_char(t - 5, 'YYYY-MM-DD') as m5,
+          to_char(t - 3, 'YYYY-MM-DD') as m3,
+          to_char(t - 2, 'YYYY-MM-DD') as m2
+        from (select (now() at time zone 'America/Bogota')::date as t) x`;
+
+      await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls reconcile', 'shared')`;
+      await tx`insert into group_members (group_id, user_id, name, role)
+        values (${groupId}, ${owner}, 'rls reconcile owner', 'leader'),
+               (${groupId}, ${member}, 'rls reconcile member', 'member')`;
+
+      const account = async (name: string, kind: "asset" | "liability", initial: number, currency = "COP") => {
+        const [{ id }] = await tx<{ id: string }[]>`
+          insert into accounts (owner_user_id, name, kind, initial_balance_cents, initial_balance_on, settlement_currency)
+          values (${owner}, ${`rls reconcile ${name}`}, ${kind}, ${initial}, ${d.opened}, ${currency}) returning id`;
+        return id;
+      };
+      const savings = await account("savings", "asset", 1000000);
+      const spare = await account("spare", "asset", 0);
+      const card = await account("card", "liability", -500000);
+      const wallet = await account("wallet", "asset", 200000);
+      const mixed = await account("mixed", "asset", 0);
+      const ladder = await account("ladder", "asset", 0);
+      const shelved = await account("shelved", "asset", 0);
+      const [{ id: incomeCategory }] = await tx<{ id: string }[]>`
+        insert into categories (owner_user_id, name, kind) values (${owner}, 'rls reconcile income', 'income') returning id`;
+
+      // Transfers carry no split, so the deferred split check stays quiet until 302 wakes it.
+      const [{ id: plainTransfer }] = await tx<{ id: string }[]>`
+        insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at)
+        values (${spare}, ${savings}, 300000, ${d.m10}) returning id`;
+      // A dollar income on a peso account, its peso figure still an estimate: a USD pocket of 50.00.
+      const [{ id: dollars }] = await tx<{ id: string }[]>`
+        insert into transactions (to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate, occurred_at)
+        values (${mixed}, 5000, 'USD', 20000000, true, ${d.m10}) returning id`;
+      await tx`insert into transaction_splits (transaction_id, category_id, amount_cents) values (${dollars}, ${incomeCategory}, 5000)`;
+      await tx`update accounts set archived_at = now() where id = ${shelved}`;
+
+      type Adjustment = {
+        id: string;
+        from_account_id: string | null;
+        to_account_id: string | null;
+        amount_cents: string;
+        currency: string;
+        occurred_at: string;
+        description: string | null;
+        owner_user_id: string | null;
+        group_id: string | null;
+        created_by: string;
+        kind: string;
+      };
+      const reconcile = async (accountId: string, day: string, counted: number) => {
+        const [row] = await tx<{ id: string; created_by: string }[]>`
+          insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+          values (${accountId}, ${day}, ${counted}) returning id, created_by`;
+        const booked = await tx<Adjustment[]>`
+          select id, from_account_id, to_account_id, amount_cents::text, currency, occurred_at::text,
+            description, owner_user_id, group_id, created_by, kind
+          from transactions where reconciliation_id = ${row.id}`;
+        return { ...row, booked };
+      };
+      const derived = async (accountId: string, day: string) => {
+        const [{ balance }] = await tx<{ balance: string }[]>`
+          select private.account_settlement_balance_on(${accountId}, ${day}::date)::text as balance`;
+        return Number(balance);
+      };
+      const refusal = async (run: (sp: postgres.TransactionSql) => Promise<unknown>) => {
+        let code: string | undefined = "none — accepted";
+        let message = "";
+        await tx
+          .savepoint(async (sp) => {
+            await run(sp);
+          })
+          .catch((error: unknown) => {
+            code = pgErrorCode(error);
+            message = error instanceof Error ? error.message : String(error);
+          });
+        return { code, message };
+      };
+
+      await enterUserContext(tx, owner);
+
+      // 296: 1 000 000 opening + 300 000 in, counted 1 200 000 over that.
+      const before296 = await derived(savings, d.m5);
+      const positive = await reconcile(savings, d.m5, before296 + 1200000);
+      const [p] = positive.booked;
+      assert(
+        labels[0],
+        before296 === 1300000 &&
+          positive.booked.length === 1 &&
+          p.to_account_id === savings &&
+          p.from_account_id === null &&
+          p.amount_cents === "1200000" &&
+          p.occurred_at === d.m5 &&
+          p.kind === "income" &&
+          p.description === null,
+        `derived ${before296}, booked ${positive.booked.length}: to ${p?.to_account_id === savings ? "the account" : p?.to_account_id}, from ${p?.from_account_id ?? "null"}, amount ${p?.amount_cents}, on ${p?.occurred_at} (day ${d.m5}), kind ${p?.kind}, description ${p?.description ?? "null"}`,
+      );
+
+      // 297: the same day again, counted 800 000 under what the ledger now says.
+      const before297 = await derived(savings, d.m5);
+      const negative = await reconcile(savings, d.m5, before297 - 800000);
+      const [n] = negative.booked;
+      assert(
+        labels[1],
+        before297 === 2500000 &&
+          negative.booked.length === 1 &&
+          n.from_account_id === savings &&
+          n.to_account_id === null &&
+          n.amount_cents === "800000" &&
+          n.kind === "expense",
+        `derived ${before297}, booked ${negative.booked.length}: from ${n?.from_account_id === savings ? "the account" : n?.from_account_id}, to ${n?.to_account_id ?? "null"}, amount ${n?.amount_cents}, kind ${n?.kind}`,
+      );
+
+      // 298: the card owes 500 000; the person counts 450 000 owed, so the debt shrinks by 50 000.
+      const owed = await reconcile(card, d.m5, -450000);
+      const [c] = owed.booked;
+      assert(
+        labels[2],
+        owed.booked.length === 1 &&
+          c.to_account_id === card &&
+          c.from_account_id === null &&
+          c.amount_cents === "50000",
+        `booked ${owed.booked.length}: to ${c?.to_account_id === card ? "the card" : c?.to_account_id}, from ${c?.from_account_id ?? "null"}, amount ${c?.amount_cents}`,
+      );
+
+      // 299: counted exactly what the ledger says.
+      const level = await reconcile(savings, d.m3, await derived(savings, d.m3));
+      const [{ count: levelRows }] = await tx<{ count: string }[]>`
+        select count(*)::text as count from account_reconciliations where id = ${level.id}`;
+      assert(
+        labels[3],
+        levelRows === "1" && level.booked.length === 0,
+        `reconciliation rows ${levelRows}, movements booked ${level.booked.length}`,
+      );
+
+      // 300: nothing later than the day moves the wallet, so its balance is the counted figure.
+      await reconcile(wallet, d.m2, 750000);
+      const onDay = await derived(wallet, d.m2);
+      const [{ balance: pocket }] = await tx<{ balance: string }[]>`
+        select balance_cents::text as balance from account_balances
+        where id = ${wallet} and currency = 'COP'`;
+      assert(
+        labels[4],
+        onDay === 750000 && pocket === "750000",
+        `balance on ${d.m2} = ${onDay}, settlement pocket = ${pocket}`,
+      );
+
+      // 301: the mixed account holds USD 50.00 beside an empty peso pocket.
+      const pockets = async () =>
+        tx<{ currency: string; balance: string }[]>`
+          select currency, balance_cents::text as balance from account_balances
+          where id = ${mixed} order by currency`;
+      const pocketsBefore = await pockets();
+      const pesos = await reconcile(mixed, d.m5, 100000);
+      const pocketsAfter = await pockets();
+      const usd = (rows: { currency: string; balance: string }[]) =>
+        rows.find((row) => row.currency === "USD")?.balance;
+      assert(
+        labels[5],
+        pesos.booked.length === 1 &&
+          pesos.booked[0].currency === "COP" &&
+          pesos.booked[0].amount_cents === "100000" &&
+          usd(pocketsBefore) === "5000" &&
+          usd(pocketsAfter) === "5000",
+        `booked ${pesos.booked.length} in ${pesos.booked[0]?.currency} for ${pesos.booked[0]?.amount_cents}; USD pocket ${usd(pocketsBefore)} -> ${usd(pocketsAfter)}`,
+      );
+
+      // 302: as the owner role, a split of the right category and the full amount. The first
+      // `set constraints` is the control — every pending movement is sound until the split lands.
+      await tx`reset role`;
+      let control = "not run";
+      await tx
+        .savepoint(async (sp) => {
+          await sp`set constraints all immediate`;
+        })
+        .then(() => {
+          control = "accepted";
+        })
+        .catch((error: unknown) => {
+          control = `refused ${pgErrorCode(error) ?? "none"}`;
+        });
+      let split = "none — accepted";
+      await tx
+        .savepoint(async (sp) => {
+          await sp`set constraints all immediate`;
+          await sp`insert into transaction_splits (transaction_id, category_id, amount_cents)
+            values (${p.id}, ${incomeCategory}, 1200000)`;
+        })
+        .catch((error: unknown) => {
+          split = `${pgErrorCode(error) ?? "none"} — ${error instanceof Error ? error.message : String(error)}`;
+        });
+      await tx`set constraints all deferred`;
+      assert(
+        labels[6],
+        control === "accepted" && split.startsWith("23514") && split.includes("carries no split"),
+        `pending movements ${control}; the split ${split}`,
+      );
+      await enterUserContext(tx, owner);
+
+      // 303-304: the adjustment of 296 under the owner who booked it.
+      const edited = await tx`update transactions set amount_cents = 1 where id = ${p.id} returning id`;
+      const plainEdited = await tx`update transactions set amount_cents = 300001 where id = ${plainTransfer} returning id`;
+      assert(
+        labels[7],
+        edited.length === 0 && plainEdited.length === 1,
+        `adjustment rows updated ${edited.length}, plain transfer rows updated ${plainEdited.length}`,
+      );
+      const removed = await tx`delete from transactions where id = ${p.id} returning id`;
+      const [{ count: kept }] = await tx<{ count: string }[]>`
+        select count(*)::text as count from transactions where id = ${p.id}`;
+      assert(
+        labels[8],
+        removed.length === 0 && kept === "1",
+        `rows deleted ${removed.length}, adjustment still there ${kept}`,
+      );
+
+      // 305: a well-formed income that names the reconciliation of 297.
+      const forged = await refusal((sp) => sp`
+        insert into transactions (to_account_id, amount_cents, occurred_at, reconciliation_id)
+        values (${spare}, 1000, ${d.m5}, ${negative.id})`);
+      assert(labels[9], forged.code === "42501", `sqlstate ${forged.code} — ${forged.message}`);
+
+      // 306
+      const rewrite = await refusal((sp) => sp`
+        update account_reconciliations set counted_balance_cents = 0 where id = ${positive.id}`);
+      const erase = await refusal((sp) => sp`delete from account_reconciliations where id = ${positive.id}`);
+      assert(
+        labels[10],
+        rewrite.code === "42501" && erase.code === "42501",
+        `update sqlstate ${rewrite.code}, delete sqlstate ${erase.code}`,
+      );
+
+      // 307
+      const visible = async (subject: string) => {
+        await enterUserContext(tx, subject);
+        const [{ count }] = await tx<{ count: string }[]>`
+          select count(*)::text as count from account_reconciliations where account_id = ${savings}`;
+        return count;
+      };
+      const ownerSees = await visible(owner);
+      const memberSees = await visible(member);
+      const outsiderSees = await visible(outsider);
+      assert(
+        labels[11],
+        ownerSees === "3" && memberSees === "3" && outsiderSees === "0",
+        `owner ${ownerSees}, member ${memberSees}, outsider ${outsiderSees}`,
+      );
+
+      // 308: the member reads the owner's savings (307) but writes only their own or a shared account.
+      await enterUserContext(tx, member);
+      const intrusion = await refusal((sp) => sp`
+        insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+        values (${savings}, ${d.today}, 0)`);
+      assert(labels[12], intrusion.code === "42501", `sqlstate ${intrusion.code} — ${intrusion.message}`);
+
+      await enterUserContext(tx, owner);
+      const attempt = (accountId: string, day: string) =>
+        refusal((sp) => sp`
+          insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+          values (${accountId}, ${day}, 0)`);
+
+      // 309-310
+      const future = await attempt(spare, d.tomorrow);
+      assert(labels[13], future.code === "RC001", `sqlstate ${future.code} — ${future.message}`);
+      const early = await attempt(spare, d.before_open);
+      assert(labels[14], early.code === "RC002", `sqlstate ${early.code} — ${early.message}`);
+
+      // 311
+      await reconcile(ladder, d.m5, 0);
+      const backwards = await attempt(ladder, d.m6);
+      const sameDay = await attempt(ladder, d.m5);
+      assert(
+        labels[15],
+        backwards.code === "RC003" && sameDay.code === "none — accepted",
+        `day before the latest: sqlstate ${backwards.code}; the same day: ${sameDay.code}`,
+      );
+
+      // 312
+      const archived = await attempt(shelved, d.m5);
+      assert(labels[16], archived.code === "RC004", `sqlstate ${archived.code} — ${archived.message}`);
+
+      // 316: the card's only movement is its adjustment, so nothing else holds the account.
+      const dropCard = await refusal((sp) => sp`delete from accounts where id = ${card}`);
+
+      // 313, 315: read as the owner role, which sees the trail.
+      await tx`reset role`;
+      const trail = await tx<{ entity: string; actor_user_id: string | null }[]>`
+        select entity, actor_user_id from audit_log
+        where action = 'INSERT' and (
+          (entity = 'account_reconciliations' and record_id = ${positive.id})
+          or (entity = 'transactions' and record_id = ${p.id}::text))
+        order by entity`;
+      assert(
+        labels[17],
+        trail.length === 2 &&
+          trail[0].entity === "account_reconciliations" &&
+          trail[1].entity === "transactions" &&
+          trail.every((row) => row.actor_user_id === owner),
+        `audit rows [${trail.map((row) => `${row.entity}:${row.actor_user_id === owner ? "owner" : row.actor_user_id}`).join(", ")}]`,
+      );
+      assert(
+        labels[19],
+        positive.created_by === owner &&
+          p.owner_user_id === owner &&
+          p.group_id === null &&
+          p.created_by === owner,
+        `reconciliation created_by ${positive.created_by === owner ? "owner" : positive.created_by}, movement owner ${p.owner_user_id === owner ? "owner" : p.owner_user_id}, group ${p.group_id ?? "null"}, created_by ${p.created_by === owner ? "owner" : p.created_by}`,
+      );
+      assert(labels[20], dropCard.code === "23503", `sqlstate ${dropCard.code} — ${dropCard.message}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ count: probeCount }] = await sql<{ count: string }[]>`
+    select count(*)::text as count from accounts where name like 'rls reconcile%'`;
+  assert(
+    tailLabel,
+    afterUser === "postgres" && probeCount === "0",
+    `current_user = ${afterUser}, rows named 'rls reconcile%' = ${probeCount}`,
+  );
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

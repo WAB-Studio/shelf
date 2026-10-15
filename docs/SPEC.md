@@ -283,6 +283,9 @@ erDiagram
     accounts ||--o| debt_terms : "if liability"
     accounts ||--o{ installment_plans : "schedules"
     accounts ||--o{ account_statements : "closes"
+    accounts ||--o{ account_reconciliations : "reconciles"
+    account_reconciliations ||--o| transactions : "adjusts (one-legged, when the gap is not zero)"
+    app_users ||--o{ account_reconciliations : "counts"
     transactions ||--o{ transaction_sources : "references"
     account_statements ||--o{ transaction_sources : "names"
     installment_plans ||--o{ installment_lines : "generates"
@@ -416,6 +419,15 @@ erDiagram
         timestamptz closed_at
     }
 
+    account_reconciliations {
+        uuid id PK
+        uuid account_id FK
+        date reconciled_on
+        bigint counted_balance_cents "a person's input, signed like the account"
+        uuid created_by FK
+        timestamptz created_at
+    }
+
     categories {
         uuid id PK
         uuid owner_user_id FK "null = group category"
@@ -446,6 +458,7 @@ erDiagram
         boolean awaiting_counterparty "true until the ingest-unknown side is named"
         text external_ref "import reference"
         uuid caused_by_transaction_id FK "null unless another movement caused this one"
+        uuid reconciliation_id FK "null unless it is a reconciliation's adjustment"
         uuid created_by FK
     }
 
@@ -673,7 +686,8 @@ Rules the model must always guarantee, regardless of how they are implemented:
   accounts it touches, never chosen by the user.
 - Every income or expense has at least one split, whose amounts sum to the
   transaction's amount and whose category shares the transaction's scope and
-  kind. A transfer has no splits and no category.
+  kind, except a reconciliation's adjustment. A transfer and an adjustment have
+  no splits and no category.
 - A movement may name the movement that caused it; deleting the cause deletes
   the charge, and a movement is never its own cause.
 - A category belongs to exactly one of a user or a group (XOR), mirroring an
@@ -716,6 +730,10 @@ Rules the model must always guarantee, regardless of how they are implemented:
   computed on read and never stored.
 - A movement carries at most one source reference per account leg; a
   statement's rows are replaced as a unit.
+- A reconciliation is immutable; its adjustment is the one movement marked with
+  it, one-legged, in the settlement currency, with no split, and counts in no
+  income or expense total and no budget.
+- The counted figure is a person's input; the derived balance is never stored.
 - A group's `cash_mode` is `shared` (a single group cash account) or
   `per_member` (one cash account per member).
 - Money is an integer number of cents.
