@@ -188,9 +188,13 @@ export function MovementsScreen({
     category: rowCategory(row, categoryNames, categoryColors),
     account: rowSubtitle(row, accountNames) ?? "",
     label: row.labels[0]?.name ?? null,
-    amountMinor: row.amountCents,
+    amountMinor:
+      row.reconciliationId !== null && row.toAccountId === null
+        ? -row.amountCents
+        : row.amountCents,
     currency: row.currency,
     tone: rowTone(row),
+    adjustment: row.reconciliationId !== null,
     auto: row.recurringRuleId !== null,
   }));
 
@@ -570,12 +574,26 @@ export function MovementsScreen({
                       subtitle={rowSubtitle(row, accountNames)}
                       color={rowColor(row, categoryColors)}
                       amount={
-                        <Money
-                          minor={row.amountCents}
-                          currency={row.currency}
-                          tone={rowTone(row)}
-                          size="inherit"
-                        />
+                        row.reconciliationId !== null ? (
+                          <Money
+                            minor={
+                              row.toAccountId !== null
+                                ? row.amountCents
+                                : -row.amountCents
+                            }
+                            currency={row.currency}
+                            tone="transfer"
+                            signed="always"
+                            size="inherit"
+                          />
+                        ) : (
+                          <Money
+                            minor={row.amountCents}
+                            currency={row.currency}
+                            tone={rowTone(row)}
+                            size="inherit"
+                          />
+                        )
                       }
                       badge={
                         row.recurringRuleId !== null ? t("autoBadge") : undefined
@@ -687,6 +705,7 @@ function rowTitle(
   categoryNames: Map<string, string>,
   t: ReturnType<typeof useTranslations>,
 ): string {
+  if (row.reconciliationId !== null) return t("kindAdjustment");
   if (row.kind === "transfer") return t("kindTransfer");
   const first = row.splits[0]?.categoryId;
   const fallback = row.kind === "income" ? t("kindIncome") : t("kindExpense");
@@ -699,6 +718,10 @@ function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
 ): string | undefined {
+  if (row.reconciliationId !== null) {
+    const accountId = row.toAccountId ?? row.fromAccountId;
+    return (accountId && accountNames.get(accountId)) ?? undefined;
+  }
   if (row.kind === "transfer") {
     const from = (row.fromAccountId && accountNames.get(row.fromAccountId)) ?? "";
     const to = (row.toAccountId && accountNames.get(row.toAccountId)) ?? "";
@@ -712,7 +735,7 @@ function rowColor(
   row: TransactionListRow,
   categoryColors: Map<string, string | null>,
 ): string | null {
-  if (row.kind === "transfer") return null;
+  if (row.reconciliationId !== null || row.kind === "transfer") return null;
   const first = row.splits[0]?.categoryId;
   return (first && categoryColors.get(first)) ?? null;
 }
@@ -724,7 +747,7 @@ function rowCategory(
   categoryNames: Map<string, string>,
   categoryColors: Map<string, string | null>,
 ): { name: string; color: string | null } | null {
-  if (row.kind === "transfer") return null;
+  if (row.reconciliationId !== null || row.kind === "transfer") return null;
   const first = row.splits[0]?.categoryId;
   const name = first && categoryNames.get(first);
   return name ? { name, color: categoryColors.get(first) ?? null } : null;
@@ -735,6 +758,7 @@ function rowCategory(
 function rowTone(
   row: TransactionListRow,
 ): "income" | "transfer" | "expense" {
+  if (row.reconciliationId !== null) return "transfer";
   if (row.kind === "income") return "income";
   if (row.kind === "transfer") return "transfer";
   return "expense";

@@ -384,7 +384,8 @@ function transactionConditions(filters: TransactionListFilters): SQL[] {
 /**
  * The count and the net per currency over EVERY movement the filter matches, in
  * one statement and independent of any limit the list applies. A transfer moves
- * the net by nothing (RF-19) but still counts.
+ * the net by nothing (RF-19) but still counts; so does an adjustment, which the
+ * net leaves out (RF-137).
  */
 export async function getTransactionTotals(
   filters: TransactionListFilters,
@@ -397,7 +398,7 @@ export async function getTransactionTotals(
       .select({
         currency: transactions.currency,
         count: sql<number>`count(*)::int`,
-        netCents: sql<string>`coalesce(sum(case ${transactions.kind} when 'income' then ${transactions.amountCents} when 'expense' then -${transactions.amountCents} else 0 end), 0)::text`,
+        netCents: sql<string>`coalesce(sum(case when ${transactions.reconciliationId} is not null then 0 else case ${transactions.kind} when 'income' then ${transactions.amountCents} when 'expense' then -${transactions.amountCents} else 0 end end), 0)::text`,
       })
       .from(transactions)
       .where(conditions.length > 0 ? and(...conditions) : undefined)

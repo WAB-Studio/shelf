@@ -37,6 +37,8 @@ export type MovementTableRow = {
   // Derived from the accounts the movement carries, never stored (RF-18).
   tone: MoneyTone;
   auto: boolean;
+  // A reconciliation's adjustment: signed in plain ink and never editable.
+  adjustment: boolean;
 };
 
 // The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
@@ -172,7 +174,13 @@ export function MovementsTable({
       align: "end",
       cell: (row) => (
         <Flex align="center" justify="end" gap="1">
-          <Money minor={row.amountMinor} currency={row.currency} tone={row.tone} />
+          <Money
+            minor={row.amountMinor}
+            currency={row.currency}
+            tone={row.tone}
+            signed={row.adjustment ? "always" : true}
+          />
+          {!row.adjustment && (
           <RowMenu
             rowName={row.title}
             items={[
@@ -185,6 +193,7 @@ export function MovementsTable({
               },
             ]}
           />
+          )}
         </Flex>
       ),
     },

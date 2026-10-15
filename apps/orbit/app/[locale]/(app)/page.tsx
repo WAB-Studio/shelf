@@ -216,6 +216,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     transfer: t("kindTransfer"),
     income: t("kindIncome"),
     expense: t("kindExpense"),
+    adjustment: t("kindAdjustment"),
   };
 
   // The withdrawal's destination read-only: the caller's resolved cash by name,
@@ -318,6 +319,15 @@ function AccountClassIcon({
 // card takes a string, which is why this calls `formatMoney` rather than compose
 // `Money` — the one other door from a stored integer to a figure.
 function rowAmount(row: TransactionListRow, locale: Locale): string {
-  const sign = row.kind === "income" ? "+" : row.kind === "expense" ? "−" : "";
+  const sign =
+    row.reconciliationId !== null
+      ? row.toAccountId !== null
+        ? "+"
+        : "−"
+      : row.kind === "income"
+        ? "+"
+        : row.kind === "expense"
+          ? "−"
+          : "";
   return `${sign}${formatMoney(row.amountCents, row.currency, locale)}`;
 }
