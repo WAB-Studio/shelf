@@ -1,4 +1,15 @@
 import { test, expect } from "./fixtures";
+import chat from "../messages/es/chat.json";
+import connections from "../messages/es/connections.json";
+import day from "../messages/es/day.json";
+import exportCatalog from "../messages/es/export.json";
+import goal from "../messages/es/goal.json";
+import habit from "../messages/es/habit.json";
+import importCatalog from "../messages/es/import.json";
+import oneOffs from "../messages/es/oneOffs.json";
+import plan from "../messages/es/plan.json";
+import week from "../messages/es/week.json";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Against `PULSAR_DOWN_BASE_URL`: a `next start` of the same build whose
 // `DATABASE_URL` points at a port nothing listens on, so the outage is real
@@ -122,5 +133,82 @@ test.describe("a database outage", () => {
     await page.goto(`${LIVE}/metas/${GHOST}`);
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toHaveCount(0);
+  });
+
+  // Every page that reads the database throws on an outage: the failure
+  // page is its only state, never its empty state or the not-found.
+  const today = todayInZone();
+  const shiftDay = (day: string, by: number) => {
+    const date = civilDateToDate(day);
+    date.setUTCDate(date.getUTCDate() + by);
+    return dateToCivilDate(date);
+  };
+  const yesterday = shiftDay(today, -1);
+  const month = today.slice(0, 7);
+  const pastMonday = () => {
+    const date = civilDateToDate(today);
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7) - 14);
+    return dateToCivilDate(date);
+  };
+
+  const reads: { path: string; empty: (string | RegExp)[] }[] = [
+    { path: "/semana", empty: [week.empty.title] },
+    { path: `/semana?semana=${pastMonday()}`, empty: [week.empty.title] },
+    { path: "/sueltas", empty: [oneOffs.empty] },
+    { path: "/metas", empty: [goal.none.title, goal.none.body] },
+    { path: "/exportar", empty: [exportCatalog.empty] },
+    { path: "/conexiones", empty: [connections.sections.first, connections.intro] },
+    { path: `/dia/${yesterday}`, empty: [day.past.nothingTitle] },
+    { path: `/metas/${GHOST}/meses`, empty: [/ no tiene tareas\./] },
+    { path: `/metas/${GHOST}/meses/${month}`, empty: [/ no tiene tareas\./] },
+    { path: `/metas/${GHOST}/meses/${month}/tarea/nueva`, empty: [/ no tiene tareas\./] },
+    { path: `/metas/${GHOST}/plan`, empty: [/ no tiene tareas\./] },
+    { path: `/metas/habitos/${GHOST}`, empty: [habit.months.title] },
+    { path: "/metas/importar/revisar", empty: [importCatalog.review.title] },
+  ];
+
+  for (const { path, empty } of reads) {
+    test(`${path} draws the failure with both exits, never its empty state`, async ({ page }) => {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Intentar otra vez" })).toBeVisible();
+      await expect(page.getByRole("main").getByRole("link", { name: "Ir a hoy" })).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Volver a / })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Esta página no existe" })).toHaveCount(0);
+      await expect(page.getByRole("navigation")).toBeVisible();
+      for (const text of empty) await expect(page.getByText(text)).toHaveCount(0);
+    });
+  }
+
+  // These four read nothing to draw: the form opens in an outage and the
+  // failure arrives on save.
+  const forms: { path: string; title: string }[] = [
+    { path: "/metas/nueva", title: goal.new.title },
+    { path: "/metas/habitos/nuevo", title: plan.habitForm.title },
+    { path: "/chat", title: chat.title },
+    { path: "/metas/importar", title: importCatalog.title },
+  ];
+
+  for (const { path, title } of forms) {
+    test(`${path} draws its form in an outage`, async ({ page }) => {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+      await expect(page.getByRole("main").getByRole("button").or(page.getByRole("main").getByRole("textbox")).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toHaveCount(0);
+    });
+  }
+
+  test("/metas at 1280 keeps the rail with its four tabs around the failure", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/metas");
+    await expect(page.getByRole("main").getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
+    await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(4);
+    await expect(page.getByText(goal.none.title)).toHaveCount(0);
+  });
+
+  test("the import template downloads in an outage", async ({ request }) => {
+    const response = await request.get(`${DOWN}/importar/plantilla.xlsx`);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("spreadsheetml.sheet");
   });
 });
