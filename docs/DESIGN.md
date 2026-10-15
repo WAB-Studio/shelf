@@ -66,3 +66,11 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   again); the export leaves adjustments out in this slice; the real figure is typed as a magnitude, its sign from the account's kind.
 - **Boards approved by the user, 2026-10-15:** the 14 reconciliation boards (B1–B12) on the HomeFund canvas,
   https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj.
+
+## Decisions of 2026-10-15, by the user («acepto todo lo que digas pendiente»)
+
+- **Reconciliation screens (M3–M5) start before the folder rename.** The branch rebases across the `git mv` with `merge.directoryRenames=true`.
+- **An invitation is accepted, never claimed on sign-in** (security review H1): a screen «X te invitó a su fondo · Aceptar / Rechazar», and a way to leave a fund. Board to draw before any worker.
+- **Only the owner unshares a shared account** (security review M1).
+- **Touch targets: 44 px minimum**, raised from 32 px, in `components/ui`.
+- **«fondo», never «grupo»**, for the shared fund on every screen; «Propietario», never «Líder».

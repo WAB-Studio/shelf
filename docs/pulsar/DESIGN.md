@@ -1743,3 +1743,8 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **RP-125:** the export's months hold no weeks on screen; «Por semana» is its own table. A goal with no measure drops «sin tareas»
   from its «Por mes» (`components/month/months-screen.tsx:100`).
 - **The workbook's example rows** (`lib/import/workbook.ts:259,267`) move into next-intl: the person reads them in the file.
+
+## Decisions of 2026-10-15, by the user («acepto todo lo que digas pendiente»)
+
+- **A daily cap on model calls for the whole app**, on top of each person's 10 imports and 50 chats.
+- **The chat labels its replies «GOALLOG».**
