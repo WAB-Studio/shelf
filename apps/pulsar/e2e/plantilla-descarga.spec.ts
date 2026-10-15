@@ -20,11 +20,13 @@ async function rowsOf(db: postgres.Sql, id: string) {
 
 for (const [width, height] of [[360, 740], [1280, 800]] as const)
   test(`at ${width}: the template link downloads ${WORKBOOK_NAME}, and that file goes back in with its 4 goals and no model`, async ({ person, browser, baseURL, db }) => {
-    // Kills: `download` removed from the link (the book opens in the tab); a workbook the importer cannot read back.
+    // Kills: `download` removed from the link (the attribute is the screen's own promise of a file; the route's attachment header alone would still
+    // save it, so the download event cannot see this one); a workbook the importer cannot read back.
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
       const link = page.getByRole("link", { name: messages.entry.workbook }).filter({ visible: true }).first();
       await expect(link).toBeVisible();
+      await expect(link, "the link asks for a download").toHaveAttribute("download", "");
       const [download] = await Promise.all([page.waitForEvent("download"), link.click()]);
       expect(download.suggestedFilename()).toBe(WORKBOOK_NAME);
       const path = await download.path();

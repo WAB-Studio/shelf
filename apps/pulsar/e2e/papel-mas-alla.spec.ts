@@ -50,10 +50,10 @@ function checkFigures(pages: string[][], tag: string) {
   noSheetEndsOnALabel(pages, tag);
 }
 
-// Cifras juntas past the sweep's 0…17 and its leer 9…14 × 0…9.
-for (const tasks of [24, 32, 48])
+// Cifras juntas past the sweep's 0…17 and its leer 9…14 × 0…9. Each cut falls every 15 tasks (9, 25, 40, 55): the points sit on a cut, where a missing `whole` parts the figures.
+for (const tasks of [25, 40, 55])
   test(`beyond the sweep: with ${tasks} open tasks of «Leer», every goal's figures share one sheet and no sheet ends on a label`, async ({ person, browser, baseURL, db }) => {
-    // Kills: `PrintBlock` without `whole` on the figures; `whole` on «ESTE MES» alone.
+    // Kills: `PrintBlock` without `whole` on the figures (all of `whole` in `PrintBlock`). Not `whole` on «ESTE MES» alone: «HASTA HOY» sits beside it in one grid row, and 70 points (0…69 tasks) never part them.
     await seedShelf(db, person, tasks);
     checkFigures(await printedPages(browser, baseURL, person, "/exportar", `mf${tasks}`, ["Leer", "Correr 10 km"]), `${tasks} tasks`);
   });
@@ -93,10 +93,11 @@ const labelIndex = (pages: string[][], name: string) => {
 };
 const isRow = (line: string) => new RegExp(`^(${NAMES.join("|")}) \\d{4}`).test(line);
 
-// 803 past its 12×40 / 16×24 / 19×24 range.
-for (const [months, above] of [[12, 48], [12, 64], [24, 0], [24, 16], [36, 0], [36, 16]] as const)
+// 803 past its 12×40 / 16×24 / 19×24 range. A 12-month table keeps its head (8 to 19 rows): the page cut falls on «above» = 25, 40 and 55
+// (the figures' cuts, every 15 tasks), where the head without `whole` is left alone on the sheet before its label.
+for (const [months, above] of [[12, 25], [12, 40], [12, 55], [24, 0], [24, 16], [36, 0], [36, 16]] as const)
   test(`beyond the sweep: a ${months}-month goal under another goal's ${above} open tasks has its name on the page of its «por mes» label`, async ({ person, browser, baseURL, db }) => {
-    // Kills: `whole` removed from the `PrintGoal` of the head.
+    // Kills: `whole` removed from the `PrintGoal` of the head (12 months); `whole` forced on a table of 20 rows or more (24 months: its head is left behind).
     const name = `Inglés ${months} meses`;
     if (above > 0) await seedFiller(db, person, above);
     await seedMeasured(db, person, name, months);
@@ -115,7 +116,6 @@ for (const [months, above] of [[12, 48], [12, 64], [24, 0], [24, 16], [36, 0], [
 // A table longer than a sheet breaks between rows, keeps its label on the first, and the «N meses más» line behind the last row.
 for (const tasks of [32, 48])
   test(`beyond the sweep: a 46-month table under ${tasks} open tasks breaks between rows, label on its first sheet, line behind the last row`, async ({ person, browser, baseURL, db }) => {
-    // Kills: `whole` forced on the whole table (it fits no sheet: a blank one).
     const name = `Inglés largo`;
     await seedMeasured(db, person, name, 46, tasks);
     const pages = await printedPages(browser, baseURL, person, "/exportar", `long${tasks}`, [name]);

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
-import { scan, type Allowed } from "./check-e2e-static";
+import { readE2eFiles, scan, type Allowed } from "./check-e2e-static";
 
 const lines = (...l: string[]) => [{ name: "x.spec.ts", text: ["test(\"a\", async ({ page }) => {", ...l, "});"].join("\n") }];
 const run = (l: string[], allowed: Allowed[] = []) => scan(lines(...l), allowed);
@@ -142,4 +145,43 @@ test("a helper that calls a measuring helper measures too", () => {
   const out = scan([MEASURING, outer, SPEC(["  await page.goto(\"/\");", "  await outer(page);"])], []);
   assert.equal(out.violations.length, 1);
   assert.equal(out.violations[0].helper, "outer");
+});
+
+test("a helper that calls a measuring helper declared after it measures too", () => {
+  const outer = HELPER(["export async function outer(page) {", "  return measure(page);", "}"]);
+  const out = scan([outer, MEASURING, SPEC(["  await page.goto(\"/\");", "  await outer(page);"])], []);
+  assert.equal(out.violations.length, 1);
+  assert.equal(out.violations[0].helper, "outer");
+});
+
+test("a chain of three helpers, the measuring one declared last, measures at the top", () => {
+  const top = HELPER(["export async function top(page) {", "  return middle(page);", "}"]);
+  const middle = HELPER(["export async function middle(page) {", "  return measure(page);", "}"]);
+  const out = scan([top, middle, MEASURING, SPEC(["  await page.goto(\"/\");", "  await top(page);"])], []);
+  assert.equal(out.violations.length, 1);
+  assert.equal(out.violations[0].helper, "top");
+});
+
+test("a function a spec exports is not a helper", () => {
+  const exporting = { name: "z.spec.ts", text: ["export async function measure(page) {", "  return await page.locator(\"h1\").boundingBox();", "}"].join("\n") };
+  const out = scan([exporting, SPEC(["  await page.goto(\"/\");", "  await measure(page);"])], []);
+  assert.equal(out.violations.length, 0);
+});
+
+test("the files the check reads are every .ts of the folder: helpers beside specs, nothing else", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "e2e-static-"));
+  try {
+    mkdirSync(path.join(dir, "data"));
+    writeFileSync(path.join(dir, "data", "inner.ts"), "export const nested = 1;");
+    writeFileSync(path.join(dir, "b.spec.ts"), "// spec");
+    writeFileSync(path.join(dir, "ayuda.ts"), "// helper");
+    writeFileSync(path.join(dir, "notes.json"), "{}");
+    assert.deepEqual(
+      readE2eFiles(dir).map((f) => f.name),
+      ["ayuda.ts", "b.spec.ts"],
+    );
+    assert.equal(readE2eFiles(dir)[0].text, "// helper");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

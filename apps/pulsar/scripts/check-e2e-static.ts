@@ -154,12 +154,16 @@ export const ALLOWED: readonly Allowed[] = [
   },
 ];
 
-function main(): void {
-  const dir = path.join(import.meta.dirname, "..", "e2e");
-  const files = readdirSync(dir)
+// Every `.ts` file of `dir`, specs and the helpers they import alike.
+export function readE2eFiles(dir: string): Array<{ name: string; text: string }> {
+  return readdirSync(dir)
     .filter((f) => f.endsWith(".ts"))
     .sort()
     .map((name) => ({ name, text: readFileSync(path.join(dir, name), "utf8") }));
+}
+
+function main(): void {
+  const files = readE2eFiles(path.join(import.meta.dirname, "..", "e2e"));
   const { violations, stale } = scan(files, ALLOWED);
   for (const v of violations) {
     const what = v.helper ? `calls ${v.helper}(), which measures with no anchor of its own,` : "measures";
