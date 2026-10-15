@@ -22,7 +22,7 @@
     "check:goal": "node --import tsx --env-file=.env.local scripts/check-goal.ts",
     "check:goal-actions": "node --import tsx --env-file=.env.local --test scripts/check-goal-actions.ts",
     "check:mcp": "node --import tsx --env-file=.env.local --test \"scripts/mcp/*.ts\"",
-    "check:plan": "node --import tsx --env-file=.env.local --test \"scripts/plan/*.ts\"",
+    "check:plan": "node --import tsx --env-file=.env.local scripts/harness/plan-run.ts",
     "source:add": "node --import tsx --env-file=.env.local scripts/add-evidence-source.ts",
     "harness:mint-session": "node --import tsx --env-file=.env.local scripts/harness/mint-session.ts",
     "harness:seed-goal": "node --import tsx --env-file=.env.local scripts/harness/seed-goal.ts",
