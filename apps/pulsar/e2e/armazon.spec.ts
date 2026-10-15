@@ -2,6 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, settled, type Person } from "./fixtures";
+import { planText, toReview } from "./importar-plan";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RNP-16, RNP-17, RNP-07: the shell's facts are true of every signed-in route
@@ -39,9 +40,11 @@ type Route = {
   form?: boolean;
   // A screen that holds a cap of its own, named where it is not a form.
   cap?: number;
+  // A route reached by a flow, not a URL: the review only draws with a draft in the tab.
+  reach?: (page: Page) => Promise<void>;
 };
 
-type World = { measured: string; bare: string };
+type World = { measured: string; bare: string; habit: string };
 
 async function seed(db: postgres.Sql, personId: string): Promise<World> {
   const created = new Date(Date.now() - 20 * 86_400_000);
@@ -66,7 +69,11 @@ async function seed(db: postgres.Sql, personId: string): Promise<World> {
     `;
   }
   await db`insert into goals.one_offs (user_id, name, day) values (${personId}, ${`Suelta ${stamp}`}, ${today})`;
-  return { measured: measured.id, bare: bare.id };
+  const [habit] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${personId}, null, ${`Hábito suelto ${stamp}`}, 'daily', 'tap', ${created}) returning id
+  `;
+  return { measured: measured.id, bare: bare.id, habit: habit.id };
 }
 
 function routes(world: World): Route[] {
@@ -98,6 +105,16 @@ function routes(world: World): Route[] {
     { name: "404", path: `/metas/00000000-0000-4000-8000-000000000000`, back: null, cap: FORM_CAP },
     // Still on `Page`'s default, so it draws the form cap.
     { name: "/conexiones", path: "/conexiones", back: /^Volver a /, cap: FORM_CAP },
+    { name: "/metas/habitos/<id>", path: `/metas/habitos/${world.habit}`, back: /^Volver a /, cap: 640 },
+    { name: "/metas/habitos/nuevo", path: "/metas/habitos/nuevo", back: /^Volver a /, form: true },
+    { name: "/chat", path: "/chat", back: /^Volver a /, cap: 640 },
+    { name: "bare plan", path: `/metas/${world.bare}/plan`, back: /^Volver a /, cap: 640 },
+    {
+      name: "/metas/importar/revisar",
+      path: "/metas/importar/revisar",
+      back: /^Volver a /,
+      reach: (page) => toReview(page, planText()),
+    },
   ];
 }
 
@@ -156,7 +173,8 @@ for (const width of WIDTHS) {
     try {
       for (const route of routes(world)) {
         const at = `${route.name} at ${width}`;
-        await page.goto(route.path);
+        if (route.reach) await route.reach(page);
+        else await page.goto(route.path);
         await loaded(page);
         await settled(page);
 
