@@ -356,8 +356,7 @@ for (const [first, second] of [
     // These visits never boot the dictionary (RNL-08), so nothing is installed
     // and no translation can exist. The Worker still loads from the precache
     // and says so, rather than leaving the install message up forever.
-    // The live region repeats the line for screen readers; the drawn one follows it.
-    await expect(page.getByText(messages.install.failed, { exact: true }).last()).toBeVisible();
+    await expect(page.getByText(messages.install.failed, { exact: true })).toBeVisible();
     await expect(page.getByText(messages.install.preparing, { exact: true })).toHaveCount(0);
     await expect(page.getByText(messages.error.title, { exact: true })).toHaveCount(0);
     expect(problems.filter((line) => /ChunkLoadError|Loading chunk|Failed to load chunk/i.test(line))).toEqual([]);

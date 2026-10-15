@@ -35,6 +35,7 @@ export function InstallStatus({
   hasBox?: boolean;
 }) {
   const t = useTranslations("install");
+  const tLive = useTranslations("live");
   const typed = query.trim().length > 0;
   const pending = typed && (
     <Text size="2" muted>
@@ -46,8 +47,8 @@ export function InstallStatus({
   // The percent is left out: it would speak on every tick.
   const live = (
     <>
-      <Live>{status.state === "installing" ? t("unknownSize") : ""}</Live>
-      <Live assertive>{status.state === "failed" ? t("failed") : ""}</Live>
+      <Live>{status.state === "installing" ? tLive("installing") : ""}</Live>
+      <Live assertive>{status.state === "failed" ? tLive("installFailed") : ""}</Live>
     </>
   );
 

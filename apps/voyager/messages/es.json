@@ -83,7 +83,7 @@
   "log": {
     "title": "Registro de búsquedas",
     "counting": "Contando las búsquedas registradas",
-    "countFailed": "No se pudo leer el registro",
+    "countFailed": "No se pudo contar el registro",
     "exporting": "Exportando…",
     "exported": "Registro exportado",
     "exportFailed": "No se pudo exportar el registro",
@@ -260,12 +260,13 @@
   "live": {
     "senses": "{count, plural, one {# sentido} other {# sentidos}}",
     "noEntry": "El diccionario no tiene esa palabra",
-    "networkReady": "Llegó una respuesta de internet",
+    "networkReady": "Llegó la respuesta en línea",
     "extraReady": "Llegó un ejemplo",
     "translating": "Traduciendo",
     "phraseDone": "Traducción lista",
-    "networkFailed": "No se pudo traer la respuesta de internet",
+    "networkFailed": "No se pudo traer la respuesta en línea",
     "notes": "{count, plural, one {# nota de la frase} other {# notas de la frase}}",
-    "installing": "Instalando el diccionario"
+    "installing": "El diccionario empezó a instalarse",
+    "installFailed": "La instalación del diccionario falló"
   }
 }
