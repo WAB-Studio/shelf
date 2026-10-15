@@ -1,5 +1,6 @@
 import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { noonFromToday } from "./reloj";
 
 // A commitment row's second line is a sentence in Archivo whose
 // figures and hours are DM Mono, and a pair in one unit says the unit once.
@@ -32,8 +33,8 @@ for (const width of [390, 1440]) {
         returning id
       `;
       await db`
-        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
-        values (${person.id}, ${goal.id}, ${row.id}, ${todayInZone()}::date, ${logged})
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity, written_at)
+        values (${person.id}, ${goal.id}, ${row.id}, ${todayInZone()}::date, ${logged}, ${noonFromToday(0)})
       `;
     };
     await commit(minutes, 10, "min", 5);

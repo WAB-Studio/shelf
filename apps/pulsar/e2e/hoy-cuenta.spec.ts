@@ -6,6 +6,7 @@ import type postgres from "postgres";
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 import { boxOf } from "./box";
+import { noonFromToday } from "./reloj";
 
 // `HoyCuenta.dc.html`: Hoy counts «hechos N de M» over the rows
 // the Semana counts, and a flexible met in its period stays as a quiet row.
@@ -350,6 +351,8 @@ test("a person whose first goal opened today reads «hechos 0 de 3» and no link
   // The fixture clears the worker's person before each test: the goal made here is the first it ever had.
   const seeded = await seedOwed(db, person, `Meta primer día ${Date.now()}`, "0 seconds", 0);
   await db`delete from goals.commitments where goal_id = ${seeded.goalId} and name in (${seeded.names.fixedC}, ${seeded.names.flexible})`;
+  await db`update goals.goals set created_at = ${noonFromToday(0)} where id = ${seeded.goalId}`;
+  await db`update goals.commitments set created_at = ${noonFromToday(0)} where goal_id = ${seeded.goalId}`;
   const { context, page } = await onPhone(browser, person, 360);
   try {
     await page.goto("/");
@@ -360,8 +363,8 @@ test("a person whose first goal opened today reads «hechos 0 de 3» and no link
     await expect(page.locator('main a[href^="/dia/"]')).toHaveCount(0);
     await expect(page.getByText("ayer", { exact: true })).toHaveCount(0);
 
-    await db`update goals.goals set created_at = now() - interval '1 day' where id = ${seeded.goalId}`;
-    await db`update goals.commitments set created_at = now() - interval '1 day' where goal_id = ${seeded.goalId}`;
+    await db`update goals.goals set created_at = ${noonFromToday(-1)} where id = ${seeded.goalId}`;
+    await db`update goals.commitments set created_at = ${noonFromToday(-1)} where goal_id = ${seeded.goalId}`;
     await page.goto("/");
     await expect(page.locator(`main a[href="/dia/${plusDays(-1)}"]`)).toHaveText("ayer");
   } finally {

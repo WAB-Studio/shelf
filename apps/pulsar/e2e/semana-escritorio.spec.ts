@@ -5,6 +5,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { noonFromToday } from "./reloj";
 
 // RNP-17, RP-16, RP-20, RP-27 on Semana (`SemanaEscritorio.dc.html`): at 1280
 // the week is a table, at 360 it is still the list. Each test seeds its own
@@ -124,7 +125,7 @@ async function dropPerson(db: postgres.Sql, id: string) {
   await db`delete from harness.identities where user_id = ${id}`;
 }
 
-const longAgo = () => new Date(Date.now() - 12 * 86_400_000);
+const longAgo = () => noonFromToday(-12);
 
 test("at 1280 the week is a table: commitments down, days across, today's fact in today's cell, a one-off a named row (RNP-17, RP-16, RP-20)", async ({
   browser,
@@ -147,7 +148,7 @@ test("at 1280 the week is a table: commitments down, days across, today's fact i
     const goalId = await seedGoal(db, personId, goalName, shift(today, 60));
     const firstId = await seedCommitment(db, personId, goalId, first, longAgo());
     // Created now: no earlier day of the week held it.
-    await seedCommitment(db, personId, goalId, second, new Date());
+    await seedCommitment(db, personId, goalId, second, noonFromToday(0));
     await db`insert into goals.facts (user_id, commitment_id, day) values (${personId}, ${firstId}, ${today})`;
     const [own] = await db<{ id: string }[]>`
       insert into goals.one_offs (user_id, goal_id, name, day) values (${personId}, ${goalId}, ${named}, ${today}) returning id

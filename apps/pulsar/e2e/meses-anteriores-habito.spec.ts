@@ -1,6 +1,7 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 
-import { dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { todayInZone, weekOf } from "@/lib/zone";
+import { dayFromToday } from "./reloj";
 
 import { test, expect, settled, visit, type Person } from "./fixtures";
 import { seedOpenGoal } from "./metas-sin-final-seed";
@@ -221,7 +222,7 @@ test.describe("«Por semana» of a goal with no end, folded (RP-120, board Meses
 
   test("a goal with an end shows every week and draws no «semanas anteriores» line", async ({ person, browser, baseURL, db }) => {
     // Kills: drawing the line without looking at `horizon`.
-    const horizon = dateToCivilDate(new Date(Date.now() + 280 * 86_400_000));
+    const horizon = dayFromToday(280);
     const id = await seedOpenGoal(db, person, { name: "Escribir", unit: { measure: "páginas", unit: "páginas" }, horizon, created: weeksAgo(29) });
     const { page, context } = await open(browser, baseURL, person, weekPath(id));
     try {

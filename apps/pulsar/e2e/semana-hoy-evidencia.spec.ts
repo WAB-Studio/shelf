@@ -5,6 +5,7 @@ import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
+import { dayFromToday, noonFromToday } from "./reloj";
 
 // `SemanaHoyEvidencia` and its dark face: inside today's
 // column the evidence mark (soft fill, accent ring) must stand out from the
@@ -40,10 +41,10 @@ const PENDING = `Pendiente ${stamp}`;
 const evening = (day: string) => new Date(`${day}T23:30:00-05:00`);
 
 async function seed(db: postgres.Sql, person: Person) {
-  const horizon = dateToCivilDate(new Date(Date.now() + 90 * 86_400_000));
+  const horizon = dayFromToday(90);
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
-    values (${person.id}, ${`Meta hoy evidencia ${stamp}`}, ${horizon}, now() - interval '20 days')
+    values (${person.id}, ${`Meta hoy evidencia ${stamp}`}, ${horizon}, ${noonFromToday(-20)})
     returning id
   `;
   const commitment = async (name: string, kind: "tap" | "evidence") => {
@@ -53,11 +54,11 @@ async function seed(db: postgres.Sql, person: Person) {
             insert into goals.commitments
               (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
             values (${person.id}, ${goal.id}, ${name}, 'daily', 'evidence',
-              (select id from goals.evidence_sources where key = 'reading_lookups'), 1, now() - interval '20 days')
+              (select id from goals.evidence_sources where key = 'reading_lookups'), 1, ${noonFromToday(-20)})
             returning id`
         : await db<{ id: string }[]>`
             insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
-            values (${person.id}, ${goal.id}, ${name}, 'daily', 'tap', now() - interval '20 days')
+            values (${person.id}, ${goal.id}, ${name}, 'daily', 'tap', ${noonFromToday(-20)})
             returning id`;
     return row.id;
   };
