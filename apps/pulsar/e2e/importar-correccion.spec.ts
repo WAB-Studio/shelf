@@ -73,6 +73,8 @@ test.describe("a correction hangs under its part and is accepted unless the pers
     const month = word(first);
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planText());
+      await expect(amountButton(page, month)).toHaveText("10 h");
+      await page.getByRole("button", { name: messages.review.correction.acceptDeclined }).click();
       await expect(amountButton(page, month)).toHaveText("9 h");
       await expect(page.getByText(messages.review.correction.said, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.review.correction.proposed, { exact: true })).toBeVisible();
@@ -80,7 +82,7 @@ test.describe("a correction hangs under its part and is accepted unless the pers
       await expect(page.getByText(`${cap(month)}: 10 h`, { exact: true })).toBeVisible();
       await expect(page.getByText(`${cap(month)}: 9 h`, { exact: true })).toBeVisible();
       await expect(page.getByText(new RegExp(`^Las tareas de ${month} suman 9 h`))).toBeVisible();
-      await expect(page.getByRole("button", { name: messages.review.correction.accept, exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: messages.review.correction.accept, exact: true })).toHaveCount(0);
 
       await page.getByRole("button", { name: messages.review.correction.decline }).click();
       await expect(page.getByText("Se queda como decía el plan: 10 h.", { exact: true })).toBeVisible();
@@ -90,18 +92,17 @@ test.describe("a correction hangs under its part and is accepted unless the pers
       await page.getByRole("button", { name: messages.review.correction.acceptDeclined }).click();
       await expect(amountButton(page, month)).toHaveText("9 h");
       await expect(page.getByText("Se queda como decía el plan: 10 h.", { exact: true })).toHaveCount(0);
-      await page.getByRole("button", { name: messages.review.correction.accept, exact: true }).click();
-      await expect(amountButton(page, month)).toHaveText("9 h");
-      await expect(page.getByText("Se queda como decía el plan: 10 h.", { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: messages.review.correction.accept, exact: true })).toHaveCount(0);
     });
   });
 
-  test("an untouched correction is written as proposed: the month is the sum of its tasks", async ({ person, browser, baseURL, db }) => {
+  test("an accepted correction is written as proposed: the month is the sum of its tasks", async ({ person, browser, baseURL, db }) => {
     // Kills: writing what the plan said while the screen showed the proposal.
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planText());
       expect(await db`select 1 from goals.goals where user_id = ${person.id}`).toHaveLength(0);
+      await page.getByRole("button", { name: messages.review.correction.acceptDeclined }).click();
       await createButton(page).click();
       await expect(page).toHaveURL(/\/metas$/);
       const [row] = await db`
@@ -116,6 +117,7 @@ test.describe("a correction hangs under its part and is accepted unless the pers
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planText());
+      await page.getByRole("button", { name: messages.review.correction.acceptDeclined }).click();
       await page.getByRole("button", { name: messages.review.correction.decline }).click();
       await expect(amountButton(page, word(first))).toHaveText("10 h");
       await createButton(page).click();
@@ -132,6 +134,7 @@ test.describe("a correction hangs under its part and is accepted unless the pers
     const { first } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planText());
+      await page.getByRole("button", { name: messages.review.correction.acceptDeclined }).click();
       await page.getByRole("button", { name: messages.review.correction.decline }).click();
       await page.getByRole("checkbox", { name: new RegExp(`^${TASK_A}`) }).uncheck();
       await page.reload();

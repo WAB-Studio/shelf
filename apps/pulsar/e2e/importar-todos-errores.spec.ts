@@ -74,10 +74,11 @@ test.describe("one reading lists every mistake (RP-72)", () => {
       const rows = [
         sentence(lineOf(BOARD, MONTH_BAD), MONTH_BAD, KM(messages.errors.form.monthUnit)),
         sentence(lineOf(BOARD, SERIES_BAD), SERIES_BAD, "Esa unidad no es km. Escribe la cantidad en km, como «- nombre · cadencia · 8 km»."),
-        sentence(lineOf(BOARD, TASK_BAD), TASK_BAD, messages.errors.estimateNotTime),
+        // 992: a task in another unit than the goal's names the unit that goes; the sentence is the catalogue's, so the row is found by its opening.
+        `Línea ${lineOf(BOARD, TASK_BAD)}: «${TASK_BAD}». Esa unidad no es km.`,
       ];
-      const rule = (row: string) => alert.getByText(row, { exact: true }).evaluate((el) => parseFloat(getComputedStyle(el).borderTopWidth));
-      for (const row of rows) await expect(alert.getByText(row, { exact: true })).toBeVisible();
+      const rule = (row: string) => alert.getByText(row, row.endsWith("km.") ? {} : { exact: true }).evaluate((el) => parseFloat(getComputedStyle(el).borderTopWidth));
+      for (const row of rows) await expect(alert.getByText(row, row.endsWith("km.") ? {} : { exact: true })).toBeVisible();
       expect(await rule(rows[0])).toBe(0);
       expect(await rule(rows[1])).toBeGreaterThan(0);
       expect(await rule(rows[2])).toBeGreaterThan(0);
@@ -152,6 +153,54 @@ test.describe("one reading lists every mistake (RP-72)", () => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await paste(page, `pulsar · plantilla 1\nhorizonte: ${HORIZON}\n`);
       await expect(appAlerts(page).filter({ hasText: /\S/ })).toContainText(`Línea 2: «horizonte: ${HORIZON}». ${messages.errors.form.goal}`);
+    });
+  });
+  test("992 K6: four lines of four kinds come back under «4 líneas por corregir», each with what fails", async ({ person, browser, baseURL }) => {
+    // Kills: stopping at the first «ritmo:» of the head, or a row that falls back to the generic form.
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      const lines = [
+        "pulsar · plantilla 2",
+        "",
+        "# Aprender",
+        `horizonte: ${HORIZON}`,
+        "medida: Práctica · horas",
+        "",
+        "## Compromisos",
+        "- Hablar · cada dia · 30 min",
+        "- Leer · 8 veces por semana · toque",
+        "",
+        "# Escribir",
+        `horizonte: ${HORIZON}`,
+        "medida: Práctica · horas",
+        "ritmo: 10",
+        "",
+        "## Tareas",
+        `- ${M1} · 3 páginas · Algo`,
+      ];
+      await paste(page, lines.join("\n"));
+      const alert = alertOf(page);
+      await expect(alert).toBeVisible();
+      await expect(alert.getByText("4 líneas por corregir", { exact: true })).toBeVisible();
+      const rows = [
+        [8, lines[7], "Falta la tilde: «cada día»."],
+        [9, lines[8], "Una semana tiene 7 días: hasta «7 veces por semana»."],
+        [14, lines[13], "Esta meta mide en horas: escribe el ritmo con su unidad, como «ritmo: 10 h»."],
+        [17, lines[16], "Esa unidad no es de tiempo."],
+      ] as const;
+      const whole = (await alert.textContent()) ?? "";
+      let from = -1;
+      for (const [line, written, said] of rows) {
+        const row = `Línea ${line}: «${written}». ${said}`;
+        await expect(alert.getByText(row)).toBeVisible();
+        const place = whole.indexOf(row);
+        expect(place).toBeGreaterThan(from);
+        from = place;
+      }
+      expect(whole).not.toContain(messages.errors.form.commitment);
+      expect(whole).not.toContain(messages.errors.form.rhythmAmount);
+      expect(whole).not.toContain(messages.errors.form.task);
+      await expect(alert.getByText(messages.errors.templateCut)).toHaveCount(0);
+      await expect(page).toHaveURL(/\/metas\/importar$/);
     });
   });
 });

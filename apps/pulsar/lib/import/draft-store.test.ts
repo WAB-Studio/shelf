@@ -263,3 +263,40 @@ test("903: the lists read back keep what is the right kind and drop the rest", (
   assert.equal(read?.corrections.length, 1);
   assert.equal(read?.notices.length, 1);
 });
+
+// ---- 992 (RP-122): a plan written in the template or the workbook is saved as written.
+
+const fix = (id: string, code: "monthSumDiffers" | "monthOverRhythm" | "nameShortened", declined: "keepsPlan" | "leavesOut") =>
+  ({ id, at: id.split(":")[0], code, said: "s", proposed: "p", declined }) as const;
+const A = fix("goals.0.months.0:monthSumDiffers", "monthSumDiffers", "keepsPlan");
+const B = fix("goals.0.months.1:monthOverRhythm", "monthOverRhythm", "keepsPlan");
+const C = fix("goals.0:nameShortened", "nameShortened", "leavesOut");
+
+test("992 K7: a template save starts with every one of its corrections declined, in their order", () => {
+  saveDraft({ ...base, via: "template", corrections: [A, B] });
+  assert.deepEqual(readDraft()?.declined, [A.id, B.id]);
+  assert.equal(readDraft()?.corrections.length, 2);
+});
+
+test("992 K7: a workbook save starts with every correction declined too", () => {
+  saveDraft({ ...base, via: "workbook", corrections: [A, B] });
+  assert.deepEqual(readDraft()?.declined, [A.id, B.id]);
+});
+
+test("992 K7: a model save starts with none declined, whatever it proposes", () => {
+  saveDraft({ ...base, via: "model", corrections: [A, B, C] });
+  assert.deepEqual(readDraft()?.declined, []);
+});
+
+test("992 K7: all of a template's corrections are declined, the kind that leaves a part out as well as the kind that keeps the plan", () => {
+  saveDraft({ ...base, via: "template", corrections: [A, C, B] });
+  assert.deepEqual(readDraft()?.declined, [A.id, C.id, B.id]);
+});
+
+test("992 K7: a template with no corrections declines nothing, and a later review keeps the declined list it saves", () => {
+  saveDraft({ ...base, via: "template", corrections: [] });
+  assert.deepEqual(readDraft()?.declined, []);
+  saveDraft({ ...base, via: "template", corrections: [A, B] });
+  saveReview(draft2(), [], [B.id]);
+  assert.deepEqual(readDraft()?.declined, [B.id]);
+});

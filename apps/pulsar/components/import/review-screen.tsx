@@ -297,7 +297,10 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
           onToggleMany: toggleMany,
           onEdit: open,
           onDecline: (id) => decide(id, true),
-          onUndo: (id) => decide(id, false),
+          onUndo: (id) => {
+            decide(id, false);
+            setAccepted((now) => new Set(now).add(id));
+          },
           onAccept: (id) => setAccepted((now) => new Set(now).add(id)),
         }}
       />
