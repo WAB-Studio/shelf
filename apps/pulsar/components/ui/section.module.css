@@ -51,8 +51,4 @@
     display: table-cell;
     padding-block-end: 12px;
   }
-
-  .repeat tr {
-    break-inside: avoid;
-  }
 }

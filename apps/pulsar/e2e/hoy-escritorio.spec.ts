@@ -75,8 +75,9 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     // A row still in React's hidden streaming div reads as textContent: «2026» glued to «12».
     const currentRow = page.locator("tr[data-current]");
     await expect(currentRow).toBeVisible();
-    const current = await currentRow.innerText();
-    const revisionNumber = current.match(/(\d+)\s*min\s*en curso/)?.[1];
+    // The week's dates carry «en curso»; its total sits in the second cell.
+    await expect(currentRow.getByRole("cell").nth(0)).toContainText("en curso");
+    const revisionNumber = (await currentRow.getByRole("cell").nth(1).innerText()).match(/^(\d+)\s*min$/)?.[1];
     expect(revisionNumber).toBe("12");
 
     await page.goto("/");
