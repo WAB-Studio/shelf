@@ -233,9 +233,53 @@ export function parsePesos(raw: string): number | null {
   return minor / STORAGE_UNIT;
 }
 
-/** @deprecated An amount is already stored in the scale a column keeps. */
+// Splits a finite number's shortest round-trip decimal string (what a person
+// typed or a cell displays) into an integer mantissa and a power-of-ten
+// exponent, so arithmetic on it stays on integers.
+function toDecimalParts(n: number): { mantissa: bigint; exp: number } {
+  const match = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/.exec(String(n));
+  if (match === null) throw new RangeError("not a finite number");
+  const [, sign, whole, frac = "", exp = "0"] = match;
+  const mantissa = BigInt(whole + frac);
+  return {
+    mantissa: sign === "-" ? -mantissa : mantissa,
+    exp: Number(exp) - frac.length,
+  };
+}
+
+// value * 10^shift as an integer, rounded half away from zero (a negative
+// shift divides). The one rounding rule for every conversion below.
+const ZERO = BigInt(0);
+const TWO = BigInt(2);
+const TEN = BigInt(10);
+
+function scaleRound(mantissa: bigint, shift: number): bigint {
+  if (shift >= 0) return mantissa * TEN ** BigInt(shift);
+  const divisor = TEN ** BigInt(-shift);
+  const abs = mantissa < ZERO ? -mantissa : mantissa;
+  const rounded = (abs * TWO + divisor) / (divisor * TWO);
+  return mantissa < ZERO ? -rounded : rounded;
+}
+
+/**
+ * Converts a decimal peso count to the integer the column stores. Reads the
+ * number's shortest decimal form, never `pesos * 100`: 1.15 * 100 is
+ * 114.99999999999999. Beyond the stored scale it rounds half away from zero.
+ * @deprecated An amount is already stored in the scale a column keeps.
+ */
 export function pesosToCents(pesos: number): number {
-  return pesos * 100;
+  const { mantissa, exp } = toDecimalParts(pesos);
+  return Number(scaleRound(mantissa, exp + STORAGE_EXPONENT));
+}
+
+/**
+ * Converts `amountMinor` at an exchange `rate` (a float from a public source)
+ * to minor units, on integers: the product is taken on the rate's shortest
+ * decimal form and rounded once, half away from zero.
+ */
+export function convertMinor(amountMinor: number, rate: number): number {
+  const { mantissa, exp } = toDecimalParts(rate);
+  return Number(scaleRound(BigInt(amountMinor) * mantissa, exp));
 }
 
 /** @deprecated Formatting an amount is `Money`'s own business. */
