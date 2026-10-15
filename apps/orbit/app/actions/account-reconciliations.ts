@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import {
@@ -79,8 +79,10 @@ export const reconcileAccountAction = authActionClient
         }
       }
 
-      // One layout covers the accounts list, the movements list, the dashboard and the reports.
+      // The layout purge reaches the other screens' cached trees on their next visit; only
+      // `refresh` re-renders the screen the dialog sits on, which the dialog stays open over.
       revalidatePath("/[locale]", "layout");
+      refresh();
       return { ok: true, id: result.id, gapCents: result.gapCents };
     },
   );
