@@ -8,7 +8,7 @@ import { grouped, noOverflow, noteOf, setNote } from "./mover-nota-ayuda";
 import { boxOf } from "./box";
 
 // Module 872 (b) (RP-95), board `JerarquiaNota` and DESIGN.md: a goal's note sits between the end line
-// and «Archivar esta meta», folded as «Nota»; with none, «Agregar una nota» stands in its place. The
+// and «Archivar esta meta», folded as «Nota»; with none, «Añadir una nota» stands in its place. The
 // sheet is the task note's with other words: placeholder «Lo que quieras recordar de esta meta», the
 // cap `GOAL_NOTE_MAX`, the count from nine tenths of it. Emptying and saving removes the note.
 
@@ -32,7 +32,7 @@ async function openSheet(page: Page, opener: string): Promise<Locator> {
 
 const field = (sheet: Locator) => sheet.getByLabel("nota", { exact: true });
 
-test("with no note the screen offers «Agregar una nota» between the end line and «Archivar esta meta», and no block (RP-95)", async ({
+test("with no note the screen offers «Añadir una nota» between the end line and «Archivar esta meta», and no block (RP-95)", async ({
   person,
   browser,
   baseURL,
@@ -43,7 +43,7 @@ test("with no note the screen offers «Agregar una nota» between the end line a
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${id}`);
   try {
     await expectTitle(page, name);
-    const add = page.getByRole("button", { name: "Agregar una nota", exact: true });
+    const add = page.getByRole("button", { name: "Añadir una nota", exact: true });
     await expect(add).toBeVisible();
     await expect(page.getByRole("button", { name: "Nota", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Cambiar la nota" })).toHaveCount(0);
@@ -70,7 +70,7 @@ test("the empty sheet carries the goal's name and its own placeholder, with no �
   const { id, name } = await seedOne(db, person);
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${id}`);
   try {
-    const sheet = await openSheet(page, "Agregar una nota");
+    const sheet = await openSheet(page, "Añadir una nota");
     await expect(sheet.getByRole("heading", { name })).toBeVisible();
     await expect(field(sheet)).toHaveAttribute("placeholder", "Lo que quieras recordar de esta meta");
     await expect(field(sheet)).toHaveValue("");
@@ -93,7 +93,7 @@ test("a note of three lines saves to that goal alone, reads folded, and unfolds 
   const other = await seedGoal(db, person, { name: `Otra ${Date.now()}`, unit: MINUTES, horizon: monthsAhead(4) });
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${id}`);
   try {
-    const sheet = await openSheet(page, "Agregar una nota");
+    const sheet = await openSheet(page, "Añadir una nota");
     await field(sheet).fill(THREE);
     await sheet.getByRole("button", { name: "Guardar" }).click();
     await expect(sheet).toBeHidden();
@@ -102,7 +102,7 @@ test("a note of three lines saves to that goal alone, reads folded, and unfolds 
 
     await page.reload();
     await expect(page.getByRole("button", { name: "Nota", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Agregar una nota" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Añadir una nota" })).toHaveCount(0);
     await expect(page.getByText("línea uno")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Nota", exact: true }).click();
@@ -142,7 +142,7 @@ test("«Cambiar la nota» opens on the note held, replaces it, and «quitar la n
     await expect(again).toBeHidden();
     expect(await noteOf(db, id)).toBeNull();
     await page.reload();
-    await expect(page.getByRole("button", { name: "Agregar una nota", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Añadir una nota", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Nota", exact: true })).toHaveCount(0);
   } finally {
     await context.close();
@@ -161,7 +161,7 @@ test("emptying the field and saving removes the note: null, never an empty strin
     await expect(sheet).toBeHidden();
     expect(await noteOf(db, id)).toBeNull();
     await page.reload();
-    await expect(page.getByRole("button", { name: "Agregar una nota", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Añadir una nota", exact: true })).toBeVisible();
 
     await setNote(db, id, "Otra vez");
     await page.reload();
@@ -187,7 +187,7 @@ test("a note of exactly the cap saves; one more shows the refusal and the count 
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${id}`);
   try {
     const calls = countActionPosts(page);
-    const sheet = await openSheet(page, "Agregar una nota");
+    const sheet = await openSheet(page, "Añadir una nota");
     const long = "a".repeat(MAX + 1);
     await field(sheet).fill(long);
     await expect(sheet.getByRole("alert")).toHaveText(`Es muy larga. Escribe máximo ${grouped(MAX)} caracteres.`);
@@ -213,7 +213,7 @@ test("the count shows from nine tenths of the cap and not before (RP-95)", async
   const { id } = await seedOne(db, person);
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${id}`);
   try {
-    const sheet = await openSheet(page, "Agregar una nota");
+    const sheet = await openSheet(page, "Añadir una nota");
     await field(sheet).fill("c".repeat(COUNT_FROM - 1));
     await expect(sheet.getByText(new RegExp(` de ${grouped(MAX)}$`))).toHaveCount(0);
     await field(sheet).fill("c".repeat(COUNT_FROM));
@@ -266,7 +266,7 @@ test("a failed save says so, keeps the text, and the retry saves (RP-95)", async
   const { id } = await seedOne(db, person);
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${id}`);
   try {
-    const sheet = await openSheet(page, "Agregar una nota");
+    const sheet = await openSheet(page, "Añadir una nota");
     await field(sheet).fill("texto que no se pierde");
     let refuse = true;
     await page.route("**/*", async (route) => {

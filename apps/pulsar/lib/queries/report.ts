@@ -22,7 +22,7 @@ import {
   type TaskRow,
 } from "@/lib/queries/goal";
 import { placeOf } from "@/lib/queries/month";
-import { toPhase, type PhaseRow } from "@/lib/queries/rows";
+import { toCadence, toPhase, type PhaseRow } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { isTimeUnit } from "@/lib/units/time";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
@@ -50,7 +50,7 @@ async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
                  'source_key', s.key,
                  'source_unit', s.unit,
                  'source_label_key', s.label_key
-               )), '[]'::json)
+               ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.goal_id = g.id) as commitments,
@@ -235,6 +235,14 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         endsOn: phase.endsOn,
         current: current?.id === phase.id,
       })),
+      commitments: row.commitments
+        .filter((commitment) => commitment.retired_at === null)
+        .map((commitment) => ({
+          name: commitment.name,
+          cadence: toCadence(commitment),
+          targetQuantity: commitment.satisfaction === "quantity" ? commitment.target_quantity : null,
+          unit: commitment.satisfaction === "quantity" ? commitment.unit : null,
+        })),
       tasks: monthItems.map(toReportTask),
       carried: monthItems
         .filter((item) => item.carriedFrom !== null && !item.done)
@@ -260,11 +268,13 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         }),
       months: figures.months.map((month) => {
         const share = month.past ? planShare(planInput, month.month) : null;
-        const items = countsTasks ? planMonthList(planInput, month.month) : null;
+        const listed = planMonthList(planInput, month.month);
+        const items = countsTasks ? listed : null;
         return {
           ...month,
           ...(noEnd ? { endless: true as const } : {}),
           carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
+          taskCount: listed.length,
           ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
         };
       }),
@@ -416,7 +426,8 @@ function holderOf(args: {
   const everyMonth = monthsOfSpan(spanStartOn, row.goal.horizon, today).map((month) => {
     const figure = sum.months.get(month);
     const old = kept.get(month);
-    const items = countsTasks ? branch.flatMap((goalId) => planMonthList(byId.get(goalId)!.planInput, month)) : null;
+    const listed = branch.flatMap((goalId) => planMonthList(byId.get(goalId)!.planInput, month));
+    const items = countsTasks ? listed : null;
     return {
       month,
       planned: figure?.planned ?? null,
@@ -425,6 +436,7 @@ function holderOf(args: {
       past: month < current,
       ...(noEnd ? { endless: true as const } : {}),
       carried: old?.carried ?? null,
+      taskCount: listed.length,
       ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
     };
   });
@@ -442,6 +454,7 @@ function holderOf(args: {
   return {
     ...report,
     rhythm: null,
+    ownMonths: [],
     unit: sum.unit,
     thisMonth: { planned, reached, underPace },
     toDate: toDate(everyMonth),
