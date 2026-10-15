@@ -39,10 +39,15 @@ function empty(status: 204 | 400): Response {
 // already refused would still take one of the day's calls. No chargeable
 // caller (no salt, no address) reaches the model at all.
 async function claimModelCall(request: Request, dailyCap: number): Promise<boolean> {
-  const client = scopedClientKey("text", request.headers);
-  if (!client) return false;
-  if (!(await claimClientCall(client, env.WORD_TEXT_DAILY_CLIENT_CAP))) return false;
-  return claimDailyCall(dailyCap);
+  try {
+    const client = scopedClientKey("text", request.headers);
+    if (!client) return false;
+    if (!(await claimClientCall(client, env.WORD_TEXT_DAILY_CLIENT_CAP))) return false;
+    return await claimDailyCall(dailyCap);
+  } catch (error) {
+    console.error("[api/word/text] claim failed", error);
+    return false;
+  }
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -79,7 +84,13 @@ export async function POST(request: Request): Promise<Response> {
     isInflectionDisagreement(group, rule);
   const thin = isThinAnswer(group) || disagrees;
 
-  const cached = await readCachedText(headword);
+  let cached: Awaited<ReturnType<typeof readCachedText>>;
+  try {
+    cached = await readCachedText(headword);
+  } catch (error) {
+    console.error("[api/word/text] cache read failed", error);
+    return empty(204);
+  }
   if (cached) {
     let translations = cached.translations;
     // A thin word never asked, or asked before this column existed:

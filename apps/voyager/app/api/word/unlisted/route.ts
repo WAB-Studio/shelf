@@ -62,7 +62,13 @@ export async function POST(request: Request): Promise<Response> {
   // a lemma the dictionary does carry — `null` when it is unlisted outright.
   const inflection = answer.viaInflection[0] ?? null;
 
-  const cached = await readCachedAnswer(word);
+  let cached: Awaited<ReturnType<typeof readCachedAnswer>>;
+  try {
+    cached = await readCachedAnswer(word);
+  } catch (error) {
+    console.error("[api/word/unlisted] cache read failed", error);
+    return empty(204);
+  }
   if (cached) {
     return json(unlistedResponseSchema.parse(cached), 200);
   }
@@ -80,14 +86,24 @@ export async function POST(request: Request): Promise<Response> {
     return empty(204);
   }
 
-  if (!(await claimClientCall(client, env.WORD_UNLISTED_DAILY_CLIENT_CAP))) {
+  try {
+    if (!(await claimClientCall(client, env.WORD_UNLISTED_DAILY_CLIENT_CAP))) {
+      return empty(204);
+    }
+  } catch (error) {
+    console.error("[api/word/unlisted] client claim failed", error);
     return empty(204);
   }
 
   // The global cap `/api/word/text` already spends against: one model, one
   // daily budget, whichever route claims it first (docs/TRAPS.md, "The
   // OpenAI CSV does not say what this app spent").
-  if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) {
+  try {
+    if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) {
+      return empty(204);
+    }
+  } catch (error) {
+    console.error("[api/word/unlisted] daily claim failed", error);
     return empty(204);
   }
 

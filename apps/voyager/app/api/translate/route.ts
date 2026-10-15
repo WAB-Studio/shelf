@@ -145,7 +145,13 @@ async function translateWithProvider(text: string): Promise<string> {
 async function translateWithModel(text: string): Promise<string | null> {
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey || !env.WORD_TEXT_DAILY_CALL_CAP) return null;
-  if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) return null;
+  // A database error is one more reason not to answer: MyMemory is tried.
+  try {
+    if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) return null;
+  } catch (error) {
+    console.error("[api/translate] daily claim failed", error);
+    return null;
+  }
   const response = await providerFetch(
     "https://api.openai.com/v1/chat/completions",
     {
@@ -194,16 +200,16 @@ export async function POST(request: Request): Promise<Response> {
   // into their word lookups. With no key (no salt, no address) the route
   // stays open: an unset variable must not switch RL-09 off. Refused before
   // MyMemory is reached; the client reads 429 as any other failure (RL-37).
-  const client = scopedClientKey("translate", request.headers);
-  if (client && !(await claimClientCall(client, env.TRANSLATE_DAILY_CLIENT_CAP))) {
-    return Response.json({ error: "rateLimited" }, { status: 429 });
-  }
-
   try {
+    const client = scopedClientKey("translate", request.headers);
+    if (client && !(await claimClientCall(client, env.TRANSLATE_DAILY_CLIENT_CAP))) {
+      return Response.json({ error: "rateLimited" }, { status: 429 });
+    }
     const text = (await translateWithModel(parsed.data.text)) ?? (await translateWithProvider(parsed.data.text));
     const result: TranslationResult = { text, origin: "network" };
     return Response.json(result, { status: 200 });
-  } catch {
+  } catch (error) {
+    console.error("[api/translate] failed", error);
     return Response.json({ error: "provider" }, { status: 502 });
   }
 }

@@ -65,7 +65,13 @@ export async function POST(request: Request): Promise<Response> {
   // on. A cache hit answers with no budget spent and no model reached,
   // whatever the caps below say.
   const hash = phraseHash(parsed.data.source, parsed.data.translation);
-  const cached = await readCachedNotes(hash);
+  let cached: Awaited<ReturnType<typeof readCachedNotes>>;
+  try {
+    cached = await readCachedNotes(hash);
+  } catch (error) {
+    console.error("[api/phrase/notes] cache read failed", error);
+    return empty(204);
+  }
   if (cached) {
     return json(notesResponseSchema.parse({ notes: cached }), 200);
   }
@@ -94,7 +100,12 @@ export async function POST(request: Request): Promise<Response> {
   // The same `reading.client_spend` row `/api/word/unlisted` bumps for this
   // caller, read against this route's own ceiling — never against
   // WORD_UNLISTED_DAILY_CLIENT_CAP, and never left unread the way it was.
-  if (!(await claimClientCall(client, env.PHRASE_NOTES_DAILY_CLIENT_CAP))) {
+  try {
+    if (!(await claimClientCall(client, env.PHRASE_NOTES_DAILY_CLIENT_CAP))) {
+      return empty(204);
+    }
+  } catch (error) {
+    console.error("[api/phrase/notes] client claim failed", error);
     return empty(204);
   }
 
@@ -104,7 +115,12 @@ export async function POST(request: Request): Promise<Response> {
   // lower of this route's own and the global one: notes never spend past
   // the day `/api/word/text` is held to.
   const dailyCap = Math.min(env.PHRASE_NOTES_DAILY_CALL_CAP, env.WORD_TEXT_DAILY_CALL_CAP);
-  if (!(await claimDailyCall(dailyCap))) {
+  try {
+    if (!(await claimDailyCall(dailyCap))) {
+      return empty(204);
+    }
+  } catch (error) {
+    console.error("[api/phrase/notes] daily claim failed", error);
     return empty(204);
   }
 
