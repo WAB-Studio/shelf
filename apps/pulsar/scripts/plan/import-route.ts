@@ -13,7 +13,12 @@ import { dirname, resolve } from "node:path";
 import { after, before, beforeEach, test } from "node:test";
 
 import ExcelJS from "exceljs";
+import { createTranslator } from "next-intl";
 import postgres from "postgres";
+
+const importMessages = JSON.parse(readFileSync(resolve(process.cwd(), "messages/es/import.json"), "utf8"));
+const say = (key: string) =>
+  (createTranslator({ locale: "es", messages: { import: importMessages }, namespace: "import" }) as unknown as (k: string) => string)(key);
 
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
@@ -367,9 +372,27 @@ test("a non-template file goes to the model as a file claim", async () => {
   assert.equal((await rows())[0].source, "file");
 });
 
+// One empty page: the header, the three objects the reader's page count looks for, a trailer.
+const ONE_PAGE_PDF = [
+  "%PDF-1.4",
+  "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+  "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+  "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >> endobj",
+  "trailer << /Root 1 0 R >>",
+  "%%EOF",
+].join("\n");
+
+test("a four-byte file named plan.pdf is not a PDF: 415, no claim", async () => {
+  const file = new File([new Uint8Array([37, 80, 68, 70])], "plan.pdf", { type: "application/pdf" });
+  const response = await route.POST(request({ file }));
+  assert.equal(response.status, 415);
+  assert.equal((await answer(response)).error, "import.errors.unreadableType");
+  assert.equal((await rows()).length, 0);
+});
+
 test("a PDF goes as parts: the source comes back with no lines to copy", async () => {
   stubDraft(rawGoal({ src: [] }));
-  const file = new File([new Uint8Array([37, 80, 68, 70])], "plan.pdf", { type: "application/pdf" });
+  const file = new File([ONE_PAGE_PDF], "plan.pdf", { type: "application/pdf" });
   const lines = await ndjson(await route.POST(request({ file })));
   assert.deepEqual(lastLine(lines).done.source, { kind: "parts", lines: null });
 });
@@ -493,13 +516,13 @@ test("801: a broken header answers one error and judges nothing below it", async
 
 // Module 885: the workbook is read by code, never by the model.
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const xlsx = (bytes: Uint8Array, name = "plantilla-pulsar.xlsx") => new File([bytes as BlobPart], name, { type: XLSX });
+const xlsx = (bytes: Uint8Array, name = "plantilla-goallog.xlsx") => new File([bytes as BlobPart], name, { type: XLSX });
 
 test("the delivered workbook, uploaded: 200 via workbook with its draft; no key, no row, no model", async () => {
   delete envHandle.OPENAI_API_KEY;
   delete envHandle.PULSAR_MODEL_STUB;
   const { templateWorkbook } = await import("@/lib/import/workbook");
-  const response = await route.POST(request({ file: xlsx(await templateWorkbook()) }));
+  const response = await route.POST(request({ file: xlsx(await templateWorkbook(say)) }));
   assert.equal(response.status, 200);
   const body = await answer(response);
   assert.equal(body.via, "workbook");
@@ -515,7 +538,7 @@ test("the delivered workbook, uploaded: 200 via workbook with its draft; no key,
 test("a workbook with a broken row: 422 workbookRows names its sheet and row; no row, no model", async () => {
   const { templateWorkbook } = await import("@/lib/import/workbook");
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(Buffer.from(await templateWorkbook()) as never);
+  await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
   wb.getWorksheet("Meses")!.getCell("B2").value = "octubre";
   const bytes = new Uint8Array(await wb.xlsx.writeBuffer());
   const response = await route.POST(request({ file: xlsx(bytes) }));
@@ -549,7 +572,7 @@ test("a file called .xlsx that is no workbook is not the template either", async
 test("a workbook with the cap spent still reads: no claim for it", async () => {
   await seedToday(10);
   const { templateWorkbook } = await import("@/lib/import/workbook");
-  const response = await route.POST(request({ file: xlsx(await templateWorkbook()) }));
+  const response = await route.POST(request({ file: xlsx(await templateWorkbook(say)) }));
   assert.equal(response.status, 200);
   assert.equal((await rows()).length, 10);
 });
@@ -559,7 +582,7 @@ test("the download: GET /importar/plantilla.xlsx hands the workbook as an attach
   const download = await import("@/app/importar/plantilla.xlsx/route");
   const response = await download.GET();
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get("content-disposition"), "attachment; filename=plantilla-pulsar.xlsx");
+  assert.equal(response.headers.get("content-disposition"), "attachment; filename=plantilla-goallog.xlsx");
   assert.equal(response.headers.get("content-type"), XLSX);
   const bytes = new Uint8Array(await response.arrayBuffer());
   const { readWorkbook } = await import("@/lib/import/workbook");

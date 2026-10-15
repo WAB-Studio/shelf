@@ -8,6 +8,7 @@ import { ChangeRow } from "@/components/chat/change-row";
 import { Button, Field, Flex, Notice, Page, Row, ScreenHeader, Section, Text } from "@/components/ui";
 import {
   NO_TURNS,
+  dropUnanswered,
   readTurns,
   requestTurns,
   subscribeTurns,
@@ -15,6 +16,7 @@ import {
   type StoredChange,
   type StoredTurn,
 } from "@/lib/chat/conversation";
+import { chatTurnSchema } from "@/lib/chat/types";
 
 type Shut = "noKey" | "cap";
 
@@ -48,6 +50,7 @@ export function ChatScreen() {
   const [busy, setBusy] = useState(false);
   const [making, setMaking] = useState(false);
   const [shut, setShut] = useState<Shut | null>(null);
+  const [tooLong, setTooLong] = useState(false);
   const sending = useRef(false);
   const makingNow = useRef(false);
 
@@ -61,6 +64,10 @@ export function ChatScreen() {
     const typed = message === null ? null : message.trim();
     if (typed === "") return;
     if (typed === null && turns.at(-1)?.role !== "person") return;
+    if (typed !== null && !chatTurnSchema.safeParse({ role: "person", text: typed }).success) {
+      setTooLong(true);
+      return;
+    }
     sending.current = true;
     setBusy(true);
     if (typed !== null) {
@@ -81,8 +88,13 @@ export function ChatScreen() {
         updateTurns((all) => [...all, { role: "chat", text: body.reply!, changes }]);
       } else if (response.status === 503 || response.status === 429) {
         // The chat is shut: the message was never answered, so it leaves no turn.
-        updateTurns((all) => (all.at(-1)?.role === "person" ? all.slice(0, -1) : all));
+        updateTurns(dropUnanswered);
         setShut(response.status === 503 ? "noKey" : "cap");
+      } else if (response.status === 422) {
+        // The server refused the message: it leaves no turn, or every later message would carry it.
+        updateTurns(dropUnanswered);
+        if (typed !== null) setText(typed);
+        setTooLong(true);
       }
     } catch {
       // The last turn stays the person's: the screen offers «Intentar otra vez».
@@ -208,7 +220,12 @@ export function ChatScreen() {
               placeholder={t("placeholder")}
               value={text}
               disabled={busy || shut !== null}
-              onChange={(event) => setText(event.target.value)}
+              hint={tooLong ? t("errors.tooLong") : undefined}
+              invalid={tooLong}
+              onChange={(event) => {
+                setText(event.target.value);
+                setTooLong(false);
+              }}
               autoComplete="off"
             />
             <Button

@@ -515,3 +515,48 @@ test("903: the schema bounds 40 goals and a cadence count from 1 to 365", async 
   const integer = goals.items.properties.commitments.items.properties.cadenceN.anyOf.find((branch) => branch.type === "integer");
   assert.deepEqual([integer?.minimum, integer?.maximum], [1, 365]);
 });
+
+test("fileRefused: bytes that are not what the type says, a long PDF and a huge image are refused", async () => {
+  const { fileRefused, pdfPages, imagePixels } = await import("./model");
+  const pdf = (pages: number) => new TextEncoder().encode(`%PDF-1.4\n${"<< /Type /Page >>\n".repeat(pages)}<< /Type /Pages /Count ${pages} >>`);
+  assert.equal(pdfPages(pdf(3)), 3);
+  assert.equal(fileRefused("pdf", pdf(40)), false);
+  assert.equal(fileRefused("pdf", pdf(41)), true);
+  assert.equal(fileRefused("pdf", new TextEncoder().encode("not a pdf")), true);
+  const png = (w: number, h: number) => {
+    const b = Buffer.alloc(32);
+    b.writeUInt32BE(0x89504e47, 0);
+    b.writeUInt32BE(w, 16);
+    b.writeUInt32BE(h, 20);
+    return new Uint8Array(b);
+  };
+  assert.equal(imagePixels(png(1000, 2000)), 2_000_000);
+  assert.equal(fileRefused("image", png(4000, 4000)), false);
+  assert.equal(fileRefused("image", png(10000, 10000)), true);
+  assert.equal(fileRefused("image", new TextEncoder().encode("text")), true);
+  assert.equal(fileRefused("text", new Uint8Array([1])), false);
+});
+
+test("fileRefused: a PDF whose pages hide in compressed objects is counted by its page tree", async () => {
+  const { fileRefused, pdfPages } = await import("./model");
+  const tree = (count: number) => new TextEncoder().encode(`%PDF-1.5\n1 0 obj << /Type /Pages /Count ${count} >> endobj\n`);
+  assert.equal(pdfPages(tree(120)), 120);
+  assert.equal(fileRefused("pdf", tree(41)), true);
+  assert.equal(fileRefused("pdf", tree(40)), false);
+});
+
+test("fileRefused: an image at the pixel cap passes, one pixel row over does not, and a header with no size is not a huge image", async () => {
+  const { fileRefused, IMAGE_PIXELS_MAX } = await import("./model");
+  const png = (w: number, h: number) => {
+    const b = Buffer.alloc(32);
+    b.writeUInt32BE(0x89504e47, 0);
+    b.writeUInt32BE(w, 16);
+    b.writeUInt32BE(h, 20);
+    return new Uint8Array(b);
+  };
+  assert.equal(IMAGE_PIXELS_MAX, 40_000_000);
+  assert.equal(fileRefused("image", png(8000, 5000)), false);
+  assert.equal(fileRefused("image", png(8000, 5001)), true);
+  const webp = new Uint8Array(Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 "), Buffer.alloc(20)]));
+  assert.equal(fileRefused("image", webp), false);
+});

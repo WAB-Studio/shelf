@@ -31,7 +31,7 @@ test("Enter alone writes a one-off for today that draws on Hoy, and the chips de
   const name = `Suelta solo Enter ${Date.now()}`;
   try {
     await page.goto("/");
-    const field = page.getByLabel("Algo suelto").last();
+    const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await expect(page.getByRole("radio", { name: "hoy" })).toHaveAttribute("aria-checked", "true");
     await field.press("Enter");
@@ -53,7 +53,7 @@ test("«mañana» writes tomorrow's day, does not draw, and says where it went (
   const name = `Suelta mañana ${Date.now()}`;
   try {
     await page.goto("/");
-    const field = page.getByLabel("Algo suelto").last();
+    const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await expect(page.getByRole("button", { name: "Anotar" })).toHaveCount(0);
     await page.getByRole("radio", { name: "mañana" }).click();
@@ -75,7 +75,7 @@ test("«sin día» writes a null day, does not draw, and the way into the list s
   const name = `Suelta sin día ${Date.now()}`;
   try {
     await page.goto("/");
-    const field = page.getByLabel("Algo suelto").last();
+    const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await page.getByRole("radio", { name: "sin día" }).click();
     await expect(page.getByRole("button", { name: "Anotar" })).toBeVisible();
@@ -103,7 +103,7 @@ test("«otro día» takes a date; a past one is refused with its message and no 
   const name = `Suelta otro día ${Date.now()}`;
   try {
     await page.goto("/");
-    const field = page.getByLabel("Algo suelto").last();
+    const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await page.getByRole("radio", { name: "otro día" }).click();
     const date = page.getByLabel("qué día");

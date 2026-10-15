@@ -101,6 +101,24 @@ test.describe("commitments and «por mes» on the export screen and on paper (RP
     }
   });
 
+  test("a goal with an end and no measure, every month empty: no «por mes» and no «sin tareas», on screen and on paper", async ({
+    person, browser, baseURL, db,
+  }) => {
+    // Kills: a table of empty months drawn because the goal has an end; a line naming the empty months.
+    await seedGoal(db, person, "Mudanza vacía", 3, [{ name: "Empacar a diario" }]);
+    try {
+      const { screen, paper } = await bothTexts(browser, baseURL!, person, "Mudanza vacía", "k3b");
+      for (const [where, text] of [["screen", screen], ["paper", paper]] as const) {
+        expect(text, `${where}: the commitment`).toContain("empacar a diario · todos los días");
+        expect(text, `${where}: no «por mes»`).not.toContain("por mes");
+        expect(text, `${where}: no «sin tareas»`).not.toContain("sin tareas");
+        expect(text, `${where}: no month named`).not.toContain(labelOf(2));
+      }
+    } finally {
+      await clear(db, person);
+    }
+  });
+
   test("a commitment that counts prints its amount: «Rodaje · 3 veces por semana · 5 km»", async ({ person, browser, baseURL, db }) => {
     // Kills: dropping the quantity from the line; the cadence phrase of another kind.
     await seedGoal(db, person, "Correr", null, [{ name: "Rodaje", kind: "times_per_week", n: 3, quantity: 5, unit: "km" }]);
@@ -141,6 +159,45 @@ test.describe("commitments and «por mes» on the export screen and on paper (RP
         const at = text.indexOf(labelOf(0));
         expect(at, `${where}: the current month's row`).toBeGreaterThanOrEqual(0);
         expect(text.slice(at, at + 40), `${where}: its count`).toContain("0 de 1 hechas");
+      }
+    } finally {
+      await clear(db, person);
+    }
+  });
+
+  test("K1: a goal inside a general prints its commitments under its «dentro» row, one line each, the unit said once, on screen and on paper", async ({
+    person, browser, baseURL, db,
+  }) => {
+    // Kills: «dentro» rows with no commitments; the line of a standalone goal drawn in another form; the unit twice in the row.
+    const [root] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, 'Carrera en IA', ${startOf(12)}::date, ${`${startOf(0)}T12:00:00Z`}::timestamptz) returning id`;
+    const [mid] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, parent_id, created_at)
+      values (${person.id}, 'IA aplicada', ${startOf(6)}::date, ${root.id}, ${`${startOf(0)}T12:00:00Z`}::timestamptz) returning id`;
+    const [leaf] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, parent_id, measure_name, measure_unit, created_at)
+      values (${person.id}, 'Evals y harness', ${startOf(4)}::date, ${mid.id}, 'palabras', 'palabras', ${`${startOf(0)}T12:00:00Z`}::timestamptz) returning id`;
+    await db`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${person.id}, ${leaf.id}, ${startOf(0)}::date, 6000)`;
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_weekdays, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${leaf.id}, 'Tema técnico', 'weekdays', ${[2, 4]}, 'quantity', 120, 'minutos', now() - interval '3 days')`;
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${person.id}, ${leaf.id}, 'Inglés pasivo', 'daily', 'tap', now() - interval '2 days')`;
+    try {
+      const { screen, paper } = await bothTexts(browser, baseURL!, person, "Carrera en IA", "k1");
+      for (const [where, text] of [["screen", screen], ["paper", paper]] as const) {
+        const at = text.indexOf("metas dentro · 2");
+        expect(at, `${where}: the «dentro» section`).toBeGreaterThanOrEqual(0);
+        const first = text.indexOf("tema técnico · mar y jue · 2 h");
+        const second = text.indexOf("inglés pasivo · todos los días");
+        expect(first, `${where}: «Tema técnico · mar y jue · 2 h»`).toBeGreaterThan(at);
+        expect(second, `${where}: «Inglés pasivo · todos los días»`).toBeGreaterThan(first);
+        expect(count(text, "tema técnico · mar y jue · 2 h"), `${where}: once`).toBe(1);
+        const row = text.slice(text.indexOf("metas dentro"), first);
+        expect(row, `${where}: the unit once`).toMatch(/octubre · 0 de 6\.000 palabras/);
+        expect(row, `${where}: the unit not twice`).not.toMatch(/palabras de [\d.]+ palabras/);
       }
     } finally {
       await clear(db, person);

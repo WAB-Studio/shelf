@@ -498,22 +498,6 @@ function buildNote(source: Source, ranges: Src[], noteText: string | null, cap: 
   return note === "" ? null : note;
 }
 
-const DAY_WORDS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
-
-function cadenceSaid(c: { cadenceKind: string; cadenceN: number | null }): string {
-  const n = c.cadenceN ?? 1;
-  switch (c.cadenceKind) {
-    case "times_per_week":
-      return `${n} por semana`;
-    case "times_per_month":
-      return `${n} al mes`;
-    case "every_n_days":
-      return `cada ${n} días`;
-    default:
-      return "cada día";
-  }
-}
-
 // The days live in `weekdays` alone and a count in the counted kinds alone, as the table holds them
 // (`commitments_weekdays_for_weekdays`, `commitments_n_for_counted_kinds`). A model that names days on
 // another kind meant those days: the plan's «Domingo» stays Sunday.
@@ -525,7 +509,7 @@ function cadenceShape<C extends { cadenceKind: string; cadenceWeekdays: number[]
   const days = [...new Set(c.cadenceWeekdays ?? [])].filter((day) => day >= 1 && day <= 7).sort((a, b) => a - b);
   if (c.cadenceKind === "weekdays") return { ...c, cadenceN: null };
   if (days.length > 0) {
-    add(at, "cadenceToWeekdays", cadenceSaid(c), days.map((day) => DAY_WORDS[day - 1]).join(", "), "leavesOut", {
+    add(at, "cadenceToWeekdays", "", days.join(","), "leavesOut", {
       kind: c.cadenceKind,
       n: c.cadenceN === null ? "" : String(c.cadenceN),
       days: JSON.stringify(c.cadenceWeekdays),
@@ -544,7 +528,7 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
   const horizons = new Map<string, string | null>();
   const names = new Map<string, string>();
   const holders = new Set(raw.goals.flatMap((goal) => (goal.parent === null ? [] : [goal.parent])));
-  const rateSaid = new Map<string, string>();
+  const rateSaid = new Map<string, { amount: string; rateUnit: string; measure: string }>();
 
   const goals: DraftGoal[] = raw.goals.map((rg, g) => {
     const at = `goals.${g}`;
@@ -575,13 +559,12 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
       if (rg.rate.per === "month") rhythm = amount;
       else {
         rhythm = Math.floor((amount * 52) / 12);
-        const said =
-          rg.rate.unit === "units"
-            ? `${rg.rate.amount} ${measure.unit} por semana`
-            : `${rg.rate.amount} ${rg.rate.unit === "hours" ? "h" : "min"} por semana`;
+        // The plan's words, as codes: the review phrases them from the catalogue.
+        const said = { rateUnit: rg.rate.unit === "units" ? "units" : rg.rate.unit === "hours" ? "hours" : "minutes", measure: measure.unit };
+        const planAmount = String(rg.rate.amount);
         // A goal with goals inside moves the rhythm to its note, which says the plan's words.
-        if (holders.has(rg.key)) rateSaid.set(rg.key, said);
-        else add(`${at}.rhythm`, "rateToRhythm", said, String(rhythm), "keepsPlan", { minutes: String(rhythm) });
+        if (holders.has(rg.key)) rateSaid.set(rg.key, { amount: planAmount, ...said });
+        else add(`${at}.rhythm`, "rateToRhythm", planAmount, String(rhythm), "keepsPlan", { minutes: String(rhythm), ...said });
       }
     }
 
@@ -685,7 +668,12 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
     const unit = goal.measure?.unit ?? "";
     if (goal.rhythm !== null) {
       const added = `ritmo: ${goal.rhythm} ${unit || "min"} al mes`;
-      add(`${at}.rhythm`, "holderRhythmToNote", rateSaid.get(goal.key) ?? String(goal.rhythm), "", "leavesOut", { rhythm: String(goal.rhythm), added });
+      const rate = rateSaid.get(goal.key);
+      add(`${at}.rhythm`, "holderRhythmToNote", rate?.amount ?? String(goal.rhythm), "", "leavesOut", {
+        rhythm: String(goal.rhythm),
+        added,
+        ...(rate ? { rateUnit: rate.rateUnit, measure: rate.measure } : {}),
+      });
       goal.note = append(goal.note, added);
       goal.rhythm = null;
     }

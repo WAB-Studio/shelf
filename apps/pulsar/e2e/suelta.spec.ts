@@ -30,10 +30,8 @@ test("the field at the foot of the day adds a one-off with no dialog and no navi
     await page.goto("/");
     const startingUrl = page.url();
 
-    // The last "Algo suelto" field on the screen is the one at the foot of
-    // "Sueltas" (day-screen.tsx): every goal's own group carries the same
-    // hidden label above it.
-    const field = page.getByLabel("Algo suelto").last();
+    // At 360 Hoy has one task field, the one under "Sueltas" (day-screen.tsx).
+    const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await field.press("Enter");
 

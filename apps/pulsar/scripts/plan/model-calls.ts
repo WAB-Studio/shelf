@@ -267,3 +267,18 @@ test("903c: the chat cap does not count a follow-up either", async () => {
   await followUp(first);
   assert.ok(await claim(first, "chat"), "the fiftieth chat claim lands");
 });
+
+// Concurrent claims of one person and kind: the cap holds for a script, not only a double tap.
+test("claimModelCall: cap + 5 concurrent import claims land exactly the cap", async () => {
+  current = first;
+  const results = await Promise.all(Array.from({ length: cap + 5 }, () => claimModelCall("RNP-13 fixture", "paste")));
+  for (const call of results) if (call) claimed.push(call.id);
+  assert.equal(results.filter(Boolean).length, cap);
+});
+
+test("claimModelCall: cap + 5 concurrent chat claims land exactly the chat cap", async () => {
+  current = first;
+  const results = await Promise.all(Array.from({ length: chatCap + 5 }, () => claimModelCall("RNP-13 fixture", "chat")));
+  for (const call of results) if (call) claimed.push(call.id);
+  assert.equal(results.filter(Boolean).length, chatCap);
+});

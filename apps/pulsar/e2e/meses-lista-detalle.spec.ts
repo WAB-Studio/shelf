@@ -48,7 +48,7 @@ for (const width of [1024, 1440]) {
         items.map((li) => {
           const box = li.getBoundingClientRect();
           const chevron = li.querySelector("svg")?.getBoundingClientRect();
-          const figure = li.querySelector<HTMLElement>("[class*='__stackFigure']");
+          const figure = li.querySelector<HTMLElement>('[data-part="table-stack-figure"]');
           return {
             chevronPast: chevron ? chevron.right - box.right : null,
             figureLeft: figure && figure.textContent?.trim() !== "—" ? figure.getBoundingClientRect().left - box.left : null,

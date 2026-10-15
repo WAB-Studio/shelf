@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { sendSignInLink, type SendSignInLinkResult } from "@/app/actions/account";
+import { signInEmailSchema } from "@/lib/validation/sign-in";
 import { Button, Field, Figure, Flex, ScreenHeader } from "@/components/ui";
 
 type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"];
@@ -37,6 +38,10 @@ export function SignInForm({
   const [state, setState] = useState<FormState>({ kind: "idle" });
 
   async function handleSend(): Promise<void> {
+    if (!signInEmailSchema.safeParse(email).success) {
+      setState({ kind: "failed", error: "emailInvalid" });
+      return;
+    }
     setState({ kind: "sending" });
     const result = await sendSignInLink(email, next);
     setState(result.ok ? { kind: "sent", email } : { kind: "failed", error: result.error });

@@ -165,7 +165,9 @@ test("at 1280 a goal with no measure draws no empty card (RNP-17)", async ({
         })
         .map((el) => (el as HTMLElement).innerText.trim()),
     );
-    expect(cards).toHaveLength(4);
+    // The end (with «esta meta no mide nada»), the commitments and the phases: a goal with no measure
+    // and no task this month draws no month card (RP-73).
+    expect(cards).toHaveLength(3);
     for (const text of cards) expect(text).not.toBe("");
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;

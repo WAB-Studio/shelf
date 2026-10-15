@@ -20,7 +20,8 @@ import {
   Separator,
   Text,
 } from "@/components/ui";
-import { type MessageKey } from "@/i18n/translator";
+import { messageKey, type MessageKey } from "@/i18n/translator";
+import { createTokenSchema } from "@/lib/validation/token";
 
 import { RevokeSheet } from "./revoke-sheet";
 
@@ -201,6 +202,11 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
   const place = { href: "/metas", place: useTranslations("common.nav")("goals") };
 
   function create() {
+    const checked = createTokenSchema.safeParse({ name });
+    if (!checked.success) {
+      setError(messageKey(checked.error.issues[0].message));
+      return;
+    }
     startTransition(async () => {
       const result = await createAccessToken({ name });
       if (!result.ok) {

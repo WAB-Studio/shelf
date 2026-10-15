@@ -185,12 +185,9 @@ test("a one-off belonging to nothing, done today, fills a mark in the Sueltas gr
 }) => {
   const name = `Suelta sin meta ${Date.now()}`;
 
-  // Written from the day's own field, never a goal's group (`NewOneOff`'s
-  // own `goalId` left undefined) — `.last()` is not needed here since this
-  // spec writes no other one-off first, but the field at the foot of
-  // "Sueltas" is still the last "Algo suelto" on the page.
+  // Written from the day's one field with «Suelta» chosen, never a goal's.
   await page.goto("/");
-  const field = page.getByLabel("Algo suelto").last();
+  const field = page.getByPlaceholder("Escribe una tarea…");
   await field.fill(name);
   await field.press("Enter");
 

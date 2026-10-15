@@ -72,7 +72,7 @@ function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useT
     return (
       <Flex direction="column" gap="3">
         <Link asChild underline="always">
-          <NextLink href={wordHref(part.token)}>
+          <NextLink href={wordHref(part.token)} prefetch={false}>
             <TapTarget align="center" gap="1">
               <Headword>{part.token}</Headword>
               <ChevronGlyph />
@@ -132,7 +132,7 @@ export function FunctionWordBlock({
         </Flex>
       ) : (
         <Link asChild underline="always">
-          <NextLink href={wordHref(part.token)}>
+          <NextLink href={wordHref(part.token)} prefetch={false}>
             <TapTarget align="center" gap="1">
               <Headword>{heading}</Headword>
               <ChevronGlyph />
@@ -218,7 +218,7 @@ export function NoEntryAnswer({ state }: { state: NoEntryState }) {
               first of them — the same order the blocks above already read
               in. */}
           <Link asChild underline="always">
-            <NextLink href={wordHref(cut[0].token)}>
+            <NextLink href={wordHref(cut[0].token)} prefetch={false}>
               <TapTarget align="center" gap="1">
                 <Text size="2">{t("noEntry.more", { count: remaining, words: cut.map((part) => part.token).join(", ") })}</Text>
                 <ChevronGlyph />

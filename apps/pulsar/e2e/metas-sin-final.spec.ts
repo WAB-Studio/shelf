@@ -70,7 +70,7 @@ for (const width of [360, 1280]) {
       try {
         const name = `Con final ${Date.now()}`;
         await page.getByLabel("nombre", { exact: true }).fill(name);
-        await page.getByLabel(/^semanas|horizonte/i).first().fill("12");
+        await page.getByLabel(/^semanas|final/i).first().fill("12");
         await page.getByRole("button", { name: "Abrirla", exact: true }).click();
         await expect(page).toHaveURL(/\/metas\/[0-9a-f-]{36}$/);
         const [row] = await db<{ horizon: string | null }[]>`

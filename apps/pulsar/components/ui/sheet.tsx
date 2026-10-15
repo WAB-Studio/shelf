@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { Dialog } from "@radix-ui/themes";
 
 import { SectionLabel } from "./section-label";
@@ -30,11 +30,30 @@ export function Sheet({
 }) {
   // Radix points every dialog at a description; with none rendered the
   // attribute would name an element that is not there, so it is dropped.
+  // No Trigger opens a sheet, so Radix has no element to give focus back to.
+  // Layout, not passive: Radix moves focus in during a passive effect.
+  const origin = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const active = document.activeElement;
+    origin.current =
+      active instanceof HTMLElement && active !== document.body ? active : null;
+  }, [open]);
+
   const described = description ? {} : { "aria-describedby": undefined };
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content className={styles.sheet} {...described}>
+      <Dialog.Content
+        className={styles.sheet}
+        {...described}
+        onCloseAutoFocus={(event) => {
+          const target = origin.current;
+          if (!target?.isConnected) return;
+          event.preventDefault();
+          target.focus();
+        }}
+      >
         <div className={styles.grabber} aria-hidden />
         {label ? (
           <div className={styles.label}>

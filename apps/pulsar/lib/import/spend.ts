@@ -20,9 +20,10 @@ export type ModelCallOutcome = "ok" | "failed" | "invalid" | "empty";
  * while the person's count for the zone's today, of the same kind, is under that
  * kind's cap, `null` otherwise. The import (`paste`, `file`) and the chat count
  * apart.
- * One statement, so the count and the insert share a round trip. Two claims
- * racing at nine may both land: a person's own double tap, accepted. The day
- * is the column default's, the real one even under `PULSAR_CLOCK`.
+ * A transaction lock per person and kind comes first, in a statement of its own:
+ * the count's snapshot is taken after the wait, so concurrent claims see each
+ * other's rows and exactly the cap lands. The day is the column default's, the
+ * real one even under `PULSAR_CLOCK`.
  */
 export async function claimModelCall(
   model: string,
@@ -33,8 +34,9 @@ export async function claimModelCall(
 
   const chat = source === "chat";
   const cap = chat ? CHAT_CALLS_DAILY_CAP : MODEL_CALLS_DAILY_CAP;
-  const rows = await withGoalsDb((tx) =>
-    tx.execute<{ id: string }>(sql`
+  const rows = await withGoalsDb(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${person.id}:${chat ? "chat" : "import"}`}, 0))`);
+    return tx.execute<{ id: string }>(sql`
       insert into goals.model_calls (user_id, model, source)
       select ${person.id}::uuid, ${model}, ${source}
       where (
@@ -43,8 +45,8 @@ export async function claimModelCall(
           and (source = 'chat') = ${chat} and model not like ${`%${FOLLOW_UP_SUFFIX}`}
       ) < ${cap}
       returning id
-    `),
-  );
+    `);
+  });
 
   return rows[0] ? { id: rows[0].id } : null;
 }

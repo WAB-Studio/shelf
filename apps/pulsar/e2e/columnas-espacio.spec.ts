@@ -125,7 +125,7 @@ for (const width of widths) {
       await page.setViewportSize({ width, height: 900 });
       await visit(page, `/metas/${goal.id}`);
       const gap = await page.locator("main").evaluate((main) => {
-        const part = (name: string) => main.querySelector(`[class*="split-module"][class$="__${name}"]`)!;
+        const part = (name: string) => main.querySelector(`[data-part="split-${name}"]`)!;
         return part("after").getBoundingClientRect().top - part("before").getBoundingClientRect().bottom;
       });
       expect(gap).toBeCloseTo(16, 0);
