@@ -63,7 +63,7 @@ async function chatRows(db: Db, personId: string) {
   `;
 }
 
-async function open(browser: Browser, baseURL: string, person: Person, width = 360) {
+async function open(browser: Browser, baseURL: string, person: Person, width = 360, clock = false) {
   const context = await browser.newContext({
     storageState: person.sessionFile,
     baseURL,
@@ -71,6 +71,7 @@ async function open(browser: Browser, baseURL: string, person: Person, width = 3
     hasTouch: width === 360,
   });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   await page.goto("/chat");
   return { context, page };
 }
@@ -647,12 +648,21 @@ test.describe("the chat when the person acts fast or changes their mind (RP-92, 
     }
     const { context, page } = await open(browser, baseURL!, person);
     try {
+      // A conversation with no turns is stored as `[]` or not at all: both read as empty.
+      const turns = () => page.evaluate(() => JSON.parse(sessionStorage.getItem("pulsar.chat") ?? "[]") as unknown[]);
+      const before = await turns();
       await send(page, "mensaje sin respuesta");
       await expect(page.getByText(chat.errors.cap, { exact: true })).toBeVisible();
       await expect(page.getByText("mensaje sin respuesta", { exact: true })).toHaveCount(0);
       await expect(page.getByText(chat.you, { exact: true })).toHaveCount(0);
-      const stored = await page.evaluate(() => sessionStorage.getItem("pulsar.chat"));
-      expect(stored === null || !stored.includes("mensaje sin respuesta")).toBe(true);
+      // Every key of both stores, under any casing: the refused message is kept nowhere.
+      const kept = await page.evaluate(() =>
+        [sessionStorage, localStorage].flatMap((store) =>
+          Object.keys(store).map((key) => `${key}=${store.getItem(key) ?? ""}`),
+        ),
+      );
+      expect(kept.filter((entry) => entry.toLowerCase().includes("mensaje sin respuesta"))).toEqual([]);
+      expect(await turns()).toEqual(before);
     } finally {
       await context.close();
       await db`delete from goals.model_calls where id = any(${ids})`;
@@ -709,7 +719,7 @@ test.describe("the chat when the person acts fast or changes their mind (RP-92, 
     db,
   }) => {
     const world = await seed(db, person.id);
-    const { context, page } = await open(browser, baseURL!, person);
+    const { context, page } = await open(browser, baseURL!, person, 360, true);
     const held = await holdActions(page);
     try {
       await send(page, "organiza marzo");
@@ -725,7 +735,7 @@ test.describe("the chat when the person acts fast or changes their mind (RP-92, 
 
       // The first request was already on its way; the other two were not taken, so they were never made.
       await expect.poll(() => planned(db, world.maze)).toBe("2030-03-01");
-      await page.waitForTimeout(1500);
+      await page.clock.runFor(30_000);
       expect(await planned(db, world.base)).toBeNull();
       expect(await budget(db, world.goal)).toBeNull();
       expect(held.seen.n).toBe(1);

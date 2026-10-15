@@ -134,15 +134,14 @@ test("«Dejarlas abiertas» closes the sheet, sends nothing and archives nothing
 }) => {
   // Kills: the cancel button archiving, or archiving on opening the sheet.
   const tree = await seedTree(db, person, Date.now());
-  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`, 360, true);
   try {
     const calls = countActionPosts(page);
     const sheet = await openSheet(page);
     await expect(sheet.getByText(/Con ella se archivan 3 metas/)).toBeVisible();
     await sheet.getByRole("button", { name: "Dejarlas abiertas", exact: true }).click();
     await expect(sheet).toBeHidden();
-    // A stray request would leave within this beat.
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(calls).toEqual([]);
     const archived = await archivedOf(db, [tree.G, tree.g1, tree.p, tree.g2]);
     expect(Object.values(archived).every((value) => value === false)).toBe(true);

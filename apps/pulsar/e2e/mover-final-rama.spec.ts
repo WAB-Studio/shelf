@@ -72,7 +72,7 @@ test("a general's end typed before its goals' ends lists them, each with its end
 }) => {
   // Kills: not listing the goals (no recuadro), listing a goal that ends before the typed end, or leaving «Moverlo» enabled.
   const tree = await seedBranch(db, person, Date.now());
-  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`, 360, true);
   try {
     const calls = countActionPosts(page);
     const sheet = await openSheet(page);
@@ -102,7 +102,7 @@ test("a general's end typed before its goals' ends lists them, each with its end
     const only = sheet.getByRole("button", { name: "Moverlo", exact: true });
     await expect(only).toBeDisabled();
     await only.dispatchEvent("click");
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(calls).toEqual([]);
     expect(await horizonsOf(db, Object.values(tree.ids))).toMatchObject({ [tree.G]: at(52), [tree.ids.c2]: at(52), [tree.ids.emp]: at(52) });
   } finally {
@@ -153,8 +153,9 @@ test("a goal below with a phase past the new end refuses the whole move, naming 
     insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
     values (${person.id}, ${tree.ids.c2}, 'Fase tardía', ${today}::date, ${phaseEnds}::date)`;
   const before = await horizonsOf(db, Object.values(tree.ids));
-  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`, 360, true);
   try {
+    const calls = countActionPosts(page);
     const sheet = await openSheet(page);
     await sheet.getByLabel(WEEKS_LABEL).fill("40");
     const all = sheet.getByRole("button", { name: "Mover también sus finales", exact: true });
@@ -165,7 +166,9 @@ test("a goal below with a phase past the new end refuses the whole move, naming 
     await expect(sentence).toBeVisible();
     expect(await sentence.innerText()).toMatch(dayWithYear(phaseEnds));
     await expect(sheet).toBeVisible();
-    await page.waitForTimeout(500);
+    // The refusal is the one request; none follows it once every timer has run.
+    await page.clock.runFor(30_000);
+    expect(calls).toHaveLength(1);
     expect(await horizonsOf(db, Object.values(tree.ids))).toEqual(before);
   } finally {
     await context.close();

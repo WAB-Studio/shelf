@@ -280,17 +280,17 @@ test("choosing a destination sends nothing; «Dejarla donde está» closes with 
 }) => {
   // Kills: moving as soon as a row is chosen; «Dejarla donde está» that still writes.
   const tree = await seedTree(db, person, Date.now());
-  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.p}`);
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.p}`, 360, true);
   try {
     const calls = countActionPosts(page);
     const sheet = await openMoveSheet(page);
     await destination(sheet, tree.names.g2).check();
     await topDestination(sheet).check();
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(calls.length).toBe(0);
     await sheet.getByRole("button", { name: "Dejarla donde está", exact: true }).click();
     await expect(sheet).toBeHidden();
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(calls.length).toBe(0);
     expect(await parentOf(db, tree.p)).toBe(tree.g1);
 
