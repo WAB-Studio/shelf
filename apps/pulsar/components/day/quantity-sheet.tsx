@@ -135,6 +135,7 @@ export function QuantitySheet({
     setError(null);
 
     startTransition(async () => {
+      // A request that never arrived throws: the sheet stays open with what was typed, never the error page.
       const result = await declareFact({
         commitmentId,
         quantity,
@@ -146,8 +147,8 @@ export function QuantitySheet({
         replace: factId != null,
         day: day ?? drawnToday,
         onHoy: day === undefined && drawnToday !== undefined ? true : undefined,
-      });
-      settle(result);
+      }).catch(() => null);
+      if (result) settle(result);
     });
   }
 
@@ -159,7 +160,8 @@ export function QuantitySheet({
     setError(null);
 
     startTransition(async () => {
-      settle(await undoFact({ factId }));
+      const result = await undoFact({ factId }).catch(() => null);
+      if (result) settle(result);
     });
   }
 

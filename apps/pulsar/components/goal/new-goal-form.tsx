@@ -71,14 +71,18 @@ export function NewGoalForm() {
     }
 
     setPending(true);
-    void createGoal(parsed.data).then((result) => {
-      if (result.ok) {
-        router.push(`/metas/${result.goalId}`);
-        return;
-      }
-      setPending(false);
-      setError(result.error);
-    });
+    // A request that never arrived rejects: the form stays as typed and the button comes back.
+    createGoal(parsed.data).then(
+      (result) => {
+        if (result.ok) {
+          router.push(`/metas/${result.goalId}`);
+          return;
+        }
+        setPending(false);
+        setError(result.error);
+      },
+      () => setPending(false),
+    );
   }
 
   return (
