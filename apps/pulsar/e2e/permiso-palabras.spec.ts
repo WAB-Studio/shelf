@@ -84,7 +84,7 @@ for (const width of [360, 1280]) {
       expect(await isNoted(clientId), "the spec's client is in harness.oauth_clients").toBe(true);
       const main = page.getByRole("main");
 
-      await expect(page.getByText("bitácora de metas", { exact: true })).toBeVisible();
+      await expect(page.getByText("GoalLog", { exact: true })).toBeVisible();
       await expect(page.getByText("Podrá leer tus metas y anotar lo que hagas.", { exact: true })).toBeVisible();
       for (const line of [...MAY, ...NEVER]) {
         await expect(page.getByText(line, { exact: true }), line).toBeVisible();

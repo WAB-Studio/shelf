@@ -58,7 +58,7 @@ async function draftOf(bytes: Uint8Array) {
 }
 
 test("the workbook's name is the file the app hands out", () => {
-  assert.equal(WORKBOOK_NAME, "plantilla-pulsar.xlsx");
+  assert.equal(WORKBOOK_NAME, "plantilla-goallog.xlsx");
 });
 
 test("the delivered workbook, read back, is the draft of PLANTILLA.md's example", async () => {

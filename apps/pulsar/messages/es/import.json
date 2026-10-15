@@ -81,16 +81,12 @@
     "rhythmMeta": "las tareas van al plan",
     "rhythmMetaUnit": "cada mes sin monto lo toma",
     "rhythmAmountOf": "Cambiar el ritmo, {amount} al mes",
-    "toPlan": "va al plan",
-    "sumAlone": "la suma de lo marcado",
-    "inLieuOfRhythm": "en lugar del ritmo",
     "groups": {
       "phases": "fases",
       "months": "meses",
       "commitments": "compromisos",
       "tasks": "tareas"
     },
-    "sumOfMarked": "{month} · la suma de lo marcado",
     "create": "{count, plural, one {Crear # meta} other {Crear # metas}}",
     "creating": "Creando…",
     "failed": "No se pudo crear el plan. Inténtalo otra vez.",
@@ -130,8 +126,6 @@
       }
     },
     "out": {
-      "one": "Sin «{name}»{subTasks, plural, =0 {} one { y su sub-tarea} other { y sus # sub-tareas}}: no se puede crear.",
-      "many": "Sin <link>{count} cosas</link> que no se pueden crear.",
       "notPlaced": "ninguna parte del plan la lleva",
       "unmarked": "la dejaste fuera",
       "refused": "no se puede crear",

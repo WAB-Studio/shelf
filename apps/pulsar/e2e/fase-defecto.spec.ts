@@ -8,7 +8,7 @@ import plan from "../messages/es/plan.json";
 async function createGoal(page: Page, name: string, horizonWeeks: string): Promise<string> {
   await page.goto("/metas/nueva");
   await page.getByLabel("nombre").fill(name);
-  await page.getByLabel("horizonte").fill(horizonWeeks);
+  await page.getByLabel("final").fill(horizonWeeks);
   await page.getByRole("button", { name: "Abrirla" }).click();
   await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
   return page.url().split("/metas/")[1];

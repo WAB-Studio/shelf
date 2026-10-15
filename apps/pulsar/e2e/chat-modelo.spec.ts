@@ -88,7 +88,7 @@ async function send(page: Page, text: string): Promise<void> {
 }
 
 test.describe("the chat against a stubbed model (RP-91–RP-94)", () => {
-  test("a reply with no change is drawn under «PULSAR» and offers no «Hacer»", async ({ person, browser, baseURL }) => {
+  test("a reply with no change is drawn under «GOALLOG» and offers no «Hacer»", async ({ person, browser, baseURL }) => {
     const { context, page } = await open(browser, baseURL!, person);
     try {
       await send(page, "hola");

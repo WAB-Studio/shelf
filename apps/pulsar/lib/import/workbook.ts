@@ -5,7 +5,7 @@ import { isHourUnit, isTimeUnit } from "@/lib/units/time";
 import type { ImportDraft, Source, Src } from "./draft";
 import { parseTemplate, TEMPLATE_HEADER, type FormCode } from "./template";
 
-export const WORKBOOK_NAME = "plantilla-pulsar.xlsx";
+export const WORKBOOK_NAME = "plantilla-goallog.xlsx";
 
 // A broken row, named by its sheet and the row number Excel shows.
 export type WorkbookError = { sheet: string; row: number; expected: FormCode };
