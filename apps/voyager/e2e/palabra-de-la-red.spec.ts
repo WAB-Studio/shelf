@@ -23,8 +23,18 @@ async function openReady(page: Page): Promise<void> {
   await page.waitForTimeout(1000);
 }
 
-// `use-network-answer.ts`'s own debounce (`PHRASE_DEBOUNCE_MS`) plus a
-// margin, the same one `word.spec.ts` gives `useDecoration`'s pair.
+// `use-network-answer.ts` waits `PHRASE_DEBOUNCE_MS` (600ms) after the box
+// settles before it asks, and that wait starts when React commits the
+// keystroke, not when `fill` returns. A fixed budget over it left 300ms and
+// failed 7 runs in 20 on a busy machine; the request leaving is the event to
+// wait on, and the draw after it gets the ordinary timeout.
+//
+// Registered before the keystroke, so the response cannot slip past it.
+function unlistedAnswered(page: Page): Promise<unknown> {
+  return page.waitForResponse((response) => response.url().includes("/api/word/unlisted"));
+}
+
+// How long the "no request" test listens: debounce plus a margin.
 const NETWORK_SETTLE_MS = 900;
 
 const UNLISTED_ANSWER = {
@@ -44,9 +54,11 @@ test("coccidiosis: the network block draws under the miss line, 200", async ({ p
   await openReady(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const answered = unlistedAnswered(page);
   await searchBox.fill("coccidiosis");
+  await answered;
 
-  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: NETWORK_SETTLE_MS });
+  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible();
   await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
   await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);
   await expect(page.getByText(UNLISTED_ANSWER.translations[0], { exact: true })).toBeVisible();
@@ -65,11 +77,13 @@ test("whereat: the correction offer and the network block draw together", async 
   await openReady(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const answered = unlistedAnswered(page);
   await searchBox.fill("whereat");
 
   await expect(page.getByText(messages.search.correctionTitle)).toBeVisible();
   await expect(page.getByRole("link", { name: "whereas", exact: false })).toBeVisible();
-  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: NETWORK_SETTLE_MS });
+  await answered;
+  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible();
 });
 
 // A prefix mid-word has no exact hit, no inflected hit and no answer on
@@ -104,10 +118,12 @@ test("coccidiosis: 204 draws today's screen plus one line, and nothing else", as
   await openReady(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const answered = unlistedAnswered(page);
   await searchBox.fill("coccidiosis");
+  await answered;
 
   await expect(page.getByText(messages.search.notFound)).toBeVisible();
-  await expect(page.getByText(messages.word.networkFailed)).toBeVisible({ timeout: NETWORK_SETTLE_MS });
+  await expect(page.getByText(messages.word.networkFailed)).toBeVisible();
   await expect(page.getByText(messages.word.networkAnswerTitle)).toHaveCount(0);
   await expect(page.getByText(messages.word.networkTranslations)).toHaveCount(0);
 });
