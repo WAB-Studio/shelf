@@ -72,7 +72,7 @@ function install() {
   });
   mock.module("../log/record", {
     namedExports: {
-      readSyncState: async () => ({ enabled: true, deviceId: DEVICE, pushedThroughLocalId: null, pulledThroughCursor: null }),
+      readSyncState: async () => ({ enabled: true, readerId: "reader-1", deviceId: DEVICE, pushedThroughLocalId: null, pulledThroughCursor: null }),
       writeSyncState: async () => void onWrite(),
       markRetired: async () => undefined,
     },

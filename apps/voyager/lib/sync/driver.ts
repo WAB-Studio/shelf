@@ -7,6 +7,7 @@ import { shareInFlight } from "./in-flight";
 import { planUploadRound } from "./upload-page";
 
 const SYNC_ENDPOINT = "/api/log/sync";
+const SYNC_LOCK = "voyager-sync";
 
 // A hostile record can never tie a hidden tab up forever: this many round
 // trips per call, then the rest waits for the next hide.
@@ -24,6 +25,7 @@ export type SyncOutcome =
   | { kind: "off" } // enabled === false: no request was ever issued
   | { kind: "done"; pushed: number; pulled: number }
   | { kind: "retired" } // the server retired this device: the copy is off for good
+  | { kind: "reader" } // the session belongs to another reader: the identity is dropped, the copy must be confirmed again
   | { kind: "failed"; cause: SyncFailure };
 
 // The row's own device, not this one's: it already crossed the wire once.
@@ -43,20 +45,29 @@ const yieldToLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 // RL-25), and the route has nothing else top-level to read it off.
 async function postBatch(
   deviceId: string,
+  readerId: string,
   rows: SyncRow[],
   since: string | null,
-): Promise<SyncResponse | "retired"> {
+): Promise<SyncResponse | "retired" | "reader"> {
   const response = await fetch(SYNC_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(syncRequestSchema.parse({ deviceId, rows, since })),
+    body: JSON.stringify(syncRequestSchema.parse({ deviceId, readerId, rows, since })),
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
     if (response.status === 409 && body?.error === "retired") return "retired";
+    if (response.status === 409 && body?.error === "reader") return "reader";
     throw new SyncFailureError(failureCause({ status: response.status, body }));
   }
   return syncResponseSchema.parse(await response.json());
+}
+
+// Keeps the cursors: with no reader on record they read as another reader's,
+// so the next confirm starts past every stored row and uploads none of them.
+async function dropIdentity(): Promise<SyncOutcome> {
+  await writeSyncState({ enabled: false, readerId: null });
+  return { kind: "reader" };
 }
 
 /**
@@ -67,9 +78,11 @@ async function postBatch(
  * what the account already holds. Never throws: a failed round trip leaves
  * the cursors where they were, so the next call resumes it.
  */
-async function runSync(): Promise<SyncOutcome> {
+async function runSyncLocked(): Promise<SyncOutcome> {
   const state = await readSyncState();
   if (!state.enabled) return { kind: "off" };
+  // A copy with no reader on record cannot say whose searches it holds.
+  if (!state.readerId) return dropIdentity();
 
   let pushedThroughLocalId = state.pushedThroughLocalId;
   let pulledThroughCursor = state.pulledThroughCursor;
@@ -80,11 +93,12 @@ async function runSync(): Promise<SyncOutcome> {
     for (let batch = 0; batch < MAX_BATCHES; batch++) {
       const { own, scannedThrough, scanned } = await readSince(pushedThroughLocalId ?? 0, SYNC_BATCH);
       const { rows } = planUploadRound(own, state.deviceId);
-      const response = await postBatch(state.deviceId, rows, pulledThroughCursor);
+      const response = await postBatch(state.deviceId, state.readerId, rows, pulledThroughCursor);
       if (response === "retired") {
         await markRetired();
         return { kind: "retired" };
       }
+      if (response === "reader") return dropIdentity();
 
       // The merge is awaited in full before either cursor moves: a batch
       // that only half lands must be read again next time, not skipped.
@@ -113,6 +127,13 @@ async function runSync(): Promise<SyncOutcome> {
         : failureCause({ error, online: typeof navigator === "undefined" || navigator.onLine });
     return { kind: "failed", cause };
   }
+}
+
+// One tab syncs at a time: a second tab's round reads the row the first has
+// just written. Without Web Locks the in-flight share still covers one realm.
+function runSync(): Promise<SyncOutcome> {
+  if (typeof navigator === "undefined" || !navigator.locks) return runSyncLocked();
+  return navigator.locks.request(SYNC_LOCK, runSyncLocked);
 }
 
 export const syncNow = shareInFlight(runSync);

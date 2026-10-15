@@ -404,7 +404,7 @@ async function main() {
         `x|y|1 -> ${garbled === null ? "null" : "a cursor"}, 31 February -> ${impossible}, legible kept = ${legible !== null}, full download = ${everything}`,
       );
 
-      const wire = (at: number) => ({ deviceId: deviceA, rows: [{ ...rowsOf(deviceA, [1])[0], at }], since: null });
+      const wire = (at: number) => ({ deviceId: deviceA, readerId: "reader", rows: [{ ...rowsOf(deviceA, [1])[0], at }], since: null });
       assert(
         "S18",
         !syncRequestSchema.safeParse(wire(9e15)).success && syncRequestSchema.safeParse(wire(1_700_000_000_000)).success,
@@ -697,7 +697,7 @@ async function main() {
     sessionStub.run = (work) => asReader(work);
     const { POST } = await import("../app/api/log/sync/route");
     const post = async (body: unknown) => {
-      const response = await POST(new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify(body) }));
+      const response = await POST(new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify({ readerId: late, ...(body as object) }) }));
       return { status: response.status, json: (await response.json()) as { rows: Record<string, unknown>[] } };
     };
     const [phone, laptop] = [randomUUID(), randomUUID()];

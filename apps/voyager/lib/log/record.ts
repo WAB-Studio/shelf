@@ -428,59 +428,38 @@ function defaultSyncState(): SyncState {
   };
 }
 
-function getSyncRow(database: IDBDatabase): Promise<SyncRow | undefined> {
-  return new Promise((resolve, reject) => {
-    const request = database
-      .transaction(SYNC_STORE_NAME, "readonly")
-      .objectStore(SYNC_STORE_NAME)
-      .get(SYNC_KEY);
-    request.onsuccess = () => resolve(request.result as SyncRow | undefined);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function putSyncRow(database: IDBDatabase, state: SyncState): Promise<void> {
+// One `readwrite` transaction: read, merge and write the `sync` row where
+// IndexedDB serialises it against every other tab's transaction. Nothing is
+// cached across calls — a copy held in a realm goes stale the moment another
+// tab signs out or switches reader. A missing row is minted here too, so two
+// tabs opened before the row exists cannot each mint a `deviceId`.
+function updateSyncRow(
+  database: IDBDatabase,
+  patch: Partial<SyncState> | ((current: SyncState) => SyncState) | null,
+): Promise<SyncState> {
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(SYNC_STORE_NAME, "readwrite");
-    transaction.objectStore(SYNC_STORE_NAME).put({ ...state, key: SYNC_KEY } satisfies SyncRow);
-    transaction.oncomplete = () => resolve();
+    const store = transaction.objectStore(SYNC_STORE_NAME);
+    let result: SyncState | null = null;
+    const request = store.get(SYNC_KEY);
+    request.onsuccess = () => {
+      const existing = request.result as SyncRow | undefined;
+      const current = existing ? normaliseSyncState(existing) : defaultSyncState();
+      result = !patch ? current : typeof patch === "function" ? patch(current) : { ...current, ...patch };
+      if (patch || !existing) store.put({ ...result, key: SYNC_KEY } satisfies SyncRow);
+      else resolve(result);
+    };
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => resolve(result as SyncState);
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error);
   });
 }
 
-async function readSyncStateFresh(): Promise<SyncState> {
-  const database = await openDatabase();
-  const existing = await getSyncRow(database);
-  if (existing) return normaliseSyncState(existing);
-  const state = defaultSyncState();
-  await putSyncRow(database, state);
-  return state;
-}
-
-// Caches the promise, not the value — the same trick `openDatabase` plays
-// with `databasePromise` above. Two calls issued before the first resolves
-// share this one pending mint of `deviceId`, instead of each finding no row,
-// each minting its own, and the second `put` discarding the first in
-// silence. Reset on failure so the next call retries instead of caching it.
-let syncStatePromise: Promise<SyncState> | null = null;
-
-// Throws when the stored row cannot be read, so a caller about to write can
-// tell that apart from a device that has no row yet.
-function loadSyncState(): Promise<SyncState> {
-  if (!syncStatePromise) {
-    syncStatePromise = readSyncStateFresh();
-    syncStatePromise.catch(() => {
-      syncStatePromise = null;
-    });
-  }
-  return syncStatePromise;
-}
-
 /** The device's sync row, minting `deviceId` the first time it is read. */
 export async function readSyncState(): Promise<SyncState> {
   try {
-    return await loadSyncState();
+    return await updateSyncRow(await openDatabase(), null);
   } catch {
     return defaultSyncState();
   }
@@ -489,13 +468,19 @@ export async function readSyncState(): Promise<SyncState> {
 /** Merges `next` into the persisted state. A failed read writes nothing. */
 export async function writeSyncState(next: Partial<SyncState>): Promise<void> {
   try {
-    const database = await openDatabase();
-    const current = await loadSyncState();
-    const merged: SyncState = { ...current, ...next };
-    await putSyncRow(database, merged);
-    syncStatePromise = Promise.resolve(merged);
+    await updateSyncRow(await openDatabase(), next);
   } catch {
     databasePromise = null;
+  }
+}
+
+// Decides from the row as the transaction reads it, not from an earlier read.
+async function transformSyncState(change: (current: SyncState) => SyncState): Promise<SyncState> {
+  try {
+    return await updateSyncRow(await openDatabase(), change);
+  } catch {
+    databasePromise = null;
+    return defaultSyncState();
   }
 }
 
@@ -519,16 +504,13 @@ export async function countPendingUpload(): Promise<number> {
 
 /** Starts the copy for this reader: keeps the cursors only for the same reader on a live device; another reader leaves stored rows behind. */
 export async function startCopyFor(readerId: string): Promise<SyncState> {
-  const current = await readSyncState();
-  const next = syncStateForReader(current, readerId, () => crypto.randomUUID(), await highestLocalId());
-  await writeSyncState(next);
-  return next;
+  const highest = await highestLocalId();
+  return transformSyncState((current) => syncStateForReader(current, readerId, () => crypto.randomUUID(), highest));
 }
 
 /** Turns the copy off for a sign-out; a retired device also forgets its identity. */
 export async function signOutSync(): Promise<void> {
-  const current = await readSyncState();
-  await writeSyncState(signOutSyncState(current, () => crypto.randomUUID()));
+  await transformSyncState((current) => signOutSyncState(current, () => crypto.randomUUID()));
 }
 
 /** The server retired this device: the copy stops until a new sign-in mints another. */

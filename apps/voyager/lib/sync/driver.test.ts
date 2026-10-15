@@ -15,7 +15,8 @@ type Written = Record<string, unknown>;
 
 let initialCursor: string | null = null;
 let written: Written[] = [];
-let requests: { since: string | null }[] = [];
+let requests: { since: string | null; readerId?: string }[] = [];
+let refusal: { status: number; error: string } | null = null;
 let responses: { rows: unknown[]; cursor: string | null }[] = [];
 let mergeImpl: (rows: unknown[]) => Promise<number> = async (rows) => rows.length;
 
@@ -43,7 +44,9 @@ function foreignRows(count: number, from: number) {
 }
 
 const fetchStub = async (_url: unknown, init: { body: string }) => {
-  requests.push({ since: JSON.parse(init.body).since });
+  const sent = JSON.parse(init.body);
+  requests.push({ since: sent.since, readerId: sent.readerId });
+  if (refusal) return { ok: false, status: refusal.status, json: async () => ({ error: refusal!.error }) };
   const next = responses.shift();
   assert.ok(next, "fetch called more times than the test queued responses");
   return { ok: true, status: 200, json: async () => ({ accepted: 0, ...next }) };
@@ -59,6 +62,7 @@ async function getDriver(): Promise<Driver> {
     namedExports: {
       readSyncState: async () => ({
         enabled: true,
+        readerId: "reader-1",
         deviceId: DEVICE,
         pushedThroughLocalId: null,
         pulledThroughCursor: initialCursor,
@@ -82,6 +86,7 @@ beforeEach(() => {
   written = [];
   requests = [];
   responses = [];
+  refusal = null;
   mergeImpl = async (rows) => rows.length;
 });
 
@@ -123,4 +128,36 @@ test("two calls at once share one round trip", async () => {
   const [a, b] = await Promise.all([(await getDriver()).syncNow(), (await getDriver()).syncNow()]);
   assert.equal(requests.length, 1);
   assert.deepEqual(a, b);
+});
+
+test("every round names the reader it syncs for", async () => {
+  responses = [{ rows: [], cursor: null }];
+  await (await getDriver()).syncNow();
+  assert.equal(requests[0].readerId, "reader-1");
+});
+
+test("a 409 for the reader drops the identity, writes no cursor and stops", async () => {
+  refusal = { status: 409, error: "reader" };
+  const outcome = await (await getDriver()).syncNow();
+  assert.deepEqual(outcome, { kind: "reader" });
+  assert.deepEqual(written, [{ enabled: false, readerId: null }]);
+  assert.equal(requests.length, 1);
+});
+
+test("rounds run under the voyager-sync lock when the browser has one", async () => {
+  const held: string[] = [];
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      onLine: true,
+      locks: { request: (name: string, run: () => Promise<unknown>) => (held.push(name), run()) },
+    },
+  });
+  try {
+    responses = [{ rows: [], cursor: null }];
+    await (await getDriver()).syncNow();
+    assert.deepEqual(held, ["voyager-sync"]);
+  } finally {
+    delete (globalThis as { navigator?: unknown }).navigator;
+  }
 });
