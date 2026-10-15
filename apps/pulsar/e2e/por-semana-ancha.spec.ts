@@ -143,17 +143,21 @@ test.describe("«Por semana» at 1280", () => {
 });
 
 test.describe("«Por semana» at 360", () => {
-  test("the stack is unchanged: «en curso» to the right of the last row's label, no header drawn", async ({ person, browser, baseURL, db }) => {
-    // Kills: the wide face's mark or columns leaking into the phone's stack.
+  test("the stack draws no header; «en curso» rides the dates' line under the last row's label (PorSemanaTelefono)", async ({ person, browser, baseURL, db }) => {
+    // Kills: the wide face's columns leaking into the phone's stack; «en curso» left in a note of its own.
     const id = await seedWeeks(db, person, "Escribir", 14, true);
     const { page, context } = await visit(browser, baseURL, person, path(id), 360);
     try {
       await expect(headers(page)).toHaveCount(0);
       const row = page.locator("main ol > li[data-current]:visible");
       await expect(row).toHaveCount(1);
+      await expect(row.getByText("en curso", { exact: true })).toHaveCount(0);
+      // The label holds «semana N» and, under it, the dates: the mark sits inside it, below its first line.
       const label = await boxOf(row.getByText(/^semana \d+/).first());
-      const mark = await boxOf(row.getByText("en curso"));
-      expect(mark.x).toBeGreaterThanOrEqual(label.x + label.width);
+      const mark = await boxOf(row.getByText(/ · en curso$/));
+      expect(mark.x).toBeGreaterThanOrEqual(label.x - 1);
+      expect(mark.x + mark.width).toBeLessThanOrEqual(label.x + label.width + 1);
+      expect(mark.y).toBeGreaterThan(label.y + 4);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     } finally {
       await context.close();

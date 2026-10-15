@@ -81,7 +81,8 @@ export async function MonthsList({
     sheetFor(month)
       ? `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}planear=${month.slice(0, 7)}`
       : `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
-  const ownKeys = new Set(cut ? cut.handSet.map((row) => row.month) : []);
+  // A holder keeps no amount of its own (RP-80): its summed months stay in the first table, in order.
+  const ownKeys = new Set(cut && !loaded.holdsGoals ? cut.handSet.map((row) => row.month) : []);
   // A goal with an end whose list folds says its rows out of its months.
   const caption =
     loaded.horizon !== null && goal.months.length < settled.length

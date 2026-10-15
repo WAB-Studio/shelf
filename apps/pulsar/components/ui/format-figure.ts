@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
 
-import { formatTime, isTimeUnit, type TimeWords } from "@/lib/units/time";
-
-// `i18n/request.ts` fixes the whole app on one locale — "es", no segment,
-// nothing negotiated — so this is the same locale the interface already
-// reads in, not a second place the app could ever disagree with itself
-// about which one a number groups in.
-const LOCALE = "es";
+import { formatCount, formatTime, isTimeUnit, type TimeWords } from "@/lib/units/time";
 
 // One run of a time's text: a figure set in mono, or the quiet word after it.
 export type TimeToken = { text: string; figure: boolean };
@@ -52,5 +46,6 @@ export function formatFigureValue(
   if (unit !== undefined && words !== undefined && isTimeUnit(unit)) {
     return { kind: "time", tokens: timeTokens(formatTime(value, words)) };
   }
-  return new Intl.NumberFormat(LOCALE).format(value);
+  // The one grouping every count reads in: «2.100» beside «6.000», never «2100».
+  return formatCount(value);
 }

@@ -29,8 +29,12 @@ export type TableRow = {
   phoneBare?: boolean;
   // A second line under the row label, on both faces: the week's dates.
   detail?: ReactNode;
-  // A mark after the dates on the wide face only («en curso»): the phone says it in `note`.
+  // A mark after the dates on the wide face only («en curso»): the phone says it in `note` or `phoneMark`.
   wideMark?: ReactNode;
+  // The phone's mark on the dates' own line, «{detail} · {mark}», in place of a `note`.
+  phoneMark?: ReactNode;
+  // A line under the phone's dates only («Primer borrador»): the wide face gives it a column.
+  phoneUnder?: ReactNode;
   // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
   // The lead cell must then be plain text: it is what the link names, so a
   // link of its own there would nest. Every other cell stays text.
@@ -146,7 +150,13 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     <>
       <span className={styles.stackLabel}>
         {row.cells[0]}
-        {row.detail ? <span className={styles.detail}>{row.detail}</span> : null}
+        {row.detail ? (
+          <span className={styles.detail}>
+            {row.detail}
+            {row.phoneMark ? <> · {row.phoneMark}</> : null}
+          </span>
+        ) : null}
+        {row.phoneUnder ? <span className={styles.detail}>{row.phoneUnder}</span> : null}
       </span>
       {lead === undefined ? null : (
         <span className={styles.stackFigure}>
