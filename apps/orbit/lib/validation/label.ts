@@ -45,7 +45,7 @@ export type CreateLabelInput = z.infer<typeof createLabelSchema>;
 // A label never changes scope, so the placement is absent from an edit.
 export const updateLabelSchema = z
   .object({
-    labelId: z.uuid(),
+    labelId: z.uuid({ error: "errors.notFound" }),
     name: labelNameSchema,
     color: labelColorSchema,
   })
@@ -54,7 +54,7 @@ export const updateLabelSchema = z
 export type UpdateLabelInput = z.infer<typeof updateLabelSchema>;
 
 export const deleteLabelSchema = z.object({
-  labelId: z.uuid(),
+  labelId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type DeleteLabelInput = z.infer<typeof deleteLabelSchema>;

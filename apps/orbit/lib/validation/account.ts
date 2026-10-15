@@ -147,7 +147,7 @@ export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 // whether the group may write a group account.
 export const updateAccountSchema = z
   .object({
-    accountId: z.uuid(),
+    accountId: z.uuid({ error: "errors.notFound" }),
     name: accountNameSchema,
     // `kind` never changes on the row; it rides along only so the shared
     // refinement can reject a subtype that leaves its kind server-side too.
@@ -166,7 +166,7 @@ export const updateAccountSchema = z
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
 
 export const archiveAccountSchema = z.object({
-  accountId: z.uuid(),
+  accountId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type ArchiveAccountInput = z.infer<typeof archiveAccountSchema>;
@@ -174,20 +174,20 @@ export type ArchiveAccountInput = z.infer<typeof archiveAccountSchema>;
 // RF-61: the group is the caller's own, resolved from the session, so only the
 // account travels.
 export const handAccountToGroupSchema = z.object({
-  accountId: z.uuid(),
+  accountId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type HandAccountToGroupInput = z.infer<typeof handAccountToGroupSchema>;
 
 
 export const restoreAccountSchema = z.object({
-  accountId: z.uuid(),
+  accountId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type RestoreAccountInput = z.infer<typeof restoreAccountSchema>;
 
 export const deleteAccountSchema = z.object({
-  accountId: z.uuid(),
+  accountId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>;
