@@ -40,6 +40,8 @@ accounting exports, native apps. None of this gets built or left
 #### Authentication and fund
 
 - [x] **RF-01** — Passwordless email login.
+- [ ] **RF-143** — Signing in by email refuses an address whose domain cannot receive mail, before any email is sent, and caps the sign-in links sent per address, as `apps/voyager` does. Decided by the user 2026-10-15.
+- [ ] **RF-145** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
 - [x] **RF-57** — Only the group `leader` invites members, edits the group and manages the group's categories.
 - [x] **RF-58** — Every member of a group can read all of its accounts (universal read); write is bounded per account — a personal account by its owner, a shared account by any member.
 - [x] **RF-59** — Whoever creates a group becomes its `leader`. The role is transferable, but a group is never left without a leader.
@@ -98,6 +100,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-63** — CRUD for categories with one level of subcategories, scoped to a user (personal) or a group; a subcategory shares its parent's scope.
 - [x] **RF-27** — Each category is either expense or income.
 - [x] **RF-64** — Creating a personal space or a group seeds an initial category set in the active language.
+- [ ] **RF-140** — Every screen that names a category shows its scope — «Mercado · fondo» for a fund category, with no mark for a personal one — and the importer resolves a category name by the scope of the account the movement lands in. Both seeded sets (RF-64), personal and fund, stay. Decided by the user 2026-10-15.
 - [x] **RF-70** — Labels, independent of category, attach to transactions through a transaction_labels join; a group's labels are managed by its leader, a user's by their owner.
 
 #### Recurring
@@ -113,6 +116,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-72** — A budget's spent and remaining amounts derive from the transaction splits that fall in the current period and match its category and any account or label narrowing; they are never stored.
 - [x] **RF-73** — A budget carries an overspend alert threshold as a percentage of its limit; a budget is flagged once its derived spending crosses that threshold.
 - [x] **RF-74** — CRUD for one-off planned payments: a future movement — its accounts, amount, category and due date — with an optional reminder date, kept distinct from recurring rules.
+- [ ] **RF-141** — A planned payment's reminder (RF-74) notifies the person by email on its reminder date. Decided by the user 2026-10-15.
 - [x] **RF-75** — Settling a planned payment records the transaction it planned, links the two, and marks the planned payment done; a settled or cancelled planned payment cannot be settled again.
 - [x] **RF-76** — CRUD for savings goals: a target amount and an optional target date, scoped to a user or a group.
 - [x] **RF-87** — A savings goal's progress — amount saved and amount remaining — derives from its contributions (`goal_contributions`), each an amount set aside virtually with no movement required; it is never stored.
@@ -123,8 +127,8 @@ accounting exports, native apps. None of this gets built or left
 
 - [x] **RF-88** — Dashboard: net worth per owner (personal and group), and income, expense and net for the current month.
 - [x] **RF-34** — This month's expenses by category, largest first.
+- [ ] **RF-139** *(successor of RF-66)* — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member, plus the movements paid from that member's personal accounts that the person marked «del hogar» — a household bill paid from a personal card. The mark is on the movement and can be set and cleared. Decided by the user 2026-10-15.
 - [x] **RF-35** — Six-month comparison of income and expense.
-- [x] **RF-66** — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member.
 - [x] **RF-67** — In every report grouped by member, the group's shared accounts appear as their own group. Shared accounts are not split across people.
 
 - [ ] **RF-137** — A person reconciles one account at a time: they enter the money it really holds on a day, and the app shows the balance it derives for that day, the real one and the gap between them. On confirm, the gap is recorded as one adjustment movement on that account, dated that day, so the derived balance equals the real one from then on; no balance is stored (RF-114). Each account lists its reconciliations: the day, what the app derived, what was real and the gap. Decided by the user 2026-10-14.
@@ -157,8 +161,8 @@ accounting exports, native apps. None of this gets built or left
 #### Import, export and visible audit (phase 2)
 
 - [x] **RF-49** — Download a spreadsheet template with the expected columns and the existing accounts and categories as valid options.
-- [x] **RF-50** — Export accounts, members, categories, recurring rules and transactions, in the same shape the import accepts.
 - [x] **RF-118** — The transaction listing exports exactly the rows its active filters select, in the same shape the import accepts.
+- [ ] **RF-142** *(successor of RF-50)* — The backup exports, and the import restores, accounts, members, categories, recurring rules, transactions, budgets (RF-71), goals and their contributions (RF-87, RF-119), debts and statements (RF-78, RF-129), and labels (RF-70), in one shape. A purchase made in dollars on a peso card (RF-123) is exported and re-imported in dollars, never converted to pesos. Decided by the user 2026-10-15.
 - [x] **RF-51** — Import with preview: everything is validated before anything is written, errors are reported per row, and the user confirms. All or nothing.
 - [x] **RF-52** — Re-importing the same file does not duplicate: every row carries a stable external reference and, if it already exists in the fund, it is updated.
 - [x] **RF-53** — Read-only audit log viewer, filterable by entity, user and date range.
@@ -177,6 +181,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-98** — Webhook ingest proposes the date the bank message carries, written with a two- or four-digit year and interpreted in `America/Bogota`; a caller-supplied date still overrides it, and a message whose date is unreadable or later than the day of delivery falls back to that day.
 - [x] **RF-99** — A person sees the message shapes they have silenced, each with the message that silenced it, and returns one to the queue: later messages of that shape wait for review again, and every message of that shape the silence discarded on its own comes back to the queue with it, indistinguishable from one never silenced. A message a person discarded stays discarded.
 - [ ] **RF-134** — A movement keeps one source reference per account leg — the statement it came from, the reference that statement gave that leg, and the line within it — so a transfer read from either side's statement is recognised as the movement already recorded, and re-importing a statement replaces exactly that statement's rows.
+- [ ] **RF-144** — Bank statements are imported through an MCP server that Claude drives: the person hands the file to Claude in a conversation, Claude reads it and calls a preview tool, the person confirms, and then an import tool writes. No paid model runs inside the app. The preview is mandatory, and re-importing the same statement never duplicates a movement (RF-134, RF-52). Earlier statements serve as examples, never as a template. Decided by the user 2026-10-15.
 - [ ] **RF-135** — A counterparty is remembered per user: a description pattern earns an account and a side after two consecutive agreeing completions, and a completion naming a different account marks the pattern ambiguous, which no later agreement undoes. A remembered pattern prefills the missing side and never fills it on its own.
 
 The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no write bypasses audit) unchanged: the same interpreter reads the payload text and the same insert path records the movement, so the created-by stamp and the audit hold as on any manual write. RF-52's idempotency shape is mirrored, not reused — RF-52 stays a spreadsheet-import requirement; the webhook applies the same stable-external-reference rule to its own deliveries. The review queue keeps that reuse: it runs RF-22's interpreter to propose rather than to decide, and RF-25 and RF-45 hold unchanged because an accepted proposal is still written through the same insert path.
@@ -205,6 +210,8 @@ The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no
 
 Dead codes. The number stays burned and the tick stays as it was.
 
+- [x] **RF-50** — Export accounts, members, categories, recurring rules and transactions, in the same shape the import accepts. _Retired 2026-10-15, by the user. Successor: RF-142 (the backup restores everything: budgets, goals, debts, statements, labels, and a dollar purchase in dollars)._
+- [x] **RF-66** — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member. _Retired 2026-10-15, by the user. Successor: RF-139 (a household bill paid from a personal card, marked «del hogar», counts as a contribution)._
 - [x] **RF-84** — A liability account keeps a statement history: one record per statement period with its bounds, its payment due date and the balance, minimum and interest captured at the cut-off. A statement is an immutable historical snapshot, materialised for past periods, never rewritten. _Retired 2026-09-07. Successor: RF-129._
 
   Retired because the built behaviour changed, not the wording. "Materialised for past periods" named
