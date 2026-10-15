@@ -1696,3 +1696,22 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/s8-crit
 - **«Por semana» at 1280 gets its own board,** and its empty FASE and NOTA columns go. Today no board draws the wide face.
 - **On paper a task list that continues on the next sheet repeats its label** («TAREAS DE OCTUBRE»). A lone table row at the top
   of a sheet is tolerated.
+
+## Decisions of 2026-10-14, after the critic of the whole app, by the user
+
+The one whole-app pass (AGENTS.md); critic: `private/reportes/critic-app-completa.md`. These are the polish picks: one slice
+(s10) ships them, then polish stops. Nothing here is built yet.
+
+- **A = a. The template keeps what the person wrote** (RP-122): every correction starts declined; «Aceptar» on one is real.
+- **B = a. A goal that holds goals reads week by week** as the sum of its goals' weeks (RP-123), like its month (RP-80).
+- **C = a. Paper follows the screen:** nested goals print inside their general goal (RP-84), and a «POR MES» with no task and
+  no amount in any row does not print (RP-124).
+- **D = a. Paper prints commitments,** one line each: «Estirar · todos los días» (RP-124).
+- **In the slice besides:** «estos meses con monto propio» never over a goal that holds goals; the template's error lines say
+  what is wrong (the missing accent, the cap of 7, the unit that goes, «ritmo» in hours) and every one at once (RP-72);
+  «Por semana» at 360 carries the phase under the date line and «en curso» on one line; «Añadir una tarea» in «Mes» for a goal
+  that has tasks; one task field on Hoy at 360, the goal chosen inside it; one number format everywhere («2.100 de 6.000
+  palabras»); no «0 tareas · 0 hechas» (RP-73); the words: «no mide horas» on a goal with no measure, «Agregar» → «Añadir»,
+  «Ábrelo en este teléfono» at 1280, the export's month names.
+- **Left out by the user's scope** (the critic's Thin 1, 3 but commitments, 4, 6, 8, 11): to `private/pulido.md`. The NOTA column
+  of «Por semana» stays dormant: nothing writes a week's note.
