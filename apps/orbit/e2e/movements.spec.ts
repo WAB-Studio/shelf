@@ -644,4 +644,54 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
       select count(*)::text as n from transactions where id in (${adjustmentId}, ${expense.id})`;
     expect(left.n).toBe("2");
   });
+
+  test("a forged edit of the adjustment surfaces the read-only refusal, not a saved dialog", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the row menu is the laptop's");
+    await seedAdjustment(1_200_000);
+
+    // The interface offers no way to edit an adjustment, so the edit of an
+    // ordinary row is sent with the adjustment's id swapped in.
+    const [expense] = await fixtureSql<{ id: string }[]>`
+      select id from transactions
+      where owner_user_id = ${scope.userId} and description = ${EXPENSE_DESCRIPTION}`;
+    let forged = 0;
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      const body = request.postData();
+      if (
+        request.method() === "POST" &&
+        request.headers()["next-action"] &&
+        body?.includes(expense.id)
+      ) {
+        forged += 1;
+        await route.continue({ postData: body.replaceAll(expense.id, adjustmentId) });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/es/movements");
+    await page
+      .getByRole("button", {
+        name: common.actionsFor.replace("{name}", EXPENSE_DESCRIPTION),
+        exact: true,
+      })
+      .click();
+    await page.getByRole("menuitem", { name: transactions.edit, exact: true }).click();
+    await page.getByLabel(transactions.amountLabel, { exact: true }).fill("99999");
+    await page
+      .locator("form")
+      .getByRole("button", { name: transactions.saveMovement, exact: true })
+      .click();
+
+    await expect(page.getByText(errorsText.adjustmentReadOnly)).toBeVisible();
+    expect(forged).toBe(1);
+    // A saved edit closes the dialog; a refused one leaves it open.
+    await expect(page.getByRole("dialog")).toBeVisible();
+    const [kept] = await fixtureSql<{ amount: string }[]>`
+      select amount_cents::text as amount from transactions where id = ${adjustmentId}`;
+    expect(kept.amount).toBe("1200000");
+  });
 });
