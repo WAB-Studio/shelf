@@ -23,16 +23,16 @@
   color: var(--gray-11);
 }
 
-/* Doubled to outrank Radix's own size class; 32px is RNF-08's floor. */
+/* Doubled to outrank Radix's own size class; 44px is RNF-08's floor. */
 .trigger.trigger {
-  height: 32px;
+  height: 44px;
 }
 
 /* The native picker, sized and painted like the selects beside it. */
 .date {
   box-sizing: border-box;
   width: 140px;
-  height: 32px;
+  height: 44px;
   padding: 0 11px;
   border-radius: 8px;
   background-color: var(--color-panel-solid);
@@ -54,7 +54,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 32px;
+  min-height: 44px;
   padding: 6px 11px;
   border-radius: 8px;
   background-color: var(--color-panel-solid);

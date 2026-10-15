@@ -1,5 +1,5 @@
 /* Radix's switch tops out at 42x24 on `size="3"`, so no size prop reaches the
-   32px floor SPEC-A3 holds every control to. The box a finger lands on is
+   44px floor SPEC-A3 holds every control to. The box a finger lands on is
    stretched past the track instead of the track being fattened: nothing on
    screen moves, and the target clears the floor.
 
@@ -11,7 +11,7 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: max(100%, 32px);
-  height: max(100%, 32px);
+  width: max(100%, 44px);
+  height: max(100%, 44px);
   transform: translate(-50%, -50%);
 }

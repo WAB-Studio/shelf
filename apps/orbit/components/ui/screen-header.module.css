@@ -20,7 +20,7 @@
   white-space: nowrap;
 }
 
-/* The square of DetalleMovimiento; border-box keeps the rule inside the 32px
+/* The square of DetalleMovimiento; border-box keeps the rule inside the 44px
    RNF-08 asks for. */
 .back {
   box-sizing: border-box;
@@ -28,8 +28,8 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 9px;
   background-color: var(--color-panel-solid);
   border: 1px solid var(--gray-a4);

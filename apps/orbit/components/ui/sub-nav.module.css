@@ -6,12 +6,12 @@
   padding: 0 0 16px;
 }
 
-/* border-box keeps the rule inside the 32px RNF-08 asks for. */
+/* border-box keeps the rule inside the 44px RNF-08 asks for. */
 .chip {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 44px;
   padding: 6px 11px;
   border-radius: 8px;
   background-color: var(--color-panel-solid);
@@ -36,6 +36,6 @@
 
 @media (min-width: 1024px) {
   .nav {
-    padding: 0 32px 16px;
+    padding: 0 44px 16px;
   }
 }

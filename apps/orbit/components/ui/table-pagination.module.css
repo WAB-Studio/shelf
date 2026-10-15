@@ -9,7 +9,7 @@
 }
 
 /* Doubled to outrank Radix's own size class. The square is painted at the 30px
-   of SPEC-A3 and the pseudo-element carries the hit area out to RNF-08's 32px. */
+   of SPEC-A3 and the pseudo-element carries the hit area out to RNF-08's 44px. */
 .step.step {
   position: relative;
   width: 30px;
@@ -20,5 +20,5 @@
 .step.step::after {
   content: "";
   position: absolute;
-  inset: -1px;
+  inset: -7px;
 }

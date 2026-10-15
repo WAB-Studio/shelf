@@ -225,6 +225,7 @@ async function main() {
   await checkAccountStatementShape();
   await checkAccountReconciliations();
   await checkRecurringRuleIsolation();
+  await checkSharedToggleLeaderOnly();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -9565,6 +9566,123 @@ async function checkRecurringRuleIsolation() {
     tailLabel,
     afterUser === "postgres" && probeCount === "0",
     `current_user = ${afterUser}, rows named 'rls recurring isolation%' = ${probeCount}`,
+  );
+}
+
+// Only the fund's leader toggles `is_shared` on a group account: a member's un-share would leave
+// `can_write_account` false for everyone, leader included.
+async function checkSharedToggleLeaderOnly() {
+  console.log("");
+  const leaderUser = randomUUID();
+  const memberUser = randomUUID();
+  const groupId = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  const labels = [
+    "322. a member's update of is_shared on a group account is refused with 42501 and the account stays shared",
+    "323. the same member still renames that shared account",
+    "324. the leader's update of is_shared on the group account passes",
+    "325. a personal account's owner still updates it, is_shared written unchanged",
+    "326. the leader re-shares the account they un-shared",
+    "327. a member cannot re-share an unshared group account",
+  ];
+  const tailLabel = "328. the rolled-back shared-toggle transaction leaves no trace";
+
+  type OrmTx = Parameters<Parameters<typeof orm.transaction>[0]>[0];
+  const enter = (tx: OrmTx, subject: string) =>
+    tx.execute(dsql`select
+      set_config('request.jwt.claims', ${JSON.stringify({ sub: subject, role: "authenticated", aud: "authenticated" })}, true),
+      set_config('statement_timeout', '8000', true),
+      set_config('role', 'authenticated', true)`);
+
+  await orm
+    .transaction(async (tx) => {
+      await tx.execute(dsql`insert into auth.users (id) values (${leaderUser}), (${memberUser})`);
+      await tx.execute(dsql`insert into app_users (id) values (${leaderUser}), (${memberUser})`);
+
+      await enter(tx, leaderUser);
+      await tx.execute(
+        dsql`insert into groups (id, name, cash_mode) values (${groupId}, 'rls shared toggle', 'shared')`,
+      );
+      await tx.execute(
+        dsql`insert into group_members (group_id, user_id, name, role)
+          values (${groupId}, ${leaderUser}, 'rls shared toggle leader', 'leader')`,
+      );
+      const [shared] = await tx.execute<{ id: string }>(
+        dsql`insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
+          values (${groupId}, true, 'rls shared toggle cash', 'asset',
+            (now() at time zone 'America/Bogota')::date) returning id`,
+      );
+
+      await tx.execute(dsql`reset role`);
+      await tx.execute(
+        dsql`insert into group_members (group_id, user_id, name, role)
+          values (${groupId}, ${memberUser}, 'rls shared toggle member', 'member')`,
+      );
+      const [ownPersonal] = await tx.execute<{ id: string }>(
+        dsql`insert into accounts (owner_user_id, name, kind, initial_balance_on)
+          values (${memberUser}, 'rls shared toggle own', 'asset',
+            (now() at time zone 'America/Bogota')::date) returning id`,
+      );
+
+      await enter(tx, memberUser);
+      let code: string | undefined = "none";
+      await tx
+        .transaction(async (sp) => {
+          await sp.execute(dsql`update accounts set is_shared = false where id = ${shared.id}`);
+        })
+        .catch((error: unknown) => {
+          code = pgErrorCode(error) ?? "unknown";
+        });
+      const [afterMember] = await tx.execute<{ is_shared: boolean }>(
+        dsql`select is_shared from accounts where id = ${shared.id}`,
+      );
+      assert(
+        labels[0],
+        code === "42501" && afterMember.is_shared === true,
+        `error code = ${code} (expected 42501), is_shared = ${afterMember.is_shared} (expected true)`,
+      );
+
+      const renamed = await tx.execute<{ id: string }>(
+        dsql`update accounts set name = 'rls shared toggle renamed' where id = ${shared.id} returning id`,
+      );
+      assert(labels[1], renamed.length === 1, `rows renamed = ${renamed.length} (expected 1)`);
+
+      await enter(tx, leaderUser);
+      const unshared = await tx.execute<{ id: string }>(
+        dsql`update accounts set is_shared = false where id = ${shared.id} returning id`,
+      );
+      assert(labels[2], unshared.length === 1, `rows updated = ${unshared.length} (expected 1)`);
+
+      const reshared = await tx.execute<{ id: string }>(
+        dsql`update accounts set is_shared = true where id = ${shared.id} returning id`,
+      );
+      assert(labels[4], reshared.length === 1, `rows re-shared by the leader = ${reshared.length} (expected 1)`);
+      await tx.execute(dsql`update accounts set is_shared = false where id = ${shared.id}`);
+
+      await enter(tx, memberUser);
+      const memberReshare = await tx.execute<{ id: string }>(
+        dsql`update accounts set is_shared = true where id = ${shared.id} returning id`,
+      );
+      assert(labels[5], memberReshare.length === 0, `rows re-shared by a member = ${memberReshare.length} (expected 0)`);
+      const toggled = await tx.execute<{ id: string }>(
+        dsql`update accounts set is_shared = false, name = 'rls shared toggle own 2' where id = ${ownPersonal.id} returning id`,
+      );
+      assert(labels[3], toggled.length === 1, `rows updated = ${toggled.length} (expected 1)`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ count: probeCount }] = await sql<{ count: string }[]>`
+    select count(*)::text as count from accounts where name like 'rls shared toggle%'`;
+  assert(
+    tailLabel,
+    afterUser === "postgres" && probeCount === "0",
+    `current_user = ${afterUser}, rows named 'rls shared toggle%' = ${probeCount}`,
   );
 }
 

@@ -17,8 +17,8 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   Add `xs`, `sm`, `md`, `lg` or `xl` only for what changes above it.
 - Treat the narrow viewport as the base case, never as a fallback.
 - A screen is done only once it holds at the narrow viewport: no horizontal
-  overflow, no overlapping controls, no tap target under 32 px on its shorter side.
-- Hold the floor at 32 px: it is Radix Themes' own default control height.
+  overflow, no overlapping controls, no tap target under 44 px on its shorter side.
+- Hold the floor at 44 px (decided by the user 2026-10-15, raised from 32 px). Enforce it in the `components/ui` primitives, never in a screen.
 - `TapTarget` in `components/ui` owns that floor for a link's content.
 
 ## Navigation
