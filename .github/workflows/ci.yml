@@ -543,6 +543,7 @@ jobs:
       - run: npm run harness:token -w apps/orbit
 
       # Each check runs whatever the one before did, so a red names itself.
+      - run: npm run check:unit --if-present -w apps/orbit
       - run: npm run db:check-rls -w apps/orbit
 
       - run: npm run check:queries -w apps/orbit
