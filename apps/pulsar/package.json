@@ -14,7 +14,6 @@
     "typecheck": "tsgo --noEmit --incremental false",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=.env.local ../../node_modules/drizzle-kit/bin.cjs migrate",
-    "evals": "node --experimental-test-module-mocks --import tsx --env-file-if-exists=.env.local evals/run.ts",
     "check:e2e-static": "node --import tsx scripts/check-e2e-static.ts",
     "check:unit": "node --experimental-test-module-mocks --import tsx --test \"{app,lib,components,scripts}/**/*.test.ts\"",
     "check:e2e": "node --env-file=.env.local ../../node_modules/@playwright/test/cli.js test",
