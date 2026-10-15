@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { InboxScreen } from "@/components/ingest/inbox-screen";
@@ -30,7 +30,6 @@ export default async function InboxPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   const [, deliveries, shapes, options] = await Promise.all([
     requireUser(),

@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
+import { getFormatter, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { PlanningHub } from "@/components/planning/planning-hub";
@@ -53,7 +53,6 @@ export default async function PlanningPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   const [budgets, goals, payments, debts, rules, group, t, format] =
     await Promise.all([

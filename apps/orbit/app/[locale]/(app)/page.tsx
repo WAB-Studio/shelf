@@ -1,7 +1,7 @@
 import { Banknote, CreditCard, Landmark, Plus, Wallet } from "lucide-react";
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { WithdrawCashCard } from "@/components/cash/withdraw-dialog";
@@ -86,7 +86,6 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
