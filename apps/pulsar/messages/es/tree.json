@@ -55,6 +55,7 @@
   },
   "archive": {
     "title": "¿Archivarla?",
+    "branchName": "«{name}»",
     "withInside": "Con ella se archivan {count, plural, one {# meta} other {# metas}}: {names}. Sus hechos y compromisos siguen aquí; al reabrirla {count, plural, one {se abre} other {se abren las #}}.",
     "confirm": "Archivarla con {count, plural, one {su meta} other {sus #}}",
     "cancel": "Dejarlas abiertas"

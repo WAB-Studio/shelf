@@ -175,6 +175,12 @@
       "rows": "{total, plural, one {# fila} other {# filas}}: {plan} en el plan, {notes} en notas, {out} fuera",
       "parts": "{total, plural, one {# parte} other {# partes}}: {plan} en el plan, {notes} en notas, {out} fuera"
     },
+    "words": {
+      "rate": "{amount} {unit, select, hours {h} minutes {min} other {{measure}}}",
+      "perWeek": "{rate} por semana",
+      "cadence": "{kind, select, times_per_week {{n} por semana} times_per_month {{n} al mes} every_n_days {cada {n} días} other {cada día}}",
+      "daysJoin": ", "
+    },
     "correction": {
       "accept": "Aceptar",
       "decline": "Dejar como estaba",
