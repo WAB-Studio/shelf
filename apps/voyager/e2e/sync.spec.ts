@@ -293,7 +293,7 @@ test("RL-24: the copy fires on hide, never on a keystroke, and the request lands
       pulledThroughCursor: null,
       lastSyncedAt: null,
       enabled: true,
-      readerId: null,
+      readerId: randomUUID(),
       retired: false,
     },
     lookups: [
@@ -471,7 +471,7 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
     await expect(page.getByText(foreignLabel)).toHaveCount(0);
     await page.waitForTimeout(1500);
     expect(openRequests, `pulls on opening an unconfirmed /cuenta: ${JSON.stringify(openRequests)}`).toHaveLength(0);
-    const syncAttempt = await page.request.post("/api/log/sync", { data: oneRowRound(foreignDeviceId) });
+    const syncAttempt = await page.request.post("/api/log/sync", { data: oneRowRound(foreignDeviceId, readerId) });
     expect(syncAttempt.status()).toBe(409);
     const [{ foreignRows }] = await sql<{ foreignRows: number }[]>`
       select count(*)::int as "foreignRows" from reading.lookups
@@ -546,6 +546,7 @@ test("RL-24: a request whose top-level deviceId disagrees with its rows never se
     const response = await page.request.post("/api/log/sync", {
       data: {
         deviceId: topDeviceId,
+        readerId,
         since: null,
         rows: [
           {
@@ -794,9 +795,10 @@ test("RL-49: verifyMagicLink calls verifyOtp exactly once and names the reason, 
   expect(success).toEqual({ ok: true, user: { id: "reader-1" } });
 });
 
-function oneRowRound(deviceId: string) {
+function oneRowRound(deviceId: string, readerId: string) {
   return {
     deviceId,
+    readerId,
     since: null,
     rows: [
       {
@@ -830,7 +832,7 @@ test("RL-24: a round from a retired device answers 409 retired and writes nothin
       values (${readerId}, ${retired}, 'unknown:unknown', now())`;
     await signInAs(page, hash);
 
-    const response = await page.request.post("/api/log/sync", { data: oneRowRound(retired) });
+    const response = await page.request.post("/api/log/sync", { data: oneRowRound(retired, readerId) });
     expect(response.status()).toBe(409);
     expect(await response.json()).toEqual({ error: "retired" });
 
@@ -858,7 +860,7 @@ test("RL-22: a round past the reader's daily row cap answers 429 quota and write
       from generate_series(1, ${SYNC_DAILY_ROW_CAP}::int) as n`;
     await signInAs(page, hash);
 
-    const response = await page.request.post("/api/log/sync", { data: oneRowRound(randomUUID()) });
+    const response = await page.request.post("/api/log/sync", { data: oneRowRound(randomUUID(), readerId) });
     expect(response.status()).toBe(429);
     expect(await response.json()).toEqual({ error: "quota" });
 

@@ -45,7 +45,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 #### The word
 
-- [ ] **RL-04** — A headword's answer shows every sense the dictionary carries for it, grouped by part of speech, each with its IPA when one exists and all of its Spanish translations.
+- [x] **RL-04** — A headword's answer shows every sense the dictionary carries for it, grouped by part of speech, each with its IPA when one exists and all of its Spanish translations.
 - [x] **RL-43** — Those groups are ordered by how often the word is really used in each part of
   speech, not by a rank fixed in advance. `grudge` answers as «rencor» before its rare verb, and
   `leave` still answers as «dejar» before «permiso» — an order no single rank can give both. The
@@ -156,25 +156,6 @@ this gets built, and no schema, table or column is "prepared for" it.
   was spent.
 - [ ] **RL-67** — When sending a sign-in link times out, the screen says the link may have been sent, before the reader asks for another. A board is drawn before it is built. Decided by the user 2026-10-15.
 - [ ] **RL-69** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
-- [ ] **RL-50** — A translation the provider's public memory supplies is judged before the reader
-  reads it, and sexual or obscene content is never drawn. The reader either gets a translation that
-  answers what they typed, or is told the phrase could not be answered — never the provider's
-  memory verbatim. A phrase the reader themselves typed is not the target: what is filtered is what
-  comes back, not what goes out.
-  - Measured 2026-09-20, `i love you`, `en|es`: `responseStatus: 200`, and
-    `responseData.translatedText` holds an explicit sexual sentence at `match: 1`, `quality: 74`.
-    It passes every gate `isUsableTranslation` applies — non-empty, not an echo, no warning prefix —
-    so `app/api/translate/route.ts:118-120` returns it and `bestAlternativeTranslation`, RL's own
-    fix for the empty primary field, is never reached.
-  - **Choosing by score cannot do this.** `te quiero` sits in `matches[1]` with the *same* `match: 1`
-    and the *same* `quality: 74`. The explicit entry wins on position alone, so no ordering by the
-    provider's own numbers separates them.
-  - **The model judges it. Decided by the user 2026-09-20**, over a length-disproportion rule and a
-    word list. Disproportion would have caught this one — 67 characters answering 10 — and misses a
-    short obscenity; a list has to be kept and vetoes the word when a reader looks it up on purpose.
-    The model is the same one already in use, and this is the second place it is asked to judge
-    content rather than produce it (`docs/voyager/DESIGN.md`, the lazy gloss prune).
-  - Not built. No board drawn for the state a reader sees when every candidate is refused.
 
 - [ ] **RL-07** — Autocomplete appears only while the string is being treated as a word. A sentence never raises it.
 - [x] **RL-26** — A headword's answer can be heard. The device speaks it with the voice the browser
@@ -185,11 +166,11 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-18** — While the string is being treated as a word and the typing has not settled, up to
   ten headwords that begin with it are offered. Choosing one answers it. The offer withdraws once
   the typing settles: the answer is already on screen and the list has nothing left to add.
-- [ ] **RL-35** *(successor of RL-14)* — The answer to a word comes whole from the device and never
+- [x] **RL-35** *(successor of RL-14)* — The answer to a word comes whole from the device and never
   waits on the network: with a connection or without one, the same text appears at the same speed,
   and no keystroke ever leaves the device. What the network can add afterwards is decoration: it
   arrives late, arrives only sometimes, and its absence never changes the answer or delays it.
-- [ ] **RL-41** — A word whose dictionary entry carries **no definition at all** can be given one
+- [x] **RL-41** — A word whose dictionary entry carries **no definition at all** can be given one
   over the network: one English sentence, in the dictionary's own register. **12,670 of the 64,258
   entries (19.7%) carry none** — 6,989 nouns, 2,664 verbs, 2,098 adjectives — and today those words
   answer with translations alone. It is **decoration under RL-35**: it is resolved the first time
@@ -197,7 +178,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   for every reader ever, and with no connection the answer is exactly the one the device already
   draws. A word that already has a definition never asks for one.
 
-- [ ] **RL-42** — A word can carry **one example sentence using it**, with its Spanish translation,
+- [x] **RL-42** — A word can carry **one example sentence using it**, with its Spanish translation,
   resolved and cached the same way and under the same decoration clause. This is not RL-08's path:
   RL-08 translates a sentence the reader typed, this shows the word in use.
 
@@ -258,6 +239,13 @@ this gets built, and no schema, table or column is "prepared for" it.
   searched under it, or its translation contains what was typed, case and accents aside; a line says how many of the
   record's words are shown, and a typing that matches nothing says so. Emptying the field gives the whole list back, and
   returning from a word's page finds the list as it was left. It reads the device's record alone and sends nothing.
+- [x] **RL-64** *(successor of RL-50)* — A translation MyMemory's public memory supplies passes a word list of sexual and
+  obscene terms, Spanish and English, before the reader sees it. The list matches whole words, case and accents aside, on
+  the top pick and on every `matches` candidate; a blocked candidate is as unusable as an empty one, so a clean
+  candidate of highest `match` still answers, and when none is clean the route answers 502 and the reader reads
+  «No se pudo traducir». The paid model's answer is not filtered. Decided by the user 2026-10-15.
+  - Measured 2026-09-20, `i love you`, `en|es`: `translatedText` held an explicit sentence at `match: 1`, `quality: 74`,
+    which passed every other gate; `te quiero` sat in `matches[1]` with the same score.
 - [ ] **RL-66** — A row of `/registro` is deleted with a ✕ on its row. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-10-15.
 - [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: an entry in the dictionary, a translation for a
@@ -302,7 +290,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   word. It only ever reads the file; no tool modifies it. The server is not part of the deployed app.
 - [ ] **RL-65** *(successor of RL-20)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The export also offers a CSV for Anki beside it. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-15.
 - [ ] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Boards are drawn before any work. Decided by the user 2026-10-15.
-- [ ] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
+- [x] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
   has, the answer offers the words it might have been, and reaching one of them is a tap. The
   suggestion is computed on the device and touches the network on no keystroke.
 - [x] **RL-44** *(successor of RL-29)* — When a search finds nothing, the word is answered over the
@@ -373,6 +361,27 @@ this gets built, and no schema, table or column is "prepared for" it.
 ### Retired
 
 Dead codes. The number stays burned and the tick stays as it was.
+
+- [x] **RL-50** — A translation the provider's public memory supplies is judged before the reader
+  reads it, and sexual or obscene content is never drawn. The reader either gets a translation that
+  answers what they typed, or is told the phrase could not be answered — never the provider's
+  memory verbatim. A phrase the reader themselves typed is not the target: what is filtered is what
+  comes back, not what goes out.
+  - Measured 2026-09-20, `i love you`, `en|es`: `responseStatus: 200`, and
+    `responseData.translatedText` holds an explicit sexual sentence at `match: 1`, `quality: 74`.
+    It passes every gate `isUsableTranslation` applies — non-empty, not an echo, no warning prefix —
+    so `app/api/translate/route.ts:118-120` returns it and `bestAlternativeTranslation`, RL's own
+    fix for the empty primary field, is never reached.
+  - **Choosing by score cannot do this.** `te quiero` sits in `matches[1]` with the *same* `match: 1`
+    and the *same* `quality: 74`. The explicit entry wins on position alone, so no ordering by the
+    provider's own numbers separates them.
+  - **The model judges it. Decided by the user 2026-09-20**, over a length-disproportion rule and a
+    word list. Disproportion would have caught this one — 67 characters answering 10 — and misses a
+    short obscenity; a list has to be kept and vetoes the word when a reader looks it up on purpose.
+    The model is the same one already in use, and this is the second place it is asked to judge
+    content rather than produce it (`docs/voyager/DESIGN.md`, the lazy gloss prune).
+  - Not built. No board drawn for the state a reader sees when every candidate is refused.
+  _Retired 2026-10-15. Successor: RL-64. The user overturned the 2026-09-20 pick of the model as judge for a word list: the model costs a call per answer and a list is deterministic._
 
 - [x] **RL-20** — The log can be exported from the app as a single file the reader saves onto their
   device: every recorded search, with its date and the headword it reached, in a documented and

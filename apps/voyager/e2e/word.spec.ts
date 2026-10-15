@@ -156,6 +156,8 @@ test("an installed dictionary answers offline, fast, and within a thumb's reach"
 
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole("heading", { name: "throughout" })).toHaveAttribute("lang", "en");
+  await expect(searchBox).toHaveAttribute("lang", "en");
 
   // `left` is its own headword, so it answers first — RL-40 offers `leave`
   // beneath it, never in its place (`PalabraConFlexion`, `lookup.ts`).
@@ -170,7 +172,7 @@ test("an installed dictionary answers offline, fast, and within a thumb's reach"
   expect(p95).toBeLessThan(10);
 
   // RNL-03: no horizontal overflow, and every focusable control clears the
-  // 32px floor on its shorter side, at the 360px viewport this project runs.
+  // 44px floor on its shorter side, at the 360px viewport this project runs.
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(360);
 
@@ -184,7 +186,7 @@ test("an installed dictionary answers offline, fast, and within a thumb's reach"
         const rect = el.getBoundingClientRect();
         return { tag: el.tagName, shorter: Math.min(rect.width, rect.height) };
       })
-      .filter((entry) => entry.shorter < 32);
+      .filter((entry) => entry.shorter < 44);
   });
   expect(undersized).toEqual([]);
 });

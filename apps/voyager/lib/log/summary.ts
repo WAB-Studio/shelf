@@ -1,7 +1,7 @@
 import { openLogDatabase } from "./record";
 import type { LookupOutcome, LookupRecord } from "./types";
 
-// The registro's third reader of `lookups` (RL-32), beside `history.ts`'s
+// The registro's third reader of `lookups` (RL-56), beside `history.ts`'s
 // page and `merge.ts`'s two writes: a single cursor pass over the
 // `normalised` index, grouping as it walks instead of loading every row.
 

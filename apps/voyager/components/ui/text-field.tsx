@@ -5,21 +5,18 @@ import { TextField as ThemesTextField } from "@radix-ui/themes";
 
 import styles from "./text-field.module.css";
 
-type RootProps = ComponentPropsWithoutRef<typeof ThemesTextField.Root> & {
-  // Holds the field to 44px tall, which the size tokens do not reach.
-  tap?: boolean;
-};
+// Every field is held to 44px tall, which the size tokens do not reach.
+type RootProps = ComponentPropsWithoutRef<typeof ThemesTextField.Root>;
 
 const Root = forwardRef<ElementRef<typeof ThemesTextField.Root>, RootProps>(function Root(
-  { tap, className, ...props },
+  { className, ...props },
   ref,
 ) {
-  const floor = tap ? styles.tap44 : undefined;
   return (
     <ThemesTextField.Root
       ref={ref}
       {...props}
-      className={floor && className ? `${floor} ${className}` : (floor ?? className)}
+      className={className ? `${styles.tap44} ${className}` : styles.tap44}
     />
   );
 });

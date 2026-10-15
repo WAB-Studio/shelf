@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { normaliseHeadword } from "@/lib/dictionary/format";
-import { NOTES_ENDPOINT, notesResponseSchema, type NotesResponse } from "@/lib/phrase/notes-protocol";
-import { Flex, Text } from "@/components/ui";
+import {
+  NOTES_ENDPOINT,
+  notesResponseSchema,
+  type NotesResponse,
+} from "@/lib/phrase/notes-protocol";
+import { Flex, Live, Text } from "@/components/ui";
 
 type NotesResult = NotesResponse;
 
@@ -16,7 +20,11 @@ type NotesResult = NotesResponse;
 // the same phrase must still read yesterday's answer instead of asking again.
 const cache = new Map<string, NotesResult>();
 
-async function fetchNotes(source: string, translation: string, signal: AbortSignal): Promise<NotesResult> {
+async function fetchNotes(
+  source: string,
+  translation: string,
+  signal: AbortSignal,
+): Promise<NotesResult> {
   try {
     const response = await fetch(NOTES_ENDPOINT, {
       method: "POST",
@@ -42,10 +50,20 @@ async function fetchNotes(source: string, translation: string, signal: AbortSign
 // `search-screen.tsx` owns every other request; mounting this only inside
 // `PhraseAnswer`'s `done` branch is what keeps RNL-05 whole without
 // teaching that file a request it does not otherwise make.
-export function PhraseNotes({ source, translation }: { source: string; translation: string }) {
+export function PhraseNotes({
+  source,
+  translation,
+}: {
+  source: string;
+  translation: string;
+}) {
   const t = useTranslations("phrase");
+  const tLive = useTranslations("live");
   const fingerprint = `${normaliseHeadword(source)}\u0000${translation}`;
-  const [resolved, setResolved] = useState<{ fingerprint: string; result: NotesResult } | null>(null);
+  const [resolved, setResolved] = useState<{
+    fingerprint: string;
+    result: NotesResult;
+  } | null>(null);
 
   useEffect(() => {
     if (cache.has(fingerprint)) return;
@@ -68,33 +86,46 @@ export function PhraseNotes({ source, translation }: { source: string; translati
     return () => controller.abort();
   }, [fingerprint, source, translation]);
 
-  const result = cache.get(fingerprint) ?? (resolved?.fingerprint === fingerprint ? resolved.result : null);
+  const result =
+    cache.get(fingerprint) ??
+    (resolved?.fingerprint === fingerprint ? resolved.result : null);
 
   if (result === null) {
     return (
-      <Text size="2" muted>
-        {t("notesPending")}
-      </Text>
+      <>
+        <Live />
+        <Text size="2" muted>
+          {t("notesPending")}
+        </Text>
+      </>
     );
   }
 
   // Zero notes is a valid answer (RL-46): the translation already replied,
   // and that silence is the screen as it stands today.
-  if (result.notes.length === 0) return null;
+  if (result.notes.length === 0)
+    return (
+      <>
+        <Live />
+      </>
+    );
 
   return (
-    <Flex direction="column" gap="3">
-      <Text size="2" muted>
-        {t("notesTitle")}
-      </Text>
-      {result.notes.map((note, index) => (
-        <Flex direction="column" gap="1" key={`${note.term}-${index}`}>
-          <Text size="2" weight="bold">
-            {note.term}
-          </Text>
-          <Text size="2">{note.note}</Text>
-        </Flex>
-      ))}
-    </Flex>
+    <>
+      <Live>{tLive("notes", { count: result.notes.length })}</Live>
+      <Flex direction="column" gap="3">
+        <Text size="2" muted>
+          {t("notesTitle")}
+        </Text>
+        {result.notes.map((note, index) => (
+          <Flex direction="column" gap="1" key={`${note.term}-${index}`}>
+            <Text size="2" weight="bold">
+              {note.term}
+            </Text>
+            <Text size="2">{note.note}</Text>
+          </Flex>
+        ))}
+      </Flex>
+    </>
   );
 }

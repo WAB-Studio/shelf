@@ -1,9 +1,12 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { providerFetch } from "@/lib/provider/fetch";
+import { containsBlockedTerm } from "@/lib/translate/blocklist";
 import { translateRequestSchema, type TranslationResult } from "@/lib/translate/types";
-import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
+import { claimCallerShare } from "@/lib/word/caller-share";
+import { claimClientCall, clientKey, scopedClientKey } from "@/lib/word/client-budget";
 import { MODEL_NAME } from "@/lib/word/model";
 import { claimDailyCall } from "@/lib/word/spend";
 
@@ -20,7 +23,7 @@ export const maxDuration = 40;
 const MYMEMORY_ENDPOINT = "https://api.mymemory.translated.net/get";
 
 // Half the OpenAI routes' 20 s: a sentence the reader is waiting on falls to
-// RL-37's per-word answer sooner.
+// RL-59's per-word answer sooner.
 const MYMEMORY_TIMEOUT_MS = 10_000;
 
 const MODEL_TIMEOUT_MS = 20_000;
@@ -54,7 +57,7 @@ function foldForComparison(s: string): string {
 // back — gibberish included — with `responseStatus: "200"` and no warning:
 // the two checks below never catch it. The same fold also refuses a proper
 // noun, a brand name or a number that legitimately holds still across `en`
-// and `es`; RL-37's per-word breakdown is what that reply lands on instead,
+// and `es`; RL-59's per-word breakdown is what that reply lands on instead,
 // an honest "could not answer" rather than a false badge.
 function isEcho(source: string, translated: string): boolean {
   return foldForComparison(translated) === foldForComparison(source);
@@ -62,14 +65,15 @@ function isEcho(source: string, translated: string): boolean {
 
 // The one gate both `responseData.translatedText` and every `matches` entry
 // answer to: not empty, not the quota warning, not an echo of what was
-// asked. A candidate that fails any of these said nothing, whichever field
-// it came from.
+// asked, and free of the blocked terms (RL-64). A candidate that fails any of
+// these said nothing, whichever field it came from.
 function isUsableTranslation(source: string, candidate: string | undefined): candidate is string {
   return (
     typeof candidate === "string" &&
     candidate.length > 0 &&
     !candidate.toUpperCase().startsWith(MYMEMORY_WARNING_PREFIX) &&
-    !isEcho(source, candidate)
+    !isEcho(source, candidate) &&
+    !containsBlockedTerm(candidate)
   );
 }
 
@@ -102,7 +106,7 @@ function bestAlternativeTranslation(source: string, matches: MyMemoryMatch[] | u
 // `matches` is even read: `responseStatus` already said the whole reply is
 // not to be trusted, so there is nothing in it worth falling back to.
 //
-// Below that, an unusable top pick is not the whole reply's failure — RL-53,
+// Below that, an unusable top pick is not the whole reply's failure — RL-60,
 // measured live: MyMemory's best-scoring match for "the cat sat on the mat"
 // is `translatedText: ""`, while a lower-scoring entry in `matches` answers
 // the sentence in full. That array is checked with the same filter before
@@ -142,10 +146,18 @@ async function translateWithProvider(text: string): Promise<string> {
 // RL-60: the model translates first, inside the daily cap the word routes
 // share. Null on any reason not to answer (no key, no cap, cap spent, failure,
 // empty or echoed reply) so the caller falls to MyMemory.
-async function translateWithModel(text: string): Promise<string | null> {
+async function translateWithModel(request: Request, text: string): Promise<string | null> {
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey || !env.WORD_TEXT_DAILY_CALL_CAP) return null;
-  if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) return null;
+  // A database error is one more reason not to answer: MyMemory is tried.
+  try {
+    const caller = clientKey(request);
+    if (caller && !(await claimCallerShare(caller, env.WORD_TEXT_DAILY_CALL_CAP))) return null;
+    if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) return null;
+  } catch (error) {
+    console.error("[api/translate] daily claim failed", error);
+    return null;
+  }
   const response = await providerFetch(
     "https://api.openai.com/v1/chat/completions",
     {
@@ -178,6 +190,9 @@ async function translateWithModel(text: string): Promise<string | null> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -193,17 +208,17 @@ export async function POST(request: Request): Promise<Response> {
   // Per caller, its own `translate:` row, so a caller's sentences never eat
   // into their word lookups. With no key (no salt, no address) the route
   // stays open: an unset variable must not switch RL-09 off. Refused before
-  // MyMemory is reached; the client reads 429 as any other failure (RL-37).
-  const client = scopedClientKey("translate", request.headers);
-  if (client && !(await claimClientCall(client, env.TRANSLATE_DAILY_CLIENT_CAP))) {
-    return Response.json({ error: "rateLimited" }, { status: 429 });
-  }
-
+  // MyMemory is reached; the client reads 429 as any other failure (RL-59).
   try {
-    const text = (await translateWithModel(parsed.data.text)) ?? (await translateWithProvider(parsed.data.text));
+    const client = scopedClientKey("translate", request.headers);
+    if (client && !(await claimClientCall(client, env.TRANSLATE_DAILY_CLIENT_CAP))) {
+      return Response.json({ error: "rateLimited" }, { status: 429 });
+    }
+    const text = (await translateWithModel(request, parsed.data.text)) ?? (await translateWithProvider(parsed.data.text));
     const result: TranslationResult = { text, origin: "network" };
     return Response.json(result, { status: 200 });
-  } catch {
+  } catch (error) {
+    console.error("[api/translate] failed", error);
     return Response.json({ error: "provider" }, { status: 502 });
   }
 }

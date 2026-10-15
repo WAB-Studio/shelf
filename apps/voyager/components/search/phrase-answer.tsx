@@ -8,7 +8,7 @@ import { PhraseNotes } from "./phrase-notes";
 
 // What stage a sentence lookup is at. The composing module owns the debounce,
 // the token floor and the request itself; this only draws the stage it lands
-// in (RL-09). `failed` is never drawn here (RL-37): the composing module
+// in (RL-09). `failed` is never drawn here (RL-59): the composing module
 // intercepts it and draws the per-word breakdown instead.
 export type PhraseState =
   | { kind: "idle" }
@@ -38,7 +38,7 @@ export function PhraseAnswer({
   // The typing has not settled and nothing was asked for: silence, not a
   // spinner, so the box never flickers while a person is mid-sentence.
   // `failed` draws nothing here either — the composing module never mounts
-  // this component while its own state reads `failed` (RL-37).
+  // this component while its own state reads `failed` (RL-59).
   if (state.kind === "waiting" || state.kind === "failed") {
     return null;
   }
@@ -57,7 +57,7 @@ export function PhraseAnswer({
       {state.kind === "done" && (
         <Flex direction="column" gap="1">
           <Text variant="translation">{state.result.text}</Text>
-          <Text size="2" color="gray">
+          <Text size="2" color="gray" english>
             {state.source}
           </Text>
           <MetaLabel>
@@ -73,7 +73,7 @@ export function PhraseAnswer({
 
       {offer.kind === "offered" && (
         <Flex direction="column" gap="1" align="start">
-          <Button size="2" tap onClick={onEnableDevice}>
+          <Button size="2" onClick={onEnableDevice}>
             {t("enableDevice")}
           </Button>
           <Text size="1" color="gray">
@@ -88,10 +88,10 @@ export function PhraseAnswer({
             {t("downloadingModel")}
           </Text>
           {offer.fraction === null ? (
-            <Progress />
+            <Progress aria-label={t("progressLabel")} />
           ) : (
             <>
-              <Progress value={Math.round(offer.fraction * 100)} />
+              <Progress value={Math.round(offer.fraction * 100)} aria-label={t("progressLabel")} />
               <Text size="1" color="gray">
                 {t("downloadProgress", { percent: Math.round(offer.fraction * 100) })}
               </Text>

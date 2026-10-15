@@ -33,7 +33,7 @@ test("planUploadRound: a 689-character row goes up cut to 500 and the request pa
   assert.equal(rows[0].text.length, 500);
   assert.equal(rows[0].normalised.length, 500);
   assert.equal(rows[0].headword!.length, 500);
-  assert.doesNotThrow(() => syncRequestSchema.parse({ deviceId: DEVICE, rows, since: null }));
+  assert.doesNotThrow(() => syncRequestSchema.parse({ deviceId: DEVICE, readerId: "reader-1", rows, since: null }));
 });
 
 test("planUploadRound: a surrogate pair on the cut is dropped whole", () => {
@@ -62,7 +62,7 @@ test("planUploadRound: the wire row carries definition and both examples, and th
   assert.equal(rows[0].definition, "to wait");
   assert.equal(rows[0].exampleEn, "I linger.");
   assert.equal(rows[0].exampleEs, "Me quedo.");
-  assert.doesNotThrow(() => syncRequestSchema.parse({ deviceId: DEVICE, rows, since: null }));
+  assert.doesNotThrow(() => syncRequestSchema.parse({ deviceId: DEVICE, readerId: "reader-1", rows, since: null }));
 });
 
 test("planUploadRound: a row without answer fields goes up with null", () => {

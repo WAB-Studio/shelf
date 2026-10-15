@@ -1,6 +1,6 @@
 import { normaliseHeadword } from "../dictionary/format";
 
-// RL-37: the translation a reader expects for a function word, which the
+// RL-59: the translation a reader expects for a function word, which the
 // dictionary orders by its own corpus and so often puts a rare sense first.
 // Hand-written device data, never fetched: the phrase fallback stays offline.
 // Chosen from SUBTLEX-US by frequency among pronouns, determiners,

@@ -1,4 +1,4 @@
-// RL-47's contract: a typed form resolves to the headword it inflects from,
+// RL-58's contract: a typed form resolves to the headword it inflects from,
 // by a table lookup first and a suffix guess after, ranked by confidence,
 // deduplicated and capped. Cases are built from a random stem and a fixed
 // seed rather than hand-typed, one per suffix family the module declares.

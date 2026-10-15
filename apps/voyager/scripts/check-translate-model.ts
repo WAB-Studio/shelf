@@ -221,7 +221,7 @@ async function main(): Promise<void> {
       );
     }
 
-    // 4b. RL-53 stays inside the fallback.
+    // 4b. RL-60 stays inside the fallback.
     reset();
     await setSpend(0);
     modelReply = () => new Response(null, { status: 500 });
@@ -241,7 +241,7 @@ async function main(): Promise<void> {
       JSON.stringify(candidate),
     );
 
-    // 4c. Both providers down: RL-37's 502, unchanged.
+    // 4c. Both providers down: RL-59's 502, unchanged.
     reset();
     await setSpend(0);
     modelReply = () => new Response(null, { status: 500 });

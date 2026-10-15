@@ -3,7 +3,7 @@ import { check, date, integer, primaryKey, text } from "drizzle-orm/pg-core";
 
 import { reading } from "./_schema";
 
-// The per-caller half of the daily budget RL-44/RL-47 need on top of
+// The per-caller half of the daily budget RL-44/RL-58 need on top of
 // `model_spend`'s global one: one row per (day, client), `client` being a
 // salted hash of the caller's IP, never the address itself. Bumped in a
 // single `on conflict do update` before either route ever calls a paid
@@ -21,5 +21,3 @@ export const clientSpend = reading.table(
   ],
 );
 
-export type ClientSpendRow = typeof clientSpend.$inferSelect;
-export type NewClientSpendRow = typeof clientSpend.$inferInsert;

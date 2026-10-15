@@ -9,11 +9,10 @@ export const UNLISTED_ENDPOINT = "/api/word/unlisted";
 
 // One field, on purpose: the server derives lemma, rule and every other fact
 // from its own dictionary index, so there is nothing here a caller can lie
-// about (RL-44/RL-47's contract).
+// about (RL-44/RL-58's contract).
 export const unlistedRequestSchema = z.object({
   word: z.string().min(1).max(64),
 });
-export type UnlistedRequest = z.infer<typeof unlistedRequestSchema>;
 
 export const unlistedResponseSchema = z.object({
   translations: z.array(z.string().min(1)).min(1),

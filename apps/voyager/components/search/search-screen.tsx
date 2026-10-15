@@ -9,6 +9,7 @@ import { normaliseHeadword } from "@/lib/dictionary/format";
 import type { SenseGroup } from "@/lib/dictionary/index-build";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { announce } from "@/lib/word/announce";
 import { useDecoration } from "@/lib/word/use-decoration";
 import { useNetworkAnswer } from "@/lib/word/use-network-answer";
 import { deviceTranslatorState, type TranslatorState } from "@/lib/translate/availability";
@@ -18,7 +19,7 @@ import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
 import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
-import { Flex, Text } from "@/components/ui";
+import { Flex, Live, Text } from "@/components/ui";
 import { InstallStatus } from "./install-status";
 import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
@@ -109,6 +110,7 @@ function resolveInitialQuery(prop: string | undefined): string {
 
 export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const tSearch = useTranslations("search");
+  const tLive = useTranslations("live");
   const { status, lookup, suggest, has, retry } = useDictionary();
 
   // Read once, at the first render this instance ever gets — including a
@@ -119,11 +121,11 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const [kind, setKind] = useState<QueryKind>({ kind: "empty" });
   const [wordAnswer, setWordAnswer] = useState<WordAnswer | null>(null);
   // RL-18: stays on screen until the text itself changes, never on a timer
-  // — a paused prefix keeps its list. Decided by the user 2026-09-09.
+  // — a paused prefix keeps its list.
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [phraseState, setPhraseState] = useState<PhraseState>({ kind: "idle" });
   // A >60-token string never reaches `translatePhrase` — this is the state
-  // that draws in its place. RL-37 reuses it for a phrase whose translation
+  // that draws in its place. RL-59 reuses it for a phrase whose translation
   // failed instead.
   const [noEntryState, setNoEntryState] = useState<NoEntryState | null>(null);
   const [deviceOffer, setDeviceOffer] = useState<DeviceOffer>({ kind: "hidden" });
@@ -216,7 +218,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
 
   // Writes `/?q=<text>` once a lookup settles — never on the keystroke that
   // produced it. A text already sitting in the URL, or an empty box, writes
-  // nothing: RL-14 owes the network no request either way, and the price the
+  // nothing: RL-35 owes the network no request either way, and the price the
   // reader was told about is one entry per lookup, not one per pause.
   function commitUrl(committedText: string): void {
     if (committedText === "" || committedText === committedTextRef.current) return;
@@ -284,8 +286,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       setLogPayload(phraseLogPayload(phraseText, dictionaryReady, "translated", result.origin, result.text));
     } catch {
       if (controller.signal.aborted) return;
-      // RL-37: a phrase in range that cannot be translated falls to the same
-      // per-word breakdown RL-31 draws for one that was never tried — the
+      // RL-59: a phrase in range that cannot be translated falls to the same
+      // per-word breakdown RL-54 draws for one that was never tried — the
       // trigger is this `failed` state, never a `done` with empty text.
       // RL-55 still logs the call: `commit` in record.ts is what drops an
       // "untranslated" outcome, so the chain keeps advancing past it instead
@@ -299,8 +301,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   }
 
   // Looks every word of `phraseText` up on the device, one `lookup` call
-  // each, with no debounce and no network — shared by RL-31's miss and
-  // RL-37's translation failure, which differ only in which line names what
+  // each, with no debounce and no network — shared by RL-54's miss and
+  // RL-59's translation failure, which differ only in which line names what
   // went wrong (`reason`, read by `NoEntryAnswer`'s title). `onResolved`
   // fires once the breakdown itself is in, so a caller that owes the log a
   // row waits for the same tick the screen does instead of racing it.
@@ -317,7 +319,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     });
   }
 
-  // RL-31: below the floor, every token is looked up on the device, with no
+  // RL-54: below the floor, every token is looked up on the device, with no
   // debounce — RNL-05 only throttles the network path, and this one never
   // reaches it. Above the ceiling, nothing is asked at all. Both branches
   // still log the call, as a "miss": `commit` in record.ts is what drops it,
@@ -350,10 +352,10 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       return;
     }
 
-    // Offline-first, decided 2026-09-11: the translator is a network call by
+    // Offline-first: the translator is a network call by
     // definition, so with none to make the request would only wait to fail.
     // `failed` is the state the JSX below already reads to hand a phrase to
-    // `NoEntryAnswer` instead of `PhraseAnswer` (RL-37) — offline reaches
+    // `NoEntryAnswer` instead of `PhraseAnswer` (RL-59) — offline reaches
     // the same breakdown through the same door, just without the wait.
     if (!navigator.onLine) {
       setPhraseState({ kind: "failed" });
@@ -471,11 +473,11 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // hit of its own, but `suggest` only ever returns headwords that begin
   // with it: a non-empty list is that same proof. Suppress SenseList's
   // "not found" text for as long as one stands — the ordinary silence of no
-  // answer yet, not a new state. Decided by the user 2026-09-09.
+  // answer yet, not a new state.
   // An answer on screen is what retires the offer: `word` closes its list
   // because the entry is already below it, while `ru` keeps the ten it was
   // read from. No clock decides this — only whether there is something to
-  // read. Decided by the user 2026-09-09.
+  // read.
   const wordFound = wordAnswer !== null && (wordAnswer.exact !== null || wordAnswer.viaInflection.length > 0);
   const suppressNotFound = !wordFound && suggestions.length > 0;
   // RL-59: the hand-written table leads a function word typed alone.
@@ -491,7 +493,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     exactGroup ? needsDefinition(exactGroup) : false,
   );
 
-  // RL-44/RL-47: the network is asked only for the two shapes the dictionary
+  // RL-44/RL-58: the network is asked only for the two shapes the dictionary
   // itself could not close — a miss, or a hit that only came through
   // inflection. An exact headword has its own network answer already
   // (`useDecoration` above); `suppressNotFound` holding means a prefix is
@@ -552,8 +554,19 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     lastLoggedText = recordable.text;
   }, [recordable]);
 
+  const announcement = announce({
+    kind: kind.kind,
+    senseCount: wordAnswer ? (wordAnswer.exact ?? wordAnswer.viaInflection[0]?.group ?? null)?.senses.length ?? null : null,
+    suggesting: suppressNotFound,
+    network: networkWord === null ? "absent" : networkAnswer.kind,
+    decoration: decoration.kind,
+    phrase: phraseState.kind,
+  });
+
   return (
     <Flex direction="column" gap="5">
+      <Live>{announcement.polite ? tLive(announcement.polite.key, { count: announcement.polite.count ?? 0 }) : ""}</Live>
+      <Live assertive>{announcement.assertive ? tLive(announcement.assertive) : ""}</Live>
       <Flex direction="column" gap="2">
         <SearchBox value={text} onChange={handleTextChange} />
         <InstallStatus status={status} onRetry={retry} query={text} />

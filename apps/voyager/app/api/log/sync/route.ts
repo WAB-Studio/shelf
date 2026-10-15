@@ -56,6 +56,10 @@ export async function POST(request: Request): Promise<Response> {
 
   const { rows, since } = parsed.data;
 
+  // A stale tab can hold one reader's sync row while the cookie now speaks for
+  // another: nothing is written, and the client drops its identity.
+  if (parsed.data.readerId !== reader.id) return json({ error: "reader" }, 409);
+
   // Nothing ties the top-level `deviceId` to the one on the rows: both are
   // `z.uuid()` and a request may disagree with itself. The rows share one
   // device (the schema refuses a mixed batch), and a batch with rows has

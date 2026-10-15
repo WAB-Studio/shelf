@@ -1,4 +1,4 @@
-// RL-37: the offline table of function-word translations. Asserted on the
+// RL-59: the offline table of function-word translations. Asserted on the
 // contract (what a reader gets for a word), not on how the table is stored.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

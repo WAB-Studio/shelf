@@ -3,7 +3,9 @@ import "server-only";
 import { normaliseHeadword } from "@/lib/dictionary/format";
 import { groupFor } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
-import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
+import { claimCallerShare } from "@/lib/word/caller-share";
+import { claimClientCall, clientKey, scopedClientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { generateWordText, MODEL_NAME } from "@/lib/word/model";
 import { textRequestSchema, textResponseSchema } from "@/lib/word/protocol";
@@ -39,13 +41,23 @@ function empty(status: 204 | 400): Response {
 // already refused would still take one of the day's calls. No chargeable
 // caller (no salt, no address) reaches the model at all.
 async function claimModelCall(request: Request, dailyCap: number): Promise<boolean> {
-  const client = scopedClientKey("text", request.headers);
-  if (!client) return false;
-  if (!(await claimClientCall(client, env.WORD_TEXT_DAILY_CLIENT_CAP))) return false;
-  return claimDailyCall(dailyCap);
+  try {
+    const client = scopedClientKey("text", request.headers);
+    if (!client) return false;
+    const caller = clientKey(request);
+    if (!caller || !(await claimCallerShare(caller, dailyCap))) return false;
+    if (!(await claimClientCall(client, env.WORD_TEXT_DAILY_CLIENT_CAP))) return false;
+    return await claimDailyCall(dailyCap);
+  } catch (error) {
+    console.error("[api/word/text] claim failed", error);
+    return false;
+  }
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -79,7 +91,13 @@ export async function POST(request: Request): Promise<Response> {
     isInflectionDisagreement(group, rule);
   const thin = isThinAnswer(group) || disagrees;
 
-  const cached = await readCachedText(headword);
+  let cached: Awaited<ReturnType<typeof readCachedText>>;
+  try {
+    cached = await readCachedText(headword);
+  } catch (error) {
+    console.error("[api/word/text] cache read failed", error);
+    return empty(204);
+  }
   if (cached) {
     let translations = cached.translations;
     // A thin word never asked, or asked before this column existed:
@@ -97,7 +115,11 @@ export async function POST(request: Request): Promise<Response> {
     ) {
       const generated = await generateWordText(headword, false, group.senses);
       translations = generated?.translations ?? null;
-      await markTranslationsAsked(headword, translations);
+      try {
+        await markTranslationsAsked(headword, translations);
+      } catch (error) {
+        console.error(`[api/word/text] cache write failed key=${headword}`, error);
+      }
     }
     return json(
       textResponseSchema.parse({
@@ -139,15 +161,19 @@ export async function POST(request: Request): Promise<Response> {
   // A thin word the model answered, even with `[]`, is closed; one it left
   // null stays open — the same rule `markTranslationsAsked` applies to the
   // re-enrichment path.
-  await writeCachedText(
-    headword,
-    MODEL_NAME,
-    definition,
-    generated.example.en,
-    generated.example.es,
-    translations,
-    translationsWereAnswered(translations),
-  );
+  try {
+    await writeCachedText(
+      headword,
+      MODEL_NAME,
+      definition,
+      generated.example.en,
+      generated.example.es,
+      translations,
+      translationsWereAnswered(translations),
+    );
+  } catch (error) {
+    console.error(`[api/word/text] cache write failed key=${headword}`, error);
+  }
 
   return json(
     textResponseSchema.parse({

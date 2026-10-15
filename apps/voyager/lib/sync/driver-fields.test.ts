@@ -27,7 +27,7 @@ test("a wire field the driver never heard of arrives; identity is renamed; recei
   });
   mock.module("../log/record", {
     namedExports: {
-      readSyncState: async () => ({ enabled: true, deviceId: DEVICE, pushedThroughLocalId: null, pulledThroughCursor: null }),
+      readSyncState: async () => ({ enabled: true, readerId: "reader-1", deviceId: DEVICE, pushedThroughLocalId: null, pulledThroughCursor: null }),
       writeSyncState: async () => undefined,
       markRetired: async () => undefined,
     },

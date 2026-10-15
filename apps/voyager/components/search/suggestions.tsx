@@ -3,7 +3,7 @@ import { useTranslations } from "next-intl";
 import { Button, Flex, Grid, TapTarget, Text, VisuallyHidden } from "@/components/ui";
 
 // Headwords that begin with the string being typed, offered while it is
-// still being treated as a word (RL-05). Silent when there is nothing to
+// still being treated as a word (RL-18). Silent when there is nothing to
 // offer, so an empty prefix never leaves a hollow list on the screen.
 export function Suggestions({
   items,
@@ -26,8 +26,8 @@ export function Suggestions({
               to the row's width regardless, which real headwords past 80
               characters with no space to break on need to fit at all. */}
           <Grid width="100%">
-            <Button variant="ghost" tap onClick={() => onPick(item)}>
-              <Text truncate serif>
+            <Button variant="ghost" onClick={() => onPick(item)}>
+              <Text truncate serif english>
                 {item}
               </Text>
             </Button>

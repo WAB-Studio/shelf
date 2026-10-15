@@ -73,6 +73,9 @@ export const syncRowSchema = z.object({
 // three (a retired one's row then fails the insert policy, a 500).
 export const syncRequestSchema = z.object({
   deviceId: z.uuid(),
+  // The reader this device believes it syncs for; the route refuses a round
+  // whose session belongs to anyone else.
+  readerId: z.string().min(1),
   rows: z
     .array(syncRowSchema)
     .max(SYNC_BATCH)
@@ -137,5 +140,4 @@ export function decodeCursor(raw: string): Cursor | null {
 }
 
 export type SyncRow = z.infer<typeof syncRowSchema>;
-export type SyncRequest = z.infer<typeof syncRequestSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;

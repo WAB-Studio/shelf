@@ -1,7 +1,7 @@
-// RL-03, RL-47 and RL-28's own contract on the word path: the typed string
+// RL-03, RL-58 and RL-28's own contract on the word path: the typed string
 // is looked up whole first (RL-03), a form that misses resolves through a
 // lemma candidate with its suffix's part of speech pinned ahead of any
-// frequency order (RL-47), and a correction is only ever computed on a true
+// frequency order (RL-58), and a correction is only ever computed on a true
 // miss — never beside an exact hit, never beside an inflected one (RL-28's
 // own comment in lookup.ts). Every index here is built through the real
 // `buildIndex`, on invented headwords, never against the shipped
@@ -128,7 +128,7 @@ test("a plural guess against a lemma the table governs stands when the target is
   assert.ok(answer.viaInflection.some((h) => h.lemma === "child" && h.rule === "plural-s"));
 });
 
-// --- RL-47: the suffix pins a part of speech ahead of any frequency order ---
+// --- RL-58: the suffix pins a part of speech ahead of any frequency order ---
 
 test("RL-47: an -ly form pins the adjective group ahead of the headword's own order", () => {
   // "zorq" carries v, n and adj senses. With no pin, POS_RANK alone would

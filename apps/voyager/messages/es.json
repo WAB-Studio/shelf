@@ -37,7 +37,8 @@
     "failed": "No se pudo instalar el diccionario",
     "failedPending": "«{query}» no tendrá respuesta hasta que reintentes",
     "retry": "Reintentar",
-    "preparingReadOnly": "Instalando el diccionario en el dispositivo"
+    "preparingReadOnly": "Instalando el diccionario en el dispositivo",
+    "progressLabel": "Progreso de la instalación"
   },
   "word": {
     "viaInflectionWithEntry": "«{surface}» también es una forma de «{lemma}»",
@@ -76,12 +77,13 @@
     "downloadingModel": "Descargando el traductor",
     "downloadProgress": "Descargando el traductor: {percent}%",
     "notesTitle": "Notas de la frase",
-    "notesPending": "Buscando notas…"
+    "notesPending": "Buscando notas…",
+    "progressLabel": "Progreso de la descarga"
   },
   "log": {
     "title": "Registro de búsquedas",
     "counting": "Contando las búsquedas registradas",
-    "countFailed": "No se pudo leer el registro",
+    "countFailed": "No se pudo contar el registro",
     "exporting": "Exportando…",
     "exported": "Registro exportado",
     "exportFailed": "No se pudo exportar el registro",
@@ -99,7 +101,7 @@
       "emptyTitle": "Todavía no has buscado nada",
       "emptyBody": "Cada palabra que busques aparece aquí, con las veces que la miraste.",
       "emptyAction": "Buscar una palabra",
-      "failedTitle": "No pude leer el registro",
+      "failedTitle": "No se pudo leer el registro",
       "failedBody": "El almacén del navegador no respondió. Tus palabras siguen ahí.",
       "failedAction": "Reintentar",
       "download": "Descargar el registro",
@@ -132,7 +134,7 @@
       "confirmBody": "Se borran {words, plural, one {la # palabra} other {las # palabras}} que has buscado, con {lookups, plural, one {su # búsqueda} other {sus # búsquedas}}. No se puede deshacer.",
       "keep": "Conservarlo",
       "soleAction": "Vaciar el registro",
-      "localAction": "Vaciar sólo en este dispositivo",
+      "localAction": "Vaciar solo en este dispositivo",
       "localBody": "Tu cuenta conserva su copia, y un dispositivo nuevo que entre a ella volverá a verla.",
       "accountAction": "Vaciar aquí y en mi cuenta",
       "accountBody": "Se lleva también lo que registraron tus otros dispositivos.",
@@ -155,7 +157,7 @@
       "sendFailed": "No se pudo enviar el enlace",
       "rateLimited": "Demasiados intentos. Prueba de nuevo en unos minutos.",
       "offline": "Sin conexión. No se pudo enviar el enlace.",
-      "linkTimeoutTitle": "No pudimos comprobar el enlace",
+      "linkTimeoutTitle": "No se pudo comprobar el enlace",
       "linkTimeoutBody": "Falló de nuestro lado, no del enlace. Ábrelo otra vez desde el correo; si tampoco entra, pide uno nuevo aquí.",
       "linkInvalidTitle": "El enlace no vale o ya venció",
       "linkInvalidBody": "Pide uno nuevo aquí abajo. Cada enlace sirve una sola vez y dura una hora."
@@ -178,13 +180,13 @@
       "lastCopyMoment": "Última copia hace un momento",
       "momentSpan": "un momento",
       "syncingSearches": "{count, plural, =0 {Copiando tus búsquedas…} one {Copiando # búsqueda…} other {Copiando # búsquedas…}}",
-      "otherReader": "Las búsquedas de antes se quedan en este dispositivo. A tu cuenta sólo va lo que busques desde ahora.",
+      "otherReader": "Las búsquedas de antes se quedan en este dispositivo. A tu cuenta solo va lo que busques desde ahora.",
       "failedOfflineTitle": "La copia no salió",
       "failedOffline": "Sin conexión desde hace {time}. Tus palabras siguen en este dispositivo.",
       "offlineNoCopy": "Sin conexión. Tus palabras siguen en este dispositivo.",
       "failedQuotaTitle": "Hoy ya no se copia más",
       "failedQuotaBody": "Copiaste el máximo de hoy. Sigue sola a las {time}; tus palabras siguen en este dispositivo.",
-      "failedServer": "Falló de nuestro lado. Tus palabras siguen en este dispositivo."
+      "failedServer": "No se pudo copiar. Tus palabras siguen en este dispositivo."
     },
     "info": {
       "tabs": {
@@ -212,13 +214,13 @@
       "lookups": "{count, plural, one {# búsqueda copiada} other {# búsquedas copiadas}}",
       "retire": "Retirar",
       "retiring": "Retirando…",
-      "retireFailed": "No se pudo completar la operación con los dispositivos",
+      "retireFailed": "No se pudo retirar el dispositivo. Reintenta.",
       "retry": "Reintentar",
       "cancel": "Cancelar",
       "confirm": "Retirar dispositivo",
       "loading": "Cargando los dispositivos…",
       "empty": "Todavía no hay ningún dispositivo copiando tu registro",
-      "confirmBody": "Sus búsquedas salen de tu copia y este dispositivo deja de sincronizar. Lo que ya se copió a tus otros dispositivos sigue en ellos.",
+      "confirmBody": "Sus búsquedas salen de tu copia y este dispositivo deja de copiar. Lo que ya se copió a tus otros dispositivos sigue en ellos.",
       "confirmBodyOwn": "Además, este dispositivo deja de copiar: tu registro se queda completo aquí. Para copiarlo de nuevo, cierra sesión y vuelve a entrar.",
       "confirmBodyLastDevice": "Es tu único dispositivo copiando: la copia de tu cuenta queda vacía. Tu registro se queda entero aquí.",
       "label": "{browser} en {platform}",
@@ -239,7 +241,7 @@
         "macos": "macOS",
         "linux": "Linux"
       },
-      "loadFailed": "No pude cargar tus dispositivos",
+      "loadFailed": "No se pudieron cargar tus dispositivos",
       "lastSeenMoment": "Visto por última vez: hace un momento",
       "labelBrowserOnly": "{browser} en otro sistema",
       "labelPlatformOnly": "Navegador desconocido en {platform}",
@@ -254,5 +256,17 @@
   "notFound": {
     "title": "Esta página no existe",
     "description": "La dirección que abriste no lleva a ninguna parte."
+  },
+  "live": {
+    "senses": "{count, plural, one {# sentido} other {# sentidos}}",
+    "noEntry": "El diccionario no tiene esa palabra",
+    "networkReady": "Llegó la respuesta en línea",
+    "extraReady": "Llegó un ejemplo",
+    "translating": "Traduciendo",
+    "phraseDone": "Traducción lista",
+    "networkFailed": "No se pudo traer la respuesta en línea",
+    "notes": "{count, plural, one {# nota de la frase} other {# notas de la frase}}",
+    "installing": "El diccionario empezó a instalarse",
+    "installFailed": "La instalación del diccionario falló"
   }
 }

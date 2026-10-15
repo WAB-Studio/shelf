@@ -148,7 +148,6 @@ export function SpeakButton({
       size="2"
       variant="ghost"
       color="gray"
-      tap={44}
       aria-label={ipa === null ? t("listen", { headword }) : t("listenPronunciation", { headword, ipa })}
       onClick={() => speak(headword)}
     >
@@ -216,7 +215,7 @@ function SenseDetail({
               <Text variant="definitionLabel" muted>
                 {t("definitionEnglish")}
               </Text>
-              <Text size="2" serif muted>
+              <Text size="2" serif muted english>
                 {sense.definition}
               </Text>
             </Flex>
@@ -390,12 +389,12 @@ function SenseGroup({
 // cap, on the data or on the screen: `hits.sort()` in `edit-distance.ts` is
 // alphabetical, not ranked by anything the reader meant, so cutting it after
 // five would drop the intended word by accident of spelling, not keep it —
-// measured 2026-09-11, more than five candidates happens on 0.9% of 4,000
+// measured, more than five candidates happens on 0.9% of 4,000
 // real one-edit typos. `wrap="wrap"` below carries nine short words in a
 // few rows at 360px with nothing pushed off screen (checked against `boz`).
 // Silent when `words` is empty — `zzqqxv` is the only case left that reaches
 // no headword at all; a real word the dictionary lacks (`fettle`) draws its
-// wrong-looking candidates here until RL-29 gives that reader a better door.
+// wrong-looking candidates here until the network answer (RL-44) offers the better door.
 function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType<typeof useTranslations> }) {
   return (
     <Flex direction="column" gap="2">
@@ -407,7 +406,7 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
           <Link asChild underline="always" key={word}>
             <NextLink href={correctionHref(word)} prefetch={false}>
               <TapTarget align="center" gap="1">
-                <Text size="3" serif>
+                <Text size="3" serif english>
                   {word}
                 </Text>
                 <ChevronGlyph />
@@ -430,7 +429,7 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
 export type SenseListVariant = "full" | "compact";
 
 // A headword's full answer: its own senses first, then every inflected form
-// that reached one, each carrying its own senses in turn (RL-04, RL-40).
+// that reached one, each carrying its own senses in turn (RL-04, RL-58).
 // docs/voyager/DESIGN.md "PalabraConFlexion": the entry answers; this offers,
 // never replaces. The 2px rule marks where the entry pauses and the offer
 // begins, and each hit sits in its own indented rail — a smaller heading and
@@ -504,7 +503,7 @@ export function SenseList({
   // Set by `search-screen.tsx` alone (module 12), from the hook module 10
   // wires to `/api/word/unlisted`. Absent on `/registro/[palabra]` and on
   // every `compact` call, so neither opens a connection of its own
-  // (RL-47's own screen, never the breakdown's eight words at once).
+  // (RL-58's own screen, never the breakdown's eight words at once).
   networkAnswer?: NetworkAnswerState;
 }) {
   const t = useTranslations("word");
@@ -582,7 +581,7 @@ export function SenseList({
         (answer.exact !== null ? (
           offerAbove && <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
         ) : (
-          // RL-47: the form is only a form — the top of the screen is a
+          // RL-58: the form is only a form — the top of the screen is a
           // different word wearing the same spelling, so the form the
           // reader typed leads and the lemma it comes from sits under the
           // 2px rule, in the same rail the `exact` branch above offers it

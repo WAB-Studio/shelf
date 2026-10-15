@@ -1,4 +1,4 @@
-// RL-36 dropped `lib/word/credits-store.ts`, but every device that ever
+// `lib/word/credits-store.ts` is gone, but every device that ever
 // resolved a photo still carries the IndexedDB database it wrote. Nothing
 // reads that database again, so nothing but this will ever delete it.
 const DATABASE_NAME = "reading-credits";

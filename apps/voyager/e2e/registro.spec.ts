@@ -697,7 +697,7 @@ test("without a session, «Vaciar el registro» drops the download link too, wit
   await expect(download).toHaveCount(0);
 });
 
-test("«Vaciar sólo en este dispositivo» does not come back on the next sync", async ({ page }) => {
+test("«Vaciar solo en este dispositivo» does not come back on the next sync", async ({ page }) => {
   test.setTimeout(45_000);
   await deleteTranslator(page);
 

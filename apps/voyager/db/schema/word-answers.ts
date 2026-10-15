@@ -2,7 +2,7 @@ import { text, timestamp } from "drizzle-orm/pg-core";
 
 import { reading } from "./_schema";
 
-// One row per word the unlisted-word route (RL-44, RL-47) has ever answered:
+// One row per word the unlisted-word route (RL-44, RL-58) has ever answered:
 // a word the dictionary carries no entry for at all, or a form of one it
 // does. `lemma`/`rule` are null for the first case and set for the second —
 // the same InflectionRule shape `lookupWord` already returns. Not a

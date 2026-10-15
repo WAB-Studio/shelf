@@ -99,7 +99,7 @@ export function lookupWord(index: DictionaryIndex, query: string): WordAnswer {
   for (const candidate of lemmaCandidates(query)) {
     if (candidate.lemma === normalised) continue;
     if (!isAnswerableHeadword(candidate.lemma)) continue;
-    // RL-47: the suffix that led here fixes a part of speech, so that
+    // RL-58: the suffix that led here fixes a part of speech, so that
     // category's senses lead the lemma's own group when it carries one.
     const group = groupFor(index, candidate.lemma, pinnedPosForRule(candidate.rule));
     if (!group) continue;

@@ -4,7 +4,7 @@ import { Box, Flex, Separator, Text, VisuallyHidden } from "@/components/ui";
 import type { UnlistedAnswer } from "@/lib/word/unlisted-protocol";
 
 // The four shapes a word's network answer can be in. State in, DOM out:
-// this file makes no request of its own (RL-44, RL-47's visible half).
+// this file makes no request of its own (RL-44, RL-58's visible half).
 export type NetworkAnswerState =
   | { kind: "pending" }
   | { kind: "resolved"; answer: UnlistedAnswer }
@@ -91,7 +91,7 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
               <Text variant="definitionLabel" muted>
                 {t("definitionEnglish")}
               </Text>
-              <Text variant="generatedProse" serif muted>
+              <Text variant="generatedProse" serif muted english>
                 {answer.definition}
               </Text>
             </Flex>
@@ -100,7 +100,7 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
             <Text variant="definitionLabel" muted>
               {t("example")}
             </Text>
-            <Text variant="generatedProse" serif>
+            <Text variant="generatedProse" serif english>
               {answer.example.en}
             </Text>
             <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>

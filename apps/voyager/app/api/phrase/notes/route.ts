@@ -3,6 +3,8 @@ import "server-only";
 import { normaliseHeadword } from "@/lib/dictionary/format";
 import { groupFor, type DictionaryIndex } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
+import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { claimDailyCall } from "@/lib/word/spend";
@@ -44,6 +46,9 @@ function unindexedTokens(index: DictionaryIndex, sourceTokens: string[]): string
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -65,7 +70,13 @@ export async function POST(request: Request): Promise<Response> {
   // on. A cache hit answers with no budget spent and no model reached,
   // whatever the caps below say.
   const hash = phraseHash(parsed.data.source, parsed.data.translation);
-  const cached = await readCachedNotes(hash);
+  let cached: Awaited<ReturnType<typeof readCachedNotes>>;
+  try {
+    cached = await readCachedNotes(hash);
+  } catch (error) {
+    console.error("[api/phrase/notes] cache read failed", error);
+    return empty(204);
+  }
   if (cached) {
     return json(notesResponseSchema.parse({ notes: cached }), 200);
   }
@@ -94,7 +105,15 @@ export async function POST(request: Request): Promise<Response> {
   // The same `reading.client_spend` row `/api/word/unlisted` bumps for this
   // caller, read against this route's own ceiling — never against
   // WORD_UNLISTED_DAILY_CLIENT_CAP, and never left unread the way it was.
-  if (!(await claimClientCall(client, env.PHRASE_NOTES_DAILY_CLIENT_CAP))) {
+  try {
+    if (!(await claimCallerShare(client, env.WORD_TEXT_DAILY_CALL_CAP))) {
+      return empty(204);
+    }
+    if (!(await claimClientCall(client, env.PHRASE_NOTES_DAILY_CLIENT_CAP))) {
+      return empty(204);
+    }
+  } catch (error) {
+    console.error("[api/phrase/notes] client claim failed", error);
     return empty(204);
   }
 
@@ -104,7 +123,12 @@ export async function POST(request: Request): Promise<Response> {
   // lower of this route's own and the global one: notes never spend past
   // the day `/api/word/text` is held to.
   const dailyCap = Math.min(env.PHRASE_NOTES_DAILY_CALL_CAP, env.WORD_TEXT_DAILY_CALL_CAP);
-  if (!(await claimDailyCall(dailyCap))) {
+  try {
+    if (!(await claimDailyCall(dailyCap))) {
+      return empty(204);
+    }
+  } catch (error) {
+    console.error("[api/phrase/notes] daily claim failed", error);
     return empty(204);
   }
 
@@ -117,7 +141,11 @@ export async function POST(request: Request): Promise<Response> {
     return empty(204);
   }
 
-  await writeCachedNotes(hash, NOTES_MODEL_NAME, notes);
+  try {
+    await writeCachedNotes(hash, NOTES_MODEL_NAME, notes);
+  } catch (error) {
+    console.error(`[api/phrase/notes] cache write failed key=${hash}`, error);
+  }
 
   return json(notesResponseSchema.parse({ notes }), 200);
 }

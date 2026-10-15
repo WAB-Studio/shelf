@@ -50,10 +50,10 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
       {!first && <Separator size="4" />}
       <Link asChild underline="none">
         <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
-          <TapTarget size={44} direction="column" align="stretch" width="100%">
+          <TapTarget direction="column" align="stretch" width="100%">
             {/* `minmax(0, 1fr) auto` on the phone stacks the translation under
               the word; the desktop's third track puts word, translation and
-              count on one row (RL-32's board). `gridColumn`/`gridRow` move
+              count on one row (RL-56's board). `gridColumn`/`gridRow` move
               each cell between the two shapes. The `minmax(0, …)` is
               written out, not left to Radix's own `columns` shorthand:
               `grid.props.js`'s `parseValue` only rewrites a bare digit
@@ -76,7 +76,7 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
               align="center"
             >
               <Flex gridColumn="1" gridRow="1" minWidth="0" overflow="hidden">
-                <Text serif truncate>
+                <Text serif truncate english>
                   {lemmaless ? row.display : row.key}
                 </Text>
               </Flex>
@@ -195,7 +195,7 @@ export function HistoryList() {
     }
 
     read();
-    // RL-39's row can still be in flight to IndexedDB when this screen
+    // RL-55's row can still be in flight to IndexedDB when this screen
     // mounts: the search that motivated the trip only settles in
     // `record.ts` once the reader leaves `/`, and that write is async even
     // once forced. This rereads the moment it lands, instead of waiting on
@@ -235,7 +235,7 @@ export function HistoryList() {
         <Text size="2" muted>
           {t("study.emptyBody")}
         </Text>
-        <Button size="2" tap onClick={() => router.push("/")}>
+        <Button size="2" onClick={() => router.push("/")}>
           {t("study.emptyAction")}
         </Button>
       </Flex>
@@ -257,7 +257,6 @@ export function HistoryList() {
         </Text>
         <Button
           size="2"
-          tap
           onClick={() => {
             setState({ kind: "loading" });
             setAttempt((current) => current + 1);
@@ -288,7 +287,6 @@ export function HistoryList() {
       <Flex direction="column" gap="3">
         <TextField.Root
           size="3"
-          tap
           value={query}
           onChange={(event) => change(event.target.value)}
           placeholder={t("study.filterLabel")}
@@ -304,7 +302,6 @@ export function HistoryList() {
                 size="2"
                 variant="ghost"
                 color="gray"
-                tap
                 aria-label={t("study.filterClear")}
                 onClick={() => change("")}
               >

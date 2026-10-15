@@ -79,7 +79,7 @@ function SignedOutForm() {
   // Half of RNL-09 this component has to hold by hand: `signOut` redirects
   // to `/registro`, so this never mounts on the way out of a session. It
   // only ever catches the other path onto this state — a device that was
-  // signed in once, is not any more, and lands here directly (RL-30).
+  // signed in once, is not any more, and lands here directly (RL-52).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -159,7 +159,9 @@ function SignedOutForm() {
       </Flex>
 
       {state.kind === "sent" ? (
-        <Text size="2">{t("sent")}</Text>
+        <Text size="2" role="status">
+          {t("sent")}
+        </Text>
       ) : (
         <Flex direction="column" gap="3" maxWidth="400px">
           <TextField.Root
@@ -183,7 +185,7 @@ function SignedOutForm() {
               <Separator size="4" />
               <Flex gap="2" align="center">
                 {state.error === "offline" && <OfflineGlyph />}
-                <Text size="2" weight="bold">
+                <Text size="2" weight="bold" role="alert">
                   {t(`errors.${state.error}`)}
                 </Text>
               </Flex>
@@ -192,7 +194,6 @@ function SignedOutForm() {
 
           <Button
             size="2"
-            tap
             block={state.kind === "failed" && state.error === "offline"}
             onClick={() => void handleSend()}
             disabled={state.kind === "sending"}
@@ -281,7 +282,7 @@ function SyncedSection({
               </Text>
             )}
           </Flex>
-          <Button size="2" tap onClick={onConfirm}>
+          <Button size="2" onClick={onConfirm}>
             {t("copy.confirmAction")}
           </Button>
         </Flex>
@@ -339,7 +340,7 @@ function SyncedSection({
                 : t("copy.failedServer")}
           </Text>
           {cause !== "quota" && (
-            <Button size="2" tap onClick={onSyncNow}>
+            <Button size="2" onClick={onSyncNow}>
               {t("copy.failedAction")}
             </Button>
           )}
@@ -384,7 +385,7 @@ function SyncedSection({
           redirect, and a `<form>` is the invocation the framework documents
           for that (node_modules/next/dist/docs's server-actions guide). */}
       <form action={signOut}>
-        <Button size="2" tap type="submit" variant="soft" color="gray" onClick={handleSignOutClick}>
+        <Button size="2" type="submit" variant="soft" color="gray" onClick={handleSignOutClick}>
           {t("signOut")}
         </Button>
       </form>

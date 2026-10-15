@@ -2,7 +2,9 @@ import "server-only";
 
 import { lookupWord } from "@/lib/dictionary/lookup";
 import { env } from "@/lib/env";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { admitWord } from "@/lib/word/admit";
+import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { MODEL_NAME } from "@/lib/word/model";
@@ -11,7 +13,7 @@ import { generateUnlistedAnswer } from "@/lib/word/unlisted-model";
 import { readCachedAnswer, writeCachedAnswer } from "@/lib/word/unlisted-cache";
 import { unlistedRequestSchema, unlistedResponseSchema } from "@/lib/word/unlisted-protocol";
 
-// RL-44 and RL-47's server half: no reader session reaches this route, the
+// RL-44 and RL-58's server half: no reader session reaches this route, the
 // cache is keyed on the word alone (`db/schema/word-answers.ts`), and its
 // answer is never a candidate for the full route cache.
 export const dynamic = "force-dynamic";
@@ -30,6 +32,9 @@ function empty(status: 204 | 400): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -62,7 +67,13 @@ export async function POST(request: Request): Promise<Response> {
   // a lemma the dictionary does carry — `null` when it is unlisted outright.
   const inflection = answer.viaInflection[0] ?? null;
 
-  const cached = await readCachedAnswer(word);
+  let cached: Awaited<ReturnType<typeof readCachedAnswer>>;
+  try {
+    cached = await readCachedAnswer(word);
+  } catch (error) {
+    console.error("[api/word/unlisted] cache read failed", error);
+    return empty(204);
+  }
   if (cached) {
     return json(unlistedResponseSchema.parse(cached), 200);
   }
@@ -80,14 +91,27 @@ export async function POST(request: Request): Promise<Response> {
     return empty(204);
   }
 
-  if (!(await claimClientCall(client, env.WORD_UNLISTED_DAILY_CLIENT_CAP))) {
+  try {
+    if (!(await claimCallerShare(client, env.WORD_TEXT_DAILY_CALL_CAP))) {
+      return empty(204);
+    }
+    if (!(await claimClientCall(client, env.WORD_UNLISTED_DAILY_CLIENT_CAP))) {
+      return empty(204);
+    }
+  } catch (error) {
+    console.error("[api/word/unlisted] client claim failed", error);
     return empty(204);
   }
 
   // The global cap `/api/word/text` already spends against: one model, one
   // daily budget, whichever route claims it first (docs/TRAPS.md, "The
   // OpenAI CSV does not say what this app spent").
-  if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) {
+  try {
+    if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) {
+      return empty(204);
+    }
+  } catch (error) {
+    console.error("[api/word/unlisted] daily claim failed", error);
     return empty(204);
   }
 
@@ -102,16 +126,20 @@ export async function POST(request: Request): Promise<Response> {
   const lemma = inflection?.lemma ?? null;
   const rule = inflection?.rule ?? null;
 
-  await writeCachedAnswer(
-    word,
-    lemma,
-    rule,
-    generated.translations,
-    generated.definition,
-    generated.example.en,
-    generated.example.es,
-    MODEL_NAME,
-  );
+  try {
+    await writeCachedAnswer(
+      word,
+      lemma,
+      rule,
+      generated.translations,
+      generated.definition,
+      generated.example.en,
+      generated.example.es,
+      MODEL_NAME,
+    );
+  } catch (error) {
+    console.error(`[api/word/unlisted] cache write failed key=${word}`, error);
+  }
 
   return json(
     unlistedResponseSchema.parse({

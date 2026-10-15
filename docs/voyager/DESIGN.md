@@ -74,7 +74,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
 ## Viewport
 
 - Build the narrow viewport first. RNL-03 is the requirement.
-- Hold a 32 px floor on every tap target's shorter side. `TapTarget` owns it for a link.
+- Hold a 44 px floor on every tap target's shorter side, the search box's clear ✕ included. `Button`, `IconButton`, `TextField` and `TapTarget` own it; no screen asks for it. Decided by the user 2026-10-15.
 - Centre the reading column above ~660 px and cap its measure at **620 px**. The phone is the case
   the app is designed for; the desktop is the case it must not look neglected in.
 - **A bottom bar carries the sections on the phone; a sidebar carries them on the desktop.** Buscar,
@@ -257,7 +257,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   `CuentaEnlaceNoVerificadoOscuroMovil` and `CuentaEnlaceInvalidoOscuroMovil`.
   - The two boards are the same screen twice and differ in two sentences, because those two
     sentences are the whole decision.
-  - **Timeout:** «No pudimos comprobar el enlace» over «Falló de nuestro lado, no del enlace. Ábrelo
+  - **Timeout:** «No se pudo comprobar el enlace» over «Falló de nuestro lado, no del enlace. Ábrelo
     otra vez desde el correo; si tampoco entra, pide uno nuevo aquí.»
   - **Spent or expired:** «El enlace no vale o ya venció» over «Pide uno nuevo aquí abajo. Cada
     enlace sirve una sola vez y dura una hora.»
@@ -300,8 +300,8 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
     «No se pudo vaciar el registro» and a «Reintentar» that could never succeed, with nothing naming
     the working option directly above it. The account is opt-in (`RL-22`), so signed-out is the
     default state. Found by the critic driving the app.
-  - **The remaining action reads «Vaciar el registro», not «Vaciar sólo en este dispositivo».** With
-    one action, «sólo» contrasts with a choice that reader does not have. `localAction` keeps its
+  - **The remaining action reads «Vaciar el registro», not «Vaciar solo en este dispositivo».** With
+    one action, «solo» contrasts with a choice that reader does not have. `localAction` keeps its
     wording for the reader who does have an account.
   - It also retires `localBody` for that reader — «Tu cuenta conserva su copia» is false when there
     is no account.
@@ -709,7 +709,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
 - **The study replaces the download as the weight of `/registro`.** Decided by the user 2026-09-09,
   approving `RegistroEstudio`. The grouped rows are the screen; «Descargar el registro» drops from a
   filled button to an underlined link at the foot. The three other states are drawn:
-  a four-row skeleton while loading, «Todavía no has buscado nada» when empty, and «No pude leer el
+  a four-row skeleton while loading, «Todavía no has buscado nada» when empty, and «No se pudo leer el
   registro» with a retry when the store fails — no system red, per `## Failure`.
 - **The no-entry screen names the string and answers each word under it.** Decided by the user
   2026-09-09, approving `SinEntrada`. At most eight word blocks; the rest becomes one line. Over

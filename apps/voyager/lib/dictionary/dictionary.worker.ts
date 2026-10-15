@@ -1,5 +1,5 @@
 // The install, the payload and the index all live in this one thread, so a
-// lookup on the main thread is a message, never a transaction (RL-14,
+// lookup on the main thread is a message, never a transaction (RL-35,
 // RNL-01). `readInstalled` decides "installing" versus "ready" alone
 // (RL-13); this file never guesses at the store's state.
 import { buildIndex, type DictionaryIndex } from "./index-build";

@@ -26,7 +26,7 @@ import {
   Text,
 } from "@/components/ui";
 
-// The other half of RL-32: one word's own searches, read off the same
+// The other half of RL-56: one word's own searches, read off the same
 // `normalised` index `HistoryList` groups by. The reader came here to see
 // again what the search box showed them, so this mounts the same
 // dictionary `SenseList` draws for `/?q=` — its own Worker, its own lookup,
@@ -162,7 +162,7 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
           <Text size="2" muted>
             {t("word.emptyBody", { word: normalised })}
           </Text>
-          <Button size="2" tap onClick={() => router.push(`/?q=${encodeURIComponent(normalised)}`)}>
+          <Button size="2" onClick={() => router.push(`/?q=${encodeURIComponent(normalised)}`)}>
             {t("word.emptyAction")}
           </Button>
         </Flex>
@@ -184,7 +184,6 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
           </Text>
           <Button
             size="2"
-            tap
             onClick={() => {
               setState({ kind: "loading" });
               setAttempt((current) => current + 1);
@@ -321,7 +320,7 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
             {index > 0 && <Separator size="4" />}
             <Grid columns="1fr auto" gap="3" align="center">
               <Flex direction="column" gap="1" minWidth="0">
-                <Text size="2">{row.text}</Text>
+                <Text size="2" english>{row.text}</Text>
                 <Text size="2" muted>
                   {rowTime(row.at)}
                 </Text>

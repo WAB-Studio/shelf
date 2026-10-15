@@ -1,21 +1,12 @@
-/* The 32px floor RNL-03 holds every control to on its short side. A ghost
+/* The 44px floor DESIGN.md holds every control to on its short side. A ghost
    variant is sized by its glyph and its padding, never by a control height, so
    the floor is pinned rather than inherited.
 
    The class is doubled to outrank `.rt-reset:where(button)`, whose `all: unset`
    wipes a same-specificity declaration from whichever sheet loads first — and
-   takes the box back to `content-box`, which would make the floor 32px plus the
-   padding rather than 32px in all. */
+   takes the box back to `content-box`, which would make the floor 44px plus the
+   padding rather than 44px in all. */
 .tap.tap {
-  box-sizing: border-box;
-  min-width: 32px;
-  min-height: 32px;
-}
-
-/* RL-26's speaker control: the same floor, pinned wider — 44px so a thumb
-   has room around a glyph that sits beside the headword, not inside a
-   labelled button. */
-.tap44.tap44 {
   box-sizing: border-box;
   min-width: 44px;
   min-height: 44px;

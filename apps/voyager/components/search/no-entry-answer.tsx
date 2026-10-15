@@ -13,7 +13,7 @@ import type { NetworkAnswerState } from "./network-answer";
 
 export type NoEntryPart = { token: string; answer: WordAnswer | null };
 
-// RL-31's miss and RL-37's translation failure draw the same blocks below
+// RL-54's miss and RL-59's translation failure draw the same blocks below
 // the title; only the title names which one happened, so both carry a reason.
 export type NoEntryReason = "noEntry" | "translationFailed";
 
@@ -87,7 +87,7 @@ function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useT
   if (table === null) {
     return <SenseList answer={part.answer} variant="compact" wordHref={wordHref(part.token)} />;
   }
-  // RL-57: a function word leads with the table's translation, the
+  // RL-59: a function word leads with the table's translation, the
   // dictionary's own block following whole and muted
   // (docs/voyager/DESIGN.md `SinEntradaFraseFuncion`). `SenseList` draws its
   // exact headword itself, so it is hidden there and drawn here, above the
@@ -146,7 +146,6 @@ export function FunctionWordBlock({
           variant="ghost"
           color="gray"
           size="2"
-          tap={44}
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >
@@ -173,7 +172,7 @@ export function FunctionWordBlock({
   );
 }
 
-// RL-31: the screen a typed word or a short phrase used to leave blank.
+// RL-54: the screen a typed word or a short phrase used to leave blank.
 // Every branch draws something — that silence is the defect this replaces.
 export function NoEntryAnswer({ state }: { state: NoEntryState }) {
   const t = useTranslations("search");

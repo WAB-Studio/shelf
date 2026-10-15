@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import type { InstallFailure, InstallProgress } from "@/lib/dictionary/install";
-import { Button, Flex, Progress, Separator, Spinner, Text } from "@/components/ui";
+import { Button, Flex, Live, Progress, Separator, Spinner, Text } from "@/components/ui";
 
 // Structural, not imported: the worker's own status type only has to satisfy
 // this shape, so this file never depends on the module that produces it
@@ -35,6 +35,7 @@ export function InstallStatus({
   hasBox?: boolean;
 }) {
   const t = useTranslations("install");
+  const tLive = useTranslations("live");
   const typed = query.trim().length > 0;
   const pending = typed && (
     <Text size="2" muted>
@@ -42,13 +43,23 @@ export function InstallStatus({
     </Text>
   );
 
+  // Mounted in every state so a change lands in a region already there.
+  // The percent is left out: it would speak on every tick.
+  const live = (
+    <>
+      <Live>{status.state === "installing" ? tLive("installing") : ""}</Live>
+      <Live assertive>{status.state === "failed" ? tLive("installFailed") : ""}</Live>
+    </>
+  );
+
   if (status.state === "ready") {
-    return null;
+    return live;
   }
 
   if (status.state === "booting") {
     return (
       <Flex direction="column" gap="1">
+        {live}
         <Flex align="center" gap="2">
           <Spinner />
           <Text size="2" muted>
@@ -66,7 +77,8 @@ export function InstallStatus({
     if (!status.progress || status.progress.total === null) {
       return (
         <Flex direction="column" gap="1">
-          <Progress />
+          {live}
+          <Progress aria-label={t("progressLabel")} />
           <Text size="2" muted>
             {t("unknownSize")}
           </Text>
@@ -82,7 +94,8 @@ export function InstallStatus({
     const percent = Math.min(100, Math.round((received / total) * 100));
     return (
       <Flex direction="column" gap="1">
-        <Progress value={percent} />
+        {live}
+        <Progress value={percent} aria-label={t("progressLabel")} />
         <Text size="2" muted>
           {t("progress", { percent })}
         </Text>
@@ -95,6 +108,7 @@ export function InstallStatus({
   // sets the break off, full-weight ink says it, the accent lives in retry.
   return (
     <Flex direction="column" gap="3" align="start">
+      {live}
       <Separator size="4" />
       <Text size="2" weight="bold">
         {t("failed")}
@@ -104,7 +118,7 @@ export function InstallStatus({
           {t("failedPending", { query })}
         </Text>
       )}
-      <Button size="2" tap onClick={onRetry}>
+      <Button size="2" onClick={onRetry}>
         {t("retry")}
       </Button>
     </Flex>

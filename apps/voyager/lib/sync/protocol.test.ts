@@ -26,20 +26,20 @@ function row(deviceId: string, localId: number): SyncRow {
 test("a batch whose rows come from two devices is refused", () => {
   const one = randomUUID();
   const two = randomUUID();
-  const parsed = syncRequestSchema.safeParse({ deviceId: one, rows: [row(one, 1), row(two, 1)], since: null });
+  const parsed = syncRequestSchema.safeParse({ deviceId: one, readerId: "reader-1", rows: [row(one, 1), row(two, 1)], since: null });
   assert.equal(parsed.success, false);
 });
 
 test("a batch from one device passes, the empty one too", () => {
   const one = randomUUID();
-  assert.equal(syncRequestSchema.safeParse({ deviceId: one, rows: [row(one, 1), row(one, 2)], since: null }).success, true);
-  assert.equal(syncRequestSchema.safeParse({ deviceId: one, rows: [], since: null }).success, true);
+  assert.equal(syncRequestSchema.safeParse({ deviceId: one, readerId: "reader-1", rows: [row(one, 1), row(one, 2)], since: null }).success, true);
+  assert.equal(syncRequestSchema.safeParse({ deviceId: one, readerId: "reader-1", rows: [], since: null }).success, true);
 });
 
 test("an `at` past the largest Date is refused", () => {
   const one = randomUUID();
   const late = { ...row(one, 1), at: 9e15 };
-  assert.equal(syncRequestSchema.safeParse({ deviceId: one, rows: [late], since: null }).success, false);
+  assert.equal(syncRequestSchema.safeParse({ deviceId: one, readerId: "reader-1", rows: [late], since: null }).success, false);
 });
 
 test("a row whose outcome is unlisted passes, an unknown outcome does not", () => {
@@ -52,6 +52,7 @@ test("a batch admits 500 rows and refuses 501", () => {
   const one = randomUUID();
   const batch = (count: number) => ({
     deviceId: one,
+    readerId: "reader-1",
     rows: Array.from({ length: count }, (_, index) => row(one, index + 1)),
     since: null,
   });
@@ -74,7 +75,7 @@ test("definition and examples admit 500 characters and refuse 501", () => {
 
 test("a request row without the three fields still passes", () => {
   const one = randomUUID();
-  assert.equal(syncRequestSchema.safeParse({ deviceId: one, rows: [row(one, 1)], since: null }).success, true);
+  assert.equal(syncRequestSchema.safeParse({ deviceId: one, readerId: "reader-1", rows: [row(one, 1)], since: null }).success, true);
 });
 
 test("500 rows with the three fields at 500 characters serialise under 4 MB", () => {
@@ -88,7 +89,7 @@ test("500 rows with the three fields at 500 characters serialise under 4 MB", ()
     exampleEn: "x".repeat(500),
     exampleEs: "x".repeat(500),
   });
-  const batch = { deviceId: one, rows: Array.from({ length: SYNC_BATCH }, (_, index) => full(index + 1)), since: null };
+  const batch = { deviceId: one, readerId: "reader-1", rows: Array.from({ length: SYNC_BATCH }, (_, index) => full(index + 1)), since: null };
   assert.equal(syncRequestSchema.safeParse(batch).success, true);
   assert.ok(JSON.stringify(batch).length < 4 * 1024 * 1024);
 });

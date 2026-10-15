@@ -37,7 +37,6 @@ export const textRequestSchema = z.object({
   surface: z.string().min(1).max(64).optional(),
   rule: z.enum(INFLECTION_RULES).optional(),
 });
-export type TextRequest = z.infer<typeof textRequestSchema>;
 
 export const textResponseSchema = z.object({
   definition: z.string().min(1).nullable(),
