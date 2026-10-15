@@ -482,8 +482,17 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
     const row = ledger.getByRole("row").filter({ hasText: transactions.kindAdjustment });
     await expect(row).toHaveCount(1);
     const cells = await row.getByRole("cell").allInnerTexts();
-    expect(flat(cells[categoryAt] ?? "x")).toBe("");
+    // The table's own «—» for a row with no category, as a transfer shows it
+    // (changed by ruling of the main session).
+    expect(flat(cells[categoryAt] ?? "x")).toBe("—");
     expect(flat(cells.join(" | "))).toContain("+$ 12.000");
+    // B10: an adjustment is never editable, so its row carries no menu.
+    await expect(
+      page.getByRole("button", {
+        name: common.actionsFor.replace("{name}", transactions.kindAdjustment),
+        exact: true,
+      }),
+    ).toHaveCount(0);
   });
 
   test("the list's net is income minus expense of the ordinary rows, the adjustment left out", async ({

@@ -188,18 +188,13 @@ export function MovementsScreen({
     category: rowCategory(row, categoryNames, categoryColors),
     account: rowSubtitle(row, accountNames) ?? "",
     label: row.labels[0]?.name ?? null,
-    // The table's Money signs by tone: only an income tone writes a plus.
     amountMinor:
       row.reconciliationId !== null && row.toAccountId === null
         ? -row.amountCents
         : row.amountCents,
     currency: row.currency,
-    tone:
-      row.reconciliationId !== null
-        ? row.toAccountId === null
-          ? "plain"
-          : "income"
-        : rowTone(row),
+    tone: rowTone(row),
+    adjustment: row.reconciliationId !== null,
     auto: row.recurringRuleId !== null,
   }));
 
