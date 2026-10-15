@@ -3740,6 +3740,7 @@ async function main(): Promise<void> {
   await reconcileStrangerSuite(userId, fellow);
   console.log("");
   await recurringRuleCategoryScopeSuite(scope, groupless);
+  await recurringRuleCategoryFitSuite(userId, scope, groupless, fellow);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -4501,5 +4502,130 @@ async function recurringRuleCategoryScopeSuite(
     next("Rewriting a rule onto another person's category is refused and keeps the old category"),
     rewritten?.serverError === "recurringRules.errors.scopeViolation" && kept?.category_id === ownCategoryId,
     `serverError = ${rewritten?.serverError ?? "none"}, stored category is own = ${kept?.category_id === ownCategoryId}`,
+  );
+}
+
+/**
+ * RF-29: a category the caller can see still has to fit the rule: the kind its side implies
+ * (a source is an expense, a destination income) and the scope of its account. A fund member
+ * sees the leader's personal categories, so a visible category of another owner is the case
+ * the visibility check alone lets through. A user holds one live membership (RF-55), so a
+ * category of a second fund is never visible to the same member and is not driven here.
+ * `null` as the caller is the run's own user, the fund's leader.
+ */
+async function recurringRuleCategoryFitSuite(
+  userId: string,
+  scope: HarnessScope,
+  groupless: HarnessUser,
+  fellow: HarnessUser,
+): Promise<void> {
+  const today = todayInBogota();
+  const as = <T>(user: HarnessUser | null, fn: () => Promise<T>): Promise<T> =>
+    user === null ? fn() : asUser(user, fn);
+
+  const personalAccount = async (user: HarnessUser | null, ownerId: string, name: string): Promise<string> => {
+    const { accountId } = await as(user, () =>
+      createAccount({
+        name,
+        kind: "asset",
+        subtype: "bancaria",
+        ownerUserId: ownerId,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 1_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const personalCategory = async (ownerId: string, kind: "expense" | "income", name: string): Promise<string> => {
+    const id = randomUUID();
+    await fixtureSql`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${id}, ${ownerId}, ${name}, ${kind}, '#4C8C4A')`;
+    track("categories", id);
+    return id;
+  };
+  const fits = (
+    user: HarnessUser | null,
+    categoryId: string,
+    side: "source" | "destination",
+    accountId: string,
+  ): Promise<boolean> =>
+    as(user, () =>
+      categoryFitsRuleAccount({
+        categoryId,
+        fromAccountId: side === "source" ? accountId : null,
+        toAccountId: side === "destination" ? accountId : null,
+      }),
+    );
+
+  const accountId = await personalAccount(groupless, groupless.id, "Harness regla ajuste");
+  const expenseId = await personalCategory(groupless.id, "expense", "Harness ajuste gasto");
+  const incomeId = await personalCategory(groupless.id, "income", "Harness ajuste ingreso");
+
+  const expenseOnSource = await fits(groupless, expenseId, "source", accountId);
+  const incomeOnDestination = await fits(groupless, incomeId, "destination", accountId);
+  const incomeOnSource = await fits(groupless, incomeId, "source", accountId);
+  const expenseOnDestination = await fits(groupless, expenseId, "destination", accountId);
+  assert(
+    next("An own category fits only the kind its side implies: expense on a source, income on a destination"),
+    expenseOnSource === true &&
+      incomeOnDestination === true &&
+      incomeOnSource === false &&
+      expenseOnDestination === false,
+    `expense on source = ${expenseOnSource}, income on destination = ${incomeOnDestination}, income on source = ${incomeOnSource}, expense on destination = ${expenseOnDestination}`,
+  );
+
+  const refused = await asUser(groupless, () =>
+    createRecurringRuleAction({
+      fromAccountId: accountId,
+      toAccountId: null,
+      amount: "10",
+      categoryId: incomeId,
+      description: "Harness regla ajuste",
+      frequency: "weekly" as const,
+      intervalN: 1,
+      dayOfMonth: null,
+      nextRunOn: shiftDate(today, 7),
+      endsOn: null,
+    }),
+  );
+  const [{ n: stored }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from recurring_rules where from_account_id = ${accountId}`;
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Saving an expense rule with an income category is refused and stores nothing"),
+    refused?.serverError === "recurringRules.errors.scopeViolation" && stored === 0,
+    `serverError = ${refused?.serverError ?? "none"}, ${stored} rule(s) stored`,
+  );
+
+  // The fellow sees the leader's personal category through the fund, yet it is not theirs.
+  const fellowAccount = await personalAccount(fellow, fellow.id, "Harness regla miembra");
+  const leaderCategory = await personalCategory(userId, "expense", "Harness ajuste líder");
+  const fellowCategory = await personalCategory(fellow.id, "expense", "Harness ajuste miembra");
+  const fellowOwn = await fits(fellow, fellowCategory, "source", fellowAccount);
+  const leadersVisible = await fits(fellow, leaderCategory, "source", fellowAccount);
+  assert(
+    next("A personal account takes its owner's category, not the leader's personal one a fellow can see"),
+    fellowOwn === true && leadersVisible === false,
+    `fellow's own category fits = ${fellowOwn}, the leader's visible personal category fits = ${leadersVisible}`,
+  );
+
+  const leaderAccount = await personalAccount(null, userId, "Harness regla líder");
+  const fundCategoryId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, group_id, name, kind, color)
+    values (${fundCategoryId}, ${scope.groupId}, 'Harness ajuste fondo', 'expense', '#4C8C4A')`;
+  track("categories", fundCategoryId);
+  const fundCategory = await fits(null, fundCategoryId, "source", leaderAccount);
+  assert(
+    next("A fund's category does not fit a personal account of its member"),
+    fundCategory === false,
+    `fund category on a personal account fits = ${fundCategory}`,
   );
 }
