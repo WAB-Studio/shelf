@@ -31,7 +31,7 @@ export type GoalNoteProps = {
 
 /**
  * `JerarquiaNota` (RP-95): a goal's note, folded as «Nota» with «Cambiar la nota»
- * beneath; with none, «Agregar una nota» stands in its place. The sheet is the
+ * beneath; with none, «Añadir una nota» stands in its place. The sheet is the
  * task note's: emptying the field and saving removes the note, and a failed
  * save keeps what was typed.
  */

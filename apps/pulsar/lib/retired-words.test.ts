@@ -20,6 +20,9 @@ const retired: { word: RegExp; allowed: string[] }[] = [
   { word: /correr el plan/i, allowed: [] },
   { word: /mover tareas de mes/i, allowed: [] },
   { word: /aceptar que el plan corra/i, allowed: [] },
+  { word: /\bagregar\b/i, allowed: ["oauth.may.phases"] },
+  { word: /no mide horas/i, allowed: [] },
+  { word: /este teléfono/i, allowed: [] },
 ];
 
 function values(node: unknown, path: string, out: [string, string][]) {
@@ -39,3 +42,15 @@ for (const { word, allowed } of retired) {
     assert.deepEqual(found, []);
   });
 }
+
+test("the plan of a goal with no measure and the sign-in lead say the board's words", () => {
+  const read = (file: string) => JSON.parse(readFileSync(join(messagesDir, file), "utf8"));
+  assert.equal(
+    read("roadmap.json").plan.noMeasure,
+    "Esta meta no mide nada, así que no tiene ritmo: cada tarea va en el mes que le pongas.",
+  );
+  assert.equal(
+    read("account.json").lead,
+    "Te mandamos un enlace a tu correo. Ábrelo en este dispositivo y entras; no hay contraseña.",
+  );
+});

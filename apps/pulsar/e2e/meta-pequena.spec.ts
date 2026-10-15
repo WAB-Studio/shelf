@@ -38,14 +38,14 @@ test("a small goal offers no entry to create a goal inside it, while its large g
   baseURL,
   db,
 }) => {
-  // Kills: offering «Agregar meta …» by `level` large only (a small goal showing it), or by a goal's having a parent.
+  // Kills: offering «Añadir meta …» by `level` large only (a small goal showing it), or by a goal's having a parent.
   const tree = await seedTree(db, person, Date.now());
 
   const small = await openAs(browser, baseURL, person, `/metas/${tree.p}`);
   try {
     await expectTitle(small.page, tree.names.p);
     await expect(small.page.locator(`main a[href="/metas/${tree.g1}"]:visible`).first()).toBeVisible();
-    await expect(small.page.getByText(/^Agregar meta/)).toHaveCount(0);
+    await expect(small.page.getByText(/^Añadir meta/)).toHaveCount(0);
     await expect(small.page.getByText("Metas dentro", { exact: true })).toHaveCount(0);
   } finally {
     await small.context.close();
@@ -54,7 +54,7 @@ test("a small goal offers no entry to create a goal inside it, while its large g
   const large = await openAs(browser, baseURL, person, `/metas/${tree.g1}`);
   try {
     await expectTitle(large.page, tree.names.g1);
-    await expect(large.page.getByRole("button", { name: "Agregar meta pequeña" })).toBeVisible();
+    await expect(large.page.getByRole("button", { name: "Añadir meta pequeña" })).toBeVisible();
   } finally {
     await large.context.close();
   }
