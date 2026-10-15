@@ -598,6 +598,61 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
     expect(body).not.toContain("deducido");
   });
 
+  // The phone's dashboard list and its detail page are siblings of the laptop's, each deciding
+  // sign and actions on its own. The laptop project reaches them by narrowing the window, so a
+  // run of this project alone still drives them.
+  test.describe("on a phone-wide window", () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test("the dashboard's recent lines sign a positive and a negative adjustment by their legs", async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name !== "desktop", "the mobile project already runs narrow");
+      await seedAdjustment(1_200_000);
+      await page.goto("/es");
+      const up = page
+        .getByRole("link")
+        .filter({ hasText: transactions.kindAdjustment })
+        .filter({ visible: true });
+      await expect(up).toHaveCount(1);
+      const upText = flat(await up.innerText());
+      expect(upText).toContain("+$ 12.000");
+      expect(upText).not.toContain(MINUS);
+
+      await fixtureSql`
+        delete from transactions
+        where from_account_id = ${accountId} or to_account_id = ${accountId}`;
+      await fixtureSql`delete from account_reconciliations where account_id = ${accountId}`;
+      await fixtureSql`delete from accounts where id = ${accountId}`;
+      await seedAdjustment(-800_000);
+      await page.goto("/es");
+      const down = page
+        .getByRole("link")
+        .filter({ hasText: transactions.kindAdjustment })
+        .filter({ visible: true });
+      await expect(down).toHaveCount(1);
+      const downText = flat(await down.innerText());
+      expect(downText).toContain(`${MINUS}$ 8.000`);
+      expect(downText).not.toContain("+$");
+    });
+
+    test("the detail offers no Editar and no Eliminar on an adjustment, and says how to fix it", async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name !== "desktop", "the mobile project already runs narrow");
+      await seedAdjustment(1_200_000);
+      await page.goto(`/es/movements/${adjustmentId}`);
+
+      await expect(
+        page.getByText(transactions.adjustmentFix, { exact: true }).filter({ visible: true }),
+      ).toHaveCount(1);
+      await expect(page.getByRole("button", { name: transactions.edit, exact: true })).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: transactions.delete, exact: true }),
+      ).toHaveCount(0);
+    });
+  });
+
   test("a forged delete of the adjustment surfaces the read-only refusal and deletes nothing", async ({
     page,
   }, testInfo) => {

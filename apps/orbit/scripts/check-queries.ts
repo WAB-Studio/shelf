@@ -3735,6 +3735,8 @@ async function main(): Promise<void> {
   await weeklyBudgetSuite(scope, userId);
   console.log("");
   await ledgerGuardSuite(userId, scope);
+  console.log("");
+  await reconcileStrangerSuite(userId, fellow);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -4350,5 +4352,60 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     recurrent.status === "update" &&
       recurrent.errors.some((e) => e.key === "accounts.errors.currencyLocked" && e.column === "settlementCurrency"),
     `status ${recurrent.status}, errors [${keys(recurrent)}]`,
+  );
+}
+
+/**
+ * RF-137: a person who may read an account but not write it learns that, never that the figures
+ * went stale. Told «stale» they would reload and try again for ever; told «denied» they stop.
+ * Its own account, opened here, so the figures above keep what they asserted on.
+ */
+async function reconcileStrangerSuite(userId: string, fellow: HarnessUser): Promise<void> {
+  const today = todayInBogota();
+  const { accountId } = await createAccount({
+    name: "Harness cuadre ajena",
+    kind: "asset",
+    subtype: "bancaria",
+    ownerUserId: userId,
+    groupId: null,
+    isShared: false,
+    institution: null,
+    lastFour: null,
+    settlementCurrency: "COP",
+    amountMinor: 1_000_000,
+    balanceOn: shiftDate(today, -10),
+  });
+  keep("accounts", accountId);
+
+  const sheet = await asUser(fellow, () => getReconcileSheet(accountId, today));
+  const rowsOf = async (): Promise<number> => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from account_reconciliations where account_id = ${accountId}`;
+    return row.n;
+  };
+  const current = await asUser(fellow, () =>
+    reconcileAccount({
+      accountId,
+      reconciledOn: today,
+      realMagnitudeCents: 2_000_000,
+      expectedDerivedCents: sheet?.account.derivedCents ?? -1,
+    }),
+  );
+  const stale = await asUser(fellow, () =>
+    reconcileAccount({
+      accountId,
+      reconciledOn: today,
+      realMagnitudeCents: 2_000_000,
+      expectedDerivedCents: (sheet?.account.derivedCents ?? 0) + 1,
+    }),
+  );
+  const rows = await rowsOf();
+  assert(
+    next("A reader who cannot write the account is denied, with a current figure or a stale one"),
+    sheet !== null && sheet.account.canWrite === false &&
+      !current.ok && current.reason === "denied" &&
+      !stale.ok && stale.reason === "denied" &&
+      rows === 0,
+    `canWrite ${sheet?.account.canWrite}; current figure ${JSON.stringify(current)}; stale figure ${JSON.stringify(stale)}; rows ${rows}`,
   );
 }
