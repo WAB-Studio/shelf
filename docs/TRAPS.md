@@ -3215,3 +3215,14 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   test failed on the race between the page and the measurement, not on the screen.
 - Await `expect(loc).toBeVisible()` before `boundingBox()` (the spec's `boxOf`). Never answer it with a retry, a sleep or a looser comparison.
 - The same `boundingBox())!` pattern stands in ~70 other specs under `apps/pulsar/e2e/`; they are not fixed.
+
+## A `test.fail()` prints ✘ and still passes
+
+- Playwright's list reporter draws a `test.fail()` that failed as expected with ✘, but counts it passed. Grepping a CI log for ✘
+  finds it beside the real reds. Measured 2026-10-14: `apps/voyager/e2e/account-send-link.spec.ts:93` read as a flake for a session.
+- Read the summary block (`N failed` and the names under it), never the ✘ lines alone.
+
+## A fixed budget over a debounce is a flake under load
+
+- `palabra-de-la-red.spec.ts:41` gave 900 ms to a screen that waits 600 ms before it asks; under a loaded runner it failed 7 of
+  20. Wait for the response the screen asks for (`page.waitForResponse`), never a budget shaved off the debounce. After: 80 of 80.
