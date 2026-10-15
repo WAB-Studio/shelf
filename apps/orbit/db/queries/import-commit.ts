@@ -199,15 +199,13 @@ export async function commitImport(
   // Then accounts, so a movement or rule that names one can link to its real id.
   const accountMap = await commitAccounts(tx, input.accounts, scope);
 
-  // Reject before a single recurring rule or transaction lands (RF-121):
-  // `toCents` below still reads every amount as pesos, which only an account
-  // settling in BASE_CURRENCY makes correct.
+  // Reject before a single recurring rule lands (RF-121): a rule's generator
+  // books in the account's currency, which the sheet does not carry. A transaction
+  // row is held to its account's currency by the pipeline and, at write time, by
+  // `assert_transaction_currency`.
   await assertBaseCurrencyAccounts(
     tx,
-    [
-      ...input.recurringRules.map((row) => row.object),
-      ...input.transactions.map((row) => row.object),
-    ],
+    input.recurringRules.map((row) => row.object),
     accountMap,
   );
 
@@ -376,6 +374,7 @@ async function commitAccounts(
     "is_shared",
     "initial_balance_cents",
     "initial_balance_on",
+    "settlement_currency",
     "external_ref",
   ];
 
@@ -398,6 +397,7 @@ async function commitAccounts(
           scoped.isShared,
           row.object.kind === "liability" ? -cents : cents,
           row.object.balanceOn,
+          row.object.settlementCurrency,
           row.externalRef,
         ];
       }),
@@ -443,9 +443,8 @@ function link(value: string | null, map: Map<string, string>): string | null {
 
 // The settlement currency of every account a recurring rule or transaction row names,
 // read back in one round trip now that a file-new account has a real row (RF-121). A
-// file-new account is never foreign here — `commitAccounts` writes none of them a
-// settlement currency of their own, so the column default (BASE_CURRENCY) holds — but
-// the check still walks it like any other, per row, and stops at the first mismatch.
+// file-new account carries the settlement currency its sheet row named — but the
+// check still walks it like any other, per row, and stops at the first mismatch.
 async function assertBaseCurrencyAccounts(
   tx: Transaction,
   rows: { fromAccountId: string | null; toAccountId: string | null }[],

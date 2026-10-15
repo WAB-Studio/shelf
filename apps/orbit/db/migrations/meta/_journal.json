@@ -393,6 +393,13 @@
       "when": 1792150000000,
       "tag": "0055_only_the_leader_shares_a_group_account",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792160000000,
+      "tag": "0056_two_invariants_the_ledger_keeps",
+      "breakpoints": true
     }
   ]
 }

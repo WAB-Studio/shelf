@@ -86,6 +86,9 @@ export const updateAccountAction = authActionClient
       if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
       if (pgErrorCode(error) === "23514")
         throw new ActionError("accounts.errors.currencyInvalid");
+      // AC001: an account with movements or a count keeps the currency they are in.
+      if (pgErrorCode(error) === "AC001")
+        throw new ActionError("accounts.errors.currencyLocked");
       throw error;
     }
     if (!updated) throw new ActionError("errors.notFound");
