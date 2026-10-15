@@ -255,10 +255,13 @@ test.describe("the row menu (B8)", () => {
       await page.keyboard.press("Escape");
 
       const segment = page.getByRole("radio", { name: accounts.archivedTab, exact: true });
+      const statusSelect = page.getByRole("combobox", { name: accounts.statusLabel });
+      // count() does not wait: let whichever of the pair is displayed render first.
+      await expect(segment.or(statusSelect)).toBeVisible();
       if ((await segment.count()) > 0) {
         await segment.click();
       } else {
-        await page.getByRole("combobox", { name: accounts.statusLabel }).click();
+        await statusSelect.click();
         await page.getByRole("option", { name: accounts.archivedTab, exact: true }).click();
       }
 
@@ -653,7 +656,12 @@ test.describe("confirming (B7)", () => {
       expect(await adjustmentsOf(account.id)).toHaveLength(0);
 
       await page.goto("/es/movements");
-      await expect(page.getByText(`Gasto ${stamp}`).first()).toBeVisible();
+      // The laptop's table prints the description; the phone's card prints category and account.
+      const spent = page
+        .getByText(`Gasto ${stamp}`)
+        .or(page.getByRole("link", { name: account.name }))
+        .filter({ visible: true });
+      await expect(spent.first()).toBeVisible();
       await expect(page.getByText("Descuadre", { exact: true })).toHaveCount(0);
     } finally {
       await dropAccount(account.id);
