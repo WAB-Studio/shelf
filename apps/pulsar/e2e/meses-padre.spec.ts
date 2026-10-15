@@ -261,7 +261,7 @@ test("«Por mes» of a holder says «sin monto» in a month no goal covers, even
   }
 });
 
-test("«Por mes» of a holder counts its own tasks per month and adds what they reached to the sum", async ({ person, browser, baseURL, db }) => {
+test("«Por mes» of a holder counts its own tasks per month and adds none of their estimates to the sum (RP-128)", async ({ person, browser, baseURL, db }) => {
   const holder = await seedHolderWithMinutes(db, person);
   await seedTask(db, person, holder, "Revisar el plan con mi mentora", thisMonth, 60);
   await seedTask(db, person, holder, "Cerrar el informe", thisMonth, 15, true);
@@ -270,8 +270,9 @@ test("«Por mes» of a holder counts its own tasks per month and adds what they 
   try {
     const current = await rowText(page, thisMonth);
     expect(current).toContain("2 tareas");
-    // 60 + 30 from its goals, 15 from its own done task; the planned figure stays the goals' 3 h.
-    expect(current).toContain("1 h 45 min");
+    // 60 + 30 from its goals; its own done task's 15 adds nothing; the planned figure stays the goals' 3 h.
+    expect(current).toContain("1 h 30 min");
+    expect(current).not.toContain("1 h 45 min");
     expect(current).toContain("de 3 h");
     const next = await rowText(page, oneAhead);
     expect(next).toContain("1 tarea");

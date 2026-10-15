@@ -139,11 +139,6 @@ export async function MonthAcrossScreen() {
     const carriedMonths = [...new Set(carried.map((entry) => entry.carriedFrom as string))];
 
     const leaves = goal.items.flatMap((entry) => (entry.children.length > 0 ? entry.children : [entry.task]));
-    const doneInMonth = sum(
-      leaves
-        .filter((task) => task.doneOn !== null && task.doneOn.slice(0, 7) === seg)
-        .map((task) => task.estimate ?? 0),
-    );
     const ownPlanned = sum(own.map((entry) => entry.part));
 
     // With the dictionary unreadable, a goal with no amount to measure draws
@@ -165,8 +160,6 @@ export async function MonthAcrossScreen() {
       });
     } else if (across.evidence === "unreadable") {
       meta = t("month.declaredOnly");
-    } else if (doneInMonth > 0) {
-      meta = t.rich("month.list.includesDone", { done: say(doneInMonth), ...fig });
     }
 
     const planLink = collapsed

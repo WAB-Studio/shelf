@@ -53,7 +53,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     `;
   };
 
-  // 720 planned: 300 + 90 declared and a 15-minute task reach 405, 56 %.
+  // 720 planned: 300 + 90 declared reach 390, 54 %; a done 15-minute task adds nothing (RP-128).
   const under = await seedGoal(underName, 720);
   await quantity(under, `Sesión A ${stamp}`, 300, monthStart);
   await quantity(under, `Sesión B ${stamp}`, 90, today);
@@ -72,7 +72,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
   const bare = await seedGoal(bareName, null);
   await quantity(bare, `Sesión D ${stamp}`, 100, monthStart);
 
-  const pace = `día ${Number(today.slice(8, 10))} · 6 h 45 min de 12 h, bajo el 60 %`;
+  const pace = `día ${Number(today.slice(8, 10))} · 6 h 30 min de 12 h, bajo el 60 %`;
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
     const page = await context.newPage();
@@ -82,7 +82,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
       await expect(seen(underName).first()).toBeVisible();
       // From the 20th the under-60 goal's «de 12 h» sits inside its pace line.
       const inLine = late ? 1 : 0;
-      await expect(seen("6 h 45 min")).toHaveCount(1 + weekSays);
+      await expect(seen("6 h 30 min")).toHaveCount(1 + weekSays);
       // On the 1st the exact goal's 432 minutes were done today: its done row says them too.
       await expect(seen("7 h 12 min")).toHaveCount(1 + weekSays + (today === monthStart ? 1 : 0));
       await expect(seen("de 12 h")).toHaveCount(2 - inLine);
@@ -106,7 +106,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
     // The card keeps its week figure and now reads it in hours and minutes:
-    // 90 this week, or the whole 405 in the first days of a month.
+    // 90 this week, or the whole 390 in the first days of a month.
     const inWeek = weekOf(today).includes(monthStart);
     await lines(inWeek ? 1 : 0);
     if (!inWeek) {

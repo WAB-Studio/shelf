@@ -1322,17 +1322,17 @@ async function runPlanMonthsCheck(): Promise<void> {
       `doneOn = ${after.tasks.find((task) => task.id === done.id)?.doneOn}`,
     );
     assert(
-      "RP-36: a done child's estimate of 60 raises measureTotal by 60, the parent's 500 adds nothing",
-      after.measureTotal - before.measureTotal === 60,
+      "RP-128: a done child's estimate of 60 adds nothing to measureTotal, nor does the parent's 500",
+      after.measureTotal - before.measureTotal === 0,
       `before=${before.measureTotal} after=${after.measureTotal}`,
     );
     const weekOf = (view: typeof after) =>
       view.weeks.find((week) => week.startsOn <= "2010-10-10" && "2010-10-10" <= week.endsOn)?.total ?? NaN;
     assert(
-      "RP-36: the same 60 lands in its week and in its month",
-      weekOf(after) - weekOf(before) === 60 &&
+      "RP-128: the estimate lands in neither its week nor its month",
+      weekOf(after) - weekOf(before) === 0 &&
         (after.months.find((row) => row.month === "2010-10-01")?.reached ?? 0) -
-          (before.months.find((row) => row.month === "2010-10-01")?.reached ?? 0) === 60,
+          (before.months.find((row) => row.month === "2010-10-01")?.reached ?? 0) === 0,
       `week ${weekOf(before)} -> ${weekOf(after)}; month ${before.month?.reached} -> ${after.month?.reached}`,
     );
   } finally {

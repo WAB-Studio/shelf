@@ -172,6 +172,16 @@ for (const width of [390, 1440]) {
       insert into goals.facts (user_id, goal_id, one_off_id, day)
       values (${person.id}, ${measured.id}, ${done.id}, ${today}::date)
     `;
+    // Hours come from blocks alone (RP-128): the done task's 161 minutes are a block of their own.
+    const [block] = await db<{ id: string }[]>`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${measured.id}, 'bloque', 'daily', 'quantity', 10, 'min', now() - interval '20 days')
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${person.id}, ${measured.id}, ${block.id}, ${today}::date, 161)
+    `;
 
     const tasked = await seedGoal(db, person.id, taskedName, horizon, 1000);
     for (const [name, doneToday] of [["a", true], ["b", false], ["c", false]] as const) {

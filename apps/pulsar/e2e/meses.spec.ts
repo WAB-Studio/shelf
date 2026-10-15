@@ -69,6 +69,15 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     insert into goals.facts (user_id, goal_id, one_off_id, day)
     values (${person.id}, ${goalId}, ${done.id}, ${lastMonth}::date + 14)
   `;
+  // Hours come from blocks alone (RP-128): the done task's 100 minutes are a block of their own.
+  const [block] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+    values (${person.id}, ${goalId}, ${`Bloque ${stamp}`}, 'daily', 'quantity', 10, 'minutos') returning id
+  `;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${person.id}, ${goalId}, ${block.id}, ${lastMonth}::date + 14, 100)
+  `;
   await db`
     insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
     values (${person.id}, ${goalId}, ${`Pendiente ${stamp}`}, ${lastMonth}::date, 200)

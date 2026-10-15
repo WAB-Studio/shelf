@@ -473,7 +473,7 @@ const GOLDEN_VIEW: unknown = {
   "measureName": "Tiempo",
   "measureUnit": "min",
   "archivedAt": null,
-  "measureTotal": 65,
+  "measureTotal": 45,
   "phases": [],
   "commitments": [
     {
@@ -521,7 +521,7 @@ const GOLDEN_VIEW: unknown = {
       "index": 4,
       "startsOn": "2026-10-05",
       "endsOn": "2026-10-11",
-      "total": 65,
+      "total": 45,
       "phaseName": null,
       "current": false
     },
@@ -538,7 +538,7 @@ const GOLDEN_VIEW: unknown = {
   "month": {
     "month": "2026-10-01",
     "planned": 750,
-    "reached": 65,
+    "reached": 45,
     "underPace": false
   },
   "months": [
@@ -552,7 +552,7 @@ const GOLDEN_VIEW: unknown = {
     {
       "month": "2026-10-01",
       "planned": 750,
-      "reached": 65,
+      "reached": 45,
       "current": true,
       "past": false
     },
@@ -746,7 +746,7 @@ const GOLDEN_METAS: unknown = {
         "kind": "amount",
         "month": "2026-10-01",
         "planned": 750,
-        "reached": 65
+        "reached": 45
       }
     }
   ],

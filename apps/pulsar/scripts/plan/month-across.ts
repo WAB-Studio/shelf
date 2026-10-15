@@ -248,12 +248,12 @@ test("loadMonthAcross: A, B, C and D read; the archived and the ended goal do no
   );
 });
 
-test("loadMonthAcross: A plans 600 and reached 120; B plans nothing; C has no line", async () => {
+test("loadMonthAcross: A plans 600 and reached 60; B plans nothing; C has no line", async () => {
   const month = await loadMonthAcross(today);
   const a = month.goals.find((goal) => goal.id === aId)!;
   assert.deepEqual(a.line, {
     planned: 600,
-    reached: 120,
+    reached: 60,
     underPace: Number(today.slice(8, 10)) >= 20,
   });
   assert.equal(a.unit, "minutos");
@@ -283,12 +283,12 @@ test("loadMonthAcross: D reaches its 7 declared plus 10 of evidence when the rea
   assert.equal(month.goals.find((goal) => goal.id === dId)!.line?.reached, 7 + 5 + 3 + 2);
 });
 
-test("loadMonthAcross: evidence that cannot be read says so; A keeps 120 and D its declared 7", async () => {
+test("loadMonthAcross: evidence that cannot be read says so; A keeps 60 and D its declared 7", async () => {
   evidenceRejects = true;
   try {
     const month = await loadMonthAcross(today);
     assert.equal(month.evidence, "unreadable");
-    assert.equal(month.goals.find((goal) => goal.id === aId)!.line?.reached, 120);
+    assert.equal(month.goals.find((goal) => goal.id === aId)!.line?.reached, 60);
     assert.equal(month.goals.find((goal) => goal.id === dId)!.line?.reached, 7);
   } finally {
     evidenceRejects = false;

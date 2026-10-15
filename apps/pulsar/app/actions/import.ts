@@ -107,7 +107,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   }
   // RP-37: a phase that starts before the goal opens begins today, one wholly
   // before it is dropped, so the refusals and the rows see the cut draft.
-  // A version 2 draft is in minutes already (RP-65).
+  // A version 2 draft is in minutes already (RP-35).
   const today = todayInZone();
   const draft = withCutPhases(parsed.data, today);
 

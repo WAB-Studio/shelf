@@ -91,16 +91,6 @@ export async function MonthDetail({
   const part = partOf(mes, goal.plan);
   const share = closed ? planShare(goal.plan, mes) : null;
 
-  const doneInMonth = sum(
-    goal.tasks.filter(
-      (task) =>
-        task.doneOn !== null &&
-        task.doneOn.slice(0, 7) === month &&
-        !goal.tasks.some((other) => other.parentId === task.id),
-    ),
-    (task) => task.estimate ?? 0,
-  );
-
   // A month that has not begun has nothing reached to show beside its amount:
   // «planeado» and the amount alone, or «sin monto planeado» alone.
   const bareFuture = !closed && !row.current;
@@ -122,8 +112,6 @@ export async function MonthDetail({
           ...fig,
         })
       : null;
-  } else if (doneInMonth > 0) {
-    note = t.rich("month.list.includesDone", { done: say(doneInMonth), ...fig });
   }
 
   // A unit other than time has no plan: a month without an amount of its own takes the rhythm (RP-101).

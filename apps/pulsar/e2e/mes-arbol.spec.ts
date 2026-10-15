@@ -62,6 +62,15 @@ async function seedTask(db: Db, personId: string, goalId: string, name: string, 
       insert into goals.facts (user_id, goal_id, one_off_id, day)
       values (${personId}, ${goalId}, ${task.id}, ${TODAY}::date)
     `;
+    // Hours come from blocks alone (RP-128): the done task's time is a block of its own.
+    const [block] = await db<{ id: string }[]>`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+      values (${personId}, ${goalId}, ${`Bloque ${name}`}, 'daily', 'quantity', 10, 'minutos') returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${personId}, ${goalId}, ${block.id}, ${TODAY}::date, ${minutes})
+    `;
   }
 }
 
