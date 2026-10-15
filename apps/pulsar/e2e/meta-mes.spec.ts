@@ -122,7 +122,7 @@ test("the goal says the month's amount, never moves with a done task, and links 
     const line = (percent: number, reached: string) =>
       late
         ? `día ${day} · ${reached} de 12 h, bajo el 60 %`
-        : `llevas ${percent} % · faltan ${daysLeft === 1 ? "1 día" : `${daysLeft} días`}`;
+        : `llevas ${percent} % · ${daysLeft === 0 ? "último día" : daysLeft === 1 ? "faltan 1 día" : `faltan ${daysLeft} días`}`;
 
     for (const width of [360, 1280]) {
       await page.setViewportSize({ width, height: 800 });
