@@ -42,7 +42,7 @@ function GlobalErrorBody({ reset }: { reset: () => void }) {
           same treatment as app/error.tsx, no shell around it here. */}
       <Separator size="4" />
       <Headword align="center">{t("title")}</Headword>
-      <Button size="2" tap onClick={reset}>
+      <Button size="2" onClick={reset}>
         {t("retry")}
       </Button>
     </Flex>

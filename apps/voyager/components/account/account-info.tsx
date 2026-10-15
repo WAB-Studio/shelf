@@ -17,7 +17,7 @@ const manifest = manifestSchema.parse(manifestJson);
 // figure here is 1024^2, not the decimal megabyte.
 const BYTES_PER_MIB = 1024 * 1024;
 
-// Each credit sits on its own row, a 32 px touch target that overlaps no other.
+// Each credit sits on its own row, a 44 px touch target that overlaps no other.
 function Credit({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Flex>

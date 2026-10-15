@@ -165,7 +165,6 @@ export function BottomNav() {
                 align="center"
                 justify="center"
                 gap="1"
-                size={44}
               >
                 <Glyph />
                 <span className={styles.label}>{t(key)}</span>

@@ -73,7 +73,7 @@ export function PhraseAnswer({
 
       {offer.kind === "offered" && (
         <Flex direction="column" gap="1" align="start">
-          <Button size="2" tap onClick={onEnableDevice}>
+          <Button size="2" onClick={onEnableDevice}>
             {t("enableDevice")}
           </Button>
           <Text size="1" color="gray">

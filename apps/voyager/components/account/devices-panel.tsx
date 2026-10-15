@@ -121,7 +121,7 @@ function DeviceRowItem({
 
       {status.kind === "idle" && (
         <Flex>
-          <Button size="2" tap variant="soft" color="gray" onClick={onRetireClick}>
+          <Button size="2" variant="soft" color="gray" onClick={onRetireClick}>
             {t("retire")}
           </Button>
         </Flex>
@@ -133,10 +133,10 @@ function DeviceRowItem({
           {isThisDevice && <Text size="2">{t("confirmBodyOwn")}</Text>}
           {isOnlyDevice && <Text size="2">{t("confirmBodyLastDevice")}</Text>}
           <Flex gap="2">
-            <Button size="2" tap variant="soft" color="gray" onClick={onCancel}>
+            <Button size="2" variant="soft" color="gray" onClick={onCancel}>
               {t("cancel")}
             </Button>
-            <Button size="2" tap onClick={onConfirm}>
+            <Button size="2" onClick={onConfirm}>
               {t("confirm")}
             </Button>
           </Flex>
@@ -160,7 +160,7 @@ function DeviceRowItem({
           <Text size="2" weight="bold">
             {t("retireFailed")}
           </Text>
-          <Button size="2" tap onClick={onRetry}>
+          <Button size="2" onClick={onRetry}>
             {t("retry")}
           </Button>
         </Flex>
@@ -278,7 +278,6 @@ export function DevicesPanel({
           </Text>
           <Button
             size="2"
-            tap
             onClick={() => {
               setState({ kind: "loading" });
               setAttempt((current) => current + 1);

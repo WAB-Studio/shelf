@@ -38,7 +38,7 @@ test("RL-33: the credit, its source url and its edition are reachable from /cuen
 });
 
 // RL-33 · RNL-02 · RNL-03: the Información tab writes figures the Spanish way
-// and every credit is its own row, a 32 px touch target overlapping no other.
+// and every credit is its own row, a 44 px touch target overlapping no other.
 // Board `CuentaInformacionCreditos` (2026-10-08). Run at both widths whatever
 // the project's own viewport, signed out.
 const CREDIT_NAMES = [
@@ -75,7 +75,7 @@ for (const width of WIDTHS) {
       );
     });
 
-    test("each credit is a link of its own with a touch area of at least 32 px", async ({
+    test("each credit is a link of its own with a touch area of at least 44 px", async ({
       page,
     }) => {
       for (const name of CREDIT_NAMES) {
@@ -89,7 +89,7 @@ for (const width of WIDTHS) {
           const bottom = Math.max(...rects.map((r) => r.bottom));
           return { w: right - left, h: bottom - top };
         });
-        expect(Math.min(box.w, box.h), `touch area of «${name}»`).toBeGreaterThanOrEqual(32);
+        expect(Math.min(box.w, box.h), `touch area of «${name}»`).toBeGreaterThanOrEqual(44);
       }
     });
 

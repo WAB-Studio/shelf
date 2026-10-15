@@ -4,7 +4,8 @@ import { normaliseHeadword } from "@/lib/dictionary/format";
 import { groupFor } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
-import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
+import { claimCallerShare } from "@/lib/word/caller-share";
+import { claimClientCall, clientKey, scopedClientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { generateWordText, MODEL_NAME } from "@/lib/word/model";
 import { textRequestSchema, textResponseSchema } from "@/lib/word/protocol";
@@ -43,6 +44,8 @@ async function claimModelCall(request: Request, dailyCap: number): Promise<boole
   try {
     const client = scopedClientKey("text", request.headers);
     if (!client) return false;
+    const caller = clientKey(request);
+    if (!caller || !(await claimCallerShare(caller, dailyCap))) return false;
     if (!(await claimClientCall(client, env.WORD_TEXT_DAILY_CLIENT_CAP))) return false;
     return await claimDailyCall(dailyCap);
   } catch (error) {

@@ -25,6 +25,8 @@ const FULL: Group = {
 const state = {
   client: "caller" as string | null,
   clientAllows: true,
+  shareAllows: true,
+  shareClaims: [] as unknown[][],
   dailyAllows: true,
   clientClaims: [] as unknown[][],
   dailyClaims: [] as unknown[],
@@ -75,6 +77,14 @@ mock.module(here("../lib/word/client-budget.ts"), {
     },
     clientKey: () => state.client,
     scopedClientKey: () => state.client,
+  },
+});
+mock.module(here("../lib/word/caller-share.ts"), {
+  namedExports: {
+    claimCallerShare: async (...args: unknown[]) => {
+      state.shareClaims.push(args);
+      return state.shareAllows;
+    },
   },
 });
 mock.module(here("../lib/word/spend.ts"), {
@@ -155,6 +165,8 @@ const SENTENCE = { text: "the cat" };
 beforeEach(() => {
   state.client = "caller";
   state.clientAllows = true;
+  state.shareAllows = true;
+  state.shareClaims = [];
   state.dailyAllows = true;
   state.clientClaims = [];
   state.dailyClaims = [];
@@ -336,4 +348,31 @@ test("translate: a model reply that echoes the sentence is no translation", asyn
   const { POST } = await import("../app/api/translate/route");
   const response = await POST(post(SENTENCE));
   assert.equal(((await response.json()) as { text: string }).text, "del proveedor");
+});
+
+// the caller's share of the day
+
+test("a caller past their share never reaches the model nor spends the day, on every paid route", async () => {
+  state.shareAllows = false;
+  const text = await import("../app/api/word/text/route");
+  const unlisted = await import("../app/api/word/unlisted/route");
+  const notes = await import("../app/api/phrase/notes/route");
+  const translate = await import("../app/api/translate/route");
+  assert.equal((await text.POST(post(TEXT))).status, 204);
+  assert.equal((await unlisted.POST(post(UNLISTED))).status, 204);
+  assert.equal((await notes.POST(post(NOTES))).status, 204);
+  assert.equal(state.modelCalls, 0);
+  assert.equal(state.dailyClaims.length, 0);
+  assert.equal(state.clientClaims.length, 0);
+  assert.deepEqual(state.shareClaims.map((c) => c[1]), [10, 10, 10]);
+  // translate falls to the provider, never the model
+  assert.equal((await translate.POST(post(SENTENCE))).status, 200);
+  assert.equal(openaiCalls(), 0);
+});
+
+test("the share is claimed before the route's own caller claim", async () => {
+  const { POST } = await import("../app/api/word/unlisted/route");
+  await POST(post(UNLISTED));
+  assert.equal(state.shareClaims.length, 1);
+  assert.deepEqual(state.shareClaims[0], ["caller", 10]);
 });

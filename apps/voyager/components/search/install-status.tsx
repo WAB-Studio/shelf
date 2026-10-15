@@ -117,7 +117,7 @@ export function InstallStatus({
           {t("failedPending", { query })}
         </Text>
       )}
-      <Button size="2" tap onClick={onRetry}>
+      <Button size="2" onClick={onRetry}>
         {t("retry")}
       </Button>
     </Flex>

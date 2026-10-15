@@ -45,7 +45,6 @@ export function SearchBox({
             size="2"
             variant="ghost"
             color="gray"
-            tap
             aria-label={t("clear")}
             onClick={() => {
               onChange("");

@@ -3,8 +3,10 @@ import "server-only";
 import { env } from "@/lib/env";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { providerFetch } from "@/lib/provider/fetch";
+import { containsBlockedTerm } from "@/lib/translate/blocklist";
 import { translateRequestSchema, type TranslationResult } from "@/lib/translate/types";
-import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
+import { claimCallerShare } from "@/lib/word/caller-share";
+import { claimClientCall, clientKey, scopedClientKey } from "@/lib/word/client-budget";
 import { MODEL_NAME } from "@/lib/word/model";
 import { claimDailyCall } from "@/lib/word/spend";
 
@@ -63,14 +65,15 @@ function isEcho(source: string, translated: string): boolean {
 
 // The one gate both `responseData.translatedText` and every `matches` entry
 // answer to: not empty, not the quota warning, not an echo of what was
-// asked. A candidate that fails any of these said nothing, whichever field
-// it came from.
+// asked, and free of the blocked terms (RL-64). A candidate that fails any of
+// these said nothing, whichever field it came from.
 function isUsableTranslation(source: string, candidate: string | undefined): candidate is string {
   return (
     typeof candidate === "string" &&
     candidate.length > 0 &&
     !candidate.toUpperCase().startsWith(MYMEMORY_WARNING_PREFIX) &&
-    !isEcho(source, candidate)
+    !isEcho(source, candidate) &&
+    !containsBlockedTerm(candidate)
   );
 }
 
@@ -143,11 +146,13 @@ async function translateWithProvider(text: string): Promise<string> {
 // RL-60: the model translates first, inside the daily cap the word routes
 // share. Null on any reason not to answer (no key, no cap, cap spent, failure,
 // empty or echoed reply) so the caller falls to MyMemory.
-async function translateWithModel(text: string): Promise<string | null> {
+async function translateWithModel(request: Request, text: string): Promise<string | null> {
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey || !env.WORD_TEXT_DAILY_CALL_CAP) return null;
   // A database error is one more reason not to answer: MyMemory is tried.
   try {
+    const caller = clientKey(request);
+    if (caller && !(await claimCallerShare(caller, env.WORD_TEXT_DAILY_CALL_CAP))) return null;
     if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) return null;
   } catch (error) {
     console.error("[api/translate] daily claim failed", error);
@@ -209,7 +214,7 @@ export async function POST(request: Request): Promise<Response> {
     if (client && !(await claimClientCall(client, env.TRANSLATE_DAILY_CLIENT_CAP))) {
       return Response.json({ error: "rateLimited" }, { status: 429 });
     }
-    const text = (await translateWithModel(parsed.data.text)) ?? (await translateWithProvider(parsed.data.text));
+    const text = (await translateWithModel(request, parsed.data.text)) ?? (await translateWithProvider(parsed.data.text));
     const result: TranslationResult = { text, origin: "network" };
     return Response.json(result, { status: 200 });
   } catch (error) {

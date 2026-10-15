@@ -4,6 +4,7 @@ import { normaliseHeadword } from "@/lib/dictionary/format";
 import { groupFor, type DictionaryIndex } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
+import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { claimDailyCall } from "@/lib/word/spend";
@@ -105,6 +106,9 @@ export async function POST(request: Request): Promise<Response> {
   // caller, read against this route's own ceiling — never against
   // WORD_UNLISTED_DAILY_CLIENT_CAP, and never left unread the way it was.
   try {
+    if (!(await claimCallerShare(client, env.WORD_TEXT_DAILY_CALL_CAP))) {
+      return empty(204);
+    }
     if (!(await claimClientCall(client, env.PHRASE_NOTES_DAILY_CLIENT_CAP))) {
       return empty(204);
     }
