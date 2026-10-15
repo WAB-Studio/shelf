@@ -113,6 +113,9 @@ export type TransactionListRow = {
   labels: { id: string; name: string; color: string | null }[];
   // The movement that produced this one, one hop only (RF-132); null for most rows.
   causedByTransactionId: string | null;
+  // The reconciliation that booked this movement as its adjustment (RF-138); null for every
+  // movement a person made.
+  reconciliationId: string | null;
 };
 
 /**
@@ -196,6 +199,24 @@ export async function insertTransaction(
   return { transactionId };
 }
 
+// `adjustment` is a movement a reconciliation booked: the policy admits no edit or delete of it,
+// and the row stays readable, so a screen can say why instead of reporting it gone (RF-138).
+export type TransactionWriteOutcome = "done" | "missing" | "adjustment";
+
+// Only on a refused write, so the common path pays nothing for it.
+async function refusedWrite(
+  tx: Transaction,
+  transactionId: string,
+): Promise<TransactionWriteOutcome> {
+  const [row] = await tx
+    .select({ reconciliationId: transactions.reconciliationId })
+    .from(transactions)
+    .where(eq(transactions.id, transactionId))
+    .limit(1);
+
+  return row?.reconciliationId ? "adjustment" : "missing";
+}
+
 /**
  * Edit the movement's fields, then replace its splits and label joins wholesale
  * (delete + one multi-row insert each). The transaction update's affected-row
@@ -214,7 +235,7 @@ export async function updateTransaction({
   description,
   splits,
   labelIds,
-}: UpdateTransactionArgs): Promise<boolean> {
+}: UpdateTransactionArgs): Promise<TransactionWriteOutcome> {
   return withUserDb(async (tx) => {
     const updated = await tx
       .update(transactions)
@@ -237,7 +258,7 @@ export async function updateTransaction({
       .where(eq(transactions.id, transactionId))
       .returning({ id: transactions.id });
 
-    if (updated.length === 0) return false;
+    if (updated.length === 0) return refusedWrite(tx, transactionId);
 
     await tx
       .delete(transactionSplits)
@@ -265,24 +286,24 @@ export async function updateTransaction({
       );
     }
 
-    return true;
+    return "done";
   });
 }
 
-// The cascade removes the splits and label joins; the boolean reports whether the
+// The cascade removes the splits and label joins; the outcome reports whether the
 // policy admitted the delete (RF-24).
 export async function deleteTransaction({
   transactionId,
 }: {
   transactionId: string;
-}): Promise<boolean> {
+}): Promise<TransactionWriteOutcome> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .delete(transactions)
       .where(eq(transactions.id, transactionId))
       .returning({ id: transactions.id });
 
-    return rows.length > 0;
+    return rows.length > 0 ? "done" : refusedWrite(tx, transactionId);
   });
 }
 
@@ -387,6 +408,7 @@ export async function listTransactions(
         recurringRuleId: transactions.recurringRuleId,
         reviewedAt: transactions.reviewedAt,
         causedByTransactionId: transactions.causedByTransactionId,
+        reconciliationId: transactions.reconciliationId,
         // Written with the joined alias, never a Drizzle column reference: a
         // reference inside a projection fragment renders bare and binds inward.
         fromSettlementCurrency: sql<

@@ -24,6 +24,11 @@ import {
 } from "@/app/actions/installment-plans";
 import { getAccountBalances } from "@/db/queries/account-balances";
 import {
+  getReconcileSheet,
+  listAccountReconciliations,
+  reconcileAccount,
+} from "@/db/queries/account-reconciliations";
+import {
   getAccountStatementHistory,
   listAccountStatements,
   recordAccountStatement,
@@ -126,7 +131,7 @@ import {
   issueWebhookCredential,
   listWebhookCredentials,
 } from "@/db/queries/webhook-credentials";
-import { withUserDb } from "@/db/session";
+import { getSessionUser, withUserDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import {
   addCivilMonths,
@@ -1619,7 +1624,7 @@ async function writeSuite(
         labelIds: [],
       }),
     async (updated) => ({
-      ok: updated,
+      ok: updated === "done",
       detail: `updated = ${updated}, amount_cents = ${await readColumn("transactions", "id", transactionId, "amount_cents")}`,
     }),
   );
@@ -1628,7 +1633,7 @@ async function writeSuite(
     "deleteTransaction",
     () => deleteTransaction({ transactionId }),
     async (deleted) => ({
-      ok: deleted,
+      ok: deleted === "done",
       detail: `deleted = ${deleted}, row still there = ${(await readColumn("transactions", "id", transactionId, "id")) !== undefined}`,
     }),
   );
@@ -3046,6 +3051,378 @@ async function timingSuite(): Promise<void> {
   });
 }
 
+/**
+ * RF-137, RF-138: the sums an adjustment must stay out of, the sheet that reads the derived
+ * figure for a day, and the write that books the gap. Its own suite, last, on accounts it opens
+ * itself: the fixtures above keep every figure they asserted on. Every flow figure is compared
+ * with what the same read said before the first adjustment, never against a constant.
+ */
+async function reconcileSuite(
+  userId: string,
+  scope: HarnessScope,
+  fellow: HarnessUser,
+): Promise<void> {
+  const today = todayInBogota();
+  const openedOn = shiftDate(today, -10);
+  const range = currentMonthRange();
+  const thisMonth = today.slice(0, 7);
+
+  const open = async (
+    name: string,
+    kind: "asset" | "liability",
+    currency: string,
+    amountMinor: number,
+    placement: "personal" | "group" = "personal",
+  ): Promise<string> => {
+    const { accountId } = await createAccount({
+      name,
+      kind,
+      subtype: kind === "asset" ? "bancaria" : "tarjeta",
+      ownerUserId: placement === "personal" ? userId : null,
+      groupId: placement === "group" ? scope.groupId : null,
+      isShared: placement === "group",
+      institution: null,
+      lastFour: null,
+      settlementCurrency: currency,
+      amountMinor,
+      balanceOn: openedOn,
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+
+  const cop = await open("Harness cuadre COP", "asset", "COP", 1_000_000);
+  const usd = await open("Harness cuadre USD", "asset", "USD", 0);
+  const card = await open("Harness cuadre tarjeta", "liability", "COP", 300_000);
+  const pot = await open("Harness cuadre fondo", "asset", "COP", 0, "group");
+  const closed = await open("Harness cuadre archivada", "asset", "COP", 0);
+  await archiveAccount({ accountId: closed });
+
+  // A spend on the account a budget narrows to, so "spent" has something an adjustment could leak into.
+  const spend = await createTransaction({
+    fromAccountId: cop,
+    toAccountId: null,
+    amountCents: 300_000,
+    occurredAt: today,
+    description: "Harness cuadre gasto",
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 300_000 }],
+    labelIds: [],
+  });
+  keep("transactions", spend.transactionId);
+  const { budgetId } = await createBudget({
+    ownerUserId: userId,
+    groupId: null,
+    categoryId: scope.categoryId,
+    accountId: cop,
+    labelId: null,
+    period: "monthly",
+    limitCents: 90_000_000,
+    thresholdPct: 80,
+    name: "Harness cuadre presupuesto",
+  });
+  keep("budgets", budgetId);
+
+  const snapshot = async () => {
+    const [flow, six, budgets, byCategory, contributions, exported] = await Promise.all([
+      getMonthlyFlow(range),
+      getSixMonthFlow(),
+      listBudgetsWithStatus(),
+      getExpensesByCategory(range),
+      getMemberContributions(range),
+      readExport({ entityKeys: ["transactions"] }),
+    ]);
+    return { flow, six, budgets, byCategory, contributions, exported: exported.transactions ?? [] };
+  };
+  const before = await snapshot();
+  const flowOf = (rows: Awaited<ReturnType<typeof getMonthlyFlow>>, currency: string) =>
+    rows.find((row) => row.currency === currency);
+
+  // Sheet reads, before anything is booked.
+  const derivedToday = await getReconcileSheet(cop, today);
+  const derivedYesterday = await getReconcileSheet(cop, shiftDate(today, -1));
+  assert(
+    next("The sheet's derived figure is the day's: opening + legs up to it, none after"),
+    derivedToday?.account.derivedCents === 700_000 &&
+      derivedYesterday?.account.derivedCents === 1_000_000,
+    `derived on ${today} = ${derivedToday?.account.derivedCents}, on the day before = ${derivedYesterday?.account.derivedCents}; expected 700000 and 1000000 (the spend is dated ${today})`,
+  );
+
+  // The unit is the history read alone, warmed once for the driver's connection.
+  await listAccountReconciliations(cop);
+  const unitBefore = roundTrips();
+  await listAccountReconciliations(cop);
+  const unit = roundTrips() - unitBefore;
+  const sheetBefore = roundTrips();
+  await getReconcileSheet(cop, today);
+  const sheetTrips = roundTrips() - sheetBefore;
+  assert(
+    next("The sheet costs two round trips, one per Promise.all read"),
+    unit > 0 && sheetTrips === unit * 2,
+    `${sheetTrips} round trips for the sheet, ${unit} for a single read`,
+  );
+
+  // Book two adjustments on the peso account in the current month: +1 200 000, then -800 000.
+  const up = await reconcileAccount({
+    accountId: cop,
+    reconciledOn: today,
+    realMagnitudeCents: 1_900_000,
+    expectedDerivedCents: 700_000,
+  });
+  const down = await reconcileAccount({
+    accountId: cop,
+    reconciledOn: today,
+    realMagnitudeCents: 1_100_000,
+    expectedDerivedCents: 1_900_000,
+  });
+  const zero = await reconcileAccount({
+    accountId: cop,
+    reconciledOn: today,
+    realMagnitudeCents: 1_100_000,
+    expectedDerivedCents: 1_100_000,
+  });
+  const usdUp = await reconcileAccount({
+    accountId: usd,
+    reconciledOn: today,
+    realMagnitudeCents: 50_000,
+    expectedDerivedCents: 0,
+  });
+  const potUp = await reconcileAccount({
+    accountId: pot,
+    reconciledOn: today,
+    realMagnitudeCents: 500_000,
+    expectedDerivedCents: 0,
+  });
+  assert(
+    next("reconcileAccount books a gap, signed, and reports it"),
+    up.ok && up.gapCents === 1_200_000 && down.ok && down.gapCents === -800_000 &&
+      zero.ok && zero.gapCents === 0 && usdUp.ok && potUp.ok,
+    `gaps ${[up, down, zero].map((r) => (r.ok ? r.gapCents : r.reason)).join(", ")}`,
+  );
+  const ids = [up, down, zero].flatMap((r) => (r.ok ? [r.id] : []));
+
+  const after = await snapshot();
+  const copBefore = flowOf(before.flow, "COP");
+  const copAfter = flowOf(after.flow, "COP");
+  const usdBefore = flowOf(before.flow, "USD");
+  const usdAfter = flowOf(after.flow, "USD");
+  // The pot's +500 000 is a COP adjustment too, so the peso row carries 400 000 + 500 000.
+  const COP_ADJUSTMENT = 400_000 + 500_000;
+
+  assert(
+    next("The month's income and expense leave adjustments out"),
+    copAfter?.incomeCents === (copBefore?.incomeCents ?? 0) &&
+      copAfter?.expenseCents === (copBefore?.expenseCents ?? 0),
+    `income ${copBefore?.incomeCents} -> ${copAfter?.incomeCents}, expense ${copBefore?.expenseCents} -> ${copAfter?.expenseCents}`,
+  );
+  assert(
+    next("The month's adjustment is its own signed sum"),
+    (copAfter?.adjustmentCents ?? 0) - (copBefore?.adjustmentCents ?? 0) === COP_ADJUSTMENT,
+    `adjustment ${copBefore?.adjustmentCents ?? 0} -> ${copAfter?.adjustmentCents}; expected +${COP_ADJUSTMENT}`,
+  );
+  assert(
+    next("The month's net leaves adjustments out"),
+    copAfter?.netCents === (copBefore?.netCents ?? 0),
+    `net ${copBefore?.netCents} -> ${copAfter?.netCents}`,
+  );
+
+  const monthRow = (rows: typeof after.six, currency: string, month: string) =>
+    rows.find((row) => row.currency === currency && row.monthStart.startsWith(month));
+  const sixOthers = after.six.every((row) => {
+    const prior = before.six.find(
+      (entry) => entry.currency === row.currency && entry.monthStart === row.monthStart,
+    );
+    return row.monthStart.startsWith(thisMonth) || row.adjustmentCents === (prior?.adjustmentCents ?? 0);
+  });
+  const sixNow = monthRow(after.six, "COP", thisMonth);
+  const sixWas = monthRow(before.six, "COP", thisMonth);
+  assert(
+    next("The six-month trend leaves adjustments out and carries them"),
+    sixNow?.incomeCents === sixWas?.incomeCents &&
+      sixNow?.expenseCents === sixWas?.expenseCents &&
+      (sixNow?.adjustmentCents ?? 0) - (sixWas?.adjustmentCents ?? 0) === COP_ADJUSTMENT &&
+      sixOthers,
+    `this month: income ${sixWas?.incomeCents} -> ${sixNow?.incomeCents}, expense ${sixWas?.expenseCents} -> ${sixNow?.expenseCents}, adjustment ${sixWas?.adjustmentCents} -> ${sixNow?.adjustmentCents}; other months unchanged = ${sixOthers}`,
+  );
+  assert(
+    next("A dollar account's adjustment lands in the dollar row only"),
+    (usdAfter?.adjustmentCents ?? 0) - (usdBefore?.adjustmentCents ?? 0) === 50_000 &&
+      usdAfter?.incomeCents === (usdBefore?.incomeCents ?? 0) &&
+      (copAfter?.adjustmentCents ?? 0) - (copBefore?.adjustmentCents ?? 0) === COP_ADJUSTMENT,
+    `usd adjustment ${usdBefore?.adjustmentCents ?? 0} -> ${usdAfter?.adjustmentCents}, cop +${(copAfter?.adjustmentCents ?? 0) - (copBefore?.adjustmentCents ?? 0)}`,
+  );
+
+  const budgetBefore = before.budgets.find((row) => row.id === budgetId);
+  const budgetAfter = after.budgets.find((row) => row.id === budgetId);
+  assert(
+    next("A budget's spent is untouched by an adjustment on its account"),
+    budgetBefore !== undefined && budgetBefore.spentCents === 300_000 &&
+      budgetAfter?.spentCents === budgetBefore.spentCents,
+    `spent ${budgetBefore?.spentCents} -> ${budgetAfter?.spentCents}`,
+  );
+  assert(
+    next("The category breakdown is untouched by an adjustment"),
+    JSON.stringify(after.byCategory) === JSON.stringify(before.byCategory),
+    `${before.byCategory.length} categories before, ${after.byCategory.length} after`,
+  );
+  assert(
+    next("Member contributions are untouched by an adjustment on a group account"),
+    JSON.stringify(after.contributions) === JSON.stringify(before.contributions),
+    `${before.contributions.length} rows before, ${after.contributions.length} after`,
+  );
+  assert(
+    next("The export leaves adjustments out"),
+    after.exported.length === before.exported.length,
+    `${before.exported.length} transaction rows before, ${after.exported.length} after`,
+  );
+
+  // History.
+  const history = await listAccountReconciliations(cop);
+  const [newest, middle, oldest] = history;
+  assert(
+    next("The history derives «Según HomeFund» as counted minus gap"),
+    middle?.gapCents === -800_000 && middle.countedCents === 1_100_000 && middle.derivedCents === 1_900_000 &&
+      oldest?.derivedCents === 700_000 && newest?.gapCents === 0 && newest.transactionId === null &&
+      newest.derivedCents === 1_100_000,
+    `rows ${history.map((row) => `${row.derivedCents}/${row.countedCents}/${row.gapCents}`).join(" | ")}`,
+  );
+  assert(
+    next("The history lists the newest first"),
+    JSON.stringify(history.map((row) => row.id)) === JSON.stringify([...ids].reverse()),
+    `order ${history.map((row) => row.id.slice(0, 4)).join(",")} against ${[...ids].reverse().map((id) => id.slice(0, 4)).join(",")}`,
+  );
+
+  // Refusals, each leaving the count of rows where it was.
+  const countRows = async (accountId: string): Promise<number> => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from account_reconciliations where account_id = ${accountId}`;
+    return row.n;
+  };
+  const rowsBefore = await countRows(cop);
+  const stale = await reconcileAccount({
+    accountId: cop,
+    reconciledOn: today,
+    realMagnitudeCents: 2_000_000,
+    expectedDerivedCents: 1_100_001,
+  });
+  assert(
+    next("A stale derived figure is refused and nothing is written"),
+    !stale.ok && stale.reason === "stale" && (await countRows(cop)) === rowsBefore,
+    `${JSON.stringify(stale)}, rows ${rowsBefore} -> ${await countRows(cop)}`,
+  );
+
+  const tomorrow = shiftDate(today, 1);
+  const beforeOpen = shiftDate(openedOn, -1);
+  const [tomorrowSheet, openSheet, yesterdaySheet, closedSheet] = await Promise.all([
+    getReconcileSheet(cop, tomorrow),
+    getReconcileSheet(cop, beforeOpen),
+    getReconcileSheet(cop, shiftDate(today, -1)),
+    getReconcileSheet(closed, today),
+  ]);
+  const attempt = (accountId: string, on: string, sheet: typeof tomorrowSheet) =>
+    reconcileAccount({
+      accountId,
+      reconciledOn: on,
+      realMagnitudeCents: 10_000,
+      expectedDerivedCents: sheet?.account.derivedCents ?? 0,
+    });
+  const [future, early, late, archived, denied] = await Promise.all([
+    attempt(cop, tomorrow, tomorrowSheet),
+    attempt(cop, beforeOpen, openSheet),
+    attempt(cop, shiftDate(today, -1), yesterdaySheet),
+    attempt(closed, today, closedSheet),
+    asUser(fellow, () => reconcileAccount({
+      accountId: cop,
+      reconciledOn: today,
+      realMagnitudeCents: 10_000,
+      expectedDerivedCents: 1_100_000,
+    })),
+  ]);
+  assert(
+    next("Each refusal is mapped, with the day it names"),
+    !future.ok && future.reason === "future" &&
+      !early.ok && early.reason === "beforeOpening" && early.date === openedOn &&
+      !late.ok && late.reason === "beforeLatest" && late.date === today &&
+      !archived.ok && archived.reason === "archived" &&
+      !denied.ok && denied.reason === "denied" &&
+      (await countRows(cop)) === rowsBefore,
+    [future, early, late, archived, denied].map((r) => (r.ok ? "ok" : `${r.reason}${r.date ? `@${r.date}` : ""}`)).join(", "),
+  );
+
+  // A liability's magnitude is signed by its kind.
+  const cardSheet = await getReconcileSheet(card, today);
+  const owed = await reconcileAccount({
+    accountId: card,
+    reconciledOn: today,
+    realMagnitudeCents: 450_000,
+    expectedDerivedCents: cardSheet?.account.derivedCents ?? 0,
+  });
+  const counted = owed.ok
+    ? await readColumn<string>("account_reconciliations", "id", owed.id, "counted_balance_cents")
+    : undefined;
+  assert(
+    next("A card's typed magnitude is stored negative"),
+    owed.ok && counted === "-450000" && owed.gapCents === -150_000,
+    `counted_balance_cents = ${counted}, derived ${cardSheet?.account.derivedCents}, ${JSON.stringify(owed)}`,
+  );
+
+  // The listing and the write paths see the mark.
+  const adjustment = history.find((row) => row.gapCents === -800_000);
+  const listed = await listTransactions({ accountId: cop });
+  const markedRow = listed.find((row) => row.id === adjustment?.transactionId);
+  const spendRow = listed.find((row) => row.id === spend.transactionId);
+  assert(
+    next("The listing marks the adjustment and only it"),
+    markedRow?.reconciliationId === adjustment?.id && spendRow?.reconciliationId === null,
+    `adjustment row mark = ${markedRow?.reconciliationId}, spend mark = ${spendRow?.reconciliationId}`,
+  );
+
+  const adjustmentId = adjustment?.transactionId ?? randomUUID();
+  const edited = await updateTransaction({
+    transactionId: adjustmentId,
+    fromAccountId: cop,
+    toAccountId: null,
+    amountCents: 1,
+    occurredAt: today,
+    description: "editado",
+    splits: [{ categoryId: scope.categoryId, amountCents: 1 }],
+    labelIds: [],
+  });
+  const removed = await deleteTransaction({ transactionId: adjustmentId });
+  const kept = await readColumn<string>("transactions", "id", adjustmentId, "amount_cents");
+  const missing = await deleteTransaction({ transactionId: randomUUID() });
+  assert(
+    next("Editing or deleting an adjustment is refused with its own reason"),
+    edited === "adjustment" && removed === "adjustment" && kept === "800000" && missing === "missing",
+    `update = ${edited}, delete = ${removed}, amount_cents still ${kept}, unknown id = ${missing}`,
+  );
+
+  // Round trips of the dashboard and the reports read-models, against the sum of their parts.
+  const trips = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = roundTrips();
+    await run();
+    return roundTrips() - started;
+  };
+  await getReportsData();
+  const group = await getUserGroup();
+  const parts =
+    (await trips(() => getExpensesByCategory(range))) +
+    (await trips(() => getSixMonthFlow())) +
+    (await trips(() => getMemberContributions(range))) +
+    (await trips(() => getUserGroup())) +
+    (await trips(() => getSessionUser())) +
+    (group ? await trips(() => listMembers(group.id, { archived: false })) : 0);
+  const reportsTrips = await trips(() => getReportsData());
+  const flowTrips = await trips(() => getMonthlyFlow(range));
+  const sixTrips = await trips(() => getSixMonthFlow());
+  const readUnit = await trips(() => getMemberContributions(range));
+  assert(
+    next("The flow sums and the reports read keep their round trips"),
+    flowTrips === readUnit && sixTrips === readUnit && reportsTrips === parts,
+    `getMonthlyFlow ${flowTrips}, getSixMonthFlow ${sixTrips} against one read ${readUnit}; getReportsData ${reportsTrips} against its parts ${parts}`,
+  );
+}
+
 async function main(): Promise<void> {
   // Opened before the first identity, so a kill between the two still leaves a
   // registry row a reaper can find dead: `createHarnessUser` would open the same
@@ -3100,6 +3477,8 @@ async function main(): Promise<void> {
   await statementSuite(debt, scope);
   console.log("");
   await timingSuite();
+  console.log("");
+  await reconcileSuite(userId, scope, fellow);
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

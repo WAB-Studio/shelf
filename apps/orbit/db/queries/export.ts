@@ -316,7 +316,12 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
           entity,
           input.from,
           input.to,
-          entity === "transactions" ? listed : [],
+          // An adjustment is a ledger correction, not a movement a person made (RF-138): the
+          // backup leaves it out, and the account's opening balance and the reconciliation
+          // history are what carry the figure.
+          entity === "transactions"
+            ? [isNull(transactions.reconciliationId), ...listed]
+            : [],
         ),
       ),
     ),

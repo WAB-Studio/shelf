@@ -218,7 +218,7 @@ export const updateTransactionAction = authActionClient
     await assertCauseReadable(parsedInput.causedByTransactionId, updateTransactionSchema);
     const counter = await resolveCounterAmount(parsedInput);
 
-    let updated: boolean;
+    let updated: Awaited<ReturnType<typeof updateTransaction>>;
     try {
       updated = await updateTransaction({
         transactionId: parsedInput.transactionId,
@@ -236,7 +236,8 @@ export const updateTransactionAction = authActionClient
       mapTransactionError(error);
     }
 
-    if (!updated) throw new ActionError("errors.notFound");
+    if (updated === "adjustment") throw new ActionError("errors.adjustmentReadOnly");
+    if (updated === "missing") throw new ActionError("errors.notFound");
 
     // Wholesale, like the splits and labels above: an edit clearing the cause
     // sends `null` and this still runs, since absent and null both mean none.
@@ -251,7 +252,8 @@ export const deleteTransactionAction = authActionClient
   .inputSchema(deleteTransactionSchema)
   .action(async ({ parsedInput: { transactionId } }) => {
     const deleted = await deleteTransaction({ transactionId });
-    if (!deleted) throw new ActionError("errors.notFound");
+    if (deleted === "adjustment") throw new ActionError("errors.adjustmentReadOnly");
+    if (deleted === "missing") throw new ActionError("errors.notFound");
 
     refresh();
   });
