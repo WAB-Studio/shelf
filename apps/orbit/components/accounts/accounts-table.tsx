@@ -41,6 +41,7 @@ export function AccountsTable({
   hasGroup,
   empty,
   onEdit,
+  onReconcile,
   onArchive,
   onRestore,
   onDelete,
@@ -53,6 +54,7 @@ export function AccountsTable({
   hasGroup: boolean;
   empty?: ReactNode;
   onEdit: (row: AccountRow) => void;
+  onReconcile: (row: AccountRow) => void;
   onArchive: (row: AccountRow) => void;
   onRestore: (row: AccountRow) => void;
   onDelete: (row: AccountRow) => void;
@@ -192,6 +194,15 @@ export function AccountsTable({
                     label: tKey("common.edit"),
                     onSelect: () => onEdit(row),
                   },
+                  ...(row.canWrite
+                    ? [
+                        {
+                          key: "reconcile",
+                          label: t("reconcile"),
+                          onSelect: () => onReconcile(row),
+                        },
+                      ]
+                    : []),
                   {
                     key: "archive",
                     label: tKey("common.archive"),

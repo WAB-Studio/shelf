@@ -14,6 +14,7 @@ import {
   restoreAccountAction,
 } from "@/app/actions/accounts";
 import { AccountFormDialog } from "@/components/accounts/account-form-dialog";
+import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
 import { AccountsTable } from "@/components/accounts/accounts-table";
 import {
   Badge,
@@ -111,6 +112,7 @@ export function AccountsScreen({
   const [formTarget, setFormTarget] = useState<AccountRow | "new" | null>(
     newSubtype ? "new" : null,
   );
+  const [reconcileTarget, setReconcileTarget] = useState<AccountRow | null>(null);
   const [rowAction, setRowAction] = useState<RowAction | null>(null);
 
   const archiveState = useAction(archiveAccountAction, {
@@ -317,6 +319,7 @@ export function AccountsScreen({
             }
             hasGroup={groupName !== null}
             onEdit={(account) => setFormTarget(account)}
+            onReconcile={(account) => setReconcileTarget(account)}
             onArchive={(account) => setRowAction({ kind: "archive", account })}
             onRestore={(account) => setRowAction({ kind: "restore", account })}
             onDelete={(account) => setRowAction({ kind: "delete", account })}
@@ -359,6 +362,7 @@ export function AccountsScreen({
                         account={account}
                         archived={archived}
                         onEdit={() => setFormTarget(account)}
+                        onReconcile={() => setReconcileTarget(account)}
                         onArchive={() => setRowAction({ kind: "archive", account })}
                         onRestore={() => setRowAction({ kind: "restore", account })}
                         onDelete={() => setRowAction({ kind: "delete", account })}
@@ -390,6 +394,16 @@ export function AccountsScreen({
         account={formTarget === "new" ? undefined : (formTarget ?? undefined)}
         defaultSubtype={newSubtype ?? undefined}
       />
+
+      {reconcileTarget !== null && (
+        <ReconcileDialog
+          account={reconcileTarget}
+          open
+          onOpenChange={(open) => {
+            if (!open) setReconcileTarget(null);
+          }}
+        />
+      )}
 
       {rowAction?.kind === "archive" && (
         <ConfirmDialog
@@ -461,6 +475,7 @@ function AccountCard({
   account,
   archived,
   onEdit,
+  onReconcile,
   onArchive,
   onRestore,
   onDelete,
@@ -469,6 +484,7 @@ function AccountCard({
   account: AccountRow;
   archived: boolean;
   onEdit: () => void;
+  onReconcile: () => void;
   onArchive: () => void;
   onRestore: () => void;
   onDelete: () => void;
@@ -577,6 +593,11 @@ function AccountCard({
                 <DropdownMenu.Item onSelect={onEdit}>
                   {tKey("common.edit")}
                 </DropdownMenu.Item>
+                {account.canWrite && (
+                  <DropdownMenu.Item onSelect={onReconcile}>
+                    {t("reconcile")}
+                  </DropdownMenu.Item>
+                )}
                 <DropdownMenu.Item onSelect={onArchive}>
                   {tKey("common.archive")}
                 </DropdownMenu.Item>
