@@ -33,8 +33,9 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
 
   // §0.3, 3: a goal whose first quantity commitment has not landed yet has
   // nothing to sum and nothing to place in a week (RP-14's own rule, carried
-  // here). No table for a measure that does not exist.
-  if (!goal.measureUnit || !goal.measureName) {
+  // here). No table for a measure that does not exist. A holder measures
+  // through its goals' summed unit and has no name of its own (RP-123).
+  if (!goal.measureUnit || (!goal.measureName && !goal.holdsGoals)) {
     return (
       <Page width="full">
         <ScreenHeader title={t("goal.review.title")} back={back} />
@@ -71,8 +72,9 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
     return {
       key: String(week.index),
       cells: [t("goal.review.weekLabel", { n: week.index }), week.total, ...(hasPhase ? [phases[index]] : []), ...(hasNote ? [notes[index]] : [])],
-      note: mark || undefined,
       wideMark: mark || undefined,
+      phoneMark: mark || undefined,
+      phoneUnder: phases[index] || undefined,
       detail: civilSpan(week.startsOn, week.endsOn),
     };
   });
