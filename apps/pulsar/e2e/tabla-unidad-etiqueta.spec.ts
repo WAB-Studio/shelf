@@ -277,7 +277,7 @@ for (const width of [360, 1024]) {
   });
 }
 
-test("revision at 360: «semana 1» with its dates under it is a 112px label and the page does not overflow", async ({
+test("revision at 360: «semana 1» with its dates under it is a label of at least 112px, its dates on one line, and the page does not overflow", async ({
   person,
   browser,
   baseURL,
@@ -289,7 +289,9 @@ test("revision at 360: «semana 1» with its dates under it is a 112px label and
     const week = row(page, "semana 1");
     await expect(week).toBeVisible();
     const label = week.locator(":scope > span").first();
-    expect((await boxOf(label)).width).toBeCloseTo(112, 0);
+    // `fitDetail`: the column takes the longest date line of any row («· en curso» included), never under 112.
+    expect((await boxOf(label)).width).toBeGreaterThanOrEqual(111.5);
+    expect((await boxOf(label.locator("span"))).height).toBeLessThan(24);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);
   } finally {
