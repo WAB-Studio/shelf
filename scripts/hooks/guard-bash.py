@@ -96,7 +96,7 @@ def check(cmd, cwd):
             for a in args:
                 if a.startswith("-"):
                     continue
-                dst = a.split(":")[-1]
+                dst = a.split(":")[-1].lstrip("+")
                 if dst in ("main", "refs/heads/main"):
                     return "git push to main is refused by the ruleset: open a PR from integracion."
 

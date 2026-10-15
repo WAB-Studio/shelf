@@ -18,8 +18,7 @@ This file is the core every agent loads. Read the file the index names before th
   `apps/portal` is «Universo». Folders and URLs keep the old names until the rename slice.
 - HomeFund: contract `docs/SPEC.md` §1, model and invariants §2, stack §4, flows `docs/FLOWS.md`, design `docs/DESIGN.md`.
 - WordBook: `docs/voyager/SPEC.md`, `docs/voyager/DESIGN.md`. GoalLog: `docs/pulsar/SPEC.md`, `docs/pulsar/DESIGN.md`.
-  Universo: `docs/portal/DESIGN.md`.
-- Give every app its own design. Never carry a pattern across because it exists next door.
+  Universo: `docs/portal/DESIGN.md`. Give every app its own design; never carry a pattern across.
 - `apps/` holds the apps, `packages/` the code two of them share: npm workspaces, one lockfile, `node_modules` hoisted
   to the root (a script reaches a binary as `../../node_modules/...`). Promote nothing until a second app asks for it.
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.

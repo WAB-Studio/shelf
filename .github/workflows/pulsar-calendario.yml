@@ -97,6 +97,7 @@ jobs:
         run: npm run harness:token -w apps/orbit
 
       - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get install -y poppler-utils
 
       - run: npm run build -w apps/pulsar
 

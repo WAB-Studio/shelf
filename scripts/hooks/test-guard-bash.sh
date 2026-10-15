@@ -51,6 +51,8 @@ passes 'git branch -D foo'
 
 blocks 'git push origin main'
 blocks 'git push origin HEAD:main'
+blocks 'git push origin +main'
+blocks 'git push origin +HEAD:main'
 blocks 'git push origin HEAD:refs/heads/main'
 passes 'git push origin infra-hooks'
 passes 'git push origin origin/main:refs/heads/integracion'

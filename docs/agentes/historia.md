@@ -43,9 +43,10 @@ Each entry names the rule and the file it lives in now.
 - In `.claude/agents/critic.md`: «A report with no criticism in it is a report that was not written.» Same successor.
 - Canvas upkeep, from «Keep each canvas current, like a Figma file a team works from» (decided 2026-10-05: «tenemos
   como 8 tabs y nunca vamos limpiando y agrupando… siempre queda el artifact con cosas antiguas y sin resultados
-  reales»). Dropped: the index page with each board's state; replacing a board with a capture of the real screen
-  the day its module lands; moving a superseded board to «Archivo» the same day; «a canvas behind `integracion` is
-  a defect». Kept: draw the board and take the user's answer before any screen; one page per area.
+  reales»). Decided by the user 2026-10-14: keep the boards; drop the index page with each board's state, the
+  replacement of a board with a capture of the real screen the day its module lands, and «a canvas behind
+  `integracion` is a defect». Kept: draw the board and take the user's answer before any screen; one page per area;
+  move a superseded board to «Archivo» the same day.
 - The prose of the rules hooks now enforce (`.claude/settings.json`): no `git stash`, commit as wilson, no Claude
   trailer, PRs to `integracion`, no `pkill -f`, no `gh pr merge` chained with a delete, no push to `main`.
   Their evidence stays below.

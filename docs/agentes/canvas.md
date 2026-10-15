@@ -18,6 +18,7 @@ The main session reads this before a screen is dispatched. The why: `docs/agente
   drawn; only `DESIGN.md` says what was chosen.
 - When a board and its `DESIGN.md` disagree, the file wins.
 - Say in `DESIGN.md` which boards do not exist. A gap nobody wrote down reads as a gap nobody noticed.
+- Move a superseded board to the canvas's «Archivo» page the same day. Never leave it beside the live one.
 - Update the canvas in place, at its own URL. Never publish a second canvas for the same app.
 - Group pages by area of the app, one page per area, light and dark side by side. Open no page for a single module.
   Split a crowded canvas into pages, never into a second canvas.
