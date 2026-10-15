@@ -235,9 +235,11 @@ function AdjustmentLines({ months }: { months: MonthFlow[] }) {
 
   return current.map((month) => (
     <Flex key={month.currency} align="center" gap="3">
-      <Text as="div" size="3" style={{ flex: 1, minWidth: 0 }} truncate>
-        {t("monthAdjustment")}
-      </Text>
+      <Box asChild flexGrow="1" minWidth="0">
+        <Text as="div" size="3" truncate>
+          {t("monthAdjustment")}
+        </Text>
+      </Box>
       <Text size="3" weight="medium">
         <Money
           minor={month.adjustmentCents}
