@@ -284,7 +284,7 @@ test("claimModelCall: cap + 5 concurrent chat claims land exactly the chat cap",
 });
 
 // RP-126: the whole app's day. The cap is set to what the table already holds plus a few, so rows other
-// lanes left today do not move the count the test asserts. `check:plan` runs its files one at a time
+// lanes left today do not move the count the test asserts. `check:plan:spend` runs its three files one at a time
 // (`--test-concurrency=1`): chat-route.ts and import-route.ts write this table too, and a row landing
 // between the count and the claims would eat the room.
 async function withAppCap<T>(room: number, run: () => Promise<T>): Promise<T> {
