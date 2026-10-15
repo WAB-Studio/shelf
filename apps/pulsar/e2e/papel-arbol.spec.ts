@@ -206,7 +206,7 @@ test.describe("the paper report groups by general goal (RP-84, RP-95, RP-77)", (
         expect(region.filter((l) => l.startsWith(labelOf(offset))), `row ${labelOf(offset)} once`).toHaveLength(1);
       }
       for (const offset of [9, 10, 11]) {
-        expect(region.filter((l) => l.startsWith(labelOf(offset))), `${labelOf(offset)} is no row`).toHaveLength(0);
+        expect(region.filter((l) => l.startsWith(labelOf(offset)) && !l.startsWith(`${labelOf(offset)},`)), `${labelOf(offset)} is no row`).toHaveLength(0);
       }
 
       const line = new RegExp(`${labelOf(9)}, ${labelOf(10)} y ${labelOf(11)}: sin monto · 1 tarea$`);

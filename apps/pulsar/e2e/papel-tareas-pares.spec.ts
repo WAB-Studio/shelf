@@ -99,7 +99,7 @@ for (const tasks of [0, 1, 2, 10, 11, 12, 13, 14, 15])
     // The summary stays alone on sheet 1: no task and no «por mes» table of the detail.
     expect(pages[0].filter(isTask), "sheet 1 holds no task").toEqual([]);
     expect(pages[0].some((line) => line.includes("· por mes")), "sheet 1 holds no detail table").toBe(false);
-    expect(pages[0].some((line) => /^leer \d+ páginas de/.test(line)), "sheet 1 holds the summary row of Leer").toBe(true);
+    expect(pages[0].some((line) => /^leer \d+ de [\d.]+ páginas/.test(line)), "sheet 1 holds the summary row of Leer").toBe(true);
     // The label shares a sheet with December, above it; no sheet ends on it.
     const withLabel = pages.flatMap((lines, page) => lines.map((line, at) => ({ line, page, at }))).filter((entry) => entry.line === OWN_LABEL);
     expect(withLabel, "the label printed once").toHaveLength(1);
@@ -120,7 +120,7 @@ test("T2: a goal with no end, no rhythm and months ahead with nothing prints no 
   for (const offset of [2, 5, 11]) expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
 });
 
-test("T2 control: a goal in minutes with no rhythm and no end keeps «enero de …: sin monto · 1 tarea» for the month that holds a task", async ({ person, browser, baseURL, db }) => {
+test("T2 control: a goal in minutes with no rhythm and no end keeps «enero …: sin monto · 1 tarea» for the month that holds a task", async ({ person, browser, baseURL, db }) => {
   // Kills: dropping the line of a month with tasks too (the whole line, not only the empty months).
   const id = await seedOpenGoal(db, person, { name: "Estudiar", unit: MINUTES, horizon: null, rhythm: null, created: openedIn(-2) });
   await db`
@@ -133,7 +133,8 @@ test("T2 control: a goal in minutes with no rhythm and no end keeps «enero de �
 test("T2 no measure: a goal with no end and no measure prints no «…: sin tareas» line for months ahead with no task", async ({ person, browser, baseURL, db }) => {
   // Kills: the guard on `horizon === null` in the line of months out of a goal with no measure (Q6 (c)).
   await seedOpenGoal(db, person, { name: "Vivir mejor", unit: null, horizon: null, rhythm: null, created: openedIn(-4) });
-  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Vivir mejor");
+  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Vivir mejor", false);
+  expect(paper, "nothing to put in it: no «por mes»").not.toContain("vivir mejor · por mes");
   expect(paper).toContain("vivir mejor");
   expect(paper).not.toContain(": sin tareas");
   expect(paper).not.toContain(": sin monto");

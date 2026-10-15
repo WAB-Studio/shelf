@@ -345,7 +345,7 @@ test.describe("a time goal with no rhythm says its left-out months' tasks (835, 
       expect(section).not.toContain(`${yearName(2)}: sin monto ·`);
       expect(section).not.toContain("0 tareas");
       // The months with a task are in the line, never printed as table rows.
-      expect(section).not.toContain(labelOf(1));
+      expect(section).not.toMatch(new RegExp(`${labelOf(1)} \\d`));
     } finally {
       await context.close();
       await remove(db, person, id);

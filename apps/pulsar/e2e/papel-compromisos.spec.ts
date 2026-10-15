@@ -140,7 +140,7 @@ test.describe("commitments and «por mes» on the export screen and on paper (RP
         expect(text, `${where}: «por mes»`).toContain("cocina · por mes");
         const at = text.indexOf(labelOf(0));
         expect(at, `${where}: the current month's row`).toBeGreaterThanOrEqual(0);
-        expect(text.slice(at, at + 40), `${where}: its count`).toContain("1 tarea");
+        expect(text.slice(at, at + 40), `${where}: its count`).toContain("0 de 1 hechas");
       }
     } finally {
       await clear(db, person);

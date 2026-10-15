@@ -3,6 +3,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
+import { cadencePhrase } from "@/lib/day/row-phrases";
 import { dayBefore } from "@/lib/day/weeks";
 import {
   civilSpan,
@@ -16,7 +17,7 @@ import { endlessCut, foldsMonths } from "@/lib/lists/endless-cut";
 import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { screenPlanned } from "@/lib/plan/screen-planned";
-import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { formatCount, formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { civilDateToDate, civilDayMonthYear } from "@/lib/zone";
 import {
   Figure,
@@ -322,6 +323,8 @@ function GoalPart({
   const unit = goal.unit;
   const format = useFormatter();
   const commonT = useTranslations("common");
+  const rootT = useTranslations();
+  const words = useTimeWords();
 
   if (goal.endedOn !== null) {
     return (
@@ -367,7 +370,8 @@ function GoalPart({
   const paperKeys = new Set(paperMonths.map((month) => month.month));
   const screenMonths = all ? goal.months : paperMonths;
   // Months set by hand sit under the line, in a table of their own; «ver todo» lists every month in order.
-  const paperOwn = new Set(cut ? cut.handSet.map((month) => month.month) : []);
+  // A goal that holds goals keeps one table: its months are the sum of the goals inside, none is its own (RP-124).
+  const paperOwn = new Set(cut && !goal.holdsGoals ? cut.handSet.map((month) => month.month) : []);
   const paperGoal: GoalReport = { ...goal, months: paperMonths };
   const aheadLine = cut?.line
     ? t.rich("ahead", {
@@ -509,6 +513,29 @@ function GoalPart({
             </Flex>
           </Section>
         );
+      case "commitments":
+        return (
+          <Section label={t("sections.commitments")}>
+            {(goal.commitments ?? []).map((commitment, index) => {
+              const cadence =
+                cadencePhrase((key, values) => rootT(key, values), commitment.cadence, {
+                  weekdayShort: rootT.raw("day.cadence.weekdayName") as string[],
+                  weekdayPlural: rootT.raw("day.cadence.weekdayPlural") as string[],
+                }) ?? rootT("day.cadence.everyDay");
+              return (
+                <Text key={`${commitment.name}-${index}`} as="p">
+                  {commitment.targetQuantity !== null && commitment.unit !== null
+                    ? t("commitmentAmount", {
+                        name: commitment.name,
+                        cadence,
+                        amount: formatQuantity(commitment.targetQuantity, commitment.unit, words),
+                      })
+                    : t("commitmentLine", { name: commitment.name, cadence })}
+                </Text>
+              );
+            })}
+          </Section>
+        );
       case "phases":
         return (
           <Section label={t("sections.phases")}>
@@ -581,30 +608,25 @@ function GoalPart({
             )))}
           </Section>
         );
-        if (!held) return list(goal.tasks.map((task) => ({ task })));
-        return (
-          <>
-            <PrintHidden>{list(groupTasks)}</PrintHidden>
-            {goal.tasks.length > 0 ? <PrintOnly>{list(goal.tasks.map((task) => ({ task })))}</PrintOnly> : null}
-          </>
-        );
+        return list(held ? groupTasks : goal.tasks.map((task) => ({ task })));
       }
       case "months": {
         if (unit === null) {
           const rows: TableRow[] = screenMonths.map((month) => {
             const started = month.current || month.past;
             const tasks = month.tasks ?? { done: 0, total: 0 };
+            const count =
+              tasks.total === 0
+                ? t("noTasks")
+                : started
+                  ? t("tasksDone", { done: tasks.done, total: tasks.total })
+                  : t("tasksToDo", { count: tasks.total });
+            const state = month.current ? t("current") : started ? t("closed") : t("upcoming");
             return {
               key: month.month,
-              cells: [
-                monthLabel(month.month),
-                tasks.total === 0
-                  ? t("noTasks")
-                  : started
-                    ? t("tasksDone", { done: tasks.done, total: tasks.total })
-                    : t("tasksToDo", { count: tasks.total }),
-                month.current ? t("current") : started ? t("closed") : t("upcoming"),
-              ],
+              cells: [monthLabel(month.month), count, state],
+              // The stacked face has no columns to hold them.
+              note: `${count} · ${state}`,
               printed: paperKeys.has(month.month) && printed(month),
             };
           });
@@ -631,7 +653,7 @@ function GoalPart({
                         <Text as="p" variant="line">
                           {t("monthsOutTasks", {
                             months: format.list(
-                              out.map((m) => monthYear.format(civilDateToDate(m.month))),
+                              out.map((m) => monthLabel(m.month)),
                               { type: "conjunction" },
                             ),
                           })}
@@ -743,7 +765,7 @@ function GoalPart({
         // A goal with no end prints no line for its months ahead with neither an amount nor a task.
         const out = goal.horizon === null ? foldedMonths.filter((month) => (month.tasks?.total ?? 0) > 0) : foldedMonths;
         const outNames = format.list(
-          out.map((m) => monthYear.format(civilDateToDate(m.month))),
+          out.map((m) => monthLabel(m.month)),
           { type: "conjunction" },
         );
         // A time goal with no rhythm counts tasks per month: the line groups the months by that count.
@@ -792,7 +814,7 @@ function GoalPart({
                   <Text as="p" variant="line" key={group.total}>
                     {t("monthsOutCount", {
                       months: format.list(
-                        group.months.map((m) => monthYear.format(civilDateToDate(m.month))),
+                        group.months.map((m) => monthLabel(m.month)),
                         { type: "conjunction" },
                       ),
                       count: group.total,
@@ -929,7 +951,7 @@ function GoalPart({
     }
   };
 
-  const spans = (section: GoalSection | "inside") => (section !== "month" && section !== "toDate" ? "all" : undefined);
+  const spans = (section: GoalSection | "inside") => (section !== "month" && section !== "toDate" && section !== "commitments" ? "all" : undefined);
   return (
     <PrintGoal whole={keepsHeadWithTable(paperMonths, goal.unit)}>
       <PrintBlock span="lead">
@@ -956,7 +978,6 @@ function GoalPart({
           key={section}
           span={spans(section)}
           whole={section === "month" || section === "toDate" || (section === "months" && !isLongTable(paperMonths, goal.unit))}
-          only={section === "months" && unit === null}
         >
           {render(section)}
         </PrintBlock>
@@ -986,12 +1007,17 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
           : screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${report.today.slice(0, 7)}-01`));
       if (unit === null || planned === null) return { goal, month: null, week: null };
       const quantity = (value: number) => formatQuantity(value, unit, words);
+      // «2.100 de 6.000 palabras»: the unit once, after the planned figure; time keeps its own words each side.
+      const pair = (done: number, of: number) =>
+        isTimeUnit(unit)
+          ? t("summary.of", { done: quantity(done), planned: quantity(of) })
+          : t("summary.of", { done: formatCount(done), planned: quantity(of) });
       const done = goal.weeks.find((w) => w.current)?.total ?? 0;
       const weekPlanned = goal.weekPlanned ?? null;
       return {
         goal,
-        month: t("summary.of", { done: quantity(goal.thisMonth.reached), planned: quantity(planned) }),
-        week: weekPlanned === null ? quantity(done) : t("summary.of", { done: quantity(done), planned: quantity(weekPlanned) }),
+        month: pair(goal.thisMonth.reached, planned),
+        week: weekPlanned === null ? quantity(done) : pair(done, weekPlanned),
       };
     });
   const depth = new Map<string, 0 | 1 | 2>();
@@ -1116,13 +1142,6 @@ export async function ReportScreen({ report, showAll = false }: { report: Report
           {groups.map(({ root, inside }) => (
             <Panel key={root.id} print="plain">
               <GoalPart goal={root} declaredOnly={declaredOnly} today={report.today} inside={inside} all={showAll} t={t} />
-              {inside.map((member) => (
-                <PrintOnly key={member.id}>
-                  <Flex direction="column" pl={member.parentId === root.id ? "5" : "7"}>
-                    <GoalPart goal={member} declaredOnly={declaredOnly} today={report.today} all={showAll} t={t} />
-                  </Flex>
-                </PrintOnly>
-              ))}
             </Panel>
           ))}
         </PanelGrid>

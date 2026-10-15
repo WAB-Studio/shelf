@@ -117,7 +117,7 @@ test.describe("the paper report: months out carry their year, and each goal's bl
       // The two Decembers of a goal never read alike: every name in the line is followed by its year.
       const line = /([^.]*?): sin monto/.exec(section.slice(section.indexOf(nameOf(DEC)) - 1))?.[0] ?? "";
       for (const month of line.match(new RegExp(NAMES.join("|"), "g")) ?? []) {
-        expect(line, `«${month}» without a year`).toMatch(new RegExp(`${month} de \\d{4}`));
+        expect(line, `«${month}» without a year`).toMatch(new RegExp(`${month} \\d{4}`));
       }
       expect(line).not.toMatch(/ a |–|\d+ meses/);
     } finally {

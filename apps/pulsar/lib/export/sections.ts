@@ -4,22 +4,33 @@ import { shortMonth } from "@/lib/dates/short-month";
 
 import type { GoalReport } from "./report";
 
-export type Section = "month" | "toDate" | "phases" | "tasks" | "months";
+export type Section = "month" | "toDate" | "commitments" | "phases" | "tasks" | "months";
 
 // A goal with no unit measures nothing, so it prints no figure section
 // rather than a zero (RP-49). `month` stays with a unit even when this month
 // has no amount: the page then prints the reached figure alone. `tasks` is
 // every task of the month, carried first, so a goal with none prints no head.
+// `commitments` follows the measure and prints only with a live one (RP-124).
+// A goal that measures nothing prints «months» only when a row it would print
+// holds a task, a planned amount or something reached (RP-124); a report that
+// carries no task count at all (hand-built) has nothing to say about them.
 export function goalSections(goal: GoalReport): Section[] {
   const measured = goal.unit !== null;
   const sections: Section[] = [];
   if (measured) sections.push("month", "toDate");
+  if ((goal.commitments ?? []).length > 0) sections.push("commitments");
   if (goal.phases.length > 0) sections.push("phases");
   if (goal.tasks.length > 0) sections.push("tasks");
-  if (measured || goal.months.some((month) => month.tasks !== undefined && printsOnPaper(month, goal.unit))) {
+  if (measured || goal.months.some((month) => holdsSomething(month, goal.unit))) {
     sections.push("months");
   }
   return sections;
+}
+
+function holdsSomething(month: GoalReport["months"][number], unit: string | null): boolean {
+  const count = month.taskCount ?? month.tasks?.total;
+  if (count === undefined || !printsOnPaper(month, unit)) return false;
+  return count > 0 || month.planned !== null || month.reached > 0;
 }
 
 // A goal's head stays with its table when the table is tall and still short enough for the goal to fit a page.

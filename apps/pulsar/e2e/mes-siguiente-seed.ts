@@ -25,8 +25,8 @@ export const range = (from: number, to: number) => Array.from({ length: to - fro
 // The 5th of a month `offset` from this one, as E1 opens («abierta el 5 nov 2024»).
 export const openedIn = (offset: number) => new Date(`${monthStartOf(offset).slice(0, 8)}05T12:00:00Z`);
 
-// How the fold line of paper names a month: «noviembre de 2026».
-export const longMonth = (offset: number) => `${monthName(offset)} de ${monthStartOf(offset).slice(0, 4)}`;
+// How the fold line of paper names a month, as its rows do: «noviembre 2026».
+export const longMonth = (offset: number) => `${monthName(offset)} ${monthStartOf(offset).slice(0, 4)}`;
 
 export const AHEAD40 = /los demás meses que vienen: 40 páginas cada uno/i;
 export const OLD_AHEAD = /\blos meses que vienen\b/i;
@@ -111,7 +111,8 @@ export const reportRow = (section: Locator, offset: number) =>
 const A4 = { width: 794, height: 1123 };
 
 // One goal's text on paper, from its «por mes» label to the next label (or the end), lowercase, one run.
-export async function paperOf(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, name: string): Promise<string> {
+// A goal that measures nothing and holds nothing prints no «por mes» (RP-124): `labelled` false hands back the whole sheet.
+export async function paperOf(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, name: string, labelled = true): Promise<string> {
   const context = await browser.newContext({ storageState: sessionFile, baseURL: baseURL!, viewport: A4 });
   try {
     const page = await context.newPage();
@@ -125,6 +126,7 @@ export async function paperOf(browser: Browser, baseURL: string | undefined, ses
     const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ").toLowerCase();
     const label = `${name} · por mes`.toLowerCase();
     const from = flat.indexOf(label);
+    if (!labelled) return flat;
     expect(from, `«${name} · por mes» in the PDF`).toBeGreaterThanOrEqual(0);
     const to = flat.indexOf("· por mes", from + label.length);
     return flat.slice(from, to === -1 ? undefined : to);

@@ -264,8 +264,8 @@ test.describe("the paper report prints the months of a goal that measures nothin
       const section = sectionOf(await printed(page, "fuera"), name);
       const line = `${withYear(2)} y ${withYear(3)}: sin tareas`;
       expect(section).toContain(line);
-      // Months out are not rows: their label («mes año») never appears, only «mes de año» inside the line.
-      for (const offset of [2, 3]) expect(section, `month ${offset} is no row`).not.toContain(labelOf(offset));
+      // Months out are not rows: their name is never followed by a row's cells, only by the line's «,», «y» or «:».
+      for (const offset of [2, 3]) expect(section, `month ${offset} is no row`).not.toMatch(new RegExp(`${labelOf(offset)} (?:\\d|sin tareas)`));
       expect(section.indexOf(line), "below the last row").toBeGreaterThan(section.indexOf(labelOf(1)));
       expect(section.match(/sin tareas/g) ?? []).toHaveLength(1);
     } finally {
@@ -290,7 +290,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
         expect(section, `closed month ${offset} is a row`).toMatch(
           new RegExp(`${labelOf(offset)} (?:0 de 0 hechas|sin tareas) cerrado`),
         );
-        expect(section, `closed month ${offset} is not in the line`).not.toContain(withYear(offset));
+        expect(section, `closed month ${offset} is not in the line`).not.toMatch(new RegExp(`${withYear(offset)}(?:,| y |:)`));
       }
       expect(section).toContain(`${labelOf(0)} 1 de 2 hechas en curso`);
     } finally {
@@ -312,7 +312,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
       expect(section).toContain(`${labelOf(2)} 2 por hacer por venir`);
       expect(section).toContain(`${withYear(1)} y ${withYear(3)}: sin tareas`);
       expect(section).toContain(`${name} · por mes · 2 meses`.toLowerCase());
-      expect(section).not.toContain(labelOf(1));
+      expect(section).not.toMatch(new RegExp(`${labelOf(1)} (?:\\d|sin tareas)`));
     } finally {
       await context.close();
       await remove(db, person, [id]);
@@ -408,7 +408,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
   }
 
   for (const viewport of [WIDE, PHONE]) {
-    test(`clause 5 on screen at ${viewport.width} px: the report shows the goal as before, no «por mes», no TAREAS table, no line`, async ({
+    test(`clause 5 on screen at ${viewport.width} px: the report shows the goal's «por mes» as paper does (RP-124), no left-out line`, async ({
       person, browser, baseURL, db,
     }) => {
       const name = `Mudanza pantalla ${Date.now()}`;
@@ -417,9 +417,9 @@ test.describe("the paper report prints the months of a goal that measures nothin
       try {
         await waitFor(page, name);
         await expect(page.getByText(`no mide nada · hasta el ${lastDay(3)}`).locator("visible=true")).toHaveCount(1);
-        for (const text of [/· por mes/i, /\d+ de \d+ hechas/, /\d+ por hacer/, /: sin tareas$/, /por venir/]) {
-          await expect(page.getByText(text).locator("visible=true"), String(text)).toHaveCount(0);
-        }
+        await expect(page.getByText(/· por mes/i).locator("visible=true")).toHaveCount(1);
+        await expect(page.getByText(/\d+ de \d+ hechas/).locator("visible=true").first()).toBeVisible();
+        await expect(page.getByText(/: sin tareas$/).locator("visible=true")).toHaveCount(1);
       } finally {
         await context.close();
         await remove(db, person, [id]);
