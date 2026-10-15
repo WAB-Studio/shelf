@@ -344,11 +344,6 @@ export function ReviewTree({
             </Flex>
           ))}
           <Flex gap="3" wrap="wrap">
-            {accepted.has(c.id) ? null : (
-              <Button disabled={handlers.disabled} onClick={() => handlers.onAccept(c.id)}>
-                {t("import.review.correction.accept")}
-              </Button>
-            )}
             <Button variant="outline" disabled={handlers.disabled} onClick={() => handlers.onDecline(c.id)}>
               {t("import.review.correction.decline")}
             </Button>
@@ -534,13 +529,13 @@ export function ReviewTree({
     const unit = unitOf(goal);
     const reach = new Set(members.flatMap((n) => [n.path, ...drawn.filter((d) => d.path.startsWith(`${n.path}.children.`)).map((d) => d.path)]));
     const pending = undecided.filter((c) => reach.has(nearest(c.at))).length;
-    const hours = monthNode?.figure ? monthNode.figure.amount : tasks.reduce((sum, n) => sum + (n.figure?.amount ?? 0), 0);
+    const hours = tasks.reduce((sum, n) => sum + (n.figure?.amount ?? 0), 0) || (monthNode?.figure?.amount ?? 0);
     const marked = tasks.filter((n) => n.marked);
     const label = [
       monthName(month),
       t("import.review.tree.monthTasks", { count: tasks.length }),
       ...(hours > 0 ? [fmt(hours, unit)] : []),
-      ...(pending > 0 ? [t("import.review.tree.summaryPending", { count: pending })] : []),
+      
     ].join(" · ");
     return (
       <Fold key={`${goal.path}:${month}`} depth={Math.min(goal.depth + 2, 4) as 2 | 3 | 4} label={label}>
@@ -575,7 +570,7 @@ export function ReviewTree({
       ...(taskCount > 0 ? [t("import.review.tree.summaryTasks", { count: taskCount })] : []),
       ...(inside.some((n) => n.kind === "commitment") ? [t("import.review.tree.summaryCommitments", { count: inside.filter((n) => n.kind === "commitment").length })] : []),
       ...(byMonth.size > 0 ? [t("import.review.tree.summaryMonths", { count: byMonth.size })] : []),
-      ...(pending > 0 ? [t("import.review.tree.summaryPending", { count: pending })] : []),
+      
     ].join(" · ");
     const out: ReactNode[] = [row(node, node.depth, false, summary)];
     if (inside.length > 0) {

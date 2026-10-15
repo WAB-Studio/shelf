@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { createOneOff } from "@/app/actions/one-offs";
 import { createOneOffSchema } from "@/lib/validation/one-off";
-import { Button, Field, Flex, Mark, Text, TextLink } from "@/components/ui";
+import { Button, Chip, Field, Flex, Mark, Text, TextLink } from "@/components/ui";
 import { dayWords } from "@/lib/day/day-words";
 import { todayInZone } from "@/lib/zone";
 
@@ -23,6 +23,8 @@ export type NewOneOffProps = {
   daylessCount?: number;
   // The goal's name as written; it names the field (RP-20).
   goalName?: string;
+  // PROTOTYPE (Thin 7): at 360 the one field of the day; the goals it may write to.
+  chooseGoal?: { id: string; name: string }[];
 };
 
 /**
@@ -37,7 +39,7 @@ export type NewOneOffProps = {
  * because Enter in the date field would otherwise write nothing. A one-off written for another
  * day, or none, does not draw on Hoy, so the field says where it went.
  */
-export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps) {
+export function NewOneOff({ goalId: fixedGoalId, daylessCount = 0, goalName: fixedGoalName, chooseGoal }: NewOneOffProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -45,8 +47,13 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
   const [error, setError] = useState<MessageKey | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [savedInPlan, setSavedInPlan] = useState(false);
+  const [target, setTarget] = useState<string | null>(null);
+  const goalId = fixedGoalId ?? target ?? undefined;
+  const goalName = fixedGoalName ?? chooseGoal?.find((g) => g.id === target)?.name;
 
   function savedMessage(kind: DayChoiceValue["kind"], day: string | null): string | null {
+    if (kind === "none" && goalId && chooseGoal) return `Quedó en el plan de ${goalName}.`;
+    if (kind === "today" && goalId && chooseGoal) return `Anotada en ${goalName}.`;
     if (kind === "none" && goalId) return t("day.newOneOff.savedPlan", { goal: goalName ?? "" });
     if (kind === "none") return t("day.newOneOff.savedNone", { count: daylessCount + 1 });
     if (kind === "today" || day === null) return null;
@@ -89,6 +96,7 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
         if (result.ok) {
           setName("");
           setChoice(DEFAULT_DAY_CHOICE);
+          setTarget(null);
           setSaved(savedMessage(choice.kind, day));
           setSavedInPlan(choice.kind === "none" && Boolean(goalId));
         } else setError(result.error);
@@ -100,29 +108,49 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
   const rawNameError = dateError ? null : error;
   // The shared one-off schema speaks Hoy's field; a goal's field names a task.
   const nameError =
-    goalId && rawNameError === "day.errors.oneOffNameEmpty" ? "month.task.nameEmpty" : rawNameError;
+    fixedGoalId && rawNameError === "day.errors.oneOffNameEmpty" ? "month.task.nameEmpty" : rawNameError;
 
   return (
     <form onSubmit={handleSubmit} noValidate>
       <Flex align="center" gap="2">
         <Mark state="empty" dashed />
         <Field
-          label={goalName ? t("day.newOneOff.labelForGoal", { goal: goalName }) : t("day.newOneOff.label")}
+          label={chooseGoal ? "Escribe una tarea…" : goalName ? t("day.newOneOff.labelForGoal", { goal: goalName }) : t("day.newOneOff.label")}
           hideLabel
           placeholder={
-            goalName
+            chooseGoal
+              ? "Escribe una tarea…"
+              : goalName
               ? t("day.newOneOff.placeholderForGoalShort", { goal: goalName })
               : t("day.newOneOff.placeholder")
           }
           value={name}
           onChange={(event) => {
             setName(event.target.value);
+            if (event.target.value.trim() === "") setTarget(null);
             setSaved(null);
             setSavedInPlan(false);
           }}
           disabled={pending}
         />
       </Flex>
+      {name.trim() !== "" && chooseGoal && chooseGoal.length > 0 ? (
+        <Flex direction="column" gap="1" ml="38px" mt="2">
+          <Text as="span" variant="meta" tone="muted">
+            de qué meta
+          </Text>
+          <Flex role="radiogroup" aria-label="de qué meta" gap="2" wrap="wrap">
+            <Chip shape="choice" radio selected={target === null} onClick={() => setTarget(null)}>
+              Suelta
+            </Chip>
+            {chooseGoal.map((g) => (
+              <Chip key={g.id} shape="choice" radio selected={target === g.id} onClick={() => setTarget(g.id)}>
+                {g.name}
+              </Chip>
+            ))}
+          </Flex>
+        </Flex>
+      ) : null}
       {name.trim() !== "" ? (
         <DayChoice
           value={choice}
@@ -144,7 +172,7 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
       ) : null}
       {nameError ? (
         <Text as="p" variant="sentence">
-          {t(nameError)}
+          {chooseGoal && nameError === "day.errors.oneOffNameEmpty" ? "Escribe el nombre de la tarea." : t(nameError)}
         </Text>
       ) : null}
       {saved ? (

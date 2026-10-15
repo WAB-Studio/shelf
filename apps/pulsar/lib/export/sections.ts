@@ -16,7 +16,8 @@ export function goalSections(goal: GoalReport): Section[] {
   if (measured) sections.push("month", "toDate");
   if (goal.phases.length > 0) sections.push("phases");
   if (goal.tasks.length > 0) sections.push("tasks");
-  if (measured || goal.months.some((month) => month.tasks !== undefined && printsOnPaper(month, goal.unit))) {
+  // PROTOTYPE (RP-124): a goal that measures nothing prints «por mes» only when some month holds a task.
+  if (measured || goal.months.some((month) => (month.tasks?.total ?? 0) > 0 && printsOnPaper(month, goal.unit))) {
     sections.push("months");
   }
   return sections;

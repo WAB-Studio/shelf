@@ -185,7 +185,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const own = planMonthList(goal.plan, monthKey).filter((item) => item.carriedFrom === null);
   // An archived goal that holds no task this month has nothing to say of it;
   // «Ver por mes» is still the way to the months that do.
-  const noMonthBlock = archived && bareMonth && own.length === 0;
+  // PROTOTYPE (RP-73): a goal with no task this month draws no month section, archived or not.
+  const noMonthBlock = bareMonth && own.length === 0;
   const units = await getTranslations("units");
   const words: TimeWords = {
     h: (h) => units("h", { h }),

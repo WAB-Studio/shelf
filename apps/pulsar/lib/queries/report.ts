@@ -229,6 +229,13 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       },
       toDate: toDate(figures.months),
       ownMonths: row.budgets.map((budget) => budget.month),
+      commitments: [...row.commitments]
+        .filter((c) => c.retired_at === null)
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+        .map((c) => ({
+          name: c.name,
+          cadence: c.cadence_kind === "daily" ? "todos los días" : c.cadence_kind === "times_per_week" ? `${c.cadence_n} veces por semana` : "",
+        })),
       phases: phases.map((phase) => ({
         aim: phase.name,
         startsOn: phase.startsOn,

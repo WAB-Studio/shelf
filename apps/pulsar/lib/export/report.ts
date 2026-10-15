@@ -47,6 +47,8 @@ export type GoalReport = {
   toDate: { planned: number; reached: number };
   // Months whose amount the person typed: paper prints every planned 0, the screen only these (RP-76).
   ownMonths?: string[];
+  // PROTOTYPE (RP-124): the living commitments, in their order.
+  commitments?: { name: string; cadence: string }[];
   phases: { aim: string; startsOn: string; endsOn: string; current: boolean }[];
   tasks: ReportTask[];
   carried: CarriedReport[];

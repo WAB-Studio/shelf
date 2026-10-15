@@ -367,7 +367,8 @@ function GoalPart({
   const paperKeys = new Set(paperMonths.map((month) => month.month));
   const screenMonths = all ? goal.months : paperMonths;
   // Months set by hand sit under the line, in a table of their own; «ver todo» lists every month in order.
-  const paperOwn = new Set(cut ? cut.handSet.map((month) => month.month) : []);
+  // PROTOTYPE: only months the goal itself holds a budget for are «con monto propio»; a holder's are sums (995).
+  const paperOwn = new Set(cut ? cut.handSet.filter((month) => (goal.ownMonths ?? []).includes(month.month)).map((month) => month.month) : []);
   const paperGoal: GoalReport = { ...goal, months: paperMonths };
   const aheadLine = cut?.line
     ? t.rich("ahead", {
@@ -458,7 +459,9 @@ function GoalPart({
   const groupTasks = held
     ? [goal, ...inside].flatMap((member) => member.tasks.map((task) => ({ task, of: member.name })))
     : [];
-  const sections: (GoalSection | "inside")[] = goalSections(paperGoal);
+  const sections: (GoalSection | "inside" | "commitments")[] = goalSections(paperGoal);
+  // PROTOTYPE (RP-124): a goal that measures nothing lists its living commitments, on both faces.
+  if (unit === null && (goal.commitments?.length ?? 0) > 0) sections.splice(0, 0, "commitments");
   if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
   if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
   const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
@@ -477,8 +480,18 @@ function GoalPart({
       />
     );
 
-  const render = (section: GoalSection | "inside") => {
+  const render = (section: GoalSection | "inside" | "commitments") => {
     switch (section) {
+      case "commitments":
+        return (
+          <Section label="compromisos">
+            {goal.commitments!.map((c) => (
+              <Text key={c.name} as="p">
+                {c.cadence ? `${c.name} · ${c.cadence}` : c.name}
+              </Text>
+            ))}
+          </Section>
+        );
       case "inside":
         return (
           <Section label={t("inside", { count: inside!.length })}>
@@ -582,12 +595,8 @@ function GoalPart({
           </Section>
         );
         if (!held) return list(goal.tasks.map((task) => ({ task })));
-        return (
-          <>
-            <PrintHidden>{list(groupTasks)}</PrintHidden>
-            {goal.tasks.length > 0 ? <PrintOnly>{list(goal.tasks.map((task) => ({ task })))}</PrintOnly> : null}
-          </>
-        );
+        // PROTOTYPE (RP-84): paper reads as the screen: every task of the group, naming its goal.
+        return list(groupTasks);
       }
       case "months": {
         if (unit === null) {
@@ -600,9 +609,9 @@ function GoalPart({
                 monthLabel(month.month),
                 tasks.total === 0
                   ? t("noTasks")
-                  : started
+                  : started && tasks.done > 0
                     ? t("tasksDone", { done: tasks.done, total: tasks.total })
-                    : t("tasksToDo", { count: tasks.total }),
+                    : `${tasks.total} ${tasks.total === 1 ? "tarea" : "tareas"}`,
                 month.current ? t("current") : started ? t("closed") : t("upcoming"),
               ],
               printed: paperKeys.has(month.month) && printed(month),
@@ -929,7 +938,7 @@ function GoalPart({
     }
   };
 
-  const spans = (section: GoalSection | "inside") => (section !== "month" && section !== "toDate" ? "all" : undefined);
+  const spans = (section: GoalSection | "inside" | "commitments") => (section !== "month" && section !== "toDate" ? "all" : undefined);
   return (
     <PrintGoal whole={keepsHeadWithTable(paperMonths, goal.unit)}>
       <PrintBlock span="lead">
@@ -956,7 +965,7 @@ function GoalPart({
           key={section}
           span={spans(section)}
           whole={section === "month" || section === "toDate" || (section === "months" && !isLongTable(paperMonths, goal.unit))}
-          only={section === "months" && unit === null}
+          only={false}
         >
           {render(section)}
         </PrintBlock>
@@ -986,12 +995,14 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
           : screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${report.today.slice(0, 7)}-01`));
       if (unit === null || planned === null) return { goal, month: null, week: null };
       const quantity = (value: number) => formatQuantity(value, unit, words);
+      // PROTOTYPE (994): «2.100 de 6.000 palabras»: the unit once, after the planned figure.
+      const bareDone = (value: number) => (isTimeUnit(unit) ? quantity(value) : new Intl.NumberFormat("es", { useGrouping: "always" }).format(value));
       const done = goal.weeks.find((w) => w.current)?.total ?? 0;
       const weekPlanned = goal.weekPlanned ?? null;
       return {
         goal,
-        month: t("summary.of", { done: quantity(goal.thisMonth.reached), planned: quantity(planned) }),
-        week: weekPlanned === null ? quantity(done) : t("summary.of", { done: quantity(done), planned: quantity(weekPlanned) }),
+        month: t("summary.of", { done: bareDone(goal.thisMonth.reached), planned: quantity(planned) }),
+        week: weekPlanned === null ? quantity(done) : t("summary.of", { done: bareDone(done), planned: quantity(weekPlanned) }),
       };
     });
   const depth = new Map<string, 0 | 1 | 2>();
@@ -1116,13 +1127,6 @@ export async function ReportScreen({ report, showAll = false }: { report: Report
           {groups.map(({ root, inside }) => (
             <Panel key={root.id} print="plain">
               <GoalPart goal={root} declaredOnly={declaredOnly} today={report.today} inside={inside} all={showAll} t={t} />
-              {inside.map((member) => (
-                <PrintOnly key={member.id}>
-                  <Flex direction="column" pl={member.parentId === root.id ? "5" : "7"}>
-                    <GoalPart goal={member} declaredOnly={declaredOnly} today={report.today} all={showAll} t={t} />
-                  </Flex>
-                </PrintOnly>
-              ))}
             </Panel>
           ))}
         </PanelGrid>

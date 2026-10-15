@@ -81,7 +81,8 @@ export async function MonthsList({
     sheetFor(month)
       ? `/metas/${goal.id}/meses?${keep ? `${keep}&` : ""}planear=${month.slice(0, 7)}`
       : `/metas/${goal.id}/meses/${month.slice(0, 7)}`;
-  const ownKeys = new Set(cut ? cut.handSet.map((row) => row.month) : []);
+  // PROTOTYPE: a holder's months are all sums; none is «con monto propio» (995).
+  const ownKeys = new Set(cut && !loaded.holdsGoals ? cut.handSet.map((row) => row.month) : []);
   // A goal with an end whose list folds says its rows out of its months.
   const caption =
     loaded.horizon !== null && goal.months.length < settled.length

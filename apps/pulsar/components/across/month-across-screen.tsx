@@ -225,6 +225,12 @@ export async function MonthAcrossScreen() {
             {own.map((entry) => item(goal, entry))}
           </Section>
         ) : null}
+        {/* PROTOTYPE (Thin 5): the link to add a task sits at the foot of a card that has tasks. */}
+        {!collapsed && !planLink && goal.items.length > 0 ? (
+          <Section as="div">
+            <TextLink href={`${goalHref}/tarea/nueva`}>{t("month.across.addTask")}</TextLink>
+          </Section>
+        ) : null}
       </Panel>
     );
   }

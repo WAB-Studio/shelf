@@ -555,7 +555,11 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                     {tree && !past && item.goal.id !== rootId ? embeddedMonth(item.goal, true) : null}
                   </Fragment>
                 ))}
-                {past || !root ? null : <NewOneOff goalId={root.id} daylessCount={daylessCount} goalName={root.name} />}
+                {past || !root ? null : (
+                  <Face on="desktop">
+                    <NewOneOff goalId={root.id} daylessCount={daylessCount} goalName={root.name} />
+                  </Face>
+                )}
               </Flex>
             </Section>
           </Panel>
@@ -631,7 +635,18 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           </Flex>
           <Flex direction="column">
             {carriedFirst.filter((oneOff) => oneOff.goalId === null).map(oneOffRow)}
-            <NewOneOff daylessCount={daylessCount} />
+            <Face on="desktop">
+              <NewOneOff daylessCount={daylessCount} />
+            </Face>
+            <Face on="phone">
+              <NewOneOff
+                daylessCount={daylessCount}
+                chooseGoal={groupBlocks.flatMap(({ rootId, items }) => {
+                  const root = items[0].goal.id === rootId ? items[0].goal : openGoals.find((goal) => goal.id === rootId);
+                  return root ? [{ id: root.id, name: root.name }] : [];
+                })}
+              />
+            </Face>
           </Flex>
         </Section>
       </Panel>

@@ -697,6 +697,20 @@ export async function loadGoal(
     }
     up = rollUp(tree, own);
     rolled = up.get(row.goal.id) ?? null;
+    // PROTOTYPE: the holder's weeks, summed from the goals under it (994); the real loader reads `branch`.
+    if (rolled?.unit) {
+      const kidFacts = row.branch.flatMap((entry) => {
+        const planTasks = entry.tasks.map((task) => toPlanTask(task, spanFrom));
+        return [
+          ...entry.facts.filter((f): f is typeof f & { commitment_id: string } => f.commitment_id !== null).map(toDeclaredFact),
+          ...estimateFacts(planTasks, rolled!.unit),
+        ];
+      });
+      figures = {
+        ...figures,
+        weeks: measureByWeek({ openedOn: spanFrom, horizon: row.goal.horizon, today, unit: rolled.unit, facts: kidFacts, evidence: [], phases }),
+      };
+    }
   } else {
     figures = goalFigures({
       goal: row.goal,

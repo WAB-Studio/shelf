@@ -42,7 +42,7 @@ type Step = "find" | "arrange" | "check";
 const STEPS: Step[] = ["find", "arrange", "check"];
 
 type Failure =
-  | { kind: "templateLine"; cut: boolean; lines: { line: number; expected: FormCode; unit?: string; text: string }[] }
+  | { kind: "templateLine"; cut: boolean; lines: { line: number; expected: FormCode; unit?: string; text: string; proto?: string }[] }
   | { kind: "workbookRows"; rows: WorkbookError[] }
   | { kind: "key"; key: MessageKey; values?: Record<string, string> };
 
@@ -179,6 +179,20 @@ export function ImportScreen() {
     const r = reread!;
     if (!r.matched || !("error" in r)) return null;
     const written = text.split("\n");
+    // PROTOTYPE: the four proposed messages, hardwired by the line they sit on.
+    const PROTO: [string, string][] = [
+      ["- Hablar · cada dia · 30 min", "Falta la tilde: «cada día»."],
+      ["- Leer · 8 veces por semana · toque", "Una semana tiene 7 días: hasta «7 veces por semana»."],
+      ["ritmo: 10", "Esta meta mide en horas: escribe el ritmo con su unidad, como «ritmo: 10 h»."],
+      ["- 2026-10 · 3 páginas · Algo", "Esa unidad no es de tiempo. Escribe el monto en horas o minutos, como «- 2026-10 · 3 h · Algo»."],
+    ];
+    if (written.some((l) => l.trim() === PROTO[0][0])) {
+      const found = PROTO.flatMap(([needle, proto]) => {
+        const at = written.findIndex((l) => l.trim() === needle);
+        return at < 0 ? [] : [{ line: at + 1, expected: "import.errors.form.task" as FormCode, text: written[at], proto }];
+      }).sort((a, b) => a.line - b.line);
+      return { kind: "templateLine", cut: false, lines: found };
+    }
     return { kind: "templateLine", cut: r.cut, lines: r.errors.map((e) => ({ ...e, text: written[e.line - 1] ?? "" })) };
   })();
   const listed = shown?.kind === "templateLine";
@@ -370,7 +384,7 @@ export function ImportScreen() {
           t("import.errors.templateLine", {
             line: e.line,
             text: e.text,
-            expected: t(formKey[e.expected], { unit: e.unit ?? "" }),
+            expected: e.proto ?? t(formKey[e.expected], { unit: e.unit ?? "" }),
           }),
         )}
       />

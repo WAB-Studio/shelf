@@ -52,5 +52,5 @@ export function formatFigureValue(
   if (unit !== undefined && words !== undefined && isTimeUnit(unit)) {
     return { kind: "time", tokens: timeTokens(formatTime(value, words)) };
   }
-  return new Intl.NumberFormat(LOCALE).format(value);
+  return new Intl.NumberFormat(LOCALE, { useGrouping: "always" }).format(value);
 }

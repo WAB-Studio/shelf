@@ -31,6 +31,9 @@ export type TableRow = {
   detail?: ReactNode;
   // A mark after the dates on the wide face only («en curso»): the phone says it in `note`.
   wideMark?: ReactNode;
+  // PROTOTYPE: the phone's mark after the dates, and a line under them (the phase where it starts).
+  phoneMark?: ReactNode;
+  phoneUnder?: ReactNode;
   // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
   // The lead cell must then be plain text: it is what the link names, so a
   // link of its own there would nest. Every other cell stays text.
@@ -146,7 +149,13 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     <>
       <span className={styles.stackLabel}>
         {row.cells[0]}
-        {row.detail ? <span className={styles.detail}>{row.detail}</span> : null}
+        {row.detail ? (
+          <span className={styles.detail}>
+            {row.detail}
+            {row.phoneMark ? ` · ${row.phoneMark}` : null}
+          </span>
+        ) : null}
+        {row.phoneUnder ? <span className={styles.detail}>{row.phoneUnder}</span> : null}
       </span>
       {lead === undefined ? null : (
         <span className={styles.stackFigure}>

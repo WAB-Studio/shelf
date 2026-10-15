@@ -65,7 +65,9 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         router.replace("/metas/importar");
         return;
       }
-      setStored(read);
+      // PROTOTYPE: a month sum that differs stays as the plan said until the person accepts.
+      const keeps = read.corrections.filter((c) => c.code === "monthSumDiffers" && c.declined === "keepsPlan").map((c) => c.id);
+      setStored({ ...read, declined: [...new Set([...read.declined, ...keeps])] });
     });
     return () => {
       live = false;
