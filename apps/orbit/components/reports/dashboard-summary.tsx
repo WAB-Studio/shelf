@@ -149,7 +149,12 @@ export function DashboardSummary({
                 <Text size="2" color="gray">
                   {tr("inCurrency", { currency: flow.currency })}
                 </Text>
-                <Flex gap="4" wrap="wrap" className={styles.monthStats}>
+                <Flex
+                  gap="4"
+                  wrap="wrap"
+                  className={styles.monthStats}
+                  data-stats={flow.adjustmentCents !== 0 ? 4 : 3}
+                >
                   <MonthStat
                     label={t("monthIncome")}
                     minor={flow.incomeCents}

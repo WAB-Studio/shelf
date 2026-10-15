@@ -729,3 +729,174 @@ test.describe("an adjustment in each currency", () => {
     expect(lines.sort()).toEqual([String(USD_GAP_CENTS), pesos(COP_GAP_CENTS)].sort());
   });
 });
+
+test.describe("the month card holds four figures on a laptop", () => {
+  let booked: BookedAccount[] = [];
+
+  test.beforeAll(async () => {
+    booked = [await seedGap("COP", 50_000_000, -46_900_000)];
+    expect(await bookedCents(booked[0].id)).toEqual(["46900000"]);
+  });
+
+  test.afterAll(async () => {
+    await dropGapAccounts(booked);
+  });
+
+  for (const width of [1024, 1280, 1440]) {
+    test(`at ${width} px no figure overlaps, clips or breaks a word`, async ({ page }, testInfo) => {
+      test.skip(testInfo.project.name !== "desktop", "the card is the laptop's");
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/es");
+      await expect(monthStat(page, ADJUSTMENT_LABEL)).toBeVisible();
+
+      const labels = [
+        dashboard.monthIncome,
+        dashboard.monthExpense,
+        dashboard.monthNet,
+        ADJUSTMENT_LABEL,
+      ];
+
+      const report = await page.locator('[data-card="month"]').evaluate((card, names) => {
+        type Box = { left: number; top: number; right: number; bottom: number };
+        const box = (rect: DOMRect): Box => ({
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+        });
+        const cardBox = box(card.getBoundingClientRect());
+        const issues: string[] = [];
+        const boxes: { name: string; box: Box }[] = [];
+
+        for (const name of names) {
+          const label = Array.from(card.querySelectorAll("*")).find(
+            (node) => node.children.length === 0 && node.textContent === name,
+          ) as HTMLElement | undefined;
+          if (!label) {
+            issues.push(`${name}: missing`);
+            continue;
+          }
+          const figure = label.nextElementSibling as HTMLElement;
+
+          for (const [part, node] of [
+            ["label", label],
+            ["figure", figure],
+          ] as const) {
+            const b = box(node.getBoundingClientRect());
+            boxes.push({ name: `${name} ${part}`, box: b });
+            if (
+              b.left < cardBox.left - 0.5 ||
+              b.right > cardBox.right + 0.5 ||
+              b.top < cardBox.top - 0.5 ||
+              b.bottom > cardBox.bottom + 0.5
+            ) {
+              issues.push(`${name} ${part}: outside the card`);
+            }
+          }
+          // A figure wider than its stat spills out of it; the stat is the block that scrolls.
+          const stat = label.parentElement as HTMLElement;
+          if (stat.scrollWidth > stat.clientWidth) issues.push(`${name}: figure clipped`);
+          if (box(figure.getBoundingClientRect()).right > box(stat.getBoundingClientRect()).right + 0.5) {
+            issues.push(`${name}: figure spills out of its stat`);
+          }
+
+          // A word broken across lines has characters at two heights.
+          const text = label.firstChild as Text;
+          const range = document.createRange();
+          let offset = 0;
+          for (const word of name.split(" ")) {
+            const tops = new Set<number>();
+            for (let i = 0; i < word.length; i += 1) {
+              range.setStart(text, offset + i);
+              range.setEnd(text, offset + i + 1);
+              tops.add(Math.round(range.getBoundingClientRect().top));
+            }
+            if (tops.size > 1) issues.push(`${name}: «${word}» is broken`);
+            offset += word.length + 1;
+          }
+        }
+
+        for (let i = 0; i < boxes.length; i += 1) {
+          for (let j = i + 1; j < boxes.length; j += 1) {
+            const a = boxes[i].box;
+            const b = boxes[j].box;
+            const overlaps =
+              Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+              Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+            if (overlaps) issues.push(`${boxes[i].name} overlaps ${boxes[j].name}`);
+          }
+        }
+
+        return issues;
+      }, labels);
+
+      expect(report).toEqual([]);
+      expect(flatText(await monthStat(page, ADJUSTMENT_LABEL).innerText())).toContain(
+        `${MINUS_SIGN}$ 469.000`,
+      );
+    });
+  }
+});
+
+test.describe("each currency's adjustment sits under its own expense breakdown (B12)", () => {
+  let booked: BookedAccount[] = [];
+  const usdIncomeCategoryId = randomUUID();
+
+  test.beforeAll(async () => {
+    booked = [
+      await seedGap("COP", 1_000_000, COP_GAP_CENTS),
+      await seedGap("USD", 10_000, USD_GAP_CENTS),
+      await seedUsdIncome(usdIncomeCategoryId, `Ingreso USD ${usdIncomeCategoryId.slice(0, 8)}`, 12_000),
+    ];
+  });
+
+  test.afterAll(async () => {
+    await dropGapAccounts(booked);
+    await fixtureSql`delete from categories where id = ${usdIncomeCategoryId}`;
+  });
+
+  test("the line of a currency follows that currency's heading, not the last one", async ({
+    page,
+  }) => {
+    await page.goto("/es/reports");
+    await expect(band(page).getByText(scope.categoryName, { exact: true })).toBeVisible();
+
+    const owners = await band(page).evaluate(
+      (root, args) => {
+        const headings = new Map<Element, string>();
+        for (const currency of args.currencies) {
+          const text = args.heading.replace("{currency}", currency);
+          for (const node of root.querySelectorAll("*")) {
+            if (node.children.length === 0 && node.textContent === text) {
+              headings.set(node, currency);
+            }
+          }
+        }
+        // The group that holds a heading is the currency's band; the line must sit in it.
+        const result: { currency: string; digits: string }[] = [];
+        for (const [heading, currency] of headings) {
+          const group = heading.parentElement!;
+          for (const node of group.querySelectorAll("*")) {
+            if (node.children.length === 0 && node.textContent === args.label) {
+              result.push({
+                currency,
+                digits: ((node.parentElement!.textContent ?? "").match(/\d/g) ?? []).join(""),
+              });
+            }
+          }
+        }
+        return result;
+      },
+      {
+        currencies: ["COP", "USD"],
+        heading: reports.inCurrency,
+        label: ADJUSTMENT_LABEL,
+      },
+    );
+
+    expect(owners).toContainEqual({ currency: "COP", digits: pesos(COP_GAP_CENTS) });
+    expect(owners).toContainEqual({ currency: "USD", digits: String(USD_GAP_CENTS) });
+    expect(owners.filter((o) => o.currency === "COP")).toHaveLength(1);
+    expect(owners.filter((o) => o.currency === "USD")).toHaveLength(1);
+  });
+});
