@@ -138,6 +138,7 @@ import { getSessionUser, withUserDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import {
   addCivilMonths,
+  budgetAnchor,
   currentMonthRange,
   lastSixMonthStarts,
   todayInBogota,
@@ -3721,6 +3722,8 @@ async function main(): Promise<void> {
   await reimportSuite(userId, scope);
   console.log("");
   await roundTripSuite(scope, userId);
+  console.log("");
+  await weeklyBudgetSuite(scope, userId);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -3862,6 +3865,75 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
       String(netTotal) === sql_.net &&
       truth.count === SEEDED,
     `${drawn.length} rows drawn, count ${totals.count} against ${sql_.count}, net ${netTotal} against ${sql_.net}`,
+  );
+}
+
+// A weekly budget on /planning/budgets spans the same Monday-to-Sunday week /planning
+// shows (RF-72): today's in the current month, the month's last day's in a past one.
+// Dates are fixed and the clock is passed in, so the proof holds on any run day.
+async function weeklyBudgetSuite(scope: HarnessScope, userId: string): Promise<void> {
+  const book = async (day: string, amountCents: number): Promise<void> => {
+    const { transactionId } = await createTransaction({
+      fromAccountId: scope.cashAccountId,
+      toAccountId: null,
+      amountCents,
+      occurredAt: day,
+      description: "Harness semana gasto",
+      externalRef: null,
+      splits: [{ categoryId: scope.categoryId, amountCents }],
+      labelIds: [],
+    });
+    keep("transactions", transactionId);
+  };
+  const { budgetId } = await createBudget({
+    ownerUserId: userId,
+    groupId: null,
+    categoryId: scope.categoryId,
+    accountId: scope.cashAccountId,
+    labelId: null,
+    period: "weekly",
+    limitCents: 90_000_000,
+    thresholdPct: 80,
+    name: "Harness semana presupuesto",
+  });
+  keep("budgets", budgetId);
+
+  const spentOn = async (today: string, month: string): Promise<number> => {
+    const rows = await listBudgetsWithStatus(budgetAnchor(month, today), { today });
+    return rows.find((row) => row.id === budgetId)?.spentCents ?? -1;
+  };
+
+  // 2026-10-15 is a Thursday: its week is 12-18 Oct; the month's first week is 28 Sep-4 Oct.
+  const midWeek = 700_00;
+  const firstWeek = 3_000_00;
+  const lastWeek = 90_000_00;
+  // Other fixtures may book on the same account in these weeks, so each case reads a delta.
+  const base = [
+    await spentOn("2026-10-15", "2026-10"),
+    await spentOn("2026-10-15", "2026-09"),
+    await spentOn("2026-10-31", "2026-10"),
+  ];
+  await book("2026-10-14", midWeek);
+  await book("2026-10-02", firstWeek);
+  await book("2026-10-28", lastWeek);
+
+  assert(
+    next("A weekly budget in the current month spans today's week, not the month's first"),
+    (await spentOn("2026-10-15", "2026-10")) - base[0] === midWeek,
+    `spent ${(await spentOn("2026-10-15", "2026-10")) - base[0]}, expected ${midWeek} (12-18 Oct, not 28 Sep-4 Oct = ${firstWeek})`,
+  );
+  assert(
+    next("A weekly budget in a past month spans the week of the month's last day"),
+    (await spentOn("2026-10-15", "2026-09")) - base[1] === firstWeek &&
+      budgetAnchor("2026-09", "2026-10-15") === "2026-09-30",
+    `spent ${(await spentOn("2026-10-15", "2026-09")) - base[1]}, anchor ${budgetAnchor("2026-09", "2026-10-15")}`,
+  );
+  // 2026-10-31 is a Saturday: the month's last day still sits in the week of 26 Oct-1 Nov.
+  assert(
+    next("On the month's last day the weekly window is still that day's week"),
+    budgetAnchor("2026-10", "2026-10-31") === "2026-10-31" &&
+      (await spentOn("2026-10-31", "2026-10")) - base[2] === lastWeek,
+    `anchor ${budgetAnchor("2026-10", "2026-10-31")}, spent ${(await spentOn("2026-10-31", "2026-10")) - base[2]}, expected ${lastWeek}`,
   );
 }
 

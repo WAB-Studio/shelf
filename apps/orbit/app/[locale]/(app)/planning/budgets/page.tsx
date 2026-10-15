@@ -9,7 +9,7 @@ import { Page } from "@/components/ui";
 import { listBudgetsWithStatus } from "@/db/queries/budgets";
 import { getUserGroup } from "@/db/queries/groups";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
-import { todayInBogota } from "@/lib/dates";
+import { budgetAnchor, todayInBogota } from "@/lib/dates";
 import { routing } from "@/i18n/routing";
 
 // A malformed `?month` never reaches `periodRange`: anything but a real `YYYY-MM`
@@ -45,9 +45,9 @@ export default async function BudgetsPage(
   const { month } = searchParamsSchema.parse(searchParams);
   // The archived tab lists exactly the budgets the active one leaves out (RF-120).
   const archived = searchParams.tab === "archived";
-  // The window derives from the month's first day; the query slides its period
-  // range around this anchor, never a stored spent column (RF-72).
-  const anchor = `${month}-01`;
+  // The query slides each period's range around this anchor, never a stored
+  // spent column (RF-72); the current month anchors on today, as /planning does.
+  const anchor = budgetAnchor(month);
 
   const [budgets, options, group] = await Promise.all([
     listBudgetsWithStatus(anchor, { archived }),
