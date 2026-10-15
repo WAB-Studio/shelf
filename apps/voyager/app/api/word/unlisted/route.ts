@@ -134,7 +134,7 @@ export async function POST(request: Request): Promise<Response> {
       MODEL_NAME,
     );
   } catch (error) {
-    console.error("[api/word/unlisted] cache write failed", error);
+    console.error(`[api/word/unlisted] cache write failed key=${word}`, error);
   }
 
   return json(

@@ -115,7 +115,7 @@ export async function POST(request: Request): Promise<Response> {
       try {
         await markTranslationsAsked(headword, translations);
       } catch (error) {
-        console.error("[api/word/text] cache write failed", error);
+        console.error(`[api/word/text] cache write failed key=${headword}`, error);
       }
     }
     return json(
@@ -169,7 +169,7 @@ export async function POST(request: Request): Promise<Response> {
       translationsWereAnswered(translations),
     );
   } catch (error) {
-    console.error("[api/word/text] cache write failed", error);
+    console.error(`[api/word/text] cache write failed key=${headword}`, error);
   }
 
   return json(
