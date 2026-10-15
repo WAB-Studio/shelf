@@ -242,3 +242,17 @@ test("RP-124 goalSections: no commitments, no «commitments»", () => {
   assert.equal((goalSections(goal({ ...withCommitments([]) })) as string[]).includes("commitments"), false);
   assert.equal((goalSections(goal()) as string[]).includes("commitments"), false);
 });
+
+test("RP-124 goalSections: a measured goal whose only task sits in a folded month no line names draws no «months»", () => {
+  const months = [
+    { month: "2026-10-01", planned: null, reached: 0, current: true, past: false, carried: null, taskCount: 0 },
+    { month: "2026-12-01", planned: null, reached: 0, current: false, past: false, carried: null, taskCount: 1 },
+  ];
+  const sections = goalSections(goal({ horizon: null, phases: [], tasks: [], thisMonth: { planned: null, reached: 0, underPace: false }, months }));
+  assert.equal(sections.includes("months"), false);
+});
+
+test("RP-124 goalSections: a month that prints as a row and holds a task still draws «months»", () => {
+  const months = [{ month: "2026-10-01", planned: null, reached: 0, current: true, past: false, carried: null, taskCount: 2 }];
+  assert.equal(goalSections(goal({ horizon: null, phases: [], tasks: [], months })).includes("months"), true);
+});
