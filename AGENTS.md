@@ -108,6 +108,8 @@ This file is the core every agent loads. Read the file the index names before th
   - A screen: its own specs and the specs the plan names. The whole e2e suite runs in CI, never locally.
 - Save every check's output to a file under the lane's `private/`, grep it, and name the paths in your report.
 - Chase a red with the one spec that failed and the server log. Never by repeating the suite.
+- Stub every paid model in a test, a check and a CI job. No proof calls OpenAI or spends a key. Decided by the user
+  2026-10-15: «no me gusta eso de que los tests gastan dinero».
 - The rest: `docs/agentes/verificacion.md`.
 
 ## Writing skills, agents and this file
