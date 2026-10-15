@@ -68,6 +68,8 @@ function mapRecurringRuleError(error: unknown): never {
   const code = pgErrorCode(error);
   if (code === "42501") throw new ActionError("errors.notFound");
   if (code === "23514") throw new ActionError("recurringRules.errors.scopeViolation");
+  // RR001: the new next run falls on or before a period the rule already booked.
+  if (code === "RR001") throw new ActionError("recurringRules.errors.nextRunOnBooked");
   if (code === "23503") throw new ActionError("errors.referenceGone");
   throw error;
 }
@@ -114,9 +116,9 @@ export const createRecurringRuleAction = authActionClient
   });
 
 /**
- * Rewrites a rule's definition (RF-29). `is_active`, `next_run_on` and the end date
- * are the pause/resume and generation paths' to write, so none travels here; a
- * denied edit reports as no row.
+ * Rewrites a rule's definition (RF-29). `is_active` is the pause/resume path's to
+ * write. `next_run_on` travels, and the database refuses one at or before the last
+ * period the rule booked. A denied edit reports as no row.
  */
 export const updateRecurringRuleAction = authActionClient
   .inputSchema(updateRecurringRuleSchema)

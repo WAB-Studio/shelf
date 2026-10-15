@@ -126,6 +126,15 @@ import {
   listTransactions,
   updateTransaction,
 } from "@/db/queries/transactions";
+import { updateAccountAction } from "@/app/actions/accounts";
+import { updateRecurringRuleAction } from "@/app/actions/recurring-rules";
+import { recordBilledAmount } from "@/db/queries/debt-statements";
+import { updateRecurringRule } from "@/db/queries/recurring-rules";
+import {
+  buildEffectiveRefs,
+  processRow,
+  type RawRow,
+} from "@/lib/spreadsheet/import-pipeline";
 import { commitImport } from "@/db/queries/import-commit";
 import type { CommitInput } from "@/db/queries/import-commit";
 import { getUserLocale, upsertUserLocale } from "@/db/queries/user-locale";
@@ -3721,6 +3730,8 @@ async function main(): Promise<void> {
   await reimportSuite(userId, scope);
   console.log("");
   await roundTripSuite(scope, userId);
+  console.log("");
+  await ledgerGuardSuite(userId, scope);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -3865,6 +3876,7 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
   );
 }
 
+
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile
 // this to CJS and run it on any Node version, not only Node 22's native strip.
 void (async () => {
@@ -3884,3 +3896,388 @@ void (async () => {
 
   report();
 })();
+
+// The currency of an account is fixed once it has history, a backup keeps each row's currency, a
+// foreign purchase on an asset account is confirmed like a card's, and a recurring rule's cursor never
+// moves back over what it booked. Each is driven through the app's own function and read back.
+async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<void> {
+  const today = todayInBogota();
+  const prefix = "Harness guard";
+
+  const open = async (
+    name: string,
+    settlementCurrency: "COP" | "USD",
+    amountMinor = 1_000_000,
+  ) => {
+    const { accountId } = await createAccount({
+      name,
+      kind: "asset",
+      subtype: "bancaria",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency,
+      amountMinor,
+      balanceOn: shiftDate(today, -30),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const edit = (accountId: string, settlementCurrency: "COP" | "USD", name: string) =>
+    updateAccount({
+      accountId,
+      name,
+      subtype: "bancaria",
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency,
+      amountMinor: 1_000_000,
+      balanceOn: shiftDate(today, -30),
+    });
+  const currencyOf = (accountId: string) =>
+    readColumn<string>("accounts", "id", accountId, "settlement_currency");
+
+  // 1. An account's currency holds once it has a movement or a count.
+  const fresh = await open(`${prefix} vacia`, "COP");
+  await edit(fresh, "USD", `${prefix} vacia`);
+  const emptyChanged = await currencyOf(fresh);
+  assert(
+    next("An account with no history may change its settlement currency"),
+    emptyChanged === "USD",
+    `currency after the edit = ${emptyChanged}`,
+  );
+
+  const used = await open(`${prefix} usada`, "COP");
+  const spent = await createTransaction({
+    fromAccountId: used,
+    toAccountId: null,
+    amountCents: 10_000,
+    occurredAt: shiftDate(today, -3),
+    description: `${prefix} gasto`,
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 10_000 }],
+    labelIds: [],
+  });
+  keep("transactions", spent.transactionId);
+  let movementCode = "none";
+  try {
+    await edit(used, "USD", `${prefix} usada`);
+  } catch (error) {
+    movementCode = pgErrorCode(error) ?? "none";
+  }
+  assert(
+    next("An account with a movement refuses a new settlement currency"),
+    movementCode === "AC001" && (await currencyOf(used)) === "COP",
+    `sqlstate ${movementCode}, currency ${await currencyOf(used)}`,
+  );
+
+  const action = await updateAccountAction({
+    accountId: used,
+    name: `${prefix} usada`,
+    kind: "asset",
+    subtype: "bancaria",
+    isShared: false,
+    institution: "",
+    lastFour: "",
+    settlementCurrency: "USD",
+    amount: "10000",
+    balanceOn: shiftDate(today, -30),
+  });
+  assert(
+    next("updateAccountAction answers a locked currency with its own key"),
+    action?.serverError === "accounts.errors.currencyLocked" && (await currencyOf(used)) === "COP",
+    `serverError = ${action?.serverError ?? "none"}`,
+  );
+  assert(
+    next("The locked-currency message exists in both languages"),
+    typeof en.accounts.errors.currencyLocked === "string" &&
+      typeof es.accounts.errors.currencyLocked === "string",
+    "accounts.errors.currencyLocked",
+  );
+
+  await edit(used, "COP", `${prefix} renombrada`);
+  assert(
+    next("An account with history still takes every other edit"),
+    (await readColumn<string>("accounts", "id", used, "name")) === `${prefix} renombrada`,
+    "renamed with the currency unchanged",
+  );
+
+  const counted = await open(`${prefix} contada`, "COP");
+  await reconcileAccount({
+    accountId: counted,
+    reconciledOn: shiftDate(today, -1),
+    realMagnitudeCents: 1_000_000,
+    expectedDerivedCents: 1_000_000,
+  });
+  let countCode = "none";
+  try {
+    await edit(counted, "USD", `${prefix} contada`);
+  } catch (error) {
+    countCode = pgErrorCode(error) ?? "none";
+  }
+  assert(
+    next("An account with a count and no movement refuses a new settlement currency"),
+    countCode === "AC001" && (await currencyOf(counted)) === "COP",
+    `sqlstate ${countCode}, currency ${await currencyOf(counted)}`,
+  );
+
+  // 3. A foreign purchase on an asset account is confirmed with what was charged (RF-123).
+  const debit = await open(`${prefix} debito`, "COP", 100_000_000);
+  const purchase = await createTransaction({
+    fromAccountId: debit,
+    toAccountId: null,
+    amountCents: 10_000,
+    currency: "USD",
+    counterAmountCents: 40_000_000,
+    counterIsEstimate: true,
+    occurredAt: shiftDate(today, -2),
+    description: `${prefix} compra en dolares`,
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 10_000 }],
+    labelIds: [],
+  });
+  keep("transactions", purchase.transactionId);
+  const balanceOf = async (accountId: string) =>
+    (await fixtureSql<{ balance: string }[]>`
+      select private.account_settlement_balance_on(${accountId}, ${today}::date)::text as balance`)[0].balance;
+  const before = await balanceOf(debit);
+  const confirmed = await recordBilledAmount({
+    transactionId: purchase.transactionId,
+    accountId: debit,
+    currency: "COP",
+    billedCents: 41_500_000,
+  });
+  const after = await balanceOf(debit);
+  const [row] = await fixtureSql<{ counter: string; estimate: boolean }[]>`
+    select counter_amount_cents::text as counter, counter_is_estimate as estimate
+    from transactions where id = ${purchase.transactionId}`;
+  assert(
+    next("A foreign purchase on an asset account is confirmed with the amount charged"),
+    confirmed && row.counter === "41500000" && row.estimate === false &&
+      before === "100000000" && after === "58500000",
+    `confirmed ${confirmed}, counter ${row.counter}, estimate ${row.estimate}, balance ${before} then ${after}`,
+  );
+  const again = await recordBilledAmount({
+    transactionId: purchase.transactionId,
+    accountId: debit,
+    currency: "COP",
+    billedCents: 1,
+  });
+  assert(
+    next("A confirmed purchase is not confirmed twice"),
+    again === false,
+    `second confirmation answered ${again}`,
+  );
+
+  // 5. A recurring rule's cursor never moves back over a period it booked.
+  const { recurringRuleId } = await createRecurringRule({
+    fromAccountId: scope.assetAccountId,
+    toAccountId: null,
+    amountCents: 1_000,
+    categoryId: scope.categoryId,
+    description: `${prefix} semanal`,
+    frequency: "weekly",
+    intervalN: 1,
+    dayOfMonth: null,
+    nextRunOn: shiftDate(today, -14),
+    endsOn: null,
+  });
+  keep("recurring_rules", recurringRuleId);
+  await fixtureSql`select private.run_due_recurring_rules(${userId}::uuid)`;
+  const booked = await fixtureSql<{ id: string; occurred_at: string }[]>`
+    select id, occurred_at::text from transactions where recurring_rule_id = ${recurringRuleId} order by occurred_at`;
+  for (const generated of booked) keep("transactions", generated.id);
+  const rule = (nextRunOn: string) => ({
+    id: recurringRuleId,
+    fromAccountId: scope.assetAccountId,
+    toAccountId: null,
+    amountCents: 1_000,
+    categoryId: scope.categoryId,
+    description: `${prefix} semanal`,
+    frequency: "weekly" as const,
+    intervalN: 1,
+    dayOfMonth: null,
+    nextRunOn,
+    endsOn: null,
+  });
+  const tryNext = async (nextRunOn: string) => {
+    try {
+      await updateRecurringRule(rule(nextRunOn));
+      return "ok";
+    } catch (error) {
+      return pgErrorCode(error) ?? "none";
+    }
+  };
+  const rewound = await tryNext(booked[0]?.occurred_at ?? "");
+  const atLast = await tryNext(booked[booked.length - 1]?.occurred_at ?? "");
+  const [cursor] = await fixtureSql<{ next_run_on: string }[]>`
+    select next_run_on::text from recurring_rules where id = ${recurringRuleId}`;
+  assert(
+    next("A recurring rule refuses a next run at or before the last period it booked"),
+    booked.length === 3 && rewound === "RR001" && atLast === "RR001" && cursor.next_run_on === shiftDate(today, 7),
+    `${booked.length} booked, rewind ${rewound}, at last ${atLast}, cursor ${cursor.next_run_on}`,
+  );
+  const forward = await tryNext(shiftDate(today, 14));
+  await fixtureSql`select private.run_due_recurring_rules(${userId}::uuid)`;
+  const [still] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where recurring_rule_id = ${recurringRuleId}`;
+  assert(
+    next("A recurring rule may still skip ahead, and the cron books nothing twice"),
+    forward === "ok" && still.n === 3,
+    `forward ${forward}, ${still.n} movements`,
+  );
+  const ruleAction = await updateRecurringRuleAction({
+    ...rule(booked[0].occurred_at),
+    amount: "10",
+  });
+  assert(
+    next("updateRecurringRuleAction answers a rewound cursor with its own key"),
+    ruleAction?.serverError === "recurringRules.errors.nextRunOnBooked",
+    `serverError = ${ruleAction?.serverError ?? "none"}`,
+  );
+  assert(
+    next("The rewound-cursor message exists in both languages"),
+    typeof en.recurringRules.errors.nextRunOnBooked === "string" &&
+      typeof es.recurringRules.errors.nextRunOnBooked === "string",
+    "recurringRules.errors.nextRunOnBooked",
+  );
+
+  // 2. A backup keeps each row's currency, and refuses a row its account does not settle in.
+  const usdAccount = await open(`${prefix} dolares`, "USD", 500_000);
+  const copCard = await open(`${prefix} peso`, "COP");
+  const usdSpend = await createTransaction({
+    fromAccountId: usdAccount,
+    toAccountId: null,
+    amountCents: 2_500,
+    occurredAt: shiftDate(today, -4),
+    description: `${prefix} gasto usd`,
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 2_500 }],
+    labelIds: [],
+  });
+  keep("transactions", usdSpend.transactionId);
+  const foreignOnPeso = await createTransaction({
+    fromAccountId: copCard,
+    toAccountId: null,
+    amountCents: 10_000,
+    currency: "USD",
+    counterAmountCents: 40_000_000,
+    counterIsEstimate: false,
+    occurredAt: shiftDate(today, -4),
+    description: `${prefix} compra en dolares`,
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 10_000 }],
+    labelIds: [],
+  });
+  keep("transactions", foreignOnPeso.transactionId);
+
+  const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
+  const sheetAccounts = (exported.accounts ?? []).filter((r) => String(r.name).startsWith(prefix));
+  const sheetMovements = (exported.transactions ?? []).filter(
+    (r) => String(r.fromAccount ?? "").startsWith(prefix) || String(r.toAccount ?? "").startsWith(prefix),
+  );
+  const exportedUsd = sheetAccounts.find((r) => r.name === `${prefix} dolares`);
+  assert(
+    next("The export writes each account's settlement currency"),
+    exportedUsd?.settlementCurrency === "USD" &&
+      sheetAccounts.find((r) => r.name === `${prefix} peso`)?.settlementCurrency === "COP",
+    `usd account exported as ${exportedUsd?.settlementCurrency}`,
+  );
+
+  const importer = await createMembershipFreeUser();
+  const categoryName = String(
+    sheetMovements.find((r) => r.description === `${prefix} gasto usd`)?.category,
+  );
+  const fileCategory: RawRow = {
+    externalRef: null,
+    name: categoryName,
+    kind: "expense",
+    parent: null,
+    color: CATEGORY_COLORS[0],
+  };
+  const fileAccounts = sheetAccounts as unknown as RawRow[];
+  const fileMovements = sheetMovements as unknown as RawRow[];
+  const importScope = await asUser(importer, () => readImportScope());
+  const records = (entity: string): RawRow[] =>
+    entity === "accounts" ? fileAccounts : entity === "categories" ? [fileCategory] : fileMovements;
+  const refs = buildEffectiveRefs(importScope, records);
+  const run = (entity: "accounts" | "categories" | "transactions", raw: RawRow, index: number) =>
+    processRow(entity, raw, index, index + 2, refs, importScope.existingRefs[entity]);
+
+  const category = run("categories", fileCategory, 0);
+  const accountRows = fileAccounts.map((raw, index) => run("accounts", raw, index));
+  const movementRows = fileMovements.map((raw, index) => run("transactions", raw, index));
+  const rowOf = (description: string) =>
+    movementRows[fileMovements.findIndex((raw) => raw.description === description)];
+  const usdRow = rowOf(`${prefix} gasto usd`);
+  const foreignRow = rowOf(`${prefix} compra en dolares`);
+  const keys = (row: { errors: { key: string }[] }) => row.errors.map((e) => e.key).join(",");
+  assert(
+    next("A backup row in the account's own currency passes, whatever that currency is"),
+    category.errors.length === 0 && accountRows.every((r) => r.errors.length === 0) && usdRow.errors.length === 0,
+    `category [${keys(category)}], accounts [${accountRows.map(keys)}], usd movement [${keys(usdRow)}]`,
+  );
+  assert(
+    next("A foreign purchase on a peso account is refused by the import, not booked as pesos"),
+    foreignRow.errors.some((e) => e.key === "transactions.errors.currencyMismatch" && e.column === "currency") &&
+      foreignRow.object === null,
+    `errors [${keys(foreignRow)}]`,
+  );
+  const blank = run("transactions", { ...fileMovements.find((r) => r.description === `${prefix} gasto usd`)!, currency: null }, 9);
+  assert(
+    next("A blank currency cell on a foreign account is refused, not read as pesos"),
+    blank.errors.some((e) => e.key === "errors.foreignCurrencyUnsupported"),
+    `errors [${keys(blank)}]`,
+  );
+
+  const input: CommitInput = {
+    members: [],
+    categories: [{ ...category, object: category.object as never }],
+    accounts: accountRows.map((r) => ({ ...r, object: r.object as never })),
+    recurringRules: [],
+    transactions: [{ ...usdRow, object: usdRow.object as never }],
+    adjustments: [],
+  };
+  let imported = "ok";
+  try {
+    await asUser(importer, () =>
+      withUserDb((tx) => commitImport(tx, input, { userId: importer.id, groupId: null })),
+    );
+  } catch (error) {
+    imported = rootMessage(error);
+  }
+  const restored = await fixtureSql<{ name: string; currency: string; opening: string; movement: string | null; mcurrency: string | null }[]>`
+    select a.name, a.settlement_currency as currency, a.initial_balance_cents::text as opening,
+      (select t.amount_cents::text from transactions t where t.from_account_id = a.id limit 1) as movement,
+      (select t.currency from transactions t where t.from_account_id = a.id limit 1) as mcurrency
+    from accounts a where a.owner_user_id = ${importer.id} order by a.name`;
+  const usdCopy = restored.find((r) => r.name === `${prefix} dolares`);
+  assert(
+    next("A restored dollar account keeps its currency, its opening and its movement in dollars"),
+    imported === "ok" && usdCopy?.currency === "USD" && usdCopy.opening === "500000" &&
+      usdCopy.movement === "2500" && usdCopy.mcurrency === "USD" &&
+      restored.find((r) => r.name === `${prefix} peso`)?.currency === "COP",
+    `import ${imported}; ${JSON.stringify(restored)}`,
+  );
+
+  const freshScope = await asUser(importer, () => readImportScope());
+  const freshRefs = buildEffectiveRefs(freshScope, (entity) => (entity === "accounts" ? fileAccounts : []));
+  const usdRaw = fileAccounts.find((r) => r.name === `${prefix} dolares`)!;
+  const recurrent = processRow(
+    "accounts",
+    { ...usdRaw, settlementCurrency: "COP" },
+    0,
+    2,
+    freshRefs,
+    freshScope.existingRefs.accounts,
+  );
+  assert(
+    next("A file row cannot change the currency of an account the scope already holds"),
+    recurrent.status === "update" &&
+      recurrent.errors.some((e) => e.key === "accounts.errors.currencyLocked" && e.column === "settlementCurrency"),
+    `status ${recurrent.status}, errors [${keys(recurrent)}]`,
+  );
+}

@@ -175,7 +175,8 @@ export type RecordBilledAmountArgs = {
  * the flag, so the amount leaves the currency pocket for the settlement one
  * without a single balance being written (RNF-07).
  *
- * The guard rides the same statement: the movement must touch this liability, the
+ * The guard rides the same statement: the movement must touch this account (a
+ * liability or an asset: a foreign purchase on a debit account is estimated too), the
  * account must settle in the currency the amount was read in, and the row must
  * still carry an estimate. False when no row answered — refused by
  * `transactions_update_writable`, already billed, or gone.
@@ -193,7 +194,6 @@ export async function recordBilledAmount({
       from accounts a
       where t.id = ${transactionId}
         and a.id = ${accountId}
-        and a.kind = 'liability'
         and (t.from_account_id = a.id or t.to_account_id = a.id)
         and a.settlement_currency = ${currency}
         and t.currency <> a.settlement_currency
