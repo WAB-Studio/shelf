@@ -19,6 +19,11 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run the `orchestrator` skill to develop. It dispatches `planner`, `worker` and `validator`.
 - Dispatch the `critic` before calling a slice done. It drives the app and judges the product;
   `validator` judges one assignment and `auditor` judges the code. Neither ever says the app is thin.
+- Scope a slice's critic to what the slice broke. It reports Broken and Hostile there; a Thin finding goes to
+  `private/pulido.md`, never into the next slice. Decided by the user 2026-10-14, after s5 to s8 each grew
+  out of the last critic's small findings, several of them there since the first round.
+- Run one whole-app critic before opening a polish slice: every screen, 360 and 1280, and paper, in one
+  closed list. The user picks from it once; one slice ships the picks; then polish stops.
 - Dispatch the `tester` when a module's proof matters more than its code. It writes the tests from
   the contract, never from the implementation, and shows every one of them red under a named mutation.
 - Dispatch the `tester` before the `worker` on every module that draws or changes a screen. It writes the

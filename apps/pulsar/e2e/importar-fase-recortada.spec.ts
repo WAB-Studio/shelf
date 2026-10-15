@@ -4,6 +4,7 @@ import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
 import { unfold } from "./importar-plan";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
+import { boxOf } from "./box";
 
 // The review says what the import does to a phase that starts before the goal
 // opens (cut to today) or ends before it (not created), and its confirm bar
@@ -98,10 +99,9 @@ test.describe("the review says the cut (RP-37)", () => {
         page.getByRole("checkbox", { name: new RegExp(CUT) }),
       ).toBeVisible();
       // The line comes before the confirm.
-      const noteBox = (await drop.boundingBox())!;
-      const confirm = (await page
-        .getByRole("button", { name: "Crear 1 meta" })
-        .boundingBox())!;
+      const noteBox = (await boxOf(drop));
+      const confirm = (await boxOf(page
+        .getByRole("button", { name: "Crear 1 meta" })));
       expect(noteBox.y).toBeLessThan(confirm.y);
     });
   });
@@ -114,9 +114,8 @@ test.describe("the review says the cut (RP-37)", () => {
     await review(
       { person, browser, baseURL },
       async (page) => {
-        const card = (await page
-          .getByRole("region", { name: messages.review.title })
-          .boundingBox())!;
+        const card = (await boxOf(page
+          .getByRole("region", { name: messages.review.title })));
         const bar = await page
           .getByRole("button", { name: "Crear 1 meta" })
           .evaluate(
@@ -137,7 +136,7 @@ test.describe("the review says the cut (RP-37)", () => {
       { person, browser, baseURL },
       async (page) => {
         await expect(page.getByRole("region", { name: messages.review.title })).toHaveCount(1);
-        const card = (await page.getByRole("region", { name: messages.review.title }).boundingBox())!;
+        const card = (await boxOf(page.getByRole("region", { name: messages.review.title })));
         const bar = (await page
           .getByRole("button", { name: "Crear 2 metas" })
           .evaluate((button) => {

@@ -5,6 +5,7 @@ import { horizonForWeeks } from "@/lib/day/weeks";
 import { todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
+import { boxOf } from "./box";
 
 // Module 900, clause 5 (board CrearDentroAviso): the create-inside sheet says the upper goal's rhythm stops
 // counting, only when it has one, and the new goal measures in the parent's unit.
@@ -43,7 +44,7 @@ test("on a goal with a rhythm the sheet says it stops counting, above «Abrirla�
     const line = sheet.getByText(lineOf(name), { exact: true });
     await expect(line).toBeVisible();
     const open = sheet.getByRole("button", { name: "Abrirla", exact: true });
-    expect((await line.boundingBox())!.y).toBeLessThan((await open.boundingBox())!.y);
+    expect((await boxOf(line)).y).toBeLessThan((await boxOf(open)).y);
 
     const child = `Línea base ${Date.now()}`;
     await sheet.getByLabel("nombre").fill(child);

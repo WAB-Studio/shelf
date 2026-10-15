@@ -5,6 +5,7 @@ import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 import { test, expect } from "./fixtures";
 import { countActionPosts, expectTitle, holdActions, MINUTES, monthsAhead, openAs, seedGoal } from "./meta-arbol-seed";
 import { grouped, noOverflow, noteOf, setNote } from "./mover-nota-ayuda";
+import { boxOf } from "./box";
 
 // Module 872 (b) (RP-95), board `JerarquiaNota` and DESIGN.md: a goal's note sits between the end line
 // and «Archivar esta meta», folded as «Nota»; with none, «Agregar una nota» stands in its place. The
@@ -47,13 +48,13 @@ test("with no note the screen offers «Agregar una nota» between the end line a
     await expect(page.getByRole("button", { name: "Nota", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Cambiar la nota" })).toHaveCount(0);
 
-    const y = async (locator: Locator) => (await locator.boundingBox())!.y;
+    const y = async (locator: Locator) => (await boxOf(locator)).y;
     const end = await y(page.getByRole("button", { name: "mover el final" }));
     const archive = await y(page.getByRole("button", { name: "Archivar esta meta" }));
     const mine = await y(add);
     expect(end).toBeLessThan(mine);
     expect(mine).toBeLessThan(archive);
-    expect((await add.boundingBox())!.width).toBeGreaterThan(300);
+    expect((await boxOf(add)).width).toBeGreaterThan(300);
   } finally {
     await context.close();
   }
@@ -298,7 +299,7 @@ test("at 360 px a long unbroken note and its open sheet do not overflow (RNP-07)
     await noOverflow(page);
     const sheet = await openSheet(page, "Cambiar la nota");
     await noOverflow(page);
-    const box = (await sheet.boundingBox())!;
+    const box = (await boxOf(sheet));
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(360);
   } finally {

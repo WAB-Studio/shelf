@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { dialog, mainLower, visit } from "./metas-sin-final-seed";
 import { seedGoal, seedHabit } from "./sin-final-seed";
+import { boxOf } from "./box";
 
 // Module 933, RP-109: a retired habit is reached again from `/metas`, in a folded «Retirados» group under
 // «Hábitos», above «Agregar un hábito». Boards: HabitosRetirados (private/tableros-s3/NOTAS.md §4), E5 of
@@ -73,8 +74,8 @@ for (const width of WIDTHS) {
         expect(second).toBeGreaterThan(first);
         await expect(page.locator(`main a[href="/metas/habitos/${reading}"]:visible`)).toHaveCount(1);
         await expect(page.locator(`main a[href="/metas/habitos/${meditate}"]:visible`)).toHaveCount(1);
-        const live = (await page.locator('main a:visible', { hasText: "Llamar a mamá" }).first().getByText("Llamar a mamá").boundingBox())!;
-        const child = (await page.locator(`main a[href="/metas/habitos/${meditate}"]:visible`).getByText("Meditar").boundingBox())!;
+        const live = (await boxOf(page.locator('main a:visible', { hasText: "Llamar a mamá" }).first().getByText("Llamar a mamá")));
+        const child = (await boxOf(page.locator(`main a[href="/metas/habitos/${meditate}"]:visible`).getByText("Meditar")));
         expect(child.x).toBeGreaterThan(live.x + 8);
       } finally {
         await context.close();

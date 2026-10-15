@@ -2,6 +2,7 @@ import { test, expect } from "./fixtures";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 import plan from "../messages/es/plan.json";
+import { boxOf } from "./box";
 
 // `ScreenHeader` (RNP-16, RNP-07): the four plan forms that had no
 // way out carry the page's one `h1` and a 48px way back that names its place.
@@ -57,7 +58,7 @@ for (const size of SIZES) {
         else await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("");
         if (form.place) await expect(back).toHaveAccessibleName(`Volver a ${form.place}`);
 
-        const box = (await back.boundingBox())!;
+        const box = (await boxOf(back));
         expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(48);
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         expect(overflow).toBeLessThanOrEqual(0);

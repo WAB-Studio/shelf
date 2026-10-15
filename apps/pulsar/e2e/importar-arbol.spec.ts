@@ -27,13 +27,14 @@ import {
   toOpenReview,
   word,
 } from "./importar-plan";
+import { boxOf } from "./box";
 
 // The review as one tree (RP-89, RP-96, RP-97). The boards are `ImportarArbol`, `ImportarFuera` and
 // `ImportarNadaQueCrear`: every word and where it sits is theirs. The plan is the template, read on
 // the server with no model.
 
 const box = (page: Page, name: string | RegExp) => page.getByRole("checkbox", { name });
-const x = async (page: Page, name: RegExp) => (await box(page, name).boundingBox())!.x;
+const x = async (page: Page, name: RegExp) => (await boxOf(box(page, name))).x;
 const backName = /tu texto/;
 
 test.describe("the review draws the plan as a tree (RP-89)", () => {
@@ -210,12 +211,12 @@ test.describe("the way back to the text (RP-86)", () => {
         const source = page.getByRole("textbox", { name: messages.review.sourceLabel, exact: true });
         await expect(source).toHaveValue(text);
         await expect(source).not.toBeEditable();
-        const s = (await source.boundingBox())!;
+        const s = (await boxOf(source));
         expect(s.width).toBeGreaterThanOrEqual(280);
         expect(s.width).toBeLessThanOrEqual(360);
-        const tree = (await box(page, new RegExp(`^${GENERAL}`)).boundingBox())!;
+        const tree = (await boxOf(box(page, new RegExp(`^${GENERAL}`))));
         expect(tree.x).toBeGreaterThanOrEqual(s.x + s.width);
-        const back = (await page.getByRole("link", { name: messages.review.change }).boundingBox())!;
+        const back = (await boxOf(page.getByRole("link", { name: messages.review.change })));
         expect(back.y).toBeGreaterThanOrEqual(s.y + s.height - 1);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
@@ -252,7 +253,7 @@ test.describe("at 360 px nothing overflows and nothing to tap is small (RNP-07)"
       await page.getByRole("button", { name: "nota · 2 líneas" }).click();
       await expect(box(page, new RegExp(`^${SUB_A}`))).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      const sub = (await box(page, new RegExp(`^${SUB_A}`)).boundingBox())!;
+      const sub = (await boxOf(box(page, new RegExp(`^${SUB_A}`))));
       expect(sub.x + sub.width).toBeLessThanOrEqual(360);
       expect(await small(page)).toEqual([]);
       void TASK_B;

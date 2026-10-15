@@ -84,6 +84,7 @@ async function printedPages(browser: Browser, baseURL: string | undefined, perso
 const spaced = (word: string) => word.split("").join(" ?");
 const HEAD = new RegExp(`^${spaced("mes")} .*${spaced("hecho")}.*${spaced("planeado")}`, "i");
 const ROW = new RegExp(`^(${NAMES.join("|")}) \\d{4}\\b`);
+const TASKS_LABEL = new RegExp(`^${spaced("tareas")} ${spaced("de")} `, "i");
 const LABEL = "leer · por mes · 14 de 27 meses";
 const MONTHS_LEFT = lineWords();
 
@@ -140,7 +141,9 @@ function checkPaper(pages: string[][], tag: string, tasks: number) {
   // Head, figures, label and first row on one sheet. With open tasks the head and its tasks may fill the sheet: then the label opens the
   // next one, among its first lines, and the heading's sheet ends on a task line, never on the head, the figures or a label.
   const sameSheet = w.label.page === w.name.page;
-  const nextSheet = w.label.page === w.name.page + 1 && w.label.at <= 3;
+  // A sheet that continues the task list repeats its «tareas de» label first: that one line, and nothing else, may push the months label down.
+  const repeated = pages[w.label.page].slice(0, w.label.at).some((line) => TASKS_LABEL.test(line));
+  const nextSheet = w.label.page === w.name.page + 1 && w.label.at <= (repeated ? 4 : 3);
   const lastOfHead = pages[w.name.page].at(-1) ?? "";
   if (tasks === 0) expect(sameSheet, `${tag}: «${LABEL}» on sheet ${w.label.page + 1}, «Leer»'s heading on sheet ${w.name.page + 1}`).toBe(true);
   expect(

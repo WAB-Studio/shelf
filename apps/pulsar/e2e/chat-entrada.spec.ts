@@ -3,6 +3,7 @@ import type { Browser, Locator, Page } from "@playwright/test";
 import { test, expect, settled, type Person } from "./fixtures";
 import chat from "../messages/es/chat.json";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // RP-91, P1 = B (`ChatEntrada`, 2026-10-13): every screen of `app/(app)` draws one link to /chat at the
 // end of its header, and /chat itself draws none. RNP-16 and RNP-17 stay: the tab bar keeps four links and
@@ -49,7 +50,7 @@ const entry = (page: Page): Locator =>
   page.locator("main header").first().getByRole("link", { name: chat.open, exact: true });
 
 type Box = { x: number; y: number; width: number; height: number };
-const box = async (locator: Locator): Promise<Box> => (await locator.boundingBox())!;
+const box = async (locator: Locator): Promise<Box> => (await boxOf(locator));
 const overlap = (a: Box, b: Box) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 

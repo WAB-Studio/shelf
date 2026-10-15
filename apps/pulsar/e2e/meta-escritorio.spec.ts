@@ -5,6 +5,7 @@ import { horizonForWeeks } from "@/lib/day/weeks";
 import { civilDateInZone } from "@/lib/zone";
 
 import { test, expect, settled as pageSettled } from "./fixtures";
+import { boxOf as visibleBox } from "./box";
 
 // RNP-17: the goal opens in two columns from 1024 — the commitments left, the
 // end, the figure and the phases right — and «Renombrar» and «Archivar» sit
@@ -189,9 +190,9 @@ test("at 1280 and 1440 the goal's name is the one h1, «Renombrar» and «Archiv
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       const h1 = page.getByRole("heading", { level: 1, name });
       await expect(h1).toBeVisible();
-      const title = (await h1.boundingBox())!;
+      const title = (await visibleBox(h1));
       for (const action of ["Renombrar", "Archivar"]) {
-        const box = (await page.getByRole("button", { name: action }).boundingBox())!;
+        const box = (await visibleBox(page.getByRole("button", { name: action })));
         expect(box.x, action).toBeGreaterThan(title.x);
         const gap = Math.abs(box.y + box.height / 2 - (title.y + title.height / 2));
         expect(gap, action).toBeLessThan(title.height);

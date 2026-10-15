@@ -5,6 +5,7 @@ import { test, expect, type Person } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { civilDateToDate, todayInZone, weekOf } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // Module 813 (RP-71, RP-32, RP-17, RP-35), `MesesFuturoYTareas` 6a and `MesesConAño` option B: no `Table` prints a
 // unit the catalogue translates («searches»), a unit other than time is said once, and the phone's label column is
@@ -288,7 +289,7 @@ test("revision at 360: «semana 1» with its dates under it is a 112px label and
     const week = row(page, "semana 1");
     await expect(week).toBeVisible();
     const label = week.locator(":scope > span").first();
-    expect((await label.boundingBox())!.width).toBeCloseTo(112, 0);
+    expect((await boxOf(label)).width).toBeCloseTo(112, 0);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);
   } finally {
@@ -359,7 +360,7 @@ test("exportar at 360: a closed month with «cerrado · N % pasó a …» under 
     await expect(closed).toBeVisible();
     expect(flat(await closed.innerText())).toMatch(/pasó a/);
     const label = closed.locator(":scope > span").first();
-    expect((await label.boundingBox())!.width).toBeCloseTo(112, 0);
+    expect((await boxOf(label)).width).toBeCloseTo(112, 0);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);
   } finally {

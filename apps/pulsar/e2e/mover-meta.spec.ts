@@ -19,6 +19,7 @@ import {
   parentOf,
   topDestination,
 } from "./mover-nota-ayuda";
+import { boxOf } from "./box";
 
 // Module 872 (b) (RP-82), board `JerarquiaMover`: «Mover bajo otra meta» opens «¿Bajo qué meta?», one
 // radio row per destination. Small goals never appear (they admit nothing); a goal's own branch is
@@ -50,7 +51,7 @@ test("from a small goal: top, the general, both larges (the current one marked),
     await expect(sheet.getByRole("button", { name: "Dejarla donde está", exact: true })).toBeEnabled();
 
     // The order of the tree: top, the general, then the larges in the plan's order (g1 was opened first).
-    const ys = await Promise.all(rows.map(async (row) => (await row.boundingBox())!.y));
+    const ys = await Promise.all(rows.map(async (row) => (await boxOf(row)).y));
     expect(ys).toEqual([...ys].sort((a, b) => a - b));
 
     // What each row says it becomes: one suelta, one grande (under the general), two pequeñas (under a large).
@@ -342,7 +343,7 @@ test("at 360 px, three levels of long names: the sheet and the page do not overf
     const sheet = await openMoveSheet(page);
     await expect(destination(sheet, long("Grande dos"))).toBeVisible();
     await noOverflow(page);
-    const box = (await sheet.boundingBox())!;
+    const box = (await boxOf(sheet));
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(360);
     const scroll = await sheet.evaluate((el) => el.scrollWidth - el.clientWidth);

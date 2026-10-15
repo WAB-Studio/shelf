@@ -3,6 +3,7 @@ import type { Sql } from "postgres";
 
 import messages from "../messages/es/connections.json";
 import { test, expect, type Person } from "./fixtures";
+import { boxOf } from "./box";
 
 // RNP-20 (a key or connection unused for 90 days no longer enters), RP-38,
 // `ConexionesVencida`: the list says so, in the muted voice of a revoked row, with no «Revocar».
@@ -322,7 +323,7 @@ for (const width of [390, 1440]) {
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
         await openFolds(page);
-        const y = async (name: string) => (await page.getByText(name, { exact: true }).boundingBox())!.y;
+        const y = async (name: string) => (await boxOf(page.getByText(name, { exact: true }))).y;
         const [live, expired, revoked] = [await y("A viva"), await y("B vencida"), await y("C revocada")];
         expect(live).toBeLessThan(expired);
         expect(expired).toBeLessThan(revoked);

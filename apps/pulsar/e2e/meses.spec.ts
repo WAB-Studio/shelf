@@ -3,6 +3,7 @@ import month from "../messages/es/month.json";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `Meses.dc.html`, `MesesEscritorio`, `MesPlan.dc.html` (RP-28,
 // RP-32, RP-35): a goal read month by month, and the sheet that sets,
@@ -471,15 +472,15 @@ test("each month is a whole 48 px link in ink to its month; one h1; the back rea
       const rows = page.locator("main ol a:visible");
       await expect(rows).toHaveCount(3);
       for (const row of await rows.all()) {
-        expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+        expect((await boxOf(row)).height).toBeGreaterThanOrEqual(48);
         expect(await row.evaluate((node) => getComputedStyle(node).color)).not.toBe("rgb(0, 0, 238)");
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
       if (width >= 1024) {
         await expect(page.locator("main ol a[aria-current=page]")).toContainText(label(thisMonth));
-        const listBox = (await rows.first().boundingBox())!;
-        const detailBox = (await page.getByRole("heading", { level: 2 }).boundingBox())!;
+        const listBox = (await boxOf(rows.first()));
+        const detailBox = (await boxOf(page.getByRole("heading", { level: 2 })));
         expect(listBox.x + listBox.width).toBeLessThan(detailBox.x);
         await rows.first().click();
         await page.waitForURL(`**/meses/${seg(lastMonth)}`);

@@ -20,6 +20,7 @@ import {
   word,
   type Seed,
 } from "./importar-plan";
+import { boxOf } from "./box";
 
 // The review of a long plan (module 902). The board is `ImportarRevisionLarga`; the decisions are the
 // last section of docs/pulsar/DESIGN.md. The plan is the shape of a real roadmap, built with no model:
@@ -229,7 +230,7 @@ test.describe("a long plan reads in one screen's worth of folds (902)", () => {
     const { seed } = longSeed();
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toSeededReview(page, seed);
-      const x = async (name: string) => (await goalBox(page, name).boundingBox())!.x;
+      const x = async (name: string) => (await boxOf(goalBox(page, name))).x;
       const g = await x(GENERAL);
       for (const name of [CASO1, CASO23, EMPLEO, INGLES]) {
         await expect(goalBox(page, name)).toBeVisible();
@@ -323,7 +324,7 @@ test.describe("a short plan keeps reading as it did (902)", () => {
     // Guards: the nesting the folds must keep (the same step as RP-89), on the existing short plan.
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, planText());
-      const x = async (name: string) => (await goalBox(page, name).boundingBox())!.x;
+      const x = async (name: string) => (await boxOf(goalBox(page, name))).x;
       const g = await x(GENERAL);
       expect(Math.abs((await x(BIG)) - (g + 16))).toBeLessThanOrEqual(1);
       expect(Math.abs((await x(SMALL)) - (g + 32))).toBeLessThanOrEqual(1);

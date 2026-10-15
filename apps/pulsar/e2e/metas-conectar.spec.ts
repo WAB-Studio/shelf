@@ -1,5 +1,6 @@
 import { test, expect } from "./fixtures";
 import { dateToCivilDate, civilDateToDate, todayInZone } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // `MetasConectar.dc.html` (RP-38, RNP-07): «el plan» on /metas
 // offers «Conectar una IA», with a goal and with none.
@@ -9,7 +10,7 @@ async function expectConnect(page: import("@playwright/test").Page, width: numbe
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute("href", "/conexiones");
   await expect(link).toContainText("Claude lee y reorganiza tus metas");
-  expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+  expect((await boxOf(link)).height).toBeGreaterThanOrEqual(48);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 }
 
@@ -58,8 +59,8 @@ test("with a goal, «Conectar una IA» follows «Exportar» (RP-38)", async ({
         await page.goto("/metas");
         await expect(page.getByText("Meta para conectar").first()).toBeVisible();
         await expectConnect(page, width);
-        const exportY = (await page.getByRole("link", { name: /Exportar/ }).boundingBox())!.y;
-        const connectY = (await page.getByRole("link", { name: /Conectar una IA/ }).boundingBox())!.y;
+        const exportY = (await boxOf(page.getByRole("link", { name: /Exportar/ }))).y;
+        const connectY = (await boxOf(page.getByRole("link", { name: /Conectar una IA/ }))).y;
         expect(connectY).toBeGreaterThan(exportY);
         await page.getByRole("link", { name: /Conectar una IA/ }).click();
         await expect(page).toHaveURL(/\/conexiones$/);

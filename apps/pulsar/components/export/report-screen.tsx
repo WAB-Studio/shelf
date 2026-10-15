@@ -526,7 +526,7 @@ function GoalPart({
         );
       case "tasks": {
         const list = (items: { task: ReportTask; of?: string }[]) => (
-          <Section label={t("sections.tasks", { month: thisMonth })}>
+          <Section label={t("sections.tasks", { month: thisMonth })} repeatLabel>
             {inPairs(items.map(({ task, of }, index) => (
               <Flex key={`${task.name}-${task.from ?? ""}-${index}`} direction="column">
                 {index > 0 ? <Separator /> : null}

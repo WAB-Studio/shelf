@@ -6,6 +6,7 @@ import type postgres from "postgres";
 import { test, expect } from "./fixtures";
 import account from "../messages/es/account.json";
 import { dateToCivilDate } from "@/lib/zone";
+import { boxOf } from "./box";
 
 // RP-18: a person comes in by the link sent to their address, and what they
 // write is theirs on every device they sign in on. The link's own landing is
@@ -191,9 +192,9 @@ test("/entrar says why the link failed above the field, in the catalogue's words
       await expect(field).toBeVisible();
       await expect(page.getByText(title, { exact: true })).toBeVisible();
       await expect(page.getByText(body, { exact: true })).toBeVisible();
-      const titleBox = (await page.getByText(title, { exact: true }).boundingBox())!;
-      const bodyBox = (await page.getByText(body, { exact: true }).boundingBox())!;
-      const fieldBox = (await field.boundingBox())!;
+      const titleBox = (await boxOf(page.getByText(title, { exact: true })));
+      const bodyBox = (await boxOf(page.getByText(body, { exact: true })));
+      const fieldBox = (await boxOf(field));
       expect(titleBox.y + titleBox.height).toBeLessThanOrEqual(fieldBox.y);
       expect(bodyBox.y + bodyBox.height).toBeLessThanOrEqual(fieldBox.y);
     }
@@ -238,7 +239,7 @@ test("/entrar names the app and sits in the centred column at 1280 (318)", async
     const title = page.getByRole("heading", { level: 1, name: account.title });
     await expect(title).toBeVisible();
     await expect(page.getByText(account.eyebrow, { exact: true })).toBeVisible();
-    expect((await title.boundingBox())!.x).toBeGreaterThanOrEqual(300);
+    expect((await boxOf(title)).x).toBeGreaterThanOrEqual(300);
   } finally {
     await context.close();
   }

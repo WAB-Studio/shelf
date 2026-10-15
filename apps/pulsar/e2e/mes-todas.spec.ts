@@ -3,6 +3,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 import monthMessages from "../messages/es/month.json";
+import { boxOf } from "./box";
 
 const owesLine = (month: string, owes: string) =>
   monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
@@ -120,7 +121,7 @@ test("each open goal draws its month: the line, the carried task first, the task
     const ownLabel = timedBlock.getByText(/^de .* · 3 h$/);
     await expect(carriedLabel).toBeVisible();
     await expect(ownLabel).toBeVisible();
-    expect((await carriedLabel.boundingBox())!.y).toBeLessThan((await ownLabel.boundingBox())!.y);
+    expect((await boxOf(carriedLabel)).y).toBeLessThan((await boxOf(ownLabel)).y);
     await expect(timedBlock.getByText(owesLine(label(lastMonth), "3 h"))).toBeVisible();
 
     const pagesBlock = page.locator("section", { has: page.getByRole("heading", { name: `Libros ${stamp}` }) });
@@ -149,7 +150,7 @@ test("each open goal draws its month: the line, the carried task first, the task
     await page.goto("/mes");
     const nameLink = page.getByRole("link", { name: `Inglés ${stamp}` });
     await expect(nameLink).toBeVisible();
-    expect((await nameLink.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+    expect((await boxOf(nameLink)).height).toBeGreaterThanOrEqual(48);
     await nameLink.click();
     await expect(page).toHaveURL(new RegExp(`/metas/${timed}/meses/${seg}$`));
   } finally {

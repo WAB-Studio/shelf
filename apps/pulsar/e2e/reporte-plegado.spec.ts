@@ -84,7 +84,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
         // The label and the table the board draws.
         await expect(main.getByText(`${seeded.name} · por mes`, { exact: true })).toBeVisible();
         if (width === 1280) {
-          await expect(main.locator("table thead").first().locator("th")).toHaveText(["mes", "hecho", "planeado"]);
+          await expect(main.locator("table thead").filter({ hasText: "planeado" }).first().locator("th")).toHaveText(["mes", "hecho", "planeado"]);
         }
         await expect(main.getByText("por semana", { exact: true })).toBeVisible();
         await expect(main.getByText(/^Esta semana: .*\.$/)).toBeVisible();

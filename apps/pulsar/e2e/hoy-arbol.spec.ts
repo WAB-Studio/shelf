@@ -20,6 +20,7 @@ import {
   topOf,
   topOfRow,
 } from "./hoy-arbol-seed";
+import { boxOf } from "./box";
 
 // `JerarquiaHoy` (RP-84, RP-47, RNP-02, RNP-07): Hoy groups by general goal.
 // One block per general with its rows in the tree's order; a row from a large
@@ -297,7 +298,7 @@ for (const width of [360, 1280]) {
       try {
         await open(page);
         await expect(page.getByText(names.general, { exact: true }).locator("visible=true").first()).toBeVisible();
-        const rowBox = (await row(page, names.row).boundingBox())!;
+        const rowBox = (await boxOf(row(page, names.row)));
         await expect(row(page, names.row)).toContainText(names.small);
         expect(rowBox.x).toBeGreaterThanOrEqual(0);
         expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(width);
