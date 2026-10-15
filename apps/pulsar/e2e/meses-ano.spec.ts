@@ -88,7 +88,7 @@ const rowsOf = (page: Page) => page.locator("main ol li:visible");
 async function labelsOf(page: Page): Promise<string[]> {
   return rowsOf(page).evaluateAll((items) =>
     items.map((item) => {
-      const label = item.querySelector<HTMLElement>('[class*="stackLabel"]');
+      const label = item.querySelector<HTMLElement>('[data-part="table-stack-label"]');
       const walker = document.createTreeWalker(label!, NodeFilter.SHOW_TEXT);
       return (walker.nextNode()?.textContent ?? "").trim();
     }),
@@ -194,8 +194,8 @@ for (const width of [360, 1024]) {
     const rows = await rowsOf(page).evaluateAll((items) =>
       items.map((item) => {
         const link = item.querySelector("a")!;
-        const label = link.querySelector<HTMLElement>('[class*="stackLabel"]')!.getBoundingClientRect();
-        const note = link.querySelector<HTMLElement>('[class*="stackNote"]')?.getBoundingClientRect();
+        const label = link.querySelector<HTMLElement>('[data-part="table-stack-label"]')!.getBoundingClientRect();
+        const note = link.querySelector<HTMLElement>('[data-part="table-stack-note"]')?.getBoundingClientRect();
         return { height: Math.round(link.getBoundingClientRect().height), dropped: note ? note.top >= label.bottom - 1 : false };
       }),
     );
@@ -207,7 +207,7 @@ for (const width of [360, 1024]) {
     // Lines the label's own text occupies: one per row, whatever the month.
     const lines = await rowsOf(page).evaluateAll((items) =>
       items.map((item) => {
-        const label = item.querySelector<HTMLElement>('[class*="stackLabel"]')!;
+        const label = item.querySelector<HTMLElement>('[data-part="table-stack-label"]')!;
         const node = document.createTreeWalker(label, NodeFilter.SHOW_TEXT).nextNode()!;
         const range = document.createRange();
         range.selectNodeContents(node);

@@ -149,7 +149,7 @@ test.describe("at 360", () => {
 
       // Drawn in Leer's group: between Leer's label and Escribir's.
       const task = await boxOf(page.getByText(name, { exact: true }));
-      const groupLabel = (goal: string) => page.locator("main").locator('[class*="section-label"]', { hasText: new RegExp(`^${goal}$`) }).locator("visible=true").first();
+      const groupLabel = (goal: string) => page.locator("main").locator('[data-part="section-label"]', { hasText: new RegExp(`^${goal}$`) }).locator("visible=true").first();
       const leer = await boxOf(groupLabel("Leer"));
       const escribir = await boxOf(groupLabel("Escribir"));
       expect(task.y).toBeGreaterThan(leer.y);

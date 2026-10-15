@@ -25,11 +25,13 @@ function checkFigures(pages: string[][], tag: string) {
       expect(squash(line), `${tag}: «ESTE MES» and «HASTA HOY» on one line, sheet ${page + 1}`).toContain("hastahoy");
       expect(lines[at + 1], `${tag}: sheet ${page + 1} keeps the number under «ESTE MES» (it ends on the label)`).toBeDefined();
       expect(lines[at + 1], `${tag}: the figure line under the labels`).toMatch(/^[\d—–-]/);
-      expect(
-        lines[at + 2],
-        `${tag}: sheet ${page + 1} ends on the number: the «de N» of «${goal}» opens sheet ${page + 2}`,
-      ).toBeDefined();
+      // Only a goal with a monthly amount carries a «de N» under its figures. «Ahorrar tiempo» has none, and since RP-124 hides its empty
+      // «por mes» nothing follows it: its number may end a sheet, it is the whole block (the figures still share the sheet).
       if (goal === "leer" || goal === "escribir") {
+        expect(
+          lines[at + 2],
+          `${tag}: sheet ${page + 1} ends on the number: the «de N» of «${goal}» opens sheet ${page + 2}`,
+        ).toBeDefined();
         expect(lines[at + 2], `${tag}: «${goal}»'s «de N» under its figures`).toMatch(/^de \d+/);
       }
     });

@@ -58,7 +58,7 @@ test("a goal with no phase and no commitment draws no empty section label and ke
     await expect(page.getByRole("link", { name: goal.phases.add })).toBeVisible();
     await expect(page.getByRole("link", { name: goal.commitments.add })).toBeVisible();
     const empty = await page.locator("main").evaluate((main) =>
-      [...main.querySelectorAll('[class*="section-label"]')].filter((node) => node.textContent?.trim() === "").length,
+      [...main.querySelectorAll('[data-part="section-label"]')].filter((node) => node.textContent?.trim() === "").length,
     );
     expect(empty).toBe(0);
   } finally {
