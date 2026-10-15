@@ -637,6 +637,28 @@ test.describe("a negative adjustment", () => {
     expect(lines).toHaveLength(1);
     expect(flatText(lines[0])).toContain(`${MINUS_SIGN}$ 15.000`);
   });
+
+  test("the six-month chart's expense bar stands at the month's spend, not spend plus the count that came up short", async ({
+    page,
+  }) => {
+    // Seeded: income 91.000, expense 43.000, prior month's expense 21.000, and a
+    // -15.000 adjustment. An expense bar that took the adjustment in stands at
+    // 58.000, which reads income:expense as 1.57 instead of 2.12.
+    await page.goto("/es/reports");
+
+    const chart = page.getByRole("img", { name: /Últimos 6 meses en COP/ });
+    await expect(chart.locator("svg")).toBeVisible();
+    const incomeBars = chart.locator('path[fill="var(--jade-9)"]');
+    const expenseBars = chart.locator('path[fill="var(--tomato-9)"]');
+    await expect(expenseBars).toHaveCount(2);
+
+    await expect
+      .poll(() => barRatio(incomeBars.first(), expenseBars.last()))
+      .toBeCloseTo(INCOME_CENTS / EXPENSE_CENTS, 2);
+    await expect
+      .poll(() => barRatio(expenseBars.first(), expenseBars.last()))
+      .toBeCloseTo(PRIOR_EXPENSE_CENTS / EXPENSE_CENTS, 2);
+  });
 });
 
 test.describe("an adjustment in dollars alone", () => {

@@ -598,6 +598,61 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
     expect(body).not.toContain("deducido");
   });
 
+  // The phone's dashboard list and its detail page are siblings of the laptop's, each deciding
+  // sign and actions on its own. The laptop project reaches them by narrowing the window, so a
+  // run of this project alone still drives them.
+  test.describe("on a phone-wide window", () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test("the dashboard's recent lines sign a positive and a negative adjustment by their legs", async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name !== "desktop", "the mobile project already runs narrow");
+      await seedAdjustment(1_200_000);
+      await page.goto("/es");
+      const up = page
+        .getByRole("link")
+        .filter({ hasText: transactions.kindAdjustment })
+        .filter({ visible: true });
+      await expect(up).toHaveCount(1);
+      const upText = flat(await up.innerText());
+      expect(upText).toContain("+$ 12.000");
+      expect(upText).not.toContain(MINUS);
+
+      await fixtureSql`
+        delete from transactions
+        where from_account_id = ${accountId} or to_account_id = ${accountId}`;
+      await fixtureSql`delete from account_reconciliations where account_id = ${accountId}`;
+      await fixtureSql`delete from accounts where id = ${accountId}`;
+      await seedAdjustment(-800_000);
+      await page.goto("/es");
+      const down = page
+        .getByRole("link")
+        .filter({ hasText: transactions.kindAdjustment })
+        .filter({ visible: true });
+      await expect(down).toHaveCount(1);
+      const downText = flat(await down.innerText());
+      expect(downText).toContain(`${MINUS}$ 8.000`);
+      expect(downText).not.toContain("+$");
+    });
+
+    test("the detail offers no Editar and no Eliminar on an adjustment, and says how to fix it", async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name !== "desktop", "the mobile project already runs narrow");
+      await seedAdjustment(1_200_000);
+      await page.goto(`/es/movements/${adjustmentId}`);
+
+      await expect(
+        page.getByText(transactions.adjustmentFix, { exact: true }).filter({ visible: true }),
+      ).toHaveCount(1);
+      await expect(page.getByRole("button", { name: transactions.edit, exact: true })).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: transactions.delete, exact: true }),
+      ).toHaveCount(0);
+    });
+  });
+
   test("a forged delete of the adjustment surfaces the read-only refusal and deletes nothing", async ({
     page,
   }, testInfo) => {
@@ -643,5 +698,55 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
     const [left] = await fixtureSql<{ n: string }[]>`
       select count(*)::text as n from transactions where id in (${adjustmentId}, ${expense.id})`;
     expect(left.n).toBe("2");
+  });
+
+  test("a forged edit of the adjustment surfaces the read-only refusal, not a saved dialog", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the row menu is the laptop's");
+    await seedAdjustment(1_200_000);
+
+    // The interface offers no way to edit an adjustment, so the edit of an
+    // ordinary row is sent with the adjustment's id swapped in.
+    const [expense] = await fixtureSql<{ id: string }[]>`
+      select id from transactions
+      where owner_user_id = ${scope.userId} and description = ${EXPENSE_DESCRIPTION}`;
+    let forged = 0;
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      const body = request.postData();
+      if (
+        request.method() === "POST" &&
+        request.headers()["next-action"] &&
+        body?.includes(expense.id)
+      ) {
+        forged += 1;
+        await route.continue({ postData: body.replaceAll(expense.id, adjustmentId) });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/es/movements");
+    await page
+      .getByRole("button", {
+        name: common.actionsFor.replace("{name}", EXPENSE_DESCRIPTION),
+        exact: true,
+      })
+      .click();
+    await page.getByRole("menuitem", { name: transactions.edit, exact: true }).click();
+    await page.getByLabel(transactions.amountLabel, { exact: true }).fill("99999");
+    await page
+      .locator("form")
+      .getByRole("button", { name: transactions.saveMovement, exact: true })
+      .click();
+
+    await expect(page.getByText(errorsText.adjustmentReadOnly)).toBeVisible();
+    expect(forged).toBe(1);
+    // A saved edit closes the dialog; a refused one leaves it open.
+    await expect(page.getByRole("dialog")).toBeVisible();
+    const [kept] = await fixtureSql<{ amount: string }[]>`
+      select amount_cents::text as amount from transactions where id = ${adjustmentId}`;
+    expect(kept.amount).toBe("1200000");
   });
 });

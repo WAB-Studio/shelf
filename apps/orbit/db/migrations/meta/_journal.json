@@ -400,6 +400,13 @@
       "when": 1792160000000,
       "tag": "0056_two_invariants_the_ledger_keeps",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792170000000,
+      "tag": "0057_a_category_gone_is_not_a_category_unseen",
+      "breakpoints": true
     }
   ]
 }

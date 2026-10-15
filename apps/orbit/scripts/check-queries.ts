@@ -98,6 +98,7 @@ import {
   settlePlannedPayment,
 } from "@/db/queries/planned-payments";
 import {
+  categoryFitsRuleAccount,
   countUnreviewedGenerated,
   createRecurringRule,
   listRecurringRules,
@@ -127,7 +128,7 @@ import {
   updateTransaction,
 } from "@/db/queries/transactions";
 import { updateAccountAction } from "@/app/actions/accounts";
-import { updateRecurringRuleAction } from "@/app/actions/recurring-rules";
+import { createRecurringRuleAction, updateRecurringRuleAction } from "@/app/actions/recurring-rules";
 import { recordBilledAmount } from "@/db/queries/debt-statements";
 import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
@@ -3735,6 +3736,11 @@ async function main(): Promise<void> {
   await weeklyBudgetSuite(scope, userId);
   console.log("");
   await ledgerGuardSuite(userId, scope);
+  console.log("");
+  await reconcileStrangerSuite(userId, fellow);
+  console.log("");
+  await recurringRuleCategoryScopeSuite(scope, groupless);
+  await recurringRuleCategoryFitSuite(userId, scope, groupless, fellow);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -4350,5 +4356,348 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     recurrent.status === "update" &&
       recurrent.errors.some((e) => e.key === "accounts.errors.currencyLocked" && e.column === "settlementCurrency"),
     `status ${recurrent.status}, errors [${keys(recurrent)}]`,
+  );
+}
+
+/**
+ * RF-137: a person who may read an account but not write it learns that, never that the figures
+ * went stale. Told «stale» they would reload and try again for ever; told «denied» they stop.
+ * Its own account, opened here, so the figures above keep what they asserted on.
+ */
+async function reconcileStrangerSuite(userId: string, fellow: HarnessUser): Promise<void> {
+  const today = todayInBogota();
+  const { accountId } = await createAccount({
+    name: "Harness cuadre ajena",
+    kind: "asset",
+    subtype: "bancaria",
+    ownerUserId: userId,
+    groupId: null,
+    isShared: false,
+    institution: null,
+    lastFour: null,
+    settlementCurrency: "COP",
+    amountMinor: 1_000_000,
+    balanceOn: shiftDate(today, -10),
+  });
+  keep("accounts", accountId);
+
+  const sheet = await asUser(fellow, () => getReconcileSheet(accountId, today));
+  const rowsOf = async (): Promise<number> => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from account_reconciliations where account_id = ${accountId}`;
+    return row.n;
+  };
+  const current = await asUser(fellow, () =>
+    reconcileAccount({
+      accountId,
+      reconciledOn: today,
+      realMagnitudeCents: 2_000_000,
+      expectedDerivedCents: sheet?.account.derivedCents ?? -1,
+    }),
+  );
+  const stale = await asUser(fellow, () =>
+    reconcileAccount({
+      accountId,
+      reconciledOn: today,
+      realMagnitudeCents: 2_000_000,
+      expectedDerivedCents: (sheet?.account.derivedCents ?? 0) + 1,
+    }),
+  );
+  const rows = await rowsOf();
+  assert(
+    next("A reader who cannot write the account is denied, with a current figure or a stale one"),
+    sheet !== null && sheet.account.canWrite === false &&
+      !current.ok && current.reason === "denied" &&
+      !stale.ok && stale.reason === "denied" &&
+      rows === 0,
+    `canWrite ${sheet?.account.canWrite}; current figure ${JSON.stringify(current)}; stale figure ${JSON.stringify(stale)}; rows ${rows}`,
+  );
+}
+
+/**
+ * RF-29: a rule's category must be one the person owns, or their fund's. Another person's category
+ * is refused when the rule is saved: the database stores it (the foreign key ignores row
+ * security), and only the generator's split trigger objects, later, by pausing the rule. The
+ * caller shares no fund with the run's own user, so none of its rows are visible to them.
+ */
+async function recurringRuleCategoryScopeSuite(
+  scope: HarnessScope,
+  groupless: HarnessUser,
+): Promise<void> {
+  const today = todayInBogota();
+  const { accountId } = await asUser(groupless, () =>
+    createAccount({
+      name: "Harness regla ajena",
+      kind: "asset",
+      subtype: "bancaria",
+      ownerUserId: groupless.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 1_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  keep("accounts", accountId);
+
+  const ownCategoryId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${ownCategoryId}, ${groupless.id}, 'Harness regla propia', 'expense', '#4C8C4A')`;
+  track("categories", ownCategoryId);
+
+  const rule = (categoryId: string) => ({
+    fromAccountId: accountId,
+    toAccountId: null,
+    amount: "10",
+    categoryId,
+    description: "Harness regla ajena",
+    frequency: "weekly" as const,
+    intervalN: 1,
+    dayOfMonth: null,
+    nextRunOn: shiftDate(today, 7),
+    endsOn: null,
+  });
+  const storedRules = async (): Promise<number> => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from recurring_rules where from_account_id = ${accountId}`;
+    return row.n;
+  };
+
+  const ownFits = await asUser(groupless, () =>
+    categoryFitsRuleAccount({ categoryId: ownCategoryId, fromAccountId: accountId, toAccountId: null }),
+  );
+  const foreignFits = await asUser(groupless, () =>
+    categoryFitsRuleAccount({ categoryId: scope.categoryId, fromAccountId: accountId, toAccountId: null }),
+  );
+  assert(
+    next("A rule's category fits when the caller owns it and does not when it is someone else's"),
+    ownFits === true && foreignFits === false,
+    `own category fits = ${ownFits}, another person's category fits = ${foreignFits}`,
+  );
+
+  const refused = await asUser(groupless, () => createRecurringRuleAction(rule(scope.categoryId)));
+  const stored = await storedRules();
+  // A rule that got stored would block the run's own cleanup of the category it names.
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Saving a rule with another person's category is refused and stores nothing"),
+    refused?.serverError === "recurringRules.errors.scopeViolation" && stored === 0,
+    `serverError = ${refused?.serverError ?? "none"}, ${stored} rule(s) stored`,
+  );
+
+  const created = await asUser(groupless, () =>
+    createRecurringRule({ ...rule(ownCategoryId), amountCents: 1000 }),
+  );
+  const ruleId = created.recurringRuleId;
+  const rewritten = await asUser(groupless, () =>
+    updateRecurringRuleAction({ id: ruleId, ...rule(scope.categoryId) }),
+  );
+  const [kept] = await fixtureSql<{ category_id: string }[]>`
+    select category_id from recurring_rules where from_account_id = ${accountId}`;
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Rewriting a rule onto another person's category is refused and keeps the old category"),
+    rewritten?.serverError === "recurringRules.errors.scopeViolation" && kept?.category_id === ownCategoryId,
+    `serverError = ${rewritten?.serverError ?? "none"}, stored category is own = ${kept?.category_id === ownCategoryId}`,
+  );
+}
+
+/**
+ * RF-29: a category the caller can see still has to fit the rule: the kind its side implies
+ * (a source is an expense, a destination income) and the scope of its account. A fund member
+ * sees the leader's personal categories, so a visible category of another owner is the case
+ * the visibility check alone lets through. A user holds one live membership (RF-55), so a
+ * category of a second fund is never visible to the same member and is not driven here.
+ * `null` as the caller is the run's own user, the fund's leader.
+ */
+async function recurringRuleCategoryFitSuite(
+  userId: string,
+  scope: HarnessScope,
+  groupless: HarnessUser,
+  fellow: HarnessUser,
+): Promise<void> {
+  const today = todayInBogota();
+  const as = <T>(user: HarnessUser | null, fn: () => Promise<T>): Promise<T> =>
+    user === null ? fn() : asUser(user, fn);
+
+  const personalAccount = async (user: HarnessUser | null, ownerId: string, name: string): Promise<string> => {
+    const { accountId } = await as(user, () =>
+      createAccount({
+        name,
+        kind: "asset",
+        subtype: "bancaria",
+        ownerUserId: ownerId,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 1_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const personalCategory = async (ownerId: string, kind: "expense" | "income", name: string): Promise<string> => {
+    const id = randomUUID();
+    await fixtureSql`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${id}, ${ownerId}, ${name}, ${kind}, '#4C8C4A')`;
+    track("categories", id);
+    return id;
+  };
+  const fits = (
+    user: HarnessUser | null,
+    categoryId: string,
+    side: "source" | "destination",
+    accountId: string,
+  ): Promise<boolean> =>
+    as(user, () =>
+      categoryFitsRuleAccount({
+        categoryId,
+        fromAccountId: side === "source" ? accountId : null,
+        toAccountId: side === "destination" ? accountId : null,
+      }),
+    );
+
+  const accountId = await personalAccount(groupless, groupless.id, "Harness regla ajuste");
+  const expenseId = await personalCategory(groupless.id, "expense", "Harness ajuste gasto");
+  const incomeId = await personalCategory(groupless.id, "income", "Harness ajuste ingreso");
+
+  const expenseOnSource = await fits(groupless, expenseId, "source", accountId);
+  const incomeOnDestination = await fits(groupless, incomeId, "destination", accountId);
+  const incomeOnSource = await fits(groupless, incomeId, "source", accountId);
+  const expenseOnDestination = await fits(groupless, expenseId, "destination", accountId);
+  assert(
+    next("An own category fits only the kind its side implies: expense on a source, income on a destination"),
+    expenseOnSource === true &&
+      incomeOnDestination === true &&
+      incomeOnSource === false &&
+      expenseOnDestination === false,
+    `expense on source = ${expenseOnSource}, income on destination = ${incomeOnDestination}, income on source = ${incomeOnSource}, expense on destination = ${expenseOnDestination}`,
+  );
+
+  const refused = await asUser(groupless, () =>
+    createRecurringRuleAction({
+      fromAccountId: accountId,
+      toAccountId: null,
+      amount: "10",
+      categoryId: incomeId,
+      description: "Harness regla ajuste",
+      frequency: "weekly" as const,
+      intervalN: 1,
+      dayOfMonth: null,
+      nextRunOn: shiftDate(today, 7),
+      endsOn: null,
+    }),
+  );
+  const [{ n: stored }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from recurring_rules where from_account_id = ${accountId}`;
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Saving an expense rule with an income category is refused and stores nothing"),
+    refused?.serverError === "recurringRules.errors.scopeViolation" && stored === 0,
+    `serverError = ${refused?.serverError ?? "none"}, ${stored} rule(s) stored`,
+  );
+
+  // The fellow sees the leader's personal category through the fund, yet it is not theirs.
+  const fellowAccount = await personalAccount(fellow, fellow.id, "Harness regla miembra");
+  const leaderCategory = await personalCategory(userId, "expense", "Harness ajuste líder");
+  const fellowCategory = await personalCategory(fellow.id, "expense", "Harness ajuste miembra");
+  const fellowOwn = await fits(fellow, fellowCategory, "source", fellowAccount);
+  const leadersVisible = await fits(fellow, leaderCategory, "source", fellowAccount);
+  assert(
+    next("A personal account takes its owner's category, not the leader's personal one a fellow can see"),
+    fellowOwn === true && leadersVisible === false,
+    `fellow's own category fits = ${fellowOwn}, the leader's visible personal category fits = ${leadersVisible}`,
+  );
+
+  const leaderAccount = await personalAccount(null, userId, "Harness regla líder");
+  const fundCategoryId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, group_id, name, kind, color)
+    values (${fundCategoryId}, ${scope.groupId}, 'Harness ajuste fondo', 'expense', '#4C8C4A')`;
+  track("categories", fundCategoryId);
+  const fundCategory = await fits(null, fundCategoryId, "source", leaderAccount);
+  assert(
+    next("A fund's category does not fit a personal account of its member"),
+    fundCategory === false,
+    `fund category on a personal account fits = ${fundCategory}`,
+  );
+
+  // A category deleted under the open form is a stale pick, not a scope breach: the guard lets it
+  // through so the foreign key answers `referenceGone`.
+  const goneId = await personalCategory(groupless.id, "expense", "Harness ajuste borrada");
+  await fixtureSql`delete from categories where id = ${goneId}`;
+  const goneFits = await fits(groupless, goneId, "source", accountId);
+  const goneRefused = await asUser(groupless, () =>
+    createRecurringRuleAction({
+      fromAccountId: accountId,
+      toAccountId: null,
+      amount: "10",
+      categoryId: goneId,
+      description: "Harness regla borrada",
+      frequency: "weekly" as const,
+      intervalN: 1,
+      dayOfMonth: null,
+      nextRunOn: shiftDate(today, 7),
+      endsOn: null,
+    }),
+  );
+  const [{ n: goneStored }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("A deleted category reads as a stale pick (referenceGone), not a scope violation, and stores nothing"),
+    goneFits === true && goneRefused?.serverError === "errors.referenceGone" && goneStored === 0,
+    `deleted category fits = ${goneFits}, serverError = ${goneRefused?.serverError ?? "none"}, ${goneStored} rule(s) stored`,
+  );
+
+  // A category of a fund the caller is not in exists but is unseen: scopeViolation, never referenceGone.
+  const foreignFundCategoryId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, group_id, name, kind, color)
+    values (${foreignFundCategoryId}, ${scope.groupId}, 'Harness ajuste fondo ajeno', 'expense', '#4C8C4A')`;
+  track("categories", foreignFundCategoryId);
+  const foreignFundRule = (categoryId: string) => ({
+    fromAccountId: accountId,
+    toAccountId: null,
+    amount: "10",
+    categoryId,
+    description: "Harness regla fondo ajeno",
+    frequency: "weekly" as const,
+    intervalN: 1,
+    dayOfMonth: null,
+    nextRunOn: shiftDate(today, 7),
+    endsOn: null,
+  });
+  const fundCreateRefused = await asUser(groupless, () =>
+    createRecurringRuleAction(foreignFundRule(foreignFundCategoryId)),
+  );
+  const [{ n: fundCreateStored }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from recurring_rules where from_account_id = ${accountId}`;
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Saving a rule with the category of a fund the caller is not in is a scope violation and stores nothing"),
+    fundCreateRefused?.serverError === "recurringRules.errors.scopeViolation" && fundCreateStored === 0,
+    `serverError = ${fundCreateRefused?.serverError ?? "none"}, ${fundCreateStored} rule(s) stored`,
+  );
+
+  const heldRule = await asUser(groupless, () =>
+    createRecurringRule({ ...foreignFundRule(expenseId), amountCents: 1000 }),
+  );
+  const fundUpdateRefused = await asUser(groupless, () =>
+    updateRecurringRuleAction({ id: heldRule.recurringRuleId, ...foreignFundRule(foreignFundCategoryId) }),
+  );
+  const [fundKept] = await fixtureSql<{ category_id: string }[]>`
+    select category_id from recurring_rules where from_account_id = ${accountId}`;
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Rewriting a rule onto the category of a fund the caller is not in is a scope violation and keeps the old one"),
+    fundUpdateRefused?.serverError === "recurringRules.errors.scopeViolation" && fundKept?.category_id === expenseId,
+    `serverError = ${fundUpdateRefused?.serverError ?? "none"}, stored category is own = ${fundKept?.category_id === expenseId}`,
   );
 }

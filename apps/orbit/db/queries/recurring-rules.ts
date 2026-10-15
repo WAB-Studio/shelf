@@ -123,9 +123,10 @@ export async function createRecurringRule({
 
 // Whether the category shares the scope of the rule's one account and the kind its
 // side implies (a source is an expense, a destination income) — the pair the
-// generator's split trigger asserts. A category the caller cannot see passes: it
-// is either gone, which the foreign key then refuses as a vanished reference, or
-// outside every list the form offers.
+// generator's split trigger asserts. A category the caller cannot see but that
+// exists does not fit: it is another person's, and the foreign key ignores row
+// security, so only this guard keeps a rule that can never book from being stored.
+// A deleted one passes, so the foreign key answers it as a stale pick.
 export async function categoryFitsRuleAccount({
   categoryId,
   fromAccountId,
@@ -144,7 +145,12 @@ export async function categoryFitsRuleAccount({
       .from(categories)
       .where(eq(categories.id, categoryId))
       .limit(1);
-    if (!seen) return true;
+    if (!seen) {
+      const probe = await tx.execute<{ gone: boolean }>(
+        sql`select not private.category_exists(${categoryId}) as gone`,
+      );
+      return probe[0]?.gone === true;
+    }
 
     const rows = await tx
       .select({ id: categories.id })

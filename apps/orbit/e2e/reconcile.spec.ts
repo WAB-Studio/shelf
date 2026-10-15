@@ -305,6 +305,36 @@ test.describe("the row menu (B8)", () => {
       await expect(page.getByRole("menuitem", { name: common.edit, exact: true })).toBeVisible();
       await expect(page.getByRole("menuitem", { name: accounts.reconcile })).toHaveCount(0);
     });
+
+    // The phone draws accounts as cards, a sibling of the laptop's table that decides
+    // «Cuadrar» on its own; the laptop project reaches it by narrowing the window.
+    test("offers no Cuadrar on the phone's card, where its owner is offered it", async ({
+      page,
+      browser,
+      baseURL,
+    }, testInfo) => {
+      test.skip(testInfo.project.name !== "desktop", "the mobile project is already narrow");
+      const phone = { width: 390, height: 844 };
+
+      const ownerContext = await browser.newContext({
+        baseURL,
+        storageState: STORAGE_STATE,
+        viewport: phone,
+      });
+      const ownerPage = await ownerContext.newPage();
+      await ownerPage.goto("/es/settings/accounts");
+      await rowMenu(ownerPage, account.name).click();
+      await expect(
+        ownerPage.getByRole("menuitem", { name: accounts.reconcile, exact: true }),
+      ).toBeVisible();
+      await ownerContext.close();
+
+      await page.setViewportSize(phone);
+      await page.goto("/es/settings/accounts");
+      await rowMenu(page, account.name).click();
+      await expect(page.getByRole("menuitem", { name: common.edit, exact: true })).toBeVisible();
+      await expect(page.getByRole("menuitem", { name: accounts.reconcile })).toHaveCount(0);
+    });
   });
 });
 
@@ -524,6 +554,29 @@ test.describe("refusals (B5b)", () => {
         peso((DERIVED_TODAY - extra) / 100),
       );
       await expect(realField(dialog)).toHaveValue("480000");
+      expect(await reconciliationsOf(account.id)).toHaveLength(0);
+      expect(await adjustmentsOf(account.id)).toHaveLength(0);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("refuses an account archived after the dialog opened: the failure toast, no success, nothing written", async ({
+    page,
+  }) => {
+    const account = await seedAccount();
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog).fill("480000");
+
+      // The menu hides Cuadrar on an archived account, so the only way to confirm
+      // against one is an account archived under an open dialog.
+      await fixtureSql`update accounts set archived_at = now() where id = ${account.id}`;
+
+      await submit(dialog).click();
+
+      await expect(page.getByText(errors.reconcileFailed, { exact: true })).toBeVisible();
+      await expect(page.getByText(accounts.reconciled, { exact: true })).toHaveCount(0);
       expect(await reconciliationsOf(account.id)).toHaveLength(0);
       expect(await adjustmentsOf(account.id)).toHaveLength(0);
     } finally {

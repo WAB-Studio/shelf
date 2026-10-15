@@ -226,6 +226,7 @@ async function main() {
   await checkAccountReconciliations();
   await checkRecurringRuleIsolation();
   await checkSharedToggleLeaderOnly();
+  await checkCategoryExistsProbe();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -9683,6 +9684,116 @@ async function checkSharedToggleLeaderOnly() {
     tailLabel,
     afterUser === "postgres" && probeCount === "0",
     `current_user = ${afterUser}, rows named 'rls shared toggle%' = ${probeCount}`,
+  );
+}
+
+// `private.category_exists` answers whether an id is a category row at all, past row security, so a
+// rule's guard can tell a deleted category from another person's. It returns a boolean and is callable
+// by `authenticated` alone.
+async function checkCategoryExistsProbe() {
+  console.log("");
+  const owner = randomUUID();
+  const stranger = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  const labels = [
+    "329. the caller sees their own category and the probe says it exists",
+    "330. another person's category is invisible to the caller yet the probe says it exists",
+    "331. a deleted category reads as absent to the probe",
+    "332. only authenticated may execute the probe, and it is a security definer with a fixed search_path",
+    "334. a category of a group the caller is not in is invisible to the caller yet the probe says it exists",
+  ];
+  const tailLabel = "333. the rolled-back category-exists transaction leaves no trace";
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${owner}), (${stranger})`;
+      await tx`insert into app_users (id) values (${owner}), (${stranger})`;
+
+      await enterUserContext(tx, owner);
+      const [{ id: own }] = await tx<{ id: string }[]>`
+        insert into categories (owner_user_id, name, kind)
+        values (${owner}, 'rls category probe own', 'expense') returning id`;
+      await tx`reset role`;
+      await enterUserContext(tx, stranger);
+      const [{ id: theirs }] = await tx<{ id: string }[]>`
+        insert into categories (owner_user_id, name, kind)
+        values (${stranger}, 'rls category probe theirs', 'expense') returning id`;
+      const [{ id: doomed }] = await tx<{ id: string }[]>`
+        insert into categories (owner_user_id, name, kind)
+        values (${stranger}, 'rls category probe doomed', 'expense') returning id`;
+      await tx`delete from categories where id = ${doomed}`;
+
+      await tx`reset role`;
+      await enterUserContext(tx, owner);
+      const [ownProbe] = await tx<{ seen: number; found: boolean }[]>`
+        select (select count(*)::int from categories where id = ${own}) as seen,
+          private.category_exists(${own}) as found`;
+      assert(labels[0], ownProbe.seen === 1 && ownProbe.found === true, `seen = ${ownProbe.seen}, probe = ${ownProbe.found}`);
+
+      const [theirProbe] = await tx<{ seen: number; found: boolean }[]>`
+        select (select count(*)::int from categories where id = ${theirs}) as seen,
+          private.category_exists(${theirs}) as found`;
+      assert(
+        labels[1],
+        theirProbe.seen === 0 && theirProbe.found === true,
+        `rows the caller sees = ${theirProbe.seen} (expected 0), probe = ${theirProbe.found} (expected true)`,
+      );
+
+      const [goneProbe] = await tx<{ found: boolean }[]>`select private.category_exists(${doomed}) as found`;
+      assert(labels[2], goneProbe.found === false, `probe on a deleted id = ${goneProbe.found} (expected false)`);
+
+      // A group-owned category has no owner_user_id: the probe must still see it.
+      await tx`reset role`;
+      await enterUserContext(tx, stranger);
+      const foreignGroup = randomUUID();
+      await tx`insert into groups (id, name, cash_mode) values (${foreignGroup}, 'rls category probe group', 'shared')`;
+      await tx`insert into group_members (group_id, user_id, name, role)
+        values (${foreignGroup}, ${stranger}, 'rls category probe leader', 'leader')`;
+      const [{ id: groupCategory }] = await tx<{ id: string }[]>`
+        insert into categories (group_id, name, kind)
+        values (${foreignGroup}, 'rls category probe group category', 'expense') returning id`;
+      await tx`reset role`;
+      await enterUserContext(tx, owner);
+      const [groupProbe] = await tx<{ seen: number; found: boolean }[]>`
+        select (select count(*)::int from categories where id = ${groupCategory}) as seen,
+          private.category_exists(${groupCategory}) as found`;
+      assert(
+        labels[4],
+        groupProbe.seen === 0 && groupProbe.found === true,
+        `rows the caller sees = ${groupProbe.seen} (expected 0), probe = ${groupProbe.found} (expected true)`,
+      );
+
+      await tx`reset role`;
+      const [fn] = await tx<
+        { anon: boolean; service: boolean; authenticated: boolean; definer: boolean; fixed_path: boolean }[]
+      >`select
+          has_function_privilege('anon', 'private.category_exists(uuid)', 'execute') as anon,
+          has_function_privilege('service_role', 'private.category_exists(uuid)', 'execute') as service,
+          has_function_privilege('authenticated', 'private.category_exists(uuid)', 'execute') as authenticated,
+          p.prosecdef as definer,
+          coalesce('search_path=""' = any (p.proconfig), false) as fixed_path
+        from pg_proc p
+        where p.oid = 'private.category_exists(uuid)'::regprocedure`;
+      assert(
+        labels[3],
+        !fn.anon && !fn.service && fn.authenticated && fn.definer && fn.fixed_path,
+        `execute anon=${fn.anon} service_role=${fn.service} authenticated=${fn.authenticated}, security definer = ${fn.definer}, search_path fixed = ${fn.fixed_path}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ count: probeCount }] = await sql<{ count: string }[]>`
+    select count(*)::text as count from categories where name like 'rls category probe%'`;
+  assert(
+    tailLabel,
+    afterUser === "postgres" && probeCount === "0",
+    `current_user = ${afterUser}, rows named 'rls category probe%' = ${probeCount}`,
   );
 }
 
