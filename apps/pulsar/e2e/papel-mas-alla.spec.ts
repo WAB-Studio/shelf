@@ -93,11 +93,11 @@ const labelIndex = (pages: string[][], name: string) => {
 };
 const isRow = (line: string) => new RegExp(`^(${NAMES.join("|")}) \\d{4}`).test(line);
 
-// 803 past its 12×40 / 16×24 / 19×24 range. A 12-month table keeps its head (8 to 19 rows): the page cut falls on «above» = 25, 40 and 55
-// (the figures' cuts, every 15 tasks), where the head without `whole` is left alone on the sheet before its label.
-for (const [months, above] of [[12, 25], [12, 40], [12, 55], [24, 0], [24, 16], [36, 0], [36, 16]] as const)
+// 803 at every table height. A goal of 8 rows or more keeps its head with its label: the page cut falls on «above» = 8, 9, 11, 24, 25, 39, 40, 54
+// and 55 (every 15 tasks), where the head without `whole` is left alone on the sheet before its label.
+for (const [months, above] of [[12, 25], [12, 40], [12, 55], [24, 0], [24, 8], [24, 9], [24, 11], [24, 16], [24, 24], [24, 25], [24, 39], [24, 40], [24, 54], [24, 55], [36, 0], [36, 16], [36, 25], [36, 40], [46, 25], [46, 40]] as const)
   test(`beyond the sweep: a ${months}-month goal under another goal's ${above} open tasks has its name on the page of its «por mes» label`, async ({ person, browser, baseURL, db }) => {
-    // Kills: `whole` removed from the `PrintGoal` of the head (12 months); `whole` forced on a table of 20 rows or more (24 months: its head is left behind).
+    // Kills: `whole` removed from the `PrintGoal` of the head (12 months); `whole` forced on the months table (blank sheet); `whole` dropped from the `PrintGoal` of a table of 20 rows or more (24 months at the cuts).
     const name = `Inglés ${months} meses`;
     if (above > 0) await seedFiller(db, person, above);
     await seedMeasured(db, person, name, months);

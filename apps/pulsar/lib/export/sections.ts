@@ -37,11 +37,11 @@ function holdsSomething(month: GoalReport["months"][number], unit: string | null
   return printsOnPaper(month, unit) && (month.planned !== null || month.reached > 0);
 }
 
-// A goal's head stays with its table when the table is tall and still short enough for the goal to fit a page.
-// A goal taller than a page still breaks, where the printer finds room.
+// A goal's head stays with its table when the table is tall enough to leave the head alone at a page foot.
+// A goal taller than a page still breaks, but Chromium opens it at the top of a sheet, so its head leads its table.
 export function keepsHeadWithTable(months: GoalReport["months"], unit: string | null): boolean {
   const rows = months.filter((month) => printsOnPaper(month, unit)).length;
-  return rows >= HEAD_WITH_TABLE_ROWS && rows < HEAD_WITH_TABLE_MAX_ROWS;
+  return rows >= HEAD_WITH_TABLE_ROWS;
 }
 
 // A month that has not started prints only with a planned amount (a planned 0
@@ -57,9 +57,6 @@ export function printsOnPaper(month: GoalReport["months"][number], unit: string 
 // A whole table this tall is what a head left at a page foot leaves alone on
 // the next page; a shorter one is left to flow with its goal.
 export const HEAD_WITH_TABLE_ROWS = 8;
-
-// Past this many rows a table is too long for its goal to keep to one page.
-export const HEAD_WITH_TABLE_MAX_ROWS = 20;
 
 // A «por mes» table tall enough to keep its goal's head flows across pages between its rows,
 // so a goal that does not fit a page never leaves its head alone (`PapelCabeceraPegada.dc.html`).
