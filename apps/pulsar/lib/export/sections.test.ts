@@ -184,3 +184,59 @@ test("RP-116 isLongTable: 7 printed rows stay whole, 8 flow", () => {
     Array.from({ length: count }, (_, i) => ({ month: `2026-${String(i % 12 + 1).padStart(2, "0")}-01`, planned: 10, reached: 0, current: false, past: false, carried: null }));
   assert.deepEqual([7, 8, 14, 15].map((count) => isLongTable(rows(count), "horas")), [false, true, true, true]);
 });
+
+// RP-124: a «por mes» whose every row holds no task, no planned amount and nothing reached is not printed; the
+// commitments of a goal come after its measure and print only when it has one.
+const emptyRow = (patch: Partial<GoalReport["months"][number]> = {}): GoalReport["months"][number] => ({
+  month: "2026-10-01",
+  planned: null,
+  reached: 0,
+  current: true,
+  past: false,
+  carried: null,
+  tasks: { done: 0, total: 0 },
+  ...patch,
+});
+const unmeasured = (patch: Partial<GoalReport> = {}) =>
+  goal({ unit: null, measureName: null, phases: [], tasks: [], thisMonth: { planned: null, reached: 0, underPace: false }, toDate: { planned: 0, reached: 0 }, ...patch });
+const withCommitments = (names: string[]) =>
+  ({ commitments: names.map((name) => ({ name })) }) as unknown as Partial<GoalReport>;
+
+test("RP-124 goalSections: a goal with no measure whose current month holds no task prints no «months»", () => {
+  // Kills: the rule of a month printing because it is current, with nothing in it.
+  const sections = goalSections(unmeasured({ months: [emptyRow(), emptyRow({ month: "2026-11-01", current: false })] }));
+  assert.equal((sections as string[]).includes("months"), false);
+});
+
+test("RP-124 goalSections: a goal with no measure and one task in a month prints «months»", () => {
+  // Kills: silencing every goal with no measure.
+  const sections = goalSections(unmeasured({ months: [emptyRow({ tasks: { done: 0, total: 1 } })] }));
+  assert.equal((sections as string[]).includes("months"), true);
+});
+
+test("RP-124 goalSections: a goal with no measure and an amount planned or reached in a month prints «months»", () => {
+  assert.equal((goalSections(unmeasured({ months: [emptyRow({ planned: 120 })] })) as string[]).includes("months"), true);
+  assert.equal((goalSections(unmeasured({ months: [emptyRow({ reached: 30 })] })) as string[]).includes("months"), true);
+});
+
+test("RP-124 goalSections: a goal with a measure keeps «months» when its rows are empty", () => {
+  // Kills: silencing by `unit`.
+  assert.equal(goalSections(goal({ months: [emptyRow({ planned: null })] })).includes("months"), true);
+});
+
+test("RP-124 goalSections: «commitments» comes after the measure when the goal has commitments", () => {
+  // Kills: no section; the section ahead of the measure.
+  const sections = goalSections(goal(withCommitments(["Estirar", "Tomar agua"]))) as string[];
+  assert.equal(sections.includes("commitments"), true);
+  assert.ok(sections.indexOf("commitments") > sections.indexOf("toDate"));
+});
+
+test("RP-124 goalSections: a goal with no measure prints «commitments» alone when it has them and nothing else", () => {
+  assert.deepEqual(goalSections(unmeasured(withCommitments(["Estirar"]))) as string[], ["commitments"]);
+});
+
+test("RP-124 goalSections: no commitments, no «commitments»", () => {
+  // Kills: an empty label.
+  assert.equal((goalSections(goal({ ...withCommitments([]) })) as string[]).includes("commitments"), false);
+  assert.equal((goalSections(goal()) as string[]).includes("commitments"), false);
+});

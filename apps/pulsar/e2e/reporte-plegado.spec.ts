@@ -848,7 +848,8 @@ test.describe("the paper's month tables without their empty months (RP-70)", () 
           .map((line) => line.trim())
           .filter((line) => line !== ""),
       );
-      const row = new RegExp(`^(${NAMES.join("|")}) \\d{4}\\b`);
+      // The left-out line also opens on a month and its year; a row never continues with «,», «y» or «:».
+      const row = new RegExp(`^(${NAMES.join("|")}) \\d{4}(?![\\d,:]| y )\\b`);
       let rows = 0;
       for (const name of names) {
         const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${name} · por mes · ${printed.get(name)} meses`.toLowerCase()));
