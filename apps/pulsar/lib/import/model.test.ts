@@ -515,3 +515,24 @@ test("903: the schema bounds 40 goals and a cadence count from 1 to 365", async 
   const integer = goals.items.properties.commitments.items.properties.cadenceN.anyOf.find((branch) => branch.type === "integer");
   assert.deepEqual([integer?.minimum, integer?.maximum], [1, 365]);
 });
+
+test("fileRefused: bytes that are not what the type says, a long PDF and a huge image are refused", async () => {
+  const { fileRefused, pdfPages, imagePixels } = await import("./model");
+  const pdf = (pages: number) => new TextEncoder().encode(`%PDF-1.4\n${"<< /Type /Page >>\n".repeat(pages)}<< /Type /Pages /Count ${pages} >>`);
+  assert.equal(pdfPages(pdf(3)), 3);
+  assert.equal(fileRefused("pdf", pdf(40)), false);
+  assert.equal(fileRefused("pdf", pdf(41)), true);
+  assert.equal(fileRefused("pdf", new TextEncoder().encode("not a pdf")), true);
+  const png = (w: number, h: number) => {
+    const b = Buffer.alloc(32);
+    b.writeUInt32BE(0x89504e47, 0);
+    b.writeUInt32BE(w, 16);
+    b.writeUInt32BE(h, 20);
+    return new Uint8Array(b);
+  };
+  assert.equal(imagePixels(png(1000, 2000)), 2_000_000);
+  assert.equal(fileRefused("image", png(4000, 4000)), false);
+  assert.equal(fileRefused("image", png(10000, 10000)), true);
+  assert.equal(fileRefused("image", new TextEncoder().encode("text")), true);
+  assert.equal(fileRefused("text", new Uint8Array([1])), false);
+});

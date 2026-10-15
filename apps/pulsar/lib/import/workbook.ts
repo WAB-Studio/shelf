@@ -114,9 +114,42 @@ function toRanges(ids: number[]): Src[] {
   return out;
 }
 
+export const ZIP_ENTRIES_MAX = 200;
+export const ZIP_INFLATED_MAX = 50 * 1024 * 1024;
+
+/**
+ * Whether the archive's own directory promises more than a template can hold, read before ExcelJS
+ * inflates anything. A directory can lie; the library checks the sizes only after inflating, so this
+ * stops the honest bomb, not a forged one.
+ */
+export function zipTooBig(bytes: Uint8Array): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let end = -1;
+  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 0xffff); at--) {
+    if (view.getUint32(at, true) === 0x06054b50) {
+      end = at;
+      break;
+    }
+  }
+  if (end < 0) return false;
+  const entries = view.getUint16(end + 10, true);
+  let at = view.getUint32(end + 16, true);
+  if (entries === 0xffff || at === 0xffffffff) return true;
+  if (entries > ZIP_ENTRIES_MAX) return true;
+  let inflated = 0;
+  for (let i = 0; i < entries; i++) {
+    if (at + 46 > bytes.length || view.getUint32(at, true) !== 0x02014b50) return false;
+    inflated += view.getUint32(at + 24, true);
+    if (inflated > ZIP_INFLATED_MAX) return true;
+    at += 46 + view.getUint16(at + 28, true) + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
+  }
+  return false;
+}
+
 export async function readWorkbook(
   bytes: Uint8Array,
 ): Promise<{ matched: false } | { matched: true; draft: ImportDraft; source: Source } | { matched: true; errors: WorkbookError[] }> {
+  if (zipTooBig(bytes)) return { matched: false };
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(Buffer.from(bytes) as never);
