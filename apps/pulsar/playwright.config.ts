@@ -52,7 +52,7 @@ export default defineConfig({
     {
       name: "mobile",
       use: phone,
-      testIgnore: /(caida|fuente-caida|importar-modelo|chat-modelo)\.spec\.ts/,
+      testIgnore: /(caida|fuente-caida|importar-modelo|chat-modelo|tope-app)\.spec\.ts/,
     },
     ...(downBaseURL
       ? [
@@ -69,6 +69,18 @@ export default defineConfig({
           {
             name: "fuente",
             testMatch: /(fuente-caida|importar-modelo|chat-modelo)\.spec\.ts/,
+            use: { ...phone, baseURL: faultBaseURL },
+          },
+        ]
+      : []),
+    // RP-126 spends the whole app's day, which refuses every other spec's claim while it stands: it
+    // runs once `fuente` is done, on the same server.
+    ...(faultBaseURL
+      ? [
+          {
+            name: "tope-app",
+            testMatch: /tope-app\.spec\.ts/,
+            dependencies: ["fuente"],
             use: { ...phone, baseURL: faultBaseURL },
           },
         ]

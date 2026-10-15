@@ -178,6 +178,21 @@ async function seedToday(count: number) {
   }
 }
 
+// RP-126: the app's day. The cap is set to what the table holds today plus `room`, so rows other lanes left
+// do not move the test. These files run one at a time (`scripts/harness/plan-run.ts`).
+async function withAppCap<T>(room: number, run: () => Promise<T>): Promise<T> {
+  const [{ count }] = await sql<{ count: string }[]>`
+    select count(*) from goals.model_calls where day = (now() at time zone 'America/Bogota')::date`;
+  const before = process.env.APP_MODEL_CALLS_DAILY_CAP;
+  process.env.APP_MODEL_CALLS_DAILY_CAP = String(Number(count) + room);
+  try {
+    return await run();
+  } finally {
+    if (before === undefined) delete process.env.APP_MODEL_CALLS_DAILY_CAP;
+    else process.env.APP_MODEL_CALLS_DAILY_CAP = before;
+  }
+}
+
 async function answer(response: Response) {
   assert.notEqual(response.status, 204, "never a 204");
   assert.equal(response.headers.get("cache-control"), "no-store");
@@ -748,4 +763,46 @@ test("903c: a box line the model left out is a task in the draft, with its corre
   assert.deepEqual(goal.tasks.map((t: { name: string; estimate: number | null }) => [t.name, t.estimate]), [["Llamar al banco", null], ["Leer", 30]]);
   assert.equal(goal.note, "Regla sin forma");
   assert.deepEqual(done.corrections.filter((c: { code: string }) => c.code === "lineToTask").map((c: { at: string }) => c.at), ["goals.0.tasks.0", "goals.0.tasks.1"]);
+});
+
+test("RP-126: the app's day spent, a person far under their ten is refused 429 import.errors.capApp, never .cap, the model not called", async () => {
+  await seedToday(2);
+  await withAppCap(0, async () => {
+    const response = await route.POST(request({ text: "quiero aprender inglés este año" }));
+    assert.equal(response.status, 429);
+    assert.equal((await answer(response)).error, "import.errors.capApp");
+  });
+  assert.equal(modelCalls.length, 0);
+  assert.equal((await rows()).length, 2, "a refused claim leaves no row");
+});
+
+test("RP-126: one call of room left in the app's day: that read lands, the next one is refused as the app's", async () => {
+  await withAppCap(1, async () => {
+    modelAnswer = () => sse(JSON.stringify({ goals: [rawGoal()] }));
+    const first = await route.POST(request({ text: "quiero aprender inglés este año" }));
+    assert.equal(first.status, 200);
+    await first.text();
+    const second = await route.POST(request({ text: "quiero aprender inglés este año" }));
+    assert.equal(second.status, 429);
+    assert.equal((await answer(second)).error, "import.errors.capApp");
+  });
+  assert.equal((await rows()).length, 1);
+});
+
+test("RP-126: the person's own ten spent while the app has room still says .cap, not the app's", async () => {
+  await seedToday(10);
+  await withAppCap(1000, async () => {
+    const response = await route.POST(request({ text: "quiero aprender inglés este año" }));
+    assert.equal(response.status, 429);
+    assert.equal((await answer(response)).error, "import.errors.cap");
+  });
+});
+
+test("RP-126: with the app's day spent a template text still reads, via template, and adds no row", async () => {
+  await withAppCap(0, async () => {
+    const response = await route.POST(request({ text: TEMPLATE }));
+    assert.equal(response.status, 200);
+    assert.equal((await answer(response)).via, "template");
+  });
+  assert.equal((await rows()).length, 0);
 });
