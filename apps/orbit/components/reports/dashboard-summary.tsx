@@ -168,6 +168,15 @@ export function DashboardSummary({
                     currency={flow.currency}
                     tone={signTone(flow.netCents, "income")}
                   />
+                  {flow.adjustmentCents !== 0 && (
+                    <MonthStat
+                      label={t("monthAdjustment")}
+                      minor={flow.adjustmentCents}
+                      currency={flow.currency}
+                      tone="plain"
+                      signed="always"
+                    />
+                  )}
                 </Flex>
               </Flex>
             ))}
@@ -222,11 +231,13 @@ function MonthStat({
   minor,
   currency,
   tone,
+  signed,
 }: {
   label: string;
   minor: number;
   currency: CurrencyCode;
   tone: MoneyTone;
+  signed?: "always";
 }) {
   return (
     <Flex direction="column" gap="1">
@@ -234,7 +245,13 @@ function MonthStat({
         {label}
       </Text>
       <Text size="4" weight="medium">
-        <Money minor={minor} currency={currency} tone={tone} size="inherit" />
+        <Money
+          minor={minor}
+          currency={currency}
+          tone={tone}
+          signed={signed}
+          size="inherit"
+        />
       </Text>
     </Flex>
   );

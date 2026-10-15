@@ -83,6 +83,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
                   </Flex>
                 ))
               )}
+              <AdjustmentLines months={sixMonthFlow} />
             </section>
           </Flex>
 
@@ -172,6 +173,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
                     </Flex>
                   ))
                 )}
+                <AdjustmentLines months={sixMonthFlow} />
               </div>
 
               <div className={styles.card}>
@@ -219,6 +221,33 @@ function byCurrency<T extends { currency: CurrencyCode }>(
   }
 
   return [...groups];
+}
+
+// The current month's gap booked by reconciliations, one line per currency that
+// has one. It is the window's last month; the chart never draws it.
+function AdjustmentLines({ months }: { months: MonthFlow[] }) {
+  const t = useTranslations("reports");
+
+  const current = byCurrency(months).flatMap(([, rows]) => {
+    const last = rows[rows.length - 1];
+    return last && last.adjustmentCents !== 0 ? [last] : [];
+  });
+
+  return current.map((month) => (
+    <Flex key={month.currency} align="center" gap="3">
+      <Text as="div" size="3" style={{ flex: 1, minWidth: 0 }} truncate>
+        {t("monthAdjustment")}
+      </Text>
+      <Text size="3" weight="medium">
+        <Money
+          minor={month.adjustmentCents}
+          currency={month.currency}
+          signed="always"
+          size="inherit"
+        />
+      </Text>
+    </Flex>
+  ));
 }
 
 // One currency's six-month trend: its own chart and its own legend, both naming

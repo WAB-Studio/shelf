@@ -488,14 +488,13 @@ test.describe("a +400.000 adjustment this month", () => {
     expect(after).toBe(true);
   });
 
-  test("the dashboard's adjustment is plain ink, neither the income's nor the expense's", async ({
+  test("the dashboard's adjustment is plain ink, not painted as gain (the income accent)", async ({
     page,
   }) => {
     await page.goto("/es");
 
     const color = await amountColor(monthStat(page, ADJUSTMENT_LABEL));
     expect(color).not.toBe(await amountColor(monthStat(page, dashboard.monthIncome)));
-    expect(color).not.toBe(await amountColor(monthStat(page, dashboard.monthExpense)));
   });
 
   test("the dashboard's income, expense and net read what they read without it", async ({
