@@ -528,7 +528,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **The week's «N de M» per day is a count, not a score.** It says how much was done and judges
   nothing, so RP-16's «no score» does not forbid it. Decided by the user 2026-09-28.
 - **A one-off left undone carries to the next day.** It reads on Hoy, marked as from an earlier day,
-  until it is done or deleted. Not built yet; no board draws it. Decided by the user 2026-09-28.
+  until it is done or deleted. Decided by the user 2026-09-28.
 - **Pulsar's not-found and error pages speak Spanish**, as `NoEncontrada.dc.html` and `Fallo.dc.html`
   draw. The not-found marks no tab. An error inside the app keeps the nav of the layout it broke in,
   so a crash on Hoy shows Hoy marked: the error happened in that place. The quiet accent link is
@@ -551,24 +551,24 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   «volver a hoy», «anotado el lunes 21» on a late fact, no step back on the seventh day, no one-offs),
   `NoEncontrada.dc.html` and `Fallo.dc.html` (no tab marked: neither is a place in the app).
 - **A past day lists only what existed that day.** A commitment created after the day drawn is not
-  on `/dia/<fecha>`; with nothing left, the day says it asked for nothing. Not built yet. Decided by
+  on `/dia/<fecha>`; with nothing left, the day says it asked for nothing. Decided by
   the user 2026-09-28, over allowing a backfill before the commitment existed.
 - **A week is Monday to Sunday, on Semana and in the review alike.** A goal's week 1 is the partial
   week up to its first Sunday. Replaces «the review's week is the goal's own», taken the same morning.
-  Not built yet. Decided by the user 2026-09-28, over 7-day runs from the opening day, and over
+  Decided by the user 2026-09-28, over 7-day runs from the opening day, and over
   printing both with dates.
 - **A done one-off stays on Hoy, in a «hechas hoy» list, and a second tap undoes it**, as a
-  commitment's fact does. Not built yet; no board draws it. Decided by the user 2026-09-28, over an
+  commitment's fact does. Decided by the user 2026-09-28, over an
   undo toast and over leaving it.
 - **A goal's horizon can be moved from the goal screen**, which keeps «Se puede mover después» true.
-  Not built yet; no board draws it. Decided by the user 2026-09-28, over changing the copy.
+  Decided by the user 2026-09-28, over changing the copy.
 - **A one-off's field takes a day, today by default.** One gesture still writes it for today; the
   person may pick «mañana», a date, or «sin día», and a dayless one waits in its own list (RP-21).
-  Not built yet; no board draws it. Decided by the user 2026-09-28, over one-offs for today only.
+  Decided by the user 2026-09-28, over one-offs for today only.
 - **The seventh day back says why there is no step further.** One line from the catalogue; the limit
-  stays `PAST_DAY_LIMIT` = 7. Not built yet. Decided by the user 2026-09-28, over widening it to 14 or 30.
+  stays `PAST_DAY_LIMIT` = 7. Decided by the user 2026-09-28, over widening it to 14 or 30.
 - **The cadences take bounds a person means:** at most 7 times a week and every 365 days at most, and
-  the message says so. A commitment already stored outside them still reads. Not built yet. Decided
+  the message says so. A commitment already stored outside them still reads. Decided
   by the user 2026-09-28, over keeping 1 to 1 000.
 - **RP-17 is kept through the move to Monday–Sunday weeks.** Its text stays true; the change lives in
   the decision above. Decided by the user 2026-09-28, over retiring it for a new code.
@@ -1757,9 +1757,9 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Not built yet.
 - **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Not built yet.
 - **Three goal levels stay,** as today (RP-78).
-- **The last day of a month reads «último día»,** never «faltan 0 días». Not built yet.
-- **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Not built yet.
-- **CI, decided for the infra train:** concurrency per branch, path filters, `pulsar-fechas` out of manual dispatch, and 6 shards for `pulsar-e2e` (4 today). Not built yet.
+- **The last day of a month reads «último día»,** never «faltan 0 días». Not built yet (RP-132).
+- **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Not built yet (RP-133).
+- **CI, decided for the infra train:** concurrency per branch, path filters, `pulsar-fechas` out of manual dispatch, and 6 shards for `pulsar-e2e`. Built in #609.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
 
 ## Decisions of 2026-10-15, the printed report's page break
