@@ -172,6 +172,8 @@ export async function MonthAcrossScreen() {
         : goal.items.length === 0
           ? { href: `${goalHref}/tarea/nueva`, label: t("month.across.addTask") }
           : null;
+    // A goal with tasks closes its card with the same link, to the real route.
+    const addLink = !collapsed && !planLink && goal.items.length > 0 ? `${goalHref}/tarea/nueva` : null;
 
     return (
       <Panel key={goal.id}>
@@ -223,6 +225,11 @@ export async function MonthAcrossScreen() {
             }
           >
             {own.map((entry) => item(goal, entry))}
+          </Section>
+        ) : null}
+        {addLink ? (
+          <Section as="div">
+            <TextLink href={addLink}>{t("month.across.addTask")}</TextLink>
           </Section>
         ) : null}
       </Panel>

@@ -47,6 +47,8 @@ test("a goal named «Inglés Crítico» keeps its capitals on its field, and on 
 
   try {
     const page = await context.newPage();
+    // The goal's own field is the desktop face; under 1024 the day has one field.
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
     await expect(page.getByLabel("Una tarea de Inglés Crítico", { exact: true })).toBeVisible();
     await expect(page.getByPlaceholder("Una tarea de Inglés Crítico…", { exact: true })).toBeVisible();
