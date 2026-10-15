@@ -178,7 +178,7 @@ test.describe("«Aceptar la corrección» accepts in one tap (993)", () => {
     });
   });
 
-  test("reload: the accepted month is still applied, 8 h", async ({ person, browser, baseURL }) => {
+  test("reload: the accepted month is still applied, 8 h, and the panel offers only «Dejar como estaba»", async ({ person, browser, baseURL }) => {
     // Kills: keeping the decision in memory alone.
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, K7);
@@ -187,6 +187,8 @@ test.describe("«Aceptar la corrección» accepts in one tap (993)", () => {
       await page.reload();
       await unfold(page);
       await expect(amountButton(page, word(second))).toHaveText("8 h");
+      await expect(decline(page)).toHaveCount(1);
+      await expect(accept(page)).toHaveCount(0);
     });
   });
 
