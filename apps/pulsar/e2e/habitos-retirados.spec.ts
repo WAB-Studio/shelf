@@ -6,7 +6,7 @@ import { seedGoal, seedHabit } from "./sin-final-seed";
 import { boxOf } from "./box";
 
 // Module 933, RP-109: a retired habit is reached again from `/metas`, in a folded «Retirados» group under
-// «Hábitos», above «Agregar un hábito». Boards: HabitosRetirados (private/tableros-s3/NOTAS.md §4), E5 of
+// «Hábitos», above «Añadir un hábito». Boards: HabitosRetirados (private/tableros-s3/NOTAS.md §4), E5 of
 // private/contrato-933.md. Written from the contract before `retired-habits.tsx` exists. Every test names the
 // mutation that kills it.
 
@@ -30,8 +30,8 @@ const group = (page: Page) => page.getByRole("button", { name: /^(Desplegar|Pleg
 
 for (const width of WIDTHS) {
   test.describe(`at ${width}`, () => {
-    test("folded by default: «Retirados» with «2» sits after the last live habit and above «Agregar un hábito»; no retired name is shown (RP-109)", async ({ person, browser, baseURL, db }) => {
-      // Kills: unfolded by default; the group drawn under «Agregar un hábito»; a count that includes a goal's retired commitment.
+    test("folded by default: «Retirados» with «2» sits after the last live habit and above «Añadir un hábito»; no retired name is shown (RP-109)", async ({ person, browser, baseURL, db }) => {
+      // Kills: unfolded by default; the group drawn under «Añadir un hábito»; a count that includes a goal's retired commitment.
       await e5(db, person.id);
       const goal = await seedGoal(db, person.id, "Cuidado", { horizon: null });
       await db`
@@ -49,7 +49,7 @@ for (const width of WIDTHS) {
         const at = text.indexOf("retirados");
         expect(at).toBeGreaterThan(text.indexOf("llamar a mamá"));
         expect(at).toBeGreaterThan(text.indexOf("estirar"));
-        expect(at).toBeLessThan(text.indexOf("agregar un hábito"));
+        expect(at).toBeLessThan(text.indexOf("añadir un hábito"));
         await expect(page.getByText("Leer antes de dormir")).toHaveCount(0);
         await expect(page.getByText("Meditar")).toHaveCount(0);
         expect(text).not.toContain("retirado el");
@@ -138,7 +138,7 @@ for (const width of WIDTHS) {
       }
     });
 
-    test("only retired habits: «Ninguno todavía.» and, after it and before «Agregar un hábito», the group (RP-109)", async ({ person, browser, baseURL, db }) => {
+    test("only retired habits: «Ninguno todavía.» and, after it and before «Añadir un hábito», the group (RP-109)", async ({ person, browser, baseURL, db }) => {
       // Kills: hiding the group when no habit is alive; «Ninguno todavía.» dropped because retired ones exist.
       await seedHabit(db, person.id, "Meditar", { kind: "daily" }, { kind: "tap" }, { created: CREATED, retired: noonOf("2026-09-20") });
       const { page, context } = await visit(browser, baseURL, person, "/metas", width);
@@ -148,7 +148,7 @@ for (const width of WIDTHS) {
         await expect(group(page)).toHaveCount(1);
         await expect(group(page)).toContainText("1");
         expect(text.indexOf("retirados")).toBeGreaterThan(text.indexOf("ninguno todavía."));
-        expect(text.indexOf("retirados")).toBeLessThan(text.indexOf("agregar un hábito"));
+        expect(text.indexOf("retirados")).toBeLessThan(text.indexOf("añadir un hábito"));
       } finally {
         await context.close();
       }

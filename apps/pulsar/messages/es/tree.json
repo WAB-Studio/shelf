@@ -41,8 +41,8 @@
     "back": "Metas",
     "levelUntil": "{level} · hasta el {date}",
     "levelNoEnd": "{level} · sin final",
-    "addBig": "Agregar meta grande",
-    "addSmall": "Agregar meta pequeña",
+    "addBig": "Añadir meta grande",
+    "addSmall": "Añadir meta pequeña",
     "moveEnd": "mover el final",
     "move": "Mover bajo otra meta",
     "archive": "Archivar esta meta"
@@ -95,7 +95,7 @@
   },
   "note": {
     "fold": "Nota",
-    "add": "Agregar una nota",
+    "add": "Añadir una nota",
     "change": "Cambiar la nota",
     "eyebrow": "nota",
     "label": "nota",
