@@ -578,6 +578,42 @@ test.describe("pending (B5) and cancel", () => {
     }
   });
 
+  test("holds the day and the real figure read-only while «Cuadrando…» shows (B5)", async ({
+    page,
+  }) => {
+    const account = await seedAccount();
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog).fill("492000");
+
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => (release = resolve));
+      await page.route("**/*", async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"] !== undefined) {
+          await held;
+        }
+        await route.continue();
+      });
+
+      await submit(dialog).click();
+      await expect(
+        dialog.getByRole("button", { name: accounts.reconcilePending, exact: true }),
+      ).toBeVisible();
+
+      await expect(dayField(dialog)).toHaveJSProperty("readOnly", true);
+      await expect(realField(dialog)).toHaveJSProperty("readOnly", true);
+      // Typing into a read-only input changes nothing.
+      await realField(dialog).press("Digit9");
+      await expect(realField(dialog)).toHaveValue("492000");
+
+      release();
+      await expect(dialog.getByText(accounts.reconciled).or(historyFigures(dialog))).toBeVisible();
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
   test("Cancelar closes the dialog and writes nothing", async ({ page }) => {
     const account = await seedAccount();
     try {
