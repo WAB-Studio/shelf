@@ -32,9 +32,6 @@ if (args[0] === "--changed") {
   files = args.length ? all.filter((f) => args.some((w) => f.includes(w))) : all;
 }
 
-// Tests that build ~37k Intl formatters (lib/zone.ts) and hold 4.7 GB for 40 s: too heavy for a mutant loop.
-const skipped = { "lib/day/weeks.ts": ["--test-skip-pattern=never lands before h"] };
-
 mkdirSync("private/stryker", { recursive: true });
 let failed = 0;
 for (const file of files) {
@@ -52,7 +49,7 @@ for (const file of files) {
   const cfg = {
     ...config,
     mutate: [file],
-    tap: { ...config.tap, nodeArgs: [...config.tap.nodeArgs, ...(skipped[file] ?? [])], testFiles: covering },
+    tap: { ...config.tap, testFiles: covering },
     incrementalFile: `private/stryker/${slug}.incremental.json`,
     jsonReporter: { fileName: `private/stryker/${slug}.json` },
   };
