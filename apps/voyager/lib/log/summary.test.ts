@@ -1,4 +1,4 @@
-// RL-32's contract on `lookups`: the reader's record groups by word, one row
+// RL-56's contract on `lookups`: the reader's record groups by word, one row
 // per word, ordered by frequency; tapping a word opens every one of its
 // searches with its date. Node has no IndexedDB, so `./record`'s
 // `openLogDatabase` is mocked with a hand-rolled cursor that iterates a

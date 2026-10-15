@@ -8,7 +8,7 @@ import { PhraseNotes } from "./phrase-notes";
 
 // What stage a sentence lookup is at. The composing module owns the debounce,
 // the token floor and the request itself; this only draws the stage it lands
-// in (RL-09). `failed` is never drawn here (RL-37): the composing module
+// in (RL-09). `failed` is never drawn here (RL-59): the composing module
 // intercepts it and draws the per-word breakdown instead.
 export type PhraseState =
   | { kind: "idle" }
@@ -38,7 +38,7 @@ export function PhraseAnswer({
   // The typing has not settled and nothing was asked for: silence, not a
   // spinner, so the box never flickers while a person is mid-sentence.
   // `failed` draws nothing here either — the composing module never mounts
-  // this component while its own state reads `failed` (RL-37).
+  // this component while its own state reads `failed` (RL-59).
   if (state.kind === "waiting" || state.kind === "failed") {
     return null;
   }

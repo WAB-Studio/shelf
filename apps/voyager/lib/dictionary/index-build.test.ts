@@ -2,7 +2,7 @@
 // answers in one block per pronunciation, the blocks in the order the entry
 // already had, and a headword carrying one answers with no grouping at all.
 // Every index here is built through the real `buildIndex` and read through
-// the real `groupFor`, so what a block holds is the order RL-43 and RL-47
+// the real `groupFor`, so what a block holds is the order RL-43 and RL-58
 // really produce — the senses themselves are invented, never the shipped
 // corpus, except where a test names a headword `pos-frequency.ts` scores
 // (`row`, `leave`) to put that measured order under the grouping.

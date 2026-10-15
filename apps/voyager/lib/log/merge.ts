@@ -1,7 +1,7 @@
 import { openLogDatabase } from "./record";
 import type { LookupRecord } from "./types";
 
-// The account copy's two operations on `lookups` (RL-39, RL-24, RNL-09), kept
+// The account copy's two operations on `lookups` (RL-55, RL-24, RNL-09), kept
 // out of record.ts so the write path a keystroke rides never gains a
 // function it does not call.
 

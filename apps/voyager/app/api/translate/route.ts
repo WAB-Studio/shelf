@@ -20,7 +20,7 @@ export const maxDuration = 40;
 const MYMEMORY_ENDPOINT = "https://api.mymemory.translated.net/get";
 
 // Half the OpenAI routes' 20 s: a sentence the reader is waiting on falls to
-// RL-37's per-word answer sooner.
+// RL-59's per-word answer sooner.
 const MYMEMORY_TIMEOUT_MS = 10_000;
 
 const MODEL_TIMEOUT_MS = 20_000;
@@ -54,7 +54,7 @@ function foldForComparison(s: string): string {
 // back — gibberish included — with `responseStatus: "200"` and no warning:
 // the two checks below never catch it. The same fold also refuses a proper
 // noun, a brand name or a number that legitimately holds still across `en`
-// and `es`; RL-37's per-word breakdown is what that reply lands on instead,
+// and `es`; RL-59's per-word breakdown is what that reply lands on instead,
 // an honest "could not answer" rather than a false badge.
 function isEcho(source: string, translated: string): boolean {
   return foldForComparison(translated) === foldForComparison(source);
@@ -102,7 +102,7 @@ function bestAlternativeTranslation(source: string, matches: MyMemoryMatch[] | u
 // `matches` is even read: `responseStatus` already said the whole reply is
 // not to be trusted, so there is nothing in it worth falling back to.
 //
-// Below that, an unusable top pick is not the whole reply's failure — RL-53,
+// Below that, an unusable top pick is not the whole reply's failure — RL-60,
 // measured live: MyMemory's best-scoring match for "the cat sat on the mat"
 // is `translatedText: ""`, while a lower-scoring entry in `matches` answers
 // the sentence in full. That array is checked with the same filter before
@@ -199,7 +199,7 @@ export async function POST(request: Request): Promise<Response> {
   // Per caller, its own `translate:` row, so a caller's sentences never eat
   // into their word lookups. With no key (no salt, no address) the route
   // stays open: an unset variable must not switch RL-09 off. Refused before
-  // MyMemory is reached; the client reads 429 as any other failure (RL-37).
+  // MyMemory is reached; the client reads 429 as any other failure (RL-59).
   try {
     const client = scopedClientKey("translate", request.headers);
     if (client && !(await claimClientCall(client, env.TRANSLATE_DAILY_CLIENT_CAP))) {

@@ -22,13 +22,13 @@ export const env = createEnv({
     // The daily ceiling on RL-41/RL-42 model calls, counted in whole calls,
     // never dollars. Optional: unset means the route always answers 204.
     WORD_TEXT_DAILY_CALL_CAP: z.coerce.number().int().positive().optional(),
-    // The daily ceiling on RL-44/RL-47 calls per caller, keyed by a salted
+    // The daily ceiling on RL-44/RL-58 calls per caller, keyed by a salted
     // hash of the IP. Optional: unset means 204 for every caller.
     WORD_UNLISTED_DAILY_CLIENT_CAP: z.coerce.number().int().positive().optional(),
     // The daily ceiling on RL-46 phrase-notes model calls. Same shape as
     // WORD_TEXT_DAILY_CALL_CAP.
     PHRASE_NOTES_DAILY_CALL_CAP: z.coerce.number().int().positive().optional(),
-    // RL-46's own per-caller ceiling, checked the same way RL-44/RL-47
+    // RL-46's own per-caller ceiling, checked the same way RL-44/RL-58
     // check WORD_UNLISTED_DAILY_CLIENT_CAP — but the counter underneath is
     // shared, not separate: both routes bump the same `reading.client_spend`
     // row for a caller, one row keyed by (day, client) carrying two

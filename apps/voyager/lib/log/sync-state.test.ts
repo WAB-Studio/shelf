@@ -1,4 +1,4 @@
-// RL-24, RL-39: the copy's state belongs to one reader on one live device.
+// RL-24, RL-55: the copy's state belongs to one reader on one live device.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

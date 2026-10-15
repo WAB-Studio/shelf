@@ -1,4 +1,4 @@
-// RL-39, RL-55: which settled lookups leave a row.
+// RL-55: which settled lookups leave a row.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

@@ -1,4 +1,4 @@
-// Pairs that RL-40 must resolve. One rule of `inflect.ts` at least, usually
+// Pairs that RL-58 must resolve. One rule of `inflect.ts` at least, usually
 // the irregular table, exercises every line here.
 export const INFLECTION_FIXTURE: readonly { surface: string; lemma: string }[] = [
   // Named by the assignment.

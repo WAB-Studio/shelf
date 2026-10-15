@@ -79,7 +79,7 @@ function SignedOutForm() {
   // Half of RNL-09 this component has to hold by hand: `signOut` redirects
   // to `/registro`, so this never mounts on the way out of a session. It
   // only ever catches the other path onto this state — a device that was
-  // signed in once, is not any more, and lands here directly (RL-30).
+  // signed in once, is not any more, and lands here directly (RL-52).
   useEffect(() => {
     let cancelled = false;
     (async () => {

@@ -41,7 +41,7 @@ export const POS_RANK: Record<PartOfSpeech, number> = {
   phraseologicalUnit: 5,
 };
 
-// RL-47's suffix clause: only a verb takes "-ing" or "-ed", only an
+// RL-58's suffix clause: only a verb takes "-ing" or "-ed", only an
 // adjective takes "-ly", and a plural names a noun. A rule not listed here
 // —identity, irregular, comparative, superlative, possessive— strips no
 // suffix that fixes a category, so it pins nothing.
@@ -84,7 +84,7 @@ function frequencyRank(order: string | undefined, pos: PartOfSpeech): number | n
   return null;
 }
 
-// RL-47's suffix clause outranks both: the typed form already told the
+// RL-58's suffix clause outranks both: the typed form already told the
 // reader which category to expect, so a sense carrying it leads whether or
 // not SUBTLEX ever scored that headword. A lemma with no sense in the
 // pinned category leaves both flags false and falls through unchanged.
@@ -135,7 +135,7 @@ export function buildIndex(payload: DictionaryPayload): DictionaryIndex {
 // normalised headword answers together, ordered by how often each part of
 // speech is really used (RL-43) where pos-frequency.ts has a row for it,
 // POS_RANK otherwise — unless pinnedPos names a category the group itself
-// carries, in which case that category's senses lead (RL-47).
+// carries, in which case that category's senses lead (RL-58).
 export function groupFor(
   index: DictionaryIndex,
   normalisedHeadword: string,
@@ -211,7 +211,7 @@ function gatherByIpa(senses: readonly Sense[]): PronunciationBlock[] {
 // The pronunciation of whichever sense groupFor put first heads the entry and
 // the rest follow their own first sense, so no headword changes which sense
 // leads it: nothing in the asset ranks a pronunciation, so nothing here
-// invents a rank. Inside a block RL-43's frequency order and RL-47's pinned
+// invents a rank. Inside a block RL-43's frequency order and RL-58's pinned
 // category still govern, untouched — gathering only moves a sense past the
 // ones it was already interleaved with.
 //

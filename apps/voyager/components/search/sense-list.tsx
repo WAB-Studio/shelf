@@ -430,7 +430,7 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
 export type SenseListVariant = "full" | "compact";
 
 // A headword's full answer: its own senses first, then every inflected form
-// that reached one, each carrying its own senses in turn (RL-04, RL-40).
+// that reached one, each carrying its own senses in turn (RL-04, RL-58).
 // docs/voyager/DESIGN.md "PalabraConFlexion": the entry answers; this offers,
 // never replaces. The 2px rule marks where the entry pauses and the offer
 // begins, and each hit sits in its own indented rail — a smaller heading and
@@ -504,7 +504,7 @@ export function SenseList({
   // Set by `search-screen.tsx` alone (module 12), from the hook module 10
   // wires to `/api/word/unlisted`. Absent on `/registro/[palabra]` and on
   // every `compact` call, so neither opens a connection of its own
-  // (RL-47's own screen, never the breakdown's eight words at once).
+  // (RL-58's own screen, never the breakdown's eight words at once).
   networkAnswer?: NetworkAnswerState;
 }) {
   const t = useTranslations("word");
@@ -582,7 +582,7 @@ export function SenseList({
         (answer.exact !== null ? (
           offerAbove && <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
         ) : (
-          // RL-47: the form is only a form — the top of the screen is a
+          // RL-58: the form is only a form — the top of the screen is a
           // different word wearing the same spelling, so the form the
           // reader typed leads and the lemma it comes from sits under the
           // 2px rule, in the same rail the `exact` branch above offers it

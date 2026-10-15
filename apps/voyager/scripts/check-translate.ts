@@ -9,7 +9,7 @@
  * this file stands as the route's only regression cover, not only the new
  * line's.
  *
- * Also proves RL-53: an empty `translatedText` alongside a usable `matches`
+ * Also proves RL-60: an empty `translatedText` alongside a usable `matches`
  * entry is answered from that entry, not refused. The stub for that case is
  * the real reply measured with `curl` against `api.mymemory.translated.net`
  * for "the cat sat on the mat", trimmed to the fields this route reads.
@@ -108,7 +108,7 @@ async function main() {
   );
 
   // The known cost: a name that legitimately holds still across English and
-  // Spanish reads exactly like an echo, and is refused the same way. RL-37
+  // Spanish reads exactly like an echo, and is refused the same way. RL-59
   // hands this to the per-word breakdown instead of the network badge —
   // an honest "could not answer", not a wrong one.
   stubFetch({ responseData: { translatedText: "Harry Potter" }, responseStatus: 200 });
@@ -128,7 +128,7 @@ async function main() {
   const quota = await postTranslate("something to translate");
   assert("a quota warning is still refused", quota.status === 502, JSON.stringify(quota));
 
-  // RL-53, the defect as measured: MyMemory's best-scoring match for "the
+  // RL-60, the defect as measured: MyMemory's best-scoring match for "the
   // cat sat on the mat" carries `translatedText: ""`, but `matches` holds a
   // second entry that actually answers the sentence. This is that exact
   // reply, trimmed to the fields the route reads.

@@ -26,7 +26,7 @@ import {
   Text,
 } from "@/components/ui";
 
-// The other half of RL-32: one word's own searches, read off the same
+// The other half of RL-56: one word's own searches, read off the same
 // `normalised` index `HistoryList` groups by. The reader came here to see
 // again what the search box showed them, so this mounts the same
 // dictionary `SenseList` draws for `/?q=` — its own Worker, its own lookup,

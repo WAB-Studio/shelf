@@ -11,7 +11,7 @@ import { generateUnlistedAnswer } from "@/lib/word/unlisted-model";
 import { readCachedAnswer, writeCachedAnswer } from "@/lib/word/unlisted-cache";
 import { unlistedRequestSchema, unlistedResponseSchema } from "@/lib/word/unlisted-protocol";
 
-// RL-44 and RL-47's server half: no reader session reaches this route, the
+// RL-44 and RL-58's server half: no reader session reaches this route, the
 // cache is keyed on the word alone (`db/schema/word-answers.ts`), and its
 // answer is never a candidate for the full route cache.
 export const dynamic = "force-dynamic";

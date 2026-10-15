@@ -260,7 +260,7 @@ function notifyFlushed(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(LOG_FLUSHED_EVENT));
 }
 
-// RL-39: a word that matched nothing and a sentence that could not be
+// RL-55: a word that matched nothing and a sentence that could not be
 // translated leave no row. The guard lives here, at the one place every
 // settled candidate — hit or miss — ends up, never at the call that reports
 // it: `recordLookup` still has to run for a miss, so it can displace

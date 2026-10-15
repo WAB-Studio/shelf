@@ -53,7 +53,7 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
           <TapTarget size={44} direction="column" align="stretch" width="100%">
             {/* `minmax(0, 1fr) auto` on the phone stacks the translation under
               the word; the desktop's third track puts word, translation and
-              count on one row (RL-32's board). `gridColumn`/`gridRow` move
+              count on one row (RL-56's board). `gridColumn`/`gridRow` move
               each cell between the two shapes. The `minmax(0, …)` is
               written out, not left to Radix's own `columns` shorthand:
               `grid.props.js`'s `parseValue` only rewrites a bare digit
@@ -195,7 +195,7 @@ export function HistoryList() {
     }
 
     read();
-    // RL-39's row can still be in flight to IndexedDB when this screen
+    // RL-55's row can still be in flight to IndexedDB when this screen
     // mounts: the search that motivated the trip only settles in
     // `record.ts` once the reader leaves `/`, and that write is async even
     // once forced. This rereads the moment it lands, instead of waiting on
