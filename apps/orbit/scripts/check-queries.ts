@@ -735,9 +735,11 @@ async function writeSuite(
       }),
     async ({ transactionId }) => {
       keep("transactions", transactionId);
+      const currency = await readColumn<string>("transactions", "id", transactionId, "currency");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, currency = ${await readColumn("transactions", "id", transactionId, "currency")}`,
+        ok: currency === "USD" && Number(stored) === USD_EXPENSE_CENTS,
+        detail: `movement ${transactionId}, currency = ${currency}, amount_cents = ${stored}`,
       };
     },
   );
@@ -788,9 +790,11 @@ async function writeSuite(
       }),
     async ({ transactionId }) => {
       keep("transactions", transactionId);
+      const counter = await readColumn<string | number>("transactions", "id", transactionId, "counter_amount_cents");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, counter_amount_cents = ${await readColumn("transactions", "id", transactionId, "counter_amount_cents")}`,
+        ok: Number(counter) === CONTRIBUTION_USD_CENTS && Number(stored) === CONTRIBUTION_COP_CENTS,
+        detail: `movement ${transactionId}, amount_cents = ${stored}, counter_amount_cents = ${counter}`,
       };
     },
   );
@@ -1115,9 +1119,10 @@ async function writeSuite(
     () => addGoalContribution({ goalId, amountCents: 1500000 }),
     async ({ contributionId }) => {
       keep("goal_contributions", contributionId);
+      const stored = await readColumn<string | number>("goal_contributions", "id", contributionId, "amount_cents");
       return {
-        ok: true,
-        detail: `contribution ${contributionId}, amount_cents = ${await readColumn("goal_contributions", "id", contributionId, "amount_cents")}`,
+        ok: Number(stored) === 1500000,
+        detail: `contribution ${contributionId}, amount_cents = ${stored}`,
       };
     },
   );
@@ -1363,9 +1368,10 @@ async function writeSuite(
       }),
     async ({ planId }) => {
       keep("installment_plans", planId);
+      const stored = await readColumn<string | number>("installment_plans", "id", planId, "n_installments");
       return {
-        ok: true,
-        detail: `plan ${planId}, n_installments = ${await readColumn("installment_plans", "id", planId, "n_installments")}`,
+        ok: Number(stored) === 3,
+        detail: `plan ${planId}, n_installments = ${stored}`,
       };
     },
   );
@@ -1381,9 +1387,11 @@ async function writeSuite(
       }),
     async ({ transactionId, paidLineIds }) => {
       keep("transactions", transactionId);
+      const kind = await readColumn<string>("transactions", "id", transactionId, "kind");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, lines paid = ${paidLineIds.length}, kind = ${await readColumn("transactions", "id", transactionId, "kind")}`,
+        ok: kind === "transfer" && Number(stored) === CARD_LINE_CENTS && paidLineIds.length === 1,
+        detail: `movement ${transactionId}, lines paid = ${paidLineIds.length}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
@@ -1564,9 +1572,11 @@ async function writeSuite(
       }),
     async ({ transactionId }) => {
       keep("transactions", transactionId);
+      const estimate = await readColumn<boolean>("transactions", "id", transactionId, "counter_is_estimate");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, counter_is_estimate = ${await readColumn("transactions", "id", transactionId, "counter_is_estimate")}`,
+        ok: estimate === true && Number(stored) === CARD_FOREIGN_CENTS,
+        detail: `movement ${transactionId}, amount_cents = ${stored}, counter_is_estimate = ${estimate}`,
       };
     },
   );
@@ -1601,9 +1611,11 @@ async function writeSuite(
       }),
     async ({ transactionId }) => {
       keep("transactions", transactionId);
+      const kind = await readColumn<string>("transactions", "id", transactionId, "kind");
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${transactionId}, kind = ${await readColumn("transactions", "id", transactionId, "kind")}`,
+        ok: kind === "expense" && Number(stored) === 2500000,
+        detail: `movement ${transactionId}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
@@ -1623,19 +1635,25 @@ async function writeSuite(
         splits: [{ categoryId: scope.categoryId, amountCents: 2700000 }],
         labelIds: [],
       }),
-    async (updated) => ({
-      ok: updated === "done",
-      detail: `updated = ${updated}, amount_cents = ${await readColumn("transactions", "id", transactionId, "amount_cents")}`,
-    }),
+    async (updated) => {
+      const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
+      return {
+        ok: updated === "done" && Number(stored) === 2700000,
+        detail: `updated = ${updated}, amount_cents = ${stored}`,
+      };
+    },
   );
 
   await checkWrite(
     "deleteTransaction",
     () => deleteTransaction({ transactionId }),
-    async (deleted) => ({
-      ok: deleted === "done",
-      detail: `deleted = ${deleted}, row still there = ${(await readColumn("transactions", "id", transactionId, "id")) !== undefined}`,
-    }),
+    async (deleted) => {
+      const stillThere = (await readColumn("transactions", "id", transactionId, "id")) !== undefined;
+      return {
+        ok: deleted === "done" && !stillThere,
+        detail: `deleted = ${deleted}, row still there = ${stillThere}`,
+      };
+    },
   );
 
   const withdrawal = await checkWrite(
@@ -1649,9 +1667,11 @@ async function writeSuite(
     async (result) => {
       keep("transactions", result.transactionId);
       if (result.createdCashAccount) keep("accounts", result.targetCashAccountId);
+      const kind = await readColumn<string>("transactions", "id", result.transactionId, "kind");
+      const stored = await readColumn<string | number>("transactions", "id", result.transactionId, "amount_cents");
       return {
-        ok: true,
-        detail: `movement ${result.transactionId}, cash account created = ${result.createdCashAccount}, kind = ${await readColumn("transactions", "id", result.transactionId, "kind")}`,
+        ok: kind === "transfer" && Number(stored) === 500000,
+        detail: `movement ${result.transactionId}, cash account created = ${result.createdCashAccount}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
