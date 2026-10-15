@@ -422,13 +422,14 @@ function GoalCard({
             {/* Which aportes the meta counts: the ones set aside in this one
                 currency and no other (RF-124). */}
             <Text size="1" color="gray">
-              {`${t("meta", {
+              {t("metaInCurrency", {
                 amount: formatMoney(
                   goal.targetAmountCents,
                   goal.currency,
                   locale,
                 ),
-              })} · ${tKey("planning.inCurrency", { currency: goal.currency })}`}
+                currency: goal.currency,
+              })}
             </Text>
           </Flex>
           <Badge

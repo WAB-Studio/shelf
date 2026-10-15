@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "title": "Shared fund",
+    "title": "HomeFund",
     "description": "Accounts, movements and balances shared between several people.",
     "loginTitle": "Sign in",
     "loginDescription": "Sign in with a link sent to your email, no password needed.",
@@ -8,7 +8,7 @@
     "onboardingDescription": "A fund is the shared pot: its accounts, its members and its history."
   },
   "common": {
-    "appName": "Shared fund",
+    "appName": "HomeFund",
     "backHome": "Back to home",
     "retry": "Try again",
     "save": "Save",
@@ -103,7 +103,6 @@
     "emptyDescription": "This is where the fund's balances and movements will appear.",
     "createAccount": "Create account",
     "createFund": "Create a fund",
-    "netWorthTitle": "Net worth",
     "netWorthIn": "Net worth in {currency}",
     "ownerChip": "{name} · <amount></amount>",
     "groupLabel": "The group",
@@ -158,7 +157,7 @@
     "data": "Data",
     "audit": "Audit log",
     "webhooks": "Webhooks",
-    "roleLeader": "Leader",
+    "roleLeader": "Owner",
     "roleMember": "Member"
   },
   "audit": {
@@ -289,7 +288,6 @@
     "openingBalanceOnLabel": "Opening date",
     "openingBalanceRow": "<amount></amount> on {date}",
     "balanceInCurrency": "<amount></amount> in {currency}",
-    "otherCurrencies": "{count, plural, one {# more currency} other {# more currencies}}",
     "activeTab": "Active",
     "archivedTab": "Archived",
     "statusLabel": "Status",
@@ -449,6 +447,7 @@
     "counterAmountLabel": "Amount at destination",
     "counterAmountHint": "Adjust the amount if it doesn't match: the rate is calculated from both amounts.",
     "rateLabel": "Exchange rate",
+    "rateLine": "1 {currency} = {rate} {foreign}",
     "rateDerived": "Calculated from both amounts, not stored.",
     "suggestRate": "Suggest amount",
     "rateUnavailable": "No suggested rate for these currencies; enter the amount.",
@@ -589,6 +588,7 @@
     "nav": "Planning sections"
   },
   "budgets": {
+    "ofLimit": " / {amount}",
     "title": "Budgets",
     "add": "New budget",
     "addTitle": "New budget",
@@ -669,6 +669,7 @@
     "accountNone": "No account",
     "initialContributionLabel": "Opening amount",
     "meta": "Target {amount}",
+    "metaInCurrency": "Target {amount} · in {currency}",
     "percent": "{pct}%",
     "apartado": "Set aside",
     "contribute": "Add",
@@ -1007,7 +1008,6 @@
     "viewMovement": "See movement",
     "statusPaid": "Paid",
     "statusPending": "Pending",
-    "pendingTotal": "Pending {amount}",
     "plansTitle": "Installments",
     "planPosition": "{paid} of {total}",
     "planUntitled": "Installment purchase",
@@ -1025,7 +1025,6 @@
     "statementsTitle": "Statements",
     "periodStart": "From",
     "statementsEmpty": "No closed statements yet.",
-    "statementsEmptyCutOff": "Choose the cut-off day in the debt's terms so periods close.",
     "statementsEmptyRecord": "Record the first statement by hand.",
     "statementRecord": "Record statement",
     "statementRecordTitle": "Record statement",

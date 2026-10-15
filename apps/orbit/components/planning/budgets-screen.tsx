@@ -413,7 +413,9 @@ function BudgetCard({
           >
             {formatMoney(budget.spentCents, budget.currency, locale)}
             <Text color="gray" weight="regular">
-              {` / ${formatMoney(budget.limitCents, budget.currency, locale)}`}
+              {t("ofLimit", {
+                amount: formatMoney(budget.limitCents, budget.currency, locale),
+              })}
             </Text>
           </Text>
           <DropdownMenu.Root>

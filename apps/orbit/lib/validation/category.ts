@@ -34,7 +34,7 @@ export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 
 // `kind` is immutable after creation, so it never appears in the update schema.
 export const updateCategorySchema = z.object({
-  categoryId: z.uuid(),
+  categoryId: z.uuid({ error: "errors.notFound" }),
   name: categoryNameSchema,
   parentId: categoryParentIdSchema,
   color: categoryColorSchema,
@@ -43,7 +43,7 @@ export const updateCategorySchema = z.object({
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 
 export const deleteCategorySchema = z.object({
-  categoryId: z.uuid(),
+  categoryId: z.uuid({ error: "errors.notFound" }),
 });
 
 export type DeleteCategoryInput = z.infer<typeof deleteCategorySchema>;

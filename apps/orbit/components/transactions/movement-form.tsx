@@ -789,7 +789,11 @@ export function MovementForm({
                   weight="medium"
                   style={{ fontVariantNumeric: "tabular-nums" }}
                 >
-                  {`1 ${currency} = ${format.number(rate, RATE_FORMAT)} ${foreign}`}
+                  {t("rateLine", {
+                    currency,
+                    rate: format.number(rate, RATE_FORMAT),
+                    foreign: foreign ?? "",
+                  })}
                 </Text>
               </Flex>
               <Text size="1" color="gray">
