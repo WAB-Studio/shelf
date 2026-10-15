@@ -7,7 +7,7 @@ import { createTranslator } from "next-intl";
 
 import { coverage } from "./coverage";
 import { parseTemplate, TEMPLATE_HEADER } from "./template";
-import { readWorkbook, templateWorkbook, WORKBOOK_NAME } from "./workbook";
+import { readWorkbook, templateWorkbook, WORKBOOK_NAME, ZIP_ENTRIES_MAX, ZIP_INFLATED_MAX } from "./workbook";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
 const say = (key: string) =>
@@ -420,4 +420,29 @@ test("zipTooBig: a template passes, an archive that declares past the cap or hol
   assert.deepEqual(await readWorkbook(bomb), { matched: false });
   assert.equal(zipTooBig(zipDeclaring(Array(201).fill(1))), true);
   assert.equal(zipTooBig(zipDeclaring(Array(200).fill(1))), false);
+});
+
+test("readWorkbook refuses a real workbook that holds more entries than a template, before it inflates anything", async () => {
+  const { default: JSZip } = await import("jszip");
+  const honest = await book({ Metas: [GOAL] });
+  const padded = async (extra: number) => {
+    const zip = await JSZip.loadAsync(honest);
+    for (let i = 0; i < extra; i++) zip.file(`padding/f${i}.txt`, "");
+    return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
+  };
+  assert.equal((await readWorkbook(await padded(100))).matched, true);
+  const bomb = await padded(ZIP_ENTRIES_MAX + 100);
+  assert.deepEqual(await readWorkbook(bomb), { matched: false });
+});
+
+test("zipTooBig: the byte at the cap passes, the next does not; a zip64 marker or a broken directory is read as the gate defines", async () => {
+  const { zipTooBig } = await import("./workbook");
+  assert.equal(zipTooBig(zipDeclaring([ZIP_INFLATED_MAX])), false);
+  assert.equal(zipTooBig(zipDeclaring([ZIP_INFLATED_MAX, 1])), true);
+  const zip64 = Buffer.from(zipDeclaring([1]));
+  zip64.writeUInt32LE(0xffffffff, zip64.length - 22 + 16);
+  assert.equal(zipTooBig(new Uint8Array(zip64)), true);
+  const broken = Buffer.from(zipDeclaring([60 * 1024 * 1024]));
+  broken.writeUInt32LE(0, 0);
+  assert.equal(zipTooBig(new Uint8Array(broken)), false);
 });

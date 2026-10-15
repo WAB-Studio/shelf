@@ -256,3 +256,12 @@ test("RP-124 goalSections: a month that prints as a row and holds a task still d
   const months = [{ month: "2026-10-01", planned: null, reached: 0, current: true, past: false, carried: null, taskCount: 2 }];
   assert.equal(goalSections(goal({ horizon: null, phases: [], tasks: [], months })).includes("months"), true);
 });
+
+test("RP-124 goalSections: «months» reads the month's task count, and a month that is no row holds nothing by its amount", () => {
+  const month = { month: "2026-10-01", planned: null, reached: 0, current: false, past: true, carried: null };
+  // A measure-less goal whose printed month names a count but carries no `tasks` read still prints «months».
+  assert.ok(goalSections(goal({ unit: null, phases: [], tasks: [], months: [{ ...month, taskCount: 3 }] })).includes("months"));
+  // A month ahead with no planned amount is no row: what it reached does not make the section.
+  const ahead = { ...month, past: false, planned: null, reached: 5 };
+  assert.equal(goalSections(goal({ months: [{ ...ahead, taskCount: 0 }] })).includes("months"), false);
+});

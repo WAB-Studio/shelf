@@ -536,3 +536,27 @@ test("fileRefused: bytes that are not what the type says, a long PDF and a huge 
   assert.equal(fileRefused("image", new TextEncoder().encode("text")), true);
   assert.equal(fileRefused("text", new Uint8Array([1])), false);
 });
+
+test("fileRefused: a PDF whose pages hide in compressed objects is counted by its page tree", async () => {
+  const { fileRefused, pdfPages } = await import("./model");
+  const tree = (count: number) => new TextEncoder().encode(`%PDF-1.5\n1 0 obj << /Type /Pages /Count ${count} >> endobj\n`);
+  assert.equal(pdfPages(tree(120)), 120);
+  assert.equal(fileRefused("pdf", tree(41)), true);
+  assert.equal(fileRefused("pdf", tree(40)), false);
+});
+
+test("fileRefused: an image at the pixel cap passes, one pixel row over does not, and a header with no size is not a huge image", async () => {
+  const { fileRefused, IMAGE_PIXELS_MAX } = await import("./model");
+  const png = (w: number, h: number) => {
+    const b = Buffer.alloc(32);
+    b.writeUInt32BE(0x89504e47, 0);
+    b.writeUInt32BE(w, 16);
+    b.writeUInt32BE(h, 20);
+    return new Uint8Array(b);
+  };
+  assert.equal(IMAGE_PIXELS_MAX, 40_000_000);
+  assert.equal(fileRefused("image", png(8000, 5000)), false);
+  assert.equal(fileRefused("image", png(8000, 5001)), true);
+  const webp = new Uint8Array(Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 "), Buffer.alloc(20)]));
+  assert.equal(fileRefused("image", webp), false);
+});
