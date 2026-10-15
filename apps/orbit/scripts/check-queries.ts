@@ -4628,4 +4628,31 @@ async function recurringRuleCategoryFitSuite(
     fundCategory === false,
     `fund category on a personal account fits = ${fundCategory}`,
   );
+
+  // A category deleted under the open form is a stale pick, not a scope breach: the guard lets it
+  // through so the foreign key answers `referenceGone`.
+  const goneId = await personalCategory(groupless.id, "expense", "Harness ajuste borrada");
+  await fixtureSql`delete from categories where id = ${goneId}`;
+  const goneFits = await fits(groupless, goneId, "source", accountId);
+  const goneRefused = await asUser(groupless, () =>
+    createRecurringRuleAction({
+      fromAccountId: accountId,
+      toAccountId: null,
+      amount: "10",
+      categoryId: goneId,
+      description: "Harness regla borrada",
+      frequency: "weekly" as const,
+      intervalN: 1,
+      dayOfMonth: null,
+      nextRunOn: shiftDate(today, 7),
+      endsOn: null,
+    }),
+  );
+  const [{ n: goneStored }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("A deleted category reads as a stale pick (referenceGone), not a scope violation, and stores nothing"),
+    goneFits === true && goneRefused?.serverError === "errors.referenceGone" && goneStored === 0,
+    `deleted category fits = ${goneFits}, serverError = ${goneRefused?.serverError ?? "none"}, ${goneStored} rule(s) stored`,
+  );
 }
