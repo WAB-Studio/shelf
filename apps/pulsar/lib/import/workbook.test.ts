@@ -3,10 +3,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import ExcelJS from "exceljs";
+import { createTranslator } from "next-intl";
 
 import { coverage } from "./coverage";
 import { parseTemplate, TEMPLATE_HEADER } from "./template";
 import { readWorkbook, templateWorkbook, WORKBOOK_NAME } from "./workbook";
+
+const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
+const say = (key: string) =>
+  (createTranslator({ locale: "es", messages: { import: catalogue }, namespace: "import" }) as unknown as (k: string) => string)(key);
 
 const DOC = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
 const DOC_EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
@@ -59,13 +64,13 @@ test("the workbook's name is the file the app hands out", () => {
 test("the delivered workbook, read back, is the draft of PLANTILLA.md's example", async () => {
   const expected = parseTemplate(DOC_EXAMPLE);
   assert.ok(expected.matched && "draft" in expected);
-  const draft = await draftOf(await templateWorkbook());
+  const draft = await draftOf(await templateWorkbook(say));
   assert.deepEqual(strip(draft), strip(expected.draft));
 });
 
 test("the delivered workbook has the mark in Metas!A1 and its headers where the document says", async () => {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(Buffer.from(await templateWorkbook()) as never);
+  await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
   assert.deepEqual(wb.worksheets.map((s) => s.name), Object.keys(HEADERS));
   assert.equal(wb.getWorksheet("Metas")!.getCell("A1").value, TEMPLATE_HEADER);
   const header = (name: string, row: number) =>
@@ -75,7 +80,7 @@ test("the delivered workbook has the mark in Metas!A1 and its headers where the 
 });
 
 test("the workbook loses nothing: its coverage counts 0 rows out, as rows", async () => {
-  const result = await read(await templateWorkbook());
+  const result = await read(await templateWorkbook(say));
   assert.ok("draft" in result);
   const counted = coverage(result.draft, result.source, new Set(), new Set());
   assert.equal(result.source.kind, "rows");
@@ -351,4 +356,37 @@ test("915 a rhythm in another unit reads as a whole number of it", async () => {
   const draft = await draftOf(await book({ Metas: [["Meta", null, null, "lectura", "páginas", 40, null]] }));
   assert.equal(draft.goals[0].rhythm, 40);
   assert.equal(draft.goals[0].horizon, null);
+});
+
+test("the delivered workbook's example rows carry exactly this text", async () => {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
+  const rows = (name: string) => {
+    const sheet = wb.getWorksheet(name)!;
+    const out: unknown[][] = [];
+    sheet.eachRow((row, n) => {
+      if (n > (name === "Metas" ? 2 : 1)) out.push(Array.from({ length: sheet.columnCount }, (_, i) => row.getCell(i + 1).value ?? null));
+    });
+    return out;
+  };
+  const goal = "Evals y harness";
+  assert.deepEqual(rows("Metas"), [
+    ["Carrera en IA", null, "2028-10-01", null, null, null, "Lo que busco en dos años.\nUn ritmo que pueda sostener."],
+    ["IA aplicada", "Carrera en IA", "2027-10-01", null, null, null, null],
+    [goal, "IA aplicada", "2027-03-01", "horas de estudio", "minutos", "12 h", "Empezar por lo que ya sé medir."],
+    ["Leer", null, null, "lectura", "páginas", "40 páginas", null],
+  ]);
+  assert.deepEqual(rows("Fases"), [[goal, "2026-10-01", "2026-12-31", goal]]);
+  assert.deepEqual(rows("Meses"), [[goal, "2026-10", "12 h"], [goal, "2026-11", "20 h"]]);
+  assert.deepEqual(rows("Compromisos"), [
+    [goal, "Tema técnico", "martes y jueves", "2 h"],
+    [goal, "Inglés pasivo", "cada día", "toque"],
+    ["Leer", "Leer", "cada día", "10 páginas"],
+  ]);
+  assert.deepEqual(rows("Tareas"), [
+    [goal, "2026-10", "Leer AI Engineering cap. 1–4", null, "4 h", null],
+    [goal, "2026-10", "Tutor", null, null, "Preguntar por la tarifa por hora.\nPedir una clase de prueba antes de pagar."],
+    [goal, "2026-10", null, "Elegir tutor", "1 h", "Comparar tres perfiles."],
+    [goal, "2026-10", null, "Sesiones 1–4", "6 h", null],
+  ]);
 });

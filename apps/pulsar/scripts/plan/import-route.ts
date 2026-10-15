@@ -13,7 +13,12 @@ import { dirname, resolve } from "node:path";
 import { after, before, beforeEach, test } from "node:test";
 
 import ExcelJS from "exceljs";
+import { createTranslator } from "next-intl";
 import postgres from "postgres";
+
+const importMessages = JSON.parse(readFileSync(resolve(process.cwd(), "messages/es/import.json"), "utf8"));
+const say = (key: string) =>
+  (createTranslator({ locale: "es", messages: { import: importMessages }, namespace: "import" }) as unknown as (k: string) => string)(key);
 
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
@@ -499,7 +504,7 @@ test("the delivered workbook, uploaded: 200 via workbook with its draft; no key,
   delete envHandle.OPENAI_API_KEY;
   delete envHandle.PULSAR_MODEL_STUB;
   const { templateWorkbook } = await import("@/lib/import/workbook");
-  const response = await route.POST(request({ file: xlsx(await templateWorkbook()) }));
+  const response = await route.POST(request({ file: xlsx(await templateWorkbook(say)) }));
   assert.equal(response.status, 200);
   const body = await answer(response);
   assert.equal(body.via, "workbook");
@@ -515,7 +520,7 @@ test("the delivered workbook, uploaded: 200 via workbook with its draft; no key,
 test("a workbook with a broken row: 422 workbookRows names its sheet and row; no row, no model", async () => {
   const { templateWorkbook } = await import("@/lib/import/workbook");
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(Buffer.from(await templateWorkbook()) as never);
+  await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
   wb.getWorksheet("Meses")!.getCell("B2").value = "octubre";
   const bytes = new Uint8Array(await wb.xlsx.writeBuffer());
   const response = await route.POST(request({ file: xlsx(bytes) }));
@@ -549,7 +554,7 @@ test("a file called .xlsx that is no workbook is not the template either", async
 test("a workbook with the cap spent still reads: no claim for it", async () => {
   await seedToday(10);
   const { templateWorkbook } = await import("@/lib/import/workbook");
-  const response = await route.POST(request({ file: xlsx(await templateWorkbook()) }));
+  const response = await route.POST(request({ file: xlsx(await templateWorkbook(say)) }));
   assert.equal(response.status, 200);
   assert.equal((await rows()).length, 10);
 });
