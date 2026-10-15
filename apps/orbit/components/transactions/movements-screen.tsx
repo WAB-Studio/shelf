@@ -92,11 +92,15 @@ type DayGroup = { key: string; label: string; rows: TransactionListRow[] };
  */
 export function MovementsScreen({
   rows,
+  totals,
   options,
   filters,
   ruleName,
 }: {
   rows: TransactionListRow[];
+  // Counted in SQL over every movement the filter matches: `rows` stops at the
+  // server's cap, these figures never do.
+  totals: { count: number; nets: { currency: CurrencyCode; netCents: number }[] };
   options: TransactionFormOptions;
   filters: MovementsFilters;
   ruleName: string | null;
@@ -193,17 +197,9 @@ export function MovementsScreen({
   // A transfer moves money between the caller's own accounts, so it moves the net
   // by nothing (RF-19). One net per currency, and no figure that adds two of them
   // (RF-124); each spans every filtered row, not just this page.
-  const netByCurrency = new Map<CurrencyCode, number>();
-  for (const row of rows) {
-    if (row.kind === "transfer") continue;
-    const signed = row.kind === "income" ? row.amountCents : -row.amountCents;
-    netByCurrency.set(
-      row.currency,
-      (netByCurrency.get(row.currency) ?? 0) + signed,
-    );
-  }
-  // Nothing filtered in is still a net: one zero, in the currency the fund
-  // reports in, rather than a heading that names no figure at all.
+  const netByCurrency = new Map<CurrencyCode, number>(
+    totals.nets.map(({ currency, netCents }) => [currency, netCents]),
+  );
   const nets: [CurrencyCode, number][] =
     netByCurrency.size === 0
       ? [[BASE_CURRENCY, 0]]
@@ -312,7 +308,7 @@ export function MovementsScreen({
           title={t("listTitle")}
           meta={
             <>
-              {t("listMeta", { count: rows.length })}{" "}
+              {t("listMeta", { count: totals.count })}{" "}
               {/* One figure per currency, each naming the one it counts: no
                   total on this screen is the sum of two of them (RF-124). */}
               {nets.map(([currency, net], index) => (

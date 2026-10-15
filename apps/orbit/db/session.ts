@@ -65,6 +65,18 @@ export async function withUserDb<T>(
 }
 
 /**
+ * Runs `fn` on a transaction the caller already holds, or opens one. A loader
+ * takes the optional `tx` so a screen can fan several reads out inside ONE
+ * transaction and pay its BEGIN, settle and COMMIT once.
+ */
+export function withUserDbOrTx<T>(
+  tx: Transaction | undefined,
+  fn: (tx: Transaction) => Promise<T>,
+): Promise<T> {
+  return tx ? fn(tx) : withUserDb(fn);
+}
+
+/**
  * `withUserDb` for a caller that has no Supabase session but has already resolved
  * a user id from a verified credential — the webhook ingest, and it alone. The
  * `userId` it passes is one it verified; it is NEVER a value read from a request

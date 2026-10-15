@@ -5,7 +5,8 @@ import { asc, eq, or, sql } from "drizzle-orm";
 import { insertRow } from "@/db/insert-row";
 import { callerGroupId } from "@/db/queries/groups";
 import { labels } from "@/db/schema";
-import { withUserDb } from "@/db/session";
+import type { Transaction } from "@/db/session";
+import { withUserDb, withUserDbOrTx } from "@/db/session";
 
 // A label set is read and written for one scope at a time: a user's personal set
 // or a group's (RF-70). The scope decides which of the XOR columns is set.
@@ -68,8 +69,11 @@ export async function listLabels(scope: LabelScope): Promise<LabelRow[]> {
  * Personal before the group's, then by name — the order the two reads it replaces
  * used to arrive in.
  */
-export async function listScopedLabels(userId: string): Promise<ScopedLabelRow[]> {
-  return withUserDb(async (tx) => {
+export async function listScopedLabels(
+  userId: string,
+  outerTx?: Transaction,
+): Promise<ScopedLabelRow[]> {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx
       .select({
         id: labels.id,

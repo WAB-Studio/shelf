@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -215,8 +215,8 @@ export async function commitImport(
   // account and category. After remap, no written reference may be one of these.
   const placeholders = new Set<string>([...accountMap.keys(), ...categoryMap.keys()]);
 
-  await commitRecurringRules(tx, input.recurringRules, accountMap, categoryMap, placeholders);
-  await commitTransactions(tx, input.transactions, accountMap, categoryMap, placeholders);
+  await commitRecurringRules(tx, input.recurringRules, accountMap, categoryMap, placeholders, scope);
+  await commitTransactions(tx, input.transactions, accountMap, categoryMap, placeholders, scope);
 
   await commitAdjustments(tx, input.adjustments ?? [], accountMap, placeholders);
 
@@ -488,6 +488,7 @@ async function commitRecurringRules(
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
+  scope: CommitScope,
 ): Promise<void> {
   if (rows.length === 0) return;
 
@@ -557,8 +558,26 @@ async function commitRecurringRules(
         nextRunOn: row.object.nextRunOn,
         endsOn: row.object.endsOn ?? null,
       })
-      .where(eq(recurringRules.externalRef, row.externalRef!));
+      .where(
+        and(
+          eq(recurringRules.externalRef, row.externalRef!),
+          scopeMatch(recurringRules.groupId, recurringRules.ownerUserId, scope),
+        ),
+      );
   }
+}
+
+// An `external_ref` is unique per scope, not globally: leading the filter with a
+// scope column lets the `(group_id, external_ref)` / `(owner_user_id, external_ref)`
+// unique indexes serve the lookup instead of a scan per updated row. The trigger
+// resolves a new row's scope from its accounts, so a row may sit in either.
+function scopeMatch(
+  groupColumn: Parameters<typeof eq>[0],
+  ownerColumn: Parameters<typeof eq>[0],
+  scope: CommitScope,
+): SQL {
+  const own = eq(ownerColumn, scope.userId);
+  return (scope.groupId ? or(eq(groupColumn, scope.groupId), own) : own) as SQL;
 }
 
 // A new row's write, resolved once: the real account and category ids a placeholder
@@ -603,6 +622,7 @@ async function commitTransactions(
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
+  scope: CommitScope,
 ): Promise<void> {
   const newRows = rows.filter((row) => row.status === "new");
   const updateRows = rows.filter((row) => row.status === "update");
@@ -636,7 +656,12 @@ async function commitTransactions(
           // confirms it, while a manual or already-reviewed row's stamp stays put (RF-31).
           reviewedAt: sql`case when ${transactions.recurringRuleId} is not null and ${transactions.reviewedAt} is null then now() else ${transactions.reviewedAt} end`,
         })
-        .where(eq(transactions.externalRef, row.externalRef!))
+        .where(
+          and(
+            eq(transactions.externalRef, row.externalRef!),
+            scopeMatch(transactions.groupId, transactions.ownerUserId, scope),
+          ),
+        )
         .returning({ id: transactions.id });
 
       if (!updated) continue;

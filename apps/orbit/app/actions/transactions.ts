@@ -231,6 +231,8 @@ export const updateTransactionAction = authActionClient
         description: parsedInput.description,
         splits: toSplitMinor(parsedInput.splits),
         labelIds: parsedInput.labelIds,
+        // Wholesale: an edit clearing the cause sends `null`, and absent means none.
+        causedByTransactionId: parsedInput.causedByTransactionId ?? null,
       });
     } catch (error) {
       mapTransactionError(error);
@@ -238,10 +240,6 @@ export const updateTransactionAction = authActionClient
 
     if (updated === "adjustment") throw new ActionError("errors.adjustmentReadOnly");
     if (updated === "missing") throw new ActionError("errors.notFound");
-
-    // Wholesale, like the splits and labels above: an edit clearing the cause
-    // sends `null` and this still runs, since absent and null both mean none.
-    await setCause(parsedInput.transactionId, parsedInput.causedByTransactionId);
 
     refresh();
   });

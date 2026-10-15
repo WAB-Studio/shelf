@@ -13,7 +13,8 @@ import type { ScopedLabelRow } from "@/db/queries/labels";
 import { listTransactions } from "@/db/queries/transactions";
 import type { TransactionListRow } from "@/db/queries/transactions";
 import { transactions } from "@/db/schema";
-import { getSessionUser, requireUser, withUserDb } from "@/db/session";
+import type { Transaction } from "@/db/session";
+import { getSessionUser, requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
 import { BASE_CURRENCY, currencySchema } from "@/lib/currency";
 
 // Enough candidates for the "this is a charge on…" picker (RF-132) without
@@ -66,6 +67,8 @@ export const getTransactionFormOptions = cache(
   async function getTransactionFormOptions(): Promise<TransactionFormOptions> {
     const user = await requireUser();
 
+    // One transaction for all seven reads: they pipeline on its connection, so
+    // BEGIN, the settle and COMMIT are paid once instead of seven times.
     const [
       accountRows,
       categories,
@@ -74,15 +77,17 @@ export const getTransactionFormOptions = cache(
       lastUsedAccountId,
       currencies,
       recentMovements,
-    ] = await Promise.all([
-      listAccounts({ archived: false }),
-      listScopedCategories(user.id),
-      listScopedLabels(user.id),
-      listCallerMembers(user.id, { archived: false }),
-      getLastUsedAccountId(),
-      listCurrencyOptions(),
-      listTransactions({}, { limit: CAUSE_CANDIDATE_LIMIT }),
-    ]);
+    ] = await withUserDb((tx) =>
+      Promise.all([
+        listAccounts({ archived: false }, tx),
+        listScopedCategories(user.id, tx),
+        listScopedLabels(user.id, tx),
+        listCallerMembers(user.id, { archived: false }, tx),
+        getLastUsedAccountId(tx),
+        listCurrencyOptions(tx),
+        listTransactions({}, { limit: CAUSE_CANDIDATE_LIMIT, tx }),
+      ]),
+    );
 
     return {
       accounts: accountRows,
@@ -111,13 +116,13 @@ export const getTransactionFormOptions = cache(
  * fund and `app_users` only their own row — and the scope is an XOR, so at most
  * one of the two ever answers.
  */
-async function listCurrencyOptions(): Promise<{
+async function listCurrencyOptions(outerTx?: Transaction): Promise<{
   accountCurrencies: Record<string, OfferedCurrency>;
   scopeCurrency: OfferedCurrency;
 }> {
   const offered = currencySchema.catch(BASE_CURRENCY);
 
-  return withUserDb(async (tx) => {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx.execute<{
       scope_currency: string;
       id: string | null;
@@ -148,11 +153,13 @@ async function listCurrencyOptions(): Promise<{
 // The account the quick-entry field defaults to (RF-22): the source of the
 // caller's most recent movement, or its destination for an income, or null when
 // they have recorded nothing yet.
-export async function getLastUsedAccountId(): Promise<string | null> {
+export async function getLastUsedAccountId(
+  outerTx?: Transaction,
+): Promise<string | null> {
   const user = await getSessionUser();
   if (!user) return null;
 
-  return withUserDb(async (tx) => {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const [row] = await tx
       .select({
         accountId: sql<

@@ -7,7 +7,7 @@ import { callerGroupId } from "@/db/queries/groups";
 import { categories } from "@/db/schema";
 import type { Category } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb } from "@/db/session";
+import { withUserDb, withUserDbOrTx } from "@/db/session";
 
 type CategoryKind = Category["kind"];
 
@@ -117,8 +117,9 @@ export async function listCategories(
  */
 export async function listScopedCategories(
   userId: string,
+  outerTx?: Transaction,
 ): Promise<ScopedCategoryNode[]> {
-  return withUserDb(async (tx) => {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx
       .select({
         id: categories.id,

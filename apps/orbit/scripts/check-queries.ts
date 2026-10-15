@@ -122,6 +122,7 @@ import {
   createTransaction,
   deleteTransaction,
   getTransactionById,
+  getTransactionTotals,
   listTransactions,
   updateTransaction,
 } from "@/db/queries/transactions";
@@ -3718,6 +3719,150 @@ async function main(): Promise<void> {
   await reconcileSuite(userId, scope, fellow);
   console.log("");
   await reimportSuite(userId, scope);
+  console.log("");
+  await roundTripSuite(scope, userId);
+}
+
+// The screens' round-trip budgets after the performance pass: the shared form
+// options fan out inside ONE transaction, a movement edit pays one statement for
+// its cause and none when it is unchanged, and the movements list takes a limit.
+async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void> {
+  const today = todayInBogota();
+  const trips = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = roundTrips();
+    await run();
+    return roundTrips() - started;
+  };
+
+  // The first call of a lane opens its connection, which the driver counts too.
+  await listAccounts({ archived: false });
+  const single = await trips(() => listAccounts({ archived: false }));
+  await getTransactionFormOptions();
+  const form = await trips(() => getTransactionFormOptions());
+  // One transaction: the single read's BEGIN, settle and COMMIT once, plus the
+  // other six reads as statements. Seven transactions cost seven times `single`.
+  assert(
+    next("getTransactionFormOptions opens one transaction, not seven"),
+    form === single + 6,
+    `${form} round trips for the form options, ${single} for one read of them`,
+  );
+
+  const created = await createTransaction({
+    fromAccountId: scope.assetAccountId,
+    toAccountId: null,
+    amountCents: 1100,
+    occurredAt: today,
+    description: "Harness rendimiento",
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 1100 }],
+    labelIds: [],
+  });
+  keep("transactions", created.transactionId);
+  const edit = (causedByTransactionId?: string | null) =>
+    updateTransaction({
+      transactionId: created.transactionId,
+      fromAccountId: scope.assetAccountId,
+      toAccountId: null,
+      amountCents: 1100,
+      occurredAt: today,
+      description: "Harness rendimiento",
+      splits: [{ categoryId: scope.categoryId, amountCents: 1100 }],
+      labelIds: [],
+      causedByTransactionId,
+    });
+  await edit();
+  const bare = await trips(() => edit());
+  const unchanged = await trips(() => edit(null));
+  assert(
+    next("An edit that leaves the cause alone pays one statement for it, in its own transaction"),
+    unchanged === bare + 1,
+    `${unchanged} round trips with the cause sent, ${bare} without it`,
+  );
+
+  const other = await createTransaction({
+    fromAccountId: scope.assetAccountId,
+    toAccountId: null,
+    amountCents: 1200,
+    occurredAt: today,
+    description: "Harness causa",
+    externalRef: null,
+    splits: [{ categoryId: scope.categoryId, amountCents: 1200 }],
+    labelIds: [],
+  });
+  keep("transactions", other.transactionId);
+  await edit(other.transactionId);
+  const set = await readColumn<string | null>(
+    "transactions",
+    "id",
+    created.transactionId,
+    "caused_by_transaction_id",
+  );
+  await edit(other.transactionId);
+  await edit(null);
+  const cleared = await readColumn<string | null>(
+    "transactions",
+    "id",
+    created.transactionId,
+    "caused_by_transaction_id",
+  );
+  assert(
+    next("An edit sets, keeps and clears the cause inside the update"),
+    set === other.transactionId && cleared === null,
+    `cause after setting = ${set}, after clearing = ${cleared}`,
+  );
+
+  const capped = await listTransactions({}, { limit: 1 });
+  const second = await listTransactions({}, { limit: 1, offset: 1 });
+  assert(
+    next("listTransactions honours a limit and an offset"),
+    capped.length === 1 && second.length <= 1 && second[0]?.id !== capped[0].id,
+    `${capped.length} rows at limit 1, offset 1 answered ${second[0]?.id ?? "none"} against ${capped[0]?.id}`,
+  );
+  // The movements screen caps the rows it draws but never its figures: a
+  // 2 001-row set answers a limit of 2 000 and the full count and net.
+  const SEEDED = 2001;
+  const marker = `Harness tope ${randomUUID()}`;
+  // One transaction: the split rule is checked at commit, so the movements and
+  // their splits must land together.
+  const seeded = await fixtureSql.begin(async (trx) => {
+    const rows = await trx<{ id: string }[]>`
+      insert into transactions (from_account_id, amount_cents, occurred_at, description, created_by, owner_user_id, group_id)
+      select a.id, 100, ${today}::date, ${marker}, ${userId}, a.owner_user_id, a.group_id
+      from accounts a, generate_series(1, ${SEEDED})
+      where a.id = ${scope.cashAccountId}
+      returning transactions.id
+    `;
+    await trx`
+      insert into transaction_splits (transaction_id, category_id, amount_cents)
+      select id, ${scope.categoryId}, 100 from transactions where description = ${marker}
+    `;
+    return rows;
+  });
+  for (const row of seeded) keep("transactions", row.id);
+  const [truth] = await fixtureSql<{ count: number; net: string }[]>`
+    select count(*)::int as count, (-sum(amount_cents))::text as net
+    from transactions where description = ${marker}
+  `;
+  const filter = { accountId: scope.cashAccountId };
+  const [drawn, totals] = await Promise.all([
+    listTransactions(filter, { limit: 2000 }),
+    getTransactionTotals(filter),
+  ]);
+  const [sql_] = await fixtureSql<{ count: number; net: string }[]>`
+    select count(*)::int as count,
+      coalesce(sum(case kind when 'income' then amount_cents when 'expense' then -amount_cents else 0 end), 0)::text as net
+    from transactions where from_account_id = ${scope.cashAccountId} or to_account_id = ${scope.cashAccountId}
+  `;
+  const netTotal = totals.nets.reduce((sum, n) => sum + n.netCents, 0);
+  assert(
+    next("A capped movements list keeps the full count and net"),
+    drawn.length === 2000 &&
+      totals.count === sql_.count &&
+      totals.count > 2000 &&
+      String(netTotal) === sql_.net &&
+      truth.count === SEEDED,
+    `${drawn.length} rows drawn, count ${totals.count} against ${sql_.count}, net ${netTotal} against ${sql_.net}`,
+  );
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

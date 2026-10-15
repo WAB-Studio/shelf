@@ -23,7 +23,7 @@ import {
   transactions,
 } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb } from "@/db/session";
+import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
 import type { SettlementCurrencies } from "@/lib/validation/transaction";
@@ -65,6 +65,8 @@ export type UpdateTransactionArgs = {
   description: string | null;
   splits: TransactionSplitInput[];
   labelIds: string[];
+  // `undefined` leaves the cause alone; `null` clears it.
+  causedByTransactionId?: string | null;
 };
 
 export type TransactionListFilters = {
@@ -235,6 +237,7 @@ export async function updateTransaction({
   description,
   splits,
   labelIds,
+  causedByTransactionId,
 }: UpdateTransactionArgs): Promise<TransactionWriteOutcome> {
   return withUserDb(async (tx) => {
     const updated = await tx
@@ -286,6 +289,17 @@ export async function updateTransaction({
       );
     }
 
+    // Its own column grant (migration 0040) keeps it out of the `.set` above. The
+    // `is distinct from` guard writes nothing when the cause did not change, and
+    // it rides this transaction rather than costing one of its own.
+    if (causedByTransactionId !== undefined) {
+      await tx.execute(sql`
+        update transactions set caused_by_transaction_id = ${causedByTransactionId}
+        where id = ${transactionId}
+          and caused_by_transaction_id is distinct from ${causedByTransactionId}
+      `);
+    }
+
     return "done";
   });
 }
@@ -307,17 +321,7 @@ export async function deleteTransaction({
   });
 }
 
-/**
- * Every matching movement with its splits and labels in ONE round trip: the two
- * child sets ride along as correlated jsonb subselects, never an N+1 follow-up
- * (RF-23). Filters compose in the WHERE; `occurredAt` stays a YYYY-MM-DD string
- * end to end, its bounds compared against the date column with no JS Date. A
- * `limit` caps the newest rows for a preview list; without it every match returns.
- */
-export async function listTransactions(
-  filters: TransactionListFilters,
-  options?: { limit?: number },
-): Promise<TransactionListRow[]> {
+function transactionConditions(filters: TransactionListFilters): SQL[] {
   const conditions: SQL[] = [];
 
   if (filters.id) conditions.push(eq(transactions.id, filters.id));
@@ -374,6 +378,52 @@ export async function listTransactions(
     );
   }
 
+  return conditions;
+}
+
+/**
+ * The count and the net per currency over EVERY movement the filter matches, in
+ * one statement and independent of any limit the list applies. A transfer moves
+ * the net by nothing (RF-19) but still counts.
+ */
+export async function getTransactionTotals(
+  filters: TransactionListFilters,
+  outerTx?: Transaction,
+): Promise<{ count: number; nets: { currency: CurrencyCode; netCents: number }[] }> {
+  const conditions = transactionConditions(filters);
+
+  return withUserDbOrTx(outerTx, async (tx) => {
+    const rows = await tx
+      .select({
+        currency: transactions.currency,
+        count: sql<number>`count(*)::int`,
+        netCents: sql<string>`coalesce(sum(case ${transactions.kind} when 'income' then ${transactions.amountCents} when 'expense' then -${transactions.amountCents} else 0 end), 0)::text`,
+      })
+      .from(transactions)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(transactions.currency);
+
+    return {
+      count: rows.reduce((sum, row) => sum + row.count, 0),
+      nets: rows
+        .map((row) => ({ currency: row.currency as CurrencyCode, netCents: Number(row.netCents) })),
+    };
+  });
+}
+
+/**
+ * Every matching movement with its splits and labels in ONE round trip: the two
+ * child sets ride along as correlated jsonb subselects, never an N+1 follow-up
+ * (RF-23). Filters compose in the WHERE; `occurredAt` stays a YYYY-MM-DD string
+ * end to end, its bounds compared against the date column with no JS Date. A
+ * `limit` caps the newest rows for a preview list; without it every match returns.
+ */
+export async function listTransactions(
+  filters: TransactionListFilters,
+  options?: { limit?: number; offset?: number; tx?: Transaction },
+): Promise<TransactionListRow[]> {
+  const conditions = transactionConditions(filters);
+
   // The outer reference is written qualified: drizzle renders an embedded column
   // bare inside a projection, and a bare `id` binds to the subquery's own table,
   // which turns the correlation into a constant and empties both sets.
@@ -390,7 +440,7 @@ export async function listTransactions(
     where tl.transaction_id = ${outerId}
   ), '[]'::jsonb)`;
 
-  return withUserDb(async (tx) => {
+  return withUserDbOrTx(options?.tx, async (tx) => {
     const query = tx
       .select({
         id: transactions.id,
@@ -435,7 +485,8 @@ export async function listTransactions(
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(transactions.occurredAt), desc(transactions.createdAt));
 
-    return options?.limit === undefined ? query : query.limit(options.limit);
+    if (options?.limit === undefined) return query;
+    return options.offset ? query.limit(options.limit).offset(options.offset) : query.limit(options.limit);
   });
 }
 
