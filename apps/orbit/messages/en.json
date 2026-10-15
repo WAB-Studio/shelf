@@ -1120,7 +1120,7 @@
     "labelInUse": "A budget uses this label. Remove it from the budget to delete it.",
     "foreignCurrencyUnsupported": "This action does not support another currency. Choose an account in the settlement currency.",
     "reconcileRealRequired": "Enter the actual balance.",
-    "reconcileFutureDay": "Pick a day that is not in the future.",
+    "reconcileFutureDay": "Pick today or an earlier day.",
     "reconcileBeforeOpening": "The account starts on {date}. Pick a day from then on.",
     "reconcileBeforeLatest": "You already reconciled this account on {date}. Pick that day or a later one.",
     "reconcileStale": "Movements changed while you were reconciling. Check the figures and try again.",

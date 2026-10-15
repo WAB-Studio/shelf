@@ -1120,7 +1120,7 @@
     "labelInUse": "Un presupuesto usa esta etiqueta. Quítala del presupuesto para eliminarla.",
     "foreignCurrencyUnsupported": "Esta operación no admite otra moneda. Elige una cuenta en la moneda de liquidación.",
     "reconcileRealRequired": "Escribe el saldo real.",
-    "reconcileFutureDay": "Elige un día que no sea futuro.",
+    "reconcileFutureDay": "Elige hoy o un día anterior.",
     "reconcileBeforeOpening": "La cuenta empieza el {date}. Elige un día desde entonces.",
     "reconcileBeforeLatest": "Ya cuadraste esta cuenta el {date}. Elige ese día o uno posterior.",
     "reconcileStale": "Los movimientos cambiaron mientras cuadrabas. Revisa las cifras y vuelve a intentarlo.",
