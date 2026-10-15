@@ -33,7 +33,7 @@ async function twoHabits(db: import("./meta-arbol-seed").Db, person: import("./f
 
 for (const width of [360, 1280]) {
   test.describe(`at ${width}`, () => {
-    test("with no habit the section is there, says «Ninguno todavía.» and offers «Agregar un hábito» (RP-100)", async ({ person, browser, baseURL, db }) => {
+    test("with no habit the section is there, says «Ninguno todavía.» and offers «Añadir un hábito» (RP-100)", async ({ person, browser, baseURL, db }) => {
       // Kills: hiding the section while it is empty (the person cannot reach the form).
       await seedOpenGoal(db, person, { name: "Cuidado personal", unit: MINUTES, horizon: null });
       const { page, context } = await visit(browser, baseURL, person, "/metas", width);
@@ -41,7 +41,7 @@ for (const width of [360, 1280]) {
         const text = await mainLower(page);
         expect(text).toContain(SECTION);
         expect(text).toContain("ninguno todavía.");
-        await expect(page.getByRole("link", { name: "Agregar un hábito", exact: true }).or(page.getByRole("button", { name: "Agregar un hábito", exact: true }))).toBeVisible();
+        await expect(page.getByRole("link", { name: "Añadir un hábito", exact: true }).or(page.getByRole("button", { name: "Añadir un hábito", exact: true }))).toBeVisible();
         expect(text).not.toContain("sin meta");
         // Under the open goals, not above them.
         expect(text.indexOf(SECTION)).toBeGreaterThan(text.indexOf("cuidado personal"));
@@ -79,11 +79,11 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("«Agregar un hábito» opens «Hábito nuevo» with the fields of the board and no external source (RP-100)", async ({ person, browser, baseURL }) => {
+    test("«Añadir un hábito» opens «Hábito nuevo» with the fields of the board and no external source (RP-100)", async ({ person, browser, baseURL }) => {
       // Kills: a route that needs a `goalId`; offering «lo que anota otra app» to a habit that has no source.
       const { page, context } = await visit(browser, baseURL, person, "/metas", width);
       try {
-        await page.getByRole("link", { name: "Agregar un hábito", exact: true }).or(page.getByRole("button", { name: "Agregar un hábito", exact: true })).click();
+        await page.getByRole("link", { name: "Añadir un hábito", exact: true }).or(page.getByRole("button", { name: "Añadir un hábito", exact: true })).click();
         await expect(page).toHaveURL(/\/metas\/habitos\/nuevo$/);
         await expect(page.getByRole("heading", { level: 1, name: "Hábito nuevo" })).toBeVisible();
         await expect(page.getByLabel("qué es", { exact: true })).toBeVisible();

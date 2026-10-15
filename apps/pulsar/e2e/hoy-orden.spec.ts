@@ -62,8 +62,14 @@ test("a goal that asks nothing is below the one that asks at 1280 and has no sec
 
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/");
-    await expect(field(asking)).toBeVisible();
+    // The one task field of the day lives in «Sueltas»; no group draws its own.
+    await expect(field(asking)).toBeHidden();
     await expect(field(quiet)).toBeHidden();
+    await expect(page.getByPlaceholder("Escribe una tarea…")).toBeVisible();
+    const sectionOf = (goal: string) =>
+      page.locator("main").locator('[data-part="section-label"]', { hasText: new RegExp(`^${goal}$`) }).locator("visible=true");
+    await expect(sectionOf(asking)).toHaveCount(1);
+    await expect(sectionOf(quiet)).toHaveCount(0);
     // The month line of the goal with no section is still on screen.
     await expect(seen(quiet)).toHaveCount(1);
     await expect(seen("este mes")).toHaveCount(1);
@@ -74,7 +80,7 @@ test("a goal that asks nothing is below the one that asks at 1280 and has no sec
       values (${person.id}, ${quietId}, ${`Suelta propia ${stamp}`}, ${todayInZone()}::date)
     `;
     await page.reload();
-    await expect(field(quiet)).toBeVisible();
+    await expect(sectionOf(quiet)).toHaveCount(1);
   } finally {
     await context.close();
     await db`delete from goals.goals where id in (${quietId}, ${askingId}) and user_id = ${person.id}`;

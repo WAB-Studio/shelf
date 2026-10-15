@@ -40,7 +40,7 @@ const NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
-// How the line paper prints for a goal with an end names a month: «noviembre de 2026».
+// The form paper no longer prints, a month named «noviembre de 2026» (RP-124 names it «noviembre 2026»).
 const longMonth = (offset: number) => `${NAMES[Number(monthStartOf(offset).slice(5, 7)) - 1]} de ${monthStartOf(offset).slice(0, 4)}`;
 
 async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width: number) {

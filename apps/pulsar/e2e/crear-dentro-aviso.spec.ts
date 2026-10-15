@@ -27,7 +27,7 @@ async function openSheet(browser: Browser, baseURL: string, sessionFile: string,
   const context = await browser.newContext({ storageState: sessionFile, baseURL, viewport: { width: 360, height: 900 } });
   const page = await context.newPage();
   await page.goto(`/metas/${goalId}`);
-  await page.getByRole("button", { name: "Agregar meta pequeña" }).click();
+  await page.getByRole("button", { name: "Añadir meta pequeña" }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();
   return { context, page, sheet };

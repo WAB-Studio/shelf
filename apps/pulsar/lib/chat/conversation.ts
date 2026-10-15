@@ -6,7 +6,6 @@ import { CHAT_TURNS_SENT, type ChatTurn } from "./types";
 // every subscriber, written after every turn and every change's state.
 const KEY = "pulsar.chat";
 
-export type ChangeState = "open" | "made" | "refused" | "lapsed";
 
 const storedChangeSchema = z.object({
   id: z.string(),
@@ -91,4 +90,9 @@ export function requestTurns(turns: StoredTurn[]): ChatTurn[] {
           })),
         },
   );
+}
+
+// A message the chat did not take (shut, or refused as invalid) leaves no turn behind to be sent again.
+export function dropUnanswered(turns: StoredTurn[]): StoredTurn[] {
+  return turns.at(-1)?.role === "person" ? turns.slice(0, -1) : turns;
 }

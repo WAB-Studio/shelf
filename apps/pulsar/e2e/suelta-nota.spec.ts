@@ -195,6 +195,16 @@ test("/sueltas draws two lines of the note under the name and its button; a row 
     await expect(page.getByText("para el jueves")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
+    // Escape gives focus back to the button that opened the sheet.
+    const opener = page.getByRole("button", { name: `Ver la nota de «${scheduledName}»` });
+    await opener.click();
+    await page
+      .getByRole("dialog")
+      .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(opener).toBeFocused();
+
     // The mark finishes it in one tap.
     await page.getByRole("button", { name: `Dar por hecha: ${bareName}` }).click();
     await expect

@@ -45,3 +45,32 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - Keep instalments under RF-136: the next payment is the minimum, with no instalments added to it. The instalment dialog
   becomes «proponer diferir». Decided by the user 2026-10-08 (Q-D5, module 604).
 - Neither has a board yet. Module 451 opens orbit's canvas with `Deudas · saldo a favor` and `Deudas · cuotas`.
+
+## Decision of 2026-10-14: the app is called «HomeFund»
+
+- The visible name is **HomeFund**: the title, the installed name (`short_name` too) and the metadata. It was «Fondo compartido». The folder
+  and the URL keep `orbit` and `our-piggy-bank`.
+
+## Decisions of 2026-10-14: reconciling an account, by the user
+
+- **A reconciliation is an adjustment movement, never a new opening balance** (RF-137): the gap stays in the history.
+- **One account at a time**, not a whole-fund close.
+- **The adjustment is its own line, «Descuadre»** (RF-138), outside expense and income totals and budgets.
+- **When:** after pulsar's s10 and the folder rename. HomeFund has no canvas yet: this slice opens it with its boards
+  (the reconcile sheet, the gap, the history, «Descuadre» in reports), and names it in `AGENTS.md`.
+- **The plan's questions, 2026-10-14** (the user: «elige lo mejor»; the session's picks): the adjustment carries a mark
+  (`reconciliation_id`) and its kind still derives from the accounts; a reconciliation with no gap is recorded with no movement
+  and reads «Cuadró»; «Neto del mes» stays income − expense with «Descuadre del mes» beside it; «Descuadre» shows on the month
+  card and in reports only when not zero, and as rows in the movements list, never in the six-month chart; the history lives in
+  the «Cuadrar» dialog; a reconciliation is final (no undo, no day before the latest, a mistake is corrected by reconciling
+  again); the export leaves adjustments out in this slice; the real figure is typed as a magnitude, its sign from the account's kind.
+- **Boards approved by the user, 2026-10-15:** the 14 reconciliation boards (B1–B12) on the HomeFund canvas,
+  https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj.
+
+## Decisions of 2026-10-15, by the user («acepto todo lo que digas pendiente»)
+
+- **Reconciliation screens (M3–M5) start before the folder rename.** The branch rebases across the `git mv` with `merge.directoryRenames=true`.
+- **An invitation is accepted, never claimed on sign-in** (security review H1): a screen «X te invitó a su fondo · Aceptar / Rechazar», and a way to leave a fund. Board to draw before any worker.
+- **Only the owner unshares a shared account** (security review M1).
+- **Touch targets: 44 px minimum**, raised from 32 px, in `components/ui`.
+- **«fondo», never «grupo»**, for the shared fund on every screen; «Propietario», never «Líder».

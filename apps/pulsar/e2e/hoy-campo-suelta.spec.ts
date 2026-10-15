@@ -2,13 +2,13 @@ import day from "../messages/es/day.json";
 import goal from "../messages/es/goal.json";
 import { test, expect } from "./fixtures";
 
-// RP-19 on Hoy, RP-20 on the goal: the goal's suelta field fits whole at 390
+// RP-19 on Hoy, RP-20 on the goal: the goal's suelta field fits whole at 1024 (the narrowest width that draws it)
 // for a long name (`PalabrasDelPlan`), and a goal with no phase and no
 // commitment draws no empty section label yet keeps «Añadir una fase».
 
 const NAME = "Inglés B1/B2 → B2+ laboral";
 
-test("at 390 the suelta field of a long goal shows its whole placeholder (RP-19)", async ({ person, browser, db }) => {
+test("at 1024 the suelta field of a long goal shows its whole placeholder (RP-19)", async ({ person, browser, db }) => {
   const [row] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon)
     values (${person.id}, ${NAME}, '2099-12-31') returning id
@@ -17,7 +17,7 @@ test("at 390 the suelta field of a long goal shows its whole placeholder (RP-19)
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
     values (${person.id}, ${row.id}, 'Tocar', 'daily', 'tap')
   `;
-  const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
+  const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 1024, height: 900 } });
   try {
     const page = await context.newPage();
     await page.goto("/");
@@ -58,7 +58,7 @@ test("a goal with no phase and no commitment draws no empty section label and ke
     await expect(page.getByRole("link", { name: goal.phases.add })).toBeVisible();
     await expect(page.getByRole("link", { name: goal.commitments.add })).toBeVisible();
     const empty = await page.locator("main").evaluate((main) =>
-      [...main.querySelectorAll('[class*="section-label"]')].filter((node) => node.textContent?.trim() === "").length,
+      [...main.querySelectorAll('[data-part="section-label"]')].filter((node) => node.textContent?.trim() === "").length,
     );
     expect(empty).toBe(0);
   } finally {

@@ -1,13 +1,13 @@
 {
-  "eyebrow": "bitácora de metas",
-  "title": "{client} quiere ver tu bitácora",
+  "eyebrow": "GoalLog",
+  "title": "{client} quiere ver tus metas",
   "mayLabel": "podrá",
   "may": {
     "read": "leer tus metas, meses, tareas, sueltas e informe",
     "done": "marcar hecho y anotar cantidades",
     "write": "abrir metas, escribir tareas y sus notas",
     "rename": "renombrar una meta y mover su final",
-    "phases": "agregar fases y compromisos, y retirar un compromiso",
+    "phases": "añadir fases y compromisos, y retirar un compromiso",
     "plan": "darle mes o día a una tarea, devolverla al plan y cambiar el monto de un mes",
     "measure": "poner la medida y el ritmo de una meta"
   },
@@ -30,7 +30,7 @@
   "invalid": {
     "title": "Este pedido no es válido",
     "body": "La aplicación que te trajo aquí no se identificó bien. No se dio ningún permiso. Vuelve a conectarla desde claude.ai.",
-    "home": "Ir a Bitácora de metas"
+    "home": "Ir a GoalLog"
   },
   "errors": {
     "invalid": "La solicitud no es válida.",

@@ -127,6 +127,9 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-66** — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member.
 - [x] **RF-67** — In every report grouped by member, the group's shared accounts appear as their own group. Shared accounts are not split across people.
 
+- [ ] **RF-137** — A person reconciles one account at a time: they enter the money it really holds on a day, and the app shows the balance it derives for that day, the real one and the gap between them. On confirm, the gap is recorded as one adjustment movement on that account, dated that day, so the derived balance equals the real one from then on; no balance is stored (RF-114). Each account lists its reconciliations: the day, what the app derived, what was real and the gap. Decided by the user 2026-10-14.
+- [ ] **RF-138** — A reconciliation's adjustment reports as its own line, «Descuadre», apart from expenses and income: it counts in no expense or income total and in no budget. Decided by the user 2026-10-14.
+
 #### Cash
 
 - [x] **RF-68** — A cash withdrawal goes to the member's own cash account or the group's shared cash, per the group's `cash_mode`.

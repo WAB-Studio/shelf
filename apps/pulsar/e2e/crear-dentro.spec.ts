@@ -59,7 +59,7 @@ function countActionPosts(page: Page): string[] {
   return calls;
 }
 
-test("from a large goal, «Agregar meta pequeña» opens the sheet and saving lands on the new goal, inside it (RP-82)", async ({
+test("from a large goal, «Añadir meta pequeña» opens the sheet and saving lands on the new goal, inside it (RP-82)", async ({
   person,
   browser,
   baseURL,
@@ -70,7 +70,7 @@ test("from a large goal, «Agregar meta pequeña» opens the sheet and saving la
   const { largeId, largeName } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
   try {
-    const add = page.getByRole("button", { name: "Agregar meta pequeña" });
+    const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
     const sheet = page.getByRole("dialog");
@@ -101,7 +101,7 @@ test("while saving, «Abrirla» cannot fire a second time (RP-82)", async ({ per
   const { largeId } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
   try {
-    const add = page.getByRole("button", { name: "Agregar meta pequeña" });
+    const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
     const sheet = page.getByRole("dialog");
@@ -143,7 +143,7 @@ test("weeks past the upper goal's end are refused on the client, naming it, with
   const { largeId, largeName } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
   try {
-    const add = page.getByRole("button", { name: "Agregar meta pequeña" });
+    const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
     const sheet = page.getByRole("dialog");
@@ -186,7 +186,7 @@ test("the upper goal archived while the sheet is open: saving says so under the 
   const { largeId, largeName } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
   try {
-    const add = page.getByRole("button", { name: "Agregar meta pequeña" });
+    const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
     const sheet = page.getByRole("dialog");
@@ -211,7 +211,7 @@ test("«No abrirla» closes the sheet and creates nothing (RP-82)", async ({ per
   const { largeId } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
   try {
-    const add = page.getByRole("button", { name: "Agregar meta pequeña" });
+    const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
     const sheet = page.getByRole("dialog");
@@ -233,7 +233,7 @@ test("«No abrirla» closes the sheet and creates nothing (RP-82)", async ({ per
   }
 });
 
-test("a small goal's screen offers no «Agregar meta …» (RP-78, RP-82)", async ({ person, browser, baseURL, db }) => {
+test("a small goal's screen offers no «Añadir meta …» (RP-78, RP-82)", async ({ person, browser, baseURL, db }) => {
   // Kills: offering the button on a goal that already sits at the third level.
   const stamp = Date.now();
   const { largeId } = await seedLarge(db, person.id, stamp);
@@ -241,8 +241,8 @@ test("a small goal's screen offers no «Agregar meta …» (RP-78, RP-82)", asyn
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${smallId}`);
   try {
     await expect(page.getByRole("main").getByText(`Pequeña crear ${stamp}`, { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Agregar meta/ })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: /^Agregar meta/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Añadir meta/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^Añadir meta/ })).toHaveCount(0);
   } finally {
     await context.close();
   }
@@ -259,8 +259,8 @@ test("on a general goal the button and the title say «grande», and the new goa
   const { generalId, generalName } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${generalId}`);
   try {
-    await expect(page.getByRole("button", { name: "Agregar meta pequeña" })).toHaveCount(0);
-    const add = page.getByRole("button", { name: "Agregar meta grande" });
+    await expect(page.getByRole("button", { name: "Añadir meta pequeña" })).toHaveCount(0);
+    const add = page.getByRole("button", { name: "Añadir meta grande" });
     await expect(add).toBeVisible();
     await add.click();
     const sheet = page.getByRole("dialog");

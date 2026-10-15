@@ -23,7 +23,6 @@ const startOf = (offset: number) => {
 };
 const nameOf = (offset: number) => MONTHS[Number(startOf(offset).slice(5, 7)) - 1];
 const labelOf = (offset: number) => `${nameOf(offset)} ${startOf(offset).slice(0, 4)}`;
-const yearOf = (offset: number) => startOf(offset).slice(0, 4);
 
 const A4 = { width: 794, height: 1123 };
 // Long enough to take a second line on paper, which moves the cut by a line instead of by a task.
@@ -147,18 +146,18 @@ function pagesOf(file: string): string[][] {
 const labelLine = (lines: string[], name: string) => lines.findIndex((l) => l.startsWith(`${name.toLowerCase()} · por mes`));
 
 test.describe("the paper report groups by general goal (RP-84, RP-95, RP-77)", () => {
-  test("the general first, its goals after it in preorder, each with its own «por mes» table", async ({
+  test("the general prints its own «por mes» table and the goals inside print none: they stay on their own screens (RP-124)", async ({
     person, browser, baseURL, db,
   }) => {
     const t = await seedTree(db, person);
     try {
       const lines = pagesOf(await printed(browser, baseURL!, person, t.general, "orden")).flat();
-      const at = [t.general, t.big1, t.small, t.big2].map((name) => labelLine(lines, name));
-      expect(at.every((i) => i >= 0), `a table for each of G, g1, p, g2: ${JSON.stringify(at)}`).toBe(true);
-      expect([...at].sort((a, b) => a - b), "G, g1, p, g2").toEqual(at);
+      expect(labelLine(lines, t.general), "G's table").toBeGreaterThanOrEqual(0);
+      for (const name of [t.big1, t.small, t.big2]) {
+        expect(labelLine(lines, name), `${name} prints no table of its own`).toBe(-1);
+      }
       const inside = lines.findIndex((l) => l.startsWith("metas dentro · 4"));
-      expect(inside, "the general lists the 4 goals inside it, before the first of them is printed").toBeGreaterThanOrEqual(0);
-      expect(inside).toBeLessThan(at[1]);
+      expect(inside, "the general still lists the 4 goals inside it").toBeGreaterThanOrEqual(0);
     } finally {
       await clear(db, person);
     }
@@ -176,29 +175,15 @@ test.describe("the paper report groups by general goal (RP-84, RP-95, RP-77)", (
     }
   });
 
-  test("a goal inside prints whole: its 30-line note to the last line, its months and its phase", async ({
+  test("a goal inside prints no section of its own: its 30-line note and its phase stay on its screen (RP-124)", async ({
     person, browser, baseURL, db,
   }) => {
     const t = await seedTree(db, person);
     try {
       const lines = pagesOf(await printed(browser, baseURL!, person, t.general, "entera")).flat();
-      const general = labelLine(lines, t.general);
-      const big1 = labelLine(lines, t.big1);
-      const small = labelLine(lines, t.small);
-      expect(big1, "g1's table").toBeGreaterThan(general);
-      expect(small, "p's table").toBeGreaterThan(big1);
-
-      const note = lines.indexOf(t.longNote[0].toLowerCase());
-      expect(note, "g1's note starts").toBeGreaterThanOrEqual(0);
-      expect(lines.slice(note, note + 30), "g1's note, all 30 lines").toEqual(t.longNote.map((l) => l.toLowerCase()));
-
-      const aim = lines.findIndex((l) => l.includes(t.aim.toLowerCase()));
-      expect(aim, "g1's phase").toBeGreaterThanOrEqual(0);
-
-      const months = lines.slice(big1, small);
-      for (const offset of [0, 1]) {
-        expect(months.some((l) => l.startsWith(labelOf(offset))), `g1's row ${labelOf(offset)}`).toBe(true);
-      }
+      expect(lines.indexOf(t.longNote[0].toLowerCase()), "g1's note does not print").toBe(-1);
+      expect(lines.findIndex((l) => l.includes(t.aim.toLowerCase())), "g1's phase does not print").toBe(-1);
+      expect(lines.indexOf(t.note[0].toLowerCase()), "the general's own note still prints").toBeGreaterThanOrEqual(0);
     } finally {
       await clear(db, person);
     }
@@ -211,9 +196,8 @@ test.describe("the paper report groups by general goal (RP-84, RP-95, RP-77)", (
     try {
       const lines = pagesOf(await printed(browser, baseURL!, person, t.general, "sinmonto")).flat();
       const general = labelLine(lines, t.general);
-      const big1 = labelLine(lines, t.big1);
       expect(general, "G's table").toBeGreaterThanOrEqual(0);
-      const region = lines.slice(general, big1);
+      const region = lines.slice(general);
 
       expect(region[0], "the count is the 9 printed rows, not the 12 months").toBe(
         `${t.general.toLowerCase()} · por mes · 9 meses`,
@@ -222,13 +206,10 @@ test.describe("the paper report groups by general goal (RP-84, RP-95, RP-77)", (
         expect(region.filter((l) => l.startsWith(labelOf(offset))), `row ${labelOf(offset)} once`).toHaveLength(1);
       }
       for (const offset of [9, 10, 11]) {
-        expect(region.filter((l) => l.startsWith(labelOf(offset))), `${labelOf(offset)} is no row`).toHaveLength(0);
+        expect(region.filter((l) => l.startsWith(labelOf(offset)) && !l.startsWith(`${labelOf(offset)},`)), `${labelOf(offset)} is no row`).toHaveLength(0);
       }
 
-      const year = (offset: number) => `(?: de ${yearOf(offset)})?`;
-      const line = new RegExp(
-        `${nameOf(9)}${year(9)}, ${nameOf(10)}${year(10)} y ${nameOf(11)} de ${yearOf(11)}: sin monto · 1 tarea$`,
-      );
+      const line = new RegExp(`${labelOf(9)}, ${labelOf(10)} y ${labelOf(11)}: sin monto · 1 tarea$`);
       expect(region.filter((l) => line.test(l)), "one line names the three months").toHaveLength(1);
       expect(region.filter((l) => l.includes("sin monto")), "and says «sin monto» once").toHaveLength(1);
     } finally {

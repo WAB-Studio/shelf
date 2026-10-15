@@ -1571,7 +1571,7 @@ Measured 2026-09-09 while fixing `/registro/<palabra>`, which was serving the ra
 (`give%20up` drawn instead of `give up`, on 16,112 of 64,258 dictionary entries — 25.1%).
 
 `GET /registro/100%` returns **500**, and no edit to the page can prevent it. The crash is in
-Next 16.3.3 itself: `shared/lib/router/utils/route-matcher.js:19` calls `decodeURIComponent(param)`
+Next 16.3.3 itself (re-read on 16.4.1, 2026-10-15, bumped for the CVE set in 16.0.0–16.3.7: `shared/lib/router/utils/route-matcher.js` now wraps `decodeURIComponent` in a try and throws `DecodeError`, line ~21; re-measure `/registro/100%` before trusting this entry): `route-matcher.js:19` calls `decodeURIComponent(param)`
 while `server/lib/router-utils/resolve-routes.js`'s `checkTrue()` is still deciding whether the
 pathname matches `/registro/[palabra]` — entirely **before** `page.tsx` executes. Confirmed by
 monkey-patching global `decodeURIComponent` and capturing the stack.
@@ -3215,3 +3215,28 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   test failed on the race between the page and the measurement, not on the screen.
 - Await `expect(loc).toBeVisible()` before `boundingBox()` (the spec's `boxOf`). Never answer it with a retry, a sleep or a looser comparison.
 - The same `boundingBox())!` pattern stands in ~70 other specs under `apps/pulsar/e2e/`; they are not fixed.
+
+## A `test.fail()` prints ✘ and still passes
+
+- Playwright's list reporter draws a `test.fail()` that failed as expected with ✘, but counts it passed. Grepping a CI log for ✘
+  finds it beside the real reds. Measured 2026-10-14: `apps/voyager/e2e/account-send-link.spec.ts:93` read as a flake for a session.
+- Read the summary block (`N failed` and the names under it), never the ✘ lines alone.
+
+## A fixed budget over a debounce is a flake under load
+
+- `palabra-de-la-red.spec.ts:41` gave 900 ms to a screen that waits 600 ms before it asks; under a loaded runner it failed 7 of
+  20. Wait for the response the screen asks for (`page.waitForResponse`), never a budget shaved off the debounce. After: 80 of 80.
+
+## The CI queue holds 20 jobs, and a train run asks for 32 (2026-10-15)
+
+- The free plan runs 20 jobs at once; one full CI run on the sharded workflow asks for 32-33. Firing CI on every merge left 12 runs queued behind 1 running, and ~370 runner-minutes went on commits already superseded.
+- Cancel the branch's queued run before firing the next one (`gh run list --branch <b> --status queued` → `gh run cancel`). One run per train.
+- Never merge into a lane where a mutator is working: its tree carries a mutation. On 2026-10-15 a merge aborted on a mutated `route.ts` and the chained cleanup deleted the branch being merged; it was restored from its commit.
+- Never chain `worktree remove`/`branch -D`/`push --delete` after a merge with `;`: a failed merge still runs them. Chain with `&&`, or check `git status` first.
+
+## A lane's `node_modules` lags the lockfile, and CI does not (2026-10-15)
+
+- b644bf09 bumped Next to 16.4.1 in the lockfile; every checkout's hoisted `node_modules` stayed 16.3.3. Locally the specs passed; CI run 38685976275 (`npm ci`) went 68 red in pulsar and 9 in voyager.
+- 16.4.1 hashes production CSS-module class names without the module name (`F8g6RG_link`, not `text-link-module__…`): every spec selecting `[class*='…-module']` finds nothing. Select through a stable `data-*` hook on the primitive, never a generated class.
+- 16.4.1 prefetches a `<Link>` once it is in view, and the offline specs count that `?_rsc=` request as a stray: `prefetch={false}` on links a spec forbids to request (`apps/voyager/components/search/no-entry-answer.tsx`, `sense-list.tsx`).
+- After a dependency bump, `rm -rf node_modules && npm ci` before believing a local green. `node -p "require('next/package.json').version"` must match the lockfile.

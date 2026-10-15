@@ -60,8 +60,8 @@ function requireOneSubject(
 // Postgres's `integer` column's own ceiling (2,147,483,647) — no quantity a
 // person types in one day, in any of RP-03's units, plausibly reaches into
 // the millions, and a value that large is a mistyped digit, not a real one.
-// Left unbounded, that mistyped digit used to reach the insert and come back
-// as a raw `value out of range for type integer` — a 500, not a message.
+// Left unbounded, that digit would reach the insert and come back as a raw
+// `value out of range for type integer` — a 500, not a message.
 export const quantitySchema = z
   .number({ error: "day.errors.quantityInvalid" })
   .int({ error: "day.errors.quantityInvalid" })

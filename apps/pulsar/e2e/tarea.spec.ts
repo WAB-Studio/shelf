@@ -258,8 +258,10 @@ test("each refusal reads its words, on the form and from the server (RP-30, RP-3
 });
 
 test("Hoy's one-off field still reads «Escribe qué es lo suelto.» for an empty name (RP-19)", async ({ page }) => {
+  // The «Algo suelto» face is the desktop one; under 1024 the day has one field (HoyUnCampo).
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
-  const field = page.getByLabel("Algo suelto").last();
+  const field = page.getByLabel("Algo suelto").locator("visible=true").last();
   await field.fill("   ");
   await field.press("Enter");
   await expect(page.getByText("Escribe qué es lo suelto.")).toBeVisible();

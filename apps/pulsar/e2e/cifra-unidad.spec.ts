@@ -124,7 +124,7 @@ test("the week's figure carries its unit on Hoy, the goal and the review, and is
       .locator("xpath=ancestor::div[.//a][1]")
       .filter({ hasText: goalName });
     await expect(card).toHaveCount(1);
-    await expect(card.locator("[class*='section-label']").first()).toHaveText(goalName);
+    await expect(card.locator("[data-part='section-label']").first()).toHaveText(goalName);
     await expect(card).toContainText(new RegExp(`${total}\\s*${KM}`));
     await expect(card).toContainText("esta semana");
     await expect(card).not.toContainText(first);

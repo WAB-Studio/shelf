@@ -24,6 +24,22 @@ async function seedGoal(db: Db, personId: string, name: string): Promise<string>
 
 const field = (page: Page, goal: string) => page.getByLabel(`Una tarea de ${goal}`, { exact: true });
 
+// Under 1024 the day has one task field and the goal is a chip under it
+// (HoyUnCampo); from 1024 each goal's group keeps its own. Either way the
+// returned locator is the input the name goes into, the goal already chosen.
+const PHONE_FIELD = "Escribe una tarea…";
+async function fillTask(page: Page, goal: string, task: string, width: number) {
+  if (width >= 1024) {
+    const input = field(page, goal);
+    await input.fill(task);
+    return input;
+  }
+  const input = page.getByPlaceholder(PHONE_FIELD);
+  await input.fill(task);
+  await page.getByRole("radiogroup", { name: "de qué meta" }).getByRole("radio", { name: goal, exact: true }).click();
+  return input;
+}
+
 for (const width of [390, 1440]) {
   test.describe(`at ${width}`, () => {
     test("the goal's field is a task of the goal and says nothing of «suelto» (RP-20)", async ({ person, browser, db }) => {
@@ -33,15 +49,23 @@ for (const width of [390, 1440]) {
       try {
         const page = await context.newPage();
         await page.goto("/");
-        const input = field(page, goal);
+        const wide = width >= 1024;
+        const input = wide ? field(page, goal) : page.getByPlaceholder(PHONE_FIELD);
         await expect(input).toBeVisible();
-        await expect(input).toHaveAttribute("placeholder", `Una tarea de ${goal}…`);
+        await expect(input).toHaveAttribute("placeholder", wide ? `Una tarea de ${goal}…` : PHONE_FIELD);
         await expect(page.getByLabel(/suelto de/i)).toHaveCount(0);
         await expect(page.getByPlaceholder(/suelto de/i)).toHaveCount(0);
         const form = page.locator("form").filter({ has: input });
         await expect(form).not.toContainText(/suelto/i);
-        // The goalless field below keeps its own words.
-        await expect(page.getByLabel("Algo suelto", { exact: true })).toBeVisible();
+        if (wide) {
+          // The goalless field below keeps its own words.
+          await expect(page.getByLabel("Algo suelto", { exact: true })).toBeVisible();
+        } else {
+          // The goal is chosen inside the one field, not asked by a group of its own.
+          await expect(page.getByLabel(/^Una tarea de /).locator("visible=true")).toHaveCount(0);
+          await input.fill("Algo");
+          await expect(page.getByRole("radiogroup", { name: "de qué meta" }).getByRole("radio", { name: goal, exact: true })).toBeVisible();
+        }
       } finally {
         await context.close();
         await db`delete from goals.goals where id = ${goalId}`;
@@ -60,12 +84,12 @@ for (const width of [390, 1440]) {
       try {
         const page = await context.newPage();
         await page.goto("/");
-        await field(page, goal).fill(task);
+        await fillTask(page, goal, task, width);
         await page.getByRole("radio", { name: "sin día" }).click();
         await page.getByRole("button", { name: "Anotar" }).click();
 
         const status = page.getByRole("status");
-        await expect(status).toContainText(`Anotada en el plan de ${goal}.`);
+        await expect(status).toContainText(width >= 1024 ? `Anotada en el plan de ${goal}.` : `Quedó en el plan de ${goal}.`);
         await expect(status).not.toContainText("sin día");
         const link = status.getByRole("link", { name: "ver el plan", exact: true });
         await expect(link).toHaveAttribute("href", `/metas/${goalId}/plan`);
@@ -100,11 +124,11 @@ test("«hoy» draws the task in the goal's group and shows no plan line", async 
   try {
     const page = await context.newPage();
     await page.goto("/");
-    const input = field(page, goal);
-    await input.fill(task);
+    const input = await fillTask(page, goal, task, 390);
     await input.press("Enter");
     await expect(page.getByText(task)).toBeVisible();
-    await expect(page.getByRole("status")).toHaveCount(0);
+    // The status is the board's «Anotada en {goal}.», never a plan line.
+    await expect(page.getByRole("status")).toHaveText(`Anotada en ${goal}.`);
     await expect(page.getByText("Anotada en el plan")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "ver el plan", exact: true })).toHaveCount(0);
   } finally {
@@ -137,7 +161,7 @@ test("«Anotar» is disabled while the write is pending, and one row lands", asy
       await route.continue();
     });
 
-    await field(page, goal).fill(task);
+    await fillTask(page, goal, task, 390);
     await page.getByRole("radio", { name: "sin día" }).click();
     const submit = page.getByRole("button", { name: "Anotar" });
     await submit.click();
@@ -167,10 +191,11 @@ test("an empty name in the goal's field is refused with the task's words, not «
   try {
     const page = await context.newPage();
     await page.goto("/");
-    const input = field(page, goal);
+    const input = page.getByPlaceholder(PHONE_FIELD);
     await input.fill("   ");
     await input.press("Enter");
-    await expect(page.getByText("Escribe qué hay que hacer.")).toBeVisible();
+    await expect(page.getByText("Escribe el nombre de la tarea.")).toBeVisible();
+    await expect(page.getByText("Escribe qué hay que hacer.")).toHaveCount(0);
     await expect(page.getByText("Escribe qué es lo suelto.")).toHaveCount(0);
     await expect(page.getByText(/suelto/i).filter({ hasText: "Escribe" })).toHaveCount(0);
   } finally {
@@ -182,8 +207,10 @@ test("an empty name in the goal's field is refused with the task's words, not «
 test("the goalless field is unchanged: «sin día» counts the waiting list, empty says «suelto»", async ({ page, db, personId }) => {
   const task = `Suelta sin día ${Date.now()}`;
   try {
+    // From 1024 the goalless field keeps its words; under it the one field is HoyUnCampo's.
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
-    const input = page.getByLabel("Algo suelto", { exact: true }).last();
+    const input = page.getByLabel("Algo suelto", { exact: true }).locator("visible=true").last();
     await input.fill(task);
     await page.getByRole("radio", { name: "sin día" }).click();
     await page.getByRole("button", { name: "Anotar" }).click();
@@ -199,7 +226,7 @@ test("the goalless field is unchanged: «sin día» counts the waiting list, emp
   }
 });
 
-test("at 360 a 40-letter goal fits the label, the placeholder and the plan line", async ({ person, browser, db }) => {
+test("at 360 a 40-letter goal fits its chip and the plan line", async ({ person, browser, db }) => {
   const goal = "Inglés laboral de la oficina y del viaje".slice(0, 40).padEnd(40, "x");
   const task = `Tarea ${Date.now()}`;
   const goalId = await seedGoal(db, person.id, goal);
@@ -207,12 +234,12 @@ test("at 360 a 40-letter goal fits the label, the placeholder and the plan line"
   try {
     const page = await context.newPage();
     await page.goto("/");
-    const input = field(page, goal);
-    await expect(input).toHaveAttribute("placeholder", `Una tarea de ${goal}…`);
-    await input.fill(task);
+    const input = page.getByPlaceholder(PHONE_FIELD);
+    await expect(input).toBeVisible();
+    await fillTask(page, goal, task, 360);
     await page.getByRole("radio", { name: "sin día" }).click();
     await page.getByRole("button", { name: "Anotar" }).click();
-    await expect(page.getByRole("status")).toContainText(`Anotada en el plan de ${goal}.`);
+    await expect(page.getByRole("status")).toContainText(`Quedó en el plan de ${goal}.`);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);
   } finally {

@@ -279,7 +279,7 @@ test.describe("the paper report: a «por mes» table of 15 rows or more starts w
   test("a no-measure goal of 10 months stays whole on one page", async ({ person, browser, baseURL, db }) => {
     await withGoal({ person, browser, baseURL: baseURL! , db }, { months: 10, measured: false, tag: "s14" }, (w) => {
       expect(new Set(w.rows.map((row) => row.page))).toEqual(new Set([w.labelPage]));
-      expect(w.pages[w.labelPage].some((text) => text.includes("sin tareas"))).toBe(true);
+      expect(w.pages[w.labelPage].some((text) => text.includes("sin tareas"))).toBe(false);
     });
   });
 });

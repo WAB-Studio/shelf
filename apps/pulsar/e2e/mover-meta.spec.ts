@@ -215,7 +215,7 @@ test("a root goal moves under a large one and becomes small: the sheet says what
     await expect.poll(() => parentOf(db, solo)).toBe(tree.g2);
     await visit(page, `/metas/${solo}`);
     // Now small: it holds nothing and offers nothing to be made inside.
-    await expect(page.getByRole("link", { name: /Agregar meta/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Añadir meta/ })).toHaveCount(0);
   } finally {
     await context.close();
   }

@@ -492,7 +492,8 @@ for (const width of [390, 1440]) {
         await page.getByRole("button", { name: "Leer el plan" }).click();
         await expectLineError(page, 6, "ritmo: 12 h");
         await expect(appAlerts(page).filter({ hasText: /\S/ })).toContainText("tiempo");
-        await expect(appAlerts(page).filter({ hasText: /\S/ })).not.toContainText("justo después");
+        // 992: the reading goes on, so a later stray «ritmo:» also lists; line 6's own row is the one that must not say where it goes.
+        await expect(appAlerts(page).filter({ hasText: /\S/ })).toContainText(/Línea 6: «ritmo: 12 h»\. El ritmo es un monto por mes/);
       } finally {
         await context.close();
       }

@@ -1,4 +1,5 @@
 import type { ReviewWeek } from "@/lib/day/types";
+import type { Cadence } from "@/lib/day/types";
 import type { Level } from "@/lib/goals/tree";
 import type { MonthRow } from "@/lib/plan/months";
 
@@ -27,6 +28,13 @@ export type ReportTask = {
   children: { name: string; done: boolean; doneOn: string | null; estimate: number | null; note: string | null }[];
 };
 
+export type ReportCommitment = {
+  name: string;
+  cadence: Cadence;
+  targetQuantity: number | null;
+  unit: string | null;
+};
+
 export type WeekSplit = { index: number; month: string; startsOn: string; endsOn: string; total: number };
 
 export type GoalReport = {
@@ -48,10 +56,18 @@ export type GoalReport = {
   // Months whose amount the person typed: paper prints every planned 0, the screen only these (RP-76).
   ownMonths?: string[];
   phases: { aim: string; startsOn: string; endsOn: string; current: boolean }[];
+  // The commitments still live, in plan order; a quantity names its amount and unit, any other null (RP-124).
+  commitments?: ReportCommitment[];
   tasks: ReportTask[];
   carried: CarriedReport[];
   // `tasks` is read for a goal that measures nothing: the months it prints on paper are its tasks' (RP-71).
-  months: (MonthRow & { carried: number | null; endless?: true; tasks?: { done: number; total: number } })[];
+  // `taskCount` is how many tasks the month's list holds, for every goal; `tasks` stays the read for one that measures nothing.
+  months: (MonthRow & {
+    carried: number | null;
+    endless?: true;
+    tasks?: { done: number; total: number };
+    taskCount?: number;
+  })[];
   weeks: ReviewWeek[];
   // The current week's planned minutes (RP-58); null when it has no amount.
   weekPlanned?: number | null;

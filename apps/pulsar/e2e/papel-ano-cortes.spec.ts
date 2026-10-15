@@ -8,7 +8,7 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 // Decisions of 2026-10-10 on the paper report, after the train-4 critic:
-//  (1) the months a paper leaves out always carry their year («diciembre de 2026, enero de 2027 y febrero de 2027: sin monto»);
+//  (1) the months a paper leaves out always carry their year («diciembre 2026, enero 2027 y febrero 2027: sin monto»);
 //  (2) a goal's «por mes» label, its table and its months-left-out line stay on one page, whatever came before;
 //  (3) a table longer than a page still breaks.
 // Every month is an offset from the real current month, so no assertion depends on the day it runs.
@@ -25,7 +25,7 @@ const startOf = (offset: number) => {
 const nameOf = (offset: number) => NAMES[Number(startOf(offset).slice(5, 7)) - 1];
 const yearOf = (offset: number) => startOf(offset).slice(0, 4);
 const labelOf = (offset: number) => `${nameOf(offset)} ${yearOf(offset)}`;
-const withYear = (offset: number) => `${nameOf(offset)} de ${yearOf(offset)}`;
+const withYear = (offset: number) => `${nameOf(offset)} ${yearOf(offset)}`;
 
 function listed(items: string[]): string {
   return items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
@@ -117,7 +117,7 @@ test.describe("the paper report: months out carry their year, and each goal's bl
       // The two Decembers of a goal never read alike: every name in the line is followed by its year.
       const line = /([^.]*?): sin monto/.exec(section.slice(section.indexOf(nameOf(DEC)) - 1))?.[0] ?? "";
       for (const month of line.match(new RegExp(NAMES.join("|"), "g")) ?? []) {
-        expect(line, `«${month}» without a year`).toMatch(new RegExp(`${month} de \\d{4}`));
+        expect(line, `«${month}» without a year`).toMatch(new RegExp(`${month} \\d{4}`));
       }
       expect(line).not.toMatch(/ a |–|\d+ meses/);
     } finally {

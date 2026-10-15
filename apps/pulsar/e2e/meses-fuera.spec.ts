@@ -22,8 +22,8 @@ const startOf = (offset: number) => {
 };
 const nameOf = (offset: number) => NAMES[Number(startOf(offset).slice(5, 7)) - 1];
 const labelOf = (offset: number) => `${nameOf(offset)} ${startOf(offset).slice(0, 4)}`;
-// The line names every month with its year (decision 2026-10-10).
-const yearName = (offset: number) => `${nameOf(offset)} de ${startOf(offset).slice(0, 4)}`;
+// The line names every month as its row does, «mes año», never «mes de año» (RP-124, 2026-10-14).
+const yearName = (offset: number) => `${nameOf(offset)} ${startOf(offset).slice(0, 4)}`;
 
 type Spec = {
   name: string;
@@ -345,7 +345,7 @@ test.describe("a time goal with no rhythm says its left-out months' tasks (835, 
       expect(section).not.toContain(`${yearName(2)}: sin monto ·`);
       expect(section).not.toContain("0 tareas");
       // The months with a task are in the line, never printed as table rows.
-      expect(section).not.toContain(labelOf(1));
+      expect(section).not.toMatch(new RegExp(`${labelOf(1)}(?!,| y |:)`));
     } finally {
       await context.close();
       await remove(db, person, id);

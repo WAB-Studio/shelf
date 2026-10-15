@@ -41,7 +41,7 @@ export const goals = goalsSchema.table(
     archivedAt: timestamp({ withTimezone: true }),
     // Units a month the person plans at (RP-52); null falls back to the pace the plan derives.
     rhythm: integer(),
-    // The month whose shift notice the person dismissed (RP-53), a first-of-month date.
+    // The month whose shift notice the person dismissed (RP-52), a first-of-month date.
     planSeen: date(),
     // The goal above (RP-78), three levels at most. No cascade: a goal that holds goals is never deleted
     // under them. The `goals.goals_guard_tree` trigger refuses a cycle, a fourth level and a horizon past

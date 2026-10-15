@@ -94,3 +94,10 @@
     font-size: var(--pulsar-text-sheet-title-size-wide);
   }
 }
+
+/* Radix renders a dialog's overlay as a theme root of its own, so the app's
+   ground would paint it opaque and hide the page behind. The scrim is its
+   `::before`; the overlay itself paints nothing. */
+:global(.radix-themes.rt-BaseDialogOverlay):has(.sheet) {
+  background-color: transparent;
+}

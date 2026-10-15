@@ -34,7 +34,11 @@ export async function MonthAcrossScreen() {
   const seg = across.month.slice(0, 7);
   const thisName = monthName(across.month);
   const weekday = weekdayNames[(new Date(`${across.today}T12:00:00Z`).getUTCDay() + 6) % 7];
-  const dateLine = `${weekday} ${Number(across.today.slice(8, 10))} de ${monthName(across.today)}`;
+  const dateLine = t("day.date", {
+    weekday,
+    day: Number(across.today.slice(8, 10)),
+    month: monthName(across.today),
+  });
 
   // The `<fig>` tags of the month catalogue: each figure of a mixed line in mono.
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
@@ -172,6 +176,8 @@ export async function MonthAcrossScreen() {
         : goal.items.length === 0
           ? { href: `${goalHref}/tarea/nueva`, label: t("month.across.addTask") }
           : null;
+    // A goal with tasks closes its card with the same link, to the real route.
+    const addLink = !collapsed && !planLink && goal.items.length > 0 ? `${goalHref}/tarea/nueva` : null;
 
     return (
       <Panel key={goal.id}>
@@ -223,6 +229,11 @@ export async function MonthAcrossScreen() {
             }
           >
             {own.map((entry) => item(goal, entry))}
+          </Section>
+        ) : null}
+        {addLink ? (
+          <Section as="div">
+            <TextLink href={addLink}>{t("month.across.addTask")}</TextLink>
           </Section>
         ) : null}
       </Panel>

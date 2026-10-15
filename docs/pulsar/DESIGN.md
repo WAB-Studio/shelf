@@ -232,7 +232,7 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 10».
   `ImportarTope`, `ImportarFormato` and `ImportarPlantillaError` stay.
 - **A part's name, amount or month changes from the button at the row's end**: its amount, or a pencil when it has none.
   It opens one sheet with only the fields that part has. Decided by the user 2026-10-12.
-- **A correction nobody touches counts as accepted.** The tree shows it applied; «Aceptar» confirms it, «Dejar como
+- **A correction nobody touches counts as accepted — on the model's read only; from the template it starts declined (RP-122, 2026-10-14).** The tree shows it applied; «Aceptar» confirms it, «Dejar como
   estaba» undoes it, and «Crear» never waits on one. Decided by the user 2026-10-12.
 - **A goal that holds goals keeps the plan's phases; a plan's weeks are tasks with their sub-tasks.** Decided by the user
   2026-10-12.
@@ -1432,7 +1432,7 @@ Three answers of the user, 2026-10-09.
 - **The field lives in the flow,** below the last turn, never fixed to the foot. The tab bar stays the only fixed thing.
 - **A failed message stays as a turn;** the button reads «Intentar otra vez» and nothing is retyped.
 - **A refused change has no button.** Its row carries the act's reason; the person asks again in a new message.
-- **Turns are labelled «TÚ» and «PULSAR»,** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
+- **Turns are labelled «TÚ» and «GOALLOG» (2026-10-15, after the rename to GoalLog),** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
   changes open. A change reads in two lines: what, in the person's own names; then «antes → después» in mono.
 - **Faces not drawn for the chat:** dark (the token table says it) and 700–1023 (between the two drawn).
 - **A change's line keeps the screens' words:** «Mover el final de «Meta»», «Fijar «Tarea» en noviembre». The other 14 stay as they read. 2026-10-13.
@@ -1696,3 +1696,56 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/s8-crit
 - **«Por semana» at 1280 gets its own board,** and its empty FASE and NOTA columns go. Today no board draws the wide face.
 - **On paper a task list that continues on the next sheet repeats its label** («TAREAS DE OCTUBRE»). A lone table row at the top
   of a sheet is tolerated.
+
+## Decisions of 2026-10-14, after the critic of the whole app, by the user
+
+The one whole-app pass (AGENTS.md); critic: `private/reportes/critic-app-completa.md`. These are the polish picks: one slice
+(s10) ships them, then polish stops. Nothing here is built yet.
+
+- **A = a. The template keeps what the person wrote** (RP-122): every correction starts declined; «Aceptar» on one is real.
+- **B = a. A goal that holds goals reads week by week** as the sum of its goals' weeks (RP-123), like its month (RP-80).
+- **C = a. Paper follows the screen:** nested goals print inside their general goal (RP-84), and a «POR MES» with no task and
+  no amount in any row does not print (RP-124).
+- **D = a. Paper prints commitments,** one line each: «Estirar · todos los días» (RP-124).
+- **In the slice besides:** «estos meses con monto propio» never over a goal that holds goals; the template's error lines say
+  what is wrong (the missing accent, the cap of 7, the unit that goes, «ritmo» in hours) and every one at once (RP-72);
+  «Por semana» at 360 carries the phase under the date line and «en curso» on one line; «Añadir una tarea» in «Mes» for a goal
+  that has tasks; one task field on Hoy at 360, the goal chosen inside it; one number format everywhere («2.100 de 6.000
+  palabras»); no «0 tareas · 0 hechas» (RP-73); the words: «no mide horas» on a goal with no measure, «Agregar» → «Añadir»,
+  «Ábrelo en este teléfono» at 1280, the export's month names.
+- **Left out by the user's scope** (the critic's Thin 1, 3 but commitments, 4, 6, 8, 11): to `private/pulido.md`. The NOTA column
+  of «Por semana» stays dormant: nothing writes a week's note.
+- **Answers of 2026-10-14 to the s10 plan's questions, by the user («todo lo que elegiste»):** 1 = a, paper equals the
+  export screen: a nested goal's note, phases and «POR MES» stop printing; 2 = a, the export screen shows commitments and
+  every «POR MES» paper prints (RP-124 widened); 3 = a, months named as their rows («noviembre 2026») go into RP-124, RP-77
+  is not retired; 4 = a, a correction nobody touched is not announced in the folded month. The note's character counter
+  («2 001 de 2000») stays out of «one number format».
+
+## Decisions of 2026-10-14, the boards of slice s10, by the user
+
+Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas», board `S10Propuesta` of the page «Sin final y hábitos»:
+`ImportarComoEscribiste`, `ImportarErroresClaros`, `PorSemanaContenedora`, `PorSemanaTelefono`, `MesesContenedora`, `MetaSinTareas`,
+`PapelSigueLaPantalla`, `CifraUnFormato`, `HoyUnCampo`, `MesAñadirTarea`, `PalabrasPulido`.
+
+- **`HoyUnCampo`: the day chips carry their own label, «para cuándo»,** like «de qué meta» above them.
+- **`ImportarErroresClaros`: the notice stays under the text box,** where it is today.
+- **A correction from the template is read only on the model's path as accepted;** from the template it starts declined (RP-122).
+- **Boards that do not exist:** dark mode; 1280 of `HoyUnCampo` (Hoy at 1280 does not change); 1280 of `PorSemanaTelefono` (s9
+  draws it); the paper face of `CifraUnFormato`.
+
+## Decision of 2026-10-14: the app is called «GoalLog»
+
+- The visible name is **GoalLog**: the rail, the title, the tab and the OAuth consent («Ir a GoalLog»). It was «Bitácora de metas».
+  Paper prints it too once module 995 lands (`export.json` `printBrand`). The folder and the URL keep `pulsar`.
+
+## Decisions of 2026-10-14, after the audit of s10, by the user
+
+- **RP-125:** the export's months hold no weeks on screen; «Por semana» is its own table. A goal with no measure drops «sin tareas»
+  from its «Por mes» (`components/month/months-screen.tsx:100`).
+- **The workbook's example rows** (`lib/import/workbook.ts:259,267`) move into next-intl: the person reads them in the file.
+
+## Decisions of 2026-10-15, by the user («acepto todo lo que digas pendiente»)
+
+- **A daily cap on model calls for the whole app**, on top of each person's 10 imports and 50 chats.
+- **The chat labels its replies «GOALLOG».**
+- **A write that fails to reach the server keeps the person where they are, with what they typed,** and the line «No se pudo guardar. Tu texto sigue aquí; inténtalo otra vez.» (Hoy's tap, the quantity sheet, «Abrirla» on a new goal). Form pages that read no data keep opening during an outage and fail on save.

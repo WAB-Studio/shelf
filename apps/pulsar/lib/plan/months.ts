@@ -83,7 +83,7 @@ export function reachedByMonth(input: {
   return reached;
 }
 
-function daysInMonth(month: string): number {
+export function daysInMonth(month: string): number {
   return new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
 }
 

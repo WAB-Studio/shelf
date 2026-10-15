@@ -29,8 +29,12 @@ export type TableRow = {
   phoneBare?: boolean;
   // A second line under the row label, on both faces: the week's dates.
   detail?: ReactNode;
-  // A mark after the dates on the wide face only («en curso»): the phone says it in `note`.
+  // A mark after the dates on the wide face only («en curso»): the phone says it in `note` or `phoneMark`.
   wideMark?: ReactNode;
+  // The phone's mark on the dates' own line, «{detail} · {mark}», in place of a `note`.
+  phoneMark?: ReactNode;
+  // A line under the phone's dates only («Primer borrador»): the wide face gives it a column.
+  phoneUnder?: ReactNode;
   // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
   // The lead cell must then be plain text: it is what the link names, so a
   // link of its own there would nest. Every other cell stays text.
@@ -113,7 +117,7 @@ function isEmpty(cell: ReactNode): boolean {
 function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords): ReactNode {
   if (isEmpty(cell)) return <span className={styles.pending}>—</span>;
   const formatted = formatFigureValue(cell, unit, words);
-  return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
+  return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} unitPart="table-unit" /> : formatted;
 }
 
 export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fitDetail, wrapNote, wholeNote, fold, after, afterPrintOnly, above, showCaption, printTitle, printLead }: TableProps) {
@@ -144,19 +148,25 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     const figure = lead === undefined ? null : row.phoneFigure === undefined ? row.cells[lead] : row.phoneFigure;
     return (
     <>
-      <span className={styles.stackLabel}>
+      <span className={styles.stackLabel} data-part="table-stack-label">
         {row.cells[0]}
-        {row.detail ? <span className={styles.detail}>{row.detail}</span> : null}
+        {row.detail ? (
+          <span className={styles.detail}>
+            {row.detail}
+            {row.phoneMark ? <> · {row.phoneMark}</> : null}
+          </span>
+        ) : null}
+        {row.phoneUnder ? <span className={styles.detail}>{row.phoneUnder}</span> : null}
       </span>
       {lead === undefined ? null : (
-        <span className={styles.stackFigure}>
+        <span className={styles.stackFigure} data-part="table-stack-figure">
           {figureCell(figure, unit, words)}
           {unitWord && !isEmpty(figure) && !row.phoneBare ? (
-            <span className={styles.unit}>{words.unit?.(unitWord, typeof figure === "number" ? figure : 2) ?? unitWord}</span>
+            <span className={styles.unit} data-part="table-unit">{words.unit?.(unitWord, typeof figure === "number" ? figure : 2) ?? unitWord}</span>
           ) : null}
         </span>
       )}
-      {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
+      {row.note ? <span className={styles.stackNote} data-part="table-stack-note">{row.note}</span> : null}
     </>
     );
   };
@@ -188,7 +198,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
                   aria-current={index === open ? "page" : undefined}
                 >
                   {phoneRow(row)}
-                  <ChevronRight size={16} strokeWidth={1.5} aria-hidden className={styles.chevron} />
+                  <ChevronRight size={16} strokeWidth={1.5} aria-hidden className={styles.chevron} data-part="table-chevron" />
                 </Link>
               ) : (
                 phoneRow(row)
@@ -219,7 +229,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
               <th key={column} scope="col" className={join(styles.header, widthClass(column))}>
                 {header}
                 {column === lead && unitWord ? (
-                  <span className={styles.headerUnit}>{words.unit?.(unitWord, 2) ?? unitWord}</span>
+                  <span className={styles.headerUnit} data-part="table-header-unit">{words.unit?.(unitWord, 2) ?? unitWord}</span>
                 ) : null}
               </th>
             ))}

@@ -30,7 +30,38 @@
     "note": "Escrito así, el plan se lee aquí mismo, sin IA y sin tope.",
     "copy": "copiar la plantilla",
     "copied": "plantilla copiada",
-    "example": "pulsar · plantilla 2\n\n# Carrera en IA\nhorizonte: 2028-10-01\nnota: Lo que busco en dos años.\nnota: Un ritmo que pueda sostener.\n\n# IA aplicada\nhorizonte: 2027-10-01\ndentro de: Carrera en IA\n\n# Evals y harness\nhorizonte: 2027-03-01\ndentro de: IA aplicada\nmedida: horas de estudio · minutos\nritmo: 12 h\nnota: Empezar por lo que ya sé medir.\n\n## Fases\n- 2026-10-01 a 2026-12-31 · Evals y harness\n\n## Meses\n- 2026-10 · 12 h\n- 2026-11 · 20 h\n\n## Compromisos\n- Tema técnico · martes y jueves · 2 h\n- Inglés pasivo · cada día · toque\n\n## Tareas\n- 2026-10 · 4 h · Leer AI Engineering cap. 1–4\n- 2026-10 · Tutor\n  nota: Preguntar por la tarifa por hora.\n  nota: Pedir una clase de prueba antes de pagar.\n  - 1 h · Elegir tutor\n    nota: Comparar tres perfiles.\n  - 6 h · Sesiones 1–4\n\n# Leer\nmedida: lectura · páginas\nritmo: 40 páginas\n\n## Compromisos\n- Leer · cada día · 10 páginas"
+    "example": "pulsar · plantilla 2\n\n# Carrera en IA\nhorizonte: 2028-10-01\nnota: Lo que busco en dos años.\nnota: Un ritmo que pueda sostener.\n\n# IA aplicada\nhorizonte: 2027-10-01\ndentro de: Carrera en IA\n\n# Evals y harness\nhorizonte: 2027-03-01\ndentro de: IA aplicada\nmedida: horas de estudio · minutos\nritmo: 12 h\nnota: Empezar por lo que ya sé medir.\n\n## Fases\n- 2026-10-01 a 2026-12-31 · Evals y harness\n\n## Meses\n- 2026-10 · 12 h\n- 2026-11 · 20 h\n\n## Compromisos\n- Tema técnico · martes y jueves · 2 h\n- Inglés pasivo · cada día · toque\n\n## Tareas\n- 2026-10 · 4 h · Leer AI Engineering cap. 1–4\n- 2026-10 · Tutor\n  nota: Preguntar por la tarifa por hora.\n  nota: Pedir una clase de prueba antes de pagar.\n  - 1 h · Elegir tutor\n    nota: Comparar tres perfiles.\n  - 6 h · Sesiones 1–4\n\n# Leer\nmedida: lectura · páginas\nritmo: 40 páginas\n\n## Compromisos\n- Leer · cada día · 10 páginas",
+    "workbook": {
+      "careerName": "Carrera en IA",
+      "careerNote": "Lo que busco en dos años.\nUn ritmo que pueda sostener.",
+      "appliedName": "IA aplicada",
+      "evalsName": "Evals y harness",
+      "evalsMeasure": "horas de estudio",
+      "evalsUnit": "minutos",
+      "evalsRhythm": "12 h",
+      "evalsNote": "Empezar por lo que ya sé medir.",
+      "readName": "Leer",
+      "readMeasure": "lectura",
+      "readUnit": "páginas",
+      "readRhythm": "40 páginas",
+      "monthAmountOct": "12 h",
+      "monthAmountNov": "20 h",
+      "technicalName": "Tema técnico",
+      "technicalCadence": "martes y jueves",
+      "technicalAmount": "2 h",
+      "passiveName": "Inglés pasivo",
+      "everyDay": "cada día",
+      "readAmount": "10 páginas",
+      "bookTask": "Leer AI Engineering cap. 1–4",
+      "bookAmount": "4 h",
+      "tutorTask": "Tutor",
+      "tutorNote": "Preguntar por la tarifa por hora.\nPedir una clase de prueba antes de pagar.",
+      "pickChild": "Elegir tutor",
+      "pickAmount": "1 h",
+      "pickNote": "Comparar tres perfiles.",
+      "sessionsChild": "Sesiones 1–4",
+      "sessionsAmount": "6 h"
+    }
   },
   "review": {
     "eyebrow": "importar · leído por OpenAI",
@@ -50,16 +81,12 @@
     "rhythmMeta": "las tareas van al plan",
     "rhythmMetaUnit": "cada mes sin monto lo toma",
     "rhythmAmountOf": "Cambiar el ritmo, {amount} al mes",
-    "toPlan": "va al plan",
-    "sumAlone": "la suma de lo marcado",
-    "inLieuOfRhythm": "en lugar del ritmo",
     "groups": {
       "phases": "fases",
       "months": "meses",
       "commitments": "compromisos",
       "tasks": "tareas"
     },
-    "sumOfMarked": "{month} · la suma de lo marcado",
     "create": "{count, plural, one {Crear # meta} other {Crear # metas}}",
     "creating": "Creando…",
     "failed": "No se pudo crear el plan. Inténtalo otra vez.",
@@ -99,8 +126,6 @@
       }
     },
     "out": {
-      "one": "Sin «{name}»{subTasks, plural, =0 {} one { y su sub-tarea} other { y sus # sub-tareas}}: no se puede crear.",
-      "many": "Sin <link>{count} cosas</link> que no se pueden crear.",
       "notPlaced": "ninguna parte del plan la lleva",
       "unmarked": "la dejaste fuera",
       "refused": "no se puede crear",
@@ -143,6 +168,12 @@
       "lines": "{total, plural, one {# línea} other {# líneas}}: {plan} en el plan, {notes} en notas, {out} fuera",
       "rows": "{total, plural, one {# fila} other {# filas}}: {plan} en el plan, {notes} en notas, {out} fuera",
       "parts": "{total, plural, one {# parte} other {# partes}}: {plan} en el plan, {notes} en notas, {out} fuera"
+    },
+    "words": {
+      "rate": "{amount} {unit, select, hours {h} minutes {min} other {{measure}}}",
+      "perWeek": "{rate} por semana",
+      "cadence": "{kind, select, times_per_week {{n} por semana} times_per_month {{n} al mes} every_n_days {cada {n} días} other {cada día}}",
+      "daysJoin": ", "
     },
     "correction": {
       "accept": "Aceptar",
@@ -279,6 +310,12 @@
       "rhythmPlace": "El ritmo va justo después de «medida:», una sola vez por meta.",
       "rhythmUnit": "El ritmo va con una medida: ponla en «medida:» y el ritmo justo debajo.",
       "rhythmAmount": "El ritmo es un monto por mes: un tiempo como «12 h», o un entero en la unidad de la medida.",
+      "rhythmTime": "Esta meta mide en horas: escribe el ritmo con su unidad, como «ritmo: 10 h».",
+      "cadenceTilde": "Falta la tilde: «cada día».",
+      "cadenceWeekCap": "Una semana tiene 7 días: hasta «7 veces por semana».",
+      "cadenceMonthCap": "Un mes tiene 31 días: hasta «31 veces al mes».",
+      "taskTime": "Esa unidad no es de tiempo. Escribe el monto en horas o minutos, como «- AAAA-MM · 12 h · nombre».",
+      "taskUnit": "Esa unidad no es {unit}. Escribe el monto en {unit}, como «- AAAA-MM · 8 {unit} · nombre».",
       "inside": "«dentro de:» va después del nombre, una sola vez por meta.",
       "insideUnknown": "«dentro de:» nombra una meta que aparece antes en el archivo.",
       "insideTooDeep": "Una meta dentro de otra llega a tres niveles: más hondo no cabe.",

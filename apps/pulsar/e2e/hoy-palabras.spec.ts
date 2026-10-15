@@ -1,6 +1,7 @@
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { noonFromToday } from "./reloj";
 
 // The words Hoy says at every width: a goal's name as written, a far date with
 // its month, a goal that ended off the screen, and the day that has no goal
@@ -35,18 +36,20 @@ test("a goal named «Inglés Crítico» keeps its capitals on its field, and on 
 }) => {
   const context = await browser.newContext({ storageState: person.sessionFile });
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon)
-    values (${person.id}, 'Inglés Crítico', ${plusDays(60)}) returning id
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, 'Inglés Crítico', ${plusDays(60)}, ${noonFromToday(0)}) returning id
   `;
 
   // It asks something, or the phone draws no section for it (RP-47).
   await db`
-    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
-    values (${person.id}, ${goal.id}, 'Tocar', 'daily', 'tap')
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${person.id}, ${goal.id}, 'Tocar', 'daily', 'tap', ${noonFromToday(0)})
   `;
 
   try {
     const page = await context.newPage();
+    // The goal's own field is the desktop face; under 1024 the day has one field.
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
     await expect(page.getByLabel("Una tarea de Inglés Crítico", { exact: true })).toBeVisible();
     await expect(page.getByPlaceholder("Una tarea de Inglés Crítico…", { exact: true })).toBeVisible();

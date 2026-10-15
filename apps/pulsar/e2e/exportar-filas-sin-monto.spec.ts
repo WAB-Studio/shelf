@@ -22,7 +22,7 @@ const startOf = (offset: number) => {
 };
 const nameOf = (offset: number) => NAMES[Number(startOf(offset).slice(5, 7)) - 1];
 const labelOf = (offset: number) => `${nameOf(offset)} ${startOf(offset).slice(0, 4)}`;
-const yearName = (offset: number) => `${nameOf(offset)} de ${startOf(offset).slice(0, 4)}`;
+const yearName = (offset: number) => `${nameOf(offset)} ${startOf(offset).slice(0, 4)}`;
 
 type Spec = {
   name: string;
@@ -269,7 +269,7 @@ test.describe("/exportar rows say «sin monto» and the month's tasks (RP-77)", 
       expect(section).toContain(`${yearName(1)} y ${yearName(3)}: sin monto · 1 tarea`);
       expect(section).toContain(`${yearName(2)}: sin monto`);
       expect(section.match(/sin monto/g) ?? []).toHaveLength(2);
-      for (const offset of [1, 2, 3]) expect(section, `row ${labelOf(offset)} not printed`).not.toContain(labelOf(offset));
+      for (const offset of [1, 2, 3]) expect(section, `row ${labelOf(offset)} not printed`).not.toMatch(new RegExp(`${labelOf(offset)}(?!,| y |:)`));
     } finally {
       await context.close();
       await remove(db, person, [id]);
@@ -330,7 +330,7 @@ test.describe("/exportar rows say «sin monto» and the month's tasks (RP-77)", 
       const section = paperSection(await printed(page, "sinmedida"), name);
       expect(section).toContain("0 de 1 hechas");
       expect(section).toContain("1 por hacer");
-      expect(section).toContain(`${yearName(2)} y ${yearName(3)}: sin tareas`);
+      expect(section).not.toContain("sin tareas");
       expect(section).not.toContain("sin monto");
     } finally {
       await context.close();

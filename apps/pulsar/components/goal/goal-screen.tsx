@@ -183,9 +183,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const bareMonth = !holds && !goal.measureUnit && goal.months.some((row) => row.current);
   const monthKey = `${today.slice(0, 7)}-01`;
   const own = planMonthList(goal.plan, monthKey).filter((item) => item.carriedFrom === null);
-  // An archived goal that holds no task this month has nothing to say of it;
-  // «Ver por mes» is still the way to the months that do.
-  const noMonthBlock = archived && bareMonth && own.length === 0;
+  // A goal with no measure that holds no task this month has nothing to say of
+  // it (RP-73, never «0 tareas»); «Ver por mes» is still the way to the months that do.
+  const noMonthBlock = bareMonth && own.length === 0;
   const units = await getTranslations("units");
   const words: TimeWords = {
     h: (h) => units("h", { h }),
@@ -206,7 +206,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const planItems = planMonthList(goal.plan, monthKey);
   const planDone = planItems.filter((item) => item.done).length;
   const planEndLabel = planEnd
-    ? `${Number(planEnd.slice(8, 10))} de ${monthNames[Number(planEnd.slice(5, 7)) - 1]} de ${planEnd.slice(0, 4)}`
+    ? t("day.dateYear", {
+        day: Number(planEnd.slice(8, 10)),
+        month: monthNames[Number(planEnd.slice(5, 7)) - 1],
+        year: planEnd.slice(0, 4),
+      })
     : null;
   // A goal with no measure keeps its plan; one measured in something else has none.
   const measuresOther = goal.measureUnit !== null && !isTimeUnit(goal.measureUnit);

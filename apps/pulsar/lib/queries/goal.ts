@@ -656,6 +656,8 @@ export async function loadGoal(
   let rolled: RolledUp | null = null;
   const own = new Map<string, GoalMonths>();
   let up = new Map<string, RolledUp>();
+  let heldWeeks: ReviewWeek[] | null = null;
+  const figuresById = new Map<string, ReturnType<typeof goalFigures>>();
   const spanFrom = holdsGoals ? spanStart(tree, row.goal.id) : civilDateInZone(new Date(row.goal.created_at));
 
   if (holdsGoals) {
@@ -689,14 +691,32 @@ export async function loadGoal(
       tasks: row.tasks,
     };
     figures = figuresOf(holder, spanFrom, evidence);
+    figuresById.set(row.goal.id, figures);
     own.set(row.goal.id, { unit: row.goal.measure_unit, months: monthFigures(figures.months, []) });
     for (const entry of row.branch) {
       const from = spanStart(tree, entry.goal.id);
       const f = figuresOf(entry, from, within(from, entry.goal.horizon === null ? today : dayBefore(entry.goal.horizon)));
+      figuresById.set(entry.goal.id, f);
       own.set(entry.goal.id, { unit: entry.goal.measure_unit, months: monthFigures(f.months, []) });
     }
     up = rollUp(tree, own);
     rolled = up.get(row.goal.id) ?? null;
+    if (rolled) {
+      // Its own plus every open goal under it in its unit, the rule `rollUp` sums months by.
+      const unitOf = (id: string): string | null => up.get(id)?.unit ?? tree.byId.get(id)!.measureUnit;
+      const spanTotal = (id: string, startsOn: string, endsOn: string): number => {
+        const unit = unitOf(id);
+        if (unit === null) return 0;
+        const ownUnit = tree.byId.get(id)!.measureUnit;
+        let total =
+          ownUnit === null || ownUnit === unit ? (figuresById.get(id)?.totalInSpan(startsOn, endsOn) ?? 0) : 0;
+        for (const cid of openKids(id)) {
+          if (unitOf(cid.id) === unit) total += spanTotal(cid.id, startsOn, endsOn);
+        }
+        return total;
+      };
+      heldWeeks = figures.weeks.map((week) => ({ ...week, total: spanTotal(row.goal!.id, week.startsOn, week.endsOn) }));
+    }
   } else {
     figures = goalFigures({
       goal: row.goal,
@@ -789,7 +809,7 @@ export async function loadGoal(
     measureTotal,
     phases,
     commitments,
-    weeks: figures.weeks,
+    weeks: heldWeeks ?? figures.weeks,
     evidence: evidenceOutcome.status,
     month,
     months,

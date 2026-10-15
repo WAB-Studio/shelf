@@ -99,7 +99,7 @@ for (const tasks of [0, 1, 2, 10, 11, 12, 13, 14, 15])
     // The summary stays alone on sheet 1: no task and no «por mes» table of the detail.
     expect(pages[0].filter(isTask), "sheet 1 holds no task").toEqual([]);
     expect(pages[0].some((line) => line.includes("· por mes")), "sheet 1 holds no detail table").toBe(false);
-    expect(pages[0].some((line) => /^leer \d+ páginas de/.test(line)), "sheet 1 holds the summary row of Leer").toBe(true);
+    expect(pages[0].some((line) => /^leer \d+ de [\d.]+ páginas/.test(line)), "sheet 1 holds the summary row of Leer").toBe(true);
     // The label shares a sheet with December, above it; no sheet ends on it.
     const withLabel = pages.flatMap((lines, page) => lines.map((line, at) => ({ line, page, at }))).filter((entry) => entry.line === OWN_LABEL);
     expect(withLabel, "the label printed once").toHaveLength(1);
@@ -109,18 +109,16 @@ for (const tasks of [0, 1, 2, 10, 11, 12, 13, 14, 15])
     expect(pages[page].at(-1), `sheet ${page + 1} does not end on the label`).not.toBe(OWN_LABEL);
   });
 
-test("T2: a goal with no end, no rhythm and months ahead with nothing prints no «…: sin monto» line", async ({ person, browser, baseURL, db }) => {
-  // Kills: the fold line of months with no amount kept for a goal with no end (5383eefa).
+test("T2: a goal with a measure, no end, no rhythm and no amount nor task in any month prints no «por mes» and no «…: sin monto» line (RP-124)", async ({ person, browser, baseURL, db }) => {
+  // Kills: printing the block anyway for a goal with a unit; the fold line of months with no amount kept for a goal with no end (5383eefa).
   await seedOpenGoal(db, person, { name: "Ahorrar tiempo", unit: PAGES, horizon: null, rhythm: null, created: openedIn(-7) });
-  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Ahorrar tiempo");
-  expect(paper).toContain("ahorrar tiempo · por mes · 9 meses");
-  expect(paper).toContain(monthLabel(-7));
-  expect(paper).toContain(monthLabel(1));
+  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Ahorrar tiempo", false);
+  expect(paper).toContain("ahorrar tiempo");
+  expect(paper).not.toContain("ahorrar tiempo · por mes");
   expect(paper).not.toContain(": sin monto");
-  for (const offset of [2, 5, 11]) expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
 });
 
-test("T2 control: a goal in minutes with no rhythm and no end keeps «enero de …: sin monto · 1 tarea» for the month that holds a task", async ({ person, browser, baseURL, db }) => {
+test("T2 control: a goal in minutes with no rhythm and no end keeps «enero …: sin monto · 1 tarea» for the month that holds a task", async ({ person, browser, baseURL, db }) => {
   // Kills: dropping the line of a month with tasks too (the whole line, not only the empty months).
   const id = await seedOpenGoal(db, person, { name: "Estudiar", unit: MINUTES, horizon: null, rhythm: null, created: openedIn(-2) });
   await db`
@@ -133,7 +131,8 @@ test("T2 control: a goal in minutes with no rhythm and no end keeps «enero de �
 test("T2 no measure: a goal with no end and no measure prints no «…: sin tareas» line for months ahead with no task", async ({ person, browser, baseURL, db }) => {
   // Kills: the guard on `horizon === null` in the line of months out of a goal with no measure (Q6 (c)).
   await seedOpenGoal(db, person, { name: "Vivir mejor", unit: null, horizon: null, rhythm: null, created: openedIn(-4) });
-  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Vivir mejor");
+  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Vivir mejor", false);
+  expect(paper, "nothing to put in it: no «por mes»").not.toContain("vivir mejor · por mes");
   expect(paper).toContain("vivir mejor");
   expect(paper).not.toContain(": sin tareas");
   expect(paper).not.toContain(": sin monto");

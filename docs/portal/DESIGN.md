@@ -26,3 +26,7 @@
 - Proyecto de Vercel `universo-apps`, https://universo-apps.vercel.app
 - `vercel.json` apaga los despliegues por git: la página no gasta la cuota de `main`.
 - Se despliega a mano desde `apps/portal`: `npx vercel deploy --prod --yes`. Solo cuando cambia una dirección o la página.
+
+## Decision of 2026-10-14: the cards say HomeFund, WordBook and GoalLog
+
+- «Universo» keeps its name. Its three cards read HomeFund, WordBook and GoalLog. Deploy it with the merge to `main` that ships the apps' new titles, not before.

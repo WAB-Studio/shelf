@@ -128,6 +128,60 @@ export function fileRoute(name: string, type: string): FileRoute {
   return null;
 }
 
+export const PDF_PAGES_MAX = 40;
+export const IMAGE_PIXELS_MAX = 40_000_000;
+
+const latin1 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("latin1");
+
+// Pages by the page objects and by the largest `/Count` of the page tree: a PDF 1.5 hides objects in
+// compressed streams but keeps the tree's count in the clear far more often than not.
+export function pdfPages(bytes: Uint8Array): number {
+  const text = latin1(bytes);
+  const objects = (text.match(/\/Type\s*\/Page(?![A-Za-z])/g) ?? []).length;
+  let counted = 0;
+  for (const m of text.matchAll(/\/Count\s+(\d+)/g)) counted = Math.max(counted, Number(m[1]));
+  return Math.max(objects, counted);
+}
+
+// Width and height from the header of a PNG, GIF or JPEG; null when the file shows none.
+export function imagePixels(bytes: Uint8Array): number | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length >= 24 && view.getUint32(0) === 0x89504e47) return view.getUint32(16) * view.getUint32(20);
+  if (bytes.length >= 10 && latin1(bytes.subarray(0, 3)) === "GIF") return view.getUint16(6, true) * view.getUint16(8, true);
+  if (bytes.length >= 4 && view.getUint16(0) === 0xffd8) {
+    let at = 2;
+    while (at + 9 < bytes.length) {
+      if (bytes[at] !== 0xff) return null;
+      const marker = bytes[at + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        return view.getUint16(at + 5) * view.getUint16(at + 7);
+      }
+      at += 2 + view.getUint16(at + 2);
+    }
+  }
+  return null;
+}
+
+const MAGIC: Record<"pdf" | "image", (b: Uint8Array) => boolean> = {
+  pdf: (b) => latin1(b.subarray(0, 1024)).includes("%PDF-"),
+  image: (b) =>
+    (b[0] === 0x89 && b[1] === 0x50) ||
+    (b[0] === 0xff && b[1] === 0xd8) ||
+    latin1(b.subarray(0, 3)) === "GIF" ||
+    (latin1(b.subarray(0, 4)) === "RIFF" && latin1(b.subarray(8, 12)) === "WEBP"),
+};
+
+/**
+ * Whether a PDF or an image is refused before any claim or model call: its bytes are not what its
+ * name says, or it has more pages or pixels than one read is worth. Text and workbooks pass.
+ */
+export function fileRefused(route: FileRoute, bytes: Uint8Array): boolean {
+  if (route !== "pdf" && route !== "image") return false;
+  if (!MAGIC[route](bytes)) return true;
+  if (route === "pdf") return pdfPages(bytes) > PDF_PAGES_MAX;
+  return (imagePixels(bytes) ?? 0) > IMAGE_PIXELS_MAX;
+}
+
 type ReadableRoute = "text" | "pdf" | "image";
 
 const toBase64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");

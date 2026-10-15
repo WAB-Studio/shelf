@@ -40,7 +40,6 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const wide = useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => false);
   const [stored, setStored] = useState<StoredDraft | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [accepted, setAccepted] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   // Set once the create left parts out; kept in the tab so a reload draws it again.
@@ -73,6 +72,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   }, [router]);
 
   const review = useMemo(() => (stored ? reviewTree(stored, today, startNames) : null), [stored, today, startNames]);
+  const accepted = useMemo(() => new Set(stored?.accepted ?? []), [stored]);
   const declined = useMemo(() => new Set(stored?.declined ?? []), [stored]);
   const strays = useMemo(() => new Map(stored ? strayEstimates(stored.draft).map((stray) => [stray.path, stray.key] as const) : []), [stored]);
   const repeated = useMemo(() => {
@@ -85,7 +85,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   function keep(next: StoredDraft, unmarked: ReadonlySet<string>) {
     setStored({ ...next, unmarked: [...unmarked] });
-    saveReview(next.draft, [...unmarked], next.declined, next.corrections);
+    saveReview(next.draft, [...unmarked], next.declined, next.corrections, next.accepted);
   }
 
   function toggle(path: string, on: boolean) {
@@ -104,17 +104,15 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     keep(stored!, next);
   }
 
-  function decide(id: string, decline: boolean) {
+  function decide(id: string, decline: boolean, accept = false) {
     const next = new Set(declined);
     if (decline) next.add(id);
     else next.delete(id);
+    const taken = new Set(accepted);
+    if (accept) taken.add(id);
+    else taken.delete(id);
     // A move taken or undone changes where its task lies, and the marks follow it.
-    keep({ ...stored!, declined: [...next] }, new Set(remapUnmarked(stored!, next, [...review!.unmarked])));
-    setAccepted((now) => {
-      const rest = new Set(now);
-      rest.delete(id);
-      return rest;
-    });
+    keep({ ...stored!, declined: [...next], accepted: [...taken] }, new Set(remapUnmarked(stored!, next, [...review!.unmarked])));
   }
 
   const monthWord = (month: string) => format.dateTime(civilDateToDate(`${month}-01`), { month: "long", timeZone: "UTC" });
@@ -297,8 +295,8 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
           onToggleMany: toggleMany,
           onEdit: open,
           onDecline: (id) => decide(id, true),
-          onUndo: (id) => decide(id, false),
-          onAccept: (id) => setAccepted((now) => new Set(now).add(id)),
+          onUndo: (id) => decide(id, false, true),
+          onAccept: (id) => decide(id, false, true),
         }}
       />
 

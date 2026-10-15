@@ -14,7 +14,7 @@ test("an alert count never counts Next's route announcer", async ({ page }) => {
   // Whether Next fills it with the title or an empty string depends on when its effect
   // reads the title, so the title is written the way Next writes it.
   await announcer.evaluate((node) => {
-    node.textContent = "Metas · Bitácora de metas";
+    node.textContent = "Metas · GoalLog";
   });
   await expect(announcer).toHaveText(/\S/);
 

@@ -80,6 +80,11 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 ## Monorepo
 
+- Call the apps by their names, not their folders: `apps/orbit` is **HomeFund**, `apps/voyager` is **WordBook**, `apps/pulsar` is
+  **GoalLog**, `apps/portal` stays «Universo». Folders and URLs keep the old names until the rename slice, decided 2026-10-14: folders `apps/homefund`,
+  `apps/wordbook`, `apps/goallog`; Vercel projects renamed the same, old URLs kept working; the GitHub repo stays `universe`. Decided by the user 2026-10-14: «no se entiende
+  rápidamente qué es».
+
 - `apps/` holds the apps, `packages/` the code two of them share. npm workspaces, one lockfile at the root.
 - `apps/orbit` is the app that was this whole repo. Its `.env.local` lives there, not at the root.
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.
@@ -131,8 +136,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `apps/voyager` — «Diccionario de lectura», https://claude.ai/artifact/K9acY69gRz13JPtAn7GWwz (the old `claude.ai/code/artifact/92f7…` link opens the same canvas)
 - `apps/pulsar` — «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
 - `apps/portal` — «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
-- `apps/orbit` — **none yet.** Its screens were built before this rule. The next orbit screen opens
-  one and names it here.
+- `apps/orbit` — «HomeFund», https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj (opened 2026-10-14 with the reconciliation boards).
 - Add the URL here the day a canvas is created. A canvas nobody can find is a canvas nobody uses.
 - Read a canvas from the main session, never from a subagent. It comes back as one 2.7 MB page whose
   head is the editor's stylesheet, not the design.
@@ -208,6 +212,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `scripts/worktree.sh` bootstraps a lane. Bootstrap one by hand only outside a worktree: `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run harness:token`. It creates `harness-2@example.invalid` and `harness-member-2@example.invalid` and lands their token rows.
 - Run any suite on that lane through the local stack: `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run check:e2e`.
 - Run pulsar specs with `PULSAR_BASE_URL=http://localhost:320<n-1>`. Its Playwright ignores `HARNESS_BASE_URL`.
+- Run a pulsar spec that needs `PULSAR_FAULT_BASE_URL` (`mes-todas.spec.ts:183` and kin) beside a fault server:
+  `PULSAR_FAULT_PORT=<free port> npm run start:fault` in `apps/pulsar`, then point `PULSAR_FAULT_BASE_URL` at it. Without it the spec is red for no reason.
 - Take `harness: <host> is not the local stack` as: wrap the command in `scripts/supabase-local.sh exec`. Set
   `HARNESS_DATABASE=remote` only for the RNF-09 timing (`check:http`, `check:queries` against the remote).
 - Share one dev server between lanes, or point a lane at its own with `HARNESS_BASE_URL`.
@@ -314,6 +320,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - **Pulsar's `pulsar-e2e` runs on the push only, never on a pull request.** Decided by the user 2026-10-05,
   twice: the second time with the suite at ~2 min on the runner's stack. Merge on `typecheck`, `lint`,
   `pulsar-unit`, `pulsar-policies` and `pulsar-checks`.
+- Never wait on CI. Fire it on the train each time a module lands, and keep dispatching: cut the next train from the one
+  in review, fix a red on its own branch, rebase what sits on top. Merge the PR once CI on the train's branch is green on the
+  same commit; do not wait for the PR to run it again. Decided by the user 2026-10-14: «eso de que me trabo por 10 mins».
 - **Fire the suite on a train's branch before merging it:** `gh workflow run ci.yml --ref <branch>`, and merge only
   when that run's `pulsar-e2e` is green. Measured 2026-10-05: it caught tren 4's rail duplicates after the merge and
   tren 5's `week.today` before it. Fix a red on `integracion` before anything else. **`integracion` → `main` only

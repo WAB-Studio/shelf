@@ -65,7 +65,7 @@ test("at 360 the marks of «este mes» stand on the day's rows' edge", async ({
         .getByRole("button", { name })
         .locator("visible=true")
         .first()
-        .locator("[class*='mark']")
+        .locator('[data-part="mark"]')
         .first()
         .boundingBox();
       return box!.x;

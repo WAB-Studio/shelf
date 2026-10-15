@@ -25,7 +25,8 @@ import exportMessages from "../messages/es/export.json";
 // Measured with `page.pdf({ preferCSSPageSize: true })`: the sheet is the app's own `@page`, never the test's.
 // Remeasured after RP-70 (empty future months off paper): `pdfinfo` still reads 5 pages for the seeded report.
 // Remeasured after RP-118: the first task, a note taller than a sheet, shares a sheet with the second, so each goal's tasks open a sheet: 6.
-const A4_PAGES = 6;
+// Remeasured after RP-124: «compromisos» opens a section on each goal and the second goal's phases leave page 5: 7.
+const A4_PAGES = 7;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 // The page as the PDF the person prints, its words on one line.
@@ -2565,7 +2566,7 @@ test.describe("the paper leaves out the months that have not started and carry n
       testInfo.annotations.push({ type: "pdf", description: file });
       const table = tableOf(file, run.name);
       for (const offset of [-2, -1, 0]) expect(table, `month ${offset} printed`).toContain(labelOf(offset));
-      for (const offset of [1, 2]) expect(table, `month +${offset} has no amount`).not.toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table, `month +${offset} has no amount`).not.toMatch(new RegExp(`${labelOf(offset)}(?!,| y |:)`));
       expect(table).toContain("en curso");
       expect(table.match(/cerrado/g) ?? []).toHaveLength(2);
       expect(table).toContain("11 km");
@@ -2597,7 +2598,7 @@ test.describe("the paper leaves out the months that have not started and carry n
       testInfo.annotations.push({ type: "pdf", description: file });
       const table = tableOf(file, run.name);
       for (const offset of [-2, -1, 0]) expect(table).toContain(labelOf(offset));
-      for (const offset of [1, 2]) expect(table).not.toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table).not.toMatch(new RegExp(`${labelOf(offset)}(?!,| y |:)`));
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${run.goalId} and user_id = ${person.id}`;
@@ -2619,7 +2620,7 @@ test.describe("the paper leaves out the months that have not started and carry n
       await expect(page.getByRole("main").getByText(run.name, { exact: true }).first()).toBeVisible();
       const table = tableOf(await printed(page, "pasado-vacio"), run.name);
       for (const offset of [-2, -1, 0]) expect(table, `month ${offset}`).toContain(labelOf(offset));
-      for (const offset of [1, 2]) expect(table, `month +${offset}`).not.toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table, `month +${offset}`).not.toMatch(new RegExp(`${labelOf(offset)}(?!,| y |:)`));
       expect(table.match(/cerrado/g) ?? []).toHaveLength(2);
     } finally {
       await context.close();

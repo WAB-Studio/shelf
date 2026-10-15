@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "title": "Fondo compartido",
+    "title": "HomeFund",
     "description": "Cuentas, movimientos y saldos compartidos entre varias personas.",
     "loginTitle": "Iniciar sesión",
     "loginDescription": "Entra con un enlace enviado a tu correo, sin contraseña.",
@@ -8,7 +8,7 @@
     "onboardingDescription": "Un fondo es el bote común: sus cuentas, sus miembros y su historial."
   },
   "common": {
-    "appName": "Fondo compartido",
+    "appName": "HomeFund",
     "backHome": "Volver al inicio",
     "retry": "Reintentar",
     "save": "Guardar",

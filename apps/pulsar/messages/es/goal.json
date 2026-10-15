@@ -3,7 +3,7 @@
     "overline": "meta nueva",
     "title": "¿Qué quieres sostener?",
     "nameLabel": "nombre",
-    "horizonLabel": "horizonte",
+    "horizonLabel": "final",
     "withEnd": "con final",
     "noEnd": "sin final",
     "noEndSentence": "No termina nunca. Se le puede dar un final después.",
@@ -115,7 +115,7 @@
   "habits": {
     "title": "Hábitos",
     "none": "Ninguno todavía.",
-    "add": "Agregar un hábito",
+    "add": "Añadir un hábito",
     "retired": "Retirados",
     "unfoldRetired": "Desplegar Retirados",
     "foldRetired": "Plegar Retirados"

@@ -58,8 +58,8 @@ function stepHref(monday: string | null, thisMonday: string): string | null {
  * ‹ › step a week at a time (`SemanaPasada.dc.html`); the week is drawn by
  * `WeekTableFace`, folded to one row per commitment on the phone.
  *
- * With no open goal at all (RP-11) the screen drew a range and a dead end;
- * `EmptyWeek` fills that in, in the day screen's own words.
+ * With no open goal at all (RP-11) `EmptyWeek` stands in for the range, in
+ * the day screen's own words.
  */
 export async function WeekScreen({ day, today }: { day: string; today: string }) {
   const t = await getTranslations();

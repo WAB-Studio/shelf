@@ -19,6 +19,21 @@ test("a large number reads with its groups separated, never as one run of digits
   assert.equal(formatted, "1.000.039");
 });
 
+// «es» leaves four digits bare unless grouping is forced; one format means 2.100 beside 21.000 (module 994, CifraUnFormato).
+test("a figure of four digits groups its thousands like every other: 1.000, 2.100, 6.600, 23.100", () => {
+  assert.equal(formatFigureValue(1_000), "1.000");
+  assert.equal(formatFigureValue(2_100), "2.100");
+  assert.equal(formatFigureValue(6_600), "6.600");
+  assert.equal(formatFigureValue(23_100), "23.100");
+  assert.equal(formatFigureValue(999), "999");
+});
+
+test("every whole number from 1.000 to 99.999 reads as its digits in groups of three, point-separated", () => {
+  for (let n = 1_000; n < 100_000; n += 37) {
+    assert.equal(formatFigureValue(n), String(n).replace(/\B(?=(\d{3})+(?!\d))/g, "."), `n = ${n}`);
+  }
+});
+
 test("a small number still reads with no separator to insert", () => {
   assert.equal(formatFigureValue(7), "7");
 });

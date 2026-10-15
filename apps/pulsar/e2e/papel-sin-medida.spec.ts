@@ -9,7 +9,7 @@ import type postgres from "postgres";
 
 // `ReporteImpresoSinMedida.dc.html` (RP-71, decision 4 of 2026-10-10): on paper, a goal that measures nothing prints
 // its months like a measured one: «<META> · POR MES · N MESES», a MES / TAREAS / ESTADO table of its tasks, and under
-// it «…: sin tareas» naming, with their year, the months not started that hold no task. The screen keeps its own.
+// it nothing of the months not started that hold no task (RP-125, RP-73: a month with no task says nothing of tasks).
 // Every month is an offset from the real current month, so no assertion depends on the day it runs.
 const NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -24,7 +24,7 @@ const startOf = (offset: number) => {
 const nameOf = (offset: number) => NAMES[Number(startOf(offset).slice(5, 7)) - 1];
 const yearOf = (offset: number) => startOf(offset).slice(0, 4);
 const labelOf = (offset: number) => `${nameOf(offset)} ${yearOf(offset)}`;
-const withYear = (offset: number) => `${nameOf(offset)} de ${yearOf(offset)}`;
+const withYear = (offset: number) => `${nameOf(offset)} ${yearOf(offset)}`;
 // «31 de enero de 2027»: the last day of a goal whose span ends at month `to`.
 const lastDay = (to: number) => {
   const date = civilDateToDate(startOf(to + 1));
@@ -253,7 +253,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
     }
   });
 
-  test("clause 3: «diciembre de … y enero de …: sin tareas» names the months left out with their year, below the table", async ({
+  test("clause 3: the months left out are no row and no line names them, «sin tareas» appears nowhere", async ({
     person, browser, baseURL, db,
   }) => {
     const name = `Mudanza fuera ${Date.now()}`;
@@ -262,19 +262,16 @@ test.describe("the paper report prints the months of a goal that measures nothin
     try {
       await waitFor(page, name);
       const section = sectionOf(await printed(page, "fuera"), name);
-      const line = `${withYear(2)} y ${withYear(3)}: sin tareas`;
-      expect(section).toContain(line);
-      // Months out are not rows: their label («mes año») never appears, only «mes de año» inside the line.
-      for (const offset of [2, 3]) expect(section, `month ${offset} is no row`).not.toContain(labelOf(offset));
-      expect(section.indexOf(line), "below the last row").toBeGreaterThan(section.indexOf(labelOf(1)));
-      expect(section.match(/sin tareas/g) ?? []).toHaveLength(1);
+      for (const offset of [2, 3]) expect(section, `month ${offset} is nowhere`).not.toContain(labelOf(offset));
+      expect(section).toContain(labelOf(1));
+      expect(section).not.toContain("sin tareas");
     } finally {
       await context.close();
       await remove(db, person, [id]);
     }
   });
 
-  test("clause 3: three months out read «a, b y c: sin tareas»; a started month with no task is a row, not in the line", async ({
+  test("clause 3: three months out are not named; a started month with no task is a row with an empty cell", async ({
     person, browser, baseURL, db,
   }) => {
     const name = `Mudanza tres ${Date.now()}`;
@@ -284,13 +281,13 @@ test.describe("the paper report prints the months of a goal that measures nothin
     try {
       await waitFor(page, name);
       const section = sectionOf(await printed(page, "tres"), name);
-      expect(section).toContain(`${listed([withYear(1), withYear(2), withYear(3)])}: sin tareas`);
+      for (const offset of [1, 2, 3]) expect(section, `month ${offset} is nowhere`).not.toContain(labelOf(offset));
+      expect(section).not.toContain("sin tareas");
       expect(section).toContain(`${name} · por mes · 3 meses`.toLowerCase());
       for (const offset of [-2, -1]) {
         expect(section, `closed month ${offset} is a row`).toMatch(
-          new RegExp(`${labelOf(offset)} (?:0 de 0 hechas|sin tareas) cerrado`),
+          new RegExp(`${labelOf(offset)} cerrado`),
         );
-        expect(section, `closed month ${offset} is not in the line`).not.toContain(withYear(offset));
       }
       expect(section).toContain(`${labelOf(0)} 1 de 2 hechas en curso`);
     } finally {
@@ -299,7 +296,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
     }
   });
 
-  test("clause 3: a month to come that holds a task is a row, never in the line", async ({
+  test("clause 3: a month to come that holds a task is a row; the empty ones around it are not named", async ({
     person, browser, baseURL, db,
   }) => {
     const name = `Mudanza venir ${Date.now()}`;
@@ -310,9 +307,9 @@ test.describe("the paper report prints the months of a goal that measures nothin
       await waitFor(page, name);
       const section = sectionOf(await printed(page, "venir"), name);
       expect(section).toContain(`${labelOf(2)} 2 por hacer por venir`);
-      expect(section).toContain(`${withYear(1)} y ${withYear(3)}: sin tareas`);
+      expect(section).not.toContain("sin tareas");
       expect(section).toContain(`${name} · por mes · 2 meses`.toLowerCase());
-      expect(section).not.toContain(labelOf(1));
+      for (const offset of [1, 3]) expect(section, `month ${offset} is nowhere`).not.toContain(labelOf(offset));
     } finally {
       await context.close();
       await remove(db, person, [id]);
@@ -337,7 +334,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
     }
   });
 
-  test("clause 3 in the print DOM: the line is visible, body text, under the table", async ({
+  test("clause 3 in the print DOM: no line under the table, no last row for months out", async ({
     person, browser, baseURL, db,
   }) => {
     const name = `Mudanza dom ${Date.now()}`;
@@ -347,26 +344,8 @@ test.describe("the paper report prints the months of a goal that measures nothin
       await waitFor(page, name);
       await page.emulateMedia({ media: "print" });
       const section = page.locator("section").filter({ hasText: `${name} · por mes` }).last();
-      const line = section.getByText(`${withYear(2)} y ${withYear(3)}: sin tareas`, { exact: true }).locator("visible=true");
-      await expect(line).toHaveCount(1);
-      const grid = section.locator("table").locator("visible=true").first();
-      const table = await grid.boundingBox();
-      const lastMonth = await grid.locator("tbody tr:not([data-row='months-out']):not([data-unprinted])").last().boundingBox();
-      const at = await line.boundingBox();
-      expect(at!.y, "the line sits under the last month row").toBeGreaterThanOrEqual(lastMonth!.y + lastMonth!.height - 1);
-      expect(at!.y + at!.height, "and at the end of the table").toBeLessThanOrEqual(table!.y + table!.height + 1);
-      await expect(grid.locator("tbody tr[data-row='months-out']"), "in the table's last row").toHaveCount(1);
-      const look = await line.evaluate((node) => {
-        const probe = document.createElement("span");
-        probe.style.fontSize = "var(--pulsar-text-line-size)";
-        document.body.append(probe);
-        const wanted = getComputedStyle(probe).fontSize;
-        probe.remove();
-        const style = getComputedStyle(node);
-        return { size: style.fontSize, wanted, family: style.fontFamily };
-      });
-      expect(look.size, "body-line size").toBe(look.wanted);
-      expect(look.family).not.toMatch(/mono/i);
+      await expect(section.getByText("sin tareas")).toHaveCount(0);
+      await expect(section.locator("tbody tr[data-row='months-out']")).toHaveCount(0);
     } finally {
       await context.close();
       await remove(db, person, [id]);
@@ -375,7 +354,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
 
   // The critic's sweep of papel-ano-cortes: k tasks in the first goal move every page cut that follows it.
   for (let k = 0; k <= 12; k++) {
-    test(`clause 4: with ${k} tasks in the first goal, each unmeasured goal's label, rows and «sin tareas» line are on one page`, async ({
+    test(`clause 4: with ${k} tasks in the first goal, each unmeasured goal's label and rows are on one page`, async ({
       person, browser, baseURL, db,
     }) => {
       const stamp = Date.now();
@@ -398,7 +377,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
           const block = after.includes("· por mes", label.length) ? after.slice(0, after.indexOf("· por mes", label.length)) : after;
           expect(block, `${name}: first row`).toContain(labelOf(-1));
           expect(block, `${name}: last row`).toContain(labelOf(0));
-          expect(block, `${name}: the line on the label's page`).toContain(": sin tareas");
+          expect(block, `${name}: no «sin tareas»`).not.toContain("sin tareas");
         }
       } finally {
         await context.close();
@@ -408,7 +387,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
   }
 
   for (const viewport of [WIDE, PHONE]) {
-    test(`clause 5 on screen at ${viewport.width} px: the report shows the goal as before, no «por mes», no TAREAS table, no line`, async ({
+    test(`clause 5 on screen at ${viewport.width} px: the report shows the goal's «por mes» as paper does (RP-124), no left-out line`, async ({
       person, browser, baseURL, db,
     }) => {
       const name = `Mudanza pantalla ${Date.now()}`;
@@ -417,9 +396,9 @@ test.describe("the paper report prints the months of a goal that measures nothin
       try {
         await waitFor(page, name);
         await expect(page.getByText(`no mide nada · hasta el ${lastDay(3)}`).locator("visible=true")).toHaveCount(1);
-        for (const text of [/· por mes/i, /\d+ de \d+ hechas/, /\d+ por hacer/, /: sin tareas$/, /por venir/]) {
-          await expect(page.getByText(text).locator("visible=true"), String(text)).toHaveCount(0);
-        }
+        await expect(page.getByText(/· por mes/i).locator("visible=true")).toHaveCount(1);
+        await expect(page.getByText(/\d+ de \d+ hechas/).locator("visible=true").first()).toBeVisible();
+        await expect(page.getByText(/sin tareas/).locator("visible=true")).toHaveCount(0);
       } finally {
         await context.close();
         await remove(db, person, [id]);
@@ -427,7 +406,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
     });
   }
 
-  test("clause 5 on screen: the goal's «Por mes» keeps its rows: a count of tasks or «sin tareas», nothing of done or to do", async ({
+  test("clause 5 on screen: the goal's «Por mes» keeps its rows: a count of tasks or nothing, never «sin tareas», nor of done or to do", async ({
     person, browser, baseURL, db,
   }) => {
     const name = `Mudanza meses ${Date.now()}`;
@@ -439,8 +418,8 @@ test.describe("the paper report prints the months of a goal that measures nothin
       await expect(items.nth(0)).toContainText("3 tareas");
       await expect(items.nth(1)).toContainText("en curso");
       await expect(items.nth(2)).toContainText("1 tarea");
-      await expect(items.nth(3)).toContainText("sin tareas");
-      await expect(items.nth(4)).toContainText("sin tareas");
+      await expect(items.nth(3)).not.toContainText("tarea");
+      await expect(items.nth(4)).not.toContainText("tarea");
       await expect(page.getByText(/hechas|por hacer|por venir/)).toHaveCount(0);
     } finally {
       await context.close();
@@ -488,7 +467,7 @@ test.describe("the paper report prints the months of a goal that measures nothin
       const bareSection = sectionOf(file, bare);
       const kmSection = sectionOf(file, km);
       expect(bareSection).not.toMatch(header("hecho"));
-      expect(bareSection).toContain(": sin tareas");
+      expect(bareSection).not.toContain("sin tareas");
       expect(bareSection).not.toContain("sin monto");
       expect(kmSection).toMatch(header("hecho"));
       expect(kmSection).not.toMatch(header("tareas"));

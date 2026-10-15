@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "title": "Diccionario",
+    "title": "WordBook",
     "description": "Diccionario inglés-español que funciona sin conexión.",
-    "shortTitle": "Diccionario"
+    "shortTitle": "WordBook"
   },
   "nav": {
     "label": "Secciones",
@@ -197,7 +197,7 @@
       "licenceLabel": "Licencia",
       "frequencyLabel": "Orden de las acepciones",
       "appLabel": "La app",
-      "appVersion": "Diccionario de lectura · versión {version}",
+      "appVersion": "WordBook · versión {version}",
       "licenceBody": "Obra derivada de DBnary. Esta app la distribuye bajo la misma licencia.",
       "licenceName": "CC BY-SA 3.0",
       "frequencyBody": "El orden en que se muestran las acepciones de una palabra viene de una tabla de frecuencias. Esta app distribuye esa tabla bajo la misma licencia, sin uso comercial.",

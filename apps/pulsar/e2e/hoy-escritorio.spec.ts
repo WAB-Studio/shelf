@@ -93,8 +93,8 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     const card = page.getByText("esta semana", { exact: true }).locator("xpath=ancestor::div[.//a][1]");
     const label = card.getByText(`Meta con cifra ${stamp}`, { exact: true });
     await expect(label).toBeVisible();
-    await expect(card.locator("[class*='section-label']").first()).toHaveText(`Meta con cifra ${stamp}`);
-    await expect(card.locator("[class*='section-label']").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
+    await expect(card.locator("[data-part='section-label']").first()).toHaveText(`Meta con cifra ${stamp}`);
+    await expect(card.locator("[data-part='section-label']").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
     const figure = await box(label);
     const sueltas = await box(page.getByText("Sueltas", { exact: true }));
     const waiting = await box(page.getByRole("link", { name: "2 esperan" }));
@@ -274,8 +274,8 @@ test("at 1280 a goal in a time unit heads its card with its name and one in kil�
       .locator("xpath=ancestor::div[.//a][1]")
       .filter({ hasText: "12 min" });
     await expect(timeCard.getByText(`Meta con cifra ${stamp}`, { exact: true })).toBeVisible();
-    await expect(timeCard.locator("[class*='section-label']").first()).toHaveText(`Meta con cifra ${stamp}`);
-    await expect(timeCard.locator("[class*='section-label']").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
+    await expect(timeCard.locator("[data-part='section-label']").first()).toHaveText(`Meta con cifra ${stamp}`);
+    await expect(timeCard.locator("[data-part='section-label']").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
     const kmCard = page
       .getByText("esta semana", { exact: true })
       .locator("xpath=ancestor::div[.//a][1]")
