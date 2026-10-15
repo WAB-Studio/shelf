@@ -201,6 +201,19 @@ test("on paper the summary is a table: Meta | month | Semana del…, a row per o
     const text = flat(summary);
     const head = text.slice(0, text.indexOf(n.general.toLowerCase()));
     expect(head).toMatch(new RegExp(`meta ${month} semana del \\d`));
+    // A week across two months names both; one inside a month names neither.
+    const today = todayInZone();
+    const monday = civilDateToDate(today);
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+    const sunday = new Date(monday);
+    sunday.setUTCDate(sunday.getUTCDate() + 6);
+    const abbreviated = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+    const [from, to] = [monday, sunday].map((date) => `${date.getUTCDate()} ${abbreviated[date.getUTCMonth()]}`);
+    if (monday.getUTCMonth() === sunday.getUTCMonth()) {
+      expect(head).toContain(`semana del ${monday.getUTCDate()} al ${sunday.getUTCDate()}`);
+    } else {
+      expect(head).toContain(`semana del ${from} al ${to}`);
+    }
     const order = [n.general, n.big, n.small, n.empty, n.loose];
     const [g, big, small, empty, loose] = chunks(summary, order);
     for (const row of [g, big, small]) {

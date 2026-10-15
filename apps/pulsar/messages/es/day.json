@@ -172,6 +172,7 @@
     "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra.",
     "dayInvalid": "Ese día no es válido.",
     "dayFuture": "Ese día todavía no llega.",
+    "dayStale": "La pantalla quedó de otro día. Recárgala.",
     "dayTooOld": "Eso ya pasó hace más de una semana.",
     "dayBeforeCommitment": "Ese día es anterior a cuando empezó este compromiso.",
     "dayAfterRetired": "Ese día es posterior a cuando se retiró este compromiso.",

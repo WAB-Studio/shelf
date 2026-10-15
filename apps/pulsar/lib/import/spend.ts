@@ -2,12 +2,24 @@ import "server-only";
 
 import { eq, sql } from "drizzle-orm";
 
+import { db } from "@/db/client";
 import { modelCalls } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { TIME_ZONE } from "@/lib/zone";
 
 export const MODEL_CALLS_DAILY_CAP = 10;
 export const CHAT_CALLS_DAILY_CAP = 50;
+
+// Every model call the app makes in a day, all persons together (RP-126): ten times the import cap and
+// five times the chat cap, so ten persons spending theirs in full fit and a minted crowd does not.
+export const APP_MODEL_CALLS_DAILY_CAP_DEFAULT = 10 * MODEL_CALLS_DAILY_CAP + 5 * CHAT_CALLS_DAILY_CAP;
+
+// Read at each claim, so a deploy changes it with its env and a check sets it low.
+export function appModelCallsDailyCap(): number {
+  const raw = process.env.APP_MODEL_CALLS_DAILY_CAP?.trim();
+  if (raw && /^[0-9]+$/.test(raw)) return Number(raw);
+  return APP_MODEL_CALLS_DAILY_CAP_DEFAULT;
+}
 
 // The second pass of an import (903c) is claimed on the read's own source, under this model name; the
 // cap counts every row but these.
@@ -24,6 +36,9 @@ export type ModelCallOutcome = "ok" | "failed" | "invalid" | "empty";
  * the count's snapshot is taken after the wait, so concurrent claims see each
  * other's rows and exactly the cap lands. The day is the column default's, the
  * real one even under `PULSAR_CLOCK`.
+ * The whole app's day is capped too (RP-126), by every row of the day, follow-ups included. Its own lock
+ * comes second, always in that order, so two claims never wait on each other crosswise; it serializes
+ * every claim of the app for the length of one insert.
  */
 export async function claimModelCall(
   model: string,
@@ -34,8 +49,11 @@ export async function claimModelCall(
 
   const chat = source === "chat";
   const cap = chat ? CHAT_CALLS_DAILY_CAP : MODEL_CALLS_DAILY_CAP;
-  const rows = await withGoalsDb(async (tx) => {
+  // The app's count reads every person's rows, which the person's own role cannot see: this door is the
+  // owner's, like the OAuth throttle's, and writes only the verified person's row.
+  const rows = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${person.id}:${chat ? "chat" : "import"}`}, 0))`);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('app:model-calls', 0))`);
     return tx.execute<{ id: string }>(sql`
       insert into goals.model_calls (user_id, model, source)
       select ${person.id}::uuid, ${model}, ${source}
@@ -44,11 +62,26 @@ export async function claimModelCall(
         where user_id = ${person.id}::uuid and day = (now() at time zone ${TIME_ZONE})::date
           and (source = 'chat') = ${chat} and model not like ${`%${FOLLOW_UP_SUFFIX}`}
       ) < ${cap}
+      and (
+        select count(*) from goals.model_calls where day = (now() at time zone ${TIME_ZONE})::date
+      ) < ${appModelCallsDailyCap()}
       returning id
     `);
   });
 
   return rows[0] ? { id: rows[0].id } : null;
+}
+
+/**
+ * True when the whole app's day is spent, to say so after a refused claim; the owner's door, since the
+ * count is every person's.
+ */
+export async function appCapReached(): Promise<boolean> {
+  const rows = await db.execute<{ spent: boolean }>(sql`
+    select count(*) >= ${appModelCallsDailyCap()} as spent from goals.model_calls
+    where day = (now() at time zone ${TIME_ZONE})::date
+  `);
+  return rows[0]?.spent === true;
 }
 
 /**

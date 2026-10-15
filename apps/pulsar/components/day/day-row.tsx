@@ -50,6 +50,9 @@ export type DayRowProps = {
   // The past day this row stands on (RP-06): every fact it writes names that
   // day. Absent on Hoy, where the action decides today itself.
   day?: string;
+  // The day Hoy was drawn for. The tap carries it, so a screen left open past
+  // midnight still writes the day it showed.
+  drawnToday?: string;
   // «anotado el lunes 21», set only when the fact was written on a later day
   // than the one drawn: the day it counts for and the day it was written are
   // never read as one (RP-06).
@@ -88,6 +91,7 @@ export function DayRow({
   loggedQuantity,
   note,
   day,
+  drawnToday,
   writtenLabel,
   writtenTime,
   quiet,
@@ -163,7 +167,7 @@ export function DayRow({
     startTransition(() => {
       // Done already: this tap undoes it, never declares a second fact
       // beside it.
-      const action = done && factId ? undoFact({ factId }) : declareFact({ commitmentId, day });
+      const action = done && factId ? undoFact({ factId }) : declareFact({ commitmentId, day: day ?? drawnToday, onHoy: day === undefined && drawnToday !== undefined ? true : undefined });
       void action.then((result) => {
         if (!result.ok) setError(result.error);
       });
@@ -203,6 +207,7 @@ export function DayRow({
           loggedQuantity={loggedQuantity}
           loggedNote={note}
           day={day}
+          drawnToday={drawnToday}
         />
       ) : null}
     </>
