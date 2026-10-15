@@ -50,3 +50,11 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 
 - The visible name is **HomeFund**: the title, the installed name (`short_name` too) and the metadata. It was «Fondo compartido». The folder
   and the URL keep `orbit` and `our-piggy-bank`.
+
+## Decisions of 2026-10-14: reconciling an account, by the user
+
+- **A reconciliation is an adjustment movement, never a new opening balance** (RF-137): the gap stays in the history.
+- **One account at a time**, not a whole-fund close.
+- **The adjustment is its own line, «Descuadre»** (RF-138), outside expense and income totals and budgets.
+- **When:** after pulsar's s10 and the folder rename. HomeFund has no canvas yet: this slice opens it with its boards
+  (the reconcile sheet, the gap, the history, «Descuadre» in reports), and names it in `AGENTS.md`.
