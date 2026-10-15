@@ -203,7 +203,7 @@ test("a goal typed as 8 weeks lands on the Monday after its week 8 (RP-11)", asy
   try {
     await page.goto("/metas/nueva");
     await page.getByLabel("nombre").fill(name);
-    await page.getByLabel("horizonte").fill("8");
+    await page.getByLabel("final").fill("8");
     await page.getByRole("button", { name: "Abrirla" }).click();
     await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
 
