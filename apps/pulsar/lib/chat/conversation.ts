@@ -91,3 +91,8 @@ export function requestTurns(turns: StoredTurn[]): ChatTurn[] {
         },
   );
 }
+
+// A message the chat did not take (shut, or refused as invalid) leaves no turn behind to be sent again.
+export function dropUnanswered(turns: StoredTurn[]): StoredTurn[] {
+  return turns.at(-1)?.role === "person" ? turns.slice(0, -1) : turns;
+}
