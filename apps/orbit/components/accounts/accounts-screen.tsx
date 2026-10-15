@@ -14,6 +14,7 @@ import {
   restoreAccountAction,
 } from "@/app/actions/accounts";
 import { AccountFormDialog } from "@/components/accounts/account-form-dialog";
+import { ProtoCuadreDialog } from "@/components/accounts/proto-cuadre-dialog";
 import { AccountsTable } from "@/components/accounts/accounts-table";
 import {
   Badge,
@@ -112,6 +113,7 @@ export function AccountsScreen({
     newSubtype ? "new" : null,
   );
   const [rowAction, setRowAction] = useState<RowAction | null>(null);
+  const [cuadreTarget, setCuadreTarget] = useState<AccountRow | null>(null);
 
   const archiveState = useAction(archiveAccountAction, {
     onSuccess() {
@@ -359,6 +361,7 @@ export function AccountsScreen({
                         account={account}
                         archived={archived}
                         onEdit={() => setFormTarget(account)}
+                        onReconcile={() => setCuadreTarget(account)}
                         onArchive={() => setRowAction({ kind: "archive", account })}
                         onRestore={() => setRowAction({ kind: "restore", account })}
                         onDelete={() => setRowAction({ kind: "delete", account })}
@@ -380,6 +383,14 @@ export function AccountsScreen({
           )}
         </Flex>
       </Box>
+
+      <ProtoCuadreDialog
+        accountName={cuadreTarget?.name ?? ""}
+        open={cuadreTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCuadreTarget(null);
+        }}
+      />
 
       <AccountFormDialog
         hasGroup={groupName !== null}
@@ -461,6 +472,7 @@ function AccountCard({
   account,
   archived,
   onEdit,
+  onReconcile,
   onArchive,
   onRestore,
   onDelete,
@@ -469,6 +481,7 @@ function AccountCard({
   account: AccountRow;
   archived: boolean;
   onEdit: () => void;
+  onReconcile?: () => void;
   onArchive: () => void;
   onRestore: () => void;
   onDelete: () => void;
@@ -577,6 +590,9 @@ function AccountCard({
                 <DropdownMenu.Item onSelect={onEdit}>
                   {tKey("common.edit")}
                 </DropdownMenu.Item>
+                {onReconcile && (
+                  <DropdownMenu.Item onSelect={onReconcile}>Cuadrar</DropdownMenu.Item>
+                )}
                 <DropdownMenu.Item onSelect={onArchive}>
                   {tKey("common.archive")}
                 </DropdownMenu.Item>

@@ -168,6 +168,15 @@ export function DashboardSummary({
                     currency={flow.currency}
                     tone={signTone(flow.netCents, "income")}
                   />
+                  {/* PROTOTYPE: hardwired field the real query will carry (M2). */}
+                  {(flow as { adjustmentCents?: number }).adjustmentCents ? (
+                    <MonthStat
+                      label="Descuadre del mes"
+                      minor={(flow as { adjustmentCents?: number }).adjustmentCents!}
+                      currency={flow.currency}
+                      tone="plain"
+                    />
+                  ) : null}
                 </Flex>
               </Flex>
             ))}

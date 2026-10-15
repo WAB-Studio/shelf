@@ -37,7 +37,14 @@ const SERIES_COLORS = {
  * counts (RF-124): two currencies are two breakdowns, two charts and two
  * contribution lists, and no series ever holds a bar from both.
  */
-export function ReportsScreen({ data }: { data: ReportsData }) {
+export function ReportsScreen({
+  data,
+  adjustments,
+}: {
+  data: ReportsData;
+  // PROTOTYPE: the month's signed adjustment per currency, hardwired.
+  adjustments?: Partial<Record<CurrencyCode, number>>;
+}) {
   const t = useTranslations("reports");
 
   const { expensesByCategory, sixMonthFlow, contributions, hasGroup } = data;
@@ -80,6 +87,20 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
                         </Text>
                       </Flex>
                     ))}
+                    {adjustments?.[currency] ? (
+                      <Flex justify="between" align="center">
+                        <Text size="3" color="gray">Descuadre del mes</Text>
+                        <Text size="3" weight="medium">
+                          {adjustments[currency]! > 0 ? "+" : ""}
+                          <Money
+                            minor={adjustments[currency]!}
+                            currency={currency}
+                            tone="plain"
+                            size="inherit"
+                          />
+                        </Text>
+                      </Flex>
+                    ) : null}
                   </Flex>
                 ))
               )}
