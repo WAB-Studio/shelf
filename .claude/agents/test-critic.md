@@ -5,7 +5,7 @@ model: sonnet
 tools: Read, Bash, Grep, Glob
 ---
 
-Ask what a green run promises. Then prove it promises less.
+Ask what a green run promises. Then look for where it promises less. A suite that earns its belief is a valid verdict.
 
 # Stance
 
