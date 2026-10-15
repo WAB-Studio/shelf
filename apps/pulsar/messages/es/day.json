@@ -2,6 +2,7 @@
   "title": "Hoy",
   "pastTitle": "Día pasado",
   "date": "{weekday} {day} de {month}",
+  "dateYear": "{day} de {month} de {year}",
   "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
   "monthLong": [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",

@@ -6,7 +6,6 @@ import { CHAT_TURNS_SENT, type ChatTurn } from "./types";
 // every subscriber, written after every turn and every change's state.
 const KEY = "pulsar.chat";
 
-export type ChangeState = "open" | "made" | "refused" | "lapsed";
 
 const storedChangeSchema = z.object({
   id: z.string(),

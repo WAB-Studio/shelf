@@ -206,7 +206,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const planItems = planMonthList(goal.plan, monthKey);
   const planDone = planItems.filter((item) => item.done).length;
   const planEndLabel = planEnd
-    ? `${Number(planEnd.slice(8, 10))} de ${monthNames[Number(planEnd.slice(5, 7)) - 1]} de ${planEnd.slice(0, 4)}`
+    ? t("day.dateYear", {
+        day: Number(planEnd.slice(8, 10)),
+        month: monthNames[Number(planEnd.slice(5, 7)) - 1],
+        year: planEnd.slice(0, 4),
+      })
     : null;
   // A goal with no measure keeps its plan; one measured in something else has none.
   const measuresOther = goal.measureUnit !== null && !isTimeUnit(goal.measureUnit);

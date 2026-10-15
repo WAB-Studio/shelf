@@ -114,7 +114,12 @@ export function civilDateLabel(day: string, weekday = false): string {
 
 // "13 de diciembre de 2026": the year always comes from the day itself.
 export function civilDateWithYear(day: string): string {
-  return `${civilDateLabel(day)} de ${day.slice(0, 4)}`;
+  return new Intl.DateTimeFormat("es-CO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(civilDateToDate(day));
 }
 
 // "martes 22 sep": weekday, day and the month's first three letters, no

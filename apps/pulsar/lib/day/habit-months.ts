@@ -1,4 +1,5 @@
 import { civilDateToDate, dateToCivilDate } from "@/lib/zone";
+import { nextMonth } from "@/lib/plan/months";
 import { asksOn } from "./cadence";
 import { habitThisWeek, habitWeeks } from "./habit-weeks";
 import type { Cadence, CommitmentPlan } from "./types";
@@ -33,12 +34,6 @@ function monthStart(day: string): string {
 function monthEnd(month: string): string {
   const date = civilDateToDate(month);
   date.setUTCMonth(date.getUTCMonth() + 1, 0);
-  return dateToCivilDate(date);
-}
-
-function nextMonth(month: string): string {
-  const date = civilDateToDate(month);
-  date.setUTCMonth(date.getUTCMonth() + 1, 1);
   return dateToCivilDate(date);
 }
 

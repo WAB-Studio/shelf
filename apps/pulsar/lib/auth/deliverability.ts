@@ -11,10 +11,9 @@ import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 // answer cleanly (timeout, SERVFAIL, no network) has to read as
 // deliverable, never as a reason to lock a reader out of their own account.
 //
-// Not a "use server" file, on purpose (RNP-09): `app/actions/account.ts`
-// exported this alongside `sendSignInLink`, which made it a public server
-// action reachable from any client, and no suite called it. Living here it
-// is a plain function a check can import and call with fake resolvers.
+// Not a "use server" file, on purpose (RNP-09): there it would be a public
+// server action reachable from any client. A plain function, a check can
+// import it and call it with fake resolvers.
 const DNS_TIMEOUT_MS = 2_500;
 
 type MxRecord = { exchange: string; priority: number };

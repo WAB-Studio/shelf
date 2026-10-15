@@ -108,13 +108,6 @@ body {
   min-height: 0;
 }
 
-/* Radix renders a dialog's overlay as a theme root of its own, so the ground
-   above would paint it opaque and hide the page behind. The scrim is its
-   `::before`; the overlay itself paints nothing. */
-.radix-themes.rt-BaseDialogOverlay {
-  background-color: transparent;
-}
-
 /* RNP-16, `ArmazonPestanas.dc.html`: below 1024px the tabs are fixed over the
    foot of the viewport (components/ui/bottom-nav), so the shell keeps their
    height clear under the content: 56px of tab, the nav's 1px rule, and the

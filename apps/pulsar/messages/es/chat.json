@@ -20,7 +20,6 @@
   "doAll": "Hacer todo",
   "made": "hecho",
   "lapsed": "sin hacer",
-  "unavailable": "El chat no está disponible ahora. Tu plan sigue igual en las demás pantallas.",
   "errors": {
     "signedOut": "Entra de nuevo para usar el chat.",
     "blank": "Escribe tu mensaje.",
