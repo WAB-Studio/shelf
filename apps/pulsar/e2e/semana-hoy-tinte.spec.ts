@@ -3,6 +3,7 @@ import type postgres from "postgres";
 
 import { test, expect, settled, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
+import { dayFromToday, noonFromToday } from "./reloj";
 
 // `SemanaHoyTinte` (approved 2026-10-09): at 1440 the whole today column,
 // header to foot, is a tint of its own (`--pulsar-today`) that is neither the
@@ -40,26 +41,26 @@ const PENDING = `Pendiente ${stamp}`;
 const evening = (day: string) => new Date(`${day}T23:30:00-05:00`);
 
 async function seed(db: postgres.Sql, person: Person, extraRows = 0): Promise<void> {
-  const horizon = dateToCivilDate(new Date(Date.now() + 90 * 86_400_000));
+  const horizon = dayFromToday(90);
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
-    values (${person.id}, ${`Meta hoy tinte ${stamp}`}, ${horizon}, now() - interval '20 days')
+    values (${person.id}, ${`Meta hoy tinte ${stamp}`}, ${horizon}, ${noonFromToday(-20)})
     returning id
   `;
   await db`
     insert into goals.commitments
       (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
     values (${person.id}, ${goal.id}, ${EVIDENCE}, 'daily', 'evidence',
-      (select id from goals.evidence_sources where key = 'reading_lookups'), 1, now() - interval '20 days')
+      (select id from goals.evidence_sources where key = 'reading_lookups'), 1, ${noonFromToday(-20)})
   `;
   await db`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
-    values (${person.id}, ${goal.id}, ${PENDING}, 'daily', 'tap', now() - interval '20 days')
+    values (${person.id}, ${goal.id}, ${PENDING}, 'daily', 'tap', ${noonFromToday(-20)})
   `;
   if (extraRows > 0) {
     await db`
       insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
-      select ${person.id}, ${goal.id}, 'Relleno ' || n || ' ' || ${stamp}::text, 'daily', 'tap', now() - interval '20 days'
+      select ${person.id}, ${goal.id}, 'Relleno ' || n || ' ' || ${stamp}::text, 'daily', 'tap', ${noonFromToday(-20)}
       from generate_series(1, ${extraRows}) n
     `;
   }

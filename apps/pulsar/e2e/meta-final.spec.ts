@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
-import { addWeeksToCivilDate, civilDateInZone, civilDateToDate, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
+import { addWeeksToCivilDate, civilDateToDate, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 import goal from "../messages/es/goal.json";
@@ -198,7 +198,7 @@ for (const [width, height] of WIDTHS) {
 
     test("an archived goal not past its end keeps its weeks line (RP-24)", async ({ person, browser, baseURL, db }) => {
       const today = todayInZone();
-      const horizon = horizonForWeeks(civilDateInZone(new Date()), 12);
+      const horizon = horizonForWeeks(today, 12);
       expect(horizon > today).toBe(true);
       const goalId = await seed(db, person.id, { createdAt: today, horizon, archived: true });
       try {

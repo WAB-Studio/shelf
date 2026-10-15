@@ -1,7 +1,8 @@
 import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { dateToCivilDate, todayInZone } from "@/lib/zone";
+import { todayInZone } from "@/lib/zone";
+import { dayFromToday } from "./reloj";
 
 import { test, expect, type Person } from "./fixtures";
 import { boxOf } from "./box";
@@ -29,7 +30,7 @@ async function seedGoal(
   person: Person,
   opts: { openedYear: number; measured: boolean; minutes: number; unit?: string },
 ): Promise<{ goalId: string }> {
-  const horizon = dateToCivilDate(new Date(Date.now() + 90 * 86_400_000));
+  const horizon = dayFromToday(90);
   const opened = openedAt(opts.openedYear);
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)

@@ -83,7 +83,8 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
       // From the 20th the under-60 goal's «de 12 h» sits inside its pace line.
       const inLine = late ? 1 : 0;
       await expect(seen("6 h 45 min")).toHaveCount(1 + weekSays);
-      await expect(seen("7 h 12 min")).toHaveCount(1 + weekSays);
+      // On the 1st the exact goal's 432 minutes were done today: its done row says them too.
+      await expect(seen("7 h 12 min")).toHaveCount(1 + weekSays + (today === monthStart ? 1 : 0));
       await expect(seen("de 12 h")).toHaveCount(2 - inLine);
       // From the 20th the under-60 goal says its pace and the 60 % one does not;
       // before it, neither does.

@@ -5,7 +5,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import account from "../messages/es/account.json";
-import { dateToCivilDate } from "@/lib/zone";
+import { dayFromToday, noonFromToday } from "./reloj";
 import { boxOf } from "./box";
 
 // RP-18: a person comes in by the link sent to their address, and what they
@@ -85,12 +85,12 @@ test("a valid link lands on Hoy with a session that reads the person's own day, 
   try {
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, created_at)
-      values (${personId}, ${`Meta entrar ${stamp}`}, ${dateToCivilDate(new Date(Date.now() + 60 * 86_400_000))}, now() - interval '10 days')
+      values (${personId}, ${`Meta entrar ${stamp}`}, ${dayFromToday(60)}, ${noonFromToday(-10)})
       returning id`;
     for (const name of [first, second]) {
       await db`
         insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
-        values (${personId}, ${goal.id}, ${name}, 'daily', 'tap', now() - interval '10 days')`;
+        values (${personId}, ${goal.id}, ${name}, 'daily', 'tap', ${noonFromToday(-10)})`;
     }
 
     const a = await freshContext(browser, baseURL!);
