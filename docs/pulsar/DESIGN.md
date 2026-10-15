@@ -1737,3 +1737,9 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 
 - The visible name is **GoalLog**: the rail, the title, the tab and the OAuth consent («Ir a GoalLog»). It was «Bitácora de metas».
   Paper prints it too once module 995 lands (`export.json` `printBrand`). The folder and the URL keep `pulsar`.
+
+## Decisions of 2026-10-14, after the audit of s10, by the user
+
+- **RP-125:** the export's months hold no weeks on screen; «Por semana» is its own table. A goal with no measure drops «sin tareas»
+  from its «Por mes» (`components/month/months-screen.tsx:100`).
+- **The workbook's example rows** (`lib/import/workbook.ts:259,267`) move into next-intl: the person reads them in the file.
