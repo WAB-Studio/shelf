@@ -15,9 +15,8 @@ test("«te quiero» passes", () => {
 
 test("matching is case- and accent-insensitive", () => {
   assert.equal(containsBlockedTerm("COÑO"), true);
-  assert.equal(containsBlockedTerm("Pene"), true);
-  assert.equal(containsBlockedTerm("pene"), true);
-  assert.equal(containsBlockedTerm("Porn star"), true);
+  assert.equal(containsBlockedTerm("Fuck"), true);
+  assert.equal(containsBlockedTerm("PUTA"), true);
 });
 
 test("matching is on word boundaries", () => {
@@ -26,4 +25,11 @@ test("matching is on word boundaries", () => {
   assert.equal(containsBlockedTerm("pendiente"), false);
   assert.equal(containsBlockedTerm("analista"), false);
   assert.equal(containsBlockedTerm("class assassin"), false);
+});
+
+test("neutral and clinical sentences pass", () => {
+  assert.equal(containsBlockedTerm("Sexual harassment is a crime."), false);
+  assert.equal(containsBlockedTerm("El acoso sexual es un delito."), false);
+  assert.equal(containsBlockedTerm("La educación sexo-afectiva y la anatomía del pene."), false);
+  assert.equal(containsBlockedTerm("The victim of rape testified."), false);
 });

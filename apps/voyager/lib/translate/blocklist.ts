@@ -1,23 +1,15 @@
-// RL-64: sexual and obscene terms, Spanish and English, that MyMemory's public
+// RL-64: explicit and obscene terms (never a neutral or clinical word), Spanish and English, that MyMemory's public
 // memory must not draw to a reader. Matched whole-word on the folded text.
 const TERMS = [
   // Spanish
   "follar", "folla", "follo", "follamos", "follan", "follen", "follando", "polla", "pollas", "verga", "vergas",
   "coño", "coños", "chupar", "chupes", "chupa", "chupo", "chupame", "mamada", "mamadas", "pajas",
-  "puta", "putas", "puto", "putos", "putear", "pene", "penes", "vagina", "vaginas", "clitoris", "teta", "tetas",
-  "pezon", "pezones", "culo", "culos", "semen",
-  "esperma", "erecto", "erección", "ereccion", "orgasmo", "orgasmos", "masturbar", "masturbarse", "masturbacion",
-  "cojones", "cojon", "joder", "jodido", "jodida", "pija", "pijas", "coger",
+  "puta", "putas", "puto", "putos", "putear", "culo", "culos", "cojones", "cojon", "joder", "jodido", "jodida", "pija", "pijas", "coger",
   "pendejo", "pendeja", "mierda", "cabron", "cabrona", "gilipollas", "capullo", "zorra",
-  "zorras", "pornografia", "porno", "desnuda", "desnudo", "desnudas", "desnudos", "sexo", "sexual", "sexuales",
-  "sexy", "violar", "violacion", "prostituta", "prostitutas", "ramera", "tetona", "pornografico",
-  // English
+  "zorras", "ramera", "tetona", // English
   "fuck", "fucks", "fucked", "fucking", "fucker", "motherfucker", "shit", "bullshit", "cunt", "cunts", "dick",
-  "dicks", "cock", "cocks", "pussy", "pussies", "tits", "boobs", "asshole", "assholes", "blowjob", "blowjobs",
-  "handjob", "cum", "cums", "cumming", "cumshot", "orgasm", "orgasms", "masturbate", "masturbating", "porn",
-  "porno", "pornography", "slut", "sluts", "whore", "whores", "bitch", "bitches", "bastard", "naked", "nude",
-  "nudes", "erection", "penis", "penises", "vagina", "anal", "rape", "raped", "rapist", "horny", "sex", "sexual",
-  "sexy", "suck", "sucking", "dildo", "boner", "wank", "wanker", 
+  "dicks", "cock", "cocks", "pussy", "pussies", "asshole", "assholes", "blowjob", "blowjobs",
+  "handjob", "cum", "cums", "cumming", "cumshot", "slut", "sluts", "whore", "whores", "bitch", "bitches", "bastard", "horny", "suck", "sucking", "dildo", "boner", "wank", "wanker", 
 ];
 
 function fold(text: string): string {
