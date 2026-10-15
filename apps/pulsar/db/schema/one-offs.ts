@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   date,
+  index,
   integer,
   pgPolicy,
   text,
@@ -42,6 +43,11 @@ export const oneOffs = goalsSchema.table(
     note: text(),
   },
   (t) => [
+    // Leading with `position` makes the fill-position `max` an index lookup.
+    index("one_offs_user_id_position_idx").on(t.userId, t.position),
+    index("one_offs_user_id_day_idx").on(t.userId, t.day),
+    index("one_offs_goal_id_idx").on(t.goalId),
+    index("one_offs_parent_id_idx").on(t.parentId),
     check("one_offs_estimate_range", sql`${t.estimate} between 1 and 1000000`),
     check(
       "one_offs_planned_month_first_day",
