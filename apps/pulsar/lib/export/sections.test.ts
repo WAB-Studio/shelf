@@ -167,10 +167,10 @@ test("RP-71 goalSections: a goal with no unit and only future months without tas
   assert.deepEqual(goalSections(goal({ unit: null, months: [ahead("2026-11-01"), held] })), ["phases", "tasks", "months"]);
 });
 
-test("803 keepsHeadWithTable: 8 to 19 printed rows keep the head with the table; 7 and 20 do not", () => {
+test("803 keepsHeadWithTable: 8 printed rows or more keep the head with the table, however tall; 7 do not", () => {
   const rows = (count: number) =>
     Array.from({ length: count }, (_, i) => ({ month: `2026-${String(i % 12 + 1).padStart(2, "0")}-01`, planned: 10, reached: 0, current: false, past: false, carried: null }));
-  assert.deepEqual([7, 8, 14, 15, 19, 20].map((count) => keepsHeadWithTable(rows(count), "horas")), [false, true, true, true, true, false]);
+  assert.deepEqual([7, 8, 14, 15, 19, 20, 24, 60].map((count) => keepsHeadWithTable(rows(count), "horas")), [false, true, true, true, true, true, true, true]);
 });
 
 test("803 keepsHeadWithTable: months that print nothing do not count", () => {

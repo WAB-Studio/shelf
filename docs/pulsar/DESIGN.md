@@ -1761,3 +1761,10 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Not built yet.
 - **CI, decided for the infra train:** concurrency per branch, path filters, `pulsar-fechas` out of manual dispatch, and 6 shards for `pulsar-e2e` (4 today). Not built yet.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
+
+## Decisions of 2026-10-15, the printed report's page break
+
+- **A goal whose «por mes» table holds 8 printed rows or more prints whole: a table that does not fit opens a fresh
+  sheet.** Its name, measure line and figures lead the table. Revokes the flow of decision (3) of 2026-10-10 (train-5
+  critic) and «a table of 15 printed rows or more flows» (train-6 critic). Accepted: a blank at the foot of the sheet
+  before. Taken by the user 2026-10-15.
