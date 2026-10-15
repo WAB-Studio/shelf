@@ -98,6 +98,7 @@ import {
   settlePlannedPayment,
 } from "@/db/queries/planned-payments";
 import {
+  categoryFitsRuleAccount,
   countUnreviewedGenerated,
   createRecurringRule,
   listRecurringRules,
@@ -127,7 +128,7 @@ import {
   updateTransaction,
 } from "@/db/queries/transactions";
 import { updateAccountAction } from "@/app/actions/accounts";
-import { updateRecurringRuleAction } from "@/app/actions/recurring-rules";
+import { createRecurringRuleAction, updateRecurringRuleAction } from "@/app/actions/recurring-rules";
 import { recordBilledAmount } from "@/db/queries/debt-statements";
 import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
@@ -3737,6 +3738,8 @@ async function main(): Promise<void> {
   await ledgerGuardSuite(userId, scope);
   console.log("");
   await reconcileStrangerSuite(userId, fellow);
+  console.log("");
+  await recurringRuleCategoryScopeSuite(scope, groupless);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -4407,5 +4410,80 @@ async function reconcileStrangerSuite(userId: string, fellow: HarnessUser): Prom
       !stale.ok && stale.reason === "denied" &&
       rows === 0,
     `canWrite ${sheet?.account.canWrite}; current figure ${JSON.stringify(current)}; stale figure ${JSON.stringify(stale)}; rows ${rows}`,
+  );
+}
+
+/**
+ * RF-29: a rule's category must be one the person owns, or their fund's. Another person's category
+ * is refused when the rule is saved: the database stores it (the foreign key ignores row
+ * security), and only the generator's split trigger objects, later, by pausing the rule. The
+ * caller shares no fund with the run's own user, so none of its rows are visible to them.
+ */
+async function recurringRuleCategoryScopeSuite(
+  scope: HarnessScope,
+  groupless: HarnessUser,
+): Promise<void> {
+  const today = todayInBogota();
+  const { accountId } = await asUser(groupless, () =>
+    createAccount({
+      name: "Harness regla ajena",
+      kind: "asset",
+      subtype: "bancaria",
+      ownerUserId: groupless.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 1_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  keep("accounts", accountId);
+
+  const ownCategoryId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${ownCategoryId}, ${groupless.id}, 'Harness regla propia', 'expense', '#4C8C4A')`;
+  track("categories", ownCategoryId);
+
+  const rule = (categoryId: string) => ({
+    fromAccountId: accountId,
+    toAccountId: null,
+    amount: "10",
+    categoryId,
+    description: "Harness regla ajena",
+    frequency: "weekly" as const,
+    intervalN: 1,
+    dayOfMonth: null,
+    nextRunOn: shiftDate(today, 7),
+    endsOn: null,
+  });
+  const storedRules = async (): Promise<number> => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from recurring_rules where from_account_id = ${accountId}`;
+    return row.n;
+  };
+
+  const ownFits = await asUser(groupless, () =>
+    categoryFitsRuleAccount({ categoryId: ownCategoryId, fromAccountId: accountId, toAccountId: null }),
+  );
+  const foreignFits = await asUser(groupless, () =>
+    categoryFitsRuleAccount({ categoryId: scope.categoryId, fromAccountId: accountId, toAccountId: null }),
+  );
+  assert(
+    next("A rule's category fits when the caller owns it and does not when it is someone else's"),
+    ownFits === true && foreignFits === false,
+    `own category fits = ${ownFits}, another person's category fits = ${foreignFits}`,
+  );
+
+  const refused = await asUser(groupless, () => createRecurringRuleAction(rule(scope.categoryId)));
+  const stored = await storedRules();
+  // A rule that got stored would block the run's own cleanup of the category it names.
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Saving a rule with another person's category is refused and stores nothing"),
+    refused?.serverError === "recurringRules.errors.scopeViolation" && stored === 0,
+    `serverError = ${refused?.serverError ?? "none"}, ${stored} rule(s) stored`,
   );
 }
