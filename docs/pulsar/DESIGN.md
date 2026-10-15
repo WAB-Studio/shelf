@@ -1748,3 +1748,4 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 
 - **A daily cap on model calls for the whole app**, on top of each person's 10 imports and 50 chats.
 - **The chat labels its replies «GOALLOG».**
+- **A write that fails to reach the server keeps the person where they are, with what they typed,** and the line «No se pudo guardar. Tu texto sigue aquí; inténtalo otra vez.» (Hoy's tap, the quantity sheet, «Abrirla» on a new goal). Form pages that read no data keep opening during an outage and fail on save.
