@@ -30,11 +30,11 @@ async function deleteOneOffsByName(db: postgres.Sql, personId: string, name: str
 }
 
 // The field at the foot of "Sueltas" (RP-19), the one belonging to no goal —
-// the last "Algo suelto" field on the screen, exactly `suelta.spec.ts`'s own
+// the one «Escribe una tarea…» field at 360, exactly `suelta.spec.ts`'s own
 // way in.
 async function addOneOff(page: Page, name: string): Promise<void> {
   await page.goto("/");
-  const field = page.getByLabel("Algo suelto").last();
+  const field = page.getByPlaceholder("Escribe una tarea…");
   await field.fill(name);
   await field.press("Enter");
   await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
