@@ -3226,3 +3226,10 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 
 - `palabra-de-la-red.spec.ts:41` gave 900 ms to a screen that waits 600 ms before it asks; under a loaded runner it failed 7 of
   20. Wait for the response the screen asks for (`page.waitForResponse`), never a budget shaved off the debounce. After: 80 of 80.
+
+## The CI queue holds 20 jobs, and a train run asks for 32 (2026-10-15)
+
+- The free plan runs 20 jobs at once; one full CI run on the sharded workflow asks for 32-33. Firing CI on every merge left 12 runs queued behind 1 running, and ~370 runner-minutes went on commits already superseded.
+- Cancel the branch's queued run before firing the next one (`gh run list --branch <b> --status queued` → `gh run cancel`). One run per train.
+- Never merge into a lane where a mutator is working: its tree carries a mutation. On 2026-10-15 a merge aborted on a mutated `route.ts` and the chained cleanup deleted the branch being merged; it was restored from its commit.
+- Never chain `worktree remove`/`branch -D`/`push --delete` after a merge with `;`: a failed merge still runs them. Chain with `&&`, or check `git status` first.
