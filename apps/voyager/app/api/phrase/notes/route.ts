@@ -133,7 +133,11 @@ export async function POST(request: Request): Promise<Response> {
     return empty(204);
   }
 
-  await writeCachedNotes(hash, NOTES_MODEL_NAME, notes);
+  try {
+    await writeCachedNotes(hash, NOTES_MODEL_NAME, notes);
+  } catch (error) {
+    console.error("[api/phrase/notes] cache write failed", error);
+  }
 
   return json(notesResponseSchema.parse({ notes }), 200);
 }

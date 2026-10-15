@@ -25,6 +25,11 @@ const state = {
   claimDailyCall: boom as () => Promise<boolean>,
   providerCalls: [] as string[],
   modelCalls: 0,
+  writeCachedText: (async () => {}) as () => Promise<void>,
+  markTranslationsAsked: (async () => {}) as () => Promise<void>,
+  writeCachedAnswer: (async () => {}) as () => Promise<void>,
+  writeCachedNotes: (async () => {}) as () => Promise<void>,
+  generated: false,
 };
 
 const env = {
@@ -79,7 +84,7 @@ mock.module(here("../lib/word/model.ts"), {
     MODEL_NAME: "stub",
     generateWordText: async () => {
       state.modelCalls += 1;
-      return null;
+      return state.generated ? { definition: "a pet", example: { en: "A cat.", es: "Un gato." }, translations: ["gato"] } : null;
     },
   },
 });
@@ -87,7 +92,9 @@ mock.module(here("../lib/word/unlisted-model.ts"), {
   namedExports: {
     generateUnlistedAnswer: async () => {
       state.modelCalls += 1;
-      return null;
+      return state.generated
+        ? { translations: ["zorblax"], definition: null, example: { en: "A zorblax.", es: "Un zorblax." } }
+        : null;
     },
   },
 });
@@ -96,26 +103,26 @@ mock.module(here("../lib/phrase/notes-model.ts"), {
     NOTES_MODEL_NAME: "stub",
     generateNotes: async () => {
       state.modelCalls += 1;
-      return null;
+      return state.generated ? [{ term: "cat", note: "gato" }] : null;
     },
   },
 });
 mock.module(here("../lib/word/text-cache.ts"), {
   namedExports: {
     readCachedText: () => state.readCachedText(),
-    writeCachedText: async () => {},
-    markTranslationsAsked: async () => {},
+    writeCachedText: () => state.writeCachedText(),
+    markTranslationsAsked: () => state.markTranslationsAsked(),
     translationsWereAnswered: () => false,
   },
 });
 mock.module(here("../lib/word/unlisted-cache.ts"), {
-  namedExports: { readCachedAnswer: () => state.readCachedAnswer(), writeCachedAnswer: async () => {} },
+  namedExports: { readCachedAnswer: () => state.readCachedAnswer(), writeCachedAnswer: () => state.writeCachedAnswer() },
 });
 mock.module(here("../lib/phrase/notes-cache.ts"), {
   namedExports: {
     phraseHash: () => "hash",
     readCachedNotes: () => state.readCachedNotes(),
-    writeCachedNotes: async () => {},
+    writeCachedNotes: () => state.writeCachedNotes(),
   },
 });
 
@@ -141,6 +148,11 @@ beforeEach(() => {
   state.claimDailyCall = boom;
   state.providerCalls = [];
   state.modelCalls = 0;
+  state.writeCachedText = boom;
+  state.markTranslationsAsked = boom;
+  state.writeCachedAnswer = boom;
+  state.writeCachedNotes = boom;
+  state.generated = true;
   logged = [];
   mock.method(console, "error", (...args: unknown[]) => {
     logged.push(args.map(String).join(" "));
@@ -254,5 +266,54 @@ test("phrase/notes: a failing daily claim answers 204", async () => {
   const response = await POST(post(NOTES));
   assert.equal(response.status, 204);
   assert.equal(state.modelCalls, 0);
+  assertLoggedOnce("api/phrase/notes");
+});
+
+test("word/text: a failing cache write still answers the paid text", async () => {
+  state.readCachedText = async () => null;
+  state.claimClientCall = async () => true;
+  state.claimDailyCall = async () => true;
+  const { POST } = await import("../app/api/word/text/route");
+  const response = await POST(post(TEXT));
+  assert.equal(response.status, 200);
+  assert.equal(((await response.json()) as { example: { en: string } }).example.en, "A cat.");
+  assertLoggedOnce("api/word/text");
+});
+
+test("word/text: a failing enrichment mark still answers the cached text", async () => {
+  state.readCachedText = async () => ({
+    definition: "a pet",
+    example: { en: "A cat.", es: "Un gato." },
+    translations: null,
+    translationsAsked: false,
+  });
+  state.claimClientCall = async () => true;
+  state.claimDailyCall = async () => true;
+  const { POST } = await import("../app/api/word/text/route");
+  const response = await POST(post(TEXT));
+  assert.equal(response.status, 200);
+  assert.deepEqual(((await response.json()) as { translations: string[] }).translations, ["gato"]);
+  assertLoggedOnce("api/word/text");
+});
+
+test("word/unlisted: a failing cache write still answers the paid text", async () => {
+  state.readCachedAnswer = async () => null;
+  state.claimClientCall = async () => true;
+  state.claimDailyCall = async () => true;
+  const { POST } = await import("../app/api/word/unlisted/route");
+  const response = await POST(post(UNLISTED));
+  assert.equal(response.status, 200);
+  assert.deepEqual(((await response.json()) as { translations: string[] }).translations, ["zorblax"]);
+  assertLoggedOnce("api/word/unlisted");
+});
+
+test("phrase/notes: a failing cache write still answers the paid notes", async () => {
+  state.readCachedNotes = async () => null;
+  state.claimClientCall = async () => true;
+  state.claimDailyCall = async () => true;
+  const { POST } = await import("../app/api/phrase/notes/route");
+  const response = await POST(post(NOTES));
+  assert.equal(response.status, 200);
+  assert.deepEqual(((await response.json()) as { notes: unknown[] }).notes, [{ term: "cat", note: "gato" }]);
   assertLoggedOnce("api/phrase/notes");
 });

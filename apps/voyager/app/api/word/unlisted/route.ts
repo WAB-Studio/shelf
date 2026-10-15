@@ -118,16 +118,20 @@ export async function POST(request: Request): Promise<Response> {
   const lemma = inflection?.lemma ?? null;
   const rule = inflection?.rule ?? null;
 
-  await writeCachedAnswer(
-    word,
-    lemma,
-    rule,
-    generated.translations,
-    generated.definition,
-    generated.example.en,
-    generated.example.es,
-    MODEL_NAME,
-  );
+  try {
+    await writeCachedAnswer(
+      word,
+      lemma,
+      rule,
+      generated.translations,
+      generated.definition,
+      generated.example.en,
+      generated.example.es,
+      MODEL_NAME,
+    );
+  } catch (error) {
+    console.error("[api/word/unlisted] cache write failed", error);
+  }
 
   return json(
     unlistedResponseSchema.parse({

@@ -108,7 +108,11 @@ export async function POST(request: Request): Promise<Response> {
     ) {
       const generated = await generateWordText(headword, false, group.senses);
       translations = generated?.translations ?? null;
-      await markTranslationsAsked(headword, translations);
+      try {
+        await markTranslationsAsked(headword, translations);
+      } catch (error) {
+        console.error("[api/word/text] cache write failed", error);
+      }
     }
     return json(
       textResponseSchema.parse({
@@ -150,15 +154,19 @@ export async function POST(request: Request): Promise<Response> {
   // A thin word the model answered, even with `[]`, is closed; one it left
   // null stays open — the same rule `markTranslationsAsked` applies to the
   // re-enrichment path.
-  await writeCachedText(
-    headword,
-    MODEL_NAME,
-    definition,
-    generated.example.en,
-    generated.example.es,
-    translations,
-    translationsWereAnswered(translations),
-  );
+  try {
+    await writeCachedText(
+      headword,
+      MODEL_NAME,
+      definition,
+      generated.example.en,
+      generated.example.es,
+      translations,
+      translationsWereAnswered(translations),
+    );
+  } catch (error) {
+    console.error("[api/word/text] cache write failed", error);
+  }
 
   return json(
     textResponseSchema.parse({
