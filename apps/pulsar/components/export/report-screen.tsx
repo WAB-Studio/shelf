@@ -630,8 +630,6 @@ function GoalPart({
               printed: paperKeys.has(month.month) && printed(month),
             };
           });
-          // Paper only (`PrintBlock only`): a goal with no end names no month ahead that holds no task.
-          const out = goal.horizon === null ? [] : foldedMonths;
           return (
             <Section
               label={t("byMonth", { goal: goal.name })}
@@ -645,20 +643,10 @@ function GoalPart({
                 stackInCard
                 printLead={earlierPaper ?? undefined}
                 after={
-                  restLine || out.length > 0 ? (
+                  restLine ? (
                     <>
                       {screenRest}
                       {paperRest ? <PrintOnly>{paperRest}</PrintOnly> : null}
-                      {out.length > 0 ? (
-                        <Text as="p" variant="line">
-                          {t("monthsOutTasks", {
-                            months: format.list(
-                              out.map((m) => monthLabel(m.month)),
-                              { type: "conjunction" },
-                            ),
-                          })}
-                        </Text>
-                      ) : null}
                     </>
                   ) : undefined
                 }

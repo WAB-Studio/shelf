@@ -166,17 +166,18 @@ for (const width of [360, 1280]) {
       }
     });
 
-    test("V5 in the report: a goal with no unit has no months on screen (paper only) and its line is never a link, hidden or not", async ({ person, browser, baseURL, db }) => {
-      // Kills: `restLine` kept as a `TextLink` in the table with no unit (b50f3fea): that table is `PrintBlock only`, so the link is in the DOM and never on screen.
+    test("V5 in the report: the export screen draws what paper prints (RP-124): its line is text, never a link, and «ver todo» sits under it", async ({ person, browser, baseURL, db }) => {
+      // Kills: `restLine` kept as a `TextLink` in the table with no unit (b50f3fea); «ver todo» missing under a goal whose list folds; «sin tareas» anywhere.
       await seedMudanza(db, person);
       const { page, context } = await open(browser, baseURL, person.sessionFile, "/exportar", width);
       try {
         await expect(page.getByRole("main").getByText("Mudanza", { exact: true }).first()).toBeVisible();
         const main = page.locator("main");
+        await expect(lineOf(main, 13, 14)).toBeVisible();
         await expect(lineAsLink(main, 13, 14)).toHaveCount(0);
         await expect(main.getByRole("link", { name: /mes(es)? más, hasta el/, includeHidden: true })).toHaveCount(0);
-        await expect(main.getByText("sin tareas")).toBeHidden();
-        await expect(seeAll(main)).toHaveCount(0);
+        await expect(main.getByText("sin tareas")).toHaveCount(0);
+        await expect(seeAll(main)).toHaveCount(1);
       } finally {
         await context.close();
       }

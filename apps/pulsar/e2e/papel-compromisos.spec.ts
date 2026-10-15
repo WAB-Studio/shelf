@@ -101,6 +101,24 @@ test.describe("commitments and «por mes» on the export screen and on paper (RP
     }
   });
 
+  test("a goal with an end and no measure, every month empty: no «por mes» and no «sin tareas», on screen and on paper", async ({
+    person, browser, baseURL, db,
+  }) => {
+    // Kills: a table of empty months drawn because the goal has an end; a line naming the empty months.
+    await seedGoal(db, person, "Mudanza vacía", 3, [{ name: "Empacar a diario" }]);
+    try {
+      const { screen, paper } = await bothTexts(browser, baseURL!, person, "Mudanza vacía", "k3b");
+      for (const [where, text] of [["screen", screen], ["paper", paper]] as const) {
+        expect(text, `${where}: the commitment`).toContain("empacar a diario · todos los días");
+        expect(text, `${where}: no «por mes»`).not.toContain("por mes");
+        expect(text, `${where}: no «sin tareas»`).not.toContain("sin tareas");
+        expect(text, `${where}: no month named`).not.toContain(labelOf(2));
+      }
+    } finally {
+      await clear(db, person);
+    }
+  });
+
   test("a commitment that counts prints its amount: «Rodaje · 3 veces por semana · 5 km»", async ({ person, browser, baseURL, db }) => {
     // Kills: dropping the quantity from the line; the cadence phrase of another kind.
     await seedGoal(db, person, "Correr", null, [{ name: "Rodaje", kind: "times_per_week", n: 3, quantity: 5, unit: "km" }]);
