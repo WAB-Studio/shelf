@@ -1,10 +1,10 @@
 # The calendar-sensitive specs (those that skip by weekday, day of the month or
 # month: modules 106, 107, 108, 135 and the later «parte» and «semana» ones),
 # once per pinned day. `PULSAR_CLOCK` (`apps/pulsar/lib/zone.ts`) pins the day
-# the server and the spec both read, so every branch runs in every train
-# instead of whichever weekday the push happens to meet. `ci.yml` calls this
-# file as `pulsar-fechas` on every push and dispatch; the daily schedule below
-# keeps one more cell, `real`, on the true date, as a net for what no pin names.
+# the server and the spec both read, so every branch runs each night, not
+# whichever weekday a push happens to meet. It runs on the
+# nightly schedule and on manual dispatch of this workflow alone, never from
+# `ci.yml`; the `real` cell reads the true date, as a net for what no pin names.
 # 08:00 UTC is 03:00 in Bogota (UTC-5): the same calendar date in both, so the
 # `real` cell reads the day the schedule means. Not cancelled by a newer run:
 # each cell owns a runner, a stack and a database.
@@ -14,7 +14,6 @@ on:
   schedule:
     - cron: "0 8 * * *"
   workflow_dispatch:
-  workflow_call:
 
 # `issues: write` is for the failure notice below: a red scheduled run mails
 # only whoever last touched the cron, and nobody reads it on a quiet day.

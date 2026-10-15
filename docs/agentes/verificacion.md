@@ -70,3 +70,10 @@ The why: `docs/agentes/historia.md` § Verification.
 - Fan out only across tracks that share no file. A fan-out costs about fifteen agents' worth of tokens.
 - Every tool call lands in `.claude/usage-log.tsv`. Run the `uso` skill to read where a session went and what repeats
   enough to become a script.
+
+## CI shape (decided by the user 2026-10-15)
+
+- One run per ref: `ci.yml` has `concurrency: ci-${{ github.ref }}` and cancels the older run in progress. `main` is never cancelled.
+- Path filters: the `changes` job compares the run against its base (the PR base; the tip before a push to `integracion`; the merge-base with `integracion` on a dispatch) and every app job (`build-orbit`, `build-pulsar`, `pulsar-e2e`, `pulsar-checks`, `orbit-checks`, `e2e`, `voyager-e2e-shard`) runs only when its app, `packages/`, the lockfile or `ci.yml` changed. `main` and a base that cannot be resolved run everything. A skipped job does not block the merge.
+- `pulsar-fechas` (the pinned-clock date matrix) is out of `ci.yml`. `pulsar-calendario.yml` runs it nightly and on its own manual dispatch: `gh workflow run pulsar-calendario.yml --ref <branch>`.
+- `pulsar-e2e` runs 6 shards; `pulsar-e2e-report` merges them. Past six, `pulsar-checks` and orbit's `e2e` set the wall time (`private/reportes/ci-costo.md`).

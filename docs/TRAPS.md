@@ -3240,3 +3240,13 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - 16.4.1 hashes production CSS-module class names without the module name (`F8g6RG_link`, not `text-link-module__…`): every spec selecting `[class*='…-module']` finds nothing. Select through a stable `data-*` hook on the primitive, never a generated class.
 - 16.4.1 prefetches a `<Link>` once it is in view, and the offline specs count that `?_rsc=` request as a stray: `prefetch={false}` on links a spec forbids to request (`apps/voyager/components/search/no-entry-answer.tsx`, `sense-list.tsx`).
 - After a dependency bump, `rm -rf node_modules && npm ci` before believing a local green. `node -p "require('next/package.json').version"` must match the lockfile.
+
+## `pulsar-fechas` is red in every pinned date: the app writes the real day (2026-10-15)
+
+- Pending, not fixed. CI run 38757787894 on `infra-tren`: every `dates (...)` cell red; the `monday` cell (`PULSAR_CLOCK=2026-10-12`) ended `43 failed, 216 passed`.
+- First failure, `e2e/dia-pasado.spec.ts:109` (RP-06, RP-05), line 125: `expect(row).toContainText(writtenLabel(todayInZone()))`.
+  - `Expected substring: "anotado el lunes 12"`
+  - `Received string: "Compromiso día pasado 1792077200692todos los días · 10:13 · lo dijiste tú · anotado el jueves 15"`
+- The spec reads the pinned day (`todayInZone()`) and the screen prints the real one (jueves 15): something that stamps «anotado» (the fact's written-at) does not go through `PULSAR_CLOCK` (`apps/pulsar/lib/zone.ts`). Other reds in the same cell: `dia-pasado.spec.ts:145` and `:204`, `hoy-palabras.spec.ts:92`, `hoy-sistema.spec.ts:144`, `meta-mes.spec.ts:373` and `:421`, `meta-ritmo-unidad.spec.ts:175`.
+- The red cells took 12 min each on 5 s timeouts. Chase it with one date and one spec, locally, with `PULSAR_CLOCK=2026-10-12`. Log: `private/ci/infra-38757787894.log`, grep `dates (monday)`.
+- Until fixed, the nightly run (`pulsar-calendario.yml`) is red by design of the bug, not of the night.
