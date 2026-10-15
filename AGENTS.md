@@ -80,6 +80,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 ## Monorepo
 
+- Call the apps by their names, not their folders: `apps/orbit` is **HomeFund**, `apps/voyager` is **WordBook**, `apps/pulsar` is
+  **GoalLog**, `apps/portal` stays «Universo». Folders and URLs keep the old names. Decided by the user 2026-10-14: «no se entiende
+  rápidamente qué es».
+
 - `apps/` holds the apps, `packages/` the code two of them share. npm workspaces, one lockfile at the root.
 - `apps/orbit` is the app that was this whole repo. Its `.env.local` lives there, not at the root.
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.

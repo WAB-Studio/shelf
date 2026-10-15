@@ -22,7 +22,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
   return {
     name: common("appName"),
     // Short enough for a launcher to write under the icon without truncating.
-    short_name: common("fund"),
+    short_name: common("appName"),
     description: metadata("description"),
     lang: DEFAULT_LOCALE,
     start_url: "/",

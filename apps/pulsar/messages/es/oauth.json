@@ -30,7 +30,7 @@
   "invalid": {
     "title": "Este pedido no es válido",
     "body": "La aplicación que te trajo aquí no se identificó bien. No se dio ningún permiso. Vuelve a conectarla desde claude.ai.",
-    "home": "Ir a Bitácora de metas"
+    "home": "Ir a GoalLog"
   },
   "errors": {
     "invalid": "La solicitud no es válida.",

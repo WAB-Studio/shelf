@@ -248,7 +248,7 @@ for (const route of ROUTES) {
       await expect(
         page.getByRole("navigation").getByRole("link").filter({ hasText: /^(Hoy|Semana|Mes|Metas)$/ }),
       ).toHaveCount(4);
-      await expect(page.getByRole("navigation").getByText("Bitácora")).toBeVisible();
+      await expect(page.getByRole("navigation").getByText("GoalLog")).toBeVisible();
 
       // Two toggles would be the phone face drawn beside the rail's own.
       await expect(page.getByRole("button", { name: /^Cambiar a modo/ })).toHaveCount(1);
@@ -328,7 +328,7 @@ for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
       expect(nav.y + nav.height).toBe(740);
       expect(nav.height).toBeLessThan(100);
       await expect(page.getByRole("table")).toHaveCount(0);
-      await expect(page.getByRole("navigation").getByText("Bitácora")).toBeHidden();
+      await expect(page.getByRole("navigation").getByText("GoalLog")).toBeHidden();
       await expect(page.getByRole("button", { name: /^Cambiar a modo/ })).toHaveCount(path === "/" ? 1 : 0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1023);
     } finally {

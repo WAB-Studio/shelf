@@ -1732,3 +1732,8 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **A correction from the template is read only on the model's path as accepted;** from the template it starts declined (RP-122).
 - **Boards that do not exist:** dark mode; 1280 of `HoyUnCampo` (Hoy at 1280 does not change); 1280 of `PorSemanaTelefono` (s9
   draws it); the paper face of `CifraUnFormato`.
+
+## Decision of 2026-10-14: the app is called «GoalLog»
+
+- The visible name is **GoalLog**: the rail, the title, the tab and the OAuth consent («Ir a GoalLog»). It was «Bitácora de metas».
+  Paper prints it too once module 995 lands (`export.json` `printBrand`). The folder and the URL keep `pulsar`.

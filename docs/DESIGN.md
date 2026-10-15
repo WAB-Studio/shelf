@@ -45,3 +45,8 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - Keep instalments under RF-136: the next payment is the minimum, with no instalments added to it. The instalment dialog
   becomes «proponer diferir». Decided by the user 2026-10-08 (Q-D5, module 604).
 - Neither has a board yet. Module 451 opens orbit's canvas with `Deudas · saldo a favor` and `Deudas · cuotas`.
+
+## Decision of 2026-10-14: the app is called «HomeFund»
+
+- The visible name is **HomeFund**: the title, the installed name (`short_name` too) and the metadata. It was «Fondo compartido». The folder
+  and the URL keep `orbit` and `our-piggy-bank`.

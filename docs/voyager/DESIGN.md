@@ -1688,3 +1688,7 @@ Taken by the user («2. b 3. b»).
 - **The spelling hint never shows before the network has answered** a word with no entry (orchestrator, same day): it
   did for ~600 ms during the debounce, against decision (b) of part 3.
 
+
+## Decision of 2026-10-14: the app is called «WordBook»
+
+- The visible name is **WordBook**: the title, the installed name and the version line. It was «Diccionario». The folder and the URL keep `voyager`.

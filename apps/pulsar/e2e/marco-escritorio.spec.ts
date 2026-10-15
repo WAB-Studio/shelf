@@ -17,8 +17,7 @@ for (const [path, marked] of ROUTES) {
     await page.goto(path);
 
     const rail = page.getByRole("navigation");
-    await expect(rail).toContainText("Bitácora");
-    await expect(rail).toContainText("de metas");
+    await expect(rail).toContainText("GoalLog");
     // The four places; the goals the rail names after them are `pestanas.spec.ts`'s.
     await expect(rail.getByRole("link").filter({ hasText: PLACES })).toHaveCount(4);
     await expect(rail).toContainText(civilDateShort(todayInZone()));
@@ -52,7 +51,7 @@ test("at 360 the bottom nav is four tabs with no name, date or toggle", async ({
 
   const nav = page.getByRole("navigation");
   await expect(nav.getByRole("link")).toHaveCount(4);
-  await expect(nav.getByText("Bitácora")).toBeHidden();
+  await expect(nav.getByText("GoalLog")).toBeHidden();
   await expect(nav.getByText(civilDateShort(todayInZone()))).toBeHidden();
   await expect(nav.getByRole("button")).toBeHidden();
   await expect(nav.getByRole("link", { name: "Metas", exact: true })).toBeVisible();
