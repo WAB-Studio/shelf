@@ -582,6 +582,22 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
     ).toHaveCount(0);
   });
 
+  test("a positive adjustment's detail carries no expense caption", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the caption is the laptop's detail");
+    await seedAdjustment(1_200_000);
+
+    await page.goto(`/es/movements/${adjustmentId}`);
+    await expect(
+      page
+        .getByRole("heading", { name: transactions.kindAdjustment, exact: true })
+        .filter({ visible: true }),
+    ).toHaveCount(1);
+
+    const body = flat(await page.locator("main").innerText());
+    expect(body).toContain("+$ 12.000");
+    expect(body).not.toContain("deducido");
+  });
+
   test("a forged delete of the adjustment surfaces the read-only refusal and deletes nothing", async ({
     page,
   }, testInfo) => {
