@@ -808,6 +808,8 @@ Playwright is a development dependency: it never reaches the bundle, ships in no
 
 The Supabase CLI is invoked as `npx --yes supabase@2.119.0` from `scripts/supabase-local.sh` alone. It is in no `package.json`, never reaches a bundle or a deployment, needs Docker and costs nothing to run, so RNF-01 and RNF-02 hold.
 
+StrykerJS (`@stryker-mutator/core`, `@stryker-mutator/tap-runner`) is a development dependency of `apps/pulsar` alone. Decided by the user 2026-10-14: it mutates the pure `lib/` files a train changed (`npm run mutate:pure`), through the command-style `tap` runner because the repo tests with `node --test`. It never reaches a bundle or a deployment and costs nothing to run, so RNF-01 and RNF-02 hold.
+
 ### Do not install
 
 | Library | Use instead |

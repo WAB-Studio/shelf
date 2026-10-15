@@ -1699,7 +1699,7 @@ For the next slice; nothing here is built yet. Critic: `private/reportes/s8-crit
 
 ## Decisions of 2026-10-14, after the critic of the whole app, by the user
 
-The one whole-app pass (AGENTS.md); critic: `private/reportes/critic-app-completa.md`. These are the polish picks: one slice
+The one whole-app pass (`.claude/skills/orchestrator/SKILL.md`); critic: `private/reportes/critic-app-completa.md`. These are the polish picks: one slice
 (s10) ships them, then polish stops. Nothing here is built yet.
 
 - **A = a. The template keeps what the person wrote** (RP-122): every correction starts declined; «Aceptar» on one is real.

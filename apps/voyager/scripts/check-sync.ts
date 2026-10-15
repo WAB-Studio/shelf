@@ -1,7 +1,7 @@
 /**
  * Drives the policies on `reading.lookups` and `reading.devices` against the
  * real database — DELETE included — instead of asserting them from the
- * migration (AGENTS.md, "Verification"), and the real statements of
+ * migration (AGENTS.md, "Code"), and the real statements of
  * `lib/sync/upload.ts` and `lib/sync/devices.ts` through them.
  *
  * S1-S21 run in transactions that always throw at the end to force a
