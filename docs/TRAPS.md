@@ -1571,7 +1571,7 @@ Measured 2026-09-09 while fixing `/registro/<palabra>`, which was serving the ra
 (`give%20up` drawn instead of `give up`, on 16,112 of 64,258 dictionary entries — 25.1%).
 
 `GET /registro/100%` returns **500**, and no edit to the page can prevent it. The crash is in
-Next 16.3.3 itself: `shared/lib/router/utils/route-matcher.js:19` calls `decodeURIComponent(param)`
+Next 16.3.3 itself (re-read on 16.4.1, 2026-10-15, bumped for the CVE set in 16.0.0–16.3.7: `shared/lib/router/utils/route-matcher.js` now wraps `decodeURIComponent` in a try and throws `DecodeError`, line ~21; re-measure `/registro/100%` before trusting this entry): `route-matcher.js:19` calls `decodeURIComponent(param)`
 while `server/lib/router-utils/resolve-routes.js`'s `checkTrue()` is still deciding whether the
 pathname matches `/registro/[palabra]` — entirely **before** `page.tsx` executes. Confirmed by
 monkey-patching global `decodeURIComponent` and capturing the stack.
