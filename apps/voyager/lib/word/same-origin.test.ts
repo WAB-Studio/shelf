@@ -123,3 +123,60 @@ for (const route of Object.keys(ROUTES) as (keyof typeof ROUTES)[]) {
     assert.ok(response.status !== 403 && response.status !== 415);
   });
 }
+
+// What Vercel sends: `Host` is the deployment host, `x-forwarded-host` the
+// domain the browser asked for, and `Origin` the page's own domain.
+function proxied(route: string, headers: Record<string, string>, body: unknown, url = "https://wordbook.test"): Request {
+  return new Request(`${url}/api/${route}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+for (const route of Object.keys(ROUTES) as (keyof typeof ROUTES)[]) {
+  test(`${route}: behind the proxy, Origin = public domain passes though Host is the deployment`, async () => {
+    const { POST } = await ROUTES[route]();
+    const response = await POST(
+      proxied(route, { host: "wordbook-git-x-team.vercel.app", "x-forwarded-host": "wordbook.app", origin: "https://wordbook.app" }, BODIES[route]),
+    );
+    assert.ok(response.status !== 403 && response.status !== 415, `guard refused: ${response.status}`);
+  });
+
+  test(`${route}: behind the proxy, a foreign Origin is 403 and nothing is claimed`, async () => {
+    const { POST } = await ROUTES[route]();
+    const response = await POST(
+      proxied(route, { host: "wordbook-git-x-team.vercel.app", "x-forwarded-host": "wordbook.app", origin: "https://evil.test" }, BODIES[route]),
+    );
+    assert.equal(response.status, 403);
+    assert.deepEqual(calls, []);
+  });
+
+  test(`${route}: a custom domain passes when Origin matches x-forwarded-host`, async () => {
+    const { POST } = await ROUTES[route]();
+    const response = await POST(
+      proxied(route, { host: "wordbook.vercel.app", "x-forwarded-host": "lector.example.org", origin: "https://lector.example.org" }, BODIES[route]),
+    );
+    assert.ok(response.status !== 403 && response.status !== 415, `guard refused: ${response.status}`);
+  });
+
+  test(`${route}: no x-forwarded-host falls back to Host, not the request URL`, async () => {
+    const { POST } = await ROUTES[route]();
+    const passes = await POST(
+      proxied(route, { host: "wordbook.test", origin: "https://wordbook.test" }, BODIES[route], "https://internal.test"),
+    );
+    assert.ok(passes.status !== 403 && passes.status !== 415, `guard refused: ${passes.status}`);
+    const refused = await POST(
+      proxied(route, { host: "wordbook.test", origin: "https://internal.test" }, BODIES[route], "https://internal.test"),
+    );
+    assert.equal(refused.status, 403);
+  });
+
+  test(`${route}: a chained x-forwarded-host is read at its first entry`, async () => {
+    const { POST } = await ROUTES[route]();
+    const response = await POST(
+      proxied(route, { host: "d.vercel.app", "x-forwarded-host": "wordbook.app, hop.internal", origin: "https://wordbook.app" }, BODIES[route]),
+    );
+    assert.ok(response.status !== 403 && response.status !== 415, `guard refused: ${response.status}`);
+  });
+}
