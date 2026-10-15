@@ -22,7 +22,6 @@ import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import { dayBefore } from "@/lib/day/weeks";
-import { estimateFacts } from "@/lib/plan/carry";
 import { fillPlan, type PlanInput, type PlanTask, type Roadmap } from "@/lib/plan/roadmap";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import {
@@ -542,14 +541,11 @@ export function goalFigures(input: {
   const tasks = input.tasks.map((task) => toPlanTask(task, openedOn));
   const rhythm = goal.rhythm ?? null;
   const plan: PlanInput = { rhythm, budgets, tasks, openedOn, horizon: goal.horizon, today };
-  // A done task's estimate counts as declared quantity (RP-36): feeds the
-  // measure alone, never a commitment's slot.
-  const measureFacts = [...facts, ...estimateFacts(tasks, goal.measure_unit)];
 
   // Null until the first quantity commitment names it (§0.3, 3): nothing to
   // sum into yet, so the total stays zero rather than matching facts with no
   // unit of their own against a measure the goal does not have.
-  const declaredTotal = goal.measure_unit ? measureOf(goal.measure_unit, measureFacts) : 0;
+  const declaredTotal = goal.measure_unit ? measureOf(goal.measure_unit, facts) : 0;
   const evidenceDays = evidence ? evidenceDaysForMeasure(goal, commitments, evidence) : [];
   const evidenceTotal = evidenceDays.reduce((total, day) => total + day.quantity, 0);
 
@@ -559,7 +555,7 @@ export function goalFigures(input: {
     today,
     budgets,
     rhythm,
-    reached: reachedByMonth({ unit: goal.measure_unit, facts: measureFacts, evidence: evidenceDays }),
+    reached: reachedByMonth({ unit: goal.measure_unit, facts, evidence: evidenceDays }),
   });
   const thisMonth = months.find((entry) => entry.current);
   const month =
@@ -583,7 +579,7 @@ export function goalFigures(input: {
     horizon: goal.horizon,
     today,
     unit: goal.measure_unit,
-    facts: measureFacts,
+    facts,
     evidence: evidenceDays,
     phases,
   });
@@ -596,7 +592,7 @@ export function goalFigures(input: {
     month,
     weeks,
     totalInSpan: (startsOn, endsOn) =>
-      totalInSpan(goal.measure_unit, measureFacts, evidenceDays, startsOn, endsOn),
+      totalInSpan(goal.measure_unit, facts, evidenceDays, startsOn, endsOn),
   };
 }
 
@@ -1080,10 +1076,9 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
     const declared = row.facts
       .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
       .map(toDeclaredFact);
-    const doneTasks = estimateFacts(tasks, unit).filter((fact) => monthOf(fact.day) === month);
     const reached = reachedByMonth({
       unit,
-      facts: [...declared, ...doneTasks],
+      facts: declared,
       evidence: evidenceDaysFor(unit, row.measure_sources, evidenceOutcome.bySourceKey),
     }).get(month) ?? 0;
     const planned = screenPlanned(plannedOf(month, plan), plan.budgets.some((budget) => budget.month === month));

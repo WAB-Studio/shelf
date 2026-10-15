@@ -48,14 +48,14 @@ async function seedBudget(db: postgres.Sql, personId: string, goalId: string, am
 }
 
 async function seedMinutes(db: postgres.Sql, personId: string, goalId: string, minutes: number) {
-  const [task] = await db<{ id: string }[]>`
-    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
-    values (${personId}, ${goalId}, 'hecha', ${month}::date, ${minutes})
+  const [commitment] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+    values (${personId}, ${goalId}, ${`Bloque ${goalId}`}, 'daily', 'quantity', 10, 'min', now() - interval '40 days')
     returning id
   `;
   await db`
-    insert into goals.facts (user_id, goal_id, one_off_id, day)
-    values (${personId}, ${goalId}, ${task.id}, ${today}::date)
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${personId}, ${goalId}, ${commitment.id}, ${today}::date, ${minutes})
   `;
 }
 

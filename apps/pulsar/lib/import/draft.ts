@@ -198,7 +198,7 @@ function refusalsV1(draft: ImportDraftV1, today: string): DraftRefusal[] {
   return refusals;
 }
 
-// A goal measured in hours is kept in minutes (RP-65): its figures are multiplied
+// A goal measured in hours is kept in minutes (RP-35): its figures are multiplied
 // by 60 once, and a draft already in minutes passes through unchanged.
 export function inMinutes(draft: ImportDraft): ImportDraft;
 export function inMinutes(draft: ImportDraftV1): ImportDraftV1;

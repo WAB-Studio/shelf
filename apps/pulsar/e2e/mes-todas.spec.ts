@@ -113,10 +113,10 @@ test("each open goal draws its month: the line, the carried task first, the task
     await page.goto("/mes");
 
     const timedBlock = page.locator("section", { has: page.getByRole("heading", { name: `Inglés ${stamp}` }) });
-    await expect(timedBlock.getByText("2 h", { exact: true }).first()).toBeVisible();
+    // A done task's 2 h adds nothing to the month: hours come from blocks alone (RP-128).
     await expect(timedBlock.getByText("de 10 h", { exact: true })).toBeVisible();
-    await expect(timedBlock.getByText("incluye 2 h de tareas hechas")).toBeVisible();
-    expect((await timedBlock.innerText()).replace(/\s+/g, " ")).toContain("2 h de 10 h");
+    await expect(timedBlock.getByText(/incluye .* de tareas hechas/)).toHaveCount(0);
+    expect((await timedBlock.innerText()).replace(/\s+/g, " ")).toContain("0 min de 10 h");
     const carriedLabel = timedBlock.getByText(`de ${label(lastMonth)}`, { exact: true });
     const ownLabel = timedBlock.getByText(/^de .* · 3 h$/);
     await expect(carriedLabel).toBeVisible();

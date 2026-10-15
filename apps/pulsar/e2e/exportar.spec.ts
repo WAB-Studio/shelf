@@ -1945,8 +1945,8 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
     return dateToCivilDate(date);
   };
 
-  // Last month 9 h of 12 h (360 min of facts and a 180 min task done) with 60 min owed against that (25 % passes on),
-  // this month 4 h 15 min of 12 h (165 min and a 90 min task done),
+  // Last month 9 h of 12 h (540 min of facts; the 180 min task done adds none, RP-128) with 60 min owed against that (25 % passes on),
+  // this month 4 h 15 min of 12 h (255 min of facts; the 90 min task done adds none),
   // then two months with only a plan. Tasks of this month: open with 4 h, open with nothing, done with 1 h 30 min.
   async function seedMonths(db: postgres.Sql, person: Person) {
     const stamp = Date.now();
@@ -1975,8 +1975,8 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
     `;
     await db`
       insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
-      values (${person.id}, ${goal.id}, ${commitment.id}, ${`${firstOfMonth(-1).slice(0, 7)}-10`}::date, 360),
-             (${person.id}, ${goal.id}, ${commitment.id}, ${todayInZone()}::date, 165)
+      values (${person.id}, ${goal.id}, ${commitment.id}, ${`${firstOfMonth(-1).slice(0, 7)}-10`}::date, 540),
+             (${person.id}, ${goal.id}, ${commitment.id}, ${todayInZone()}::date, 255)
     `;
     const last = firstOfMonth(-1);
     const this_ = firstOfMonth(0);

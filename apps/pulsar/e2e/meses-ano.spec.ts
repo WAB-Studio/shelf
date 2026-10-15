@@ -258,6 +258,13 @@ test_("the current month in time with no amount keeps «este mes», its figure a
   await db`
     insert into goals.facts (user_id, goal_id, one_off_id, day)
     values (${person.id}, ${goalId}, ${done.id}, ${todayInZone()}::date)`;
+  // Hours come from blocks alone (RP-128): the done task's 270 minutes are a block of their own.
+  const [block] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+    values (${person.id}, ${goalId}, ${`Bloque ${Date.now()}`}, 'daily', 'quantity', 10, 'minutos') returning id`;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${person.id}, ${goalId}, ${block.id}, ${todayInZone()}::date, 270)`;
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
   const text = squash(await (await blockOf(page)).innerText());
@@ -274,6 +281,13 @@ test_("a closed month in time with no amount keeps «cerrado» and its figure (R
   await db`
     insert into goals.facts (user_id, goal_id, one_off_id, day)
     values (${person.id}, ${goalId}, ${done.id}, ${lastMonth}::date + 14)`;
+  // Hours come from blocks alone (RP-128): the done task's 100 minutes are a block of their own.
+  const [block] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+    values (${person.id}, ${goalId}, ${`Bloque ${Date.now()}`}, 'daily', 'quantity', 10, 'minutos') returning id`;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${person.id}, ${goalId}, ${block.id}, ${lastMonth}::date + 14, 100)`;
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto(`/metas/${goalId}/meses/${seg(lastMonth)}`);
   const text = squash(await (await blockOf(page)).innerText());

@@ -107,7 +107,7 @@ before(async () => {
   await reach(ids.S3, 240);
   await reach(ids.P3, 30);
 
-  // K1d: a task of the general's own, 1 h, done today.
+  // K1d: a task of the general's own, 1 h, done today; hours come from blocks alone (RP-128).
   ids.G4 = await plant("K1d general", 4, "min");
   ids.A4 = await plant("K1d grande", 1, "min", { parent: ids.G4 });
   const [{ id: task }] = await admin<{ id: string }[]>`
@@ -160,8 +160,8 @@ test("a goal in another unit adds nothing to the week", async () => {
   assert.equal(last(await weeksOf(ids.G3)).total, 240);
 });
 
-test("what the general's own tasks reached adds to the week", async () => {
-  assert.equal(last(await weeksOf(ids.G4)).total, 60);
+test("a done task of the general's own adds nothing to the week (RP-128)", async () => {
+  assert.equal(last(await weeksOf(ids.G4)).total, 0);
 });
 
 test("the weeks open with the earliest goal inside", async () => {

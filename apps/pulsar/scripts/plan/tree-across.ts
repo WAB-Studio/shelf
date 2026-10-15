@@ -175,7 +175,7 @@ before(async () => {
     insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
     values (${owner.user_id}, ${g1Id}, ${g1.commitmentId}, ${`${lastMonth}-15`}, 45),
            (${owner.user_id}, ${g1Id}, ${g1.commitmentId}, ${monthStart}, 120)`;
-  // q ended today, opened on the 1st: a task of 30 minutes done on the 1st.
+  // q ended today, opened on the 1st: a task of 30 minutes done on the 1st that counts toward no hours (RP-128).
   await sql`update goals.goals set created_at = ${`${monthStart}T00:00:00-05:00`}, horizon = ${today} where id = ${qId}`;
   const [done] = await sql<{ id: string }[]>`
     insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
@@ -227,21 +227,21 @@ test("«Mes» tree order: G, g1, p, S; q ended is not a block; one group per gen
   );
 });
 
-test("«Mes» sum: g1 is its own 120 plus p's 30; G adds q's 30 on top; the stored 999 reads nothing", async () => {
+test("«Mes» sum: g1 is its own 120 plus p's 30; G adds q's done task's 30 not at all (RP-128); the stored 999 reads nothing", async () => {
   const month = await loadMonthAcross(today);
   const line = (id: string) => month.goals.find((goal) => goal.id === id)!.line;
   assert.deepEqual(line(pId), { planned: 600, reached: 30, underPace: line(pId)!.underPace });
   assert.deepEqual(line(g1Id)?.planned, 600);
   assert.equal(line(g1Id)?.reached, 150);
   assert.deepEqual(line(gId)?.planned, 600);
-  assert.equal(line(gId)?.reached, 180);
+  assert.equal(line(gId)?.reached, 150);
   assert.equal(month.goals.find((goal) => goal.id === gId)!.unit, "minutos");
 });
 
-test("«Mes» an ended goal under an open general adds its part of the month, and draws nothing", async () => {
+test("«Mes» an ended goal under an open general adds its blocks to the month, never a done task's estimate, and draws nothing", async () => {
   const month = await loadMonthAcross(today);
   assert.equal(month.goals.some((goal) => goal.id === qId), false);
-  assert.equal(month.goals.find((goal) => goal.id === gId)!.line?.reached, 150 + 30);
+  assert.equal(month.goals.find((goal) => goal.id === gId)!.line?.reached, 150);
 });
 
 test("«Mes» a holder has no rhythm or budget of its own in its plan", async () => {
@@ -287,12 +287,12 @@ test("report tree order and groups: q after p, S last", async () => {
 test("report sum: G's this month, to date and months are the sums of its goals", async () => {
   const report = await loadReport(today);
   const g = report.goals.find((goal) => goal.id === gId)!;
-  assert.equal(g.thisMonth.reached, 180);
+  assert.equal(g.thisMonth.reached, 150);
   assert.equal(g.thisMonth.planned, 600);
   // g1's 45 of last month sit before G opened: G's months open where its goals do.
-  assert.equal(g.toDate.reached, 180 + 45);
+  assert.equal(g.toDate.reached, 150 + 45);
   const now = g.months.find((row) => row.current)!;
-  assert.deepEqual([now.planned, now.reached], [600, 180]);
+  assert.deepEqual([now.planned, now.reached], [600, 150]);
   const before = g.months.find((row) => row.month === `${monthFrom(today, -1)}-01`)!;
   assert.equal(before.reached, 45);
   assert.equal(g.holdsGoals, true);
