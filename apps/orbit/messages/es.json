@@ -116,7 +116,8 @@
     "viewReports": "Ver reportes",
     "title": "Inicio",
     "firstAccountTitle": "Abre tu primera cuenta",
-    "addAccountKind": "Añadir"
+    "addAccountKind": "Añadir",
+    "monthAdjustment": "Descuadre del mes"
   },
   "reports": {
     "title": "Reportes",
@@ -129,7 +130,8 @@
     "legendExpense": "Gastos",
     "contributionsTitle": "Aportes del mes",
     "contributionsEmpty": "Sin aportes este mes.",
-    "noGroup": "Los aportes son una cifra del grupo. Todavía no tienes grupo."
+    "noGroup": "Los aportes son una cifra del grupo. Todavía no tienes grupo.",
+    "monthAdjustment": "Descuadre del mes"
   },
   "nav": {
     "title": "Navegación",
@@ -332,7 +334,24 @@
       "dateRequired": "Elige una fecha.",
       "dateInvalid": "Elige una fecha válida.",
       "dateInFuture": "La fecha no puede ser futura."
-    }
+    },
+    "reconcile": "Cuadrar",
+    "reconcileTitle": "Cuadrar {name}",
+    "reconcileCurrency": "En {currency}",
+    "reconcileDay": "Día",
+    "reconcileDerived": "Según HomeFund",
+    "reconcileRealAsset": "Saldo real",
+    "reconcileRealLiability": "Deuda real",
+    "reconcileGap": "Descuadre",
+    "reconcileGapHint": "Se registra como un movimiento de descuadre del {date}.",
+    "reconcileBalanced": "Cuadra. No se registra ningún movimiento.",
+    "reconcileSubmit": "Cuadrar",
+    "reconcilePending": "Cuadrando…",
+    "reconciled": "Cuenta cuadrada",
+    "reconciliations": "Cuadres",
+    "reconciliationsEmpty": "Aún no has cuadrado esta cuenta.",
+    "reconciliationBalanced": "Cuadró",
+    "reconciliationFigures": "Según HomeFund {derived} · Real {real}"
   },
   "categories": {
     "title": "Categorías",
@@ -528,7 +547,9 @@
     "unreviewedFilter": "Sin revisar",
     "ruleFilter": "Regla recurrente",
     "chipFrom": "Desde {date}",
-    "chipTo": "Hasta {date}"
+    "chipTo": "Hasta {date}",
+    "kindAdjustment": "Descuadre",
+    "adjustmentFix": "Se corrige cuadrando la cuenta de nuevo."
   },
   "cash": {
     "withdrawAction": "Retirar efectivo",
@@ -1097,7 +1118,14 @@
     "accountHasHistory": "No puedes pasar al grupo una cuenta con movimientos. Archívala en su lugar.",
     "accountRefTaken": "El grupo ya tiene una cuenta con la misma referencia de importación. Archiva esta cuenta en su lugar.",
     "labelInUse": "Un presupuesto usa esta etiqueta. Quítala del presupuesto para eliminarla.",
-    "foreignCurrencyUnsupported": "Esta operación no admite otra moneda. Elige una cuenta en la moneda de liquidación."
+    "foreignCurrencyUnsupported": "Esta operación no admite otra moneda. Elige una cuenta en la moneda de liquidación.",
+    "reconcileRealRequired": "Escribe el saldo real.",
+    "reconcileFutureDay": "Elige un día que no sea futuro.",
+    "reconcileBeforeOpening": "La cuenta empieza el {date}. Elige un día desde entonces.",
+    "reconcileBeforeLatest": "Ya cuadraste esta cuenta el {date}. Elige ese día o uno posterior.",
+    "reconcileStale": "Los movimientos cambiaron mientras cuadrabas. Revisa las cifras y vuelve a intentarlo.",
+    "reconcileFailed": "No se pudo cuadrar la cuenta. Inténtalo de nuevo.",
+    "adjustmentReadOnly": "Un descuadre no se edita ni se borra; se corrige cuadrando la cuenta de nuevo."
   },
   "data": {
     "screen": {

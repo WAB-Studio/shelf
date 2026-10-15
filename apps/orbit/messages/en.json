@@ -116,7 +116,8 @@
     "viewReports": "View reports",
     "title": "Home",
     "firstAccountTitle": "Open your first account",
-    "addAccountKind": "Add"
+    "addAccountKind": "Add",
+    "monthAdjustment": "Month gap"
   },
   "reports": {
     "title": "Reports",
@@ -129,7 +130,8 @@
     "legendExpense": "Expenses",
     "contributionsTitle": "Contributions this month",
     "contributionsEmpty": "No contributions this month.",
-    "noGroup": "Contributions are a group figure. You have no group yet."
+    "noGroup": "Contributions are a group figure. You have no group yet.",
+    "monthAdjustment": "Month gap"
   },
   "nav": {
     "title": "Navigation",
@@ -332,7 +334,24 @@
       "dateRequired": "Choose a date.",
       "dateInvalid": "Choose a valid date.",
       "dateInFuture": "The date cannot be in the future."
-    }
+    },
+    "reconcile": "Reconcile",
+    "reconcileTitle": "Reconcile {name}",
+    "reconcileCurrency": "In {currency}",
+    "reconcileDay": "Day",
+    "reconcileDerived": "Per HomeFund",
+    "reconcileRealAsset": "Actual balance",
+    "reconcileRealLiability": "Actual debt",
+    "reconcileGap": "Gap",
+    "reconcileGapHint": "Recorded as a gap movement on {date}.",
+    "reconcileBalanced": "It matches. No movement is recorded.",
+    "reconcileSubmit": "Reconcile",
+    "reconcilePending": "Reconciling…",
+    "reconciled": "Account reconciled",
+    "reconciliations": "Reconciliations",
+    "reconciliationsEmpty": "You have not reconciled this account yet.",
+    "reconciliationBalanced": "Matched",
+    "reconciliationFigures": "Per HomeFund {derived} · Actual {real}"
   },
   "categories": {
     "title": "Categories",
@@ -528,7 +547,9 @@
     "unreviewedFilter": "Unreviewed",
     "ruleFilter": "Recurring rule",
     "chipFrom": "From {date}",
-    "chipTo": "To {date}"
+    "chipTo": "To {date}",
+    "kindAdjustment": "Gap",
+    "adjustmentFix": "Fix it by reconciling the account again."
   },
   "cash": {
     "withdrawAction": "Withdraw cash",
@@ -1097,7 +1118,14 @@
     "accountHasHistory": "You cannot hand over an account that has movements. Archive it instead.",
     "accountRefTaken": "The group already has an account with the same import reference. Archive this one instead.",
     "labelInUse": "A budget uses this label. Remove it from the budget to delete it.",
-    "foreignCurrencyUnsupported": "This action does not support another currency. Choose an account in the settlement currency."
+    "foreignCurrencyUnsupported": "This action does not support another currency. Choose an account in the settlement currency.",
+    "reconcileRealRequired": "Enter the actual balance.",
+    "reconcileFutureDay": "Pick a day that is not in the future.",
+    "reconcileBeforeOpening": "The account starts on {date}. Pick a day from then on.",
+    "reconcileBeforeLatest": "You already reconciled this account on {date}. Pick that day or a later one.",
+    "reconcileStale": "Movements changed while you were reconciling. Check the figures and try again.",
+    "reconcileFailed": "The account could not be reconciled. Try again.",
+    "adjustmentReadOnly": "A gap movement cannot be edited or deleted; fix it by reconciling the account again."
   },
   "data": {
     "screen": {
