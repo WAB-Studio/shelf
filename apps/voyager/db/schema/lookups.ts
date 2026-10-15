@@ -91,5 +91,3 @@ export const lookups = reading.table(
   ],
 );
 
-export type Lookup = typeof lookups.$inferSelect;
-export type NewLookup = typeof lookups.$inferInsert;

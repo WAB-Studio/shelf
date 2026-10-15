@@ -16,4 +16,3 @@ export const phraseNotes = reading.table("phrase_notes", {
 });
 
 export type PhraseNoteRow = typeof phraseNotes.$inferSelect;
-export type NewPhraseNoteRow = typeof phraseNotes.$inferInsert;

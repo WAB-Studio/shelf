@@ -12,7 +12,7 @@ export const MODEL_NAME = "gpt-5-mini";
 
 const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
-// Measured 2026-09-10: left unset, 83% of the output tokens went to
+// Measured: left unset, 83% of the output tokens went to
 // reasoning — 2,695 output tokens for 12 words instead of ~600. Never
 // unset, never "minimal" for this task.
 const REASONING_EFFORT = "low";

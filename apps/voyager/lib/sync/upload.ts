@@ -185,7 +185,7 @@ export async function downloadRows(
   // serializes a bound value for that OID through `new Date(x).toISOString()`
   // — dropping the stored microseconds, so the cursor lands on the wrong side
   // of the very row it named and a tied upload batch either replays forever
-  // or is silently dropped at the boundary (RL-24, both measured 2026-09-08).
+  // or is silently dropped at the boundary (RL-24).
   // Casting from text keeps the parameter's own OID at `text` (25): the value
   // crosses the wire unchanged, and Postgres parses it back server-side.
   const boundary = cursor

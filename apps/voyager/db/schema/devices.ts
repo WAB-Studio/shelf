@@ -49,4 +49,3 @@ export const devices = reading.table(
 );
 
 export type Device = typeof devices.$inferSelect;
-export type NewDevice = typeof devices.$inferInsert;

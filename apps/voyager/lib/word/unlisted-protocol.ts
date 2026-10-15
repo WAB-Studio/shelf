@@ -13,7 +13,6 @@ export const UNLISTED_ENDPOINT = "/api/word/unlisted";
 export const unlistedRequestSchema = z.object({
   word: z.string().min(1).max(64),
 });
-export type UnlistedRequest = z.infer<typeof unlistedRequestSchema>;
 
 export const unlistedResponseSchema = z.object({
   translations: z.array(z.string().min(1)).min(1),

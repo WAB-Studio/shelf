@@ -32,10 +32,10 @@ function editsAtDistanceOne(word: string): Set<string> {
 
 // Every headword one edit from `normalised` that the index actually has,
 // ranked for a stable order on screen — empty only when there is none
-// (`zzqqxv`). No cap: decided by the user 2026-09-11, against
+// (`zzqqxv`). No cap, against
 // `docs/voyager/DESIGN.md`'s "One edit, no cap" — a real word the
 // dictionary lacks (`fettle`) can sit one edit from several headwords at
-// once and still surface all of them here; RL-29 is what tells that reader
+// once and still surface all of them here; RL-44 is what tells that reader
 // none of them is what they meant, not this function withholding the list.
 //
 // Ranking: `POS_FREQUENCY_ORDER` carries no number, only a per-headword

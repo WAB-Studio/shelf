@@ -4,8 +4,7 @@ import { useEffect } from "react";
 
 import { syncNow } from "@/lib/sync/driver";
 
-// The push/pull's only trigger (RNL-09): the same `visibilitychange` event
-// `flushPendingLookup` rides (lib/log/record.ts:145-148). Never a timer.
+// Rides the same `visibilitychange` event as `flushPendingLookup`. Never a timer.
 const MIN_INTERVAL_MS = 60_000;
 
 /** Renders nothing. Fires `syncNow()` on hide, at most once a minute. */

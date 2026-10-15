@@ -17,4 +17,3 @@ export const modelSpend = reading.table(
 );
 
 export type ModelSpendRow = typeof modelSpend.$inferSelect;
-export type NewModelSpendRow = typeof modelSpend.$inferInsert;

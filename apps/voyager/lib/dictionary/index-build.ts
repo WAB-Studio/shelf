@@ -164,7 +164,7 @@ const LEADING_PRIMARY_STRESS = /^([/[]?)\u02c8/u;
 // The asset writes one sound several ways — `hope` carries `/hoʊp/` beside
 // `/ˈhoʊp/`, `daisy` `/ˈdeɪzi/` beside `/ˈdeɪ.zi/`, `canton` `/ˈkæntɒn/`
 // beside `/ˈkænˌtɒn/` — and a block per spelling tells the reader that two
-// identical sounds differ. Measured 2026-09-20 over the shipped asset: 19
+// identical sounds differ. Measured over the shipped asset: 19
 // of the 190 headwords split on a notation accident alone.
 //
 // Only the *primary* stress is a distinction, and only where it falls. The

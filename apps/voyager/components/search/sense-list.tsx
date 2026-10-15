@@ -390,12 +390,12 @@ function SenseGroup({
 // cap, on the data or on the screen: `hits.sort()` in `edit-distance.ts` is
 // alphabetical, not ranked by anything the reader meant, so cutting it after
 // five would drop the intended word by accident of spelling, not keep it —
-// measured 2026-09-11, more than five candidates happens on 0.9% of 4,000
+// measured, more than five candidates happens on 0.9% of 4,000
 // real one-edit typos. `wrap="wrap"` below carries nine short words in a
 // few rows at 360px with nothing pushed off screen (checked against `boz`).
 // Silent when `words` is empty — `zzqqxv` is the only case left that reaches
 // no headword at all; a real word the dictionary lacks (`fettle`) draws its
-// wrong-looking candidates here until RL-29 gives that reader a better door.
+// wrong-looking candidates here until the network answer (RL-44) offers the better door.
 function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType<typeof useTranslations> }) {
   return (
     <Flex direction="column" gap="2">

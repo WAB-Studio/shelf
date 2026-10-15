@@ -5,8 +5,7 @@ export type QueryKind =
   | { kind: "word"; text: string }
   | { kind: "phrase"; text: string; tokens: number };
 
-// A phrase below this is still a phrase; the module that declines to
-// translate it is the one that reads this number.
+// Fewer tokens than this is a word.
 // Two, not three. A two-word query that is not itself an entry is almost
 // always a phrasal verb — "toiling up", "give in", "look after" — whose
 // meaning is precisely not the sum of its parts, so the word-by-word
@@ -31,7 +30,7 @@ export function classify(raw: string, isEntry: (normalised: string) => boolean):
     return { kind: "word", text };
   }
   const tokens = text.split(" ").length;
-  if (tokens > 1) {
+  if (tokens >= PHRASE_MIN_TOKENS) {
     return { kind: "phrase", text, tokens };
   }
   return { kind: "word", text };

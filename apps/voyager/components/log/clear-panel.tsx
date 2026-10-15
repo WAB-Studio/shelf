@@ -27,7 +27,7 @@ type Stage =
  * `## Failure` governs the confirm screen even though nothing failed yet:
  * no red exists in this palette, so the break reads through a hairline and
  * full-weight ink, and the accent sits on **Conservarlo**, the safe exit —
- * never on either destructive option. Decided by the user 2026-09-09,
+ * never on either destructive option,
  * against the usual habit of accenting the default action: a reader who
  * taps out of habit here keeps their record, never loses it.
  *

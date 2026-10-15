@@ -13,7 +13,7 @@ export default defineConfig({
   outputDir: "./private/playwright-results",
   // Two, never more: the runner this suite really runs on is a private
   // repository's `ubuntu-latest`, which is 2 vCPU. Workers above the core
-  // count buy memory pressure, not speed. Measured 2026-09-19 over the whole
+  // count buy memory pressure, not speed. Measured over the whole
   // suite: 370s serial against 182s, 194s and 191s across three parallel
   // runs, all 175 green, none flaky. Four specs reach Supabase auth and can
   // now land in the same window; `retries: 0` below is what would say so.

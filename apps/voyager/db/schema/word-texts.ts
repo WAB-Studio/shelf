@@ -20,5 +20,3 @@ export const wordTexts = reading.table("word_texts", {
   translationsAsked: boolean().notNull().default(false),
 });
 
-export type WordTextRow = typeof wordTexts.$inferSelect;
-export type NewWordTextRow = typeof wordTexts.$inferInsert;

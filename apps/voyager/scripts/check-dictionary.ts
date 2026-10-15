@@ -423,7 +423,7 @@ assert(
 );
 
 // D14 — RL-28: a one-edit miss recovers the headword it was one edit away
-// from, 100% of the time. Decided by the user 2026-09-11: no cap survives
+// from, 100% of the time. No cap survives
 // on `edit-distance.ts`'s own candidate count. Sample is every 50th eligible
 // headword (length >= 4, plain a-z), its middle character deleted, so a red
 // here reruns identically. A corruption that happens to land on another
@@ -451,9 +451,8 @@ assert(
 );
 
 // D15 and D16 — `fettle` sits one substitution from four real headwords (kettle,
-// mettle, nettle, settle) and gets all four: decided by the user 2026-09-11
-// that RL-28 corrects every one-edit miss with no cap, knowing `fettle` is
-// not a typo but a real word the dictionary lacks — RL-29 is what tells
+// mettle, nettle, settle) and gets all four: RL-28 corrects every one-edit miss with no cap, knowing
+// `fettle` is not a typo but a real word the dictionary lacks — RL-44 is what tells
 // that reader none of the four is what they meant, not this guard.
 // `zzqqxv` has no headword within one edit at all, which stays empty.
 const fettleCorrection = lookupWord(index, "fettle").correction;
@@ -507,8 +506,8 @@ assert(
 );
 
 // D18 — RL-28: candidates a POS_FREQUENCY_ORDER row exists for sort ahead of
-// candidates it does not, alphabetical within each block. Decided by the
-// user 2026-09-11: the table carries no number, so a rowed candidate is
+// candidates it does not, alphabetical within each block. The
+// table carries no number, so a rowed candidate is
 // never ranked against another rowed one — only rowed-or-not is honest.
 // "bame" moves 8 of its 13 candidates ahead of the other 5; "fettle" is
 // unchanged, since none of kettle/mettle/nettle/settle carries a row. Named

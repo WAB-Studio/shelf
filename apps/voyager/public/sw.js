@@ -2,15 +2,10 @@
 // names the one cache the app is allowed to hold, and `activate` deletes any
 // other cache it finds under this origin.
 //
-// v7 held assets from every deploy since 2026-09-07, because a deploy changes
-// no byte of this file and so installs no new worker: nothing ever ran
-// `activate` again, and `cacheFirst` never evicts. A device that opened the
-// app on 2026-09-10 still carried that build's dictionary worker, whose
-// `lookupWord` answered `{query, exact, viaInflection}` with no `correction`
-// — the field `sense-list.tsx` has read since RL-28 (#157). Bumping the name
-// is what drops that pool; `SHELL_BUILD` below is what keeps a later deploy
-// from rebuilding it.
-const CACHE_NAME = "reading-shell-v11";
+// A deploy changes no byte of this file and so installs no new worker, and
+// `cacheFirst` never evicts. Bumping the name is what drops an old asset pool;
+// `SHELL_BUILD` below is what keeps a later deploy from rebuilding it.
+const CACHE_NAME = "reading-shell-v12";
 
 // The shell the cache is allowed to hold, read off the current `/` every time
 // the network answers one. A deploy changes the hashed script names in that
@@ -138,8 +133,7 @@ async function shellBuild(response) {
 // Everything under `/_next/static/` belongs to exactly one build, and
 // `cacheFirst` never evicts: without this, a device keeps every build it has
 // ever opened. A stale shell then draws today's chunks alongside its own, and
-// the two disagree — measured 2026-09-14, a shell from before RL-28 handed
-// today's `SenseList` an answer with no `correction` and the screen threw.
+// the two disagree and the screen can throw.
 // One build's chunks at a time, retired the moment "/" names another set.
 async function retireOtherBuilds(cache, response) {
   const build = await shellBuild(response);
@@ -210,13 +204,8 @@ self.addEventListener("fetch", (event) => {
   // in Cache Storage on the device, for nothing.
   if (url.pathname.startsWith("/dictionary/")) return;
 
-  // The app's only server surface. A stale translation is worse than none, so
-  // this route is never intercepted, cached, or answered while offline.
-  if (url.pathname === "/api/translate") return;
-
-  // Uploads a batch of already-synced rows. A cached response here would
-  // replay rows the server already has, never send the ones it does not.
-  if (url.pathname === "/api/log/sync") return;
+  // `/api/translate` and `/api/log/sync` are neither navigations nor
+  // `/_next/static/`, so they fall through to the browser uncached.
 
   // Lands the magic link and sets the session cookie. A cached response
   // sets no cookie, so the sign-in would silently fail.

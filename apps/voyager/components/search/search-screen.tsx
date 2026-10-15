@@ -119,7 +119,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const [kind, setKind] = useState<QueryKind>({ kind: "empty" });
   const [wordAnswer, setWordAnswer] = useState<WordAnswer | null>(null);
   // RL-18: stays on screen until the text itself changes, never on a timer
-  // — a paused prefix keeps its list. Decided by the user 2026-09-09.
+  // — a paused prefix keeps its list.
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [phraseState, setPhraseState] = useState<PhraseState>({ kind: "idle" });
   // A >60-token string never reaches `translatePhrase` — this is the state
@@ -350,7 +350,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       return;
     }
 
-    // Offline-first, decided 2026-09-11: the translator is a network call by
+    // Offline-first: the translator is a network call by
     // definition, so with none to make the request would only wait to fail.
     // `failed` is the state the JSX below already reads to hand a phrase to
     // `NoEntryAnswer` instead of `PhraseAnswer` (RL-37) — offline reaches
@@ -471,11 +471,11 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // hit of its own, but `suggest` only ever returns headwords that begin
   // with it: a non-empty list is that same proof. Suppress SenseList's
   // "not found" text for as long as one stands — the ordinary silence of no
-  // answer yet, not a new state. Decided by the user 2026-09-09.
+  // answer yet, not a new state.
   // An answer on screen is what retires the offer: `word` closes its list
   // because the entry is already below it, while `ru` keeps the ten it was
   // read from. No clock decides this — only whether there is something to
-  // read. Decided by the user 2026-09-09.
+  // read.
   const wordFound = wordAnswer !== null && (wordAnswer.exact !== null || wordAnswer.viaInflection.length > 0);
   const suppressNotFound = !wordFound && suggestions.length > 0;
   // RL-59: the hand-written table leads a function word typed alone.

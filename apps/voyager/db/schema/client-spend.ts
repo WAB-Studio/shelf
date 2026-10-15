@@ -21,5 +21,3 @@ export const clientSpend = reading.table(
   ],
 );
 
-export type ClientSpendRow = typeof clientSpend.$inferSelect;
-export type NewClientSpendRow = typeof clientSpend.$inferInsert;

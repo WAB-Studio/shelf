@@ -13,7 +13,6 @@ export const notesRequestSchema = z.object({
   source: z.string().min(1).max(200),
   translation: z.string().min(1).max(200),
 });
-export type NotesRequest = z.infer<typeof notesRequestSchema>;
 
 export const phraseNoteSchema = z.object({
   term: z.string().min(1).max(64),

@@ -137,5 +137,4 @@ export function decodeCursor(raw: string): Cursor | null {
 }
 
 export type SyncRow = z.infer<typeof syncRowSchema>;
-export type SyncRequest = z.infer<typeof syncRequestSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;
