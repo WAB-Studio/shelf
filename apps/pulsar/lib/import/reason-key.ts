@@ -51,7 +51,7 @@ export const declinedKeys = {
   leavesOut: "import.review.correction.leavesOut",
 } satisfies Record<Correction["declined"], MessageKey>;
 
-// The 22 forms of the first template are catalogue keys already; the five of the second are bare codes.
+// The 28 forms of the first template are catalogue keys already; the five of the second are bare codes.
 export const formKey = {
   "import.errors.form.goal": "import.errors.form.goal",
   "import.errors.form.goalLong": "import.errors.form.goalLong",
@@ -71,6 +71,12 @@ export const formKey = {
   "import.errors.form.commitment": "import.errors.form.commitment",
   "import.errors.form.commitmentUnit": "import.errors.form.commitmentUnit",
   "import.errors.form.commitmentTime": "import.errors.form.commitmentTime",
+  "import.errors.form.cadenceTilde": "import.errors.form.cadenceTilde",
+  "import.errors.form.cadenceWeekCap": "import.errors.form.cadenceWeekCap",
+  "import.errors.form.cadenceMonthCap": "import.errors.form.cadenceMonthCap",
+  "import.errors.form.rhythmTime": "import.errors.form.rhythmTime",
+  "import.errors.form.taskTime": "import.errors.form.taskTime",
+  "import.errors.form.taskUnit": "import.errors.form.taskUnit",
   "import.errors.estimateNotTime": "import.errors.estimateNotTime",
   "import.errors.form.task": "import.errors.form.task",
   "import.errors.form.child": "import.errors.form.child",
