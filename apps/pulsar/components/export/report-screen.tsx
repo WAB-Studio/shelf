@@ -462,7 +462,7 @@ function GoalPart({
   const groupTasks = held
     ? [goal, ...inside].flatMap((member) => member.tasks.map((task) => ({ task, of: member.name })))
     : [];
-  const sections: (GoalSection | "inside")[] = goalSections(paperGoal);
+  const sections: (GoalSection | "inside")[] = goalSections({ ...paperGoal, months: [...paperMonths, ...foldedMonths] });
   if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
   if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
   const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
