@@ -2,6 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
+import { todayInZone } from "@/lib/zone";
 
 // `HoySiguienteCifra` (RP-28, RP-30, RP-54): Hoy's «este mes» row
 // for the next task of the plan says one hour figure and never a 0. A whole
@@ -284,7 +285,7 @@ for (const width of WIDTHS) {
     const stamp = Date.now();
     const name = `Trasteo ${letters(stamp)}`;
     const goal = await seedGoal(db, person.id, `Meta sin medida ${stamp}`, null);
-    const month = `${new Date().toISOString().slice(0, 7)}-01`;
+    const month = `${todayInZone().slice(0, 7)}-01`;
     await db`
       insert into goals.one_offs (user_id, goal_id, name, planned_month, position)
       values (${person.id}, ${goal}, ${name}, ${month}::date, 1)

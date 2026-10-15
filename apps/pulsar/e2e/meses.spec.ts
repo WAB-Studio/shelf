@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 import month from "../messages/es/month.json";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { boxOf } from "./box";
 
 // `Meses.dc.html`, `MesesEscritorio`, `MesPlan.dc.html` (RP-28,
@@ -413,7 +413,7 @@ test("an ended goal and an archived one read their months and offer no way into 
   `;
   const archivedId = await seedGoal(db, person.id, `Meta archivada ${stamp}`);
   await db`update goals.goals set archived_at = now() where id = ${archivedId}`;
-  const openedMonth = monthOf(openedOn.toISOString().slice(0, 10));
+  const openedMonth = monthOf(civilDateInZone(openedOn));
   // A budget keeps the empty face out of the way: the guard under test is the row's.
   await db`
     insert into goals.month_budgets (user_id, goal_id, month, amount)

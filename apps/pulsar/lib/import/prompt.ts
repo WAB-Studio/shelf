@@ -33,3 +33,8 @@ export const SYSTEM_PROMPT = [
     `it is null when the plan sets no end for the goal. ` +
     `Keep the plan's own language for names.`,
 ].join(" ");
+
+// The model has no clock: a year left out of a date is read against this line.
+export function importSystemPrompt(today: string): string {
+  return `${SYSTEM_PROMPT} Today is ${today} (America/Bogota); weeks run Monday to Sunday. A date the plan writes without a year is the latest such day not after today.`;
+}

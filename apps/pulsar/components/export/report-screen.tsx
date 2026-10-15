@@ -55,6 +55,10 @@ const monthOnly = new Intl.DateTimeFormat("es-CO", {
   month: "long",
   timeZone: "UTC",
 });
+const monthShort = new Intl.DateTimeFormat("es-CO", {
+  month: "short",
+  timeZone: "UTC",
+});
 const dateWithYear = new Intl.DateTimeFormat("es-CO", {
   day: "numeric",
   month: "long",
@@ -987,7 +991,16 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
   monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
   const sunday = new Date(monday);
   sunday.setUTCDate(sunday.getUTCDate() + 6);
-  const weekHead = t("summary.weekHead", { from: monday.getUTCDate(), to: sunday.getUTCDate() });
+  // A week across two months names both, so «28 al 3» never reads without its months.
+  const crosses = monday.getUTCMonth() !== sunday.getUTCMonth();
+  const shortMonth = (date: Date) => monthShort.format(date).replace(".", "").slice(0, 3);
+  const weekHead = t("summary.weekHead", {
+    from: monday.getUTCDate(),
+    to: sunday.getUTCDate(),
+    crosses: crosses ? "yes" : "no",
+    fromMonth: shortMonth(monday),
+    toMonth: shortMonth(sunday),
+  });
 
   const lines = report.goals
     .filter((goal) => goal.endedOn === null)

@@ -329,6 +329,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               loggedQuantity={logged?.quantity ?? null}
               note={logged?.note ?? null}
               day={past ? day : undefined}
+              drawnToday={past ? undefined : day}
               writtenLabel={
                 logged && logged.writtenOn !== day
                   ? dayPhrase("day.past.writtenOn", logged.writtenOn, t)
@@ -361,6 +362,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               loggedQuantity={logged?.quantity ?? null}
               note={logged?.note ?? null}
               day={past ? day : undefined}
+              drawnToday={past ? undefined : day}
             />
           );
         })}
