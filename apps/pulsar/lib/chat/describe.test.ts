@@ -110,7 +110,7 @@ test("every tool describes itself over its own ids", () => {
 });
 
 test("the chat's error keys read through errorOf", () => {
-  for (const key of ["signedOut", "blank", "noKey", "cap", "failed", "notAllowed", "notInPlan"]) {
+  for (const key of ["signedOut", "blank", "noKey", "cap", "capApp", "failed", "notAllowed", "notInPlan"]) {
     assert.notEqual(errorOf(`chat.errors.${key}`).key, "mcp.errors.unknown", key);
   }
 });

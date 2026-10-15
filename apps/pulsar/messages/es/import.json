@@ -323,6 +323,7 @@
       "goalNote": "La nota de la meta es más larga de lo que cabe. Acórtala."
     },
     "noKey": "La lectura con IA no está disponible ahora. Un plan escrito en la plantilla sí se lee.",
+    "capApp": "La lectura con IA llegó hoy a su límite. Mañana vuelve a estar disponible. Un plan escrito en la plantilla sí se lee hoy.",
     "cap": "Ya leíste 10 planes con IA hoy. Mañana puedes leer otros 10. Un plan escrito en la plantilla sí se lee hoy.",
     "blank": "No pegaste nada. Pega tu plan o sube un archivo.",
     "empty": "No encontramos metas, meses ni tareas en este texto. Prueba escribirlo en la plantilla.",
