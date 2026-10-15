@@ -1050,10 +1050,10 @@ test("903 dentro de: a second line naming a goal above is an error on the second
   assert.deepEqual(errors2(text).errors.map((e) => [e.line, e.expected]), [[9, "inside"]]);
 });
 
-test("903 dentro de: a line with no name cuts the read at that line", () => {
+test("903 dentro de: a line with no name is reported and the read goes on to the lines below", () => {
   const result = errors2(`${H2}# A\nhorizonte: 2027-10-01\ndentro de:\n## Tareas\n- mal\n`);
-  assert.equal(result.cut, true);
-  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[4, "inside"]]);
+  assert.equal(result.cut, false);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[4, "inside"], [6, "import.errors.form.task"]]);
 });
 
 test("903 dentro de: a goal cannot be inside itself", () => {
@@ -1261,7 +1261,7 @@ test("992 rhythm in time: «ritmo: 10» under a measure in hours, or in minutes,
   for (const unit of ["horas", "minutos"]) {
     const read = listOf(`${V2}# A\nhorizonte: 2027-10-01\nmedida: Práctica · ${unit}\nritmo: 10\n`);
     assert.equal(read.errors.length, 1, unit);
-    assert.equal(read.errors[0].line, 5, unit);
+    assert.equal(read.errors[0].line, 6, unit);
     assert.equal(sayOf(read.errors[0]), "Esta meta mide en horas: escribe el ritmo con su unidad, como «ritmo: 10 h».", unit);
   }
   const ok = parseV2(`${V2}# A\nhorizonte: 2027-10-01\nmedida: Práctica · horas\nritmo: 10 h\n`);
