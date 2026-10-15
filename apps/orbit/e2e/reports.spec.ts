@@ -275,3 +275,458 @@ test.describe("a second currency on the dashboard", () => {
     ).toBeVisible();
   });
 });
+
+/**
+ * RF-138 on the two report surfaces: the month's adjustment (what a
+ * reconciliation booked) is its own line, apart from income, expense and net.
+ * Written from the plan's M5 Done table and boards B11/B12, before the line exists.
+ *
+ * A reconciliation is seeded as the person's own insert; the database books the
+ * adjustment movement, so no marked movement is ever written here. Every figure
+ * is stated from the rows seeded: the account opens today at 10.000 and is
+ * counted at 410.000, a gap of +400.000.
+ */
+const ADJUSTMENT_LABEL = messages.dashboard.monthAdjustment;
+const COP_GAP_CENTS = 40_000_000;
+const USD_GAP_CENTS = 2_500;
+
+const MINUS_SIGN = "−";
+
+function flatText(text: string): string {
+  return text.replace(/[  ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+type BookedAccount = { id: string; currency: "COP" | "USD" };
+
+// An account opening today at `openingCents`, then counted `gapCents` above what
+// HomeFund derives: the trigger books one adjustment of that size, or none at zero.
+async function seedGap(
+  currency: "COP" | "USD",
+  openingCents: number,
+  gapCents: number,
+): Promise<BookedAccount> {
+  const id = randomUUID();
+
+  await asHarnessUser(async (tx) => {
+    await tx`
+      insert into accounts (
+        id, owner_user_id, name, kind, subtype, settlement_currency,
+        initial_balance_cents, initial_balance_on)
+      values (
+        ${id}, ${scope.userId}, ${`Descuadre ${currency} ${id.slice(0, 8)}`}, 'asset', 'bancaria',
+        ${currency}, ${openingCents}, (now() at time zone ${TIME_ZONE})::date)`;
+    await tx`
+      insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+      values (${id}, (now() at time zone ${TIME_ZONE})::date, ${openingCents + gapCents})`;
+  });
+
+  return { id, currency };
+}
+
+// A dollar income on a fresh account with no reconciliation: it makes the USD band exist.
+async function seedUsdIncome(
+  categoryId: string,
+  categoryName: string,
+  cents: number,
+): Promise<BookedAccount> {
+  const id = randomUUID();
+
+  await asHarnessUser(async (tx) => {
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${categoryId}, ${scope.userId}, ${categoryName}, 'income', '#4C8C4A')`;
+    await tx`
+      insert into accounts (
+        id, owner_user_id, name, kind, subtype, settlement_currency,
+        initial_balance_cents, initial_balance_on)
+      values (
+        ${id}, ${scope.userId}, ${`Ingreso USD ${id.slice(0, 8)}`}, 'asset', 'bancaria', 'USD',
+        0, (now() at time zone ${TIME_ZONE})::date)`;
+    const [income] = await tx<{ id: string }[]>`
+      insert into transactions (to_account_id, amount_cents, occurred_at, description)
+      values (
+        ${id}, ${cents}, (now() at time zone ${TIME_ZONE})::date, 'Harness ingreso en dólares')
+      returning id`;
+    await tx`
+      insert into transaction_splits (transaction_id, category_id, amount_cents)
+      values (${income.id}, ${categoryId}, ${cents})`;
+  });
+
+  return { id, currency: "USD" };
+}
+
+async function bookedCents(accountId: string): Promise<string[]> {
+  const rows = await fixtureSql<{ amount: string }[]>`
+    select amount_cents::text as amount from transactions
+    where reconciliation_id is not null
+      and (from_account_id = ${accountId} or to_account_id = ${accountId})`;
+
+  return rows.map((row) => row.amount);
+}
+
+async function dropGapAccounts(accounts: BookedAccount[]): Promise<void> {
+  for (const { id } of accounts) {
+    await fixtureSql`
+      delete from transactions where from_account_id = ${id} or to_account_id = ${id}`;
+    await fixtureSql`delete from account_reconciliations where account_id = ${id}`;
+    await fixtureSql`delete from accounts where id = ${id}`;
+  }
+}
+
+/**
+ * Every line under `root` that names the adjustment, as the text a person reads
+ * on it: the label with its amount. The innermost element that carries the label
+ * stands for the line; when it holds the label alone, its parent holds the amount.
+ */
+async function adjustmentLines(root: Locator): Promise<string[]> {
+  return root.evaluate((element, label) => {
+    const lines: string[] = [];
+    const textOf = (node: Element) => (node as HTMLElement).innerText ?? "";
+
+    for (const node of element.querySelectorAll("*")) {
+      if (node.tagName === "SCRIPT" || node.tagName === "STYLE") continue;
+      const own = textOf(node);
+      if (!own.includes(label)) continue;
+      if (Array.from(node.children).some((child) => textOf(child).includes(label))) continue;
+      lines.push(own.trim() === label ? textOf(node.parentElement!) : own);
+    }
+
+    return lines;
+  }, ADJUSTMENT_LABEL);
+}
+
+// The colour a figure is drawn in: the innermost element that carries its digits.
+async function amountColor(stat: Locator): Promise<string> {
+  return stat.evaluate((element) => {
+    let deepest: Element = element;
+    for (const node of element.querySelectorAll("*")) {
+      if (/\d/.test((node as HTMLElement).innerText ?? "")) deepest = node;
+    }
+
+    return getComputedStyle(deepest).color;
+  });
+}
+
+function currencyBand(page: Page, currency: string): Locator {
+  return page
+    .getByText(reports.inCurrency.replace("{currency}", currency), { exact: true })
+    .locator("..");
+}
+
+test("with no reconciliation, neither surface names the month's adjustment", async ({
+  page,
+}) => {
+  // Control: green before the screens change and must stay green after.
+  await page.goto("/es");
+  await expect(monthStat(page, dashboard.monthNet)).toBeVisible();
+  expect(await adjustmentLines(page.locator("main"))).toEqual([]);
+
+  await page.goto("/es/reports");
+  await expect(
+    band(page).getByText(scope.categoryName, { exact: true }),
+  ).toBeVisible();
+  expect(await adjustmentLines(band(page))).toEqual([]);
+});
+
+test.describe("a reconciliation with no gap", () => {
+  let booked: BookedAccount[] = [];
+
+  test.beforeAll(async () => {
+    booked = [await seedGap("COP", 1_000_000, 0)];
+    expect(await bookedCents(booked[0].id)).toEqual([]);
+  });
+
+  test.afterAll(async () => {
+    await dropGapAccounts(booked);
+  });
+
+  test("neither surface draws a line at zero", async ({ page }) => {
+    // Control: a zero gap books nothing, so nothing is drawn.
+    await page.goto("/es");
+    await expect(monthStat(page, dashboard.monthNet)).toBeVisible();
+    expect(await adjustmentLines(page.locator("main"))).toEqual([]);
+
+    await page.goto("/es/reports");
+    await expect(
+      band(page).getByText(scope.categoryName, { exact: true }),
+    ).toBeVisible();
+    expect(await adjustmentLines(band(page))).toEqual([]);
+  });
+});
+
+test.describe("a +400.000 adjustment this month", () => {
+  let booked: BookedAccount[] = [];
+
+  test.beforeAll(async () => {
+    booked = [await seedGap("COP", 1_000_000, COP_GAP_CENTS)];
+    // The seed is only as good as what the database booked from it.
+    expect(await bookedCents(booked[0].id)).toEqual([String(COP_GAP_CENTS)]);
+  });
+
+  test.afterAll(async () => {
+    await dropGapAccounts(booked);
+  });
+
+  test("the dashboard's month card reads «Descuadre del mes» +$ 400.000 after the net", async ({
+    page,
+  }) => {
+    await page.goto("/es");
+
+    const stat = monthStat(page, ADJUSTMENT_LABEL);
+    await expect(stat).toBeVisible();
+
+    // Raw text: the digits alone would pass with the sign and without it.
+    expect(flatText(await stat.innerText())).toContain("+$ 400.000");
+
+    const net = await monthStat(page, dashboard.monthNet).boundingBox();
+    const adjustment = await stat.boundingBox();
+    expect(net).not.toBeNull();
+    expect(adjustment).not.toBeNull();
+    // After «Neto del mes»: on the same row to its right, or on the next row.
+    const after =
+      adjustment!.y > net!.y + net!.height - 1 || adjustment!.x > net!.x + net!.width - 1;
+    expect(after).toBe(true);
+  });
+
+  test("the dashboard's adjustment is plain ink, neither the income's nor the expense's", async ({
+    page,
+  }) => {
+    await page.goto("/es");
+
+    const color = await amountColor(monthStat(page, ADJUSTMENT_LABEL));
+    expect(color).not.toBe(await amountColor(monthStat(page, dashboard.monthIncome)));
+    expect(color).not.toBe(await amountColor(monthStat(page, dashboard.monthExpense)));
+  });
+
+  test("the dashboard's income, expense and net read what they read without it", async ({
+    page,
+  }) => {
+    await page.goto("/es");
+    await expect(monthStat(page, ADJUSTMENT_LABEL)).toBeVisible();
+
+    expect(await digitsOf(monthStat(page, dashboard.monthIncome))).toBe(
+      pesos(INCOME_CENTS),
+    );
+    expect(await digitsOf(monthStat(page, dashboard.monthExpense))).toBe(
+      pesos(EXPENSE_CENTS),
+    );
+    expect(await digitsOf(monthStat(page, dashboard.monthNet))).toBe(
+      pesos(INCOME_CENTS - EXPENSE_CENTS),
+    );
+    // A net that took the adjustment in would have lost its sign test too:
+    // 91.000 - 43.000 + 400.000 reads 448.000.
+    expect(flatText(await monthStat(page, dashboard.monthNet).innerText())).not.toContain(
+      "448.000",
+    );
+  });
+
+  test("the reports screen reads «Descuadre del mes» +$ 400.000 under the breakdown", async ({
+    page,
+  }) => {
+    await page.goto("/es/reports");
+
+    const row = band(page).getByText(scope.categoryName, { exact: true });
+    await expect(row).toBeVisible();
+
+    const lines = await adjustmentLines(band(page));
+    expect(lines).toHaveLength(1);
+    expect(flatText(lines[0])).toContain("+$ 400.000");
+
+    const line = band(page).getByText(ADJUSTMENT_LABEL, { exact: false }).first();
+    const rowBox = await row.boundingBox();
+    const lineBox = await line.boundingBox();
+    expect(rowBox).not.toBeNull();
+    expect(lineBox).not.toBeNull();
+    expect(lineBox!.y).toBeGreaterThan(rowBox!.y);
+  });
+
+  test("the reports breakdown and the month's category row read what they read without it", async ({
+    page,
+  }) => {
+    await page.goto("/es/reports");
+
+    const row = band(page).getByText(scope.categoryName, { exact: true }).locator("..");
+    await expect(row).toBeVisible();
+    expect(await digitsOf(row)).toBe(pesos(EXPENSE_CENTS));
+
+    // The adjustment is not a category: the one expense category is the only row.
+    await expect(
+      band(page).getByText(/^Descuadre$/, { exact: true }),
+    ).toHaveCount(0);
+  });
+
+  test("the six-month chart still draws two series: no third legend, no third bar colour, no lifted income bar", async ({
+    page,
+  }) => {
+    await page.goto("/es/reports");
+
+    const chart = page.getByRole("img", { name: /Últimos 6 meses en COP/ });
+    await expect(chart.locator("svg")).toBeVisible();
+
+    // The legend names income and expense for the currency, and nothing else.
+    await expect(band(page).getByText(/ en COP$/)).toHaveCount(2);
+    await expect(
+      band(page).getByText(`${reports.legendIncome} en COP`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      band(page).getByText(`${reports.legendExpense} en COP`, { exact: true }),
+    ).toBeVisible();
+
+    const incomeBars = chart.locator('path[fill="var(--jade-9)"]');
+    const expenseBars = chart.locator('path[fill="var(--tomato-9)"]');
+    await expect(incomeBars).toHaveCount(1);
+    await expect(expenseBars).toHaveCount(2);
+    // Every bar is one of the two series' colours.
+    await expect(chart.locator('path[fill^="var(--"]')).toHaveCount(3);
+
+    // An income bar that took the adjustment in would stand 5x its figure.
+    await expect
+      .poll(() => barRatio(incomeBars.first(), expenseBars.last()))
+      .toBeCloseTo(INCOME_CENTS / EXPENSE_CENTS, 2);
+  });
+
+  test.describe("on a 390 px screen", () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test("the four month stats wrap without overflowing", async ({ page }) => {
+      await page.goto("/es");
+
+      const labels = [
+        dashboard.monthIncome,
+        dashboard.monthExpense,
+        dashboard.monthNet,
+        ADJUSTMENT_LABEL,
+      ];
+      for (const label of labels) {
+        await expect(monthStat(page, label)).toBeVisible();
+        const box = await monthStat(page, label).boundingBox();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+      }
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  });
+});
+
+test.describe("a negative adjustment", () => {
+  let booked: BookedAccount[] = [];
+
+  test.beforeAll(async () => {
+    booked = [await seedGap("COP", 5_000_000, -1_500_000)];
+    expect(await bookedCents(booked[0].id)).toEqual(["1500000"]);
+  });
+
+  test.afterAll(async () => {
+    await dropGapAccounts(booked);
+  });
+
+  test("both surfaces read it with the minus sign, never the hyphen", async ({ page }) => {
+    await page.goto("/es");
+    const stat = monthStat(page, ADJUSTMENT_LABEL);
+    await expect(stat).toBeVisible();
+    expect(flatText(await stat.innerText())).toContain(`${MINUS_SIGN}$ 15.000`);
+
+    await page.goto("/es/reports");
+    await expect(
+      band(page).getByText(scope.categoryName, { exact: true }),
+    ).toBeVisible();
+    const lines = await adjustmentLines(band(page));
+    expect(lines).toHaveLength(1);
+    expect(flatText(lines[0])).toContain(`${MINUS_SIGN}$ 15.000`);
+  });
+});
+
+test.describe("an adjustment in dollars alone", () => {
+  let booked: BookedAccount[] = [];
+  const usdIncomeCategoryId = randomUUID();
+  const usdIncomeCategoryName = `Ingreso USD ${randomUUID().slice(0, 8)}`;
+  const USD_INCOME = 12_000;
+
+  test.beforeAll(async () => {
+    booked = [await seedGap("USD", 10_000, USD_GAP_CENTS)];
+    expect(await bookedCents(booked[0].id)).toEqual([String(USD_GAP_CENTS)]);
+
+    // The dollar band exists with or without an adjustment: it holds an income, on
+    // an account of its own so no movement is dated at or before the reconciliation.
+    booked.push(await seedUsdIncome(usdIncomeCategoryId, usdIncomeCategoryName, USD_INCOME));
+  });
+
+  test.afterAll(async () => {
+    await dropGapAccounts(booked);
+    await fixtureSql`delete from categories where id = ${usdIncomeCategoryId}`;
+  });
+
+  test("the dashboard shows it in the USD band and not in the peso band", async ({ page }) => {
+    await page.goto("/es");
+
+    const usd = currencyBand(page, "USD");
+    const cop = currencyBand(page, "COP");
+    await expect(usd).toBeVisible();
+
+    const usdLines = await adjustmentLines(usd);
+    expect(usdLines).toHaveLength(1);
+    expect(usdLines[0]).toContain("+");
+    expect((usdLines[0].match(/\d/g) ?? []).join("")).toBe(String(USD_GAP_CENTS));
+
+    // The peso band has no adjustment of its own, so it names none.
+    expect(await adjustmentLines(cop)).toEqual([]);
+    // The dollar income still reads its own figure, unmixed with the gap.
+    expect(
+      await digitsOf(usd.getByText(dashboard.monthIncome, { exact: true }).locator("..")),
+    ).toBe(String(USD_INCOME));
+  });
+
+  test("the reports screen draws one line, in dollars", async ({ page }) => {
+    await page.goto("/es/reports");
+    await expect(band(page).getByText(scope.categoryName, { exact: true })).toBeVisible();
+
+    const lines = await adjustmentLines(band(page));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("+");
+    expect((lines[0].match(/\d/g) ?? []).join("")).toBe(String(USD_GAP_CENTS));
+  });
+});
+
+test.describe("an adjustment in each currency", () => {
+  let booked: BookedAccount[] = [];
+  const usdIncomeCategoryId = randomUUID();
+
+  test.beforeAll(async () => {
+    booked = [
+      await seedGap("COP", 1_000_000, COP_GAP_CENTS),
+      await seedGap("USD", 10_000, USD_GAP_CENTS),
+      await seedUsdIncome(usdIncomeCategoryId, `Ingreso USD ${usdIncomeCategoryId.slice(0, 8)}`, 12_000),
+    ];
+  });
+
+  test.afterAll(async () => {
+    await dropGapAccounts(booked);
+    await fixtureSql`delete from categories where id = ${usdIncomeCategoryId}`;
+  });
+
+  test("the dashboard reads each in its own band, never summed", async ({ page }) => {
+    await page.goto("/es");
+
+    const cop = await adjustmentLines(currencyBand(page, "COP"));
+    const usd = await adjustmentLines(currencyBand(page, "USD"));
+
+    expect(cop).toHaveLength(1);
+    expect(flatText(cop[0])).toContain("+$ 400.000");
+    expect(usd).toHaveLength(1);
+    expect((usd[0].match(/\d/g) ?? []).join("")).toBe(String(USD_GAP_CENTS));
+  });
+
+  test("the reports screen draws one line per currency", async ({ page }) => {
+    await page.goto("/es/reports");
+    await expect(band(page).getByText(scope.categoryName, { exact: true })).toBeVisible();
+
+    const lines = (await adjustmentLines(band(page))).map(
+      (line) => (line.match(/\d/g) ?? []).join(""),
+    );
+    expect(lines.sort()).toEqual([String(USD_GAP_CENTS), pesos(COP_GAP_CENTS)].sort());
+  });
+});
