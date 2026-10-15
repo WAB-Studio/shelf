@@ -3264,3 +3264,9 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 ## CI serves orbit with `next dev`, and a race hides under `next start` (2026-10-15)
 - `reconcile.spec.ts:634` (B7) passed 7/7 on `next build` + `next start` and failed in CI: the dialog toasted before the list behind it re-rendered,
   and `next dev` is slow enough to open that window. Reproduce an orbit e2e red the way `check:e2e` serves it before calling it local-green.
+
+## Every lane shares one local Postgres: a mutator's SQL reaches every other lane (2026-10-15)
+- The mutator of #618 rewrote `private.category_exists` on the local stack while the validator ran `db:check-rls` and `check:queries` from
+  another worktree: 329–331 and Q167–Q169 read red on correct code. Ports and `HARNESS_LANE` split the apps, never the database.
+- Run a judge that alters a function, a policy or a grant alone, or after the others. Before trusting a local red, compare the object with its
+  migration (`pg_get_functiondef`); the clean proof is CI's `policies` job.
