@@ -39,6 +39,10 @@ if not plans:
 plan = plans[0]
 text = plan.read_text(encoding="utf-8", errors="replace")
 
+# A plan that waits on something outside itself says so in one line and names nothing.
+if re.search(r"^\*\*Bloqueado:\*\*", text, re.M):
+    sys.exit(0)
+
 header = re.compile(r"^## \[([ x~])\] ([A-Z]?\d+) [—·] (.+)$", re.M)
 modules = [
     {"state": m.group(1), "number": m.group(2), "title": m.group(3).strip(), "at": m.end()}
