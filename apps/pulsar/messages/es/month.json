@@ -93,7 +93,7 @@
     "noMeasure": "Esta meta no mide nada, así que no lleva montos ni tiempo.",
     "estimateNotTime": "Esta meta no mide tiempo, así que sus tareas no llevan cifra.",
     "monthClosed": "Un mes cerrado guarda el monto con que terminó.",
-    "outsideSpan": "Ese mes queda fuera del plazo de la meta.",
+    "outsideSpan": "Ese mes queda después del final de la meta.",
     "closed": "Esta meta ya terminó o está archivada.",
     "parentInvalid": "Una sub-tarea solo va bajo una tarea del mes sin día, sin tiempo propio y sin nada hecho.",
     "parentHasDoneChild": "Una de sus sub-tareas ya está hecha, y lo hecho no se borra.",

@@ -498,7 +498,7 @@ test("801: a broken header answers one error and judges nothing below it", async
 
 // Module 885: the workbook is read by code, never by the model.
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const xlsx = (bytes: Uint8Array, name = "plantilla-pulsar.xlsx") => new File([bytes as BlobPart], name, { type: XLSX });
+const xlsx = (bytes: Uint8Array, name = "plantilla-goallog.xlsx") => new File([bytes as BlobPart], name, { type: XLSX });
 
 test("the delivered workbook, uploaded: 200 via workbook with its draft; no key, no row, no model", async () => {
   delete envHandle.OPENAI_API_KEY;
@@ -564,7 +564,7 @@ test("the download: GET /importar/plantilla.xlsx hands the workbook as an attach
   const download = await import("@/app/importar/plantilla.xlsx/route");
   const response = await download.GET();
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get("content-disposition"), "attachment; filename=plantilla-pulsar.xlsx");
+  assert.equal(response.headers.get("content-disposition"), "attachment; filename=plantilla-goallog.xlsx");
   assert.equal(response.headers.get("content-type"), XLSX);
   const bytes = new Uint8Array(await response.arrayBuffer());
   const { readWorkbook } = await import("@/lib/import/workbook");

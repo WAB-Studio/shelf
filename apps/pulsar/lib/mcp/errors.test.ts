@@ -33,7 +33,7 @@ test("a closed month's refusal, reads month.json's sentence", () => {
 
 test("the server's own keys read their sentences", () => {
   assert.equal(errorOf("mcp.errors.goalNotFound").message, "Esa meta no existe o no es de esta persona.");
-  assert.equal(errorOf("mcp.errors.unauthorized").message, "La llave no es válida o ya se revocó. Crea otra en Pulsar.");
+  assert.equal(errorOf("mcp.errors.unauthorized").message, "La llave no es válida o ya se revocó. Crea otra en GoalLog, en Conexiones.");
 });
 
 test("an unknown key is mcp.errors.unknown, key and sentence, never its own echo", () => {

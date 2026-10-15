@@ -1432,7 +1432,7 @@ Three answers of the user, 2026-10-09.
 - **The field lives in the flow,** below the last turn, never fixed to the foot. The tab bar stays the only fixed thing.
 - **A failed message stays as a turn;** the button reads «Intentar otra vez» and nothing is retyped.
 - **A refused change has no button.** Its row carries the act's reason; the person asks again in a new message.
-- **Turns are labelled «TÚ» and «PULSAR»,** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
+- **Turns are labelled «TÚ» and «GOALLOG» (2026-10-15, after the rename to GoalLog),** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
   changes open. A change reads in two lines: what, in the person's own names; then «antes → después» in mono.
 - **Faces not drawn for the chat:** dark (the token table says it) and 700–1023 (between the two drawn).
 - **A change's line keeps the screens' words:** «Mover el final de «Meta»», «Fijar «Tarea» en noviembre». The other 14 stay as they read. 2026-10-13.

@@ -1,6 +1,6 @@
 {
-  "eyebrow": "bitácora de metas",
-  "title": "{client} quiere ver tu bitácora",
+  "eyebrow": "GoalLog",
+  "title": "{client} quiere ver tus metas",
   "mayLabel": "podrá",
   "may": {
     "read": "leer tus metas, meses, tareas, sueltas e informe",

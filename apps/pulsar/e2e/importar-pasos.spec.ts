@@ -56,7 +56,7 @@ test.describe("the entry hands over the template, the workbook and the text for 
     });
   });
 
-  test("«Descargar la plantilla en Excel» downloads plantilla-pulsar.xlsx, a book the reader takes for the template", async ({ person, browser, baseURL }) => {
+  test("«Descargar la plantilla en Excel» downloads plantilla-goallog.xlsx, a book the reader takes for the template", async ({ person, browser, baseURL }) => {
     // Kills: a link to a path the server does not serve, or a book with no rows.
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
@@ -65,7 +65,7 @@ test.describe("the entry hands over the template, the workbook and the text for 
         page.waitForEvent("download"),
         page.getByRole("link", { name: messages.entry.workbook }).click(),
       ]);
-      expect(download.suggestedFilename()).toBe("plantilla-pulsar.xlsx");
+      expect(download.suggestedFilename()).toBe("plantilla-goallog.xlsx");
       const path = await download.path();
       const { readFile } = await import("node:fs/promises");
       const read = await readWorkbook(new Uint8Array(await readFile(path)));
