@@ -9701,6 +9701,7 @@ async function checkCategoryExistsProbe() {
     "330. another person's category is invisible to the caller yet the probe says it exists",
     "331. a deleted category reads as absent to the probe",
     "332. only authenticated may execute the probe, and it is a security definer with a fixed search_path",
+    "334. a category of a group the caller is not in is invisible to the caller yet the probe says it exists",
   ];
   const tailLabel = "333. the rolled-back category-exists transaction leaves no trace";
 
@@ -9741,6 +9742,27 @@ async function checkCategoryExistsProbe() {
 
       const [goneProbe] = await tx<{ found: boolean }[]>`select private.category_exists(${doomed}) as found`;
       assert(labels[2], goneProbe.found === false, `probe on a deleted id = ${goneProbe.found} (expected false)`);
+
+      // A group-owned category has no owner_user_id: the probe must still see it.
+      await tx`reset role`;
+      await enterUserContext(tx, stranger);
+      const foreignGroup = randomUUID();
+      await tx`insert into groups (id, name, cash_mode) values (${foreignGroup}, 'rls category probe group', 'shared')`;
+      await tx`insert into group_members (group_id, user_id, name, role)
+        values (${foreignGroup}, ${stranger}, 'rls category probe leader', 'leader')`;
+      const [{ id: groupCategory }] = await tx<{ id: string }[]>`
+        insert into categories (group_id, name, kind)
+        values (${foreignGroup}, 'rls category probe group category', 'expense') returning id`;
+      await tx`reset role`;
+      await enterUserContext(tx, owner);
+      const [groupProbe] = await tx<{ seen: number; found: boolean }[]>`
+        select (select count(*)::int from categories where id = ${groupCategory}) as seen,
+          private.category_exists(${groupCategory}) as found`;
+      assert(
+        labels[4],
+        groupProbe.seen === 0 && groupProbe.found === true,
+        `rows the caller sees = ${groupProbe.seen} (expected 0), probe = ${groupProbe.found} (expected true)`,
+      );
 
       await tx`reset role`;
       const [fn] = await tx<

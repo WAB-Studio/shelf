@@ -4655,4 +4655,49 @@ async function recurringRuleCategoryFitSuite(
     goneFits === true && goneRefused?.serverError === "errors.referenceGone" && goneStored === 0,
     `deleted category fits = ${goneFits}, serverError = ${goneRefused?.serverError ?? "none"}, ${goneStored} rule(s) stored`,
   );
+
+  // A category of a fund the caller is not in exists but is unseen: scopeViolation, never referenceGone.
+  const foreignFundCategoryId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, group_id, name, kind, color)
+    values (${foreignFundCategoryId}, ${scope.groupId}, 'Harness ajuste fondo ajeno', 'expense', '#4C8C4A')`;
+  track("categories", foreignFundCategoryId);
+  const foreignFundRule = (categoryId: string) => ({
+    fromAccountId: accountId,
+    toAccountId: null,
+    amount: "10",
+    categoryId,
+    description: "Harness regla fondo ajeno",
+    frequency: "weekly" as const,
+    intervalN: 1,
+    dayOfMonth: null,
+    nextRunOn: shiftDate(today, 7),
+    endsOn: null,
+  });
+  const fundCreateRefused = await asUser(groupless, () =>
+    createRecurringRuleAction(foreignFundRule(foreignFundCategoryId)),
+  );
+  const [{ n: fundCreateStored }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from recurring_rules where from_account_id = ${accountId}`;
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Saving a rule with the category of a fund the caller is not in is a scope violation and stores nothing"),
+    fundCreateRefused?.serverError === "recurringRules.errors.scopeViolation" && fundCreateStored === 0,
+    `serverError = ${fundCreateRefused?.serverError ?? "none"}, ${fundCreateStored} rule(s) stored`,
+  );
+
+  const heldRule = await asUser(groupless, () =>
+    createRecurringRule({ ...foreignFundRule(expenseId), amountCents: 1000 }),
+  );
+  const fundUpdateRefused = await asUser(groupless, () =>
+    updateRecurringRuleAction({ id: heldRule.recurringRuleId, ...foreignFundRule(foreignFundCategoryId) }),
+  );
+  const [fundKept] = await fixtureSql<{ category_id: string }[]>`
+    select category_id from recurring_rules where from_account_id = ${accountId}`;
+  await fixtureSql`delete from recurring_rules where from_account_id = ${accountId}`;
+  assert(
+    next("Rewriting a rule onto the category of a fund the caller is not in is a scope violation and keeps the old one"),
+    fundUpdateRefused?.serverError === "recurringRules.errors.scopeViolation" && fundKept?.category_id === expenseId,
+    `serverError = ${fundUpdateRefused?.serverError ?? "none"}, stored category is own = ${fundKept?.category_id === expenseId}`,
+  );
 }
