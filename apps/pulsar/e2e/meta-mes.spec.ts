@@ -200,8 +200,9 @@ test("a measure with no amount says so and offers to plan the month; no measure 
       await page.goto(`/metas/${noMeasure}`);
       await expect(page.getByText(`Meta sin medida ${stamp}`).first()).toBeVisible();
       await expect(seen(page, "esta meta no mide nada")).toHaveCount(1);
-      await expect(seen(page, monthName)).toHaveCount(1);
-      await expect(seen(page, "0 tareas · 0 hechas")).toHaveCount(1);
+      // RP-73 (`MetaSinTareas`): no task this month, so no month section and no «0 tareas»; «Ver por mes» stays.
+      await expect(seen(page, monthName)).toHaveCount(0);
+      await expect(visible(page, /0 tareas/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveAttribute(
         "href",
         `/metas/${noMeasure}/meses`,

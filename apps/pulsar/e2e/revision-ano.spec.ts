@@ -103,14 +103,10 @@ test("an open goal's row for today carries its year and says «en curso» once (
     await expect(items(page).nth(1)).toContainText(range(dayAfter(monday, -7), dayAfter(monday, -1)));
     await expect(items(page).nth(2)).toContainText(range(monday, dayAfter(monday, 6)));
     await expect(items(page).filter({ hasText: "en curso" })).toHaveCount(1);
-    await expect(items(page).nth(2)).toContainText("en curso");
-    // The note owns its own track: it starts at or right of the figure's right edge, never under or over it.
+    // PorSemanaTelefono: «en curso» closes the dates' own line, with no note of its own beside the figure.
     const current = items(page).nth(2);
-    const figure = await current.locator(":scope > span").nth(1).boundingBox();
-    const note = await current.locator(":scope > span").nth(2).boundingBox();
-    expect(note!.x, `«en curso» starts at ${note!.x}px, the figure ends at ${figure!.x + figure!.width}px`).toBeGreaterThanOrEqual(
-      figure!.x + figure!.width - 0.5,
-    );
+    await expect(current.getByText(`${range(monday, dayAfter(monday, 6))} · en curso`, { exact: true })).toHaveCount(1);
+    await expect(current.locator(":scope > span")).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   } finally {
     await drop(db, personId, goalId);
