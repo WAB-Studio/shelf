@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  index,
   integer,
   pgPolicy,
   text,
@@ -63,6 +64,10 @@ export const transactionSources = finances.table(
     uniqueIndex("transaction_sources_statement_seq_unique")
       .on(table.statementId, table.sourceSeq)
       .where(sql`${table.sourceSeq} is not null`),
+    // Parent deletes check these foreign keys; without an index each one scans this table.
+    index("transaction_sources_statement_id_idx")
+      .on(table.statementId)
+      .where(sql`${table.statementId} is not null`),
     // Readable and writable exactly when the leg's own account is — the scope is the account's.
     pgPolicy("transaction_sources_select", {
       for: "select",

@@ -59,6 +59,13 @@ export const budgets = finances.table(
       .on(table.groupId)
       .where(sql`${table.groupId} is not null`),
     index("budgets_category_id_idx").on(table.categoryId),
+    // Parent deletes check these foreign keys; without an index each one scans this table.
+    index("budgets_account_id_idx")
+      .on(table.accountId)
+      .where(sql`${table.accountId} is not null`),
+    index("budgets_label_id_idx")
+      .on(table.labelId)
+      .where(sql`${table.labelId} is not null`),
     // Universal read inside the group: your own personal budgets, plus every budget of the group you belong to.
     pgPolicy("budgets_select_member", {
       for: "select",

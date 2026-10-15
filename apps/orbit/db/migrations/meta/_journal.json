@@ -365,6 +365,13 @@
       "when": 1792037005283,
       "tag": "0051_an_account_reconciles_with_an_adjustment",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792130000000,
+      "tag": "0053_foreign_keys_get_indexes",
+      "breakpoints": true
     }
   ]
 }
