@@ -46,6 +46,7 @@ jobs:
       HARNESS_LANE: 6
       SPECS: >-
         e2e/dia-pasado.spec.ts
+        e2e/exportar-filas-sin-monto.spec.ts
         e2e/habito-esta-semana.spec.ts
         e2e/habito-semanas.spec.ts
         e2e/hoy-cuenta.spec.ts
