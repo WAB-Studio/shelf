@@ -28,10 +28,11 @@ export function goalSections(goal: GoalReport): Section[] {
 }
 
 function holdsSomething(month: GoalReport["months"][number], unit: string | null): boolean {
-  const count = month.taskCount ?? month.tasks?.total;
+  // A month that is no row counts only by the tasks the line under the table names: those of `tasks`.
+  const count = printsOnPaper(month, unit) ? (month.taskCount ?? month.tasks?.total) : month.tasks?.total;
   // A measured goal's months always carry their amounts; only a task count may be missing.
   if (count === undefined && unit === null) return false;
-  // A month with a task counts though it is not a row: the line under the table names it.
+  // A month with a task the line names counts though it is not a row.
   if ((count ?? 0) > 0) return true;
   return printsOnPaper(month, unit) && (month.planned !== null || month.reached > 0);
 }

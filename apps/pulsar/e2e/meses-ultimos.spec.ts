@@ -40,8 +40,8 @@ const NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
-// How the line paper prints for a goal with an end names a month: «noviembre 2026».
-const longMonth = (offset: number) => `${NAMES[Number(monthStartOf(offset).slice(5, 7)) - 1]} ${monthStartOf(offset).slice(0, 4)}`;
+// The form paper no longer prints, a month named «noviembre de 2026» (RP-124 names it «noviembre 2026»).
+const longMonth = (offset: number) => `${NAMES[Number(monthStartOf(offset).slice(5, 7)) - 1]} de ${monthStartOf(offset).slice(0, 4)}`;
 
 async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width: number) {
   const context = await browser.newContext({ storageState: sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
@@ -523,6 +523,7 @@ test("on paper a goal that measures nothing, with no task ahead and no end, prin
   for (const offset of [-2, -1, 0, 1]) expect(paper, monthLabel(offset)).toContain(monthLabel(offset));
   for (const offset of [2, 3, 11]) expect(paper, monthLabel(offset)).not.toContain(monthLabel(offset));
   expect(paper, "no «sin tareas» line").not.toContain(": sin tareas");
+  for (const offset of [1, 2, 6, 11]) expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
   expect(paper).not.toContain("cada uno");
 });
 
@@ -536,6 +537,7 @@ test("on paper a goal that measures nothing prints a month ahead that holds a ta
   expect(paper).toContain(monthLabel(1));
   expect(paper).toContain(monthLabel(3));
   expect(paper, "no «sin tareas» line").not.toContain(": sin tareas");
+  for (const offset of [1, 2, 3]) expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
 });
 
 test("on paper a group with no end prints its closed months (RP-80, RP-107)", async ({ person, browser, baseURL, db }) => {

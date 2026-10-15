@@ -366,6 +366,26 @@ test.describe("at 360", () => {
       await context.close();
     }
   });
+  test("a past day at 360 offers no «de qué meta»", async ({ person, browser, db }) => {
+    await seedGoals(db, person.id, ["Leer", "Escribir"]);
+    await db`update goals.goals set created_at = now() - interval '30 days' where user_id = ${person.id}`;
+    await db`update goals.commitments set created_at = now() - interval '30 days' where user_id = ${person.id}`;
+    const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 360, height: 740 }, hasTouch: true });
+    try {
+      const page = await context.newPage();
+      const yesterday = new Date(`${todayInZone()}T12:00:00Z`);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      await page.goto(`/dia/${yesterday.toISOString().slice(0, 10)}`);
+      await settled(page);
+      await expect(page.getByText("Revisar leer", { exact: true })).toBeVisible();
+      // A past day draws no task field at all, so there is nothing to choose a goal for.
+      await expect(page.getByPlaceholder(FIELD)).toHaveCount(0);
+      await expect(page.getByText(/^de qué meta$/i)).toHaveCount(0);
+      await expect(metaGroup(page)).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
 });
 
 test.describe("at 1280", () => {

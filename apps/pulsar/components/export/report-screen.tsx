@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { getTranslations } from "next-intl/server";
 
@@ -253,6 +253,30 @@ function MeasureLine({
     .join(" · ");
 }
 
+// One line per live commitment, «Estirar · todos los días»; a goal inside a general prints them under its row (RP-124).
+function CommitmentLines({ goal, t }: { goal: GoalReport; t: Translator<"export"> }) {
+  const rootT = useTranslations();
+  const words = useTimeWords();
+  return (goal.commitments ?? []).map((commitment, index) => {
+    const cadence =
+      cadencePhrase((key, values) => rootT(key, values), commitment.cadence, {
+        weekdayShort: rootT.raw("day.cadence.weekdayName") as string[],
+        weekdayPlural: rootT.raw("day.cadence.weekdayPlural") as string[],
+      }) ?? rootT("day.cadence.everyDay");
+    return (
+      <Text key={`${commitment.name}-${index}`} as="p">
+        {commitment.targetQuantity !== null && commitment.unit !== null
+          ? t("commitmentAmount", {
+              name: commitment.name,
+              cadence,
+              amount: formatQuantity(commitment.targetQuantity, commitment.unit, words),
+            })
+          : t("commitmentLine", { name: commitment.name, cadence })}
+      </Text>
+    );
+  });
+}
+
 // One line per goal inside a general: its month and amount, then its last day.
 function InsideRow({
   goal,
@@ -278,7 +302,9 @@ function InsideRow({
         ? [
             t("insideRow", {
               month: monthOnly.format(civilDateToDate(today)),
-              done: formatQuantity(goal.thisMonth.reached, goal.unit as string, words),
+              done: isTimeUnit(goal.unit as string)
+                ? formatQuantity(goal.thisMonth.reached, goal.unit as string, words)
+                : formatCount(goal.thisMonth.reached),
               planned: formatQuantity(planned, goal.unit as string, words),
             }),
             until === null ? null : t("until", { date: until }),
@@ -323,8 +349,6 @@ function GoalPart({
   const unit = goal.unit;
   const format = useFormatter();
   const commonT = useTranslations("common");
-  const rootT = useTranslations();
-  const words = useTimeWords();
 
   if (goal.endedOn !== null) {
     return (
@@ -487,13 +511,10 @@ function GoalPart({
         return (
           <Section label={t("inside", { count: inside!.length })}>
             {inside!.map((member) => (
-              <InsideRow
-                key={member.id}
-                goal={member}
-                level={member.parentId === goal.id ? 1 : 2}
-                today={today}
-                t={t}
-              />
+              <Fragment key={member.id}>
+                <InsideRow goal={member} level={member.parentId === goal.id ? 1 : 2} today={today} t={t} />
+                <CommitmentLines goal={member} t={t} />
+              </Fragment>
             ))}
           </Section>
         );
@@ -516,24 +537,7 @@ function GoalPart({
       case "commitments":
         return (
           <Section label={t("sections.commitments")}>
-            {(goal.commitments ?? []).map((commitment, index) => {
-              const cadence =
-                cadencePhrase((key, values) => rootT(key, values), commitment.cadence, {
-                  weekdayShort: rootT.raw("day.cadence.weekdayName") as string[],
-                  weekdayPlural: rootT.raw("day.cadence.weekdayPlural") as string[],
-                }) ?? rootT("day.cadence.everyDay");
-              return (
-                <Text key={`${commitment.name}-${index}`} as="p">
-                  {commitment.targetQuantity !== null && commitment.unit !== null
-                    ? t("commitmentAmount", {
-                        name: commitment.name,
-                        cadence,
-                        amount: formatQuantity(commitment.targetQuantity, commitment.unit, words),
-                      })
-                    : t("commitmentLine", { name: commitment.name, cadence })}
-                </Text>
-              );
-            })}
+            <CommitmentLines goal={goal} t={t} />
           </Section>
         );
       case "phases":
