@@ -45,7 +45,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 #### The word
 
-- [ ] **RL-04** — A headword's answer shows every sense the dictionary carries for it, grouped by part of speech, each with its IPA when one exists and all of its Spanish translations.
+- [x] **RL-04** — A headword's answer shows every sense the dictionary carries for it, grouped by part of speech, each with its IPA when one exists and all of its Spanish translations.
 - [x] **RL-43** — Those groups are ordered by how often the word is really used in each part of
   speech, not by a rank fixed in advance. `grudge` answers as «rencor» before its rare verb, and
   `leave` still answers as «dejar» before «permiso» — an order no single rank can give both. The
@@ -164,11 +164,11 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-18** — While the string is being treated as a word and the typing has not settled, up to
   ten headwords that begin with it are offered. Choosing one answers it. The offer withdraws once
   the typing settles: the answer is already on screen and the list has nothing left to add.
-- [ ] **RL-35** *(successor of RL-14)* — The answer to a word comes whole from the device and never
+- [x] **RL-35** *(successor of RL-14)* — The answer to a word comes whole from the device and never
   waits on the network: with a connection or without one, the same text appears at the same speed,
   and no keystroke ever leaves the device. What the network can add afterwards is decoration: it
   arrives late, arrives only sometimes, and its absence never changes the answer or delays it.
-- [ ] **RL-41** — A word whose dictionary entry carries **no definition at all** can be given one
+- [x] **RL-41** — A word whose dictionary entry carries **no definition at all** can be given one
   over the network: one English sentence, in the dictionary's own register. **12,670 of the 64,258
   entries (19.7%) carry none** — 6,989 nouns, 2,664 verbs, 2,098 adjectives — and today those words
   answer with translations alone. It is **decoration under RL-35**: it is resolved the first time
@@ -176,7 +176,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   for every reader ever, and with no connection the answer is exactly the one the device already
   draws. A word that already has a definition never asks for one.
 
-- [ ] **RL-42** — A word can carry **one example sentence using it**, with its Spanish translation,
+- [x] **RL-42** — A word can carry **one example sentence using it**, with its Spanish translation,
   resolved and cached the same way and under the same decoration clause. This is not RL-08's path:
   RL-08 translates a sentence the reader typed, this shows the word in use.
 
@@ -289,7 +289,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [ ] **RL-27** — A local server, which the reader starts on their own machine, offers the exported
   file to an MCP client: the most looked-up words, the most recent ones, and the full history of one
   word. It only ever reads the file; no tool modifies it. The server is not part of the deployed app.
-- [ ] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
+- [x] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
   has, the answer offers the words it might have been, and reaching one of them is a tap. The
   suggestion is computed on the device and touches the network on no keystroke.
 - [x] **RL-44** *(successor of RL-29)* — When a search finds nothing, the word is answered over the
