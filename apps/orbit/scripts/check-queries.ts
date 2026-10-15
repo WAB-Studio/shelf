@@ -3291,9 +3291,24 @@ async function reconcileSuite(
     `${before.contributions.length} rows before, ${after.contributions.length} after`,
   );
   assert(
-    next("The export leaves adjustments out"),
-    after.exported.length === before.exported.length,
-    `${before.exported.length} transaction rows before, ${after.exported.length} after`,
+    next("The export carries adjustments as movements, signed by their legs"),
+    (() => {
+      const adjustmentRows = (name: string) =>
+        after.exported.filter(
+          (row) =>
+            row.description !== "Harness cuadre gasto" &&
+            (row.toAccount === name || row.fromAccount === name),
+        );
+      const copRows = adjustmentRows("Harness cuadre COP");
+      const gained = copRows.find((row) => row.toAccount === "Harness cuadre COP" && row.fromAccount === null);
+      const lost = copRows.find((row) => row.fromAccount === "Harness cuadre COP" && row.toAccount === null);
+      return (
+        after.exported.length === before.exported.length + 4 &&
+        gained?.amount === 1_200_000 &&
+        lost?.amount === 800_000
+      );
+    })(),
+    `${before.exported.length} transaction rows before, ${after.exported.length} after; expected +4 (up, down, dollar, pot; the zero gap books none)`,
   );
 
   // History.
