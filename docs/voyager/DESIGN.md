@@ -122,7 +122,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
 - When a board and this file disagree, **this file wins**.
 - **The canvas is 149 boards**, counted 2026-10-08 from **version 39**'s own `appifact-doc` block (150 `.dc.html`
   files plus `canvas.json`). The five added are module 525's, in one row of the `cuenta` page under one annotation,
-  primary face only. **The canvas has no index page yet**, which `docs/agentes/canvas.md` governs: a gap, written here.
+  primary face only.
 - **The canvas is 144 boards**, counted 2026-09-13 from **version 34**'s own `appifact-doc` block
   (145 `.dc.html` files plus `canvas.json`). The two added are RL-49's, `CuentaEnlaceNoVerificado`
   and `CuentaEnlaceInvalido`, side by side on the `cuenta` page so the pair reads as the comparison
