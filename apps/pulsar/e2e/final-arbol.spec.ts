@@ -54,7 +54,7 @@ test("shortening a general's end before a goal inside it lists that goal on the 
 }) => {
   // Kills: not listing the goal that ends after (no recuadro), listing one that ends before, or leaving «Moverlo» enabled to write.
   const tree = await seedWeeks(db, person, Date.now(), { G: 30, g1: 12, p: 8, g2: 20 });
-  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`, 360, true);
   try {
     const calls = countActionPosts(page);
     const sheet = await openHorizon(page);
@@ -72,7 +72,7 @@ test("shortening a general's end before a goal inside it lists that goal on the 
     await expect(confirm).toBeDisabled();
     await confirm.dispatchEvent("click");
 
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(calls).toEqual([]);
     expect(await horizonOf(db, tree.G)).toBe(tree.at(30));
   } finally {
@@ -139,7 +139,7 @@ test("a goal inside cannot end after the goal above: the sentence names it and i
 }) => {
   // Kills: letting a large goal's end pass the general's, or naming a different goal than the one directly above.
   const tree = await seedWeeks(db, person, Date.now(), { G: 30, g1: 12, p: 8, g2: 20 });
-  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.g1}`);
+  const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.g1}`, 360, true);
   try {
     const calls = countActionPosts(page);
     const sheet = await openHorizon(page);
@@ -154,7 +154,7 @@ test("a goal inside cannot end after the goal above: the sentence names it and i
     const confirm = sheet.getByRole("button", { name: "Moverlo", exact: true });
     await expect(confirm).toBeDisabled();
     await confirm.dispatchEvent("click");
-    await page.waitForTimeout(500);
+    await page.clock.runFor(30_000);
     expect(calls).toEqual([]);
     expect(await horizonOf(db, tree.g1)).toBe(tree.at(12));
 

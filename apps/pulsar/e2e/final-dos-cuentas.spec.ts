@@ -37,9 +37,10 @@ const line = (n: number) => `contando desde esta semana; la meta lleva ${n} ${n 
 const OPENED_LONG_AGO = "2024-11-05";
 const OPENED_LAST_MONDAY = plusDays(MONDAY, -7);
 
-async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360) {
+async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360, clock = false) {
   const context = await browser.newContext({ storageState: sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   await visit(page, path);
   return { page, context };
 }
@@ -222,7 +223,7 @@ test("E2: with the action held, the buttons are disabled, a second tap sends not
 test("E2: «Dejarlo como está» after typing 10 closes the sheet and sends nothing (RP-111)", async ({ person, browser, baseURL, db }) => {
   // Kills: sending the typed number when the sheet is dismissed.
   const { correr } = await seedE2(db, person);
-  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${correr}`);
+  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${correr}`, 360, true);
   try {
     const posts = postCounter(page);
     const sheet = await openSheet(page, "mover el final");
@@ -230,7 +231,7 @@ test("E2: «Dejarlo como está» after typing 10 closes the sheet and sends noth
     await expect(sheet.getByText(line(2), { exact: true })).toBeVisible();
     await sheet.getByRole("button", { name: "Dejarlo como está", exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
-    await page.waitForTimeout(400);
+    await page.clock.runFor(30_000);
     expect(posts).toEqual([]);
     expect(await horizonOfGoal(db, correr)).toBe(fromThis(8));
   } finally {

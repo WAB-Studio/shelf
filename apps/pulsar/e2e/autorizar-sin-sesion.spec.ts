@@ -70,7 +70,7 @@ test.describe("the consent screen without a session (RP-60)", () => {
 
       const flight = await response!.text();
       const raw = /"next\\":\\"(\/oauth(?:[^"\\]|\\u[0-9a-f]{4})*)/.exec(flight)?.[1];
-      expect(raw, "the form's next prop is in the page").toBeDefined();
+      expect(raw, `the form's next prop is in the page, starting at the request; got ${JSON.stringify(raw)} in ${flight.slice(0, 200)}`).toMatch(/^\/oauth\/autorizar\?/);
       const next = JSON.parse(`"${raw}"`) as string;
       expect(next.startsWith("/oauth/autorizar?")).toBe(true);
       const params = new URL(next, baseURL!).searchParams;

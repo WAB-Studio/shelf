@@ -124,9 +124,10 @@ export async function archivedOf(db: Db, ids: string[]): Promise<Record<string, 
   return Object.fromEntries(rows.map((row) => [row.id, row.archived]));
 }
 
-export async function openAs(browser: Browser, baseURL: string | undefined, person: Person, path: string, width = 360) {
+export async function openAs(browser: Browser, baseURL: string | undefined, person: Person, path: string, width = 360, clock = false) {
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   await page.goto(path);
   await settled(page);
   return { page, context };

@@ -36,9 +36,10 @@ const line = (shown?: number) =>
 const INVALID = "Escribe un número entero de semanas, entre 1 y 520.";
 const BASE_REFUSAL = "La fase «Base» llega hasta la semana 6 (7 desde la apertura). El final no puede quedar antes.";
 
-async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360) {
+async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360, clock = false) {
   const context = await browser.newContext({ storageState: sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   await visit(page, path);
   return { page, context };
 }
@@ -173,7 +174,7 @@ test("F1: a phase the page did not have is refused by the server after pressing,
 test("F1: «Dejarlo como está» with 5 typed closes the sheet, sends nothing and the end stays (RP-114)", async ({ person, browser, baseURL, db }) => {
   // Kills: sending the refused number when the sheet is dismissed.
   const { id } = await seedF1(db, person);
-  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}`);
+  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}`, 360, true);
   try {
     const posts = postCounter(page);
     const sheet = await openMove(page);
@@ -181,7 +182,7 @@ test("F1: «Dejarlo como está» with 5 typed closes the sheet, sends nothing an
     await expect(button(sheet, "Moverlo")).toBeDisabled();
     await button(sheet, "Dejarlo como está").click();
     await expect(dialog(page)).toHaveCount(0);
-    await page.waitForTimeout(400);
+    await page.clock.runFor(30_000);
     expect(posts).toEqual([]);
     expect(await horizonOfGoal(db, id)).toBe(fromThis(10));
   } finally {

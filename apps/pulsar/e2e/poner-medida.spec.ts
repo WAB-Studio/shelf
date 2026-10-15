@@ -17,9 +17,10 @@ const NAME_LABEL = "qué cuenta";
 const UNIT_LABEL = "en qué unidad";
 const DAY_BACK = (days: number) => new Date(Date.now() - days * DAY_MS);
 
-async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360) {
+async function open(browser: Browser, baseURL: string | undefined, sessionFile: string, path: string, width = 360, clock = false) {
   const context = await browser.newContext({ storageState: sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
+  if (clock) await page.clock.install();
   await visit(page, path);
   return { page, context };
 }
@@ -181,7 +182,7 @@ test("another screen gave the goal its measure first: «Esta meta ya mide en pá
 test("«Cancelar» with both fields full closes the sheet and writes nothing, sending nothing (RP-117)", async ({ person, browser, baseURL, db }) => {
   // Kills: saving on dismiss.
   const id = await mudanza(db, person);
-  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}`);
+  const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}`, 360, true);
   try {
     const posts = postCounter(page);
     const sheet = await openSheet(page);
@@ -189,7 +190,7 @@ test("«Cancelar» with both fields full closes the sheet and writes nothing, se
     await unitField(sheet).fill("cajas");
     await cancel(sheet).click();
     await expect(dialog(page)).toHaveCount(0);
-    await page.waitForTimeout(400);
+    await page.clock.runFor(30_000);
     expect(posts).toEqual([]);
     expect(await measureOf(db, id)).toEqual({ name: null, unit: null });
     await expect(offer(page)).toBeVisible();
