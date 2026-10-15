@@ -372,9 +372,27 @@ test("a non-template file goes to the model as a file claim", async () => {
   assert.equal((await rows())[0].source, "file");
 });
 
+// One empty page: the header, the three objects the reader's page count looks for, a trailer.
+const ONE_PAGE_PDF = [
+  "%PDF-1.4",
+  "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+  "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+  "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >> endobj",
+  "trailer << /Root 1 0 R >>",
+  "%%EOF",
+].join("\n");
+
+test("a four-byte file named plan.pdf is not a PDF: 415, no claim", async () => {
+  const file = new File([new Uint8Array([37, 80, 68, 70])], "plan.pdf", { type: "application/pdf" });
+  const response = await route.POST(request({ file }));
+  assert.equal(response.status, 415);
+  assert.equal((await answer(response)).error, "import.errors.unreadableType");
+  assert.equal((await rows()).length, 0);
+});
+
 test("a PDF goes as parts: the source comes back with no lines to copy", async () => {
   stubDraft(rawGoal({ src: [] }));
-  const file = new File([new Uint8Array([37, 80, 68, 70])], "plan.pdf", { type: "application/pdf" });
+  const file = new File([ONE_PAGE_PDF], "plan.pdf", { type: "application/pdf" });
   const lines = await ndjson(await route.POST(request({ file })));
   assert.deepEqual(lastLine(lines).done.source, { kind: "parts", lines: null });
 });
