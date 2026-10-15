@@ -1,9 +1,6 @@
 // A cache write that keeps failing while the claims succeed re-spends a model
 // call on every lookup of that word and is visible only as a log line. The line
 // must name the route and the word key so an alert can group on them.
-//
-// `todo`: the routes log the route and the error, not the key (measured
-// 2026-10-15). Remove `todo` when the line carries it.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import Module from "node:module";
@@ -99,7 +96,7 @@ const CASES = [
 ];
 
 for (const c of CASES) {
-  test(`${c.route}: a failing cache write logs one line naming the route and the key`, { todo: "log line does not carry the key" }, async () => {
+  test(`${c.route}: a failing cache write logs one line naming the route and the key`, async () => {
     const { POST } = await c.load();
     const response = await POST(post(c.body));
     assert.equal(response.status, 200);
@@ -107,5 +104,6 @@ for (const c of CASES) {
     assert.ok(logged[0].includes(c.route), logged[0]);
     assert.ok(logged[0].includes("cache write failed"), logged[0]);
     assert.ok(logged[0].includes(c.key), `no key in: ${logged[0]}`);
+    assert.ok(!logged[0].includes("the cat sat down"), logged[0]);
   });
 }
