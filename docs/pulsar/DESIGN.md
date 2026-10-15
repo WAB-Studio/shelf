@@ -1749,3 +1749,15 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **A daily cap on model calls for the whole app**, on top of each person's 10 imports and 50 chats.
 - **The chat labels its replies «GOALLOG».**
 - **A write that fails to reach the server keeps the person where they are, with what they typed,** and the line «No se pudo guardar. Tu texto sigue aquí; inténtalo otra vez.» (Hoy's tap, the quantity sheet, «Abrirla» on a new goal). Form pages that read no data keep opening during an outage and fail on save.
+
+## Decisions of 2026-10-15 (pending list), by the user
+
+- **«Nada se borra» covers facts only.** Phases, cadences, a measure, a rhythm and goals with no facts can be edited and deleted; a goal or commitment that explains facts stays archived or retired (RP-13, RP-24). Not built yet.
+- **A goal's hours come from blocks alone,** a block's quantity. A task's estimate does not count toward hours. Not built yet.
+- **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Not built yet.
+- **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Not built yet.
+- **Three goal levels stay,** as today (RP-78).
+- **The last day of a month reads «último día»,** never «faltan 0 días». Not built yet.
+- **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Not built yet.
+- **CI, decided for the infra train:** concurrency per branch, path filters, `pulsar-fechas` out of manual dispatch, and 6 shards for `pulsar-e2e` (4 today). Not built yet.
+- **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.

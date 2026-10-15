@@ -1699,3 +1699,12 @@ Taken by the user («2. b 3. b»).
 - **RL-50: a word list filters what MyMemory returns;** a blocked answer reads «No se pudo traducir». Overturns the 2026-09-20 pick of the model as judge.
 - **Touch targets: 44 px minimum**, raised from 32 px; the search box's clear ✕ included.
 - **«No se pudo …»** for a failure, never «No pude» or «No pudimos».
+
+## Decisions of 2026-10-15 (pending list), by the user
+
+- **The export adds a CSV for Anki beside the JSON.** The JSON stays the complete copy (RL-20). Not built yet.
+- **A row of `/registro` can be deleted with a ✕ per row.** Replaces the premise that the record only gains rows. Not built yet.
+- **When sending a sign-in link times out, the screen says it may have been sent:** a new line, with a board drawn before it is built. Not built yet.
+- **The dead RL-45 «swishing» path is deleted.** No visible behaviour changes.
+- **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/voyager/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Needs boards before any work. Not built yet.
+- **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
