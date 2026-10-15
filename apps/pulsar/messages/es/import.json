@@ -278,7 +278,7 @@
       "note": "La nota va bajo una tarea, con dos espacios, o bajo una sub-tarea, con cuatro.",
       "rhythmPlace": "El ritmo va justo después de «medida:», una sola vez por meta.",
       "rhythmUnit": "El ritmo va con una medida: ponla en «medida:» y el ritmo justo debajo.",
-      "rhythmAmount": "El ritmo es un monto por mes: un entero en la unidad de la medida.",
+      "rhythmAmount": "El ritmo es un monto por mes: un tiempo como «12 h», o un entero en la unidad de la medida.",
       "rhythmTime": "Esta meta mide en horas: escribe el ritmo con su unidad, como «ritmo: 10 h».",
       "cadenceTilde": "Falta la tilde: «cada día».",
       "cadenceWeekCap": "Una semana tiene 7 días: hasta «7 veces por semana».",
