@@ -64,3 +64,12 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   card and in reports only when not zero, and as rows in the movements list, never in the six-month chart; the history lives in
   the «Cuadrar» dialog; a reconciliation is final (no undo, no day before the latest, a mistake is corrected by reconciling
   again); the export carries adjustments as movements, like the list (decided 2026-10-15, RF-50 and RF-118); the real figure is typed as a magnitude, its sign from the account's kind.
+
+## Decisions of 2026-10-15: after the cuadre critic, by the user
+
+- **The export keeps adjustments, flagged in the «Descuadre» column**, so a restored backup keeps every reconciliation. A total
+  made by hand filters that column.
+- **A real figure below zero is typed with a minus sign** («-5000»): an overdrawn asset or an overpaid card. No switch, no new
+  control; one line of help under the field. Replaces «typed as a magnitude» above for that case. Not built yet.
+- **«Gastos» and «Ingresos» in /movements leave adjustments out.** They show in «Todos» and under a fourth option «Descuadre» of
+  the type filter. Not built yet.
