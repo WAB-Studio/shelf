@@ -103,6 +103,21 @@ function request(body: unknown, headers: Record<string, string> = {}) {
 
 const say = (text: string) => ({ turns: [{ role: "person", text }] });
 
+// RP-126: the app's day. The cap is set to what the table holds today plus `room`, so rows other lanes left
+// do not move the test. These files run one at a time (`scripts/harness/plan-run.ts`).
+async function withAppCap<T>(room: number, run: () => Promise<T>): Promise<T> {
+  const [{ count }] = await sql<{ count: string }[]>`
+    select count(*) from goals.model_calls where day = (now() at time zone 'America/Bogota')::date`;
+  const before = process.env.APP_MODEL_CALLS_DAILY_CAP;
+  process.env.APP_MODEL_CALLS_DAILY_CAP = String(Number(count) + room);
+  try {
+    return await run();
+  } finally {
+    if (before === undefined) delete process.env.APP_MODEL_CALLS_DAILY_CAP;
+    else process.env.APP_MODEL_CALLS_DAILY_CAP = before;
+  }
+}
+
 async function seedChat(count: number, source: "chat" | "paste" = "chat") {
   for (let i = 0; i < count; i++) {
     await sql`insert into goals.model_calls (user_id, model, source, outcome) values (${userId}, 'RNP-21 fixture', ${source}, 'ok')`;
@@ -363,4 +378,39 @@ test("a body that declares more than 1 MiB is refused before anything is claimed
   const at = await route.POST(request(say("¿Cómo voy?"), { "content-length": String(1024 * 1024) }));
   assert.equal(at.status, 200);
   assert.equal((await chatRows()).length, 1);
+});
+
+test("RP-126: the app's day spent, a person far under their fifty is refused 429 chat.errors.capApp, never .cap, the model not asked", async () => {
+  delete envHandle.PULSAR_CHAT_STUB;
+  envHandle.OPENAI_API_KEY = "sk-never-sent";
+  await seedChat(2);
+  await withAppCap(0, async () => {
+    const response = await route.POST(request(say("¿Cómo voy?")));
+    assert.equal(response.status, 429);
+    assert.equal((await body(response)).error, "chat.errors.capApp");
+  });
+  assert.equal(fetchCalls.length, 0);
+  assert.equal((await chatRows()).length, 2);
+});
+
+test("RP-126: one call of room left in the app's day: that message lands, the next is refused as the app's", async () => {
+  await withAppCap(1, async () => {
+    const first = await route.POST(request(say("¿Cómo voy?")));
+    assert.equal(first.status, 200);
+    const second = await route.POST(request(say("¿Cómo voy?")));
+    assert.equal(second.status, 429);
+    assert.equal((await body(second)).error, "chat.errors.capApp");
+  });
+  assert.equal((await chatRows()).length, 1);
+});
+
+test("RP-126: the person's own fifty spent while the app has room still says .cap, not the app's", async () => {
+  delete envHandle.PULSAR_CHAT_STUB;
+  envHandle.OPENAI_API_KEY = "sk-never-sent";
+  await seedChat(50);
+  await withAppCap(1000, async () => {
+    const response = await route.POST(request(say("¿Cómo voy?")));
+    assert.equal(response.status, 429);
+    assert.equal((await body(response)).error, "chat.errors.cap");
+  });
 });
