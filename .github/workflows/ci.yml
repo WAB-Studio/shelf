@@ -92,6 +92,7 @@ jobs:
           apps: voyager
       - run: npm run check:sync -w apps/voyager
       - run: npm run check:grants -w apps/voyager
+      - run: npm run check:sign-in-budget -w apps/voyager
 
   # The pure modules, mirrors voyager's `unit` job. No database, no secret.
   pulsar-unit:
