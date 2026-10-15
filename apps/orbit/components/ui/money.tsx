@@ -40,7 +40,9 @@ export type MoneyProps = {
   currency: CurrencyCode;
   tone?: MoneyTone;
   size?: "row" | "figure" | "hero" | "inherit";
-  signed?: boolean;
+  // "always" reads the stored sign whatever the tone, «+» included: a figure
+  // that is neither income nor expense but still moves the balance (RF-138).
+  signed?: boolean | "always";
   // Marks the figure as what a person expects to be billed, not what was
   // billed (RF-123). No screen writes that mark itself.
   estimate?: boolean;
@@ -68,7 +70,11 @@ export function Money({
   const sign =
     !signed || amountMinor === 0
       ? ""
-      : tone === "income"
+      : signed === "always"
+        ? amountMinor < 0
+          ? MINUS
+          : "+"
+        : tone === "income"
         ? "+"
         : tone === "expense"
           ? MINUS
