@@ -15,7 +15,8 @@ This file is the core every agent loads. Read the file the index names before th
 ## Apps and contracts
 
 - Call the apps by their names: `apps/orbit` is **HomeFund**, `apps/voyager` is **WordBook**, `apps/pulsar` is **GoalLog**,
-  `apps/portal` is «Universo». Folders and URLs keep the old names until the rename slice.
+  `apps/portal` is «Universo». Folders and URLs keep the old names until the rename slice, which renames the folders to
+  `apps/homefund`, `apps/wordbook`, `apps/goallog` and the Vercel projects the same (old URLs kept); the repo stays `universe`.
 - HomeFund: contract `docs/SPEC.md` §1, model and invariants §2, stack §4, flows `docs/FLOWS.md`, design `docs/DESIGN.md`.
 - WordBook: `docs/voyager/SPEC.md`, `docs/voyager/DESIGN.md`. GoalLog: `docs/pulsar/SPEC.md`, `docs/pulsar/DESIGN.md`.
   Universo: `docs/portal/DESIGN.md`. Give every app its own design; never carry a pattern across.
@@ -55,10 +56,11 @@ This file is the core every agent loads. Read the file the index names before th
 | Level | Trait | Chain |
 |---|---|---|
 | 3 | money, a delete, a permission, policy or grant, a migration, what is stored, a refusal | `tester` → `worker` → `validator` + `mutator` |
-| 2 | a screen or a query with none of level 3 | one `worker` that writes its own tests red first; the train's `validator` judges it |
+| 2 | a NEW screen, or a new state of one | `tester` → `worker`; the train's `validator` judges it |
+| 2 | a change to an existing screen, or a query, with none of level 3 | one `worker` that writes its Done table red first; the train's `validator` judges it |
 | 1 | words, docs, a pure function | one `worker` |
 
-- Cap a module at one diff a person reviews at once: about 400 changed lines. Split a bigger one.
+- Cap a module at one diff a person reviews at once: about 400 changed lines of its code, not its tests. Split a bigger one.
 - A slice is reviewed when a reviewer read it in a clean context. A reviewer with no findings is a valid result.
 
 ## Code
@@ -75,10 +77,8 @@ This file is the core every agent loads. Read the file the index names before th
 - Compose a screen from `components/ui` and its props. Never write a utility class, an inline `style={{…}}` or a CSS
   module outside it. Add a prop to the primitive for a variant; never patch one from outside.
 - Reach `localStorage`, `sessionStorage` and IndexedDB from `lib/` alone. Never silence the lint rule with a disable.
-- Write interface text a person acts on. Cut text that only explains.
-- Install only from `docs/SPEC.md` §4. Install nothing on its «Do not install» list.
-- Leave `apps/voyager/.env.local` alone.
-- Write code and identifiers in English. Write user-facing copy in the user's language.
+- Install only from `docs/SPEC.md` §4, nothing on its «Do not install» list. Leave `apps/voyager/.env.local` alone.
+- Write code and identifiers in English. Write user-facing copy in the user's language. Interface text: what a person acts on.
 - Comments: say what the code does not, one idea each. Never restate the line below. Never log a change, a date, an
   author or a ticket.
 
@@ -93,9 +93,9 @@ This file is the core every agent loads. Read the file the index names before th
 
 - Enforced by hooks in `.claude/settings.json`: no `git stash`, commits as `wilson <cxrkeybwp2004@gmail.com>`, no Claude
   trailer of any kind, PRs to `integracion`, no `pkill -f`, no `gh pr merge` chained with a delete, no push to `main`.
-- Do git work without asking: commit, push, open a PR, merge into `integracion`, delete a branch. Report it.
+- Do git work without asking: commit, push, open a PR, merge into `integracion`, delete a branch; report it. Ride a docs
+  change along with the work that produced it.
 - Ask before taking `integracion` to `main`. That merge is the deploy: once per slice, at most once a day.
-- Ride a docs change along with the work that produced it.
 - Fetch before you compare. Ask GitHub whether a branch landed: a squash merge is never an ancestor.
 
 ## Verification

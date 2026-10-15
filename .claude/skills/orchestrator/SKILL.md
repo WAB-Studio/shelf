@@ -26,7 +26,7 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
 2. Pick a plan path: `private/plan-<slice>.md`.
 3. Dispatch `planner` with the slice and that path.
 4. Read the plan. Check every module is bounded, ordered, tied to RF codes, and has a done criterion.
-   Check each carries its risk level (`AGENTS.md` § Modules) and fits the size cap.
+   Check each carries its risk level (`AGENTS.md` § Modules) and fits the size cap (400 lines of code, tests not counted).
    Check the slice is cut by layer, not by function: all its loaders in one module, the screens of one area in one
    module. About eight modules a slice, never seventeen. Split only what shares no file and needs no other module's result.
 5. Put any `Questions` to the user. Wait for the answers.
@@ -40,7 +40,8 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
 2. Take every assignment that depends on nothing pending. Open a lane for each: `scripts/worktree.sh <lane> <branch> <base>`.
 3. Dispatch each module's chain by its risk level (`AGENTS.md` § Modules). Level 3: the `tester` first, on the
    module's branch, writes the Done table's tests from the contract, red; then the `worker` makes them green.
-   Level 2: one `worker` writes its Done table red first, then makes it green. Level 1: one `worker`.
+   Level 2, a new screen or a new state of one: the same chain, `tester` then `worker`. Level 2, a change to an
+   existing screen or a query: one `worker` writes its Done table red first, then makes it green. Level 1: one `worker`.
    Before a screen: the user approved its board (`docs/agentes/canvas.md`), and the query that feeds it exists.
    Measure what the module's claim includes, in real rows, before dispatching it.
    Dispatch one agent per lane, all in one message. Mark the plan's module `## [~]` the moment you dispatch it.
@@ -62,6 +63,8 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
 - Never ask whether to keep going or close the handoff. The `Stop` hook says when the window is full.
 - Never ask permission for the next step the plan already names. Take it and report it.
 - Never end a turn on a report while a module is ready to dispatch. Take it.
+- Leave `**Bloqueado:** <reason>` at the head of a plan that waits on something outside itself: the `Stop` hook stays
+  quiet on it and names no module.
 - Take the module the `Stop` hook names. It reads the plan's boxes and the `Depende de:` line, so it names only what
   is takeable and says nothing while every module is in flight or blocked.
 - Say who or what blocks a module, in one line, when one is blocked. Never go quiet.
@@ -166,6 +169,8 @@ Send: goal, files with path, contract, RF codes and the `docs/` sections to read
 builds on, done criterion, the decisions you already took.
 
 Name the branch, the lane, the worktree path and the port. It commits its own work.
+Say the `/cuenta` rule in every dispatch that drives WordBook: never type an address into it
+(`docs/agentes/voyager.md`).
 Say that the database is remote and shared: it never migrates, never touches a trigger, a policy or a grant,
 and never runs a suite on a lane that is not its own.
 State the done criterion as a fact to prove. Never as a command to run.

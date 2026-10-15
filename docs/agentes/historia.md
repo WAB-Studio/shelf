@@ -10,7 +10,7 @@ Each entry names the rule and the file it lives in now.
   after s5 to s8 each grew out of the last critic's small findings, several of them there since the first round.
 - Tester before worker on every screen module. Decided by the user 2026-10-06, after four modules in one evening went
   worker → validator → worker over clauses nobody had tested. Narrowed by the user 2026-10-14 to the risk table's
-  level 3 (`AGENTS.md` § Modules).
+  level 3 (`AGENTS.md` § Modules), then restored for a new screen on 2026-10-15 (see the review entry below).
 - Words-only module to one agent that writes its Done table red first. Decided by the user 2026-10-10.
 - Judge per train, never per module. Decided by the user 2026-10-12: per-module judging and per-test mutations took
   more than half of each module's time (one `next build` per mutation).
@@ -148,9 +148,23 @@ Each entry names the rule and the file it lives in now.
 
 - An inline `style={{…}}` or a CSS module counts as a utility class. Decided by the user 2026-10-08.
 - Storage only from `lib/`, never a lint disable. Decided by the user 2026-09-19.
+- Revoke ALL from `anon`, `authenticated` and `service_role` in every migration that creates a table: Supabase grants
+  them all at `CREATE TABLE`, so a table nobody revoked is open to every role.
 
 ## Names (`AGENTS.md` § Apps)
 
 - HomeFund, WordBook, GoalLog. Decided by the user 2026-10-14: «no se entiende rápidamente qué es». Folders
   `apps/homefund`, `apps/wordbook`, `apps/goallog` at the rename slice; Vercel projects renamed the same, old URLs kept
   working; the GitHub repo stays `universe`.
+
+## Review of the AGENTS.md restructure (`AGENTS.md`, `docs/agentes/`)
+
+- The user reviewed the 120-line core plus `docs/agentes/` and approved all 12 process changes on 2026-10-15, with one
+  adjustment. Decided by the user 2026-10-15.
+- The adjustment (change 1, the risk table): level 2 splits. A NEW screen, or a new state of one, keeps `tester` →
+  `worker`; a change to an existing screen, or a query, with none of level 3, is one `worker` that writes its own Done
+  table red first. The 2026-10-14 narrowing of the tester to level 3 stands for the second case only.
+- Change 2, the 400-line cap, counts the module's code, not its tests.
+- The review found four partial losses, now restored: the `/cuenta` rule in every WordBook dispatch (orchestrator
+  skill), the rename's destination names (core, § Apps and contracts), `**Bloqueado:**` in plan-watch (orchestrator
+  skill) and the reason behind revoking ALL (above).
