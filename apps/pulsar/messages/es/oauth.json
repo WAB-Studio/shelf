@@ -7,7 +7,7 @@
     "done": "marcar hecho y anotar cantidades",
     "write": "abrir metas, escribir tareas y sus notas",
     "rename": "renombrar una meta y mover su final",
-    "phases": "agregar fases y compromisos, y retirar un compromiso",
+    "phases": "añadir fases y compromisos, y retirar un compromiso",
     "plan": "darle mes o día a una tarea, devolverla al plan y cambiar el monto de un mes",
     "measure": "poner la medida y el ritmo de una meta"
   },

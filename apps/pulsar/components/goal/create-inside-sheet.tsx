@@ -27,7 +27,7 @@ export type CreateInsideActionProps = {
 };
 
 /**
- * «Agregar meta …» (RP-82, RP-79): a button on a goal's own screen opening a
+ * «Añadir meta …» (RP-82, RP-79): a button on a goal's own screen opening a
  * sheet with a name and a weeks count. A goal starts the day it is created, so
  * the count runs from today's week; one that ends after the upper goal is
  * refused here with the room left, before any request leaves.

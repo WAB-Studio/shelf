@@ -49,7 +49,7 @@
     "schedule_task": "Cambiar el día de la tarea «{task}»",
     "set_month_amount": "Poner el monto de {month} en «{goal}»",
     "rename_goal": "Renombrar la meta «{goal}»",
-    "add_phase": "Agregar una fase a «{goal}»",
+    "add_phase": "Añadir una fase a «{goal}»",
     "add_commitment": "Crear el compromiso «{name}»",
     "move_horizon": "Mover el final de «{goal}»",
     "fix_task": "Fijar «{task}» en {month}",
