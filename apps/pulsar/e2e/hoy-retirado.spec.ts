@@ -1,6 +1,5 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
-import { noonFromToday } from "./reloj";
 
 // A commitment retired today keeps today's done row when it has today's fact
 // (its mark, hour and «lo dijiste tú», undoable as before), asks still
@@ -53,9 +52,6 @@ test("a commitment retired today with today's fact stays a done row, one without
       await sheet.getByRole("button", { name: "Retirarlo" }).click();
       await expect(sheet).toBeHidden();
     }
-
-    // «Retirarlo» stamps the database's own now(), which a pinned clock does not move.
-    await db`update goals.commitments set retired_at = ${noonFromToday(0)} where goal_id = ${goal.id} and user_id = ${person.id}`;
 
     await page.goto("/");
     await expect(page.getByRole("button", { name: /^Diaria sin hecho/ })).toBeVisible();
@@ -116,9 +112,6 @@ test("a commitment retired today reads on a day before as it did then (RP-13)", 
       await sheet.getByRole("button", { name: "Retirarlo" }).click();
       await expect(sheet).toBeHidden();
     }
-
-    // «Retirarlo» stamps the database's own now(), which a pinned clock does not move.
-    await db`update goals.commitments set retired_at = ${noonFromToday(0)} where goal_id = ${goal.id} and user_id = ${person.id}`;
 
     await page.goto(`/dia/${yesterday}`);
     await expect(page.getByText("Hecha ayer", { exact: true })).toBeVisible();
