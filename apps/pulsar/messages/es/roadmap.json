@@ -19,7 +19,7 @@
     "seeRest": "Ver el resto del plan",
     "addTask": "Añadir una tarea",
     "continues": "Viene de {from} y sigue en {to}.",
-    "noMeasure": "Esta meta no mide horas, así que no tiene ritmo: cada tarea va en el mes que le pongas.",
+    "noMeasure": "Esta meta no mide nada, así que no tiene ritmo: cada tarea va en el mes que le pongas.",
     "seeMonths": "Ver mes por mes"
   },
   "hoyMovido": {

@@ -65,7 +65,7 @@ test("the general lists its large goals in plan order, each with its month, its 
   }
 });
 
-test("the general offers «Agregar meta grande» and no «Mover bajo otra meta» (RP-82, RP-79)", async ({
+test("the general offers «Añadir meta grande» and no «Mover bajo otra meta» (RP-82, RP-79)", async ({
   person,
   browser,
   baseURL,
@@ -76,8 +76,8 @@ test("the general offers «Agregar meta grande» and no «Mover bajo otra meta»
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
   try {
     await expect(page.getByText("Metas dentro", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Agregar meta grande" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Agregar meta pequeña" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Añadir meta grande" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Añadir meta pequeña" })).toHaveCount(0);
     await expect(page.getByText("Mover bajo otra meta")).toHaveCount(0);
   } finally {
     await context.close();
@@ -163,7 +163,7 @@ test("a general whose goals cover no amount this month says «Sin monto este mes
   }
 });
 
-test("the large goal names the general above and opens it, lists its small goal and offers «Agregar meta pequeña» (RP-81, RP-82)", async ({
+test("the large goal names the general above and opens it, lists its small goal and offers «Añadir meta pequeña» (RP-81, RP-82)", async ({
   person,
   browser,
   baseURL,
@@ -186,8 +186,8 @@ test("the large goal names the general above and opens it, lists its small goal 
     expect(text).toContain(`${monthWord} · 1 h de 2 h`);
     expect(text).toMatch(/hasta el [^·]+$/);
 
-    await expect(page.getByRole("button", { name: "Agregar meta pequeña" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Agregar meta grande" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Añadir meta pequeña" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Añadir meta grande" })).toHaveCount(0);
 
     await above.click();
     await page.waitForURL(`**/metas/${tree.G}`);
@@ -203,7 +203,7 @@ test("an archived branch offers no creating inside, no move and no archive, and 
   baseURL,
   db,
 }) => {
-  // Kills: offering «Agregar meta …» or «Mover bajo otra meta» on an archived goal.
+  // Kills: offering «Añadir meta …» or «Mover bajo otra meta» on an archived goal.
   const tree = await seedTree(db, person, Date.now());
   await archiveTogether(db, [tree.G, tree.g1, tree.p, tree.g2]);
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.g1}`);
@@ -211,7 +211,7 @@ test("an archived branch offers no creating inside, no move and no archive, and 
     await expectTitle(page, tree.names.g1);
     await expect(page.getByRole("button", { name: "Reabrir" })).toBeVisible();
     await expect(page.locator(`main a[href="/metas/${tree.G}"]:visible`).first()).toContainText(tree.names.G);
-    await expect(page.getByRole("button", { name: /^Agregar meta/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Añadir meta/ })).toHaveCount(0);
     await expect(page.getByText("Mover bajo otra meta")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Archivar esta meta" })).toHaveCount(0);
   } finally {
@@ -222,7 +222,7 @@ test("an archived branch offers no creating inside, no move and no archive, and 
   try {
     await expectTitle(general.page, tree.names.G);
     await expect(general.page.getByRole("button", { name: "Reabrir" })).toBeVisible();
-    await expect(general.page.getByRole("button", { name: /^Agregar meta/ })).toHaveCount(0);
+    await expect(general.page.getByRole("button", { name: /^Añadir meta/ })).toHaveCount(0);
     await expect(general.page.getByText("Mover bajo otra meta")).toHaveCount(0);
   } finally {
     await general.context.close();
@@ -235,7 +235,7 @@ test("an ended goal inside the tree offers no creating inside and no move, and s
   baseURL,
   db,
 }) => {
-  // Kills: offering «Agregar meta pequeña» or «Mover bajo otra meta» on a goal whose end has arrived.
+  // Kills: offering «Añadir meta pequeña» or «Mover bajo otra meta» on a goal whose end has arrived.
   const stamp = Date.now();
   const G = await seedGoal(db, person, { name: `General terminada ${stamp}`, unit: MINUTES, horizon: today });
   const g1 = await seedGoal(db, person, { name: `Grande terminada ${stamp}`, parent: G, unit: MINUTES, horizon: today });
@@ -244,7 +244,7 @@ test("an ended goal inside the tree offers no creating inside and no move, and s
     await expectTitle(page, `Grande terminada ${stamp}`);
     await expect(page.getByText(/^terminó /i).first()).toBeVisible();
     await expect(page.locator(`main a[href="/metas/${G}"]:visible`).first()).toContainText(`General terminada ${stamp}`);
-    await expect(page.getByRole("button", { name: /^Agregar meta/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Añadir meta/ })).toHaveCount(0);
     await expect(page.getByText("Mover bajo otra meta")).toHaveCount(0);
   } finally {
     await context.close();
