@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, date, index, pgPolicy, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, date, index, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
 
 import { finances } from "./_schema";
@@ -24,6 +24,9 @@ export const accountReconciliations = finances.table(
     // of the account's settlement currency.
     countedBalanceCents: bigint({ mode: "number" }).notNull(),
     // Set by trigger from `auth.uid()`; no grant lets a caller name it.
+    // The key its booked movement carries (RF-52), so a backup's adjustment is found again on a
+    // second import. Null leaves the movement's own id to stand in, as on any movement.
+    externalRef: text(),
     createdBy: uuid()
       .notNull()
       .references(() => appUsers.id, { onDelete: "restrict" }),
@@ -37,6 +40,7 @@ export const accountReconciliations = finances.table(
       table.createdAt.desc(),
     ),
     index("account_reconciliations_created_by_idx").on(table.createdBy),
+    check("account_reconciliations_external_ref_length", sql`length(${table.externalRef}) <= 200`),
     pgPolicy("account_reconciliations_select", {
       for: "select",
       to: authenticatedRole,

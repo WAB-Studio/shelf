@@ -3,7 +3,7 @@ import "server-only";
 import { desc, eq, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import { accountReconciliations, accounts } from "@/db/schema";
+import { accountReconciliations, accounts, transactions } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
@@ -165,6 +165,14 @@ export async function reconcileAccount(
 ): Promise<ReconcileAccountResult> {
   try {
     return await withUserDb(async (tx) => {
+      // Held to commit: a second count of this account waits here, so its pre-read below sees
+      // the first one's gap and refuses `stale` instead of booking against a ledger it never saw.
+      // Only a writer takes it, so a stranger never holds an account's lock.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${args.accountId}::text, 0))
+          from accounts where id = ${args.accountId} and private.can_write_account(id)`,
+      );
+
       const [now] = await tx
         .select({
           writable: sql<boolean>`private.can_write_account(accounts.id)`,
@@ -196,7 +204,16 @@ export async function reconcileAccount(
         },
       );
 
-      return { ok: true as const, id: row.id, gapCents: row.countedCents - derivedCents };
+      // A movement saved after the pre-read still lands before the trigger computes the gap, so the
+      // gap told back is the one booked, read off its marked movement.
+      const [booked] = await tx
+        .select({ amount: transactions.amountCents, into: transactions.toAccountId })
+        .from(transactions)
+        .where(eq(transactions.reconciliationId, row.id))
+        .limit(1);
+      const gapCents = booked ? (booked.into === null ? -booked.amount : booked.amount) : 0;
+
+      return { ok: true as const, id: row.id, gapCents };
     });
   } catch (error) {
     if (error instanceof Refused) return error.result;

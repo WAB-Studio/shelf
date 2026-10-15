@@ -12,6 +12,7 @@ import { authActionClient } from "@/lib/safe-action";
 import { runImportPipeline } from "@/lib/spreadsheet/import-pipeline";
 import type { ImportResult, RowFieldError } from "@/lib/spreadsheet/import-pipeline";
 import type { SheetEntity } from "@/lib/spreadsheet/schema";
+import type { ImportedAdjustment } from "@/lib/validation/account-reconciliation";
 import type { CreateAccountInput } from "@/lib/validation/account";
 import type { CreateCategoryInput } from "@/lib/validation/category";
 import type { CreateMemberInput } from "@/lib/validation/member";
@@ -79,9 +80,13 @@ export const previewImportAction = authActionClient
 
 // One entity's passing rows in the shape the commit writes: its classification, its
 // stable key, the placeholder a reference to it resolves to, and its validated payload.
-function rowsFor<T>(result: ImportResult, entity: SheetEntity): CommitRow<T>[] {
+function rowsFor<T>(
+  result: ImportResult,
+  entity: SheetEntity,
+  keep: (object: unknown) => boolean = () => true,
+): CommitRow<T>[] {
   const bucket = result.perEntity.find((set) => set.entity === entity);
-  return (bucket?.rows ?? []).map((row) => ({
+  return (bucket?.rows ?? []).filter((row) => keep(row.object)).map((row) => ({
     index: row.index,
     sheetRow: row.sheetRow,
     status: row.status,
@@ -89,6 +94,12 @@ function rowsFor<T>(result: ImportResult, entity: SheetEntity): CommitRow<T>[] {
     placeholderId: row.placeholderId,
     object: row.object as T,
   }));
+}
+
+// The transactions sheet carries a backup's adjustments beside its movements; only the
+// validated adjustment shape says `adjustment: true`.
+function isAdjustment(object: unknown): boolean {
+  return typeof object === "object" && object !== null && "adjustment" in object;
 }
 
 /**
@@ -117,7 +128,8 @@ export const commitImportAction = authActionClient
       categories: rowsFor<CreateCategoryInput>(result, "categories"),
       accounts: rowsFor<CreateAccountInput>(result, "accounts"),
       recurringRules: rowsFor<CreateRecurringRuleInput>(result, "recurringRules"),
-      transactions: rowsFor<CreateTransactionInput>(result, "transactions"),
+      transactions: rowsFor<CreateTransactionInput>(result, "transactions", (object) => !isAdjustment(object)),
+      adjustments: rowsFor<ImportedAdjustment>(result, "transactions", isAdjustment),
     };
 
     const outcome = await withUserDb((tx) => commitImport(tx, input, scope));

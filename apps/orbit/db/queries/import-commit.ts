@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
+  accountReconciliations,
   accounts,
   categories,
   groupMembers,
@@ -12,11 +13,13 @@ import {
 } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
+import { insertRow } from "@/db/insert-row";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
 import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import type { CreateAccountInput } from "@/lib/validation/account";
+import type { ImportedAdjustment } from "@/lib/validation/account-reconciliation";
 import type { CreateCategoryInput } from "@/lib/validation/category";
 import type { CreateMemberInput } from "@/lib/validation/member";
 import type { CreateRecurringRuleInput } from "@/lib/validation/recurring-rule";
@@ -101,6 +104,8 @@ export type CommitInput = {
   accounts: CommitRow<CreateAccountInput>[];
   recurringRules: CommitRow<CreateRecurringRuleInput>[];
   transactions: CommitRow<CreateTransactionInput>[];
+  // A backup's reconciliation adjustments (RF-50): booked as reconciliations, never as movements.
+  adjustments?: CommitRow<ImportedAdjustment>[];
 };
 
 export type CommitOutcome = { inserted: number; updated: number };
@@ -213,12 +218,15 @@ export async function commitImport(
   await commitRecurringRules(tx, input.recurringRules, accountMap, categoryMap, placeholders);
   await commitTransactions(tx, input.transactions, accountMap, categoryMap, placeholders);
 
+  await commitAdjustments(tx, input.adjustments ?? [], accountMap, placeholders);
+
   for (const bucket of [
     input.members,
     input.categories,
     input.accounts,
     input.recurringRules,
     input.transactions,
+    input.adjustments ?? [],
   ]) {
     for (const row of bucket) count(row);
   }
@@ -758,4 +766,47 @@ async function writeSplits(
   await tx.execute(
     sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents) values ${values}`,
   );
+}
+
+// Reconciliation refusals a backup row can meet: the day, the opening, the latest count, an archived account.
+const ADJUSTMENT_REFUSALS = new Set(["RC001", "RC002", "RC003", "RC004"]);
+
+/**
+ * Books each backup adjustment as the reconciliation that produces it (RF-137, RF-138), after
+ * every ordinary movement has landed. The count is the account's balance that day plus the
+ * exported gap, so the database books exactly that gap and the balance re-derives equal (RF-50).
+ * In day order, since a reconciliation may not predate the account's latest. A row that already
+ * exists in scope (`update`) is left alone: a reconciliation is final.
+ */
+async function commitAdjustments(
+  tx: Transaction,
+  rows: CommitRow<ImportedAdjustment>[],
+  accountMap: Map<string, string>,
+  placeholders: Set<string>,
+): Promise<void> {
+  const ordered = rows
+    .filter((row) => row.status === "new")
+    .sort((a, b) => a.object.occurredAt.localeCompare(b.object.occurredAt) || a.index - b.index);
+
+  for (const row of ordered) {
+    try {
+      const accountId = link(row.object.accountId, accountMap)!;
+      assertLinked(accountId, placeholders);
+      const gap = toCents(row.object.amount) * (row.object.direction === "up" ? 1 : -1);
+
+      await insertRow(tx, accountReconciliations, {
+        accountId,
+        reconciledOn: row.object.occurredAt,
+        countedBalanceCents: sql`private.account_settlement_balance_on(${accountId}, ${row.object.occurredAt}::date) + ${gap}::bigint`,
+        externalRef: row.externalRef,
+      });
+    } catch (error) {
+      const code = pgErrorCode(error);
+      const reasonKey =
+        code !== undefined && ADJUSTMENT_REFUSALS.has(code)
+          ? "data.import.errors.adjustmentRefused"
+          : transactionReasonKey(error);
+      throw rowFailure("transactions", row.sheetRow, reasonKey, error);
+    }
+  }
 }

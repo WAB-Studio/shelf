@@ -128,6 +128,7 @@ type ColumnView =
       readonly key: string;
       readonly field: string;
       readonly ref?: { readonly entity: "accounts" | "categories" };
+      readonly flag?: true;
     }
   | {
       readonly key: string;
@@ -265,6 +266,11 @@ function toExportRows<E extends SheetEntity>(
       }
 
       const value = row[column.field];
+
+      if (column.flag) {
+        cell[column.key] = value == null ? null : true;
+        continue;
+      }
 
       if (column.ref) {
         // A reference presents the referenced row's name; a null id (a one-sided

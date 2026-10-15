@@ -15,6 +15,7 @@ import { ActionError } from "@/lib/errors";
 import { centsToPesos } from "@/lib/money";
 import { SHEET_ENTITIES, sheetDescriptors, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { parseWorkbook, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
+import { importedAdjustmentSchema } from "@/lib/validation/account-reconciliation";
 import { createAccountSchema } from "@/lib/validation/account";
 import { createCategorySchema } from "@/lib/validation/category";
 import { createMemberSchema } from "@/lib/validation/member";
@@ -40,6 +41,7 @@ const CATEGORY_KIND_MISMATCH = "data.import.errors.categoryKindMismatch";
 // this module's `data.import.errors` namespace: the same key names the same reason
 // wherever a pesos-only path meets an account outside BASE_CURRENCY.
 const FOREIGN_CURRENCY_UNSUPPORTED = "errors.foreignCurrencyUnsupported";
+const ADJUSTMENT_ONE_ACCOUNT = "data.import.errors.adjustmentOneAccount";
 
 // A catalogue key is a dotted identifier with no spaces; a raw Zod default is an
 // English sentence. The light guard's number/enum/date fields carry no custom key,
@@ -470,6 +472,23 @@ function resolveAndShape(
       checkBaseCurrency(entity, raw, fromAccountId, "fromAccount", refs.accountCurrencies, errors);
       checkBaseCurrency(entity, raw, toAccountId, "toAccount", refs.accountCurrencies, errors);
 
+      // An adjustment is one account's gap: one leg, no category, never a split (RF-138).
+      if (data.adjustment === true) {
+        if ((data.fromAccount == null) === (data.toAccount == null)) {
+          errors.push({ key: ADJUSTMENT_ONE_ACCOUNT, column: "adjustment", value: "true" });
+        }
+        return {
+          object: {
+            adjustment: true,
+            accountId: fromAccountId ?? toAccountId,
+            direction: data.fromAccount == null ? "up" : "down",
+            amount: data.amount,
+            occurredAt: data.occurredAt,
+          },
+          errors,
+        };
+      }
+
       // The kind follows the account pair: both names present is a transfer, which
       // carries no category and no splits (RF-20/RF-69). An income or expense builds
       // a single split for the row's full amount, so the split-sum rule holds.
@@ -547,7 +566,11 @@ function processRow(
   const resolved = resolveAndShape(entity, guarded.data as Record<string, unknown>, refs, raw);
   if (resolved.errors.length > 0) return { ...carried, errors: resolved.errors, object: null };
 
-  const checked = createSchemas[entity].safeParse(resolved.object);
+  const isAdjustment =
+    entity === "transactions" && (guarded.data as { adjustment?: unknown }).adjustment === true;
+  const checked = (isAdjustment ? importedAdjustmentSchema : createSchemas[entity]).safeParse(
+    resolved.object,
+  );
   if (!checked.success) {
     return {
       ...carried,

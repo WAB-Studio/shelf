@@ -379,6 +379,13 @@
       "when": 1792130000000,
       "tag": "0053_foreign_keys_get_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792140000000,
+      "tag": "0054_an_adjustment_keeps_its_import_key",
+      "breakpoints": true
     }
   ]
 }

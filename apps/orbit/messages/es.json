@@ -1170,6 +1170,7 @@
       "institution": "Entidad",
       "amount": "Monto",
       "currency": "Moneda",
+      "adjustment": "Descuadre",
       "balanceOn": "Fecha inicial",
       "email": "Correo",
       "parent": "Categoría principal",
@@ -1199,6 +1200,8 @@
         "unknownReference": "Ninguna cuenta o categoría de tu fondo coincide con este nombre.",
         "ambiguousReference": "Más de una cuenta o categoría comparte este nombre. Renombra una para que sea única.",
         "categoryKindMismatch": "Elige una categoría del mismo tipo (ingreso o gasto) que este movimiento.",
+        "adjustmentOneAccount": "Un descuadre lleva una sola cuenta, de origen o de destino.",
+        "adjustmentRefused": "El descuadre no se pudo registrar: su fecha es anterior a la apertura o al último cuadre de la cuenta, o la cuenta está archivada.",
         "hasErrors": "El archivo todavía tiene errores. Corrígelos e impórtalo de nuevo."
       }
     }

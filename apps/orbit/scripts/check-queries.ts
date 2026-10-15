@@ -125,6 +125,8 @@ import {
   listTransactions,
   updateTransaction,
 } from "@/db/queries/transactions";
+import { commitImport } from "@/db/queries/import-commit";
+import type { CommitInput } from "@/db/queries/import-commit";
 import { getUserLocale, upsertUserLocale } from "@/db/queries/user-locale";
 import {
   getWebhookCredentialOptions,
@@ -140,6 +142,7 @@ import {
   todayInBogota,
 } from "@/lib/dates";
 import { pgErrorCode } from "@/lib/db-error";
+import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { SEED_CATEGORIES } from "@/lib/fund/seed";
 import {
   accountRowSchema,
@@ -3458,6 +3461,205 @@ async function reconcileSuite(
   );
 }
 
+// Export -> import into a fresh scope reproduces every balance and keeps adjustments out of income
+// and expense (RF-50, RF-138). The import is `commitImport` itself, fed the rows `readExport` wrote.
+async function reimportSuite(userId: string, scope: HarnessScope): Promise<void> {
+  const today = todayInBogota();
+  const importer = await createMembershipFreeUser();
+  const prefix = "Harness reimport";
+
+  const open = async (name: string, kind: "asset" | "liability", amountMinor: number) => {
+    const { accountId } = await createAccount({
+      name,
+      kind,
+      subtype: kind === "asset" ? "bancaria" : "tarjeta",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor,
+      balanceOn: shiftDate(today, -10),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const savings = await open(`${prefix} ahorros`, "asset", 1_000_000);
+  const card = await open(`${prefix} tarjeta`, "liability", 300_000);
+
+  const spend = async (amountCents: number, occurredAt: string) => {
+    const { transactionId } = await createTransaction({
+      fromAccountId: savings,
+      toAccountId: null,
+      amountCents,
+      occurredAt,
+      description: `${prefix} gasto`,
+      externalRef: null,
+      splits: [{ categoryId: scope.categoryId, amountCents }],
+      labelIds: [],
+    });
+    keep("transactions", transactionId);
+  };
+  await spend(300_000, shiftDate(today, -5));
+  await reconcileAccount({
+    accountId: savings,
+    reconciledOn: shiftDate(today, -2),
+    realMagnitudeCents: 1_900_000,
+    expectedDerivedCents: 700_000,
+  });
+  await spend(100_000, today);
+  await reconcileAccount({
+    accountId: savings,
+    reconciledOn: today,
+    realMagnitudeCents: 1_700_000,
+    expectedDerivedCents: 1_800_000,
+  });
+  await reconcileAccount({
+    accountId: card,
+    reconciledOn: today,
+    realMagnitudeCents: 450_000,
+    expectedDerivedCents: -300_000,
+  });
+
+  // What a person would export: the fixture's own accounts and the movements that touch them.
+  const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
+  const sheetAccounts = (exported.accounts ?? []).filter((row) => String(row.name).startsWith(prefix));
+  const sheetMovements = (exported.transactions ?? []).filter(
+    (row) =>
+      String(row.fromAccount ?? "").startsWith(prefix) || String(row.toAccount ?? "").startsWith(prefix),
+  );
+
+  const pesos = (cents: number) => `${Math.trunc(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+  const placeholder = new Map(sheetAccounts.map((row) => [String(row.name), randomUUID()]));
+  const categoryPlaceholder = randomUUID();
+  const idOf = (name: unknown) => (name == null ? null : placeholder.get(String(name)) ?? null);
+
+  const input: CommitInput = {
+    members: [],
+    categories: [
+      {
+        status: "new",
+        index: 0,
+        sheetRow: 2,
+        externalRef: null,
+        placeholderId: categoryPlaceholder,
+        object: { name: `${prefix} categoria`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] },
+      },
+    ],
+    accounts: sheetAccounts.map((row, index) => ({
+      status: "new" as const,
+      index,
+      sheetRow: index + 2,
+      externalRef: row.externalRef as string | null,
+      placeholderId: placeholder.get(String(row.name)) ?? null,
+      object: {
+        name: String(row.name),
+        kind: row.kind as "asset" | "liability",
+        subtype: row.subtype as never,
+        placement: "personal" as const,
+        institution: null,
+        settlementCurrency: "COP" as const,
+        // A liability exports its debt signed; the form takes the magnitude.
+        amount: pesos(Math.abs(row.amount as number)),
+        balanceOn: String(row.balanceOn),
+      },
+    })),
+    recurringRules: [],
+    transactions: [],
+    adjustments: [],
+  };
+  sheetMovements.forEach((row, index) => {
+    const common = {
+      status: "new" as const,
+      index,
+      sheetRow: index + 2,
+      externalRef: row.externalRef as string | null,
+      placeholderId: null,
+    };
+    if ((row as Record<string, unknown>).adjustment === true) {
+      input.adjustments!.push({
+        ...common,
+        object: {
+          adjustment: true,
+          accountId: (idOf(row.fromAccount) ?? idOf(row.toAccount))!,
+          direction: row.fromAccount == null ? "up" : "down",
+          amount: pesos(row.amount as number),
+          occurredAt: String(row.occurredAt),
+        },
+      });
+    } else {
+      input.transactions.push({
+        ...common,
+        object: {
+          fromAccountId: idOf(row.fromAccount),
+          toAccountId: idOf(row.toAccount),
+          amount: pesos(row.amount as number),
+          occurredAt: String(row.occurredAt),
+          description: (row.description as string | null) ?? null,
+          externalRef: common.externalRef,
+          splits: [{ categoryId: categoryPlaceholder, amount: pesos(row.amount as number) }],
+          labelIds: [],
+        },
+      });
+    }
+  });
+
+  let imported = "ok";
+  try {
+    await asUser(importer, () =>
+      withUserDb((tx) => commitImport(tx, input, { userId: importer.id, groupId: null })),
+    );
+  } catch (error) {
+    imported = rootMessage(error);
+  }
+
+  const figures = (owner: string) =>
+    fixtureSql<{ name: string; balance: string; income: string; expense: string; adjusted: string }[]>`
+      select a.name,
+        private.account_settlement_balance_on(a.id, ${today}::date)::text as balance,
+        coalesce((select sum(t.amount_cents) from transactions t
+          where t.to_account_id = a.id and t.from_account_id is null and t.reconciliation_id is null), 0)::text as income,
+        coalesce((select sum(t.amount_cents) from transactions t
+          where t.from_account_id = a.id and t.to_account_id is null and t.reconciliation_id is null), 0)::text as expense,
+        coalesce((select sum(case when t.to_account_id = a.id then t.amount_cents else -t.amount_cents end)
+          from transactions t where t.reconciliation_id is not null
+          and (t.to_account_id = a.id or t.from_account_id = a.id)), 0)::text as adjusted
+      from accounts a where a.owner_user_id = ${owner} and a.name like ${prefix + "%"}
+      order by a.name`;
+  const [source, copy] = [await figures(userId), await figures(importer.id)];
+  const same = (key: "balance" | "income" | "expense" | "adjusted") =>
+    source.length === 2 && JSON.stringify(source.map((r) => r[key])) === JSON.stringify(copy.map((r) => r[key]));
+  const brief = (rows: typeof source) =>
+    rows.map((r) => `${r.name}: balance ${r.balance}, income ${r.income}, expense ${r.expense}, adjusted ${r.adjusted}`).join(" | ");
+
+  assert(
+    next("Export then import gives every account the balance it had"),
+    imported === "ok" && same("balance"),
+    `import ${imported}; source [${brief(source)}]; copy [${brief(copy)}]`,
+  );
+  assert(
+    next("A re-imported adjustment stays out of income and expense and is still an adjustment"),
+    imported === "ok" && same("income") && same("expense") && same("adjusted") &&
+      copy.find((r) => r.name.endsWith("ahorros"))?.adjusted === "1100000",
+    `source [${brief(source)}]; copy [${brief(copy)}]`,
+  );
+
+  const keys = async (owner: string) =>
+    (await fixtureSql<{ external_ref: string }[]>`
+      select t.external_ref from transactions t
+      join accounts a on a.id = coalesce(t.to_account_id, t.from_account_id)
+      where t.reconciliation_id is not null and t.owner_user_id = ${owner} and a.name like ${prefix + "%"}
+      order by t.external_ref`).map((r) => r.external_ref);
+  const [sourceKeys, copyKeys] = [await keys(userId), await keys(importer.id)];
+  assert(
+    next("A re-imported adjustment keeps the key its backup row carried"),
+    sourceKeys.length > 0 && copyKeys.length === sourceKeys.length &&
+      JSON.stringify(copyKeys) === JSON.stringify(sheetMovements.filter((r) => (r as Record<string, unknown>).adjustment === true).map((r) => r.externalRef).sort()),
+    `copy keys ${copyKeys.length}, source adjustments ${sourceKeys.length}`,
+  );
+}
+
 async function main(): Promise<void> {
   // Opened before the first identity, so a kill between the two still leaves a
   // registry row a reaper can find dead: `createHarnessUser` would open the same
@@ -3514,6 +3716,8 @@ async function main(): Promise<void> {
   await timingSuite();
   console.log("");
   await reconcileSuite(userId, scope, fellow);
+  console.log("");
+  await reimportSuite(userId, scope);
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile
