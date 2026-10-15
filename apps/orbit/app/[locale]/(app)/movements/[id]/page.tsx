@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { MovementDetail } from "@/components/transactions/movement-detail";
@@ -29,7 +29,6 @@ export default async function MovementPage(
   const { locale, id } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   // The read is scoped by RLS, so a movement the caller may not see returns null;
   // the form options ride the same fan-out for the edit dialog and the

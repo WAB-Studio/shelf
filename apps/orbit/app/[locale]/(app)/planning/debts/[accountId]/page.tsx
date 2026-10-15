@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
@@ -33,7 +33,6 @@ export default async function DebtDetailPage(
   const { locale, accountId } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   // No fan-out of its own: `getDebtDetail` IS one — five reads in a single
   // `Promise.all`, the group among them — so nothing here chains a second await.

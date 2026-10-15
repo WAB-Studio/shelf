@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { RecurringScreen } from "@/components/planning/recurring-screen";
@@ -30,7 +30,6 @@ export default async function RecurringPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   const [rules, unreviewedCount, options, group] = await Promise.all([
     listRecurringRules(),

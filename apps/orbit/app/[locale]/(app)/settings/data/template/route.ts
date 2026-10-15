@@ -11,7 +11,6 @@ import { routing } from "@/i18n/routing";
 
 // ExcelJS writes with Node streams and zlib; the name read is user-scoped.
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 const SPREADSHEET_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

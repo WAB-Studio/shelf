@@ -1,6 +1,6 @@
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 
 import { AccountsScreen } from "@/components/accounts/accounts-screen";
@@ -27,7 +27,6 @@ export default async function AccountsPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  setRequestLocale(locale);
 
   const { tab, new: requestedSubtype } = await props.searchParams;
   const archived = tab === "archived";

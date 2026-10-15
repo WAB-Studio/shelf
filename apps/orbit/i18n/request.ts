@@ -1,5 +1,6 @@
 import { hasLocale, type Messages } from "next-intl";
 import { getRequestConfig } from "next-intl/server";
+import { locale as rootLocale } from "next/root-params";
 
 import { BASE_CURRENCY, minorUnitExponent } from "@/lib/currency";
 import { DEFAULT_LOCALE, TIME_ZONE } from "@/lib/locales";
@@ -10,9 +11,23 @@ import { routing } from "./routing";
 type Catalogue<T extends Messages> = T;
 export type EnglishCatalogue = Catalogue<typeof en>;
 
-export default getRequestConfig(async ({ requestLocale }) => {
+/**
+ * `next/root-params` only answers inside a Server Component render. A server
+ * action reaches the config outside one and throws, so it reads the locale the
+ * proxy forwarded instead.
+ */
+async function segmentLocale(requestLocale: Promise<string | undefined>) {
+  try {
+    return await rootLocale();
+  } catch {
+    return requestLocale;
+  }
+}
+
+export default getRequestConfig(async ({ locale: explicit, requestLocale }) => {
+  // An explicit `getTranslations({ locale })` wins, as it does for route handlers and metadata.
   // The segment doubles as a catch-all, so anything unknown falls back instead of throwing.
-  const requested = await requestLocale;
+  const requested = explicit ?? (await segmentLocale(requestLocale));
   const locale = hasLocale(routing.locales, requested)
     ? requested
     : DEFAULT_LOCALE;
