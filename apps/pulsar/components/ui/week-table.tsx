@@ -50,6 +50,7 @@ function Dot({ cell, fold }: { cell: WeekTableCell; fold?: boolean }) {
       className={join(cell.state === "none" ? styles.none : join(styles.dot, styles[cell.state]), fold ? styles.foldDot : undefined)}
       role="img"
       aria-label={cell.label}
+      data-part="week-dot"
       data-state={cell.state}
     />
   );

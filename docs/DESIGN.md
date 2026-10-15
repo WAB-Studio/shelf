@@ -64,6 +64,16 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   card and in reports only when not zero, and as rows in the movements list, never in the six-month chart; the history lives in
   the «Cuadrar» dialog; a reconciliation is final (no undo, no day before the latest, a mistake is corrected by reconciling
   again); the export carries adjustments as movements, like the list (decided 2026-10-15, RF-50 and RF-118); the real figure is typed as a magnitude, its sign from the account's kind.
+- **Boards approved by the user, 2026-10-15:** the 14 reconciliation boards (B1–B12) on the HomeFund canvas,
+  https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj.
+
+## Decisions of 2026-10-15, by the user («acepto todo lo que digas pendiente»)
+
+- **Reconciliation screens (M3–M5) start before the folder rename.** The branch rebases across the `git mv` with `merge.directoryRenames=true`.
+- **An invitation is accepted, never claimed on sign-in** (security review H1): a screen «X te invitó a su fondo · Aceptar / Rechazar», and a way to leave a fund. Board to draw before any worker.
+- **Only the owner unshares a shared account** (security review M1).
+- **Touch targets: 44 px minimum**, raised from 32 px, in `components/ui`.
+- **«fondo», never «grupo»**, for the shared fund on every screen; «Propietario», never «Líder».
 
 ## Decisions of 2026-10-15: after the cuadre critic, by the user
 

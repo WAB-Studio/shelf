@@ -21,7 +21,7 @@ import { fillPlan, type PlanTask } from "@/lib/plan/roadmap";
 import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
 import { isClosed } from "@/lib/validation/closed";
 import { horizonRefusal, moveHorizonSchema, type MoveHorizonInput } from "@/lib/validation/horizon";
-import { civilDateInZone, todayInZone } from "@/lib/zone";
+import { civilDateInZone, clockOverride, todayInZone } from "@/lib/zone";
 import {
   addCommitmentSchema,
   addPhaseSchema,
@@ -577,10 +577,13 @@ export async function retireCommitment(
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
+  // A pinned clock stamps noon of its day in Bogotá (the same civil day in the zone and in UTC); unpinned, the database's own now().
+  const retiredAt = clockOverride(process.env) ? new Date(`${todayInZone()}T17:00:00Z`) : sql`now()`;
+
   const retired = await withGoalsDb((tx) =>
     tx
       .update(commitments)
-      .set({ retiredAt: sql`now()` })
+      .set({ retiredAt })
       .where(
         and(eq(commitments.id, parsed.data.commitmentId), eq(commitments.userId, person.id)),
       )

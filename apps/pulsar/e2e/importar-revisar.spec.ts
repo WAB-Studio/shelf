@@ -82,8 +82,8 @@ const box = (page: Page, name: string | RegExp) => page.getByRole("checkbox", { 
 // A row is the box around its checkbox; sub-tasks and notes live in it or right after it.
 const rowOf = (page: Page, name: RegExp) => page.locator("div").filter({ has: page.getByRole("checkbox", { name }) }).last();
 const openSubTasks = (page: Page) => page.getByRole("button", { name: /\d+ sub-tareas?/ }).first().click();
-// The first month says 12 h and its tasks add up to 11 h: the check proposes the sum, and the row shows it.
-const SUM = "11 h";
+// The first month says 12 h and its tasks add up to 11 h: a template is kept as written (RP-122), so the row shows 12 h.
+const SUM = "12 h";
 
 test.describe("the review of an imported plan (RP-37, RP-35)", () => {
   test("it reads the goal, its amounts, its commitments and the tutor task with its two sub-tasks", async ({ person, browser, baseURL }) => {

@@ -88,7 +88,7 @@ async function send(page: Page, text: string): Promise<void> {
 }
 
 test.describe("the chat against a stubbed model (RP-91–RP-94)", () => {
-  test("a reply with no change is drawn under «PULSAR» and offers no «Hacer»", async ({ person, browser, baseURL }) => {
+  test("a reply with no change is drawn under «GOALLOG» and offers no «Hacer»", async ({ person, browser, baseURL }) => {
     const { context, page } = await open(browser, baseURL!, person);
     try {
       await send(page, "hola");
@@ -733,6 +733,36 @@ test.describe("the chat when the person acts fast or changes their mind (RP-92, 
       held.release();
       await context.close();
       await drop(db, world);
+    }
+  });
+
+  test("a message over 2000 characters is not sent, keeps its text and says what to do; the next one is answered", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    const { context, page } = await open(browser, baseURL!, person);
+    let hits = 0;
+    await page.route("**/chat/enviar", async (route) => {
+      hits += 1;
+      await route.continue();
+    });
+    try {
+      const long = "a".repeat(2001);
+      await send(page, long);
+      await expect(page.getByText(chat.errors.tooLong, { exact: true })).toBeVisible();
+      await expect(field(page)).toHaveValue(long);
+      await expect(page.getByText(chat.you, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(chat.errors.failed)).toHaveCount(0);
+      expect(hits).toBe(0);
+
+      await field(page).fill("hola");
+      await expect(page.getByText(chat.errors.tooLong, { exact: true })).toHaveCount(0);
+      await enviar(page).click();
+      await expect(page.getByText("Hola, dime qué quieres ver o cambiar en tu plan.")).toBeVisible();
+      expect(hits).toBe(1);
+    } finally {
+      await context.close();
     }
   });
 });

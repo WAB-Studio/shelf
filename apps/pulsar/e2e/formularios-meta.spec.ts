@@ -36,14 +36,14 @@ for (const viewport of [
       const refusal = page.getByText("Escribe un nombre.", { exact: true });
       await expect(refusal).toBeVisible();
       await expect(name).toHaveAttribute("aria-invalid", "true");
-      await expect(page.getByLabel("horizonte")).not.toHaveAttribute("aria-invalid", "true");
+      await expect(page.getByLabel("final")).not.toHaveAttribute("aria-invalid", "true");
       expect(await gapBelow(name, refusal)).toBeLessThanOrEqual(8);
     });
 
     test("a horizon out of range is refused in the horizon's hint, in its place", async ({ page }) => {
       await page.goto("/metas/nueva");
       await page.getByLabel("nombre").fill(`Meta horizonte ${Date.now()}`);
-      const horizon = page.getByLabel("horizonte");
+      const horizon = page.getByLabel("final");
       await horizon.fill("9999");
       await page.getByRole("button", { name: "Abrirla" }).click();
 

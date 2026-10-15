@@ -60,10 +60,10 @@ function token(page: Page, name: "--pulsar-muted" | "--pulsar-quiet"): Promise<s
 
 type Seen = { text: string; color: string; ratio: number };
 
-// Every visible element of one primitive's unit class, its colour and its contrast against the first painted ground.
-function seen(page: Page, module: "figure" | "table", cls: "unit" | "headerUnit" | "chevron"): Promise<Seen[]> {
+// Every visible element of one primitive's unit part, its colour and its contrast against the first painted ground.
+function seen(page: Page, part: "figure-unit" | "table-unit" | "table-header-unit" | "table-chevron"): Promise<Seen[]> {
   return page.evaluate(
-    ([moduleName, className]) => {
+    (selector) => {
       const channels = (css: string) => css.match(/[\d.]+/g)!.map(Number);
       const luminance = ([r, g, b]: number[]) => {
         const lin = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -77,7 +77,7 @@ function seen(page: Page, module: "figure" | "table", cls: "unit" | "headerUnit"
         }
         return [255, 255, 255];
       };
-      const nodes = document.querySelectorAll<HTMLElement>(`[class*='${moduleName}-module'][class*='__${className}']`);
+      const nodes = document.querySelectorAll<HTMLElement>(`[data-part='${selector}']`);
       return [...nodes]
         .filter((el) => el.getClientRects().length > 0)
         .map((el) => {
@@ -91,7 +91,7 @@ function seen(page: Page, module: "figure" | "table", cls: "unit" | "headerUnit"
           };
         });
     },
-    [module, cls] as const,
+    part,
   );
 }
 
@@ -108,7 +108,7 @@ for (const face of FACES) {
       const muted = await token(page, "--pulsar-muted");
       const quiet = await token(page, "--pulsar-quiet");
       expect(muted, "the face has two different tokens").not.toBe(quiet);
-      const units = await seen(page, "figure", "unit");
+      const units = await seen(page, "figure-unit");
       expect(units.map((u) => u.text)).toContain("búsquedas");
       allPaint(units, muted, "Figure unit");
     } finally {
@@ -127,7 +127,7 @@ for (const [width, where] of [[360, "/exportar"], [1280, "/metas/<id>/revision"]
     const { page, close } = await open(browser, baseURL, person, path, width, "light");
     try {
       const muted = await token(page, "--pulsar-muted");
-      const units = await seen(page, "table", "unit");
+      const units = await seen(page, "table-unit");
       allPaint(units, muted, "table cell unit");
     } finally {
       await close();
@@ -140,7 +140,7 @@ test("/exportar at 1280: the «km» in the header of a measured column is --puls
   const { page, close } = await open(browser, baseURL, person, "/exportar", 1280, "light");
   try {
     const muted = await token(page, "--pulsar-muted");
-    const units = await seen(page, "table", "headerUnit");
+    const units = await seen(page, "table-header-unit");
     expect(units.map((u) => u.text)).toContain("km");
     allPaint(units, muted, "header unit");
   } finally {
@@ -155,7 +155,7 @@ test("/metas/<id>/meses at 360: the row chevron stays --pulsar-quiet, a stroke a
     const quiet = await token(page, "--pulsar-quiet");
     const muted = await token(page, "--pulsar-muted");
     expect(quiet).not.toBe(muted);
-    allPaint(await seen(page, "table", "chevron"), quiet, "chevron");
+    allPaint(await seen(page, "table-chevron"), quiet, "chevron");
   } finally {
     await close();
   }
@@ -168,9 +168,9 @@ test("dark at 360: every unit beside a figure reads at 4.5:1 or more against its
     const { page, close } = await open(browser, baseURL, person, path, 360, "dark");
     try {
       const units = [
-        ...(await seen(page, "figure", "unit")),
-        ...(await seen(page, "table", "unit")),
-        ...(await seen(page, "table", "headerUnit")),
+        ...(await seen(page, "figure-unit")),
+        ...(await seen(page, "table-unit")),
+        ...(await seen(page, "table-header-unit")),
       ];
       expect(units.length, `${path}: units on screen`).toBeGreaterThan(0);
       for (const unit of units) expect(unit.ratio, `${path} «${unit.text}»`).toBeGreaterThanOrEqual(4.5);
@@ -187,7 +187,7 @@ for (const face of FACES) {
     const { page, close } = await open(browser, baseURL, person, "/exportar", 1280, face);
     try {
       await page.emulateMedia({ media: "print" });
-      const units = [...(await seen(page, "figure", "unit")), ...(await seen(page, "table", "unit")), ...(await seen(page, "table", "headerUnit"))];
+      const units = [...(await seen(page, "figure-unit")), ...(await seen(page, "table-unit")), ...(await seen(page, "table-header-unit"))];
       allPaint(units, "rgb(0, 0, 0)", "printed unit");
     } finally {
       await close();
@@ -199,7 +199,7 @@ test("dark at 1280: the «km» in the /exportar header reads at 4.5:1 or more ag
   await seedGoal(db, person, "km", 40, 20);
   const { page, close } = await open(browser, baseURL, person, "/exportar", 1280, "dark");
   try {
-    const units = await seen(page, "table", "headerUnit");
+    const units = await seen(page, "table-header-unit");
     expect(units.length, "header units on screen").toBeGreaterThan(0);
     expect(units.map((u) => u.text)).toContain("km");
     for (const unit of units) expect(unit.ratio, `header «${unit.text}»`).toBeGreaterThanOrEqual(4.5);

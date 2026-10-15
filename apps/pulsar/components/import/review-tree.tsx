@@ -6,6 +6,7 @@ import { Pencil } from "lucide-react";
 
 import { srcLines, type Correction, type DraftGoal, type ImportDraft, type Notice as DraftNotice, type Src } from "@/lib/import/draft";
 import { bySection } from "@/lib/import/sections";
+import { cadenceWords, daysWords, rateWords } from "@/lib/import/correction-words";
 import { correctionKeys, declinedKeys, noticeKey, outKey, remapped } from "@/lib/import/reason-key";
 import type { reviewTree, ReviewNode } from "@/lib/import/review";
 import { phaseCuts, phaseDrops } from "@/lib/import/draft";
@@ -290,8 +291,18 @@ export function ReviewTree({
       }
       case "parentEstimateDiffers":
         return { name: node.label, said: `${c.said} ${v.unit ?? ""}`.trim(), proposed: `${c.proposed} ${v.unit ?? ""}`.trim() };
-      case "rateToRhythm":
-        return { said: c.said, proposed: fmt(Number(c.proposed), unit), rate: c.said.replace(/ por semana$/, "") };
+      case "rateToRhythm": {
+        const words = rateWords(t, c);
+        return { said: words.said, proposed: fmt(Number(c.proposed), unit), rate: words.rate };
+      }
+      case "holderRhythmToNote":
+        return { said: rateWords(t, c).said, name: node.label };
+      case "cadenceToWeekdays":
+        return {
+          said: c.said === "" ? cadenceWords(t, c) : c.said,
+          proposed: daysWords(t, c.proposed, t.raw("day.cadence.weekdayName") as string[]),
+          name: node.label,
+        };
       case "endWithinAbove":
         return { said: dayShort(c.said), proposed: dayShort(c.proposed), above: v.above ?? "" };
       default:
@@ -303,6 +314,8 @@ export function ReviewTree({
     const unit = unitOf(node);
     if (c.code === "monthSumDiffers" || c.code === "monthOverRhythm") return fmt(Number(c.said), unit);
     if (c.code === "parentEstimateDropped" || c.code === "parentEstimateDiffers") return `${c.said} ${c.values?.unit ?? ""}`.trim();
+    if (c.code === "rateToRhythm" || c.code === "holderRhythmToNote") return rateWords(t, c).said;
+    if (c.code === "cadenceToWeekdays") return c.said === "" ? cadenceWords(t, c) : c.said;
     return c.said;
   };
 

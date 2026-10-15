@@ -48,20 +48,20 @@ const monthName = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC"
 const monthButton = (page: Page, amount: string) => page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${monthName}.*, ${amount}$`, "i") });
 
 test.describe("a time measure shows as hours and minutes, never as its unit (RP-35, RP-66)", () => {
-  test("a measure written in hours reads «11 h» on its month (the sum of its tasks), with no measure row", async ({ person, browser, baseURL }) => {
+  test("a measure written in hours reads «12 h» on its month (as written), with no measure row", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, template("medida: horas de estudio · horas"));
-      await expect(monthButton(page, "11 h")).toBeVisible();
-      await expect(monthButton(page, "11 h")).toHaveText("11 h");
+      await expect(monthButton(page, "12 h")).toBeVisible();
+      await expect(monthButton(page, "12 h")).toHaveText("12 h");
       await expect(page.getByText(TIME_WORDS, { exact: true })).toHaveCount(0);
       await expect(page.getByText("minutos", { exact: true })).toHaveCount(0);
     });
   });
 
-  test("a measure written in minutes reads «11 h» too", async ({ person, browser, baseURL }) => {
+  test("a measure written in minutes reads «12 h» too", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, template(MEASURE_LINE));
-      await expect(monthButton(page, "11 h")).toHaveText("11 h");
+      await expect(monthButton(page, "12 h")).toHaveText("12 h");
       await expect(page.getByText("minutos", { exact: true })).toHaveCount(0);
     });
   });

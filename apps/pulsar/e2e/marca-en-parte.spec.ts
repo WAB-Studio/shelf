@@ -8,22 +8,24 @@ import { test, expect } from "./fixtures";
 // to that class; the specs of the modules that consume it do.
 type Painted = { image: string; ring: string; accent: string; backgroundColor: string };
 
-// Hashed module classes carry the source name, so the stylesheet says which
-// class a state gets.
-async function paint(page: Page, module: string, stateClass: string, base: string[]): Promise<Painted> {
+// The classes of a state come from the primitive's own element: a hashed module class is
+// `<prefix><name>`, so the prefix read off a real element's `name` class says which stylesheet
+// holds the state's rule.
+async function paint(page: Page, part: string, stateClass: string, base: string[]): Promise<Painted> {
   return page.evaluate(
-    ({ module, stateClass, base }) => {
-      const find = (name: string) => {
-        for (const sheet of Array.from(document.styleSheets)) {
-          for (const rule of Array.from(sheet.cssRules)) {
-            const m = (rule as CSSStyleRule).selectorText?.match(new RegExp(`\\.(${module}[\\w-]*__${name})(?![\\w-])`));
-            if (m) return m[1];
-          }
-        }
-        return null;
-      };
-      const classes = [...base, stateClass].map(find);
-      if (classes.some((c) => c === null)) throw new Error(`no class for ${[...base, stateClass]}`);
+    ({ part, stateClass, base }) => {
+      const names = [...base, stateClass];
+      const sample = [...document.querySelectorAll(`[data-part="${part}"]`)]
+        .map((el) => [...el.classList].find((c) => c.endsWith(base[0]) && /[_]$/.test(c.slice(0, c.length - base[0].length))))
+        .find(Boolean);
+      if (!sample) throw new Error(`no [data-part="${part}"] element with a «${base[0]}» class`);
+      const prefix = sample.slice(0, sample.length - base[0].length);
+      const classes = names.map((name) => prefix + name);
+      const defined = (cls: string) =>
+        Array.from(document.styleSheets).some((sheet) =>
+          Array.from(sheet.cssRules).some((rule) => new RegExp(`\\.${cls}(?![\\w-])`).test((rule as CSSStyleRule).selectorText ?? "")),
+        );
+      if (classes.some((c) => !defined(c))) throw new Error(`no class for ${names}`);
       const el = document.createElement("span");
       el.className = classes.join(" ");
       el.style.cssText = "display:inline-block;width:24px;height:24px;border-radius:50%";
@@ -38,7 +40,7 @@ async function paint(page: Page, module: string, stateClass: string, base: strin
       el.remove();
       return out;
     },
-    { module, stateClass, base },
+    { part, stateClass, base },
   );
 }
 
@@ -64,10 +66,10 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     const dot = {
-      partial: await paint(page, "week-table", "partial", ["dot"]),
-      empty: await paint(page, "week-table", "empty", ["dot"]),
-      declared: await paint(page, "week-table", "declared", ["dot"]),
-      evidence: await paint(page, "week-table", "evidence", ["dot"]),
+      partial: await paint(page, "week-dot", "partial", ["dot"]),
+      empty: await paint(page, "week-dot", "empty", ["dot"]),
+      declared: await paint(page, "week-dot", "declared", ["dot"]),
+      evidence: await paint(page, "week-dot", "evidence", ["dot"]),
     };
     // The lower half is the accent, the upper transparent; the ring is the accent.
     expect(dot.partial.image).toContain("linear-gradient");

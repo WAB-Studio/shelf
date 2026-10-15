@@ -25,8 +25,12 @@ export type StoredDraft = {
   text?: string | null;
   unmarked: string[] | null;
   declined: string[];
+  // Correction ids the person accepted by hand; with `declined` they decide which panel a correction draws.
+  accepted?: string[];
 };
 
+// A plan written in the template or the workbook is saved as written: its corrections start declined and the
+// person accepts the ones she wants. The model's reading starts with them accepted (RP-122).
 // The draft rides from the import screen to its review in the tab's own storage: a reload of the
 // review keeps it, a new tab starts without it, and nothing reaches the database before the confirm.
 export function saveDraft(input: {
@@ -38,15 +42,15 @@ export function saveDraft(input: {
   sourceName?: string | null;
   text?: string | null;
 }): void {
-  write({ version: 2, ...input, sourceName: input.sourceName ?? null, text: input.text ?? null, unmarked: null, declined: [] });
+  write({ version: 2, ...input, sourceName: input.sourceName ?? null, text: input.text ?? null, unmarked: null, declined: input.via === "model" ? [] : input.corrections.map((c) => c.id) });
 }
 
 // Rewrites the draft, the unmarked paths and the declined corrections, and the corrections themselves when
 // given (an edit settles some); the rest stays.
-export function saveReview(draft: ImportDraft, unmarked: string[], declined: string[], corrections?: Correction[]): void {
+export function saveReview(draft: ImportDraft, unmarked: string[], declined: string[], corrections?: Correction[], accepted?: string[]): void {
   const current = readDraft();
   if (!current) return;
-  write({ ...current, draft, unmarked, declined, ...(corrections ? { corrections } : {}) });
+  write({ ...current, draft, unmarked, declined, ...(corrections ? { corrections } : {}), ...(accepted ? { accepted } : {}) });
 }
 
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((p): p is string => typeof p === "string") : []);
@@ -77,6 +81,7 @@ export function readDraft(): StoredDraft | null {
       text: typeof parsed.text === "string" ? parsed.text : parsed.text === null ? null : undefined,
       unmarked: Array.isArray(parsed.unmarked) ? strings(parsed.unmarked) : null,
       declined: strings(parsed.declined),
+      accepted: strings(parsed.accepted),
     };
   } catch {
     return null;

@@ -71,7 +71,7 @@ function BlockHeading({
   if (!wordHref) return <Headword size={headwordSize}>{word}</Headword>;
   return (
     <Link asChild underline="always">
-      <NextLink href={wordHref}>
+      <NextLink href={wordHref} prefetch={false}>
         <TapTarget align="center" gap="1">
           <Headword size={headwordSize}>{word}</Headword>
           <ChevronGlyph />
@@ -405,7 +405,7 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
       <Flex gap="4" wrap="wrap">
         {words.map((word) => (
           <Link asChild underline="always" key={word}>
-            <NextLink href={correctionHref(word)}>
+            <NextLink href={correctionHref(word)} prefetch={false}>
               <TapTarget align="center" gap="1">
                 <Text size="3" serif>
                   {word}

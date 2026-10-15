@@ -35,5 +35,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "flightdeck@claude-flightdeck": false
   }
 }

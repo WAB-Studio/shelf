@@ -1692,3 +1692,10 @@ Taken by the user («2. b 3. b»).
 ## Decision of 2026-10-14: the app is called «WordBook»
 
 - The visible name is **WordBook**: the title, the installed name and the version line. It was «Diccionario». The folder and the URL keep `voyager`.
+
+## Decisions of 2026-10-15, by the user («acepto todo lo que digas pendiente»)
+
+- **One caller spends at most 20 % of the day's model budget** across the paid routes.
+- **RL-50: a word list filters what MyMemory returns;** a blocked answer reads «No se pudo traducir». Overturns the 2026-09-20 pick of the model as judge.
+- **Touch targets: 44 px minimum**, raised from 32 px; the search box's clear ✕ included.
+- **«No se pudo …»** for a failure, never «No pude» or «No pudimos».

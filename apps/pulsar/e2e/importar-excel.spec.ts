@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { createTranslator } from "next-intl";
 import type postgres from "postgres";
 
 import messages from "../messages/es/import.json";
@@ -9,11 +10,14 @@ import { asPerson, countOf } from "./importar-plan";
 // A workbook uploaded on /metas/importar (RP-98): read on the server with no key, no claim and no
 // model. The boards are `ImportarExcelFilas` and `ImportarExcelAjeno`.
 
+const say = (key: string) =>
+  (createTranslator({ locale: "es", messages: { import: messages }, namespace: "import" }) as unknown as (k: string) => string)(key);
+
 const GOAL = "Evals y harness";
 
 async function load(): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load((await templateWorkbook()) as never);
+  await wb.xlsx.load((await templateWorkbook(say)) as never);
   return wb;
 }
 
@@ -37,7 +41,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
     wb.getWorksheet("Meses")!.addRow([GOAL, "2026-13", "37 h"]);
     wb.getWorksheet("Tareas")!.addRow([GOAL, "2026-10", "Semana 3", null, "tres horas", null]);
     wb.getWorksheet("Compromisos")!.addRow([GOAL, "Inglés", "de lunes a viernes y domingo", "1 h"]);
-    const file = upload("plantilla-pulsar.xlsx", await bytes(wb));
+    const file = upload("plantilla-goallog.xlsx", await bytes(wb));
 
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
@@ -51,7 +55,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
       await expect(rows.nth(0)).toHaveText(`Meses, fila 4: ${messages.errors.form.monthReal}`);
       await expect(rows.nth(1)).toHaveText(/^Compromisos, fila 5: /);
       await expect(rows.nth(2)).toHaveText(/^Tareas, fila 6: /);
-      await expect(page.getByText("Leído de plantilla-pulsar.xlsx. Corrige el libro y vuelve a subirlo.", { exact: true })).toBeVisible();
+      await expect(page.getByText("Leído de plantilla-goallog.xlsx. Corrige el libro y vuelve a subirlo.", { exact: true })).toBeVisible();
       await expect(page.getByLabel(messages.textLabel, { exact: true })).toHaveValue("");
       await expect(alert.getByRole("button")).toHaveCount(0);
       await expect(page.getByRole("link", { name: messages.entry.workbook })).toBeVisible();
@@ -67,7 +71,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
     wb.getWorksheet("Meses")!.addRow([GOAL, "2026-13", "37 h"]);
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
-      await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-pulsar.xlsx", await bytes(wb)));
+      await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-goallog.xlsx", await bytes(wb)));
       await page.getByRole("button", { name: messages.read }).click();
       await expect(page.getByText("1 fila por corregir", { exact: true })).toBeVisible();
       await expect(page.getByText(/^Meses, fila 1: /)).toBeVisible();
@@ -101,7 +105,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
     // Kills: sending a good book to the model, or counting its rows as lines.
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
-      await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-pulsar.xlsx", await bytes(await load())));
+      await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-goallog.xlsx", await bytes(await load())));
       await page.getByRole("button", { name: messages.read }).click();
       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
       await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();

@@ -523,7 +523,7 @@ test("a weekly rate becomes a monthly rhythm in whole minutes, 52 weeks over 12 
   const { draft, corrections } = run([rawGoal({ rate: { amount: 10, unit: "hours", per: "week" } })]);
   assert.equal(draft.goals[0].rhythm, 2600);
   assert.equal(corrections[0].code, "rateToRhythm");
-  assert.equal(corrections[0].said, "10 h por semana");
+  assert.deepEqual([corrections[0].said, corrections[0].values?.rateUnit], ["10", "hours"]);
   assert.equal(run([rawGoal({ rate: { amount: 7, unit: "hours", per: "week" } })]).draft.goals[0].rhythm, 1820);
   const monthly = run([rawGoal({ rate: { amount: 30, unit: "hours", per: "month" } })]);
   assert.equal(monthly.draft.goals[0].rhythm, 1800);
@@ -732,9 +732,9 @@ test("903: the correction names the days Monday to Sunday and ignores a day past
     const { draft, corrections } = run([rawGoal({ commitments: [commitment({ cadenceWeekdays: days })] })]);
     return { text: corrections.find((c) => c.code === "cadenceToWeekdays")?.proposed, days: draft.goals[0].commitments[0].cadenceWeekdays };
   };
-  assert.equal(said([1]).text, "lun");
-  assert.equal(said([7, 1, 3]).text, "lun, mié, dom");
-  assert.deepEqual(said([8, 2]), { text: "mar", days: [2] });
+  assert.equal(said([1]).text, "1");
+  assert.equal(said([7, 1, 3]).text, "1,3,7");
+  assert.deepEqual(said([8, 2]), { text: "2", days: [2] });
   const past = run([rawGoal({ commitments: [commitment({ cadenceWeekdays: [8] })] })]);
   assert.deepEqual(past.corrections, []);
   assert.equal(past.draft.goals[0].commitments[0].cadenceKind, "times_per_week");

@@ -161,7 +161,7 @@ test("a new goal opened with 12 reads «12 semanas» and «semana 1 de 12» on S
   try {
     await page.goto("/metas/nueva");
     await page.getByLabel("nombre").fill(name);
-    await expect(page.getByLabel("horizonte")).toHaveValue("12");
+    await expect(page.getByLabel("final")).toHaveValue("12");
     await page.getByRole("button", { name: "Abrirla" }).click();
     await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
     goalId = page.url().split("/metas/")[1];

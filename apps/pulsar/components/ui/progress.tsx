@@ -6,7 +6,7 @@ import styles from "./progress.module.css";
 export function Progress({ percent, size }: { percent: number; size?: "thick" }) {
   const width = Math.min(100, Math.max(0, percent));
   return (
-    <span aria-hidden className={size === "thick" ? `${styles.track} ${styles.thick}` : styles.track}>
+    <span aria-hidden data-part="progress-track" className={size === "thick" ? `${styles.track} ${styles.thick}` : styles.track}>
       <span className={styles.fill} style={{ inlineSize: `${width}%` }} />
     </span>
   );

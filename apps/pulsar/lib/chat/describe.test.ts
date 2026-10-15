@@ -117,7 +117,7 @@ test("the chat's error keys read through errorOf", () => {
 
 // The words of the approved boards (NOTAS.md), pasted whole.
 const BOARD_WORDS = [
-  "Chat", "Hoy", "TÚ", "PULSAR", "Hacer", "Hacer todo", "Enviar", "Mensaje",
+  "Chat", "Hoy", "TÚ", "GOALLOG", "Hacer", "Hacer todo", "Enviar", "Mensaje",
   "Pide un cambio o pregunta por tu plan",
   "Tu mensaje y las partes de tu plan que lee se envían a OpenAI.",
   "PRUEBA CON", "¿Cómo voy este mes?", "Pon 4 h de inglés para noviembre",

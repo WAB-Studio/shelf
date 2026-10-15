@@ -109,15 +109,13 @@ for (const tasks of [0, 1, 2, 10, 11, 12, 13, 14, 15])
     expect(pages[page].at(-1), `sheet ${page + 1} does not end on the label`).not.toBe(OWN_LABEL);
   });
 
-test("T2: a goal with no end, no rhythm and months ahead with nothing prints no «…: sin monto» line", async ({ person, browser, baseURL, db }) => {
-  // Kills: the fold line of months with no amount kept for a goal with no end (5383eefa).
+test("T2: a goal with a measure, no end, no rhythm and no amount nor task in any month prints no «por mes» and no «…: sin monto» line (RP-124)", async ({ person, browser, baseURL, db }) => {
+  // Kills: printing the block anyway for a goal with a unit; the fold line of months with no amount kept for a goal with no end (5383eefa).
   await seedOpenGoal(db, person, { name: "Ahorrar tiempo", unit: PAGES, horizon: null, rhythm: null, created: openedIn(-7) });
-  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Ahorrar tiempo");
-  expect(paper).toContain("ahorrar tiempo · por mes · 9 meses");
-  expect(paper).toContain(monthLabel(-7));
-  expect(paper).toContain(monthLabel(1));
+  const paper = await paperOf(browser, baseURL, person.sessionFile, "/exportar", "Ahorrar tiempo", false);
+  expect(paper).toContain("ahorrar tiempo");
+  expect(paper).not.toContain("ahorrar tiempo · por mes");
   expect(paper).not.toContain(": sin monto");
-  for (const offset of [2, 5, 11]) expect(paper, longMonth(offset)).not.toContain(longMonth(offset));
 });
 
 test("T2 control: a goal in minutes with no rhythm and no end keeps «enero …: sin monto · 1 tarea» for the month that holds a task", async ({ person, browser, baseURL, db }) => {

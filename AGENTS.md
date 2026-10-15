@@ -136,8 +136,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `apps/voyager` — «Diccionario de lectura», https://claude.ai/artifact/K9acY69gRz13JPtAn7GWwz (the old `claude.ai/code/artifact/92f7…` link opens the same canvas)
 - `apps/pulsar` — «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
 - `apps/portal` — «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
-- `apps/orbit` — **none yet.** Its screens were built before this rule. The next orbit screen opens
-  one and names it here.
+- `apps/orbit` — «HomeFund», https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj (opened 2026-10-14 with the reconciliation boards).
 - Add the URL here the day a canvas is created. A canvas nobody can find is a canvas nobody uses.
 - Read a canvas from the main session, never from a subagent. It comes back as one 2.7 MB page whose
   head is the editor's stylesheet, not the design.

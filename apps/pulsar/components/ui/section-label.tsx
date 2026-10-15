@@ -8,7 +8,7 @@ import styles from "./section-label.module.css";
 // `printSuffix` joins the label after « · » on paper alone. It is drawn from a pseudo-element, so the label's text on screen stays the label.
 export function SectionLabel({ children, printSuffix }: { children?: ReactNode; printSuffix?: string }) {
   return (
-    <span className={styles.label} data-print-suffix={printSuffix ? ` · ${printSuffix}` : undefined}>
+    <span className={styles.label} data-part="section-label" data-print-suffix={printSuffix ? ` · ${printSuffix}` : undefined}>
       {children}
     </span>
   );

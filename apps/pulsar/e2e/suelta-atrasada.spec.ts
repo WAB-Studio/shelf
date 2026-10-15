@@ -93,7 +93,7 @@ test("completed from Hoy, a carried one-off moves to «hechas hoy» and a reload
     const undo = page.getByRole("button", { name: `Deshacer: ${name}` });
     await expect(undo).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel("Algo suelto").last()).toBeVisible();
+    await expect(page.getByPlaceholder("Escribe una tarea…")).toBeVisible();
     await expect(undo).toBeVisible();
 
     const facts = await db<{ day: string }[]>`
@@ -123,7 +123,7 @@ test("deleted from Hoy, a carried one-off leaves, a reload keeps it gone, and no
     await expect(nameButton(page, name)).toHaveCount(0);
 
     await page.reload();
-    await expect(page.getByLabel("Algo suelto").last()).toBeVisible();
+    await expect(page.getByPlaceholder("Escribe una tarea…")).toBeVisible();
     await expect(nameButton(page, name)).toHaveCount(0);
 
     expect(await db`select id from goals.one_offs where id = ${id}`).toHaveLength(0);

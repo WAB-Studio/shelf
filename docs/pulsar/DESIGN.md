@@ -1432,7 +1432,7 @@ Three answers of the user, 2026-10-09.
 - **The field lives in the flow,** below the last turn, never fixed to the foot. The tab bar stays the only fixed thing.
 - **A failed message stays as a turn;** the button reads «Intentar otra vez» and nothing is retyped.
 - **A refused change has no button.** Its row carries the act's reason; the person asks again in a new message.
-- **Turns are labelled «TÚ» and «PULSAR»,** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
+- **Turns are labelled «TÚ» and «GOALLOG» (2026-10-15, after the rename to GoalLog),** no bubbles, no left/right alignment. «Hacer todo» shows only with two or more
   changes open. A change reads in two lines: what, in the person's own names; then «antes → después» in mono.
 - **Faces not drawn for the chat:** dark (the token table says it) and 700–1023 (between the two drawn).
 - **A change's line keeps the screens' words:** «Mover el final de «Meta»», «Fijar «Tarea» en noviembre». The other 14 stay as they read. 2026-10-13.
@@ -1743,3 +1743,9 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **RP-125:** the export's months hold no weeks on screen; «Por semana» is its own table. A goal with no measure drops «sin tareas»
   from its «Por mes» (`components/month/months-screen.tsx:100`).
 - **The workbook's example rows** (`lib/import/workbook.ts:259,267`) move into next-intl: the person reads them in the file.
+
+## Decisions of 2026-10-15, by the user («acepto todo lo que digas pendiente»)
+
+- **A daily cap on model calls for the whole app**, on top of each person's 10 imports and 50 chats.
+- **The chat labels its replies «GOALLOG».**
+- **A write that fails to reach the server keeps the person where they are, with what they typed,** and the line «No se pudo guardar. Tu texto sigue aquí; inténtalo otra vez.» (Hoy's tap, the quantity sheet, «Abrirla» on a new goal). Form pages that read no data keep opening during an outage and fail on save.

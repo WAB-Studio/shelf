@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { CHAT_MODEL, answerChat, chatAvailable } from "@/lib/chat/model";
 import { describeChange } from "@/lib/chat/describe";
-import { chatRequestSchema, type Change } from "@/lib/chat/types";
+import { REQUEST_BYTES_MAX, chatRequestSchema, type Change } from "@/lib/chat/types";
 import { claimModelCall, settleModelCall } from "@/lib/import/spend";
 import { loadChangeNames } from "@/lib/queries/chat";
 import { getPerson } from "@/lib/session";
@@ -36,6 +36,8 @@ function idsOf(changes: Change[]) {
 export async function POST(request: NextRequest) {
   const person = await getPerson();
   if (!person) return fail(401, "chat.errors.signedOut");
+
+  if (Number(request.headers.get("content-length")) > REQUEST_BYTES_MAX) return fail(422, "chat.errors.blank");
 
   const body = chatRequestSchema.safeParse(await request.json().catch(() => null));
   if (!body.success) return fail(422, "chat.errors.blank");
