@@ -11,6 +11,7 @@ import {
   streamInPlaceOfModel,
   toOpenReview,
   toReview,
+  unfold,
   word,
 } from "./importar-plan";
 
@@ -134,6 +135,76 @@ test.describe("a model's reading keeps its corrections accepted (RP-122)", () =>
       await expect(page).toHaveURL(/\/metas$/);
       const rows = await monthRows(db, person.id);
       expect(rows.map((r) => [r.month, r.amount])).toEqual([[`${first}-01`, 660], [`${second}-01`, 480]]);
+    });
+  });
+});
+
+// RP-122 / RP-89, board face 3: one tap accepts, and the panel that stays offers «Dejar como estaba» alone.
+test.describe("«Aceptar la corrección» accepts in one tap (993)", () => {
+  const acceptDeclined = (page: Page) => page.getByRole("button", { name: messages.review.correction.acceptDeclined });
+  const decline = (page: Page) => page.getByRole("button", { name: messages.review.correction.decline, exact: true });
+  const accept = (page: Page) => page.getByRole("button", { name: messages.review.correction.accept, exact: true });
+
+  test("one tap: the row says 8 h, the panel offers no «Aceptar», and «Crear» writes 8 h", async ({ person, browser, baseURL, db }) => {
+    // Kills: `onUndo` lifting the refusal without marking the correction accepted (a second «Aceptar» stays).
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, K7);
+      await acceptDeclined(page).last().click();
+      await expect(amountButton(page, word(second))).toHaveText("8 h");
+      await expect(decline(page)).toHaveCount(1);
+      await expect(accept(page)).toHaveCount(0);
+      await createButton(page).click();
+      await expect(page).toHaveURL(/\/metas$/);
+      const rows = await monthRows(db, person.id);
+      expect(rows.map((r) => [r.month, r.amount])).toEqual([[`${first}-01`, 720], [`${second}-01`, 480]]);
+    });
+  });
+
+  test("back: «Dejar como estaba» restores the written 20 h and «Crear» writes it; the button to accept again is one tap too", async ({ person, browser, baseURL, db }) => {
+    // Kills: an acceptance with no way back.
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, K7);
+      await acceptDeclined(page).last().click();
+      await decline(page).click();
+      await expect(page.getByText(kept("20 h"), { exact: true })).toBeVisible();
+      await expect(amountButton(page, word(second))).toHaveText("20 h");
+      await acceptDeclined(page).last().click();
+      await expect(accept(page)).toHaveCount(0);
+      await decline(page).click();
+      await createButton(page).click();
+      await expect(page).toHaveURL(/\/metas$/);
+      const rows = await monthRows(db, person.id);
+      expect(rows.map((r) => [r.month, r.amount])).toEqual([[`${first}-01`, 720], [`${second}-01`, 1200]]);
+    });
+  });
+
+  test("reload: the accepted month is still applied, 8 h", async ({ person, browser, baseURL }) => {
+    // Kills: keeping the decision in memory alone.
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, K7);
+      await acceptDeclined(page).last().click();
+      await expect(amountButton(page, word(second))).toHaveText("8 h");
+      await page.reload();
+      await unfold(page);
+      await expect(amountButton(page, word(second))).toHaveText("8 h");
+    });
+  });
+
+  test("while «Crear» runs, «Aceptar la corrección» and «Dejar como estaba» are disabled", async ({ person, browser, baseURL }) => {
+    // Kills: dropping `disabled` from the correction buttons.
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, K7);
+      await acceptDeclined(page).last().click();
+      await expect(decline(page)).toHaveCount(1);
+      await page.route("**/metas/importar/revisar", async (route) => {
+        if (route.request().method() === "POST") await new Promise((resolve) => setTimeout(resolve, 2500));
+        await route.continue();
+      });
+      await createButton(page).click();
+      await expect(page.getByRole("button", { name: messages.review.creating })).toBeDisabled();
+      await expect(decline(page)).toBeDisabled();
+      await expect(acceptDeclined(page).first()).toBeDisabled();
+      await expect(page).toHaveURL(/\/metas$/);
     });
   });
 });
