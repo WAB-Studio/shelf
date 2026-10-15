@@ -127,6 +127,19 @@ export const ingestDeliveries = finances.table(
     index("ingest_deliveries_owner_merchant_key_idx")
       .on(table.ownerUserId, table.merchantKey)
       .where(sql`${table.merchantKey} is not null`),
+    // Parent deletes check these foreign keys; without an index each one scans this table.
+    index("ingest_deliveries_transaction_id_idx")
+      .on(table.transactionId)
+      .where(sql`${table.transactionId} is not null`),
+    index("ingest_deliveries_credential_id_idx")
+      .on(table.credentialId)
+      .where(sql`${table.credentialId} is not null`),
+    index("ingest_deliveries_proposed_account_id_idx")
+      .on(table.proposedAccountId)
+      .where(sql`${table.proposedAccountId} is not null`),
+    index("ingest_deliveries_proposed_category_id_idx")
+      .on(table.proposedCategoryId)
+      .where(sql`${table.proposedCategoryId} is not null`),
     pgPolicy("ingest_deliveries_select", {
       for: "select",
       to: authenticatedRole,

@@ -139,6 +139,18 @@ export const transactions = finances.table(
       .on(table.toAccountId)
       .where(sql`to_account_id is not null`),
     index("transactions_created_by_idx").on(table.createdBy),
+    // The layout reads the caller's newest movement on every route (`getLastUsedAccountId`).
+    index("transactions_created_by_recent_idx").on(
+      table.createdBy,
+      table.occurredAt.desc(),
+      table.createdAt.desc(),
+    ),
+    // The order every movement list sorts by, so a `limit` stops early instead of sorting the ledger.
+    index("transactions_recent_idx").on(table.occurredAt.desc(), table.createdAt.desc(), table.id),
+    // `countUnreviewedGenerated` and the unreviewed filter: generated movements still awaiting a look.
+    index("transactions_unreviewed_generated_idx")
+      .on(table.id)
+      .where(sql`${table.recurringRuleId} is not null and ${table.reviewedAt} is null`),
     index("transactions_recurring_rule_id_idx").on(table.recurringRuleId),
     index("transactions_caused_by_idx")
       .on(table.causedByTransactionId)

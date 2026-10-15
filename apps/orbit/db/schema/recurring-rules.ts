@@ -105,6 +105,16 @@ export const recurringRules = finances.table(
     uniqueIndex("recurring_rules_group_external_ref_unique")
       .on(table.groupId, table.externalRef)
       .where(sql`${table.externalRef} is not null`),
+    // Parent deletes check these foreign keys; without an index each one scans this table.
+    index("recurring_rules_from_account_id_idx")
+      .on(table.fromAccountId)
+      .where(sql`${table.fromAccountId} is not null`),
+    index("recurring_rules_to_account_id_idx")
+      .on(table.toAccountId)
+      .where(sql`${table.toAccountId} is not null`),
+    index("recurring_rules_created_by_idx")
+      .on(table.createdBy)
+      .where(sql`${table.createdBy} is not null`),
     // Universal read inside the group: your own personal rules, plus every rule of the group you belong to.
     pgPolicy("recurring_rules_select_member", {
       for: "select",

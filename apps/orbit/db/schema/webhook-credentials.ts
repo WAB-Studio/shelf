@@ -50,6 +50,13 @@ export const webhookCredentials = finances.table(
     // The resolver keys on the token hash, so it is unique across every credential.
     uniqueIndex("webhook_credentials_token_hash_unique").on(table.tokenHash),
     index("webhook_credentials_owner_user_id_idx").on(table.ownerUserId),
+    // Parent deletes check these foreign keys; without an index each one scans this table.
+    index("webhook_credentials_default_account_id_idx")
+      .on(table.defaultAccountId)
+      .where(sql`${table.defaultAccountId} is not null`),
+    index("webhook_credentials_default_category_id_idx")
+      .on(table.defaultCategoryId)
+      .where(sql`${table.defaultCategoryId} is not null`),
     // Self-service CRUD: a user only ever sees and writes their own credentials.
     pgPolicy("webhook_credentials_select", {
       for: "select",
