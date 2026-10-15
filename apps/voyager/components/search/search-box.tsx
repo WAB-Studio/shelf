@@ -32,6 +32,7 @@ export function SearchBox({
       onChange={(event) => onChange(event.target.value)}
       placeholder={t("placeholder")}
       aria-label={t("label")}
+      lang="en"
       autoCapitalize="none"
       autoCorrect="off"
       spellCheck={false}
@@ -46,7 +47,10 @@ export function SearchBox({
             color="gray"
             tap
             aria-label={t("clear")}
-            onClick={() => onChange("")}
+            onClick={() => {
+              onChange("");
+              inputRef.current?.focus();
+            }}
           >
             <X size={16} />
           </IconButton>

@@ -156,6 +156,8 @@ test("an installed dictionary answers offline, fast, and within a thumb's reach"
 
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole("heading", { name: "throughout" })).toHaveAttribute("lang", "en");
+  await expect(searchBox).toHaveAttribute("lang", "en");
 
   // `left` is its own headword, so it answers first — RL-40 offers `leave`
   // beneath it, never in its place (`PalabraConFlexion`, `lookup.ts`).

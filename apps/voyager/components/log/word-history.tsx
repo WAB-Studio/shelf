@@ -321,7 +321,7 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
             {index > 0 && <Separator size="4" />}
             <Grid columns="1fr auto" gap="3" align="center">
               <Flex direction="column" gap="1" minWidth="0">
-                <Text size="2">{row.text}</Text>
+                <Text size="2" english>{row.text}</Text>
                 <Text size="2" muted>
                   {rowTime(row.at)}
                 </Text>

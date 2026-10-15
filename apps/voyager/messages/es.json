@@ -37,7 +37,8 @@
     "failed": "No se pudo instalar el diccionario",
     "failedPending": "«{query}» no tendrá respuesta hasta que reintentes",
     "retry": "Reintentar",
-    "preparingReadOnly": "Instalando el diccionario en el dispositivo"
+    "preparingReadOnly": "Instalando el diccionario en el dispositivo",
+    "progressLabel": "Progreso de la instalación"
   },
   "word": {
     "viaInflectionWithEntry": "«{surface}» también es una forma de «{lemma}»",
@@ -76,7 +77,8 @@
     "downloadingModel": "Descargando el traductor",
     "downloadProgress": "Descargando el traductor: {percent}%",
     "notesTitle": "Notas de la frase",
-    "notesPending": "Buscando notas…"
+    "notesPending": "Buscando notas…",
+    "progressLabel": "Progreso de la descarga"
   },
   "log": {
     "title": "Registro de búsquedas",
@@ -254,5 +256,16 @@
   "notFound": {
     "title": "Esta página no existe",
     "description": "La dirección que abriste no lleva a ninguna parte."
+  },
+  "live": {
+    "senses": "{count, plural, one {# sentido} other {# sentidos}}",
+    "noEntry": "El diccionario no tiene esa palabra",
+    "networkReady": "Llegó una respuesta de internet",
+    "extraReady": "Llegó un ejemplo",
+    "translating": "Traduciendo",
+    "phraseDone": "Traducción lista",
+    "networkFailed": "No se pudo traer la respuesta de internet",
+    "notes": "{count, plural, one {# nota de la frase} other {# notas de la frase}}",
+    "installing": "Instalando el diccionario"
   }
 }

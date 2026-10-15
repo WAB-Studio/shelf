@@ -19,5 +19,5 @@ export function Headword({
   ...props
 }: Omit<HeadingProps, "size"> & { size?: HeadwordSize }) {
   const base = sizeClassName(size);
-  return <Heading {...props} className={className ? `${base} ${className}` : base} />;
+  return <Heading lang="en" {...props} className={className ? `${base} ${className}` : base} />;
 }

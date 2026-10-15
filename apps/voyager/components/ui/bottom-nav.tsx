@@ -143,7 +143,7 @@ export function BottomNav() {
 
   return (
     <nav className={styles.nav} aria-label={t("label")}>
-      <Heading className={styles.title}>{tMeta("title")}</Heading>
+      <Heading as="h2" className={styles.title}>{tMeta("title")}</Heading>
       {items.map(({ route, key }) => {
         const selected = pathname === route;
         const Glyph = GLYPHS[key];

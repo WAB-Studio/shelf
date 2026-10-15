@@ -39,3 +39,5 @@ export { Headword } from "./headword";
 export { PosLabel } from "./label";
 
 export { MetaLabel } from "./meta-label";
+
+export { Live } from "./live";

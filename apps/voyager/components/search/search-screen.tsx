@@ -9,6 +9,7 @@ import { normaliseHeadword } from "@/lib/dictionary/format";
 import type { SenseGroup } from "@/lib/dictionary/index-build";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { announce } from "@/lib/word/announce";
 import { useDecoration } from "@/lib/word/use-decoration";
 import { useNetworkAnswer } from "@/lib/word/use-network-answer";
 import { deviceTranslatorState, type TranslatorState } from "@/lib/translate/availability";
@@ -18,7 +19,7 @@ import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
 import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
-import { Flex, Text } from "@/components/ui";
+import { Flex, Live, Text } from "@/components/ui";
 import { InstallStatus } from "./install-status";
 import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
@@ -109,6 +110,7 @@ function resolveInitialQuery(prop: string | undefined): string {
 
 export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const tSearch = useTranslations("search");
+  const tLive = useTranslations("live");
   const { status, lookup, suggest, has, retry } = useDictionary();
 
   // Read once, at the first render this instance ever gets — including a
@@ -552,8 +554,19 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     lastLoggedText = recordable.text;
   }, [recordable]);
 
+  const announcement = announce({
+    kind: kind.kind,
+    senseCount: wordAnswer ? (wordAnswer.exact ?? wordAnswer.viaInflection[0]?.group ?? null)?.senses.length ?? null : null,
+    suggesting: suppressNotFound,
+    network: networkWord === null ? "absent" : networkAnswer.kind,
+    decoration: decoration.kind,
+    phrase: phraseState.kind,
+  });
+
   return (
     <Flex direction="column" gap="5">
+      <Live>{announcement.polite ? tLive(announcement.polite.key, { count: announcement.polite.count ?? 0 }) : ""}</Live>
+      <Live assertive>{announcement.assertive ? tLive(announcement.assertive) : ""}</Live>
       <Flex direction="column" gap="2">
         <SearchBox value={text} onChange={handleTextChange} />
         <InstallStatus status={status} onRetry={retry} query={text} />
