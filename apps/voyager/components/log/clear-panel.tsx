@@ -97,7 +97,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
     return (
       <Link asChild underline="always" muted>
         <button type="button" onClick={() => setStage({ kind: "confirming" })}>
-          <TapTarget size={44} align="center" px="1">
+          <TapTarget align="center" px="1">
             {t("trigger")}
           </TapTarget>
         </button>
@@ -122,7 +122,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
       </Flex>
 
       <Flex>
-        <Button size="3" tap={44} disabled={wiping} onClick={() => setStage({ kind: "idle" })}>
+        <Button size="3" disabled={wiping} onClick={() => setStage({ kind: "idle" })}>
           {t("keep")}
         </Button>
       </Flex>
@@ -132,7 +132,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
           <Flex direction="column" gap="1" align="start">
             <Link asChild underline="always" muted>
               <button type="button" disabled={wiping} onClick={() => void wipeLocal()}>
-                <TapTarget size={44} align="center" px="1">
+                <TapTarget align="center" px="1">
                   {stage.kind === "wiping" && stage.scope === "local" ? t("wiping") : t("localAction")}
                 </TapTarget>
               </button>
@@ -145,7 +145,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
                 <Text size="2" weight="bold" role="alert">
                   {t("failed")}
                 </Text>
-                <Button size="2" tap onClick={() => void wipeLocal()}>
+                <Button size="2" onClick={() => void wipeLocal()}>
                   {t("retry")}
                 </Button>
               </Flex>
@@ -155,7 +155,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
           <Flex direction="column" gap="1" align="start">
             <Link asChild underline="always" muted>
               <button type="button" disabled={wiping} onClick={() => void wipeAccount()}>
-                <TapTarget size={44} align="center" px="1">
+                <TapTarget align="center" px="1">
                   {stage.kind === "wiping" && stage.scope === "account" ? t("wiping") : t("accountAction")}
                 </TapTarget>
               </button>
@@ -168,7 +168,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
                 <Text size="2" weight="bold" role="alert">
                   {t("failed")}
                 </Text>
-                <Button size="2" tap onClick={() => void wipeAccount()}>
+                <Button size="2" onClick={() => void wipeAccount()}>
                   {t("retry")}
                 </Button>
               </Flex>
@@ -182,7 +182,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
         <Flex direction="column" gap="1" align="start">
           <Link asChild underline="always" muted>
             <button type="button" disabled={wiping} onClick={() => void wipeLocal()}>
-              <TapTarget size={44} align="center" px="1">
+              <TapTarget align="center" px="1">
                 {wiping ? t("wiping") : t("soleAction")}
               </TapTarget>
             </button>
@@ -192,7 +192,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
               <Text size="2" weight="bold" role="alert">
                 {t("failed")}
               </Text>
-              <Button size="2" tap onClick={() => void wipeLocal()}>
+              <Button size="2" onClick={() => void wipeLocal()}>
                 {t("retry")}
               </Button>
             </Flex>

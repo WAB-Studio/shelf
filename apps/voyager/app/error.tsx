@@ -19,7 +19,7 @@ export default function Error({ reset }: { error: Error & { digest?: string }; r
             the title stays full-weight ink, the accent lives in retry alone. */}
         <Separator size="4" />
         <Headword align="center">{t("title")}</Headword>
-        <Button size="2" tap onClick={reset}>
+        <Button size="2" onClick={reset}>
           {t("retry")}
         </Button>
       </Flex>

@@ -162,7 +162,7 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
           <Text size="2" muted>
             {t("word.emptyBody", { word: normalised })}
           </Text>
-          <Button size="2" tap onClick={() => router.push(`/?q=${encodeURIComponent(normalised)}`)}>
+          <Button size="2" onClick={() => router.push(`/?q=${encodeURIComponent(normalised)}`)}>
             {t("word.emptyAction")}
           </Button>
         </Flex>
@@ -184,7 +184,6 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
           </Text>
           <Button
             size="2"
-            tap
             onClick={() => {
               setState({ kind: "loading" });
               setAttempt((current) => current + 1);

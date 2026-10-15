@@ -50,7 +50,7 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
       {!first && <Separator size="4" />}
       <Link asChild underline="none">
         <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
-          <TapTarget size={44} direction="column" align="stretch" width="100%">
+          <TapTarget direction="column" align="stretch" width="100%">
             {/* `minmax(0, 1fr) auto` on the phone stacks the translation under
               the word; the desktop's third track puts word, translation and
               count on one row (RL-56's board). `gridColumn`/`gridRow` move
@@ -235,7 +235,7 @@ export function HistoryList() {
         <Text size="2" muted>
           {t("study.emptyBody")}
         </Text>
-        <Button size="2" tap onClick={() => router.push("/")}>
+        <Button size="2" onClick={() => router.push("/")}>
           {t("study.emptyAction")}
         </Button>
       </Flex>
@@ -257,7 +257,6 @@ export function HistoryList() {
         </Text>
         <Button
           size="2"
-          tap
           onClick={() => {
             setState({ kind: "loading" });
             setAttempt((current) => current + 1);
@@ -288,7 +287,6 @@ export function HistoryList() {
       <Flex direction="column" gap="3">
         <TextField.Root
           size="3"
-          tap
           value={query}
           onChange={(event) => change(event.target.value)}
           placeholder={t("study.filterLabel")}
@@ -304,7 +302,6 @@ export function HistoryList() {
                 size="2"
                 variant="ghost"
                 color="gray"
-                tap
                 aria-label={t("study.filterClear")}
                 onClick={() => change("")}
               >

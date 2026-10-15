@@ -154,25 +154,6 @@ this gets built, and no schema, table or column is "prepared for" it.
   screen never calls a link invalid on the strength of a timeout, and nothing verifies again on the
   reader's behalf: `verifyOtp` is not idempotent and a timeout says nothing about whether the token
   was spent.
-- [ ] **RL-50** — A translation the provider's public memory supplies is judged before the reader
-  reads it, and sexual or obscene content is never drawn. The reader either gets a translation that
-  answers what they typed, or is told the phrase could not be answered — never the provider's
-  memory verbatim. A phrase the reader themselves typed is not the target: what is filtered is what
-  comes back, not what goes out.
-  - Measured 2026-09-20, `i love you`, `en|es`: `responseStatus: 200`, and
-    `responseData.translatedText` holds an explicit sexual sentence at `match: 1`, `quality: 74`.
-    It passes every gate `isUsableTranslation` applies — non-empty, not an echo, no warning prefix —
-    so `app/api/translate/route.ts:118-120` returns it and `bestAlternativeTranslation`, RL's own
-    fix for the empty primary field, is never reached.
-  - **Choosing by score cannot do this.** `te quiero` sits in `matches[1]` with the *same* `match: 1`
-    and the *same* `quality: 74`. The explicit entry wins on position alone, so no ordering by the
-    provider's own numbers separates them.
-  - **The model judges it. Decided by the user 2026-09-20**, over a length-disproportion rule and a
-    word list. Disproportion would have caught this one — 67 characters answering 10 — and misses a
-    short obscenity; a list has to be kept and vetoes the word when a reader looks it up on purpose.
-    The model is the same one already in use, and this is the second place it is asked to judge
-    content rather than produce it (`docs/voyager/DESIGN.md`, the lazy gloss prune).
-  - Not built. No board drawn for the state a reader sees when every candidate is refused.
 
 - [ ] **RL-07** — Autocomplete appears only while the string is being treated as a word. A sentence never raises it.
 - [x] **RL-26** — A headword's answer can be heard. The device speaks it with the voice the browser
@@ -256,6 +237,13 @@ this gets built, and no schema, table or column is "prepared for" it.
   searched under it, or its translation contains what was typed, case and accents aside; a line says how many of the
   record's words are shown, and a typing that matches nothing says so. Emptying the field gives the whole list back, and
   returning from a word's page finds the list as it was left. It reads the device's record alone and sends nothing.
+- [x] **RL-64** *(successor of RL-50)* — A translation MyMemory's public memory supplies passes a word list of sexual and
+  obscene terms, Spanish and English, before the reader sees it. The list matches whole words, case and accents aside, on
+  the top pick and on every `matches` candidate; a blocked candidate is as unusable as an empty one, so a clean
+  candidate of highest `match` still answers, and when none is clean the route answers 502 and the reader reads
+  «No se pudo traducir». The paid model's answer is not filtered. Decided by the user 2026-10-15.
+  - Measured 2026-09-20, `i love you`, `en|es`: `translatedText` held an explicit sentence at `match: 1`, `quality: 74`,
+    which passed every other gate; `te quiero` sat in `matches[1]` with the same score.
 - [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: an entry in the dictionary, a translation for a
   sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that
@@ -372,6 +360,27 @@ this gets built, and no schema, table or column is "prepared for" it.
 ### Retired
 
 Dead codes. The number stays burned and the tick stays as it was.
+
+- [x] **RL-50** — A translation the provider's public memory supplies is judged before the reader
+  reads it, and sexual or obscene content is never drawn. The reader either gets a translation that
+  answers what they typed, or is told the phrase could not be answered — never the provider's
+  memory verbatim. A phrase the reader themselves typed is not the target: what is filtered is what
+  comes back, not what goes out.
+  - Measured 2026-09-20, `i love you`, `en|es`: `responseStatus: 200`, and
+    `responseData.translatedText` holds an explicit sexual sentence at `match: 1`, `quality: 74`.
+    It passes every gate `isUsableTranslation` applies — non-empty, not an echo, no warning prefix —
+    so `app/api/translate/route.ts:118-120` returns it and `bestAlternativeTranslation`, RL's own
+    fix for the empty primary field, is never reached.
+  - **Choosing by score cannot do this.** `te quiero` sits in `matches[1]` with the *same* `match: 1`
+    and the *same* `quality: 74`. The explicit entry wins on position alone, so no ordering by the
+    provider's own numbers separates them.
+  - **The model judges it. Decided by the user 2026-09-20**, over a length-disproportion rule and a
+    word list. Disproportion would have caught this one — 67 characters answering 10 — and misses a
+    short obscenity; a list has to be kept and vetoes the word when a reader looks it up on purpose.
+    The model is the same one already in use, and this is the second place it is asked to judge
+    content rather than produce it (`docs/voyager/DESIGN.md`, the lazy gloss prune).
+  - Not built. No board drawn for the state a reader sees when every candidate is refused.
+  _Retired 2026-10-15. Successor: RL-64. The user overturned the 2026-09-20 pick of the model as judge for a word list: the model costs a call per answer and a list is deterministic._
 
 - [x] **RL-53** — When the provider's best pick for a sentence is unusable — empty, the quota warning, or an echo of
   what was typed — the route does not give up on the reply: it reads the provider's other candidates (`matches`)

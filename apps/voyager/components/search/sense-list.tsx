@@ -148,7 +148,6 @@ export function SpeakButton({
       size="2"
       variant="ghost"
       color="gray"
-      tap={44}
       aria-label={ipa === null ? t("listen", { headword }) : t("listenPronunciation", { headword, ipa })}
       onClick={() => speak(headword)}
     >

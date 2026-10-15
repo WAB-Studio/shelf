@@ -26,7 +26,7 @@ export function Suggestions({
               to the row's width regardless, which real headwords past 80
               characters with no space to break on need to fit at all. */}
           <Grid width="100%">
-            <Button variant="ghost" tap onClick={() => onPick(item)}>
+            <Button variant="ghost" onClick={() => onPick(item)}>
               <Text truncate serif english>
                 {item}
               </Text>

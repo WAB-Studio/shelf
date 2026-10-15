@@ -4,6 +4,7 @@ import { lookupWord } from "@/lib/dictionary/lookup";
 import { env } from "@/lib/env";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { admitWord } from "@/lib/word/admit";
+import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { MODEL_NAME } from "@/lib/word/model";
@@ -91,6 +92,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    if (!(await claimCallerShare(client, env.WORD_TEXT_DAILY_CALL_CAP))) {
+      return empty(204);
+    }
     if (!(await claimClientCall(client, env.WORD_UNLISTED_DAILY_CLIENT_CAP))) {
       return empty(204);
     }

@@ -194,7 +194,6 @@ function SignedOutForm() {
 
           <Button
             size="2"
-            tap
             block={state.kind === "failed" && state.error === "offline"}
             onClick={() => void handleSend()}
             disabled={state.kind === "sending"}
@@ -283,7 +282,7 @@ function SyncedSection({
               </Text>
             )}
           </Flex>
-          <Button size="2" tap onClick={onConfirm}>
+          <Button size="2" onClick={onConfirm}>
             {t("copy.confirmAction")}
           </Button>
         </Flex>
@@ -341,7 +340,7 @@ function SyncedSection({
                 : t("copy.failedServer")}
           </Text>
           {cause !== "quota" && (
-            <Button size="2" tap onClick={onSyncNow}>
+            <Button size="2" onClick={onSyncNow}>
               {t("copy.failedAction")}
             </Button>
           )}
@@ -386,7 +385,7 @@ function SyncedSection({
           redirect, and a `<form>` is the invocation the framework documents
           for that (node_modules/next/dist/docs's server-actions guide). */}
       <form action={signOut}>
-        <Button size="2" tap type="submit" variant="soft" color="gray" onClick={handleSignOutClick}>
+        <Button size="2" type="submit" variant="soft" color="gray" onClick={handleSignOutClick}>
           {t("signOut")}
         </Button>
       </form>

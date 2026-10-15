@@ -304,8 +304,7 @@ test("RL-25: «Retirar» weighs like «Cerrar sesión» (gray, soft); «Retirar 
     expect(resting.color).toBe(anchor.color);
     expect(resting.background).toBe(anchor.background);
     expect(resting.radius).toBe(anchor.radius);
-    expect(resting.height).toBeGreaterThanOrEqual(32);
-    expect(resting.height).toBeLessThan(44);
+    expect(resting.height).toBeGreaterThanOrEqual(44);
 
     await retire.click();
     const confirm = await look(page.getByRole("button", { name: d.confirm, exact: true }));

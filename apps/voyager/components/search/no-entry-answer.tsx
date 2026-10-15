@@ -146,7 +146,6 @@ export function FunctionWordBlock({
           variant="ghost"
           color="gray"
           size="2"
-          tap={44}
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >
