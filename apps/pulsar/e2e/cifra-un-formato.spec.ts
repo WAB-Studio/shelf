@@ -41,7 +41,8 @@ for (const [name, path] of [
       const text = ((await page.locator("main").first().innerText()) ?? "").replace(/\s+/g, " ");
       expect(text).toMatch(/2\.100 de 6\.000 palabras/);
       expect(bareFigures(text)).toEqual([]);
-      expect(text).toContain(MONTH_LONG[Number(thisMonth.slice(5, 7)) - 1]);
+      // The month may be set in capitals by CSS; `innerText` reads them back so.
+      expect(text.toLowerCase()).toContain(MONTH_LONG[Number(thisMonth.slice(5, 7)) - 1]);
     } finally {
       await context.close();
       await db`delete from goals.goals where user_id = ${person.id}`;

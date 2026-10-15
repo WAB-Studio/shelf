@@ -74,7 +74,8 @@ test("a holder with an end says «N de M meses» for exactly the rows its one ta
     await expect(page.locator("main table")).toHaveCount(1);
     const caption = page.getByText(/^\d+ de \d+ meses$/).locator("visible=true");
     await expect(caption).toHaveCount(1);
-    const said = (await caption.innerText()).match(/(\d+) de (\d+) meses/);
+    // The caption is set in capitals by CSS; `innerText` reads them back so.
+    const said = (await caption.innerText()).match(/(\d+) de (\d+) meses/i);
     expect(said, "caption reads «N de M meses»").not.toBeNull();
     expect(Number(said![1])).toBe(await rowsOf(page).count());
     expect(Number(said![2])).toBeGreaterThan(Number(said![1]));
