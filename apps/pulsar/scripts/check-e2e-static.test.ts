@@ -101,3 +101,45 @@ test("an awaited expect of an awaited read anchors nothing", () => {
 test("expect.poll anchors", () => {
   assert.equal(run([GOTO, "  await expect.poll(() => n).toBe(1);", MEASURE]).violations.length, 0);
 });
+
+test("every match on a line counts, not the first", () => {
+  const out = run(["  await page.goto(a); await settled(page); await page.goto(b); const x = await el.boundingBox();"]);
+  assert.equal(out.violations.length, 1);
+});
+
+const HELPER = (body: string[]) => ({
+  name: "ayuda.ts",
+  text: ["import { expect } from \"./fixtures\";", ...body].join("\n"),
+});
+const SPEC = (l: string[]) => ({ name: "y.spec.ts", text: ["test(\"a\", async ({ page }) => {", ...l, "});"].join("\n") });
+const MEASURING = HELPER(["export async function measure(page) {", "  return await page.locator(\"h1\").boundingBox();", "}"]);
+
+test("a non-spec file is scanned like a spec", () => {
+  const out = scan([HELPER(["export async function go(page) {", "  await page.goto(\"/\");", "  return await page.locator(\"h1\").boundingBox();", "}"])], []);
+  assert.equal(out.violations.length, 1);
+  assert.equal(out.violations[0].file, "ayuda.ts");
+});
+
+test("a call to a helper that measures with no anchor fails after goto, naming the helper", () => {
+  const out = scan([MEASURING, SPEC(["  await page.goto(\"/\");", "  await measure(page);"])], []);
+  assert.equal(out.violations.length, 1);
+  assert.equal(out.violations[0].helper, "measure");
+  assert.equal(out.violations[0].file, "y.spec.ts");
+});
+
+test("a helper that anchors before it measures is not a measure", () => {
+  const boxOf = HELPER(["export const boxOf = async (loc) => {", "  await expect(loc).toBeVisible();", "  return (await loc.boundingBox())!;", "};"]);
+  assert.equal(scan([boxOf, SPEC(["  await page.goto(\"/\");", "  await boxOf(page);"])], []).violations.length, 0);
+});
+
+test("an anchor between the goto and the helper call clears it", () => {
+  const out = scan([MEASURING, SPEC(["  await page.goto(\"/\");", "  await settled(page);", "  await measure(page);"])], []);
+  assert.equal(out.violations.length, 0);
+});
+
+test("a helper that calls a measuring helper measures too", () => {
+  const outer = HELPER(["export async function outer(page) {", "  return measure(page);", "}"]);
+  const out = scan([MEASURING, outer, SPEC(["  await page.goto(\"/\");", "  await outer(page);"])], []);
+  assert.equal(out.violations.length, 1);
+  assert.equal(out.violations[0].helper, "outer");
+});

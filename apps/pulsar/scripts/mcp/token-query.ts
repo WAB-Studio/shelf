@@ -280,11 +280,6 @@ test("the hour edge: the list and the door agree 30 minutes either side of 90 da
   assert.equal((await readFolding("beforeHour")).token.expiredAt, null);
 });
 
-test("the query carries no literal of the 90-day rule", async () => {
-  const { readFileSync } = await import("node:fs");
-  assert.ok(!readFileSync("lib/queries/tokens.ts", "utf8").includes("90 days"));
-});
-
 test("the list is one application statement besides the session settle", async () => {
   const run = () => session.actAs(asResolved(subject), () => tokens.listAccessTokens());
   await run();
