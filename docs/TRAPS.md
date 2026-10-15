@@ -1076,7 +1076,7 @@ diff: `gh run view <id>` prints them, and a cancelled-by-priority run names itse
 Land one thing at a time when the group is busy, and prefer cancelling a redundant run
 (`gh run cancel <id>`) over adding another.
 
-**The redundant run is usually your own `integracion` fast-forward.** `AGENTS.md` says to
+**The redundant run is usually your own `integracion` fast-forward.** `docs/agentes/lanes.md` says to
 fast-forward it *before using it*; doing it after every merge instead queues a run over a SHA `main`
 has already tested, and that run is what evicts the PR waiting behind it. Measured again 2026-09-08:
 three fast-forwards in an afternoon, each one a push run on a SHA identical to `main`'s, and the last
@@ -1378,7 +1378,7 @@ y el editor recibe un documento cortado. Costó una publicación: el bloque term
 
 ## El puerto de otro carril responde por el tuyo, y los rojos no tienen patrón
 
-Medido 2026-09-09. La fórmula está en `AGENTS.md`: un carril sirve la app de lectura en
+Medido 2026-09-09. La fórmula está en `docs/agentes/lanes.md`: un carril sirve la app de lectura en
 `:310<n-1>`. El carril 4 es **:3103**; **:3102 es el carril 3**.
 
 El orquestador mandó a un agente del carril 4 correr su suite contra `:3102`. Su propio servidor
@@ -1487,7 +1487,7 @@ marcaba las 14:33 y el fuente las 13:52, así que el `npm run build` sí había 
 reinicio, porque `next start` lee el `.next` **al arrancar**.
 
 - **`Another next dev server is already running` no aplica a un `next start`.** Esa regla de
-  `AGENTS.md` es correcta para un `dev`, que recompila solo, y **falsa para un build de producción**,
+  `docs/agentes/lanes.md` es correcta para un `dev`, que recompila solo, y **falsa para un build de producción**,
   que no. El worker intentó reiniciar :3100, la regla lo mandó a reusar el que había, y midió JS
   viejo. Tras reconstruir, **reinicia siempre**, aunque el puerto responda.
 - Diagnóstico en un solo paso: `stat -c '%y' apps/voyager/.next/BUILD_ID` contra el `%y` del fichero
@@ -1514,7 +1514,7 @@ pendiente por grupo**: un tercero encolado detrás cancela al que ya esperaba. E
 funcionando — el grupo existe para que dos runs no toquen la base remota a la vez.
 
 No hay nada que arreglar. La cobertura existe: el mismo árbol pasó la `e2e` en verde dentro de la
-PR #140, y `AGENTS.md` ya dice que la `e2e` de orbit es informativa y que ningún check la exige en
+PR #140, y `docs/agentes/verificacion.md` ya dice que la `e2e` de orbit es informativa y que ningún check la exige en
 `main`. Lo único que se pierde es la señal en el push cuando los runs se amontonan. **Escrito para
 que nadie lo investigue una cuarta vez.**
 
@@ -2023,7 +2023,7 @@ one message. A reader whose verification times out is told their link is **inval
 when it is neither: the link is still good and the same one would work. They will ask for another
 email instead, and each one is a real send from the user's own Gmail.
 
-**This does not reopen the separate-Supabase-project question.** `AGENTS.md` asks for "an actual
+**This does not reopen the separate-Supabase-project question.** `docs/agentes/verificacion.md` asks for "an actual
 quota error code, not an inference". A 504 is a gateway timeout. Nothing here shows a limit.
 
 **Do not buy quiet on it.** No `retry`, no `waitFor`, no `sleep`, and do not serialize lanes —

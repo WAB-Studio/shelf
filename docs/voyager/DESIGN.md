@@ -122,7 +122,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
 - When a board and this file disagree, **this file wins**.
 - **The canvas is 149 boards**, counted 2026-10-08 from **version 39**'s own `appifact-doc` block (150 `.dc.html`
   files plus `canvas.json`). The five added are module 525's, in one row of the `cuenta` page under one annotation,
-  primary face only. **The canvas has no index page yet**, which `AGENTS.md` asks of every canvas: a gap, written here.
+  primary face only. **The canvas has no index page yet**, which `docs/agentes/canvas.md` governs: a gap, written here.
 - **The canvas is 144 boards**, counted 2026-09-13 from **version 34**'s own `appifact-doc` block
   (145 `.dc.html` files plus `canvas.json`). The two added are RL-49's, `CuentaEnlaceNoVerificado`
   and `CuentaEnlaceInvalido`, side by side on the `cuenta` page so the pair reads as the comparison
@@ -147,7 +147,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   rebuild. Verified 2026-09-11 by round-tripping 142 files back through the page's own parse.
 - **The canvas was 126 boards**, counted 2026-09-10 from the published file's `appifact-doc` block.
   It was 168 that morning. **42 dark boards were deleted the same day**, on the user's decision, and
-  the four-faces-per-state rule went with them (`AGENTS.md`, "Design").
+  the four-faces-per-state rule went with them (`docs/agentes/canvas.md`, "The rule").
 - **What was deleted, and how it was chosen.** A dark board was deleted when it is an exact colour
   substitution of its light twin under this file's own token table — `#9A3B24`→`#D9805F`,
   `#17160F`→`#F0EBDD`, `#FAF8F2`→`#14130F`, `#FFFFFF`→`#1C1B16`, `#DED8C8`→`#302E25`,
