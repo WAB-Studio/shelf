@@ -219,9 +219,11 @@ test("RP-124 goalSections: a goal with no measure and an amount planned or reach
   assert.equal((goalSections(unmeasured({ months: [emptyRow({ reached: 30 })] })) as string[]).includes("months"), true);
 });
 
-test("RP-124 goalSections: a goal with a measure keeps «months» when its rows are empty", () => {
-  // Kills: silencing by `unit`.
-  assert.equal(goalSections(goal({ months: [emptyRow({ planned: null })] })).includes("months"), true);
+test("RP-124 goalSections: a goal with a measure drops «months» when no row holds a task or an amount, and keeps it with one", () => {
+  // Kills: printing the block anyway for a goal with a unit.
+  assert.equal(goalSections(goal({ months: [emptyRow({ planned: null })] })).includes("months"), false);
+  assert.equal(goalSections(goal({ months: [emptyRow({ planned: 0 })] })).includes("months"), true);
+  assert.equal(goalSections(goal({ months: [emptyRow({ planned: null, reached: 2 })] })).includes("months"), true);
 });
 
 test("RP-124 goalSections: «commitments» comes after the measure when the goal has commitments", () => {

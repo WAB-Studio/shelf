@@ -11,7 +11,7 @@ export type Section = "month" | "toDate" | "commitments" | "phases" | "tasks" | 
 // has no amount: the page then prints the reached figure alone. `tasks` is
 // every task of the month, carried first, so a goal with none prints no head.
 // `commitments` follows the measure and prints only with a live one (RP-124).
-// A goal that measures nothing prints «months» only when a row it would print
+// A goal prints «months» only when a row it would print
 // holds a task, a planned amount or something reached (RP-124); a report that
 // carries no task count at all (hand-built) has nothing to say about them.
 export function goalSections(goal: GoalReport): Section[] {
@@ -21,7 +21,7 @@ export function goalSections(goal: GoalReport): Section[] {
   if ((goal.commitments ?? []).length > 0) sections.push("commitments");
   if (goal.phases.length > 0) sections.push("phases");
   if (goal.tasks.length > 0) sections.push("tasks");
-  if (measured || goal.months.some((month) => holdsSomething(month, goal.unit))) {
+  if (goal.months.some((month) => holdsSomething(month, goal.unit))) {
     sections.push("months");
   }
   return sections;
@@ -29,8 +29,11 @@ export function goalSections(goal: GoalReport): Section[] {
 
 function holdsSomething(month: GoalReport["months"][number], unit: string | null): boolean {
   const count = month.taskCount ?? month.tasks?.total;
-  if (count === undefined || !printsOnPaper(month, unit)) return false;
-  return count > 0 || month.planned !== null || month.reached > 0;
+  // A measured goal's months always carry their amounts; only a task count may be missing.
+  if (count === undefined && unit === null) return false;
+  // A month with a task counts though it is not a row: the line under the table names it.
+  if ((count ?? 0) > 0) return true;
+  return printsOnPaper(month, unit) && (month.planned !== null || month.reached > 0);
 }
 
 // A goal's head stays with its table when the table is tall and still short enough for the goal to fit a page.

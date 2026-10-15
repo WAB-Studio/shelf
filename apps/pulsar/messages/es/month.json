@@ -34,7 +34,6 @@
     "emptyAction": "Planear {month}",
     "withoutMeasure": {
       "tasks": "{count, plural, one {# tarea} other {# tareas}}",
-      "none": "sin tareas",
       "goalTasks": "{count, plural, one {# tarea} other {# tareas}} · {done, plural, one {# hecha} other {# hechas}}",
       "columnTasks": "tareas"
     },

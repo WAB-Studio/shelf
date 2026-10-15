@@ -462,7 +462,7 @@ function GoalPart({
   const groupTasks = held
     ? [goal, ...inside].flatMap((member) => member.tasks.map((task) => ({ task, of: member.name })))
     : [];
-  const sections: (GoalSection | "inside")[] = goalSections(paperGoal);
+  const sections: (GoalSection | "inside")[] = goalSections({ ...paperGoal, months: [...paperMonths, ...foldedMonths] });
   if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
   if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
   const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
@@ -617,7 +617,7 @@ function GoalPart({
             const tasks = month.tasks ?? { done: 0, total: 0 };
             const count =
               tasks.total === 0
-                ? t("noTasks")
+                ? null
                 : started
                   ? t("tasksDone", { done: tasks.done, total: tasks.total })
                   : t("tasksToDo", { count: tasks.total });
@@ -626,12 +626,10 @@ function GoalPart({
               key: month.month,
               cells: [monthLabel(month.month), count, state],
               // The stacked face has no columns to hold them.
-              note: `${count} · ${state}`,
+              note: count === null ? state : `${count} · ${state}`,
               printed: paperKeys.has(month.month) && printed(month),
             };
           });
-          // Paper only (`PrintBlock only`): a goal with no end names no month ahead that holds no task.
-          const out = goal.horizon === null ? [] : foldedMonths;
           return (
             <Section
               label={t("byMonth", { goal: goal.name })}
@@ -645,20 +643,10 @@ function GoalPart({
                 stackInCard
                 printLead={earlierPaper ?? undefined}
                 after={
-                  restLine || out.length > 0 ? (
+                  restLine ? (
                     <>
                       {screenRest}
                       {paperRest ? <PrintOnly>{paperRest}</PrintOnly> : null}
-                      {out.length > 0 ? (
-                        <Text as="p" variant="line">
-                          {t("monthsOutTasks", {
-                            months: format.list(
-                              out.map((m) => monthLabel(m.month)),
-                              { type: "conjunction" },
-                            ),
-                          })}
-                        </Text>
-                      ) : null}
                     </>
                   ) : undefined
                 }
