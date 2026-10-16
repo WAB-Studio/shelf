@@ -41,6 +41,16 @@ test("503 is unreached", async () => {
   assert.deepEqual(await ask(), { kind: "unreached" });
 });
 
+test("500 is unreached, never remembered as a refusal", async () => {
+  stubFetch(() => new Response(null, { status: 500 }));
+  assert.deepEqual(await ask(), { kind: "unreached" });
+});
+
+test("499 is declined, the last 4xx", async () => {
+  stubFetch(() => new Response(null, { status: 499 }));
+  assert.deepEqual(await ask(), { kind: "declined" });
+});
+
 test("a rejected fetch is unreached", async () => {
   stubFetch(() => Promise.reject(new TypeError("Failed to fetch")));
   assert.deepEqual(await ask(), { kind: "unreached" });
