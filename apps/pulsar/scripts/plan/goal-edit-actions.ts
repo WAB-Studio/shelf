@@ -555,6 +555,43 @@ test("removeRhythm: every closed month reads the amount it read before, and the 
   assert.ok(!(await budgets(goalId)).some((row) => row.month >= `${thisMonth}-01`));
 });
 
+// RP-76: the last month plans the share its days take. A goal that ended inside a closed month froze that month at the
+// days up to its horizon (the first day after the goal), not at a whole month of the old rhythm.
+test("removeRhythm: a goal that ended inside a closed month keeps that month at its share of days (RP-76)", async () => {
+  const { goalId } = await goal("terminada en un mes cerrado");
+  const lastDayOf = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const opened = monthFrom(today, -2);
+  const ended = monthFrom(today, -1);
+  await admin`update goals.goals set created_at = ${`${opened}-15T12:00:00Z`}, horizon = ${`${ended}-11`}, rhythm = 720 where id = ${goalId}`;
+  const planned = async () => (await view(goalId)).months.map((m) => [m.month, m.planned]);
+  const expected = [
+    [`${opened}-01`, Math.floor((720 * (lastDayOf(opened) - 14)) / lastDayOf(opened))],
+    [`${ended}-01`, Math.floor((720 * 10) / lastDayOf(ended))],
+  ];
+  assert.deepEqual((await planned()).slice(0, 2), expected, "the read before");
+
+  assert.deepEqual(await mine(() => roadmap.removeRhythm({ goalId })), { ok: true });
+  assert.deepEqual(await budgets(goalId), [
+    { month: `${opened}-01`, amount: expected[0][1] },
+    { month: `${ended}-01`, amount: expected[1][1] },
+  ]);
+  assert.deepEqual((await planned()).slice(0, 2), expected, "the read after");
+});
+
+test("removeRhythm: a month closed after the goal ended gets no amount, and none below zero", async () => {
+  const { goalId } = await goal("terminada hace dos meses");
+  const first = monthFrom(today, -3);
+  await admin`update goals.goals set created_at = ${`${first}-15T12:00:00Z`}, horizon = ${`${monthFrom(today, -2)}-11`}, rhythm = 720 where id = ${goalId}`;
+  assert.deepEqual(await mine(() => roadmap.removeRhythm({ goalId })), { ok: true });
+  const rows = await budgets(goalId);
+  assert.ok(rows.every((row) => row.amount >= 0), JSON.stringify(rows));
+  assert.deepEqual(
+    rows.map((row) => row.month),
+    [`${first}-01`, `${monthFrom(today, -2)}-01`],
+    "only the months the goal had days in",
+  );
+});
+
 test("removeRhythm: a goal with no rhythm answers noRhythm, someone else's goalNotFound and keeps its rhythm", async () => {
   const { goalId } = await goal("sin ritmo");
   assert.deepEqual(await mine(() => roadmap.removeRhythm({ goalId })), { ok: false, error: "roadmap.errors.noRhythm" });
