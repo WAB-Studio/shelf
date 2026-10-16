@@ -38,6 +38,8 @@ const door = postgres(process.env.DATABASE_URL!, {
 (globalThis as unknown as { sql: unknown }).sql = door;
 
 const handlers = new Map<string, Handler>();
+// The shape each tool registered, which the MCP SDK parses every call against before the handler runs.
+const inputs = new Map<string, { parse(input: unknown): Record<string, unknown> }>();
 let session: typeof import("@/lib/session");
 let acts: {
   plan: typeof import("@/app/actions/plan");
@@ -121,6 +123,13 @@ async function call(name: string, input: Record<string, unknown>, person: Person
   return handler(input, ctxOf(person));
 }
 
+// A call as the SDK makes it: the input is parsed against the registered shape, so a key the shape lacks is dropped.
+const asSdk = (name: string, input: Record<string, unknown>) => {
+  const shape = inputs.get(name);
+  assert.ok(shape, `${name} registered no input shape`);
+  return shape.parse(input);
+};
+
 const body = (result: { content: { text: string }[] }) => JSON.parse(result.content[0].text);
 
 async function succeeds(name: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -199,7 +208,10 @@ before(async () => {
   };
   const { registerWriteTools } = await import("@/lib/mcp/tools/write");
   registerWriteTools({
-    registerTool: (name: string, _config: unknown, handler: Handler) => void handlers.set(name, handler),
+    registerTool: (name: string, config: { inputSchema: { parse(input: unknown): Record<string, unknown> } }, handler: Handler) => {
+      handlers.set(name, handler);
+      inputs.set(name, config.inputSchema);
+    },
   } as unknown as McpServer);
 
   const runId = await openCheckRun(admin);
@@ -403,8 +415,8 @@ async function backdatedTask(): Promise<string> {
 test("complete_task and declare_fact with a day write the same fact on that day, and refuse 8 days back with the same key", async () => {
   const viaComplete = await backdatedTask();
   const viaDeclare = await backdatedTask();
-  const completed = await succeeds("complete_task", { one_off_id: viaComplete, day: dayFrom(-2) });
-  const declared = await succeeds("declare_fact", { one_off_id: viaDeclare, day: dayFrom(-2) });
+  const completed = await succeeds("complete_task", asSdk("complete_task", { one_off_id: viaComplete, day: dayFrom(-2) }));
+  const declared = await succeeds("declare_fact", asSdk("declare_fact", { one_off_id: viaDeclare, day: dayFrom(-2) }));
 
   const read = async (factId: unknown) =>
     (await door`select one_off_id, commitment_id, quantity, day::text as day,
@@ -419,13 +431,13 @@ test("complete_task and declare_fact with a day write the same fact on that day,
   const tooOld = dayFrom(-8);
   const a = await backdatedTask();
   const b = await backdatedTask();
-  await refused("complete_task", { one_off_id: a, day: tooOld }, "day.errors.dayTooOld", day.errors.dayTooOld);
-  await refused("declare_fact", { one_off_id: b, day: tooOld }, "day.errors.dayTooOld", day.errors.dayTooOld);
+  await refused("complete_task", asSdk("complete_task", { one_off_id: a, day: tooOld }), "day.errors.dayTooOld", day.errors.dayTooOld);
+  await refused("declare_fact", asSdk("declare_fact", { one_off_id: b, day: tooOld }), "day.errors.dayTooOld", day.errors.dayTooOld);
   assert.equal((await door`select 1 from goals.facts where one_off_id in ${door([a, b])}`).length, 0);
 
   const early = await backdatedTask();
   const sentence = (day.errors as Record<string, string>).dayBeforeOneOffDay;
-  await refused("complete_task", { one_off_id: early, day: dayFrom(-4) }, "day.errors.dayBeforeOneOffDay", sentence);
+  await refused("complete_task", asSdk("complete_task", { one_off_id: early, day: dayFrom(-4) }), "day.errors.dayBeforeOneOffDay", sentence);
 });
 
 test("declare_fact writes a commitment's quantity on a past day within the bound, and refuses one beyond it", async () => {

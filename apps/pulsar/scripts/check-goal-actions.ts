@@ -391,8 +391,12 @@ test("completeOneOff: a task already done keeps its fact and its day; a second m
   const task = await seedTask({ createdAgo: 4, dayOffset: -3 });
   const first = await completeOneOff({ oneOffId: task, day: shiftDay(today, -2) });
   assert.equal(first.ok, true);
+  revalidated.length = 0;
   const second = await completeOneOff({ oneOffId: task, day: shiftDay(today, -1) });
   assert.equal(second.ok, true);
+  // Nothing landed on the second day, so its screen is not asked to refresh; the first day's is.
+  assert.ok(revalidated.includes(`/dia/${shiftDay(today, -2)}`), revalidated.join(", "));
+  assert.ok(!revalidated.includes(`/dia/${shiftDay(today, -1)}`), revalidated.join(", "));
   if (first.ok && second.ok) assert.equal(second.factId, first.factId);
   const rows = await factsOf(task);
   assert.equal(rows.length, 1);
