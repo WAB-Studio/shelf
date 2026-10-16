@@ -154,6 +154,7 @@ import {
   todayInBogota,
 } from "@/lib/dates";
 import { pgErrorCode } from "@/lib/db-error";
+import { provisionalMemberName } from "@/lib/validation/member";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { SEED_CATEGORIES } from "@/lib/fund/seed";
 import {
@@ -3747,6 +3748,7 @@ async function main(): Promise<void> {
   console.log("");
   await serverEntriesSuite(scope);
   await e5Suite();
+  await e6Suite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -5682,5 +5684,90 @@ async function e5SeedWalk(): Promise<void> {
       new Set(soloRows.map((row) => row.color)).size === soloRows.length &&
       new Set(groupRows.map((row) => row.color)).size === groupRows.length,
     direct.error || `${new Set(soloRows.map((row) => row.color)).size}/${soloRows.length} personal, ${new Set(groupRows.map((row) => row.color)).size}/${groupRows.length} group distinct colours`,
+  );
+}
+
+// The invite step's server half (RF-06, RF-07): the member an address becomes,
+// and the refusals the table itself gives, driven through the query the invite
+// action runs and the name rule it applies.
+async function e6Suite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo invitaciones ${tag}`, leaderName: "Harness lider invita", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const [seeded] = await fixtureSql<{ member_id: string; account_id: string }[]>`
+    select
+      (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
+      (select id from accounts where group_id = ${groupId} and subtype = 'efectivo') as account_id`;
+  track("group_members", seeded.member_id);
+  track("accounts", seeded.account_id);
+  const seededCategories = await fixtureSql<{ id: string }[]>`
+    select id from categories where group_id = ${groupId}`;
+  for (const row of seededCategories) track("categories", row.id);
+  const fellow = await seedFellowMember(leader.id, groupId);
+
+  const inviteRows = (email: string) =>
+    fixtureSql<{ id: string; name: string; invite_email: string | null; user_id: string | null }[]>`
+      select id, name, invite_email, user_id from group_members
+      where group_id = ${groupId} and lower(invite_email) = ${email.toLowerCase()}`;
+
+  // An address over the name's cap of 80: valid, 85 characters.
+  const longAddress = `e6-${tag}-${"x".repeat(55)}@mail.example.invalid`;
+  const invited = await asUser(leader, async () => {
+    try {
+      const { memberId } = await createMember({
+        groupId,
+        name: provisionalMemberName(longAddress),
+        inviteEmail: longAddress,
+      });
+      track("group_members", memberId);
+      return { memberId, error: "" };
+    } catch (error) {
+      return { memberId: "", error: refusal(error) };
+    }
+  });
+  const longRows = await inviteRows(longAddress);
+  assert(
+    next("An address over 80 characters invites: the whole address is stored, the member's name is its first 80, and it is unclaimed"),
+    longAddress.length > 80 &&
+      invited.error === "" &&
+      longRows.length === 1 &&
+      longRows[0].invite_email === longAddress &&
+      longRows[0].name === longAddress.slice(0, 80) &&
+      longRows[0].user_id === null,
+    invited.error || `${longRows.length} rows, name ${longRows[0]?.name.length} characters, address ${longRows[0]?.invite_email?.length}`,
+  );
+
+  const again = await asUser(leader, async () => {
+    try {
+      await createMember({ groupId, name: "Otra vez", inviteEmail: longAddress.toUpperCase() });
+      return { code: null as string | null, error: "" };
+    } catch (error) {
+      return { code: pgErrorCode(error) ?? null, error: refusal(error) };
+    }
+  });
+  assert(
+    next("The same address in another case is refused by the table (23505) and leaves one member"),
+    again.code === "23505" && (await inviteRows(longAddress)).length === 1,
+    again.error || "the second invite landed",
+  );
+
+  const stranger = `e6-plain-${tag}@example.invalid`;
+  const refused = await asUser(fellow, async () => {
+    try {
+      await createMember({ groupId, name: provisionalMemberName(stranger), inviteEmail: stranger });
+      return { code: null as string | null, error: "" };
+    } catch (error) {
+      return { code: pgErrorCode(error) ?? null, error: refusal(error) };
+    }
+  });
+  assert(
+    next("A member who is not the leader cannot invite: 42501 and no row"),
+    refused.code === "42501" && (await inviteRows(stranger)).length === 0,
+    refused.error || "the invite landed",
   );
 }
