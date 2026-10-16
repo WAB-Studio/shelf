@@ -45,6 +45,7 @@
     "editPhase": "Cambiar la fase",
     "newCommitment": "Compromiso nuevo",
     "newHabit": "Hábito nuevo",
-    "newTask": "Tarea nueva"
+    "newTask": "Tarea nueva",
+    "cadence": "Frecuencia"
   }
 }
