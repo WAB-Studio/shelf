@@ -160,7 +160,7 @@ test.beforeAll(async () => {
     created.accountIds.push(debt);
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-      values (${debt}, ${scope.userId}, ${names.debt}, 'liability', 'tarjeta', -1000000, ${today})`;
+      values (${debt}, ${scope.userId}, ${names.debt}, 'liability', 'card', -1000000, ${today})`;
     await tx`
       insert into debt_terms (
         account_id, debt_kind, annual_rate, minimum_payment_cents,
@@ -173,7 +173,7 @@ test.beforeAll(async () => {
     await tx`
       insert into accounts (
         id, owner_user_id, name, kind, subtype, settlement_currency, initial_balance_cents, initial_balance_on)
-      values (${usd}, ${scope.userId}, ${names.usd}, 'asset', 'bancaria', 'USD', 0, ${today})`;
+      values (${usd}, ${scope.userId}, ${names.usd}, 'asset', 'bank', 'USD', 0, ${today})`;
 
     created.shapeIds.push(randomUUID());
   });

@@ -231,7 +231,7 @@ test("refuses to delete a member whose person owns an account, and says so", asy
         initial_balance_cents, initial_balance_on)
       values (
         ${accountId}, ${scope.memberUserId}, ${`Cuenta del miembro ${stamp}`},
-        'asset', 'bancaria', 1000000, (now() at time zone ${TIME_ZONE})::date)`;
+        'asset', 'bank', 1000000, (now() at time zone ${TIME_ZONE})::date)`;
   });
 
   const [target] = await fixtureSql<{ id: string; archived_at: string | null }[]>`

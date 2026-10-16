@@ -52,7 +52,7 @@ test.beforeEach(async () => {
       insert into accounts (
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (
-        ${secondAccountId}, ${scope.userId}, 'Harness cuenta destino', 'asset', 'bancaria',
+        ${secondAccountId}, ${scope.userId}, 'Harness cuenta destino', 'asset', 'bank',
         0, (now() at time zone ${TIME_ZONE})::date)`;
 
     const [transfer] = await tx<{ id: string }[]>`

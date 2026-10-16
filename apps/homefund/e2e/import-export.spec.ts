@@ -55,7 +55,7 @@ test.beforeAll(async () => {
       await tx`
         insert into accounts (
           id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-        values (${id}, ${scope.userId}, ${name}, 'asset', 'bancaria', 0, '2026-01-01')`;
+        values (${id}, ${scope.userId}, ${name}, 'asset', 'bank', 0, '2026-01-01')`;
     }
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)

@@ -377,7 +377,7 @@ async function seedScope(userId: string, memberUserId: string): Promise<E2eScope
       insert into accounts (
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (
-        ${scope.accountId}, ${userId}, ${scope.accountName}, 'asset', 'bancaria',
+        ${scope.accountId}, ${userId}, ${scope.accountName}, 'asset', 'bank',
         5000000, (now() at time zone ${TIME_ZONE})::date)`;
 
     await tx`

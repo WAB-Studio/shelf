@@ -87,7 +87,7 @@ test.beforeAll(async () => {
       insert into accounts (
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (
-        ${secondAccountId}, ${scope.userId}, 'Cuenta de los reportes', 'asset', 'bancaria',
+        ${secondAccountId}, ${scope.userId}, 'Cuenta de los reportes', 'asset', 'bank',
         9000000, (now() at time zone ${TIME_ZONE})::date)`;
 
     const [expense] = await tx<{ id: string }[]>`
@@ -219,7 +219,7 @@ test.describe("a second currency on the dashboard", () => {
           id, owner_user_id, name, kind, subtype, settlement_currency,
           initial_balance_cents, initial_balance_on)
         values (
-          ${usdAccountId}, ${scope.userId}, 'Cuenta reportes USD', 'asset', 'bancaria', 'USD',
+          ${usdAccountId}, ${scope.userId}, 'Cuenta reportes USD', 'asset', 'bank', 'USD',
           ${USD_OPENING_CENTS}, (now() at time zone ${TIME_ZONE})::date)`;
 
       const [income] = await tx<{ id: string }[]>`
@@ -313,7 +313,7 @@ async function seedGap(
         id, owner_user_id, name, kind, subtype, settlement_currency,
         initial_balance_cents, initial_balance_on)
       values (
-        ${id}, ${scope.userId}, ${`Descuadre ${currency} ${id.slice(0, 8)}`}, 'asset', 'bancaria',
+        ${id}, ${scope.userId}, ${`Descuadre ${currency} ${id.slice(0, 8)}`}, 'asset', 'bank',
         ${currency}, ${openingCents}, (now() at time zone ${TIME_ZONE})::date)`;
     await tx`
       insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
@@ -340,7 +340,7 @@ async function seedUsdIncome(
         id, owner_user_id, name, kind, subtype, settlement_currency,
         initial_balance_cents, initial_balance_on)
       values (
-        ${id}, ${scope.userId}, ${`Ingreso USD ${id.slice(0, 8)}`}, 'asset', 'bancaria', 'USD',
+        ${id}, ${scope.userId}, ${`Ingreso USD ${id.slice(0, 8)}`}, 'asset', 'bank', 'USD',
         0, (now() at time zone ${TIME_ZONE})::date)`;
     const [income] = await tx<{ id: string }[]>`
       insert into transactions (to_account_id, amount_cents, occurred_at, description)
