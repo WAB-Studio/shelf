@@ -129,7 +129,8 @@ test.describe("an import that updates the goals the person already has (RP-130)"
 
       await expect(updateRow(page)).toBeVisible();
       await expect(updateRow(page)).toBeChecked();
-      await expect(rowOf(page, new RegExp(`^${LEER}`))).toHaveCount(0);
+      // A goal row reads its name then «meta · …»; the task «Leer capítulo» inside the goal is not a created «Leer».
+      await expect(rowOf(page, new RegExp(`^${LEER}meta`))).toHaveCount(0);
 
       let above = (await boxOf(updateRow(page))).y;
       for (const text of DIFFS(second)) {
@@ -177,8 +178,8 @@ test.describe("an import that updates the goals the person already has (RP-130)"
       expect(named[0].horizon).toBe(plus(400));
       const budgets = await db`select to_char(month, 'YYYY-MM') as month, amount from goals.month_budgets where goal_id = ${id} order by month`;
       expect(budgets.map((r) => [r.month, r.amount])).toEqual([[first, 60], [second, 120]]);
-      const kept = await db`select name, retired_at from goals.commitments where goal_id = ${id} order by name`;
-      expect(kept.map((r) => r.name)).toEqual([REPASAR, RELEER]);
+      const kept = await db`select name, retired_at from goals.commitments where goal_id = ${id} order by position, created_at, id`;
+      expect(kept.map((r) => r.name)).toEqual([RELEER, REPASAR]);
       expect(kept.every((r) => r.retired_at === null)).toBe(true);
       const tasks = await db`select name from goals.one_offs where goal_id = ${id}`;
       expect(tasks.map((r) => r.name)).toEqual([CHAPTER]);
@@ -344,7 +345,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
       await confirm(page, 2).click();
       await expect(page).toHaveURL(/\/metas$/);
       expect((await goalJson(db, spaced)).horizon).toBe(plus(400));
-      expect(await db`select 1 from goals.goals where user_id = ${person.id} and archived_at is null and lower(btrim(regexp_replace(name, '\s+', ' ', 'g'))) = 'leer más'`).toHaveLength(1);
+      expect(await db`select 1 from goals.goals where user_id = ${person.id} and archived_at is null and lower(btrim(regexp_replace(name, '[[:space:]]+', ' ', 'g'))) = 'leer más'`).toHaveLength(1);
       expect(await db`select 1 from goals.goals where user_id = ${person.id} and name = 'Escribir más'`).toHaveLength(1);
       expect(await db`select 1 from goals.goals where user_id = ${person.id} and name = 'Escribir mas'`).toHaveLength(1);
       expect(await db`select 1 from goals.goals where user_id = ${person.id} and name = 'Correr' and archived_at is null`).toHaveLength(1);
