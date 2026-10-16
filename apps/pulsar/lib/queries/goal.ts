@@ -216,6 +216,8 @@ export type GoalView = {
   measureUnit: string | null;
   // The goal can be deleted: no fact depends on it and it holds no goal, archived ones included (RP-127).
   deletable: boolean;
+  // What keeps it from being deleted, for the line that says so: goals inside win over facts.
+  deleteBlock: "goals" | "facts" | null;
   // A fact or evidence commitment feeds its measure, so it neither changes nor goes (RP-134).
   measureFed: boolean;
   // Null while open, set once the moment `archiveGoal` runs (RP-24): what
@@ -814,6 +816,7 @@ export async function loadGoal(
     measureName: row.goal.measure_name,
     measureUnit,
     deletable: !row.has_facts && !row.has_children,
+    deleteBlock: row.has_children ? "goals" : row.has_facts ? "facts" : null,
     measureFed: row.measure_fed,
     archivedAt: row.goal.archived_at,
     measureTotal,

@@ -140,7 +140,9 @@ test("a goal nothing has happened in offers «Borrar la meta»; a goal with a fa
     const b = await open(browser, baseURL, person, `/metas/${id}`);
     try {
       await expect(b.page.getByRole("heading", { level: 1 })).toBeVisible();
-      await expect(deleteButton(b.page), via).toHaveCount(0);
+      // Refused, not hidden: the act stays, disabled, with the reason and the way out under it.
+      await expect(deleteButton(b.page), via).toBeDisabled();
+      await expect(b.page.getByText(goalMessages.delete.refusedFacts, { exact: true }), via).toBeVisible();
     } finally {
       await b.context.close();
     }
@@ -165,7 +167,8 @@ test("a goal that holds a goal, open or archived, offers no «Borrar la meta» (
     const { page, context } = await open(browser, baseURL, person, `/metas/${id}`);
     try {
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      await expect(deleteButton(page)).toHaveCount(0);
+      await expect(deleteButton(page)).toBeDisabled();
+      await expect(page.getByText("Tiene metas dentro: muévelas o bórralas primero.", { exact: true })).toBeVisible();
     } finally {
       await context.close();
     }
@@ -469,9 +472,10 @@ test("a measure a fact feeds offers neither «Cambiar la medida» nor «Quitar l
   const a = await open(browser, baseURL, person, `/metas/${fed}`);
   try {
     await expect(a.page.getByText("mide Páginas leídas, en páginas", { exact: true })).toBeVisible();
-    await expect(a.page.getByRole("button", { name: CHANGE, exact: true })).toHaveCount(0);
+    await expect(a.page.getByRole("button", { name: CHANGE, exact: true })).toBeDisabled();
+    await expect(a.page.getByText(goalMessages.measure.fedReason, { exact: true })).toBeVisible();
     await expect(a.page.getByRole("button", { name: REMOVE_MEASURE, exact: true })).toHaveCount(0);
-    await expect(deleteButton(a.page)).toHaveCount(0);
+    await expect(deleteButton(a.page)).toBeDisabled();
   } finally {
     await a.context.close();
   }
@@ -480,7 +484,7 @@ test("a measure a fact feeds offers neither «Cambiar la medida» nor «Quitar l
     try {
       await expect(b.page.getByRole("button", { name: CHANGE, exact: true }), label).toBeVisible();
       // A fact on the goal: it cannot be deleted, yet its measure is still the person's to change.
-      await expect(deleteButton(b.page), label).toHaveCount(0);
+      await expect(deleteButton(b.page), label).toBeDisabled();
     } finally {
       await b.context.close();
     }
@@ -625,6 +629,79 @@ test("«Quitar el ritmo» pends with both buttons disabled and a second tap send
     await expect(dialog(page)).toHaveCount(0);
     expect(posts).toHaveLength(1);
     expect(await rhythmOfGoal(db, id)).toBeNull();
+  } finally {
+    await context.close();
+  }
+});
+
+// Where a removal line sits against its removal control and against the sheet's primary button.
+async function sitsWithItsRemoval(sheet: Locator, line: Locator, primary: Locator, removal: Locator) {
+  const [l, p, r] = [await line.boundingBox(), await primary.boundingBox(), await removal.boundingBox()];
+  expect(l && p && r).toBeTruthy();
+  // Under the primary button, not above it, and right above its own control.
+  expect(l!.y).toBeGreaterThan(p!.y + p!.height - 1);
+  expect(r!.y).toBeGreaterThanOrEqual(l!.y + l!.height - 1);
+  expect(r!.y - (l!.y + l!.height)).toBeLessThan(40);
+  await expect(sheet).toBeVisible();
+}
+
+test("the rhythm sheet's removal line sits over «Quitar el ritmo», under «Guardar el ritmo» (RP-127)", async ({ person, browser, baseURL, db }) => {
+  // Kills: the removal sentence left above the primary button, where it reads as what saving does.
+  const id = await seedOpenGoal(db, person, { name: "Leer", unit: PAGES, rhythm: 40, horizon: monthsAhead(5), created: DAY_BACK(3) });
+  const { page, context } = await open(browser, baseURL, person, `/metas/${id}`);
+  try {
+    await page.getByRole("button", { name: /40 páginas al mes/ }).click();
+    const sheet = dialog(page);
+    await sitsWithItsRemoval(
+      sheet,
+      sheet.getByText(BODY_OTHER, { exact: true }),
+      sheet.getByRole("button", { name: /^Guardar/ }),
+      sheet.getByRole("button", { name: REMOVE_RHYTHM, exact: true }),
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("the measure sheet's removal line sits over «Quitar la medida», under «Guardar» (RP-134)", async ({ person, browser, baseURL, db }) => {
+  // Kills: «Deja de medir.» left above «Guardar».
+  const id = await leer(db, person, 40);
+  const { page, context } = await open(browser, baseURL, person, `/metas/${id}`);
+  try {
+    await page.getByRole("button", { name: CHANGE, exact: true }).click();
+    const sheet = dialog(page);
+    await sitsWithItsRemoval(
+      sheet,
+      sheet.getByText(/^Deja de medir\./),
+      sheet.getByRole("button", { name: "Guardar", exact: true }),
+      sheet.getByRole("button", { name: REMOVE_MEASURE, exact: true }),
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("a new unit names, before «Guardar», the commitments that stop counting toward the goal (RP-134)", async ({ person, browser, baseURL, db }) => {
+  // Kills: a unit change that cuts commitments off in silence; naming one already in the new unit; naming a retired one.
+  const id = await leer(db, person);
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+    values (${person.id}, ${id}, 'Leer · 10 páginas', 'daily', 'quantity', 10, 'páginas', now() - interval '3 days'),
+           (${person.id}, ${id}, 'Capítulo al día', 'daily', 'quantity', 1, 'capítulos', now() - interval '3 days'),
+           (${person.id}, ${id}, 'Tocar', 'daily', 'tap', null, null, now() - interval '3 days')`;
+  const { page, context } = await open(browser, baseURL, person, `/metas/${id}`);
+  try {
+    await page.getByRole("button", { name: CHANGE, exact: true }).click();
+    const sheet = dialog(page);
+    const says = sheet.getByText("Este compromiso deja de sumar a la meta, porque cuenta en otra unidad: Leer · 10 páginas.", { exact: true });
+    await expect(says).toHaveCount(0);
+    await nameField(sheet).fill("Hojas");
+    await expect(says).toHaveCount(0);
+    await unitField(sheet).fill("capítulos");
+    await expect(says).toBeVisible();
+    await expect(sheet.getByText(/Capítulo al día/)).toHaveCount(0);
+    await unitField(sheet).fill("páginas");
+    await expect(says).toHaveCount(0);
   } finally {
     await context.close();
   }

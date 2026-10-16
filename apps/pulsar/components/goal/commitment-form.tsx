@@ -30,7 +30,7 @@ export type CommitmentFormProps = {
   sources: { key: string; labelKey: SourceKey; unit: string }[];
   // Cadence-only edit (RP-127): the form opens on the row's cadence, asks for nothing else and saves
   // through `editCadence`. `goalName` then names the place the way back and «Cancelar» return to.
-  edit?: { commitmentId: string; cadence: Cadence };
+  edit?: { commitmentId: string; cadence: Cadence; name?: string };
 };
 
 // RP-12's five cadences (`lib/day/types.ts`'s `Cadence`), in the order of
@@ -195,6 +195,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
           edit ? t("goal.commitments.cadenceTitle") : t(habit ? "plan.habitForm.title" : "plan.commitmentForm.title")
         }
         back={{ href: returnTo, place: goalName }}
+        eyebrow={edit?.name}
       />
 
       {edit ? null : (
