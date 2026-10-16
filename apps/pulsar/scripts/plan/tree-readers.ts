@@ -468,6 +468,7 @@ test("loadGoalPlace costs 2 statements: the settle and one read", async () => {
 // Written down from the loaders as they stood before the tree, over the plant
 // above with `today = 2026-10-12`.
 const GOLDEN_VIEW: unknown = {
+  "deleteBlock": "facts",
   "id": "aaaaaaaa-0000-4000-8000-000000000001",
   "name": "alone",
   "horizon": "2027-02-01",
