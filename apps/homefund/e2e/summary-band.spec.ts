@@ -47,10 +47,6 @@ async function computed(locator: Locator, property: string): Promise<string> {
   return locator.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property);
 }
 
-async function widthOf(locator: Locator): Promise<number> {
-  return locator.evaluate((el) => el.getBoundingClientRect().width);
-}
-
 function card(page: Page, name: "net" | "month" | "cash"): Locator {
   return page.locator(`[data-card="${name}"]`);
 }

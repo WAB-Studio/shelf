@@ -27,6 +27,7 @@ import {
   Link,
   MovementRow,
   Page,
+  PlainLink,
   ScreenHeader,
   TapTarget,
   Text,
@@ -163,10 +164,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           <Flex align="stretch" justify="center" gap="4" wrap="wrap">
             {ACCOUNT_CLASSES.map((tile) => (
               <Card key={tile.subtype} asChild>
-                <LocaleLink
-                  href={`/settings/accounts?new=${tile.subtype}`}
-                  style={{ width: 240, textDecoration: "none", color: "inherit" }}
-                >
+                <PlainLink href={`/settings/accounts?new=${tile.subtype}`} width={240}>
                   <Flex direction="column" align="center" gap="3">
                     <CategoryTile
                       color={tile.surface}
@@ -183,7 +181,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
                       </Text>
                     </Flex>
                   </Flex>
-                </LocaleLink>
+                </PlainLink>
               </Card>
             ))}
           </Flex>

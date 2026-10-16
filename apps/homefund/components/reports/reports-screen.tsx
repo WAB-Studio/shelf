@@ -8,7 +8,10 @@ import {
   CategoryTile,
   Flex,
   Heading,
+  Disc,
   Money,
+  ReportCard,
+  ReportRow,
   Text,
 } from "@/components/ui";
 import type { BarChartDatum } from "@/components/ui";
@@ -18,7 +21,6 @@ import type { ReportsData } from "@/db/queries/reports/reports-screen";
 import type { MemberContributionNamed } from "@/db/queries/reports/reports-screen";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
-import styles from "./reports-screen.module.css";
 
 // The two flow series carry the fund's colours: jade for what comes in, tomato
 // for what goes out.
@@ -106,20 +108,20 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           <Heading size="6">{t("title")}</Heading>
 
           <Flex direction="column" gap="4">
-            <div className={styles.card}>
+            <ReportCard>
               <Heading as="h2" size="4">{t("comparisonTitle")}</Heading>
               {byCurrency(sixMonthFlow).map(([currency, months]) => (
                 <CurrencyTrend key={currency} currency={currency} months={months} />
               ))}
-            </div>
+            </ReportCard>
 
-            <div className={styles.lowerRow}>
-              <div className={styles.card}>
+            <ReportRow>
+              <ReportCard>
                 <Heading as="h2" size="4">{t("byCategoryTitle")}</Heading>
                 <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} />
-              </div>
+              </ReportCard>
 
-              <div className={styles.card}>
+              <ReportCard>
                 <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
                 {!hasGroup ? (
                   <Text size="2" color="gray">
@@ -141,8 +143,8 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
                     </Flex>
                   ))
                 )}
-              </div>
-            </div>
+              </ReportCard>
+            </ReportRow>
           </Flex>
         </Flex>
       </Box>
@@ -209,9 +211,11 @@ function ExpenseBands({
         {rows.map((row) => (
           <Flex key={row.categoryId} align="center" gap="3">
             <CategoryTile color={row.color} size={28} />
-            <Text as="div" size="3" style={{ flex: 1, minWidth: 0 }} truncate>
-              {row.name}
-            </Text>
+            <Box asChild flexGrow="1" minWidth="0">
+              <Text as="div" size="3" truncate>
+                {row.name}
+              </Text>
+            </Box>
             <Text size="3" weight="medium">
               <Money
                 minor={row.totalCents}
@@ -294,14 +298,7 @@ function CurrencyTrend({
 function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <Flex align="center" gap="2">
-      <Box
-        style={{
-          width: 12,
-          height: 12,
-          borderRadius: "9999px",
-          background: color,
-        }}
-      />
+      <Disc size={12} surface={color} />
       <Text size="2" color="gray">
         {label}
       </Text>
@@ -318,9 +315,11 @@ function ContributionRow({ row }: { row: MemberContributionNamed }) {
 
   return (
     <Flex align="center" gap="3">
-      <Text as="div" size="3" style={{ flex: 1, minWidth: 0 }} truncate>
-        {name}
-      </Text>
+      <Box asChild flexGrow="1" minWidth="0">
+        <Text as="div" size="3" truncate>
+          {name}
+        </Text>
+      </Box>
       <Text size="3" weight="medium">
         <Money minor={row.contributionCents} currency={row.currency} size="inherit" />
       </Text>

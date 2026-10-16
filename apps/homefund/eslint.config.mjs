@@ -64,16 +64,9 @@ const eslintConfig = defineConfig([
       "no-restricted-syntax": ["error", insertSyntax, ...screenSyntax],
     },
   },
-  // Debt: these files predate the rule above. Shrink the list, never grow it.
+  // `next/font` hands its variables to `<html>` as a class, which only the root layout can reach.
   {
-    files: [
-      "app/[[]locale]/(app)/page.tsx",
-      "app/[[]locale]/layout.tsx",
-      "components/onboarding/onboarding-invite-step.tsx",
-      "components/reports/dashboard-summary.tsx",
-      "components/reports/reports-screen.tsx",
-      "components/transactions/movement-detail.tsx",
-    ],
+    files: ["app/[[]locale]/layout.tsx"],
     rules: { "no-restricted-syntax": ["error", insertSyntax] },
   },
   // The RLS harness calls the builder on purpose, as the negative control that

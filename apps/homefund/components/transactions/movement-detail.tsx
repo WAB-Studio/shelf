@@ -250,9 +250,11 @@ export function MovementDetail({
               <ChevronLeftIcon size={18} />
             </LocaleLink>
           </IconButton>
-          <Heading size="5" style={{ flex: 1 }}>
-            {isAdjustment ? t("kindAdjustment") : t("detailTitle")}
-          </Heading>
+          <Box flexGrow="1">
+            <Heading size="5">
+              {isAdjustment ? t("kindAdjustment") : t("detailTitle")}
+            </Heading>
+          </Box>
         </Flex>
 
         <Flex direction="column" align="center" gap="2" py="4">
@@ -446,7 +448,7 @@ export function MovementDetail({
             size="3"
             variant="soft"
             color="gray"
-            style={{ flex: 1 }}
+            grow
             onClick={() => setEditOpen(true)}
           >
             <PencilIcon size={16} />
@@ -457,7 +459,7 @@ export function MovementDetail({
             size="3"
             variant="soft"
             color="red"
-            style={{ flex: 1 }}
+            grow
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2Icon size={16} />

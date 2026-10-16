@@ -4,11 +4,16 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
+  BandCard,
+  BandCards,
+  BandFigure,
+  BandStats,
   Badge,
   Button,
   Flex,
-  Heading,
   Money,
+  PlainLink,
+  SummaryBand,
   TapTarget,
   Text,
 } from "@/components/ui";
@@ -17,7 +22,6 @@ import type { DashboardData } from "@/db/queries/reports/dashboard";
 import type { OwnerNetWorthNamed } from "@/db/queries/reports/dashboard";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
-import styles from "./dashboard-summary.module.css";
 
 /**
  * The home dashboard's headline: the fund's total net worth over a pill per owner
@@ -61,9 +65,9 @@ export function DashboardSummary({
   );
 
   return (
-    <Flex direction="column" gap="4" className={styles.summary}>
-      <div className={styles.cards}>
-        <div className={styles.card} data-card="net">
+    <SummaryBand>
+      <BandCards>
+        <BandCard ratio={1.35} data-card="net">
           <Flex direction="column" gap="2">
             {/* Two figures are two totals, so the stack takes a name of its own;
                 one figure is already named by the label under it. */}
@@ -78,14 +82,14 @@ export function DashboardSummary({
                 <Text size="2" color="gray">
                   {t("netWorthIn", { currency: total.currency })}
                 </Text>
-                <Heading size="8" className={styles.figure}>
+                <BandFigure>
                   <Money
                     minor={total.netWorthCents}
                     currency={total.currency}
                     tone={signTone(total.netWorthCents)}
                     size="inherit"
                   />
-                </Heading>
+                </BandFigure>
               </Flex>
             ))}
 
@@ -94,22 +98,16 @@ export function DashboardSummary({
                 {/* Deep-links to the ledger filtered to generated-unreviewed rows; hidden
                     once nothing awaits review (RF-31). */}
                 {unreviewedCount > 0 && (
-                  <LocaleLink
-                    href="/movements?unreviewed=1"
-                    style={{ textDecoration: "none", alignSelf: "flex-start" }}
-                  >
+                  <PlainLink href="/movements?unreviewed=1" alignSelf="flex-start">
                     <TapTarget align="center">
                       <Badge color="amber" variant="soft" radius="full">
                         {t("unreviewedBadge", { count: unreviewedCount })}
                       </Badge>
                     </TapTarget>
-                  </LocaleLink>
+                  </PlainLink>
                 )}
                 {pendingDeliveryCount > 0 && (
-                  <LocaleLink
-                    href="/inbox"
-                    style={{ textDecoration: "none", alignSelf: "flex-start" }}
-                  >
+                  <PlainLink href="/inbox" alignSelf="flex-start">
                     <TapTarget align="center">
                       <Badge color="amber" variant="soft" radius="full">
                         {t("pendingDeliveriesBadge", {
@@ -117,7 +115,7 @@ export function DashboardSummary({
                         })}
                       </Badge>
                     </TapTarget>
-                  </LocaleLink>
+                  </PlainLink>
                 )}
               </Flex>
             )}
@@ -140,21 +138,16 @@ export function DashboardSummary({
               ))}
             </Flex>
           </Flex>
-        </div>
+        </BandCard>
 
-        <div className={styles.card} data-card="month">
+        <BandCard ratio={1} centered data-card="month">
           <Flex direction="column" gap="4">
             {monthFlow.map((flow) => (
               <Flex key={flow.currency} direction="column" gap="2">
                 <Text size="2" color="gray">
                   {tr("inCurrency", { currency: flow.currency })}
                 </Text>
-                <Flex
-                  gap="4"
-                  wrap="wrap"
-                  className={styles.monthStats}
-                  data-stats={flow.adjustmentCents !== 0 ? 4 : 3}
-                >
+                <BandStats count={flow.adjustmentCents !== 0 ? 4 : 3}>
                   <MonthStat
                     label={t("monthIncome")}
                     minor={flow.incomeCents}
@@ -182,21 +175,23 @@ export function DashboardSummary({
                       signed="always"
                     />
                   )}
-                </Flex>
+                </BandStats>
               </Flex>
             ))}
           </Flex>
-        </div>
+        </BandCard>
 
-        <div className={styles.card} data-card="cash">
+        <BandCard ratio={0.9} hideBelowMd data-card="cash">
           {cash}
-        </div>
-      </div>
+        </BandCard>
+      </BandCards>
 
-      <Button asChild tap variant="ghost" style={{ alignSelf: "flex-start" }}>
-        <LocaleLink href="/reports">{t("viewReports")}</LocaleLink>
-      </Button>
-    </Flex>
+      <Flex>
+        <Button asChild tap variant="ghost">
+          <LocaleLink href="/reports">{t("viewReports")}</LocaleLink>
+        </Button>
+      </Flex>
+    </SummaryBand>
   );
 }
 
