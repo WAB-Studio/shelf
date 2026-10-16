@@ -14,6 +14,7 @@ import {
 import { BASE_CURRENCY } from "@/lib/currency";
 import { ActionError } from "@/lib/errors";
 import { centsToPesos } from "@/lib/money";
+import { resolveCategoryInScope, scopeKeyOf, type ScopeKey } from "@/lib/spreadsheet/resolve-category";
 import { SHEET_ENTITIES, sheetDescriptors, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { parseWorkbook, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
 import { importedAdjustmentSchema } from "@/lib/validation/account-reconciliation";
@@ -33,6 +34,8 @@ const MAX_DATA_ROWS = 10_000;
 export const TOO_MANY_ROWS = "data.import.errors.tooManyRows";
 const UNKNOWN_REFERENCE = "data.import.errors.unknownReference";
 const AMBIGUOUS_REFERENCE = "data.import.errors.ambiguousReference";
+// The name exists, but only in the scope the row's account is not in (RF-140).
+const CATEGORY_OUT_OF_SCOPE = "data.import.errors.categoryOutOfScope";
 const INVALID_CELL = "data.import.errors.invalidCell";
 // A category resolves fine and still refuses the row: its kind must match the
 // movement's own direction (RF-27), the same rule `assert_split_matches_transaction`
@@ -138,6 +141,10 @@ export type EffectiveRefs = {
   // file's own new categories — never trusted from the file's `kind` cell alone,
   // since a stray typo there is caught by the category row's own schema, not here.
   categoryKinds: Map<string, string>;
+  // The scope each effective account and category lands in, by the same ids the name
+  // maps hold. A file-new fund account of a caller with no fund has none (null).
+  accountScopes: Map<string, ScopeKey | null>;
+  categoryScopes: Map<string, ScopeKey>;
 };
 
 // The money column keys of each entity, so the light guard sees a peso string where
@@ -265,6 +272,27 @@ function buildCategoryKinds(existing: ScopedCategory[], fileRows: RawRow[]): Map
   });
 
   return kindById;
+}
+
+// The effective id→scope map for one entity, over the same ids `buildEffectiveMap`
+// mints: an existing row, renamed by the file or not, keeps the scope it has; a
+// file-new row takes the scope the commit will write it in.
+function buildScopes<S extends ScopeKey | null>(
+  existing: ScopedEntity[],
+  fileRows: RawRow[],
+  seedPrefix: string,
+  scopeOfNew: (raw: RawRow) => S,
+): Map<string, S> {
+  const scopeById = new Map<string, S>(existing.map((row) => [row.id, scopeKeyOf(row) as S]));
+  const existingRefs = new Set(existing.flatMap((row) => (row.externalRef != null ? [row.externalRef] : [])));
+
+  fileRows.forEach((raw, rowIndex) => {
+    const ref = text(raw.externalRef);
+    if (ref.length > 0 && existingRefs.has(ref)) return;
+    scopeById.set(placeholderFor(seedPrefix, ref, rowIndex), scopeOfNew(raw));
+  });
+
+  return scopeById;
 }
 
 // The raw record turned name-shaped for the descriptor's light guard: a money cell
@@ -483,6 +511,33 @@ function resolveAndShape(
     return resolved.id ?? null;
   };
 
+  // A movement's or a rule's category, picked among the same-named ones by the scope
+  // of the account it books on: the source for an expense, the destination for an
+  // income. Any other shape, or an account that did not resolve, leaves the name alone.
+  const resolveCategory = (
+    name: unknown,
+    fromAccountId: string | null,
+    toAccountId: string | null,
+  ): string | null => {
+    if (name == null) return null;
+    const accountId =
+      data.fromAccount != null && data.toAccount == null
+        ? fromAccountId
+        : data.fromAccount == null && data.toAccount != null
+          ? toAccountId
+          : null;
+    const accountScope = accountId !== null ? (refs.accountScopes.get(accountId) ?? null) : null;
+    const resolved = resolveCategoryInScope(refs.categories.get(name as string) ?? [], accountScope, refs.categoryScopes);
+    if ("id" in resolved) return resolved.id;
+    const key = {
+      unknown: UNKNOWN_REFERENCE,
+      ambiguous: AMBIGUOUS_REFERENCE,
+      outOfScope: CATEGORY_OUT_OF_SCOPE,
+    }[resolved.error];
+    errors.push({ key, column: "category", value: rawCellValue(entity, raw, "category") });
+    return null;
+  };
+
   switch (entity) {
     case "accounts": {
       const ref = text(raw.externalRef);
@@ -512,7 +567,7 @@ function resolveAndShape(
     case "recurringRules": {
       const fromAccountId = resolveInto(data.fromAccount, refs.accounts, "fromAccount");
       const toAccountId = resolveInto(data.toAccount, refs.accounts, "toAccount");
-      const categoryId = resolveInto(data.category, refs.categories, "category");
+      const categoryId = resolveCategory(data.category, fromAccountId, toAccountId);
       checkBaseCurrency(entity, raw, fromAccountId, "fromAccount", refs.accountCurrencies, errors);
       checkBaseCurrency(entity, raw, toAccountId, "toAccount", refs.accountCurrencies, errors);
       return {
@@ -568,7 +623,7 @@ function resolveAndShape(
       const isTransfer = data.fromAccount != null && data.toAccount != null;
       const categoryId = isTransfer
         ? null
-        : resolveInto(data.category, refs.categories, "category");
+        : resolveCategory(data.category, fromAccountId, toAccountId);
 
       // A category that resolves fine can still be the wrong kind for this movement's
       // direction (RF-27): income when only a destination is named, expense when only
@@ -694,6 +749,18 @@ export function buildEffectiveRefs(
       ),
     ),
     categoryKinds: buildCategoryKinds(scope.categories, recordsOf("categories")),
+    // Mirrors the commit: a new account lands by its placement, a new category in the
+    // caller's fund when there is one, else with the caller.
+    accountScopes: buildScopes<ScopeKey | null>(scope.accounts, recordsOf("accounts"), "accounts", (raw) =>
+      text(raw.placement) === "group"
+        ? scope.caller.groupId !== null
+          ? `group:${scope.caller.groupId}`
+          : null
+        : `user:${scope.caller.userId}`,
+    ),
+    categoryScopes: buildScopes<ScopeKey>(scope.categories, recordsOf("categories"), "categories", () =>
+      scope.caller.groupId !== null ? `group:${scope.caller.groupId}` : `user:${scope.caller.userId}`,
+    ),
   };
 }
 

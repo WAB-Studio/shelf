@@ -3984,6 +3984,7 @@ async function main(): Promise<void> {
   await importScopeOwnerSuite(userId, scope);
   await adjustmentFilterSuite(userId, scope);
   await negativeCountSuite(userId);
+  await importCategoryScopeSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -6330,4 +6331,193 @@ async function negativeCountSuite(userId: string): Promise<void> {
     again.ok && again.gapCents === 0 && againMarked.length === 0,
     `${JSON.stringify(again)} / ${JSON.stringify(againMarked)}`,
   );
+}
+
+// M28: the importer picks a movement's or a rule's category by the scope of its account (RF-140).
+// A hand-built scope, no database: the pipeline is pure over what `readImportScope` returns.
+async function importCategoryScopeSuite(): Promise<void> {
+  console.log("");
+  const U = randomUUID();
+  const G = randomUUID();
+  const id = () => randomUUID();
+  const cat = (name: string, kind: "expense" | "income", owner: "user" | "group", externalRef: string | null = null) => ({
+    id: id(),
+    name,
+    externalRef,
+    ownerUserId: owner === "user" ? U : null,
+    groupId: owner === "group" ? G : null,
+    kind,
+  });
+  const acct = (name: string, owner: "user" | "group", externalRef: string | null = null) => ({
+    id: id(),
+    name,
+    externalRef,
+    ownerUserId: owner === "user" ? U : null,
+    groupId: owner === "group" ? G : null,
+    settlementCurrency: "COP",
+  });
+
+  const mercadoOwn = cat("M28 Mercado", "expense", "user");
+  const mercadoFund = cat("M28 Mercado", "expense", "group");
+  const sueldoOwn = cat("M28 Sueldo", "income", "user");
+  const sueldoFund = cat("M28 Sueldo", "income", "group");
+  const onlyFund = cat("M28 Solo fondo", "expense", "group");
+  const onlyOwn = cat("M28 Solo mio", "expense", "user");
+  const twiceA = cat("M28 Doble", "expense", "user");
+  const twiceB = cat("M28 Doble", "expense", "user");
+  const keyedFund = cat("M28 Con llave", "expense", "group", "m28-cat-ref");
+  const own = acct("M28 Cuenta mia", "user");
+  const fund = acct("M28 Cuenta fondo", "group", "m28-acct-ref");
+
+  const emptyRefs = (): Record<"accounts" | "members" | "categories" | "recurringRules" | "transactions", Set<string>> => ({
+    accounts: new Set(["m28-acct-ref"]),
+    members: new Set(),
+    categories: new Set(["m28-cat-ref"]),
+    recurringRules: new Set(),
+    transactions: new Set(),
+  });
+  const scopeFor = (groupId: string | null) => ({
+    caller: { userId: U, groupId },
+    accounts: [own, fund],
+    categories: [mercadoOwn, mercadoFund, sueldoOwn, sueldoFund, onlyFund, onlyOwn, twiceA, twiceB, keyedFund],
+    existingRefs: emptyRefs(),
+  });
+
+  type Files = Partial<Record<"accounts" | "categories", RawRow[]>>;
+  const move = (over: RawRow): RawRow => ({
+    externalRef: null,
+    fromAccount: null,
+    toAccount: null,
+    amount: 1_000_000,
+    category: null,
+    occurredAt: "2026-03-31",
+    description: null,
+    adjustment: null,
+    currency: null,
+    ...over,
+  });
+  const rule = (over: RawRow): RawRow => ({
+    externalRef: null,
+    fromAccount: null,
+    toAccount: null,
+    amount: 1_000_000,
+    category: null,
+    description: null,
+    frequency: "monthly",
+    intervalN: 1,
+    dayOfMonth: 1,
+    nextRunOn: "2026-12-01",
+    endsOn: null,
+    ...over,
+  });
+  const run = (
+    entity: "transactions" | "recurringRules" | "categories",
+    raw: RawRow,
+    groupId: string | null = G,
+    files: Files = {},
+    index = 0,
+  ) => {
+    const s = scopeFor(groupId);
+    const refs = buildEffectiveRefs(s, (e) => (files as Record<string, RawRow[]>)[e] ?? []);
+    return processRow(entity, raw, index, index + 2, refs, s.existingRefs[entity]);
+  };
+  const splitOf = (row: { object: unknown }) =>
+    (row.object as { splits?: { categoryId: string }[] } | null)?.splits?.[0]?.categoryId;
+  const ruleCat = (row: { object: unknown }) => (row.object as { categoryId?: string } | null)?.categoryId;
+  const errs = (row: { errors: { key: string; column: string | null; value: string | null }[] }) =>
+    JSON.stringify(row.errors);
+  const OUT = "data.import.errors.categoryOutOfScope";
+  const refused = (row: { errors: { key: string; column: string | null; value: string | null }[]; object: unknown }, key: string, value: string) =>
+    row.object === null && row.errors.length === 1 && row.errors[0].key === key &&
+    row.errors[0].column === "category" && row.errors[0].value === value;
+
+  let r = run("transactions", move({ fromAccount: fund.name, category: "M28 Mercado" }));
+  assert(next("An expense on a fund account takes the fund's category of that name"),
+    r.errors.length === 0 && splitOf(r) === mercadoFund.id, `${errs(r)} split ${splitOf(r)}`);
+  r = run("transactions", move({ fromAccount: own.name, category: "M28 Mercado" }));
+  assert(next("An expense on a personal account takes the person's category of that name"),
+    r.errors.length === 0 && splitOf(r) === mercadoOwn.id, `${errs(r)} split ${splitOf(r)}`);
+  r = run("transactions", move({ toAccount: fund.name, category: "M28 Sueldo" }));
+  assert(next("An income takes the scope of its destination account"),
+    r.errors.length === 0 && splitOf(r) === sueldoFund.id, `${errs(r)} split ${splitOf(r)}`);
+  r = run("transactions", move({ toAccount: own.name, category: "M28 Sueldo" }));
+  assert(next("An income on a personal account takes the person's category"),
+    r.errors.length === 0 && splitOf(r) === sueldoOwn.id, `${errs(r)} split ${splitOf(r)}`);
+
+  r = run("transactions", move({ fromAccount: own.name, category: onlyFund.name }));
+  assert(next("A personal account naming a category only the fund holds is refused on the category"),
+    refused(r, OUT, onlyFund.name), errs(r));
+  r = run("transactions", move({ fromAccount: fund.name, category: onlyOwn.name }));
+  assert(next("A fund account naming a category only the person holds is refused on the category"),
+    refused(r, OUT, onlyOwn.name), errs(r));
+  r = run("transactions", move({ fromAccount: fund.name, category: "M28 No existe" }));
+  assert(next("A name nobody holds stays unknown"),
+    refused(r, "data.import.errors.unknownReference", "M28 No existe"), errs(r));
+  r = run("transactions", move({ fromAccount: own.name, category: twiceA.name }));
+  assert(next("Two categories of that name inside the account's scope stay ambiguous"),
+    refused(r, "data.import.errors.ambiguousReference", twiceA.name), errs(r));
+  r = run("transactions", move({ fromAccount: own.name, category: sueldoOwn.name }));
+  assert(next("The kind check runs after the scope: an income category on an expense is a kind mismatch"),
+    refused(r, "data.import.errors.categoryKindMismatch", sueldoOwn.name), errs(r));
+
+  r = run("recurringRules", rule({ fromAccount: fund.name, category: "M28 Mercado" }));
+  assert(next("A rule on a fund account takes the fund's category"),
+    r.errors.length === 0 && ruleCat(r) === mercadoFund.id, `${errs(r)} cat ${ruleCat(r)}`);
+  r = run("recurringRules", rule({ fromAccount: own.name, category: "M28 Mercado" }));
+  assert(next("A rule on a personal account takes the person's category"),
+    r.errors.length === 0 && ruleCat(r) === mercadoOwn.id, `${errs(r)} cat ${ruleCat(r)}`);
+  r = run("recurringRules", rule({ fromAccount: own.name, category: onlyFund.name }));
+  assert(next("A rule naming a category of the other scope is refused"), refused(r, OUT, onlyFund.name), errs(r));
+  r = run("recurringRules", rule({ toAccount: fund.name, category: "M28 Sueldo" }));
+  assert(next("An income rule takes its destination's scope"),
+    r.errors.length === 0 && ruleCat(r) === sueldoFund.id, `${errs(r)} cat ${ruleCat(r)}`);
+
+  // A category the file adds lands where the commit puts it: the caller's fund, else the caller.
+  const fileCat: RawRow = { externalRef: null, name: "M28 Nueva", kind: "expense", parent: null, color: CATEGORY_COLORS[0] };
+  const placeholder = run("categories", fileCat, G, { categories: [fileCat] }).placeholderId;
+  r = run("transactions", move({ fromAccount: fund.name, category: "M28 Nueva" }), G, { categories: [fileCat] });
+  assert(next("A file-new category counts as the fund's for a caller in a fund"),
+    placeholder !== null && r.errors.length === 0 && splitOf(r) === placeholder, `${errs(r)} split ${splitOf(r)} vs ${placeholder}`);
+  r = run("transactions", move({ fromAccount: own.name, category: "M28 Nueva" }), G, { categories: [fileCat] });
+  assert(next("A file-new category is out of scope for a personal account of a caller in a fund"),
+    refused(r, OUT, "M28 Nueva"), errs(r));
+  r = run("transactions", move({ fromAccount: own.name, category: "M28 Nueva" }), null, { categories: [fileCat] });
+  assert(next("A file-new category counts as the caller's own for a caller with no fund"),
+    r.errors.length === 0 && splitOf(r) !== undefined, errs(r));
+
+  // A category the file renames keeps the scope it has.
+  const renamed: RawRow = { externalRef: "m28-cat-ref", name: "M28 Renombrada", kind: "expense", parent: null, color: CATEGORY_COLORS[0] };
+  r = run("transactions", move({ fromAccount: fund.name, category: "M28 Renombrada" }), G, { categories: [renamed] });
+  assert(next("A file row that updates a fund category keeps it in the fund"),
+    r.errors.length === 0 && splitOf(r) === keyedFund.id, `${errs(r)} split ${splitOf(r)}`);
+  r = run("transactions", move({ fromAccount: own.name, category: "M28 Renombrada" }), G, { categories: [renamed] });
+  assert(next("A renamed fund category stays out of scope for a personal account"), refused(r, OUT, "M28 Renombrada"), errs(r));
+
+  // A file-new account lands by its placement.
+  const newAcct = (placement: string): RawRow => ({
+    externalRef: null, name: "M28 Nueva cuenta", kind: "asset", subtype: "bank", placement,
+    institution: null, amount: 0, balanceOn: "2026-01-01", settlementCurrency: null,
+  });
+  r = run("transactions", move({ fromAccount: "M28 Nueva cuenta", category: onlyFund.name }), G, { accounts: [newAcct("group")] });
+  assert(next("A file-new fund account takes the fund's categories"), r.errors.length === 0 && splitOf(r) === onlyFund.id, errs(r));
+  r = run("transactions", move({ fromAccount: "M28 Nueva cuenta", category: onlyFund.name }), G, { accounts: [newAcct("personal")] });
+  assert(next("A file-new personal account is out of scope for the fund's category"), refused(r, OUT, onlyFund.name), errs(r));
+  r = run("transactions", move({ fromAccount: "M28 Nueva cuenta", category: onlyOwn.name }), G, { accounts: [newAcct("personal")] });
+  assert(next("A file-new personal account takes the person's categories"), r.errors.length === 0 && splitOf(r) === onlyOwn.id, errs(r));
+  r = run("transactions", move({ fromAccount: "M28 Nueva cuenta", category: onlyOwn.name }), null, { accounts: [newAcct("group")] });
+  assert(next("A file-new fund account for a caller with no fund has no scope: the name alone decides"),
+    r.errors.length === 0 && splitOf(r) === onlyOwn.id, errs(r));
+
+  // A file row that updates an existing account keeps its scope, whatever placement it carries.
+  const updated: RawRow = { ...newAcct("personal"), externalRef: "m28-acct-ref", name: "M28 Fondo renombrada" };
+  r = run("transactions", move({ fromAccount: "M28 Fondo renombrada", category: onlyFund.name }), G, { accounts: [updated] });
+  assert(next("A file row that updates a fund account keeps it in the fund"),
+    r.errors.length === 0 && splitOf(r) === onlyFund.id, errs(r));
+
+  assert(next("Both languages carry the out-of-scope copy"),
+    (es.data.import.errors as Record<string, string>).categoryOutOfScope ===
+      "Esta categoría es de otro alcance que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya." &&
+      (en.data.import.errors as Record<string, string>).categoryOutOfScope ===
+        "This category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account.",
+    "categoryOutOfScope missing or reworded");
 }

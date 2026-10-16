@@ -20,11 +20,17 @@ import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import ExcelJS from "exceljs";
 
-import { SHEET_ENTITIES, sheetDescriptors, transactionSheetDescriptor } from "@/lib/spreadsheet/schema";
+import { CATEGORY_COLORS } from "@/lib/fund/category-color";
+import {
+  SHEET_ENTITIES,
+  sheetDescriptors,
+  transactionSheetDescriptor,
+  type SheetEntity,
+} from "@/lib/spreadsheet/schema";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { asHarnessUser, clearGroup, clearLedger, readScope, test } from "./global-setup";
+import { asHarnessUser, clearGroup, clearLedger, readScope, seedGroup, test } from "./global-setup";
 
 const data = messages.data;
 const stamp = randomUUID().slice(0, 8);
@@ -362,5 +368,241 @@ test.describe("export and template", () => {
       type: "list",
       formulae: [`options!$A$1:$A$${accountOptions.length}`],
     });
+  });
+});
+
+// RF-140 (importer half): a person in a fund holds the same category name twice, personal and
+// fund. The row's account decides which one it books; a name only the other scope holds is
+// refused on its own row at preview, and nothing is written (RF-51).
+test.describe("import resolves a category by its account's scope", () => {
+  const m28 = `m28-${stamp}`;
+  const MERCADO = `T3 Mercado ${stamp}`;
+  const INGRESO = `T3 Ingreso ${stamp}`;
+  const SOLO_FONDO = `T3 Solo fondo ${stamp}`;
+  const NUEVA = `T3 Nueva ${stamp}`;
+  const FUND_ACCOUNT = `T3 Cuenta fondo ${stamp}`;
+  const m = {
+    fundAccount: randomUUID(),
+    mercadoOwn: randomUUID(),
+    mercadoFund: randomUUID(),
+    ingresoOwn: randomUUID(),
+    ingresoFund: randomUUID(),
+    soloFondo: randomUUID(),
+    nuevaOwn: randomUUID(),
+  };
+  const refsLike = `${m28}-%`;
+
+  type Sheets = { entity: SheetEntity; rows: Record<string, unknown>[] }[];
+  async function multiSheetFile(name: string, sheets: Sheets): Promise<string> {
+    const workbook = new ExcelJS.Workbook();
+    for (const { entity, rows } of sheets) {
+      const sheet = workbook.addWorksheet(data.sheets[entity]);
+      const keys = (sheetDescriptors[entity].columns as readonly { key: string }[]).map((column) => column.key);
+      sheet.addRow(keys.map((key) => data.columns[key as keyof typeof data.columns]));
+      for (const row of rows) sheet.addRow(keys.map((key) => row[key] ?? null));
+    }
+    const path = join(dir, name);
+    writeFileSync(path, Buffer.from(await workbook.xlsx.writeBuffer()));
+    return path;
+  }
+
+  const expense = (suffix: string, from: string, category: string) => ({
+    externalRef: `${m28}-${suffix}`,
+    fromAccount: from,
+    amount: 15000,
+    category,
+    occurredAt: "2026-03-31",
+    description: `M28 ${suffix}`,
+  });
+
+  async function booked() {
+    return fixtureSql<{ external_ref: string; category_id: string }[]>`
+      select t.external_ref, s.category_id
+      from transactions t join transaction_splits s on s.transaction_id = t.id
+      where t.external_ref like ${refsLike}
+      order by t.external_ref`;
+  }
+  async function count(table: "transactions" | "recurring_rules"): Promise<number> {
+    const [row] = await fixtureSql<{ n: string }[]>`
+      select count(*)::text as n from ${fixtureSql(table)} where external_ref like ${refsLike}`;
+    return Number(row.n);
+  }
+
+  test.beforeAll(async () => {
+    const { groupId } = await seedGroup();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (
+          id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${m.fundAccount}, ${groupId}, true, ${FUND_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
+      for (const [id, name, kind, owner] of [
+        [m.mercadoOwn, MERCADO, "expense", "own"],
+        [m.mercadoFund, MERCADO, "expense", "fund"],
+        [m.ingresoOwn, INGRESO, "income", "own"],
+        [m.ingresoFund, INGRESO, "income", "fund"],
+        [m.soloFondo, SOLO_FONDO, "expense", "fund"],
+        // The person already holds the file's new name: only the fund's scope tells the two apart.
+        [m.nuevaOwn, NUEVA, "expense", "own"],
+      ] as const) {
+        await tx`
+          insert into categories (id, owner_user_id, group_id, name, kind, color)
+          values (${id}, ${owner === "own" ? scope.userId : null}, ${owner === "fund" ? groupId : null},
+            ${name}, ${kind}, '#4C8C4A')`;
+      }
+    });
+  });
+
+  test.afterEach(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`delete from transactions where external_ref like ${refsLike}`;
+      await tx`delete from recurring_rules where external_ref like ${refsLike}`;
+    });
+  });
+
+  test.afterAll(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`delete from transactions where external_ref like ${refsLike}`;
+      await tx`delete from recurring_rules where external_ref like ${refsLike}`;
+    });
+    await fixtureSql`delete from accounts where id = ${m.fundAccount}`;
+    await fixtureSql`delete from categories where id in ${fixtureSql(Object.values(m).slice(1))}`;
+    await fixtureSql`delete from categories where name = ${NUEVA}`;
+    await clearGroup();
+  });
+
+  async function confirm(page: Page) {
+    const committed = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().endsWith("/es/settings/data"),
+    );
+    await page.getByRole("button", { name: data.screen.confirmImport, exact: true }).click();
+    await committed;
+  }
+
+  test("one name in both scopes previews as two new rows, each stored on its own account's category, and again as two updates", async ({
+    page,
+  }) => {
+    // Kills: resolving `category` with the plain name lookup, which calls the pair ambiguous.
+    const path = await multiSheetFile("scopes.xlsx", [
+      {
+        entity: "transactions",
+        rows: [expense("own", ACCOUNT_NAME, MERCADO), expense("fund", FUND_ACCOUNT, MERCADO)],
+      },
+    ]);
+    await chooseFile(page, path);
+    await expect(totalsBadge(page, "2 nuevas")).toBeVisible();
+    await expect(totalsBadge(page, "0 con errores")).toBeVisible();
+    expect(await count("transactions")).toBe(0);
+
+    await confirm(page);
+    await expect(page.getByText(data.screen.importDone, { exact: true })).toBeVisible();
+    expect(await booked()).toEqual([
+      { external_ref: `${m28}-fund`, category_id: m.mercadoFund },
+      { external_ref: `${m28}-own`, category_id: m.mercadoOwn },
+    ]);
+
+    // RF-52: the same file again updates both and adds none.
+    await page.locator('input[type="file"]').setInputFiles(path);
+    await expect(totalsBadge(page, "0 nuevas")).toBeVisible();
+    await expect(totalsBadge(page, "2 actualizadas")).toBeVisible();
+    await confirm(page);
+    expect(await count("transactions")).toBe(2);
+    expect(await booked()).toEqual([
+      { external_ref: `${m28}-fund`, category_id: m.mercadoFund },
+      { external_ref: `${m28}-own`, category_id: m.mercadoOwn },
+    ]);
+  });
+
+  test("an income row takes the category of its destination account's scope", async ({ page }) => {
+    // Kills: reading the source account for every movement, so an income looks at no scope.
+    const income = {
+      externalRef: `${m28}-ingreso`,
+      toAccount: FUND_ACCOUNT,
+      amount: 90000,
+      category: INGRESO,
+      occurredAt: "2026-03-31",
+      description: "M28 ingreso",
+    };
+    await chooseFile(page, await multiSheetFile("income.xlsx", [{ entity: "transactions", rows: [income] }]));
+    await expect(totalsBadge(page, "1 nueva")).toBeVisible();
+    await expect(totalsBadge(page, "0 con errores")).toBeVisible();
+    await confirm(page);
+    await expect(page.getByText(data.screen.importDone, { exact: true })).toBeVisible();
+    expect(await booked()).toEqual([{ external_ref: `${m28}-ingreso`, category_id: m.ingresoFund }]);
+  });
+
+  test("a personal account naming a category only the fund holds is refused on its row, and the valid row is not written either", async ({
+    page,
+  }) => {
+    // Kills: mapping the out-of-scope outcome to the lone same-named candidate.
+    const copy = (data.import.errors as Record<string, string>).categoryOutOfScope;
+    expect(copy).toBeTruthy();
+    await chooseFile(
+      page,
+      await multiSheetFile("out-of-scope.xlsx", [
+        {
+          entity: "transactions",
+          rows: [expense("good", ACCOUNT_NAME, MERCADO), expense("bad", ACCOUNT_NAME, SOLO_FONDO)],
+        },
+      ]),
+    );
+    await expect(totalsBadge(page, "1 nueva")).toBeVisible();
+    await expect(totalsBadge(page, "1 con error")).toBeVisible();
+    const report = page.getByRole("table", { name: data.screen.importHeading });
+    const reportRow = report.getByRole("row").filter({ hasText: copy });
+    await expect(reportRow).toHaveCount(1);
+    await expect(reportRow).toContainText(SOLO_FONDO);
+    await expect(page.getByRole("button", { name: data.screen.confirmImport, exact: true })).toBeDisabled();
+    expect(await count("transactions")).toBe(0);
+  });
+
+  test("a recurring rule takes the category of its account's scope", async ({ page }) => {
+    // Kills: wiring the scoped resolver into movements only, leaving rules on the plain lookup.
+    const rule = (suffix: string, from: string) => ({
+      externalRef: `${m28}-${suffix}`,
+      fromAccount: from,
+      amount: 50000,
+      category: MERCADO,
+      description: `M28 regla ${suffix}`,
+      frequency: "monthly",
+      intervalN: 1,
+      dayOfMonth: 1,
+      nextRunOn: "2026-12-01",
+    });
+    await chooseFile(
+      page,
+      await multiSheetFile("rules.xlsx", [
+        { entity: "recurringRules", rows: [rule("rown", ACCOUNT_NAME), rule("rfund", FUND_ACCOUNT)] },
+      ]),
+    );
+    await expect(totalsBadge(page, "2 nuevas")).toBeVisible();
+    await expect(totalsBadge(page, "0 con errores")).toBeVisible();
+    await confirm(page);
+    await expect(page.getByText(data.screen.importDone, { exact: true })).toBeVisible();
+    const stored = await fixtureSql<{ external_ref: string; category_id: string }[]>`
+      select external_ref, category_id from recurring_rules
+      where external_ref like ${refsLike} order by external_ref`;
+    expect(stored).toEqual([
+      { external_ref: `${m28}-rfund`, category_id: m.mercadoFund },
+      { external_ref: `${m28}-rown`, category_id: m.mercadoOwn },
+    ]);
+  });
+
+  test("a category the file adds is the fund's for a person in a fund, so a fund account may name it", async ({
+    page,
+  }) => {
+    // Kills: keying a file-new category as the caller's own while the commit puts it in the fund.
+    await chooseFile(
+      page,
+      await multiSheetFile("new-category.xlsx", [
+        {
+          entity: "categories",
+          rows: [{ name: NUEVA, kind: "expense", color: CATEGORY_COLORS[0] }],
+        },
+        { entity: "transactions", rows: [expense("nueva", FUND_ACCOUNT, NUEVA)] },
+      ]),
+    );
+    await expect(totalsBadge(page, "2 nuevas")).toBeVisible();
+    await expect(totalsBadge(page, "0 con errores")).toBeVisible();
+    expect(await count("transactions")).toBe(0);
   });
 });
