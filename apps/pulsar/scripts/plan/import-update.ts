@@ -403,6 +403,55 @@ test("phases: a new one is inserted, one of the same aim has its span updated, t
   assert.equal(rows[0].id, baseId, "the span is updated, the phase is not replaced");
 });
 
+// RP-25: a phase may end ON the goal's horizon day, never after it. The edges are where the boundary lives.
+test("horizon: moved onto the very day a phase ends is written, not refused (RP-25)", async () => {
+  const name = fresh("Horizonte sobre fase");
+  const id = await seedGoal(name, { horizon: `${M(12)}-01` });
+  await seedPhase(id, "Intocada", `${M(1)}-01`, `${M(3)}-01`);
+  const draft = draftOf({ name, horizon: `${M(3)}-01` });
+  const result = ok(await confirm(draft, await review(draft)));
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  assert.equal((await goalRow(id)).horizon, `${M(3)}-01`);
+});
+
+test("horizon: moved onto the day a phase the plan rewrites now ends is written, one day short of it is refused (RP-25)", async () => {
+  const name = fresh("Horizonte sobre fase reescrita");
+  const id = await seedGoal(name, { horizon: `${M(12)}-01` });
+  await seedPhase(id, "Larga", `${M(1)}-01`, `${M(8)}-01`);
+  const draft = draftOf({ name, horizon: `${M(3)}-01`, phases: [`${M(1)}-01 a ${M(3)}-01 · Larga`] });
+  const result = ok(await confirm(draft, await review(draft)));
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  assert.equal((await goalRow(id)).horizon, `${M(3)}-01`);
+  const [phase] = await admin<{ ends_on: string }[]>`select ends_on::text from goals.phases where goal_id = ${id}`;
+  assert.equal(phase.ends_on, `${M(3)}-01`);
+
+  const short = fresh("Horizonte un día antes");
+  const shortId = await seedGoal(short, { horizon: `${M(12)}-01` });
+  await seedPhase(shortId, "Intocada", `${M(1)}-01`, `${M(3)}-02`);
+  const shorter = draftOf({ name: short, horizon: `${M(3)}-01` });
+  const refused = ok(await confirm(shorter, await review(shorter)));
+  assert.deepEqual(refused.failed.map((f) => f.reason), ["goal.errors.horizonBeforePhase"]);
+  assert.equal((await goalRow(shortId)).horizon, `${M(12)}-01`);
+});
+
+test("phases: one that ends on the day of the horizon the goal keeps, or the one it moves to, is written (RP-25)", async () => {
+  const kept = fresh("Fase hasta el horizonte");
+  const keptId = await seedGoal(kept, { horizon: `${M(12)}-01` });
+  const moved = fresh("Fase hasta el horizonte nuevo");
+  const movedId = await seedGoal(moved, { horizon: `${M(12)}-01` });
+  const draft = draftOf(
+    { name: kept, horizon: `${M(12)}-01`, phases: [`${M(2)}-01 a ${M(12)}-01 · Cierre`] },
+    { name: moved, horizon: `${M(6)}-01`, phases: [`${M(2)}-01 a ${M(6)}-01 · Cierre`] },
+  );
+  const result = ok(await confirm(draft, await review(draft)));
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  const ends = async (goalId: string) =>
+    (await admin<{ ends_on: string }[]>`select ends_on::text from goals.phases where goal_id = ${goalId}`).map((r) => r.ends_on);
+  assert.deepEqual(await ends(keptId), [`${M(12)}-01`]);
+  assert.deepEqual(await ends(movedId), [`${M(6)}-01`]);
+  assert.equal((await goalRow(movedId)).horizon, `${M(6)}-01`);
+});
+
 test("commitments: a fact-less one takes the new cadence, a new one is added, the one the plan omits stays", async () => {
   const name = fresh("Compromisos");
   const id = await seedGoal(name);
@@ -490,6 +539,52 @@ test("tasks: a changed one is updated, a done one is not, new ones go after the 
   assert.ok(b.position > a.position, "in the plan's order");
 });
 
+test("tasks: a matched task that only changes month moves to it, and one that only changes estimate keeps its month", async () => {
+  const name = fresh("Tarea de mes");
+  const id = await seedGoal(name);
+  await seedTask(id, "Solo mes", M(1), 60, 1);
+  await seedTask(id, "Solo estimado", M(1), 60, 2);
+  const draft = draftOf({
+    name,
+    horizon: `${M(12)}-01`,
+    measure: "Estudio · minutos",
+    tasks: [`${M(3)} · 60 min · Solo mes`, `${M(1)} · 90 min · Solo estimado`],
+  });
+  const result = ok(await confirm(draft, await review(draft)));
+  assert.equal(result.failed.length, 0);
+  const rows = await admin<{ name: string; estimate: number | null; planned_month: string | null }[]>`
+    select name, estimate, to_char(planned_month, 'YYYY-MM') as planned_month from goals.one_offs where goal_id = ${id} order by name`;
+  assert.deepEqual(rows.map((r) => [r.name, r.estimate, r.planned_month]), [
+    ["Solo estimado", 90, M(1)],
+    ["Solo mes", 60, M(3)],
+  ]);
+});
+
+test("tasks: a done task the draft estimates and places otherwise is left as it is and reported as nothing", async () => {
+  const name = fresh("Tarea hecha distinta");
+  const id = await seedGoal(name, { note: "vieja" });
+  const hecha = await seedTask(id, "Hecha", M(1), 30, 1);
+  await seedFact(id, { oneOffId: hecha });
+  // The note differs so the goal is an update; the done task differs in both estimate and month and must not follow.
+  const draft = draftOf({
+    name,
+    horizon: `${M(12)}-01`,
+    note: "nueva",
+    measure: "Estudio · minutos",
+    tasks: [`${M(3)} · 99 min · Hecha`],
+  });
+  const updates = await review(draft);
+  wire.length = 0;
+  const result = ok(await confirm(draft, updates));
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  // The database would refuse the rewrite of a done row on its own; the import must not even ask it.
+  const asked = wire.filter((q) => /update\s+"?goals"?\."?one_offs"?/i.test(q));
+  assert.deepEqual(asked, [], "no statement rewrites a task");
+  const [row] = await admin<{ estimate: number | null; planned_month: string | null }[]>`
+    select estimate, to_char(planned_month, 'YYYY-MM') as planned_month from goals.one_offs where id = ${hecha}`;
+  assert.deepEqual([row.estimate, row.planned_month], [30, M(1)]);
+});
+
 test("a child goal of a matched goal in the draft is created under the matched goal's id", async () => {
   const mother = fresh("Madre matriz");
   const child = fresh("Hija nueva");
@@ -554,6 +649,20 @@ test("stale: a goalId that is not the goal the name matches is refused", async (
   const result = await confirm(draft, [{ ...update, goalId: wrong }]);
   assert.deepEqual(result, { ok: false, error: "import.errors.reviewStale", at: "goals.0" });
   assert.equal(await world(), before);
+});
+
+test("an update naming a goal the draft does not have, the next index after its last one included, is a refusal that writes nothing", async () => {
+  const name = fresh("Indice falso");
+  const id = await seedGoal(name, { note: "vieja" });
+  const draft = draftOf({ name, horizon: `${M(12)}-01`, note: "nueva" });
+  const [real] = await review(draft);
+  const before = await world();
+  for (const g of [draft.goals.length, draft.goals.length + 5, -1]) {
+    const result = await confirm(draft, [{ ...real, g }]);
+    assert.deepEqual(result, { ok: false, error: "import.errors.draftInvalid", at: "updates.0.g" }, `g = ${g}`);
+  }
+  assert.equal(await world(), before);
+  assert.equal((await goalRow(id)).note, "vieja");
 });
 
 test("a matched goal the review did not send as an update is never changed", async () => {

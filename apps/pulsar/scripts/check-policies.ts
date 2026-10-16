@@ -3361,6 +3361,26 @@ async function checkDeleteAndEdit0025(): Promise<void> {
       const toCounted = (id: string) => (sp: postgres.TransactionSql) =>
         sp`update goals.commitments set cadence_kind = 'times_per_week', cadence_n = 3 where id = ${id}`;
 
+      // The catalogue, not a probe: a column granted by mistake is a column anyone can write.
+      // Phases open `aim`, `starts_on`, `ends_on`; commitments open the retire stamp, the name, the note and the cadence.
+      const updatable = async (table: "phases" | "commitments") =>
+        (
+          await tx<{ column_name: string }[]>`
+            select a.attname as column_name
+            from pg_attribute a
+            where a.attrelid = ${`goals.${table}`}::regclass and a.attnum > 0 and not a.attisdropped
+              and has_column_privilege('authenticated', a.attrelid, a.attnum, 'UPDATE')
+            order by a.attname`
+        ).map((row) => row.column_name);
+      const phaseColumns = (await updatable("phases")).join(",");
+      assert("P19e", phaseColumns === "aim,ends_on,starts_on", `columns of goals.phases that authenticated may update: ${phaseColumns}`);
+      const commitmentColumns = (await updatable("commitments")).join(",");
+      assert(
+        "P18i",
+        commitmentColumns === "cadence_kind,cadence_n,cadence_weekdays,name,note,retired_at",
+        `columns of goals.commitments that authenticated may update: ${commitmentColumns}`,
+      );
+
       // -- phases --
       // No WHERE and no RETURNING: either one reads rows through the SELECT policy and hides a `using (true)`.
       const span = await attemptShape(
@@ -3474,6 +3494,50 @@ async function checkDeleteAndEdit0025(): Promise<void> {
         `another person's phase and goal after my update and deletes, aim = ${theirs.phase ?? "gone"}, goals = ${theirs.goals}`,
       );
 
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // A delete that names no row and asks for none back reads nothing through the SELECT policy, so the delete policy
+  // alone says whose rows it may take. Another person's goal, phase and commitment stay (RP-127).
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      if (mutant) await tx.unsafe(mutant);
+      const mine = (
+        await tx<{ id: string }[]>`
+          insert into goals.goals (user_id, name, horizon) values (${subject}, 'mía', '2026-12-31') returning id`
+      )[0].id;
+      const theirs = (
+        await tx<{ id: string }[]>`
+          insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2026-12-31') returning id`
+      )[0].id;
+      for (const [user, goalId] of [
+        [subject, mine],
+        [intruder, theirs],
+      ] as const) {
+        await tx`insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on) values (${user}, ${goalId}, 'f', '2026-01-01', '2026-02-01')`;
+        await tx`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction) values (${user}, ${goalId}, 'c', 'daily', 'tap')`;
+      }
+      await enterUserContext(tx, subject);
+      const took: Record<string, string> = {};
+      // Children first: the goal's own delete would cascade over them and hide which statement took what.
+      for (const table of ["phases", "commitments", "goals"] as const) {
+        const r = await attemptShape(tx, (sp) => sp`delete from ${sp("goals")}.${sp(table)}`);
+        took[table] = shape(r);
+      }
+      await enterUserContext(tx, intruder);
+      const [left] = await tx<{ goals: number; phases: number; commitments: number }[]>`
+        select (select count(*)::int from goals.goals where id = ${theirs}) as goals,
+               (select count(*)::int from goals.phases where goal_id = ${theirs}) as phases,
+               (select count(*)::int from goals.commitments where goal_id = ${theirs}) as commitments`;
+      assert(
+        "P37i",
+        left.goals === 1 && left.phases === 1 && left.commitments === 1,
+        `another person's goal, phases, commitments after my bare deletes: ${left.goals},${left.phases},${left.commitments}; mine: ${JSON.stringify(took)}`,
+      );
       throw forcedRollback;
     })
     .catch((error: unknown) => {
