@@ -72,3 +72,11 @@ test("a null MX beside a real MX is deliverable", async () => {
   ]);
   assert.equal(await deliverable({ mx }), true);
 });
+
+test("a resolver that never answers is released by the guard's own timeout", async () => {
+  const hang = () => new Promise<never>(() => {});
+  const startedAt = Date.now();
+  assert.equal(await deliverable({ mx: hang, a: hang, aaaa: hang }), true);
+  // Bounded by the guard's own clock (2.5s), not by the resolver's silence.
+  assert.ok(Date.now() - startedAt < 7_000);
+});
