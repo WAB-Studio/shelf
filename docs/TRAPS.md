@@ -3296,8 +3296,10 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - Git renames the files the branch had, not the ones it added: those land in the old folder as unmerged. Pass the flag on every rebase of a branch cut before the rename.
 - Ignored files (`.env.local`, `.next/`, `private/`, `.eslintcache`) stay under the old folder in every checkout but the one that ran `git mv`. Copy `.env.local` into the new folder and run `npx next typegen` there.
 
-## Vercel's `deploymentEnabled` lives inside the Root Directory: pause Git deployments before pushing a folder rename (2026-10-16)
+## Vercel's `deploymentEnabled` lives inside the Root Directory: re-root before pushing a folder rename (2026-10-16)
 - A project builds from its Root Directory (`apps/orbit`, ...). Push a branch that moved the folder and Vercel finds none: one deployment per project, state ERROR, `NOW_SANDBOX_WORKER_ROOTDIR_NOT_EXIST`.
-- Measured 2026-10-16 (M7): `gitProviderOptions.createDeployments: "disabled"` read back as stored on all three projects and did **not** stop Git deployments. The push of `renombre-m1` at 14:33:27Z created one ERROR deployment per project at 14:33:32Z. Production (`e404f8cc`, READY) stayed untouched.
-- Do: read `GET /v6/deployments?projectId=<id>&since=<push time>` after the first push of a renamed branch; never take the stored field as proof.
-- How it was finally stopped: pending, the user is deciding (options: re-root the projects, disconnect Git, accept the errors). <!-- MAIN SESSION: fill in the outcome here -->
+- `gitProviderOptions.createDeployments: "disabled"` reads back as stored and stops nothing. Measured: the push of `renombre-m1` at 14:33:27Z wrote one ERROR deployment per project. Production stayed on `e404f8cc`, READY.
+- Re-root the projects to the new folders before pushing. The renamed branch then reads its own `vercel.json` (`"*": false, "main": true`): the push of `renombre` at 14:59:07Z wrote 0 deployments.
+- Re-root while `main` keeps the old folders only when no `main` deploy is due before the rename reaches it. A hotfix from `main` first puts the old Root Directory back.
+- Read `GET /v6/deployments?projectId=<id>&since=<push time>` after the first push of a renamed branch. Never take a stored field as proof.
+- The auto-mode classifier refuses `PATCH /v9/projects` as a production deploy. The user runs it with `!`.
