@@ -159,7 +159,7 @@ export function ReviewTree({
     }
   };
 
-  function cadenceText(commitment: Commitment): string {
+  function cadenceText(commitment: Pick<Commitment, "cadenceKind" | "cadenceWeekdays" | "cadenceN">): string {
     switch (commitment.cadenceKind) {
       case "daily":
         return t("goal.cadence.daily");
@@ -415,26 +415,40 @@ export function ReviewTree({
     );
   }
 
+  // A note quoted in a difference line: its first words, on one line.
+  const clip = (text: string) => {
+    const flat = text.replace(/\s+/g, " ").trim();
+    return flat.length > 40 ? `${flat.slice(0, 40).trimEnd()}…` : flat;
+  };
+
   // One line of what the import would change in an open goal, from the figures of the draft and of the goal.
   function differenceLine(d: Difference, unit: string): string {
     switch (d.kind) {
       case "horizon":
         return t("import.review.diff.horizon", { to: dayShort(dayBefore(d.to)) });
       case "note":
-        return t("import.review.diff.note");
+        return t("import.review.diff.note", { shape: d.from === null ? "set" : "change", from: clip(d.from ?? ""), to: clip(d.to) });
       case "measure":
         return d.kept === "fed" ? t("import.review.diff.measureKept") : t("import.review.diff.measure", { name: d.name, unit: d.unit });
       case "rhythm":
         return t("import.review.diff.rhythm", { amount: fmt(d.to, unit) });
       case "month":
-        return t("import.review.diff.month", { amount: fmt(d.amount, unit), month: monthWord(d.month) });
+        return t("import.review.diff.month", {
+          shape: d.from === null ? "set" : "change",
+          amount: fmt(d.amount, unit),
+          month: monthWord(d.month),
+          from: d.from === null ? "" : fmt(d.from, unit),
+        });
       case "phaseAdded":
       case "phaseChanged":
         return t(`import.review.diff.${d.kind}`, { aim: d.aim, startsOn: dayShort(d.startsOn), endsOn: dayShort(d.endsOn) });
       case "phaseOverlaps":
         return t("import.review.diff.phaseOverlaps", { aim: d.aim, startsOn: dayShort(d.startsOn), endsOn: dayShort(d.endsOn), with: d.with });
+      case "commitmentChanged": {
+        const said = (c: typeof d.from) => cadenceText({ cadenceKind: c.kind, cadenceWeekdays: c.weekdays, cadenceN: c.n });
+        return t("import.review.diff.commitmentChanged", { name: d.name, from: said(d.from), to: said(d.to) });
+      }
       case "commitmentAdded":
-      case "commitmentChanged":
       case "commitmentReplaced":
       case "taskAdded":
         return t(`import.review.diff.${d.kind}`, { name: d.name });
@@ -588,7 +602,7 @@ export function ReviewTree({
       <CheckRow
         key={node.path}
         depth={depth as 0 | 1 | 2 | 3 | 4}
-        unboxed={!blocked && review.unchanged.has(node.path)}
+        unboxed={!blocked && (review.unchanged.has(node.path) || review.crosses.has(node.path))}
         checked={node.marked}
         onCheckedChange={(value) => handlers.onToggle(node.path, value)}
         name={name}

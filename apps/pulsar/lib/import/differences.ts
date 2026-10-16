@@ -39,15 +39,15 @@ export type GoalSnapshot = {
 // Nothing here removes: a part the plan omits is only named in `stays`. A phase that crosses another is never written.
 export type Difference =
   | { kind: "horizon"; to: string }
-  | { kind: "note"; to: string }
+  | { kind: "note"; from: string | null; to: string }
   | { kind: "measure"; name: string; unit: string; kept: "fed" | null }
   | { kind: "rhythm"; to: number }
-  | { kind: "month"; month: string; amount: number }
+  | { kind: "month"; month: string; amount: number; from: number | null }
   | { kind: "phaseAdded"; aim: string; startsOn: string; endsOn: string }
   | { kind: "phaseChanged"; aim: string; startsOn: string; endsOn: string }
   | { kind: "phaseOverlaps"; aim: string; startsOn: string; endsOn: string; with: string }
   | { kind: "commitmentAdded"; name: string }
-  | { kind: "commitmentChanged"; name: string }
+  | { kind: "commitmentChanged"; name: string; from: Cadence; to: Cadence }
   | { kind: "commitmentReplaced"; name: string }
   | { kind: "taskAdded"; name: string }
   | { kind: "taskMoved"; name: string; from: string; to: string }
@@ -106,7 +106,7 @@ export function differences(draftGoal: DraftGoal, snapshot: GoalSnapshot, today:
   }
 
   const note = (draftGoal as { note?: string | null }).note;
-  if (typeof note === "string" && note !== (snapshot.note ?? "")) out.push({ kind: "note", to: note });
+  if (typeof note === "string" && note !== (snapshot.note ?? "")) out.push({ kind: "note", from: snapshot.note === null || snapshot.note === "" ? null : snapshot.note, to: note });
 
   const measure = draftGoal.measure;
   if (measure !== null && (snapshot.measure?.name !== measure.name || snapshot.measure?.unit !== measure.unit)) {
@@ -121,7 +121,7 @@ export function differences(draftGoal: DraftGoal, snapshot: GoalSnapshot, today:
   for (const entry of draftGoal.months) {
     if (monthKey(entry.month) < current) continue;
     const have = snapshot.months.find((m) => monthKey(m.month) === monthKey(entry.month));
-    if (have?.amount !== entry.amount) out.push({ kind: "month", month: monthKey(entry.month), amount: entry.amount });
+    if (have?.amount !== entry.amount) out.push({ kind: "month", month: monthKey(entry.month), amount: entry.amount, from: have?.amount ?? null });
   }
 
   for (const phase of draftGoal.phases) {
@@ -145,7 +145,8 @@ export function differences(draftGoal: DraftGoal, snapshot: GoalSnapshot, today:
       n: commitment.cadenceN,
     };
     if (sameCadence(cadence, have.cadence)) continue;
-    out.push({ kind: have.hasFacts ? "commitmentReplaced" : "commitmentChanged", name: commitment.name });
+    if (have.hasFacts) out.push({ kind: "commitmentReplaced", name: commitment.name });
+    else out.push({ kind: "commitmentChanged", name: commitment.name, from: have.cadence, to: cadence });
   }
 
   for (const task of draftGoal.tasks) {

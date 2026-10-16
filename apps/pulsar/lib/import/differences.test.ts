@@ -105,7 +105,7 @@ test("horizon, note, rhythm, measure", () => {
   const goal = { ...draftGoal({ horizon: "2028-01-01", rhythm: 900, measure: { name: "Páginas", unit: "pág" } }), note: "nueva" };
   assert.deepEqual(changes(goal, snapshot()), [
     { kind: "horizon", to: "2028-01-01" },
-    { kind: "note", to: "nueva" },
+    { kind: "note", from: null, to: "nueva" },
     { kind: "measure", name: "Páginas", unit: "pág", kept: null },
     { kind: "rhythm", to: 900 },
   ]);
@@ -127,8 +127,8 @@ test("only open months differ", () => {
     ],
   });
   assert.deepEqual(changes(goal, snapshot()), [
-    { kind: "month", month: "2026-10", amount: 700 },
-    { kind: "month", month: "2026-11", amount: 800 },
+    { kind: "month", month: "2026-10", amount: 700, from: 600 },
+    { kind: "month", month: "2026-11", amount: 800, from: null },
   ]);
 });
 
@@ -149,7 +149,7 @@ test("a commitment is added, changed, or replaced when it has facts", () => {
   const weekly = commitment({ cadenceKind: "times_per_week", cadenceN: 3 });
   const goal = draftGoal({ commitments: [weekly, commitment({ name: "Escribir" })] });
   assert.deepEqual(changes(goal, snapshot()), [
-    { kind: "commitmentChanged", name: "Leer" },
+    { kind: "commitmentChanged", name: "Leer", from: { kind: "daily", weekdays: null, n: null }, to: { kind: "times_per_week", weekdays: null, n: 3 } },
     { kind: "commitmentAdded", name: "Escribir" },
   ]);
   const withFacts = snapshot();
@@ -258,7 +258,7 @@ test("no difference removes a part", () => {
 });
 
 test("the fingerprint ignores order and follows content", () => {
-  const a: Difference = { kind: "month", month: "2026-10", amount: 1 };
+  const a: Difference = { kind: "month", month: "2026-10", amount: 1, from: null };
   const b: Difference = { kind: "taskAdded", name: "X" };
   assert.equal(fingerprint([a, b]), fingerprint([b, a]));
   assert.notEqual(fingerprint([a]), fingerprint([{ ...a, amount: 2 }]));
@@ -287,6 +287,15 @@ test("the new messages parse and the plural formats", () => {
     say(["review", "diff", "phaseOverlaps"], { aim: "Base aeróbica", startsOn: "15 oct", endsOn: "30 nov", with: "Base aeróbica suave" }),
     /se cruza con «Base aeróbica suave»/,
   );
+  assert.equal(
+    say(["review", "diff", "commitmentChanged"], { name: "Trotar", from: "todos los días", to: "lunes, miércoles y viernes" }),
+    "Cambia cada cuándo se cumple «Trotar»: de todos los días a lunes, miércoles y viernes",
+  );
+  assert.equal(say(["review", "diff", "note"], { shape: "change", from: "vieja", to: "nueva" }), "Cambia la nota de «vieja» a «nueva»");
+  assert.equal(say(["review", "diff", "note"], { shape: "set", from: "", to: "nueva" }), "Pone la nota «nueva»");
+  assert.equal(say(["review", "diff", "month"], { shape: "change", amount: "2 h", month: "noviembre", from: "1 h" }), "Pone 2 h en noviembre, en lugar de 1 h");
+  assert.equal(say(["review", "diff", "month"], { shape: "set", amount: "2 h", month: "noviembre", from: "" }), "Pone 2 h en noviembre, que no tenía nada");
+  assert.ok(!/Márcala/.test(catalogue.review.crosses));
   for (const key of Object.keys(catalogue.review.diff)) {
     const leaf = catalogue.review.diff[key] as string;
     assert.doesNotThrow(() => new IntlMessageFormat(leaf, "es"), key);
