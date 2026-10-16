@@ -60,6 +60,7 @@ import {
   listTransactions,
 } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
+import type { Account } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { BASE_CURRENCY, type OfferedCurrency } from "@/lib/currency";
 import { addCivilDays, addCivilMonths, todayInBogota } from "@/lib/dates";
@@ -93,7 +94,7 @@ type DemoAccount = {
   key: AccountKey;
   name: string;
   kind: "asset" | "liability";
-  subtype: "bank" | "cash" | "card";
+  subtype: Account["subtype"];
   institution: string | null;
   lastFour: string | null;
   // Where the account settles (RF-121): every existing account keeps the peso,
