@@ -11,6 +11,8 @@ type Probe = { classes: string[]; colorScheme: string };
 function run(options: {
   stored: string | null | (() => never);
   dark: boolean | (() => never);
+  // The `<html>` element is unreachable, as when the document is half-torn.
+  document?: "throws";
 }): Probe {
   const classes = new Set<string>();
   const root = {
@@ -23,7 +25,14 @@ function run(options: {
   const { stored, dark } = options;
 
   runInNewContext(themeScript, {
-    document: { documentElement: root },
+    document:
+      options.document === "throws"
+        ? {
+            get documentElement(): never {
+              throw new Error("document unavailable");
+            },
+          }
+        : { documentElement: root },
     localStorage: {
       getItem: () => (typeof stored === "function" ? stored() : stored),
     },
@@ -63,4 +72,10 @@ test("a matchMedia that throws falls to light", () => {
 
 test("both failing still lands light and never throws", () => {
   assert.deepEqual(run({ stored: boom, dark: boom }).classes, ["light"]);
+});
+
+// Mutation: remove the outer `try/catch` around the class write in `themeScript`.
+test("a document that throws never throws out of the script", () => {
+  assert.doesNotThrow(() => run({ stored: "dark", dark: false, document: "throws" }));
+  assert.doesNotThrow(() => run({ stored: boom, dark: boom, document: "throws" }));
 });
