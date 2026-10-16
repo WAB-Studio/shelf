@@ -82,7 +82,7 @@ let transactions: { scope: string[]; mode: string }[];
 let refuseCommit: boolean;
 
 function freshStores(): Map<string, StoreData> {
-  return new Map([
+  return new Map<string, StoreData>([
     ["lookups", { keyPath: "id", auto: true, seq: 0, rows: new Map(), indexes: { at: "at", normalised: "normalised", headword: "headword", foreign: ["device", "deviceSeq"] } }],
     ["sync", { keyPath: "key", auto: false, seq: 0, rows: new Map(), indexes: {} }],
   ]);
@@ -125,7 +125,10 @@ function makeTransaction(scope: string[], mode: string) {
   function end() {
     pending -= 1;
     if (pending > 0) return;
-    queueMicrotask(() => {
+    // A real transaction commits once the task that fired the last request
+    // callback, microtasks included, has drained: a `await` chain still gets to
+    // issue its next request.
+    setImmediate(() => {
       if (pending > 0 || settled) return;
       if (refuseCommit) return fail(new Error("refused"));
       settled = true;
@@ -267,9 +270,9 @@ mock.module("./record", {
 });
 
 type Delete = typeof import("./delete");
-let module: Delete | null = null;
+let loaded: Delete | null = null;
 async function load(): Promise<Delete> {
-  return (module ??= await import("./delete"));
+  return (loaded ??= await import("./delete"));
 }
 
 let events: string[] = [];
@@ -404,6 +407,14 @@ test("with no reader on the sync row the rows go and nothing is queued", async (
   assert.deepEqual(await deleteStudyGroup("leave"), { deleted: 4 });
   assert.deepEqual(remaining(), [3, 4]);
   assert.deepEqual((await readTombstoneQueue("reader-1")).pending, []);
+  assert.equal(stores.get("sync")!.rows.has("tombstones"), false, "a queue was written for no reader");
+});
+
+test("with a reader on the sync row the queue lives under the sync key \"tombstones\"", async () => {
+  seedGroupWorld();
+  const { deleteStudyGroup } = await load();
+  await deleteStudyGroup("leave");
+  assert.equal(stores.get("sync")!.rows.has("tombstones"), true);
 });
 
 test("with no sync row at all the rows go and nothing is queued", async () => {
@@ -411,6 +422,7 @@ test("with no sync row at all the rows go and nothing is queued", async () => {
   const { deleteStudyGroup, readTombstoneQueue } = await load();
   assert.deepEqual(await deleteStudyGroup("leave"), { deleted: 4 });
   assert.deepEqual((await readTombstoneQueue("reader-1")).pending, []);
+  assert.equal(stores.get("sync")!.rows.has("tombstones"), false);
 });
 
 test("deleting touches neither the sync state nor the schema version", async () => {
