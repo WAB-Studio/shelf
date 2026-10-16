@@ -243,7 +243,7 @@ A row compared against its own `received_at` read back this way tests as **great
 
 Cast from text inside the SQL — `$1::text::timestamptz` — so the parameter travels as OID 25 and
 Postgres parses the literal at full precision. Comparing `::text` on both sides works too, and is
-what `apps/voyager/scripts/check-sync.ts` does.
+what `apps/wordbook/scripts/check-sync.ts` does.
 
 Three agents hit this independently the same day, in three different shapes: a row greater than
 itself, a `created_at` serialised wrong on the way out, and the download cursor below.
@@ -256,7 +256,7 @@ Measured 2026-09-08.
 A CHECK whose predicate goes NULL is satisfied: Postgres refuses a row only when the constraint
 reads **false**.
 
-`commitments_weekdays_for_weekdays` in `apps/pulsar/db/migrations/0000_*.sql` was written as an
+`commitments_weekdays_for_weekdays` in `apps/goallog/db/migrations/0000_*.sql` was written as an
 equality between two predicates:
 
 ```
@@ -292,7 +292,7 @@ of UTC.
 goals.facts.day = 2026-09-22  ->  Mon Sep 21 2026 19:00:00 GMT-0500
 ```
 
-Measured 2026-09-22 in `apps/pulsar`, on a probe that read back the fact it had just written.
+Measured 2026-09-22 in `apps/goallog`, on a probe that read back the fact it had just written.
 
 Drizzle's `date()` column is string mode and is **not** affected: through `db`, `2026-09-22` stays
 `"2026-09-22"`. **It protects more than its own columns.** `drizzle()` patches `client.options.parsers`
@@ -603,7 +603,7 @@ the identity Postgres sees. If a claim can outlive its connection, a policy test
 wrong identity and prove nothing. Chase it with two scripts and one connection string before
 trusting any single-statement identity swap again.
 
-**Confirmed, with numbers, 2026-09-22, by `apps/pulsar/scripts/check-policies.ts`'s own validation.**
+**Confirmed, with numbers, 2026-09-22, by `apps/goallog/scripts/check-policies.ts`'s own validation.**
 This is the one assertion in that script that reads a shared physical resource — the Supavisor pool
 behind one `DATABASE_URL` — rather than a single self-contained transaction, and it is exactly the
 one that flakes. Three repros, same connection string, `max: 1` pools throughout:
@@ -811,8 +811,8 @@ global was only reached by a bare, un-mocked call, which timed out.
 
 ### An explicit `--port` in a `dev` script silently ignores `PORT`
 
-`apps/voyager`'s `dev` script read `next dev --port 3100`. A flag on the command line beats the `PORT`
-environment variable, so `PORT=3103 npm run dev -w apps/voyager` bound **3100** — lane 1's port — and
+`apps/wordbook`'s `dev` script read `next dev --port 3100`. A flag on the command line beats the `PORT`
+environment variable, so `PORT=3103 npm run dev -w apps/wordbook` bound **3100** — lane 1's port — and
 said so only in a line nobody reads. Two lanes hit it the same afternoon; one bound another lane's
 port and had to kill the process it did not own.
 
@@ -827,7 +827,7 @@ A lane's port belongs to the lane. A script that pins one takes it from whoever 
 
 ### A dependency declared on a branch is not installed by merging it
 
-Module 3 added `fast-xml-parser` to `apps/voyager/package.json` and to the lockfile. Nobody ran
+Module 3 added `fast-xml-parser` to `apps/wordbook/package.json` and to the lockfile. Nobody ran
 `npm install` in the main checkout afterwards, so the package was never on disk there. Merging the
 branch changed the manifest, not `node_modules`.
 
@@ -884,7 +884,7 @@ shows green for the wrong reason — which is exactly the failure a negative con
 
 **Superseded 2026-10-08.** Measured 2026-09-11, when `/api/word/photo` still existed: 79 tests reached
 it and `/api/word/text` for real on every run. That route went with RL-36 (2026-09-14). The cost it
-named stays true for the routes that remain and is now guarded in `apps/voyager/e2e/fixtures.ts`:
+named stays true for the routes that remain and is now guarded in `apps/wordbook/e2e/fixtures.ts`:
 
 - `test`/`expect` imported from `./fixtures` intercept `/api/word/text`, `/api/word/unlisted` and
   `/api/phrase/notes` and answer them deterministically, tagging each stub with `x-e2e-word-stub`.
@@ -945,7 +945,8 @@ variable it prints renames itself, while the `playwright.config.ts` that reads i
 `READING_BASE_URL`: the command runs, silently ignores the port you gave it and drives the default.
 Nothing errors — the suite just points somewhere else.
 
-Grep for `_BASE_URL` when an app is renamed, and rename the variable with it.
+Grep for `_BASE_URL` when an app is renamed. The variable is a column of `worktree.sh`'s table, so an
+app rename leaves it alone: `VOYAGER_BASE_URL` and `PULSAR_BASE_URL` stay what the configs read.
 
 Measured 2026-09-07.
 
@@ -988,7 +989,7 @@ sent you.
 
 ### A service worker that caches every navigation under a literal key overwrites itself
 
-`apps/voyager/public/sw.js` stored every navigation response under the key `"/"`. A hard load of
+`apps/wordbook/public/sw.js` stored every navigation response under the key `"/"`. A hard load of
 `/fuente` therefore replaced the cached shell of `/`, and the next offline visit to `/` served the
 wrong page. The existing spec stayed green throughout — it only ever exercises `/`.
 
@@ -1090,20 +1091,20 @@ Fast-forwarding `integracion` still spends a run, so keep the advice above.
 
 ### A lane born for one app cannot typecheck the other until typegen runs there
 
-`worktree.sh --app voyager` copies voyager's `.env.local` and nothing of orbit's. The lane is
+`worktree.sh --app wordbook` copies voyager's `.env.local` and nothing of orbit's. The lane is
 therefore complete for voyager and cold for orbit: `.next/types` was never generated there, so
-`npm run typecheck` at the root fails on `apps/orbit` with 39 errors of the shape
+`npm run typecheck` at the root fails on `apps/homefund` with 39 errors of the shape
 `TS2304: Cannot find name 'PageProps'` and `LayoutProps`. Not one of them names a file the lane
 changed.
 
 It reads as a branch that broke orbit. It is a lane that never built orbit. `npx next typegen` in
-`apps/orbit` clears all 39, and the artefact is gitignored, so nothing about the branch changes.
+`apps/homefund` clears all 39, and the artefact is gitignored, so nothing about the branch changes.
 
 Typecheck the app the lane was opened for. Before calling the other app's errors a regression, run
 `next typegen` there once and look again — and never with that app's dev server up, which is the
 separate race two sections above.
 
-Measured 2026-09-08 validating the voyager lane module in a lane opened `--app voyager`.
+Measured 2026-09-08 validating the voyager lane module in a lane opened `--app wordbook`.
 
 ### `git diff main` moves under a verification when someone merges
 
@@ -1167,7 +1168,7 @@ Measured 2026-09-08, driving voyager's `lib/session.ts` from a scratchpad harnes
 ### `db:check-rls` cannot see a change to the settle statement's search_path
 
 A validator mutated `searchPath: "finances, public"` to `"public"` in both call sites of
-`apps/orbit/db/session.ts` and ran `db:check-rls` to prove the check discriminated. It stayed green
+`apps/homefund/db/session.ts` and ran `db:check-rls` to prove the check discriminated. It stayed green
 past assertion 107.
 
 `scripts/check-rls.ts` sets `search_path` on its own Postgres connection config. It never goes
@@ -1222,7 +1223,7 @@ keys, and a branch matching several rules deploys if any one of them is `true`:
     "git": { "deploymentEnabled": { "*": false, "main": true } }
 
 That drops every branch's preview and leaves only the merge to `main`. **It also removes the only
-place `next build` runs for orbit.** CI builds `apps/voyager` (`ci.yml:232`) and nothing else: the
+place `next build` runs for orbit.** CI builds `apps/wordbook` (`ci.yml:232`) and nothing else: the
 orbit `e2e` job starts `npm run dev`, `typecheck` is tsgo and `lint` is eslint. With previews off, an
 orbit build breaks at the production deploy, after the merge — which is exactly the shape of the
 failure that cost hours on 2026-09-08, where one broken build hid the next. **Add `next build` for
@@ -1238,7 +1239,7 @@ The deployment quota above stands.
 
 ### Voyager's browser suite reads three false reds against `next dev`
 
-`apps/voyager/playwright.config.ts` carries no `webServer` block: it drives whatever answers on
+`apps/wordbook/playwright.config.ts` carries no `webServer` block: it drives whatever answers on
 `VOYAGER_BASE_URL`, defaulting to `:3100`. The port a developer keeps up all day is `npm run dev`,
 and the suite is written against `next build && next start` — its own comment says so, and CI's
 `voyager-e2e` job builds before it starts the server.
@@ -1255,9 +1256,9 @@ difference and already cost a measurement once — see "StrictMode doubles a Wor
 Build first, on a port of its own, and leave the dev server alone:
 
 ```
-npm run build -w apps/voyager
-npm run start -w apps/voyager -- --port 3110 &
-VOYAGER_BASE_URL=http://localhost:3110 npm run check:e2e -w apps/voyager
+npm run build -w apps/wordbook
+npm run start -w apps/wordbook -- --port 3110 &
+VOYAGER_BASE_URL=http://localhost:3110 npm run check:e2e -w apps/wordbook
 ```
 
 Never read a local red on this suite as a red on `main` until it has run against a build. Measured
@@ -1272,7 +1273,7 @@ rows survived, as plus-addressed gmail addresses.
 `npm run harness:census` did not move: `ephemeral: 25`, `shared: 16`, 141 MB, the same numbers before
 and after. It counts `harness%@example.invalid` and null-email rows and nothing else, so a row whose
 email does not match that shape is invisible to it — and `harness:reap` cannot prune what the
-registry never saw. **`apps/voyager` had no registry of its own**, so every probe
+registry never saw. **`apps/wordbook` had no registry of its own**, so every probe
 there is in that position by default.
 
 Until voyager has a registry: a probe that touches `auth` from voyager deletes its own rows in the
@@ -1304,8 +1305,8 @@ Measured 2026-09-08.
 ### A code cited in a source comment can not exist in `SPEC.md`
 
 A code cited in a comment in the code is not proof the code was ever opened.
-`apps/voyager/components/search/search-screen.tsx:42` cites **RL-36**, and the highest code ever
-opened in `docs/voyager/SPEC.md` is RL-29.
+`apps/wordbook/components/search/search-screen.tsx:42` cites **RL-36**, and the highest code ever
+opened in `docs/wordbook/SPEC.md` is RL-29.
 
 Grep `RL-[0-9]*` over `SPEC.md` before trusting a number read from a code comment.
 
@@ -1490,7 +1491,7 @@ reinicio, porque `next start` lee el `.next` **al arrancar**.
   `docs/agentes/lanes.md` es correcta para un `dev`, que recompila solo, y **falsa para un build de producción**,
   que no. El worker intentó reiniciar :3100, la regla lo mandó a reusar el que había, y midió JS
   viejo. Tras reconstruir, **reinicia siempre**, aunque el puerto responda.
-- Diagnóstico en un solo paso: `stat -c '%y' apps/voyager/.next/BUILD_ID` contra el `%y` del fichero
+- Diagnóstico en un solo paso: `stat -c '%y' apps/wordbook/.next/BUILD_ID` contra el `%y` del fichero
   que editaste. Si el build es posterior y la página sigue mostrando lo viejo, es el servidor.
 - El snapshot del `error-context.md` dice qué se estaba sirviendo de verdad. Léelo antes de dudar
   del código: ahí se vio el `button` que ya no existía en el fuente.
@@ -1599,14 +1600,14 @@ already-open handle. Under a machine running a dev server, a Chromium and a full
 can tear the page down before the transaction commits anyway.
 
 **Chase it with the one spec, never by repeating the suite.** `node ../../node_modules/@playwright/test/cli.js test e2e/log.spec.ts --project=mobile`
-from `apps/voyager` against a production build. If it passes alone, it is this.
+from `apps/wordbook` against a production build. If it passes alone, it is this.
 
 **Never buy quiet on it** — no `retry`, no `waitFor`, no `sleep`. Same rule as `sync.spec.ts`.
 It would reopen only with a failure that reproduces alone.
 
 ## `addInitScript` reinjects on every navigation, not once
 
-Found 2026-09-10 in `apps/voyager/e2e/registro.spec.ts:130` (`a reader who only ever missed still
+Found 2026-09-10 in `apps/wordbook/e2e/registro.spec.ts:130` (`a reader who only ever missed still
 sees the empty state, not a dead screen`). The test called `deleteLogDatabase` — an `addInitScript`
 wrapping `indexedDB.deleteDatabase("reading-log")` — once at the top, typed a query, then did a
 second `page.goto("/registro")` and asserted on what that screen drew.
@@ -1630,21 +1631,21 @@ already uses — or restructure the test so nothing after the write navigates at
 
 ## `npm run typecheck` from the root reddens in a lane that never built the other app
 
-A voyager-only lane (`scripts/worktree.sh <n> <rama> <base> --app voyager`) copies no
-`apps/orbit/.env.local` and never runs `next build` or `next dev` there, so `.next/types` is never
+A voyager-only lane (`scripts/worktree.sh <n> <rama> <base> --app wordbook`) copies no
+`apps/homefund/.env.local` and never runs `next build` or `next dev` there, so `.next/types` is never
 written for orbit. The root `typecheck` script runs `tsgo` over both apps and fails with ~20
 `TS2304: Cannot find name 'PageProps'`/`'LayoutProps'` errors, none of them naming a file the lane
 touched. This is the same family as "A lane born for one app cannot typecheck the other until
 typegen runs there" above, reproduced 2026-09-10 in an unrelated voyager lane — it is not tied to
-that entry's module, it is tied to any lane opened `--app voyager`.
+that entry's module, it is tied to any lane opened `--app wordbook`.
 
-Run `npm run typecheck -w apps/voyager` in a voyager-only lane, never the root script. `npx next
-typegen` in `apps/orbit` would clear it too, but there is nothing to typecheck there if the lane was
+Run `npm run typecheck -w apps/wordbook` in a voyager-only lane, never the root script. `npx next
+typegen` in `apps/homefund` would clear it too, but there is nothing to typecheck there if the lane was
 never meant to touch orbit.
 
 ## A guard on `recordLookup`'s own call breaks the prefix chain it feeds
 
-Found 2026-09-10 in `apps/voyager/components/search/search-screen.tsx`, a regression from the same
+Found 2026-09-10 in `apps/wordbook/components/search/search-screen.tsx`, a regression from the same
 day's earlier PR #132. That PR moved RL-39's guard ("a miss leaves no row") onto the *call* to
 `recordLookup` — the word path only called it when `answer.exact || answer.viaInflection.length >
 0`, and the phrase path dropped its `"untranslated"`/`"miss"` calls outright.
@@ -1676,7 +1677,7 @@ rerunning `e2e/log.spec.ts -g "headword typed on into nonsense"` alone: it reds 
 
 ## A single-key relay loses a row when one flush commits two
 
-Found 2026-09-10 in `apps/voyager/lib/log/record.ts`, a gap in module 22's own relay (PR #130), not
+Found 2026-09-10 in `apps/wordbook/lib/log/record.ts`, a gap in module 22's own relay (PR #130), not
 a regression from anything landed since.
 
 `flushPendingLookup` can call `commit` twice in the same synchronous pass: `settleCandidate` commits
@@ -1714,7 +1715,7 @@ per relay call, immaterial next to the 800ms settle window this all runs behind 
 Proven by reverting `relayPendingRow`/`clearRelayedRow` to the single-key version and rerunning the
 new case: it reds losing "book" exactly as described, and passes again once the list comes back.
 Never touched `SETTLE_MS` or `MAX_PENDING_MS` to fix this — both are settled questions elsewhere in
-this file and in `docs/voyager/SPEC.md`'s `RL-39`.
+this file and in `docs/wordbook/SPEC.md`'s `RL-39`.
 
 ### Reading the design canvas spends 30k tokens before the file exists
 
@@ -1743,7 +1744,7 @@ looks empty rather than broken.
 
 ### A server-rendered session turns a precached shell route into a leak
 
-`apps/voyager/public/sw.js` precaches three shell routes and rewrites each one's cache entry on
+`apps/wordbook/public/sw.js` precaches three shell routes and rewrites each one's cache entry on
 every online navigation, so a route that opens offline never goes stale. `/cuenta` is the documented
 exception: its HTML carries `getReader()`'s answer, so a signed-in render replayed after the cookie
 is gone would hand the next person on the device the previous reader's email out of Cache Storage.
@@ -1764,7 +1765,7 @@ one. For `/registro` the cached signed-out render is the right answer rather tha
 the account wipe calls `DELETE /api/log/clear`, which cannot work offline anyway.
 
 **The same change also moves a route from static to dynamic, and the build output is where you see
-it.** `npm run build -w apps/voyager` prints `○ /registro` before and `ƒ /registro` after. Nothing
+it.** `npm run build -w apps/wordbook` prints `○ /registro` before and `ƒ /registro` after. Nothing
 fails; the route just starts costing a server render per visit. Diff the route table against the
 base branch whenever a page gains a call that reads cookies or headers.
 
@@ -1772,7 +1773,7 @@ base branch whenever a page gains a call that reads cookies or headers.
 ## Openverse y el bucket de Supabase: tres cosas que muerden al escribir el módulo
 
 **Describe una ruta retirada.** `RL-36`, la foto de la palabra, se retiró entero el 2026-09-14
-(`docs/voyager/SPEC.md` §1 «Retired»); lo de abajo queda escrito porque costó un día, no porque siga
+(`docs/wordbook/SPEC.md` §1 «Retired»); lo de abajo queda escrito porque costó un día, no porque siga
 en pie.
 
 Medido 2026-09-10 conduciendo la cadena entera —buscar, bajar, subir— antes de despachar nada.
@@ -1839,7 +1840,7 @@ aquí.
 
 ## Un relevo que sí llega a IndexedDB se duplica si nadie lo comprueba al recuperarlo
 
-Encontrado 2026-09-11, `apps/voyager/lib/log/record.ts`, en el fallo intermitente de
+Encontrado 2026-09-11, `apps/wordbook/lib/log/record.ts`, en el fallo intermitente de
 `e2e/log.spec.ts:377`. Este defecto es primo del de "Un relevo de una sola clave pierde una fila
 cuando un `flush` compromete dos" (arriba) y de "`log.spec.ts`'s killed-tab test loses its race
 under a loaded machine": los tres hablan del mismo relevo, pero éste es una carrera distinta, y la
@@ -1900,7 +1901,7 @@ fila de más.
 ## `foto.spec.ts` no puede pedirle píxeles al bucket en CI, y no debe pedirle credenciales tampoco
 
 **Describe una ruta retirada.** `RL-36`, la foto de la palabra, se retiró entero el 2026-09-14
-(`docs/voyager/SPEC.md` §1 «Retired»); `foto.spec.ts` y `/api/word/photo` salen del código en el
+(`docs/wordbook/SPEC.md` §1 «Retired»); `foto.spec.ts` y `/api/word/photo` salen del código en el
 módulo que lo construye, y lo de abajo queda escrito porque costó un día, no porque siga en pie.
 
 Medido 2026-09-11. `.github/workflows/ci.yml`'s `voyager-e2e` no define ninguna de las cinco
@@ -1938,7 +1939,7 @@ dibujar píxeles reales **no puede pasar en CI jamás**, con o sin credenciales 
 
 `AGENTS.md` says to revoke ALL from `anon`, `authenticated` and `service_role` in every migration that
 creates a table, because "Supabase grants them at `CREATE TABLE`". **Keep doing it — and know that in
-`apps/voyager`'s `reading` schema the grant it defends against never arrives.**
+`apps/wordbook`'s `reading` schema the grant it defends against never arrives.**
 
 Measured 2026-09-12 against the live database:
 
@@ -1958,12 +1959,12 @@ control that removes the `REVOKE` and then watches `anon` get refused **has prov
 schema — it would be refused either way. Prove a grant by reading `information_schema.role_table_grants`
 for the table you just made, not by revoking and watching a query fail.
 
-`apps/orbit` is where the rule was learned and its tables live in `public`, which **does** carry
+`apps/homefund` is where the rule was learned and its tables live in `public`, which **does** carry
 default ACL rows. The rule is right there and cheap everywhere, so it stays as written.
 
 ## Normalising before you check the shape launders markup into a real word
 
-`apps/voyager/lib/word/admit.ts` gates which strings may reach a paid model on a route the dictionary
+`apps/wordbook/lib/word/admit.ts` gates which strings may reach a paid model on a route the dictionary
 cannot vouch for. The obvious order — normalise, then test the shape — **is a hole**, and module 4's
 worker found it while building to a contract that specified exactly that order.
 
@@ -2071,8 +2072,8 @@ checks ASCII shape, so plain lowercase English words pass whatever they spell.
 
 ## Una clave ausente apaga una ruta de pago en silencio, y la pantalla dice «no se pudo responder»
 
-Read from Vercel on 2026-09-12, project **`reading`** (not `voyager` — the CLI needs
-`--project reading`). Production carries **seven** environment variables:
+Read from Vercel on 2026-09-12, project **`reading`** (renamed `wordbook` 2026-10-16; the CLI needs
+`--project wordbook` now). Production carries **seven** environment variables:
 
 ```
 NEXT_PUBLIC_SITE_URL  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY  NEXT_PUBLIC_SUPABASE_URL
@@ -2090,14 +2091,14 @@ off, and the reader sees the app exactly as it was before any of this was built.
 RL-44, RL-45, RL-46, generated definitions, generated examples and word photos are all dead in
 production and have been for as long as the keys have been absent.
 
-**They are missing from `apps/voyager/.env.local` too**, which is why a critic driving the built app
+**They are missing from `apps/wordbook/.env.local` too**, which is why a critic driving the built app
 had to start the server with the variables by hand to see a single network answer.
 
 **Check the environment before believing a slice shipped.** Fifteen modules went green, merged, and
-deployed while the feature they built could not run. `npx vercel env ls production --project reading`
+deployed while the feature they built could not run. `npx vercel env ls production --project wordbook`
 is one command and it is the difference between "shipped" and "shipped and dark".
 **La lista de arriba caducó, y por eso la trampa vale.** Medido de nuevo el 2026-09-20 con
-`npx vercel env ls production --project reading`: producción lleva **trece** variables.
+`npx vercel env ls production --project wordbook`: producción lleva **trece** variables.
 `CLIENT_KEY_SALT` y los cuatro topes entraron hace cinco días; **`OPENAI_API_KEY` entró hace diez
 horas** y su primer gasto quedó en `reading.model_spend` el 2026-09-19 con `calls: 3`. Siguen
 ausentes `GEMINI_API_KEY` y todo `SUPABASE_STORAGE_*` — este último a propósito, porque RL-36 se
@@ -2138,18 +2139,18 @@ Failed to type check.
 
 Los tres errores son uno: sin el módulo, `eachRow` no tiene tipos y sus parámetros caen a `any`.
 
-**`exceljs` está declarado sólo en `apps/orbit/package.json`.** `apps/voyager/scripts/build-concreteness.ts`
+**`exceljs` está declarado sólo en `apps/homefund/package.json`.** `apps/wordbook/scripts/build-concreteness.ts`
 lo importa sin declararlo. npm lo iza a `node_modules/` de la raíz — no hay copia bajo ninguna app —
 así que aquí resuelve. CI también: `npm ci` en la raíz instala los dos workspaces y luego corre
-`npm run build -w apps/voyager`. **El izado tapa la dependencia no declarada en todas partes menos
+`npm run build -w apps/wordbook`. **El izado tapa la dependencia no declarada en todas partes menos
 una.** Vercel instala el proyecto voyager acotado a su propio workspace, y es el único sitio que la ve.
 
 **Ningún check verde prueba que un workspace declara lo que importa.** Un import desnudo que otra app
 del monorepo declara pasa `typecheck`, `lint`, `build` y la `e2e`, y muere en el despliegue.
 
 **El arreglo, decidido por el usuario 2026-09-13:** el script sale de la superficie que tipa
-`next build` — `scripts/build-concreteness.ts` en el `exclude` de `apps/voyager/tsconfig.json` — y
-sigue tipado por `apps/voyager/tsconfig.scripts.json`, que corre bajo `npm run typecheck`, donde el
+`next build` — `scripts/build-concreteness.ts` en el `exclude` de `apps/wordbook/tsconfig.json` — y
+sigue tipado por `apps/wordbook/tsconfig.scripts.json`, que corre bajo `npm run typecheck`, donde el
 izado resuelve. No se instaló nada: son 23 MB y 9 dependencias transitivas por un script que sólo
 puede correr en la máquina del usuario, sobre un `.xlsx` gitignorado, y cuya salida
 (`lib/word/concreteness.generated.json`) ya está commiteada.
@@ -2166,7 +2167,7 @@ Dos cosas que muerden al escribir ese segundo config:
 
 ```
 mv node_modules/exceljs node_modules/exceljs.hidden
-npm run build -w apps/voyager     # la condición de Vercel, en local
+npm run build -w apps/wordbook     # la condición de Vercel, en local
 mv node_modules/exceljs.hidden node_modules/exceljs
 ```
 
@@ -2192,7 +2193,7 @@ La forma sin `correction` —`{ query, exact: null, viaInflection: [] }`— es l
 versiones en la misma pantalla:** la `SenseList` de hoy con la respuesta de un worker de hace
 cuatro días.
 
-**Por qué el dispositivo todavía la tenía.** `apps/voyager/public/sw.js`:
+**Por qué el dispositivo todavía la tenía.** `apps/wordbook/public/sw.js`:
 
 - `CACHE_NAME` se sube **a mano**, y sólo se subió una vez, el 2026-09-07 (`2b1c140`). Un despliegue
   no cambia ni un byte de ese fichero, así que el navegador **no instala un worker nuevo**, `activate`
@@ -2219,7 +2220,7 @@ no se entera de que desplegaste. Si el worker no cambia, el dispositivo se queda
 
 ## Un migrador corrido desde la rama equivocada no aplica nada y dice que sí
 
-Medido el 2026-09-19, cerrando RL-36. `npm run db:migrate -w apps/voyager` terminó en
+Medido el 2026-09-19, cerrando RL-36. `npm run db:migrate -w apps/wordbook` terminó en
 `migrations applied successfully!` y **la base no cambió**: `to_regclass('reading.word_photos')`
 seguía devolviendo la tabla y `model_spend` conservaba su columna `photos`.
 
@@ -2256,7 +2257,7 @@ cualquier `next build`, lo borra. `.next` no está versionado, así que no deja 
 Cuesta minutos cada vez que alguien lo lee como un rojo suyo: lo tropezaron el worker del módulo 8,
 su validador y el rebase de RL-49.
 
-Vuelve en Next 16 con otra ruta y otro nombre de archivo. Medido el 2026-09-22 en `apps/pulsar`,
+Vuelve en Next 16 con otra ruta y otro nombre de archivo. Medido el 2026-09-22 en `apps/goallog`,
 lane 4, después de que un validador creara `app/uicheck9x/page.tsx` para medir la pantalla y la
 borrara al terminar:
 
@@ -2289,7 +2290,7 @@ Dos diferencias lo explican, y las dos están en el camino que la pantalla recor
 - **`groupFor` ordena por `RL-43` antes de que se dibuje una acepción.** «Entreverado» es una
   propiedad del orden de la pantalla, y el asset se guarda en otro.
 
-**Lo que costó:** las tres cifras entraron en `docs/voyager/SPEC.md` y en `docs/voyager/DESIGN.md`
+**Lo que costó:** las tres cifras entraron en `docs/wordbook/SPEC.md` y en `docs/wordbook/DESIGN.md`
 como hechos medidos, y un worker salió despachado sobre la de en medio — «ninguna acepción trae el
 IPA en nulo, así que no construyas estado huérfano». Sí lo traen, dos. Lo encontró el worker al
 implementarlo, no la revisión. El censo barato además se dejó `bass`, `desert`, `minute`, `polish` y
@@ -2301,7 +2302,7 @@ Un `JSON.parse` del asset y un `Map` a mano responden otra pregunta parecida y m
 
 ## Drizzle's insert builder names every column, so a column-scoped GRANT refuses it
 
-`apps/pulsar/db/migrations/0000_mighty_pet_avengers.sql` grants INSERT on `goals.facts` over eight
+`apps/goallog/db/migrations/0000_mighty_pet_avengers.sql` grants INSERT on `goals.facts` over eight
 named columns and deliberately leaves out `written_at`, so that a fact's writing time is the
 column's `now()` and nobody's parameter. A `declareFact` that never mentions `written_at` still
 fails:
@@ -2328,7 +2329,7 @@ the granted columns, and leave the rest out of the SQL entirely.
 ## A pulsar lane mints no identity, so every lane writes the same `goals` rows
 
 `scripts/worktree.sh`'s table gives `pulsar` an `.env.local` and **no harness identities**, so a lane
-opened with `--app pulsar` has no `harness-<n>@example.invalid` of its own. Every pulsar track that
+opened with `--app goallog` has no `harness-<n>@example.invalid` of its own. Every pulsar track that
 needs a person to write as reaches for the same registered pair, `harness-5@example.invalid` and
 `harness-member-5@example.invalid` — and `HARNESS_LANE` does not scope `goals.goals`,
 `goals.commitments`, `goals.phases`, `goals.facts` or `goals.one_offs`. Two tracks seeding fixtures
@@ -2348,13 +2349,13 @@ It is the same shape as «One database behind every harness lane» above, one sc
 
 ## A cold pool sometimes makes a real `Promise.all` fan-out measure as a chain
 
-Measured 2026-09-22, module 8's `apps/pulsar/lib/queries/day.ts`. `loadDay` opens
+Measured 2026-09-22, module 8's `apps/goallog/lib/queries/day.ts`. `loadDay` opens
 `withGoalsDb` and `withReadingDb` in the same `Promise.all([...])`, with no await between
 them and no data dependency from one to the other — the fan-out is real in the code. A
 fresh process can still, sometimes, measure two spans that barely touch or do not touch
 at all — and other fresh processes, on the same commit, overlap cleanly.
 
-With `apps/pulsar/db/client.ts`'s pool already warm — a query or two already run on it —
+With `apps/goallog/db/client.ts`'s pool already warm — a query or two already run on it —
 both transactions begin **0.2 ms** apart and their two data queries fire within about a
 millisecond of each other. Three separate cold processes gave three different pictures:
 
@@ -2426,7 +2427,7 @@ connection caches, not with the code.
 
 ## `check:e2e` reads `PULSAR_BASE_URL`, and a lane running `HARNESS_BASE_URL` alone never notices
 
-- **What.** `apps/pulsar/playwright.config.ts` reads `process.env.PULSAR_BASE_URL`, never
+- **What.** `apps/goallog/playwright.config.ts` reads `process.env.PULSAR_BASE_URL`, never
   `HARNESS_BASE_URL`, and falls back to `http://localhost:3200` — lane 1's port — when it is unset.
   A lane invoking `check:e2e` by hand with only `HARNESS_BASE_URL` set drives whatever server already
   answers 3200 instead of its own build, and a mutation applied only to the lane's own checkout never
@@ -2443,7 +2444,7 @@ connection caches, not with the code.
 
 ## A migration's dedupe is only as safe as the day it was measured
 
-- **What.** `apps/pulsar/db/migrations/0003_swift_toro.sql`'s `DELETE` ahead of
+- **What.** `apps/goallog/db/migrations/0003_swift_toro.sql`'s `DELETE` ahead of
   `facts_commitment_day_unique` reaches `auth.users.email like 'harness%@example.invalid'` alone,
   because that is what a hand-run count against the live database showed on 2026-09-27: every
   `(commitment_id, day)` group with more than one fact belonged to a harness identity, none to a
@@ -2466,7 +2467,7 @@ connection caches, not with the code.
 
 ## A spec's own "another day" was yesterday, which on a Monday belongs to the week before
 
-- **What.** `apps/pulsar/e2e/semana.spec.ts` picked a day "guaranteed not to be today" by subtracting
+- **What.** `apps/goallog/e2e/semana.spec.ts` picked a day "guaranteed not to be today" by subtracting
   24 hours from now, unconditionally. On every day but Monday that lands inside the current
   Monday-to-Sunday week; on a Monday it lands on the Sunday before, a day `lib/zone.ts`'s `weekOf`
   places in the *previous* week — the spec then asserted against a day `/semana` never draws at all.
@@ -2509,13 +2510,13 @@ connection caches, not with the code.
 ## A lane's `session-<n>.json` outlives the identity it names
 
 - **What.** `check:goal` failed with `Failed query: insert into "goals"."goals" … params: 50a8cf48-…`:
-  the cookie in `apps/pulsar/private/session-4.json` named a harness identity `harness:reap` had already
+  the cookie in `apps/goallog/private/session-4.json` named a harness identity `harness:reap` had already
   pruned. `mint-session` opens a seed run it never closes, so the reap drops it once its heartbeat is
   30 minutes stale, and the session file stays behind pointing at nobody.
 - **Measured 2026-09-28** on lane 4, twice: module 65's rerun and the coordinator's. A fresh
   `harness:mint-session` made the same code pass, 87 checks.
 - **Do.** Run `HARNESS_LANE=<n> PULSAR_BASE_URL=http://localhost:<port> npm run harness:mint-session
-  -w apps/pulsar` before `check:day`, `check:goal` or `check:goal-actions` when the last mint is over
+  -w apps/goallog` before `check:day`, `check:goal` or `check:goal-actions` when the last mint is over
   half an hour old. A red on an insert naming a `user_id` that is not the lane's is this, not the code.
 - **Its access token also dies after an hour, and then every call spends a refresh.** `getClaims()` refreshes an
   expired token and a script never writes the new cookie back, so each server action pays one
@@ -2552,7 +2553,7 @@ connection caches, not with the code.
 
 ## A mutant reads as a survivor because `next dev` served the code from before it
 
-Measured 2026-09-29 by module 87's tester in `apps/pulsar`: mutants M23 and M40 read green on e2e
+Measured 2026-09-29 by module 87's tester in `apps/goallog`: mutants M23 and M40 read green on e2e
 until the lane's `next dev` was restarted, then went red (2 and 3 failures). Turbopack in dev kept
 serving the server code from before the edit. The same day a validator read seven reds on a lane
 server (`CONNECTION_ENDED`, 404 on `/compromisos/nuevo`) that vanished after a restart.
@@ -2566,7 +2567,7 @@ server (`CONNECTION_ENDED`, 404 on `/compromisos/nuevo`) that vanished after a r
 
 ## `CONNECTION_ENDED` after a 30 s timeout is the fixture closing, not the pooler
 
-Measured 2026-09-29 in `apps/pulsar`: `sobrevivientes-la-critica.spec.ts:132` and `:161` reported
+Measured 2026-09-29 in `apps/goallog`: `sobrevivientes-la-critica.spec.ts:132` and `:161` reported
 `Test timeout of 30000ms` then `write CONNECTION_ENDED`. The page snapshot in `error-context.md` showed
 the sheet open; the spec looked for the field by a label module 83 had renamed
 (`semanas desde el` became `semanas, contando la del`), so `fill` waited out the clock and the
@@ -2578,7 +2579,7 @@ fixture's `db` closed under the pending query.
 
 ## Two specs that mint at one lane number share a session file
 
-Measured 2026-09-29 in `apps/pulsar`: `mint-session.ts` wrote `private/session-<lane>.json`, and every
+Measured 2026-09-29 in `apps/goallog`: `mint-session.ts` wrote `private/session-<lane>.json`, and every
 spec picked its lane by hand (`9700 + laneNumber()` in `metas-terminadas` and `sueltas-programadas`,
 `9711` reached by two formulas on lane 1, `9850 + lane` reused by four tests). Under `workers: 2` two
 mints of one number overwrote one cookie file: the loser drove, and at teardown deleted rows of, the
@@ -2627,11 +2628,11 @@ attach, not to be visible.
 
 ## A pulsar lane has no member identity, so `check:goal-actions` dies there
 
-- Measured 2026-09-30, module 100: in a lane opened with `--app pulsar`, `check:goal-actions` ran 18/2.
+- Measured 2026-09-30, module 100: in a lane opened with `--app goallog`, `check:goal-actions` ran 18/2.
   Both reds said `no member identity — run harness:token for this lane`. The member is minted by
-  orbit's `harness:token`, and that lane has no `apps/orbit/.env.local`.
-- Run `npm run harness:token -w apps/orbit` with the lane's `HARNESS_LANE` from the main checkout,
-  which has `apps/orbit/.env.local`. Never insert the member into `auth.users` by hand: a row outside
+  orbit's `harness:token`, and that lane has no `apps/homefund/.env.local`.
+- Run `npm run harness:token -w apps/homefund` with the lane's `HARNESS_LANE` from the main checkout,
+  which has `apps/homefund/.env.local`. Never insert the member into `auth.users` by hand: a row outside
   `@repo/harness-registry` is a leak nothing prunes.
 - Lane 1's member is `harness-member@example.invalid`, with no number. Until 2026-09-30
   `check-goal-actions.ts` looked for `harness-member-1@…` and went red 18/2 on lane 1 too.
@@ -2641,10 +2642,10 @@ attach, not to be visible.
 - **What.** Under `next dev`, `<nextjs-portal>` holds the always-present Dev Tools badge, bottom-left by
   default: a 32 px button at x 22–54, y 746–778 at 1280×800. The rail's face toggle is at x 26–70,
   y 738–782, so `marco-escritorio.spec.ts:31` timed out on «subtree intercepts pointer events».
-- **Measured 2026-09-30, `apps/pulsar`.** No error dialog, no issues count, aria-label
+- **Measured 2026-09-30, `apps/goallog`.** No error dialog, no issues count, aria-label
   «Open Next.js Dev Tools», zero errors or warnings in the dev log and console. CI runs a production
   build, which has no badge, so it stayed green.
-- **Do.** Keep `devIndicators: { position: "bottom-right" }` in `apps/pulsar/next.config.ts`. Never set
+- **Do.** Keep `devIndicators: { position: "bottom-right" }` in `apps/goallog/next.config.ts`. Never set
   `devIndicators: false`: errors would stay, but the badge is how a dev sees a real issue count.
 - **Also on the phone.** Bottom-right is the Metas tab's corner at 360: a spec that taps it (`varias-metas.spec.ts:16`)
   reads «`<nextjs-portal>` subtree intercepts pointer events» under `next dev`, with no error behind the badge.
@@ -2739,7 +2740,7 @@ Every app's `vercel.json` says `deploymentEnabled: { "*": false, "main": true }`
 - **Measured 2026-10-05**, API `v6/deployments`, last 24 h: **140 deployments, all `Preview` `CANCELED`, none built.**
   orbit 69 (60 from `pulsar-*` branches, 9 from `integracion`), reading 70 (61, 9), pulsar 2.
 - **The cause.** The three projects had `enableAffectedProjectsDeployments: true`. A push that does not touch
-  `apps/orbit` makes orbit write a cancelled deployment through the «unaffected» path, which never reads the
+  `apps/homefund` makes orbit write a cancelled deployment through the «unaffected» path, which never reads the
   `vercel.json`. Each cancelled record counts against the 100 a day. The project the branch touches reads its
   `vercel.json` and writes nothing — that is why pulsar had 2 and its siblings 70.
 - **Fixed the same day**: `enableAffectedProjectsDeployments: false` on orbit, reading and pulsar
@@ -2767,13 +2768,13 @@ Lanes opened before module 227 hold `scripts/supabase-local.sh` and `supabase/co
 - **Do.** Move the two files aside, merge, and keep `supabase/signing_keys.json`: it is gitignored and the stack needs it.
 - A branch older than 227 has no tracked script. Switching a lane back to one needs the untracked copy restored.
 - A pulsar check that needs `harness-member-<n>` reads orbit's identity. A lane opened for pulsar alone has no
-  `apps/orbit/.env.local`, so copy it in and run `HARNESS_LANE=<n> ../../scripts/supabase-local.sh exec npm run
-  harness:token` from `apps/orbit`. Check the rows landed in the local `auth.users`, not the remote one.
+  `apps/homefund/.env.local`, so copy it in and run `HARNESS_LANE=<n> ../../scripts/supabase-local.sh exec npm run
+  harness:token` from `apps/homefund`. Check the rows landed in the local `auth.users`, not the remote one.
 
 ## A `WIP:` commit can carry a mutant
 
 A session closed by the window commits what is on disk. On 2026-10-05 the voyager `WIP:` commit `89e8867` held
-`commit(pending)` commented out in `apps/voyager/lib/log/record.ts`: a negative control left mid-proof. No run on that
+`commit(pending)` commented out in `apps/wordbook/lib/log/record.ts`: a negative control left mid-proof. No run on that
 branch could pass until it was restored.
 
 - **Do.** Before you finish a `WIP:` branch, read `git diff <base>..HEAD` over the app code, not only the specs.
@@ -2791,7 +2792,7 @@ branch could pass until it was restored.
 
 ## `check:mcp` needs a dev server started a certain way, and a session of its own
 
-- `scripts/mcp/route.ts` and `oauth-flow.ts` read the server log at `apps/pulsar/private/dev<port>.log` (port `3200 + lane - 1`)
+- `scripts/mcp/route.ts` and `oauth-flow.ts` read the server log at `apps/goallog/private/dev<port>.log` (port `3200 + lane - 1`)
   and assert a `[outbound]` line. Nothing in the app writes it: the server must start with the fetch hook
   `NODE_OPTIONS='--import data:text/javascript,const%20f=fetch;globalThis.fetch=(i,o)=>{console.log(%22[outbound]%22,String(i.url??i));return%20f(i,o)}'`.
   Without it, 23 tests fail with «the server log does not show outbound calls»; without the server, 39 fail with `fetch failed`.
@@ -2806,8 +2807,8 @@ branch could pass until it was restored.
   `private/session-<lane>.json`, which `checks-run.ts` drops with its run). Locally, mint the session the same way first.
   Measured 2026-10-05: `read-tools.ts` expected `list_goals` at 2 statements; module 210 (tren 5) made `/metas` read the
   evidence beside the goals, 4 statements, and the red sat unseen through trains 5, 6 and 7, because no CI ran it then.
-- A lane opened with `--app pulsar` has no member identity until `HARNESS_LANE=<n> scripts/supabase-local.sh exec npm run
-  harness:token -w apps/orbit` runs from the main checkout; `harness:mint-session` makes the person only. Without it
+- A lane opened with `--app goallog` has no member identity until `HARNESS_LANE=<n> scripts/supabase-local.sh exec npm run
+  harness:token -w apps/homefund` runs from the main checkout; `harness:mint-session` makes the person only. Without it
   `check:plan` reports 14 reds («no member identity») that read like regressions. Measured the same day in lanes 4 and 5.
 
 ## A DDL mutant on the local stack breaks every other lane
@@ -2828,7 +2829,7 @@ branch could pass until it was restored.
 - Plant the intruder's row and insert the subject's in the privileged part of the transaction, with no
   `enterUserContext`, and roll back. Prove the probe by running the mutated function inside that same rollback.
 - Measured 2026-10-06: module 252's P177 and P187 (first version) passed against the unfiltered `commitments_fill_position`;
-  run privileged, P187 read 42 instead of 1. `apps/pulsar/scripts/check-policies.ts`: P187, P188, P189.
+  run privileged, P187 read 42 instead of 1. `apps/goallog/scripts/check-policies.ts`: P187, P188, P189.
 
 ## `\d` in a TS template literal collapses to `d`
 
@@ -2860,7 +2861,7 @@ branch could pass until it was restored.
   shadow roots, so it counts that node as an app alert.
 - Measured 2026-10-06: CI run 37524876363 failed `importar-revisar.spec.ts:84` at line 100,
   `getByRole('alert').filter({ hasText: /\S/ })` counting 1. Locally it never reproduced: it is timing.
-- Count app alerts with `appAlerts(page)` from `apps/pulsar/e2e/fixtures.ts`, never `getByRole('alert')` on the page.
+- Count app alerts with `appAlerts(page)` from `apps/goallog/e2e/fixtures.ts`, never `getByRole('alert')` on the page.
   `anunciador.spec.ts` shows both counts after a client navigation.
 
 ## A migration on the local stack reaches every lane
@@ -2878,7 +2879,7 @@ branch could pass until it was restored.
 
 ## A lane's dev server started bare reads the remote project
 
-- `next dev` in a lane loads `apps/pulsar/.env.local`, which points at the remote project. The specs mint their
+- `next dev` in a lane loads `apps/goallog/.env.local`, which points at the remote project. The specs mint their
   session on the local stack, so `/auth/confirm` refuses it and every spec reads `linkInvalid`.
 - Start a lane's server inside `scripts/supabase-local.sh exec`. Measured 2026-10-06: four agents on four lanes hit it
   the same evening before each found it alone.
@@ -2899,7 +2900,7 @@ branch could pass until it was restored.
 - Match a date's words with `\p{L}` and the `u` flag, never `\w`: `\w` is ASCII and skips «miércoles» and «sábado»,
   so on those days a header spec measured the «hechos 0 de 6» tally instead (75 px off, 2026-10-07). Drive the longest
   date by rewriting the eyebrow's text, so the check never waits for a Wednesday.
-- Read `docs/pulsar/SPEC.md` before "fixing" an order a spec expects. On 2026-10-07 a red e2e asked «most recent
+- Read `docs/goallog/SPEC.md` before "fixing" an order a spec expects. On 2026-10-07 a red e2e asked «most recent
   first» for `ended_this_week`; the query was changed to `horizon desc` and broke three `check:day`/`check:plan`
   assertions that pin RP-47's plan order. The e2e followed a DESIGN line RP-47 had superseded; it was the spec that was wrong.
   The e2e only failed from a Wednesday, the first weekday that draws two endings.
@@ -2912,7 +2913,7 @@ branch could pass until it was restored.
 - Count inside a `VOLATILE` plpgsql function that takes the lock first: under READ COMMITTED each statement in it takes a
   fresh snapshot after the lock is granted. One round trip still.
 - Measured 2026-10-08: voyager `reading.sync_rows_today`; mutant «inline lock» left 4 rows for a cap of 2 (S22 in
-  `apps/voyager/scripts/check-sync.ts`).
+  `apps/wordbook/scripts/check-sync.ts`).
 
 ## A `using(true)` UPDATE policy hides behind the SELECT policy
 
@@ -3042,7 +3043,7 @@ in use`, the job goes red with no spec run, and `pulsar-e2e-report` follows it r
 
 ## The service worker's cache name lives in two files
 
-- `apps/voyager/e2e/despliegue.spec.ts` writes `CACHE_NAME` by hand. Bumping it in `apps/voyager/public/sw.js` without the
+- `apps/wordbook/e2e/despliegue.spec.ts` writes `CACHE_NAME` by hand. Bumping it in `apps/wordbook/public/sw.js` without the
   spec leaves `despliegue.spec.ts:38` red in CI («one cache, named by the worker in hand»), and nowhere else.
 - Measured 2026-10-09, module 651: v8 → v9 in `sw.js`, the spec still read v8, and the PR went red on its only e2e run.
 - Bump both in the same commit.
@@ -3056,7 +3057,7 @@ in use`, the job goes red with no spec run, and `pulsar-e2e-report` follows it r
 
 ### A cached Response hands a Turbopack Worker no bootstrap config
 
-`apps/voyager/public/sw.js` `cacheFirst` returned the stored `Response` as is. A stored response has no URL
+`apps/wordbook/public/sw.js` `cacheFirst` returned the stored `Response` as is. A stored response has no URL
 fragment, and Turbopack carries the Worker's bootstrap config in the Worker URL's `#params=…`; the Worker
 takes its location from the response, so it logs "Missing worker bootstrap config" and dies, online too.
 Return `new Response(cached.body, {status, headers})` instead. The worker chunk is named inside another chunk,
@@ -3068,7 +3069,7 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 
 ## A pulsar spec named `*caida.spec.ts` never runs in the mobile project
 
-- `apps/pulsar/playwright.config.ts` makes `mobile` ignore `(caida|fuente-caida|importar-modelo)\.spec\.ts`, unanchored, so
+- `apps/goallog/playwright.config.ts` makes `mobile` ignore `(caida|fuente-caida|importar-modelo)\.spec\.ts`, unanchored, so
   any new file ending in `caida.spec.ts` is ignored there too. It runs only if the `caida` or `fuente-caida` project
   matches it; otherwise Playwright says «No tests found» and the module looks covered.
 - Measured 2026-10-09, cierre parte 2. Name a new spec something else, or add it to a project by name.
@@ -3089,14 +3090,14 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 
 ## A column added to a table granted column by column is refused until it is granted
 
-- `reading.lookups` grants INSERT to `authenticated` column by column (`apps/voyager/db/migrations/0000_*.sql:75-78`). A
+- `reading.lookups` grants INSERT to `authenticated` column by column (`apps/wordbook/db/migrations/0000_*.sql:75-78`). A
   migration that adds a column must name it in a new `GRANT INSERT (…)`, or every insert that carries it fails with 42501.
 - A probe run as the migration's superuser passes; only an insert `set local role authenticated` sees it.
 - Measured 2026-10-09, module 697: 0005 added three columns, its validator passed, and 698's `check:sync` hit 42501 on the
   first upload. Fixed by 0006. Prove a new column as the role that writes it.
 
 ## `page.content()` always holds every interface string
-- `NextIntlClientProvider` in `apps/pulsar/app/layout.tsx` ships the whole message catalogue in each page's payload.
+- `NextIntlClientProvider` in `apps/goallog/app/layout.tsx` ships the whole message catalogue in each page's payload.
 - `expect(await page.content()).not.toContain("<copy>")` cannot pass, whatever the screen paints.
 - Assert absence on what is drawn: `getByText(...).toHaveCount(0)` or `locator("body").innerText()`.
 - Measured 2026-10-10, module 723: `meses-km.spec.ts:165` stayed red with the feature correct; the only match was the raw
@@ -3107,7 +3108,7 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
   `registro-copia.spec.ts` (`zebraRound`) and `export.spec.ts` (`recordSchema` 2) still seeded the old shape.
 - The rows are rejected silently: RNL-01 waits for `pulledThroughCursor` until the 30 s timeout, with no error.
 - Each module's own suite stayed green; only the train's CI run caught them. Measured 2026-10-10, train t3 (#566).
-- Grep `recordSchema`, `foreign` and `/api/log/sync` routes in `apps/voyager/e2e` in the same module that changes the wire.
+- Grep `recordSchema`, `foreign` and `/api/log/sync` routes in `apps/wordbook/e2e` in the same module that changes the wire.
 
 
 ## Chromium print ignores `break-*: avoid` between siblings
@@ -3115,7 +3116,7 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
   between grid items. Wrappers (grid, flex, padded box, second `tbody`) did not help.
 - What it honours: `break-inside: avoid` on the container, and `break-before: avoid` on a row inside the same `tbody`.
 - So pulsar's months-left-out line is the table's last `<tr data-row="months-out">` (`Table` prop `after`,
-  `apps/pulsar/components/ui/table.tsx`), and a goal's head stays with its table through `PrintGoal whole`.
+  `apps/goallog/components/ui/table.tsx`), and a goal's head stays with its table through `PrintGoal whole`.
 - Measured 2026-10-10, modules 802 and 803: a 26-position sweep left the line alone at 2 cuts, and a 48-test sweep left
   the head alone at 8, until moved inside. Prove a break rule with a sweep that moves the cut, never one PDF.
 
@@ -3141,8 +3142,8 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 ## A mutation that only bites on some days: run it under PULSAR_CLOCK
 - `PULSAR_CLOCK=YYYY-MM-DD` pins «today» for pulsar's server (`todayInZone`), the browser (a `pulsar-clock` meta the
   signed-in layout draws), the specs and `seed-goal.ts`. Export it once for the server and the spec run alike:
-  `export HARNESS_LANE=6 PULSAR_CLOCK=2026-10-21; PORT=3205 scripts/supabase-local.sh exec npm run start -w apps/pulsar`,
-  then `PULSAR_BASE_URL=http://localhost:3205 scripts/supabase-local.sh exec npm run check:e2e -w apps/pulsar -- --project=mobile <spec>`.
+  `export HARNESS_LANE=6 PULSAR_CLOCK=2026-10-21; PORT=3205 scripts/supabase-local.sh exec npm run start -w apps/goallog`,
+  then `PULSAR_BASE_URL=http://localhost:3205 scripts/supabase-local.sh exec npm run check:e2e -w apps/goallog -- --project=mobile <spec>`.
 - It is honoured only beside a loopback `DATABASE_URL` and never with `VERCEL`; anywhere else `next.config.ts` refuses to
   build or boot and `todayInZone` throws. A bare `next start` in a lane reads `.env.local`, the remote, and refuses.
 - SQL stays on the real clock: `created_at`/`archived_at`/`retired_at` defaults, token expiry, `model_calls.day` and the
@@ -3182,7 +3183,7 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 
 ### A hand-written savepoint does not recover a postgres-js transaction
 
-Measured 2026-10-13, module 898 (`apps/pulsar/app/actions/import.ts`). Writing `savepoint p` / `rollback to savepoint p` by hand
+Measured 2026-10-13, module 898 (`apps/goallog/app/actions/import.ts`). Writing `savepoint p` / `rollback to savepoint p` by hand
 inside `db.transaction` looks right and fails: postgres-js remembers the first error and re-raises it when the outer `begin`
 ends, so the whole import still rolls back. Nest `tx.transaction(async (sp) => …)` instead: drizzle issues the savepoint and the
 driver forgets the error it caught. The fast path stays one transaction; the nested ones run only after a class-23 refusal.
@@ -3191,7 +3192,7 @@ driver forgets the error it caught. The fast path stays one transaction; the nes
 
 Measured 2026-10-13, module 903. The wrapper exports `OPENAI_API_KEY=` (empty) so no suite reaches OpenAI, and an exported
 variable wins over `.env.local`: a dev server started through it answers 503 `noKey` even with the key in the lane's
-`apps/pulsar/.env.local`. A deliberate paid read needs the server started with the key read from `.env.local` inside the exec.
+`apps/goallog/.env.local`. A deliberate paid read needs the server started with the key read from `.env.local` inside the exec.
 That 503 calls no model, so a forgotten key costs nothing but the confusion.
 
 ## A push that fails does not stop the delete chained after it
@@ -3201,7 +3202,7 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - Push, then read the remote back (`git fetch && git log -1 origin/<train>`), and only in a separate command delete the module branch.
 
 ## Two `<main>` while a client redirect lands
-- 2026-10-14, module 975, `apps/pulsar/e2e/metas-sin-final-seed.ts` (`visit`). CI run 38620980911, `meta-ritmo-unidad.spec.ts:159` at 360:
+- 2026-10-14, module 975, `apps/goallog/e2e/metas-sin-final-seed.ts` (`visit`). CI run 38620980911, `meta-ritmo-unidad.spec.ts:159` at 360:
   `/metas/{id}/plan` redirects to `/metas/{id}`, and for a moment the old and the new `main` are both in the DOM. `toHaveCount(1)` passed
   on one instant and `toBeVisible()` ran on the next, strict-mode failing on two. The two lines are not atomic. It failed once in CI and 1 in 20 locally (`--repeat-each=10` at both widths).
 - Waiting for the final URL alone did not cure it: the 1-in-20 still failed with two `main` after `toHaveURL`, both carrying the goal's content.
@@ -3209,17 +3210,17 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   Never answer it with a retry or a sleep.
 
 ## `boundingBox()` does not wait
-- 2026-10-14, slice s8, `apps/pulsar/e2e/ver-menos-semanas.spec.ts:279` («a habit: «Por mes», the count, then «ver menos»…»).
+- 2026-10-14, slice s8, `apps/goallog/e2e/ver-menos-semanas.spec.ts:279` («a habit: «Por mes», the count, then «ver menos»…»).
   CI run 38645166115, `pulsar-e2e (4)`: `TypeError: Cannot read properties of null (reading 'y')`. The same test passed in run 38640702463 on the same screen code.
   `locator.boundingBox()` returns `null` when the element is not drawn yet; `(await loc.boundingBox())!` turns that into a crash, and the
   test failed on the race between the page and the measurement, not on the screen.
 - Await `expect(loc).toBeVisible()` before `boundingBox()` (the spec's `boxOf`). Never answer it with a retry, a sleep or a looser comparison.
-- The same `boundingBox())!` pattern stands in ~70 other specs under `apps/pulsar/e2e/`; they are not fixed.
+- The same `boundingBox())!` pattern stands in ~70 other specs under `apps/goallog/e2e/`; they are not fixed.
 
 ## A `test.fail()` prints ✘ and still passes
 
 - Playwright's list reporter draws a `test.fail()` that failed as expected with ✘, but counts it passed. Grepping a CI log for ✘
-  finds it beside the real reds. Measured 2026-10-14: `apps/voyager/e2e/account-send-link.spec.ts:93` read as a flake for a session.
+  finds it beside the real reds. Measured 2026-10-14: `apps/wordbook/e2e/account-send-link.spec.ts:93` read as a flake for a session.
 - Read the summary block (`N failed` and the names under it), never the ✘ lines alone.
 
 ## A fixed budget over a debounce is a flake under load
@@ -3238,7 +3239,7 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 
 - b644bf09 bumped Next to 16.4.1 in the lockfile; every checkout's hoisted `node_modules` stayed 16.3.3. Locally the specs passed; CI run 38685976275 (`npm ci`) went 68 red in pulsar and 9 in voyager.
 - 16.4.1 hashes production CSS-module class names without the module name (`F8g6RG_link`, not `text-link-module__…`): every spec selecting `[class*='…-module']` finds nothing. Select through a stable `data-*` hook on the primitive, never a generated class.
-- 16.4.1 prefetches a `<Link>` once it is in view, and the offline specs count that `?_rsc=` request as a stray: `prefetch={false}` on links a spec forbids to request (`apps/voyager/components/search/no-entry-answer.tsx`, `sense-list.tsx`).
+- 16.4.1 prefetches a `<Link>` once it is in view, and the offline specs count that `?_rsc=` request as a stray: `prefetch={false}` on links a spec forbids to request (`apps/wordbook/components/search/no-entry-answer.tsx`, `sense-list.tsx`).
 - After a dependency bump, `rm -rf node_modules && npm ci` before believing a local green. `node -p "require('next/package.json').version"` must match the lockfile.
 
 ## `pulsar-fechas` is red in every pinned date: the app writes the real day (2026-10-15)
@@ -3247,7 +3248,7 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - First failure, `e2e/dia-pasado.spec.ts:109` (RP-06, RP-05), line 125: `expect(row).toContainText(writtenLabel(todayInZone()))`.
   - `Expected substring: "anotado el lunes 12"`
   - `Received string: "Compromiso día pasado 1792077200692todos los días · 10:13 · lo dijiste tú · anotado el jueves 15"`
-- The spec reads the pinned day (`todayInZone()`) and the screen prints the real one (jueves 15): something that stamps «anotado» (the fact's written-at) does not go through `PULSAR_CLOCK` (`apps/pulsar/lib/zone.ts`). Other reds in the same cell: `dia-pasado.spec.ts:145` and `:204`, `hoy-palabras.spec.ts:92`, `hoy-sistema.spec.ts:144`, `meta-mes.spec.ts:373` and `:421`, `meta-ritmo-unidad.spec.ts:175`.
+- The spec reads the pinned day (`todayInZone()`) and the screen prints the real one (jueves 15): something that stamps «anotado» (the fact's written-at) does not go through `PULSAR_CLOCK` (`apps/goallog/lib/zone.ts`). Other reds in the same cell: `dia-pasado.spec.ts:145` and `:204`, `hoy-palabras.spec.ts:92`, `hoy-sistema.spec.ts:144`, `meta-mes.spec.ts:373` and `:421`, `meta-ritmo-unidad.spec.ts:175`.
 - The red cells took 12 min each on 5 s timeouts. Chase it with one date and one spec, locally, with `PULSAR_CLOCK=2026-10-12`. Log: `private/ci/infra-38757787894.log`, grep `dates (monday)`.
 - Until fixed, the nightly run (`pulsar-calendario.yml`) is red by design of the bug, not of the night.
 
@@ -3289,3 +3290,14 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - Twice in one session the active account became `wilsoniridian`, which cannot write `WAB-Studio/universe`: pushes and `gh workflow run` got 403.
 - Read `gh auth status` on a 403. Push with `git push "https://x-access-token:$(gh auth token -u Cxrkeyb)@github.com/WAB-Studio/universe.git" …`
   and `GH_TOKEN=$(gh auth token -u Cxrkeyb) gh …` rather than switching the account another session may need.
+
+## A rebase across a folder rename leaves the branch's new files in conflict (2026-10-16)
+- Measured on `goallog-1023` rebased onto both renames (`apps/pulsar` → `apps/goallog`, `apps/voyager` → `apps/wordbook`): 3 files in `UA` by default, clean with `git -c merge.directoryRenames=true rebase <base>`.
+- Git renames the files the branch had, not the ones it added: those land in the old folder as unmerged. Pass the flag on every rebase of a branch cut before the rename.
+- Ignored files (`.env.local`, `.next/`, `private/`, `.eslintcache`) stay under the old folder in every checkout but the one that ran `git mv`. Copy `.env.local` into the new folder and run `npx next typegen` there.
+
+## Vercel's `deploymentEnabled` lives inside the Root Directory: pause Git deployments before pushing a folder rename (2026-10-16)
+- A project builds from its Root Directory (`apps/orbit`, ...). Push a branch that moved the folder and Vercel finds none: one deployment per project, state ERROR, `NOW_SANDBOX_WORKER_ROOTDIR_NOT_EXIST`.
+- Measured 2026-10-16 (M7): `gitProviderOptions.createDeployments: "disabled"` read back as stored on all three projects and did **not** stop Git deployments. The push of `renombre-m1` at 14:33:27Z created one ERROR deployment per project at 14:33:32Z. Production (`e404f8cc`, READY) stayed untouched.
+- Do: read `GET /v6/deployments?projectId=<id>&since=<push time>` after the first push of a renamed branch; never take the stored field as proof.
+- How it was finally stopped: pending, the user is deciding (options: re-root the projects, disconnect Git, accept the errors). <!-- MAIN SESSION: fill in the outcome here -->

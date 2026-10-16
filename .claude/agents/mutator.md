@@ -22,7 +22,7 @@ Only the files the branch itself changed:
 `git log $(git merge-base <base> HEAD)..HEAD --name-only --format=`.
 Never the whole repository. The risk is in the change.
 
-Run `npm run mutate:pure -- --changed <base>` in `apps/pulsar` first on the pure `lib/` files the branch changed, and spend your own budget on screens, policies and actions, which Stryker cannot reach.
+Run `npm run mutate:pure -- --changed <base>` in `apps/goallog` first on the pure `lib/` files the branch changed, and spend your own budget on screens, policies and actions, which Stryker cannot reach.
 
 Skip generated files, fixtures, migrations and anything under `e2e/` or `scripts/check-*`: you
 mutate the app, never the thing that judges it.
@@ -82,7 +82,7 @@ A suite that errors before it asserts is neither. Fix the run or drop the mutant
 - Save every mutation as a patch under the lane's `private/mutants/<id>.patch`, and name the path in
   the report beside its id. `.claude/usage-log.tsv` cuts a command at ~427 characters: on 2026-10-06
   module 276 recovered one of six survivors from it and had to rebuild the other five by guess.
-- **Never type an address into `apps/voyager`'s `/cuenta`**, and never disable the deliverability
+- **Never type an address into `apps/wordbook`'s `/cuenta`**, and never disable the deliverability
   guard in `app/actions/account.ts`: both send a real email and mint a real `auth.users` row.
 - Never run `db:migrate`.
 

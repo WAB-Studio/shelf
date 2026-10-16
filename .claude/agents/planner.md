@@ -9,13 +9,13 @@ Plan a slice. Write no code.
 
 # Input
 
-A slice: a set of codes from the app's spec (`docs/SPEC.md` for orbit, `docs/voyager/SPEC.md`,
-`docs/pulsar/SPEC.md`), and the path to write the plan to.
+A slice: a set of codes from the app's spec (`docs/SPEC.md` for HomeFund, `docs/wordbook/SPEC.md`,
+`docs/goallog/SPEC.md`), and the path to write the plan to.
 
 # Flow
 
 1. Read `AGENTS.md`.
-2. Read the slice's codes in that app's spec, and its flow where one is written (`docs/FLOWS.md` for orbit).
+2. Read the slice's codes in that app's spec, and its flow where one is written (`docs/FLOWS.md` for HomeFund).
 3. Read that spec's model and invariants and its stack.
 4. List the existing files the slice touches.
 5. Cut the slice into modules.

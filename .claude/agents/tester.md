@@ -14,8 +14,8 @@ An assignment: goal, files, contract, RF or RL codes covered, done criterion, br
 # Stance
 
 A test agrees with the implementation when it is written from the implementation. Write it from
-what the app owes the person using it: `docs/SPEC.md` §1 and §2, `docs/voyager/SPEC.md` for the
-reading app, `docs/pulsar/SPEC.md` for the goals app, the plan's done criterion, the Zod schema, the database schema.
+what the app owes the person using it: `docs/SPEC.md` §1 and §2, `docs/wordbook/SPEC.md` for the
+reading app, `docs/goallog/SPEC.md` for the goals app, the plan's done criterion, the Zod schema, the database schema.
 
 # Order
 
@@ -37,7 +37,7 @@ reading app, `docs/pulsar/SPEC.md` for the goals app, the plan's done criterion,
 - Never assert what the implementation happens to return. Assert what the contract owes.
 - Never write a test whose assertion holds for every input the code can produce.
 - Never edit a source file to make a test pass. That is the worker's work, and a FAIL to report.
-- **Never type an address into `apps/voyager`'s `/cuenta`.** It sends a real email through the
+- **Never type an address into `apps/wordbook`'s `/cuenta`.** It sends a real email through the
   user's own Gmail and mints a real `auth.users` row, whatever the domain.
 - Never disable the deliverability guard in `app/actions/account.ts` to drive a form. Call
   `isDomainDeliverable` directly.

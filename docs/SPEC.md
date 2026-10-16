@@ -40,7 +40,7 @@ accounting exports, native apps. None of this gets built or left
 #### Authentication and fund
 
 - [x] **RF-01** — Passwordless email login.
-- [ ] **RF-143** — Signing in by email refuses an address whose domain cannot receive mail, before any email is sent, and caps the sign-in links sent per address, as `apps/voyager` does. Decided by the user 2026-10-15.
+- [ ] **RF-143** — Signing in by email refuses an address whose domain cannot receive mail, before any email is sent, and caps the sign-in links sent per address, as `apps/wordbook` does. Decided by the user 2026-10-15.
 - [ ] **RF-145** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
 - [x] **RF-57** — Only the group `leader` invites members, edits the group and manages the group's categories.
 - [x] **RF-58** — Every member of a group can read all of its accounts (universal read); write is bounded per account — a personal account by its owner, a shared account by any member.
@@ -826,7 +826,7 @@ Playwright is a development dependency: it never reaches the bundle, ships in no
 
 The Supabase CLI is invoked as `npx --yes supabase@2.119.0` from `scripts/supabase-local.sh` alone. It is in no `package.json`, never reaches a bundle or a deployment, needs Docker and costs nothing to run, so RNF-01 and RNF-02 hold.
 
-StrykerJS (`@stryker-mutator/core`, `@stryker-mutator/tap-runner`) is a development dependency of `apps/pulsar` alone. Decided by the user 2026-10-14: it mutates the pure `lib/` files a train changed (`npm run mutate:pure`), through the command-style `tap` runner because the repo tests with `node --test`. It never reaches a bundle or a deployment and costs nothing to run, so RNF-01 and RNF-02 hold.
+StrykerJS (`@stryker-mutator/core`, `@stryker-mutator/tap-runner`) is a development dependency of `apps/goallog` alone. Decided by the user 2026-10-14: it mutates the pure `lib/` files a train changed (`npm run mutate:pure`), through the command-style `tap` runner because the repo tests with `node --test`. It never reaches a bundle or a deployment and costs nothing to run, so RNF-01 and RNF-02 hold.
 
 ### Do not install
 
