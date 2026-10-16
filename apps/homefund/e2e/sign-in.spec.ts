@@ -15,11 +15,13 @@
  * created it, and its rows are dropped after the file, so the census finds no
  * identity the registry does not know.
  */
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { closeRun, openRun, runId } from "@repo/harness-registry";
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+import { addressKey, callerKey } from "@/lib/auth/client-key";
+import { todayInBogota } from "@/lib/dates";
 import { SEED_CATEGORIES } from "@/lib/fund/seed";
 import messages from "@/messages/es.json";
 
@@ -33,6 +35,8 @@ const signedOut = { cookies: [], origins: [] };
 const stamp = randomUUID().slice(0, 8);
 let serial = 0;
 const minted: string[] = [];
+const listedEmails: string[] = [];
+const claimedKeys: string[] = [];
 
 test.skip(({ viewport }) => viewport?.width === 360, "the sign-in facts are read once, on the laptop");
 
@@ -55,6 +59,9 @@ test.afterAll(async () => {
       }
     }
     await clearGroup();
+    // By exact address or key: another lane's rows are never reached.
+    if (listedEmails.length) await fixtureSql`delete from finances.allowed_emails where email in ${fixtureSql(listedEmails)}`;
+    if (claimedKeys.length) await fixtureSql`delete from finances.sign_in_claims where client_key in ${fixtureSql(claimedKeys)}`;
   } finally {
     await closeRun(fixtureSql);
   }
@@ -266,4 +273,148 @@ test("every address this file minted is in the harness registry under this run",
   for (const row of rows) {
     expect(row, row.email).toMatchObject({ run_id: runId(), disposition: "ephemeral" });
   }
+});
+
+// RF-145 and RF-143: the list and the daily caps answer before any mail is sent.
+const SALT = process.env.CLIENT_KEY_SALT ?? "";
+const CLIENT_CAP = Number(process.env.SIGN_IN_LINK_DAILY_CLIENT_CAP ?? 5);
+const ADDRESS_CAP = Number(process.env.SIGN_IN_LINK_DAILY_ADDRESS_CAP ?? 3);
+
+test.describe("the list and the daily caps", () => {
+  test.beforeAll(() => {
+    // Without the salt the caps are open (`noKey`) and every row below would pass for the wrong reason.
+    expect(SALT.length, "CLIENT_KEY_SALT must be set (>= 16 chars): this describe fails, never skips").toBeGreaterThanOrEqual(16);
+  });
+
+  // A random /64 in 2001:db8::/32 per caller: the counters are shared by every lane and rerun.
+  function newCaller(): string {
+    const group = () => randomBytes(2).toString("hex");
+    return `2001:db8:${group()}:${group()}:${group()}::1`;
+  }
+
+  async function listAddress(email: string) {
+    listedEmails.push(email);
+    await fixtureSql`insert into finances.allowed_emails (email) values (${email.trim().toLowerCase()})`;
+  }
+
+  function track(ip: string, email: string) {
+    claimedKeys.push(callerKey(new Headers({ "x-forwarded-for": ip }), SALT)!, addressKey(email, SALT));
+  }
+
+  // Submits the form as `ip` and reports which of the two answers the person saw.
+  async function submit(browser: Browser, baseURL: string, ip: string, typed: string): Promise<"sent" | "refused"> {
+    const context = await browser.newContext({ baseURL, storageState: signedOut, extraHTTPHeaders: { "x-forwarded-for": ip } });
+    try {
+      const page = await context.newPage();
+      await page.goto("/es/login");
+      await page.getByLabel(auth.emailLabel).fill(typed);
+      await page.getByRole("button", { name: auth.sendLink, exact: true }).click();
+      const sent = page.getByRole("heading", { name: auth.sentTitle, exact: true });
+      const toast = page.locator("[data-sonner-toast][data-type='error']");
+      await expect(sent.or(toast)).toBeVisible();
+      if (await sent.isVisible()) {
+        await register(typed.trim().toLowerCase());
+        return "sent";
+      }
+      // A refusal says so; «unexpected» is a crash, not a refusal.
+      await expect(toast).not.toContainText(messages.errors.unexpected);
+      return "refused";
+    } finally {
+      await context.close();
+    }
+  }
+
+  function listedAddress(): string {
+    const email = newAddress();
+    return email;
+  }
+
+  test("a listed address gets its link whatever the case or the padding typed", async ({ browser, baseURL }) => {
+    // Kills: drop lower(btrim()) from the lookup.
+    const email = listedAddress();
+    await listAddress(email);
+    const ip = newCaller();
+    track(ip, email);
+
+    expect(await submit(browser, baseURL!, ip, ` ${email.toUpperCase()} `)).toBe("sent");
+    await expect.poll(async () => (await inbox(email)).messages_count).toBe(1);
+    // The send went through the claims: the address spent one of its three.
+    const spent = await fixtureSql<{ count: number }[]>`
+      select count from finances.sign_in_claims where client_key = ${addressKey(email, SALT)}`;
+    expect(spent.map((row) => row.count)).toEqual([1]);
+  });
+
+  test("an address that is not listed is refused with a toast and no mail", async ({ browser, baseURL }) => {
+    // Kills: exists -> true.
+    const email = listedAddress();
+    const ip = newCaller();
+    track(ip, email);
+
+    expect(await submit(browser, baseURL!, ip, email)).toBe("refused");
+    expect((await inbox(email)).messages_count).toBe(0);
+    const users = await fixtureSql`select 1 from auth.users where email = ${email}`;
+    expect(users).toHaveLength(0);
+  });
+
+  test("one address takes three links a day from any callers; the fourth is refused", async ({ browser, baseURL }) => {
+    // Kills: `<` -> `<=`; skipping the address claim.
+    const email = listedAddress();
+    await listAddress(email);
+    const outcomes: string[] = [];
+    for (let i = 0; i <= ADDRESS_CAP; i += 1) {
+      const ip = newCaller();
+      track(ip, email);
+      // Auth itself refuses a second link to one user inside its own interval (1 s locally);
+      // the cap under test is the app's, so the sends are spaced past it.
+      if (i > 0) await new Promise((done) => setTimeout(done, 2_000));
+      outcomes.push(await submit(browser, baseURL!, ip, email));
+    }
+    expect(outcomes).toEqual([...Array(ADDRESS_CAP).fill("sent"), "refused"]);
+    await expect.poll(async () => (await inbox(email)).messages_count).toBe(ADDRESS_CAP);
+  });
+
+  test.describe.serial("one caller", () => {
+    const ip = newCaller();
+    const targets: string[] = [];
+
+    test("takes five links a day to different addresses; the sixth is refused", async ({ browser, baseURL }) => {
+      // Kills: skipping the caller claim; `<` -> `<=`.
+      const outcomes: string[] = [];
+      for (let i = 0; i <= CLIENT_CAP; i += 1) {
+        const email = listedAddress();
+        await listAddress(email);
+        track(ip, email);
+        targets.push(email);
+        outcomes.push(await submit(browser, baseURL!, ip, email));
+      }
+      expect(outcomes).toEqual([...Array(CLIENT_CAP).fill("sent"), "refused"]);
+    });
+
+    test("a caller refused at its cap spends nothing of the address it asked for", async () => {
+      // Kills: claiming the address before the caller.
+      expect(targets).toHaveLength(CLIENT_CAP + 1);
+      const refused = targets[CLIENT_CAP];
+      const rows = await fixtureSql`
+        select 1 from finances.sign_in_claims where client_key = ${addressKey(refused, SALT)}`;
+      expect(rows).toHaveLength(0);
+      const spent = await fixtureSql<{ count: number }[]>`
+        select count from finances.sign_in_claims where client_key = ${callerKey(new Headers({ "x-forwarded-for": ip }), SALT)!}`;
+      expect(spent.map((row) => row.count)).toEqual([CLIENT_CAP]);
+    });
+  });
+
+  test("the claims are dated by Bogotá's day", async ({ browser, baseURL }) => {
+    // Kills: `current_date` (red at 19:00-24:00 Bogotá here; any hour in scripts/check-sign-in.ts).
+    const email = listedAddress();
+    await listAddress(email);
+    const ip = newCaller();
+    track(ip, email);
+    expect(await submit(browser, baseURL!, ip, email)).toBe("sent");
+
+    const keys = [callerKey(new Headers({ "x-forwarded-for": ip }), SALT)!, addressKey(email, SALT)];
+    const rows = await fixtureSql<{ day: string }[]>`
+      select day::text as day from finances.sign_in_claims where client_key in ${fixtureSql(keys)}`;
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row.day).toBe(todayInBogota());
+  });
 });
