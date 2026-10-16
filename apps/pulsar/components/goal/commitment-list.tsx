@@ -118,6 +118,7 @@ export async function CommitmentList({
           retired={commitment.retiredAt !== null}
           retiredLabel={t("goal.commitments.retired")}
           factDayCount={commitment.factDayCount}
+          goalId={goalId}
           trailing={
             <Flex direction="column" align="end">
               <Text as="span" variant="sentence" tone="muted">
