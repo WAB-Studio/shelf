@@ -49,7 +49,7 @@ export type MoneyProps = {
 };
 
 /**
- * The one place an amount turns into a figure (RF-48, RF-121, RNF-05). The
+ * The one place an amount turns into a figure (RF-125, RF-121, RNF-05). The
  * stored integer in, the currency's own figure out — no screen divides by the
  * stored scale, none writes the currency's mark and none writes its own sign.
  */

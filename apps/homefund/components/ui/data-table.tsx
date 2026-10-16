@@ -24,7 +24,7 @@ export type DataColumn<Row> = {
 export type DataSection<Row> = { key: string; label: string; rows: Row[] };
 
 /**
- * The dense list of SPEC-A3 (RF-48, RNF-08). Grid tracks lay it out and explicit
+ * The dense list of SPEC-A3 (RF-125, RNF-08). Grid tracks lay it out and explicit
  * ARIA roles carry the semantics, because a `<table>` switched to `display: grid`
  * loses them in the accessibility tree — this way every cell is still announced
  * with its column's header.
@@ -54,7 +54,7 @@ export function DataTable<Row>({
   rowKey: (row: Row) => string;
   total?: ReactNode[];
   // Drawn in place of the rows, under the column headers and inside the same
-  // frame, when every section came back empty (SPEC-A3, RF-48).
+  // frame, when every section came back empty (SPEC-A3, RF-125).
   empty?: ReactNode;
   // Drawn under the container, inside the same gutter: the pagination of
   // SPEC-A3 lines up with the table's edges without a screen padding it.

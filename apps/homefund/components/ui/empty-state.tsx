@@ -4,7 +4,7 @@ import { Box, Flex, Text } from "@radix-ui/themes";
 // Matches the dashboard's empty state so no screen invents its own.
 // `filtered` is the same stack without the page-filling growth: it sits inside
 // the table container that framed the rows, so the column headers stay on screen
-// and the text never accuses of filtering when no filter is on (RF-23, RF-48).
+// and the text never accuses of filtering when no filter is on (RF-23, RF-125).
 export function EmptyState({
   icon,
   title,

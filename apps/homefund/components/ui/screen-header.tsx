@@ -6,7 +6,7 @@ import { Link as LocaleLink } from "@/i18n/navigation";
 import styles from "./screen-header.module.css";
 
 /**
- * The band every screen opens with (RF-48): the title, a secondary datum on its
+ * The band every screen opens with (RF-125): the title, a secondary datum on its
  * baseline, and the caller's actions at the end. Below `md` it is a bare
  * `Heading size="5"` inside the page's own gutter, so a screen that adopts it
  * does not shift on a phone; from `md` up it takes the 24/32/16 of SPEC-A3.
