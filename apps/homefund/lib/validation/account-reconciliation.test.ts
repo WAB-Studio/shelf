@@ -67,6 +67,8 @@ test("the form schema refuses what checkRealAmount refuses, with the same key", 
     ["+5", INVALID],
     ["-+5", INVALID],
     ["-999999999999", TOO_LARGE],
+    ["", REQUIRED],
+    ["   ", REQUIRED],
   ];
   for (const [value, key] of cases) {
     const result = parse({ realAmount: value });
