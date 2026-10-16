@@ -1757,8 +1757,8 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Not built yet.
 - **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Not built yet.
 - **Three goal levels stay,** as today (RP-78).
-- **The last day of a month reads «último día»,** never «faltan 0 días». Not built yet (RP-132).
-- **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Not built yet (RP-133).
+- **The last day of a month reads «último día»,** never «faltan 0 días». Built (RP-132).
+- **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Built (RP-133).
 - **CI, decided for the infra train:** concurrency per branch, path filters, `pulsar-fechas` out of manual dispatch, and 6 shards for `pulsar-e2e`. Built in #609.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
 
