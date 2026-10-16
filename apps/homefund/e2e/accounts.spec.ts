@@ -182,6 +182,7 @@ async function confirmThroughMenu(
 async function seedAccount(options: {
   openingCents: number;
   movementCents?: number;
+  subtype?: "bank" | "cash" | "card";
 }): Promise<{ id: string; name: string }> {
   const id = randomUUID();
   const name = `Cuenta ${stamp}-${(serial += 1)}`;
@@ -192,7 +193,7 @@ async function seedAccount(options: {
         id, owner_user_id, name, kind, subtype,
         initial_balance_cents, initial_balance_on)
       values (
-        ${id}, ${scope.userId}, ${name}, 'asset', 'bancaria',
+        ${id}, ${scope.userId}, ${name}, 'asset', ${options.subtype ?? "bank"},
         ${options.openingCents}, (now() at time zone ${TIME_ZONE})::date)`;
 
     if (options.movementCents === undefined) return;
@@ -264,7 +265,7 @@ test("creates an account from the form and stores its opening balance signed by 
 
   expect(rows).toHaveLength(1);
   expect(rows[0].kind).toBe("liability");
-  expect(rows[0].subtype).toBe("tarjeta");
+  expect(rows[0].subtype).toBe("card");
   expect(rows[0].initial_balance_cents).toBe(String(owedCents));
 
   // Written through the interface, so it carries no fixture id: dropped here
@@ -746,4 +747,82 @@ test.describe("with a fund behind the caller", () => {
 
     await dropAccount(account.id);
   });
+});
+
+// The dashboard's first-account tiles open the form on a class by its stored word.
+for (const [word, kindLabel, subtypeLabel, kind, amountLabel] of [
+  ["cash", accounts.kindAsset, accounts.subtypeEfectivo, "asset", accounts.openingBalanceLabel],
+  ["card", accounts.kindLiability, accounts.subtypeTarjeta, "liability", accounts.openingOwedLabel],
+] as const) {
+  test(`opens the form on ?new=${word} and stores ${word}`, async ({ page }) => {
+    const name = `Clase ${word} ${stamp}`;
+
+    await page.goto(`/es/settings/accounts?new=${word}`);
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("radio", { name: kindLabel, exact: true })).toBeChecked();
+    await expect(dialog.getByRole("radio", { name: subtypeLabel, exact: true })).toBeChecked();
+
+    await dialog.getByRole("textbox", { name: accounts.nameLabel }).fill(name);
+    await dialog.getByRole("textbox", { name: amountLabel }).fill("1000");
+    await dialog.getByRole("button", { name: common.save, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    const rows = await fixtureSql<{ id: string; kind: string; subtype: string }[]>`
+      select id, kind, subtype from accounts
+      where owner_user_id = ${scope.userId} and name = ${name}`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe(kind);
+    expect(rows[0].subtype).toBe(word);
+
+    await dropAccount(rows[0].id);
+  });
+}
+
+test("keeps cash when a cash account is edited", async ({ page }) => {
+  const account = await seedAccount({ openingCents: 100_000, subtype: "cash" });
+  const renamed = `Efectivo renombrado ${stamp}`;
+
+  await page.goto("/es/settings/accounts");
+  await rowMenu(page, account.name).click();
+  await page.getByRole("menuitem", { name: common.edit, exact: true }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByRole("radio", { name: accounts.subtypeEfectivo, exact: true }),
+  ).toBeChecked();
+
+  await dialog.getByRole("textbox", { name: accounts.nameLabel }).fill(renamed);
+  await dialog.getByRole("button", { name: common.save, exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  const [saved] = await fixtureSql<{ name: string; subtype: string }[]>`
+    select name, subtype from accounts where id = ${account.id}`;
+  expect(saved.name).toBe(renamed);
+  expect(saved.subtype).toBe("cash");
+
+  await dropAccount(account.id);
+});
+
+test("opens no dialog on a legacy word in ?new=", async ({ page }) => {
+  await page.goto("/es/settings/accounts?new=bancaria");
+
+  await expect(page.getByRole("button", { name: accounts.add, exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("writes nothing when a ?new=cash dialog is cancelled", async ({ page }) => {
+  const name = `Cancelada ${stamp}`;
+
+  await page.goto("/es/settings/accounts?new=cash");
+
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: accounts.nameLabel }).fill(name);
+  await dialog.getByRole("button", { name: common.cancel, exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  const rows = await fixtureSql`
+    select id from accounts where owner_user_id = ${scope.userId} and name = ${name}`;
+  expect(rows).toHaveLength(0);
 });

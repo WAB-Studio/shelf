@@ -75,6 +75,8 @@ type DebtFormValues = {
   accountId: string;
   name: string;
   kind: "liability";
+  subtype: "card";
+  settlementCurrency: OfferedCurrency;
   placement: (typeof ACCOUNT_PLACEMENTS)[number];
   institution: string;
   amount: string;
@@ -161,6 +163,9 @@ function DebtForm({
       accountId: account?.accountId ?? "",
       name: "",
       kind: "liability",
+      // The create schema requires both; the form offers neither as a choice.
+      subtype: "card",
+      settlementCurrency: currency,
       placement: "personal",
       institution: "",
       amount: "",
