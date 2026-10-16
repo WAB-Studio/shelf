@@ -1,0 +1,16 @@
+supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322
+
+> wordbook@0.1.0 check:e2e
+> node ../../node_modules/@playwright/test/cli.js test e2e/decoracion-reintento.spec.ts
+
+
+Running 6 tests using 1 worker
+
+  ✓  1 [mobile] › e2e/decoracion-reintento.spec.ts:59:5 › pending: the decoration's line shows while the text request is held open (2.0s)
+  ✓  2 [mobile] › e2e/decoracion-reintento.spec.ts:75:5 › an aborted text request is asked again the next time the word is looked up (4.8s)
+  ✓  3 [mobile] › e2e/decoracion-reintento.spec.ts:97:5 › a 503 is asked again: first 503, then 200, and the example draws (4.7s)
+  ✓  4 [mobile] › e2e/decoracion-reintento.spec.ts:116:5 › a 204 is not asked again: umbrella, apple, umbrella costs one request for umbrella (4.1s)
+  ✓  5 [mobile] › e2e/decoracion-reintento.spec.ts:131:5 › a 200 is not asked again: umbrella, apple, umbrella costs one request for umbrella (3.9s)
+  ✓  6 [mobile] › e2e/decoracion-reintento.spec.ts:151:5 › an unlisted word whose request was aborted is asked again after another word (3.2s)
+
+  6 passed (23.3s)

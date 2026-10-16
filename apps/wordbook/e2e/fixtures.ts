@@ -44,8 +44,20 @@ function wordRouteName(url: URL): WordRouteName | null {
   return null;
 }
 
+// One scripted answer to one request of a route. `abort` is a request that
+// never reaches the server; `status` answers with that code and an empty
+// body; `ok` answers 200 with the body; `hold` keeps the request open until
+// `releaseWordRoute` lets it answer 204.
+export type WordRouteStep =
+  | { kind: "abort" }
+  | { kind: "status"; status: number }
+  | { kind: "ok"; body: unknown }
+  | { kind: "hold" };
+
 type WordRouteState = {
   opted: Set<WordRouteName>;
+  script: Map<WordRouteName, WordRouteStep[]>;
+  held: Map<WordRouteName, () => void>;
   textBody: WordTextBody | null;
   unlistedBody: UnlistedBody | null;
   phraseNotesBody: PhraseNotesBody | null;
@@ -64,6 +76,12 @@ type WordRouteFixtures = {
   stubUnlisted(body: UnlistedBody): Promise<void>;
   // Same shape as `stubWordText`, for `/api/phrase/notes` (RL-46).
   stubPhraseNotes(body: PhraseNotesBody): Promise<void>;
+  // Answers the route's next requests with these steps, one per request in
+  // order; once they run out the route answers as the stubs above say. Every
+  // answer it fabricates carries `STUB_HEADER`.
+  scriptWordRoute(route: WordRouteName, steps: WordRouteStep[]): Promise<void>;
+  // Lets a request a `hold` step is keeping open answer 204.
+  releaseWordRoute(route: WordRouteName): Promise<void>;
 };
 
 export const test = base.extend<WordRouteFixtures>({
@@ -71,7 +89,14 @@ export const test = base.extend<WordRouteFixtures>({
   // parameter here reads to `eslint-plugin-react-hooks` as the `use` hook,
   // which this file, being test wiring rather than a component, is not.
   wordRouteState: async ({}, provide) => {
-    await provide({ opted: new Set(), textBody: null, unlistedBody: null, phraseNotesBody: null });
+    await provide({
+      opted: new Set(),
+      script: new Map(),
+      held: new Map(),
+      textBody: null,
+      unlistedBody: null,
+      phraseNotesBody: null,
+    });
   },
 
   // Overriding the built-in `context`, not `page`: `log.spec.ts` opens
@@ -87,6 +112,24 @@ export const test = base.extend<WordRouteFixtures>({
         const name = wordRouteName(new URL(route.request().url()))!;
         if (wordRouteState.opted.has(name)) {
           void route.continue();
+          return;
+        }
+        const step = wordRouteState.script.get(name)?.shift();
+        if (step) {
+          if (step.kind === "abort") void route.abort("failed");
+          else if (step.kind === "status")
+            void route.fulfill({ status: step.status, headers: { [STUB_HEADER]: "1" } });
+          else if (step.kind === "ok")
+            void route.fulfill({
+              status: 200,
+              contentType: "application/json",
+              headers: { [STUB_HEADER]: "1" },
+              body: JSON.stringify(step.body),
+            });
+          else
+            wordRouteState.held.set(name, () => {
+              void route.fulfill({ status: 204, headers: { [STUB_HEADER]: "1" } }).catch(() => {});
+            });
           return;
         }
         const fabricated =
@@ -159,6 +202,19 @@ export const test = base.extend<WordRouteFixtures>({
   stubPhraseNotes: async ({ wordRouteState }, provide) => {
     await provide(async (body) => {
       wordRouteState.phraseNotesBody = body;
+    });
+  },
+
+  scriptWordRoute: async ({ wordRouteState }, provide) => {
+    await provide(async (route, steps) => {
+      wordRouteState.script.set(route, [...steps]);
+    });
+  },
+
+  releaseWordRoute: async ({ wordRouteState }, provide) => {
+    await provide(async (route) => {
+      wordRouteState.held.get(route)?.();
+      wordRouteState.held.delete(route);
     });
   },
 });

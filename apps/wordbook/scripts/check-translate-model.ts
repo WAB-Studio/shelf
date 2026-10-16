@@ -97,11 +97,18 @@ async function setSpend(calls: number): Promise<void> {
 
 let POST: (request: Request) => Promise<Response>;
 
+// A fresh documentation-range address per call keeps each caller chargeable
+// and under the per-caller cap; the route refuses the model to a caller with
+// no address.
+const POOL_SIZE = 40;
+let nextPoolAddress = 1;
+const poolAddress = (n: number): string => `203.0.113.${n}`;
+
 async function translate(text: string, ip?: string): Promise<{ status: number; body: { text?: string; origin?: string } }> {
   const response = await POST(
     new Request("http://localhost/api/translate", {
       method: "POST",
-      headers: { "content-type": "application/json", ...(ip ? { "x-forwarded-for": ip } : {}) },
+      headers: { "content-type": "application/json", "x-forwarded-for": ip ?? poolAddress(nextPoolAddress++) },
       body: JSON.stringify({ text }),
     }),
   );
@@ -119,7 +126,9 @@ function reset(): void {
 const CAP_IP = "198.51.100.41";
 const capKeys = (() => {
   const unscoped = clientKeyFromAddress(CAP_IP, SALT);
-  return [unscoped, scopeClientKey("translate", unscoped)!];
+  const pool = Array.from({ length: POOL_SIZE }, (_, i) => clientKeyFromAddress(poolAddress(i + 1), SALT));
+  const keys = [unscoped, ...pool];
+  return [...keys, ...keys.map((key) => scopeClientKey("translate", key)!), ...keys.map((key) => `share:${key}`)];
 })();
 
 async function main(): Promise<void> {
@@ -259,9 +268,11 @@ async function main(): Promise<void> {
       statuses.join() === "200,200,429",
       `statuses=${statuses.join()}`,
     );
+    // The exact split is not asserted, but the model must have served: the per-caller
+    // share (#612) sends the caller's second call to MyMemory.
     assert(
       "T6. the refused sentence reached neither provider and claimed no model call",
-      modelCalls === CLIENT_CAP && mymemoryCalls === 0 && (await spend()) === CLIENT_CAP,
+      modelCalls >= 1 && modelCalls + mymemoryCalls === CLIENT_CAP && (await spend()) === modelCalls,
       `model=${modelCalls} mymemory=${mymemoryCalls} spend=${await spend()}`,
     );
 

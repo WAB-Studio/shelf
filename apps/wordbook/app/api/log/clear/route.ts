@@ -2,18 +2,13 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
+import { json } from "@/lib/http/responses";
 import { getReader, withReaderDb } from "@/lib/session";
 
 // Never a candidate for the route cache: the same reasoning as
 // `app/api/log/sync/route.ts`, though this route answers no state a cache
 // could even name.
 export const dynamic = "force-dynamic";
-
-const NO_STORE = { "Cache-Control": "no-store" };
-
-function json(body: unknown, status: number): Response {
-  return Response.json(body, { status, headers: NO_STORE });
-}
 
 /**
  * «Vaciar aquí y en mi cuenta» (`RegistroVaciarConfirmar`): empties this

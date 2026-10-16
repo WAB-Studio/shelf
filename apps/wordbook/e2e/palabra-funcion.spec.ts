@@ -170,6 +170,14 @@ test("offline, a function word typed alone still answers from the table, folded,
   page.on("request", (request) => urls.push(request.url()));
 
   const table = functionWordTranslation("would") as string;
+  // The word's own decoration request leaves once the debounce has elapsed;
+  // it settles (fails offline, or is answered by the fixture) and that is
+  // the moment a sentence request, had one been sent, would have left too.
+  const isText = (request: { url(): string }) => request.url().includes("/api/word/text");
+  const decorationSettled = Promise.race([
+    page.waitForEvent("requestfailed", isText),
+    page.waitForEvent("requestfinished", isText),
+  ]);
   await searchBox(page).fill("would");
   await expect(visible(page, table)).toHaveCount(1);
   await expect(control(page)).toHaveAttribute("aria-expanded", "false");
@@ -177,6 +185,7 @@ test("offline, a function word typed alone still answers from the table, folded,
   await control(page).click();
   await expect(visible(page, DICTIONARY_LEAD.would, false)).toHaveCount(1);
 
+  await decorationSettled;
   // The word's own paid routes may try the network and fail; the phrase
   // route is not a word's business.
   expect(urls.filter((url) => url.includes("/api/translate"))).toEqual([]);
