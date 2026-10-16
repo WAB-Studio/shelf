@@ -96,7 +96,26 @@
     "sourceFile": "leído de {name}",
     "sourceFileAnon": "leído de un archivo",
     "change": "Volver al texto",
-    "repeated": "Ya tienes una meta abierta con este nombre. Quedó desmarcada: márcala si quieres otra.",
+    "repeated": "Tienes más de una meta abierta con este nombre: no sabemos cuál actualizar. Quedó desmarcada: márcala si quieres otra.",
+    "update": "Actualiza tu meta «{goal}»",
+    "noChange": "Ya está como dice el plan.",
+    "diff": {
+      "horizon": "Cambia el final al {to}",
+      "note": "Cambia la nota",
+      "measure": "Cambia la medida a «{name}», en {unit}",
+      "measureKept": "Su medida se queda: ya tiene avance contado",
+      "rhythm": "Cambia el ritmo a {amount} al mes",
+      "month": "Pone {amount} en {month}",
+      "phaseAdded": "Agrega la fase «{aim}», del {startsOn} al {endsOn}",
+      "phaseChanged": "Mueve la fase «{aim}» del {startsOn} al {endsOn}",
+      "commitmentAdded": "Agrega el compromiso «{name}»",
+      "commitmentChanged": "Cambia cada cuándo se cumple «{name}»",
+      "commitmentReplaced": "«{name}» ya tiene días anotados: se retira y se abre otro con el nuevo ritmo",
+      "taskAdded": "Agrega la tarea «{name}»",
+      "taskChanged": "Cambia la tarea «{name}»",
+      "subTaskAdded": "Agrega la sub-tarea «{name}» a «{task}»",
+      "stays": "{count, plural, one {Se queda # parte que el plan no nombra} other {Se quedan # partes que el plan no nombra}}"
+    },
     "edit": {
       "title": "Cambiar el monto",
       "rhythmTitle": "Cambiar el ritmo",
@@ -278,6 +297,7 @@
     "estimateDroppedNotTime": "se crea sin cifra: esta meta no mide tiempo"
   },
   "errors": {
+    "reviewStale": "Tu meta cambió mientras revisabas. Vuelve a revisar el plan.",
     "doneInFuture": "Una tarea hecha no puede tener un día por venir. Pon hoy o un día anterior.",
     "doneWithSubtasks": "Una tarea con sub-tareas se da por hecha con ellas. Quita el día.",
     "estimateNotTime": "Quita la cifra de esta línea: esta meta no mide tiempo.",
@@ -364,6 +384,7 @@
   "created": {
     "eyebrow": "importar · hecho",
     "title": "Plan creado",
+    "updated": "{count, plural, one {# meta actualizada} other {# metas actualizadas}}",
     "count": "{goals, plural, one {Se creó # meta} other {Se crearon # metas}} con todo su plan, menos {parts, plural, one {# parte que no se pudo escribir} other {# partes que no se pudieron escribir}}.",
     "section": "No se escribió",
     "hint": "agrégalas a mano en su meta; lo demás de tu plan ya está en Metas",
