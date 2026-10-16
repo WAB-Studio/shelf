@@ -3,10 +3,10 @@ import "server-only";
 import { asc, eq, or, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import { callerGroupId } from "@/db/queries/groups";
+import { callerGroupId, callerGroupInfo } from "@/db/queries/groups";
 import { labels } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb, withUserDbOrTx } from "@/db/session";
+import { requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
 
 // A label set is read and written for one scope at a time: a user's personal set
 // or a group's (RF-70). The scope decides which of the XOR columns is set.
@@ -66,8 +66,7 @@ export async function listLabels(scope: LabelScope): Promise<LabelRow[]> {
 /**
  * Every label a form offers, in ONE statement: the caller's own and their group's,
  * the group resolved by subselect rather than behind a transaction of its own.
- * Personal before the group's, then by name — the order the two reads it replaces
- * used to arrive in.
+ * Personal before the group's, then by name.
  */
 export async function listScopedLabels(
   userId: string,
@@ -103,6 +102,7 @@ export async function listScopedLabels(
  */
 export async function listManagedLabels(
   scope: LabelScope,
+  outerTx?: Transaction,
 ): Promise<LabelManagementRow[]> {
   // The outer reference is written qualified: drizzle renders an embedded column
   // bare inside a projection, and a bare `id` binds to the subquery's own table.
@@ -116,7 +116,7 @@ export async function listManagedLabels(
     select count(*)::int from budgets b where b.label_id = ${outerId}
   )`;
 
-  return withUserDb(async (tx) =>
+  return withUserDbOrTx(outerTx, async (tx) =>
     tx
       .select({
         id: labels.id,
@@ -132,8 +132,11 @@ export async function listManagedLabels(
 }
 
 // The colours already spent in the scope, so a new label defaults to a fresh one.
-export async function listUsedLabelColors(scope: LabelScope): Promise<string[]> {
-  return withUserDb(async (tx) => {
+export async function listUsedLabelColors(
+  scope: LabelScope,
+  outerTx?: Transaction,
+): Promise<string[]> {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx
       .selectDistinct({ color: labels.color })
       .from(labels)
@@ -194,5 +197,40 @@ export async function deleteLabel({
       .returning({ id: labels.id });
 
     return rows.length > 0;
+  });
+}
+
+/**
+ * The labels screen in one transaction (RF-70): both scopes with their counts and
+ * spent colours. A personal-only caller gets empty group lists.
+ */
+export async function getLabelsScreenData(): Promise<{
+  groupName: string | null;
+  isLeader: boolean;
+  personal: LabelManagementRow[];
+  group: LabelManagementRow[];
+  usedColors: { personal: string[]; group: string[] };
+}> {
+  const user = await requireUser();
+
+  return withUserDb(async (tx) => {
+    const group = await callerGroupInfo(tx, user.id);
+    const own = { ownerUserId: user.id };
+    const empty = Promise.resolve([]);
+
+    const [personal, personalColors, groupLabels, groupColors] = await Promise.all([
+      listManagedLabels(own, tx),
+      listUsedLabelColors(own, tx),
+      group ? listManagedLabels({ groupId: group.id }, tx) : empty,
+      group ? listUsedLabelColors({ groupId: group.id }, tx) : empty,
+    ]);
+
+    return {
+      groupName: group?.name ?? null,
+      isLeader: group?.role === "leader",
+      personal,
+      group: groupLabels,
+      usedColors: { personal: personalColors, group: groupColors },
+    };
   });
 }

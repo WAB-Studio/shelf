@@ -3,6 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { minimumPaymentSql } from "@/db/queries/debt-minimum";
 import type { DebtTerms } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
@@ -141,12 +142,12 @@ export async function getDebtOverview(): Promise<DebtOverviewRow[]> {
           else dt.credit_limit_cents - abs(b.settlement_cents) end as available_credit_cents,
         round(abs(b.settlement_cents) * mr.monthly_rate)::bigint as monthly_interest_cents,
         mr.monthly_rate as monthly_rate_pct,
-        case
-          when dt.minimum_payment_cents is not null then dt.minimum_payment_cents
-          when dt.minimum_payment_pct is not null
-            then round(abs(b.settlement_cents) * dt.minimum_payment_pct)::bigint
-          else null
-        end as minimum_payment_cents,
+        ${minimumPaymentSql({
+          fixed: sql`dt.minimum_payment_cents`,
+          pct: sql`dt.minimum_payment_pct`,
+          balance: sql`b.settlement_cents`,
+          fallback: sql`null::bigint`,
+        })} as minimum_payment_cents,
         coalesce(s.cut_off_date, nc.next_cut_off) as next_cut_off_date,
         coalesce(s.payment_due_date, nd.next_due) as next_due_date,
         coalesce((

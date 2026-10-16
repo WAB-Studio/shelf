@@ -88,7 +88,7 @@ export async function listWebhookCredentials(): Promise<WebhookCredentialRow[]> 
 }
 
 // Stamp the revocation; the affected-row count reports whether the owner policy
-// admitted it (RF-85). A resolve past this point yields no row.
+// admitted it. A resolve past this point yields no row.
 export async function revokeWebhookCredential({
   id,
 }: {
