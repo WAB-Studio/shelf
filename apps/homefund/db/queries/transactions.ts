@@ -79,6 +79,8 @@ export type TransactionListFilters = {
   // The label a movement carries through the join, RF-89.
   labelId?: string;
   kind?: string;
+  // A reconciliation's adjustment only (RF-138).
+  adjustments?: boolean;
   // The deep-link target: keep only generated movements still awaiting review
   // (`recurring_rule_id is not null and reviewed_at is null`), RF-31.
   unreviewed?: boolean;
@@ -323,6 +325,7 @@ export async function deleteTransaction({
 
 // The one listing predicate: the ledger list, its totals and the export all narrow
 // by it, so a filter selects the same movements wherever it is read (RF-23, RF-89).
+// An adjustment is expense- or income-shaped yet neither: only `adjustments` selects it (RF-138).
 export function transactionListConditions(filters: TransactionListFilters): SQL[] {
   const conditions: SQL[] = [];
 
@@ -353,6 +356,10 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
     );
   }
   if (filters.kind) conditions.push(eq(transactions.kind, filters.kind));
+  if (filters.kind === "expense" || filters.kind === "income") {
+    conditions.push(isNull(transactions.reconciliationId));
+  }
+  if (filters.adjustments) conditions.push(isNotNull(transactions.reconciliationId));
   if (filters.unreviewed) {
     // "Waiting for a person" (RF-133): a generated movement not yet confirmed,
     // or one `awaiting_counterparty` — never every one-sided movement. Income
@@ -387,7 +394,7 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
  * The count and the net per currency over EVERY movement the filter matches, in
  * one statement and independent of any limit the list applies. A transfer moves
  * the net by nothing (RF-19) but still counts; so does an adjustment, which the
- * net leaves out (RF-137).
+ * net leaves out (RF-137) and the expense and income filters never select (RF-138).
  */
 export async function getTransactionTotals(
   filters: TransactionListFilters,
