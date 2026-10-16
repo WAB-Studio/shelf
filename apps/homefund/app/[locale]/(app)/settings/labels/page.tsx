@@ -5,8 +5,7 @@ import { notFound } from "next/navigation";
 
 import { LabelsScreen } from "@/components/labels/labels-screen";
 import { Page } from "@/components/ui";
-import { getUserGroup, getUserGroupRole } from "@/db/queries/groups";
-import { listManagedLabels, listUsedLabelColors } from "@/db/queries/labels";
+import { getLabelsScreenData } from "@/db/queries/labels";
 import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
 
@@ -28,31 +27,16 @@ export default async function LabelsPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  // The screen presents both scopes (RF-70), so the caller's group is resolved
-  // first: it names the second scope the reads below key off. The group reads
-  // collapse to resolved empties when the caller runs personal-only.
-  const [user, group] = await Promise.all([requireUser(), getUserGroup()]);
-
-  const personalScope = { ownerUserId: user.id } as const;
-  const empty = Promise.resolve([]);
-
-  const [personal, personalColors, role, groupLabels, groupColors] =
-    await Promise.all([
-      listManagedLabels(personalScope),
-      listUsedLabelColors(personalScope),
-      getUserGroupRole(),
-      group ? listManagedLabels({ groupId: group.id }) : empty,
-      group ? listUsedLabelColors({ groupId: group.id }) : empty,
-    ]);
+  const [, data] = await Promise.all([requireUser(), getLabelsScreenData()]);
 
   return (
     <Page>
       <LabelsScreen
-        personal={personal}
-        group={groupLabels}
-        groupName={group?.name ?? null}
-        canManageGroup={role === "leader"}
-        usedColors={{ personal: personalColors, group: groupColors }}
+        personal={data.personal}
+        group={data.group}
+        groupName={data.groupName}
+        canManageGroup={data.isLeader}
+        usedColors={data.usedColors}
       />
     </Page>
   );
