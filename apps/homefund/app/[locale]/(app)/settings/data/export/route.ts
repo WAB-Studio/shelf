@@ -9,7 +9,7 @@ import { requireUser } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
 import { SHEET_ENTITIES, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { buildWorkbook, type SheetLabels } from "@/lib/spreadsheet/workbook";
-import { movementFiltersSchema } from "@/lib/validation/transaction";
+import { movementFiltersSchema, movementTypeFilter } from "@/lib/validation/transaction";
 import { routing } from "@/i18n/routing";
 
 // ExcelJS writes with Node streams and zlib, so the workbook build stays on the
@@ -57,10 +57,11 @@ export async function GET(
   const entityKeys = requestedEntities(params);
   const filters = movementFiltersSchema.parse(Object.fromEntries(params));
 
-  // The type chip maps to the generated `kind`; "all" drops the predicate so the
-  // sheet carries every kind, the transfers RF-19 keeps out of reports included.
+  // The type chip maps to the generated `kind`, or to the adjustments flag; "all"
+  // drops the predicate so the sheet carries every kind, the transfers RF-19 keeps
+  // out of reports included (RF-118, RF-138).
   const transactionFilters: TransactionExportFilters = {
-    kind: filters.type === "all" ? undefined : filters.type,
+    ...movementTypeFilter(filters.type),
     memberUserId: filters.member,
     accountId: filters.account,
     categoryId: filters.category,

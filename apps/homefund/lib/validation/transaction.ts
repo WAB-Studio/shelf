@@ -506,7 +506,21 @@ const filterFlag = z
 
 // The chip's value, mirrored one-to-one onto the movement's generated kind, with
 // the transfer a kind of its own so no income or expense chip surfaces it (RF-19).
-export const MOVEMENT_TYPES = ["all", "expense", "income", "transfer"] as const;
+// `adjustment` is no kind: it selects the reconciliation-marked rows alone (RF-138).
+export const MOVEMENT_TYPES = ["all", "expense", "income", "transfer", "adjustment"] as const;
+
+export type MovementTypeValue = (typeof MOVEMENT_TYPES)[number];
+
+// The list predicate a type stands for, shared by the page and the export so
+// neither keeps a mapping of its own (RF-23, RF-118, RF-138).
+export function movementTypeFilter(type: MovementTypeValue): {
+  kind?: "expense" | "income" | "transfer";
+  adjustments?: true;
+} {
+  if (type === "all") return {};
+  if (type === "adjustment") return { adjustments: true };
+  return { kind: type };
+}
 
 // The movement list's filter set exactly as it travels in the URL (RF-23, RF-89).
 // The list page, the filter bar and the filtered export all parse this one
