@@ -32,3 +32,13 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-16	homefund-632-tren2	validator	0	0	0	48605
 2026-10-16	homefund-632-e6	mutator	19	19	0	52845
 2026-10-16	5 trenes	review				
+2026-10-16	wordbook-tren1-635	validator	1	1	1	63341
+2026-10-16	wordbook-tren1-635	mutator	22	22	0	120854
+2026-10-16	homefund-t1-636	validator	0	0	0	
+2026-10-16	homefund-t1-636	mutator	15	15	0	
+2026-10-16	goallog-allow-email-637	validator	0	0	0	
+2026-10-16	wordbook-tren2-638	validator	0	0	0	
+2026-10-16	wordbook-tren2-638	mutator	13	13	0	
+2026-10-16	homefund-t2-639	validator	1	1	0	
+2026-10-16	wordbook-cuenta-critic	critic	6	6	0	139623
+2026-10-16	homefund-t2-639	mutator	5	5	0	88033

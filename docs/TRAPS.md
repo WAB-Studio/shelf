@@ -3320,3 +3320,19 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 ## A canvas read costs the main session about 40k tokens (2026-10-16)
 - `Artifact read` of the WordBook canvas returned the 4.3 MB page: the editor's stylesheet and fonts, before any board.
 - Do: read it once, and take the boards from the saved file with a script. They live in the `appifact-doc` script, `content.files`, one `.dc.html` each, plus `canvas.json`. Splice new boards in there. Before republishing, strip the publish skeleton the read prepends (everything before `<!doctype html>\n<html lang="en">`), and escape `</` in the JSON.
+
+## `scripts/worktree.sh` cannot open a branch that already exists (2026-10-16)
+- `scripts/worktree.sh 7 wordbook-k1 --app wordbook` died with `fatal: a branch named 'wordbook-k1' already exists`: the script always passes `-b`.
+- Do: when the local branch equals its remote, delete the local one and open the lane from the remote: `git branch -D <b> && scripts/worktree.sh <n> <b> origin/<b>`, then `git branch --set-upstream-to=origin/<b>`.
+
+## `git switch -C` on a branch checked out in another worktree fails without a word under `-q` (2026-10-16)
+- In lane 3, `git switch -q -C homefund-t1 origin/homefund-t1 && git merge …` printed nothing: `homefund-t1` was checked out in lane 8, so the switch refused and the merge ran on the lane's own branch. The train never got module 9 until `git merge-base --is-ancestor` caught it.
+- Do: merge a train in the worktree that holds it (`git worktree list`), and check `git merge-base --is-ancestor <module tip> origin/<train>` after every push.
+
+## HomeFund's drizzle snapshot chain forks at 0052 (2026-10-16)
+- `npm run db:generate` fails on `integracion`: snapshots 0053 and 0054 both name 0052's id as `prevId`. A migration's own proof «generate writes nothing» can only be taken with the chain straightened by hand, then reverted.
+- Do: fix the chain in a module of its own before relying on `db:generate`. Until then, say in a report that the proof ran on a straightened chain.
+
+## The 0059 trigger hides old account words in test inserts (2026-10-16)
+- `private.set_account_subtype()` rewrites any subtype on INSERT (`efectivo` → `cash`, anything else from `kind`), so a fixture that still inserts `'bancaria'` lands as `bank` and no suite goes red.
+- Do: prove a fixture's words with a grep count, not a suite. Only an UPDATE, a read by the old word or a read-back equality turns red.
