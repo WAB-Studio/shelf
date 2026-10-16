@@ -182,6 +182,9 @@ test("a done task is left alone", () => {
   assert.deepEqual(differences(draftGoal({ tasks: [task({ estimate: 999 })] }), done, TODAY), [
     { kind: "stays", count: 2 },
   ]);
+  assert.deepEqual(differences(draftGoal({ tasks: [task({ month: "2026-12" })] }), done, TODAY), [
+    { kind: "stays", count: 2 },
+  ]);
 });
 
 test("a part the plan omits stays, and stays alone changes nothing", () => {
