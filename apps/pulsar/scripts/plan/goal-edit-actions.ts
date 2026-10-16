@@ -500,10 +500,14 @@ test("changeGoalMeasure and removeGoalMeasure: no measure, a goal holding goals,
 
   const holder = (await goal("madre medida")).goalId;
   await childOf(holder, "hija medida");
+  const held = { measure: await measureOf(holder), budgets: await budgets(holder) };
+  assert.equal(held.measure.unit, "minutos");
   assert.deepEqual(await mine(() => edit.changeGoalMeasure({ goalId: holder, name: "X", unit: "x" })), {
     ok: false,
     error: "plan.errors.holderNoMeasure",
   });
+  // The refusal is the whole answer: the measure the holder had is the measure it keeps.
+  assert.deepEqual({ measure: await measureOf(holder), budgets: await budgets(holder) }, held);
 
   const theirs = (await goal("medida ajena", "minutos", stranger)).goalId;
   for (const goalId of [theirs, NOWHERE]) {
