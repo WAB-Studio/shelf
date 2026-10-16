@@ -540,8 +540,8 @@ test.describe("at 360 px (RP-127)", () => {
   });
 });
 
-test("RP-104 sits in «Retired» with its tick and the line, and RP-135 is open where it was", () => {
-  // Kills: an RP-104 left live beside its successor; RP-135 ticked or placed elsewhere.
+test("RP-104 sits in «Retired» with its tick and the line, and RP-135 is ticked where it was", () => {
+  // Kills: an RP-104 left live beside its successor; RP-135 left unticked or placed elsewhere.
   const spec = readFileSync(resolve(process.cwd(), "../../docs/pulsar/SPEC.md"), "utf8");
   const [live, retired] = spec.split(/^### Retired$/m);
   expect(retired).toBeDefined();
@@ -554,6 +554,6 @@ test("RP-104 sits in «Retired» with its tick and the line, and RP-135 is open 
   const lines = live.split("\n");
   const at = lines.findIndex((l) => l.startsWith("- [x] **RP-113**"));
   expect(at).toBeGreaterThanOrEqual(0);
-  expect(lines[at + 1]).toMatch(/^- \[ \] \*\*RP-135\*\* \*\(successor of RP-104\)\*/);
+  expect(lines[at + 1]).toMatch(/^- \[x\] \*\*RP-135\*\* \*\(successor of RP-104\)\*/);
   expect(lines[at + 1]).toContain("A retired habit is not edited.");
 });
