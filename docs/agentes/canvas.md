@@ -25,10 +25,10 @@ The main session reads this before a screen is dispatched. The why: `docs/agente
 
 ## The canvases
 
-- `apps/orbit` (HomeFund): «HomeFund», https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj (created 2026-10-14).
-- `apps/voyager` (WordBook): «Diccionario de lectura», https://claude.ai/artifact/K9acY69gRz13JPtAn7GWwz (the old
+- `apps/homefund` (HomeFund): «HomeFund», https://claude.ai/artifact/UJsx2ugZgNoRFWMvNGmooj (created 2026-10-14).
+- `apps/wordbook` (WordBook): «Diccionario de lectura», https://claude.ai/artifact/K9acY69gRz13JPtAn7GWwz (the old
   `claude.ai/code/artifact/92f7…` link opens the same canvas).
-- `apps/pulsar` (GoalLog): «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
+- `apps/goallog` (GoalLog): «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
 - `apps/portal`: «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
 - Add the URL here the day a canvas is created. A canvas nobody can find is a canvas nobody uses.
 

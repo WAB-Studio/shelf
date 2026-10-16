@@ -1,0 +1,628 @@
+"use client";
+
+import { useSyncExternalStore, type ReactNode } from "react";
+import NextLink from "next/link";
+import { useTranslations } from "next-intl";
+
+import { ipaKey, pronunciationBlocks, type Sense } from "@/lib/dictionary/index-build";
+import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { speak, speechSupported } from "@/lib/speech/speak";
+import {
+  Box,
+  Flex,
+  Grid,
+  Headword,
+  IconButton,
+  Link,
+  PosLabel,
+  Separator,
+  Text,
+  TapTarget,
+} from "@/components/ui";
+import { GeneratedText, type GeneratedTextState } from "./generated-text";
+import { NetworkAnswer, type NetworkAnswerState } from "./network-answer";
+
+// `search-screen.tsx`'s own query name: every door this file opens onto a
+// correction is `/?q=<word>`, the same param `no-entry-answer.tsx` reads —
+// no shared import between the two, so the literal is repeated, not the code.
+const CORRECTION_QUERY_PARAM = "q";
+
+function correctionHref(word: string): string {
+  return `/?${CORRECTION_QUERY_PARAM}=${encodeURIComponent(word)}`;
+}
+
+// docs/wordbook/DESIGN.md "Viewport": stroke-width 1.75, round caps and
+// joins, fill none — the same glyph shape `bottom-nav.tsx` draws, sized down
+// for an inline word.
+function ChevronGlyph() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+// A block's own headword, made into `wordHref`'s door back to the full
+// entry: `Headword` sets no colour of its own, so `Link`'s accent cascades
+// into it — the same route `no-entry-answer.tsx` takes for the miss line.
+// Plain when `wordHref` is absent, which is every call outside the
+// breakdown. `headwordSize` carries `PalabraConFlexion`'s own smaller
+// offer heading through to `Headword`; every other caller leaves it at the
+// default 34px.
+function BlockHeading({
+  word,
+  wordHref,
+  headwordSize,
+}: {
+  word: string;
+  wordHref?: string;
+  headwordSize?: "default" | "offer";
+}) {
+  if (!wordHref) return <Headword size={headwordSize}>{word}</Headword>;
+  return (
+    <Link asChild underline="always">
+      <NextLink href={wordHref} prefetch={false}>
+        <TapTarget align="center" gap="1">
+          <Headword size={headwordSize}>{word}</Headword>
+          <ChevronGlyph />
+        </TapTarget>
+      </NextLink>
+    </Link>
+  );
+}
+
+// The glyph docs/wordbook/DESIGN.md "Settled" fixes exactly: a play triangle
+// and two sound arcs, 1.75px strokes, round caps and joins. Drawn here
+// rather than pulled from lucide because the path itself is what the board
+// settles, not a stand-in for "speaker".
+function SpeakerGlyph() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+      <path d="M17 8.5a5 5 0 010 7" />
+      <path d="M19.5 6a8.5 8.5 0 010 12" />
+    </svg>
+  );
+}
+
+// `speechSupported()` never changes within one page life, so there is
+// nothing to subscribe to — only a snapshot to read, which is what tells
+// `useSyncExternalStore` to skip the effect-driven setState this needs to
+// stay SSR-safe: false on the server (no `window`), the real answer once
+// the client itself renders.
+function subscribeNever(): () => void {
+  return () => {};
+}
+
+function getServerSnapshot(): boolean {
+  return false;
+}
+
+// RL-26: a headword can be heard. Asked of the browser fresh on every open —
+// never inferred from its name or version — so a browser with no
+// `speechSynthesis` shows no control at all, rather than one that does
+// nothing when pressed.
+//
+// `lib/speech/speak.ts` is handed the spelling, so the browser itself picks
+// which pronunciation of a grouped entry comes out. The control therefore
+// names the one it really speaks — the entry's leading block, drawn
+// directly under the headword — instead of claiming two sounds and offering
+// one unnamed (RL-51). A second control was refused: the voice takes the
+// spelling, so both would sound alike.
+export function SpeakButton({
+  headword,
+  ipa,
+  t,
+}: {
+  headword: string;
+  ipa: string | null;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const supported = useSyncExternalStore(subscribeNever, speechSupported, getServerSnapshot);
+
+  if (!supported) return null;
+
+  return (
+    <IconButton
+      type="button"
+      size="2"
+      variant="ghost"
+      color="gray"
+      aria-label={ipa === null ? t("listen", { headword }) : t("listenPronunciation", { headword, ipa })}
+      onClick={() => speak(headword)}
+    >
+      <SpeakerGlyph />
+    </IconButton>
+  );
+}
+
+// The IPA heading the entry's first pronunciation block, or null when the
+// entry draws no block at all (58,773 of 58,944 headwords) or when that
+// first block is the headless one — which only `can` and `pace` carry, and
+// never in first place. The voice control and the generated example are
+// both named from here, so neither can name a sound the screen does not
+// lead with.
+export function leadPronunciation(senses: readonly Sense[]): string | null {
+  return pronunciationBlocks(senses)?.[0].ipa ?? null;
+}
+
+// One sense's own body: every translation on one comma-joined line
+// (docs/wordbook/DESIGN.md "The translations are one line, separated by
+// commas"), its English
+// definition drawn open beneath its own label when the entry carries one
+// (docs/wordbook/DESIGN.md "The English definition draws open, always"), and
+// its own IPA only when it is a different sound from the one already drawn
+// on its segment's label row — repeating an identical IPA on every sense
+// would say nothing a reader does not already have. Compared through
+// `ipaKey`, the same key the grouping runs on: two notations of one sound
+// are not two sounds, which used to cost `god`, `majesty` and `mass` a dead
+// line each (`/ɡɑ(d)/` over `/ɡɑd/`, `/ˈmæs/` over `/mæs/`). `compact` drops the IPA and
+// the definition (docs/wordbook/DESIGN.md "A word block on `SinEntradaFrase`
+// carries its translations alone"): only `NoEntryAnswer`'s per-word
+// breakdown ever sets it.
+function SenseDetail({
+  sense,
+  segmentIpa,
+  compact,
+  t,
+}: {
+  sense: Sense;
+  segmentIpa: string | null;
+  compact: boolean;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const ownSound = sense.ipa !== null && (segmentIpa === null || ipaKey(sense.ipa) !== ipaKey(segmentIpa));
+  const ownIpa = !compact && ownSound ? sense.ipa : null;
+
+  return (
+    <Flex direction="column" gap="2">
+      <Flex direction="column" gap="1">
+        {ownIpa !== null && (
+          <Text size="2" color="gray" truncate>
+            {ownIpa}
+          </Text>
+        )}
+        <Text size="1" color="gray">
+          {t("translations")}
+        </Text>
+        <Text variant="translation">{sense.translations.join(", ")}</Text>
+      </Flex>
+      {!compact && sense.definition !== null && (
+        <Flex direction="column" data-definition-block="">
+          <Separator size="4" />
+          <Box pt="2" pb="1">
+            <Flex direction="column" gap="1">
+              <Text variant="definitionLabel" muted>
+                {t("definitionEnglish")}
+              </Text>
+              <Text size="2" serif muted english>
+                {sense.definition}
+              </Text>
+            </Flex>
+          </Box>
+          <Separator size="4" />
+        </Flex>
+      )}
+    </Flex>
+  );
+}
+
+// A contiguous run of same-part-of-speech senses: one `PosLabel`, one IPA
+// taken from the run's first sense, and every sense's own body ruled apart
+// with a hairline. Never a card, never a border box (docs/wordbook/DESIGN.md).
+function PosSegment({
+  segment,
+  compact,
+  ipaHeaded,
+  t,
+}: {
+  segment: SenseSegment;
+  compact: boolean;
+  // True inside a pronunciation block (RL-51): the block's head already
+  // named the IPA, so the label row stops carrying one of its own
+  // (docs/wordbook/DESIGN.md "The pronunciation groups the entry").
+  ipaHeaded: boolean;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const segmentIpa = segment.senses[0].ipa;
+
+  return (
+    <Flex direction="column" gap="3">
+      <Flex align="center" gap="2">
+        <PosLabel>{t(`pos.${segment.pos}`)}</PosLabel>
+        {!compact && !ipaHeaded && segmentIpa !== null && (
+          // IPA runs past 120 characters with no space to break on, and it is
+          // metadata beside the headword, not the headword itself — one
+          // clamped line reads better than four wrapped ones. `PosLabel` has
+          // no intrinsic width limit of its own, so the row's flex-shrink
+          // alone would starve it too; the clamp has to come from `Grid`,
+          // whose `minmax(0, 1fr)` governs the item regardless
+          // (docs/wordbook/DESIGN.md "What the data forces").
+          <Grid flexGrow="1" minWidth="0">
+            <Text size="2" color="gray" align="right" truncate>
+              {segmentIpa}
+            </Text>
+          </Grid>
+        )}
+      </Flex>
+      {segment.senses.map((sense, index) => (
+        <Flex direction="column" gap="3" key={index}>
+          {index > 0 && <Separator size="4" />}
+          <SenseDetail sense={sense} segmentIpa={segmentIpa} compact={compact} t={t} />
+        </Flex>
+      ))}
+    </Flex>
+  );
+}
+
+type SenseSegment = { pos: Sense["pos"]; senses: Sense[] };
+
+// `groupFor` (lib/dictionary/index-build.ts) already sorts senses by
+// POS_RANK, so every sense of one part of speech arrives contiguous: this
+// only draws its label once instead of once per sense (RL-04).
+function segmentByPos(senses: readonly Sense[]): SenseSegment[] {
+  const segments: SenseSegment[] = [];
+  for (const sense of senses) {
+    const open = segments.at(-1);
+    if (open !== undefined && open.pos === sense.pos) open.senses.push(sense);
+    else segments.push({ pos: sense.pos, senses: [sense] });
+  }
+  return segments;
+}
+
+// Part-of-speech segments ruled apart with a hairline: the whole of a
+// headword's senses when it carries one pronunciation, one block's share of
+// them when it carries several.
+function PosSegments({
+  senses,
+  compact,
+  ipaHeaded,
+  interlude,
+  t,
+}: {
+  senses: readonly Sense[];
+  compact: boolean;
+  ipaHeaded: boolean;
+  // Drawn right under the first segment (RL-58): the group the entry opens
+  // with stays above it, every other segment below.
+  interlude?: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const segments = segmentByPos(senses);
+
+  return (
+    <Flex direction="column" gap="3">
+      {segments.map((segment, index) => (
+        <Flex direction="column" gap="3" key={index}>
+          {index > 0 && <Separator size="4" />}
+          <PosSegment segment={segment} compact={compact} ipaHeaded={ipaHeaded} t={t} />
+          {index === 0 && interlude}
+        </Flex>
+      ))}
+    </Flex>
+  );
+}
+
+// A group of part-of-speech segments, one per headword or inflected form —
+// gathered first into one block per pronunciation when the group carries
+// more than one (RL-51, board `PalabraPronunciacionOscuroMovil`). `row` is
+// two words wearing one spelling: its `/ɹaʊ/` senses used to sit at
+// positions three and five of five.
+//
+// One pronunciation is no grouping — 58,754 of the 58,944 indexed
+// headwords, `leave` and `grudge` among them — and draws exactly what it
+// drew before, through
+// the same branch the breakdown takes. `compact` never groups: that variant
+// carries no IPA at all (docs/wordbook/DESIGN.md "A word block on
+// `SinEntradaFrase` carries its translations alone"), so a head there would
+// name a pronunciation nothing under it repeats.
+function SenseGroup({
+  senses,
+  compact,
+  interlude,
+  t,
+}: {
+  senses: readonly Sense[];
+  compact: boolean;
+  // Lands under the first category of the first pronunciation block.
+  interlude?: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const blocks = compact ? null : pronunciationBlocks(senses);
+
+  if (blocks === null) {
+    return <PosSegments senses={senses} compact={compact} ipaHeaded={false} interlude={interlude} t={t} />;
+  }
+
+  return (
+    <Flex direction="column" gap="4">
+      {blocks.map((block, index) => (
+        <Flex direction="column" gap="3" key={index} data-pronunciation-block={block.ipa ?? ""}>
+          {index > 0 && <Separator size="4" />}
+          {/* The block head is the IPA alone — no headword repeated, no
+              number — one step up from the sense IPA it replaces, in the
+              muted metadata tone (docs/wordbook/DESIGN.md). The block that
+              gathers senses carrying no IPA draws no head: `can` and `pace`
+              are the only two entries that reach it, each through a proper
+              noun normalising into the word. */}
+          {block.ipa !== null && (
+            <Text size="3" muted truncate>
+              {block.ipa}
+            </Text>
+          )}
+          <PosSegments
+            senses={block.senses}
+            compact={compact}
+            ipaHeaded
+            interlude={index === 0 ? interlude : undefined}
+            t={t}
+          />
+        </Flex>
+      ))}
+    </Flex>
+  );
+}
+
+// RL-28: every headword `lookupWord` found one edit from the miss, each its
+// own tap back into `/?q=<word>` — the same door `BlockHeading` opens, drawn
+// smaller here because there is no entry underneath it yet to lead into. No
+// cap, on the data or on the screen: `hits.sort()` in `edit-distance.ts` is
+// alphabetical, not ranked by anything the reader meant, so cutting it after
+// five would drop the intended word by accident of spelling, not keep it —
+// measured, more than five candidates happens on 0.9% of 4,000
+// real one-edit typos. `wrap="wrap"` below carries nine short words in a
+// few rows at 360px with nothing pushed off screen (checked against `boz`).
+// Silent when `words` is empty — `zzqqxv` is the only case left that reaches
+// no headword at all; a real word the dictionary lacks (`fettle`) draws its
+// wrong-looking candidates here until the network answer (RL-44) offers the better door.
+function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType<typeof useTranslations> }) {
+  return (
+    <Flex direction="column" gap="2">
+      <Text size="2" color="gray">
+        {t("correctionTitle")}
+      </Text>
+      <Flex gap="4" wrap="wrap">
+        {words.map((word) => (
+          <Link asChild underline="always" key={word}>
+            <NextLink href={correctionHref(word)} prefetch={false}>
+              <TapTarget align="center" gap="1">
+                <Text size="3" serif english>
+                  {word}
+                </Text>
+                <ChevronGlyph />
+              </TapTarget>
+            </NextLink>
+          </Link>
+        ))}
+      </Flex>
+    </Flex>
+  );
+}
+
+// `full` is a direct lookup's own answer — IPA, definition, voice, the lot.
+// `compact` is a word block inside the no-entry breakdown
+// (`no-entry-answer.tsx`): headword, category and translations alone
+// (docs/wordbook/DESIGN.md "A word block on `SinEntradaFrase` carries its
+// translations alone"), and no voice control — that belongs to the word
+// screen's own four boards, never to the breakdown (docs/wordbook/DESIGN.md
+// "RL-26").
+export type SenseListVariant = "full" | "compact";
+
+// A headword's full answer: its own senses first, then every inflected form
+// that reached one, each carrying its own senses in turn (RL-04, RL-58).
+// docs/wordbook/DESIGN.md "PalabraConFlexion": the entry answers; this offers,
+// never replaces. The 2px rule marks where the entry pauses and the offer
+// begins, and each hit sits in its own indented rail — a smaller heading and
+// a muted label are the only things that rank it under the entry, no colour a
+// plain reading wouldn't already have.
+function ViaInflectionOffer({
+  answer,
+  compact,
+  wordHref,
+  t,
+}: {
+  answer: WordAnswer;
+  compact: boolean;
+  wordHref?: string;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <Flex direction="column" gap="4">
+      <Separator size="4" weight="heavy" />
+      {answer.viaInflection.map((hit, index) => (
+        <Flex direction="column" gap="3" key={`${hit.surface}-${hit.lemma}`}>
+          {index > 0 && <Separator size="4" />}
+          <Box rail>
+            <Flex direction="column" gap="3">
+              <Flex direction="column" gap="1">
+                <PosLabel muted>{t("viaInflectionWithEntry", { surface: hit.surface, lemma: hit.lemma })}</PosLabel>
+                <Flex align="center" gap="1">
+                  <BlockHeading word={hit.lemma} wordHref={wordHref} headwordSize="offer" />
+                  {!compact && <SpeakButton headword={hit.lemma} ipa={leadPronunciation(hit.group.senses)} t={t} />}
+                </Flex>
+              </Flex>
+              <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+            </Flex>
+          </Box>
+        </Flex>
+      ))}
+    </Flex>
+  );
+}
+
+export function SenseList({
+  answer,
+  variant = "full",
+  wordHref,
+  showExactHeadword = true,
+  showSpeaker = true,
+  generated,
+  networkAnswer,
+}: {
+  answer: WordAnswer;
+  variant?: SenseListVariant;
+  // The breakdown's own door back to `/?q=<word>` (docs/wordbook/DESIGN.md
+  // "Every block of the breakdown is a way back in"). Set by
+  // `no-entry-answer.tsx` alone; a direct lookup passes nothing, so its
+  // headword stays plain.
+  wordHref?: string;
+  // False on `/registro/[palabra]` alone: that screen already draws the
+  // word as its own page heading, so the exact match's own copy of it, or
+  // the form-first headword the sin-`exact` branch now leads with, would
+  // repeat as a second heading sharing the page heading's name. The offered
+  // lemma underneath still gets its own heading either way — that word
+  // never names the page.
+  showExactHeadword?: boolean;
+  // False where the caller draws the voice control beside the headword
+  // itself (a function word's block, RL-59).
+  showSpeaker?: boolean;
+  // Set by `search-screen.tsx` alone, from `useDecoration` — the state a
+  // network call resolved for the exact headword, never fetched here.
+  // Absent on `/registro/[palabra]`, which opens no connection at all.
+  generated?: GeneratedTextState;
+  // Set by `search-screen.tsx` alone (module 12), from the hook module 10
+  // wires to `/api/word/unlisted`. Absent on `/registro/[palabra]` and on
+  // every `compact` call, so neither opens a connection of its own
+  // (RL-58's own screen, never the breakdown's eight words at once).
+  networkAnswer?: NetworkAnswerState;
+}) {
+  const t = useTranslations("word");
+  const tSearch = useTranslations("search");
+  const compact = variant === "compact";
+  // Null on every compact call: the breakdown groups nothing, so it names
+  // nothing either (docs/wordbook/DESIGN.md "A word block on
+  // `SinEntradaFrase` carries its translations alone").
+  const exactLead = !compact && answer.exact !== null ? leadPronunciation(answer.exact.senses) : null;
+
+  // RL-58: the lemma block rises under the form's first group instead of
+  // closing the entry, on both variants.
+  const offerInside = answer.exact !== null && answer.viaInflection.length > 0;
+  const offerAbove = !offerInside;
+  const offer = offerInside ? (
+    <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
+  ) : null;
+
+  const hasAnswer = answer.exact !== null || answer.viaInflection.length > 0;
+  if (!hasAnswer) {
+    return (
+      <Flex direction="column" gap="3">
+        <Flex direction="column" gap="1">
+          {/* RL-44: a resolved network answer is the answer; the line that
+              says the dictionary lacks the word stands only until then. */}
+          {networkAnswer?.kind !== "resolved" && <Text size="3">{tSearch("notFound")}</Text>}
+          {/* RL-28 replaces the hint below with a correction the moment one
+              exists — "revisa la ortografía" tells the reader nothing a tap
+              wouldn't have already fixed for them. */}
+          {answer.correction.length === 0 && networkAnswer?.kind !== "resolved" && networkAnswer?.kind !== "pending" && (
+            <Text size="2" color="gray">
+              {tSearch("notFoundHint")}
+            </Text>
+          )}
+        </Flex>
+        {answer.correction.length > 0 && <CorrectionOffer words={answer.correction} t={tSearch} />}
+        {!compact && networkAnswer && <NetworkAnswer state={networkAnswer} surface={answer.query} />}
+      </Flex>
+    );
+  }
+
+  return (
+    <Flex direction="column" gap="4">
+      {answer.exact !== null && (
+        <Flex direction="column" gap="3">
+          <Flex align="center" gap="1">
+            {showExactHeadword && <BlockHeading word={answer.exact.headword} wordHref={wordHref} />}
+            {!compact && showSpeaker && <SpeakButton headword={answer.exact.headword} ipa={exactLead} t={t} />}
+          </Flex>
+          <SenseGroup
+            senses={answer.exact.senses}
+            compact={compact}
+            interlude={offerInside ? offer : undefined}
+            t={t}
+          />
+          {!compact && generated && <GeneratedText state={generated} />}
+          {/* RL-51: the example is decoration resolved from the spelling
+              alone (RL-42), so it lands under whichever block the entry
+              draws last and reads as that block's own — `row` closed with
+              «Me gusta remar el bote» beneath /ɹaʊ/, `tear` with «no rasgar
+              el vestido» beneath /tiə/, 5 of 5 measured. The foot line says
+              which pronunciation it is about: the entry's leading one, the
+              sense the model writes for and the sound «Escuchar» speaks. An
+              entry that draws no block reads unchanged — there is no other
+              block for it to be mistaken for. */}
+          {!compact && generated?.kind === "resolved" && exactLead !== null && (
+            <Text size="1" color="gray" data-generated-pronunciation={exactLead}>
+              {t("examplePronunciation", { ipa: exactLead })}
+            </Text>
+          )}
+        </Flex>
+      )}
+
+      {answer.viaInflection.length > 0 &&
+        (answer.exact !== null ? (
+          offerAbove && <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
+        ) : (
+          // RL-58: the form is only a form — the top of the screen is a
+          // different word wearing the same spelling, so the form the
+          // reader typed leads and the lemma it comes from sits under the
+          // 2px rule, in the same rail the `exact` branch above offers it
+          // from (docs/wordbook/DESIGN.md "The form the reader typed leads
+          // the answer"). Every hit shares one `surface` (`lookupWord`
+          // fixes it once per query), so the headword and its network
+          // answer draw once, ahead of however many lemma candidates follow.
+          <Flex direction="column" gap="4">
+            <Flex direction="column" gap="3">
+              <Flex align="center" gap="1">
+                {showExactHeadword && (
+                  <BlockHeading word={answer.viaInflection[0].surface} wordHref={wordHref} />
+                )}
+                {!compact && <SpeakButton headword={answer.viaInflection[0].surface} ipa={null} t={t} />}
+              </Flex>
+              {/* A failed fetch says nothing about a form the dictionary
+                  already answered (RL-35, RL-58). */}
+              {!compact && networkAnswer && networkAnswer.kind !== "failed" && (
+                <NetworkAnswer state={networkAnswer} surface={answer.viaInflection[0].surface} />
+              )}
+            </Flex>
+            <Separator size="4" weight="heavy" />
+            {answer.viaInflection.map((hit, index) => (
+              <Flex direction="column" gap="3" key={`${hit.surface}-${hit.lemma}`}>
+                {index > 0 && <Separator size="4" />}
+                <Box rail>
+                  <Flex direction="column" gap="3">
+                    <Flex direction="column" gap="1">
+                      <PosLabel muted>{t("formOf", { surface: hit.surface, lemma: hit.lemma })}</PosLabel>
+                      <Flex align="center" gap="1">
+                        <BlockHeading word={hit.lemma} wordHref={wordHref} headwordSize="offer" />
+                        {!compact && <SpeakButton headword={hit.lemma} ipa={leadPronunciation(hit.group.senses)} t={t} />}
+                      </Flex>
+                    </Flex>
+                    <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+                  </Flex>
+                </Box>
+              </Flex>
+            ))}
+          </Flex>
+        ))}
+    </Flex>
+  );
+}

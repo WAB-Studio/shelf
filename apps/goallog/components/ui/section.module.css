@@ -1,0 +1,54 @@
+/* docs/goallog/DESIGN.md "The space system": label → content 12. The gap to
+   the next section (32, 40 from 1024) belongs to the parent, never a margin. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+/* A real table so paper repeats the label on every sheet the body runs onto; on screen it reads as plain blocks. */
+.repeat,
+.repeat thead,
+.repeat tbody,
+.repeat tr,
+.repeat th,
+.repeat td {
+  display: block;
+  padding: 0;
+  font-weight: 400;
+  text-align: start;
+}
+
+.repeat,
+.repeat tbody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media print {
+  .repeat {
+    display: table;
+    inline-size: 100%;
+    border-collapse: collapse;
+  }
+
+  .repeat thead {
+    display: table-header-group;
+  }
+
+  .repeat tbody {
+    display: table-row-group;
+  }
+
+  .repeat tr {
+    display: table-row;
+  }
+
+  .repeat th,
+  .repeat td {
+    display: table-cell;
+    padding-block-end: 12px;
+  }
+}

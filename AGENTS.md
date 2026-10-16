@@ -14,11 +14,11 @@ This file is the core every agent loads. Read the file the index names before th
 
 ## Apps and contracts
 
-- Call the apps by their names: `apps/orbit` is **HomeFund**, `apps/voyager` is **WordBook**, `apps/pulsar` is **GoalLog**,
-  `apps/portal` is «Universo». Folders and URLs keep the old names until the rename slice, which renames the folders to
-  `apps/homefund`, `apps/wordbook`, `apps/goallog` and the Vercel projects the same (old URLs kept); the repo stays `universe`.
+- Call the apps by their names: `apps/homefund` is **HomeFund**, `apps/wordbook` **WordBook**, `apps/goallog` **GoalLog**,
+  `apps/portal` «Universo». Vercel projects: `homefund`, `wordbook`, `goallog`; the repo stays `universe`. Production deploys the
+  old folders until the final merge moves each to `<app>app.vercel.app`; `our-piggy-bank`, `reading-neon`, `pulsar-psi-six` keep answering.
 - HomeFund: contract `docs/SPEC.md` §1, model and invariants §2, stack §4, flows `docs/FLOWS.md`, design `docs/DESIGN.md`.
-- WordBook: `docs/voyager/SPEC.md`, `docs/voyager/DESIGN.md`. GoalLog: `docs/pulsar/SPEC.md`, `docs/pulsar/DESIGN.md`.
+- WordBook: `docs/wordbook/SPEC.md`, `docs/wordbook/DESIGN.md`. GoalLog: `docs/goallog/SPEC.md`, `docs/goallog/DESIGN.md`.
   Universo: `docs/portal/DESIGN.md`. Give every app its own design; never carry a pattern across.
 - `apps/` holds the apps, `packages/` the code two of them share: npm workspaces, one lockfile, `node_modules` hoisted
   to the root (a script reaches a binary as `../../node_modules/...`). Promote nothing until a second app asks for it.
@@ -32,7 +32,7 @@ This file is the core every agent loads. Read the file the index names before th
 - `docs/agentes/lanes.md`: opening, working in and dropping a lane; `HARNESS_LANE`; the harness.
 - `docs/agentes/verificacion.md`: suites, judges, CI, what a session spends.
 - `docs/agentes/canvas.md`: drawing a screen before it is built; the canvases. Main session.
-- `docs/agentes/voyager.md`: WordBook's `/cuenta`, auth, keys and census.
+- `docs/agentes/wordbook.md`: WordBook's `/cuenta`, auth, keys and census.
 - `docs/agentes/historia.md`: the measurements and decisions behind these rules.
 - `docs/TRAPS.md`: read it before writing a query, a migration or a spec.
 - `apps/<app>/AGENTS.md`: what holds inside one app. Loaded when you work there.
@@ -44,10 +44,10 @@ This file is the core every agent loads. Read the file the index names before th
   commit, and what blocks.
 - Ask the user only what they alone can decide. Ask it whole: what it is, the options, what each costs, your pick.
 - Use the credential the user hands you. Never tell the user to rotate, revoke or replace one.
-- Work in your own lane: its worktree, its port, its `HARNESS_LANE`. Ports: orbit :300<n-1>, voyager :310<n-1>,
-  pulsar :320<n-1>. Wrap every suite and dev server in `scripts/supabase-local.sh exec`.
+- Work in your own lane: its worktree, its port, its `HARNESS_LANE`. Ports: homefund :300<n-1>, wordbook :310<n-1>,
+  goallog :320<n-1>. Wrap every suite and dev server in `scripts/supabase-local.sh exec`.
 - Keep plans in `private/`, and a lane's patches and logs in its own `private/`, never in `/tmp`.
-- Never type an address into WordBook's `/cuenta`: it sends a real email. See `docs/agentes/voyager.md`.
+- Never type an address into WordBook's `/cuenta`: it sends a real email. See `docs/agentes/wordbook.md`.
 
 ## Modules
 
@@ -77,7 +77,7 @@ This file is the core every agent loads. Read the file the index names before th
 - Compose a screen from `components/ui` and its props. Never write a utility class, an inline `style={{…}}` or a CSS
   module outside it. Add a prop to the primitive for a variant; never patch one from outside.
 - Reach `localStorage`, `sessionStorage` and IndexedDB from `lib/` alone. Never silence the lint rule with a disable.
-- Install only from `docs/SPEC.md` §4, nothing on its «Do not install» list. Leave `apps/voyager/.env.local` alone.
+- Install only from `docs/SPEC.md` §4, nothing on its «Do not install» list. Leave `apps/wordbook/.env.local` alone.
 - Write code and identifiers in English. Write user-facing copy in the user's language. Interface text: what a person acts on.
 - Comments: say what the code does not, one idea each. Never restate the line below. Never log a change, a date, an
   author or a ticket.

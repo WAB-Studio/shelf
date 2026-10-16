@@ -15,8 +15,8 @@ The why: `docs/agentes/historia.md` § Verification.
   only place a broken build is caught before production.
 - Make the orbit suite run less, or shard it across harness lanes. Never micro-optimise its install: setup is 48 of
   its 1099 seconds.
-- Append an assertion at the end of its suite, in `apps/orbit/scripts/check-queries.ts` and
-  `apps/orbit/scripts/check-http.ts` alike. `Q` and `H` count calls at runtime; inserting in the middle renumbers
+- Append an assertion at the end of its suite, in `apps/homefund/scripts/check-queries.ts` and
+  `apps/homefund/scripts/check-http.ts` alike. `Q` and `H` count calls at runtime; inserting in the middle renumbers
   everything below.
 - Copy `<app>/private/playwright-results/` into the lane's `private/` before rerunning a suite that went red. A passing
   run wipes it, and the failure's `error-context.md` goes with it.
@@ -54,9 +54,9 @@ The why: `docs/agentes/historia.md` § Verification.
 - `pulsar-e2e` runs on the push only, never on a pull request. Merge a pulsar PR on `typecheck`, `lint`, `pulsar-unit`,
   `pulsar-policies` and `pulsar-checks`.
 - Orbit's `e2e` is informative, not blocking: no check is required by `main`'s ruleset. It runs on a pull request only
-  when the change reaches `apps/orbit`, `packages/` or the lockfile, and always on the push to `main`. Merge on
+  when the change reaches `apps/homefund`, `packages/` or the lockfile, and always on the push to `main`. Merge on
   `typecheck`, `lint` and `voyager-e2e`; read a red on `main` and fix forward.
-- `voyager-e2e` runs on a pull request only when it reaches `apps/voyager`, `packages/`, the lockfile or `ci.yml`, and
+- `voyager-e2e` runs on a pull request only when it reaches `apps/wordbook`, `packages/`, the lockfile or `ci.yml`, and
   always on a push. Skipped, it does not block the merge.
 - Fix a red on `integracion` before anything else. Take `integracion` to `main` only with the whole suite green, and
   prove the slice there before that merge, not after.

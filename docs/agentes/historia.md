@@ -140,14 +140,14 @@ Each entry names the rule and the file it lives in now.
   (the redirect carried `error=`) was gone before it could be read, because the rerun that proved it a flake deleted
   the directory. The second footprint lost that way; the first is why the separate-project question stays closed.
 
-## WordBook (`docs/agentes/voyager.md`)
+## WordBook (`docs/agentes/wordbook.md`)
 
 - Never type an address into `/cuenta`. Measured 2026-09-10: a critic typed `lector.prueba@example.com`, the send
   bounced into the user's inbox, and the census found seven ghost rows from three days (`lector@example.com` and
   five `nietoc0595+voyager-rate-N@gmail.com`). All seven deleted that day.
 - Never disable the deliverability guard. Measured 2026-09-10, two hours after the rule above: a worker did exactly
   that and minted two more rows and two more bounces.
-- Leave `apps/voyager/.env.local` alone. Decided by the user 2026-09-08. Do not raise it again. Copy it unchanged into
+- Leave `apps/wordbook/.env.local` alone. Decided by the user 2026-09-08. Do not raise it again. Copy it unchanged into
   a voyager lane: decided by the user 2026-10-05.
 
 ## Code (`AGENTS.md` § Code)

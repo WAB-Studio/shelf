@@ -27,11 +27,11 @@ jobs:
       # PageProps and LayoutProps live in generated, gitignored route types.
       # One app at a time: typegen reads the app's own `app/` directory.
       - run: npx next typegen
-        working-directory: apps/orbit
+        working-directory: apps/homefund
       - run: npx next typegen
-        working-directory: apps/voyager
+        working-directory: apps/wordbook
       - run: npx next typegen
-        working-directory: apps/pulsar
+        working-directory: apps/goallog
       - run: npm run typecheck
 
   lint:
@@ -59,7 +59,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run check:dict -w apps/voyager
+      - run: npm run check:dict -w apps/wordbook
 
   # The pure modules, in milliseconds. `node:test` ships with Node 22, so this
   # job installs nothing the others do not. It exists so a mutation costs
@@ -75,7 +75,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run check:unit -w apps/voyager
+      - run: npm run check:unit -w apps/wordbook
 
   # Drives the policies on `reading` against the real database, DELETE included
   # — the only proof RNL-10 has. One transaction that always rolls back, so it
@@ -95,10 +95,10 @@ jobs:
       # `check:sync` reads `--env-file=.env.local`, which the action writes.
       - uses: ./.github/actions/supabase-local
         with:
-          apps: voyager
-      - run: npm run check:sync -w apps/voyager
-      - run: npm run check:grants -w apps/voyager
-      - run: npm run check:sign-in-budget -w apps/voyager
+          apps: wordbook
+      - run: npm run check:sync -w apps/wordbook
+      - run: npm run check:grants -w apps/wordbook
+      - run: npm run check:sign-in-budget -w apps/wordbook
 
   # The pure modules, mirrors voyager's `unit` job. No database, no secret.
   pulsar-unit:
@@ -110,7 +110,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run check:unit -w apps/pulsar
+      - run: npm run check:unit -w apps/goallog
       - run: npm run check:unit -w packages/harness-registry
 
   # Drives the `goals` policies against the real database, exactly as
@@ -129,14 +129,14 @@ jobs:
       # `check:policies` reads `--env-file=.env.local`, which the action writes.
       - uses: ./.github/actions/supabase-local
         with:
-          apps: pulsar
-      - run: npm run check:policies -w apps/pulsar
+          apps: goallog
+      - run: npm run check:policies -w apps/goallog
 
   # The 12-minute suite runs here so a laptop is not holding a dev server and a
   # Chromium for it. Every job runs on its own stack, so runs never contend.
-  # Every path below addresses `apps/orbit`: the suite, its `.env.local`,
+  # Every path below addresses `apps/homefund`: the suite, its `.env.local`,
   # its route types and its results directory all live there since the monorepo.
-  # `apps/voyager` has its own database and local stack, but no harness lane:
+  # `apps/wordbook` has its own database and local stack, but no harness lane:
   # nothing here touches it — its checks run in the voyager jobs above and in
   # `voyager-e2e`.
   # Which of the two apps a change can actually affect. Orbit's suite is 17
@@ -162,9 +162,9 @@ jobs:
           REF: ${{ github.ref }}
         run: |
           # `packages/` and the lockfile reach both apps; so does this workflow.
-          orbit_paths="apps/orbit packages package-lock.json .github/workflows/ci.yml"
-          pulsar_paths="apps/pulsar packages package-lock.json .github/workflows/ci.yml"
-          voyager_paths="apps/voyager packages package-lock.json .github/workflows/ci.yml"
+          orbit_paths="apps/homefund packages package-lock.json .github/workflows/ci.yml"
+          pulsar_paths="apps/goallog packages package-lock.json .github/workflows/ci.yml"
+          voyager_paths="apps/wordbook packages package-lock.json .github/workflows/ci.yml"
           # Pull request: against its base. Push to `integracion`: against the
           # tip before it. Dispatch on a branch: against where it left
           # `integracion`. `main` (the deploy) and anything unresolvable run all.
@@ -251,7 +251,7 @@ jobs:
 
       # No database is reached: the build compiles and prerenders, and every route
       # that queries is dynamic. It is the compile that has to be proven here.
-      - run: npm run build -w apps/orbit
+      - run: npm run build -w apps/homefund
 
   # `next build` for pulsar runs nowhere else since it ships production-only,
   # same as orbit. Unlike `build-orbit` this runs on every pull request rather
@@ -293,9 +293,9 @@ jobs:
             exit 1
           fi
 
-      - run: npm run build -w apps/pulsar
+      - run: npm run build -w apps/goallog
 
-  # `apps/pulsar`'s own browser suite, against `next build && next start` —
+  # `apps/goallog`'s own browser suite, against `next build && next start` —
   # never `next dev`, for the reason `playwright.config.ts`'s own head gives.
   # Its own lane (8: local lanes are 1-5, orbit's CI lane is 9). The stack is
   # the runner's own, so no group serialises its runs.
@@ -332,17 +332,17 @@ jobs:
       # `--env-file=.env.local`, which the action writes.
       - uses: ./.github/actions/supabase-local
         with:
-          apps: pulsar
+          apps: goallog
       - run: npx playwright install --with-deps chromium
       - run: sudo apt-get install -y poppler-utils
 
-      - run: npm run build -w apps/pulsar
+      - run: npm run build -w apps/goallog
 
       # `--port` explicitly: the `start` script is a bare `next start`, which
       # defaults to 3000 — only `dev` carries `--port ${PORT:-3200}`.
       - name: Start the app and wait for it to answer
         run: |
-          npm run start -w apps/pulsar -- --port 3207 > /tmp/pulsar.log 2>&1 &
+          npm run start -w apps/goallog -- --port 3207 > /tmp/pulsar.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3207/; then
               echo "up after ${SECONDS}s"; exit 0
@@ -356,7 +356,7 @@ jobs:
       - name: Start the app with an unreachable database and wait for it to answer
         run: |
           DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:1/postgres \
-            npm run start -w apps/pulsar -- --port 3217 > /tmp/pulsar-down.log 2>&1 &
+            npm run start -w apps/goallog -- --port 3217 > /tmp/pulsar-down.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3217/entrar; then
               echo "up after ${SECONDS}s"; exit 0
@@ -366,15 +366,15 @@ jobs:
           echo "the down server never answered"; tail -50 /tmp/pulsar-down.log; exit 1
 
       # Same build, every `reading_lookups` read rejecting
-      # (`apps/pulsar/lib/evidence/fault-seam.ts`), for `fuente-caida.spec.ts`.
+      # (`apps/goallog/lib/evidence/fault-seam.ts`), for `fuente-caida.spec.ts`.
       # Never set in `build-pulsar`, `pulsar-checks` or on Vercel.
       - name: Start the app with an unreadable evidence source and wait for it to answer
         run: |
           PULSAR_FAULT_SEAM=reading_lookups \
-          PULSAR_MODEL_STUB=draft:${{ github.workspace }}/apps/pulsar/e2e/data/modelo-borrador.json \
-          PULSAR_CHAT_STUB=script:${{ github.workspace }}/apps/pulsar/e2e/data/chat-guion.json \
+          PULSAR_MODEL_STUB=draft:${{ github.workspace }}/apps/goallog/e2e/data/modelo-borrador.json \
+          PULSAR_CHAT_STUB=script:${{ github.workspace }}/apps/goallog/e2e/data/chat-guion.json \
           OPENAI_API_KEY=sk-stub \
-            npm run start -w apps/pulsar -- --port 3227 > /tmp/pulsar-fault.log 2>&1 &
+            npm run start -w apps/goallog -- --port 3227 > /tmp/pulsar-fault.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3227/entrar; then
               echo "up after ${SECONDS}s"; exit 0
@@ -391,14 +391,14 @@ jobs:
         env:
           PULSAR_DOWN_BASE_URL: http://localhost:3217
           PULSAR_FAULT_BASE_URL: http://localhost:3227
-        run: npm run check:e2e -w apps/pulsar -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
+        run: npm run check:e2e -w apps/goallog -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
 
       - name: Upload the blob report
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: pulsar-blob-${{ matrix.shard }}
-          path: apps/pulsar/blob-report
+          path: apps/goallog/blob-report
           retention-days: 3
 
       - name: Upload the server log
@@ -427,7 +427,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: pulsar-playwright-results-${{ matrix.shard }}
-          path: apps/pulsar/private/playwright-results
+          path: apps/goallog/private/playwright-results
 
   # One check name for the suite: red when any shard is, green when all are.
   # `always()` so a red shard still gets its report merged.
@@ -447,18 +447,18 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           pattern: pulsar-blob-*
-          path: apps/pulsar/all-blobs
+          path: apps/goallog/all-blobs
           merge-multiple: true
 
       - name: Merge the shards' reports
         run: npx playwright merge-reports --reporter html,list ./all-blobs
-        working-directory: apps/pulsar
+        working-directory: apps/goallog
 
       - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: pulsar-e2e-report
-          path: apps/pulsar/playwright-report
+          path: apps/goallog/playwright-report
 
       - name: Fail when a shard failed
         if: needs.pulsar-e2e.result != 'success'
@@ -493,32 +493,32 @@ jobs:
       # Orbit is there for `harness:token`.
       - uses: ./.github/actions/supabase-local
         with:
-          apps: pulsar orbit
+          apps: goallog homefund
 
       # Creates or refreshes lane 7's shared pair; idempotent.
-      - run: npm run harness:token -w apps/orbit
+      - run: npm run harness:token -w apps/homefund
 
-      - run: npm run check:e2e-static -w apps/pulsar
+      - run: npm run check:e2e-static -w apps/goallog
 
-      - run: npm run build -w apps/pulsar
+      - run: npm run build -w apps/goallog
 
       - name: Start the app and wait for it to answer
         run: |
           # `check:mcp` reads this log at `private/dev3206.log` and asserts an `[outbound]` line
           # that only this fetch hook writes.
-          mkdir -p apps/pulsar/private
+          mkdir -p apps/goallog/private
           NODE_OPTIONS='--import data:text/javascript,const%20f=fetch;globalThis.fetch=(i,o)=>{console.log(%22[outbound]%22,String(i.url??i));return%20f(i,o)}' \
-            npm run start -w apps/pulsar -- --port 3206 > apps/pulsar/private/dev3206.log 2>&1 &
+            npm run start -w apps/goallog -- --port 3206 > apps/goallog/private/dev3206.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3206/; then
               echo "up after ${SECONDS}s"; exit 0
             fi
             sleep 2
           done
-          echo "the server never answered"; tail -50 apps/pulsar/private/dev3206.log; exit 1
+          echo "the server never answered"; tail -50 apps/goallog/private/dev3206.log; exit 1
 
       - name: Run the four checks under one harness run
-        working-directory: apps/pulsar
+        working-directory: apps/goallog
         run: node --import tsx --env-file=.env.local scripts/harness/checks-run.ts
 
       # `route.ts` reads `private/session-7.json`, which `checks-run.ts` drops with its run;
@@ -526,15 +526,15 @@ jobs:
       - name: Run check:mcp
         if: ${{ !cancelled() }}
         run: |
-          npm run harness:mint-session -w apps/pulsar
-          npm run check:mcp -w apps/pulsar
+          npm run harness:mint-session -w apps/goallog
+          npm run check:mcp -w apps/goallog
 
       - name: Upload the server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: pulsar-checks-log
-          path: apps/pulsar/private/dev3206.log
+          path: apps/goallog/private/dev3206.log
 
   # HomeFund's three scripts against the local stack, none of them in any other
   # job. `db:check-rls` and `check:queries` open their own connection;
@@ -561,25 +561,25 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx next typegen
-        working-directory: apps/orbit
+        working-directory: apps/homefund
 
       - uses: ./.github/actions/supabase-local
         with:
-          apps: orbit
+          apps: homefund
 
-      - run: npm run harness:token -w apps/orbit
+      - run: npm run harness:token -w apps/homefund
 
       # Each check runs whatever the one before did, so a red names itself.
-      - run: npm run check:unit --if-present -w apps/orbit
-      - run: npm run db:check-rls -w apps/orbit
+      - run: npm run check:unit --if-present -w apps/homefund
+      - run: npm run db:check-rls -w apps/homefund
 
-      - run: npm run check:queries -w apps/orbit
+      - run: npm run check:queries -w apps/homefund
         if: ${{ !cancelled() }}
 
       - name: Start the dev server and wait for it to answer
         if: ${{ !cancelled() }}
         run: |
-          npm run dev -w apps/orbit > /tmp/next-dev.log 2>&1 &
+          npm run dev -w apps/homefund > /tmp/next-dev.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3000/es; then
               echo "up after ${SECONDS}s"; exit 0
@@ -588,7 +588,7 @@ jobs:
           done
           echo "the dev server never answered"; tail -50 /tmp/next-dev.log; exit 1
 
-      - run: npm run check:http -w apps/orbit
+      - run: npm run check:http -w apps/homefund
         if: ${{ !cancelled() }}
 
       - name: Upload the dev server log
@@ -625,22 +625,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx next typegen
-        working-directory: apps/orbit
+        working-directory: apps/homefund
 
       # The scripts read `.env.local` through `--env-file`, which has no fallback
       # to the process environment; the action writes it beside the app.
       - uses: ./.github/actions/supabase-local
         with:
-          apps: orbit
+          apps: homefund
 
       - run: npx playwright install --with-deps chromium
 
       # Lane 9's two identities and their token rows. Idempotent.
-      - run: npm run harness:token -w apps/orbit
+      - run: npm run harness:token -w apps/homefund
 
       - name: Start the dev server and wait for it to answer
         run: |
-          npm run dev -w apps/orbit > /tmp/next-dev.log 2>&1 &
+          npm run dev -w apps/homefund > /tmp/next-dev.log 2>&1 &
           # Curl rather than a `wait-on` install: nothing outside SPEC.md §4 is
           # installed. Dev compiles a route on its first hit, so the wait is for
           # the first page to render, not for the port to open.
@@ -652,7 +652,7 @@ jobs:
           done
           echo "the dev server never answered"; tail -50 /tmp/next-dev.log; exit 1
 
-      - run: npm run check:e2e -w apps/orbit
+      - run: npm run check:e2e -w apps/homefund
 
       # The server log is where a red spec is explained.
       - name: Upload the dev server log
@@ -667,9 +667,9 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: playwright-results
-          path: apps/orbit/private/playwright-results-9/
+          path: apps/homefund/private/playwright-results-9/
 
-  # `apps/voyager`'s own browser suite. It ran nowhere until 2026-09-08, and
+  # `apps/wordbook`'s own browser suite. It ran nowhere until 2026-09-08, and
   # that is how two seeded specs sat red on `main` unnoticed: they opened
   # `reading-log` pinned at version 1 after module 6 raised the store to 2.
   voyager-e2e-shard:
@@ -687,7 +687,7 @@ jobs:
       SHARD_TOTAL: 3
       VOYAGER_BASE_URL: http://localhost:3100
       # Arms `app/layout.tsx`'s test hook for this job's own build alone.
-      # `apps/voyager/vercel.json` names no such variable, so a Vercel build
+      # `apps/wordbook/vercel.json` names no such variable, so a Vercel build
       # never sets it and never inlines the branch it guards.
       VOYAGER_E2E_HOOKS: "1"
     steps:
@@ -698,20 +698,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx next typegen
-        working-directory: apps/voyager
+        working-directory: apps/wordbook
 
       # The build validates the five variables through `lib/env.ts`; the suite
       # itself reaches none of them.
       - uses: ./.github/actions/supabase-local
         with:
-          apps: voyager
+          apps: wordbook
 
       - run: npx playwright install --with-deps chromium
 
       # Production, not dev: the config says so, and module 22's counting
       # assertions need the single effect run production gives
       # (docs/TRAPS.md, "StrictMode doubles a Worker count").
-      - run: npm run build -w apps/voyager
+      - run: npm run build -w apps/wordbook
 
       # `--port` explicitly: the `start` script is a bare `next start`, which
       # defaults to 3000 — only `dev` carries `--port ${PORT:-3100}`. Without
@@ -719,7 +719,7 @@ jobs:
       # against a healthy app.
       - name: Start the app and wait for it to answer
         run: |
-          npm run start -w apps/voyager -- --port 3100 > /tmp/voyager.log 2>&1 &
+          npm run start -w apps/wordbook -- --port 3100 > /tmp/voyager.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3100/; then
               echo "up after ${SECONDS}s"; exit 0
@@ -729,14 +729,14 @@ jobs:
           echo "the server never answered"; tail -50 /tmp/voyager.log; exit 1
 
       - name: Run shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }}
-        run: npm run check:e2e -w apps/voyager -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
+        run: npm run check:e2e -w apps/wordbook -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
 
       - name: Upload the blob report
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: voyager-blob-${{ matrix.shard }}
-          path: apps/voyager/blob-report
+          path: apps/wordbook/blob-report
           retention-days: 3
 
       - name: Upload the server log
@@ -751,7 +751,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: voyager-playwright-results-${{ matrix.shard }}
-          path: apps/voyager/private/playwright-results
+          path: apps/wordbook/private/playwright-results
 
   # Red when any shard is, green when all are; skipped when the shards were.
   voyager-e2e:
@@ -770,18 +770,18 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           pattern: voyager-blob-*
-          path: apps/voyager/all-blobs
+          path: apps/wordbook/all-blobs
           merge-multiple: true
 
       - name: Merge the shards' reports
         run: npx playwright merge-reports --reporter html,list ./all-blobs
-        working-directory: apps/voyager
+        working-directory: apps/wordbook
 
       - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: voyager-e2e-report
-          path: apps/voyager/playwright-report
+          path: apps/wordbook/playwright-report
 
       - name: Fail when a shard failed
         if: needs.voyager-e2e-shard.result != 'success'

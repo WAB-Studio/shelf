@@ -18,3 +18,9 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-16	goallog-tren-final	critic-2	2	2	0	121618
 2026-10-16	goallog-tren-final	validator-fixes	1	0	1	83533
 2026-10-16	7 trenes	review				
+2026-10-16	goallog-rp131	validator	0	0	0	37367
+2026-10-16	goallog-rp131	mutator	7	7	0	50821
+2026-10-16	goallog-rp131	mutator-e2e	2	2	0	42620
+2026-10-16	renombre	validator	0	0	0	93716
+2026-10-16	renombre	mutator	15	15	0	66733
+2026-10-16	goallog-tren-final	ci	2	2	2	

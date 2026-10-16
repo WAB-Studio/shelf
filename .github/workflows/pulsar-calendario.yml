@@ -1,6 +1,6 @@
 # The calendar-sensitive specs (those that skip by weekday, day of the month or
 # month: modules 106, 107, 108, 135 and the later «parte» and «semana» ones),
-# once per pinned day. `PULSAR_CLOCK` (`apps/pulsar/lib/zone.ts`) pins the day
+# once per pinned day. `PULSAR_CLOCK` (`apps/goallog/lib/zone.ts`) pins the day
 # the server and the spec both read, so every branch runs each night, not
 # whichever weekday a push happens to meet. It runs on the
 # nightly schedule and on manual dispatch of this workflow alone, never from
@@ -90,15 +90,15 @@ jobs:
       # orbit is there for `harness:token`.
       - uses: ./.github/actions/supabase-local
         with:
-          apps: pulsar orbit
+          apps: goallog homefund
 
       - name: Land the lane's harness identities
-        run: npm run harness:token -w apps/orbit
+        run: npm run harness:token -w apps/homefund
 
       - run: npx playwright install --with-deps chromium
       - run: sudo apt-get install -y poppler-utils
 
-      - run: npm run build -w apps/pulsar
+      - run: npm run build -w apps/goallog
 
       # `--port` explicitly: the `start` script is a bare `next start`, which
       # defaults to 3000 — only `dev` carries `--port ${PORT:-3200}`.
@@ -108,7 +108,7 @@ jobs:
         env:
           PULSAR_CLOCK: ${{ matrix.clock }}
         run: |
-          npm run start -w apps/pulsar -- --port 3206 > /tmp/pulsar.log 2>&1 &
+          npm run start -w apps/goallog -- --port 3206 > /tmp/pulsar.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3206/; then
               echo "up after ${SECONDS}s"; exit 0
@@ -129,7 +129,7 @@ jobs:
         run: |
           specs="$SPECS"
           if [ -n "$PULSAR_CLOCK" ]; then specs="${specs//e2e\/sobrevivientes-la-critica.spec.ts/}"; fi
-          npm run check:e2e -w apps/pulsar -- $specs
+          npm run check:e2e -w apps/goallog -- $specs
 
       - name: Upload the server log
         if: always()
@@ -143,7 +143,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: pulsar-calendario-playwright-results-${{ matrix.name }}
-          path: apps/pulsar/private/playwright-results
+          path: apps/goallog/private/playwright-results
 
       - name: Open an issue for the failed run
         if: failure() && github.event_name == 'schedule'

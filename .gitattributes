@@ -13,4 +13,4 @@
 
 # The dictionary asset and its manifest are generated, not authored: never
 # diff them, and never let a merge treat them as prose.
-apps/voyager/public/dictionary/*.json -diff linguist-generated
+apps/wordbook/public/dictionary/*.json -diff linguist-generated

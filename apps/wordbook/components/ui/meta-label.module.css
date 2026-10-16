@@ -1,0 +1,9 @@
+/* docs/wordbook/DESIGN.md "Metadata labels": PosLabel's 11px / 600 / 0.12em /
+   uppercase shape, in muted. Doubled to outrank `.rt-Text:where(.rt-r-size-N)`. */
+.label.label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rl-muted);
+}

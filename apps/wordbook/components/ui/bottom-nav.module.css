@@ -1,0 +1,115 @@
+/* docs/wordbook/DESIGN.md "Viewport": a hairline above the ground, fixed under
+   every screen at every width so Registro is one tap away, not two behind
+   Fuente. Mirrors page.module.css's own ground/hairline reads.
+   `--rl-keyboard-inset` (bottom-nav.tsx) rides the bar above an open
+   keyboard on the browser `interactiveWidget` in layout.tsx does not reach;
+   unset, it resolves to `0px` and this reads exactly as it did before. */
+.nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: var(--rl-keyboard-inset, 0px);
+  z-index: 1;
+  display: flex;
+  background: var(--rl-ground);
+  border-top: 1px solid var(--rl-line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Centres the row above ~660px under the same column page.module.css caps
+   the reading screens to, so the bar lines up with what sits above it. */
+@media (min-width: 660px) {
+  .nav {
+    max-width: 620px;
+    margin-inline: auto;
+  }
+}
+
+/* Each section takes an equal share of the row; the 44px floor itself comes
+   from TapTarget, this only centres it and carries the state colour.
+   Doubled to outrank `.rt-Link:where(:any-link, button)`. */
+.item.item {
+  flex: 1 1 0;
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.item.item.selected {
+  color: var(--rl-accent);
+}
+
+.item.item.unselected {
+  color: var(--rl-muted);
+}
+
+/* docs/wordbook/DESIGN.md "Viewport": 11px / 600 / 0.12em / uppercase, the
+   same shape as PosLabel and MetaLabel but sized to the glyph above it. */
+.label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  /* The trailing letter-spacing after the last glyph rounds into the flex
+     item's own shrink-to-fit width often enough to wrap "REGISTRO" onto a
+     second line; the label is two words at most and never needs to. */
+  white-space: nowrap;
+  /* Hinted advances round to whole pixels at 11px and widen the last glyph
+     by ~1.6px; unhinted advances keep the designed 0.12em rhythm. */
+  text-rendering: geometricPrecision;
+}
+
+/* The sidebar-only heading and the sidebar-only foot reserve: both collapse
+   to nothing on the bar, below 1024px. */
+.title {
+  display: none;
+}
+
+.spacer {
+  display: none;
+}
+
+/* docs/wordbook/DESIGN.md "Viewport": the bar becomes a sidebar at 1024px, a
+   second breakpoint distinct from the ~660px the reading column centres
+   above. Same `<nav>`, same items, same `aria-current` — only the box
+   changes shape. */
+@media (min-width: 1024px) {
+  .nav {
+    inset-inline: 0 auto;
+    inset-block: 0;
+    width: 240px;
+    max-width: none;
+    margin-inline: 0;
+    flex-direction: column;
+    align-items: stretch;
+    border-top: none;
+    border-inline-end: 1px solid var(--rl-line);
+    padding-bottom: 0;
+    padding-block: var(--space-6);
+  }
+
+  .title.title {
+    display: block;
+    padding-inline: 18px;
+    margin: 0 0 var(--space-6) 0;
+    font-size: 21px;
+  }
+
+  /* Doubled to outrank the mobile row's own `.item.item` above. */
+  .item.item {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    min-height: 44px;
+    padding-inline-start: 18px;
+    border-inline-start: 2px solid transparent;
+  }
+
+  .item.item.selected {
+    border-inline-start-color: var(--rl-accent);
+  }
+
+  .spacer {
+    display: block;
+    flex: 1 1 auto;
+  }
+}
