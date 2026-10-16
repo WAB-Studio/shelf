@@ -14,7 +14,7 @@ import { todayInBogota } from "@/lib/dates";
 import { TIME_ZONE } from "@/lib/locales";
 
 // Where a cash withdrawal lands and what it may draw from (RF-68). The target is
-// the sole `subtype = 'efectivo'` account the mode points at; `sourceAccounts`
+// the sole `subtype = 'cash'` account the mode points at; `sourceAccounts`
 // are the non-cash asset accounts the caller may write, i.e. what a withdrawal
 // takes money out of. `reason` names why a target is missing, so the caller can
 // decide to create-on-demand — a write path this read never takes.
@@ -64,7 +64,7 @@ const accountRowColumns = {
 
 /**
  * Where the caller's cash sits, as a predicate: under 'shared' it is the group's
- * one `efectivo` account, under every other mode — per-member, or personal-only
+ * one `cash` account, under every other mode — per-member, or personal-only
  * (RF-55) — it is their own, which never resolves to another member's. Mode and
  * membership resolve inside the statement, so naming the scope costs no read.
  */
@@ -95,7 +95,7 @@ export async function resolveWithdrawalTarget(): Promise<WithdrawalTarget> {
   return { targetCashAccountId, sourceAccounts };
 }
 
-// The one live `efectivo` account inside the given scope, RLS-scoped on top. A
+// The one live `cash` account inside the given scope, RLS-scoped on top. A
 // stable order keeps the pick deterministic if a scope ever holds more than one.
 async function findCashAccountId(scope: SQL): Promise<string | null> {
   return withUserDb((tx) => findCashAccountIdTx(tx, scope));
@@ -152,7 +152,7 @@ export async function withdrawCash({
     let targetCashAccountId = await findCashAccountIdTx(tx, targetScope);
     let createdCashAccount = false;
 
-    // No cash under the caller's scope: create their personal `efectivo` account
+    // No cash under the caller's scope: create their personal `cash` account
     // and draw into it. 'shared' always has the group's cash, so this only ever
     // fires for a per-member or personal caller (RF-55, RF-56).
     if (targetCashAccountId === null) {
@@ -193,7 +193,7 @@ export async function withdrawCash({
 
 // The caller's writable, live, non-cash asset accounts — what a withdrawal draws
 // FROM. Writable is own-or-shared, mirroring the accounts INSERT policy; the
-// `efectivo` subtype is excluded so cash never draws from cash.
+// `cash` subtype is excluded so cash never draws from cash.
 async function listWithdrawalSources(userId: string): Promise<AccountRow[]> {
   return withUserDb(async (tx) => {
     const rows = await tx

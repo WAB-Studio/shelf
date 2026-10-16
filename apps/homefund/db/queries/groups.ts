@@ -146,7 +146,7 @@ export async function updateGroupSettings({
   });
 }
 
-// Creates the group's `efectivo` account only when it has none, seeded at zero
+// Creates the group's `cash` account only when it has none, seeded at zero
 // like the one `createGroup` writes. The lookup is what keeps a group that
 // already has its cash from getting a second one. Settles where the group
 // does (RF-121): the currency just written in the same statement above.
