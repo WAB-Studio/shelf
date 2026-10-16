@@ -3,7 +3,7 @@ import { expect, test } from "./fixtures";
 // The one cache `sw.js` is allowed to hold. A name that drifts from the
 // worker's own is a spec that measures nothing, so it is read back below
 // from `caches.keys()` rather than only asserted against.
-const CACHE_NAME = "reading-shell-v12";
+const CACHE_NAME = "reading-shell-v13";
 
 // A chunk no build of this app will ever name, standing in for what a
 // previous deploy left behind: `cacheFirst` writes every `/_next/static/`
