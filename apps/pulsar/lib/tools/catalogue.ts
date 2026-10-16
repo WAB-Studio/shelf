@@ -131,7 +131,7 @@ export const writeTools: readonly ToolSpec[] = [
     },
     (input) => declareFact(input as Parameters<typeof declareFact>[0]),
   ),
-  write("complete_task", { one_off_id: id }, (input) =>
+  write("complete_task", { one_off_id: id, day: day.optional() }, (input) =>
     completeOneOff(input as Parameters<typeof completeOneOff>[0]),
   ),
   write(

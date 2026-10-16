@@ -135,21 +135,25 @@ export function requireQuantityFor(satisfaction: "tap" | "quantity" | "evidence"
 
 /**
  * A caller-supplied day never names a moment its subject could not have had
- * (RP-06): before its goal opened, before a commitment existed, after it was retired, or at all on a
- * one-off — a one-off is done on the day it is done, never redated. Read the
+ * (RP-06): before its goal opened, before a commitment existed, after it was retired; a
+ * one-off is refused a day before it was made or before its own day (RP-129). Read the
  * subject's own civil days first, never guessed from the payload, then run
  * this refinement on the very schema the action used.
  */
 export function requireDayForSubject(
   subject:
     | { kind: "commitment"; openedDay: string; createdDay: string; retiredDay: string | null }
-    | { kind: "oneOff" },
+    | { kind: "oneOff"; createdDay: string; ownDay: string | null },
 ) {
   return function refine(data: { day?: string | null }, ctx: z.RefinementCtx) {
     if (data.day == null) return;
 
     if (subject.kind === "oneOff") {
-      ctx.addIssue({ code: "custom", message: "day.errors.dayOnOneOff", path: ["day"] });
+      if (data.day < subject.createdDay) {
+        ctx.addIssue({ code: "custom", message: "day.errors.dayBeforeOneOff", path: ["day"] });
+      } else if (subject.ownDay != null && data.day < subject.ownDay) {
+        ctx.addIssue({ code: "custom", message: "day.errors.dayBeforeOneOffDay", path: ["day"] });
+      }
       return;
     }
 

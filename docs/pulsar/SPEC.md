@@ -63,7 +63,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RP-05** — A declared fact can be undone. A derived one cannot: it belongs to the app that recorded it.
 - [x] **RP-06** — A fact can be written for a day already past. It keeps the day it happened and the moment it was written, and the two are never shown as one.
   - Widened 2026-09-28, unticked, by the user's decisions after the critic: a past day lists only what existed that day, and its oldest reachable day (seven back) says why there is no step further.
-- [ ] **RP-129** — A task can be marked done on a past day, up to seven days back, the reach of a fact (RP-06): it keeps the day it was done on and counts there. Decided by the user 2026-10-15.
+- [ ] **RP-129** — A task can be marked done on a past day, up to seven days back, the reach of a fact (RP-06): it keeps the day it was done on. It shows on that day's screen among what was done, and counts there: in that day's week and in its month's tasks done (RP-73, RP-52); its estimate adds no hours (RP-128). Decided by the user 2026-10-15.
 
 #### The evidence another app leaves
 

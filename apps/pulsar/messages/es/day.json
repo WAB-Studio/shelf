@@ -68,6 +68,7 @@
   },
   "doneOneOffs": {
     "title": "Hechas hoy",
+    "titlePast": "Hechas ese día",
     "undoLabel": "Deshacer: {name}"
   },
   "choice": {
@@ -176,6 +177,7 @@
     "dayTooOld": "Eso ya pasó hace más de una semana.",
     "dayBeforeCommitment": "Ese día es anterior a cuando empezó este compromiso.",
     "dayAfterRetired": "Ese día es posterior a cuando se retiró este compromiso.",
-    "dayOnOneOff": "Una suelta se hace el día que se hace, no otro."
+    "dayBeforeOneOff": "Esa tarea todavía no existía ese día.",
+    "dayBeforeOneOffDay": "Esa tarea era para un día después."
   }
 }
