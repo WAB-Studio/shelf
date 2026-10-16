@@ -14,7 +14,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 remote_url() {
   local f
-  for f in "${SCHEMA_DIFF_ENV:-}" "$ROOT/apps/orbit/.env.local" "$ROOT/apps/pulsar/.env.local" "$ROOT/apps/voyager/.env.local"; do
+  for f in "${SCHEMA_DIFF_ENV:-}" "$ROOT/apps/homefund/.env.local" "$ROOT/apps/goallog/.env.local" "$ROOT/apps/wordbook/.env.local"; do
     [ -n "$f" ] && [ -f "$f" ] || continue
     local v
     v="$(grep '^MIGRATION_DATABASE_URL=' "$f" | head -1 | cut -d= -f2-)"
