@@ -5,8 +5,7 @@ import { notFound } from "next/navigation";
 
 import { MembersScreen } from "@/components/members/members-screen";
 import { Page } from "@/components/ui";
-import { listMembers } from "@/db/queries/group-members";
-import { getUserGroup, getUserGroupRole } from "@/db/queries/groups";
+import { getMembersScreenData } from "@/db/queries/group-members";
 import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
 
@@ -31,23 +30,20 @@ export default async function MembersPage(
   const { tab } = await props.searchParams;
   const archived = tab === "archived";
 
-  const [user, group, role] = await Promise.all([
+  const [user, data] = await Promise.all([
     requireUser(),
-    getUserGroup(),
-    getUserGroupRole(),
+    getMembersScreenData({ archived }),
   ]);
   // Members live inside a group; a personal-only caller has none to list (RF-55).
-  if (!group) notFound();
-
-  const members = await listMembers(group.id, { archived });
+  if (!data) notFound();
 
   return (
     <Page>
       <MembersScreen
-        members={members}
+        members={data.members}
         currentUserId={user.id}
         archived={archived}
-        isLeader={role === "leader"}
+        isLeader={data.isLeader}
       />
     </Page>
   );

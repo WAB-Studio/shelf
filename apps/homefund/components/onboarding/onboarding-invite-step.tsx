@@ -7,15 +7,16 @@ import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
+import type { z } from "zod";
 
-import { createMemberAction } from "@/app/actions/members";
+import { inviteMemberByEmailAction } from "@/app/actions/members";
 import { MemberFormDialog } from "@/components/members/member-form-dialog";
 import {
   Badge,
   Box,
   Button,
   Card,
+  Disc,
   Field,
   FieldControl,
   FieldMessage,
@@ -28,21 +29,11 @@ import {
 import type { MemberRow } from "@/db/queries/group-members";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { useActionErrorToast } from "@/lib/use-action-toast";
+import { inviteByEmailSchema } from "@/lib/validation/member";
 
-// The email is the only field a person types; the member's provisional name is
-// derived from it on submit (renameable later), so the form validates just the
-// address against the same email rule the server re-runs (RF-07).
-const inviteFormSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .min(1, { error: "members.errors.emailInvalid" })
-    .pipe(z.email({ error: "members.errors.emailInvalid" })),
-});
+type InviteFormValues = z.infer<typeof inviteByEmailSchema>;
 
-type InviteFormValues = z.infer<typeof inviteFormSchema>;
-
-// The roster is the server's `members` prop: `createMemberAction` calls
+// The roster is the server's `members` prop: `inviteMemberByEmailAction` calls
 // `refresh()`, so a new member re-renders here without any client copy.
 export function OnboardingInviteStep({
   members,
@@ -103,11 +94,11 @@ function InviteByEmailForm() {
   const tMembers = useTranslations("members");
 
   const form = useForm<InviteFormValues>({
-    resolver: zodResolver(inviteFormSchema),
+    resolver: zodResolver(inviteByEmailSchema),
     defaultValues: { email: "" },
   });
 
-  const { execute, isPending } = useAction(createMemberAction, {
+  const { execute, isPending } = useAction(inviteMemberByEmailAction, {
     onSuccess({ data }) {
       toast.success(tMembers("created"));
       // A failed send still lands the member as pending; surface it, don't fail.
@@ -118,8 +109,8 @@ function InviteByEmailForm() {
   });
 
   function onSubmit({ email }: InviteFormValues) {
-    // Provisional name = the invited address until they rename it in settings.
-    execute({ name: email, email });
+    // The server names the member from the address.
+    execute({ email });
   }
 
   return (
@@ -174,25 +165,20 @@ function RosterCard({
   return (
     <Card>
       <Flex align="center" gap="3">
-        <Flex
-          align="center"
-          justify="center"
-          flexShrink="0"
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 999,
-            fontSize: 15,
-            fontWeight: 700,
-            backgroundColor: "var(--accent-9)",
-            color: "var(--accent-contrast)",
-          }}
+        <Disc
+          size={36}
+          surface="var(--accent-9)"
+          ink="var(--accent-contrast)"
+          fontSize={15}
+          fontWeight={700}
         >
           {member.name.charAt(0).toUpperCase()}
-        </Flex>
-        <Text weight="medium" truncate style={{ flexGrow: 1, minWidth: 0 }}>
-          {member.name}
-        </Text>
+        </Disc>
+        <Box flexGrow="1" minWidth="0">
+          <Text as="div" weight="medium" truncate>
+            {member.name}
+          </Text>
+        </Box>
         <Flex align="center" gap="2" flexShrink="0">
           {member.role === "leader" && (
             <Badge color="blue">{t("ownerBadge")}</Badge>

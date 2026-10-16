@@ -6,8 +6,7 @@ import { notFound } from "next/navigation";
 import { OnboardingInviteStep } from "@/components/onboarding/onboarding-invite-step";
 import { OnboardingStepper } from "@/components/onboarding/onboarding-stepper";
 import { Flex, Heading, Text } from "@/components/ui";
-import { listMembers } from "@/db/queries/group-members";
-import { getUserGroup } from "@/db/queries/groups";
+import { getMembersScreenData } from "@/db/queries/group-members";
 import { requireUser } from "@/db/session";
 import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
@@ -33,15 +32,14 @@ export default async function OnboardingInvitePage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const [user, group] = await Promise.all([requireUser(), getUserGroup()]);
-
-  // The final step presumes the fund from step one; without it the flow restarts.
-  if (!group) return redirect({ href: "/onboarding", locale });
-
-  const [members, t] = await Promise.all([
-    listMembers(group.id, { archived: false }),
+  const [user, data, t] = await Promise.all([
+    requireUser(),
+    getMembersScreenData({ archived: false }),
     getTranslations("onboarding.inviteStep"),
   ]);
+
+  // The final step presumes the fund from step one; without it the flow restarts.
+  if (!data) return redirect({ href: "/onboarding", locale });
 
   return (
     <Flex asChild direction="column" gap="5">
@@ -51,7 +49,7 @@ export default async function OnboardingInvitePage(
           <Heading size="7">{t("title")}</Heading>
           <Text color="gray">{t("subtitle")}</Text>
         </Flex>
-        <OnboardingInviteStep members={members} currentUserId={user.id} />
+        <OnboardingInviteStep members={data.members} currentUserId={user.id} />
       </main>
     </Flex>
   );
