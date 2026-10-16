@@ -68,10 +68,21 @@
     "noMeasure": "Esta meta todavía no tiene cifra."
   },
   "commitments": {
+    "changeCadence": "Cambiar la frecuencia",
+    "cadenceTitle": "¿Cada cuánto?",
+    "delete": "Borrar el compromiso",
+    "deleteBody": "Nadie lo ha hecho todavía: se borra sin dejar rastro. Retirarlo, en cambio, lo deja en la lista.",
+    "deleteConfirm": "Borrarlo",
     "retired": "retirado",
     "add": "Añadir un compromiso"
   },
   "phases": {
+    "editTitle": "Cambiar la fase",
+    "save": "Guardar",
+    "delete": "Borrar la fase",
+    "deleteBody": "Se borra la fase. Los días hechos en esas semanas siguen ahí.",
+    "deleteConfirm": "Borrarla",
+    "keep": "Dejarla como está",
     "add": "Añadir una fase"
   },
   "cadence": {
@@ -136,7 +147,17 @@
     "monthTasks": "{month} · {done} de {total} tareas",
     "archivedOnShort": "archivada el {date}"
   },
+  "delete": {
+    "action": "Borrar la meta",
+    "body": "Se borra «{goal}» con sus fases, compromisos y tareas. No tiene hechos: nada de lo vivido se pierde.",
+    "confirm": "Borrarla",
+    "keep": "Dejarla como está"
+  },
   "measure": {
+    "change": "Cambiar la medida",
+    "remove": "Quitar la medida",
+    "removeBody": "Deja de medir.{rhythm, select, yes { Se quita también su ritmo{months, plural, =0 {} one { y el monto de # mes} other { y los montos de # meses}}.} other {{months, plural, =0 {} one { Se quita el monto de # mes.} other { Se quitan los montos de # meses.}}}}",
+    "unitChangeBody": "Cambiar la unidad quita el ritmo y los montos de los meses.",
     "offer": "Ponerle medida",
     "title": "¿Qué mide?",
     "nameLabel": "qué cuenta",

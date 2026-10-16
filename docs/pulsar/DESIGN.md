@@ -1768,3 +1768,16 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
   sheet.** Its name, measure line and figures lead the table. Revokes the flow of decision (3) of 2026-10-10 (train-5
   critic) and «a table of 15 printed rows or more flows» (train-6 critic). Accepted: a blank at the foot of the sheet
   before. Taken by the user 2026-10-15.
+
+## Decisions of 2026-10-15, answers to the last slice's plan, by the user
+
+- **The AI keeps a set measure fixed;** the person changes or removes a measure no fact feeds. Retires RP-117 for RP-134.
+- **A loose habit no fact names changes its cadence.** Retires RP-104 for RP-135.
+- **A cadence or a measure facts depend on never changes:** the person retires it and opens another.
+- **A goal with goals inside is not deleted** until they are moved out or deleted.
+- **A past day lists the dated tasks it owed and the tasks done on it;** month tasks stay on Hoy.
+- **An import merges and never removes:** open goals only, matched by name; two goals of one name are not updated.
+- **Sign-ups stay on in Supabase Auth** until WordBook's and HomeFund's lists are built. Nothing to code.
+- **GoalLog's sign-in route accepts `code` and still `token_hash`;** RP-131 stays unticked until the email template moves.
+- **A stranger reads «Este correo no tiene invitación a GoalLog.»**
+- **The allowed list seeds everyone who owns a GoalLog row;** new people enter by `npm run allow-email` plus a dashboard invite.

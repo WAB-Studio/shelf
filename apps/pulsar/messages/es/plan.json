@@ -62,6 +62,15 @@
     "cancel": "Dejarla abierta"
   },
   "errors": {
+    "phaseNotFound": "Esa fase ya no está.",
+    "commitmentNotFound": "Ese compromiso ya no está.",
+    "commitmentHasFacts": "Ya hay días hechos con este compromiso: se retira, no se borra.",
+    "cadenceHasFacts": "Ya hay días hechos con esta frecuencia: retíralo y abre otro.",
+    "commitmentRetired": "Este compromiso ya está retirado.",
+    "goalHasFacts": "Esta meta ya tiene hechos: se archiva, no se borra.",
+    "goalHoldsGoals": "Tiene metas dentro: sácalas o bórralas primero.",
+    "measureFed": "Su medida ya suma hechos: no cambia.",
+    "noMeasure": "Esta meta no mide nada.",
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "goalNotFound": "Esa meta ya no existe.",
     "measureKept": "Esa meta ya mide {name}. La medida puesta no cambia.",

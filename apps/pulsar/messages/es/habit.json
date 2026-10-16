@@ -1,4 +1,9 @@
 {
+  "changeCadence": "Cambiar la frecuencia",
+  "delete": "Borrar el hábito",
+  "deleteBody": "Nadie lo ha hecho todavía: se borra sin dejar rastro. Retirarlo, en cambio, lo deja en «Retirados».",
+  "deleteConfirm": "Borrarlo",
+  "keep": "Dejarlo como está",
   "title": "Hábito",
   "overline": "hábito · desde el {date}",
   "retiredOn": "retirado el {date}",
