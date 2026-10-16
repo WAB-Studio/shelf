@@ -10,10 +10,11 @@ import {
 } from "@/components/ui";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
+import type { MovementTypeValue } from "@/lib/validation/transaction";
 
 // The type filter's value, mirrored one-to-one onto the `?type=` query and, on
 // the server, onto the movement's generated kind (RF-19, RF-23).
-export type MovementType = "all" | "expense" | "income" | "transfer";
+export type MovementType = MovementTypeValue;
 
 export type MovementsFilters = {
   type: MovementType;

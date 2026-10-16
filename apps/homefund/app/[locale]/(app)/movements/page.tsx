@@ -9,7 +9,7 @@ import { getRecurringRuleName } from "@/db/queries/recurring-rules";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { getTransactionTotals, listTransactions } from "@/db/queries/transactions";
 import type { TransactionListFilters } from "@/db/queries/transactions";
-import { movementFiltersSchema } from "@/lib/validation/transaction";
+import { movementFiltersSchema, movementTypeFilter } from "@/lib/validation/transaction";
 import { routing } from "@/i18n/routing";
 
 // Server-side ceiling: the screen pages the rows on the client but counts and
@@ -38,11 +38,11 @@ export default async function MovementsPage(
 
   const parsed = movementFiltersSchema.parse(await props.searchParams);
 
-  // The type chip maps to the generated `kind`; "all" drops the predicate so
-  // the list carries every kind (RF-23). A transfer is a kind of its own, so
-  // the expense and income chips can never surface it (RF-19).
+  // The type chip maps to the generated `kind`, or to the adjustments flag; "all"
+  // drops the predicate so the list carries every kind (RF-23, RF-138). A transfer
+  // is a kind of its own, so the expense and income chips can never surface it (RF-19).
   const filters: TransactionListFilters = {
-    kind: parsed.type === "all" ? undefined : parsed.type,
+    ...movementTypeFilter(parsed.type),
     from: parsed.from,
     to: parsed.to,
     memberUserId: parsed.member,
