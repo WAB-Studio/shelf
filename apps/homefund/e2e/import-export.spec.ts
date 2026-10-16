@@ -432,8 +432,9 @@ test.describe("import resolves a category by its account's scope", () => {
     const { groupId } = await seedGroup();
     await asHarnessUser(async (tx) => {
       await tx`
-        insert into accounts (id, group_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-        values (${m.fundAccount}, ${groupId}, ${FUND_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
+        insert into accounts (
+          id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${m.fundAccount}, ${groupId}, true, ${FUND_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
       for (const [id, name, kind, owner] of [
         [m.mercadoOwn, MERCADO, "expense", "own"],
         [m.mercadoFund, MERCADO, "expense", "fund"],
