@@ -25,6 +25,7 @@
     "check:decoration": "node --import tsx --env-file=.env.local scripts/check-decoration.ts",
     "check:grants": "node --import tsx --env-file=.env.local scripts/check-grants.ts",
     "check:sign-in-budget": "node --import tsx --env-file=.env.local scripts/check-sign-in-budget.ts",
+    "allow-email": "node --import tsx --env-file=.env.local scripts/allow-email.ts",
     "check:allow-email": "node --import tsx --env-file=.env.local scripts/check-allow-email.ts",
     "check:admission": "node --import tsx --env-file=.env.local scripts/check-admission.ts",
     "check:thinness": "node --import tsx --env-file=.env.local scripts/check-thinness.ts",
