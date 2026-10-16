@@ -50,10 +50,10 @@ async function fetchOrFail(input: string, signal: AbortSignal | undefined, reaso
     response = await fetch(input, { signal });
   } catch (error) {
     if (isAbort(error)) throw error;
-    throw fail("network", `No se pudo conectar para descargar «${input}».`);
+    throw fail("network", `Could not connect to download "${input}".`);
   }
   if (!response.ok) {
-    throw fail(reason, `«${input}» respondió con estado ${response.status}.`);
+    throw fail(reason, `"${input}" answered with status ${response.status}.`);
   }
   return response;
 }
@@ -70,17 +70,17 @@ export async function install(options: {
     manifestJson = await manifestResponse.json();
   } catch (error) {
     if (isAbort(error)) throw error;
-    throw fail("manifest", "El manifiesto del diccionario no es JSON válido.");
+    throw fail("manifest", "The dictionary manifest is not valid JSON.");
   }
   const parsed = manifestSchema.safeParse(manifestJson);
   if (!parsed.success) {
-    throw fail("manifest", "El manifiesto del diccionario no tiene la forma esperada.");
+    throw fail("manifest", "The dictionary manifest does not have the expected shape.");
   }
   const manifest = parsed.data;
 
   const assetResponse = await fetchOrFail(manifest.asset.path, signal, "network");
   if (!assetResponse.body) {
-    throw fail("network", "La respuesta del diccionario no trae contenido.");
+    throw fail("network", "The dictionary response has no body.");
   }
 
   // The server answers this asset gzipped and chunked, so `content-length`
@@ -103,13 +103,13 @@ export async function install(options: {
   }
 
   if (received !== manifest.asset.bytes) {
-    throw fail("integrity", "El diccionario descargado no tiene el tamaño esperado.");
+    throw fail("integrity", "The downloaded dictionary is not the expected size.");
   }
 
   const bytes = concat(chunks, received);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   if (toHex(digest) !== manifest.asset.sha256) {
-    throw fail("integrity", "El diccionario descargado no coincide con su huella.");
+    throw fail("integrity", "The downloaded dictionary does not match its hash.");
   }
 
   const payloadText = new TextDecoder().decode(bytes);
@@ -117,17 +117,17 @@ export async function install(options: {
   try {
     payloadJson = JSON.parse(payloadText);
   } catch {
-    throw fail("integrity", "El diccionario descargado no es JSON válido.");
+    throw fail("integrity", "The downloaded dictionary is not valid JSON.");
   }
   const payload = payloadJson as DictionaryPayload;
   if (typeof payload !== "object" || payload === null || payload.version !== PAYLOAD_VERSION) {
-    throw fail("integrity", "La versión del diccionario descargado no es compatible.");
+    throw fail("integrity", "The downloaded dictionary version is not supported.");
   }
 
   try {
     await writeInstalled(manifest, payloadText);
   } catch {
-    throw fail("storage", "No se pudo guardar el diccionario en el dispositivo.");
+    throw fail("storage", "Could not save the dictionary on the device.");
   }
 
   return { manifest, payload };

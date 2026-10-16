@@ -1,0 +1,187 @@
+supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322
+
+> wordbook@0.1.0 check:e2e
+> node ../../node_modules/@playwright/test/cli.js test e2e/decoracion-reintento.spec.ts e2e/word.spec.ts e2e/palabra-de-la-red.spec.ts e2e/palabra-flaca.spec.ts e2e/forma-primero.spec.ts e2e/sin-entrada.spec.ts e2e/install.spec.ts e2e/sin-red-una-visita.spec.ts e2e/frase-notas.spec.ts
+
+
+Running 108 tests using 2 workers
+
+  ✓    1 [mobile] › e2e/forma-primero.spec.ts:67:5 › RL-47: swishing leads with its own form, swish sits under the 2px rule (1.9s)
+  ✓    2 [mobile] › e2e/decoracion-reintento.spec.ts:59:5 › pending: the decoration's line shows while the text request is held open (2.5s)
+  ✓    3 [mobile] › e2e/forma-primero.spec.ts:91:5 › RL-47 leaves the exact branch alone but gives its offered lemma a voice control too (1.5s)
+  ✓    5 [mobile] › e2e/forma-primero.spec.ts:117:5 › RL-47 keeps the bed clause: bed answers alone, reading still leads over read (1.7s)
+  ✓    6 [mobile] › e2e/forma-primero.spec.ts:152:5 › RL-26: snuffed's form-only answer gets a voice control, and it fires (1.4s)
+  ✓    7 [mobile] › e2e/forma-primero.spec.ts:183:5 › variant="compact" draws neither branch's network block (1.3s)
+  ✓    8 [mobile] › e2e/forma-primero.spec.ts:207:5 › no real request to /api/word/* is left behind (2.4s)
+  ✘    4 [mobile] › e2e/decoracion-reintento.spec.ts:75:5 › an aborted text request is asked again the next time the word is looked up (9.8s)
+  ✓    9 [mobile] › e2e/frase-notas.spec.ts:66:5 › the translation paints whole before its notes ever answer (3.4s)
+  ✓   11 [mobile] › e2e/frase-notas.spec.ts:96:5 › changing the phrase while its notes are in flight never paints the old phrase's notes (4.7s)
+  ✓   12 [mobile] › e2e/frase-notas.spec.ts:130:5 › a phrase whose notes answer 204 reads exactly as the screen did before RL-46 (2.7s)
+  ✘   10 [mobile] › e2e/decoracion-reintento.spec.ts:97:5 › a 503 is asked again: first 503, then 200, and the example draws (9.9s)
+  ✓   13 [mobile] › e2e/frase-notas.spec.ts:154:5 › a keystroke mid-phrase raises no request to /api/phrase/notes (2.5s)
+  ✓   14 [mobile] › e2e/decoracion-reintento.spec.ts:116:5 › a 204 is not asked again: umbrella, apple, umbrella costs one request for umbrella (4.3s)
+  ✓   15 [mobile] › e2e/frase-notas.spec.ts:238:5 › a phrase typed key by key is translated once and noted once (4.8s)
+  ✓   16 [mobile] › e2e/decoracion-reintento.spec.ts:131:5 › a 200 is not asked again: umbrella, apple, umbrella costs one request for umbrella (3.8s)
+  ✓   17 [mobile] › e2e/frase-notas.spec.ts:255:5 › typing after a translation raises no notes request until the next translation lands (4.2s)
+  ✓   18 [mobile] › e2e/decoracion-reintento.spec.ts:151:5 › an unlisted word whose request was aborted is asked again after another word (3.0s)
+  ✓   20 [mobile] › e2e/install.spec.ts:15:5 › an interrupted install leaves nothing behind, and a whole one is never fetched twice (2.2s)
+  ✓   19 [mobile] › e2e/frase-notas.spec.ts:281:5 › returning to a phrase already translated and noted raises no request (4.2s)
+  ✓   21 [mobile] › e2e/palabra-de-la-red.spec.ts:54:5 › coccidiosis: the network block draws under the miss line, 200 (1.7s)
+  ✓   23 [mobile] › e2e/palabra-de-la-red.spec.ts:77:5 › whereat: the correction offer and the network block draw together (1.8s)
+  ✓   24 [mobile] › e2e/palabra-de-la-red.spec.ts:95:5 › ru: the suggestion list holds, and no request reaches /api/word/unlisted (2.0s)
+  ✓   25 [mobile] › e2e/palabra-de-la-red.spec.ts:120:5 › coccidiosis: 204 draws today's screen plus one line, and nothing else (1.8s)
+  ✓   26 [mobile] › e2e/palabra-flaca.spec.ts:60:5 › bed's dictionary senses draw unchanged whether the network's translations arrive or not, and the network's own lines sit marked underneath them (3.3s)
+  ✓   27 [mobile] › e2e/palabra-flaca.spec.ts:103:5 › a thin word with an empty translations array draws no network block, same as null (1.9s)
+requests while offline and typing "hello world", static assets excluded: 0
+  ✓   28 [mobile] › e2e/sin-entrada.spec.ts:46:5 › a two-token miss draws both headwords, offline, with no request (2.3s)
+  ✓   29 [mobile] › e2e/sin-entrada.spec.ts:79:5 › a two-token miss where the dictionary lacks one word draws that word's own heading and its own miss, and the other's answer (3.3s)
+  ✓   22 [mobile] › e2e/frase-notas.spec.ts:301:5 › the same phrase with another translation asks again (19.9s)
+requests past the ceiling, static assets excluded: 0
+  ✓   30 [mobile] › e2e/sin-entrada.spec.ts:107:5 › a 61-token string draws one line and no heading, and asks the dictionary nothing (2.4s)
+  ✓   32 [mobile] › e2e/sin-entrada.spec.ts:128:5 › the cat sits still debounces to exactly one translate request, 600ms after the last keystroke (2.5s)
+  ✓   31 [mobile] › e2e/frase-notas.spec.ts:328:5 › no notes request while the translation is pending (4.1s)
+  ✓   33 [mobile] › e2e/sin-entrada.spec.ts:158:5 › the search screen carries no link to /fuente (1.3s)
+requests past the failed translate call, static assets and the call itself excluded: 0
+  ✓   35 [mobile] › e2e/sin-entrada.spec.ts:171:5 › a phrase whose translation fails falls to the per-word breakdown, capped at eight blocks with the rest in one line (2.5s)
+  ✓   34 [mobile] › e2e/frase-notas.spec.ts:343:5 › no notes request when the translation fails (3.5s)
+  ✓   36 [mobile] › e2e/sin-entrada.spec.ts:237:5 › a two-token string reaches the translator, and falls back to the breakdown when it fails (3.0s)
+  ✓   37 [mobile] › e2e/frase-notas.spec.ts:355:5 › emptying the box after a translation raises no notes request (3.5s)
+  ✓   38 [mobile] › e2e/sin-entrada.spec.ts:262:5 › a one-token miss never reaches the translator (2.7s)
+  ✓   39 [mobile] › e2e/sin-red-una-visita.spec.ts:107:9 › 360px › one online visit to / lets a new page answer «apple» with no connection (1.5s)
+  ✓   41 [mobile] › e2e/sin-red-una-visita.spec.ts:138:11 › 360px › first online visits only to /registro then /cuenta: / offline says the install failed, never installing forever (1.4s)
+  ✓   42 [mobile] › e2e/sin-red-una-visita.spec.ts:138:11 › 360px › first online visits only to /cuenta: / offline says the install failed, never installing forever (1.3s)
+  ✓   43 [mobile] › e2e/sin-red-una-visita.spec.ts:138:11 › 360px › first online visits only to /registro: / offline says the install failed, never installing forever (808ms)
+  ✓   44 [mobile] › e2e/sin-red-una-visita.spec.ts:163:9 › 360px › a Worker that cannot load says the install failed, never installing forever (304ms)
+  ✓   40 [mobile] › e2e/sin-entrada.spec.ts:282:5 › every block and the trailing line lead back to /?q=<word>, and that screen answers it (4.4s)
+  ✓   45 [mobile] › e2e/sin-red-una-visita.spec.ts:107:9 › 1280px › one online visit to / lets a new page answer «apple» with no connection (1.8s)
+  ✓   47 [mobile] › e2e/sin-red-una-visita.spec.ts:138:11 › 1280px › first online visits only to /registro then /cuenta: / offline says the install failed, never installing forever (764ms)
+  ✓   46 [mobile] › e2e/sin-entrada.spec.ts:414:5 › a function word's block starts with the table translation and the dictionary's line follows it (2.6s)
+  ✓   48 [mobile] › e2e/sin-red-una-visita.spec.ts:138:11 › 1280px › first online visits only to /cuenta: / offline says the install failed, never installing forever (824ms)
+  ✓   50 [mobile] › e2e/sin-red-una-visita.spec.ts:138:11 › 1280px › first online visits only to /registro: / offline says the install failed, never installing forever (943ms)
+  ✓   51 [mobile] › e2e/sin-red-una-visita.spec.ts:163:9 › 1280px › a Worker that cannot load says the install failed, never installing forever (352ms)
+  ✓   49 [mobile] › e2e/sin-entrada.spec.ts:428:5 › the dictionary line under a function word is muted, the table line is not (2.7s)
+RNL-01 worker round trip, 200 lookups, log empty — p95 0.200 ms
+  ✓   52 [mobile] › e2e/word.spec.ts:141:5 › an installed dictionary answers offline, fast, and within a thumb's reach (1.6s)
+  ✓   53 [mobile] › e2e/sin-entrada.spec.ts:447:5 › the board's sentence: she and nobody lead with the table, whispered and heard stay as the dictionary has them (2.5s)
+  ✓   54 [mobile] › e2e/word.spec.ts:194:5 › RL-18: the offer retires the moment an answer stands under it (3.6s)
+  ✓   55 [mobile] › e2e/sin-entrada.spec.ts:466:5 › a function word written with a capital is headed by the dictionary's entry, not by what was typed (2.5s)
+  ✓   57 [mobile] › e2e/sin-entrada.spec.ts:479:5 › a content word's block draws the dictionary alone (2.6s)
+  ✓   56 [mobile] › e2e/word.spec.ts:227:5 › a mid-word prefix stays silent past the settle, and a real miss still says so (3.7s)
+  ✓   59 [mobile] › e2e/word.spec.ts:260:5 › RNL-03: an 85-character headword with no space to break on never scrolls the page sideways (1.5s)
+  ✓   58 [mobile] › e2e/sin-entrada.spec.ts:491:5 › offline, the breakdown still leads with the table translation and asks for nothing (2.6s)
+  ✓   61 [mobile] › e2e/sin-entrada.spec.ts:507:5 › past sixty words of function words, the line stands alone with no block and no table line (1.5s)
+  ✓   60 [mobile] › e2e/word.spec.ts:284:5 › a paused prefix never leaves the page blank (2.9s)
+  ✓   62 [mobile] › e2e/sin-entrada.spec.ts:522:5 › in a sentence, left carries the leave block between its first and second groups (2.5s)
+  ✓   63 [mobile] › e2e/word.spec.ts:334:5 › a headword with no definition at all draws no definition label and no dangling line (2.5s)
+  ✓   64 [mobile] › e2e/sin-entrada.spec.ts:546:5 › in a sentence, saw carries the see block under its first group, ahead of its second (2.4s)
+  ✓   65 [mobile] › e2e/word.spec.ts:359:5 › umbrella draws no dictionary definition, and the generated one arrives marked (2.5s)
+  ✓   66 [mobile] › e2e/sin-entrada.spec.ts:557:5 › in a sentence, bed (an exact entry with no lemma) carries no lemma block (2.6s)
+  ✓   67 [mobile] › e2e/word.spec.ts:390:5 › a generated example with no definition heads itself as an example, never as a definition (2.5s)
+  ✓   68 [mobile] › e2e/sin-entrada.spec.ts:565:5 › in a sentence, a form with no entry of its own still leads, then names its lemma once (2.6s)
+  ✓   69 [mobile] › e2e/word.spec.ts:428:5 › `left` (one of the 34 entries whose definition is a bare '.') never draws that period as one (2.5s)
+  ✓   71 [mobile] › e2e/word.spec.ts:462:5 › the English definition draws open with no interaction, and stays inside the column (1.5s)
+  ✓   70 [mobile] › e2e/sin-entrada.spec.ts:576:5 › a function word's dictionary block is folded on arrival behind a control that says so (2.5s)
+  ✓   72 [mobile] › e2e/word.spec.ts:492:5 › a word the dictionary carries never offers a one-letter lemma or an irregular table override (1.6s)
+  ✓   73 [mobile] › e2e/sin-entrada.spec.ts:588:5 › the control is a 44px target (2.6s)
+  ✓   74 [mobile] › e2e/word.spec.ts:524:5 › a one-character query answers only `a` and `i`, never the other ten single-letter keys (2.9s)
+  ✓   75 [mobile] › e2e/sin-entrada.spec.ts:594:5 › tapping the control opens the muted block and the control reads «ocultar»; tapping again folds it (2.5s)
+  ✓   76 [mobile] › e2e/word.spec.ts:584:5 › RL-40: a word's own entry answers first, and a plausible inflection is offered beneath it (1.6s)
+  ✓   77 [mobile] › e2e/sin-entrada.spec.ts:617:5 › six function words at 360 take less than half of the 2540px the open breakdown measured (2.5s)
+  ✓   79 [mobile] › e2e/sin-entrada.spec.ts:633:5 › offline, a sentence still answers from the device: the lemma block under left's first group, the function words folded (2.4s)
+  ✓   80 [mobile] › e2e/sin-entrada.spec.ts:658:5 › log.study.forms is gone from the messages (1ms)
+  ✓   78 [mobile] › e2e/word.spec.ts:640:5 › a headword replaced mid-flight never lands its text on the word that replaced it (6.5s)
+requests while offline and typing "hello world", static assets excluded: 0
+  ✓   81 [desktop] › e2e/sin-entrada.spec.ts:46:5 › a two-token miss draws both headwords, offline, with no request (3.1s)
+  ✓   82 [mobile] › e2e/word.spec.ts:700:5 › RL-51: a headword with one pronunciation draws no block, and keeps its IPA on the label row (2.2s)
+  ✓   84 [mobile] › e2e/word.spec.ts:736:5 › a proper noun is labelled a proper noun, and the word «pronombre» is drawn nowhere (1.9s)
+  ✓   83 [desktop] › e2e/sin-entrada.spec.ts:79:5 › a two-token miss where the dictionary lacks one word draws that word's own heading and its own miss, and the other's answer (3.6s)
+requests past the ceiling, static assets excluded: 0
+  ✓   85 [desktop] › e2e/sin-entrada.spec.ts:107:5 › a 61-token string draws one line and no heading, and asks the dictionary nothing (2.2s)
+  ✓   86 [desktop] › e2e/sin-entrada.spec.ts:128:5 › the cat sits still debounces to exactly one translate request, 600ms after the last keystroke (2.1s)
+  ✓   87 [desktop] › e2e/sin-entrada.spec.ts:158:5 › the search screen carries no link to /fuente (1.5s)
+requests past the failed translate call, static assets and the call itself excluded: 0
+  ✓   88 [desktop] › e2e/sin-entrada.spec.ts:171:5 › a phrase whose translation fails falls to the per-word breakdown, capped at eight blocks with the rest in one line (2.5s)
+  ✓   89 [desktop] › e2e/sin-entrada.spec.ts:237:5 › a two-token string reaches the translator, and falls back to the breakdown when it fails (3.1s)
+  ✓   90 [desktop] › e2e/sin-entrada.spec.ts:262:5 › a one-token miss never reaches the translator (2.3s)
+  ✓   91 [desktop] › e2e/sin-entrada.spec.ts:282:5 › every block and the trailing line lead back to /?q=<word>, and that screen answers it (4.0s)
+  ✓   92 [desktop] › e2e/sin-entrada.spec.ts:414:5 › a function word's block starts with the table translation and the dictionary's line follows it (2.4s)
+  ✓   93 [desktop] › e2e/sin-entrada.spec.ts:428:5 › the dictionary line under a function word is muted, the table line is not (2.4s)
+  ✓   94 [desktop] › e2e/sin-entrada.spec.ts:447:5 › the board's sentence: she and nobody lead with the table, whispered and heard stay as the dictionary has them (2.4s)
+  ✓   95 [desktop] › e2e/sin-entrada.spec.ts:466:5 › a function word written with a capital is headed by the dictionary's entry, not by what was typed (2.4s)
+  ✓   96 [desktop] › e2e/sin-entrada.spec.ts:479:5 › a content word's block draws the dictionary alone (2.5s)
+  ✓   97 [desktop] › e2e/sin-entrada.spec.ts:491:5 › offline, the breakdown still leads with the table translation and asks for nothing (2.5s)
+  ✓   98 [desktop] › e2e/sin-entrada.spec.ts:507:5 › past sixty words of function words, the line stands alone with no block and no table line (1.3s)
+  ✓   99 [desktop] › e2e/sin-entrada.spec.ts:522:5 › in a sentence, left carries the leave block between its first and second groups (2.3s)
+  ✓  100 [desktop] › e2e/sin-entrada.spec.ts:546:5 › in a sentence, saw carries the see block under its first group, ahead of its second (2.4s)
+  ✓  101 [desktop] › e2e/sin-entrada.spec.ts:557:5 › in a sentence, bed (an exact entry with no lemma) carries no lemma block (2.3s)
+  ✓  102 [desktop] › e2e/sin-entrada.spec.ts:565:5 › in a sentence, a form with no entry of its own still leads, then names its lemma once (2.3s)
+  ✓  103 [desktop] › e2e/sin-entrada.spec.ts:576:5 › a function word's dictionary block is folded on arrival behind a control that says so (2.4s)
+  ✓  104 [desktop] › e2e/sin-entrada.spec.ts:588:5 › the control is a 44px target (2.4s)
+  ✓  105 [desktop] › e2e/sin-entrada.spec.ts:594:5 › tapping the control opens the muted block and the control reads «ocultar»; tapping again folds it (2.5s)
+  -  106 [desktop] › e2e/sin-entrada.spec.ts:617:5 › six function words at 360 take less than half of the 2540px the open breakdown measured
+  ✓  107 [desktop] › e2e/sin-entrada.spec.ts:633:5 › offline, a sentence still answers from the device: the lemma block under left's first group, the function words folded (2.4s)
+  ✓  108 [desktop] › e2e/sin-entrada.spec.ts:658:5 › log.study.forms is gone from the messages (1ms)
+
+
+  1) [mobile] › e2e/decoracion-reintento.spec.ts:75:5 › an aborted text request is asked again the next time the word is looked up 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('She opened her umbrella as it started to rain.')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('She opened her umbrella as it started to rain.')
+
+
+      92 |
+      93 |   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(2);
+    > 94 |   await expect(page.getByText(TEXT.example.en)).toBeVisible();
+         |                                                 ^
+      95 | });
+      96 |
+      97 | test("a 503 is asked again: first 503, then 200, and the example draws", async ({ page, scriptWordRoute }) => {
+        at /home/cxrkeyb/projects/finances-app-l2/apps/wordbook/e2e/decoracion-reintento.spec.ts:94:49
+
+    Error Context: private/playwright-results/decoracion-reintento-an-ab-4e3bd--time-the-word-is-looked-up-mobile/error-context.md
+
+  2) [mobile] › e2e/decoracion-reintento.spec.ts:97:5 › a 503 is asked again: first 503, then 200, and the example draws 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('She opened her umbrella as it started to rain.')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('She opened her umbrella as it started to rain.')
+
+
+      111 |
+      112 |   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(2);
+    > 113 |   await expect(page.getByText(TEXT.example.en)).toBeVisible();
+          |                                                 ^
+      114 | });
+      115 |
+      116 | test("a 204 is not asked again: umbrella, apple, umbrella costs one request for umbrella", async ({ page }) => {
+        at /home/cxrkeyb/projects/finances-app-l2/apps/wordbook/e2e/decoracion-reintento.spec.ts:113:49
+
+    Error Context: private/playwright-results/decoracion-reintento-a-503-e1c4a-n-200-and-the-example-draws-mobile/error-context.md
+
+  2 failed
+    [mobile] › e2e/decoracion-reintento.spec.ts:75:5 › an aborted text request is asked again the next time the word is looked up 
+    [mobile] › e2e/decoracion-reintento.spec.ts:97:5 › a 503 is asked again: first 503, then 200, and the example draws 
+  1 skipped
+  105 passed (2.9m)
+npm error Lifecycle script `check:e2e` failed with error:
+npm error code 1
+npm error path /home/cxrkeyb/projects/finances-app-l2/apps/wordbook
+npm error workspace wordbook@0.1.0
+npm error location /home/cxrkeyb/projects/finances-app-l2/apps/wordbook
+npm error command failed
+npm error command sh -c node ../../node_modules/@playwright/test/cli.js test e2e/decoracion-reintento.spec.ts e2e/word.spec.ts e2e/palabra-de-la-red.spec.ts e2e/palabra-flaca.spec.ts e2e/forma-primero.spec.ts e2e/sin-entrada.spec.ts e2e/install.spec.ts e2e/sin-red-una-visita.spec.ts e2e/frase-notas.spec.ts
