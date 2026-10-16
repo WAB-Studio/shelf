@@ -97,11 +97,18 @@ async function setSpend(calls: number): Promise<void> {
 
 let POST: (request: Request) => Promise<Response>;
 
+// A fresh documentation-range address per call keeps each caller chargeable
+// and under the per-caller cap; the route refuses the model to a caller with
+// no address.
+const POOL_SIZE = 40;
+let nextPoolAddress = 1;
+const poolAddress = (n: number): string => `203.0.113.${n}`;
+
 async function translate(text: string, ip?: string): Promise<{ status: number; body: { text?: string; origin?: string } }> {
   const response = await POST(
     new Request("http://localhost/api/translate", {
       method: "POST",
-      headers: { "content-type": "application/json", ...(ip ? { "x-forwarded-for": ip } : {}) },
+      headers: { "content-type": "application/json", "x-forwarded-for": ip ?? poolAddress(nextPoolAddress++) },
       body: JSON.stringify({ text }),
     }),
   );
@@ -119,7 +126,8 @@ function reset(): void {
 const CAP_IP = "198.51.100.41";
 const capKeys = (() => {
   const unscoped = clientKeyFromAddress(CAP_IP, SALT);
-  return [unscoped, scopeClientKey("translate", unscoped)!];
+  const pool = Array.from({ length: POOL_SIZE }, (_, i) => clientKeyFromAddress(poolAddress(i + 1), SALT));
+  return [unscoped, scopeClientKey("translate", unscoped)!, ...pool, ...pool.map((key) => scopeClientKey("translate", key)!)];
 })();
 
 async function main(): Promise<void> {
