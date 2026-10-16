@@ -24,8 +24,17 @@ test("a word outside the table answers null", () => {
   assert.equal(functionWordTranslation(""), null);
 });
 
-test("the table holds about a hundred well-formed entries", () => {
-  assert.ok(FUNCTION_WORDS.size >= 90 && FUNCTION_WORDS.size <= 130, `size ${FUNCTION_WORDS.size}`);
+test("the table keeps its 110 words, the common ones among them", () => {
+  assert.equal(FUNCTION_WORDS.size, 110);
+  const common = [
+    "the", "of", "a", "to", "in", "it", "would", "and", "is", "that",
+    "for", "with", "on", "as", "at", "by", "this", "he", "she", "not",
+    "but", "or", "from", "they", "we",
+  ];
+  for (const word of common) assert.notEqual(functionWordTranslation(word), null, word);
+});
+
+test("every table row is well formed", () => {
   const source = readFileSync(new URL("./function-words.ts", import.meta.url), "utf8");
   const written = [...source.matchAll(/^ {2}\["([^"]+)", "/gm)].map((m) => m[1]);
   assert.equal(new Set(written).size, written.length, "duplicate key");

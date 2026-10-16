@@ -4,11 +4,6 @@ import type { Page } from "@playwright/test";
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
 
-// `search-screen.tsx`'s own constant, not exported: the debounce a sentence
-// waits out before it is worth asking about (RNL-05, rule 1). Shared with
-// `phrase.spec.ts`'s own copy of the same literal, not imported from it.
-const PHRASE_DEBOUNCE_MS = 600;
-
 async function waitForDictionary(page: Page): Promise<void> {
   const assetResponse = page.waitForResponse(
     (response) => response.url().includes(manifest.asset.path) && response.ok(),
@@ -137,6 +132,7 @@ test("a phrase whose notes answer 204 reads exactly as the screen did before RL-
   // on, so this test drives the real fixture path rather than a fake of it.
   await waitForDictionary(page);
 
+  const notesResponse = page.waitForResponse((response) => response.url().includes("/api/phrase/notes"));
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill(phraseText);
 
@@ -144,9 +140,9 @@ test("a phrase whose notes answer 204 reads exactly as the screen did before RL-
   await expect(page.getByText(phraseText)).toBeVisible();
   await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible();
 
-  // Give the notes fetch time to settle before reading its absence: a
-  // 204 this fast never has anything to paint either way.
-  await page.waitForTimeout(500);
+  // The notes request is the signal that the 204 landed; only after its
+  // response is the absence of a title and of a pending line a fact.
+  await notesResponse;
   await expect(page.getByText(messages.phrase.notesTitle)).toHaveCount(0);
   await expect(page.getByText(messages.phrase.notesPending)).toHaveCount(0);
 });
@@ -155,9 +151,32 @@ test("a keystroke mid-phrase raises no request to /api/phrase/notes", async ({ p
   await disableDeviceTranslator(page);
   const phraseText = "frisking from side to side";
   const answerText = "correteando de lado a lado";
-  await stubTranslateRoute(page, { [phraseText]: answerText });
-  // Default 204 from `fixtures.ts` again: this test only counts requests,
-  // never their answer.
+
+  // The translation is held until released, so the screen sits on its
+  // «translating» line: the moment a notes request mounted too early would
+  // have left.
+  const translateTexts: string[] = [];
+  let translateSeen!: () => void;
+  const translateArrived = new Promise<void>((resolve) => {
+    translateSeen = resolve;
+  });
+  let releaseTranslation!: () => void;
+  const released = new Promise<void>((resolve) => {
+    releaseTranslation = resolve;
+  });
+  await page.route("**/api/translate", async (route) => {
+    const { text } = route.request().postDataJSON() as { text: string };
+    translateTexts.push(text);
+    translateSeen();
+    await released;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ text: answerText, origin: "network" }),
+    });
+  });
+  // Default 204 from `fixtures.ts` for the notes: this test only counts
+  // requests, never their answer.
 
   let notesRequests = 0;
   page.on("request", (request) => {
@@ -167,25 +186,28 @@ test("a keystroke mid-phrase raises no request to /api/phrase/notes", async ({ p
   await waitForDictionary(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
-  // One keystroke short of the full phrase, well inside the debounce
-  // window: no translation exists yet for anything to note.
+  // One keystroke short of the full phrase, then the completing one before
+  // the debounce can fire: the partial text must never be asked about.
   await searchBox.fill(phraseText.slice(0, -1));
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS - 100);
-  expect(notesRequests, "no notes request before any translation is even asked for").toBe(0);
-
-  // The keystroke that completes the phrase — still short of the debounce
-  // that would let a translation request leave at all.
   await searchBox.fill(phraseText);
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS - 100);
-  expect(notesRequests, "the completing keystroke itself raises nothing").toBe(0);
 
+  // The debounce elapsed: the settled phrase's own request left.
+  await translateArrived;
+  expect(translateTexts, "only the settled phrase is translated").toEqual([phraseText]);
+
+  // The pending line is painted and two frames have run: any effect the
+  // pending state mounted has had its turn.
+  await expect(page.getByText(messages.phrase.translating)).toBeVisible();
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+  expect(notesRequests, "no notes request while the translation is still pending").toBe(0);
+
+  const notesResponse = page.waitForResponse((response) => response.url().includes("/api/phrase/notes"));
+  releaseTranslation();
   await expect(page.getByText(answerText)).toBeVisible({ timeout: 5000 });
-  // The fixture's default 204 answers fast enough that the pending line can
-  // already be gone by the time this reads — the request count below is
-  // what this test is actually about, not the pending line's own lifespan.
-  await expect
-    .poll(() => notesRequests, { message: "the one request leaves only once the translation is already done" })
-    .toBe(1);
+  await notesResponse;
+  expect(notesRequests, "the one request leaves only once the translation is done").toBe(1);
 });
 
 // ---- RL-46 / RNL-05: notes are asked once per translation, never per keystroke ----

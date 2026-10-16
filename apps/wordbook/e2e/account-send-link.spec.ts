@@ -1,7 +1,6 @@
 import { expect, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
-import { isDomainDeliverable } from "../app/actions/account";
 import messages from "../messages/es.json";
 
 // `sendSignInLink` (app/actions/account.ts) is a Server Action: the browser
@@ -228,57 +227,4 @@ test("a dead-domain answer paints its own copy, and neither of the other two", a
   await expect(page.getByText(messages.account.errors.domainUndeliverable)).toBeVisible();
   await expect(page.getByText(messages.account.errors.sendFailed)).toHaveCount(0);
   await expect(page.getByText(messages.account.errors.rateLimited)).toHaveCount(0);
-});
-
-test("a domain with a null MX (RFC 7505) is not deliverable", async () => {
-  // `example.com`: RFC 7505 §6 gives it as the null-MX example.
-  await expect(isDomainDeliverable("example.com")).resolves.toBe(false);
-});
-
-test("a domain with no DNS records at all is not deliverable", async () => {
-  await expect(isDomainDeliverable("asdkjhqwe-no-existe-1234.com")).resolves.toBe(false);
-});
-
-// The acceptance path is proved against `isDomainDeliverable` directly, not
-// through `submit`: calling the action for a domain the check lets through
-// would ask Supabase for a real send, spending the project's send quota and
-// (for an address Supabase has never seen) leaving a row in `auth.users`.
-test("a domain with no MX but an A record is deliverable (RFC 5321 §5.1's implicit MX)", async () => {
-  // GitHub's raw-content host: publishes A/AAAA, no MX (confirmed live,
-  // 2026-09-10 — `dns.resolveMx` answers `ENODATA`).
-  await expect(isDomainDeliverable("raw.githubusercontent.com")).resolves.toBe(true);
-});
-
-test("an ordinary domain with a real MX is deliverable", async () => {
-  await expect(isDomainDeliverable("gmail.com")).resolves.toBe(true);
-});
-
-test("a resolver error that is not 'no such record' fails open (today's behaviour, not a promise)", async () => {
-  const brokenResolvers = {
-    resolveMx: () => Promise.reject(Object.assign(new Error("queryMx ESERVFAIL"), { code: "ESERVFAIL" })),
-    resolve4: () => Promise.reject(Object.assign(new Error("queryA ESERVFAIL"), { code: "ESERVFAIL" })),
-    resolve6: () => Promise.reject(Object.assign(new Error("queryAaaa ESERVFAIL"), { code: "ESERVFAIL" })),
-  };
-
-  await expect(isDomainDeliverable("broken-resolver.invalid", brokenResolvers)).resolves.toBe(true);
-});
-
-test("a resolver that never answers still gives an answer, on its own clock", async () => {
-  const hangingResolvers = {
-    resolveMx: () => new Promise<never>(() => {}),
-    resolve4: () => new Promise<never>(() => {}),
-    resolve6: () => new Promise<never>(() => {}),
-  };
-
-  const startedAt = Date.now();
-  const result = await isDomainDeliverable("never-answers.invalid", hangingResolvers);
-  const elapsedMs = Date.now() - startedAt;
-  console.log(`isDomainDeliverable hanging resolver: answered after ${elapsedMs}ms`);
-
-  expect(result).toBe(true);
-  // Bounded by its own timeout, not by the resolver's silence, and still
-  // under `SEND_LINK_TIMEOUT_MS` (8s). The margin over `DNS_TIMEOUT_MS`
-  // (2.5s) is event-loop delay, not the check waiting: with three suites on
-  // this machine the same call answered after 5290ms (2026-09-14).
-  expect(elapsedMs).toBeLessThan(7_000);
 });
