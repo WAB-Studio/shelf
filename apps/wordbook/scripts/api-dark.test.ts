@@ -175,7 +175,7 @@ mock.module(here("../lib/session.ts"), {
 });
 mock.module(here("../lib/sync/upload.ts"), {
   namedExports: {
-    writeUpload: async () => ({ status: "ok", accepted: 0 }),
+    writeUpload: async () => ({ status: "ok", accepted: 0, buried: 0, tombstones: [] }),
     downloadRows: async () => [],
   },
 });
@@ -540,7 +540,7 @@ test("log/sync and log/clear answer no-store on 401, 400, 409 and 200", async ()
   assert.equal(other.status, 409);
   const ok = await sync.POST(valid("reader-1"));
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { accepted: 0, rows: [], cursor: null });
+  assert.deepEqual(await ok.json(), { accepted: 0, rows: [], cursor: null, tombstones: [], tombstoneCursor: null });
   const cleared = await clear.DELETE();
   assert.equal(cleared.status, 200);
   assert.deepEqual(await cleared.json(), {});

@@ -23,7 +23,7 @@ const OTHER_READER = "22222222-2222-4222-8222-222222222222";
 const DEVICE = "33333333-3333-4333-8333-333333333333";
 
 let dbCalls = 0;
-mock.module(here("../../../../lib/session.ts"), {
+mock.module(here("../lib/session.ts"), {
   namedExports: {
     getReader: async () => ({ id: SESSION_READER }),
     withReaderDb: async () => {
@@ -32,10 +32,10 @@ mock.module(here("../../../../lib/session.ts"), {
     },
   },
 });
-mock.module(here("../../../../lib/sync/upload.ts"), { namedExports: { downloadRows: async () => [], writeUpload: async () => ({}) } });
+mock.module(here("../lib/sync/upload.ts"), { namedExports: { downloadRows: async () => [], writeUpload: async () => ({}) } });
 
 const post = async (body: unknown) => {
-  const { POST } = await import("./route");
+  const { POST } = await import("../app/api/log/sync/route");
   return POST(new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify(body) }));
 };
 
