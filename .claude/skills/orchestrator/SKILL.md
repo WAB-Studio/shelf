@@ -84,6 +84,9 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
 - A slice is reviewed when a reviewer read it in a clean context. A reviewer with no findings is a valid result.
 - Append one row per judge per train to `docs/agentes/rendimiento-jueces.tsv`: date, train, judge, findings, findings
   no other judge found, fixed, tokens if known. Count CI too when it caught what no judge did.
+- Dispatch one `validator` per train. Judge a fix or a module that lands after it with the train's CI on the same
+  commit, never a second `validator`. Give a level-3 fix the `mutator` on its lines.
+- Scope a second `critic` to the screens the fixes touched, never the whole slice again.
 - Read the table at a model change and every 5 trains. Merge or space out a judge that found nothing another judge
   did not. Report the change to the user,
   and mark the review with a row whose judge is `review`.

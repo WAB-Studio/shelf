@@ -35,6 +35,12 @@ Each entry names the rule and the file it lives in now.
   result». Decided by the user 2026-10-14 («hagamos todo lo de investigación estratégicas»), from
   `private/investigacion-estrategias.md` Part C and A5.
 
+- One `validator` per train; a fix or a late module is judged by the train's CI. First pruning review, 2026-10-16,
+  over 7 trains: the second-pass validators (homefund-618b, goallog-tren-final 1022 and fixes) found 0, 0 and 1, and
+  that 1 (`tree-readers.ts`) CI 38852989964 caught on its own; 179k tokens for nothing unique. First-pass validators
+  found something unique in 4 of 7, the mutator in 5 of 5, the critic in 2 of 2: kept. The second critic found 2
+  real Hostile findings for 121k over the whole slice: kept, scoped to the fixed screens.
+
 ## Retired 2026-10-14 by the user
 
 - «Never close a slice on a report of greens alone. A slice with no criticism in it was not reviewed.» Successor:
