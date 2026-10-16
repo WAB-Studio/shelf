@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import type { z } from "zod";
+
 import {
   ACCOUNT_SUBTYPES,
   SUBTYPES_BY_KIND,
@@ -31,11 +33,11 @@ const updateBase = {
   balanceOn: "2020-01-01",
 };
 
-function issues(schema: { safeParse(v: unknown): any }, input: unknown) {
+function issues(schema: z.ZodType, input: unknown) {
   const result = schema.safeParse(input);
   return result.success
     ? []
-    : result.error.issues.map((i: any) => ({ message: i.message, path: i.path }));
+    : result.error.issues.map((i) => ({ message: i.message, path: i.path }));
 }
 
 test("the form's list is the new words", () => {

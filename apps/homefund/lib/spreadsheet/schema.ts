@@ -114,6 +114,24 @@ const sheetCivilDateSchema = z.string().trim().refine(isCivilDate);
 // create schema unchanged, its external ref appended (RF-52).
 const accountRowFields = createAccountSchema.extend({ externalRef: externalRefSchema });
 
+// The words a workbook exported before RF-56 carries in an account's subtype cell.
+// Import-only: the form refuses them, while a sheet written with them still re-imports
+// and keeps matching on `external_ref` (RF-52).
+export const LEGACY_ACCOUNT_SUBTYPES = {
+  bancaria: "bank",
+  efectivo: "cash",
+  tarjeta: "card",
+} as const;
+
+// Exact keys only, with no trim or case fold: a cell that would need cleaning to
+// match passes through raw, so the enum below refuses it rather than a cleaner
+// laundering it into a word. `Object.hasOwn` keeps "constructor" and kin out.
+function fromLegacySubtype(cell: unknown): unknown {
+  return typeof cell === "string" && Object.hasOwn(LEGACY_ACCOUNT_SUBTYPES, cell)
+    ? LEGACY_ACCOUNT_SUBTYPES[cell as keyof typeof LEGACY_ACCOUNT_SUBTYPES]
+    : cell;
+}
+
 // The settlement currency is the one cell a workbook may not carry (RF-121). The
 // form has a picker and so demands it; a sheet written before the column existed
 // has nobody to choose, and re-importing one has to keep matching on `external_ref`
@@ -130,6 +148,7 @@ export const accountRowSchema = z
     ...accountRowFields.shape,
     // A blank cell is a sheet from before the column, or a template row nobody filled.
     settlementCurrency: accountCurrencySchema.nullish().transform((value) => value ?? BASE_CURRENCY),
+    subtype: z.unknown().transform(fromLegacySubtype),
   })
   .pipe(accountRowFields);
 export type AccountRow = z.infer<typeof accountRowSchema>;
