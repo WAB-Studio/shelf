@@ -8,6 +8,7 @@ import { translateRequestSchema, type TranslationResult } from "@/lib/translate/
 import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey, scopedClientKey } from "@/lib/word/client-budget";
 import { MODEL_NAME } from "@/lib/word/model";
+import { logDark } from "@/lib/word/dark";
 import { claimDailyCall } from "@/lib/word/spend";
 
 // The word path never reaches this route (RL-09): it exists for the sentence
@@ -144,18 +145,38 @@ async function translateWithProvider(text: string): Promise<string> {
 }
 
 // RL-60: the model translates first, inside the daily cap the word routes
-// share. Null on any reason not to answer (no key, no cap, cap spent, failure,
-// empty or echoed reply) so the caller falls to MyMemory.
+// share. Null on any reason not to answer (no key, no cap, no caller to
+// charge, cap spent, failure, empty or echoed reply) so the caller falls to
+// MyMemory; each reason leaves one log line, never the sentence.
 async function translateWithModel(request: Request, text: string): Promise<string | null> {
   const apiKey = env.OPENAI_API_KEY;
-  if (!apiKey || !env.WORD_TEXT_DAILY_CALL_CAP) return null;
+  if (!apiKey) {
+    logDark("translate", "no-key");
+    return null;
+  }
+  if (!env.WORD_TEXT_DAILY_CALL_CAP) {
+    logDark("translate", "no-cap");
+    return null;
+  }
+  // A caller nobody can charge never reaches the model.
+  const caller = clientKey(request);
+  if (!caller) {
+    logDark("translate", "no-caller");
+    return null;
+  }
   // A database error is one more reason not to answer: MyMemory is tried.
   try {
-    const caller = clientKey(request);
-    if (caller && !(await claimCallerShare(caller, env.WORD_TEXT_DAILY_CALL_CAP))) return null;
-    if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) return null;
+    if (!(await claimCallerShare(caller, env.WORD_TEXT_DAILY_CALL_CAP))) {
+      logDark("translate", "caller-share");
+      return null;
+    }
+    if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) {
+      logDark("translate", "day-cap");
+      return null;
+    }
   } catch (error) {
     console.error("[api/translate] daily claim failed", error);
+    logDark("translate", "claim-error");
     return null;
   }
   const response = await providerFetch(
@@ -178,15 +199,20 @@ async function translateWithModel(request: Request, text: string): Promise<strin
     },
     { name: "openai-translate", timeoutMs: MODEL_TIMEOUT_MS },
   );
-  if (!response) return null;
+  if (!response) {
+    logDark("translate", "model-failed");
+    return null;
+  }
   try {
     const payload = (await response.json()) as { choices?: { message?: { content?: unknown } }[] };
     const content = payload.choices?.[0]?.message?.content;
     const out = typeof content === "string" ? content.trim() : "";
-    return out && !isEcho(text, out) ? out : null;
+    if (out && !isEcho(text, out)) return out;
   } catch {
-    return null;
+    // An unreadable body is a failed model call, logged below.
   }
+  logDark("translate", "model-failed");
+  return null;
 }
 
 export async function POST(request: Request): Promise<Response> {
