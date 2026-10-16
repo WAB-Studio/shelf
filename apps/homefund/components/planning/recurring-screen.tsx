@@ -22,18 +22,22 @@ import {
   Callout,
   Card,
   ConfirmDialog,
+  Disc,
   EmptyState,
+  Figure,
   Flex,
   FundChip,
   Heading,
   IconButton,
+  PlainLink,
   RowMenu,
   Switch,
   Text,
+  ToneSurface,
 } from "@/components/ui";
 import type { RecurringRuleRow } from "@/db/queries/recurring-rules";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
-import { Link as LocaleLink, useRouter } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -144,7 +148,7 @@ export function RecurringScreen({
       {/* Generated movements land marked automatic until confirmed (RF-31); the
           banner leads to the ledger to review them, and stays hidden at zero. */}
       {unreviewedCount > 0 && (
-        <LocaleLink href="/movements?unreviewed=1" style={{ textDecoration: "none" }}>
+        <PlainLink href="/movements?unreviewed=1">
           <Callout.Root color="amber" variant="soft">
             <Callout.Icon>
               <TriangleAlert size={16} aria-hidden />
@@ -153,7 +157,7 @@ export function RecurringScreen({
               {t("unreviewedBanner", { count: unreviewedCount })}
             </Callout.Text>
           </Callout.Root>
-        </LocaleLink>
+        </PlainLink>
       )}
 
       <Box display={{ initial: "block", lg: "none" }}>
@@ -280,25 +284,10 @@ function RuleCard({
 
   return (
     <Card>
-      <Flex
-        align="center"
-        gap="3"
-        style={{ opacity: rule.isActive ? 1 : 0.55 }}
-      >
-        <Flex
-          align="center"
-          justify="center"
-          flexShrink="0"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 999,
-            background: "var(--accent-a3)",
-            color: "var(--accent-11)",
-          }}
-        >
+      <ToneSurface align="center" gap="3" faded={!rule.isActive}>
+        <Disc size={40} surface="var(--accent-a3)" ink="var(--accent-11)">
           <Repeat size={19} />
-        </Flex>
+        </Disc>
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2">
             <Text size="3" weight="medium" truncate>
@@ -312,15 +301,15 @@ function RuleCard({
             {subtitle}
           </Text>
         </Flex>
-        <Text
+        <Figure
           size="3"
           weight="medium"
           color={isIncome ? "grass" : undefined}
-          style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+          nowrap
         >
           {formatMoney(rule.amountCents, rule.currency, locale)}
-        </Text>
-      </Flex>
+        </Figure>
+      </ToneSurface>
       <Flex align="center" justify="end" gap="3" mt="3">
         <Flex align="center" gap="2">
           <Switch

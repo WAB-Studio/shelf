@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { AmountField } from "./amount-field";
 import { Disc } from "./disc";
 import { Eyebrow } from "./eyebrow";
 import { Figure } from "./figure";
@@ -84,4 +85,27 @@ test("Stepper fills done and active steps and greys the rest", () => {
   assert.equal(out.match(/background:var\(--accent-9\)/g)?.length, 2);
   assert.equal(out.match(/background:var\(--gray-4\)/g)?.length, 1);
   assert.equal(out.match(/height:2px/g)?.length, 2);
+});
+
+test("Figure sets a line height of one only when tight", () => {
+  assert.match(html(createElement(Figure, { tight: true }, "5")), /line-height:1/);
+  assert.doesNotMatch(html(createElement(Figure, null, "5")), /line-height/);
+});
+
+test("ToneSurface fades without a tone and keeps its own background", () => {
+  const out = html(createElement(ToneSurface, { faded: true }, "x"));
+  assert.match(out, /opacity:0\.55/);
+  assert.doesNotMatch(out, /background/);
+});
+
+test("AmountField is tabular and takes a fixed width", () => {
+  const out = html(createElement(AmountField, { width: 110 }));
+  assert.match(out, /width:110px/);
+  assert.match(out, /font-variant-numeric:tabular-nums/);
+});
+
+test("panel.module.css draws the notice card at 560px with a 16px corner", () => {
+  const css = readFileSync(new URL("./panel.module.css", import.meta.url), "utf8");
+  assert.match(css, /\[data-variant="notice"\]\s*\{[^}]*width: 560px;[^}]*padding: 34px 32px;/);
+  assert.match(css, /\.panel\s*\{[^}]*border-radius: 16px;/);
 });

@@ -17,7 +17,8 @@ export type PanelCell = {
 /**
  * The card SPEC-A3 draws where the dense table does not fit. `stack` carries an
  * optional heading over `PanelRow`s; `inline` is one padded row of controls,
- * which is what the wide quick entry is.
+ * which is what the wide quick entry is; `notice` is the centred card a message
+ * and its way out sit on.
  *
  * State never lives here: what a row leads to and what a control does are the
  * caller's.
@@ -31,7 +32,7 @@ export function Panel({
   title?: string;
   // Rides at the head's end, opposite the title: the block's one way out.
   action?: ReactNode;
-  variant?: "stack" | "inline";
+  variant?: "stack" | "inline" | "notice";
   children?: ReactNode;
 }) {
   return (

@@ -150,7 +150,7 @@ export function GoalsTable({
           </Text>
           {/* Which aportes the meta counts: the ones set aside in this one
               currency and no other (RF-124). */}
-          <Text size="1" color="gray" style={{ whiteSpace: "nowrap" }}>
+          <Text size="1" color="gray" wrap="nowrap">
             {tKey("planning.inCurrency", { currency: goal.currency })}
           </Text>
         </Flex>

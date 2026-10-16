@@ -130,7 +130,7 @@ export function CategoriesScreen({
   const activeParentOptions =
     activeScope === effectiveScope ? parentOptions : personalParentOptions;
 
-  // One row per category and one right under it per subcategory (RF-116): the
+  // One row per category and one right under it per subcategory (RF-63): the
   // count a parent's cell reads is `childCount`, never `children.length`
   // recomputed here, and a subcategory's own cell reads a dash — nesting
   // stops at one level, so it never has a count of its own.

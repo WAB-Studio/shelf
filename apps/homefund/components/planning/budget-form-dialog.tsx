@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { createBudgetAction, updateBudgetAction } from "@/app/actions/budgets";
 import {
+  Box,
   Button,
   Dialog,
   Field,
@@ -16,6 +17,7 @@ import {
   FieldGroup,
   FieldLabel,
   FieldMessage,
+  Figure,
   Flex,
   SegmentedControl,
   Select,
@@ -338,23 +340,20 @@ function BudgetForm({
                 {t("thresholdLabel")}
               </FieldLabel>
               <Flex align="center" gap="4">
-                <Slider
-                  value={[field.value]}
-                  onValueChange={([value]) => field.onChange(value)}
-                  min={1}
-                  max={100}
-                  step={1}
-                  disabled={isPending}
-                  aria-labelledby="budget-threshold-label"
-                  style={{ flex: 1 }}
-                />
-                <Text
-                  size="3"
-                  weight="bold"
-                  style={{ fontVariantNumeric: "tabular-nums" }}
-                >
+                <Box flexGrow="1" minWidth="0">
+                  <Slider
+                    value={[field.value]}
+                    onValueChange={([value]) => field.onChange(value)}
+                    min={1}
+                    max={100}
+                    step={1}
+                    disabled={isPending}
+                    aria-labelledby="budget-threshold-label"
+                  />
+                </Box>
+                <Figure size="3" weight="bold">
                   {t("thresholdValue", { pct: threshold })}
-                </Text>
+                </Figure>
               </Flex>
               <FieldMessage error={fieldState.error} />
             </Field>

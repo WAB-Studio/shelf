@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { Button, Flex, Heading, Link, Page, TapTarget } from "@/components/ui";
+import { Button, Flex, Heading, Link, Page, Panel, TapTarget } from "@/components/ui";
 import { Link as LocaleLink } from "@/i18n/navigation";
 
 /**
@@ -53,18 +53,7 @@ export default function AppError({
         justify="center"
         flexGrow="1"
       >
-        <Flex
-          direction="column"
-          align="center"
-          gap="4"
-          style={{
-            width: 560,
-            backgroundColor: "var(--color-panel-solid)",
-            border: "1px solid var(--gray-a4)",
-            borderRadius: 16,
-            padding: "34px 32px",
-          }}
-        >
+        <Panel variant="notice">
           <Heading size="6" align="center">
             {t("errors.unexpected")}
           </Heading>
@@ -78,7 +67,7 @@ export default function AppError({
               </TapTarget>
             </LocaleLink>
           </Link>
-        </Flex>
+        </Panel>
       </Flex>
     </Page>
   );

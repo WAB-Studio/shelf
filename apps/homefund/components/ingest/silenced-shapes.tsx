@@ -11,6 +11,7 @@ import {
   Card,
   Flex,
   Heading,
+  RawText,
   Separator,
   Text,
 } from "@/components/ui";
@@ -119,13 +120,9 @@ export function SilencedShapes({ shapes }: { shapes: SilencedShapeRow[] }) {
                   <Text size="2" weight="medium">
                     {t("rawTextLabel")}
                   </Text>
-                  <Text
-                    size="2"
-                    color="gray"
-                    style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
-                  >
+                  <RawText size="2" color="gray">
                     {shape.sampleText}
-                  </Text>
+                  </RawText>
                 </Flex>
               )}
             </Flex>

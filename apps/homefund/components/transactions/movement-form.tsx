@@ -30,6 +30,7 @@ import {
   FieldGroup,
   FieldLabel,
   FieldMessage,
+  Figure,
   Flex,
   FundChip,
   Grid,
@@ -540,22 +541,18 @@ export function MovementForm({
         >
           <ChevronLeftIcon size={18} />
         </IconButton>
-        <Heading size="5" style={{ flex: 1 }}>
-          {t(isEdit ? "editTitle" : "formTitle")}
-        </Heading>
+        <Flex flexGrow="1" minWidth="0">
+          <Heading size="5">{t(isEdit ? "editTitle" : "formTitle")}</Heading>
+        </Flex>
         {isGroupScoped && <FundChip label={tKey("fund.label")} />}
       </Flex>
 
       {/* The amount reads in the derived kind's sign and colour; the pill names
           the kind read-only, never a control (RF-18). */}
       <Flex direction="column" align="center" gap="2" mb="5">
-        <Heading
-          size="8"
-          color={kindColor}
-          style={{ fontVariantNumeric: "tabular-nums" }}
-        >
+        <Figure as="h1" size="8" color={kindColor}>
           {`${sign}${formatMoney(amountMinor ?? 0, currency, locale)}`}
-        </Heading>
+        </Figure>
         {kindLabel && (
           <Flex align="center" gap="2">
             <Badge color={kindColor} variant="soft" radius="full">
@@ -784,17 +781,13 @@ export function MovementForm({
                 <Text size="2" color="gray">
                   {t("rateLabel")}
                 </Text>
-                <Text
-                  size="2"
-                  weight="medium"
-                  style={{ fontVariantNumeric: "tabular-nums" }}
-                >
+                <Figure size="2" weight="medium">
                   {t("rateLine", {
                     currency,
                     rate: format.number(rate, RATE_FORMAT),
                     foreign: foreign ?? "",
                   })}
-                </Text>
+                </Figure>
               </Flex>
               <Text size="1" color="gray">
                 {t("rateDerived")}

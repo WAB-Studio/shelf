@@ -23,7 +23,9 @@ import {
   Box,
   Button,
   Card,
+  Disc,
   EmptyState,
+  Figure,
   Flex,
   FundChip,
   Heading,
@@ -96,9 +98,9 @@ function OtherOwed({
   locale: Locale;
 }) {
   return pockets.map((pocket) => (
-    <Text key={pocket.currency} size="1" color="gray">
+    <Figure key={pocket.currency} size="1" color="gray">
       {formatMoney(pocket.owedCents, pocket.currency, locale)}
-    </Text>
+    </Figure>
   ));
 }
 
@@ -429,13 +431,9 @@ export function DebtsScreen({
                     ? `${t("total")} · ${currencyLabel(set.currency)}`
                     : t("total")}
                 </Text>
-                <Heading
-                  as="h2"
-                  size="8"
-                  style={{ fontVariantNumeric: "tabular-nums" }}
-                >
+                <Figure as="h2" size="8">
                   {formatMoney(set.owedCents, set.currency, locale)}
-                </Heading>
+                </Figure>
                 {totals.nextPayment !== null &&
                   totals.nextPayment.currency === set.currency && (
                     <Text size="2" color="gray">
@@ -577,31 +575,11 @@ export function DebtsScreen({
   );
 }
 
-// A soft tinted disc carrying the card's icon, matching the hub's rows.
-function Disc({ icon: Icon, tint }: { icon: LucideIcon; tint: string }) {
-  return (
-    <Flex
-      align="center"
-      justify="center"
-      style={{
-        width: 42,
-        height: 42,
-        borderRadius: "var(--radius-5)",
-        background: `var(--${tint}-a3)`,
-        color: `var(--${tint}-11)`,
-        flexShrink: 0,
-      }}
-    >
-      <Icon size={20} />
-    </Flex>
-  );
-}
-
 // The head row every card shares: disc, name over a meta line, owed on the
 // right — the pocket the debt bills in, and under it what it owes in a currency
 // it does not, each drawn in its own and never added to the other (RF-124).
 function CardHead({
-  icon,
+  icon: Icon,
   tint,
   name,
   meta,
@@ -621,8 +599,15 @@ function CardHead({
 
   return (
     <Flex align="center" gap="3">
-      <Disc icon={icon} tint={tint} />
-      <Flex direction="column" style={{ flex: 1, minWidth: 0 }}>
+      <Disc
+        size={42}
+        radius={5}
+        surface={`var(--${tint}-a3)`}
+        ink={`var(--${tint}-11)`}
+      >
+        <Icon size={20} />
+      </Disc>
+      <Flex direction="column" flexGrow="1" minWidth="0">
         <Text weight="bold" truncate>
           {name}
         </Text>
@@ -630,8 +615,8 @@ function CardHead({
           {meta}
         </Text>
       </Flex>
-      <Flex direction="column" align="end" style={{ fontVariantNumeric: "tabular-nums" }}>
-        <Text weight="bold">{formatMoney(owedCents, currency, locale)}</Text>
+      <Flex direction="column" align="end">
+        <Figure weight="bold">{formatMoney(owedCents, currency, locale)}</Figure>
         <OtherOwed pockets={otherOwed} locale={locale} />
       </Flex>
     </Flex>
@@ -649,13 +634,13 @@ function Stat({
   align?: "right";
 }) {
   return (
-    <Flex direction="column" gap="1" style={align ? { textAlign: "right" } : undefined}>
-      <Text size="1" color="gray">
+    <Flex direction="column" gap="1">
+      <Text size="1" color="gray" align={align}>
         {label}
       </Text>
-      <Text size="2" weight="medium" style={{ fontVariantNumeric: "tabular-nums" }}>
+      <Figure size="2" weight="medium" align={align}>
         {value}
-      </Text>
+      </Figure>
     </Flex>
   );
 }
@@ -663,7 +648,7 @@ function Stat({
 /**
  * The card's footer. Reading a debt is offered to everyone it is shown to, so
  * the door onto its cuotas and its extractos is never gated — the phone has no
- * other way in (RF-58, RF-81, RF-84). The abono is the caller's own privilege
+ * other way in (RF-58, RF-81). The abono is the caller's own privilege
  * and arrives absent when the policies would refuse it (RF-16).
  */
 function CardActions({

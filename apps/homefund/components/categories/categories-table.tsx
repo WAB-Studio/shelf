@@ -45,10 +45,10 @@ export type CategoryTableRow = {
 };
 
 /**
- * The dense Categorías of `private/design-desktop/SPEC-A3.md` (RF-63, RF-116):
+ * The dense Categorías of `private/design-desktop/SPEC-A3.md` (RF-63):
  * one section per scope, personal and the group's, a subcategory drawn right
  * under its parent inside that same section and never the other. The count in
- * `subcategorías` is the query's own `childCount` (RF-116) — this table never
+ * `subcategorías` is the query's own `childCount` (RF-63) — this table never
  * recomputes it from the rows it was handed.
  */
 export function CategoriesTable<Row extends CategoryTableRow>({

@@ -31,6 +31,7 @@ import {
   ConfirmDialog,
   DropdownMenu,
   EmptyState,
+  Figure,
   Flex,
   FundChip,
   Heading,
@@ -415,7 +416,7 @@ function GoalCard({
     <Card>
       <Flex direction="column" gap="3">
         <Flex align="center" gap="3">
-          <Flex direction="column" style={{ flex: 1, minWidth: 0 }}>
+          <Flex direction="column" flexGrow="1" minWidth="0">
             <Text weight="medium" truncate>
               {goal.name}
             </Text>
@@ -496,13 +497,12 @@ function GoalCard({
         <Flex align="center" justify="between" gap="3">
           <Text size="2" color="gray">
             {t("apartado")}{" "}
-            <Text
+            <Figure
               color={goal.reachedTarget ? "jade" : undefined}
               weight="medium"
-              style={{ fontVariantNumeric: "tabular-nums" }}
             >
               {formatMoney(goal.savedCents, goal.currency, locale)}
-            </Text>
+            </Figure>
           </Text>
           {/* Archiving is what stops money reaching the goal, so it stops here too. */}
           {!archived && (
