@@ -7386,6 +7386,7 @@ async function checkReportFunctionsExcludeTransfers() {
       )
       select count(*)::text as count from purged`;
     auditPurged = count;
+    await sql`select set_config('request.jwt.claims', '', false)`;
   }
 
   const [{ count: probeCount }] = await sql<{ count: string }[]>`
@@ -10333,13 +10334,14 @@ async function m1ScriptRows(tag: string, labels: M1Labels) {
       const rowsAfterFirst = await listRows(a.folded).catch(() => []);
       const second = run(a.typed, serviceKey);
       const rowsAfterSecond = await listRows(a.folded).catch(() => []);
-      const countBefore = (await listSql<{ n: number }[]>`select count(*)::int as n from finances.allowed_emails`.catch(() => [{ n: -1 }]))[0].n;
+      // Counted under this run's stamp alone: another lane's invitations list addresses in the same table meanwhile.
+      const countBefore = (await listSql<{ n: number }[]>`select count(*)::int as n from finances.allowed_emails where email like ${"%" + stamp + "%"}`.catch(() => [{ n: -1 }]))[0].n;
       // Queued for removal too: a script that skips the shape check lists the spaced one, and the CHECK admits it.
       const spacedAddress = `with space-${stamp}@example.invalid`;
       addresses.push(`not-an-address-${stamp}`, spacedAddress);
       const bad = run(`not-an-address-${stamp}`, serviceKey);
       const spaced = run(spacedAddress, serviceKey);
-      const countAfter = (await listSql<{ n: number }[]>`select count(*)::int as n from finances.allowed_emails`.catch(() => [{ n: -1 }]))[0].n;
+      const countAfter = (await listSql<{ n: number }[]>`select count(*)::int as n from finances.allowed_emails where email like ${"%" + stamp + "%"}`.catch(() => [{ n: -1 }]))[0].n;
       assert(
         labels.scriptOnce,
         first.code === 0 && /agregado/.test(first.out) && second.code === 0 && /ya estaba/.test(second.out) && !/agregado/.test(second.out) &&

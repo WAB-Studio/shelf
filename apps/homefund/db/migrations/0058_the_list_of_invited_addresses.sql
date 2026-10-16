@@ -21,6 +21,66 @@ REVOKE ALL ON TABLE "finances"."allowed_emails" FROM "anon", "authenticated", "s
 --> statement-breakpoint
 REVOKE ALL ON TABLE "finances"."sign_in_claims" FROM "anon", "authenticated", "service_role";
 --> statement-breakpoint
+-- RF-43/45: both tables are audited like every other write. Neither has an `id`, so `record_id` renders
+-- its primary key: the address, or `client_key/day`. Neither row carries a scope column, so both land
+-- unscoped and only their actor reads them back; a seed or a sign-in counter is a system write.
+CREATE OR REPLACE FUNCTION private.capture_audit()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_survivor jsonb;
+  v_before jsonb;
+  v_after jsonb;
+  v_record_id text;
+begin
+  if tg_op = 'DELETE' then
+    v_survivor := to_jsonb(old);
+    v_before := to_jsonb(old);
+    v_after := null;
+  elsif tg_op = 'INSERT' then
+    v_survivor := to_jsonb(new);
+    v_before := null;
+    v_after := to_jsonb(new);
+  else
+    v_survivor := to_jsonb(new);
+    v_before := to_jsonb(old);
+    v_after := to_jsonb(new);
+  end if;
+
+  if tg_table_name = 'transaction_labels' then
+    v_record_id := (v_survivor->>'transaction_id') || ':' || (v_survivor->>'label_id');
+  elsif tg_table_name = 'debt_terms' then
+    v_record_id := v_survivor->>'account_id';
+  elsif tg_table_name = 'allowed_emails' then
+    v_record_id := v_survivor->>'email';
+  elsif tg_table_name = 'sign_in_claims' then
+    v_record_id := (v_survivor->>'client_key') || '/' || (v_survivor->>'day');
+  else
+    v_record_id := v_survivor->>'id';
+  end if;
+
+  insert into finances.audit_log
+    (entity, record_id, action, actor_user_id, owner_user_id, group_id, before_data, after_data, occurred_at)
+  values
+    (tg_table_name, v_record_id, tg_op, (select auth.uid()),
+     (v_survivor->>'owner_user_id')::uuid, (v_survivor->>'group_id')::uuid,
+     v_before, v_after, now());
+  return null;
+end;
+$function$;
+--> statement-breakpoint
+revoke all on function private.capture_audit() from public, anon, authenticated, service_role;
+--> statement-breakpoint
+-- Before the seed below, so every address it lists leaves its INSERT in the log.
+CREATE TRIGGER capture_audit AFTER INSERT OR UPDATE OR DELETE ON "finances"."allowed_emails"
+  FOR EACH ROW EXECUTE FUNCTION private.capture_audit();
+--> statement-breakpoint
+CREATE TRIGGER capture_audit AFTER INSERT OR UPDATE OR DELETE ON "finances"."sign_in_claims"
+  FOR EACH ROW EXECUTE FUNCTION private.capture_audit();
+--> statement-breakpoint
 -- Whoever already keeps a fund here, and whoever a leader already invited, keeps asking for a link. Harness
 -- identities (`.invalid`) are left out of the users; an address the CHECK would refuse is skipped rather than
 -- failing the migration.
