@@ -1,7 +1,8 @@
 import type { ForeignRow } from "@/lib/log/merge";
 import { readSince, mergeForeign } from "@/lib/log/merge";
+import { applyTombstones, readTombstoneQueue, settleTombstones } from "@/lib/log/delete";
 import { markRetired, readSyncState, writeSyncState } from "@/lib/log/record";
-import { SYNC_BATCH, syncRequestSchema, syncResponseSchema, type SyncResponse, type SyncRow } from "./protocol";
+import { SYNC_BATCH, syncRequestSchema, syncResponseSchema, type SyncResponse, type SyncRow, type Tombstone } from "./protocol";
 import { failureCause, type SyncFailure } from "./failure";
 import { shareInFlight } from "./in-flight";
 import { planUploadRound } from "./upload-page";
@@ -48,11 +49,13 @@ async function postBatch(
   readerId: string,
   rows: SyncRow[],
   since: string | null,
+  tombstones: Tombstone[],
+  tombstonesSince: string | null,
 ): Promise<SyncResponse | "retired" | "reader"> {
   const response = await fetch(SYNC_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(syncRequestSchema.parse({ deviceId, readerId, rows, since })),
+    body: JSON.stringify(syncRequestSchema.parse({ deviceId, readerId, rows, since, tombstones, tombstonesSince })),
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -88,12 +91,17 @@ async function runSyncLocked(): Promise<SyncOutcome> {
   let pulledThroughCursor = state.pulledThroughCursor;
   let pushed = 0;
   let pulled = 0;
+  let removed = 0;
 
   try {
     for (let batch = 0; batch < MAX_BATCHES; batch++) {
       const { own, scannedThrough, scanned } = await readSince(pushedThroughLocalId ?? 0, SYNC_BATCH);
       const { rows } = planUploadRound(own, state.deviceId);
-      const response = await postBatch(state.deviceId, state.readerId, rows, pulledThroughCursor);
+      // Read every round, not once per call: a page sent leaves the queue
+      // shorter, and a delete made meanwhile joins it.
+      const queue = await readTombstoneQueue(state.readerId);
+      const marks = queue.pending.slice(0, SYNC_BATCH);
+      const response = await postBatch(state.deviceId, state.readerId, rows, pulledThroughCursor, marks, queue.since);
       if (response === "retired") {
         await markRetired();
         return { kind: "retired" };
@@ -104,6 +112,12 @@ async function runSyncLocked(): Promise<SyncOutcome> {
       // that only half lands must be read again next time, not skipped.
       await yieldToLoop();
       pulled += await mergeForeign(response.rows.map(toForeignRow));
+      // Marks are applied after the merge, so a row and the mark that deletes
+      // it in one answer never leave the row behind. The queue settles only
+      // once both landed: a round that fails before keeps every mark for the
+      // next one. A null mark cursor means none came back, never "start over".
+      removed += await applyTombstones(response.tombstones, state.deviceId);
+      await settleTombstones(state.readerId, marks, response.tombstoneCursor ?? queue.since);
 
       // The upload cursor follows what was scanned, not what was sent: a page
       // of foreign rows has nothing to send and still has to be left behind.
@@ -116,9 +130,10 @@ async function runSyncLocked(): Promise<SyncOutcome> {
       // Stop only once neither side has a next page waiting: a short scanned
       // page alone no longer ends the call, or a large foreign backlog would
       // never finish downloading behind a thin local log.
-      if (scanned < SYNC_BATCH && response.rows.length < SYNC_BATCH) break;
+      const marksWaiting = response.tombstones.length >= SYNC_BATCH || queue.pending.length > marks.length;
+      if (scanned < SYNC_BATCH && response.rows.length < SYNC_BATCH && !marksWaiting) break;
     }
-    if (pulled > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
+    if (pulled > 0 || removed > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
     return { kind: "done", pushed, pulled };
   } catch (error) {
     const cause =
