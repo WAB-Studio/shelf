@@ -3982,6 +3982,8 @@ async function main(): Promise<void> {
   await e5Suite();
   await e6Suite();
   await importScopeOwnerSuite(userId, scope);
+  await adjustmentFilterSuite(userId, scope);
+  await negativeCountSuite(userId);
   await importCategoryScopeSuite();
 }
 
@@ -5703,7 +5705,7 @@ async function e5Suite(): Promise<void> {
   const expectedUnreviewedExpense = model.filter((m) => m.kind === "expense" && !m.reviewed && (m.rule || m.awaiting)).map((m) => m.ref).sort();
   assert(
     next("transactionListConditions is the predicate the list and the export both run"),
-    conditions !== undefined && conditions({}).length === 0 && conditions({ kind: "income" }).length === 1 &&
+    conditions !== undefined && conditions({}).length === 0 && conditions({ kind: "income" }).length >= 1 &&
       viaConditions.value !== null &&
       sameList(mine(viaConditions.value.map((row) => row.description ?? "")), expectedUnreviewedExpense),
     viaConditions.value ? `selects ${mine(viaConditions.value.map((row) => row.description ?? "")).length} of ${expectedUnreviewedExpense.length}` : viaConditions.error,
@@ -6076,6 +6078,259 @@ async function importScopeOwnerSuite(
   const used = await trips(() => readImportScope());
   // Each read is one transaction of four statements (begin, settle, query, commit): 7 reads.
   assert(next("The reads fan out"), used <= 7 * 4, `${used} statements for 7 reads`);
+}
+
+// M23: expense and income leave a reconciliation's adjustment out, and `adjustments` selects them alone (RF-138, RF-23, RF-118).
+async function adjustmentFilterSuite(userId: string, scope: HarnessScope): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const open = async (name: string): Promise<string> => {
+    const { accountId } = await createAccount({
+      name: `${name} ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 1_000_000,
+      balanceOn: shiftDate(today, -10),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const incomeCategoryId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${incomeCategoryId}, ${userId}, ${`Harness T3 ingreso ${tag}`}, 'income', '#4C8C4A')`;
+  track("categories", incomeCategoryId);
+  const account = await open("Harness T3 filtro");
+  const other = await open("Harness T3 filtro destino");
+
+  const book = async (
+    description: string,
+    from: string | null,
+    to: string | null,
+    amountCents: number,
+    categoryId: string | null,
+  ): Promise<string> => {
+    const made = await createTransaction({
+      fromAccountId: from,
+      toAccountId: to,
+      amountCents,
+      occurredAt: today,
+      description: `${description} ${tag}`,
+      externalRef: null,
+      splits: categoryId ? [{ categoryId, amountCents }] : [],
+      labelIds: [],
+    });
+    keep("transactions", made.transactionId);
+    return made.transactionId;
+  };
+  const expenseId = await book("Harness T3 gasto", account, null, 100_000, scope.categoryId);
+  const incomeId = await book("Harness T3 ingreso", null, account, 50_000, incomeCategoryId);
+  const transferId = await book("Harness T3 traslado", account, other, 20_000, null);
+
+  // Derived is now 1 000 000 - 100 000 + 50 000 - 20 000 = 930 000. Count high, then low.
+  const gainedBy = await reconcileAccount({ accountId: account, reconciledOn: today, realMagnitudeCents: 1_000_000, expectedDerivedCents: 930_000 });
+  const lostBy = await reconcileAccount({ accountId: account, reconciledOn: today, realMagnitudeCents: 900_000, expectedDerivedCents: 1_000_000 });
+  const history = await listAccountReconciliations(account);
+  const inId = history.find((row) => row.gapCents === 70_000)?.transactionId;
+  const outId = history.find((row) => row.gapCents === -100_000)?.transactionId;
+  assert(
+    next("The fixture books one adjustment into the account and one out of it"),
+    gainedBy.ok && lostBy.ok && inId !== undefined && inId !== null && outId !== undefined && outId !== null,
+    `${JSON.stringify(gainedBy)} / ${JSON.stringify(lostBy)} / ${history.map((row) => row.gapCents).join(",")}`,
+  );
+  const adjustmentIds = [inId ?? "", outId ?? ""].sort();
+
+  const idsOf = async (filters: Parameters<typeof listTransactions>[0]) =>
+    (await listTransactions({ accountId: account, ...filters })).map((row) => row.id).sort();
+  const sameIds = (got: string[], want: string[]) => JSON.stringify([...got].sort()) === JSON.stringify([...want].sort());
+
+  const expenseIds = await idsOf({ kind: "expense" });
+  assert(
+    next("Expense leaves out an outgoing adjustment"),
+    sameIds(expenseIds, [expenseId]),
+    `expense filter listed ${expenseIds.length} rows: ${expenseIds.join(",")}; expected only ${expenseId}`,
+  );
+  const incomeIds = await idsOf({ kind: "income" });
+  assert(
+    next("Income leaves out an incoming adjustment"),
+    sameIds(incomeIds, [incomeId]),
+    `income filter listed ${incomeIds.length} rows: ${incomeIds.join(",")}; expected only ${incomeId}`,
+  );
+  const adjustmentRows = await listTransactions({ accountId: account, adjustments: true });
+  assert(
+    next("The adjustment filter selects both adjustments, each marked by its reconciliation"),
+    sameIds(adjustmentRows.map((row) => row.id), adjustmentIds) &&
+      adjustmentRows.every((row) => row.reconciliationId !== null),
+    `listed ${adjustmentRows.map((row) => `${row.id}/${row.reconciliationId}`).join(",")}; expected ${adjustmentIds.join(",")}`,
+  );
+  const allIds = await idsOf({});
+  assert(
+    next("The adjustment filter is off unless asked: no filter lists all five rows"),
+    sameIds(allIds, [expenseId, incomeId, transferId, ...adjustmentIds]),
+    `unfiltered list held ${allIds.length} rows`,
+  );
+  const offIds = await idsOf({ adjustments: false });
+  assert(
+    next("adjustments: false is the same as absent"),
+    sameIds(offIds, allIds),
+    `adjustments:false listed ${offIds.length} rows against ${allIds.length}`,
+  );
+  const transferIds = await idsOf({ kind: "transfer" });
+  assert(
+    next("Transfer is unchanged by the adjustment predicate"),
+    sameIds(transferIds, [transferId]),
+    `transfer filter listed ${transferIds.length} rows`,
+  );
+  const none = await idsOf({ kind: "expense", adjustments: true });
+  assert(
+    next("Expense and adjustments together select nothing"),
+    none.length === 0,
+    `${none.length} rows`,
+  );
+
+  const totalsOf = async (filters: Parameters<typeof getTransactionTotals>[0]) => {
+    const totals = await getTransactionTotals({ accountId: account, ...filters });
+    return { count: totals.count, net: totals.nets.reduce((sum, row) => sum + row.netCents, 0) };
+  };
+  const [tExpense, tIncome, tAdjust, tAll] = await Promise.all([
+    totalsOf({ kind: "expense" }),
+    totalsOf({ kind: "income" }),
+    totalsOf({ adjustments: true }),
+    totalsOf({}),
+  ]);
+  assert(
+    next("The totals count what the list lists"),
+    tExpense.count === 1 && tExpense.net === -100_000 &&
+      tIncome.count === 1 && tIncome.net === 50_000 &&
+      tAdjust.count === 2 && tAdjust.net === 0 &&
+      tAll.count === 5 && tAll.net === -50_000,
+    `expense ${JSON.stringify(tExpense)}, income ${JSON.stringify(tIncome)}, adjustments ${JSON.stringify(tAdjust)}, all ${JSON.stringify(tAll)}`,
+  );
+
+  const exportOf = async (filters: NonNullable<Parameters<typeof readExport>[0]["transactionFilters"]>) =>
+    ((await readExport({ entityKeys: ["transactions"], transactionFilters: { accountId: account, ...filters } })).transactions ?? []);
+  const [xExpense, xIncome, xAdjust, xAll] = await Promise.all([
+    exportOf({ kind: "expense" }),
+    exportOf({ kind: "income" }),
+    exportOf({ adjustments: true }),
+    exportOf({}),
+  ]);
+  assert(
+    next("The export narrows the same way"),
+    xExpense.length === 1 && xExpense[0].description === `Harness T3 gasto ${tag}` && !xExpense[0].adjustment &&
+      xIncome.length === 1 && xIncome[0].description === `Harness T3 ingreso ${tag}` &&
+      xAdjust.length === 2 && xAdjust.every((row) => row.adjustment === true) &&
+      xAll.length === 5 && xAll.filter((row) => row.adjustment === true).length === 2,
+    `export expense ${xExpense.length}, income ${xIncome.length}, adjustments ${xAdjust.length} (${xAdjust.map((row) => row.adjustment).join(",")}), all ${xAll.length}`,
+  );
+}
+
+// M22: a signed counted figure reaches the ledger with the account's sign (RF-137). The countings
+// start from a derived 0, so the expected books are the whole story: nothing else moves them.
+async function negativeCountSuite(userId: string): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const open = async (name: string, kind: "asset" | "liability"): Promise<string> => {
+    const { accountId } = await createAccount({
+      name: `${name} ${tag}`,
+      kind,
+      subtype: kind === "asset" ? "bank" : "card",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 0,
+      balanceOn: shiftDate(today, -10),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const asset = await open("Harness M22 activo", "asset");
+  const card = await open("Harness M22 tarjeta", "liability");
+
+  type Marked = { from_account_id: string | null; to_account_id: string | null; amount_cents: string };
+  const markedOf = (reconciliationId: string) =>
+    fixtureSql<Marked[]>`
+      select from_account_id, to_account_id, amount_cents::text
+      from transactions where reconciliation_id = ${reconciliationId}`;
+  const balanceOf = async (accountId: string) =>
+    (await fixtureSql<{ balance: string }[]>`
+      select private.account_settlement_balance_on(${accountId}, ${today}::date)::text as balance`)[0].balance;
+
+  const assetCount = await reconcileAccount({ accountId: asset, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: 0 });
+  const cardCount = await reconcileAccount({ accountId: card, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: 0 });
+  const assetId = assetCount.ok ? assetCount.id : "";
+  const cardId = cardCount.ok ? cardCount.id : "";
+
+  const assetStored = assetId ? await readColumn<string>("account_reconciliations", "id", assetId, "counted_balance_cents") : undefined;
+  assert(
+    next("An asset's negative count is stored negative"),
+    assetStored === "-500000",
+    `counted_balance_cents = ${assetStored}, ${JSON.stringify(assetCount)}`,
+  );
+  const assetMarked = assetId ? await markedOf(assetId) : [];
+  assert(
+    next("A negative count books the gap out of the asset"),
+    assetCount.ok && assetCount.gapCents === -500_000 && assetMarked.length === 1 &&
+      assetMarked[0].from_account_id === asset && assetMarked[0].to_account_id === null &&
+      assetMarked[0].amount_cents === "500000",
+    `${JSON.stringify(assetCount)} / ${JSON.stringify(assetMarked)}`,
+  );
+
+  const cardStored = cardId ? await readColumn<string>("account_reconciliations", "id", cardId, "counted_balance_cents") : undefined;
+  assert(
+    next("An overpaid card's negative count is stored positive"),
+    cardStored === "500000",
+    `counted_balance_cents = ${cardStored}, ${JSON.stringify(cardCount)}`,
+  );
+  const cardMarked = cardId ? await markedOf(cardId) : [];
+  assert(
+    next("An overpaid card's gap is booked into the card"),
+    cardCount.ok && cardCount.gapCents === 500_000 && cardMarked.length === 1 &&
+      cardMarked[0].to_account_id === card && cardMarked[0].from_account_id === null &&
+      cardMarked[0].amount_cents === "500000",
+    `${JSON.stringify(cardCount)} / ${JSON.stringify(cardMarked)}`,
+  );
+
+  const assetHistory = await listAccountReconciliations(asset);
+  const cardHistory = await listAccountReconciliations(card);
+  assert(
+    next("The asset's history reads counted -500000, gap -500000, derived 0"),
+    assetHistory.length === 1 && assetHistory[0].countedCents === -500_000 &&
+      assetHistory[0].gapCents === -500_000 && assetHistory[0].derivedCents === 0,
+    JSON.stringify(assetHistory),
+  );
+  assert(
+    next("The card's history reads counted +500000, gap +500000, derived 0"),
+    cardHistory.length === 1 && cardHistory[0].countedCents === 500_000 &&
+      cardHistory[0].gapCents === 500_000 && cardHistory[0].derivedCents === 0,
+    JSON.stringify(cardHistory),
+  );
+
+  const [assetBalance, cardBalance] = await Promise.all([balanceOf(asset), balanceOf(card)]);
+  assert(
+    next("Each balance afterwards equals what was counted"),
+    assetBalance === "-500000" && cardBalance === "500000",
+    `asset ${assetBalance}, card ${cardBalance}`,
+  );
+
+  const again = await reconcileAccount({ accountId: asset, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: -500_000 });
+  const againMarked = again.ok ? await markedOf(again.id) : [];
+  assert(
+    next("A negative count that matches the ledger books nothing"),
+    again.ok && again.gapCents === 0 && againMarked.length === 0,
+    `${JSON.stringify(again)} / ${JSON.stringify(againMarked)}`,
+  );
 }
 
 // M28: the importer picks a movement's or a rule's category by the scope of its account (RF-140).
