@@ -10,6 +10,9 @@ let deliverable = true;
 let answer: { error: { status?: number } | null } = { error: null };
 const otpCalls: { email: string; options: { shouldCreateUser: boolean; emailRedirectTo: string } }[] = [];
 const probed: string[] = [];
+// RP-131: the list stands in for `goals.allowed_emails`; every address below is on it unless a test says not.
+let allowed = true;
+const listChecked: string[] = [];
 
 // The seam is `@supabase/ssr` and `next/headers`, under the real `@repo/supabase-auth`: the act
 // loads that package with a dynamic import, which `mock.module` does not intercept (the real
@@ -36,6 +39,15 @@ const fakes: Record<string, unknown> = {
     }),
   },
 };
+
+mock.module("@/lib/auth/allowlist", {
+  namedExports: {
+    isEmailAllowed: async (email: string) => {
+      listChecked.push(email);
+      return allowed;
+    },
+  },
+});
 
 mock.module("@/lib/auth/deliverability", {
   namedExports: {
@@ -64,6 +76,8 @@ beforeEach(() => {
   answer = { error: null };
   otpCalls.length = 0;
   probed.length = 0;
+  allowed = true;
+  listChecked.length = 0;
 });
 
 test("a valid address on a deliverable domain asks Auth once, for a link back to /auth/confirm", async () => {
@@ -106,4 +120,43 @@ test("an address that is not one is refused with no probe and no call", async ()
   assert.deepEqual(await sendSignInLink("x"), { ok: false, error: "emailInvalid" });
   assert.equal(probed.length, 0);
   assert.equal(otpCalls.length, 0);
+});
+
+test("an address not on the list is refused as notInvited before DNS or Auth is asked", async () => {
+  allowed = false;
+  assert.deepEqual(await sendSignInLink("extrano@correo.test"), { ok: false, error: "notInvited" });
+  assert.deepEqual(listChecked, ["extrano@correo.test"]);
+  assert.equal(probed.length, 0);
+  assert.equal(otpCalls.length, 0);
+});
+
+test("an address on the list is checked once, probed once and sent once", async () => {
+  assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: true });
+  assert.deepEqual(listChecked, ["ana@correo.test"]);
+  assert.deepEqual(probed, ["correo.test"]);
+  assert.equal(otpCalls.length, 1);
+  assert.equal(otpCalls[0].options.shouldCreateUser, true);
+});
+
+test("an address on the list whose domain takes no mail is still refused as domainUndeliverable", async () => {
+  deliverable = false;
+  assert.deepEqual(await sendSignInLink("ana@muerto.test"), { ok: false, error: "domainUndeliverable" });
+  assert.equal(listChecked.length, 1);
+  assert.equal(otpCalls.length, 0);
+});
+
+test("a string that is no address never reaches the list", async () => {
+  assert.deepEqual(await sendSignInLink("x"), { ok: false, error: "emailInvalid" });
+  assert.equal(listChecked.length, 0);
+});
+
+test("the refusal and the two link screens read the words the user chose", async () => {
+  const { default: messages } = await import("@/messages/es/account.json");
+  const errors = messages.errors as Record<string, string>;
+  assert.equal(errors.notInvited, "Este correo no tiene invitación a GoalLog.");
+  assert.equal(errors.linkOtherBrowserTitle, "Abre el enlace en el navegador donde lo pediste");
+  assert.equal(
+    errors.linkOtherBrowserBody,
+    "Por seguridad el enlace solo entra en el navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.",
+  );
 });
