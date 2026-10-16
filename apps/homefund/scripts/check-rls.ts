@@ -1,7 +1,10 @@
 // Proves the access policies actually fire. Runs outside Next.js under Node 22
 // type stripping, so it reads `process.env` directly and pulls only
 // `pgErrorCode` from the app.
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 import { getTableColumns, is, sql as dsql } from "drizzle-orm";
 import { CasingCache } from "drizzle-orm/casing";
@@ -17,6 +20,7 @@ import {
   closeRun,
   openRun,
   registerEphemeralIdentity,
+  runId,
 } from "@repo/harness-registry";
 
 import { insertRow } from "@/db/insert-row";
@@ -175,6 +179,11 @@ async function main() {
     "REPORT  assertion 4 alone is worthless against an empty table; 2, 3 and 7 are what give it teeth.",
   );
 
+  if (process.env.RLS_ONLY === "m1") {
+    await checkAllowedEmailList();
+    return;
+  }
+
   await checkRepivotPolicies();
   await checkLedgerPolicies();
   await checkAnalyticsAggregates();
@@ -228,6 +237,7 @@ async function main() {
   await checkRecurringRuleIsolation();
   await checkSharedToggleLeaderOnly();
   await checkCategoryExistsProbe();
+  await checkAllowedEmailList();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -9797,6 +9807,607 @@ async function checkCategoryExistsProbe() {
     afterUser === "postgres" && probeCount === "0",
     `current_user = ${afterUser}, rows named 'rls category probe%' = ${probeCount}`,
   );
+}
+
+// Assertions 335-351: migration 0058, HomeFund's list of invited addresses and the daily counter of
+// sign-in links (RF-145, RF-143), the trigger that lists an address a leader invites, and the
+// `allow-email` script. Every row runs in a transaction it rolls back, except the script rows, which
+// write through a child process and remove what they wrote by exact address.
+//
+// Two hooks exist for proving a mutation red without touching the shared database:
+//   M1_MIGRATION_FILE  a path to a SQL file; each row drops 0058's objects inside its own transaction
+//                      and installs that file instead, so nothing outlives the ROLLBACK.
+//   M1_ALLOW_EMAIL_SCRIPT / M1_LIST_URL  run another script, against another database, for the script rows.
+const M1_ROLLBACK = Symbol("m1 rollback");
+type M1Tx = postgres.TransactionSql;
+type M1Verdict = { ok: boolean; detail: string };
+
+function m1MigrationFile(): string {
+  const dir = path.join(process.cwd(), "db", "migrations");
+  const found = readdirSync(dir).find((name) => /^0058_.*\.sql$/.test(name));
+  if (!found) throw new Error("db/migrations/0058_*.sql does not exist");
+  return path.join(dir, found);
+}
+
+// Drops what 0058 made and runs its statements again, inside the caller's transaction. Postgres DDL
+// is transactional, so the ROLLBACK puts the shared database back as it was.
+async function m1Install(tx: M1Tx): Promise<void> {
+  await tx.unsafe(`drop function if exists private.list_invited_email() cascade`);
+  await tx.unsafe(`drop table if exists finances.allowed_emails, finances.sign_in_claims cascade`);
+}
+
+async function m1RunMigration(tx: M1Tx, file: string): Promise<void> {
+  for (const statement of readFileSync(file, "utf8").split("--> statement-breakpoint")) {
+    if (statement.trim()) await tx.unsafe(statement);
+  }
+}
+
+// Runs `body` in a transaction that always rolls back. A thrown error fails every label it owns.
+async function m1Rows(
+  labels: string[],
+  body: (tx: M1Tx) => Promise<M1Verdict[]>,
+  options: { reinstall?: boolean; beforeMigration?: (tx: M1Tx) => Promise<void> } = {},
+): Promise<void> {
+  let verdicts: M1Verdict[] = labels.map(() => ({ ok: false, detail: "the body never ran" }));
+  await sql
+    .begin(async (tx) => {
+      const override = process.env.M1_MIGRATION_FILE;
+      if (options.reinstall || override) {
+        const file = override ?? m1MigrationFile();
+        await m1Install(tx);
+        if (options.beforeMigration) await options.beforeMigration(tx);
+        await m1RunMigration(tx, file);
+      }
+      verdicts = await body(tx);
+      throw M1_ROLLBACK;
+    })
+    .catch((error: unknown) => {
+      if (error === M1_ROLLBACK) return;
+      verdicts = labels.map(() => ({ ok: false, detail: `aborted — ${describeRefusal(error)}` }));
+    });
+  labels.forEach((label, i) => assert(label, verdicts[i].ok, verdicts[i].detail));
+}
+
+// The sqlstate a statement is refused with, or null when it was accepted. A savepoint keeps the
+// surrounding transaction usable.
+async function m1Refusal(tx: M1Tx, run: (sp: M1Tx) => Promise<unknown>): Promise<string | null> {
+  try {
+    await tx.savepoint(async (sp) => {
+      await run(sp as unknown as M1Tx);
+    });
+    return null;
+  } catch (error) {
+    return pgErrorCode(error) ?? "none";
+  }
+}
+
+async function m1Become(tx: M1Tx, role: "authenticated" | "anon" | "service_role", subject: string) {
+  const claims = JSON.stringify({ sub: subject, role, aud: role });
+  await tx`select set_config('request.jwt.claims', ${claims}, true), set_config('role', ${role}, true)`;
+}
+
+// A group with a leader who has a login and a plain member who has one, seeded the way the
+// member-management check does.
+async function m1Group(tx: M1Tx) {
+  const leader = randomUUID();
+  const member = randomUUID();
+  const groupId = randomUUID();
+  await tx`insert into auth.users (id) values (${leader}), (${member})`;
+  await tx`insert into app_users (id) values (${leader}), (${member})`;
+  await enterUserContext(tx, leader);
+  await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls m1', 'shared')`;
+  await tx`insert into group_members (group_id, user_id, name, role)
+    values (${groupId}, ${leader}, 'rls m1 leader', 'leader')`;
+  await tx`reset role`;
+  await tx`insert into group_members (group_id, user_id, name, role)
+    values (${groupId}, ${member}, 'rls m1 member', 'member')`;
+  return { leader, member, groupId };
+}
+
+async function m1Listed(tx: M1Tx, email: string): Promise<number> {
+  const [{ n }] = await tx<{ n: number }[]>`
+    select count(*)::int as n from finances.allowed_emails where email = ${email}`;
+  return n;
+}
+
+async function checkAllowedEmailList() {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const labels = {
+    listClosed: "335. authenticated, anon and service_role read nothing from the allowed list; RLS on, no policy",
+    claimsClosed: "336. the sign-in counter refuses select and insert to authenticated, anon and service_role",
+    noGrant: "337. neither table carries a privilege of any kind for the three API roles",
+    listShape: "338. the allowed list stores a folded address only, once",
+    claimsShape: "339. the counter holds a count from 1 to 1000, once per client and day",
+    seedUsers: "340. the seed lists every HomeFund user's address folded, and no harness .invalid address",
+    seedInvites: "341. the seed lists a pending invitation and skips an archived one",
+    leaderLists: "342. a leader's invitation lists the address folded; a row with no address lists nothing",
+    leaderUpdates: "343. a leader setting an invite address lists it; renaming the row lists nothing",
+    keepsRow: "344. an address already listed keeps its row when invited again",
+    memberNothing: "345. a plain member's attempt to invite is refused and lists nothing",
+    fnClosed: "346. only the trigger runs list_invited_email: a definer with a fixed search path, no caller may execute it",
+    scriptOnce: "347. allow-email lists an address once, folded; a bad shape exits 1 and lists nothing",
+    scriptCreates: "348. allow-email creates one confirmed Auth user, sends no mail, and creates none the second time",
+    scriptRerun: "349. a failed Auth create leaves the address listed and a rerun completes it",
+    scriptExisting: "350. allow-email leaves an Auth user that already exists as it is",
+    tail: "351. the rolled-back allowed-list transactions leave no trace",
+  };
+
+  const ROLES = ["authenticated", "anon", "service_role"] as const;
+  const TABLES = ["finances.allowed_emails", "finances.sign_in_claims"] as const;
+
+  await m1Rows([labels.listClosed], async (tx) => {
+    const [rel] = await tx<{ rls: boolean; policies: number }[]>`
+      select c.relrowsecurity as rls,
+        (select count(*)::int from pg_policy p where p.polrelid = c.oid) as policies
+      from pg_class c where c.oid = 'finances.allowed_emails'::regclass`;
+    const verdict: string[] = [];
+    let closed = true;
+    for (const role of ROLES) {
+      await m1Become(tx, role, randomUUID());
+      const code = await m1Refusal(tx, (sp) => sp`select email from finances.allowed_emails`);
+      await tx`reset role`;
+      verdict.push(`${role} = ${code ?? "accepted"}`);
+      if (code !== "42501") closed = false;
+    }
+    return [{ ok: closed && rel.rls === true && rel.policies === 0, detail: `${verdict.join(", ")}; RLS = ${rel.rls}, policies = ${rel.policies}` }];
+  });
+
+  await m1Rows([labels.claimsClosed], async (tx) => {
+    const verdict: string[] = [];
+    let closed = true;
+    const [rel] = await tx<{ rls: boolean; policies: number }[]>`
+      select c.relrowsecurity as rls,
+        (select count(*)::int from pg_policy p where p.polrelid = c.oid) as policies
+      from pg_class c where c.oid = 'finances.sign_in_claims'::regclass`;
+    for (const role of ROLES) {
+      await m1Become(tx, role, randomUUID());
+      const read = await m1Refusal(tx, (sp) => sp`select count from finances.sign_in_claims`);
+      const write = await m1Refusal(
+        tx,
+        (sp) => sp`insert into finances.sign_in_claims (client_key, day, "count") values (${"k-" + tag}, current_date, 1)`,
+      );
+      await tx`reset role`;
+      verdict.push(`${role}: select ${read ?? "accepted"}, insert ${write ?? "accepted"}`);
+      if (read !== "42501" || write !== "42501") closed = false;
+    }
+    return [{ ok: closed && rel.rls === true && rel.policies === 0, detail: `${verdict.join("; ")}; RLS = ${rel.rls}, policies = ${rel.policies}` }];
+  });
+
+  await m1Rows([labels.noGrant], async (tx) => {
+    const held: string[] = [];
+    for (const table of TABLES) {
+      for (const role of ROLES) {
+        const [row] = await tx<{ any_table: boolean; any_column: boolean }[]>`
+          select has_table_privilege(${role}, ${table}, 'select,insert,update,delete,truncate,references,trigger') as any_table,
+            has_any_column_privilege(${role}, ${table}, 'select,insert,update,references') as any_column`;
+        if (row.any_table || row.any_column) held.push(`${role} on ${table}`);
+      }
+    }
+    return [{ ok: held.length === 0, detail: held.length === 0 ? "no privilege held" : `held: ${held.join(", ")}` }];
+  });
+
+  await m1Rows([labels.listShape], async (tx) => {
+    const refused: Record<string, string | null> = {};
+    for (const bad of [` Ana-${tag}@X.com `, `Ana-${tag}@x.com`, `no-at-sign-${tag}`, `@x-${tag}.com`]) {
+      refused[bad] = await m1Refusal(tx, (sp) => sp`insert into finances.allowed_emails (email) values (${bad})`);
+    }
+    const good = `ana-${tag}@x.com`;
+    const stored = await tx<{ added_at: Date | null }[]>`
+      insert into finances.allowed_emails (email) values (${good}) returning added_at`;
+    const twice = await m1Refusal(tx, (sp) => sp`insert into finances.allowed_emails (email) values (${good})`);
+    const shapeOk = Object.values(refused).every((code) => code === "23514");
+    return [
+      {
+        ok: shapeOk && stored[0]?.added_at != null && twice === "23505",
+        detail: `unfolded or shapeless addresses refused = ${JSON.stringify(refused)}, folded address stored with added_at = ${stored[0]?.added_at ?? "none"}, second insert of it = ${twice ?? "accepted"}`,
+      },
+    ];
+  });
+
+  await m1Rows([labels.claimsShape], async (tx) => {
+    const outcome: Record<string, string | null> = {};
+    for (const n of [0, 1001, -1]) {
+      outcome[`count ${n}`] = await m1Refusal(
+        tx,
+        (sp) => sp`insert into finances.sign_in_claims (client_key, day, "count") values (${"k-" + tag}, current_date, ${n})`,
+      );
+    }
+    const edges = [1, 1000];
+    const accepted: (string | null)[] = [];
+    for (const n of edges) {
+      accepted.push(
+        await m1Refusal(
+          tx,
+          (sp) => sp`insert into finances.sign_in_claims (client_key, day, "count") values (${"edge-" + n + tag}, current_date, ${n})`,
+        ),
+      );
+    }
+    await tx`insert into finances.sign_in_claims (client_key, day, "count") values (${"dup-" + tag}, current_date, 1)`;
+    const dup = await m1Refusal(
+      tx,
+      (sp) => sp`insert into finances.sign_in_claims (client_key, day, "count") values (${"dup-" + tag}, current_date, 2)`,
+    );
+    const otherDay = await m1Refusal(
+      tx,
+      (sp) => sp`insert into finances.sign_in_claims (client_key, day, "count") values (${"dup-" + tag}, current_date + 1, 1)`,
+    );
+    return [
+      {
+        ok:
+          Object.values(outcome).every((code) => code === "23514") &&
+          accepted.every((code) => code === null) &&
+          dup === "23505" &&
+          otherDay === null,
+        detail: `out-of-range = ${JSON.stringify(outcome)}, edges 1 and 1000 = ${JSON.stringify(accepted)}, same client and day twice = ${dup ?? "accepted"}, same client next day = ${otherDay ?? "accepted"}`,
+      },
+    ];
+  });
+
+  // The seed: the migration is dropped and run again over fixtures planted first, inside one
+  // rolled-back transaction, so what it listed is what a fresh migrate would list.
+  const real = `Seed.Real.${tag}@Example.COM`;
+  const realFolded = real.toLowerCase();
+  const harnessAddress = `seed-${tag}@harness.invalid`;
+  const noApp = `seed.noapp.${tag}@example.com`;
+  const pending = `Seed.Pending.${tag}@Example.COM`;
+  const archived = `seed.archived.${tag}@example.com`;
+  const seedFixtures = async (tx: M1Tx) => {
+    const [a, b, c] = [randomUUID(), randomUUID(), randomUUID()];
+    await tx`insert into auth.users (id, email) values (${a}, ${" " + real + " "}), (${b}, ${harnessAddress}), (${c}, ${noApp})`;
+    await tx`insert into app_users (id) values (${a}), (${b})`;
+    const group = await m1Group(tx);
+    await enterUserContext(tx, group.leader);
+    await tx`insert into group_members (group_id, name, role, invite_email)
+      values (${group.groupId}, 'rls m1 pending', 'member', ${pending})`;
+    await tx`insert into group_members (group_id, name, role, invite_email)
+      values (${group.groupId}, 'rls m1 archived', 'member', ${archived})`;
+    await tx`reset role`;
+    await tx`update group_members set archived_at = now() where group_id = ${group.groupId} and invite_email = ${archived}`;
+  };
+  await m1Rows(
+    [labels.seedUsers, labels.seedInvites],
+    async (tx) => {
+      const listedOf = async (email: string) => m1Listed(tx, email);
+      const [missingUsers] = await tx<{ n: number }[]>`
+        select count(*)::int as n
+        from auth.users u join app_users a on a.id = u.id
+        where u.email is not null
+          and lower(btrim(u.email)) not like '%.invalid'
+          and position('@' in lower(btrim(u.email))) > 1
+          and not exists (select 1 from finances.allowed_emails e where e.email = lower(btrim(u.email)))`;
+      const [strayInvalid] = await tx<{ n: number }[]>`
+        select count(*)::int as n from finances.allowed_emails e
+        where e.email like '%.invalid'
+          and not exists (
+            select 1 from finances.group_members m
+            where lower(btrim(m.invite_email)) = e.email and m.user_id is null and m.archived_at is null)`;
+      const users = {
+        real: await listedOf(realFolded),
+        harness: await listedOf(harnessAddress),
+        noApp: await listedOf(noApp),
+      };
+      const invites = { pending: await listedOf(pending.toLowerCase()), archived: await listedOf(archived) };
+      return [
+        {
+          ok: users.real === 1 && users.harness === 0 && users.noApp === 0 && missingUsers.n === 0 && strayInvalid.n === 0,
+          detail: `user listed folded = ${users.real}, harness .invalid user = ${users.harness}, auth user with no app row = ${users.noApp}, app users missing from the list = ${missingUsers.n}, .invalid on the list with no pending invitation behind it = ${strayInvalid.n}`,
+        },
+        {
+          ok: invites.pending === 1 && invites.archived === 0,
+          detail: `pending invitation listed folded = ${invites.pending}, archived invitation listed = ${invites.archived}`,
+        },
+      ];
+    },
+    { reinstall: true, beforeMigration: seedFixtures },
+  );
+
+  await m1Rows([labels.leaderLists], async (tx) => {
+    const group = await m1Group(tx);
+    const invite = `Inv.${tag}@Y.invalid`;
+    await enterUserContext(tx, group.leader);
+    await tx`insert into group_members (group_id, name, role, invite_email)
+      values (${group.groupId}, 'rls m1 invited', 'member', ${invite})`;
+    await tx`reset role`;
+    const [{ total: totalBefore }] = await tx<{ total: number }[]>`select count(*)::int as total from finances.allowed_emails`;
+    await enterUserContext(tx, group.leader);
+    await tx`insert into group_members (group_id, name, role) values (${group.groupId}, 'rls m1 no login', 'member')`;
+    await tx`reset role`;
+    const [{ total: totalAfter }] = await tx<{ total: number }[]>`select count(*)::int as total from finances.allowed_emails`;
+    const folded = await m1Listed(tx, invite.toLowerCase());
+    const raw = await m1Listed(tx, invite);
+    return [
+      {
+        ok: folded === 1 && raw === 0 && totalAfter === totalBefore,
+        detail: `listed folded = ${folded}, listed as typed = ${raw}, rows after an invitation with no address = ${totalAfter - totalBefore} new`,
+      },
+    ];
+  });
+
+  await m1Rows([labels.leaderUpdates], async (tx) => {
+    const group = await m1Group(tx);
+    const invite = `Upd.${tag}@Y.invalid`;
+    await enterUserContext(tx, group.leader);
+    const [{ id }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role) values (${group.groupId}, 'rls m1 later', 'member') returning id`;
+    await tx`update group_members set invite_email = ${invite} where id = ${id}`;
+    await tx`reset role`;
+    const afterSet = await m1Listed(tx, invite.toLowerCase());
+    // A revoked address stays revoked while the row is only renamed.
+    await tx`delete from finances.allowed_emails where email = ${invite.toLowerCase()}`;
+    await enterUserContext(tx, group.leader);
+    await tx`update group_members set name = 'rls m1 renamed' where id = ${id}`;
+    await tx`reset role`;
+    const afterRename = await m1Listed(tx, invite.toLowerCase());
+    return [
+      {
+        ok: afterSet === 1 && afterRename === 0,
+        detail: `listed after setting the address = ${afterSet}, listed again after a rename alone = ${afterRename} (expected 0)`,
+      },
+    ];
+  });
+
+  await m1Rows([labels.keepsRow], async (tx) => {
+    const group = await m1Group(tx);
+    const address = `keep.${tag}@y.invalid`;
+    await tx`insert into finances.allowed_emails (email, added_at) values (${address}, now() - interval '1 day')`;
+    const [{ ts: before }] = await tx<{ ts: string }[]>`select added_at::text as ts from finances.allowed_emails where email = ${address}`;
+    await enterUserContext(tx, group.leader);
+    const code = await m1Refusal(
+      tx,
+      (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+        values (${group.groupId}, 'rls m1 again', 'member', ${address.toUpperCase()})`,
+    );
+    await tx`reset role`;
+    const rows = await tx<{ ts: string }[]>`select added_at::text as ts from finances.allowed_emails where email = ${address}`;
+    return [
+      {
+        ok: code === null && rows.length === 1 && rows[0].ts === before,
+        detail: `invitation = ${code ?? "accepted"}, rows = ${rows.length}, added_at ${rows[0]?.ts} (was ${before})`,
+      },
+    ];
+  });
+
+  await m1Rows([labels.memberNothing], async (tx) => {
+    const group = await m1Group(tx);
+    const address = `mem.${tag}@y.invalid`;
+    await enterUserContext(tx, group.member);
+    const code = await m1Refusal(
+      tx,
+      (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+        values (${group.groupId}, 'rls m1 sneaky', 'member', ${address})`,
+    );
+    await tx`reset role`;
+    const listed = await m1Listed(tx, address);
+    return [
+      {
+        ok: code === "42501" && listed === 0,
+        detail: `member's insert = ${code ?? "accepted"}, address listed = ${listed}`,
+      },
+    ];
+  });
+
+  await m1Rows([labels.fnClosed], async (tx) => {
+    const [fn] = await tx<
+      { anon: boolean; service: boolean; authenticated: boolean; definer: boolean; fixed_path: boolean; trig: number }[]
+    >`select
+        has_function_privilege('anon', 'private.list_invited_email()', 'execute') as anon,
+        has_function_privilege('service_role', 'private.list_invited_email()', 'execute') as service,
+        has_function_privilege('authenticated', 'private.list_invited_email()', 'execute') as authenticated,
+        p.prosecdef as definer,
+        coalesce('search_path=""' = any (p.proconfig), false) as fixed_path,
+        (select count(*)::int from pg_trigger t
+           where t.tgfoid = p.oid and t.tgrelid = 'finances.group_members'::regclass and not t.tgisinternal) as trig
+      from pg_proc p where p.oid = 'private.list_invited_email()'::regprocedure`;
+    await m1Become(tx, "authenticated", randomUUID());
+    const code = await m1Refusal(tx, (sp) => sp`select private.list_invited_email()`);
+    await tx`reset role`;
+    return [
+      {
+        ok: !fn.anon && !fn.service && !fn.authenticated && fn.definer && fn.fixed_path && fn.trig === 1 && code === "42501",
+        detail: `execute anon=${fn.anon} service_role=${fn.service} authenticated=${fn.authenticated}, definer = ${fn.definer}, search_path fixed = ${fn.fixed_path}, triggers on group_members = ${fn.trig}, direct call as authenticated = ${code ?? "accepted"}`,
+      },
+    ];
+  });
+
+  await m1ScriptRows(tag, labels);
+
+  const [{ n: leftovers }] = await sql<{ n: number }[]>`
+    select count(*)::int as n from finances.allowed_emails
+    where email like ${"%" + tag + "%"}`.catch(() => [{ n: process.env.M1_MIGRATION_FILE ? 0 : -1 }]);
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  assert(
+    labels.tail,
+    afterUser === "postgres" && leftovers === 0,
+    `current_user = ${afterUser}, listed addresses carrying this run's tag = ${leftovers}`,
+  );
+}
+
+type M1Labels = Record<string, string>;
+
+function m1StackEnv(): Record<string, string> {
+  const out = execFileSync("npx", ["--yes", "supabase@2.119.0", "status", "-o", "env"], {
+    cwd: path.resolve(process.cwd(), "..", ".."),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  const values: Record<string, string> = {};
+  for (const line of out.split("\n")) {
+    const match = /^([A-Z_]+)="(.*)"$/.exec(line.trim());
+    if (match) values[match[1]] = match[2];
+  }
+  return values;
+}
+
+async function m1Mail(mailpit: string, address: string): Promise<{ reachable: boolean; messages: number }> {
+  try {
+    const response = await fetch(`${mailpit}/api/v1/search?query=${encodeURIComponent(`to:${address}`)}`);
+    if (!response.ok) return { reachable: false, messages: -1 };
+    const body = (await response.json()) as { messages_count?: number; total?: number };
+    const count = body.messages_count ?? body.total;
+    return typeof count === "number" ? { reachable: true, messages: count } : { reachable: false, messages: -1 };
+  } catch {
+    return { reachable: false, messages: -1 };
+  }
+}
+
+// The script rows write for real, through a child process, against the local stack only. They
+// remove by exact address and register every Auth user they cause in the harness registry.
+async function m1ScriptRows(tag: string, labels: M1Labels) {
+  const scriptLabels = [labels.scriptOnce, labels.scriptCreates, labels.scriptRerun, labels.scriptExisting];
+  const fail = (detail: string) => scriptLabels.forEach((label) => assert(label, false, detail));
+
+  const apiUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const listUrl = process.env.M1_LIST_URL ?? process.env.MIGRATION_DATABASE_URL ?? "";
+  const local = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/;
+  if (!local.test(apiUrl) || !/@(127\.0\.0\.1|localhost):/.test(listUrl) || !/@(127\.0\.0\.1|localhost):/.test(process.env.DATABASE_URL ?? "")) {
+    fail(`refusing to run against anything but the local stack: API ${apiUrl || "unset"}`);
+    return;
+  }
+  let stack: Record<string, string>;
+  try {
+    stack = m1StackEnv();
+  } catch (error) {
+    fail(`the local stack's keys could not be read — ${String(error)}`);
+    return;
+  }
+  const serviceKey = stack.SERVICE_ROLE_KEY ?? "";
+  const mailpit = stack.MAILPIT_URL ?? "http://127.0.0.1:54324";
+  if (!serviceKey) {
+    fail("the local stack reported no service-role key");
+    return;
+  }
+
+  const listSql = postgres(listUrl, { prepare: false, max: 1 });
+  const stamp = randomUUID().slice(0, 8);
+  const addresses: string[] = [];
+  const fresh = (): { typed: string; folded: string } => {
+    const folded = `harness-allow-${stamp}-${addresses.length}@example.invalid`;
+    addresses.push(folded);
+    const typed = folded.replace("harness-allow", "Harness-Allow").replace("example", "Example");
+    return { typed, folded };
+  };
+
+  const run = (address: string, key: string) => {
+    const script = process.env.M1_ALLOW_EMAIL_SCRIPT;
+    const [command, args] = script
+      ? ["node", ["--import", "tsx", script, address]]
+      : ["npm", ["run", "--silent", "allow-email", "--", address]];
+    const result = spawnSync(command, args as string[], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      timeout: 90_000,
+      env: {
+        ...process.env,
+        MIGRATION_DATABASE_URL: listUrl,
+        NEXT_PUBLIC_SUPABASE_URL: apiUrl,
+        SUPABASE_SERVICE_ROLE_KEY: key,
+      },
+    });
+    return { code: result.status, out: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+  };
+  const authUsers = (address: string) =>
+    sql<{ id: string; confirmed: boolean }[]>`
+      select id, email_confirmed_at is not null as confirmed from auth.users where email = ${address}`;
+  const listRows = (address: string) =>
+    listSql<{ added_at: string }[]>`select added_at::text from finances.allowed_emails where email = ${address}`;
+  const register = async (id: string, email: string) => {
+    await sql`insert into harness.identities (user_id, run_id, email, disposition)
+      values (${id}, ${runId()}, ${email}, 'ephemeral') on conflict (user_id) do nothing`;
+  };
+
+  try {
+    // 347: once, folded, a bad shape refused.
+    {
+      const a = fresh();
+      const first = run(a.typed, serviceKey);
+      for (const user of await authUsers(a.folded)) await register(user.id, a.folded);
+      const rowsAfterFirst = await listRows(a.folded).catch(() => []);
+      const second = run(a.typed, serviceKey);
+      const rowsAfterSecond = await listRows(a.folded).catch(() => []);
+      const countBefore = (await listSql<{ n: number }[]>`select count(*)::int as n from finances.allowed_emails`.catch(() => [{ n: -1 }]))[0].n;
+      const bad = run(`not-an-address-${stamp}`, serviceKey);
+      const spaced = run(`with space-${stamp}@example.invalid`, serviceKey);
+      const countAfter = (await listSql<{ n: number }[]>`select count(*)::int as n from finances.allowed_emails`.catch(() => [{ n: -1 }]))[0].n;
+      assert(
+        labels.scriptOnce,
+        first.code === 0 && /agregado/.test(first.out) && second.code === 0 && /ya estaba/.test(second.out) && !/agregado/.test(second.out) &&
+          rowsAfterFirst.length === 1 && rowsAfterSecond.length === 1 && rowsAfterSecond[0].added_at === rowsAfterFirst[0].added_at &&
+          bad.code === 1 && spaced.code === 1 && countBefore === countAfter && countBefore !== -1,
+        `first run exit ${first.code} «${first.out.trim().split("\n").pop()}», second exit ${second.code} «${second.out.trim().split("\n").pop()}», rows ${rowsAfterFirst.length}/${rowsAfterSecond.length} under the folded address, bad shapes exit ${bad.code}/${spaced.code} with ${countAfter - countBefore} rows added`,
+      );
+    }
+
+    // 348: one confirmed Auth user, no mail, none on the second run.
+    {
+      const a = fresh();
+      const before = await m1Mail(mailpit, a.folded);
+      const first = run(a.typed, serviceKey);
+      const afterFirst = await authUsers(a.folded);
+      for (const user of afterFirst) await register(user.id, a.folded);
+      const mail = await m1Mail(mailpit, a.folded);
+      const second = run(a.typed, serviceKey);
+      const afterSecond = await authUsers(a.folded);
+      assert(
+        labels.scriptCreates,
+        before.reachable && mail.reachable && first.code === 0 && second.code === 0 &&
+          afterFirst.length === 1 && afterFirst[0].confirmed === true && mail.messages === 0 &&
+          afterSecond.length === 1 && afterSecond[0].id === afterFirst[0]?.id,
+        `exit ${first.code}/${second.code}, Auth users after run 1 = ${afterFirst.length} (confirmed = ${afterFirst[0]?.confirmed}), after run 2 = ${afterSecond.length}, messages for the address = ${mail.messages} (mailbox reachable = ${mail.reachable})`,
+      );
+    }
+
+    // 349: a refused create leaves the address listed; the rerun completes it.
+    {
+      const a = fresh();
+      const broken = run(a.typed, "not-a-real-key");
+      const listedAfterBreak = await listRows(a.folded).catch(() => []);
+      const usersAfterBreak = await authUsers(a.folded);
+      for (const user of usersAfterBreak) await register(user.id, a.folded);
+      const rerun = run(a.typed, serviceKey);
+      const usersAfterRerun = await authUsers(a.folded);
+      for (const user of usersAfterRerun) await register(user.id, a.folded);
+      assert(
+        labels.scriptRerun,
+        broken.code !== 0 && broken.code !== null && listedAfterBreak.length === 1 && usersAfterBreak.length === 0 &&
+          rerun.code === 0 && usersAfterRerun.length === 1 && usersAfterRerun[0].confirmed === true,
+        `broken key exit ${broken.code}, listed = ${listedAfterBreak.length}, Auth users = ${usersAfterBreak.length}; rerun exit ${rerun.code}, Auth users = ${usersAfterRerun.length}`,
+      );
+    }
+
+    // 350: an address that already has an Auth user keeps it untouched.
+    {
+      const a = fresh();
+      // Made through the admin API, as a real invited person's row is: a bare insert into auth.users
+      // leaves no identity row and GoTrue then refuses to create the address a second time.
+      const made = await fetch(`${apiUrl}/auth/v1/admin/users`, {
+        method: "POST",
+        headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, "content-type": "application/json" },
+        body: JSON.stringify({ email: a.folded, email_confirm: false }),
+      });
+      const existing = ((await made.json()) as { id?: string }).id ?? "";
+      if (existing) await register(existing, a.folded);
+      const result = run(a.typed, serviceKey);
+      const users = await authUsers(a.folded);
+      const listed = await listRows(a.folded).catch(() => []);
+      assert(
+        labels.scriptExisting,
+        result.code === 0 && users.length === 1 && users[0].id === existing && users[0].confirmed === false && listed.length === 1,
+        `exit ${result.code} «${result.out.trim().split("\n").slice(0, 2).join(" / ").slice(0, 160)}», Auth users = ${users.length}, same id = ${users[0]?.id === existing}, confirmed flipped = ${users[0]?.confirmed}, listed = ${listed.length}`,
+      );
+    }
+  } finally {
+    for (const address of addresses) {
+      await listSql`delete from finances.allowed_emails where email = ${address}`.catch(() => undefined);
+      const ids = (await authUsers(address)).map((user) => user.id);
+      for (const id of ids) {
+        await sql`delete from harness.identities where user_id = ${id}`.catch(() => undefined);
+        await sql`delete from app_users where id = ${id}`.catch(() => undefined);
+        await sql`delete from auth.users where id = ${id}`.catch(() => undefined);
+      }
+    }
+    await listSql.end();
+  }
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile
