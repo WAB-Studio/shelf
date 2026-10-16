@@ -5,7 +5,7 @@
 // A deploy changes no byte of this file and so installs no new worker, and
 // `cacheFirst` never evicts. Bumping the name is what drops an old asset pool;
 // `SHELL_BUILD` below is what keeps a later deploy from rebuilding it.
-const CACHE_NAME = "reading-shell-v12";
+const CACHE_NAME = "reading-shell-v13";
 
 // The shell the cache is allowed to hold, read off the current `/` every time
 // the network answers one. A deploy changes the hashed script names in that
@@ -48,7 +48,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      const pages = await Promise.all(
+      const fetched = await Promise.all(
         SHELL_ROUTES.map(async (route) => {
           // Omitting credentials for "/cuenta" forces the signed-out render
           // even when the tab installing the worker happens to hold a
@@ -59,6 +59,8 @@ self.addEventListener("install", (event) => {
           return { route, response, html: await response.clone().text() };
         }),
       );
+      // A refusal or an error page is a page to draw, never one to keep.
+      const pages = fetched.filter((page) => page.response.ok);
       // The sweep runs before any chunk lands, or it would delete the ones
       // another page's precache had just stored.
       const home = pages.find((page) => page.route === "/");
@@ -159,22 +161,36 @@ async function retireOtherBuilds(cache, response) {
 // the response just never gets written back.
 async function navigate(request, event) {
   const cache = await caches.open(CACHE_NAME);
-  const path = new URL(request.url).pathname;
+  const url = new URL(request.url);
+  const path = url.pathname;
   try {
     const response = await Promise.race([fetch(request), rejectAfter(NAVIGATION_TIMEOUT_MS)]);
-    if (!NO_OVERWRITE_ROUTES.has(path)) cache.put(request, response.clone());
+    // Only a good page is kept, and never a lookup: "/?q=<word>" is one
+    // address per word, so storing each would grow the cache without bound.
+    // `redirected` is a guard a page navigation never reaches (it sees an opaque
+    // redirect, not ok); kept for a followed redirect, unproven by any spec.
+    const isLookup = path === "/" && url.search !== "";
+    if (response.ok && !response.redirected && !isLookup && !NO_OVERWRITE_ROUTES.has(path)) {
+      cache.put(request, response.clone());
+    }
     // "/" alone: every page names a different set of chunks, so only one
     // route can stand for the build without reading a change into a move
     // between screens. It is also the route a reader opens first.
     // Held open past the response rather than awaited before it: the reader
     // waits for the screen, never for the cache to be swept.
-    if (path === "/") event.waitUntil(retireOtherBuilds(cache, response.clone()));
+    if (path === "/" && response.ok) event.waitUntil(retireOtherBuilds(cache, response.clone()));
     return response;
   } catch {
     // "/cuenta" ignores the query: the tab is chosen on the client from the
     // address, so one cached copy serves both.
     const shell = await cache.match(request, { ignoreSearch: path === "/cuenta" });
     if (shell) return shell;
+    // A lookup never visited online opens on the box, which reads the word
+    // from the address.
+    if (path === "/") {
+      const home = await cache.match("/");
+      if (home) return home;
+    }
     if (path.startsWith("/registro/")) {
       const generic = await cache.match("/registro/_");
       if (generic) return generic;
