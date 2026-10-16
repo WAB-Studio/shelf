@@ -15,6 +15,8 @@ import {
   type DismissPlanNoticesInput,
 } from "@/lib/validation/rhythm";
 import { TIME_UNITS } from "@/lib/units/time";
+import { freezeClosedMonths } from "@/lib/plan/rhythm-freeze";
+import { removeRhythmSchema } from "@/lib/validation/goal-edit";
 import { TIME_ZONE, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
@@ -23,6 +25,7 @@ import { NamedError } from "@/lib/actions/named-error";
 const MAX_TIME_RHYTHM = 44_640;
 
 export type SetRhythmResult = { ok: true } | { ok: false; error: MessageKey };
+export type RemoveRhythmResult = { ok: true } | { ok: false; error: MessageKey };
 export type DismissPlanNoticeResult = { ok: true } | { ok: false; error: MessageKey };
 
 /**
@@ -89,17 +92,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
             else plan_seen end
         where id in (select id from ok) returning id
       ),
-      ins as (
-        insert into month_budgets (user_id, goal_id, month, amount)
-        select ${person.id}, ok.id, d.first,
-               ok.rhythm * (least(ok.horizon, d.next) - greatest(ok.opened, d.first)) / (d.next - d.first)
-        from ok, generate_series(
-          date_trunc('month', ok.opened), date_trunc('month', ${today}::date) - interval '1 month', interval '1 month'
-        ) m, lateral (select m::date as first, (m + interval '1 month')::date as next) d
-        where ok.rhythm is not null
-        on conflict (goal_id, month) do nothing
-        returning 1
-      ),
+      ins as (${freezeClosedMonths(sql`(select id from ok)`, sql`(select rhythm from ok)`, today)}),
       rel as (
         update one_offs set planned_month = null
         where goal_id in (select id from ok where rhythm is null and lower(trim(measure_unit)) = any(${timeUnits}))
@@ -128,6 +121,41 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
   if (goal.holder) return { ok: false, error: "tree.errors.holderNoRhythm" };
   if (!goal.measured) return { ok: false, error: "roadmap.errors.rhythmNoMeasure" };
   if (goal.timed && amount > MAX_TIME_RHYTHM) return { ok: false, error: "roadmap.errors.rhythmRange" };
+
+  revalidatePath(`/metas/${goalId}`, "layout");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/**
+ * Takes a goal's rhythm away (RP-127) in one statement. The months already over are frozen first,
+ * each at the plan it was lived against (RP-76), so the rhythm going rewrites no past figure; the
+ * open month and the ones to come keep no amount. The CTEs read one snapshot, so `g.rhythm` is the
+ * old value. The AI has no tool for this (RP-119).
+ */
+export async function removeRhythm(input: unknown): Promise<RemoveRhythmResult> {
+  const parsed = removeRhythmSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "month.errors.signedOut" };
+
+  const { goalId } = parsed.data;
+  const rows = await withGoalsDb((tx) =>
+    tx.execute<{ rhythm: number | null }>(sql`
+      with g as (
+        select id, rhythm from goals where id = ${goalId} and user_id = ${person.id}
+      ),
+      ins as (${freezeClosedMonths(sql`(select id from g)`, sql`(select rhythm from g)`, todayInZone())}),
+      upd as (
+        update goals set rhythm = null where id in (select id from g where rhythm is not null) returning id
+      )
+      select rhythm from g
+    `),
+  );
+
+  if (!rows[0]) return { ok: false, error: "plan.errors.goalNotFound" };
+  if (rows[0].rhythm === null) return { ok: false, error: "roadmap.errors.noRhythm" };
 
   revalidatePath(`/metas/${goalId}`, "layout");
   revalidatePath("/");
