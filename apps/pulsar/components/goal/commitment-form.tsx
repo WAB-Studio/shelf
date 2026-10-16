@@ -4,8 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import Link from "next/link";
+
 import { addCommitment } from "@/app/actions/plan";
+import { editCadence } from "@/app/actions/plan-edit";
+import type { Cadence } from "@/lib/day/types";
 import { addCommitmentSchema, type AddCommitmentInput } from "@/lib/validation/plan";
+import { editCadenceSchema } from "@/lib/validation/plan-edit";
 import { Button, Chip, ChipRow, Field, FieldPair, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
 import { messageKey, type MessageKey, type SourceKey } from "@/i18n/translator";
 
@@ -23,6 +28,9 @@ export type CommitmentFormProps = {
   // by the page: a second source is a seeded row, never a case this form
   // hardcodes.
   sources: { key: string; labelKey: SourceKey; unit: string }[];
+  // Cadence-only edit (RP-127): the form opens on the row's cadence, asks for nothing else and saves
+  // through `editCadence`. `goalName` then names the place the way back and «Cancelar» return to.
+  edit?: { commitmentId: string; cadence: Cadence };
 };
 
 // RP-12's five cadences (`lib/day/types.ts`'s `Cadence`), in the order of
@@ -55,7 +63,7 @@ const THRESHOLD_ERRORS: MessageKey[] = ["plan.errors.thresholdInvalid"];
  * refuse never leaves the device — the same shape `NewGoalForm` already
  * takes. No new server code.
  */
-export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sources }: CommitmentFormProps) {
+export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sources, edit }: CommitmentFormProps) {
   const t = useTranslations();
   const router = useRouter();
   // Held until the answer: a transition would end before it, and a second tap would write a second row.
@@ -65,9 +73,16 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
 
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [cadenceKind, setCadenceKind] = useState<CadenceKind>("daily");
-  const [weekdays, setWeekdays] = useState<number[]>([]);
-  const [cadenceN, setCadenceN] = useState("");
+  const start = edit?.cadence;
+  const [cadenceKind, setCadenceKind] = useState<CadenceKind>(start?.kind ?? "daily");
+  const [weekdays, setWeekdays] = useState<number[]>(start?.kind === "weekdays" ? start.days : []);
+  const [cadenceN, setCadenceN] = useState(
+    start?.kind === "times_per_week" || start?.kind === "times_per_month"
+      ? String(start.count)
+      : start?.kind === "every_n_days"
+        ? String(start.n)
+        : "",
+  );
   const [satisfaction, setSatisfaction] = useState<SatisfactionKind>("tap");
   const [targetQuantity, setTargetQuantity] = useState("");
   const [unit, setUnit] = useState("");
@@ -82,9 +97,11 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
     );
   }
 
-  function buildInput(): AddCommitmentInput | null {
-    const cadence =
-      cadenceKind === "daily"
+  // Where saving and «Cancelar» return: the screen the person came from.
+  const returnTo = habit ? (edit ? `/metas/habitos/${edit.commitmentId}` : "/metas") : `/metas/${goalId}`;
+
+  function buildCadence() {
+    return cadenceKind === "daily"
         ? ({ cadenceKind: "daily" } as const)
         : cadenceKind === "weekdays"
           ? ({ cadenceKind: "weekdays", cadenceWeekdays: weekdays } as const)
@@ -93,6 +110,32 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
             : cadenceKind === "every_n_days"
               ? ({ cadenceKind: "every_n_days", cadenceN: Number(cadenceN) } as const)
               : ({ cadenceKind: "times_per_month", cadenceN: Number(cadenceN) } as const);
+  }
+
+  function handleEdit() {
+    if (!edit) return;
+    setError(null);
+    const input = { commitmentId: edit.commitmentId, ...buildCadence() };
+    const parsed = editCadenceSchema.safeParse(input);
+    if (!parsed.success) {
+      setError(messageKey(parsed.error.issues[0].message));
+      return;
+    }
+
+    setPending(true);
+    void editCadence(input).then((result) => {
+      if (result.ok) {
+        router.push(returnTo);
+        router.refresh();
+      } else {
+        setPending(false);
+        setError(result.error);
+      }
+    });
+  }
+
+  function buildInput(): AddCommitmentInput | null {
+    const cadence = buildCadence();
 
     const done =
       satisfaction === "tap"
@@ -116,6 +159,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
 
   function handleSubmit() {
     if (pending) return;
+    if (edit) return handleEdit();
     setError(null);
 
     const input = buildInput();
@@ -124,7 +168,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
     setPending(true);
     void addCommitment(input).then((result) => {
       if (result.ok) {
-        router.push(habit ? "/metas" : `/metas/${goalId}`);
+        router.push(returnTo);
         router.refresh();
       } else {
         setPending(false);
@@ -147,19 +191,23 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
   return (
     <Page>
       <ScreenHeader
-        title={t(habit ? "plan.habitForm.title" : "plan.commitmentForm.title")}
-        back={{ href: habit ? "/metas" : `/metas/${goalId}`, place: goalName }}
+        title={
+          edit ? t("goal.commitments.cadenceTitle") : t(habit ? "plan.habitForm.title" : "plan.commitmentForm.title")
+        }
+        back={{ href: returnTo, place: goalName }}
       />
 
-      <Field
-        label={t("plan.commitmentForm.whatLabel")}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        invalid={nameRefusal !== undefined}
-        hint={nameRefusal}
-      />
+      {edit ? null : (
+        <Field
+          label={t("plan.commitmentForm.whatLabel")}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          invalid={nameRefusal !== undefined}
+          hint={nameRefusal}
+        />
+      )}
 
-      {habit ? (
+      {habit && !edit ? (
         <TextArea
           label={t("plan.habitForm.noteLabel")}
           placeholder={t("plan.habitForm.notePlaceholder")}
@@ -243,6 +291,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
         ) : null}
       </Section>
 
+      {edit ? null : (
       <Section label={t("plan.commitmentForm.doneByLabel")}>
         <ChipRow>
           {SATISFACTION_KINDS.filter((kind) => kind !== "evidence" || sources.length > 0).map((kind) => (
@@ -314,6 +363,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
           </>
         ) : null}
       </Section>
+      )}
 
       {error && !ownedRefusal ? (
         <Text as="p" tone="ink" variant="sentence">
@@ -322,8 +372,21 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
       ) : null}
 
       <Button block onClick={handleSubmit} disabled={pending}>
-        {t(pending ? "plan.commitmentForm.submitting" : "plan.commitmentForm.submit")}
+        {t(
+          edit
+            ? pending
+              ? "plan.commitmentForm.saving"
+              : "plan.commitmentForm.save"
+            : pending
+              ? "plan.commitmentForm.submitting"
+              : "plan.commitmentForm.submit",
+        )}
       </Button>
+      {edit ? (
+        <Button asChild block variant="outline">
+          <Link href={returnTo}>{t("plan.commitmentForm.cancel")}</Link>
+        </Button>
+      ) : null}
     </Page>
   );
 }
