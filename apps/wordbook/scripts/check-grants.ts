@@ -1,6 +1,8 @@
 /**
- * Drives the grant layer of `reading.word_answers`, `reading.phrase_notes`
- * and `reading.client_spend` against the real database — DELETE never even
+ * Drives the grants of `reading`, and the policies of the two tables this
+ * file proves (`lookup_tombstones`, `allowed_emails`), against the real
+ * database. For `reading.word_answers`, `reading.phrase_notes` and
+ * `reading.client_spend` the grant layer alone — DELETE never even
  * attempted, because SELECT and INSERT alone already prove the REVOKE
  * (AGENTS.md, "Code"). No policy exists on these three, so no
  * `auth.users` row is needed for a role switch to mean anything, unlike
