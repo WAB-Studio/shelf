@@ -165,6 +165,9 @@ import {
   transactionRowSchema,
 } from "@/lib/spreadsheet/schema";
 import { createTransactionSchema } from "@/lib/validation/transaction";
+import { and, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { transactions } from "@/db/schema";
 import en from "@/messages/en.json";
 import es from "@/messages/es.json";
 
@@ -3741,6 +3744,8 @@ async function main(): Promise<void> {
   console.log("");
   await recurringRuleCategoryScopeSuite(scope, groupless);
   await recurringRuleCategoryFitSuite(userId, scope, groupless, fellow);
+  console.log("");
+  await e5Suite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -4699,5 +4704,856 @@ async function recurringRuleCategoryFitSuite(
     next("Rewriting a rule onto the category of a fund the caller is not in is a scope violation and keeps the old one"),
     fundUpdateRefused?.serverError === "recurringRules.errors.scopeViolation" && fundKept?.category_id === expenseId,
     `serverError = ${fundUpdateRefused?.serverError ?? "none"}, stored category is own = ${fundKept?.category_id === expenseId}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// E5 · settings loaders in one transaction, one listing predicate, one minimum-payment
+// rule, one seed walk. Written from the contract, so each module the plan adds is reached
+// through a dynamic import: a missing export fails its own assertion, never the whole run.
+// ---------------------------------------------------------------------------
+
+// The driver's own debug hook, wrapped once: every statement the pool puts on the wire,
+// text included, so "one transaction" is counted as BEGINs rather than inferred from a
+// round-trip formula that depends on how many reads a loader happens to need.
+const wiredStatements: string[] = [];
+let wiredCapture = false;
+
+function wireStatementLog(): void {
+  const options = (
+    globalThis as unknown as {
+      sql: { options: { debug: (...args: unknown[]) => void } };
+    }
+  ).sql.options;
+  const original = options.debug;
+  options.debug = (...args: unknown[]) => {
+    if (wiredCapture) wiredStatements.push(String(args[1]));
+    original(...args);
+  };
+}
+
+async function statementsOf<T>(run: () => Promise<T>): Promise<{ value: T; texts: string[] }> {
+  wiredStatements.length = 0;
+  wiredCapture = true;
+  try {
+    const value = await run();
+    return { value, texts: [...wiredStatements] };
+  } finally {
+    wiredCapture = false;
+  }
+}
+
+const beginsIn = (texts: string[]): number => texts.filter((t) => /^\s*begin\b/i.test(t)).length;
+const settlesIn = (texts: string[]): number => texts.filter((t) => /set_config/i.test(t)).length;
+const readsOf = (texts: string[], table: string): number =>
+  texts.filter((t) => t.includes(`from "${table}"`)).length;
+
+// A module the plan adds, or the reason it is not there: the assertion that needs it fails
+// by name instead of the whole run failing on a link error.
+async function loadE5Module(specifier: string): Promise<Record<string, unknown>> {
+  try {
+    return (await import(specifier)) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+async function attempt<T>(run: () => Promise<T>): Promise<{ value: T | null; error: string }> {
+  try {
+    return { value: await run(), error: "" };
+  } catch (error) {
+    return { value: null, error: rootMessage(error) };
+  }
+}
+
+type E5Node = {
+  id: string;
+  name: string;
+  color: string | null;
+  childCount: number;
+  children: { id: string; name: string; color: string | null }[];
+};
+type E5Member = {
+  id: string;
+  name: string;
+  role: string;
+  userId: string | null;
+  inviteEmail: string | null;
+  archivedAt: Date | null;
+};
+type E5MembersScreen = { members: E5Member[]; isLeader: boolean } | null;
+type E5CategoriesScreen = {
+  groupName: string | null;
+  isLeader: boolean;
+  categories: E5Node[];
+  personal: E5Node[];
+  group: E5Node[];
+  parents: { id: string; name: string }[];
+  usedColors: string[];
+};
+type E5Label = { id: string; name: string; color: string | null; movementCount: number; budgetCount: number };
+type E5LabelsScreen = {
+  groupName: string | null;
+  isLeader: boolean;
+  personal: E5Label[];
+  group: E5Label[];
+  usedColors: { personal: string[]; group: string[] };
+};
+
+type E5Owner = { column: "owner_user_id" | "group_id"; id: string };
+
+// The category tree of one scope and kind, straight from the table: parents by name, each
+// with its children by name. The loader's nodes are folded to the same strings to compare.
+async function rawCategoryTree(owner: E5Owner, kind: "expense" | "income"): Promise<string[]> {
+  const rows = await fixtureSql<{ name: string; kids: string }[]>`
+    select p.name, coalesce(string_agg(c.name, ',' order by c.name), '') as kids
+    from categories p
+    left join categories c on c.parent_id = p.id
+    where p.parent_id is null and p.kind = ${kind} and p.${fixtureSql(owner.column)} = ${owner.id}
+    group by p.id, p.name
+    order by p.name`;
+  return rows.map((row) => `${row.name}[${row.kids}]`);
+}
+
+const foldNodes = (nodes: E5Node[]): string[] =>
+  nodes.map((node) => `${node.name}[${node.children.map((child) => child.name).join(",")}]`);
+
+async function rawParentIds(owner: E5Owner, kind: "expense" | "income"): Promise<string[]> {
+  const rows = await fixtureSql<{ id: string }[]>`
+    select id from categories
+    where parent_id is null and kind = ${kind} and ${fixtureSql(owner.column)} = ${owner.id}
+    order by name`;
+  return rows.map((row) => row.id);
+}
+
+async function rawTopColors(owner: E5Owner): Promise<string[]> {
+  const rows = await fixtureSql<{ color: string }[]>`
+    select distinct color from categories
+    where parent_id is null and color is not null and ${fixtureSql(owner.column)} = ${owner.id}
+    order by color`;
+  return rows.map((row) => row.color);
+}
+
+async function rawLabels(owner: E5Owner): Promise<string[]> {
+  const rows = await fixtureSql<{ name: string; color: string | null; mc: number; bc: number }[]>`
+    select l.name, l.color,
+      (select count(*)::int from transaction_labels tl where tl.label_id = l.id) as mc,
+      (select count(*)::int from budgets b where b.label_id = l.id) as bc
+    from labels l where l.${fixtureSql(owner.column)} = ${owner.id}
+    order by l.name`;
+  return rows.map((row) => `${row.name}|${row.color}|${row.mc}|${row.bc}`);
+}
+
+async function rawLabelColors(owner: E5Owner): Promise<string[]> {
+  const rows = await fixtureSql<{ color: string }[]>`
+    select distinct color from labels
+    where color is not null and ${fixtureSql(owner.column)} = ${owner.id} order by color`;
+  return rows.map((row) => row.color);
+}
+
+const foldLabels = (rows: E5Label[]): string[] =>
+  rows.map((row) => `${row.name}|${row.color}|${row.movementCount}|${row.budgetCount}`);
+
+const sameList = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
+const sameSet = (a: readonly string[], b: readonly string[]): boolean =>
+  sameList([...a].sort(), [...b].sort());
+
+// A movement as the fixture knows it: what a person would say about it, written from the
+// scenario and never read back from a query. The expected set of every filter is computed
+// from these.
+type E5Movement = {
+  ref: string;
+  kind: "income" | "expense" | "transfer";
+  accounts: string[];
+  categories: string[];
+  labels: string[];
+  creator: string;
+  rule: boolean;
+  reviewed: boolean;
+  awaiting: boolean;
+};
+
+async function e5Suite(): Promise<void> {
+  wireStatementLog();
+  const today = todayInBogota();
+  const tag = randomUUID().slice(0, 8);
+
+  const leader = await createMembershipFreeUser();
+  const groupName = `Harness fondo ajustes ${tag}`;
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: groupName, leaderName: "Harness lider ajustes", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const [seeded] = await fixtureSql<{ member_id: string; account_id: string }[]>`
+    select
+      (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
+      (select id from accounts where group_id = ${groupId} and subtype = 'efectivo') as account_id`;
+  track("group_members", seeded.member_id);
+  track("accounts", seeded.account_id);
+  const seededCategories = await fixtureSql<{ id: string }[]>`
+    select id from categories where group_id = ${groupId}`;
+  for (const row of seededCategories) track("categories", row.id);
+  const cashId = seeded.account_id;
+
+  const fellow = await seedFellowMember(leader.id, groupId);
+  await seedPendingInvite({
+    groupId,
+    memberId: randomUUID(),
+    actorId: leader.id,
+    name: "Harness invitada viva",
+    email: `e5-live-${tag}@harness.invalid`,
+    archived: false,
+  });
+  await seedPendingInvite({
+    groupId,
+    memberId: randomUUID(),
+    actorId: leader.id,
+    name: "Harness invitada archivada",
+    email: `e5-archived-${tag}@harness.invalid`,
+    archived: true,
+  });
+
+  const { accountId: bankId } = await asUser(leader, () =>
+    createAccount({
+      name: `Harness banco del fondo ${tag}`,
+      kind: "asset",
+      subtype: "bancaria",
+      ownerUserId: null,
+      groupId,
+      isShared: true,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 5_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  keep("accounts", bankId);
+  const { accountId: ownAccountId } = await asUser(leader, () =>
+    createAccount({
+      name: `Harness cuenta propia ${tag}`,
+      kind: "asset",
+      subtype: "bancaria",
+      ownerUserId: leader.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 2_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  keep("accounts", ownAccountId);
+
+  const [expenseOne, expenseTwo] = (
+    await fixtureSql<{ id: string }[]>`
+      select id from categories
+      where group_id = ${groupId} and kind = 'expense' and parent_id is null order by name limit 2`
+  ).map((row) => row.id);
+  const [incomeOne] = (
+    await fixtureSql<{ id: string }[]>`
+      select id from categories
+      where group_id = ${groupId} and kind = 'income' and parent_id is null order by name limit 1`
+  ).map((row) => row.id);
+
+  // The leader's personal set: it must differ from the group's, or "personal" and "group"
+  // could be swapped without a figure moving.
+  const personalScope = { ownerUserId: leader.id } as const;
+  const { categoryId: ownParent } = await asUser(leader, () =>
+    createCategory({ scope: personalScope, name: `Harness propia gastos ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  const { categoryId: ownChild } = await asUser(leader, () =>
+    createCategory({ scope: personalScope, name: `Harness propia hija ${tag}`, kind: "expense", parentId: ownParent, color: "#7C3AED" }),
+  );
+  const { categoryId: ownIncome } = await asUser(leader, () =>
+    createCategory({ scope: personalScope, name: `Harness propia ingreso ${tag}`, kind: "income", parentId: null, color: "#15803D" }),
+  );
+  for (const id of [ownParent, ownChild, ownIncome]) track("categories", id);
+
+  const groupLabelUsed = (await asUser(leader, () =>
+    createLabel({ scope: { groupId }, name: `Harness grupo usada ${tag}`, color: "#B45309" }),
+  )).labelId;
+  const groupLabelFree = (await asUser(leader, () =>
+    createLabel({ scope: { groupId }, name: `Harness grupo libre ${tag}`, color: "#BE185D" }),
+  )).labelId;
+  const ownLabelUsed = (await asUser(leader, () =>
+    createLabel({ scope: personalScope, name: `Harness propia usada ${tag}`, color: "#1D4ED8" }),
+  )).labelId;
+  const ownLabelFree = (await asUser(leader, () =>
+    createLabel({ scope: personalScope, name: `Harness propia libre ${tag}`, color: "#047857" }),
+  )).labelId;
+  for (const id of [groupLabelUsed, groupLabelFree, ownLabelUsed, ownLabelFree]) track("labels", id);
+
+  // Movements. Every one is written through the app's own createTransaction, as the person
+  // it names; the review flags go in after, as the owner, because nothing in the app writes
+  // `awaiting_counterparty` yet and the rule stamp comes from the generator.
+  const { recurringRuleId } = await asUser(leader, () =>
+    createRecurringRule({
+      fromAccountId: cashId,
+      toAccountId: null,
+      amountCents: 30_000,
+      categoryId: expenseOne,
+      description: `Harness regla ${tag}`,
+      frequency: "monthly",
+      intervalN: 1,
+      dayOfMonth: 5,
+      nextRunOn: shiftDate(today, 20),
+      endsOn: null,
+    }),
+  );
+  keep("recurring_rules", recurringRuleId);
+
+  const model: E5Movement[] = [];
+  const ids = new Map<string, string>();
+  const book = async (
+    who: HarnessUser,
+    entry: Omit<E5Movement, "creator" | "rule" | "reviewed" | "awaiting"> &
+      Partial<Pick<E5Movement, "rule" | "reviewed" | "awaiting">>,
+    from: string | null,
+    to: string | null,
+    amount: number,
+  ): Promise<void> => {
+    const { transactionId } = await asUser(who, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: to,
+        amountCents: amount,
+        occurredAt: today,
+        description: entry.ref,
+        externalRef: entry.ref,
+        splits: entry.categories.map((categoryId) => ({ categoryId, amountCents: amount })),
+        labelIds: entry.labels,
+      }),
+    );
+    keep("transactions", transactionId);
+    ids.set(entry.ref, transactionId);
+    model.push({ rule: false, reviewed: false, awaiting: false, ...entry, creator: who.id });
+  };
+  const r = (suffix: string) => `e5-${tag}-${suffix}`;
+
+  await book(leader, { ref: r("m1"), kind: "expense", accounts: [cashId], categories: [expenseOne], labels: [groupLabelUsed] }, cashId, null, 11_100);
+  await book(fellow, { ref: r("m2"), kind: "expense", accounts: [bankId], categories: [expenseTwo], labels: [] }, bankId, null, 12_200);
+  await book(leader, { ref: r("m3"), kind: "income", accounts: [cashId], categories: [incomeOne], labels: [] }, null, cashId, 13_300);
+  await book(leader, { ref: r("m4"), kind: "transfer", accounts: [cashId, bankId], categories: [], labels: [] }, cashId, bankId, 14_400);
+  await book(leader, { ref: r("m5"), kind: "expense", accounts: [cashId], categories: [expenseOne], labels: [], rule: true }, cashId, null, 15_500);
+  await book(leader, { ref: r("m6"), kind: "expense", accounts: [cashId], categories: [expenseTwo], labels: [], awaiting: true }, cashId, null, 16_600);
+  await book(leader, { ref: r("m7"), kind: "expense", accounts: [cashId], categories: [expenseTwo], labels: [], awaiting: true, reviewed: true }, cashId, null, 17_700);
+  await book(leader, { ref: r("m8"), kind: "expense", accounts: [cashId], categories: [expenseTwo], labels: [], rule: true, reviewed: true }, cashId, null, 18_800);
+  await book(leader, { ref: r("m9"), kind: "expense", accounts: [ownAccountId], categories: [ownParent], labels: [ownLabelUsed] }, ownAccountId, null, 19_900);
+
+  await asOwner(leader.id, async (tx) => {
+    for (const m of model) {
+      if (m.rule) await tx`update transactions set recurring_rule_id = ${recurringRuleId} where id = ${ids.get(m.ref)!}`;
+      if (m.awaiting) await tx`update transactions set awaiting_counterparty = true where id = ${ids.get(m.ref)!}`;
+      if (m.reviewed) await tx`update transactions set reviewed_at = now() where id = ${ids.get(m.ref)!}`;
+    }
+  });
+
+  const { budgetId: groupBudget } = await asUser(leader, () =>
+    createBudget({ ownerUserId: null, groupId, categoryId: expenseOne, accountId: null, labelId: groupLabelUsed, period: "monthly", limitCents: 90_000, thresholdPct: 80, name: `Harness presupuesto grupo ${tag}` }),
+  );
+  keep("budgets", groupBudget);
+  const { budgetId: ownBudget } = await asUser(leader, () =>
+    createBudget({ ownerUserId: leader.id, groupId: null, categoryId: ownParent, accountId: null, labelId: ownLabelUsed, period: "monthly", limitCents: 90_000, thresholdPct: 80, name: `Harness presupuesto propio ${tag}` }),
+  );
+  keep("budgets", ownBudget);
+
+  const solo = await createMembershipFreeUser();
+  const soloScope = { ownerUserId: solo.id } as const;
+  const soloIds: string[] = [];
+  const { categoryId: soloParent } = await asUser(solo, () =>
+    createCategory({ scope: soloScope, name: `Harness solo gastos ${tag}`, kind: "expense", parentId: null, color: "#0369A1" }),
+  );
+  const { categoryId: soloChild } = await asUser(solo, () =>
+    createCategory({ scope: soloScope, name: `Harness solo hija ${tag}`, kind: "expense", parentId: soloParent, color: "#9333EA" }),
+  );
+  const { categoryId: soloOther } = await asUser(solo, () =>
+    createCategory({ scope: soloScope, name: `Harness solo otra ${tag}`, kind: "expense", parentId: null, color: "#C2410C" }),
+  );
+  soloIds.push(soloParent, soloChild, soloOther);
+  for (const id of soloIds) track("categories", id);
+  const soloLabel = (await asUser(solo, () =>
+    createLabel({ scope: soloScope, name: `Harness solo etiqueta ${tag}`, color: "#0F766E" }),
+  )).labelId;
+  track("labels", soloLabel);
+
+  console.log(`REPORT  e5 identities: leader ${leader.id}, fellow ${fellow.id}, solo ${solo.id}.`);
+  const asLeader = <T>(run: () => Promise<T>) => asUser(leader, run);
+  const groupOwner: E5Owner = { column: "group_id", id: groupId };
+  const leaderOwner: E5Owner = { column: "owner_user_id", id: leader.id };
+  const soloOwner: E5Owner = { column: "owner_user_id", id: solo.id };
+
+  const membersMod = await loadE5Module("@/db/queries/group-members");
+  const categoriesMod = await loadE5Module("@/db/queries/categories");
+  const labelsMod = await loadE5Module("@/db/queries/labels");
+  const membersLoader = membersMod.getMembersScreenData as
+    | ((o: { archived: boolean }) => Promise<E5MembersScreen>)
+    | undefined;
+  const categoriesLoader = categoriesMod.getCategoriesScreenData as
+    | ((kind: "expense" | "income") => Promise<E5CategoriesScreen>)
+    | undefined;
+  const labelsLoader = labelsMod.getLabelsScreenData as (() => Promise<E5LabelsScreen>) | undefined;
+  const missing = (name: string) => `${name} is not exported`;
+
+  // ---- Members -------------------------------------------------------------
+  const rawNames = async (archived: boolean): Promise<string[]> =>
+    (
+      await fixtureSql<{ name: string }[]>`
+        select name from group_members
+        where group_id = ${groupId} and (archived_at is not null) = ${archived} order by name`
+    ).map((row) => row.name);
+  const liveNames = await rawNames(false);
+  const archivedNames = await rawNames(true);
+
+  const live = membersLoader
+    ? await attempt(() => asLeader(() => membersLoader({ archived: false })))
+    : { value: null, error: missing("getMembersScreenData") };
+  const gone = membersLoader
+    ? await attempt(() => asLeader(() => membersLoader({ archived: true })))
+    : { value: null, error: missing("getMembersScreenData") };
+  assert(
+    next("getMembersScreenData(live) lists the group's unarchived members by name, the invited and not-yet-claimed included"),
+    live.value !== null &&
+      sameList(live.value.members.map((m) => m.name), liveNames) &&
+      liveNames.includes("Harness invitada viva") &&
+      liveNames.includes("Harness miembra") &&
+      !liveNames.includes("Harness invitada archivada"),
+    live.value ? `names ${live.value.members.map((m) => m.name).join(" | ")} against ${liveNames.join(" | ")}` : live.error,
+  );
+  assert(
+    next("getMembersScreenData(archived) lists the archived members alone"),
+    gone.value !== null &&
+      archivedNames.length === 1 &&
+      sameList(gone.value.members.map((m) => m.name), archivedNames) &&
+      gone.value.members.every((m) => m.archivedAt !== null),
+    gone.value ? `names ${gone.value.members.map((m) => m.name).join(" | ")} against ${archivedNames.join(" | ")}` : gone.error,
+  );
+  const soloMembers = membersLoader
+    ? await attempt(() => asUser(solo, () => membersLoader({ archived: false })))
+    : { value: null, error: missing("getMembersScreenData") };
+  assert(
+    next("getMembersScreenData is null for a caller with no group"),
+    membersLoader !== undefined && soloMembers.error === "" && soloMembers.value === null,
+    membersLoader ? `returned ${JSON.stringify(soloMembers.value)} ${soloMembers.error}` : missing("getMembersScreenData"),
+  );
+  const fellowMembers = membersLoader
+    ? await attempt(() => asUser(fellow, () => membersLoader({ archived: false })))
+    : { value: null, error: missing("getMembersScreenData") };
+  assert(
+    next("getMembersScreenData names the leader as leader and the fellow member as not"),
+    live.value?.isLeader === true && fellowMembers.value?.isLeader === false,
+    `leader ${live.value?.isLeader}, fellow ${fellowMembers.value?.isLeader} ${fellowMembers.error}`,
+  );
+  if (membersLoader) await asLeader(() => membersLoader({ archived: false }));
+  const membersCost = membersLoader
+    ? await attempt(() => statementsOf(() => asLeader(() => membersLoader({ archived: false }))))
+    : { value: null, error: missing("getMembersScreenData") };
+  assert(
+    next("getMembersScreenData opens one transaction and settles the session once"),
+    membersCost.value !== null && beginsIn(membersCost.value.texts) === 1 && settlesIn(membersCost.value.texts) === 1,
+    membersCost.value
+      ? `${beginsIn(membersCost.value.texts)} BEGIN(s), ${settlesIn(membersCost.value.texts)} settle(s), ${membersCost.value.texts.length} statements`
+      : membersCost.error,
+  );
+
+  // ---- Categories ----------------------------------------------------------
+  const cats = categoriesLoader
+    ? await attempt(() => asLeader(() => categoriesLoader("expense")))
+    : { value: null, error: missing("getCategoriesScreenData") };
+  const catsIncome = categoriesLoader
+    ? await attempt(() => asLeader(() => categoriesLoader("income")))
+    : { value: null, error: missing("getCategoriesScreenData") };
+  const groupExpense = await rawCategoryTree(groupOwner, "expense");
+  const personalExpense = await rawCategoryTree(leaderOwner, "expense");
+  const groupIncome = await rawCategoryTree(groupOwner, "income");
+  assert(
+    next("getCategoriesScreenData for a grouped caller: the group's tree, the caller's own tree, the leader flag and the fund name"),
+    cats.value !== null &&
+      groupExpense.length > 1 && personalExpense.length > 0 &&
+      sameList(foldNodes(cats.value.categories), groupExpense) &&
+      sameList(foldNodes(cats.value.group), groupExpense) &&
+      sameList(foldNodes(cats.value.personal), personalExpense) &&
+      cats.value.isLeader === true && cats.value.groupName === groupName,
+    cats.value
+      ? `group [${foldNodes(cats.value.group).join(" ")}], personal [${foldNodes(cats.value.personal).join(" ")}], leader ${cats.value.isLeader}, name ${cats.value.groupName}`
+      : cats.error,
+  );
+  const catsParents = await rawParentIds(groupOwner, "expense");
+  const catsColors = await rawTopColors(groupOwner);
+  assert(
+    next("getCategoriesScreenData: the parent picker holds the scope's top-level ids and the used colours both kinds of top-level"),
+    cats.value !== null &&
+      sameList(cats.value.parents.map((p) => p.id), catsParents) &&
+      sameSet(cats.value.usedColors, catsColors),
+    cats.value ? `parents ${cats.value.parents.length}/${catsParents.length}, colours ${cats.value.usedColors.length}/${catsColors.length}` : cats.error,
+  );
+  assert(
+    next("getCategoriesScreenData follows the kind it is given"),
+    catsIncome.value !== null &&
+      groupIncome.length > 0 &&
+      sameList(foldNodes(catsIncome.value.categories), groupIncome) &&
+      !sameList(groupIncome, groupExpense) &&
+      sameList(foldNodes(catsIncome.value.personal), await rawCategoryTree(leaderOwner, "income")),
+    catsIncome.value ? `income group [${foldNodes(catsIncome.value.categories).join(" ")}]` : catsIncome.error,
+  );
+  const soloCats = categoriesLoader
+    ? await attempt(() => asUser(solo, () => categoriesLoader("expense")))
+    : { value: null, error: missing("getCategoriesScreenData") };
+  const soloTree = await rawCategoryTree(soloOwner, "expense");
+  assert(
+    next("getCategoriesScreenData for an ungrouped caller: the personal set once, no group, no fund name, not a leader"),
+    soloCats.value !== null &&
+      soloTree.length === 2 &&
+      sameList(foldNodes(soloCats.value.categories), soloTree) &&
+      sameList(foldNodes(soloCats.value.personal), soloTree) &&
+      soloCats.value.group.length === 0 &&
+      soloCats.value.groupName === null && soloCats.value.isLeader === false &&
+      sameList(soloCats.value.parents.map((p) => p.id), await rawParentIds(soloOwner, "expense")) &&
+      sameSet(soloCats.value.usedColors, await rawTopColors(soloOwner)),
+    soloCats.value ? `categories [${foldNodes(soloCats.value.categories).join(" ")}], group ${soloCats.value.group.length}, name ${soloCats.value.groupName}` : soloCats.error,
+  );
+  if (categoriesLoader) {
+    await asLeader(() => categoriesLoader("expense"));
+    await asUser(solo, () => categoriesLoader("expense"));
+  }
+  const catsCostGrouped = categoriesLoader
+    ? await attempt(() => statementsOf(() => asLeader(() => categoriesLoader("expense"))))
+    : { value: null, error: missing("getCategoriesScreenData") };
+  const catsCostSolo = categoriesLoader
+    ? await attempt(() => statementsOf(() => asUser(solo, () => categoriesLoader("expense"))))
+    : { value: null, error: missing("getCategoriesScreenData") };
+  assert(
+    next("getCategoriesScreenData costs one transaction, and an ungrouped caller's personal set is read once, not twice"),
+    catsCostGrouped.value !== null && catsCostSolo.value !== null &&
+      beginsIn(catsCostGrouped.value.texts) === 1 && beginsIn(catsCostSolo.value.texts) === 1 &&
+      settlesIn(catsCostGrouped.value.texts) === 1 && settlesIn(catsCostSolo.value.texts) === 1 &&
+      readsOf(catsCostSolo.value.texts, "categories") >= 1 &&
+      readsOf(catsCostSolo.value.texts, "categories") <= 3 &&
+      readsOf(catsCostGrouped.value.texts, "categories") <= 4,
+    catsCostGrouped.value && catsCostSolo.value
+      ? `grouped ${beginsIn(catsCostGrouped.value.texts)} BEGIN, ${readsOf(catsCostGrouped.value.texts, "categories")} category reads; ungrouped ${beginsIn(catsCostSolo.value.texts)} BEGIN, ${readsOf(catsCostSolo.value.texts, "categories")} category reads`
+      : `${catsCostGrouped.error} ${catsCostSolo.error}`,
+  );
+
+  // ---- Labels --------------------------------------------------------------
+  const labs = labelsLoader
+    ? await attempt(() => asLeader(() => labelsLoader()))
+    : { value: null, error: missing("getLabelsScreenData") };
+  const rawGroupLabels = await rawLabels(groupOwner);
+  const rawOwnLabels = await rawLabels(leaderOwner);
+  assert(
+    next("getLabelsScreenData: both scopes with their movement and budget counts"),
+    labs.value !== null &&
+      rawGroupLabels.some((row) => row.endsWith("|1|1")) &&
+      rawOwnLabels.some((row) => row.endsWith("|1|1")) &&
+      sameList(foldLabels(labs.value.group), rawGroupLabels) &&
+      sameList(foldLabels(labs.value.personal), rawOwnLabels),
+    labs.value ? `group [${foldLabels(labs.value.group).join(" ; ")}], personal [${foldLabels(labs.value.personal).join(" ; ")}]` : labs.error,
+  );
+  assert(
+    next("getLabelsScreenData: used colours per scope, leader flag and fund name"),
+    labs.value !== null &&
+      sameSet(labs.value.usedColors.group, await rawLabelColors(groupOwner)) &&
+      sameSet(labs.value.usedColors.personal, await rawLabelColors(leaderOwner)) &&
+      labs.value.isLeader === true && labs.value.groupName === groupName,
+    labs.value ? `group colours ${labs.value.usedColors.group.join(",")}, personal ${labs.value.usedColors.personal.join(",")}` : labs.error,
+  );
+  const soloLabs = labelsLoader
+    ? await attempt(() => asUser(solo, () => labelsLoader()))
+    : { value: null, error: missing("getLabelsScreenData") };
+  assert(
+    next("getLabelsScreenData for an ungrouped caller: own labels only, no group, no fund name, not a leader"),
+    soloLabs.value !== null &&
+      soloLabs.value.group.length === 0 && soloLabs.value.usedColors.group.length === 0 &&
+      sameList(foldLabels(soloLabs.value.personal), await rawLabels(soloOwner)) &&
+      soloLabs.value.personal.length === 1 &&
+      soloLabs.value.groupName === null && soloLabs.value.isLeader === false,
+    soloLabs.value ? `personal ${soloLabs.value.personal.length}, group ${soloLabs.value.group.length}, name ${soloLabs.value.groupName}` : soloLabs.error,
+  );
+  if (labelsLoader) await asLeader(() => labelsLoader());
+  const labsCost = labelsLoader
+    ? await attempt(() => statementsOf(() => asLeader(() => labelsLoader())))
+    : { value: null, error: missing("getLabelsScreenData") };
+  assert(
+    next("getLabelsScreenData opens one transaction and settles the session once"),
+    labsCost.value !== null && beginsIn(labsCost.value.texts) === 1 && settlesIn(labsCost.value.texts) === 1,
+    labsCost.value ? `${beginsIn(labsCost.value.texts)} BEGIN(s), ${settlesIn(labsCost.value.texts)} settle(s)` : labsCost.error,
+  );
+
+  // ---- The list and the export select the same movements ---------------------
+  const mine = (descriptions: string[]) => descriptions.filter((d) => d.startsWith(`e5-${tag}-`)).sort();
+  const filters: { name: string; filter: Record<string, string | boolean>; owns: (m: E5Movement) => boolean }[] = [
+    { name: "account", filter: { accountId: cashId }, owns: (m) => m.accounts.includes(cashId) },
+    { name: "category", filter: { categoryId: expenseTwo }, owns: (m) => m.categories.includes(expenseTwo) },
+    { name: "label", filter: { labelId: groupLabelUsed }, owns: (m) => m.labels.includes(groupLabelUsed) },
+    { name: "kind", filter: { kind: "expense" }, owns: (m) => m.kind === "expense" },
+    { name: "member", filter: { memberUserId: fellow.id }, owns: (m) => m.creator === fellow.id },
+    { name: "rule", filter: { recurringRuleId }, owns: (m) => m.rule },
+    // RF-133: waiting for a person is a generated movement not yet confirmed, or one awaiting its other side.
+    { name: "unreviewed", filter: { unreviewed: true }, owns: (m) => !m.reviewed && (m.rule || m.awaiting) },
+    { name: "account, category and unreviewed together", filter: { accountId: cashId, categoryId: expenseTwo, unreviewed: true }, owns: (m) => m.accounts.includes(cashId) && m.categories.includes(expenseTwo) && !m.reviewed && (m.rule || m.awaiting) },
+  ];
+
+  // The awaiting rows exist only because the fixture wrote them as the owner: read them
+  // back, or "unreviewed" could pass over a seed that never landed.
+  const awaitingStored = await fixtureSql<{ description: string }[]>`
+    select description from transactions
+    where awaiting_counterparty = true and description like ${`e5-${tag}-%`} order by description`;
+  assert(
+    next("The awaiting-counterparty rows the parity checks lean on are stored, with and without a review stamp"),
+    sameList(awaitingStored.map((row) => row.description), [r("m6"), r("m7")]),
+    `stored awaiting rows: ${awaitingStored.map((row) => row.description).join(", ")}`,
+  );
+
+  for (const { name, filter, owns } of filters) {
+    const expected = model.filter(owns).map((m) => m.ref).sort();
+    const listed = mine((await asLeader(() => listTransactions(filter))).map((row) => row.description ?? ""));
+    const exported = mine(
+      ((await asLeader(() => readExport({ entityKeys: ["transactions"], transactionFilters: filter }))).transactions ?? []).map(
+        (row) => String(row.description ?? ""),
+      ),
+    );
+    assert(
+      next(`List and export select the same movements under the ${name} filter, and the ones the scenario says`),
+      expected.length > 0 && sameList(listed, expected) && sameList(exported, expected),
+      `expected ${expected.map((e) => e.slice(-2)).join(",")}; list ${listed.map((e) => e.slice(-2)).join(",")}; export ${exported.map((e) => e.slice(-2)).join(",")}`,
+    );
+  }
+
+  const conditionsFor = (transactionsMod: Record<string, unknown>) =>
+    transactionsMod.transactionListConditions as ((f: Record<string, unknown>) => SQL[]) | undefined;
+  const conditions = conditionsFor(await loadE5Module("@/db/queries/transactions"));
+  const viaConditions = conditions
+    ? await attempt(() =>
+        asLeader(() =>
+          withUserDb((tx) =>
+            tx
+              .select({ description: transactions.description })
+              .from(transactions)
+              .where(and(...conditions({ unreviewed: true, kind: "expense" }))),
+          ),
+        ),
+      )
+    : { value: null, error: missing("transactionListConditions") };
+  const expectedUnreviewedExpense = model.filter((m) => m.kind === "expense" && !m.reviewed && (m.rule || m.awaiting)).map((m) => m.ref).sort();
+  assert(
+    next("transactionListConditions is the predicate the list and the export both run"),
+    conditions !== undefined && conditions({}).length === 0 && conditions({ kind: "income" }).length === 1 &&
+      viaConditions.value !== null &&
+      sameList(mine(viaConditions.value.map((row) => row.description ?? "")), expectedUnreviewedExpense),
+    viaConditions.value ? `selects ${mine(viaConditions.value.map((row) => row.description ?? "")).length} of ${expectedUnreviewedExpense.length}` : viaConditions.error,
+  );
+
+  // The group's movements, rule and budget hang off the group, not off a person, so the
+  // identity purge's group delete would meet their splits and refuse. Dropped here, in the
+  // order the purge cannot reach.
+  await asOwner(leader.id, async (tx) => {
+    await tx`delete from transactions where description like ${`e5-${tag}-%`}`;
+    await tx`delete from budgets where id in ${tx([groupBudget, ownBudget])}`;
+    await tx`delete from recurring_rules where id = ${recurringRuleId}`;
+  });
+
+  await e5MinimumPayment(leader);
+  await e5SeedWalk();
+}
+
+// The minimum payment, written once. The same percentage and the same fixed amount must
+// come out of the statement read and the overview read, against a figure computed apart.
+async function e5MinimumPayment(leader: HarnessUser): Promise<void> {
+  const today = todayInBogota();
+  const tag = randomUUID().slice(0, 8);
+
+  const minimumMod = await loadE5Module("@/db/queries/debt-minimum");
+  const minimumPaymentSql = minimumMod.minimumPaymentSql as
+    | ((o: { fixed: SQL; pct: SQL; balance: SQL; fallback: SQL }) => SQL)
+    | undefined;
+  const evaluate = async (o: { fixed: string; pct: string; balance: string; fallback: string }) => {
+    if (!minimumPaymentSql) return { value: null as string | null, error: "minimumPaymentSql is not exported" };
+    return attempt(async () => {
+      const rows = await asUser(leader, () =>
+        withUserDb((tx) =>
+          tx.execute<{ v: string | null }>(
+            sql`select ${minimumPaymentSql({ fixed: sql.raw(o.fixed), pct: sql.raw(o.pct), balance: sql.raw(o.balance), fallback: sql.raw(o.fallback) })} as v`,
+          ),
+        ),
+      );
+      return rows[0]?.v === null || rows[0]?.v === undefined ? null : String(rows[0].v);
+    });
+  };
+  const fixedWins = await evaluate({ fixed: "5000::bigint", pct: "0.10::numeric", balance: "(-1000000)::bigint", fallback: "0" });
+  const pctOnly = await evaluate({ fixed: "null::bigint", pct: "0.05::numeric", balance: "(-1000010)::bigint", fallback: "0" });
+  const pctOnOwed = await evaluate({ fixed: "null::bigint", pct: "0.05::numeric", balance: "1000010::bigint", fallback: "0" });
+  const noneZero = await evaluate({ fixed: "null::bigint", pct: "null::numeric", balance: "(-1000000)::bigint", fallback: "0" });
+  const noneNull = await evaluate({ fixed: "null::bigint", pct: "null::numeric", balance: "(-1000000)::bigint", fallback: "null::bigint" });
+  assert(
+    next("minimumPaymentSql: a fixed amount wins over a percentage"),
+    fixedWins.value === "5000",
+    `fixed 5000 with 10 percent of 1000000 gave ${fixedWins.value ?? fixedWins.error}`,
+  );
+  assert(
+    next("minimumPaymentSql: a percentage is of the absolute balance, rounded to the cent"),
+    pctOnly.value === "50001" && pctOnOwed.value === "50001",
+    `5 percent of -1000010 gave ${pctOnly.value ?? pctOnly.error}, of 1000010 gave ${pctOnOwed.value ?? pctOnOwed.error}`,
+  );
+  assert(
+    next("minimumPaymentSql: no terms give the caller's own fallback, zero or null"),
+    noneZero.value === "0" && noneNull.value === null && noneNull.error === "",
+    `fallback 0 gave ${noneZero.value ?? noneZero.error}, fallback null gave ${noneNull.value ?? noneNull.error}`,
+  );
+
+  const open = async (name: string, amountMinor: number) => {
+    const { accountId } = await asUser(leader, () =>
+      createAccount({
+        name: `Harness minimo ${name} ${tag}`,
+        kind: "liability",
+        subtype: "tarjeta",
+        ownerUserId: leader.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor,
+        balanceOn: shiftDate(today, -40),
+      }),
+    );
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const terms = async (accountId: string, fixed: number | null, pct: string | null) => {
+    await asUser(leader, () =>
+      upsertDebtTerms({
+        accountId,
+        debtKind: "revolving",
+        annualRate: "0.2800",
+        minimumPaymentCents: fixed,
+        minimumPaymentPct: pct,
+        creditLimitCents: 500_000_000,
+        statementCutOffDay: 15,
+        paymentDueDay: 5,
+        avalCents: null,
+      }),
+    );
+    keep("debt_terms", accountId);
+  };
+  const pctCard = await open("porcentaje", 1_234_567);
+  const fixedCard = await open("fijo", 2_000_000);
+  const bareCard = await open("sin terminos", 700_000);
+  await terms(pctCard, null, "0.0333");
+  await terms(fixedCard, 77_000, null);
+  await terms(bareCard, null, null);
+
+  // The figure computed apart: the balance the account_balances view reports for the card in
+  // its settlement currency, and the percentage applied in JavaScript from the stored text.
+  const owed = async (accountId: string): Promise<number> => {
+    const [row] = await fixtureSql<{ balance_cents: string }[]>`
+      select b.balance_cents from account_balances b join accounts a on a.id = b.id and b.currency = a.settlement_currency
+      where b.id = ${accountId}`;
+    return Math.abs(Number(row.balance_cents));
+  };
+  const pctOwed = await owed(pctCard);
+  const expectedPct = Math.round(pctOwed * 0.0333);
+
+  const overview = await asUser(leader, () => getDebtOverview());
+  const overviewOf = (id: string) => overview.find((row) => row.accountId === id)?.minimumPaymentCents;
+  const statementOf = async (id: string) => (await asUser(leader, () => getCurrentStatement(id)))?.minimumPaymentCents;
+
+  assert(
+    next("Percentage minimum: the overview and the statement both read round(abs(owed) x pct)"),
+    pctOwed > 0 && expectedPct > 0 && overviewOf(pctCard) === expectedPct && (await statementOf(pctCard)) === expectedPct,
+    `owed ${pctOwed}; expected ${expectedPct}; overview ${overviewOf(pctCard)}; statement ${await statementOf(pctCard)}`,
+  );
+  assert(
+    next("Fixed minimum: the overview and the statement both read the fixed amount"),
+    overviewOf(fixedCard) === 77_000 && (await statementOf(fixedCard)) === 77_000,
+    `overview ${overviewOf(fixedCard)}; statement ${await statementOf(fixedCard)}`,
+  );
+  assert(
+    next("No terms for a minimum: the statement reads zero and the overview reads null, never one fallback for both"),
+    overviewOf(bareCard) === null && (await statementOf(bareCard)) === 0,
+    `overview ${overviewOf(bareCard)}; statement ${await statementOf(bareCard)}`,
+  );
+}
+
+// The seed walk, written once: a personal space and a group colour their trees alike, node
+// by node, children included, and a child never wears the colour of its parent.
+async function e5SeedWalk(): Promise<void> {
+  const seedMod = await loadE5Module("@/db/queries/seed-categories");
+  const seedCategoryTree = seedMod.seedCategoryTree as
+    | ((tx: unknown, scope: { ownerUserId: string } | { groupId: string }, locale: "es" | "en") => Promise<unknown>)
+    | undefined;
+
+  const soloUser = await createMembershipFreeUser();
+  const direct = seedCategoryTree
+    ? await attempt(() =>
+        asUser(soloUser, () => withUserDb((tx) => seedCategoryTree(tx, { ownerUserId: soloUser.id }, "es"))),
+      )
+    : { value: null, error: "seedCategoryTree is not exported" };
+  const soloRows = await fixtureSql<{ id: string; name: string; kind: string; color: string | null; parent_id: string | null }[]>`
+    select id, name, kind, color, parent_id from categories where owner_user_id = ${soloUser.id}`;
+  for (const row of soloRows) track("categories", row.id);
+
+  const founder = await createMembershipFreeUser();
+  const { groupId } = await asUser(founder, () =>
+    createGroup({ name: `Harness fondo semilla ${randomUUID().slice(0, 8)}`, leaderName: "Harness semilla", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const [fresh] = await fixtureSql<{ member_id: string; account_id: string }[]>`
+    select
+      (select id from group_members where group_id = ${groupId} and user_id = ${founder.id}) as member_id,
+      (select id from accounts where group_id = ${groupId} and subtype = 'efectivo') as account_id`;
+  track("group_members", fresh.member_id);
+  track("accounts", fresh.account_id);
+  const groupRows = await fixtureSql<{ id: string; name: string; kind: string; color: string | null; parent_id: string | null }[]>`
+    select id, name, kind, color, parent_id from categories where group_id = ${groupId}`;
+  for (const row of groupRows) track("categories", row.id);
+
+  const nodes = SEED_CATEGORIES.flatMap((category) => [
+    { key: `${category.kind}:${category.name.es}`, name: category.name.es, kind: category.kind, parentName: null as string | null },
+    ...(category.children ?? []).map((child) => ({
+      key: `${category.kind}:${category.name.es}/${child.name.es}`,
+      name: child.name.es,
+      kind: category.kind,
+      parentName: category.name.es,
+    })),
+  ]);
+  const colourByKey = (rows: typeof soloRows): Map<string, string | null> => {
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return new Map(
+      rows.map((row) => {
+        const parent = row.parent_id ? byId.get(row.parent_id) : undefined;
+        return [parent ? `${row.kind}:${parent.name}/${row.name}` : `${row.kind}:${row.name}`, row.color];
+      }),
+    );
+  };
+  const personalColours = colourByKey(soloRows);
+  const groupColours = colourByKey(groupRows);
+
+  assert(
+    next("seedCategoryTree writes the seed tree for a personal scope: every node, in the locale, with its kind and its parent"),
+    direct.error === "" &&
+      soloRows.length === nodes.length &&
+      nodes.every((node) => personalColours.has(node.key)) &&
+      soloRows.every((row) => (row.parent_id === null) === (nodes.find((n) => n.name === row.name)?.parentName === null)),
+    direct.error || `${soloRows.length} rows against ${nodes.length} seed nodes`,
+  );
+  assert(
+    next("A new personal space and a new fund colour their trees node by node alike"),
+    direct.error === "" &&
+      groupRows.length === nodes.length &&
+      nodes.every((node) => personalColours.get(node.key) !== undefined && personalColours.get(node.key) === groupColours.get(node.key)),
+    direct.error || nodes.filter((n) => personalColours.get(n.key) !== groupColours.get(n.key)).map((n) => n.key).join(", ") || "all alike",
+  );
+  const parentColourOf = (node: (typeof nodes)[number], colours: Map<string, string | null>) =>
+    node.parentName === null ? undefined : colours.get(`${node.kind}:${node.parentName}`);
+  assert(
+    next("In both seeded trees no child copies its parent's colour and no colour repeats"),
+    direct.error === "" &&
+      nodes.every((n) => n.parentName === null || (personalColours.get(n.key) !== parentColourOf(n, personalColours) && groupColours.get(n.key) !== parentColourOf(n, groupColours))) &&
+      new Set(soloRows.map((row) => row.color)).size === soloRows.length &&
+      new Set(groupRows.map((row) => row.color)).size === groupRows.length,
+    direct.error || `${new Set(soloRows.map((row) => row.color)).size}/${soloRows.length} personal, ${new Set(groupRows.map((row) => row.color)).size}/${groupRows.length} group distinct colours`,
   );
 }
