@@ -1,5 +1,6 @@
 "use server";
 
+import { isEmailAllowed } from "@/lib/auth/allowlist";
 import { isDomainDeliverable } from "@/lib/auth/deliverability";
 import { consentReturnPath } from "@/lib/validation/oauth";
 import { signInEmailSchema } from "@/lib/validation/sign-in";
@@ -22,7 +23,7 @@ async function supabaseClient() {
 
 export type SendSignInLinkResult =
   | { ok: true }
-  | { ok: false; error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "rateLimited" };
+  | { ok: false; error: "emailInvalid" | "notInvited" | "domainUndeliverable" | "sendFailed" | "rateLimited" };
 
 /**
  * Asks for the sign-in link (RP-18). No `data` on the call: it would land in
@@ -32,6 +33,9 @@ export type SendSignInLinkResult =
 export async function sendSignInLink(email: string, next?: string): Promise<SendSignInLinkResult> {
   const parsed = signInEmailSchema.safeParse(email);
   if (!parsed.success) return { ok: false, error: "emailInvalid" };
+
+  // Before DNS and Auth: an address off the list costs neither a lookup nor a send.
+  if (!(await isEmailAllowed(parsed.data))) return { ok: false, error: "notInvited" };
 
   const domain = parsed.data.slice(parsed.data.lastIndexOf("@") + 1);
   // Before Supabase ever sees the address: a domain that cannot take mail

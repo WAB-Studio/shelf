@@ -10,11 +10,14 @@
   "sentOther": "Usar otro correo",
   "errors": {
     "emailInvalid": "Escribe un correo válido.",
+    "notInvited": "Este correo no tiene invitación a GoalLog.",
     "domainUndeliverable": "Ese dominio no recibe correo.",
     "sendFailed": "No se pudo enviar el enlace.",
     "rateLimited": "Demasiados intentos. Prueba de nuevo en unos minutos.",
     "linkTimeoutTitle": "No pudimos comprobar el enlace",
     "linkTimeoutBody": "Falló de nuestro lado, no del enlace. Ábrelo otra vez desde el correo; si tampoco entra, pide uno nuevo aquí abajo.",
+    "linkOtherBrowserTitle": "Abre el enlace en el navegador donde lo pediste",
+    "linkOtherBrowserBody": "Por seguridad el enlace solo entra en el navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.",
     "linkInvalidTitle": "El enlace no vale o ya venció",
     "linkInvalidBody": "Pide uno nuevo aquí abajo. Cada enlace sirve una sola vez."
   }

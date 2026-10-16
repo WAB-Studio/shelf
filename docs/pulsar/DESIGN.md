@@ -1762,7 +1762,7 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **The last day of a month reads «último día»,** never «faltan 0 días». Built (RP-132).
 - **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Built (RP-133).
 - **CI, decided for the infra train:** concurrency per branch, path filters, `pulsar-fechas` out of manual dispatch, and 6 shards for `pulsar-e2e`. Built in #609.
-- **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
+- **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Built in GoalLog (RP-131) but the cut of `token_hash`, which waits for the shared template; sign-ups stay on until WordBook and HomeFund have their lists.
 
 ## Decisions of 2026-10-15, the printed report's page break
 
