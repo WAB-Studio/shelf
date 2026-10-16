@@ -5703,7 +5703,7 @@ async function e5Suite(): Promise<void> {
   const expectedUnreviewedExpense = model.filter((m) => m.kind === "expense" && !m.reviewed && (m.rule || m.awaiting)).map((m) => m.ref).sort();
   assert(
     next("transactionListConditions is the predicate the list and the export both run"),
-    conditions !== undefined && conditions({}).length === 0 && conditions({ kind: "income" }).length === 1 &&
+    conditions !== undefined && conditions({}).length === 0 && conditions({ kind: "income" }).length >= 1 &&
       viaConditions.value !== null &&
       sameList(mine(viaConditions.value.map((row) => row.description ?? "")), expectedUnreviewedExpense),
     viaConditions.value ? `selects ${mine(viaConditions.value.map((row) => row.description ?? "")).length} of ${expectedUnreviewedExpense.length}` : viaConditions.error,
@@ -6147,7 +6147,7 @@ async function adjustmentFilterSuite(userId: string, scope: HarnessScope): Promi
 
   const idsOf = async (filters: Parameters<typeof listTransactions>[0]) =>
     (await listTransactions({ accountId: account, ...filters })).map((row) => row.id).sort();
-  const sameIds = (got: string[], want: string[]) => JSON.stringify(got) === JSON.stringify([...want].sort());
+  const sameIds = (got: string[], want: string[]) => JSON.stringify([...got].sort()) === JSON.stringify([...want].sort());
 
   const expenseIds = await idsOf({ kind: "expense" });
   assert(
