@@ -44,6 +44,11 @@ export async function dropRun(sql: postgres.Sql): Promise<void> {
       try {
         // Every `goals.*` row cascades from `auth.users`; a pulsar person has
         // no `app_users` row and writes no `audit_log` row.
+        // The list row goes by exact address, never by pattern: another lane's
+        // `harness%@example.invalid` rows share it (docs/TRAPS.md, "A cleanup keyed by...").
+        await sql`
+          delete from goals.allowed_emails
+          where email = (select lower(email) from auth.users where id = ${id})`;
         await sql`delete from auth.users where id = ${id}`;
         dropped.push(id);
       } catch (error) {

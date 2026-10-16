@@ -97,6 +97,12 @@ export async function createIdentity(runId: string): Promise<{ id: string; email
     await tx`
       insert into harness.identities (user_id, run_id, email, disposition)
       values (${id}, ${runId}, ${email}, 'ephemeral')`;
+
+    // Harness people sign in by a landed token, never by the form, so only the specs that submit
+    // /entrar need the list; e2e-run drops this row by the same exact address.
+    await tx`
+      insert into goals.allowed_emails (email) values (${email.toLowerCase()})
+      on conflict do nothing`;
   });
 
   return { id, email };

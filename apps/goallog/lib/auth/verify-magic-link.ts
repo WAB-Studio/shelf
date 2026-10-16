@@ -7,7 +7,7 @@ import { consentReturnPath } from "@/lib/validation/oauth";
 // completed, so the token's fate is unknown. `linkInvalid` covers a
 // malformed query string and a rejection that did complete: both are
 // failures the design attributes to the link, not to us.
-export type FailureReason = "linkTimeout" | "linkInvalid";
+export type FailureReason = "linkTimeout" | "linkInvalid" | "linkOtherBrowser";
 
 export type VerifyMagicLinkResult<TUser> =
   | { ok: true; user: TUser }
