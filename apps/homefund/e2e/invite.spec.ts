@@ -22,9 +22,12 @@ import messages from "@/messages/es.json";
 import { fixtureSql } from "../scripts/harness/fixtures";
 import {
   LEADER_MEMBER_NAME,
+  MEMBER_STORAGE_STATE,
+  STORAGE_STATE,
   asHarnessUser,
   clearGroup,
   readScope,
+  seedGroup,
   test,
 } from "./global-setup";
 
@@ -346,4 +349,90 @@ test("a roster disc is 36 by 36 and round", async ({ page }) => {
   expect(box?.height).toBe(36);
   const radius = await disc.evaluate((node) => parseFloat(getComputedStyle(node).borderRadius));
   expect(radius).toBeGreaterThanOrEqual(18);
+});
+
+test.describe("a refusal reads as the one that happened", () => {
+  test.describe("a plain member", () => {
+    test.use({ storageState: MEMBER_STORAGE_STATE });
+
+    test("inviting by address reads «only the owner», writes no member and sends no mail", async ({ page }) => {
+      // Kills: the `notLeader()` mapping dropped from the invite action, or its 42501 test inverted (the member reads the generic error).
+      groupId = (await seedGroup()).groupId;
+      const email = invitee();
+      const { input, send } = await openStep(page);
+      try {
+        await input.fill(email);
+        await send.click();
+
+        await expect(page.getByText(messages.errors.notLeader, { exact: true })).toBeVisible();
+        await expect(page.getByText(messages.errors.unexpected, { exact: true })).toHaveCount(0);
+        expect(await inviteRows(email)).toHaveLength(0);
+        expect(await mailCount(email)).toBe(0);
+      } finally {
+        await forget(email);
+      }
+    });
+
+    test("a forged add-member call reads «only the owner» and writes no member", async ({ page, browser }) => {
+      // Kills: the `notLeader()` mapping dropped from the add-member action, or its 42501 test inverted.
+      groupId = (await seedGroup()).groupId;
+      const seen: { id: string; body: string; url: string }[] = [];
+
+      // The leader's own add-member call, caught on the wire to learn the action's id and body shape.
+      const leader = await browser.newContext({ storageState: STORAGE_STATE });
+      try {
+        const leaderPage = await leader.newPage();
+        leaderPage.on("request", (request) => {
+          const id = request.headers()["next-action"];
+          if (request.method() === "POST" && id) {
+            seen.push({ id, body: request.postData() ?? "", url: request.url() });
+          }
+        });
+        await leaderPage.goto("/es/settings/members");
+        await leaderPage.getByRole("button", { name: members.add, exact: true }).filter({ visible: true }).first().click();
+        const dialog = leaderPage.getByRole("dialog");
+        await dialog.getByRole("textbox", { name: members.nameLabel }).fill(`Harness reenviado ${randomUUID().slice(0, 8)}`);
+        await dialog.getByRole("button", { name: messages.common.save, exact: true }).click();
+        await expect.poll(() => seen.length).toBeGreaterThan(0);
+        await expect(dialog).toBeHidden();
+      } finally {
+        await leader.close();
+      }
+
+      const before = (await rosterRows()).length;
+      const forged = { ...seen[0], body: JSON.stringify([{ name: "Intruso de la prueba" }]) };
+      const answer = await page.request.post(forged.url, {
+        headers: {
+          "next-action": forged.id,
+          "content-type": "text/plain;charset=UTF-8",
+          accept: "text/x-component",
+        },
+        data: forged.body,
+      });
+
+      expect(await answer.text()).toContain("errors.notLeader");
+      expect((await rosterRows()).length).toBe(before);
+    });
+  });
+
+  test("a leader's second invitation to a pending address reads as a failure, never «only the owner»", async ({ page }) => {
+    // Kills: the 42501 test inverted in the invite action (every refusal other than the owner's reads «only the owner»).
+    const email = invitee();
+    const { input, send } = await openStep(page);
+    try {
+      await input.fill(email);
+      await send.click();
+      await expect(cards(page).filter({ hasText: email })).toHaveCount(1);
+      await register(email);
+
+      await input.fill(email);
+      await send.click();
+
+      await expect(page.getByText(messages.errors.unexpected, { exact: true })).toBeVisible();
+      await expect(page.getByText(messages.errors.notLeader, { exact: true })).toHaveCount(0);
+      expect(await inviteRows(email)).toHaveLength(1);
+    } finally {
+      await forget(email);
+    }
+  });
 });

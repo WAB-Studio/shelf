@@ -18,6 +18,7 @@ import messages from "@/messages/es.json";
 import { fixtureSql } from "../scripts/harness/fixtures";
 import {
   LEADER_MEMBER_NAME,
+  MEMBER_STORAGE_STATE,
   PLAIN_MEMBER_NAME,
   asHarnessUser,
   clearGroup,
@@ -210,5 +211,172 @@ test.describe("labels", () => {
     await expect(shown.getByText(personalName, { exact: true })).toHaveCount(1);
     await expect(shown.getByText(GROUP_NAME, { exact: true })).toHaveCount(0);
     await expect(shown.getByText(groupName, { exact: true })).toHaveCount(0);
+  });
+});
+
+// The row menu's accessible name, built from the same catalogue entry the table reads.
+function menuOf(page: Page, name: string): Locator {
+  return band(page).getByRole("button", {
+    name: messages.common.actionsFor.replace("{name}", name),
+    exact: true,
+  });
+}
+
+test.describe("an archived member", () => {
+  const categoryId = randomUUID();
+  const labelId = randomUUID();
+  const categoryName = `Categoría del fondo archivado ${stamp}`;
+  const labelName = `Etiqueta del fondo archivado ${stamp}`;
+
+  test.use({ storageState: MEMBER_STORAGE_STATE });
+
+  test.beforeEach(async () => {
+    const { groupId } = await seedGroup();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into categories (id, group_id, name, kind, color)
+        values (${categoryId}, ${groupId}, ${categoryName}, 'expense', '#8C4A4A')`;
+      await tx`
+        insert into labels (id, group_id, name, color)
+        values (${labelId}, ${groupId}, ${labelName}, '#8C4A4A')`;
+      await tx`
+        update group_members set archived_at = now()
+        where group_id = ${groupId} and name = ${PLAIN_MEMBER_NAME}`;
+    });
+  });
+
+  test.afterEach(async () => {
+    await fixtureSql`delete from categories where id = ${categoryId}`;
+    await fixtureSql`delete from labels where id = ${labelId}`;
+  });
+
+  test("resolves no fund on the members screen", async ({ page }) => {
+    // Pins the outcome, not the layer: the fund lookup's archived predicate and the `groups` policy each refuse it, so dropping the predicate alone changes nothing.
+    const response = await page.goto("/es/settings/members");
+
+    expect(response?.status()).toBe(404);
+    await expect(page.getByText(messages.errors.notFoundTitle, { exact: true })).toBeVisible();
+    await expect(page.getByText(LEADER_MEMBER_NAME, { exact: true })).toHaveCount(0);
+  });
+
+  test("sees no fund section on the categories screen", async ({ page }) => {
+    // Pins the outcome as above, on the categories loader (neither the fund's heading nor its set is drawn).
+    await page.goto("/es/settings/categories");
+
+    const shown = band(page);
+    await expect(page.getByRole("heading", { name: messages.categories.title })).toBeVisible();
+    await expect(shown.getByText(categoryName, { exact: true })).toHaveCount(0);
+    if (!laptop(page)) return;
+    await expect(shown.getByText(messages.categories.personalSection, { exact: true }).first()).toBeVisible();
+    await expect(shown.getByText(GROUP_NAME, { exact: true })).toHaveCount(0);
+  });
+
+  test("sees no fund section on the labels screen", async ({ page }) => {
+    // Pins the outcome as above, on the labels loader (the fund's heading is not drawn over the personal set).
+    await page.goto("/es/settings/labels");
+
+    const shown = band(page);
+    await expect(page.getByRole("heading", { name: messages.labels.title })).toBeVisible();
+    await expect(shown.getByText(labelName, { exact: true })).toHaveCount(0);
+    await expect(shown.getByText(GROUP_NAME, { exact: true })).toHaveCount(0);
+  });
+});
+
+test.describe("a plain member", () => {
+  const categoryId = randomUUID();
+  const labelId = randomUUID();
+  const categoryName = `Categoría del fondo ajena ${stamp}`;
+  const labelName = `Etiqueta del fondo ajena ${stamp}`;
+
+  test.beforeEach(async () => {
+    const { groupId } = await seedGroup();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into categories (id, group_id, name, kind, color)
+        values (${categoryId}, ${groupId}, ${categoryName}, 'expense', '#8C4A4A')`;
+      await tx`
+        insert into labels (id, group_id, name, color)
+        values (${labelId}, ${groupId}, ${labelName}, '#8C4A4A')`;
+    });
+  });
+
+  test.afterEach(async () => {
+    await fixtureSql`delete from categories where id = ${categoryId}`;
+    await fixtureSql`delete from labels where id = ${labelId}`;
+  });
+
+  test.describe("reading", () => {
+    test.use({ storageState: MEMBER_STORAGE_STATE });
+
+    test("sees the fund's categories and no menu on any of them", async ({ page }) => {
+      // Kills: the categories page granting the fund's controls to everyone (`canManageGroup` forced true).
+      await page.goto("/es/settings/categories");
+
+      await expect(band(page).getByText(categoryName, { exact: true })).toHaveCount(1);
+      if (!laptop(page)) return;
+      await expect(menuOf(page, categoryName)).toHaveCount(0);
+    });
+
+    test("sees the fund's labels and no menu on any of them", async ({ page }) => {
+      // Kills: the labels loader or page granting the fund's controls to a member (`isLeader` or `canManageGroup` forced true).
+      await page.goto("/es/settings/labels");
+
+      await expect(band(page).getByText(labelName, { exact: true })).toHaveCount(1);
+      await expect(menuOf(page, labelName)).toHaveCount(0);
+      if (laptop(page)) return;
+      await expect(band(page).getByText(messages.labels.leaderOnly, { exact: true })).toBeVisible();
+    });
+  });
+
+  test("the leader has the menu where the member has none", async ({ page }) => {
+    // Kills: the two member tests passing because the menu is never drawn at all.
+    await page.goto("/es/settings/labels");
+
+    await expect(band(page).getByText(labelName, { exact: true })).toHaveCount(1);
+    await expect(menuOf(page, labelName)).toHaveCount(1);
+    await expect(band(page).getByText(messages.labels.leaderOnly, { exact: true })).toHaveCount(0);
+
+    await page.goto("/es/settings/categories");
+    await expect(band(page).getByText(categoryName, { exact: true })).toHaveCount(1);
+    if (laptop(page)) await expect(menuOf(page, categoryName)).toHaveCount(1);
+  });
+});
+
+test.describe("income parents", () => {
+  const incomeId = randomUUID();
+  const expenseId = randomUUID();
+  const incomeName = `Ingreso principal ${stamp}`;
+  const expenseName = `Gasto principal ${stamp}`;
+
+  test.beforeEach(async () => {
+    const { groupId } = await seedGroup();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into categories (id, group_id, name, kind, color)
+        values
+          (${incomeId}, ${groupId}, ${incomeName}, 'income', '#4C8C4A'),
+          (${expenseId}, ${groupId}, ${expenseName}, 'expense', '#8C4A4A')`;
+    });
+  });
+
+  test.afterEach(async () => {
+    await fixtureSql`delete from categories where id in (${incomeId}, ${expenseId})`;
+  });
+
+  test("the picker of a new income category offers income parents only", async ({ page }) => {
+    // Kills: the parent list read for the expense kind whichever tab is open (an expense category is offered, an income one is not).
+    await page.goto("/es/settings/categories?kind=income");
+    await expect(band(page).getByText(incomeName, { exact: true })).toHaveCount(1);
+
+    await page
+      .getByRole("button", { name: messages.categories.add, exact: true })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await page.getByRole("dialog").getByLabel(messages.categories.parentLabel).click();
+
+    const options = page.getByRole("option");
+    await expect(options.filter({ hasText: incomeName })).toHaveCount(1);
+    await expect(options.filter({ hasText: expenseName })).toHaveCount(0);
   });
 });
