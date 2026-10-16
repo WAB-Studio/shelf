@@ -2,6 +2,7 @@ import "server-only";
 
 import { env } from "@/lib/env";
 import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
+import { logDark } from "@/lib/word/dark";
 import { clientKeyFromAddress, scopeClientKey } from "@/lib/word/client-key";
 
 /**
@@ -18,7 +19,10 @@ export async function claimSignInLink(
 ): Promise<"ok" | "rateLimited" | "noKey"> {
   const salt = env.CLIENT_KEY_SALT;
   const caller = scopedClientKey("signin", headers);
-  if (!salt || !caller) return "noKey";
+  if (!salt || !caller) {
+    logDark("signin", "no-caller");
+    return "noKey";
+  }
 
   if (!(await claimClientCall(caller, env.SIGN_IN_LINK_DAILY_CLIENT_CAP))) return "rateLimited";
 

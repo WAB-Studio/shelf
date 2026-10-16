@@ -3,7 +3,9 @@ import "server-only";
 import { normaliseHeadword } from "@/lib/dictionary/format";
 import { groupFor, type DictionaryIndex } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
+import { empty, json } from "@/lib/http/responses";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
+import { logDark } from "@/lib/word/dark";
 import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
@@ -21,16 +23,6 @@ export const dynamic = "force-dynamic";
 
 // Above the provider's own 20 s timeout.
 export const maxDuration = 30;
-
-const NO_STORE = { "Cache-Control": "no-store" };
-
-function json(body: unknown, status: number): Response {
-  return Response.json(body, { status, headers: NO_STORE });
-}
-
-function empty(status: 204 | 400): Response {
-  return new Response(null, { status, headers: NO_STORE });
-}
 
 // A source token survives translation when the exact same spelling still
 // appears as a whole word inside the translation — `frisking` staying
@@ -75,6 +67,7 @@ export async function POST(request: Request): Promise<Response> {
     cached = await readCachedNotes(hash);
   } catch (error) {
     console.error("[api/phrase/notes] cache read failed", error);
+    logDark("phrase/notes", "cache-error");
     return empty(204);
   }
   if (cached) {
@@ -85,12 +78,12 @@ export async function POST(request: Request): Promise<Response> {
   // no chargeable client, over either cap, a provider failure, or a
   // generation that fails to validate all answer `204` — the same
   // "no connection" screen already drawn (RL-35).
-  if (
-    !env.OPENAI_API_KEY ||
-    !env.PHRASE_NOTES_DAILY_CALL_CAP ||
-    !env.PHRASE_NOTES_DAILY_CLIENT_CAP ||
-    !env.WORD_TEXT_DAILY_CALL_CAP
-  ) {
+  if (!env.OPENAI_API_KEY) {
+    logDark("phrase/notes", "no-key");
+    return empty(204);
+  }
+  if (!env.PHRASE_NOTES_DAILY_CALL_CAP || !env.PHRASE_NOTES_DAILY_CLIENT_CAP || !env.WORD_TEXT_DAILY_CALL_CAP) {
+    logDark("phrase/notes", "no-cap");
     return empty(204);
   }
 
@@ -99,6 +92,7 @@ export async function POST(request: Request): Promise<Response> {
   // reads `null` for every caller and this route never reaches the model.
   const client = clientKey(request);
   if (!client) {
+    logDark("phrase/notes", "no-caller");
     return empty(204);
   }
 
@@ -107,13 +101,16 @@ export async function POST(request: Request): Promise<Response> {
   // WORD_UNLISTED_DAILY_CLIENT_CAP, and never left unread the way it was.
   try {
     if (!(await claimCallerShare(client, env.WORD_TEXT_DAILY_CALL_CAP))) {
+      logDark("phrase/notes", "caller-share");
       return empty(204);
     }
     if (!(await claimClientCall(client, env.PHRASE_NOTES_DAILY_CLIENT_CAP))) {
+      logDark("phrase/notes", "caller-cap");
       return empty(204);
     }
   } catch (error) {
     console.error("[api/phrase/notes] client claim failed", error);
+    logDark("phrase/notes", "claim-error");
     return empty(204);
   }
 
@@ -125,10 +122,12 @@ export async function POST(request: Request): Promise<Response> {
   const dailyCap = Math.min(env.PHRASE_NOTES_DAILY_CALL_CAP, env.WORD_TEXT_DAILY_CALL_CAP);
   try {
     if (!(await claimDailyCall(dailyCap))) {
+      logDark("phrase/notes", "day-cap");
       return empty(204);
     }
   } catch (error) {
     console.error("[api/phrase/notes] daily claim failed", error);
+    logDark("phrase/notes", "claim-error");
     return empty(204);
   }
 
@@ -138,6 +137,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const notes = await generateNotes(parsed.data.source, parsed.data.translation, survivors, unindexed);
   if (!notes) {
+    logDark("phrase/notes", "model-failed");
     return empty(204);
   }
 
