@@ -23,6 +23,7 @@ import { expect, type Browser, type BrowserContext, type Page } from "@playwrigh
 import { addressKey, callerKey } from "@/lib/auth/client-key";
 import { todayInBogota } from "@/lib/dates";
 import { SEED_CATEGORIES } from "@/lib/fund/seed";
+import en from "@/messages/en.json";
 import messages from "@/messages/es.json";
 
 import { fixtureSql, purgeAuditTrail, purgeIdentity } from "../scripts/harness/fixtures";
@@ -721,6 +722,144 @@ test.describe("the code link lands only in the browser that asked", () => {
     } finally {
       await a.context.close();
       await b.context.close();
+    }
+  });
+});
+
+// RF-145, RF-143: the login says each refusal and the other-browser notice in the person's words.
+test.describe("the login's words", () => {
+  const toastOf = (page: Page) => page.locator("[data-sonner-toast][data-type='error']");
+
+  async function typeAndSend(page: Page, email: string, copy: typeof messages.auth = auth) {
+    await page.getByLabel(copy.emailLabel).fill(email);
+    await page.getByRole("button", { name: copy.sendLink, exact: true }).click();
+  }
+
+  test("pending: the button reads sending and is disabled until the answer", async ({ browser, baseURL }) => {
+    // Kills: dropping `disabled={isPending}`.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page, ip } = await fresh(browser, baseURL!);
+    track(ip, email);
+    try {
+      await page.route("**/es/login", async (route) => {
+        if (route.request().method() === "POST") await new Promise((done) => setTimeout(done, 1_500));
+        await route.continue();
+      });
+      await page.goto("/es/login");
+      await typeAndSend(page, email);
+      const pending = page.getByRole("button", { name: auth.sending, exact: true });
+      await expect(pending).toBeVisible();
+      await expect(pending).toBeDisabled();
+      await expect(page.getByRole("heading", { name: auth.sentTitle, exact: true })).toBeVisible();
+      await register(email);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("refused as not invited: the toast is errors.notInvited, the field keeps the address and the button is enabled", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: a wrong key; `form.reset()` on error.
+    const email = newAddress("gmail.com");
+    const { context, page, ip } = await fresh(browser, baseURL!);
+    track(ip, email);
+    try {
+      await page.goto("/es/login");
+      await typeAndSend(page, email);
+      await expect(toastOf(page)).toHaveText(messages.errors.notInvited);
+      await expect(page.getByLabel(auth.emailLabel)).toHaveValue(email);
+      await expect(page.getByRole("button", { name: auth.sendLink, exact: true })).toBeEnabled();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("refused as undeliverable: the toast is errors.domainUndeliverable", async ({ browser, baseURL }) => {
+    const email = newAddress("example.com");
+    await listAddress(email);
+    const { context, page, ip } = await fresh(browser, baseURL!);
+    track(ip, email);
+    try {
+      await page.goto("/es/login");
+      await typeAndSend(page, email);
+      await expect(toastOf(page)).toHaveText(messages.errors.domainUndeliverable);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("refused as capped: the toast is errors.signInLinkCapped, not the rate-limit sentence", async ({ browser, baseURL }) => {
+    // Kills: reusing `errors.emailRateLimited`.
+    const email = newAddress();
+    await listAddress(email);
+    for (let i = 0; i < ADDRESS_CAP; i += 1) {
+      const ip = newCaller();
+      track(ip, email);
+      if (i > 0) await new Promise((done) => setTimeout(done, 2_000));
+      expect((await attempt(browser, baseURL!, ip, email)).kind).toBe("sent");
+    }
+    await new Promise((done) => setTimeout(done, 2_000));
+    const { context, page, ip } = await fresh(browser, baseURL!);
+    track(ip, email);
+    try {
+      await page.goto("/es/login");
+      await typeAndSend(page, email);
+      await expect(toastOf(page)).toHaveText(messages.errors.signInLinkCapped);
+      expect(messages.errors.signInLinkCapped).not.toBe(messages.errors.emailRateLimited);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("done and cancelled: the panel names the address and «Usar otro correo» returns an empty form", async ({ browser, baseURL }) => {
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await requestLink(page, email);
+      await expect(page.getByRole("status")).toContainText(email);
+      await page.getByRole("button", { name: auth.useAnotherEmail, exact: true }).click();
+      await expect(page.getByLabel(auth.emailLabel)).toHaveValue("");
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("other browser: linkOtherBrowser shows the red alert, linkInvalid its own, an unknown value none", async ({ browser, baseURL }) => {
+    // Kills: testing only `linkInvalid`.
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      const alert = page.locator("main").getByRole("alert");
+      await page.goto("/es/login?error=linkOtherBrowser");
+      await expect(alert).toHaveText(messages.errors.linkOtherBrowser);
+      await page.goto("/es/login?error=linkInvalid");
+      await expect(alert).toHaveText(messages.errors.linkInvalid);
+      await page.goto("/es/login?error=x");
+      await expect(page.getByLabel(auth.emailLabel)).toBeVisible();
+      await expect(alert).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("English: the four keys exist and render under /en/login", async ({ browser, baseURL }) => {
+    // Kills: a key missing in en.json.
+    for (const key of ["notInvited", "domainUndeliverable", "signInLinkCapped", "linkOtherBrowser"] as const) {
+      expect(en.errors[key], key).toBeTruthy();
+    }
+    const email = newAddress("gmail.com");
+    const { context, page, ip } = await fresh(browser, baseURL!);
+    track(ip, email);
+    try {
+      await page.goto("/en/login?error=linkOtherBrowser");
+      await expect(page.locator("main").getByRole("alert")).toHaveText(en.errors.linkOtherBrowser);
+      await typeAndSend(page, email, en.auth);
+      await expect(toastOf(page)).toHaveText(en.errors.notInvited);
+    } finally {
+      await context.close();
     }
   });
 });

@@ -38,8 +38,10 @@ export default async function LoginPage(props: PageProps<"/[locale]/login">) {
   const searchParams = await props.searchParams;
   const t = await getTranslations();
 
-  // Set by `/auth/confirm` when the magic link is expired or already spent.
-  const linkInvalid = firstValue(searchParams.error) === "linkInvalid";
+  // Set by `/auth/confirm`: the link is expired or spent, or was opened in a browser that did not ask for it.
+  const error = firstValue(searchParams.error);
+  const linkNotice =
+    error === "linkInvalid" || error === "linkOtherBrowser" ? (`errors.${error}` as const) : null;
 
   return (
     <Flex asChild direction="column" flexGrow="1" p="4">
@@ -59,12 +61,12 @@ export default async function LoginPage(props: PageProps<"/[locale]/login">) {
                   <Text color="gray">{t("auth.tagline")}</Text>
                 </Flex>
               </Flex>
-              {linkInvalid && (
+              {linkNotice && (
                 <Callout.Root color="red" role="alert">
                   <Callout.Icon>
                     <CircleAlertIcon size={16} aria-hidden />
                   </Callout.Icon>
-                  <Callout.Text>{t("errors.linkInvalid")}</Callout.Text>
+                  <Callout.Text>{t(linkNotice)}</Callout.Text>
                 </Callout.Root>
               )}
               <Card>
