@@ -94,6 +94,8 @@ test("parseAmount refuses a group that is not three digits", () => {
 test("parseAmount keeps the lone-mark rule", () => {
   assert.equal(parseAmount("1.500"), 150000);
   assert.equal(parseAmount("1,500"), 150000);
+  assert.equal(parseAmount("12345.678"), 1234567800);
+  assert.equal(parseAmount("1500.000"), 150000000);
   assert.equal(parseAmount("1.5"), 150);
   assert.equal(parseAmount("1,25"), 125);
   assert.equal(parseAmount("500000"), 50000000);

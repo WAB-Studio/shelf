@@ -52,7 +52,7 @@ type WrittenFigure = { major: string; fraction: string };
 // other as the thousands group: "1.234,56" and "1,234.56" are the same
 // figure, and "1,234.567" is three decimals, refused, never a thousandfold
 // misreading. A single mark repeated is a group mark. A lone mark followed by
-// exactly three digits is a group too, since the column never holds a third
+// exactly three digits is a group too, whatever the digits before it, since the column never holds a third
 // decimal; any other lone mark is the decimal one. Every group after the
 // first is three digits and the first is one to three, or the figure is
 // refused.
@@ -90,10 +90,7 @@ function splitWritten(raw: string): WrittenFigure | null {
   const whole = trimmed.slice(0, cut);
   const tail = trimmed.slice(cut + 1);
   if (tail.length === 0) return null;
-  if (tail.length === 3) {
-    const major = groups(`${whole}${decimal}${tail}`, decimal);
-    return major === null ? null : { major, fraction: "" };
-  }
+  if (tail.length === 3) return { major: `${whole}${tail}`, fraction: "" };
   return { major: whole, fraction: tail };
 }
 
