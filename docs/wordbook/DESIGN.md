@@ -191,8 +191,8 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   `Palabra` family already draws it.
 - **An answer the AI wrote already has boards** — `SinResultadoIA` and `SinResultadoIAFallo`, both
   in all four. Whatever RL-29 becomes, it is not drawing from nothing.
-- **Nothing is drawn for exporting or for syncing**, and this file names neither. A screen for
-  either is designed from scratch, not derived from a board.
+- **Nothing is drawn for syncing.** Exporting has `RegistroExportarAnki` and `RegistroExportarAnkiEstados`
+  (approved 2026-10-16, `## Decisions of 2026-10-16`).
 - **This slice's boards, named.** `FraseOferta`, `SinResultadoIA`, `SinResultadoIAFallo`,
   `SinResultadoSinPista`, `Registro`, `RegistroVacío`, `Cuenta`, `CuentaDentro`,
   `BarraSidebarClaroMovil`, `BarraSidebarClaroEscritorio`, `BarraSidebarOscuroMovil` and
@@ -1708,3 +1708,35 @@ Taken by the user («2. b 3. b»).
 - **The dead RL-45 «swishing» path is deleted.** No visible behaviour changes.
 - **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/wordbook/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Needs boards before any work. Not built yet.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
+
+## Decisions of 2026-10-16: the seven boards of «cuenta», approved by the user
+
+Canvas version 48. Every board draws the dark 360 face; `RegistroBorrarFila` adds the 1280 face. Not built yet.
+
+- **`RegistroExportarAnki`, `RegistroExportarAnkiEstados`:** «Descargar para Anki» is a second accent link under
+  «Descargar el registro», 44 px, in the footer `registro/page.tsx` already wraps. Preparing: «Preparando las
+  tarjetas…» in its place, dimmed, no tap. Done: «{cards, plural, one {# tarjeta para Anki descargada} other {# tarjetas
+  para Anki descargadas}}», 14 px dimmed, under the links; `cards` is `buildAnkiExport().cards`. Failed: rule, «No se
+  pudo preparar el archivo para Anki» in full ink 600, accent «Reintentar» calls `buildAnkiExport()` again. No
+  searches: `RegistroVacío`, no link. The CSV explains nothing about its format.
+- **`RegistroBorrarFila`:** each row is a grid `[minmax(0, 1fr) | 44px]`; the ✕ is an `IconButton` beside the link,
+  never inside it, in the lowest dimmed ink (`#6C6759`), and it never navigates. Its name: «Borrar «{word}»»; it never
+  contains «Borrar el filtro». At `md` the row is one line (word | translation over forms | count, 40 px) with the ✕
+  in a fourth 44 px track.
+- **`RegistroBorrarFilaConfirmar`:** the confirmation opens inside the row, under its lines and above its rule, no
+  card; the row's ✕ hides while it is open. «¿Borrar «{word}»?» 15 px 600; «Se borran {count, plural, one {su #
+  búsqueda} other {sus # búsquedas}} y sus formas en todos tus dispositivos. No se puede deshacer.» dimmed; accent
+  «Conservar», then «Borrar» as a grey underlined link (the order and weights of `RegistroVaciarConfirmar`). Deleting:
+  both dimmed, «Borrando…». Opening another row's confirmation closes the first. Done has no board: the row leaves,
+  the header drops its count, the last row leaves `RegistroVacío`. Locators by name take `exact: true`.
+- **`RegistroBorrarFilaFallo`:** the row never left (the IndexedDB transaction aborts whole). Inside the row: rule,
+  «No se pudo borrar «{word}»» (`role="alert"`), «No se tocó nada: {count, plural, one {su # búsqueda sigue aquí}
+  other {sus # búsquedas siguen aquí}}.», accent «Reintentar» (calls `deleteStudyGroup` again, no second question),
+  «Conservar» grey link closes the block.
+- **`CuentaNoInvitado`:** under the kept address, rule and «Este correo no tiene invitación a WordBook.» in full ink
+  600, the form's existing failure shape.
+- **`CuentaEnlaceOtroNavegador`:** `?error=linkOtherBrowser`, the notice of `CuentaEnlaceNoVerificado` and
+  `CuentaEnlaceInvalido`: «Abre el enlace en el navegador donde lo pediste» / «Por seguridad el enlace solo entra en el
+  navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.» (GoalLog's words). The form below is the retry.
+- **`CuentaEnlaceNoVerificado` and `CuentaEnlaceInvalido` are stale:** drawn before «Tu cuenta» and the Copia section.
+  The user asked for both redrawn so the three match.
