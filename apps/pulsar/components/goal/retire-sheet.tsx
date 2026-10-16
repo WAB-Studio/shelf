@@ -103,6 +103,8 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
   const [pending, setPending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const editable = factDayCount === 0 && goalId !== null;
+  // Facts name it: the cadence and the delete stay in view, disabled, with their reason. A loose habit says it on its own screen.
+  const locked = factDayCount > 0 && goalId !== null;
   const [error, setError] = useState<MessageKey | null>(null);
 
   const description =
@@ -147,6 +149,10 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
           <Button asChild block variant="outline">
             <Link href={`/metas/${goalId}/compromisos/${commitmentId}`}>{t("goal.commitments.changeCadence")}</Link>
           </Button>
+        ) : locked ? (
+          <Button block variant="outline" disabled aria-describedby="cadence-locked-reason">
+            {t("goal.commitments.changeCadence")}
+          </Button>
         ) : null}
         <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
           {t("plan.retireSheet.cancel")}
@@ -165,6 +171,18 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
             {t("goal.commitments.delete")}
           </Button>
         </Flex>
+      ) : null}
+      {locked ? (
+        <>
+          <Flex justify="start">
+            <Button variant="ghost" disabled aria-describedby="cadence-locked-reason">
+              {t("goal.commitments.delete")}
+            </Button>
+          </Flex>
+          <Text as="p" id="cadence-locked-reason" variant="sentence" tone="muted">
+            {t("plan.errors.cadenceHasFacts")}
+          </Text>
+        </>
       ) : null}
     </Sheet>
     {editable ? (

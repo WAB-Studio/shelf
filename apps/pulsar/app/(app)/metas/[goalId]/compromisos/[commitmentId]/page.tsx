@@ -37,7 +37,7 @@ export default async function CommitmentCadencePage({
       hasMeasure={goal.measureUnit !== null}
       measureUnit={goal.measureUnit}
       sources={[]}
-      edit={{ commitmentId: commitment.id, cadence: commitment.cadence }}
+      edit={{ commitmentId: commitment.id, cadence: commitment.cadence, name: commitment.name }}
     />
   );
 }

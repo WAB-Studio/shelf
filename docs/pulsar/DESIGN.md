@@ -1777,6 +1777,7 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **A loose habit no fact names changes its cadence.** Retires RP-104 for RP-135.
 - **A cadence or a measure facts depend on never changes:** the person retires it and opens another.
 - **A goal with goals inside is not deleted** until they are moved out or deleted.
+- **An act that cannot be done is shown disabled with one line saying why, never hidden** («Borrar la meta», «Cambiar la medida», «Cambiar la frecuencia», «Borrar el compromiso»). A removal's sentence sits with its own removal control, never above the sheet's primary button.
 - **A past day lists the dated tasks it owed and the tasks done on it;** month tasks stay on Hoy.
 - **An import merges and never removes:** open goals only, matched by name; two goals of one name are not updated.
 - **Sign-ups stay on in Supabase Auth** until WordBook's and HomeFund's lists are built. Nothing to code.

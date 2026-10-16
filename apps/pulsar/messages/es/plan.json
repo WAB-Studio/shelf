@@ -48,7 +48,7 @@
   },
   "retireSheet": {
     "title": "¿Retirarlo?",
-    "descriptionWithDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y los {days, plural, one {# día} other {# días}} en que lo hiciste siguen ahí.",
+    "descriptionWithDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y {days, plural, one {el día} other {los # días}} en que lo hiciste {days, plural, one {sigue} other {siguen}} ahí.",
     "descriptionNoDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual.",
     "confirm": "Retirarlo",
     "cancel": "Dejarlo como está"

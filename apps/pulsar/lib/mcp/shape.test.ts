@@ -43,6 +43,7 @@ function goalView(unit: string | null): GoalView {
     measureName: unit === null ? null : "Lectura",
     measureUnit: unit,
     deletable: false,
+    deleteBlock: "facts",
     measureFed: unit !== null,
     archivedAt: null,
     measureTotal: 570,

@@ -18,7 +18,7 @@ type Refusal = { field: "name" | "unit"; text: string };
  * `Ponerle medida` (RP-117) and `Cambiar la medida` (RP-134): under «esta meta no mide nada», a
  * sheet that asks what the goal counts and in which unit; on a goal that measures and that no
  * fact feeds (`fed` false), the same sheet opens on the measure, says what a new unit takes away
- * and ends in `Quitar la medida`. The same schemas and acts as the AI door; a refusal reads under
+ * and ends in `Quitar la medida`, its sentence over it. A fed measure draws the act disabled with its reason. The same schemas and acts as the AI door; a refusal reads under
  * the field it touches.
  */
 export function MeasureAction({
@@ -28,6 +28,7 @@ export function MeasureAction({
   fed = false,
   rhythm = false,
   months = 0,
+  counting = [],
 }: {
   goalId: string;
   goalName: string;
@@ -38,6 +39,8 @@ export function MeasureAction({
   // A rhythm and this many month amounts go with the measure (RP-134).
   rhythm?: boolean;
   months?: number;
+  // The live commitments counted toward the measure, each with its unit: another unit cuts them off.
+  counting?: { name: string; unit: string }[];
 }) {
   const t = useTranslations();
   const router = useRouter();
@@ -102,7 +105,24 @@ export function MeasureAction({
   // Another stored unit clears the rhythm and the amounts written in the old one.
   const unitChanges = current !== undefined && unit.trim() !== "" && storedMeasure(unit.trim(), null).unit !== current.unit;
 
-  if (current && fed) return null;
+  // Commitments in the old unit stop feeding the goal once the unit is another.
+  const stopping =
+    current !== undefined && unitChanges ? counting.filter((commitment) => commitment.unit === current.unit) : [];
+
+  if (current && fed) {
+    return (
+      <>
+        <Flex>
+          <Button variant="ghost" tone="accent" tap={44} disabled aria-describedby="measure-fed-reason">
+            {t("goal.measure.change")}
+          </Button>
+        </Flex>
+        <Text as="p" id="measure-fed-reason" variant="sentence" tone="muted">
+          {t("goal.measure.fedReason")}
+        </Text>
+      </>
+    );
+  }
 
   return (
     <>
@@ -140,14 +160,14 @@ export function MeasureAction({
             {t("goal.measure.unitChangeBody")}
           </Text>
         ) : null}
-        {current ? (
+        {stopping.length > 0 ? (
           <Text as="p" variant="sentence" tone="muted">
-            {t("goal.measure.removeBody", { rhythm: rhythm ? "yes" : "no", months })}
-          </Text>
-        ) : null}
-        {removeRefusal ? (
-          <Text as="p" variant="sentence" tone="muted">
-            {removeRefusal}
+            {t("goal.measure.stops", {
+              count: stopping.length,
+              names: new Intl.ListFormat("es", { style: "long", type: "conjunction" }).format(
+                stopping.map((commitment) => commitment.name),
+              ),
+            })}
           </Text>
         ) : null}
         <SheetActions>
@@ -157,12 +177,24 @@ export function MeasureAction({
           <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
             {t("goal.measure.cancel")}
           </Button>
-          {current ? (
-            <Button block variant="outline" onClick={handleRemove} disabled={pending}>
-              {t("goal.measure.remove")}
-            </Button>
-          ) : null}
         </SheetActions>
+        {current ? (
+          <>
+            <Text as="p" variant="sentence" tone="muted">
+              {t("goal.measure.removeBody", { rhythm: rhythm ? "yes" : "no", months })}
+            </Text>
+            {removeRefusal ? (
+              <Text as="p" variant="sentence" tone="muted">
+                {removeRefusal}
+              </Text>
+            ) : null}
+            <Flex justify="start">
+              <Button variant="ghost" onClick={handleRemove} disabled={pending}>
+                {t("goal.measure.remove")}
+              </Button>
+            </Flex>
+          </>
+        ) : null}
       </Sheet>
     </>
   );

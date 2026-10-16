@@ -176,6 +176,22 @@ test("a habit with a fact, a retired one, an unknown one, another person's and a
   }
 });
 
+test("a habit with a fact shows «Cambiar la frecuencia» and «Borrar el hábito» disabled, with the reason once", async ({ person, browser, baseURL, db }) => {
+  // Kills: hiding the refused acts with no reason on the habit's screen.
+  const id = await seedHabit(db, person.id, "Con hecho", { kind: "daily" });
+  await seedFact(db, person.id, id, null, shift(TODAY, -1));
+  const { page, context } = await visit(browser, baseURL, person, habitPath(id), 360);
+  try {
+    await mainLower(page);
+    await expect(page.getByRole("button", { name: "Cambiar la frecuencia", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Borrar el hábito", exact: true })).toBeDisabled();
+    await expect(page.getByRole("link", { name: "Cambiar la frecuencia", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Ya hay días hechos con esta frecuencia: retíralo y abre otro.", { exact: true })).toHaveCount(1);
+  } finally {
+    await context.close();
+  }
+});
+
 test("at 360 px the cadence page does not scroll sideways", async ({ person, browser, baseURL, db }) => {
   // Kills: a field or a chip row wider than the phone.
   const id = await seedHabit(db, person.id, "Estirar", { kind: "weekdays", days: [1, 3, 5] });

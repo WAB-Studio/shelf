@@ -14,6 +14,7 @@ import { TODAY, TODAY_INDEX, drawn, seedFact, seedHabit, shift } from "./sin-fin
 // names the mutation that kills it. A locator that never appears fails in 6 s with its own name.
 test.use({ actionTimeout: 6000 });
 
+const CADENCE_REASON = "Ya hay días hechos con esta frecuencia: retíralo y abre otro.";
 const FACT_REFUSAL = "Ya hay días hechos con este compromiso: se retira, no se borra.";
 const WEEKS_BOUND = "Escribe cuántas veces por semana, un número entero entre 1 y 7.";
 const DAYS_BOUND = "Escribe cada cuántos días, un número entero entre 1 y 365.";
@@ -68,8 +69,8 @@ const NOT_TODAY = ((TODAY_INDEX + 3) % 7) + 1;
 const mainOf = async (page: Page) => drawn(await page.locator("main").innerText());
 
 test.describe("the sheet of a live commitment (RP-127)", () => {
-  test("with a fact it is today's sheet, word for word: two buttons, no delete, no cadence", async ({ person, browser, baseURL, db }) => {
-    // Kills: offering the delete or the cadence on `factDayCount >= 0` instead of `=== 0`.
+  test("with a fact the sheet retires and shows «Cambiar la frecuencia» and «Borrar el compromiso» disabled, with the reason once", async ({ person, browser, baseURL, db }) => {
+    // Kills: offering the delete or the cadence on `factDayCount >= 0` instead of `=== 0`; hiding the refused acts with no reason.
     const goal = await seedOpenGoal(db, person, { name: "Cuidado", unit: MINUTES, horizon: null });
     const id = await seedCommitment(db, person, goal, "Estirar");
     await seedFact(db, person.id, id, goal, shift(TODAY, -1), 15);
@@ -80,10 +81,45 @@ test.describe("the sheet of a live commitment (RP-127)", () => {
       await expect(sheet).toContainText(
         "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y los 2 días en que lo hiciste siguen ahí.",
       );
-      expect((await actsOf(sheet)).map((text) => text.trim())).toEqual(["Retirarlo", "Dejarlo como está"]);
-      await expect(sheet.getByRole("button", { name: /Borrar/ })).toHaveCount(0);
+      await expect(sheet.getByRole("button", { name: "Retirarlo", exact: true })).toBeEnabled();
+      await expect(sheet.getByRole("button", { name: "Cambiar la frecuencia", exact: true })).toBeDisabled();
+      await expect(sheet.getByRole("button", { name: "Borrar el compromiso", exact: true })).toBeDisabled();
       await expect(sheet.getByRole("link", { name: /Cambiar/ })).toHaveCount(0);
-      await expect(sheet.getByText("Cambiar la frecuencia")).toHaveCount(0);
+      await expect(sheet.getByText(CADENCE_REASON, { exact: true })).toHaveCount(1);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("one fact day reads «el día en que lo hiciste sigue ahí», never «los 1 día»", async ({ person, browser, baseURL, db }) => {
+    // Kills: the plural hardcoded as «los # día(s)».
+    const goal = await seedOpenGoal(db, person, { name: "Cuidado", unit: MINUTES, horizon: null });
+    const id = await seedCommitment(db, person, goal, "Estirar");
+    await seedFact(db, person.id, id, goal, shift(TODAY, -1), 15);
+    const { page, context } = await visit(browser, baseURL, person, `/metas/${goal}`, 360);
+    try {
+      const sheet = await openSheet(page, "Estirar");
+      await expect(sheet).toContainText("y el día en que lo hiciste sigue ahí.");
+      await expect(sheet).not.toContainText("los 1 día");
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("the cadence page names the commitment, and the list count adds the retired ones apart", async ({ person, browser, baseURL, db }) => {
+    // Kills: the page headed with the goal alone; a count that says «tres» over four rows.
+    const goal = await seedOpenGoal(db, person, { name: "Cuidado", unit: MINUTES, horizon: null });
+    const id = await seedCommitment(db, person, goal, "Estirar");
+    await seedCommitment(db, person, goal, "Caminar");
+    await seedCommitment(db, person, goal, "Nadar");
+    const gone = await seedCommitment(db, person, goal, "Correr");
+    await db`update goals.commitments set retired_at = now() where id = ${gone}`;
+    const { page, context } = await visit(browser, baseURL, person, `/metas/${goal}`, 360);
+    try {
+      await expect(page.getByRole("main")).toContainText("tres compromisos, 1 retirado");
+      await page.goto(`/metas/${goal}/compromisos/${id}`);
+      await expect(page.getByRole("heading", { level: 1, name: "¿Cada cuánto?" })).toBeVisible();
+      await expect(page.getByRole("main")).toContainText("Estirar");
     } finally {
       await context.close();
     }
@@ -426,7 +462,7 @@ test.describe("a loose habit's screen (RP-127, RP-135)", () => {
     }
   });
 
-  test("with a fact it offers neither", async ({ person, browser, baseURL, db }) => {
+  test("with a fact it offers neither, and shows both disabled", async ({ person, browser, baseURL, db }) => {
     // Kills: offering the delete or the cadence whatever `factDayCount` says.
     const id = await seedHabit(db, person.id, "Meditar", { kind: "daily" });
     await seedFact(db, person.id, id, null, shift(TODAY, -1));
@@ -434,9 +470,9 @@ test.describe("a loose habit's screen (RP-127, RP-135)", () => {
     try {
       await mainLower(page);
       await expect(page.getByRole("button", { name: "Retirarlo", exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Borrar el hábito" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Borrar el hábito" })).toBeDisabled();
       await expect(page.getByRole("link", { name: "Cambiar la frecuencia" })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Cambiar la frecuencia" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Cambiar la frecuencia" })).toBeDisabled();
     } finally {
       await context.close();
     }
