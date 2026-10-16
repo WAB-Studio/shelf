@@ -69,8 +69,9 @@ test("the scope key prefers the group when both are given", () => {
 
 test("order of candidates does not change the outcome", () => {
   const sets = [["G", "P"], ["G1", "G2", "P"], ["G", "P2"], ["X", "G"], []];
+  const accounts: readonly (ScopeKey | null)[] = [null, U, G];
   for (const ids of sets) {
-    for (const acct of [null, U, G]) {
+    for (const acct of accounts) {
       const want = resolveCategoryInScope(ids, acct, scopes);
       const rev = [...ids].reverse();
       assert.deepEqual(resolveCategoryInScope(rev, acct, scopes), want);
