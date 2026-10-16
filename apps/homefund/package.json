@@ -26,6 +26,7 @@
     "seed:year:drop": "npm run seed:year -- drop",
     "seed:demo": "TSX_TSCONFIG_PATH=scripts/harness/tsconfig.json node --import tsx --env-file=.env.local scripts/seed-demo.ts",
     "seed:demo:drop": "npm run seed:demo -- drop",
+    "allow-email": "node --import tsx --env-file=.env.local scripts/allow-email.ts",
     "check": "npm run db:check-rls && npm run check:queries && npm run check:http"
   },
   "dependencies": {
