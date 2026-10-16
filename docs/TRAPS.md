@@ -3303,3 +3303,20 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - Re-root while `main` keeps the old folders only when no `main` deploy is due before the rename reaches it. A hotfix from `main` first puts the old Root Directory back.
 - Read `GET /v6/deployments?projectId=<id>&since=<push time>` after the first push of a renamed branch. Never take a stored field as proof.
 - The auto-mode classifier refuses `PATCH /v9/projects` as a production deploy. The user runs it with `!`.
+
+## Two screens share an accessible name: a spec that navigates by it reads too early (2026-10-16)
+- WordBook's `/` and `/registro` both carry a textbox named «Buscar». `registro-copia.spec.ts:234` took that textbox as proof it had left `/registro`, so the next click landed before the navigation ended. `cuenta-copia.spec.ts:657` took its snapshot before the held `POST /api/log/sync` went out.
+- Measured: under CPU ×6 with 6 workers, 12 of 30 runs failed. After waiting on the URL and on the request, 60 of 60 passed. In CI it failed three times on two branches (#630, #631) and passed alone locally.
+- Do: wait on the URL or on the request the step causes, never on a control another screen also draws.
+
+## A `check:*` script CI never runs rots in silence (2026-10-16)
+- `check:translate-model` of WordBook had been red since #612: its T6 still expected two model calls from one caller, and the per-caller share allows one. Nobody saw it, because no CI job runs the script.
+- Do: before trusting a script's green, find it in `.github/workflows/ci.yml`. If it is not there, run it on `integracion` first.
+
+## `next dev` rewrites the block of each app's `AGENTS.md` (2026-10-16)
+- Every worktree that started `next dev` showed ` M apps/<app>/AGENTS.md`: the generated block's heading changes from `#` to `##`.
+- Do: commit the generated block with the work that started the server. Never count it as a worker's change.
+
+## A canvas read costs the main session about 40k tokens (2026-10-16)
+- `Artifact read` of the WordBook canvas returned the 4.3 MB page: the editor's stylesheet and fonts, before any board.
+- Do: read it once, and take the boards from the saved file with a script. They live in the `appifact-doc` script, `content.files`, one `.dc.html` each, plus `canvas.json`. Splice new boards in there. Before republishing, strip the publish skeleton the read prepends (everything before `<!doctype html>\n<html lang="en">`), and escape `</` in the JSON.

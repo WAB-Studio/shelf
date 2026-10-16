@@ -24,3 +24,10 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-16	renombre	validator	0	0	0	93716
 2026-10-16	renombre	mutator	15	15	0	66733
 2026-10-16	goallog-tren-final	ci	2	2	2	
+2026-10-16	wordbook-631	validator	5	5	2	107769
+2026-10-16	wordbook-631	mutator	16	16	5	88099
+2026-10-16	wordbook-631	ci	1	0	1	
+2026-10-16	homefund-632-tren1	validator	2	2	2	107513
+2026-10-16	homefund-632-tren1	mutator	25	25	6	105830
+2026-10-16	homefund-632-tren2	validator	0	0	0	48605
+2026-10-16	homefund-632-e6	mutator	19	19	0	52845
