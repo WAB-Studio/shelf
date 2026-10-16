@@ -31,6 +31,12 @@ test("a padded address is trimmed", () => {
   assert.deepEqual(result.data, { email: "ana@example.com" });
 });
 
+test("an address padded on both sides parses to the bare address", () => {
+  const result = inviteByEmailSchema.safeParse({ email: " ana@x.invalid " });
+  assert.equal(result.success, true);
+  assert.equal((result.data as { email: string }).email, "ana@x.invalid");
+});
+
 test("a blank or missing address is refused with the email-invalid key", () => {
   for (const input of [{ email: "" }, { email: "   " }, {}]) {
     assert.deepEqual(messages(input), ["members.errors.emailInvalid"], JSON.stringify(input));

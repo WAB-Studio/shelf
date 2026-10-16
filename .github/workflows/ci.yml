@@ -554,6 +554,8 @@ jobs:
     env:
       HARNESS_LANE: 10
       HARNESS_BASE_URL: http://localhost:3000
+      # A test salt, not a secret: RF-143's caps key on it and pass unkeyed without it.
+      CLIENT_KEY_SALT: ci-test-salt-not-secret
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -575,6 +577,9 @@ jobs:
       - run: npm run db:check-rls -w apps/homefund
 
       - run: npm run check:queries -w apps/homefund
+        if: ${{ !cancelled() }}
+
+      - run: npm run check:sign-in -w apps/homefund
         if: ${{ !cancelled() }}
 
       - name: Start the dev server and wait for it to answer
@@ -618,6 +623,7 @@ jobs:
       # rows a local lane is driving. Lanes 1 to 5 are the checkouts.
       HARNESS_LANE: 9
       HARNESS_BASE_URL: http://localhost:3000
+      CLIENT_KEY_SALT: ci-test-salt-not-secret
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

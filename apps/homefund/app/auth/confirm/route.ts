@@ -16,13 +16,20 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-// `magiclink` and `signup` are what the current email templates send. `email`
-// is the single value the documented templates use, accepted so that editing a
-// template later needs no code change.
-const confirmSchema = z.object({
-  token_hash: z.string().min(1),
-  type: z.enum(["magiclink", "signup", "email"]),
-});
+// `code` is the PKCE link `signInWithOtp` now sends. `token_hash` stays for the
+// invitation mail and any link already in an inbox. `magiclink` and `signup` are
+// what the current email templates send. `email` is the single value the
+// documented templates use, accepted so that editing a template later needs no
+// code change.
+const confirmSchema = z
+  .object({
+    code: z.string().min(1).optional(),
+    token_hash: z.string().min(1).optional(),
+    type: z.enum(["magiclink", "signup", "email"]).optional(),
+  })
+  .refine((query) => query.code !== undefined || (query.token_hash !== undefined && query.type !== undefined));
+
+type LinkFailure = "linkInvalid" | "linkOtherBrowser";
 
 function applyHeaders(response: NextResponse, headers: Headers): NextResponse {
   headers.forEach((value, name) => response.headers.set(name, value));
@@ -33,9 +40,10 @@ function invalidLink(
   request: NextRequest,
   locale: Locale,
   headers: Headers,
+  reason: LinkFailure = "linkInvalid",
 ): NextResponse {
   const url = new URL(`/${locale}/login`, request.url);
-  url.searchParams.set("error", "linkInvalid");
+  url.searchParams.set("error", reason);
 
   return applyHeaders(NextResponse.redirect(url), headers);
 }
@@ -59,11 +67,21 @@ export async function GET(request: NextRequest) {
   );
   if (!query.success) return invalidLink(request, fallbackLocale, authHeaders);
 
+  const { code, token_hash, type } = query.data;
+
+  // Only the browser that asked holds the verifier `@supabase/ssr` set when the
+  // link was requested; from any other, Auth is not asked and the code stays
+  // unspent for the browser that can use it.
+  if (code !== undefined) {
+    const holdsVerifier = request.cookies.getAll().some(({ name }) => name.endsWith("-code-verifier"));
+    if (!holdsVerifier) return invalidLink(request, fallbackLocale, authHeaders, "linkOtherBrowser");
+  }
+
   const supabase = await createSupabaseServerClient(authHeaders);
-  const { data, error } = await supabase.auth.verifyOtp({
-    type: query.data.type,
-    token_hash: query.data.token_hash,
-  });
+  const { data, error } =
+    code !== undefined
+      ? await supabase.auth.exchangeCodeForSession(code)
+      : await supabase.auth.verifyOtp({ type: type!, token_hash: token_hash! });
 
   if (error || !data.user) {
     console.error("magic link verification failed", error);
@@ -75,7 +93,7 @@ export async function GET(request: NextRequest) {
   const locale = await withUserDb(async (tx) => {
     // One statement, not check-then-insert: a second click or a mail client
     // prefetching the link would race a duplicate key. The id is the one
-    // `verifyOtp` just verified, which is what the insert policy checks.
+    // Auth just verified, which is what the insert policy checks.
     const created = await insertRow(
       tx,
       appUsers,

@@ -1,10 +1,13 @@
 "use server";
 
 import { getLocale } from "next-intl/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { z } from "zod";
 
+import { isEmailAllowed } from "@/db/queries/allowlist";
+import { claimSignInLink } from "@/db/queries/sign-in-claims";
 import { redirect } from "@/i18n/navigation";
+import { deliverabilityExempt, isDomainDeliverable } from "@/lib/auth/deliverability";
 import { env } from "@/lib/env";
 import { ActionError } from "@/lib/errors";
 import { isInternalPath } from "@/lib/internal-path";
@@ -16,12 +19,27 @@ const POST_LOGIN_REDIRECT_MAX_AGE = 60 * 15;
 
 /**
  * Sends the sign-in link (RF-01). The bind argument carries the destination the
- * proxy put in `?next=`; the form itself only holds the email.
+ * proxy put in `?next=`; the form itself only holds the email. Every refusal
+ * lands before Auth is asked, cheapest first, and the daily caps (RF-143) last
+ * so that an uninvited or undeliverable address never spends a claim.
  */
 export const signInAction = actionClient
   .bindArgsSchemas([z.string().optional()])
   .inputSchema(signInSchema)
   .action(async ({ parsedInput: { email }, bindArgsParsedInputs: [next] }) => {
+    // RF-145: only invited addresses get a link.
+    if (!(await isEmailAllowed(email))) throw new ActionError("errors.notInvited");
+
+    const domain = email.trim().toLowerCase().split("@").pop() ?? "";
+    const deliverable =
+      deliverabilityExempt(domain, env.NEXT_PUBLIC_SUPABASE_URL) || (await isDomainDeliverable(domain));
+    if (!deliverable) throw new ActionError("errors.domainUndeliverable");
+
+    // `noKey` passes: Auth's own per-hour limit still stands behind it.
+    if ((await claimSignInLink(await headers(), email)) === "rateLimited") {
+      throw new ActionError("errors.signInLinkCapped");
+    }
+
     const supabase = await createSupabaseServerClient();
 
     const { error } = await supabase.auth.signInWithOtp({

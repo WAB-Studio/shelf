@@ -16,6 +16,7 @@
     "db:check-rls": "TSX_TSCONFIG_PATH=scripts/harness/tsconfig.json node --import tsx --env-file=.env.local scripts/check-rls.ts",
     "check:unit": "node --import tsx --test \"{lib,components}/**/*.test.ts\"",
     "check:queries": "TSX_TSCONFIG_PATH=scripts/harness/tsconfig.json node --import tsx --env-file=.env.local scripts/check-queries.ts",
+    "check:sign-in": "TSX_TSCONFIG_PATH=scripts/harness/tsconfig.json node --import tsx --env-file=.env.local scripts/check-sign-in.ts",
     "check:http": "TSX_TSCONFIG_PATH=scripts/harness/tsconfig.json node --import tsx --env-file=.env.local scripts/check-http.ts",
     "check:e2e": "node --env-file=.env.local ../../node_modules/@playwright/test/cli.js test",
     "harness:token": "TSX_TSCONFIG_PATH=scripts/harness/tsconfig.json node --import tsx --env-file=.env.local scripts/harness/mint-harness-token.ts",
@@ -26,6 +27,7 @@
     "seed:year:drop": "npm run seed:year -- drop",
     "seed:demo": "TSX_TSCONFIG_PATH=scripts/harness/tsconfig.json node --import tsx --env-file=.env.local scripts/seed-demo.ts",
     "seed:demo:drop": "npm run seed:demo -- drop",
+    "allow-email": "node --import tsx --env-file=.env.local scripts/allow-email.ts",
     "check": "npm run db:check-rls && npm run check:queries && npm run check:http"
   },
   "dependencies": {
