@@ -41,7 +41,7 @@
     "fromLabel": "desde la semana",
     "toLabel": "hasta la semana",
     "submit": "Añadir la fase",
-    "span": "Del lunes <fig>{from}</fig> al domingo <fig>{to}</fig>. La meta llega hasta la semana <fig>{lastWeek}</fig>, el <fig>{lastDay}</fig>.",
+    "span": "Del <fig>{from}</fig> al <fig>{to}</fig>. La meta llega hasta la semana <fig>{lastWeek}</fig>, el <fig>{lastDay}</fig>.",
     "beyond": "La meta llega hasta la semana <fig>{lastWeek}</fig>, el <fig>{lastDay}</fig>. Elige hasta esa semana o mueve el final.",
     "moveEnd": "Mover el final",
     "overlap": "Las semanas <fig>{from}</fig> a <fig>{to}</fig> ya son de «{aim}». Empieza en la <fig>{next}</fig>."

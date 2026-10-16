@@ -25,7 +25,7 @@ import {
 import { dayBefore, horizonWeeksOf, weekIndexOf } from "@/lib/day/weeks";
 import { civilDateLabel } from "@/lib/zone";
 
-import { MAX_GOAL_WEEKS, weeksToPhaseSpan } from "./phase-weeks";
+import { MAX_GOAL_WEEKS, phaseSpanKeeping } from "./phase-weeks";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type PhaseFormProps = {
@@ -114,7 +114,7 @@ export function PhaseForm({
 
   // The typed weeks read live: the days they cover, or the refusal naming the
   // goal's last week, or the phase they overlap. Derived, never stored.
-  const span = ordered ? weeksToPhaseSpan(openedOn, fromData, toData, horizon) : null;
+  const span = ordered ? phaseSpanKeeping(openedOn, fromData, toData, horizon, phase) : null;
   const pastFrom = fromData !== null && fromData > lastWeek;
   const pastTo = toData !== null && toData > lastWeek;
   const beyond = ordered && (pastFrom || pastTo);
@@ -137,8 +137,8 @@ export function PhaseForm({
         })
       : span
         ? t.rich("plan.phaseForm.span", {
-            from: civilDateLabel(span.startsOn),
-            to: civilDateLabel(span.endsOn),
+            from: civilDateLabel(span.startsOn, true),
+            to: civilDateLabel(span.endsOn, true),
             ...lastWeekFigures,
           })
         : null;
@@ -169,7 +169,7 @@ export function PhaseForm({
       return;
     }
 
-    const typedSpan = weeksToPhaseSpan(openedOn, fromResult.data, toResult.data, horizon);
+    const typedSpan = phaseSpanKeeping(openedOn, fromResult.data, toResult.data, horizon, phase);
     if (!phaseWithinHorizon(typedSpan, horizon) || overlapped) {
       // The refusal already reads in the hint; focus on the ringed field announces it.
       (fromInvalid || !toInvalid ? fromRef : toRef).current?.focus();

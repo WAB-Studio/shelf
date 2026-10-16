@@ -2,7 +2,7 @@ import type { Browser, BrowserContext, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { weeksToPhaseSpan } from "@/components/goal/phase-weeks";
-import { civilDateInZone, dateToCivilDate } from "@/lib/zone";
+import { civilDateInZone, civilDateLabel, dateToCivilDate } from "@/lib/zone";
 
 import { test, expect, visit, type Person } from "./fixtures";
 import goalMessages from "../messages/es/goal.json";
@@ -281,6 +281,42 @@ for (const [width, height] of WIDTHS) {
         expect(await phaseRow(db, s.secondId)).toEqual({ aim: s.secondAim, starts_on: span.startsOn, ends_on: span.endsOn });
         // The form answers again after a refusal.
         await expect(page.getByRole("button", { name: SAVE, exact: true })).toBeEnabled();
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("two phases that meet mid-week share that week: either saves a rename with its dates unmoved", async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const s = await seed(db, person.id);
+      // The first ends on Monday of week 3, the second starts the Tuesday after: both are week 3.
+      const monday = weeksToPhaseSpan(s.openedOn, 3, 3, null).startsOn;
+      const sunday = weeksToPhaseSpan(s.openedOn, 5, 5, null).endsOn;
+      await db`update goals.phases set ends_on = ${monday}::date where id = ${s.firstId}`;
+      await db`update goals.phases set starts_on = ${monday}::date + 1, ends_on = ${sunday}::date where id = ${s.secondId}`;
+      const secondFrom = await db<{ d: string }[]>`select to_char(${monday}::date + 1, 'YYYY-MM-DD') as d`;
+      const context = await openContext(browser, person, baseURL!, width, height);
+      try {
+        const page = await openEdit(context, s.goalId, s.secondId);
+        await expect(page.getByLabel(plan.phaseForm.fromLabel)).toHaveValue("3");
+        await expect(page.locator("#phase-weeks-hint")).not.toContainText("ya son de");
+        await expect(page.locator("#phase-weeks-hint")).toContainText(`Del ${civilDateLabel(secondFrom[0].d, true)} al `);
+        const renamed = `Sigue ${Date.now()}`;
+        await page.getByLabel(plan.phaseForm.aimLabel).fill(renamed);
+        await page.getByRole("button", { name: SAVE, exact: true }).click();
+        await page.waitForURL(new RegExp(`/metas/${s.goalId}$`));
+        expect(await phaseRow(db, s.secondId)).toEqual({ aim: renamed, starts_on: secondFrom[0].d, ends_on: sunday });
+
+        const first = await openEdit(context, s.goalId, s.firstId);
+        await expect(first.locator("#phase-weeks-hint")).not.toContainText("ya son de");
+        await first.getByLabel(plan.phaseForm.aimLabel).fill(`Antes ${Date.now()}`);
+        await first.getByRole("button", { name: SAVE, exact: true }).click();
+        await first.waitForURL(new RegExp(`/metas/${s.goalId}$`));
+        expect((await phaseRow(db, s.firstId))?.ends_on).toBe(monday);
       } finally {
         await context.close();
       }
