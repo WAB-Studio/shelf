@@ -74,7 +74,7 @@ export function lastSixMonthStarts(): string[] {
 
 // Half-open `[Monday, next Monday)` for the Bogotá week around `reference`. The
 // day-of-week is read from the midday-UTC instant, so no local offset shifts it.
-export function weekRange(reference: string): {
+function weekRange(reference: string): {
   start: string;
   endExclusive: string;
 } {
@@ -87,7 +87,7 @@ export function weekRange(reference: string): {
 }
 
 // Half-open `[Jan 01 of that year, next Jan 01)` for the year `reference` sits in.
-export function yearRange(reference: string): {
+function yearRange(reference: string): {
   start: string;
   endExclusive: string;
 } {
@@ -110,7 +110,7 @@ function dayOfMonthClamped(anchor: Date, day: number): Date {
 }
 
 // The next Bogotá `YYYY-MM-DD` on or after `reference` whose day-of-month is
-// `day`, clamped to the month length. A cut-off or due day lands here (RF-84).
+// `day`, clamped to the month length. A cut-off or due day lands here.
 export function nextDayOfMonthOnOrAfter(day: number, reference: string): string {
   const ref = civilDateToDate(reference);
   let candidate = dayOfMonthClamped(ref, day);

@@ -61,7 +61,7 @@ function band(page: Page): Locator {
 test("the categories screen renders the categories it read", async ({ page }) => {
   await page.goto("/es/settings/categories");
 
-  // Categorías gained a laptop band of its own (RF-63, RF-116): the phone's
+  // Categorías has a laptop band of its own (RF-63): the phone's
   // card and the table's row both carry the bare name, so this scopes the read
   // to whichever the width is showing, in line rather than a shared helper.
   const shown = page.locator("main > div > .rt-Box").filter({ visible: true });
@@ -101,7 +101,7 @@ test("the labels screen renders a label with its usage counts", async ({
 
   await page.goto("/es/settings/labels");
 
-  // Etiquetas gained the same laptop band (RF-70, RF-116); see the categories
+  // Etiquetas has the same laptop band (RF-70); see the categories
   // test above for why this reads in line rather than through a shared helper.
   const shown = page.locator("main > div > .rt-Box").filter({ visible: true });
   await expect(shown.getByText(name, { exact: true })).toBeVisible();

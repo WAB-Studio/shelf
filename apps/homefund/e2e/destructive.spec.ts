@@ -98,7 +98,7 @@ test("creates a category and deletes it from the screen and the table", async ({
   await form.getByRole("button", { name: common.save, exact: true }).click();
 
   await expect(form).toBeHidden();
-  // Categorías gained a laptop band of its own (RF-63, RF-116): a bare name
+  // Categorías has a laptop band of its own (RF-63): a bare name
   // matches the phone's card and the table's row alike, so the check names the
   // one the width is showing.
   await expect(band(page).getByText(name, { exact: true })).toBeVisible();
@@ -129,7 +129,7 @@ test("creates a label and deletes it from the screen and the table", async ({
   await form.getByRole("button", { name: common.save, exact: true }).click();
 
   await expect(form).toBeHidden();
-  // Etiquetas gained a laptop band of its own (RF-70, RF-116): a bare name
+  // Etiquetas has a laptop band of its own (RF-70): a bare name
   // matches the phone's card and the table's row alike, so the check names the
   // one the width is showing.
   await expect(band(page).getByText(name, { exact: true })).toBeVisible();

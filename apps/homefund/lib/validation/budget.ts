@@ -87,16 +87,11 @@ export const archiveBudgetSchema = z.object({
   budgetId: z.uuid({ error: "budgets.errors.budgetInvalid" }),
 });
 
-export type ArchiveBudgetInput = z.infer<typeof archiveBudgetSchema>;
-
 export const restoreBudgetSchema = z.object({
   budgetId: z.uuid({ error: "budgets.errors.budgetInvalid" }),
 });
-
-export type RestoreBudgetInput = z.infer<typeof restoreBudgetSchema>;
 
 export const deleteBudgetSchema = z.object({
   budgetId: z.uuid({ error: "budgets.errors.budgetInvalid" }),
 });
 
-export type DeleteBudgetInput = z.infer<typeof deleteBudgetSchema>;

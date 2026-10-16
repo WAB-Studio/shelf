@@ -28,7 +28,7 @@ import { createTransactionSchema } from "@/lib/validation/transaction";
 const MAX_DATA_ROWS = 10_000;
 
 // Every error the pipeline reports is a catalogue key, translated by the screen that
-// shows it (RF-48). The cap and the reference resolver raise these; a schema failure
+// shows it. The cap and the reference resolver raise these; a schema failure
 // carries its own field keys.
 export const TOO_MANY_ROWS = "data.import.errors.tooManyRows";
 const UNKNOWN_REFERENCE = "data.import.errors.unknownReference";
@@ -52,7 +52,7 @@ const ACCOUNT_CURRENCY_CHANGE = "accounts.errors.currencyLocked";
 // A catalogue key is a dotted identifier with no spaces; a raw Zod default is an
 // English sentence. The light guard's number/enum/date fields carry no custom key,
 // so a mistyped cell surfaces Zod's default — mapped to a key here so no English
-// string ever reaches the preview (RF-48).
+// string ever reaches the preview.
 const CATALOGUE_KEY = /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/;
 
 // A stable, private namespace for the placeholder id a file-new reference target

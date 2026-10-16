@@ -239,7 +239,7 @@ function cardOwed(page: Page, name: string): Locator {
 /**
  * The open period's own balance, read inside the panel that names it: the same
  * word labels the statements column and the detail's first tile, and only this
- * one moves with a movement recorded after the last cut-off (RF-84). The heading
+ * one moves with a movement recorded after the last cut-off. The heading
  * sits in the panel's head, so the panel is two levels up.
  */
 function openPeriodBalance(page: Page): Locator {

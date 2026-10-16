@@ -15,8 +15,8 @@ const categoryParentIdSchema = z
   .uuid({ error: "categories.errors.parentInvalid" })
   .nullable();
 
-// Every category picks its own colour, parent or child alike (D8): a
-// subcategory no longer inherits its parent's at write time.
+// Every category picks its own colour, parent or child alike; a subcategory
+// never inherits its parent's.
 const categoryColorSchema = z.enum(CATEGORY_COLORS, {
   error: "categories.errors.colorRequired",
 });
@@ -46,4 +46,3 @@ export const deleteCategorySchema = z.object({
   categoryId: z.uuid({ error: "errors.notFound" }),
 });
 
-export type DeleteCategoryInput = z.infer<typeof deleteCategorySchema>;

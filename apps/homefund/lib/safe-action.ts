@@ -7,7 +7,7 @@ import { ActionError } from "@/lib/errors";
 
 /**
  * Every action starts here. `serverError` is always a message key, so the form
- * that receives it can translate it (RF-48).
+ * that receives it can translate it.
  */
 export const actionClient = createSafeActionClient({
   defaultValidationErrorsShape: "flattened",

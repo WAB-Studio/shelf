@@ -107,19 +107,13 @@ export const archiveGoalSchema = z.object({
   goalId: z.uuid({ error: "goals.errors.goalInvalid" }),
 });
 
-export type ArchiveGoalInput = z.infer<typeof archiveGoalSchema>;
-
 export const restoreGoalSchema = z.object({
   goalId: z.uuid({ error: "goals.errors.goalInvalid" }),
 });
 
-export type RestoreGoalInput = z.infer<typeof restoreGoalSchema>;
-
 export const deleteGoalSchema = z.object({
   goalId: z.uuid({ error: "goals.errors.goalInvalid" }),
 });
-
-export type DeleteGoalInput = z.infer<typeof deleteGoalSchema>;
 
 // A typed virtual aporte toward the goal (RF-87); the entry earmarks no
 // movement, so the amount alone crosses as a peso string.
@@ -136,10 +130,7 @@ export const goalContributionsSchema = z.object({
   goalId: z.uuid({ error: "goals.errors.goalInvalid" }),
 });
 
-export type GoalContributionsInput = z.infer<typeof goalContributionsSchema>;
-
 export const removeGoalContributionSchema = z.object({
   contributionId: z.uuid({ error: "goals.errors.contributionInvalid" }),
 });
 
-export type RemoveGoalContributionInput = z.infer<typeof removeGoalContributionSchema>;

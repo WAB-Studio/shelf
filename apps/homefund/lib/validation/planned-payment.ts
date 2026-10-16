@@ -130,10 +130,7 @@ export const cancelPlannedPaymentSchema = z.object({
   plannedPaymentId: z.uuid({ error: "plannedPayments.errors.plannedPaymentInvalid" }),
 });
 
-export type CancelPlannedPaymentInput = z.infer<typeof cancelPlannedPaymentSchema>;
-
 export const deletePlannedPaymentSchema = z.object({
   plannedPaymentId: z.uuid({ error: "plannedPayments.errors.plannedPaymentInvalid" }),
 });
 
-export type DeletePlannedPaymentInput = z.infer<typeof deletePlannedPaymentSchema>;

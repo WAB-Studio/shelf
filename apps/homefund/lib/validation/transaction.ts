@@ -473,8 +473,6 @@ export const deleteTransactionSchema = z.object({
   transactionId: z.uuid({ error: "errors.notFound" }),
 });
 
-export type DeleteTransactionInput = z.infer<typeof deleteTransactionSchema>;
-
 // A movement's missing side, filled by hand (RF-132 companion, RF-133): the
 // account travels through the very same shape a form would submit, so the
 // action's write and the DB's own writable-scope policy are the only judges
@@ -483,8 +481,6 @@ export const completeCounterpartySchema = z.object({
   transactionId: z.uuid({ error: "errors.notFound" }),
   accountId: z.uuid({ error: "transactions.errors.accountInvalid" }),
 });
-
-export type CompleteCounterpartyInput = z.infer<typeof completeCounterpartySchema>;
 
 // A malformed value never reaches Postgres: a bad type falls back to "all", a
 // bad date or a repeated key drops to undefined, so the query filters on the
@@ -528,4 +524,3 @@ export const movementFiltersSchema = z.object({
   rule: filterReference,
 });
 
-export type MovementFilters = z.infer<typeof movementFiltersSchema>;

@@ -202,14 +202,11 @@ export function formatMoney(
   return formatter.format(value);
 }
 
-// COP-only wrappers, marked to retire. Forty-five files still call them, from
+// COP-only wrappers, marked to retire. Callers still bound to them date from
 // when every amount was a peso stored as a hundredth of itself. Each caller
 // drops its own as the screen it serves starts carrying a currency (RF-121).
 // They count whole pesos, which is a third scale and the reason they go: only
 // `pesosToCents` bridges them to the integer a column holds.
-
-/** @deprecated Bound an amount with `maxAmountMinor(currency)`. */
-export const MAX_AMOUNT_PESOS = MAX_AMOUNT_MAJOR;
 
 /** @deprecated Normalising is `parseAmount`'s own business. */
 export function normalizeAmountInput(raw: string): string {

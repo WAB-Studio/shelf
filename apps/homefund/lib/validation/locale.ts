@@ -9,4 +9,3 @@ export const setLocaleSchema = z.object({
   locale: z.enum(LOCALES),
 });
 
-export type SetLocaleInput = z.infer<typeof setLocaleSchema>;

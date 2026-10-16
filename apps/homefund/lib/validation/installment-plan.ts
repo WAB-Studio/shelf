@@ -145,6 +145,3 @@ export const deleteInstallmentPlanSchema = z.object({
   planId: z.uuid({ error: "installments.errors.planInvalid" }),
 });
 
-export type DeleteInstallmentPlanInput = z.infer<
-  typeof deleteInstallmentPlanSchema
->;

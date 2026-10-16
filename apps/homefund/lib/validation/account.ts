@@ -169,25 +169,18 @@ export const archiveAccountSchema = z.object({
   accountId: z.uuid({ error: "errors.notFound" }),
 });
 
-export type ArchiveAccountInput = z.infer<typeof archiveAccountSchema>;
-
 // RF-61: the group is the caller's own, resolved from the session, so only the
 // account travels.
 export const handAccountToGroupSchema = z.object({
   accountId: z.uuid({ error: "errors.notFound" }),
 });
 
-export type HandAccountToGroupInput = z.infer<typeof handAccountToGroupSchema>;
-
 
 export const restoreAccountSchema = z.object({
   accountId: z.uuid({ error: "errors.notFound" }),
 });
 
-export type RestoreAccountInput = z.infer<typeof restoreAccountSchema>;
-
 export const deleteAccountSchema = z.object({
   accountId: z.uuid({ error: "errors.notFound" }),
 });
 
-export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>;
