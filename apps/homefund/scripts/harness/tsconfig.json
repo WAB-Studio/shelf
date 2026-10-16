@@ -5,6 +5,7 @@
     "paths": {
       "server-only": ["./scripts/harness/stubs/server-only.ts"],
       "next-intl/server": ["./scripts/harness/stubs/next-intl-server.ts"],
+      "next/cache": ["./scripts/harness/stubs/next-cache.ts"],
       "@/lib/supabase/server": ["./scripts/harness/stubs/supabase-server.ts"],
       "@/*": ["./*"]
     }

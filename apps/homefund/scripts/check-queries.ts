@@ -3742,7 +3742,7 @@ async function main(): Promise<void> {
   await recurringRuleCategoryScopeSuite(scope, groupless);
   await recurringRuleCategoryFitSuite(userId, scope, groupless, fellow);
   console.log("");
-  await serverEntriesSuite(scope, groupless);
+  await serverEntriesSuite(scope);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -4706,7 +4706,9 @@ async function recurringRuleCategoryFitSuite(
 
 // E4: the invite validates with the schema its form uses, the two data routes overlap
 // their session check with their reads, and two uncalled write endpoints are gone.
-async function serverEntriesSuite(scope: HarnessScope, groupless: HarnessUser): Promise<void> {
+async function serverEntriesSuite(scope: HarnessScope): Promise<void> {
+  // Earlier suites let `groupless` found a fund, so this one needs a user who still has none.
+  const groupless = await createMembershipFreeUser();
   const members = (await import("@/app/actions/members")) as Record<string, unknown>;
   type InviteResult = {
     data?: { memberId: string; inviteEmailFailed: boolean };
