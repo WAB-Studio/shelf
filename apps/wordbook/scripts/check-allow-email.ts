@@ -87,7 +87,8 @@ async function main() {
   const fresh = `harness-allow-${randomUUID()}@example.invalid`;
   const preexisting = `harness-allow-${randomUUID()}@example.invalid`;
   const unconfirmedKey = `harness-allow-${randomUUID()}@example.invalid`;
-  const all = [fresh, preexisting, unconfirmedKey];
+  const badShape = "nobody@nodot";
+  const all = [fresh, preexisting, unconfirmedKey, badShape];
   const { createClient } = await import("@supabase/supabase-js");
   const admin = createClient(apiUrl, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 
@@ -95,9 +96,9 @@ async function main() {
     for (const email of all) await forget(email);
     const before = (await sql`select count(*)::int as n from reading.allowed_emails`)[0].n as number;
 
-    const bad = allowEmail("x");
+    const bad = allowEmail(badShape);
     assert(
-      "a string that is not an address exits 1 and lists nothing",
+      "a string that is not an address (the stored column would take it) exits 1 and lists nothing",
       bad.code === 1 && ((await sql`select count(*)::int as n from reading.allowed_emails`)[0].n as number) === before,
       `exit=${bad.code}`,
     );
