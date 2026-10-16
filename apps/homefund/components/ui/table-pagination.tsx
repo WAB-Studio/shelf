@@ -6,7 +6,7 @@ import { Flex, IconButton } from "@radix-ui/themes";
 import styles from "./table-pagination.module.css";
 
 /**
- * The foot of a dense table (RF-48, RNF-08). State never lives here: the caller
+ * The foot of a dense table (RF-125, RNF-08). State never lives here: the caller
  * owns the page index, builds the caption from its own ICU message and withholds
  * the handler at either end — the button then reads disabled instead of
  * disappearing, so the control never moves under the pointer.
