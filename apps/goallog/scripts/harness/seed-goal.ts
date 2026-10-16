@@ -10,10 +10,10 @@
 // at build time and a plain script never sees — imported directly, these run
 // as the ordinary async functions they are. What they cannot survive outside
 // Next is what they import: `server-only` does not exist as a package at all
-// off Next's bundler (`apps/orbit/scripts/harness/stubs/server-only.ts`'s own
+// off Next's bundler (`apps/homefund/scripts/harness/stubs/server-only.ts`'s own
 // comment), `next/headers`'s `cookies()` throws outside a request scope, and
 // `next/cache`'s `revalidatePath` throws with no static generation store to
-// invalidate. `apps/orbit/scripts/check-queries.ts` solves the first with a
+// invalidate. `apps/homefund/scripts/check-queries.ts` solves the first with a
 // `TSX_TSCONFIG_PATH` pointed at a stub file; this script has no second file
 // to point one at, so the same three modules are stubbed in-process instead,
 // by replacing `Module._load` before the first `@/`-rooted import ever runs.
@@ -59,7 +59,7 @@ function loadCookies(): StoredCookie[] {
 // Real cookies from a real `/auth/confirm` redemption: `@supabase/ssr`'s own
 // client parses them and asks the real auth server for real claims, so
 // `getPerson()` below sees exactly the identity `mint-session.ts` minted —
-// nothing here fabricates a claim the way `apps/orbit/scripts/harness/
+// nothing here fabricates a claim the way `apps/homefund/scripts/harness/
 // stubs/supabase-server.ts` does.
 function installStubs(cookies: StoredCookie[]): void {
   // `_load` is undocumented — the type declarations carry no signature for

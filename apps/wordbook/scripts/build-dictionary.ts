@@ -333,7 +333,7 @@ ${LICENCE_URL}
 Attribution: ${ATTRIBUTION}
 
 Modifications:
-This script (apps/voyager/scripts/build-dictionary.ts) parsed the source TEI
+This script (apps/wordbook/scripts/build-dictionary.ts) parsed the source TEI
 XML and extracted, per entry carrying a Spanish translation, its headword,
 part of speech, IPA, Spanish translations and definition into a JSON array.
 It dropped every entry without a Spanish translation. Of the extracted
@@ -344,7 +344,7 @@ transcription (for example "/ænˈtiːɡʌn/<ref:<<name:OED>>>" becomes
 "/ænˈtiːɡʌn/"); definition is the first sentence of the entry's first sense,
 and is left empty for entries with more than one sense, so distinct meanings
 are never run together into one string; part of speech is folded onto the
-six values apps/voyager/lib/dictionary/format.ts declares, mapping the
+six values apps/wordbook/lib/dictionary/format.ts declares, mapping the
 source's thirteen further categories and its unlabelled entries onto the
 closest of the six. It changed nothing else: no headword, translation or
 definition text was altered beyond those two cuts.

@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# GoalLog (`apps/pulsar`)
+# GoalLog (`apps/goallog`)
 
 Contract: `docs/pulsar/SPEC.md`. Design: `docs/pulsar/DESIGN.md`. CI and mutations: `docs/agentes/verificacion.md`.
 

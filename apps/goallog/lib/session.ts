@@ -68,7 +68,7 @@ export async function getPerson(): Promise<Person | null> {
  *
  * The guard and the settle themselves live in `withSettledTransaction`
  * (`@/lib/settled-transaction`), not here: that function holds no
- * `next/headers` and no `@/db/client`, so `apps/pulsar/scripts/check-policies.ts`
+ * `next/headers` and no `@/db/client`, so `apps/goallog/scripts/check-policies.ts`
  * calls the very same one instead of a copy of it, and a mutation to either
  * is caught from both places.
  */

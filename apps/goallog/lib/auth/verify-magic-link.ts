@@ -2,7 +2,7 @@ import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 
 import { consentReturnPath } from "@/lib/validation/oauth";
 
-// Copied from `apps/voyager/lib/auth/verify-magic-link.ts` (RP-18): a
+// Copied from `apps/wordbook/lib/auth/verify-magic-link.ts` (RP-18): a
 // timeout is the gateway not answering — `verifyOtp` ran but never
 // completed, so the token's fate is unknown. `linkInvalid` covers a
 // malformed query string and a rejection that did complete: both are

@@ -4,11 +4,11 @@ import { pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { EvidenceReader } from "./types";
 
 /**
- * A read-only reference to `apps/voyager`'s `reading.lookups`
- * (apps/voyager/db/schema/lookups.ts), narrowed to the four columns this
+ * A read-only reference to `apps/wordbook`'s `reading.lookups`
+ * (apps/wordbook/db/schema/lookups.ts), narrowed to the four columns this
  * reader needs. Declared here and never exported from `db/schema/index.ts`:
  * drizzle-kit's diff for this app never sees this table, so it never tries
- * to create, alter or drop it (RNP-10). `apps/voyager` owns that table, its
+ * to create, alter or drop it (RNP-10). `apps/wordbook` owns that table, its
  * migration and its policies; this file only names enough of its shape to
  * read from it.
  */
@@ -30,7 +30,7 @@ const LABEL_KEY = "sources.readingLookups";
 /**
  * One statement: how many searches landed on each civil day of `zone`,
  * between `from` and `to` inclusive. Nothing here filters by `personId` —
- * `apps/voyager`'s own `lookups_select_self` policy is what narrows the rows
+ * `apps/wordbook`'s own `lookups_select_self` policy is what narrows the rows
  * to the caller's own (RP-10, RNP-05), because `tx` arrives already settled
  * to `search_path = 'reading, public'` and `role = authenticated` by
  * `withReadingDb`. A reader that repeated that filter in SQL would still be

@@ -4,7 +4,7 @@
 //
 // Voyager has no Admin API key (`lib/env.ts`) and none is added here: a
 // service-role key in the harness is a production key in the harness. The
-// path that works instead is the one `apps/orbit/scripts/harness/
+// path that works instead is the one `apps/homefund/scripts/harness/
 // mint-harness-token.ts` already proved: land a row in
 // `auth.one_time_tokens` over a direct connection, then let voyager's own
 // `GET /auth/confirm` verify it — the same route a real magic link lands on.
@@ -12,11 +12,11 @@
 // landed row and the column carry the same hash.
 //
 // The two apps share one Supabase project, so `harness.runs` and
-// `harness.identities` — schemas `apps/orbit/db/migrations/0039` owns — are
+// `harness.identities` — schemas `apps/homefund/db/migrations/0039` owns — are
 // reachable from here over the same `MIGRATION_DATABASE_URL`. `openRun` and
 // `closeRun` come from `@repo/harness-registry`, the package both apps
 // depend on, rather than reimplemented, so `npm run harness:census -w
-// apps/orbit` sees this identity the moment it lands.
+// apps/homefund` sees this identity the moment it lands.
 // `registerEphemeralIdentity` itself is not imported: it inserts into
 // `app_users`, a finances table a voyager reader never has a row in — the
 // run and the `harness.identities` insert are composed here instead, by
@@ -50,7 +50,7 @@ function baseUrl(): string {
  * A fresh `auth.users` row and its `harness.identities` row, landed in one
  * transaction so a crash between the two never leaves either without the
  * other. Every column GoTrue's own verify path reads is filled — the same
- * set `ensureHarnessAuthUser` (`apps/orbit/scripts/harness/session.ts`)
+ * set `ensureHarnessAuthUser` (`apps/homefund/scripts/harness/session.ts`)
  * fills — because a null one there is a 500, not a refusal.
  */
 async function createReaderIdentity(runId: string): Promise<{ id: string; email: string }> {

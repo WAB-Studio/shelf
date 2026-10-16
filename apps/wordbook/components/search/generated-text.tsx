@@ -49,7 +49,7 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
   // the no-network/no-result/capped state, not this one).
   const hasDefinition = text.definition !== null;
   // RL-45: only a lemma the dictionary answered thin ever carries these
-  // (`isThinAnswer`, `apps/voyager/lib/word/thin.ts`); every other lemma's
+  // (`isThinAnswer`, `apps/wordbook/lib/word/thin.ts`); every other lemma's
   // `translations` is `null` and this block draws nothing, same as today.
   const hasNetworkTranslations = text.translations !== null && text.translations.length > 0;
 

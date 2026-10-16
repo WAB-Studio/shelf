@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# WordBook (`apps/voyager`)
+# WordBook (`apps/wordbook`)
 
 Contract: `docs/voyager/SPEC.md`. Design: `docs/voyager/DESIGN.md`. Read `docs/agentes/voyager.md` before driving
 this app, probing its auth or touching its keys.

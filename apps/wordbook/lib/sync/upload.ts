@@ -6,10 +6,10 @@ import type { Transaction } from "@/lib/session";
 import { SYNC_BATCH, SYNC_DAILY_ROW_CAP, type Cursor, type SyncRow } from "@/lib/sync/protocol";
 
 // The columns `authenticated` may insert into `lookups`, in the grant's own
-// order (apps/voyager/db/migrations/0000_shallow_hammerhead.sql:74-78).
+// order (apps/wordbook/db/migrations/0000_shallow_hammerhead.sql:74-78).
 // `received_at` is never here: no grant reaches it, only the server's own
 // clock stamps it — which is why a builder `.insert()` cannot be used
-// (apps/orbit/db/insert-row.ts's header: it would name `received_at` too,
+// (apps/homefund/db/insert-row.ts's header: it would name `received_at` too,
 // with the keyword `default`, and Postgres checks the privilege on a named
 // column even then).
 const INSERT_COLUMNS = sql.join(

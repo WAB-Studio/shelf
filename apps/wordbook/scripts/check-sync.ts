@@ -64,14 +64,14 @@ function assert(label: string, ok: boolean, detail: string): void {
 }
 
 // Nothing here goes through drizzle, so the driver's own PostgresError is the
-// thrown value — no cause chain to walk, unlike `apps/orbit/lib/db-error.ts`.
+// thrown value — no cause chain to walk, unlike `apps/homefund/lib/db-error.ts`.
 function pgCode(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
   const { code } = error as { code: unknown };
   return typeof code === "string" ? code : undefined;
 }
 
-// Mirrors `withReaderDb` (`apps/voyager/lib/session.ts`): one statement, not
+// Mirrors `withReaderDb` (`apps/wordbook/lib/session.ts`): one statement, not
 // four, and transaction-local (`true`), so re-pointing mid-transaction is
 // safe — it never reaches across a reused connection (`docs/TRAPS.md:389`).
 async function enterUserContext(tx: postgres.TransactionSql, subject: string): Promise<void> {

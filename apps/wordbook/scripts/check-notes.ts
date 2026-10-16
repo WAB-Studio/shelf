@@ -20,7 +20,7 @@
  *      restarted once with `CLIENT_KEY_SALT`, `PHRASE_NOTES_DAILY_CALL_CAP`
  *      and `PHRASE_NOTES_DAILY_CLIENT_CAP=1` exported in the shell that
  *      started it, never written to `.env.local` (docs/agentes/voyager.md, "Leave
- *      apps/voyager/.env.local alone"). Runs the real model calls, the
+ *      apps/wordbook/.env.local alone"). Runs the real model calls, the
  *      cache-repeat check, the no-leak check and the per-caller cap check,
  *      then restores `model_spend` and deletes every row it wrote.
  *      A client cap of exactly 1 is why `BLACK_MINORCA` and `FRISKING` below

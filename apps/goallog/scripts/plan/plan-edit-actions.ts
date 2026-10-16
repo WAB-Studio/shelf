@@ -211,7 +211,7 @@ before(async () => {
   me = person.id;
   const memberEmail = `harness-member${laneNumber() === 1 ? "" : `-${laneNumber()}`}@example.invalid`;
   const [other] = await sql<{ id: string }[]>`select id from auth.users where email = ${memberEmail}`;
-  if (!other) throw new Error("no lane member identity — run harness:token for this lane from apps/orbit");
+  if (!other) throw new Error("no lane member identity — run harness:token for this lane from apps/homefund");
   member = other.id;
 });
 

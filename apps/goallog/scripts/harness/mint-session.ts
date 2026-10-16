@@ -1,5 +1,5 @@
 // Mints a real pulsar session and leaves it standing, for `seed-goal.ts` — a
-// second process — and the browser suite to drive under. Unlike `apps/voyager/
+// second process — and the browser suite to drive under. Unlike `apps/wordbook/
 // scripts/harness/mint-reader-session.ts`, which this file otherwise copies,
 // nothing here drops the identity or closes a run.
 //
@@ -15,7 +15,7 @@
 // insert is composed here instead, by hand, exactly as
 // `mint-reader-session.ts` does it.
 //
-// NOTHING HERE ASKS THE AUTH SERVER TO SEND (`apps/orbit/scripts/harness/
+// NOTHING HERE ASKS THE AUTH SERVER TO SEND (`apps/homefund/scripts/harness/
 // session.ts`'s own warning, word for word): the address is synthetic and
 // undeliverable, and `POST /auth/v1/otp` against one still reaches the
 // project's SMTP, whose bounce lands in a real inbox. A token row is landed
@@ -52,7 +52,7 @@ async function registeringRunId(): Promise<string> {
   return own;
 }
 
-// `apps/pulsar` on `:320<n-1>` (`scripts/worktree.sh`'s own table). Overridable
+// `apps/goallog` on `:320<n-1>` (`scripts/worktree.sh`'s own table). Overridable
 // for a lane pointed at someone else's already-running server (`docs/agentes/lanes.md`,
 // "Harness lanes").
 function baseUrl(): string {

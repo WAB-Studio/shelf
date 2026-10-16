@@ -9,15 +9,15 @@
     "node": "22.x"
   },
   "scripts": {
-    "dev": "npm run dev -w apps/orbit",
-    "dev:voyager": "npm run dev -w apps/voyager",
-    "dev:pulsar": "npm run dev -w apps/pulsar",
-    "build": "npm run build -w apps/orbit",
-    "build:voyager": "npm run build -w apps/voyager",
-    "build:pulsar": "npm run build -w apps/pulsar",
+    "dev": "npm run dev -w apps/homefund",
+    "dev:wordbook": "npm run dev -w apps/wordbook",
+    "dev:goallog": "npm run dev -w apps/goallog",
+    "build": "npm run build -w apps/homefund",
+    "build:wordbook": "npm run build -w apps/wordbook",
+    "build:goallog": "npm run build -w apps/goallog",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "check": "npm run check -w apps/orbit"
+    "check": "npm run check -w apps/homefund"
   },
   "allowScripts": {
     "esbuild@0.18.20": true,

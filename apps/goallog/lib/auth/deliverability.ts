@@ -1,6 +1,6 @@
 import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 
-// Copied from `apps/voyager/app/actions/account.ts` (RP-18), same fail-open
+// Copied from `apps/wordbook/app/actions/account.ts` (RP-18), same fail-open
 // behaviour: promoting this to `packages/` would edit voyager's own copy,
 // which this slice does not touch.
 //

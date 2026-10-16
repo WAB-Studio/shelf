@@ -16,7 +16,7 @@ import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 import { reading } from "./_schema";
 
 // A search a reader stopped on, copied up from a device's own IndexedDB record
-// (apps/voyager/lib/log/types.ts). Never rewritten: a merge only inserts, which
+// (apps/wordbook/lib/log/types.ts). Never rewritten: a merge only inserts, which
 // is what makes retrying it after a crash safe (RL-24).
 export const lookups = reading.table(
   "lookups",

@@ -27,7 +27,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const APP_DIR = path.resolve(__dirname, "..");
-const APP_PREFIX = "apps/voyager/";
+const APP_PREFIX = "apps/wordbook/";
 
 const EXCLUDED: RegExp[] = [
   /\.test\.tsx?$/,

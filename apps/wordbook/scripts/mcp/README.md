@@ -3,12 +3,12 @@
 A local, read-only MCP server over the reading log the app exports from
 `/registro` (RL-20). It runs on the reader's own machine, never as part of
 the deployed app, and reads a JSON file — it never touches IndexedDB, the
-network or the database `apps/voyager` uses for the sync copy.
+network or the database `apps/wordbook` uses for the sync copy.
 
 ## Run it
 
 ```
-VOYAGER_LOG_PATH=/path/to/registro-lecturas-2026-09-08.json npm run -w apps/voyager mcp:serve
+VOYAGER_LOG_PATH=/path/to/registro-lecturas-2026-09-08.json npm run -w apps/wordbook mcp:serve
 ```
 
 `VOYAGER_LOG_PATH` names the file `/registro`'s download produced. The
@@ -25,7 +25,7 @@ Add to Claude Desktop's MCP config:
   "mcpServers": {
     "voyager-reading-log": {
       "command": "npx",
-      "args": ["tsx", "apps/voyager/scripts/mcp/server.ts"],
+      "args": ["tsx", "apps/wordbook/scripts/mcp/server.ts"],
       "cwd": "/absolute/path/to/finances-app",
       "env": { "VOYAGER_LOG_PATH": "/absolute/path/to/registro-lecturas-2026-09-08.json" }
     }

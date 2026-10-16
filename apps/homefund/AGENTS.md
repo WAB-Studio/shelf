@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# HomeFund (`apps/orbit`)
+# HomeFund (`apps/homefund`)
 
 Contract: `docs/SPEC.md` §1, model and invariants §2, stack §4. Flows: `docs/FLOWS.md`. Design: `docs/DESIGN.md`.
 

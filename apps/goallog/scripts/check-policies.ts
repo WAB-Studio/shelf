@@ -3,7 +3,7 @@
  * guard-and-settle body `lib/session.ts`'s `withGoalsDb` runs before every
  * query — instead of reading either from a migration (AGENTS.md, "Code").
  *
- * Three parts, in the shape of `apps/voyager/scripts/check-sync.ts`:
+ * Three parts, in the shape of `apps/wordbook/scripts/check-sync.ts`:
  *
  * Part 1 drives RLS and grants. Two `randomUUID()` subjects, their
  * `auth.users` rows inserted inside one transaction that always throws at the
@@ -136,7 +136,7 @@ async function attemptCount(
   return { count, code };
 }
 
-// Mirrors `withGoalsDb` (`apps/pulsar/lib/session.ts`): one statement, not
+// Mirrors `withGoalsDb` (`apps/goallog/lib/session.ts`): one statement, not
 // four, and transaction-local (`true`), so re-pointing mid-transaction is
 // safe — it never reaches across a reused connection.
 async function enterUserContext(tx: postgres.TransactionSql, subject: string): Promise<void> {

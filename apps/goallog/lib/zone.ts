@@ -1,4 +1,4 @@
-// The only file under `apps/pulsar` allowed to name a time zone. Every other
+// The only file under `apps/goallog` allowed to name a time zone. Every other
 // module reaches the person's day through the functions below, never through
 // `Date`'s local-offset behaviour or the process's own `TZ`.
 export const TIME_ZONE = "America/Bogota";

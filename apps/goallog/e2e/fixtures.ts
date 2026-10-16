@@ -125,7 +125,7 @@ async function clearPerson(sql: postgres.Sql, id: string): Promise<void> {
 // Named `provide`, not Playwright's own `use`: an identically-named
 // parameter here reads to `eslint-plugin-react-hooks` as the `use` hook,
 // which this file, being test wiring rather than a component, is not
-// (`apps/voyager/e2e/fixtures.ts`'s own fix for the same warning).
+// (`apps/wordbook/e2e/fixtures.ts`'s own fix for the same warning).
 export const test = base.extend<Fixtures, WorkerFixtures>({
   db: async ({}, provide) => {
     const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });

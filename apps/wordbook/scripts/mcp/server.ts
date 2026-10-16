@@ -4,7 +4,7 @@
  * §4's closed dependency list and its "do not install" wrappers on
  * principle. Three read-only tools; not one write ever opens the file.
  *
- * Run: `VOYAGER_LOG_PATH=/path/to/registro-lecturas-*.json npm run -w apps/voyager mcp:serve`
+ * Run: `VOYAGER_LOG_PATH=/path/to/registro-lecturas-*.json npm run -w apps/wordbook mcp:serve`
  */
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";

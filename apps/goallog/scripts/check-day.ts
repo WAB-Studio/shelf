@@ -8,7 +8,7 @@
 //
 // The statement count comes from the driver, not from reading `day.ts`:
 // `postgres`'s own `debug` option fires once for every statement it puts on
-// the wire, `begin` and `commit` included (`apps/orbit/scripts/harness/
+// the wire, `begin` and `commit` included (`apps/homefund/scripts/harness/
 // instrument.ts`'s own technique). The done criterion names "four
 // statements... two settles and two queries", so `begin`/`commit` are
 // counted off the wire and then excluded before the assertion — they are a
