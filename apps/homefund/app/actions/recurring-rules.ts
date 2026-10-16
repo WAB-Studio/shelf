@@ -10,7 +10,6 @@ import {
   deleteRecurringRule,
   markTransactionReviewed,
   setRecurringRuleActive,
-  setRecurringRuleEndDate,
   updateRecurringRule,
 } from "@/db/queries/recurring-rules";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
@@ -25,7 +24,6 @@ import {
   pauseRecurringRuleSchema,
   refineRuleAmount,
   resumeRecurringRuleSchema,
-  setRecurringRuleEndDateSchema,
   updateRecurringRuleSchema,
 } from "@/lib/validation/recurring-rule";
 
@@ -169,23 +167,6 @@ export const resumeRecurringRuleAction = authActionClient
   .action(async ({ parsedInput: { id } }) => {
     const resumed = await setRecurringRuleActive({ id, isActive: true });
     if (!resumed) throw new ActionError("errors.notFound");
-
-    refresh();
-  });
-
-// Setting or clearing the end date bounds when the rule stops generating (RF-32).
-// An end date before the next run trips the check, mapped like any scope refusal.
-export const setRecurringRuleEndDateAction = authActionClient
-  .inputSchema(setRecurringRuleEndDateSchema)
-  .action(async ({ parsedInput: { id, endsOn } }) => {
-    let updated: boolean;
-    try {
-      updated = await setRecurringRuleEndDate({ id, endsOn: endsOn ?? null });
-    } catch (error) {
-      mapRecurringRuleError(error);
-    }
-
-    if (!updated) throw new ActionError("errors.notFound");
 
     refresh();
   });
