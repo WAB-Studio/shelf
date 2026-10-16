@@ -21,6 +21,7 @@ const REASONS = [
   "import.errors.quantityNoAmount",
   "import.errors.noteShape",
   "import.errors.partFailed",
+  "import.errors.phaseOverlaps",
 ];
 
 test("every reason a failed part carries has a sentence of its own, and none says «tabla»", () => {

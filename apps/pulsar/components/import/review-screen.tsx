@@ -207,15 +207,17 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
 
   const goalsKept = review.toSend.goals.length;
   const updating = review.updates.length;
+  // Marked goals that are all open goals the plan leaves as they are: nothing to create or update.
+  const idle = goalsKept > 0 && review.creating + updating === 0;
   const label =
     updating === 0
-      ? t("import.review.create", { count: goalsKept })
+      ? t("import.review.create", { count: review.creating })
       : review.creating === 0
         ? t("import.review.updateOnly", { count: updating })
         : t("import.review.createAndUpdate", { created: review.creating, updated: updating });
 
   async function confirm() {
-    if (pending || goalsKept === 0) return;
+    if (pending || goalsKept === 0 || idle) return;
     setPending(true);
     setFailure(null);
     setStale(null);
@@ -321,7 +323,7 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
 
       {failure ? <Notice>{failure}</Notice> : null}
 
-      {review.nothingWritable ? null : (
+      {review.nothingWritable || idle ? null : (
         <ActionBar>
           <Button block onClick={confirm} disabled={pending || goalsKept === 0} aria-busy={pending || undefined}>
             {pending ? t("import.review.creating") : label}

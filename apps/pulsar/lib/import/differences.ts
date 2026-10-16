@@ -36,7 +36,7 @@ export type GoalSnapshot = {
   }[];
 };
 
-// Nothing here removes: a part the plan omits is only counted in `stays`.
+// Nothing here removes: a part the plan omits is only named in `stays`. A phase that crosses another is never written.
 export type Difference =
   | { kind: "horizon"; to: string }
   | { kind: "note"; to: string }
@@ -45,13 +45,15 @@ export type Difference =
   | { kind: "month"; month: string; amount: number }
   | { kind: "phaseAdded"; aim: string; startsOn: string; endsOn: string }
   | { kind: "phaseChanged"; aim: string; startsOn: string; endsOn: string }
+  | { kind: "phaseOverlaps"; aim: string; startsOn: string; endsOn: string; with: string }
   | { kind: "commitmentAdded"; name: string }
   | { kind: "commitmentChanged"; name: string }
   | { kind: "commitmentReplaced"; name: string }
   | { kind: "taskAdded"; name: string }
-  | { kind: "taskChanged"; name: string }
+  | { kind: "taskMoved"; name: string; from: string; to: string }
+  | { kind: "taskResized"; name: string; from: number | null; to: number | null }
   | { kind: "subTaskAdded"; name: string; task: string }
-  | { kind: "stays"; count: number };
+  | { kind: "stays"; part: "phase" | "commitment" | "task"; name: string };
 
 export type GoalMatch = { g: number; match: GoalSnapshot | "ambiguous" | null };
 
@@ -74,6 +76,26 @@ function sameCadence(a: Cadence, b: Cadence): boolean {
 }
 
 const monthKey = (month: string) => month.slice(0, 7);
+
+/**
+ * The existing phase a plan phase crosses, judged on dates: phases may share a calendar week. A phase the plan
+ * names is compared by its own name, never against itself; a phase that ends before `today` is dropped and
+ * crosses nothing, and one that starts before it begins that day.
+ */
+export function phaseCrossing(
+  phase: { aim: string; startsOn: string; endsOn: string },
+  planned: { aim: string }[],
+  existing: { aim: string; startsOn: string; endsOn: string }[],
+  today: string,
+): string | null {
+  if (phase.endsOn < today) return null;
+  const startsOn = phase.startsOn < today ? today : phase.startsOn;
+  const named = new Set(planned.map((p) => nameKey(p.aim)));
+  const crossed = existing
+    .filter((have) => !named.has(nameKey(have.aim)) && have.startsOn <= phase.endsOn && startsOn <= have.endsOn)
+    .sort((a, b) => (a.startsOn < b.startsOn ? -1 : a.startsOn > b.startsOn ? 1 : 0));
+  return crossed[0]?.aim ?? null;
+}
 
 // Every change the import would apply to `snapshot`. A part the plan leaves alone is no difference.
 export function differences(draftGoal: DraftGoal, snapshot: GoalSnapshot, today: string): Difference[] {
@@ -104,10 +126,11 @@ export function differences(draftGoal: DraftGoal, snapshot: GoalSnapshot, today:
 
   for (const phase of draftGoal.phases) {
     const have = snapshot.phases.find((p) => nameKey(p.aim) === nameKey(phase.aim));
-    if (!have) out.push({ kind: "phaseAdded", aim: phase.aim, startsOn: phase.startsOn, endsOn: phase.endsOn });
-    else if (have.startsOn !== phase.startsOn || have.endsOn !== phase.endsOn) {
-      out.push({ kind: "phaseChanged", aim: phase.aim, startsOn: phase.startsOn, endsOn: phase.endsOn });
-    }
+    if (have && have.startsOn === phase.startsOn && have.endsOn === phase.endsOn) continue;
+    const span = { aim: phase.aim, startsOn: phase.startsOn, endsOn: phase.endsOn };
+    const crossed = phaseCrossing(phase, draftGoal.phases, snapshot.phases, today);
+    if (crossed !== null) out.push({ kind: "phaseOverlaps", ...span, with: crossed });
+    else out.push({ kind: have ? "phaseChanged" : "phaseAdded", ...span });
   }
 
   for (const commitment of draftGoal.commitments) {
@@ -132,8 +155,11 @@ export function differences(draftGoal: DraftGoal, snapshot: GoalSnapshot, today:
       continue;
     }
     if (have.done) continue;
-    if (have.estimate !== task.estimate || monthKey(have.month) !== monthKey(task.month)) {
-      out.push({ kind: "taskChanged", name: task.name });
+    if (monthKey(have.month) !== monthKey(task.month)) {
+      out.push({ kind: "taskMoved", name: task.name, from: monthKey(have.month), to: monthKey(task.month) });
+    }
+    if (have.estimate !== task.estimate) {
+      out.push({ kind: "taskResized", name: task.name, from: have.estimate, to: task.estimate });
     }
     for (const child of task.children) {
       if (!have.children.some((c) => nameKey(c.name) === nameKey(child.name))) {
@@ -142,24 +168,22 @@ export function differences(draftGoal: DraftGoal, snapshot: GoalSnapshot, today:
     }
   }
 
-  const named = <T>(items: T[], pick: (item: T) => string) => new Set(items.map((item) => nameKey(pick(item))));
+  const planned = <T>(items: T[], pick: (item: T) => string) => new Set(items.map((item) => nameKey(pick(item))));
   const plan = {
-    phases: named(draftGoal.phases, (p) => p.aim),
-    commitments: named(draftGoal.commitments, (c) => c.name),
-    tasks: named(draftGoal.tasks, (t) => t.name),
+    phases: planned(draftGoal.phases, (p) => p.aim),
+    commitments: planned(draftGoal.commitments, (c) => c.name),
+    tasks: planned(draftGoal.tasks, (t) => t.name),
   };
-  const omitted =
-    snapshot.phases.filter((p) => !plan.phases.has(nameKey(p.aim))).length +
-    snapshot.commitments.filter((c) => !plan.commitments.has(nameKey(c.name))).length +
-    snapshot.tasks.filter((t) => !plan.tasks.has(nameKey(t.name))).length;
-  if (omitted > 0) out.push({ kind: "stays", count: omitted });
+  for (const p of snapshot.phases) if (!plan.phases.has(nameKey(p.aim))) out.push({ kind: "stays", part: "phase", name: p.aim });
+  for (const c of snapshot.commitments) if (!plan.commitments.has(nameKey(c.name))) out.push({ kind: "stays", part: "commitment", name: c.name });
+  for (const t of snapshot.tasks) if (!plan.tasks.has(nameKey(t.name))) out.push({ kind: "stays", part: "task", name: t.name });
 
   return out;
 }
 
-// Whether the import writes anything: `stays` alone writes nothing.
+// Whether the import writes anything: `stays` and a phase that crosses write nothing.
 export function changesAnything(list: Difference[]): boolean {
-  return list.some((d) => d.kind !== "stays");
+  return list.some((d) => d.kind !== "stays" && d.kind !== "phaseOverlaps");
 }
 
 function stable(value: unknown): string {

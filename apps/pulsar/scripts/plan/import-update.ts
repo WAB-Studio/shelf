@@ -403,6 +403,37 @@ test("phases: a new one is inserted, one of the same aim has its span updated, t
   assert.equal(rows[0].id, baseId, "the span is updated, the phase is not replaced");
 });
 
+test("phases: one of another name whose dates cross an existing one is refused even sent marked; the rest lands", async () => {
+  const name = fresh("Fases cruzadas");
+  const id = await seedGoal(name, { note: "vieja" });
+  await seedPhase(id, "Base suave", `${M(2)}-01`, lastDay(3));
+  const draft = draftOf({
+    name,
+    horizon: `${M(12)}-01`,
+    note: "nueva",
+    phases: [`${M(2)}-01 a ${lastDay(3)} · Base`, `${M(6)}-01 a ${lastDay(7)} · Libre`],
+  });
+  const updates = await review(draft);
+  const listed = diff.differences(draft.goals[0], (await asMe(() => match.loadImportSnapshots([name])))[0], TODAY);
+  assert.deepEqual(listed.filter((d) => d.kind === "phaseOverlaps").map((d) => (d.kind === "phaseOverlaps" ? d.with : "")), ["Base suave"]);
+  const result = ok(await confirm(draft, updates));
+  assert.deepEqual(result.failed.map((f) => [f.path, f.reason]), [["goals.0.phases.0", "import.errors.phaseOverlaps"]]);
+  const rows = await admin<{ aim: string }[]>`select aim from goals.phases where goal_id = ${id} order by starts_on`;
+  assert.deepEqual(rows.map((r) => r.aim), ["Base suave", "Libre"], "the crossing phase is not written, the free one is");
+  assert.equal((await goalRow(id)).note, "nueva");
+});
+
+test("phases: a phase added across one is not added even when it is the only difference", async () => {
+  const name = fresh("Solo cruce");
+  const id = await seedGoal(name);
+  await seedPhase(id, "Base suave", `${M(2)}-01`, lastDay(3));
+  const draft = draftOf({ name, horizon: `${M(12)}-01`, phases: [`${M(3)}-01 a ${lastDay(4)} · Base`] });
+  const before = await world();
+  const result = ok(await confirm(draft, await review(draft)));
+  assert.equal(result.failed.length, 1);
+  assert.equal(await world(), before, "nothing is written");
+});
+
 // RP-25: a phase may end ON the goal's horizon day, never after it. The edges are where the boundary lives.
 test("horizon: moved onto the very day a phase ends is written, not refused (RP-25)", async () => {
   const name = fresh("Horizonte sobre fase");

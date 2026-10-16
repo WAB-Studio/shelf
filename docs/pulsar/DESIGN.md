@@ -1785,3 +1785,4 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **A stranger reads «Este correo no tiene invitación a GoalLog.»**
 - **The allowed list seeds everyone who owns a GoalLog row;** new people enter by `npm run allow-email` plus a dashboard invite.
 - **Two phases of one goal may share a calendar week when their dates do not overlap;** the person's dates are kept and both phases show that week number. Overlap is judged on dates in the form, the server and the import, never on weeks. Saving an unchanged phase moves no date. Decided by the user 2026-10-15.
+- **An import phase whose name matches none but whose dates cross an existing phase is not added:** the review reads «se cruza con «<fase>»» and leaves it unmarked, and the confirm refuses it even if sent marked. Overlap is judged on dates (phases may share a calendar week). Taken by the user 2026-10-15.

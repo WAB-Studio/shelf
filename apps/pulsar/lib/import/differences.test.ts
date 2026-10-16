@@ -167,29 +167,88 @@ test("a task is added, changed in estimate or month, with sub-tasks added", () =
     ],
   });
   assert.deepEqual(changes(goal, snapshot()), [
-    { kind: "taskChanged", name: "Curso" },
+    { kind: "taskResized", name: "Curso", from: 60, to: 90 },
     { kind: "subTaskAdded", name: "Unidad 1", task: "Curso" },
     { kind: "taskAdded", name: "Examen" },
   ]);
   assert.deepEqual(changes(draftGoal({ tasks: [task({ month: "2026-12" })] }), snapshot()), [
-    { kind: "taskChanged", name: "Curso" },
+    { kind: "taskMoved", name: "Curso", from: "2026-10", to: "2026-12" },
+  ]);
+});
+
+test("a task's change says what moves: its month, its estimate, or both", () => {
+  const both = draftGoal({ tasks: [task({ month: "2026-11", estimate: null })] });
+  assert.deepEqual(changes(both, snapshot()), [
+    { kind: "taskMoved", name: "Curso", from: "2026-10", to: "2026-11" },
+    { kind: "taskResized", name: "Curso", from: 60, to: null },
+  ]);
+  const none = snapshot();
+  none.tasks[0].estimate = null;
+  assert.deepEqual(changes(draftGoal({ tasks: [task({ estimate: 45 })] }), none), [
+    { kind: "taskResized", name: "Curso", from: null, to: 45 },
+  ]);
+});
+
+test("a phase of another name whose dates cross an existing one is no addition; the day after is no crossing", () => {
+  const crossing = draftGoal({ phases: [{ aim: "Base suave", startsOn: "2026-12-31", endsOn: "2027-02-28" }] });
+  assert.deepEqual(changes(crossing, snapshot()), [
+    { kind: "phaseOverlaps", aim: "Base suave", startsOn: "2026-12-31", endsOn: "2027-02-28", with: "Base" },
+  ]);
+  assert.equal(changesAnything(changes(crossing, snapshot())), false);
+  const after = draftGoal({ phases: [{ aim: "Base suave", startsOn: "2027-01-01", endsOn: "2027-02-28" }] });
+  assert.deepEqual(changes(after, snapshot()), [
+    { kind: "phaseAdded", aim: "Base suave", startsOn: "2027-01-01", endsOn: "2027-02-28" },
+  ]);
+});
+
+test("a phase shares a calendar week with another when their dates do not meet", () => {
+  // 2026-12-31 is a Thursday: both phases fall in the week of Monday 28 December.
+  const week = snapshot({ phases: [{ id: "p1", aim: "Base", startsOn: "2026-10-01", endsOn: "2026-12-30" }] });
+  const goal = draftGoal({ phases: [{ aim: "Velocidad", startsOn: "2026-12-31", endsOn: "2027-02-28" }] });
+  assert.deepEqual(changes(goal, week).map((d) => d.kind), ["phaseAdded"]);
+});
+
+test("a phase the plan renames across its old dates is judged against the phases the plan does not name", () => {
+  const goal = draftGoal({
+    phases: [
+      { aim: "Base", startsOn: "2027-01-01", endsOn: "2027-02-28" },
+      { aim: "Otra", startsOn: "2026-10-16", endsOn: "2026-12-31" },
+    ],
+  });
+  assert.deepEqual(changes(goal, snapshot()).map((d) => d.kind), ["phaseChanged", "phaseAdded"]);
+});
+
+test("a phase moved onto another existing one crosses it", () => {
+  const two = snapshot({
+    phases: [
+      { id: "p1", aim: "Base", startsOn: "2026-10-01", endsOn: "2026-11-30" },
+      { id: "p2", aim: "Velocidad", startsOn: "2026-12-01", endsOn: "2027-02-28" },
+    ],
+  });
+  const goal = draftGoal({ phases: [{ aim: "Base", startsOn: "2026-10-01", endsOn: "2026-12-10" }] });
+  assert.deepEqual(changes(goal, two), [
+    { kind: "phaseOverlaps", aim: "Base", startsOn: "2026-10-01", endsOn: "2026-12-10", with: "Velocidad" },
   ]);
 });
 
 test("a done task is left alone", () => {
   const done = snapshot();
   done.tasks[0].done = true;
-  assert.deepEqual(differences(draftGoal({ tasks: [task({ estimate: 999 })] }), done, TODAY), [
-    { kind: "stays", count: 2 },
-  ]);
-  assert.deepEqual(differences(draftGoal({ tasks: [task({ month: "2026-12" })] }), done, TODAY), [
-    { kind: "stays", count: 2 },
-  ]);
+  const left: Difference[] = [
+    { kind: "stays", part: "phase", name: "Base" },
+    { kind: "stays", part: "commitment", name: "Leer" },
+  ];
+  assert.deepEqual(differences(draftGoal({ tasks: [task({ estimate: 999 })] }), done, TODAY), left);
+  assert.deepEqual(differences(draftGoal({ tasks: [task({ month: "2026-12" })] }), done, TODAY), left);
 });
 
-test("a part the plan omits stays, and stays alone changes nothing", () => {
+test("a part the plan omits stays by name, and stays alone changes nothing", () => {
   const list = differences(draftGoal(), snapshot(), TODAY);
-  assert.deepEqual(list, [{ kind: "stays", count: 3 }]);
+  assert.deepEqual(list, [
+    { kind: "stays", part: "phase", name: "Base" },
+    { kind: "stays", part: "commitment", name: "Leer" },
+    { kind: "stays", part: "task", name: "Curso" },
+  ]);
   assert.equal(changesAnything(list), false);
 });
 
@@ -215,7 +274,19 @@ test("the new messages parse and the plural formats", () => {
   assert.equal(say(["created", "updated"], { count: 1 }), "1 meta actualizada");
   assert.equal(say(["created", "updated"], { count: 3 }), "3 metas actualizadas");
   assert.equal(say(["review", "update"], { goal: "Inglés" }), "Actualiza tu meta «Inglés»");
-  assert.match(say(["review", "diff", "stays"], { count: 2 }), /2 partes/);
+  assert.equal(say(["review", "diff", "stays"], { part: "phase", name: "Base" }), "Se queda la fase «Base», que el plan no nombra");
+  assert.match(say(["review", "diff", "stays"], { part: "task", name: "Curso" }), /la tarea «Curso»/);
+  assert.equal(
+    say(["review", "diff", "taskMoved"], { name: "Carrera de prueba", from: "Octubre", to: "Noviembre" }),
+    "Pasa la tarea «Carrera de prueba» de Octubre a Noviembre",
+  );
+  assert.match(say(["review", "diff", "taskResized"], { name: "T", shape: "change", from: "1 h", to: "2 h" }), /de 1 h a 2 h/);
+  assert.match(say(["review", "diff", "taskResized"], { name: "T", shape: "set", from: "", to: "2 h" }), /Le pone 2 h/);
+  assert.match(say(["review", "diff", "taskResized"], { name: "T", shape: "drop", from: "1 h", to: "" }), /Quita el estimado/);
+  assert.match(
+    say(["review", "diff", "phaseOverlaps"], { aim: "Base aeróbica", startsOn: "15 oct", endsOn: "30 nov", with: "Base aeróbica suave" }),
+    /se cruza con «Base aeróbica suave»/,
+  );
   for (const key of Object.keys(catalogue.review.diff)) {
     const leaf = catalogue.review.diff[key] as string;
     assert.doesNotThrow(() => new IntlMessageFormat(leaf, "es"), key);

@@ -17,6 +17,7 @@ export const failedReasonKey: Record<string, string> = {
   "import.errors.cadenceCount": "import.created.reasons.cadenceCount",
   "import.errors.quantityNoAmount": "import.created.reasons.quantityNoAmount",
   "import.errors.noteShape": "import.created.reasons.noteShape",
+  "import.errors.phaseOverlaps": "import.created.reasons.phaseOverlaps",
   "import.errors.partFailed": "import.created.reasons.partFailed",
 };
 

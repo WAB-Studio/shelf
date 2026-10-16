@@ -431,16 +431,26 @@ export function ReviewTree({
       case "phaseAdded":
       case "phaseChanged":
         return t(`import.review.diff.${d.kind}`, { aim: d.aim, startsOn: dayShort(d.startsOn), endsOn: dayShort(d.endsOn) });
+      case "phaseOverlaps":
+        return t("import.review.diff.phaseOverlaps", { aim: d.aim, startsOn: dayShort(d.startsOn), endsOn: dayShort(d.endsOn), with: d.with });
       case "commitmentAdded":
       case "commitmentChanged":
       case "commitmentReplaced":
       case "taskAdded":
-      case "taskChanged":
         return t(`import.review.diff.${d.kind}`, { name: d.name });
+      case "taskMoved":
+        return t("import.review.diff.taskMoved", { name: d.name, from: monthName(d.from), to: monthName(d.to) });
+      case "taskResized":
+        return t("import.review.diff.taskResized", {
+          name: d.name,
+          shape: d.from === null ? "set" : d.to === null ? "drop" : "change",
+          from: d.from === null ? "" : fmt(d.from, unit),
+          to: d.to === null ? "" : fmt(d.to, unit),
+        });
       case "subTaskAdded":
         return t("import.review.diff.subTaskAdded", { name: d.name, task: d.task });
       case "stays":
-        return t("import.review.diff.stays", { count: d.count });
+        return t("import.review.diff.stays", { part: d.part, name: d.name });
     }
   }
 
@@ -490,7 +500,15 @@ export function ReviewTree({
       );
     }
     if (node.kind === "phase") {
-      const cut = phaseCuts(work, today).find((entry) => entry.path === node.path);
+      const crossed = review.crosses.get(node.path);
+      if (crossed !== undefined) {
+        items.push(
+          <Text key="crosses" as="p" variant="sentence" tone="muted">
+            {t("import.review.crosses", { with: crossed })}
+          </Text>,
+        );
+      }
+      const cut =phaseCuts(work, today).find((entry) => entry.path === node.path);
       if (cut) {
         items.push(
           <Text key="cut" as="p" variant="sentence" tone="muted">
@@ -570,6 +588,7 @@ export function ReviewTree({
       <CheckRow
         key={node.path}
         depth={depth as 0 | 1 | 2 | 3 | 4}
+        unboxed={!blocked && review.unchanged.has(node.path)}
         checked={node.marked}
         onCheckedChange={(value) => handlers.onToggle(node.path, value)}
         name={name}
@@ -681,6 +700,9 @@ export function ReviewTree({
     if (n.kind === "note" || n.kind === "rhythm" || !n.markable) return false;
     if (returning.has(n.path)) return true;
     if (!unmarked.has(n.path)) return false;
+    // A goal two open goals name, and a phase across another, are already one row with its own control in the tree.
+    if (repeated.has(Number(n.path.split(".")[1])) && (n.kind === "goal" || n.kind === "group")) return false;
+    if (review.crosses.has(n.path)) return false;
     const parent = parentOf(index);
     return parent === undefined || parent.marked;
   });
