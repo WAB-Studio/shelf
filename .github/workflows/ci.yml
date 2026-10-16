@@ -132,6 +132,7 @@ jobs:
         with:
           apps: goallog
       - run: npm run check:policies -w apps/goallog
+      - run: npm run check:allow-email -w apps/goallog
 
   # The 12-minute suite runs here so a laptop is not holding a dev server and a
   # Chromium for it. Every job runs on its own stack, so runs never contend.
