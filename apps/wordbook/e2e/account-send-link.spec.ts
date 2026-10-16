@@ -228,3 +228,17 @@ test("a dead-domain answer paints its own copy, and neither of the other two", a
   await expect(page.getByText(messages.account.errors.sendFailed)).toHaveCount(0);
   await expect(page.getByText(messages.account.errors.rateLimited)).toHaveCount(0);
 });
+
+// RL-69: an address off the invitation list is refused before any email is
+// sent. The answer is simulated like every send in this file.
+test("a not-invited answer paints its own line under the kept address, and no other error", async ({ page }) => {
+  await mockSendSignInLinkResult(page, { ok: false, error: "notInvited" });
+  const email = "reader@example.com";
+  await submit(page, email);
+
+  await expect(page.getByText("Este correo no tiene invitación a WordBook.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: messages.account.emailLabel })).toHaveValue(email);
+  for (const key of ["sendFailed", "rateLimited", "emailInvalid", "domainUndeliverable", "offline"] as const) {
+    await expect(page.getByText(messages.account.errors[key], { exact: true })).toHaveCount(0);
+  }
+});

@@ -34,8 +34,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps & BlockProp>(
   },
 );
 
-export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  function IconButton({ className, ...props }, ref) {
-    return <ThemesIconButton ref={ref} {...props} className={withTap(className)} />;
+type QuietProp = {
+  // The glyph in the table's dimmest muted role (`--rl-muted-quiet`), never
+  // Radix's own gray step: `RegistroBorrarFila`'s ✕ is the first to ask.
+  quiet?: boolean;
+};
+
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps & QuietProp>(
+  function IconButton({ quiet, className, ...props }, ref) {
+    const classes = quiet ? `${styles.quiet} ${withTap(className)}` : withTap(className);
+    return <ThemesIconButton ref={ref} {...props} className={classes} />;
   },
 );

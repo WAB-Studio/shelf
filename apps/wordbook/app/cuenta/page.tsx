@@ -9,11 +9,11 @@ import { Flex, Headword, Page, Separator, Text } from "@/components/ui";
 // RL-49: `app/auth/confirm/route.ts` sends a failed link here as
 // `?error=linkTimeout` (the gateway never answered) or `?error=linkInvalid`
 // (the link is genuinely spent or expired). Anything else is no failure.
-type LinkFailure = "linkTimeout" | "linkInvalid" | null;
+type LinkFailure = "linkTimeout" | "linkInvalid" | "linkOtherBrowser" | null;
 
 function resolveLinkFailure(raw: string | string[] | undefined): LinkFailure {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return value === "linkTimeout" || value === "linkInvalid" ? value : null;
+  return value === "linkTimeout" || value === "linkInvalid" || value === "linkOtherBrowser" ? value : null;
 }
 
 // Server-rendered shell alone, like `/registro`: `getReader()` reads the
@@ -49,10 +49,10 @@ export default async function CuentaPage({
           <Flex direction="column" gap="3" align="start">
             <Separator size="4" />
             <Text size="2" weight="bold">
-              {linkFailure === "linkTimeout" ? t("errors.linkTimeoutTitle") : t("errors.linkInvalidTitle")}
+              {t(`errors.${linkFailure}Title`)}
             </Text>
             <Text size="2" muted>
-              {linkFailure === "linkTimeout" ? t("errors.linkTimeoutBody") : t("errors.linkInvalidBody")}
+              {t(`errors.${linkFailure}Body`)}
             </Text>
           </Flex>
         )}
