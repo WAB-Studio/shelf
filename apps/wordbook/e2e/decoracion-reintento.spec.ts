@@ -77,7 +77,7 @@ test("an aborted text request is asked again the next time the word is looked up
   scriptWordRoute,
 }) => {
   await deleteTranslator(page);
-  await scriptWordRoute("text", [{ kind: "abort" }, { kind: "ok", body: TEXT }]);
+  await scriptWordRoute("text", [{ kind: "abort" }, { kind: "status", status: 204 }, { kind: "ok", body: TEXT }]);
   const asked = track(page, "/api/word/text", "headword");
   await openReady(page);
 
@@ -96,7 +96,7 @@ test("an aborted text request is asked again the next time the word is looked up
 
 test("a 503 is asked again: first 503, then 200, and the example draws", async ({ page, scriptWordRoute }) => {
   await deleteTranslator(page);
-  await scriptWordRoute("text", [{ kind: "status", status: 503 }, { kind: "ok", body: TEXT }]);
+  await scriptWordRoute("text", [{ kind: "status", status: 503 }, { kind: "status", status: 204 }, { kind: "ok", body: TEXT }]);
   const asked = track(page, "/api/word/text", "headword");
   await openReady(page);
 
