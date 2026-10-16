@@ -146,7 +146,9 @@ function emptyPlan() {
  * by the differences the review showed: the snapshot is read again in this transaction and a goal
  * whose differences no longer give the review's fingerprint, or whose name now matches none or two,
  * refuses the whole call before anything is written. Nothing is removed; each kind of update is one
- * statement for every matched goal, so the bound holds.
+ * statement for every matched goal, so the bound holds. A draft goal that matches one open goal and
+ * was not sent is skipped with its parts, never created again; a goal created under it goes under
+ * the open goal.
  *
  * RP-90: a phase, month, commitment or task the table still refuses after those checks is returned in `failed`
  * with its name and reason, and the rest is written; only a goal the table refuses fails the call. A matched
@@ -193,7 +195,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   const basePosition = (table: typeof goals | typeof commitments | typeof oneOffs): SQL =>
     sql`(select coalesce(max(p.position), 0) from ${table} p where p.user_id = ${person.id}::uuid)`;
 
-  function build(matched: Map<number, GoalSnapshot>): Plan {
+  function build(matched: Map<number, GoalSnapshot>, skipped: Map<number, GoalSnapshot>): Plan {
     const plan = emptyPlan();
     // The refusals above leave every parent earlier than its child, and none deeper than three.
     const indexOfKey = new Map<string, number>();
@@ -258,11 +260,11 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       const at = `goals.${g}`;
       const parentAt = goal.parent === null ? undefined : indexOfKey.get(goal.parent);
       if (!indexOfKey.has(goal.key)) indexOfKey.set(goal.key, g);
-      const snapshot = matched.get(g);
+      const snapshot = matched.get(g) ?? skipped.get(g);
       if (snapshot) {
         idOf.push(snapshot.id);
         layerOf.push(-1);
-        addUpdate(g, goal, snapshot);
+        if (matched.has(g)) addUpdate(g, goal, snapshot);
         continue;
       }
 
@@ -432,25 +434,25 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     withGoalsDb(async (tx): Promise<{ stale: string } | { plan: Plan; updatedIds: string[] }> => {
       // RP-130: the review's matches are judged against the goals as they stand in this transaction.
       const matched = new Map<number, GoalSnapshot>();
-      if (updates.length > 0) {
-        const snapshots = await loadImportSnapshots(
-          updates.map((update) => draft.goals[update.g].name),
-          tx,
-        );
-        const matches = matchGoals(draft, snapshots);
-        for (const update of updates) {
-          const found = matches[update.g].match;
-          const stale =
-            found === null ||
-            found === "ambiguous" ||
-            found.id !== update.goalId ||
-            fingerprint(differences(draft.goals[update.g], found, today)) !== update.fingerprint;
-          if (stale) return { stale: `goals.${update.g}` };
-          matched.set(update.g, found);
-        }
+      const matches = matchGoals(draft, await loadImportSnapshots(draft.goals.map((goal) => goal.name), tx));
+      for (const update of updates) {
+        const found = matches[update.g].match;
+        const stale =
+          found === null ||
+          found === "ambiguous" ||
+          found.id !== update.goalId ||
+          fingerprint(differences(draft.goals[update.g], found, today)) !== update.fingerprint;
+        if (stale) return { stale: `goals.${update.g}` };
+        matched.set(update.g, found);
+      }
+      // A goal that matches one open goal and was not confirmed is left alone: never created again, never changed.
+      // Two open goals of the name are no match, so that goal is created as before.
+      const skipped = new Map<number, GoalSnapshot>();
+      for (const { g, match } of matches) {
+        if (match !== null && match !== "ambiguous" && !matched.has(g)) skipped.set(g, match);
       }
 
-      const plan = build(matched);
+      const plan = build(matched, skipped);
       const { failed } = plan;
       const put = async <P extends Part>(parts: P[], statement: (values: SQL) => SQL): Promise<P[]> => {
         if (parts.length === 0) return [];

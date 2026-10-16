@@ -568,6 +568,31 @@ test("a matched goal the review did not send as an update is never changed", asy
   assert.equal(budget.amount, 90);
 });
 
+test("a matched goal the confirm leaves out of updates is skipped: not created again, not changed, and the rest lands", async () => {
+  const name = fresh("Fuera de la revisión");
+  const nueva = fresh("Nueva junto a la omitida");
+  const id = await seedGoal(name, { note: "vieja" });
+  await seedBudget(id, M(1), 90);
+  const draft = draftOf(
+    { name, horizon: `${M(12)}-01`, note: "nueva", measure: "Estudio · minutos", months: [`${M(1)} · 120 min`], tasks: [`${M(1)} · 30 min · Tarea omitida`] },
+    { name: nueva, horizon: `${M(12)}-01` },
+  );
+  const before = await admin<{ r: unknown }[]>`select to_jsonb(g) as r from goals.goals g where id = ${id}`;
+  const result = ok(await asMe(() => action.confirmImport({ draft, updates: [] })));
+  assert.deepEqual(result.updatedIds, []);
+  const [{ count }] = await admin<{ count: number }[]>`select count(*)::int as count from goals.goals where user_id = ${mine.id} and name = ${name}`;
+  assert.equal(count, 1, "the left-out goal is not created again");
+  const after = await admin<{ r: unknown }[]>`select to_jsonb(g) as r from goals.goals g where id = ${id}`;
+  assert.deepEqual(after, before, "the existing goal is unchanged");
+  const [{ tasks }] = await admin<{ tasks: number }[]>`select count(*)::int as tasks from goals.one_offs where user_id = ${mine.id} and name = 'Tarea omitida'`;
+  assert.equal(tasks, 0, "none of its parts is written anywhere");
+  const [budget] = await admin<{ amount: number }[]>`select amount from goals.month_budgets where goal_id = ${id}`;
+  assert.equal(budget.amount, 90);
+  const [created] = await admin<{ id: string }[]>`select id from goals.goals where user_id = ${mine.id} and name = ${nueva}`;
+  assert.ok(created, "the unmatched goal is still created");
+  assert.deepEqual(result.goalIds, [created.id]);
+});
+
 // ---- one transaction -------------------------------------------------------------------------------------------
 
 test("a failure after the updates rolls the updates back, and one before them leaves no goal created", async () => {

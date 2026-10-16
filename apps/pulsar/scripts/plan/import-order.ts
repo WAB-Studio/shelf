@@ -197,8 +197,9 @@ test("import order: tasks number across the draft and each child sits right afte
 });
 
 test("import order: the confirm pays the statements it paid before position was written", () => {
-  // Settle, goals, measure, commitments, parents, children: phases and budgets are absent.
-  assert.equal(imported.statements, 6);
+  // Settle, the snapshot of the open goals the draft names (RP-130), goals, measure, commitments, parents,
+  // children: phases and budgets are absent.
+  assert.equal(imported.statements, 7);
 });
 
 // RP-67 orders a plan's tasks by month only where the rhythm is in time; RP-101: any other unit fixes each task to its own month, in reading order.
