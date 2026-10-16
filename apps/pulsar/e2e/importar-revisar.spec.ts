@@ -281,13 +281,13 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     });
   });
 
-  // RP-130: a draft goal one open goal already names is updated only through the review's `updates`; sent without
-  // one, as this review still sends it, it is skipped: no second goal, and the open one is left as it was.
-  test("a goal an open goal already names starts unmarked with a warning, and marking it writes no second and leaves the open one unchanged", async ({ person, browser, baseURL, db }) => {
+  // RP-130: one open goal of the name is updated; two are not guessed between, so the goal starts unmarked with the
+  // note, and marking it creates a third beside them, leaving both as they were.
+  test("a goal two open goals name starts unmarked with a warning, and marking it creates another and leaves both open ones unchanged", async ({ person, browser, baseURL, db }) => {
     const { horizon } = monthsFromToday();
-    const [open] = await db<{ id: string }[]>`insert into goals.goals (user_id, name, horizon) values (${person.id}, 'IA aplicada', ${horizon}) returning id`;
-    const openRow = () => db`select to_jsonb(g) as r from goals.goals g where id = ${open.id}`;
-    const before = await openRow();
+    const [open, other] = await db<{ id: string }[]>`insert into goals.goals (user_id, name, horizon) values (${person.id}, 'IA aplicada', ${horizon}), (${person.id}, 'IA aplicada', ${horizon}) returning id`;
+    const openRow = (id: string) => db`select to_jsonb(g) as r from goals.goals g where id = ${id}`;
+    const before = [await openRow(open.id), await openRow(other.id)];
     await db`insert into goals.goals (user_id, name, horizon, archived_at) values (${person.id}, 'Trámites', ${horizon}, now())`;
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, template());
@@ -303,13 +303,13 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await page.getByRole("button", { name: "Crear 3 metas" }).click();
       await expect(page).toHaveURL(/\/metas$/);
       const goals = await db`select 1 from goals.goals where user_id = ${person.id} and name = 'IA aplicada' and archived_at is null`;
-      expect(goals).toHaveLength(1);
-      expect(await openRow()).toEqual(before);
+      expect(goals).toHaveLength(3);
+      expect([await openRow(open.id), await openRow(other.id)]).toEqual(before);
       const parts = await db`
-        select 1 from goals.phases where goal_id = ${open.id}
-        union all select 1 from goals.month_budgets where goal_id = ${open.id}
-        union all select 1 from goals.commitments where goal_id = ${open.id}
-        union all select 1 from goals.one_offs where goal_id = ${open.id}`;
+        select 1 from goals.phases where goal_id in (${open.id}, ${other.id})
+        union all select 1 from goals.month_budgets where goal_id in (${open.id}, ${other.id})
+        union all select 1 from goals.commitments where goal_id in (${open.id}, ${other.id})
+        union all select 1 from goals.one_offs where goal_id in (${open.id}, ${other.id})`;
       expect(parts).toHaveLength(0);
     });
     await asPerson({ person, browser, baseURL }, async (page) => {

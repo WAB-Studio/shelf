@@ -88,6 +88,8 @@
       "tasks": "tareas"
     },
     "create": "{count, plural, one {Crear # meta} other {Crear # metas}}",
+    "updateOnly": "{count, plural, one {Actualizar # meta} other {Actualizar # metas}}",
+    "createAndUpdate": "{created, plural, one {Crear # meta} other {Crear # metas}} y actualizar {updated}",
     "creating": "Creando…",
     "failed": "No se pudo crear el plan. Inténtalo otra vez.",
     "amountOf": "Cambiar el monto de {name}, {amount}",

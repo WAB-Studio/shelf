@@ -1757,7 +1757,7 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **«Nada se borra» covers facts only.** Phases, cadences, a measure, a rhythm and goals with no facts can be edited and deleted; a goal or commitment that explains facts stays archived or retired (RP-13, RP-24). Built (RP-127, RP-134, RP-135).
 - **A goal's hours come from blocks alone,** a block's quantity. A task's estimate does not count toward hours. Built in RP-128.
 - **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Built (RP-129).
-- **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Not built yet.
+- **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Built (RP-130).
 - **Three goal levels stay,** as today (RP-78).
 - **The last day of a month reads «último día»,** never «faltan 0 días». Built (RP-132).
 - **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Built (RP-133).

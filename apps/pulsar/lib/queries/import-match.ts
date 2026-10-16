@@ -43,13 +43,14 @@ type SnapshotRow = {
  * One statement: a snapshot of every open goal of the person whose name is among `names`, for the import to
  * diff a draft against (RP-130). Open is `listGoals`'s rule, not archived. A name is matched as `nameKey`
  * reads it, applied here and bound as one jsonb parameter: a JS array would expand into a parenthesised list.
+ * `null` reads every open goal, for a page that does not yet know the draft's names (bounded by the person's open goals).
  * Two open goals of one name both come back; the match, not this read, refuses to guess between them.
  *
  * `tx` is the caller's transaction, so the read sees what that transaction wrote; without it the read opens its own.
  */
-export async function loadImportSnapshots(names: string[], tx?: Transaction): Promise<GoalSnapshot[]> {
-  const keys = [...new Set(names.map(nameKey))];
-  if (keys.length === 0) return [];
+export async function loadImportSnapshots(names: string[] | null, tx?: Transaction): Promise<GoalSnapshot[]> {
+  const keys = names === null ? [] : [...new Set(names.map(nameKey))];
+  if (names !== null && keys.length === 0) return [];
 
   const read = (run: Transaction) =>
     run.execute<{ row: SnapshotRow }>(sql`
@@ -109,15 +110,16 @@ export async function loadImportSnapshots(names: string[], tx?: Transaction): Pr
       ) as row
       from "goals"."goals" g
       where g.archived_at is null
-        and lower(regexp_replace(btrim(normalize(g.name, nfc)), '\\s+', ' ', 'g'))
-          in (select jsonb_array_elements_text(${JSON.stringify(keys)}::jsonb))
+        and (${names === null}
+          or lower(regexp_replace(btrim(normalize(g.name, nfc)), '\\s+', ' ', 'g'))
+            in (select jsonb_array_elements_text(${JSON.stringify(keys)}::jsonb)))
       order by g.position, g.created_at, g.id
     `);
 
   const rows = await (tx ? read(tx) : withGoalsDb(read));
   const wanted = new Set(keys);
   return rows
-    .filter(({ row }) => wanted.has(nameKey(row.name)))
+    .filter(({ row }) => names === null || wanted.has(nameKey(row.name)))
     .map(({ row }) => ({
       id: row.id,
       name: row.name,

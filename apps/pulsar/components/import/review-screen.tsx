@@ -9,7 +9,8 @@ import { confirmImport } from "@/app/actions/import";
 import { srcLines, strayEstimates } from "@/lib/import/draft";
 import { clearCreated, describePart, readCreated, saveCreated, type CreatedResult } from "@/lib/import/created-store";
 import { clearDraft, readDraft, saveReview, storedText, type StoredDraft } from "@/lib/import/draft-store";
-import { edit, editedCorrections, goalHorizonRefusal, nameKey, remapUnmarked, reviewTree, weekdaysIn, type ReviewNode } from "@/lib/import/review";
+import { edit, editedCorrections, goalHorizonRefusal, remapUnmarked, reviewTree, weekdaysIn, type ReviewNode } from "@/lib/import/review";
+import type { GoalSnapshot } from "@/lib/import/differences";
 import { monthsOfSpan } from "@/lib/plan/months";
 import { civilDateToDate } from "@/lib/zone";
 import { ActionBar, Button, Flex, ListDetail, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
@@ -32,7 +33,7 @@ function subscribeWide(notify: () => void) {
  * in. What the person unmarks, declines or changes is what `confirmImport` is sent, kept in the
  * tab's storage so a reload loses none of it; nothing reaches the database before «Crear».
  */
-export function ReviewScreen({ today, openGoalNames }: { today: string; openGoalNames: string[] }) {
+export function ReviewScreen({ today, snapshots }: { today: string; snapshots: GoalSnapshot[] }) {
   const t = useTranslations();
   const format = useFormatter();
   const router = useRouter();
@@ -44,8 +45,16 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const [failure, setFailure] = useState<string | null>(null);
   // Set once the create left parts out; kept in the tab so a reload draws it again.
   const [created, setCreated] = useState<CreatedResult | null>(null);
-  // The names the draft is first measured against; a server refresh never re-reads it.
-  const [startNames] = useState(openGoalNames);
+  // The open goals the draft is first matched against. A server refresh never re-reads them, or the goals this
+  // confirm creates would turn the review into updates before it leaves; a stale refusal asks for the one read.
+  const [start, setStart] = useState(snapshots);
+  const [refreshing, setRefreshing] = useState<GoalSnapshot[] | null>(null);
+  if (refreshing !== null && snapshots !== refreshing) {
+    setStart(snapshots);
+    setRefreshing(null);
+  }
+  // The goal whose open goal changed under the review, by its place in the draft as drawn.
+  const [stale, setStale] = useState<number | null>(null);
   const confirmed = useRef(false);
 
   // The tab's storage is only there once mounted; the server paints no draft.
@@ -71,14 +80,10 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     };
   }, [router]);
 
-  const review = useMemo(() => (stored ? reviewTree(stored, today, startNames) : null), [stored, today, startNames]);
+  const review = useMemo(() => (stored ? reviewTree(stored, today, start) : null), [stored, today, start]);
   const accepted = useMemo(() => new Set(stored?.accepted ?? []), [stored]);
   const declined = useMemo(() => new Set(stored?.declined ?? []), [stored]);
   const strays = useMemo(() => new Map(stored ? strayEstimates(stored.draft).map((stray) => [stray.path, stray.key] as const) : []), [stored]);
-  const repeated = useMemo(() => {
-    const open = new Set(startNames.map(nameKey));
-    return new Set(review ? review.work.goals.flatMap((goal, g) => (open.has(nameKey(goal.name)) ? [g] : [])) : []);
-  }, [review, startNames]);
 
   if (created) return <CreatedScreen result={created} />;
   if (!stored || !review) return <Page width="full" />;
@@ -201,18 +206,26 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   }
 
   const goalsKept = review.toSend.goals.length;
+  const updating = review.updates.length;
+  const label =
+    updating === 0
+      ? t("import.review.create", { count: goalsKept })
+      : review.creating === 0
+        ? t("import.review.updateOnly", { count: updating })
+        : t("import.review.createAndUpdate", { created: review.creating, updated: updating });
 
   async function confirm() {
     if (pending || goalsKept === 0) return;
     setPending(true);
     setFailure(null);
+    setStale(null);
     try {
-      const result = await confirmImport(review!.toSend);
+      const result = await confirmImport({ draft: review!.toSend, updates: review!.updates });
       if (result.ok) {
         confirmed.current = true;
         clearDraft();
         if (result.failed.length > 0) {
-          const left = { goals: result.goalIds.length, parts: result.failed.map((part) => describePart(review!.toSend, part)) };
+          const left = { goals: result.goalIds.length, updated: result.updatedIds.length, parts: result.failed.map((part) => describePart(review!.toSend, part)) };
           saveCreated(left);
           setCreated(left);
           return;
@@ -221,7 +234,12 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         router.push("/metas");
         return;
       }
-      setFailure(t(result.error.includes(".errors.") ? messageKey(result.error) : "import.review.failed"));
+      if (result.error === "import.errors.reviewStale" && result.at !== undefined) {
+        // Nothing was written: the goal says so where it is, and the open goals are read again.
+        setStale(review!.drawnAt(Number(result.at.split(".")[1])));
+        setRefreshing(snapshots);
+        router.refresh();
+      } else setFailure(t(result.error.includes(".errors.") ? messageKey(result.error) : "import.review.failed"));
     } catch {
       setFailure(t("import.review.failed"));
     }
@@ -284,7 +302,8 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         notices={stored.notices}
         declined={declined}
         accepted={accepted}
-        repeated={repeated}
+        repeated={review.ambiguous}
+        stale={stale}
         strays={strays}
         today={today}
         hasLines={coverage.kind !== "parts"}
@@ -305,7 +324,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       {review.nothingWritable ? null : (
         <ActionBar>
           <Button block onClick={confirm} disabled={pending || goalsKept === 0} aria-busy={pending || undefined}>
-            {pending ? t("import.review.creating") : t("import.review.create", { count: goalsKept })}
+            {pending ? t("import.review.creating") : label}
           </Button>
         </ActionBar>
       )}

@@ -379,6 +379,24 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     });
   });
 
+  test("the button names what happens and counts only what is done: an update-only plan reads «Actualizar 1 meta», a mixed one «Crear 1 meta y actualizar 1»", async ({ person, browser, baseURL, db }) => {
+    // Kills: counting the update among the created; a button that stays «Crear 0 metas» (disabled) on a plan that only updates.
+    const id = await openLeer(db, person.id);
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf(leerBlock(), newBlock()));
+      await expect(page.getByRole("button", { name: "Crear 1 meta y actualizar 1", exact: true })).toBeEnabled();
+    });
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf(leerBlock()));
+      const only = page.getByRole("button", { name: "Actualizar 1 meta", exact: true });
+      await expect(only).toBeEnabled();
+      await only.click();
+      await expect(page).toHaveURL(/\/metas$/);
+      expect((await goalJson(db, id)).horizon).toBe(plus(400));
+      expect(await db`select 1 from goals.goals where user_id = ${person.id} and name = ${LEER}`).toHaveLength(1);
+    });
+  });
+
   for (const width of [360, 1280]) {
     test(`a long list of differences holds at ${width}: no horizontal scroll, every line drawn`, async ({ person, browser, baseURL, db }) => {
       // Kills: a difference line that does not wrap; a list cut short.

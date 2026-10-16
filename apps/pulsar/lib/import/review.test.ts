@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { draftRefusals, type DraftGoal, type DraftTask, type ImportDraft } from "./draft";
 import type { StoredDraft } from "./draft-store";
+import type { GoalSnapshot } from "./differences";
 import { edit, editedCorrections, goalHorizonRefusal, markedDraft, nameKey, remapUnmarked, reviewTree, weekdaysIn } from "./review";
 
 const TODAY = "2026-10-15";
@@ -49,7 +50,20 @@ const stored = (d: ImportDraft, over: Partial<StoredDraft> = {}): StoredDraft =>
   declined: [],
   ...over,
 });
-const review = (d: ImportDraft, over: Partial<StoredDraft> = {}, names: string[] = []) => reviewTree(stored(d, over), TODAY, names);
+const snapshot = (name: string, id = name): GoalSnapshot => ({
+  id,
+  name,
+  horizon: "2027-10-01",
+  note: null,
+  measure: { name: "horas", unit: "minutos" },
+  measureFed: false,
+  rhythm: null,
+  months: [],
+  phases: [],
+  commitments: [],
+  tasks: [],
+});
+const review = (d: ImportDraft, over: Partial<StoredDraft> = {}, snapshots: GoalSnapshot[] = []) => reviewTree(stored(d, over), TODAY, snapshots);
 
 const phase = { aim: "Evals", startsOn: "2026-10-16", endsOn: "2026-12-31", src: [] };
 const three = draft(
@@ -136,9 +150,23 @@ test("a goal unmarked takes the goals inside it; a declined proposal is not appl
   assert.equal(r.nodes.find((n) => n.path === "goals.3")?.marked, true);
 });
 
-test("a goal an open goal already names starts unmarked when nothing was marked yet", () => {
-  const r = review(draft(goal({ name: "Inglés" }), goal({ key: "g2", name: "Otra" })), { unmarked: null }, ["ingles".replace("i", "I").replace("ngles", "nglés")]);
-  assert.deepEqual(r.toSend.goals.map((g) => g.name), ["Otra"]);
+test("a goal one open goal names is an update, marked; a goal two open goals name starts unmarked (RP-130)", () => {
+  const d = draft(goal({ name: "Inglés" }), goal({ key: "g2", name: "Otra" }), goal({ key: "g3", name: "Doble" }));
+  const r = review(d, { unmarked: null }, [snapshot("ingles".replace("i", "I").replace("ngles", "nglés"), "a"), snapshot("Doble", "b"), snapshot("doble", "c")]);
+  assert.deepEqual(r.toSend.goals.map((g) => g.name), ["Inglés", "Otra"]);
+  assert.deepEqual([...r.ambiguous], [2]);
+  assert.deepEqual(r.updates.map((u) => [u.g, u.goalId]), [[0, "a"]]);
+  assert.equal(r.creating, 1);
+});
+
+test("an update's index is its place among the goals sent, and its fingerprint is of the draft with phases cut", () => {
+  const cutPhase = { aim: "Evals", startsOn: "2026-10-01", endsOn: "2026-12-31", src: [] };
+  const d = draft(goal({ name: "Otra" }), goal({ key: "g2", name: "Meta", phases: [cutPhase] }));
+  const r = review(d, { unmarked: ["goals.0"] }, [snapshot("Meta", "m")]);
+  assert.deepEqual(r.updates.map((u) => [u.g, u.goalId]), [[0, "m"]]);
+  assert.equal(r.drawnAt(0), 1);
+  assert.deepEqual(r.changes.get(1)?.map((c) => c.kind), ["phaseAdded"]);
+  assert.match(r.updates[0].fingerprint, new RegExp(TODAY));
 });
 
 test("corrections sit on the node where they happened", () => {

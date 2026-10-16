@@ -21,9 +21,16 @@ export function CreatedScreen({ result }: { result: CreatedResult }) {
     <Page width="full">
       <ScreenHeader title={t("import.created.title")} eyebrow={t("import.created.eyebrow")} />
       <Flex direction="column" gap="6">
-        <Text as="p" variant="sentence" tone="ink">
-          {t("import.created.count", { goals: result.goals, parts: result.parts.length })}
-        </Text>
+        {result.updated > 0 ? (
+          <Text as="p" variant="sentence" tone="ink">
+            {t("import.created.updated", { count: result.updated })}
+          </Text>
+        ) : null}
+        {result.goals > 0 || result.updated === 0 ? (
+          <Text as="p" variant="sentence" tone="ink">
+            {t("import.created.count", { goals: result.goals, parts: result.parts.length })}
+          </Text>
+        ) : null}
         <Section label={t("import.created.section")}>
           <Flex direction="column" gap="5">
             <Text as="p" variant="sentence" tone="muted">

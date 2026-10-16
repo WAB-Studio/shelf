@@ -8,8 +8,8 @@ export type FailedKind = "goal" | "phase" | "month" | "commitment" | "task" | "s
 // the moment the plan is created, so the result cannot look anything up afterwards.
 export type CreatedPart = { name: string; goal: string; kind: FailedKind; month: string | null; reason: string };
 
-// What «Plan creado» draws: how many goals were written and each part that was not.
-export type CreatedResult = { goals: number; parts: CreatedPart[] };
+// What «Plan creado» draws: how many goals were created, how many open goals were updated (RP-130), and each part that was not written.
+export type CreatedResult = { goals: number; updated: number; parts: CreatedPart[] };
 
 // The sentence for each reason `FailedPart.reason` can carry; any other key reads as `partFailed`.
 export const failedReasonKey: Record<string, string> = {
@@ -52,14 +52,14 @@ export function readCreated(): CreatedResult | null {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { goals?: unknown; parts?: unknown };
+    const parsed = JSON.parse(raw) as { goals?: unknown; updated?: unknown; parts?: unknown };
     if (typeof parsed.goals !== "number" || !Array.isArray(parsed.parts)) return null;
     const parts = parsed.parts.flatMap((entry: Record<string, unknown>): CreatedPart[] =>
       typeof entry?.name === "string" && typeof entry.goal === "string" && typeof entry.reason === "string" && typeof entry.kind === "string" && KINDS.includes(entry.kind)
         ? [{ name: entry.name, goal: entry.goal, kind: entry.kind as FailedKind, month: typeof entry.month === "string" ? entry.month : null, reason: entry.reason }]
         : [],
     );
-    return parts.length === 0 ? null : { goals: parsed.goals, parts };
+    return parts.length === 0 ? null : { goals: parsed.goals, updated: typeof parsed.updated === "number" ? parsed.updated : 0, parts };
   } catch {
     return null;
   }

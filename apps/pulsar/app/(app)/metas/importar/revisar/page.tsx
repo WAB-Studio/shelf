@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
 import { ReviewScreen } from "@/components/import/review-screen";
-import { listGoals } from "@/lib/queries/goal";
+import { loadImportSnapshots } from "@/lib/queries/import-match";
 import { getPerson } from "@/lib/session";
 import { todayInZone } from "@/lib/zone";
 
@@ -13,13 +13,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("importReview") };
 }
 
-// The auth gate, today's day and the open goals' names, for the repeated-name
-// warning; the draft itself lives in the tab's storage, so the client reads it (RP-37).
+// The auth gate, today's day and a snapshot of every open goal, for the review to match the draft's goals
+// against (RP-130); the draft itself lives in the tab's storage, so the client reads it (RP-37) and the
+// names to match are not known here.
 export default async function ImportReviewPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
-  const open = await listGoals();
+  const snapshots = await loadImportSnapshots(null);
 
-  return <ReviewScreen today={todayInZone()} openGoalNames={open.map((goal) => goal.name)} />;
+  return <ReviewScreen today={todayInZone()} snapshots={snapshots} />;
 }

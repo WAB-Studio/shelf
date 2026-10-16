@@ -8,6 +8,7 @@ import { coverage, outness } from "./coverage";
 import {
   decideWithPaths,
   draftRefusals,
+  withCutPhases,
   withoutStrayEstimates,
   type Correction,
   type CorrectionCode,
@@ -16,6 +17,7 @@ import {
   type ImportDraft,
   type Notice,
 } from "./draft";
+import { differences, fingerprint, matchGoals, type Difference, type GoalSnapshot } from "./differences";
 import type { StoredDraft } from "./draft-store";
 
 export type ReviewNode = {
@@ -206,17 +208,18 @@ const WRITTEN = new Set<ReviewNode["kind"]>(["goal", "group", "phase", "month", 
 
 // The review of a stored draft: the tree to draw, what the person is sent to confirm and what the
 // plan's lines came to. The corrections the person declined are undone, the check's proposals they
-// did not decline are applied, and a goal an open goal already names starts unmarked.
-export function reviewTree(stored: StoredDraft, today: string, openGoalNames: string[]) {
+// did not decline are applied, a goal one open goal names is drawn as an update (RP-130), and a goal
+// two open goals name starts unmarked: the import cannot choose between them.
+export function reviewTree(stored: StoredDraft, today: string, snapshots: GoalSnapshot[]) {
   const decided = decideWithPaths(stored.draft, stored.corrections, new Set(stored.declined));
   const work = withoutStrayEstimates(decided.draft);
   // A correction is drawn where its part now lies: a task the second pass moved has gone to another goal.
   const corrections = stored.corrections.map((c) => ({ ...c, at: decided.pathOf(c.at) }));
   const refusals = draftRefusals(work, today);
   const refused = new Set(refusals.map((refusal) => refusal.path));
-  const open = new Set(openGoalNames.map(nameKey));
+  const matches = matchGoals(work, snapshots);
   const unmarked: ReadonlySet<string> = new Set(
-    stored.unmarked ?? work.goals.flatMap((goal, g) => (open.has(nameKey(goal.name)) ? [`goals.${g}`] : [])),
+    stored.unmarked ?? matches.flatMap(({ g, match }) => (match === "ambiguous" ? [`goals.${g}`] : [])),
   );
   const out = outness(work, unmarked, refused);
   const blocked = outness(work, new Set(), refused);
@@ -287,6 +290,28 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
   for (const notice of stored.notices) nodeAt(notice.at)?.notices.push(notice);
 
   const toSend = markedDraft(work, unmarked, refused);
+
+  // The updates ride on the draft the server compares: the one with its phases cut, and the goals the person
+  // left in, so a goal's index here is its place among them.
+  const cut = withCutPhases(toSend, today);
+  const kept = work.goals.flatMap((_, g) => (out(`goals.${g}`) === null ? [g] : []));
+  const matched = new Map<number, GoalSnapshot>();
+  const ambiguous = new Set<number>();
+  for (const { g, match } of matches) {
+    if (match === "ambiguous") ambiguous.add(g);
+    else if (match !== null) matched.set(g, match);
+  }
+  const changes = new Map<number, Difference[]>();
+  const updates: { g: number; goalId: string; fingerprint: string }[] = [];
+  kept.forEach((g, sent) => {
+    const snapshot = matched.get(g);
+    if (!snapshot) return;
+    const list = differences(cut.goals[sent], snapshot, today);
+    changes.set(g, list);
+    updates.push({ g: sent, goalId: snapshot.id, fingerprint: fingerprint(list) });
+  });
+  // The goal's place in the draft as drawn, for a refusal that names its place in the draft sent.
+  const drawnAt = (sent: number) => kept[sent];
   const createCount = toSend.goals.reduce(
     (n, goal) => n + 1 + goal.phases.length + goal.months.length + goal.commitments.length + goal.tasks.reduce((m, task) => m + 1 + task.children.length, 0),
     0,
@@ -298,6 +323,12 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
     unmarked,
     refused,
     createCount,
+    creating: toSend.goals.length - updates.length,
+    matched,
+    ambiguous,
+    changes,
+    updates,
+    drawnAt,
     nothingWritable: !nodes.some((n) => WRITTEN.has(n.kind) && n.markable),
     coverage: coverage(work, stored.source, unmarked, refused),
     toSend,
