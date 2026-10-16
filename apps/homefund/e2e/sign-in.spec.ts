@@ -41,6 +41,8 @@ const claimedKeys: string[] = [];
 test.skip(({ viewport }) => viewport?.width === 360, "the sign-in facts are read once, on the laptop");
 
 test.beforeAll(async ({ baseURL }) => {
+  // Without the salt the caps are open (`noKey`) and every sign-in below would pass for the wrong reason.
+  expect(process.env.CLIENT_KEY_SALT?.length ?? 0, "CLIENT_KEY_SALT must be set (>= 16 chars): this file fails, never skips").toBeGreaterThanOrEqual(16);
   // The send creates an `auth.users` row and a mail: only the local stack may receive either.
   const supabase = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://unset.invalid");
   expect(["127.0.0.1", "localhost"], `Supabase is ${supabase.host}, not the local stack`).toContain(supabase.hostname);
@@ -67,11 +69,35 @@ test.afterAll(async () => {
   }
 });
 
-function newAddress(): string {
+function newAddress(domain = "example.invalid"): string {
   serial += 1;
-  const email = `harness-signin-${stamp}-${serial}@example.invalid`;
+  const email = `harness-signin-${stamp}-${serial}@${domain}`;
   minted.push(email);
   return email;
+}
+
+const SALT = process.env.CLIENT_KEY_SALT ?? "";
+
+// A random /64 in 2001:db8::/32 per caller: the caller counter is shared by every lane and rerun.
+function newCaller(): string {
+  const group = () => randomBytes(2).toString("hex");
+  return `2001:db8:${group()}:${group()}:${group()}::1`;
+}
+
+// Lists the address by its exact value; the file removes it by that value after.
+async function listAddress(email: string) {
+  listedEmails.push(email);
+  await fixtureSql`insert into finances.allowed_emails (email) values (${email.trim().toLowerCase()})`;
+}
+
+function track(ip: string, email: string) {
+  claimedKeys.push(callerKey(new Headers({ "x-forwarded-for": ip }), SALT)!, addressKey(email, SALT));
+}
+
+// What a refusal shows: the sentence once the catalogue has it, the key the action threw until then.
+function refusalText(key: string): string {
+  const name = key.replace(/^errors\./, "");
+  return (messages.errors as Record<string, string>)[name] ?? key;
 }
 
 async function register(email: string) {
@@ -81,12 +107,16 @@ async function register(email: string) {
     on conflict do nothing`;
 }
 
-async function fresh(browser: Browser, baseURL: string): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext({ baseURL, storageState: signedOut });
-  return { context, page: await context.newPage() };
+// Every context is its own caller, so the daily caller cap never counts another row's sends.
+async function fresh(browser: Browser, baseURL: string): Promise<{ context: BrowserContext; page: Page; ip: string }> {
+  const ip = newCaller();
+  claimedKeys.push(callerKey(new Headers({ "x-forwarded-for": ip }), SALT)!);
+  const context = await browser.newContext({ baseURL, storageState: signedOut, extraHTTPHeaders: { "x-forwarded-for": ip } });
+  return { context, page: await context.newPage(), ip };
 }
 
 async function requestLink(page: Page, email: string, path = "/es/login") {
+  claimedKeys.push(addressKey(email, SALT));
   await page.goto(path);
   await page.getByLabel(auth.emailLabel).fill(email);
   await page.getByRole("button", { name: auth.sendLink, exact: true }).click();
@@ -126,6 +156,7 @@ async function userIdOf(email: string): Promise<string> {
 test("the login form sends one message to the address and says so", async ({ browser, baseURL }) => {
   // Kills: the sign-in action that answers «Revisa tu correo» without asking Auth to send.
   const email = newAddress();
+  await listAddress(email);
   const { context, page } = await fresh(browser, baseURL!);
   try {
     await requestLink(page, email);
@@ -143,6 +174,7 @@ test("opening the link signs the person in on the app, with the personal categor
 }) => {
   // Kills: the first sign-in that skips the seed of the personal category set (RF-64).
   const email = newAddress();
+  await listAddress(email);
   const { context, page } = await fresh(browser, baseURL!);
   try {
     await requestLink(page, email);
@@ -173,6 +205,7 @@ test("an address pending as a member signs in and lands as that member, not as a
 }) => {
   // Kills: the sign-in that never claims the invitation (RF-06), so the person lands in no fund.
   const email = newAddress();
+  await listAddress(email);
   const { groupId } = await seedGroup();
   const pendingId = randomUUID();
   await asHarnessUser(async (tx) => {
@@ -206,10 +239,12 @@ test("an address pending as a member signs in and lands as that member, not as a
 test("the page asked for before signing in is where the link lands", async ({ browser, baseURL }) => {
   // Kills: the destination dropped between the login form and the link.
   const email = newAddress();
+  await listAddress(email);
   const { context, page } = await fresh(browser, baseURL!);
   try {
     await page.goto("/es/movements");
     await expect(page).toHaveURL(/\/es\/login\?next=/);
+    claimedKeys.push(addressKey(email, SALT));
     await page.getByLabel(auth.emailLabel).fill(email);
     await page.getByRole("button", { name: auth.sendLink, exact: true }).click();
     await expect(page.getByRole("heading", { name: auth.sentTitle, exact: true })).toBeVisible();
@@ -225,6 +260,7 @@ test("the page asked for before signing in is where the link lands", async ({ br
 test("a destination outside the app is ignored: the link lands on the home page", async ({ browser, baseURL }) => {
   // Kills: the redirect that follows any `next` it is given.
   const email = newAddress();
+  await listAddress(email);
   const { context, page } = await fresh(browser, baseURL!);
   try {
     await requestLink(page, email, "/es/login?next=//evil.example/steal");
@@ -240,6 +276,7 @@ test("a destination outside the app is ignored: the link lands on the home page"
 test("a link opened a second time lands on the login with the invalid-link notice", async ({ browser, baseURL }) => {
   // Kills: the route that treats a spent link as a good one.
   const email = newAddress();
+  await listAddress(email);
   const first = await fresh(browser, baseURL!);
   const second = await fresh(browser, baseURL!);
   try {
@@ -276,62 +313,47 @@ test("every address this file minted is in the harness registry under this run",
 });
 
 // RF-145 and RF-143: the list and the daily caps answer before any mail is sent.
-const SALT = process.env.CLIENT_KEY_SALT ?? "";
 const CLIENT_CAP = Number(process.env.SIGN_IN_LINK_DAILY_CLIENT_CAP ?? 5);
 const ADDRESS_CAP = Number(process.env.SIGN_IN_LINK_DAILY_ADDRESS_CAP ?? 3);
 
-test.describe("the list and the daily caps", () => {
-  test.beforeAll(() => {
-    // Without the salt the caps are open (`noKey`) and every row below would pass for the wrong reason.
-    expect(SALT.length, "CLIENT_KEY_SALT must be set (>= 16 chars): this describe fails, never skips").toBeGreaterThanOrEqual(16);
-  });
+type Attempt = { kind: "sent"; panel: string } | { kind: "refused"; text: string };
 
-  // A random /64 in 2001:db8::/32 per caller: the counters are shared by every lane and rerun.
-  function newCaller(): string {
-    const group = () => randomBytes(2).toString("hex");
-    return `2001:db8:${group()}:${group()}:${group()}::1`;
-  }
-
-  async function listAddress(email: string) {
-    listedEmails.push(email);
-    await fixtureSql`insert into finances.allowed_emails (email) values (${email.trim().toLowerCase()})`;
-  }
-
-  function track(ip: string, email: string) {
-    claimedKeys.push(callerKey(new Headers({ "x-forwarded-for": ip }), SALT)!, addressKey(email, SALT));
-  }
-
-  // Submits the form as `ip` and reports which of the two answers the person saw.
-  async function submit(browser: Browser, baseURL: string, ip: string, typed: string): Promise<"sent" | "refused"> {
-    const context = await browser.newContext({ baseURL, storageState: signedOut, extraHTTPHeaders: { "x-forwarded-for": ip } });
-    try {
-      const page = await context.newPage();
-      await page.goto("/es/login");
-      await page.getByLabel(auth.emailLabel).fill(typed);
-      await page.getByRole("button", { name: auth.sendLink, exact: true }).click();
-      const sent = page.getByRole("heading", { name: auth.sentTitle, exact: true });
-      const toast = page.locator("[data-sonner-toast][data-type='error']");
-      await expect(sent.or(toast)).toBeVisible();
-      if (await sent.isVisible()) {
-        await register(typed.trim().toLowerCase());
-        return "sent";
-      }
-      // A refusal says so; «unexpected» is a crash, not a refusal.
-      await expect(toast).not.toContainText(messages.errors.unexpected);
-      return "refused";
-    } finally {
-      await context.close();
+// Submits the form as `ip` and reports which of the two answers the person saw.
+async function attempt(browser: Browser, baseURL: string, ip: string, typed: string): Promise<Attempt> {
+  const context = await browser.newContext({ baseURL, storageState: signedOut, extraHTTPHeaders: { "x-forwarded-for": ip } });
+  try {
+    const page = await context.newPage();
+    await page.goto("/es/login");
+    await page.getByLabel(auth.emailLabel).fill(typed);
+    await page.getByRole("button", { name: auth.sendLink, exact: true }).click();
+    const sent = page.getByRole("heading", { name: auth.sentTitle, exact: true });
+    const toast = page.locator("[data-sonner-toast][data-type='error']");
+    await expect(sent.or(toast)).toBeVisible();
+    if (await sent.isVisible()) {
+      await register(typed.trim().toLowerCase());
+      return { kind: "sent", panel: await page.getByRole("status").innerText() };
     }
+    // A refusal says so; «unexpected» is a crash, not a refusal.
+    await expect(toast).not.toContainText(messages.errors.unexpected);
+    return { kind: "refused", text: await toast.innerText() };
+  } finally {
+    await context.close();
   }
+}
 
-  function listedAddress(): string {
-    const email = newAddress();
-    return email;
-  }
+async function submit(browser: Browser, baseURL: string, ip: string, typed: string): Promise<"sent" | "refused"> {
+  return (await attempt(browser, baseURL, ip, typed)).kind;
+}
 
+async function claimsOf(keys: string[]): Promise<number> {
+  const rows = await fixtureSql`select 1 from finances.sign_in_claims where client_key in ${fixtureSql(keys)}`;
+  return rows.length;
+}
+
+test.describe("the list and the daily caps", () => {
   test("a listed address gets its link whatever the case or the padding typed", async ({ browser, baseURL }) => {
     // Kills: drop lower(btrim()) from the lookup.
-    const email = listedAddress();
+    const email = newAddress();
     await listAddress(email);
     const ip = newCaller();
     track(ip, email);
@@ -346,7 +368,7 @@ test.describe("the list and the daily caps", () => {
 
   test("an address that is not listed is refused with a toast and no mail", async ({ browser, baseURL }) => {
     // Kills: exists -> true.
-    const email = listedAddress();
+    const email = newAddress();
     const ip = newCaller();
     track(ip, email);
 
@@ -357,37 +379,44 @@ test.describe("the list and the daily caps", () => {
   });
 
   test("one address takes three links a day from any callers; the fourth is refused", async ({ browser, baseURL }) => {
-    // Kills: `<` -> `<=`; skipping the address claim.
-    const email = listedAddress();
+    // Kills: `<` -> `<=`; skipping the address claim; mapping `rateLimited` to a sent link.
+    const email = newAddress();
     await listAddress(email);
-    const outcomes: string[] = [];
+    const results: Attempt[] = [];
     for (let i = 0; i <= ADDRESS_CAP; i += 1) {
       const ip = newCaller();
       track(ip, email);
       // Auth itself refuses a second link to one user inside its own interval (1 s locally);
       // the cap under test is the app's, so the sends are spaced past it.
       if (i > 0) await new Promise((done) => setTimeout(done, 2_000));
-      outcomes.push(await submit(browser, baseURL!, ip, email));
+      results.push(await attempt(browser, baseURL!, ip, email));
     }
-    expect(outcomes).toEqual([...Array(ADDRESS_CAP).fill("sent"), "refused"]);
+    expect(results.map((result) => result.kind)).toEqual([...Array(ADDRESS_CAP).fill("sent"), "refused"]);
+    const refusal = results[ADDRESS_CAP];
+    expect(refusal.kind === "refused" && refusal.text).toContain(refusalText("errors.signInLinkCapped"));
+    // The refused fourth sent nothing.
     await expect.poll(async () => (await inbox(email)).messages_count).toBe(ADDRESS_CAP);
   });
 
   test.describe.serial("one caller", () => {
     const ip = newCaller();
     const targets: string[] = [];
+    let last: Attempt | undefined;
 
     test("takes five links a day to different addresses; the sixth is refused", async ({ browser, baseURL }) => {
-      // Kills: skipping the caller claim; `<` -> `<=`.
+      // Kills: skipping the caller claim; `<` -> `<=`; mapping `rateLimited` to a sent link.
       const outcomes: string[] = [];
       for (let i = 0; i <= CLIENT_CAP; i += 1) {
-        const email = listedAddress();
+        const email = newAddress();
         await listAddress(email);
         track(ip, email);
         targets.push(email);
-        outcomes.push(await submit(browser, baseURL!, ip, email));
+        last = await attempt(browser, baseURL!, ip, email);
+        outcomes.push(last.kind);
       }
       expect(outcomes).toEqual([...Array(CLIENT_CAP).fill("sent"), "refused"]);
+      expect(last?.kind === "refused" && last.text).toContain(refusalText("errors.signInLinkCapped"));
+      expect((await inbox(targets[CLIENT_CAP])).messages_count).toBe(0);
     });
 
     test("a caller refused at its cap spends nothing of the address it asked for", async () => {
@@ -405,7 +434,7 @@ test.describe("the list and the daily caps", () => {
 
   test("the claims are dated by Bogotá's day", async ({ browser, baseURL }) => {
     // Kills: `current_date` (red at 19:00-24:00 Bogotá here; any hour in scripts/check-sign-in.ts).
-    const email = listedAddress();
+    const email = newAddress();
     await listAddress(email);
     const ip = newCaller();
     track(ip, email);
@@ -416,5 +445,282 @@ test.describe("the list and the daily caps", () => {
       select day::text as day from finances.sign_in_claims where client_key in ${fixtureSql(keys)}`;
     expect(rows).toHaveLength(2);
     for (const row of rows) expect(row.day).toBe(todayInBogota());
+  });
+});
+
+test.describe("the sign-in action's refusals come before Auth is asked", () => {
+  test("an uninvited address on a deliverable domain is refused with errors.notInvited and gets no mail", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: the list check after `signInWithOtp`.
+    const email = newAddress("gmail.com");
+    const ip = newCaller();
+    track(ip, email);
+
+    const result = await attempt(browser, baseURL!, ip, email);
+    expect(result).toEqual({ kind: "refused", text: expect.stringContaining(refusalText("errors.notInvited")) });
+    expect((await inbox(email)).messages_count).toBe(0);
+    expect(await fixtureSql`select 1 from auth.users where email = ${email}`).toHaveLength(0);
+    // A refusal spends no link of the caller's or the address's.
+    expect(await claimsOf([callerKey(new Headers({ "x-forwarded-for": ip }), SALT)!, addressKey(email, SALT)])).toBe(0);
+  });
+
+  test("an uninvited address on an undeliverable domain is told it is not invited: the list answers before DNS", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: the deliverability guard placed before the list.
+    const email = newAddress("example.com");
+    const ip = newCaller();
+    track(ip, email);
+
+    const result = await attempt(browser, baseURL!, ip, email);
+    expect(result).toEqual({ kind: "refused", text: expect.stringContaining(refusalText("errors.notInvited")) });
+    expect((await inbox(email)).messages_count).toBe(0);
+  });
+
+  test("a listed address on a domain that takes no mail is refused with errors.domainUndeliverable before Auth", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: dropping the `isDomainDeliverable` call; placing the claims before it.
+    const email = newAddress("example.com");
+    await listAddress(email);
+    const ip = newCaller();
+    track(ip, email);
+
+    const result = await attempt(browser, baseURL!, ip, email);
+    expect(result).toEqual({ kind: "refused", text: expect.stringContaining(refusalText("errors.domainUndeliverable")) });
+    expect((await inbox(email)).messages_count).toBe(0);
+    expect(await fixtureSql`select 1 from auth.users where email = ${email}`).toHaveLength(0);
+    expect(await claimsOf([callerKey(new Headers({ "x-forwarded-for": ip }), SALT)!, addressKey(email, SALT)])).toBe(0);
+  });
+
+  test("a listed .invalid address reaches the local mailbox: the guard exempts the reserved TLD", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: `isDomainDeliverable` without the `.invalid` exemption (no MX, no A: it would refuse).
+    const email = newAddress(`${stamp}.invalid`);
+    await listAddress(email);
+    const ip = newCaller();
+    track(ip, email);
+
+    expect((await attempt(browser, baseURL!, ip, email)).kind).toBe("sent");
+    await expect.poll(async () => (await inbox(email)).messages_count).toBe(1);
+  });
+
+  test("a new address and a known one get the same answer", async ({ browser, baseURL }) => {
+    // Kills: a sent panel (or a refusal) that differs for an address Auth had not met.
+    const email = newAddress();
+    await listAddress(email);
+    expect(await fixtureSql`select 1 from auth.users where email = ${email}`).toHaveLength(0);
+
+    const first = await attempt(browser, baseURL!, newCaller(), email);
+    expect(await fixtureSql`select 1 from auth.users where email = ${email}`).toHaveLength(1);
+    // Past Auth's own one-second interval for a user.
+    await new Promise((done) => setTimeout(done, 2_000));
+    const second = await attempt(browser, baseURL!, newCaller(), email);
+
+    expect(first.kind).toBe("sent");
+    expect(second).toEqual(first);
+  });
+});
+
+// The link as the stack's mail carries it. Auth's own hop is made here, without a browser, so the
+// test holds the `/auth/confirm?code=…` URL the person's browser would be sent to.
+async function verifyUrlOf(email: string): Promise<URL> {
+  let id = "";
+  await expect
+    .poll(async () => {
+      id = (await inbox(email)).messages[0]?.ID ?? "";
+      return id;
+    })
+    .not.toBe("");
+  const message = await (await fetch(`${MAILBOX}/api/v1/message/${id}`)).json();
+  const href = /https?:\/\/[^"'\s<>]*\/auth\/v1\/verify\?[^"'\s<>]+/.exec(`${message.HTML}\n${message.Text}`)?.[0];
+  if (!href) throw new Error("the mail carries no verify link");
+  return new URL(href.replaceAll("&amp;", "&"));
+}
+
+async function codeLinkOf(email: string, baseURL: string): Promise<{ url: string; code: string }> {
+  const hop = await fetch(await verifyUrlOf(email), { redirect: "manual" });
+  const location = hop.headers.get("location");
+  if (!location) throw new Error(`Auth answered ${hop.status} with no redirect`);
+  const target = new URL(location);
+  const code = target.searchParams.get("code");
+  if (!code) throw new Error(`Auth's redirect carries no code: ${location}`);
+  expect(target.origin, "Auth redirects to the app").toBe(new URL(baseURL).origin);
+  expect(target.pathname).toBe("/auth/confirm");
+  return { url: target.toString(), code };
+}
+
+async function flowStates(code: string): Promise<number> {
+  const rows = await fixtureSql`select 1 from auth.flow_state where auth_code = ${code}`;
+  return rows.length;
+}
+
+function hasSession(cookies: { name: string }[]): boolean {
+  // The PKCE verifier is named `…-auth-token-code-verifier`: it is not a session.
+  return cookies.some(({ name }) => /auth-token/.test(name) && !name.endsWith("-code-verifier"));
+}
+
+test.describe("the code link lands only in the browser that asked", () => {
+  test("opened in the asking browser it signs in, seeds the personal categories and sets the locale", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: dropping the `code` branch of the route.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await requestLink(page, email);
+      const link = await codeLinkOf(email, baseURL!);
+      await page.goto(link.url);
+
+      await expect(page).toHaveURL(/\/es$/);
+      const cookies = await context.cookies();
+      expect(hasSession(cookies)).toBe(true);
+      expect(cookies).toContainEqual(expect.objectContaining({ name: "NEXT_LOCALE", value: "es" }));
+      await page.goto("/es/movements");
+      await expect(page).toHaveURL(/\/es\/movements$/);
+
+      const seeded = await fixtureSql<{ name: string }[]>`
+        select name from categories where owner_user_id = ${await userIdOf(email)}`;
+      const expected = SEED_CATEGORIES.flatMap((category) => [
+        category.name.es,
+        ...(category.children ?? []).map((child) => child.name.es),
+      ]);
+      expect(seeded.map((row) => row.name).sort()).toEqual(expected.sort());
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("the page asked for before signing in is where the code link lands", async ({ browser, baseURL }) => {
+    // Kills: reading `post_login_redirect` on the `token_hash` path only.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await requestLink(page, email, "/es/login?next=/es/movements");
+      await page.goto((await codeLinkOf(email, baseURL!)).url);
+      await expect(page).toHaveURL(/\/es\/movements$/);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a pending member who signs in by code lands as that member, not as a new one", async ({ browser, baseURL }) => {
+    // Kills: skipping `claimInviteForUser` on the `code` path.
+    const email = newAddress();
+    await listAddress(email);
+    const { groupId } = await seedGroup();
+    const pendingId = randomUUID();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into group_members (id, group_id, name, role, invite_email)
+        values (${pendingId}, ${groupId}, ${`Invitado M9 ${stamp}`}, 'member', ${email})`;
+    });
+    const [before] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from group_members where group_id = ${groupId}`;
+
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await requestLink(page, email);
+      await page.goto((await codeLinkOf(email, baseURL!)).url);
+      await expect(page).toHaveURL(/\/es\/bienvenida$/);
+
+      const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null }[]>`
+        select id, name, user_id from group_members where id = ${pendingId}`;
+      expect(member).toEqual({ id: pendingId, name: `Invitado M9 ${stamp}`, user_id: await userIdOf(email) });
+      const [after] = await fixtureSql<{ n: number }[]>`
+        select count(*)::int as n from group_members where group_id = ${groupId}`;
+      expect(after.n).toBe(before.n);
+    } finally {
+      await context.close();
+      await clearGroup();
+    }
+  });
+
+  test("opened in another browser it lands on the login with linkOtherBrowser and leaves the link unspent", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: asking Auth for the session without checking the browser holds the verifier.
+    const email = newAddress();
+    await listAddress(email);
+    const asking = await fresh(browser, baseURL!);
+    const other = await fresh(browser, baseURL!);
+    try {
+      await requestLink(asking.page, email);
+      const link = await codeLinkOf(email, baseURL!);
+      expect(await flowStates(link.code), "Auth minted the code").toBe(1);
+
+      await other.page.goto(link.url);
+      await expect(other.page).toHaveURL(/\/es\/login\?error=linkOtherBrowser$/);
+      expect(hasSession(await other.context.cookies())).toBe(false);
+      // Auth was not asked: its code is still there, and the browser that asked can still use it.
+      expect(await flowStates(link.code)).toBe(1);
+
+      await asking.page.goto(link.url);
+      await expect(asking.page).toHaveURL(/\/es$/);
+      expect(hasSession(await asking.context.cookies())).toBe(true);
+    } finally {
+      await asking.context.close();
+      await other.context.close();
+    }
+  });
+
+  test("a code opened a second time lands on the login with linkInvalid", async ({ browser, baseURL }) => {
+    // Kills: redirecting to the home page on any Auth failure.
+    const email = newAddress();
+    await listAddress(email);
+    const first = await fresh(browser, baseURL!);
+    const second = await fresh(browser, baseURL!);
+    try {
+      await requestLink(first.page, email);
+      const link = await codeLinkOf(email, baseURL!);
+      // The second visit is from a browser that still holds the verifier, so only the spent code is wrong.
+      const verifiers = (await first.context.cookies()).filter(({ name }) => name.endsWith("-code-verifier"));
+      expect(verifiers.length, "the asking browser holds the verifier").toBeGreaterThan(0);
+
+      await first.page.goto(link.url);
+      await expect(first.page).toHaveURL(/\/es$/);
+
+      await second.context.addCookies(verifiers);
+      await second.page.goto(link.url);
+      await expect(second.page).toHaveURL(/\/es\/login\?error=linkInvalid$/);
+      expect(hasSession(await second.context.cookies())).toBe(false);
+    } finally {
+      await first.context.close();
+      await second.context.close();
+    }
+  });
+
+  test("the redirect that lands either link says no-store", async ({ browser, baseURL }) => {
+    // Kills: dropping `applyHeaders` on one path.
+    const byCode = newAddress();
+    const byHash = newAddress();
+    await listAddress(byCode);
+    await listAddress(byHash);
+    const a = await fresh(browser, baseURL!);
+    const b = await fresh(browser, baseURL!);
+    try {
+      await requestLink(a.page, byCode);
+      const codeResponse = await a.context.request.get((await codeLinkOf(byCode, baseURL!)).url, { maxRedirects: 0 });
+      expect([302, 307]).toContain(codeResponse.status());
+      expect(codeResponse.headers()["cache-control"]).toContain("no-store");
+
+      await requestLink(b.page, byHash);
+      const hashResponse = await b.context.request.get(await confirmPath(byHash), { maxRedirects: 0 });
+      expect([302, 307]).toContain(hashResponse.status());
+      expect(hashResponse.headers()["cache-control"]).toContain("no-store");
+    } finally {
+      await a.context.close();
+      await b.context.close();
+    }
   });
 });
