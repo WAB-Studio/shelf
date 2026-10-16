@@ -416,7 +416,7 @@ test.describe("the group's own settings", () => {
     // the form was submitted in, which is the request's, not the group's.
     const cash = await fixtureSql<{ name: string }[]>`
       select name from accounts
-      where group_id = ${groupId} and subtype = 'efectivo' and archived_at is null`;
+      where group_id = ${groupId} and subtype = 'cash' and archived_at is null`;
     expect(cash).toHaveLength(1);
     expect(cash[0].name).toBe(GROUP_CASH_ACCOUNT_NAME.es);
   });

@@ -137,7 +137,7 @@ test.beforeAll(async () => {
         insert into accounts (
           id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
         values (${id}, ${scope.userId}, ${named("Tarjeta escritorio", i)},
-          'liability', 'tarjeta', ${-1_000_000 * (i + 1)}, ${today})`;
+          'liability', 'card', ${-1_000_000 * (i + 1)}, ${today})`;
       await tx`
         insert into debt_terms (
           account_id, debt_kind, annual_rate, minimum_payment_cents,

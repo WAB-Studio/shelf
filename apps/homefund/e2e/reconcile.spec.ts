@@ -87,7 +87,7 @@ async function seedAccount(
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (
         ${id}, ${scope.userId}, ${name}, ${kind},
-        ${options.subtype ?? (kind === "asset" ? "bancaria" : "tarjeta")},
+        ${options.subtype ?? (kind === "asset" ? "bank" : "card")},
         ${opening}, ${OPENED})`;
 
     const spend = options.spendCents ?? (kind === "asset" ? SPEND : 0);

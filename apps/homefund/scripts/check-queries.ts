@@ -534,7 +534,7 @@ async function seedDebtFixture(
         (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values
         (${fixture.unlimitedAccountId}, ${userId}, ${fixture.unlimitedName},
-         'liability', 'tarjeta', -1200000, ${fixture.openedOn})`;
+         'liability', 'card', -1200000, ${fixture.openedOn})`;
 
     // No credit limit and no minimum percentage: the limit is what the credit
     // totals must skip, and the cut-off day is what gives the history periods.
@@ -621,7 +621,7 @@ async function writeSuite(
       createAccount({
         name: "Harness tarjeta",
         kind: "liability",
-        subtype: "tarjeta",
+        subtype: "card",
         ownerUserId: userId,
         groupId: null,
         isShared: false,
@@ -647,7 +647,7 @@ async function writeSuite(
       updateAccount({
         accountId,
         name: "Harness tarjeta editada",
-        subtype: "tarjeta",
+        subtype: "card",
         isShared: false,
         institution: "Davivienda",
         lastFour: "9876",
@@ -721,7 +721,7 @@ async function writeSuite(
       createAccount({
         name: "Harness dólares",
         kind: "asset",
-        subtype: "bancaria",
+        subtype: "bank",
         ownerUserId: userId,
         groupId: null,
         isShared: false,
@@ -773,7 +773,7 @@ async function writeSuite(
       createAccount({
         name: "Harness fondo dólares",
         kind: "asset",
-        subtype: "bancaria",
+        subtype: "bank",
         ownerUserId: null,
         groupId: scope.groupId,
         isShared: true,
@@ -853,7 +853,7 @@ async function writeSuite(
              where group_id = ${groupId} and user_id = ${groupless.id}
                and role = 'leader') as member_id,
           (select id from accounts
-             where group_id = ${groupId} and subtype = 'efectivo') as account_id,
+             where group_id = ${groupId} and subtype = 'cash') as account_id,
           (select array_agg(id) from categories where group_id = ${groupId})
             as category_ids`;
 
@@ -1688,9 +1688,10 @@ async function writeSuite(
       if (result.createdCashAccount) keep("accounts", result.targetCashAccountId);
       const kind = await readColumn<string>("transactions", "id", result.transactionId, "kind");
       const stored = await readColumn<string | number>("transactions", "id", result.transactionId, "amount_cents");
+      const targetSubtype = await readColumn<string>("accounts", "id", result.targetCashAccountId, "subtype");
       return {
-        ok: kind === "transfer" && Number(stored) === 500000,
-        detail: `movement ${result.transactionId}, cash account created = ${result.createdCashAccount}, kind = ${kind}, amount_cents = ${stored}`,
+        ok: kind === "transfer" && Number(stored) === 500000 && targetSubtype === "cash",
+        detail: `movement ${result.transactionId}, cash account created = ${result.createdCashAccount}, target subtype = ${targetSubtype}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
@@ -1751,7 +1752,7 @@ async function writeSuite(
       const cashAccounts = async () =>
         fixtureSql<{ id: string }[]>`
           select id from accounts
-          where group_id = ${scope.groupId} and subtype = 'efectivo' and archived_at is null`;
+          where group_id = ${scope.groupId} and subtype = 'cash' and archived_at is null`;
 
       const first = await updateGroupSettings(settings);
       const afterFirst = await cashAccounts();
@@ -2421,7 +2422,7 @@ async function readSuite(
           row: {
             name: "Harness fila",
             kind: "asset",
-            subtype: "bancaria",
+            subtype: "bank",
             placement: "personal",
             institution: null,
             lastFour: "",
@@ -2757,7 +2758,7 @@ async function invariantSuite(
          where group_id = ${paletteGroupId} and user_id = ${paletteLeader.id}
            and role = 'leader') as member_id,
       (select id from accounts
-         where group_id = ${paletteGroupId} and subtype = 'efectivo') as account_id`;
+         where group_id = ${paletteGroupId} and subtype = 'cash') as account_id`;
   if (paletteSeeded.member_id !== null) track("group_members", paletteSeeded.member_id);
   if (paletteSeeded.account_id !== null) track("accounts", paletteSeeded.account_id);
   const fundCategoryRows = await fixtureSql<{ id: string; color: string | null }[]>`
@@ -3116,7 +3117,7 @@ async function reconcileSuite(
     const { accountId } = await createAccount({
       name,
       kind,
-      subtype: kind === "asset" ? "bancaria" : "tarjeta",
+      subtype: kind === "asset" ? "bank" : "card",
       ownerUserId: placement === "personal" ? userId : null,
       groupId: placement === "group" ? scope.groupId : null,
       isShared: placement === "group",
@@ -3488,7 +3489,7 @@ async function reimportSuite(userId: string, scope: HarnessScope): Promise<void>
     const { accountId } = await createAccount({
       name,
       kind,
-      subtype: kind === "asset" ? "bancaria" : "tarjeta",
+      subtype: kind === "asset" ? "bank" : "card",
       ownerUserId: userId,
       groupId: null,
       isShared: false,
@@ -3674,6 +3675,235 @@ async function reimportSuite(userId: string, scope: HarnessScope): Promise<void>
       JSON.stringify(copyKeys) === JSON.stringify(sheetMovements.filter((r) => (r as Record<string, unknown>).adjustment === true).map((r) => r.externalRef).sort()),
     `copy keys ${copyKeys.length}, source adjustments ${sourceKeys.length}`,
   );
+
+  // RF-51, RF-52: a workbook exported before the words were English still previews and
+  // re-imports. Each row is the account row this very export wrote, with only the cell an
+  // old file would have spelled differently.
+  const olderBank = sheetAccounts.find((r) => String(r.name).endsWith("ahorros")) as unknown as RawRow;
+  const olderCard = sheetAccounts.find((r) => String(r.name).endsWith("tarjeta")) as unknown as RawRow;
+  const olderScope = await asUser(importer, () => readImportScope());
+  const olderRefs = buildEffectiveRefs(olderScope, () => []);
+  const preview = (raw: RawRow) =>
+    processRow("accounts", raw, 0, 2, olderRefs, olderScope.existingRefs.accounts);
+  const legacyRef = `harness-legacy-${randomUUID()}`;
+  const legacyBank = preview({ ...olderBank, name: `${prefix} vieja`, subtype: "bancaria", externalRef: legacyRef });
+  assert(
+    next("A workbook written with «bancaria» previews with no error and reads as bank"),
+    legacyBank.errors.length === 0 &&
+      (legacyBank.object as { subtype?: string } | null)?.subtype === "bank" &&
+      legacyBank.status === "new",
+    `errors [${legacyBank.errors.map((e) => e.key)}], subtype ${(legacyBank.object as { subtype?: string } | null)?.subtype}, status ${legacyBank.status}`,
+  );
+  const legacyMismatch = preview({ ...olderCard, subtype: "efectivo", amount: Math.abs(Number(olderCard.amount)), externalRef: null });
+  assert(
+    next("An old word that does not fit its kind is refused on the subtype column"),
+    legacyMismatch.errors.length === 1 &&
+      legacyMismatch.errors[0].column === "subtype" &&
+      legacyMismatch.errors[0].key === "accounts.errors.subtypeKindMismatch" &&
+      legacyMismatch.object === null,
+    `errors [${legacyMismatch.errors.map((e) => `${e.column}:${e.key}`)}]`,
+  );
+
+  const commitOlder = async (row: typeof legacyBank): Promise<string> => {
+    try {
+      await asUser(importer, () =>
+        withUserDb((tx) =>
+          commitImport(
+            tx,
+            {
+              members: [],
+              categories: [],
+              accounts: [{ ...row, object: row.object as never }],
+              recurringRules: [],
+              transactions: [],
+              adjustments: [],
+            },
+            { userId: importer.id, groupId: null },
+          ),
+        ),
+      );
+      return "ok";
+    } catch (error) {
+      return rootMessage(error);
+    }
+  };
+  const firstLoad = await commitOlder(legacyBank);
+  const afterScope = await asUser(importer, () => readImportScope());
+  const again = processRow(
+    "accounts",
+    { ...olderBank, name: `${prefix} vieja`, subtype: "bancaria", externalRef: legacyRef },
+    0,
+    2,
+    buildEffectiveRefs(afterScope, () => []),
+    afterScope.existingRefs.accounts,
+  );
+  const secondLoad = again.status === "update" ? await commitOlder(again) : "not an update";
+  const stored = await fixtureSql<{ id: string; subtype: string }[]>`
+    select id, subtype from accounts where owner_user_id = ${importer.id} and external_ref = ${legacyRef}`;
+  for (const row of stored) track("accounts", row.id);
+  assert(
+    next("Re-importing an old workbook updates the account it already holds and never duplicates it"),
+    firstLoad === "ok" &&
+      again.status === "update" &&
+      again.errors.length === 0 &&
+      secondLoad === "ok" &&
+      stored.length === 1 &&
+      stored[0].subtype === "bank",
+    `first ${firstLoad}, second row ${again.status} [${again.errors.map((e) => e.key)}], commit ${secondLoad}, ${stored.length} stored as [${stored.map((r) => r.subtype)}]`,
+  );
+}
+
+/**
+ * RF-68, RF-40, RF-56: where a withdrawal lands, what it draws from, and the cash a fund
+ * or a first withdrawal seeds. Every caller is its own membership-free user, so no
+ * earlier suite has put a cash account in the way, and each case reads the STORED subtype
+ * outside RLS: the claim is about the word written, not about what a query finds.
+ */
+async function cashSuite(): Promise<void> {
+  const today = todayInBogota();
+  const open = (
+    user: HarnessUser,
+    name: string,
+    subtype: "bank" | "cash",
+    groupId: string | null,
+  ) =>
+    asUser(user, async () => {
+      const { accountId } = await createAccount({
+        name,
+        kind: "asset",
+        subtype,
+        ownerUserId: groupId === null ? user.id : null,
+        groupId,
+        isShared: groupId !== null,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 1_000_000,
+        balanceOn: shiftDate(today, -3),
+      });
+      track("accounts", accountId);
+      return accountId;
+    });
+  const found = async (column: "owner_user_id" | "group_id", id: string) => {
+    const rows = await fixtureSql<{ id: string; subtype: string; group_id: string | null; owner_user_id: string | null }[]>`
+      select id, subtype, group_id, owner_user_id from accounts
+      where ${fixtureSql(column)} = ${id} order by created_at`;
+    for (const row of rows) track("accounts", row.id);
+    return rows;
+  };
+  const trackFund = async (groupId: string) => {
+    for (const table of ["group_members", "categories"] as const) {
+      const rows = await fixtureSql<{ id: string }[]>`select id from ${fixtureSql(table)} where group_id = ${groupId}`;
+      for (const row of rows) track(table, row.id);
+    }
+  };
+  const found_ = (rows: { subtype: string }[]) => rows.map((r) => r.subtype).join(",");
+
+  // A per-member fund seeds its leader one personal cash and the fund none.
+  const perMemberLeader = await createMembershipFreeUser();
+  const { groupId: perMemberGroup } = await asUser(perMemberLeader, () =>
+    createGroup({ name: "Harness fondo por miembro", leaderName: "Harness lider", cashMode: "per_member", locale: "es" }),
+  );
+  track("groups", perMemberGroup);
+  await trackFund(perMemberGroup);
+  const seededPersonal = await found("owner_user_id", perMemberLeader.id);
+  const seededInGroup = await found("group_id", perMemberGroup);
+  assert(
+    next("A per-member fund seeds its leader one personal cash and the group none"),
+    seededPersonal.length === 1 &&
+      seededPersonal[0].subtype === "cash" &&
+      seededPersonal[0].group_id === null &&
+      seededInGroup.length === 0,
+    `leader owns [${found_(seededPersonal)}], group holds ${seededInGroup.length}`,
+  );
+
+  // RF-68 under per_member: the caller's own cash, never the group's. RF-40: the sources
+  // hold the bank and no cash of either owner.
+  const groupCash = await open(perMemberLeader, "Harness caja del fondo", "cash", perMemberGroup);
+  const memberBank = await open(perMemberLeader, "Harness banco por miembro", "bank", null);
+  const perMemberTarget = await asUser(perMemberLeader, () => resolveWithdrawalTarget());
+  const sourceIds = perMemberTarget.sourceAccounts.map((a) => a.id);
+  assert(
+    next("Under per_member a withdrawal targets the caller's own cash, not the group's"),
+    perMemberTarget.targetCashAccountId === seededPersonal[0]?.id &&
+      perMemberTarget.targetCashAccountId !== groupCash,
+    `target ${perMemberTarget.targetCashAccountId}, own cash ${seededPersonal[0]?.id}, group cash ${groupCash}`,
+  );
+  assert(
+    next("Cash never draws from cash: the sources hold the bank and no cash account"),
+    sourceIds.includes(memberBank) &&
+      !sourceIds.includes(groupCash) &&
+      !sourceIds.includes(seededPersonal[0]?.id) &&
+      perMemberTarget.sourceAccounts.every((a) => a.subtype !== "cash"),
+    `sources [${perMemberTarget.sourceAccounts.map((a) => a.subtype).join(",")}]`,
+  );
+
+  // RF-68 under shared: the group's cash, though the caller also owns a cash of their own.
+  const sharedLeader = await createMembershipFreeUser();
+  const { groupId: sharedGroup } = await asUser(sharedLeader, () =>
+    createGroup({ name: "Harness fondo compartido caja", leaderName: "Harness lider", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", sharedGroup);
+  await trackFund(sharedGroup);
+  const sharedSeeded = await found("group_id", sharedGroup);
+  const ownCash = await open(sharedLeader, "Harness caja propia", "cash", null);
+  const sharedTarget = await asUser(sharedLeader, () => resolveWithdrawalTarget());
+  assert(
+    next("A shared fund seeds one group cash, and the withdrawal target under shared is that account"),
+    sharedSeeded.length === 1 &&
+      sharedSeeded[0].subtype === "cash" &&
+      sharedSeeded[0].owner_user_id === null &&
+      sharedTarget.targetCashAccountId === sharedSeeded[0].id &&
+      sharedTarget.targetCashAccountId !== ownCash,
+    `group holds [${found_(sharedSeeded)}], target ${sharedTarget.targetCashAccountId}, own cash ${ownCash}`,
+  );
+
+  // A withdrawal lands in the cash that exists; it creates nothing. Personal on both sides,
+  // so the movement is the caller's alone and the identity purge can drop it.
+  const holder = await createMembershipFreeUser();
+  const holderBank = await open(holder, "Harness banco con caja", "bank", null);
+  const holderCash = await open(holder, "Harness caja existente", "cash", null);
+  const landed = await asUser(holder, () =>
+    withdrawCash({ sourceAccountId: holderBank, amountCents: 100_000, cashAccountName: "Efectivo" }),
+  );
+  track("transactions", landed.transactionId);
+  const landedSubtype = await readColumn<string>("accounts", "id", landed.targetCashAccountId, "subtype");
+  const holderAccounts = await found("owner_user_id", holder.id);
+  assert(
+    next("A withdrawal lands in the existing cash and creates none"),
+    landed.createdCashAccount === false &&
+      landed.targetCashAccountId === holderCash &&
+      landedSubtype === "cash" &&
+      holderAccounts.length === 2,
+    `created = ${landed.createdCashAccount}, target ${landed.targetCashAccountId} (${landedSubtype}), own cash ${holderCash}, ${holderAccounts.length} accounts`,
+  );
+
+  // A personal-only caller with no cash: the first withdrawal creates it as cash, the second reuses it.
+  const personal = await createMembershipFreeUser();
+  const personalBank = await open(personal, "Harness banco personal", "bank", null);
+  const before = await asUser(personal, () => resolveWithdrawalTarget());
+  const first = await asUser(personal, () =>
+    withdrawCash({ sourceAccountId: personalBank, amountCents: 100_000, cashAccountName: "Efectivo" }),
+  );
+  const second = await asUser(personal, () =>
+    withdrawCash({ sourceAccountId: personalBank, amountCents: 100_000, cashAccountName: "Efectivo" }),
+  );
+  track("transactions", first.transactionId);
+  track("transactions", second.transactionId);
+  const createdRows = (await found("owner_user_id", personal.id)).filter((r) => r.subtype !== "bank");
+  assert(
+    next("A caller with no cash gets one created as cash, and the second withdrawal reuses it"),
+    before.targetCashAccountId === null &&
+      before.reason === "no-cash-account" &&
+      first.createdCashAccount === true &&
+      second.createdCashAccount === false &&
+      second.targetCashAccountId === first.targetCashAccountId &&
+      createdRows.length === 1 &&
+      createdRows[0].id === first.targetCashAccountId &&
+      createdRows[0].subtype === "cash" &&
+      createdRows[0].group_id === null,
+    `before ${before.targetCashAccountId}/${before.reason}, first ${first.createdCashAccount}, second ${second.createdCashAccount}, stored [${found_(createdRows)}]`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -3734,6 +3964,8 @@ async function main(): Promise<void> {
   await reconcileSuite(userId, scope, fellow);
   console.log("");
   await reimportSuite(userId, scope);
+  console.log("");
+  await cashSuite();
   console.log("");
   await roundTripSuite(scope, userId);
   console.log("");
@@ -3997,7 +4229,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     const { accountId } = await createAccount({
       name,
       kind: "asset",
-      subtype: "bancaria",
+      subtype: "bank",
       ownerUserId: userId,
       groupId: null,
       isShared: false,
@@ -4014,7 +4246,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     updateAccount({
       accountId,
       name,
-      subtype: "bancaria",
+      subtype: "bank",
       isShared: false,
       institution: null,
       lastFour: null,
@@ -4063,7 +4295,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     accountId: used,
     name: `${prefix} usada`,
     kind: "asset",
-    subtype: "bancaria",
+    subtype: "bank",
     isShared: false,
     institution: "",
     lastFour: "",
@@ -4377,7 +4609,7 @@ async function reconcileStrangerSuite(userId: string, fellow: HarnessUser): Prom
   const { accountId } = await createAccount({
     name: "Harness cuadre ajena",
     kind: "asset",
-    subtype: "bancaria",
+    subtype: "bank",
     ownerUserId: userId,
     groupId: null,
     isShared: false,
@@ -4437,7 +4669,7 @@ async function recurringRuleCategoryScopeSuite(
     createAccount({
       name: "Harness regla ajena",
       kind: "asset",
-      subtype: "bancaria",
+      subtype: "bank",
       ownerUserId: groupless.id,
       groupId: null,
       isShared: false,
@@ -4536,7 +4768,7 @@ async function recurringRuleCategoryFitSuite(
       createAccount({
         name,
         kind: "asset",
-        subtype: "bancaria",
+        subtype: "bank",
         ownerUserId: ownerId,
         groupId: null,
         isShared: false,
@@ -5017,7 +5249,7 @@ async function e5Suite(): Promise<void> {
   const [seeded] = await fixtureSql<{ member_id: string; account_id: string }[]>`
     select
       (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
-      (select id from accounts where group_id = ${groupId} and subtype = 'efectivo') as account_id`;
+      (select id from accounts where group_id = ${groupId} and subtype = 'cash') as account_id`;
   track("group_members", seeded.member_id);
   track("accounts", seeded.account_id);
   const seededCategories = await fixtureSql<{ id: string }[]>`
@@ -5047,7 +5279,7 @@ async function e5Suite(): Promise<void> {
     createAccount({
       name: `Harness banco del fondo ${tag}`,
       kind: "asset",
-      subtype: "bancaria",
+      subtype: "bank",
       ownerUserId: null,
       groupId,
       isShared: true,
@@ -5063,7 +5295,7 @@ async function e5Suite(): Promise<void> {
     createAccount({
       name: `Harness cuenta propia ${tag}`,
       kind: "asset",
-      subtype: "bancaria",
+      subtype: "bank",
       ownerUserId: leader.id,
       groupId: null,
       isShared: false,
@@ -5537,7 +5769,7 @@ async function e5MinimumPayment(leader: HarnessUser): Promise<void> {
       createAccount({
         name: `Harness minimo ${name} ${tag}`,
         kind: "liability",
-        subtype: "tarjeta",
+        subtype: "card",
         ownerUserId: leader.id,
         groupId: null,
         isShared: false,
@@ -5632,7 +5864,7 @@ async function e5SeedWalk(): Promise<void> {
   const [fresh] = await fixtureSql<{ member_id: string; account_id: string }[]>`
     select
       (select id from group_members where group_id = ${groupId} and user_id = ${founder.id}) as member_id,
-      (select id from accounts where group_id = ${groupId} and subtype = 'efectivo') as account_id`;
+      (select id from accounts where group_id = ${groupId} and subtype = 'cash') as account_id`;
   track("group_members", fresh.member_id);
   track("accounts", fresh.account_id);
   const groupRows = await fixtureSql<{ id: string; name: string; kind: string; color: string | null; parent_id: string | null }[]>`
@@ -5702,7 +5934,7 @@ async function e6Suite(): Promise<void> {
   const [seeded] = await fixtureSql<{ member_id: string; account_id: string }[]>`
     select
       (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
-      (select id from accounts where group_id = ${groupId} and subtype = 'efectivo') as account_id`;
+      (select id from accounts where group_id = ${groupId} and subtype = 'cash') as account_id`;
   track("group_members", seeded.member_id);
   track("accounts", seeded.account_id);
   const seededCategories = await fixtureSql<{ id: string }[]>`

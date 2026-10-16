@@ -397,7 +397,7 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
         insert into accounts (
           id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
         values (
-          ${accountId}, ${scope.userId}, ${accountName}, 'asset', 'bancaria',
+          ${accountId}, ${scope.userId}, ${accountName}, 'asset', 'bank',
           ${OPENING}, ${addCivilDays(todayInBogota(), -30)})`;
       await tx`
         insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)

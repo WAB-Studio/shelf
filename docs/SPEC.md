@@ -359,6 +359,7 @@ erDiagram
         boolean is_shared "group account any member may write"
         text name
         text kind "asset | liability"
+        text subtype "bank | cash | card"
         text institution
         text last_four "nullable; exactly four digits"
         text settlement_currency "ISO 4217 shape; default COP"

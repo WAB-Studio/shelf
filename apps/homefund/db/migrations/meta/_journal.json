@@ -414,6 +414,13 @@
       "when": 1792180000000,
       "tag": "0058_the_list_of_invited_addresses",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792190000000,
+      "tag": "0059_the_stored_words_spelled_in_english",
+      "breakpoints": true
     }
   ]
 }

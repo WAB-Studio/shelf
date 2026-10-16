@@ -123,9 +123,9 @@ test.beforeAll(async () => {
       insert into accounts (
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values
-        (${cardId}, ${scope.userId}, ${cardName}, 'liability', 'tarjeta',
+        (${cardId}, ${scope.userId}, ${cardName}, 'liability', 'card',
           ${-CARD_OWED_CENTS}, ${today}),
-        (${bareId}, ${scope.userId}, ${bareName}, 'liability', 'tarjeta',
+        (${bareId}, ${scope.userId}, ${bareName}, 'liability', 'card',
           ${-BARE_OWED_CENTS}, ${today})`;
 
     // Only the first carries terms; the other owes without a rate (RF-78, RF-79).
@@ -302,7 +302,7 @@ async function seedDebt({
       insert into accounts (
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (
-        ${id}, ${scope.userId}, ${name}, 'liability', 'tarjeta',
+        ${id}, ${scope.userId}, ${name}, 'liability', 'card',
         ${-owedCents}, ${openedOn ?? todayInBogota()})`;
 
     if (terms === undefined) return;
@@ -332,7 +332,7 @@ async function seedAsset({
       insert into accounts (
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (
-        ${id}, ${scope.userId}, ${name}, 'asset', 'bancaria',
+        ${id}, ${scope.userId}, ${name}, 'asset', 'bank',
         ${openingCents}, ${todayInBogota()})`;
   });
 }
@@ -679,7 +679,7 @@ test.describe("the row menus", () => {
       .getByRole("textbox", { name: installments.amountLabel })
       .fill("10000");
     await fixtureSql`
-      update accounts set kind = 'liability', subtype = 'tarjeta'
+      update accounts set kind = 'liability', subtype = 'card'
       where id = ${switchingId}`;
     await dialog
       .getByRole("button", { name: installments.paymentSave, exact: true })
@@ -1407,4 +1407,28 @@ test.describe("a debt with a foreign purchase", () => {
       },
     ]);
   });
+});
+
+test("stores card for a debt made in the debt form", async ({ page }) => {
+  const name = `Deuda formulario ${stamp}`;
+
+  await page.goto("/es/planning/debts");
+  await page.getByRole("button", { name: debts.add, exact: true }).filter({ visible: true }).first().click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("textbox", { name: debts.nameLabel }).fill(name);
+  await dialog.getByRole("textbox", { name: debts.openingBalanceLabel }).fill("100000");
+  await dialog.getByRole("textbox", { name: debts.annualRateLabel }).fill("24");
+  await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  const rows = await fixtureSql<{ id: string; kind: string; subtype: string }[]>`
+    select id, kind, subtype from accounts
+    where owner_user_id = ${scope.userId} and name = ${name}`;
+  expect(rows).toHaveLength(1);
+  expect(rows[0].kind).toBe("liability");
+  expect(rows[0].subtype).toBe("card");
+
+  await dropAccounts([rows[0].id]);
 });
