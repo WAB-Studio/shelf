@@ -73,7 +73,7 @@ A scope: an app, a screen, a slice, or a flow. Default to the app named, whole.
 - Give the number, not the adjective. «418 filas, 2,3 s», never «va lento».
 - Say plainly what you could not reach, and why.
 - One idea per finding.
-- **Never type an address into `apps/voyager`'s `/cuenta`.** It sends a real email through the
+- **Never type an address into `apps/wordbook`'s `/cuenta`.** It sends a real email through the
   user's own Gmail and mints a real `auth.users` row, whatever the domain.
 
 # Output

@@ -14,8 +14,8 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
 ## Start
 
 1. Read `AGENTS.md`, `docs/agentes/lanes.md` and `docs/agentes/verificacion.md`. Before a screen, `docs/agentes/canvas.md`.
-2. Read the spec of the app the goal names: `docs/SPEC.md` and `docs/FLOWS.md` for orbit,
-   `docs/voyager/SPEC.md`, `docs/pulsar/SPEC.md`.
+2. Read the spec of the app the goal names: `docs/SPEC.md` and `docs/FLOWS.md` for HomeFund,
+   `docs/wordbook/SPEC.md`, `docs/goallog/SPEC.md`.
 3. Take the goal from the user's request. Ask only when it names none.
 4. Start the dev server on :3000 and keep it running. Restart it when you must.
 
@@ -173,7 +173,7 @@ builds on, done criterion, the decisions you already took.
 
 Name the branch, the lane, the worktree path and the port. It commits its own work.
 Say the `/cuenta` rule in every dispatch that drives WordBook: never type an address into it
-(`docs/agentes/voyager.md`).
+(`docs/agentes/wordbook.md`).
 Say that the database is remote and shared: it never migrates, never touches a trigger, a policy or a grant,
 and never runs a suite on a lane that is not its own.
 State the done criterion as a fact to prove. Never as a command to run.
