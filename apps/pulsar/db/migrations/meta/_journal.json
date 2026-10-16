@@ -169,6 +169,13 @@
       "when": 1792040661809,
       "tag": "0024_indices",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792112578070,
+      "tag": "0025_borrar_y_lista",
+      "breakpoints": true
     }
   ]
 }

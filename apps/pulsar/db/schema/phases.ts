@@ -37,6 +37,20 @@ export const phases = goalsSchema.table(
       to: authenticatedRole,
       withCheck: sql`${authUid} = ${t.userId}`,
     }),
+    // The grant narrows this to `aim` and the span (RP-127); `using` alone would let a caller hand their phase to
+    // someone else's id.
+    pgPolicy("phases_update_self", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`${authUid} = ${t.userId}`,
+      withCheck: sql`${authUid} = ${t.userId}`,
+    }),
+    // No fact names a phase, so nothing but ownership keeps one.
+    pgPolicy("phases_delete_self", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`${authUid} = ${t.userId}`,
+    }),
   ],
 );
 

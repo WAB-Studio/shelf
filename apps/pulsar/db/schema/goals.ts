@@ -98,6 +98,26 @@ export const goals = goalsSchema.table(
         select 1 from "goals"."goals" p where p.id = ${t.parentId}
       ))`,
     }),
+    // Every child cascades past RLS, and so does every fact on one of them: these arms are all that keeps a fact
+    // (RP-127). A goal that holds goals is left to `goals_parent_id_goals_id_fk` (23503).
+    pgPolicy("goals_delete_self", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`${authUid} = ${t.userId} and not exists (
+        select 1 from "goals"."facts" f where f.goal_id = ${t.id}
+      ) and not exists (
+        select 1 from "goals"."commitments" c join "goals"."facts" f on f.commitment_id = c.id
+        where c.goal_id = ${t.id}
+      ) and not exists (
+        select 1 from "goals"."one_offs" o join "goals"."facts" f on f.one_off_id = o.id
+        where o.goal_id = ${t.id}
+      ) and not exists (
+        select 1 from "goals"."one_offs" o
+        join "goals"."one_offs" s on s.parent_id = o.id
+        join "goals"."facts" f on f.one_off_id = s.id
+        where o.goal_id = ${t.id}
+      )`,
+    }),
   ],
 );
 

@@ -664,8 +664,8 @@ async function checkRealDoor(): Promise<void> {
 // Read the grant back from the catalogue, never from the migration file:
 // `facts` carried DELETE from 0000 ("undoing a tap is a delete of the whole
 // row"), `one_offs` from its own migration and `month_budgets` from 0007 (a month
-// amount is removed, and moved by delete and insert). `goals`, `phases`,
-// `commitments` and `model_calls` carry none. Takes any
+// amount is removed, and moved by delete and insert), and `goals`, `phases` and
+// `commitments` from 0025 (RP-127). `model_calls` carries none. Takes any
 // executor so a mutant run can read it inside its own rollback.
 async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
   const grants = await q<{ table_name: string }[]>`
@@ -1227,8 +1227,8 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   const expected: [string, string, string][] = [
     ["P108", "month_budgets", "DELETE INSERT(amount,goal_id,month,user_id) SELECT UPDATE(amount)"],
     ["P110", "model_calls", "INSERT(model,source,user_id) SELECT UPDATE(input_tokens,outcome,output_tokens)"],
-    // 0015 took the UPDATE 0008 gave: a phase is written once.
-    ["P113", "phases", "INSERT(aim,ends_on,goal_id,id,starts_on,user_id) SELECT"],
+    // 0015 took the UPDATE 0008 gave; 0025 gives back aim and span, and the delete (RP-127).
+    ["P113", "phases", "DELETE INSERT(aim,ends_on,goal_id,id,starts_on,user_id) SELECT UPDATE(aim,ends_on,starts_on)"],
   ];
   for (const [label, table, wanted] of expected) {
     const authenticated = await privilegesOf(q, table, "authenticated");
@@ -1260,7 +1260,7 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   const counts = policies.map((r) => `${r.tablename}=${r.count}`).join(",");
   assert(
     "P112",
-    counts === "model_calls=3,month_budgets=4,one_offs=4,phases=2",
+    counts === "model_calls=3,month_budgets=4,one_offs=4,phases=4",
     `policies per table = ${counts || "none"}`,
   );
 }
@@ -1544,29 +1544,38 @@ async function checkPlanByMonth(): Promise<void> {
       );
       assert("P104", badSource.code === "23514", `a call from source 'x', sqlstate = ${badSource.code ?? "none"}`);
 
-      // -- phases: written once, no UPDATE grant at all (0015 took 0008's) --
+      // -- phases: 0015 took 0008's UPDATE; 0025 gives back aim and span to the owner (RP-127) --
       const [shiftable] = await tx<{ id: string }[]>`
         insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
         values (${subject}, ${goal.id}, 'fase corrible', '2026-12-01', '2026-12-31') returning id`;
-      const phaseMoves = await attempt(
+      const phaseMoves = await attemptShape(
         tx,
         (sp) => sp`update goals.phases set starts_on = '2027-01-01', ends_on = '2027-01-31' where id = ${shiftable.id}`,
       );
-      assert("P114", phaseMoves.code === "42501", `own phase's dates move, sqlstate = ${phaseMoves.code ?? "none"}`);
-      const phaseAim = await attempt(tx, (sp) => sp`update goals.phases set aim = 'otra' where id = ${shiftable.id}`);
-      assert("P115", phaseAim.code === "42501", `update phases.aim, sqlstate = ${phaseAim.code ?? "none"}`);
-      const phaseBackwards = await attempt(
+      assert("P114", phaseMoves.code === undefined && phaseMoves.count === 1, `own phase's dates move, ${shape(phaseMoves)}`);
+      const phaseAim = await attemptShape(tx, (sp) => sp`update goals.phases set aim = 'otra' where id = ${shiftable.id}`);
+      assert("P115", phaseAim.code === undefined && phaseAim.count === 1, `update phases.aim, ${shape(phaseAim)}`);
+      // The span now runs 2027-01-01..2027-01-31: an end before its start is the CHECK's to refuse.
+      const phaseBackwards = await attemptShape(
         tx,
         (sp) => sp`update goals.phases set ends_on = '2026-12-31' where id = ${shiftable.id}`,
       );
-      assert("P116", phaseBackwards.code === "42501", `a phase's end moves, sqlstate = ${phaseBackwards.code ?? "none"}`);
+      assert(
+        "P116",
+        phaseBackwards.code === "23514" && phaseBackwards.constraint === "phases_ends_on_after_starts_on",
+        `a phase's end moves before its start, ${shape(phaseBackwards)}`,
+      );
 
       await enterUserContext(tx, intruder);
-      const foreignPhase = await attempt(
+      const foreignPhase = await attemptShape(
         tx,
         (sp) => sp`update goals.phases set starts_on = '2027-02-01', ends_on = '2027-02-28' where id = ${shiftable.id}`,
       );
-      assert("P117", foreignPhase.code === "42501", `another person's phase dates move, sqlstate = ${foreignPhase.code ?? "none"}`);
+      assert(
+        "P117",
+        foreignPhase.code === undefined && foreignPhase.count === 0,
+        `another person's phase dates move, ${shape(foreignPhase)}`,
+      );
       const foreignShift = await attempt(tx, (sp) => sp`select id from goals.month_shifts`);
       assert("P105", foreignShift.code === "42P01", `another person reads a shift, sqlstate = ${foreignShift.code ?? "none"}`);
       const foreignCall = await tx<{ id: string }[]>`select id from goals.model_calls where id = ${call.id}`;
