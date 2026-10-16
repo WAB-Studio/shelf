@@ -264,7 +264,7 @@ function CommitmentLines({ goal, t }: { goal: GoalReport; t: Translator<"export"
   return (goal.commitments ?? []).map((commitment, index) => {
     const cadence =
       cadencePhrase((key, values) => rootT(key, values), commitment.cadence, {
-        weekdayShort: rootT.raw("day.weekdayLong") as string[],
+        weekdayName: rootT.raw("day.weekdayLong") as string[],
         weekdayPlural: rootT.raw("day.cadence.weekdayPlural") as string[],
       }) ?? rootT("day.cadence.everyDay");
     return (

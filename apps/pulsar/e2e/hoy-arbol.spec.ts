@@ -197,6 +197,7 @@ for (const width of [360, 1280]) {
       await seedBudget(db, person.id, large, 700);
       const small = await seedGoal(db, person.id, names.small, large);
       await seedBudget(db, person.id, small, 1020);
+      // A done one-off with an estimate: it reaches nothing (RP-128), so the line reads 0 min.
       await seedReached(db, person.id, small, 750);
       const other = await seedGoal(db, person.id, `Otra chica ${stamp}`, large);
       await seedBudget(db, person.id, other, 1200);
@@ -205,7 +206,7 @@ for (const width of [360, 1280]) {
       try {
         await open(page);
         const line = page.getByText(
-          new RegExp(`${MONTH_LONG[Number(today.slice(5, 7)) - 1]}\\s*·\\s*12 h 30 min\\s+de\\s+37 h`),
+          new RegExp(`${MONTH_LONG[Number(today.slice(5, 7)) - 1]}\\s*·\\s*0 min\\s+de\\s+37 h`),
         );
         await expect(line.first()).toBeVisible();
         // Between the general's label and its first row.
@@ -244,6 +245,7 @@ for (const width of [360, 1280]) {
       const other = await seedGoal(db, person.id, names.other, large);
       await seedBudget(db, person.id, small, 600);
       await seedBudget(db, person.id, other, 300);
+      // Done one-offs with estimates reach nothing (RP-128): every line reads 0 min.
       await seedReached(db, person.id, small, 150);
       await seedReached(db, person.id, other, 60);
       await seedCommitment(db, person.id, small, names.row);
@@ -260,8 +262,8 @@ for (const width of [360, 1280]) {
       try {
         await open(page);
         const month = MONTH_LONG[Number(today.slice(5, 7)) - 1];
-        const smallLine = page.getByText(new RegExp(`${month}\\s*·\\s*2 h 30 min\\s+de\\s+10 h`)).locator("visible=true").first();
-        const otherLine = page.getByText(new RegExp(`${month}\\s*·\\s*1 h\\s+de\\s+5 h`)).locator("visible=true").first();
+        const smallLine = page.getByText(new RegExp(`${month}\\s*·\\s*0 min\\s+de\\s+10 h`)).locator("visible=true").first();
+        const otherLine = page.getByText(new RegExp(`${month}\\s*·\\s*0 min\\s+de\\s+5 h`)).locator("visible=true").first();
         await expect(smallLine).toBeVisible();
         await expect(otherLine).toBeVisible();
         // Each goal's name stands alone above its own line and its own task.
@@ -279,7 +281,7 @@ for (const width of [360, 1280]) {
         expect(otherName).toBeLessThan(otherAt);
         expect(otherAt).toBeLessThan(otherTask);
         // The general's own line is the sum of both.
-        await expect(page.getByText(new RegExp(`${month}\\s*·\\s*3 h 30 min\\s+de\\s+15 h`)).locator("visible=true").first()).toBeVisible();
+        await expect(page.getByText(new RegExp(`${month}\\s*·\\s*0 min\\s+de\\s+15 h`)).locator("visible=true").first()).toBeVisible();
       } finally {
         await context.close();
       }

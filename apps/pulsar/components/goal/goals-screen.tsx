@@ -50,7 +50,7 @@ export async function GoalsScreen({
 
   // `HabitosSueltos`: each live habit with its cadence and its note; tapping one opens its screen.
   const cadenceNames = {
-    weekdayShort: t.raw("day.cadence.weekdayName") as string[],
+    weekdayName: t.raw("day.cadence.weekdayName") as string[],
     weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
   };
   const liveHabits = habits.filter((habit) => habit.retiredAt === null);

@@ -295,7 +295,7 @@ export async function MonthAcrossScreen() {
             {across.loose.map((habit) => {
               const cadence =
                 cadencePhrase((key, values) => t(key, values), habit.cadence, {
-                  weekdayShort: t.raw("day.cadence.weekdayName") as string[],
+                  weekdayName: t.raw("day.cadence.weekdayName") as string[],
                   weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
                 }) ?? t("day.cadence.everyDay");
               return (
