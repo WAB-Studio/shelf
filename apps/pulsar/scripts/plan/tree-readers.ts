@@ -385,10 +385,13 @@ test("a goal alone has no tree figures and the same old fields", async () => {
   const old: Record<string, unknown> = { ...loaded };
   for (const key of [
     "note", "parent", "ancestors", "level", "holdsGoals", "children", "outOfUnit",
-    "branchOpenCount", "latestBelow", "above", "tree",
+    "branchOpenCount", "latestBelow", "above", "tree", "deletable", "measureFed",
   ]) {
     delete old[key];
   }
+  // Not tree figures: what the goal holds decides these (RP-127, RP-134).
+  assert.equal(loaded.deletable, false);
+  assert.equal(loaded.measureFed, true);
   assert.deepEqual(JSON.parse(JSON.stringify(old)), GOLDEN_VIEW);
 
   const metas = await as(single, () => goalQueries.listGoalsForMetas("2026-10-12"));
