@@ -23,6 +23,11 @@ const MAX_INT2 = 32_767;
 // Largest epoch-ms a JavaScript `Date` holds; past it `toISOString` throws.
 const MAX_EPOCH_MS = 8_640_000_000_000_000;
 
+// A search the reader deleted (RL-66), named by the identity its row carries.
+// Up, it asks the account to delete that row and refuse its return; down, it
+// tells another device to delete its own copy (RL-70).
+export const tombstoneSchema = z.object({ deviceId: z.uuid(), localId: z.int().positive().max(MAX_INT4) });
+
 // One row of the reader's log, as it travels off the device that wrote it.
 // `deviceId` + `localId` is the row's identity: copying it twice never
 // duplicates it, on the way up or on the way down (RL-24).
@@ -81,6 +86,11 @@ export const syncRequestSchema = z.object({
     .max(SYNC_BATCH)
     .refine((rows) => rows.every((row) => row.deviceId === rows[0].deviceId), { message: "one device per batch" }),
   since: z.string().min(1).nullable(),
+  // Defaulted, not required: a client installed before deletion existed sends
+  // neither field and still syncs. `tombstonesSince` is the mark cursor, its
+  // own string beside `since`: marks and rows are ordered by different clocks.
+  tombstones: z.array(tombstoneSchema).max(SYNC_BATCH).default([]),
+  tombstonesSince: z.string().min(1).nullable().default(null),
 });
 
 // What the server answers: how many of the uploaded rows it accepted, the
@@ -100,6 +110,11 @@ export const syncResponseSchema = z.object({
     }),
   ),
   cursor: z.string().min(1).nullable(),
+  // The marks other rounds wrote since `tombstonesSince`, and the cursor to
+  // send back for them. Defaulted so a driver reading an older server's
+  // answer still parses it.
+  tombstones: z.array(tombstoneSchema).default([]),
+  tombstoneCursor: z.string().min(1).nullable().default(null),
 });
 
 // ---- the cursor ----
@@ -108,7 +123,8 @@ export const syncResponseSchema = z.object({
 // `(deviceId, localId)` that makes it unique. `received_at` alone repeats
 // across an entire upload batch (one INSERT stamps every row with the same
 // `now()`), so a scalar cursor either replays or drops whatever else shares
-// that instant at a page boundary.
+// that instant at a page boundary. The mark cursor is the same tuple with a
+// mark's `deleted_at` in `receivedAt`: one statement ties its marks the same way.
 export type Cursor = { receivedAt: string; deviceId: string; localId: number };
 
 // Opaque to the driver: it stores and echoes the string and never reads what is
@@ -140,4 +156,5 @@ export function decodeCursor(raw: string): Cursor | null {
 }
 
 export type SyncRow = z.infer<typeof syncRowSchema>;
+export type Tombstone = z.infer<typeof tombstoneSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;

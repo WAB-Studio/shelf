@@ -49,7 +49,7 @@ export async function POST(request: Request): Promise<Response> {
   const parsed = syncRequestSchema.safeParse(raw);
   if (!parsed.success) return json({ error: "invalid" }, 400);
 
-  const { rows, since } = parsed.data;
+  const { rows, since, tombstones, tombstonesSince } = parsed.data;
 
   // A stale tab can hold one reader's sync row while the cookie now speaks for
   // another: nothing is written, and the client drops its identity.
@@ -66,12 +66,18 @@ export async function POST(request: Request): Promise<Response> {
   const label = deviceLabel(request.headers.get("user-agent"));
 
   const sinceCursor = since ? decodeCursor(since) : null;
+  const marksCursor = tombstonesSince ? decodeCursor(tombstonesSince) : null;
 
   const outcome = await withReaderDb(async (tx) => {
     // Same statement order the contract names: upload, then download.
-    const upload = await writeUpload(tx, reader.id, deviceId, label, rows);
+    const upload = await writeUpload(tx, reader.id, deviceId, label, rows, undefined, tombstones, marksCursor);
     if (upload.status !== "ok") return upload;
-    return { status: "ok", accepted: upload.accepted, downloaded: await downloadRows(tx, sinceCursor, deviceId) } as const;
+    return {
+      status: "ok",
+      accepted: upload.accepted,
+      marks: upload.tombstones,
+      downloaded: await downloadRows(tx, sinceCursor, deviceId),
+    } as const;
   });
 
   if (outcome.status === "retired") return json({ error: "retired" }, 409);
@@ -85,6 +91,18 @@ export async function POST(request: Request): Promise<Response> {
     ? encodeCursor({ receivedAt: last.receivedAt, deviceId: last.deviceId, localId: last.localId })
     : sinceCursor && encodeCursor(sinceCursor);
 
-  const response: SyncResponse = { accepted: outcome.accepted, rows: wireRows, cursor };
+  const lastMark = outcome.marks.at(-1);
+  // Each cursor is echoed from its own field alone: the two clocks never stand in for each other.
+  const tombstoneCursor = lastMark
+    ? encodeCursor({ receivedAt: `${lastMark.deleted_at}Z`, deviceId: lastMark.device_id, localId: lastMark.local_id })
+    : marksCursor && encodeCursor(marksCursor);
+
+  const response: SyncResponse = {
+    accepted: outcome.accepted,
+    rows: wireRows,
+    cursor,
+    tombstones: outcome.marks.map((mark) => ({ deviceId: mark.device_id, localId: mark.local_id })),
+    tombstoneCursor,
+  };
   return json(response, 200);
 }

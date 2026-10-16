@@ -28,7 +28,7 @@ mock.module(here("../lib/session.ts"), {
     getReader: async () => ({ id: SESSION_READER }),
     withReaderDb: async () => {
       dbCalls += 1;
-      return { status: "ok", accepted: 0, downloaded: [] };
+      return { status: "ok", accepted: 0, marks: [], downloaded: [] };
     },
   },
 });
