@@ -179,6 +179,11 @@ async function main() {
     "REPORT  assertion 4 alone is worthless against an empty table; 2, 3 and 7 are what give it teeth.",
   );
 
+  if (process.env.RLS_ONLY === "m11") {
+    await checkAccountSubtypeWords();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "m1") {
     await checkAllowedEmailList();
     return;
@@ -239,6 +244,7 @@ async function main() {
   await checkCategoryExistsProbe();
   await checkAllowedEmailList();
   await checkAllowedEmailAudit();
+  await checkAccountSubtypeWords();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -3195,8 +3201,9 @@ async function checkAuditViewerPolicy() {
   );
 }
 
-// Assertions 117-122: the durable account `subtype` (RF-56). The 0009 backfill classified every prior
-// row — seeded cash to 'efectivo', any other liability to 'tarjeta', any other asset to 'bancaria' —
+// Assertions 117-122: the durable account `subtype` (RF-56), in the words 0059 stores. The 0009
+// backfill classified every row, and 0059 spelled the words `bank`, `cash`, `card` — seeded cash to
+// 'cash', any other liability to 'card', any other asset to 'bank' —
 // and no row is left null; the subtype↔kind CHECK refuses a mismatch; the derive trigger fills an
 // omitted subtype while the column grant lets a member pass and later change one; and the widened
 // column changed no read policy, so a non-member still cannot SELECT another group's cash account.
@@ -3209,22 +3216,22 @@ async function checkAccountSubtypeBackfill() {
   const groupId = randomUUID();
 
   const labels = [
-    "117. the backfill's three outcomes hold: a seeded cash account is 'efectivo', a card 'tarjeta', a bank 'bancaria'",
+    "117. the stored words after 0059 hold: a seeded cash account is 'cash', a card 'card', a bank 'bank'",
     "118. no accounts row across the whole table carries a null subtype",
-    "119. the subtype↔kind check refuses a liability marked efectivo — the one subtype the trigger keeps",
+    "119. the subtype↔kind check refuses a liability marked cash — the one subtype the trigger keeps",
     "120. the derive trigger fills the caller-ungranted column, so an authenticated insert omitting subtype lands",
-    "121. a non-member cannot SELECT another group's efectivo account — the widened column changed no read policy",
-    "122. the column grant lets a member insert an explicit efectivo and later change it to bancaria; an efectivo liability is still refused",
+    "121. a non-member cannot SELECT another group's cash account — the widened column changed no read policy",
+    "122. the column grant lets a member insert an explicit cash and later change it to bank; a cash liability is still refused",
   ];
   const tailLabel = "123. the rolled-back subtype transaction leaves no trace";
 
   // The exact CASE the 0009 backfill applied, replicated so the proof reads what the migration ran.
   const backfillSubtype = (name: string, kind: string) =>
     ["Efectivo del grupo", "Group cash", "Mi efectivo", "My cash"].includes(name)
-      ? "efectivo"
+      ? "cash"
       : kind === "liability"
-        ? "tarjeta"
-        : "bancaria";
+        ? "card"
+        : "bank";
 
   const forcedRollback = Symbol("forced rollback");
 
@@ -3242,17 +3249,17 @@ async function checkAccountSubtypeBackfill() {
       await tx`insert into group_members (group_id, user_id, name, role)
         values (${groupId}, ${leaderUser}, 'rls subtype leader', 'leader')`;
 
-      // The group's shared cash account. `efectivo` carries no INSERT grant, so it is seeded as the owner
+      // The group's shared cash account. `cash` carries no INSERT grant, so it is seeded as the owner
       // with the value the backfill would have written, exactly as a renamed-free seeded cash row holds it.
       await tx`reset role`;
       const cashName = GROUP_CASH_ACCOUNT_NAME.es;
       const [{ id: cashAccount, subtype: cashSubtype }] = await tx<{ id: string; subtype: string }[]>`
         insert into accounts (group_id, is_shared, name, kind, subtype, initial_balance_on)
-        values (${groupId}, true, ${cashName}, 'asset', 'efectivo', (now() at time zone 'America/Bogota')::date)
+        values (${groupId}, true, ${cashName}, 'asset', 'cash', (now() at time zone 'America/Bogota')::date)
         returning id, subtype`;
 
       // A card and a bank, seeded through the leader's own context omitting subtype: the derive trigger
-      // sets 'tarjeta' for the liability and 'bancaria' for the asset — the backfill's other two outcomes.
+      // sets 'card' for the liability and 'bank' for the asset — the backfill's other two outcomes.
       await enterUserContext(tx, leaderUser);
       const [{ subtype: cardSubtype }] = await tx<{ subtype: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_cents, initial_balance_on)
@@ -3268,22 +3275,22 @@ async function checkAccountSubtypeBackfill() {
         cashSubtype === backfillSubtype(cashName, "asset") &&
           cardSubtype === backfillSubtype("rls subtype leader card", "liability") &&
           bankSubtype === backfillSubtype("rls subtype leader bank", "asset") &&
-          cashSubtype === "efectivo" && cardSubtype === "tarjeta" && bankSubtype === "bancaria",
+          cashSubtype === "cash" && cardSubtype === "card" && bankSubtype === "bank",
         `cash = ${cashSubtype}, card = ${cardSubtype}, bank = ${bankSubtype}`,
       );
 
       assert(labels[1], nullCount === "0", `rows with a null subtype = ${nullCount}`);
 
-      // 119: the subtype↔kind check. The trigger rewrites any non-'efectivo' value to follow the kind,
-      // so 'efectivo' is the sole value it preserves — and 'efectivo' on a liability is what the CHECK
+      // 119: the subtype↔kind check. The trigger rewrites any non-'cash' value to follow the kind,
+      // so 'cash' is the sole value it preserves — and 'cash' on a liability is what the CHECK
       // must reject. Seeded as the owner so the explicit value reaches the row untouched.
       let checkBreach = "";
       await tx
         .savepoint(async (sp) => {
           await sp`reset role`;
           await sp`insert into accounts (owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-            values (${leaderUser}, 'rls subtype cash card', 'liability', 'efectivo', -100, (now() at time zone 'America/Bogota')::date)`;
-          assert(labels[2], false, "an efectivo liability landed, which the check must not allow");
+            values (${leaderUser}, 'rls subtype cash card', 'liability', 'cash', -100, (now() at time zone 'America/Bogota')::date)`;
+          assert(labels[2], false, "a cash liability landed, which the check must not allow");
         })
         .catch((error: unknown) => {
           checkBreach = pgErrorCode(error) ?? "none";
@@ -3297,15 +3304,15 @@ async function checkAccountSubtypeBackfill() {
         `authenticated insert filled card = ${cardSubtype}, bank = ${bankSubtype}`,
       );
 
-      // 121: an outsider in no shared group sees zero rows for the group's efectivo account.
+      // 121: an outsider in no shared group sees zero rows for the group's cash account.
       await enterUserContext(tx, outsiderUser);
       const [{ count: outsiderSees }] = await tx<{ count: string }[]>`
         select count(*)::text as count from accounts where id = ${cashAccount}`;
       assert(labels[4], outsiderSees === "0", `visible rows = ${outsiderSees}`);
 
       // 122: the column grant, exercised as an authenticated member in scope. A member creates a cash
-      // account by passing 'efectivo' — the trigger keeps the explicit value — then changes it to
-      // 'bancaria'; but an 'efectivo' on a liability is still barred by the subtype↔kind CHECK.
+      // account by passing 'cash' — the trigger keeps the explicit value — then changes it to
+      // 'bank'; but a 'cash' on a liability is still barred by the subtype↔kind CHECK.
       await enterUserContext(tx, memberUser);
       await tx`reset role`;
       await tx`insert into group_members (group_id, user_id, name, role)
@@ -3313,25 +3320,25 @@ async function checkAccountSubtypeBackfill() {
       await enterUserContext(tx, memberUser);
       const [{ subtype: pickedSubtype, id: pickedAccount }] = await tx<{ subtype: string; id: string }[]>`
         insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
-        values (${memberUser}, 'rls subtype member cash', 'asset', 'efectivo', (now() at time zone 'America/Bogota')::date)
+        values (${memberUser}, 'rls subtype member cash', 'asset', 'cash', (now() at time zone 'America/Bogota')::date)
         returning subtype, id`;
-      const changed = await tx`update accounts set subtype = 'bancaria' where id = ${pickedAccount}`;
+      const changed = await tx`update accounts set subtype = 'bank' where id = ${pickedAccount}`;
       const [{ subtype: changedSubtype }] = await tx<{ subtype: string }[]>`
         select subtype from accounts where id = ${pickedAccount}`;
       let liabilityBreach = "";
       await tx
         .savepoint(async (sp) => {
           await sp`insert into accounts (owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-            values (${memberUser}, 'rls subtype member card', 'liability', 'efectivo', -100, (now() at time zone 'America/Bogota')::date)`;
+            values (${memberUser}, 'rls subtype member card', 'liability', 'cash', -100, (now() at time zone 'America/Bogota')::date)`;
         })
         .catch((error: unknown) => {
           liabilityBreach = pgErrorCode(error) ?? "none";
         });
       assert(
         labels[5],
-        pickedSubtype === "efectivo" && changed.count === 1 && changedSubtype === "bancaria" &&
+        pickedSubtype === "cash" && changed.count === 1 && changedSubtype === "bank" &&
           liabilityBreach === "23514",
-        `inserted = ${pickedSubtype}, updated rows = ${changed.count}, now = ${changedSubtype}, efectivo-liability sqlstate = ${liabilityBreach}`,
+        `inserted = ${pickedSubtype}, updated rows = ${changed.count}, now = ${changedSubtype}, cash-liability sqlstate = ${liabilityBreach}`,
       );
 
       throw forcedRollback;
@@ -3351,7 +3358,7 @@ async function checkAccountSubtypeBackfill() {
 }
 
 // Assertions 124-127: the cash slice's report invariants. A withdrawal is a transfer bank→cash — the
-// member's contribution, settled on the way in; a cash expense flows out of the group's `efectivo`
+// member's contribution, settled on the way in; a cash expense flows out of the group's `cash`
 // account; a return is a transfer cash→bank that debits the contribution. What is proved is that the
 // two transfers never leak into income or expense (RF-40, RF-19), that the return nets down the
 // contribution (RF-42, RF-66), and that handing cash writes no row (RF-41). The very aggregate SQL of
@@ -3410,8 +3417,8 @@ async function checkCashReportInvariants() {
           to_char(date_trunc('month', now() at time zone 'America/Bogota'), 'YYYY-MM-DD') as start,
           to_char(date_trunc('month', now() at time zone 'America/Bogota') + interval '1 month', 'YYYY-MM-DD') as end_exclusive`;
 
-      // The member's personal bank account, the group's shared `efectivo` cash and one group expense
-      // category. `efectivo` carries no INSERT grant, so the cash row is seeded as the owner with the
+      // The member's personal bank account, the group's shared `cash` account and one group expense
+      // category. `cash` carries no INSERT grant, so the cash row is seeded as the owner with the
       // subtype a seeded cash account holds, exactly as the fund's own does.
       const [{ id: bankAccount }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_on)
@@ -3420,7 +3427,7 @@ async function checkCashReportInvariants() {
       const cashName = GROUP_CASH_ACCOUNT_NAME.es;
       const [{ id: cashAccount }] = await tx<{ id: string }[]>`
         insert into accounts (group_id, is_shared, name, kind, subtype, initial_balance_on)
-        values (${groupId}, true, ${cashName}, 'asset', 'efectivo', (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${groupId}, true, ${cashName}, 'asset', 'cash', (now() at time zone 'America/Bogota')::date) returning id`;
       await enterUserContext(tx, memberUser);
       const [{ id: expenseCat }] = await tx<{ id: string }[]>`
         insert into categories (group_id, name, kind)
@@ -3432,7 +3439,7 @@ async function checkCashReportInvariants() {
         values (${bankAccount}, ${cashAccount}, 10000, (now() at time zone 'America/Bogota')::date)
         returning id, kind`;
 
-      // 2. Cash expense: 6000 out of the group `efectivo`, one split on the group category.
+      // 2. Cash expense: 6000 out of the group `cash`, one split on the group category.
       const [{ id: expenseTxn }] = await tx<{ id: string }[]>`
         insert into transactions (from_account_id, amount_cents, occurred_at)
         values (${cashAccount}, 6000, (now() at time zone 'America/Bogota')::date) returning id`;
@@ -3826,7 +3833,7 @@ async function checkImportCommit() {
         sheetRow: 2,
         externalRef: "imp-acct-A",
         placeholderId: phAccountA,
-        object: { name: "Imp A", kind: "asset", subtype: "efectivo", placement: "personal", institution: null, settlementCurrency: "COP", amount: "100", balanceOn: today },
+        object: { name: "Imp A", kind: "asset", subtype: "cash", placement: "personal", institution: null, settlementCurrency: "COP", amount: "100", balanceOn: today },
       },
       {
         status: "new",
@@ -3834,7 +3841,7 @@ async function checkImportCommit() {
         sheetRow: 2,
         externalRef: "imp-acct-C",
         placeholderId: phAccountC,
-        object: { name: "Imp C", kind: "asset", subtype: "efectivo", placement: "personal", institution: null, settlementCurrency: "COP", amount: "200", balanceOn: today },
+        object: { name: "Imp C", kind: "asset", subtype: "cash", placement: "personal", institution: null, settlementCurrency: "COP", amount: "200", balanceOn: today },
       },
     ],
     recurringRules: [],
@@ -3905,7 +3912,7 @@ async function checkImportCommit() {
             sheetRow: 2,
             externalRef: "imp-acct-A",
             placeholderId: null,
-            object: { name: "Imp A2", kind: "asset", subtype: "bancaria", placement: "personal", institution: null, settlementCurrency: "COP", amount: "150", balanceOn: today },
+            object: { name: "Imp A2", kind: "asset", subtype: "bank", placement: "personal", institution: null, settlementCurrency: "COP", amount: "150", balanceOn: today },
           },
           {
             status: "new",
@@ -3913,7 +3920,7 @@ async function checkImportCommit() {
             sheetRow: 2,
             externalRef: "imp-acct-B",
             placeholderId: randomUUID(),
-            object: { name: "Imp B", kind: "asset", subtype: "efectivo", placement: "personal", institution: null, settlementCurrency: "COP", amount: "10", balanceOn: today },
+            object: { name: "Imp B", kind: "asset", subtype: "cash", placement: "personal", institution: null, settlementCurrency: "COP", amount: "10", balanceOn: today },
           },
         ],
         recurringRules: [],
@@ -3974,7 +3981,7 @@ async function checkImportCommit() {
             sheetRow: 2,
             externalRef: "imp-acct-A",
             placeholderId: null,
-            object: { name: "Imp A", kind: "asset", subtype: "efectivo", placement: "personal", institution: null, settlementCurrency: "COP", amount: "100", balanceOn: today },
+            object: { name: "Imp A", kind: "asset", subtype: "cash", placement: "personal", institution: null, settlementCurrency: "COP", amount: "100", balanceOn: today },
           },
           {
             status: "update",
@@ -3982,7 +3989,7 @@ async function checkImportCommit() {
             sheetRow: 2,
             externalRef: "imp-acct-C",
             placeholderId: null,
-            object: { name: "Imp C", kind: "asset", subtype: "efectivo", placement: "personal", institution: null, settlementCurrency: "COP", amount: "200", balanceOn: today },
+            object: { name: "Imp C", kind: "asset", subtype: "cash", placement: "personal", institution: null, settlementCurrency: "COP", amount: "200", balanceOn: today },
           },
         ],
         recurringRules: [],
@@ -4060,7 +4067,7 @@ async function checkImportCommit() {
         sheetRow: 2,
         externalRef: "imp-fail-acct",
         placeholderId: randomUUID(),
-        object: { name: "Imp Fail Acct", kind: "asset", subtype: "efectivo", placement: "personal", institution: null, settlementCurrency: "COP", amount: "100", balanceOn: today },
+        object: { name: "Imp Fail Acct", kind: "asset", subtype: "cash", placement: "personal", institution: null, settlementCurrency: "COP", amount: "100", balanceOn: today },
       },
     ],
     recurringRules: [],
@@ -5430,7 +5437,7 @@ async function checkInsertHelper() {
       const cardValues = {
         name: "RLS insert helper card",
         kind: "liability" as const,
-        subtype: "bancaria" as const,
+        subtype: "bank" as const,
         ownerUserId: owner,
         groupId: null,
         isShared: false,
@@ -5455,8 +5462,8 @@ async function checkInsertHelper() {
         `helper wrote ${card?.id ?? "nothing"}, builder ${builderRefusal}`,
       );
 
-      // 176: the same row read back. `subtype` went in as 'bancaria' and comes out
-      // 'tarjeta' — `set_account_subtype` follows the kind, and the helper's
+      // 176: the same row read back. `subtype` went in as 'bank' and comes out
+      // 'card' — `set_account_subtype` follows the kind, and the helper's
       // statement reaches the trigger like any other.
       const [stamped] = await tx.execute<{
         id: string;
@@ -5471,15 +5478,15 @@ async function checkInsertHelper() {
         stamped.id === card.id &&
           stamped.created_at !== null &&
           stamped.updated_at !== null &&
-          stamped.subtype === "tarjeta",
-        `created_at = ${stamped.created_at !== null}, updated_at = ${stamped.updated_at !== null}, subtype = ${stamped.subtype} from 'bancaria'`,
+          stamped.subtype === "card",
+        `created_at = ${stamped.created_at !== null}, updated_at = ${stamped.updated_at !== null}, subtype = ${stamped.subtype} from 'bank'`,
       );
 
       // 177: two rows, one statement, against a movement of the owner's own.
       const [cash] = await tx.execute<{ id: string }>(
         dsql`insert into accounts
           (owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-          values (${owner}, 'RLS insert helper cash', 'asset', 'efectivo', 100000, ${today})
+          values (${owner}, 'RLS insert helper cash', 'asset', 'cash', 100000, ${today})
           returning id`,
       );
       const [category] = await tx.execute<{ id: string }>(
@@ -7111,7 +7118,7 @@ async function checkIngestShapeRestore() {
       const [account] = await tx.execute<{ id: string }>(
         dsql`insert into accounts
           (owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-          values (${owner}, 'RLS restore account', 'asset', 'efectivo', 100000, ${today})
+          values (${owner}, 'RLS restore account', 'asset', 'cash', 100000, ${today})
           returning id`,
       );
       const [movement] = await tx.execute<{ id: string }>(
@@ -10571,6 +10578,318 @@ async function checkAllowedEmailAudit() {
         await tx`insert into app_users (id) values (${id})`;
       },
     },
+  );
+}
+
+// Assertions 358-366: migration 0059, the stored account subtypes `bank`, `cash`, `card` (RF-56). Each
+// row replays 0059 over the state 0058 left, inside a transaction that rolls back: it restores the old
+// CHECKs (NOT VALID), the old trigger function and the old default, seeds rows in the old words, and
+// runs the migration's statements. The migration file is read by glob `0059_*.sql`;
+// M11_MIGRATION_FILE points the same replay at another file, which is how a mutant is proved red
+// without touching the shared database.
+type M11Seed = { owner: string; bancaria: string; efectivo: string; tarjeta: string; cash: string; bank: string };
+
+function m11MigrationFile(): string {
+  const override = process.env.M11_MIGRATION_FILE;
+  if (override) return override;
+  const dir = path.join(process.cwd(), "db", "migrations");
+  const found = readdirSync(dir).find((name) => /^0059_.*\.sql$/.test(name));
+  if (!found) throw new Error("db/migrations/0059_*.sql does not exist");
+  return path.join(dir, found);
+}
+
+async function m11Replay(tx: M1Tx, tag: string): Promise<M11Seed> {
+  await tx`select set_config('request.jwt.claims', '', true)`;
+  await tx.unsafe(`alter table finances.accounts drop constraint if exists accounts_subtype_kind`);
+  await tx.unsafe(`alter table finances.accounts drop constraint if exists accounts_subtype_valid`);
+  await tx.unsafe(`create or replace function private.set_account_subtype() returns trigger
+    language plpgsql security definer set search_path = '' as $f$
+    begin
+      if new.subtype is distinct from 'efectivo' then
+        new.subtype := case when new.kind = 'liability' then 'tarjeta' else 'bancaria' end;
+      end if;
+      return new;
+    end; $f$`);
+  // The state before 0059 let the function be called; the migration must close it.
+  await tx.unsafe(
+    `grant execute on function private.set_account_subtype() to public, anon, authenticated, service_role`,
+  );
+  await tx.unsafe(`alter table finances.accounts alter column subtype set default 'bancaria'`);
+
+  const owner = randomUUID();
+  await tx`insert into auth.users (id) values (${owner})`;
+  await tx`insert into app_users (id) values (${owner})`;
+  // The trigger would rewrite the explicit words; the rows stand as an old deploy left them.
+  await tx.unsafe(`alter table finances.accounts disable trigger accounts_set_subtype`);
+  const seed = async (suffix: string, kind: string, subtype: string): Promise<string> => {
+    const [{ id }] = await tx<{ id: string }[]>`
+      insert into finances.accounts (owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${owner}, ${`rls m11 ${suffix} ${tag}`}, ${kind}, ${subtype}, ${kind === "liability" ? -100 : 0},
+        (now() at time zone 'America/Bogota')::date)
+      returning id`;
+    return id;
+  };
+  const bancaria = await seed("bancaria", "asset", "bancaria");
+  const efectivo = await seed("efectivo", "asset", "efectivo");
+  const tarjeta = await seed("tarjeta", "liability", "tarjeta");
+  const cash = await seed("cash", "asset", "cash");
+  const bank = await seed("bank", "asset", "bank");
+  await tx.unsafe(`alter table finances.accounts enable trigger accounts_set_subtype`);
+  await tx.unsafe(`alter table finances.accounts add constraint accounts_subtype_valid
+    check (subtype in ('bancaria','efectivo','tarjeta')) not valid`);
+  await tx.unsafe(`alter table finances.accounts add constraint accounts_subtype_kind
+    check ((subtype in ('efectivo','bancaria') and kind = 'asset') or (subtype = 'tarjeta' and kind = 'liability')) not valid`);
+  return { owner, bancaria, efectivo, tarjeta, cash, bank };
+}
+
+async function m11Rows(
+  labels: string[],
+  tag: string,
+  body: (tx: M1Tx, seed: M11Seed) => Promise<M1Verdict[]>,
+  afterMigration?: (tx: M1Tx) => Promise<void>,
+): Promise<void> {
+  let verdicts: M1Verdict[] = labels.map(() => ({ ok: false, detail: "the body never ran" }));
+  await sql
+    .begin(async (tx) => {
+      const file = m11MigrationFile();
+      const seed = await m11Replay(tx, tag);
+      await m1RunMigration(tx, file);
+      if (afterMigration) await afterMigration(tx);
+      verdicts = await body(tx, seed);
+      throw M1_ROLLBACK;
+    })
+    .catch((error: unknown) => {
+      if (error === M1_ROLLBACK) return;
+      verdicts = labels.map(() => ({ ok: false, detail: `aborted — ${describeRefusal(error)}` }));
+    });
+  labels.forEach((label, i) => assert(label, verdicts[i].ok, verdicts[i].detail));
+}
+
+// The row's subtype after an authenticated insert, or `refused <sqlstate>`.
+async function m11Insert(
+  tx: M1Tx,
+  owner: string,
+  kind: "asset" | "liability",
+  subtype: string | undefined,
+  tag: string,
+): Promise<string> {
+  const name = `rls m11 ins ${randomUUID().slice(0, 6)} ${tag}`;
+  const balance = kind === "liability" ? -100 : 0;
+  await enterUserContext(tx, owner);
+  try {
+    return await tx.savepoint(async (sp) => {
+      const rows =
+        subtype === undefined
+          ? await sp<{ subtype: string }[]>`
+              insert into accounts (owner_user_id, name, kind, initial_balance_cents, initial_balance_on)
+              values (${owner}, ${name}, ${kind}, ${balance}, (now() at time zone 'America/Bogota')::date)
+              returning subtype`
+          : await sp<{ subtype: string }[]>`
+              insert into accounts (owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+              values (${owner}, ${name}, ${kind}, ${subtype}, ${balance}, (now() at time zone 'America/Bogota')::date)
+              returning subtype`;
+      return rows[0].subtype;
+    });
+  } catch (error) {
+    return `refused ${pgErrorCode(error) ?? "none"}`;
+  } finally {
+    await tx`reset role`;
+  }
+}
+
+// What an UPDATE of one account's subtype comes to: the sqlstate and the constraint named, or `landed`.
+async function m11Update(tx: M1Tx, id: string, subtype: string, asUser?: string): Promise<string> {
+  if (asUser) await enterUserContext(tx, asUser);
+  try {
+    return await tx.savepoint(async (sp) => {
+      const done = await sp`update accounts set subtype = ${subtype} where id = ${id}`;
+      return done.count === 1 ? "landed" : `matched ${done.count} rows`;
+    });
+  } catch (error) {
+    const constraint = (error as { constraint_name?: string }).constraint_name ?? "?";
+    return `refused ${pgErrorCode(error) ?? "none"} ${constraint}`;
+  } finally {
+    if (asUser) await tx`reset role`;
+  }
+}
+
+async function checkAccountSubtypeWords() {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const labels = {
+    maps: "358. 0059 maps bancaria to bank, efectivo to cash and tarjeta to card, leaves cash and bank rows as they were, and no other word remains",
+    audited: "359. the mapping is audited: one UPDATE audit row per mapped account, old word before, new word after, null actor, the account's owner",
+    refuseOld: "360. accounts_subtype_valid refuses bancaria, efectivo, tarjeta and an unknown word on an update",
+    kind: "361. accounts_subtype_kind pins kind: a liability cannot be cash, an asset cannot be card, an asset moves from bank to cash",
+    trigger: "362. the trigger keeps cash, stores efectivo as cash, derives every other word from kind and refuses cash on a liability",
+    dflt: "363. the column default is bank",
+    closed: "364. set_account_subtype is closed to anon, authenticated and service_role, a definer with a fixed search path",
+    bodies: "365. no function body in private or finances names bancaria or tarjeta, and efectivo only set_account_subtype's",
+    tail: "366. the rolled-back subtype replays leave no trace",
+  };
+
+  await m11Rows([labels.maps, labels.audited], tag, async (tx, seed) => {
+    const read = async (id: string) =>
+      (await tx<{ subtype: string }[]>`select subtype from finances.accounts where id = ${id}`)[0]?.subtype;
+    const got = {
+      bancaria: await read(seed.bancaria),
+      efectivo: await read(seed.efectivo),
+      tarjeta: await read(seed.tarjeta),
+      cash: await read(seed.cash),
+      bank: await read(seed.bank),
+    };
+    const [{ n: strays }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from finances.accounts where subtype not in ('bank', 'cash', 'card')`;
+    type A = { record_id: string; before: string | null; after: string | null; actor: string | null; owner: string | null };
+    const ids = [seed.bancaria, seed.efectivo, seed.tarjeta, seed.cash, seed.bank];
+    const audit = await tx<A[]>`
+      select record_id, before_data->>'subtype' as before, after_data->>'subtype' as after,
+        actor_user_id as actor, owner_user_id as owner
+      from finances.audit_log
+      where entity = 'accounts' and action = 'UPDATE' and record_id = any(${ids}::text[])`;
+    const expected: [string, string, string][] = [
+      [seed.bancaria, "bancaria", "bank"],
+      [seed.efectivo, "efectivo", "cash"],
+      [seed.tarjeta, "tarjeta", "card"],
+    ];
+    const auditOk = expected.every(([id, before, after]) => {
+      const rows = audit.filter((r) => r.record_id === id);
+      return (
+        rows.length === 1 && rows[0].before === before && rows[0].after === after && rows[0].actor === null && rows[0].owner === seed.owner
+      );
+    });
+    return [
+      {
+        ok:
+          got.bancaria === "bank" && got.efectivo === "cash" && got.tarjeta === "card" &&
+          got.cash === "cash" && got.bank === "bank" && strays === 0,
+        detail: `bancaria -> ${got.bancaria}, efectivo -> ${got.efectivo}, tarjeta -> ${got.tarjeta}, cash row ${got.cash}, bank row ${got.bank}, rows outside the three words = ${strays}`,
+      },
+      {
+        ok: auditOk && audit.length === 3,
+        detail: `UPDATE audit rows for the five seeded accounts = ${audit.length}; ${JSON.stringify(audit.map((r) => [r.before, r.after, r.actor, r.owner === seed.owner]))}`,
+      },
+    ];
+  });
+
+  // The kind CHECK is dropped after the replay so only accounts_subtype_valid can speak.
+  await m11Rows(
+    [labels.refuseOld],
+    tag,
+    async (tx, seed) => {
+      const outcomes: string[] = [];
+      for (const word of ["bancaria", "efectivo", "tarjeta", "banco"]) {
+        outcomes.push(`${word}: ${await m11Update(tx, seed.bank, word)}`);
+      }
+      return [
+        {
+          ok: outcomes.every((o) => o.endsWith("refused 23514 accounts_subtype_valid")),
+          detail: outcomes.join("; "),
+        },
+      ];
+    },
+    async (tx) => {
+      await tx.unsafe(`alter table finances.accounts drop constraint if exists accounts_subtype_kind`);
+    },
+  );
+
+  // The valid CHECK is dropped after the replay so only accounts_subtype_kind can speak.
+  await m11Rows(
+    [labels.kind],
+    tag,
+    async (tx, seed) => {
+      const liabilityCash = await m11Update(tx, seed.tarjeta, "cash", seed.owner);
+      const assetCard = await m11Update(tx, seed.bank, "card", seed.owner);
+      const moved = await m11Update(tx, seed.bank, "cash", seed.owner);
+      const [row] = await tx<{ subtype: string }[]>`select subtype from finances.accounts where id = ${seed.bank}`;
+      return [
+        {
+          ok:
+            liabilityCash === "refused 23514 accounts_subtype_kind" &&
+            assetCard === "refused 23514 accounts_subtype_kind" &&
+            moved === "landed" &&
+            row.subtype === "cash",
+          detail: `liability to cash: ${liabilityCash}; asset to card: ${assetCard}; asset bank to cash: ${moved}, now ${row.subtype}`,
+        },
+      ];
+    },
+    async (tx) => {
+      await tx.unsafe(`alter table finances.accounts drop constraint if exists accounts_subtype_valid`);
+    },
+  );
+
+  await m11Rows([labels.trigger], tag, async (tx, seed) => {
+    const got = {
+      assetCash: await m11Insert(tx, seed.owner, "asset", "cash", tag),
+      assetEfectivo: await m11Insert(tx, seed.owner, "asset", "efectivo", tag),
+      assetOmitted: await m11Insert(tx, seed.owner, "asset", undefined, tag),
+      assetBank: await m11Insert(tx, seed.owner, "asset", "bank", tag),
+      assetBancaria: await m11Insert(tx, seed.owner, "asset", "bancaria", tag),
+      liabilityOmitted: await m11Insert(tx, seed.owner, "liability", undefined, tag),
+      liabilityTarjeta: await m11Insert(tx, seed.owner, "liability", "tarjeta", tag),
+      liabilityCash: await m11Insert(tx, seed.owner, "liability", "cash", tag),
+    };
+    const want = {
+      assetCash: "cash",
+      assetEfectivo: "cash",
+      assetOmitted: "bank",
+      assetBank: "bank",
+      assetBancaria: "bank",
+      liabilityOmitted: "card",
+      liabilityTarjeta: "card",
+      liabilityCash: "refused 23514",
+    };
+    return [{ ok: JSON.stringify(got) === JSON.stringify(want), detail: JSON.stringify(got) }];
+  });
+
+  await m11Rows([labels.dflt], tag, async (tx) => {
+    const [row] = await tx<{ column_default: string | null }[]>`
+      select column_default from information_schema.columns
+      where table_schema = 'finances' and table_name = 'accounts' and column_name = 'subtype'`;
+    return [{ ok: row?.column_default === "'bank'::text", detail: `column_default = ${row?.column_default}` }];
+  });
+
+  await m11Rows([labels.closed], tag, async (tx) => {
+    const [fn] = await tx<
+      { anon: boolean; authenticated: boolean; service: boolean; definer: boolean; config: string[] | null }[]
+    >`
+      select has_function_privilege('anon', p.oid, 'execute') as anon,
+        has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
+        has_function_privilege('service_role', p.oid, 'execute') as service,
+        p.prosecdef as definer, p.proconfig as config
+      from pg_proc p where p.oid = 'private.set_account_subtype()'::regprocedure`;
+    const fixedPath = (fn.config ?? []).some((entry) => entry === 'search_path=""');
+    return [
+      {
+        ok: !fn.anon && !fn.authenticated && !fn.service && fn.definer && fixedPath,
+        detail: `execute anon=${fn.anon} authenticated=${fn.authenticated} service_role=${fn.service}, definer = ${fn.definer}, proconfig = ${JSON.stringify(fn.config)}`,
+      },
+    ];
+  });
+
+  await m11Rows([labels.bodies], tag, async (tx) => {
+    const rows = await tx<{ name: string; old: boolean; efectivo: boolean }[]>`
+      select n.nspname || '.' || p.proname as name,
+        p.prosrc ~ 'bancaria|tarjeta' as old, p.prosrc ~ 'efectivo' as efectivo
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('private', 'finances') and (p.prosrc ~ 'bancaria|tarjeta' or p.prosrc ~ 'efectivo')`;
+    const oldNames = rows.filter((r) => r.old).map((r) => r.name);
+    const efectivoNames = rows.filter((r) => r.efectivo).map((r) => r.name);
+    return [
+      {
+        ok: oldNames.length === 0 && efectivoNames.length === 1 && efectivoNames[0] === "private.set_account_subtype",
+        detail: `bodies naming bancaria or tarjeta = ${JSON.stringify(oldNames)}; bodies naming efectivo = ${JSON.stringify(efectivoNames)}`,
+      },
+    ];
+  });
+
+  const [{ n: leftovers }] = await sql<{ n: number }[]>`
+    select count(*)::int as n from finances.accounts where name like ${"rls m11 % " + tag}`;
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  assert(
+    labels.tail,
+    afterUser === "postgres" && leftovers === 0,
+    `current_user = ${afterUser}, accounts carrying this run's tag = ${leftovers}`,
   );
 }
 
