@@ -1,12 +1,13 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 
 import { createTranslator } from "next-intl";
 import { expect, test } from "./fixtures";
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
-import type { LookupRecord } from "../lib/log/types";
+import type { LookupRecord, SyncState } from "../lib/log/types";
 import type { LogExport } from "../lib/log/export";
 // A plain number, safe to import at Node runtime — `record.ts` guards every
 // call that touches `indexedDB` or `window` behind a `typeof` check, and this
@@ -277,4 +278,371 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
   const decoration = requestsWhileTyping.filter((url) => url.includes("/api/word/"));
   expect(decoration.length, "decoration never asked").toBeGreaterThanOrEqual(1);
   expect(decoration.length).toBeLessThanOrEqual(2);
+});
+
+
+// ---------------------------------------------------------------------------
+// RL-65, RNL-08: the Anki CSV beside the JSON (boards RegistroExportarAnki,
+// RegistroExportarAnkiEstados). Written from the board and the contract, not
+// from the component.
+// ---------------------------------------------------------------------------
+
+type SeedLookup = Omit<LookupRecord, "id">;
+
+const study = messages.log.study;
+const jsonControl = (page: Page) => page.getByRole("button", { name: study.download, exact: true });
+const ankiControl = (page: Page) => page.getByRole("button", { name: study.downloadAnki, exact: true });
+
+function studyRow(word: string, translation: string | null, at: number, extra: Partial<SeedLookup> = {}): SeedLookup {
+  return {
+    schema: 3,
+    at,
+    text: word,
+    normalised: word,
+    kind: "word",
+    outcome: translation === null ? "miss" : "exact",
+    headword: translation === null ? null : word,
+    rule: null,
+    senses: translation === null ? 0 : 1,
+    translation,
+    dictionaryReady: true,
+    origin: "device",
+    ...extra,
+  };
+}
+
+// Study order is count desc, then most recent first: alpha (2 searches), then
+// zebra (newer), then mango. "quiet" has no translation and owes no card.
+const NOW = Date.now();
+const STUDY_ROWS: SeedLookup[] = [
+  studyRow("alpha", 'alfa, "primera"', NOW - 50),
+  studyRow("alpha", 'alfa, "primera"', NOW - 40),
+  studyRow("mango", "mango", NOW - 30),
+  studyRow("zebra", "cebra", NOW - 20),
+  studyRow("quiet", null, NOW - 10),
+];
+const EXPECTED_CARDS = ['"alpha","alfa, ""primera"""', '"zebra","cebra"', '"mango","mango"'];
+
+function copyOn(): SyncState {
+  return {
+    deviceId: randomUUID(),
+    pushedThroughLocalId: null,
+    pulledThroughCursor: null,
+    lastSyncedAt: null,
+    enabled: true,
+    readerId: randomUUID(),
+    retired: false,
+  };
+}
+
+// Seeds from the home screen: /registro reads the sync row on open and would
+// race this write (same reason as registro-copia.spec.ts).
+async function seedStudy(page: Page, rows: SeedLookup[], sync: SyncState | null = null): Promise<void> {
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+  await page.evaluate(
+    ({ version, sync, lookups }) =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("reading-log", version);
+        request.onupgradeneeded = (event) => {
+          const database = request.result;
+          if (event.oldVersion < 1) {
+            const store = database.createObjectStore("lookups", { keyPath: "id", autoIncrement: true });
+            store.createIndex("at", "at");
+            store.createIndex("normalised", "normalised");
+          }
+          if (event.oldVersion < 2) {
+            database.createObjectStore("sync", { keyPath: "key" });
+            request.transaction!
+              .objectStore("lookups")
+              .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
+          }
+          if (event.oldVersion < 3) {
+            request.transaction!.objectStore("lookups").createIndex("headword", "headword");
+          }
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction(["lookups", "sync"], "readwrite");
+          if (sync) tx.objectStore("sync").put({ ...sync, key: "state" });
+          for (const lookup of lookups) tx.objectStore("lookups").add(lookup);
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+        request.onerror = () => reject(request.error);
+      }),
+    { version: DATABASE_VERSION, sync, lookups: rows },
+  );
+}
+
+async function openSeeded(page: Page): Promise<void> {
+  await deleteTranslator(page);
+  await seedStudy(page, STUDY_ROWS);
+  await page.goto("/registro");
+  await expect(jsonControl(page)).toBeVisible();
+}
+
+async function downloadAnki(page: Page): Promise<{ name: string; text: string }> {
+  const downloadPromise = page.waitForEvent("download");
+  await ankiControl(page).click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  if (!path) throw new Error("no download path");
+  return { name: download.suggestedFilename(), text: await fs.readFile(path, "utf-8") };
+}
+
+test("RL-65: with rows, the JSON and the Anki controls both show, by exact name", async ({ page }) => {
+  await openSeeded(page);
+  await expect(jsonControl(page)).toBeVisible();
+  await expect(ankiControl(page)).toBeVisible();
+  // The Anki control sits under the JSON one, same column.
+  const json = await jsonControl(page).boundingBox();
+  const anki = await ankiControl(page).boundingBox();
+  expect(anki!.y).toBeGreaterThan(json!.y);
+  expect(anki!.height).toBeGreaterThanOrEqual(44);
+});
+
+test("RL-65: the Anki download is registro-lecturas-<date>-anki.csv, one card per translated group in study order, and the done line counts them", async ({
+  page,
+}) => {
+  await openSeeded(page);
+  const file = await downloadAnki(page);
+  expect(file.name).toMatch(/^registro-lecturas-\d{4}-\d{2}-\d{2}-anki\.csv$/);
+  const lines = file.text.split("\n");
+  expect(lines.slice(0, 2)).toEqual(["#separator:Comma", "#html:false"]);
+  expect(lines.slice(2).filter((line) => line !== "")).toEqual(EXPECTED_CARDS);
+  expect(file.text.endsWith("\n")).toBe(true);
+  await expect(page.getByText(t("log.study.ankiDone", { cards: EXPECTED_CARDS.length }))).toBeVisible();
+  // The JSON control is still there beside the line.
+  await expect(jsonControl(page)).toBeVisible();
+});
+
+test("RL-65: the CSV declares text/csv;charset=utf-8", async ({ page }) => {
+  await openSeeded(page);
+  // The blob's type is read from the object URL the anchor points at, before
+  // the page revokes it.
+  await page.evaluate(() => {
+    const w = window as unknown as { __blobTypes: string[] };
+    w.__blobTypes = [];
+    const create = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob) w.__blobTypes.push(object.type);
+      return create(object);
+    };
+  });
+  await downloadAnki(page);
+  const types = await page.evaluate(() => (window as unknown as { __blobTypes: string[] }).__blobTypes);
+  expect(types).toEqual(["text/csv;charset=utf-8"]);
+});
+
+test("RL-65: while the cards are read, the Anki control reads «Preparando las tarjetas…» and is disabled; the JSON control is untouched", async ({
+  page,
+}) => {
+  await openSeeded(page);
+  // A readwrite transaction on `lookups` kept alive by chained reads: the
+  // study's readonly transaction queues behind it until it is released.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const w = window as unknown as { __hold: boolean };
+        w.__hold = true;
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const tx = request.result.transaction("lookups", "readwrite");
+          const store = tx.objectStore("lookups");
+          let first = true;
+          const step = () => {
+            const get = store.get(1);
+            get.onsuccess = () => {
+              if (first) {
+                first = false;
+                resolve();
+              }
+              if (w.__hold) step();
+            };
+          };
+          step();
+        };
+      }),
+  );
+  const downloadPromise = page.waitForEvent("download");
+  await ankiControl(page).click();
+  const preparing = page.getByRole("button", { name: study.ankiPreparing, exact: true });
+  await expect(preparing).toBeVisible();
+  await expect(preparing).toBeDisabled();
+  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(jsonControl(page)).toBeEnabled();
+  await expect(page.getByText(study.ankiFailed)).toHaveCount(0);
+
+  await page.evaluate(() => ((window as unknown as { __hold: boolean }).__hold = false));
+  await downloadPromise;
+  await expect(page.getByText(t("log.study.ankiDone", { cards: EXPECTED_CARDS.length }))).toBeVisible();
+  await expect(ankiControl(page)).toBeEnabled();
+});
+
+test("RL-65: a failed read shows «No se pudo preparar el archivo para Anki» and «Reintentar», and the retry reads again and succeeds", async ({
+  page,
+}) => {
+  await openSeeded(page);
+  let downloads = 0;
+  page.on("download", () => (downloads += 1));
+  // The next transaction opened fails once, which is the study's read.
+  await page.evaluate(() => {
+    const w = window as unknown as { __thrown: number; __failNext: boolean };
+    w.__thrown = 0;
+    w.__failNext = true;
+    const original = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (...args: Parameters<typeof original>) {
+      if (w.__failNext) {
+        w.__failNext = false;
+        w.__thrown += 1;
+        throw new DOMException("e2e: read refused", "InvalidStateError");
+      }
+      return original.apply(this, args);
+    };
+  });
+  await ankiControl(page).click();
+  await expect(page.getByText(study.ankiFailed, { exact: true })).toBeVisible();
+  const retry = page.getByRole("button", { name: messages.log.retry, exact: true });
+  await expect(retry).toBeVisible();
+  await expect(jsonControl(page)).toBeVisible();
+  await expect(ankiControl(page)).toBeVisible();
+  expect(downloads, "a failed read offered a file").toBe(0);
+  expect(await page.evaluate(() => (window as unknown as { __thrown: number }).__thrown)).toBe(1);
+
+  const downloadPromise = page.waitForEvent("download");
+  await retry.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/-anki\.csv$/);
+  await expect(page.getByText(t("log.study.ankiDone", { cards: EXPECTED_CARDS.length }))).toBeVisible();
+  await expect(page.getByText(study.ankiFailed)).toHaveCount(0);
+  await expect(retry).toHaveCount(0);
+});
+
+test("RL-65: a confirmed zero shows neither control, and clearing the log takes both away without a reload", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await expect(page.getByText(study.emptyTitle)).toBeVisible();
+  await expect(jsonControl(page)).toHaveCount(0);
+  await expect(ankiControl(page)).toHaveCount(0);
+
+  await seedStudy(page, STUDY_ROWS);
+  await page.goto("/registro");
+  await expect(ankiControl(page)).toBeVisible();
+  await expect(jsonControl(page)).toBeVisible();
+  await page.getByRole("button", { name: messages.log.clear.trigger }).click();
+  await page.getByRole("button", { name: messages.log.clear.soleAction }).click();
+  await expect(page.getByText(study.emptyTitle)).toBeVisible();
+  await expect(jsonControl(page)).toHaveCount(0);
+  await expect(ankiControl(page)).toHaveCount(0);
+});
+
+// `deleteStudyGroup` lives in a module the production page does not expose,
+// and the row's ✕ is K10's. This test therefore does what that function does
+// to the store (removes the group's rows in one transaction) and fires the
+// event it announces itself with, `voyager:log-deleted`.
+test("RL-66: after the last group is deleted, both controls leave without a reload", async ({ page }) => {
+  await deleteTranslator(page);
+  await seedStudy(page, [studyRow("alpha", "alfa", NOW)]);
+  await page.goto("/registro");
+  await expect(ankiControl(page)).toBeVisible();
+  await expect(jsonControl(page)).toBeVisible();
+
+  let loads = 0;
+  page.on("load", () => (loads += 1));
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction("lookups", "readwrite");
+          tx.objectStore("lookups").clear();
+          tx.oncomplete = () => {
+            db.close();
+            window.dispatchEvent(new Event("voyager:log-deleted"));
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+  await expect(jsonControl(page)).toHaveCount(0);
+  await expect(ankiControl(page)).toHaveCount(0);
+  expect(loads, "the page reloaded").toBe(0);
+});
+
+function answerJson(route: Route, body: unknown): Promise<void> {
+  return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+}
+
+test("RL-65: rows a sync round lands show both controls without a reload", async ({ page }) => {
+  await deleteTranslator(page);
+  await seedStudy(page, [], copyOn());
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/log/sync", async (route) => {
+    await gate;
+    await answerJson(route, {
+      accepted: 0,
+      rows: [
+        {
+          deviceId: randomUUID(),
+          localId: 1,
+          at: Date.now(),
+          text: "zebra",
+          normalised: "zebra",
+          kind: "word",
+          outcome: "exact",
+          headword: "zebra",
+          rule: null,
+          senses: 1,
+          translation: "cebra",
+          dictionaryReady: true,
+          origin: "device",
+          recordSchema: 2,
+          definition: null,
+          exampleEn: null,
+          exampleEs: null,
+          receivedAt: new Date().toISOString(),
+        },
+      ],
+      cursor: "zebra-cursor",
+    });
+  });
+  let loads = 0;
+  page.on("load", () => (loads += 1));
+
+  await page.goto("/registro");
+  await expect(page.getByText(study.emptyTitle)).toBeVisible();
+  await expect(jsonControl(page)).toHaveCount(0);
+  await expect(ankiControl(page)).toHaveCount(0);
+  const loadsBefore = loads;
+
+  release();
+  await expect(jsonControl(page)).toBeVisible();
+  await expect(ankiControl(page)).toBeVisible();
+  expect(loads).toBe(loadsBefore);
+
+  const file = await downloadAnki(page);
+  expect(file.text.split("\n").slice(2).filter((line) => line !== "")).toEqual(['"zebra","cebra"']);
+});
+
+test("RNL-08: building the Anki CSV mounts no dictionary Worker and fetches no dictionary asset", async ({ page }) => {
+  await countWorkerConstructions(page);
+  await openSeeded(page);
+  const requests: string[] = [];
+  page.on("request", (request) => requests.push(request.url()));
+  await downloadAnki(page);
+  await expect(page.getByText(t("log.study.ankiDone", { cards: EXPECTED_CARDS.length }))).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __workersBuilt: number }).__workersBuilt)).toBe(0);
+  expect(requests.some((url) => url.includes(manifest.asset.path))).toBe(false);
 });
