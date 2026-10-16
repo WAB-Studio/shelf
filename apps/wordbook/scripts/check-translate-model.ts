@@ -127,7 +127,8 @@ const CAP_IP = "198.51.100.41";
 const capKeys = (() => {
   const unscoped = clientKeyFromAddress(CAP_IP, SALT);
   const pool = Array.from({ length: POOL_SIZE }, (_, i) => clientKeyFromAddress(poolAddress(i + 1), SALT));
-  return [unscoped, scopeClientKey("translate", unscoped)!, ...pool, ...pool.map((key) => scopeClientKey("translate", key)!)];
+  const keys = [unscoped, ...pool];
+  return [...keys, ...keys.map((key) => scopeClientKey("translate", key)!), ...keys.map((key) => `share:${key}`)];
 })();
 
 async function main(): Promise<void> {
