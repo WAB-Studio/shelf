@@ -426,3 +426,252 @@ test("the precached /cuenta never carries the email of the session that installe
     await sql.end();
   }
 });
+
+// ---------------------------------------------------------------------------
+// W5: only a good page is kept, a lookup's address is never stored, and any
+// `/?q=` opens offline. Written from the contract, not from `sw.js`.
+// ---------------------------------------------------------------------------
+
+type Page = import("@playwright/test").Page;
+type Context = import("@playwright/test").BrowserContext;
+
+const SHELL_CACHE = "reading-shell-v13";
+const BROKEN = "w5-broken-page-marker";
+
+async function noTranslator(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    delete (window as unknown as { Translator?: unknown }).Translator;
+  });
+}
+
+// Every script `/` loaded sits in Cache Storage: the worker's precache has
+// finished, so an offline open has its chunks.
+async function shellReady(page: Page): Promise<void> {
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const scripts = Array.from(document.querySelectorAll("script[src]"))
+          .map((s) => new URL((s as HTMLScriptElement).src).pathname)
+          .filter((p) => p.startsWith("/_next/static/"));
+        for (const p of ["/", "/registro", "/cuenta", "/registro/_", ...scripts]) {
+          let hit = false;
+          for (const name of await caches.keys()) {
+            if (await (await caches.open(name)).match(new URL(p, location.origin).toString())) hit = true;
+          }
+          if (!hit) return false;
+        }
+        return true;
+      }),
+    )
+    .toBe(true);
+}
+
+// Answers the worker's own fetch of `pathname` (never the page's) with `status`,
+// `times` times. `context.route` is what reaches the worker (docs/TRAPS.md).
+async function breakWorkerFetch(
+  context: Context,
+  pathname: string,
+  status: number,
+  options: { times?: number; headers?: Record<string, string>; body?: string } = {},
+): Promise<{ hits: () => number }> {
+  let hits = 0;
+  const limit = options.times ?? 1;
+  await context.route(
+    (url) => url.pathname === pathname && url.search === "",
+    (route) => {
+      if (!route.request().serviceWorker() || hits >= limit) {
+        void route.fallback();
+        return;
+      }
+      hits += 1;
+      void route.fulfill({
+        status,
+        headers: { "content-type": "text/html", ...options.headers },
+        body: options.body ?? `<html><body>${BROKEN}</body></html>`,
+      });
+    },
+  );
+  return { hits: () => hits };
+}
+
+async function cachedEntry(page: Page, p: string): Promise<{ status: number; text: string } | null> {
+  return page.evaluate(async (p) => {
+    for (const name of await caches.keys()) {
+      const hit = await (await caches.open(name)).match(new URL(p, location.origin).toString());
+      if (hit) return { status: hit.status, text: await hit.text() };
+    }
+    return null;
+  }, p);
+}
+
+async function staticKeys(page: Page): Promise<string[]> {
+  return (await cachedChunks(page)).sort();
+}
+
+// An absence has no event to wait for: the page has already shown the
+// network's answer (the worker's `put` is issued before that), then the cache
+// is read repeatedly for as long as a slow `put`/sweep could still land.
+async function staysTrue(check: () => Promise<boolean>, windowMs = 1500): Promise<boolean> {
+  const end = Date.now() + windowMs;
+  do {
+    if (!(await check())) return false;
+    await new Promise((r) => setTimeout(r, 100));
+  } while (Date.now() < end);
+  return true;
+}
+
+async function expectBox(page: Page): Promise<void> {
+  const box = page.getByRole("textbox", { name: messages.search.label });
+  await expect(box).toBeVisible();
+  await expect(box).toBeEditable();
+}
+
+test("W5: the worker holds one cache, named reading-shell-v13", async ({ page }) => {
+  await noTranslator(page);
+  await page.goto("/");
+  await shellReady(page);
+  expect(await page.evaluate(() => caches.keys())).toEqual([SHELL_CACHE]);
+});
+
+test("W5: a 503 on / online reaches the page but does not replace the cached shell", async ({ page, context }) => {
+  await noTranslator(page);
+  await page.goto("/");
+  await shellReady(page);
+  const broken = await breakWorkerFetch(context, "/", 503);
+
+  await page.reload();
+  await expect(page.getByText(BROKEN)).toBeVisible();
+  expect(broken.hits()).toBe(1);
+
+  expect(await staysTrue(async () => (await cachedEntry(page, "/"))?.status === 200)).toBe(true);
+  await context.setOffline(true);
+  await page.goto("/");
+  await expect(page.getByText(BROKEN)).toHaveCount(0);
+  await expectBox(page);
+});
+
+test("W5: a 500 on /registro/<word> online does not become what opens offline", async ({ page, context }) => {
+  await noTranslator(page);
+  await page.goto("/");
+  await shellReady(page);
+  await breakWorkerFetch(context, "/registro/zzqq", 500);
+
+  await page.goto("/registro/zzqq");
+  await expect(page.getByText(BROKEN)).toBeVisible();
+
+  expect(await staysTrue(async () => (await cachedEntry(page, "/registro/zzqq"))?.status !== 500)).toBe(
+    true,
+  );
+  await context.setOffline(true);
+  await page.goto("/registro/zzqq");
+  await expect(page.getByText(BROKEN)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "zzqq" })).toBeVisible();
+});
+
+test("W5: a 503 on / never sweeps the chunks of the build in hand", async ({ page, context }) => {
+  await noTranslator(page);
+  await page.goto("/");
+  await shellReady(page);
+  const before = await staticKeys(page);
+  expect(before.length).toBeGreaterThan(0);
+
+  // A page naming other scripts reads as a new build to the sweep.
+  await breakWorkerFetch(context, "/", 503, {
+    body: `<html><body>${BROKEN}<script src="/_next/static/chunks/w5-other-build.js"></script></body></html>`,
+  });
+  await page.reload();
+  await expect(page.getByText(BROKEN)).toBeVisible();
+
+  expect(await staysTrue(async () => (await staticKeys(page)).join() === before.join())).toBe(true);
+});
+
+test("W5: a response the server redirected is not what opens / offline", async ({ page, context }) => {
+  await noTranslator(page);
+  await page.goto("/");
+  await shellReady(page);
+  await breakWorkerFetch(context, "/", 307, { headers: { location: "/cuenta" }, body: "" });
+
+  await page.goto("/");
+  await page.waitForLoadState("load");
+
+  expect(await staysTrue(async () => {
+    const hit = await cachedEntry(page, "/");
+    return hit !== null && hit.status === 200;
+  })).toBe(true);
+  await context.setOffline(true);
+  await page.goto("/");
+  await expectBox(page);
+});
+
+test("W5: /?q=<word> is never written to Cache Storage", async ({ page }) => {
+  await noTranslator(page);
+  await page.goto("/");
+  await shellReady(page);
+
+  await page.goto("/?q=book");
+  await expect(page.getByRole("heading", { name: "book", exact: true })).toBeVisible();
+
+  expect(await page.evaluate(() => caches.keys())).toEqual([SHELL_CACHE]);
+  const searched = async () =>
+    page.evaluate(async () => {
+      const keys: string[] = [];
+      for (const name of await caches.keys()) {
+        for (const request of await (await caches.open(name)).keys()) {
+          if (new URL(request.url).search.startsWith("?q=")) keys.push(request.url);
+        }
+      }
+      return keys;
+    });
+  expect(await staysTrue(async () => (await searched()).length === 0)).toBe(true);
+});
+
+test("W5: offline, /?q=apple opens with apple's answer though it was never visited online", async ({
+  page,
+  context,
+}) => {
+  await noTranslator(page);
+  await page.goto("/");
+  await shellReady(page);
+  await expect.poll(() => dictionaryInstalled(page)).toBe(true);
+
+  await context.setOffline(true);
+  await page.goto("/?q=apple");
+  await expect(page.getByText("manzana, poma", { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.install.failed, { exact: true })).toHaveCount(0);
+});
+
+test("W5: offline, /?q=book still answers book when it was visited online first", async ({ page, context }) => {
+  await noTranslator(page);
+  await page.goto("/");
+  await shellReady(page);
+  await expect.poll(() => dictionaryInstalled(page)).toBe(true);
+  // Controlled by the worker now: this is the visit the worker may see.
+  await page.goto("/?q=book");
+  await expect(page.getByRole("heading", { name: "book", exact: true })).toBeVisible();
+
+  await context.setOffline(true);
+  await page.goto("/?q=book");
+  await expect(page.getByRole("heading", { name: "book", exact: true })).toBeVisible();
+});
+
+test("W5: an install whose /cuenta answers 500 skips it, completes, and / opens offline", async ({
+  page,
+  context,
+}) => {
+  await noTranslator(page);
+  const broken = await breakWorkerFetch(context, "/cuenta", 500, { times: 1 });
+  await page.goto("/");
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  await expect.poll(() => isCached(page, "/")).toBe(true);
+  await expect.poll(() => isCached(page, "/registro/_")).toBe(true);
+  expect(broken.hits()).toBe(1);
+
+  const cuenta = await cachedEntry(page, "/cuenta");
+  expect(cuenta === null || cuenta.status === 200, `cached /cuenta status ${cuenta?.status}`).toBe(true);
+  await context.setOffline(true);
+  await page.goto("/");
+  await expectBox(page);
+});
