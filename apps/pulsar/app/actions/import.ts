@@ -358,6 +358,11 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       goal.phases.forEach((phase, p) => {
         const have = snapshot.phases.find((s) => nameKey(s.aim) === nameKey(phase.aim));
         const path = `${at}.phases.${p}`;
+        // A phase that crosses another is left out even when the review sent it marked.
+        if (listed.some((d) => d.kind === "phaseOverlaps" && nameKey(d.aim) === nameKey(phase.aim))) {
+          plan.failed.push({ path, name: phase.aim, reason: "import.errors.phaseOverlaps" });
+          return;
+        }
         if (!have) {
           const part = { row: sql`${person.id}::uuid, ${id}::uuid, ${phase.aim}, ${phase.startsOn}::date, ${phase.endsOn}::date`, path, name: phase.aim };
           plan.phaseRows.push(part);

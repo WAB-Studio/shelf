@@ -155,8 +155,60 @@ test("a goal one open goal names is an update, marked; a goal two open goals nam
   const r = review(d, { unmarked: null }, [snapshot("ingles".replace("i", "I").replace("ngles", "nglés"), "a"), snapshot("Doble", "b"), snapshot("doble", "c")]);
   assert.deepEqual(r.toSend.goals.map((g) => g.name), ["Inglés", "Otra"]);
   assert.deepEqual([...r.ambiguous], [2]);
+  assert.deepEqual(r.changes.get(0), []);
+  assert.deepEqual(r.updates, [], "a goal the plan leaves as it is is no update");
+  assert.equal(r.creating, 1);
+});
+
+test("a goal that changes is counted as an update, one that does not is not counted at all (RP-130)", () => {
+  const d = draft(goal({ name: "Inglés", horizon: "2028-01-01" }), goal({ key: "g2", name: "Igual" }), goal({ key: "g3", name: "Nueva" }));
+  const r = review(d, { unmarked: null }, [snapshot("Inglés", "a"), snapshot("Igual", "b")]);
   assert.deepEqual(r.updates.map((u) => [u.g, u.goalId]), [[0, "a"]]);
   assert.equal(r.creating, 1);
+  const alone = review(draft(goal({ name: "Igual" })), { unmarked: null }, [snapshot("Igual", "b")]);
+  assert.equal(alone.updates.length + alone.creating, 0, "nothing to create or update: no button");
+});
+
+test("a phase across an existing one of another name starts unmarked with the phase it crosses named", () => {
+  const crossing = { aim: "Base aeróbica", startsOn: "2026-10-15", endsOn: "2026-11-30", src: [] };
+  const clear = { aim: "Velocidad", startsOn: "2027-01-01", endsOn: "2027-02-28", src: [] };
+  const open = { ...snapshot("Meta", "m"), phases: [{ id: "p", aim: "Base aeróbica suave", startsOn: "2026-10-15", endsOn: "2026-11-29" }] };
+  const r = review(draft(goal({ phases: [crossing, clear] })), { unmarked: null }, [open]);
+  assert.deepEqual([...r.crosses], [["goals.0.phases.0", "Base aeróbica suave"]]);
+  assert.equal(r.nodes.find((n) => n.path === "goals.0.phases.0")?.marked, false);
+  assert.equal(r.nodes.find((n) => n.path === "goals.0.phases.1")?.marked, true);
+  assert.equal(r.unchanged.has("goals.0.phases.0"), false, "the crossing phase keeps its box");
+  assert.deepEqual(r.toSend.goals[0].phases.map((p) => p.aim), ["Velocidad"]);
+  // Marked back, the review names it and sends no difference that writes it.
+  const marked = review(draft(goal({ phases: [crossing] })), { unmarked: [] }, [open]);
+  assert.deepEqual(marked.changes.get(0)?.map((c) => c.kind), ["phaseOverlaps", "stays"]);
+  assert.deepEqual(marked.updates, []);
+});
+
+test("a part the plan leaves as it is carries no box; a part that changes does", () => {
+  const open: GoalSnapshot = {
+    ...snapshot("Meta", "m"),
+    rhythm: 600,
+    months: [{ month: "2026-11-01", amount: 90 }],
+    commitments: [{ id: "c", name: "Estirar", cadence: { kind: "daily", weekdays: null, n: null }, satisfaction: "tap", target: null, unit: null, hasFacts: false }],
+    tasks: [{ id: "t", name: "Carrera de prueba", estimate: null, month: "2026-10-01", done: false, children: [{ id: "k", name: "Calentar", done: false }] }],
+  };
+  const stretch = { name: "Estirar", cadenceKind: "daily" as const, cadenceWeekdays: null, cadenceN: null, satisfaction: "tap" as const, targetQuantity: null, unit: null, src: [] };
+  const moved = task({ name: "Carrera de prueba", month: "2026-11", estimate: null, children: [
+    { name: "Calentar", estimate: null, note: null, noteSrc: [], src: [], rule: null },
+    { name: "Correr", estimate: null, note: null, noteSrc: [], src: [], rule: null },
+  ] });
+  const r = review(
+    draft(goal({ rhythm: 600, months: [{ month: "2026-11", amount: 90, src: [] }, { month: "2026-12", amount: 30, src: [] }], commitments: [stretch], tasks: [moved] })),
+    { unmarked: null },
+    [open],
+  );
+  assert.deepEqual([...r.unchanged].sort(), ["goals.0.commitments.0", "goals.0.months.0", "goals.0.rhythm", "goals.0.tasks.0.children.0"]);
+  assert.deepEqual(r.changes.get(0)?.filter((d) => d.kind === "taskMoved"), [{ kind: "taskMoved", name: "Carrera de prueba", from: "2026-10", to: "2026-11" }]);
+});
+
+test("a goal that matches no open goal has every part boxed", () => {
+  assert.equal(review(draft(goal({ rhythm: 600 })), { unmarked: null }, []).unchanged.size, 0);
 });
 
 test("an update's index is its place among the goals sent, and its fingerprint is of the draft with phases cut", () => {

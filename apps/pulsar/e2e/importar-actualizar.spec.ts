@@ -95,6 +95,13 @@ async function openLeer(db: Db, userId: string): Promise<string> {
 const rowOf = (page: Page, name: RegExp | string) => page.getByRole("checkbox", { name });
 const updateRow = (page: Page, goal = LEER) => rowOf(page, new RegExp(`^${messages.review.update.replace("{goal}", goal)}`));
 const line = (page: Page, text: string | RegExp) => page.getByText(text, typeof text === "string" ? { exact: true } : undefined);
+// The first goal's parts, pressed again until the page has hydrated and they stay open.
+const openParts = (page: Page) =>
+  expect(async () => {
+    const parts = page.getByRole("button", { name: /^Sus partes/ }).first();
+    if ((await parts.getAttribute("aria-expanded")) !== "true") await parts.click();
+    await expect(parts).toHaveAttribute("aria-expanded", "true", { timeout: 500 });
+  }).toPass();
 const confirm = (page: Page, count = 1) => page.getByRole("button", { name: count === 1 ? "Crear 1 meta" : `Crear ${count} metas` });
 
 // The goal's whole row as the database holds it, to prove a goal was left as it was.
@@ -115,7 +122,7 @@ const DIFFS = (second: string) => [
   new RegExp(`^Pone 2 h en ${word(second)}`),
   `Agrega el compromiso «${REPASAR}»`,
   `Agrega la tarea «${CHAPTER}»`,
-  "Se queda 1 parte que el plan no nombra",
+  `Se queda el compromiso «${RELEER}», que el plan no nombra`,
 ];
 
 test.describe("an import that updates the goals the person already has (RP-130)", () => {
@@ -395,6 +402,77 @@ test.describe("an import that updates the goals the person already has (RP-130)"
       await expect(page).toHaveURL(/\/metas$/);
       expect((await goalJson(db, id)).horizon).toBe(plus(400));
       expect(await db`select 1 from goals.goals where user_id = ${person.id} and name = ${LEER}`).toHaveLength(1);
+    });
+  });
+
+  test("a task that changes says what moves, and a part the plan leaves out is named", async ({ person, browser, baseURL, db }) => {
+    // Kills: «Cambia la tarea «X»» with no word of what changes; «Se queda 1 parte» with no name.
+    const { first, second } = months();
+    const id = await openLeer(db, person.id);
+    await db`insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month, in_plan, position)
+             values (${person.id}, ${id}, 'Carrera de prueba', null, ${`${first}-01`}::date, true, 1000)`;
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf({ name: LEER, tasks: [`${second} · Carrera de prueba`] }, newBlock()));
+      await expect(line(page, new RegExp(`^Pasa la tarea «Carrera de prueba» de ${word(first)}.* a ${word(second)}`, "i"))).toBeVisible();
+      await expect(line(page, `Se queda el compromiso «${RELEER}», que el plan no nombra`)).toBeVisible();
+      await expect(line(page, /^Cambia la tarea/)).toHaveCount(0);
+      await expect(line(page, /^Se quedan? \d/)).toHaveCount(0);
+    });
+  });
+
+  test("a plan that changes no goal shows no button, and one that changes one counts only it", async ({ person, browser, baseURL, db }) => {
+    // Kills: «Actualizar 4 metas» when every goal reads «Ya está como dice el plan»; counting the unchanged goal.
+    await openGoal(db, person.id, LEER, { horizon: plus(400) });
+    await openGoal(db, person.id, "Correr", { horizon: plus(400) });
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf({ name: LEER, horizon: plus(400) }, { name: "Correr", horizon: plus(400) }));
+      await expect(line(page, messages.review.noChange)).toHaveCount(2);
+      await expect(page.getByRole("button", { name: /^(Crear|Actualizar)/ })).toHaveCount(0);
+    });
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf({ name: LEER, horizon: plus(401) }, { name: "Correr", horizon: plus(400) }));
+      await expect(page.getByRole("button", { name: "Actualizar 1 meta", exact: true })).toBeEnabled();
+    });
+  });
+
+  test("a part that does not change carries no checkbox; one that does keeps it", async ({ person, browser, baseURL, db }) => {
+    // Kills: a checkbox on a part an import cannot remove.
+    await openLeer(db, person.id);
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf(leerBlock({ commitments: [`${RELEER} · cada día · toque`, `${REPASAR} · cada día · toque`] }), newBlock()));
+      await openParts(page);
+      await expect(rowOf(page, new RegExp(`^${RELEER}`))).toHaveCount(0);
+      await expect(page.getByText(RELEER, { exact: true }).first()).toBeVisible();
+      await expect(rowOf(page, new RegExp(`^${REPASAR}`))).toBeChecked();
+    });
+  });
+
+  test("a phase of another name across an existing one is unmarked with the phase named, and is never written", async ({ person, browser, baseURL, db }) => {
+    // Kills: adding «Base aeróbica» beside «Base aeróbica suave» over its dates; marking it by default.
+    const id = await openLeer(db, person.id);
+    const { first, second } = months();
+    const from = `${first}-28`;
+    const to = `${second}-27`;
+    await db`insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on) values (${person.id}, ${id}, 'Base aeróbica suave', ${from}::date, ${to}::date)`;
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf(leerBlock({ phases: [`${from} a ${to} · Base aeróbica`] }), newBlock()));
+      await openParts(page);
+      await expect(rowOf(page, /^Base aeróbica/)).not.toBeChecked();
+      await expect(line(page, /^Se cruza con la fase «Base aeróbica suave»/)).toBeVisible();
+      await confirm(page, 1).click();
+      await expect(page).toHaveURL(/\/metas$/);
+      expect((await db`select aim from goals.phases where goal_id = ${id}`).map((r) => r.aim)).toEqual(["Base aeróbica suave"]);
+    });
+  });
+
+  test("two open goals of one name show once, not again under «Las dejaste fuera»", async ({ person, browser, baseURL, db }) => {
+    // Kills: the unmarked goal listed twice, once in the tree and once as a left-out line.
+    await openGoal(db, person.id, LEER);
+    await openGoal(db, person.id, LEER);
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf({ name: LEER, horizon: plus(400) }, newBlock()));
+      await expect(rowOf(page, new RegExp(`^${LEER}`))).toHaveCount(1);
+      await expect(page.getByText(messages.review.left.title, { exact: false })).toHaveCount(0);
     });
   });
 

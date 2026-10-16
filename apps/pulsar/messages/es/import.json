@@ -101,6 +101,7 @@
     "repeated": "Tienes más de una meta abierta con este nombre: no sabemos cuál actualizar. Quedó desmarcada: márcala si quieres otra.",
     "update": "Actualiza tu meta «{goal}»",
     "noChange": "Ya está como dice el plan.",
+    "crosses": "Se cruza con la fase «{with}» de la meta: no se agrega. Márcala si quieres intentarlo.",
     "diff": {
       "horizon": "Cambia el final al {to}",
       "note": "Cambia la nota",
@@ -114,9 +115,11 @@
       "commitmentChanged": "Cambia cada cuándo se cumple «{name}»",
       "commitmentReplaced": "«{name}» ya tiene días anotados: se retira y se abre otro con el nuevo ritmo",
       "taskAdded": "Agrega la tarea «{name}»",
-      "taskChanged": "Cambia la tarea «{name}»",
+      "taskMoved": "Pasa la tarea «{name}» de {from} a {to}",
+      "taskResized": "{shape, select, set {Le pone {to} a la tarea «{name}»} drop {Quita el estimado de la tarea «{name}» ({from})} other {Cambia el estimado de la tarea «{name}» de {from} a {to}}}",
       "subTaskAdded": "Agrega la sub-tarea «{name}» a «{task}»",
-      "stays": "{count, plural, one {Se queda # parte que el plan no nombra} other {Se quedan # partes que el plan no nombra}}"
+      "phaseOverlaps": "La fase «{aim}», del {startsOn} al {endsOn}, se cruza con «{with}»: no se agrega",
+      "stays": "{part, select, phase {Se queda la fase «{name}», que el plan no nombra} commitment {Se queda el compromiso «{name}», que el plan no nombra} other {Se queda la tarea «{name}», que el plan no nombra}}"
     },
     "edit": {
       "title": "Cambiar el monto",
@@ -359,6 +362,7 @@
     "quantityNoAmount": "Un compromiso con cantidad lleva monto y unidad. Ponlos.",
     "noteShape": "La nota de esta parte está vacía. Quítala o escríbela.",
     "partFailed": "No se pudo escribir. El resto del plan sí se creó.",
+    "phaseOverlaps": "Esta fase se cruza con otra de la meta. Cámbiale las fechas.",
     "tapWithAmount": "Un compromiso de una vez no lleva monto ni unidad. Quítalos.",
     "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez.",
     "workbookRows": "{count, plural, one {# fila por corregir} other {# filas por corregir}}",
@@ -404,6 +408,7 @@
       "cadenceWeekdays": "No se escribió: los días que tenía no van con su cadencia. Agrégala en la meta con otros días.",
       "cadenceCount": "No se escribió: la cantidad de veces no iba con su cadencia. Agrégala en la meta con otra cantidad.",
       "quantityNoAmount": "No se escribió: le faltaba el monto o la unidad. Agrégala en la meta con los dos.",
+      "phaseOverlaps": "No se escribió: se cruza con otra fase de la meta. Cámbiale las fechas en la meta.",
       "partFailed": "No se pudo escribir. Agrégala en la meta a mano."
     }
   }
