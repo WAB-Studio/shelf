@@ -8,7 +8,7 @@ import { db } from "@/db/client";
 import { insertRow } from "@/db/insert-row";
 import { listAccounts } from "@/db/queries/accounts";
 import { listScopedCategories } from "@/db/queries/categories";
-import type { CategoryNode } from "@/db/queries/categories";
+import type { ScopedCategoryNode } from "@/db/queries/categories";
 import { webhookCredentials } from "@/db/schema";
 import { requireUser, withUserDb } from "@/db/session";
 
@@ -151,21 +151,25 @@ export async function resolveWebhookCredential(
 // What the issue form offers as a credential's fallbacks (RF-86).
 export type WebhookCredentialOptions = {
   accounts: { id: string; name: string }[];
-  categories: { id: string; name: string; kind: "income" | "expense" }[];
+  categories: {
+    id: string;
+    name: string;
+    kind: "income" | "expense";
+    scope: ScopedCategoryNode["scope"];
+  }[];
 };
 
 // A node and its children as flat pickable rows; a child inherits the node's kind,
-// which the payload's `direction` has to be able to match.
-function flattenCategories(
-  nodes: CategoryNode[],
-): { id: string; name: string; kind: "income" | "expense" }[] {
+// which the payload's `direction` has to be able to match; it inherits the scope too.
+function flattenCategories(nodes: ScopedCategoryNode[]): WebhookCredentialOptions["categories"] {
   return nodes
     .flatMap((node) => [
-      { id: node.id, name: node.name, kind: node.kind },
+      { id: node.id, name: node.name, kind: node.kind, scope: node.scope },
       ...node.children.map((child) => ({
         id: child.id,
         name: child.name,
         kind: node.kind,
+        scope: node.scope,
       })),
     ])
     .sort((a, b) => a.name.localeCompare(b.name));

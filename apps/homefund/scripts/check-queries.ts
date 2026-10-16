@@ -3985,6 +3985,7 @@ async function main(): Promise<void> {
   await adjustmentFilterSuite(userId, scope);
   await negativeCountSuite(userId);
   await importCategoryScopeSuite();
+  await categoryScopeSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -6520,4 +6521,136 @@ async function importCategoryScopeSuite(): Promise<void> {
       (en.data.import.errors as Record<string, string>).categoryOutOfScope ===
         "This category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account.",
     "categoryOutOfScope missing or reworded");
+}
+
+// M25: the two category readers that used to drop the scope say it (RF-140). A personal category and
+// the fund's carry one name, so only the scope tells the two rows apart.
+async function categoryScopeSuite(): Promise<void> {
+  console.log("");
+  const today = todayInBogota();
+  const tag = randomUUID().slice(0, 8);
+  const name = `Harness T3 Mercado ${tag}`;
+
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo alcance ${tag}`, leaderName: "Harness lider alcance", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const [seeded] = await fixtureSql<{ member_id: string; account_id: string }[]>`
+    select
+      (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
+      (select id from accounts where group_id = ${groupId} and subtype = 'cash') as account_id`;
+  track("group_members", seeded.member_id);
+  track("accounts", seeded.account_id);
+  for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${groupId}`) {
+    track("categories", row.id);
+  }
+
+  const open = async (placement: "personal" | "group"): Promise<string> => {
+    const { accountId } = await asUser(leader, () =>
+      createAccount({
+        name: `Harness alcance ${placement} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: placement === "personal" ? leader.id : null,
+        groupId: placement === "group" ? groupId : null,
+        isShared: placement === "group",
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 5_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const [ownAccount, groupAccount] = [await open("personal"), await open("group")];
+
+  const makeCategory = async (scope: { ownerUserId: string } | { groupId: string }, parentId: string | null, label: string) => {
+    const { categoryId } = await asUser(leader, () =>
+      createCategory({ scope, name: label, kind: "expense", parentId, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const ownCategory = await makeCategory({ ownerUserId: leader.id }, null, name);
+  const groupCategory = await makeCategory({ groupId }, null, name);
+  const groupChild = await makeCategory({ groupId }, groupCategory, `Harness T3 hija ${tag}`);
+
+  const spent: string[] = [];
+  const spend = async (from: string, categoryId: string, amountCents: number) => {
+    const { transactionId } = await asUser(leader, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: null,
+        amountCents,
+        occurredAt: today,
+        description: `Harness T3 alcance ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    spent.push(transactionId);
+  };
+  await spend(ownAccount, ownCategory, 120_000);
+  await spend(groupAccount, groupCategory, 340_000);
+
+  const range = currentMonthRange();
+  let tripsUsed = -1;
+  let unitTrips = -1;
+  const rows = (
+    await asUser(leader, async () => {
+      const unitStarted = roundTrips();
+      await getMonthlyFlow(range);
+      unitTrips = roundTrips() - unitStarted;
+      const started = roundTrips();
+      const read = await getExpensesByCategory(range);
+      tripsUsed = roundTrips() - started;
+      return read;
+    })
+  ).filter((row) => row.name === name);
+  const ownRow = rows.find((row) => row.categoryId === ownCategory);
+  const groupRow = rows.find((row) => row.categoryId === groupCategory);
+
+  assert(
+    next("A personal category's row says personal"),
+    ownRow?.scope === "personal" && ownRow.totalCents === 120_000,
+    JSON.stringify(ownRow),
+  );
+  assert(
+    next("A fund category's row says group"),
+    groupRow?.scope === "group" && groupRow.totalCents === 340_000,
+    JSON.stringify(groupRow),
+  );
+  assert(
+    next("Same name, two scopes, two rows, each with its own total"),
+    rows.length === 2 && ownRow !== undefined && groupRow !== undefined && ownRow.categoryId !== groupRow.categoryId,
+    JSON.stringify(rows),
+  );
+  assert(
+    next("The expenses by category still cost one round trip"),
+    unitTrips > 0 && tripsUsed === unitTrips,
+    `${tripsUsed} round trips against ${unitTrips} for one single-statement read`,
+  );
+
+  const options = await asUser(leader, () => getWebhookCredentialOptions());
+  const named = options.categories.filter((category) => category.name === name);
+  assert(
+    next("The webhook options carry the scope of both same-named categories"),
+    named.length === 2 &&
+      named.find((category) => category.id === ownCategory)?.scope === "personal" &&
+      named.find((category) => category.id === groupCategory)?.scope === "group",
+    JSON.stringify(named),
+  );
+  assert(
+    next("A fund child category inherits the group scope"),
+    options.categories.find((category) => category.id === groupChild)?.scope === "group",
+    JSON.stringify(options.categories.find((category) => category.id === groupChild)),
+  );
+
+  // A fund-account movement has no owning user, so the identity purge would leave it pinned to the fund's category.
+  await fixtureSql`delete from transactions where id in ${fixtureSql(spent)}`;
 }
