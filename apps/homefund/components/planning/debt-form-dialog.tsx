@@ -218,7 +218,7 @@ function DebtForm({
         name: values.name,
         kind: "liability",
         // A debt is a card: the only subtype a liability admits (accounts_subtype_kind).
-        subtype: "tarjeta",
+        subtype: "card",
         placement: values.placement,
         institution: values.institution,
         settlementCurrency: currency,

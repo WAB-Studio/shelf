@@ -312,7 +312,7 @@ async function ensureScaffold(userId: string): Promise<Scaffold> {
   const account = async (
     name: string,
     kind: "asset" | "liability",
-    subtype: "bancaria" | "efectivo" | "tarjeta",
+    subtype: "bank" | "cash" | "card",
     amountMinor: number,
     currency: OfferedCurrency = BASE_CURRENCY,
   ): Promise<string> => {
@@ -360,10 +360,10 @@ async function ensureScaffold(userId: string): Promise<Scaffold> {
   }
 
   return {
-    bankAccountId: await account("banco", "asset", "bancaria", 12000000),
-    cashAccountId: await account("efectivo", "asset", "efectivo", 200000),
-    cardAccountId: await account("tarjeta", "liability", "tarjeta", 3000000),
-    usdAccountId: await account("dolares", "asset", "bancaria", 50000, "USD"),
+    bankAccountId: await account("banco", "asset", "bank", 12000000),
+    cashAccountId: await account("efectivo", "asset", "cash", 200000),
+    cardAccountId: await account("tarjeta", "liability", "card", 3000000),
+    usdAccountId: await account("dolares", "asset", "bank", 50000, "USD"),
     expenseCategoryIds,
     incomeCategoryId: await category("Salario", "income"),
   };

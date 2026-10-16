@@ -41,9 +41,9 @@ import {
 
 // The message key naming each subtype's segment, kept beside the enum it maps.
 const SUBTYPE_LABEL_KEYS = {
-  bancaria: "subtypeBancaria",
-  efectivo: "subtypeEfectivo",
-  tarjeta: "subtypeTarjeta",
+  bank: "subtypeBancaria",
+  cash: "subtypeEfectivo",
+  card: "subtypeTarjeta",
 } as const;
 
 // The kind that admits a class, mirroring SUBTYPES_BY_KIND: a card is money owed,
@@ -153,9 +153,9 @@ function AccountForm({
           accountId: "",
           name: "",
           // The kind follows the class, so a pre-chosen card opens as a liability.
-          kind: kindForSubtype(defaultSubtype ?? "bancaria"),
+          kind: kindForSubtype(defaultSubtype ?? "bank"),
           // A new asset is a bank account unless the user picks cash (RF-56).
-          subtype: defaultSubtype ?? "bancaria",
+          subtype: defaultSubtype ?? "bank",
           placement: "personal",
           isShared: false,
           institution: "",
@@ -257,7 +257,7 @@ function AccountForm({
                       // card, an asset falls back to a bank account.
                       form.setValue(
                         "subtype",
-                        value === "liability" ? "tarjeta" : "bancaria",
+                        value === "liability" ? "card" : "bank",
                       );
                     }}
                     aria-labelledby="account-kind-label"

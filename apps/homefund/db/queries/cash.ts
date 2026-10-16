@@ -110,7 +110,7 @@ async function findCashAccountIdTx(
   const [row] = await tx
     .select({ id: accounts.id })
     .from(accounts)
-    .where(and(scope, eq(accounts.subtype, "efectivo"), isNull(accounts.archivedAt)))
+    .where(and(scope, eq(accounts.subtype, "cash"), isNull(accounts.archivedAt)))
     .orderBy(asc(accounts.createdAt))
     .limit(1);
 
@@ -165,7 +165,7 @@ export async function withdrawCash({
           isShared: false,
           name: cashAccountName,
           kind: "asset",
-          subtype: "efectivo",
+          subtype: "cash",
           initialBalanceCents: 0,
           initialBalanceOn: sql`(now() at time zone ${TIME_ZONE})::date`,
         },
@@ -202,7 +202,7 @@ async function listWithdrawalSources(userId: string): Promise<AccountRow[]> {
       .where(
         and(
           eq(accounts.kind, "asset"),
-          ne(accounts.subtype, "efectivo"),
+          ne(accounts.subtype, "cash"),
           isNull(accounts.archivedAt),
           or(eq(accounts.ownerUserId, userId), eq(accounts.isShared, true)),
         ),

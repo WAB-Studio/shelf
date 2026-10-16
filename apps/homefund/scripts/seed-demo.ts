@@ -93,7 +93,7 @@ type DemoAccount = {
   key: AccountKey;
   name: string;
   kind: "asset" | "liability";
-  subtype: "bancaria" | "efectivo" | "tarjeta";
+  subtype: "bank" | "cash" | "card";
   institution: string | null;
   lastFour: string | null;
   // Where the account settles (RF-121): every existing account keeps the peso,
@@ -112,7 +112,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     key: "savings",
     name: "Ahorros Bancolombia",
     kind: "asset",
-    subtype: "bancaria",
+    subtype: "bank",
     institution: "Bancolombia",
     lastFour: "4082",
     settlementCurrency: "COP",
@@ -122,7 +122,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     key: "nequi",
     name: "Nequi",
     kind: "asset",
-    subtype: "bancaria",
+    subtype: "bank",
     institution: "Nequi",
     lastFour: "7731",
     settlementCurrency: "COP",
@@ -132,7 +132,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     key: "cash",
     name: "Efectivo",
     kind: "asset",
-    subtype: "efectivo",
+    subtype: "cash",
     institution: null,
     lastFour: null,
     settlementCurrency: "COP",
@@ -142,7 +142,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     key: "usd",
     name: "Payoneer USD",
     kind: "asset",
-    subtype: "bancaria",
+    subtype: "bank",
     institution: "Payoneer",
     lastFour: null,
     settlementCurrency: "USD",
@@ -152,7 +152,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     key: "visa",
     name: "Tarjeta Visa Bancolombia",
     kind: "liability",
-    subtype: "tarjeta",
+    subtype: "card",
     institution: "Bancolombia",
     lastFour: "5519",
     settlementCurrency: "COP",
@@ -162,7 +162,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     key: "falabella",
     name: "Tarjeta CMR Falabella",
     kind: "liability",
-    subtype: "tarjeta",
+    subtype: "card",
     institution: "Banco Falabella",
     lastFour: "9204",
     settlementCurrency: "COP",

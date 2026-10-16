@@ -8,14 +8,14 @@ import { maxAmountMinor, parseAmount } from "@/lib/money";
 export const ACCOUNT_KINDS = ["asset", "liability"] as const;
 
 // What the account is: a bank account, physical cash, or a card (RF-56).
-export const ACCOUNT_SUBTYPES = ["bancaria", "efectivo", "tarjeta"] as const;
+export const ACCOUNT_SUBTYPES = ["bank", "cash", "card"] as const;
 
 // Which subtypes each kind admits, mirroring the accounts_subtype_kind DB CHECK:
 // cash and bank hold value (asset); a card is money owed (liability). The form
 // offers only these per kind, and the refinement below rejects the rest.
 export const SUBTYPES_BY_KIND = {
-  asset: ["bancaria", "efectivo"],
-  liability: ["tarjeta"],
+  asset: ["bank", "cash"],
+  liability: ["card"],
 } as const satisfies Record<
   (typeof ACCOUNT_KINDS)[number],
   readonly (typeof ACCOUNT_SUBTYPES)[number][]

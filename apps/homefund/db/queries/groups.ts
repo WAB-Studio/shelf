@@ -160,7 +160,7 @@ async function ensureGroupCashAccount(
     .where(
       and(
         eq(accounts.groupId, groupId),
-        eq(accounts.subtype, "efectivo"),
+        eq(accounts.subtype, "cash"),
         isNull(accounts.archivedAt),
       ),
     )
@@ -174,7 +174,7 @@ async function ensureGroupCashAccount(
     isShared: true,
     name: GROUP_CASH_ACCOUNT_NAME[locale],
     kind: "asset",
-    subtype: "efectivo",
+    subtype: "cash",
     settlementCurrency: currency,
     initialBalanceCents: 0,
     initialBalanceOn: sql`(now() at time zone ${TIME_ZONE})::date`,

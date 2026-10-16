@@ -621,7 +621,7 @@ async function writeSuite(
       createAccount({
         name: "Harness tarjeta",
         kind: "liability",
-        subtype: "tarjeta",
+        subtype: "card",
         ownerUserId: userId,
         groupId: null,
         isShared: false,
@@ -647,7 +647,7 @@ async function writeSuite(
       updateAccount({
         accountId,
         name: "Harness tarjeta editada",
-        subtype: "tarjeta",
+        subtype: "card",
         isShared: false,
         institution: "Davivienda",
         lastFour: "9876",
@@ -721,7 +721,7 @@ async function writeSuite(
       createAccount({
         name: "Harness dólares",
         kind: "asset",
-        subtype: "bancaria",
+        subtype: "bank",
         ownerUserId: userId,
         groupId: null,
         isShared: false,
@@ -773,7 +773,7 @@ async function writeSuite(
       createAccount({
         name: "Harness fondo dólares",
         kind: "asset",
-        subtype: "bancaria",
+        subtype: "bank",
         ownerUserId: null,
         groupId: scope.groupId,
         isShared: true,
@@ -3116,7 +3116,7 @@ async function reconcileSuite(
     const { accountId } = await createAccount({
       name,
       kind,
-      subtype: kind === "asset" ? "bancaria" : "tarjeta",
+      subtype: kind === "asset" ? "bank" : "card",
       ownerUserId: placement === "personal" ? userId : null,
       groupId: placement === "group" ? scope.groupId : null,
       isShared: placement === "group",
@@ -3488,7 +3488,7 @@ async function reimportSuite(userId: string, scope: HarnessScope): Promise<void>
     const { accountId } = await createAccount({
       name,
       kind,
-      subtype: kind === "asset" ? "bancaria" : "tarjeta",
+      subtype: kind === "asset" ? "bank" : "card",
       ownerUserId: userId,
       groupId: null,
       isShared: false,
@@ -3997,7 +3997,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     const { accountId } = await createAccount({
       name,
       kind: "asset",
-      subtype: "bancaria",
+      subtype: "bank",
       ownerUserId: userId,
       groupId: null,
       isShared: false,
@@ -4014,7 +4014,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     updateAccount({
       accountId,
       name,
-      subtype: "bancaria",
+      subtype: "bank",
       isShared: false,
       institution: null,
       lastFour: null,
@@ -4063,7 +4063,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     accountId: used,
     name: `${prefix} usada`,
     kind: "asset",
-    subtype: "bancaria",
+    subtype: "bank",
     isShared: false,
     institution: "",
     lastFour: "",
@@ -4377,7 +4377,7 @@ async function reconcileStrangerSuite(userId: string, fellow: HarnessUser): Prom
   const { accountId } = await createAccount({
     name: "Harness cuadre ajena",
     kind: "asset",
-    subtype: "bancaria",
+    subtype: "bank",
     ownerUserId: userId,
     groupId: null,
     isShared: false,
@@ -4437,7 +4437,7 @@ async function recurringRuleCategoryScopeSuite(
     createAccount({
       name: "Harness regla ajena",
       kind: "asset",
-      subtype: "bancaria",
+      subtype: "bank",
       ownerUserId: groupless.id,
       groupId: null,
       isShared: false,
@@ -4536,7 +4536,7 @@ async function recurringRuleCategoryFitSuite(
       createAccount({
         name,
         kind: "asset",
-        subtype: "bancaria",
+        subtype: "bank",
         ownerUserId: ownerId,
         groupId: null,
         isShared: false,
@@ -5047,7 +5047,7 @@ async function e5Suite(): Promise<void> {
     createAccount({
       name: `Harness banco del fondo ${tag}`,
       kind: "asset",
-      subtype: "bancaria",
+      subtype: "bank",
       ownerUserId: null,
       groupId,
       isShared: true,
@@ -5063,7 +5063,7 @@ async function e5Suite(): Promise<void> {
     createAccount({
       name: `Harness cuenta propia ${tag}`,
       kind: "asset",
-      subtype: "bancaria",
+      subtype: "bank",
       ownerUserId: leader.id,
       groupId: null,
       isShared: false,
@@ -5537,7 +5537,7 @@ async function e5MinimumPayment(leader: HarnessUser): Promise<void> {
       createAccount({
         name: `Harness minimo ${name} ${tag}`,
         kind: "liability",
-        subtype: "tarjeta",
+        subtype: "card",
         ownerUserId: leader.id,
         groupId: null,
         isShared: false,
