@@ -2895,7 +2895,7 @@ async function checkAuditLogPolicies() {
     "111. an authenticated insert, update and delete of a category each land one audit row with the right action, before/after and the caller as actor",
     "112. an authenticated insert, update and delete against the log are each refused",
     "113. the recurring generator's transaction and its split are captured with a null actor",
-    "114. every RLS-enabled table save the log itself carries the capture trigger",
+    "114. every RLS-enabled table save the log, the allowed list and the sign-in counter carries the capture trigger",
     "115. the purge drops a row past 24 months and keeps a recent one",
   ];
   const tailLabel = "116. the rolled-back audit transaction leaves no trace";
@@ -3002,13 +3002,15 @@ async function checkAuditLogPolicies() {
     });
 
   // 114: no audited write path skips capture — every RLS-enabled public table but the log itself
-  // carries a `capture_audit` trigger. Runs outside any role switch; it reads only the catalog.
+  // carries a `capture_audit` trigger. The allowed list and the sign-in counter hold no fund data and no
+  // scope, and no API role can write either, so they are exempt. Runs outside any role switch; it reads
+  // only the catalog.
   const uncovered = await sql<{ tablename: string }[]>`
     select c.relname as tablename
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'finances' and c.relkind = 'r' and c.relrowsecurity
-      and c.relname <> 'audit_log'
+      and c.relname not in ('audit_log', 'allowed_emails', 'sign_in_claims')
       and not exists (
         select 1 from pg_trigger t
         where t.tgrelid = c.oid and t.tgname = 'capture_audit' and not t.tgisinternal)`;
@@ -4959,6 +4961,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   account_reconciliations: ["created_at", "created_by", "id"],
   account_statements: ["closed_at", "id"],
   accounts: ["archived_at", "created_at", "id", "updated_at"],
+  // The allowed list and the sign-in counter carry no grant at all (RF-145, RF-143).
+  allowed_emails: ["added_at", "email"],
   app_users: ["created_at", "updated_at"],
   audit_log: [
     "action",
@@ -5039,6 +5043,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "updated_at",
   ],
   savings_goals: ["archived_at", "created_at", "id", "updated_at"],
+  sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: [],
   transaction_sources: ["created_at", "id"],
   transaction_splits: ["id"],
@@ -5098,6 +5103,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "source",
   ],
   accounts: ["created_at", "group_id", "id", "kind", "owner_user_id", "updated_at"],
+  allowed_emails: ["added_at", "email"],
   app_users: ["created_at", "id", "updated_at"],
   audit_log: [
     "action",
@@ -5188,6 +5194,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
   recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
   savings_goals: ["created_at", "group_id", "id", "owner_user_id", "updated_at"],
+  sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: ["label_id", "transaction_id"],
   transaction_sources: [
     "account_id",
@@ -10326,8 +10333,11 @@ async function m1ScriptRows(tag: string, labels: M1Labels) {
       const second = run(a.typed, serviceKey);
       const rowsAfterSecond = await listRows(a.folded).catch(() => []);
       const countBefore = (await listSql<{ n: number }[]>`select count(*)::int as n from finances.allowed_emails`.catch(() => [{ n: -1 }]))[0].n;
+      // Queued for removal too: a script that skips the shape check lists the spaced one, and the CHECK admits it.
+      const spacedAddress = `with space-${stamp}@example.invalid`;
+      addresses.push(`not-an-address-${stamp}`, spacedAddress);
       const bad = run(`not-an-address-${stamp}`, serviceKey);
-      const spaced = run(`with space-${stamp}@example.invalid`, serviceKey);
+      const spaced = run(spacedAddress, serviceKey);
       const countAfter = (await listSql<{ n: number }[]>`select count(*)::int as n from finances.allowed_emails`.catch(() => [{ n: -1 }]))[0].n;
       assert(
         labels.scriptOnce,
