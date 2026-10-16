@@ -3981,6 +3981,7 @@ async function main(): Promise<void> {
   await serverEntriesSuite(scope);
   await e5Suite();
   await e6Suite();
+  await importScopeOwnerSuite(userId, scope);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -6002,4 +6003,76 @@ async function e6Suite(): Promise<void> {
     refused.code === "42501" && (await inviteRows(stranger)).length === 0,
     refused.error || "the invite landed",
   );
+}
+
+// M26: the import's read side names each row's scope and the caller's own id and fund.
+async function importScopeOwnerSuite(
+  userId: string,
+  scope: HarnessScope,
+): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  // Earlier suites put the shared groupless user in a fund; this one needs a person in none.
+  const groupless = await createMembershipFreeUser();
+  const name = `Harness T3 Mercado ${tag}`;
+  const personalId = randomUUID();
+  const fundId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${personalId}, ${userId}, ${name}, 'expense', '#4C8C4A')`;
+  track("categories", personalId);
+  await fixtureSql`
+    insert into categories (id, group_id, name, kind, color)
+    values (${fundId}, ${scope.groupId}, ${name}, 'expense', '#4C8C4A')`;
+  track("categories", fundId);
+
+  const fundAccountId = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, group_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${fundAccountId}, ${scope.groupId}, ${`Harness T3 fondo ${tag}`}, 'asset', 'bank', 0, current_date)`;
+  track("accounts", fundAccountId);
+
+  const trips = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = roundTrips();
+    await run();
+    return roundTrips() - started;
+  };
+  const read = await readImportScope();
+  const same = read.categories.filter((row) => row.name === name);
+  const personal = same.find((row) => row.id === personalId);
+  const fund = same.find((row) => row.id === fundId);
+
+  assert(
+    next("A personal category names its owner"),
+    personal?.ownerUserId === userId && personal.groupId === null,
+    `owner ${personal?.ownerUserId}, group ${personal?.groupId}`,
+  );
+  assert(
+    next("A fund category names its fund"),
+    fund?.ownerUserId === null && fund.groupId === scope.groupId,
+    `owner ${fund?.ownerUserId}, group ${fund?.groupId}`,
+  );
+  const sharedAccount = read.accounts.find((row) => row.id === fundAccountId);
+  const ownAccount = read.accounts.find((row) => row.id === scope.assetAccountId && row.ownerUserId === userId && row.groupId === null);
+  assert(
+    next("An account carries its owner"),
+    sharedAccount !== undefined &&
+      sharedAccount.groupId === scope.groupId &&
+      sharedAccount.ownerUserId === null &&
+      ownAccount !== undefined,
+    `fund account ${JSON.stringify(sharedAccount)}, personal account ${ownAccount?.id}`,
+  );
+  const outsider = await asUser(groupless, () => readImportScope());
+  assert(
+    next("The caller is the session user and their fund"),
+    read.caller.userId === userId &&
+      read.caller.groupId === scope.groupId &&
+      outsider.caller.userId === groupless.id &&
+      outsider.caller.groupId === null,
+    `${JSON.stringify(read.caller)} / ${JSON.stringify(outsider.caller)}`,
+  );
+  await readImportScope();
+  const used = await trips(() => readImportScope());
+  // Each read is one transaction of four statements (begin, settle, query, commit): 7 reads.
+  assert(next("The reads fan out"), used <= 7 * 4, `${used} statements for 7 reads`);
 }
