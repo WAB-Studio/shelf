@@ -51,6 +51,7 @@ import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { CreateInsideAction } from "./create-inside-sheet";
 import { MoveEndRow, MoveHorizonAction } from "./horizon-sheet";
+import { DeleteGoalSheet } from "./delete-goal-sheet";
 import { MeasureAction } from "./measure-sheet";
 import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import { GoalNote } from "./goal-note-sheet";
@@ -157,11 +158,17 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   };
   const moveAction = <MoveHorizonAction {...moveProps} />;
 
+  const deleteAction = (block: boolean) =>
+    goal.deletable ? (
+      <DeleteGoalSheet goalId={goal.id} name={goal.name} above={goal.parent?.id ?? null} block={block} />
+    ) : null;
+
   const phoneActs = ended ? (
     <Face on="phone">
       <Section as="div">
         {moveAction}
         <ArchiveGoalAction goalId={goal.id} name={goal.name} short {...archiveBranch} />
+        {deleteAction(true)}
       </Section>
     </Face>
   ) : null;
@@ -398,6 +405,16 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </Text>
         )}
         {goal.measureUnit || holds || archived || ended ? null : <MeasureAction goalId={goal.id} goalName={goal.name} />}
+        {goal.measureUnit && !holds && !archived && !ended && !goal.measureFed ? (
+          <MeasureAction
+            goalId={goal.id}
+            goalName={goal.name}
+            current={{ name: goal.measureName ?? "", unit: goal.measureUnit }}
+            fed={goal.measureFed}
+            rhythm={goal.rhythm !== null}
+            months={goal.plan.budgets.length}
+          />
+        ) : null}
         {ended ? <Face on="desktop">{moveAction}</Face> : null}
       </Panel>
   );
@@ -588,7 +605,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
                 </Text>
               </Flex>
             }
-            disabled
+            href={archived || ended ? undefined : `/metas/${goal.id}/fases/${phase.id}`}
+            disabled={archived || ended}
           />
         ))}
         {archived || ended ? null : (
@@ -631,6 +649,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               <Flex gap="3">
                 <RenameGoalAction goalId={goal.id} name={goal.name} />
                 <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short {...archiveBranch} />
+                {deleteAction(false)}
               </Flex>
             </Face>
           )
@@ -652,10 +671,14 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <GoalNote goalId={goal.id} name={goal.name} note={goal.note} />
 
       {archived ? (
-        <ReopenGoalButton goalId={goal.id} />
+        <>
+          <ReopenGoalButton goalId={goal.id} />
+          {deleteAction(true)}
+        </>
       ) : ended ? null : (
         <Face on="phone">
           <ArchiveGoalAction goalId={goal.id} name={goal.name} {...archiveBranch} />
+          {deleteAction(true)}
         </Face>
       )}
     </Page>

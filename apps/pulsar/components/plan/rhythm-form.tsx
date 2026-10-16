@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { setRhythm } from "@/app/actions/roadmap";
+import { removeRhythm, setRhythm } from "@/app/actions/roadmap";
 import { Button, Chip, ChipRow, Field, SheetActions, Text } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import { daysBetween } from "@/lib/day/weeks";
@@ -144,6 +144,20 @@ export function RhythmForm({
     }
   }
 
+  async function handleRemove() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    const result = await removeRhythm({ goalId });
+    setPending(false);
+    if (result.ok) {
+      onDone?.();
+      router.refresh();
+    } else {
+      setError(t(result.error));
+    }
+  }
+
   return (
     <>
       {time ? (
@@ -185,6 +199,11 @@ export function RhythmForm({
           {t("roadmap.sinRitmo.releases", { count: releases })}
         </Text>
       ) : null}
+      {sheet && initial !== null ? (
+        <Text as="p" variant="sentence" tone="muted">
+          {t(time ? "roadmap.rhythm.removeBodyPlan" : "roadmap.rhythm.removeBody")}
+        </Text>
+      ) : null}
       <SheetActions>
         <Button block onClick={handleSave} disabled={pending}>
           {sheet ? t(pending ? "roadmap.ritmo.saving" : "roadmap.ritmo.save") : t("roadmap.sinRitmo.build")}
@@ -192,6 +211,11 @@ export function RhythmForm({
         {sheet ? (
           <Button block variant="outline" onClick={onDone} disabled={pending}>
             {t("roadmap.ritmo.cancel")}
+          </Button>
+        ) : null}
+        {sheet && initial !== null ? (
+          <Button block variant="outline" onClick={handleRemove} disabled={pending}>
+            {t("roadmap.rhythm.remove")}
           </Button>
         ) : null}
       </SheetActions>

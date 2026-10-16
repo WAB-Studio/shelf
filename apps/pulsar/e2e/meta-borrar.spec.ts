@@ -249,6 +249,26 @@ test("deleting lands on /metas, the goal is in no list, Hoy does not draw it, an
   }
 });
 
+test("deleting a goal inside another lands on the goal above, which no longer lists it (RP-127)", async ({ person, browser, baseURL, db }) => {
+  // Kills: a redirect to /metas for a nested goal; a parent screen that keeps the deleted goal from a stale cache.
+  const parent = await seedOpenGoal(db, person, { name: "Casa", unit: null, created: DAY_BACK(5) });
+  const kid = await seedOpenGoal(db, person, { name: "Cocina", parent, unit: null, created: DAY_BACK(5) });
+  const other = await seedOpenGoal(db, person, { name: "Baño", parent, unit: null, created: DAY_BACK(5) });
+  const { page, context } = await open(browser, baseURL, person, `/metas/${kid}`);
+  try {
+    await deleteButton(page).click();
+    await confirmDelete(dialog(page)).click();
+    await expect(page).toHaveURL(new RegExp(`/metas/${parent}$`));
+    await expect(page.getByRole("heading", { level: 1, name: "Casa" })).toBeVisible();
+    await expect(page.locator(`main a[href="/metas/${other}"]`).first()).toBeVisible();
+    await expect(page.locator(`main a[href="/metas/${kid}"]`)).toHaveCount(0);
+    expect(await goalRows(db, kid)).toBe(0);
+    expect(await goalRows(db, parent)).toBe(1);
+  } finally {
+    await context.close();
+  }
+});
+
 test("a fact that arrives while the sheet is open is refused with «ya tiene hechos» and the goal stays (RP-127)", async ({ person, browser, baseURL, db }) => {
   // Kills: swallowing the server's refusal (the sheet closes, or leaves, as if it had deleted); deleting a goal with facts.
   const id = await mudanza(db, person);

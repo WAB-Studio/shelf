@@ -4,19 +4,41 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+import { changeGoalMeasure, removeGoalMeasure } from "@/app/actions/goal-edit";
 import { setGoalMeasure } from "@/app/actions/plan";
+import { storedMeasure } from "@/lib/units/time";
+import { changeGoalMeasureSchema } from "@/lib/validation/goal-edit";
 import { setGoalMeasureSchema } from "@/lib/validation/measure";
-import { Button, Field, Flex, Sheet, SheetActions } from "@/components/ui";
+import { Button, Field, Flex, Sheet, SheetActions, Text } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
 type Refusal = { field: "name" | "unit"; text: string };
 
 /**
- * `Ponerle medida` (RP-117): under «esta meta no mide nada», a sheet that asks what the goal
- * counts and in which unit. The same schema and the same act as the AI door; a refusal reads
- * under the field it touches.
+ * `Ponerle medida` (RP-117) and `Cambiar la medida` (RP-134): under «esta meta no mide nada», a
+ * sheet that asks what the goal counts and in which unit; on a goal that measures and that no
+ * fact feeds (`fed` false), the same sheet opens on the measure, says what a new unit takes away
+ * and ends in `Quitar la medida`. The same schemas and acts as the AI door; a refusal reads under
+ * the field it touches.
  */
-export function MeasureAction({ goalId, goalName }: { goalId: string; goalName: string }) {
+export function MeasureAction({
+  goalId,
+  goalName,
+  current,
+  fed = false,
+  rhythm = false,
+  months = 0,
+}: {
+  goalId: string;
+  goalName: string;
+  // The measure being changed; absent when the goal measures nothing yet.
+  current?: { name: string; unit: string };
+  // A fact feeds the measure: it stays fixed and nothing is offered (RP-134).
+  fed?: boolean;
+  // A rhythm and this many month amounts go with the measure (RP-134).
+  rhythm?: boolean;
+  months?: number;
+}) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -24,18 +46,20 @@ export function MeasureAction({ goalId, goalName }: { goalId: string; goalName: 
   const [unit, setUnit] = useState("");
   const [pending, setPending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const [removeRefusal, setRemoveRefusal] = useState<string | null>(null);
 
   function openSheet() {
-    setName("");
-    setUnit("");
+    setName(current?.name ?? "");
+    setUnit(current?.unit ?? "");
     setRefusal(null);
+    setRemoveRefusal(null);
     setOpen(true);
   }
 
   async function handleSave() {
     if (pending) return;
 
-    const parsed = setGoalMeasureSchema.safeParse({ goalId, name, unit });
+    const parsed = (current ? changeGoalMeasureSchema : setGoalMeasureSchema).safeParse({ goalId, name, unit });
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       const field = issue.path[0] === "name" ? "name" : "unit";
@@ -47,23 +71,44 @@ export function MeasureAction({ goalId, goalName }: { goalId: string; goalName: 
     setPending(true);
     setRefusal(null);
 
-    const result = await setGoalMeasure(parsed.data);
+    const result = current ? await changeGoalMeasure(parsed.data) : await setGoalMeasure(parsed.data);
     setPending(false);
     if (result.ok) {
       setOpen(false);
       router.refresh();
     } else if (result.error === "plan.errors.measureKept") {
-      setRefusal({ field: "unit", text: t("goal.measure.kept", { unit: result.values?.name ?? "" }) });
+      const kept = "values" in result ? (result.values as { name?: string } | undefined)?.name : undefined;
+      setRefusal({ field: "unit", text: t("goal.measure.kept", { unit: kept ?? "" }) });
     } else {
       setRefusal({ field: "unit", text: t(result.error) });
     }
   }
 
+  async function handleRemove() {
+    if (pending) return;
+    setPending(true);
+    setRemoveRefusal(null);
+
+    const result = await removeGoalMeasure({ goalId });
+    setPending(false);
+    if (result.ok) {
+      setOpen(false);
+      router.refresh();
+    } else {
+      setRemoveRefusal(t(result.error));
+    }
+  }
+
+  // Another stored unit clears the rhythm and the amounts written in the old one.
+  const unitChanges = current !== undefined && unit.trim() !== "" && storedMeasure(unit.trim(), null).unit !== current.unit;
+
+  if (current && fed) return null;
+
   return (
     <>
       <Flex>
         <Button variant="ghost" tone="accent" tap={44} onClick={openSheet}>
-          {t("goal.measure.offer")}
+          {t(current ? "goal.measure.change" : "goal.measure.offer")}
         </Button>
       </Flex>
       <Sheet open={open} onOpenChange={setOpen} label={goalName} title={t("goal.measure.title")}>
@@ -90,6 +135,21 @@ export function MeasureAction({ goalId, goalName }: { goalId: string; goalName: 
           invalid={refusal?.field === "unit"}
           hint={refusal?.field === "unit" ? refusal.text : undefined}
         />
+        {unitChanges ? (
+          <Text as="p" variant="sentence" tone="muted">
+            {t("goal.measure.unitChangeBody")}
+          </Text>
+        ) : null}
+        {current ? (
+          <Text as="p" variant="sentence" tone="muted">
+            {t("goal.measure.removeBody", { rhythm: rhythm ? "yes" : "no", months })}
+          </Text>
+        ) : null}
+        {removeRefusal ? (
+          <Text as="p" variant="sentence" tone="muted">
+            {removeRefusal}
+          </Text>
+        ) : null}
         <SheetActions>
           <Button block onClick={handleSave} disabled={pending}>
             {t("goal.measure.confirm")}
@@ -97,6 +157,11 @@ export function MeasureAction({ goalId, goalName }: { goalId: string; goalName: 
           <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
             {t("goal.measure.cancel")}
           </Button>
+          {current ? (
+            <Button block variant="outline" onClick={handleRemove} disabled={pending}>
+              {t("goal.measure.remove")}
+            </Button>
+          ) : null}
         </SheetActions>
       </Sheet>
     </>
