@@ -3981,6 +3981,11 @@ async function main(): Promise<void> {
   await serverEntriesSuite(scope);
   await e5Suite();
   await e6Suite();
+  await importScopeOwnerSuite(userId, scope);
+  await adjustmentFilterSuite(userId, scope);
+  await negativeCountSuite(userId);
+  await importCategoryScopeSuite();
+  await categoryScopeSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -5701,7 +5706,7 @@ async function e5Suite(): Promise<void> {
   const expectedUnreviewedExpense = model.filter((m) => m.kind === "expense" && !m.reviewed && (m.rule || m.awaiting)).map((m) => m.ref).sort();
   assert(
     next("transactionListConditions is the predicate the list and the export both run"),
-    conditions !== undefined && conditions({}).length === 0 && conditions({ kind: "income" }).length === 1 &&
+    conditions !== undefined && conditions({}).length === 0 && conditions({ kind: "income" }).length >= 1 &&
       viaConditions.value !== null &&
       sameList(mine(viaConditions.value.map((row) => row.description ?? "")), expectedUnreviewedExpense),
     viaConditions.value ? `selects ${mine(viaConditions.value.map((row) => row.description ?? "")).length} of ${expectedUnreviewedExpense.length}` : viaConditions.error,
@@ -6002,4 +6007,650 @@ async function e6Suite(): Promise<void> {
     refused.code === "42501" && (await inviteRows(stranger)).length === 0,
     refused.error || "the invite landed",
   );
+}
+
+// M26: the import's read side names each row's scope and the caller's own id and fund.
+async function importScopeOwnerSuite(
+  userId: string,
+  scope: HarnessScope,
+): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  // Earlier suites put the shared groupless user in a fund; this one needs a person in none.
+  const groupless = await createMembershipFreeUser();
+  const name = `Harness T3 Mercado ${tag}`;
+  const personalId = randomUUID();
+  const fundId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${personalId}, ${userId}, ${name}, 'expense', '#4C8C4A')`;
+  track("categories", personalId);
+  await fixtureSql`
+    insert into categories (id, group_id, name, kind, color)
+    values (${fundId}, ${scope.groupId}, ${name}, 'expense', '#4C8C4A')`;
+  track("categories", fundId);
+
+  const fundAccountId = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, group_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${fundAccountId}, ${scope.groupId}, ${`Harness T3 fondo ${tag}`}, 'asset', 'bank', 0, current_date)`;
+  track("accounts", fundAccountId);
+
+  const trips = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = roundTrips();
+    await run();
+    return roundTrips() - started;
+  };
+  const read = await readImportScope();
+  const same = read.categories.filter((row) => row.name === name);
+  const personal = same.find((row) => row.id === personalId);
+  const fund = same.find((row) => row.id === fundId);
+
+  assert(
+    next("A personal category names its owner"),
+    personal?.ownerUserId === userId && personal.groupId === null,
+    `owner ${personal?.ownerUserId}, group ${personal?.groupId}`,
+  );
+  assert(
+    next("A fund category names its fund"),
+    fund?.ownerUserId === null && fund.groupId === scope.groupId,
+    `owner ${fund?.ownerUserId}, group ${fund?.groupId}`,
+  );
+  const sharedAccount = read.accounts.find((row) => row.id === fundAccountId);
+  const ownAccount = read.accounts.find((row) => row.id === scope.assetAccountId && row.ownerUserId === userId && row.groupId === null);
+  assert(
+    next("An account carries its owner"),
+    sharedAccount !== undefined &&
+      sharedAccount.groupId === scope.groupId &&
+      sharedAccount.ownerUserId === null &&
+      ownAccount !== undefined,
+    `fund account ${JSON.stringify(sharedAccount)}, personal account ${ownAccount?.id}`,
+  );
+  const outsider = await asUser(groupless, () => readImportScope());
+  assert(
+    next("The caller is the session user and their fund"),
+    read.caller.userId === userId &&
+      read.caller.groupId === scope.groupId &&
+      outsider.caller.userId === groupless.id &&
+      outsider.caller.groupId === null,
+    `${JSON.stringify(read.caller)} / ${JSON.stringify(outsider.caller)}`,
+  );
+  await readImportScope();
+  const used = await trips(() => readImportScope());
+  // Each read is one transaction of four statements (begin, settle, query, commit): 7 reads.
+  assert(next("The reads fan out"), used <= 7 * 4, `${used} statements for 7 reads`);
+}
+
+// M23: expense and income leave a reconciliation's adjustment out, and `adjustments` selects them alone (RF-138, RF-23, RF-118).
+async function adjustmentFilterSuite(userId: string, scope: HarnessScope): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const open = async (name: string): Promise<string> => {
+    const { accountId } = await createAccount({
+      name: `${name} ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 1_000_000,
+      balanceOn: shiftDate(today, -10),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const incomeCategoryId = randomUUID();
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${incomeCategoryId}, ${userId}, ${`Harness T3 ingreso ${tag}`}, 'income', '#4C8C4A')`;
+  track("categories", incomeCategoryId);
+  const account = await open("Harness T3 filtro");
+  const other = await open("Harness T3 filtro destino");
+
+  const book = async (
+    description: string,
+    from: string | null,
+    to: string | null,
+    amountCents: number,
+    categoryId: string | null,
+  ): Promise<string> => {
+    const made = await createTransaction({
+      fromAccountId: from,
+      toAccountId: to,
+      amountCents,
+      occurredAt: today,
+      description: `${description} ${tag}`,
+      externalRef: null,
+      splits: categoryId ? [{ categoryId, amountCents }] : [],
+      labelIds: [],
+    });
+    keep("transactions", made.transactionId);
+    return made.transactionId;
+  };
+  const expenseId = await book("Harness T3 gasto", account, null, 100_000, scope.categoryId);
+  const incomeId = await book("Harness T3 ingreso", null, account, 50_000, incomeCategoryId);
+  const transferId = await book("Harness T3 traslado", account, other, 20_000, null);
+
+  // Derived is now 1 000 000 - 100 000 + 50 000 - 20 000 = 930 000. Count high, then low.
+  const gainedBy = await reconcileAccount({ accountId: account, reconciledOn: today, realMagnitudeCents: 1_000_000, expectedDerivedCents: 930_000 });
+  const lostBy = await reconcileAccount({ accountId: account, reconciledOn: today, realMagnitudeCents: 900_000, expectedDerivedCents: 1_000_000 });
+  const history = await listAccountReconciliations(account);
+  const inId = history.find((row) => row.gapCents === 70_000)?.transactionId;
+  const outId = history.find((row) => row.gapCents === -100_000)?.transactionId;
+  assert(
+    next("The fixture books one adjustment into the account and one out of it"),
+    gainedBy.ok && lostBy.ok && inId !== undefined && inId !== null && outId !== undefined && outId !== null,
+    `${JSON.stringify(gainedBy)} / ${JSON.stringify(lostBy)} / ${history.map((row) => row.gapCents).join(",")}`,
+  );
+  const adjustmentIds = [inId ?? "", outId ?? ""].sort();
+
+  const idsOf = async (filters: Parameters<typeof listTransactions>[0]) =>
+    (await listTransactions({ accountId: account, ...filters })).map((row) => row.id).sort();
+  const sameIds = (got: string[], want: string[]) => JSON.stringify([...got].sort()) === JSON.stringify([...want].sort());
+
+  const expenseIds = await idsOf({ kind: "expense" });
+  assert(
+    next("Expense leaves out an outgoing adjustment"),
+    sameIds(expenseIds, [expenseId]),
+    `expense filter listed ${expenseIds.length} rows: ${expenseIds.join(",")}; expected only ${expenseId}`,
+  );
+  const incomeIds = await idsOf({ kind: "income" });
+  assert(
+    next("Income leaves out an incoming adjustment"),
+    sameIds(incomeIds, [incomeId]),
+    `income filter listed ${incomeIds.length} rows: ${incomeIds.join(",")}; expected only ${incomeId}`,
+  );
+  const adjustmentRows = await listTransactions({ accountId: account, adjustments: true });
+  assert(
+    next("The adjustment filter selects both adjustments, each marked by its reconciliation"),
+    sameIds(adjustmentRows.map((row) => row.id), adjustmentIds) &&
+      adjustmentRows.every((row) => row.reconciliationId !== null),
+    `listed ${adjustmentRows.map((row) => `${row.id}/${row.reconciliationId}`).join(",")}; expected ${adjustmentIds.join(",")}`,
+  );
+  const allIds = await idsOf({});
+  assert(
+    next("The adjustment filter is off unless asked: no filter lists all five rows"),
+    sameIds(allIds, [expenseId, incomeId, transferId, ...adjustmentIds]),
+    `unfiltered list held ${allIds.length} rows`,
+  );
+  const offIds = await idsOf({ adjustments: false });
+  assert(
+    next("adjustments: false is the same as absent"),
+    sameIds(offIds, allIds),
+    `adjustments:false listed ${offIds.length} rows against ${allIds.length}`,
+  );
+  const transferIds = await idsOf({ kind: "transfer" });
+  assert(
+    next("Transfer is unchanged by the adjustment predicate"),
+    sameIds(transferIds, [transferId]),
+    `transfer filter listed ${transferIds.length} rows`,
+  );
+  const none = await idsOf({ kind: "expense", adjustments: true });
+  assert(
+    next("Expense and adjustments together select nothing"),
+    none.length === 0,
+    `${none.length} rows`,
+  );
+
+  const totalsOf = async (filters: Parameters<typeof getTransactionTotals>[0]) => {
+    const totals = await getTransactionTotals({ accountId: account, ...filters });
+    return { count: totals.count, net: totals.nets.reduce((sum, row) => sum + row.netCents, 0) };
+  };
+  const [tExpense, tIncome, tAdjust, tAll] = await Promise.all([
+    totalsOf({ kind: "expense" }),
+    totalsOf({ kind: "income" }),
+    totalsOf({ adjustments: true }),
+    totalsOf({}),
+  ]);
+  assert(
+    next("The totals count what the list lists"),
+    tExpense.count === 1 && tExpense.net === -100_000 &&
+      tIncome.count === 1 && tIncome.net === 50_000 &&
+      tAdjust.count === 2 && tAdjust.net === 0 &&
+      tAll.count === 5 && tAll.net === -50_000,
+    `expense ${JSON.stringify(tExpense)}, income ${JSON.stringify(tIncome)}, adjustments ${JSON.stringify(tAdjust)}, all ${JSON.stringify(tAll)}`,
+  );
+
+  const exportOf = async (filters: NonNullable<Parameters<typeof readExport>[0]["transactionFilters"]>) =>
+    ((await readExport({ entityKeys: ["transactions"], transactionFilters: { accountId: account, ...filters } })).transactions ?? []);
+  const [xExpense, xIncome, xAdjust, xAll] = await Promise.all([
+    exportOf({ kind: "expense" }),
+    exportOf({ kind: "income" }),
+    exportOf({ adjustments: true }),
+    exportOf({}),
+  ]);
+  assert(
+    next("The export narrows the same way"),
+    xExpense.length === 1 && xExpense[0].description === `Harness T3 gasto ${tag}` && !xExpense[0].adjustment &&
+      xIncome.length === 1 && xIncome[0].description === `Harness T3 ingreso ${tag}` &&
+      xAdjust.length === 2 && xAdjust.every((row) => row.adjustment === true) &&
+      xAll.length === 5 && xAll.filter((row) => row.adjustment === true).length === 2,
+    `export expense ${xExpense.length}, income ${xIncome.length}, adjustments ${xAdjust.length} (${xAdjust.map((row) => row.adjustment).join(",")}), all ${xAll.length}`,
+  );
+}
+
+// M22: a signed counted figure reaches the ledger with the account's sign (RF-137). The countings
+// start from a derived 0, so the expected books are the whole story: nothing else moves them.
+async function negativeCountSuite(userId: string): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const open = async (name: string, kind: "asset" | "liability"): Promise<string> => {
+    const { accountId } = await createAccount({
+      name: `${name} ${tag}`,
+      kind,
+      subtype: kind === "asset" ? "bank" : "card",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 0,
+      balanceOn: shiftDate(today, -10),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const asset = await open("Harness M22 activo", "asset");
+  const card = await open("Harness M22 tarjeta", "liability");
+
+  type Marked = { from_account_id: string | null; to_account_id: string | null; amount_cents: string };
+  const markedOf = (reconciliationId: string) =>
+    fixtureSql<Marked[]>`
+      select from_account_id, to_account_id, amount_cents::text
+      from transactions where reconciliation_id = ${reconciliationId}`;
+  const balanceOf = async (accountId: string) =>
+    (await fixtureSql<{ balance: string }[]>`
+      select private.account_settlement_balance_on(${accountId}, ${today}::date)::text as balance`)[0].balance;
+
+  const assetCount = await reconcileAccount({ accountId: asset, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: 0 });
+  const cardCount = await reconcileAccount({ accountId: card, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: 0 });
+  const assetId = assetCount.ok ? assetCount.id : "";
+  const cardId = cardCount.ok ? cardCount.id : "";
+
+  const assetStored = assetId ? await readColumn<string>("account_reconciliations", "id", assetId, "counted_balance_cents") : undefined;
+  assert(
+    next("An asset's negative count is stored negative"),
+    assetStored === "-500000",
+    `counted_balance_cents = ${assetStored}, ${JSON.stringify(assetCount)}`,
+  );
+  const assetMarked = assetId ? await markedOf(assetId) : [];
+  assert(
+    next("A negative count books the gap out of the asset"),
+    assetCount.ok && assetCount.gapCents === -500_000 && assetMarked.length === 1 &&
+      assetMarked[0].from_account_id === asset && assetMarked[0].to_account_id === null &&
+      assetMarked[0].amount_cents === "500000",
+    `${JSON.stringify(assetCount)} / ${JSON.stringify(assetMarked)}`,
+  );
+
+  const cardStored = cardId ? await readColumn<string>("account_reconciliations", "id", cardId, "counted_balance_cents") : undefined;
+  assert(
+    next("An overpaid card's negative count is stored positive"),
+    cardStored === "500000",
+    `counted_balance_cents = ${cardStored}, ${JSON.stringify(cardCount)}`,
+  );
+  const cardMarked = cardId ? await markedOf(cardId) : [];
+  assert(
+    next("An overpaid card's gap is booked into the card"),
+    cardCount.ok && cardCount.gapCents === 500_000 && cardMarked.length === 1 &&
+      cardMarked[0].to_account_id === card && cardMarked[0].from_account_id === null &&
+      cardMarked[0].amount_cents === "500000",
+    `${JSON.stringify(cardCount)} / ${JSON.stringify(cardMarked)}`,
+  );
+
+  const assetHistory = await listAccountReconciliations(asset);
+  const cardHistory = await listAccountReconciliations(card);
+  assert(
+    next("The asset's history reads counted -500000, gap -500000, derived 0"),
+    assetHistory.length === 1 && assetHistory[0].countedCents === -500_000 &&
+      assetHistory[0].gapCents === -500_000 && assetHistory[0].derivedCents === 0,
+    JSON.stringify(assetHistory),
+  );
+  assert(
+    next("The card's history reads counted +500000, gap +500000, derived 0"),
+    cardHistory.length === 1 && cardHistory[0].countedCents === 500_000 &&
+      cardHistory[0].gapCents === 500_000 && cardHistory[0].derivedCents === 0,
+    JSON.stringify(cardHistory),
+  );
+
+  const [assetBalance, cardBalance] = await Promise.all([balanceOf(asset), balanceOf(card)]);
+  assert(
+    next("Each balance afterwards equals what was counted"),
+    assetBalance === "-500000" && cardBalance === "500000",
+    `asset ${assetBalance}, card ${cardBalance}`,
+  );
+
+  const again = await reconcileAccount({ accountId: asset, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: -500_000 });
+  const againMarked = again.ok ? await markedOf(again.id) : [];
+  assert(
+    next("A negative count that matches the ledger books nothing"),
+    again.ok && again.gapCents === 0 && againMarked.length === 0,
+    `${JSON.stringify(again)} / ${JSON.stringify(againMarked)}`,
+  );
+}
+
+// M28: the importer picks a movement's or a rule's category by the scope of its account (RF-140).
+// A hand-built scope, no database: the pipeline is pure over what `readImportScope` returns.
+async function importCategoryScopeSuite(): Promise<void> {
+  console.log("");
+  const U = randomUUID();
+  const G = randomUUID();
+  const id = () => randomUUID();
+  const cat = (name: string, kind: "expense" | "income", owner: "user" | "group", externalRef: string | null = null) => ({
+    id: id(),
+    name,
+    externalRef,
+    ownerUserId: owner === "user" ? U : null,
+    groupId: owner === "group" ? G : null,
+    kind,
+  });
+  const acct = (name: string, owner: "user" | "group", externalRef: string | null = null) => ({
+    id: id(),
+    name,
+    externalRef,
+    ownerUserId: owner === "user" ? U : null,
+    groupId: owner === "group" ? G : null,
+    settlementCurrency: "COP",
+  });
+
+  const mercadoOwn = cat("M28 Mercado", "expense", "user");
+  const mercadoFund = cat("M28 Mercado", "expense", "group");
+  const sueldoOwn = cat("M28 Sueldo", "income", "user");
+  const sueldoFund = cat("M28 Sueldo", "income", "group");
+  const onlyFund = cat("M28 Solo fondo", "expense", "group");
+  const onlyOwn = cat("M28 Solo mio", "expense", "user");
+  const twiceA = cat("M28 Doble", "expense", "user");
+  const twiceB = cat("M28 Doble", "expense", "user");
+  const keyedFund = cat("M28 Con llave", "expense", "group", "m28-cat-ref");
+  const own = acct("M28 Cuenta mia", "user");
+  const fund = acct("M28 Cuenta fondo", "group", "m28-acct-ref");
+
+  const emptyRefs = (): Record<"accounts" | "members" | "categories" | "recurringRules" | "transactions", Set<string>> => ({
+    accounts: new Set(["m28-acct-ref"]),
+    members: new Set(),
+    categories: new Set(["m28-cat-ref"]),
+    recurringRules: new Set(),
+    transactions: new Set(),
+  });
+  const scopeFor = (groupId: string | null) => ({
+    caller: { userId: U, groupId },
+    accounts: [own, fund],
+    categories: [mercadoOwn, mercadoFund, sueldoOwn, sueldoFund, onlyFund, onlyOwn, twiceA, twiceB, keyedFund],
+    existingRefs: emptyRefs(),
+  });
+
+  type Files = Partial<Record<"accounts" | "categories", RawRow[]>>;
+  const move = (over: RawRow): RawRow => ({
+    externalRef: null,
+    fromAccount: null,
+    toAccount: null,
+    amount: 1_000_000,
+    category: null,
+    occurredAt: "2026-03-31",
+    description: null,
+    adjustment: null,
+    currency: null,
+    ...over,
+  });
+  const rule = (over: RawRow): RawRow => ({
+    externalRef: null,
+    fromAccount: null,
+    toAccount: null,
+    amount: 1_000_000,
+    category: null,
+    description: null,
+    frequency: "monthly",
+    intervalN: 1,
+    dayOfMonth: 1,
+    nextRunOn: "2026-12-01",
+    endsOn: null,
+    ...over,
+  });
+  const run = (
+    entity: "transactions" | "recurringRules" | "categories",
+    raw: RawRow,
+    groupId: string | null = G,
+    files: Files = {},
+    index = 0,
+  ) => {
+    const s = scopeFor(groupId);
+    const refs = buildEffectiveRefs(s, (e) => (files as Record<string, RawRow[]>)[e] ?? []);
+    return processRow(entity, raw, index, index + 2, refs, s.existingRefs[entity]);
+  };
+  const splitOf = (row: { object: unknown }) =>
+    (row.object as { splits?: { categoryId: string }[] } | null)?.splits?.[0]?.categoryId;
+  const ruleCat = (row: { object: unknown }) => (row.object as { categoryId?: string } | null)?.categoryId;
+  const errs = (row: { errors: { key: string; column: string | null; value: string | null }[] }) =>
+    JSON.stringify(row.errors);
+  const OUT = "data.import.errors.categoryOutOfScope";
+  const refused = (row: { errors: { key: string; column: string | null; value: string | null }[]; object: unknown }, key: string, value: string) =>
+    row.object === null && row.errors.length === 1 && row.errors[0].key === key &&
+    row.errors[0].column === "category" && row.errors[0].value === value;
+
+  let r = run("transactions", move({ fromAccount: fund.name, category: "M28 Mercado" }));
+  assert(next("An expense on a fund account takes the fund's category of that name"),
+    r.errors.length === 0 && splitOf(r) === mercadoFund.id, `${errs(r)} split ${splitOf(r)}`);
+  r = run("transactions", move({ fromAccount: own.name, category: "M28 Mercado" }));
+  assert(next("An expense on a personal account takes the person's category of that name"),
+    r.errors.length === 0 && splitOf(r) === mercadoOwn.id, `${errs(r)} split ${splitOf(r)}`);
+  r = run("transactions", move({ toAccount: fund.name, category: "M28 Sueldo" }));
+  assert(next("An income takes the scope of its destination account"),
+    r.errors.length === 0 && splitOf(r) === sueldoFund.id, `${errs(r)} split ${splitOf(r)}`);
+  r = run("transactions", move({ toAccount: own.name, category: "M28 Sueldo" }));
+  assert(next("An income on a personal account takes the person's category"),
+    r.errors.length === 0 && splitOf(r) === sueldoOwn.id, `${errs(r)} split ${splitOf(r)}`);
+
+  r = run("transactions", move({ fromAccount: own.name, category: onlyFund.name }));
+  assert(next("A personal account naming a category only the fund holds is refused on the category"),
+    refused(r, OUT, onlyFund.name), errs(r));
+  r = run("transactions", move({ fromAccount: fund.name, category: onlyOwn.name }));
+  assert(next("A fund account naming a category only the person holds is refused on the category"),
+    refused(r, OUT, onlyOwn.name), errs(r));
+  r = run("transactions", move({ fromAccount: fund.name, category: "M28 No existe" }));
+  assert(next("A name nobody holds stays unknown"),
+    refused(r, "data.import.errors.unknownReference", "M28 No existe"), errs(r));
+  r = run("transactions", move({ fromAccount: own.name, category: twiceA.name }));
+  assert(next("Two categories of that name inside the account's scope stay ambiguous"),
+    refused(r, "data.import.errors.ambiguousReference", twiceA.name), errs(r));
+  r = run("transactions", move({ fromAccount: own.name, category: sueldoOwn.name }));
+  assert(next("The kind check runs after the scope: an income category on an expense is a kind mismatch"),
+    refused(r, "data.import.errors.categoryKindMismatch", sueldoOwn.name), errs(r));
+
+  r = run("recurringRules", rule({ fromAccount: fund.name, category: "M28 Mercado" }));
+  assert(next("A rule on a fund account takes the fund's category"),
+    r.errors.length === 0 && ruleCat(r) === mercadoFund.id, `${errs(r)} cat ${ruleCat(r)}`);
+  r = run("recurringRules", rule({ fromAccount: own.name, category: "M28 Mercado" }));
+  assert(next("A rule on a personal account takes the person's category"),
+    r.errors.length === 0 && ruleCat(r) === mercadoOwn.id, `${errs(r)} cat ${ruleCat(r)}`);
+  r = run("recurringRules", rule({ fromAccount: own.name, category: onlyFund.name }));
+  assert(next("A rule naming a category of the other scope is refused"), refused(r, OUT, onlyFund.name), errs(r));
+  r = run("recurringRules", rule({ toAccount: fund.name, category: "M28 Sueldo" }));
+  assert(next("An income rule takes its destination's scope"),
+    r.errors.length === 0 && ruleCat(r) === sueldoFund.id, `${errs(r)} cat ${ruleCat(r)}`);
+
+  // A category the file adds lands where the commit puts it: the caller's fund, else the caller.
+  const fileCat: RawRow = { externalRef: null, name: "M28 Nueva", kind: "expense", parent: null, color: CATEGORY_COLORS[0] };
+  const placeholder = run("categories", fileCat, G, { categories: [fileCat] }).placeholderId;
+  r = run("transactions", move({ fromAccount: fund.name, category: "M28 Nueva" }), G, { categories: [fileCat] });
+  assert(next("A file-new category counts as the fund's for a caller in a fund"),
+    placeholder !== null && r.errors.length === 0 && splitOf(r) === placeholder, `${errs(r)} split ${splitOf(r)} vs ${placeholder}`);
+  r = run("transactions", move({ fromAccount: own.name, category: "M28 Nueva" }), G, { categories: [fileCat] });
+  assert(next("A file-new category is out of scope for a personal account of a caller in a fund"),
+    refused(r, OUT, "M28 Nueva"), errs(r));
+  r = run("transactions", move({ fromAccount: own.name, category: "M28 Nueva" }), null, { categories: [fileCat] });
+  assert(next("A file-new category counts as the caller's own for a caller with no fund"),
+    r.errors.length === 0 && splitOf(r) !== undefined, errs(r));
+
+  // A category the file renames keeps the scope it has.
+  const renamed: RawRow = { externalRef: "m28-cat-ref", name: "M28 Renombrada", kind: "expense", parent: null, color: CATEGORY_COLORS[0] };
+  r = run("transactions", move({ fromAccount: fund.name, category: "M28 Renombrada" }), G, { categories: [renamed] });
+  assert(next("A file row that updates a fund category keeps it in the fund"),
+    r.errors.length === 0 && splitOf(r) === keyedFund.id, `${errs(r)} split ${splitOf(r)}`);
+  r = run("transactions", move({ fromAccount: own.name, category: "M28 Renombrada" }), G, { categories: [renamed] });
+  assert(next("A renamed fund category stays out of scope for a personal account"), refused(r, OUT, "M28 Renombrada"), errs(r));
+
+  // A file-new account lands by its placement.
+  const newAcct = (placement: string): RawRow => ({
+    externalRef: null, name: "M28 Nueva cuenta", kind: "asset", subtype: "bank", placement,
+    institution: null, amount: 0, balanceOn: "2026-01-01", settlementCurrency: null,
+  });
+  r = run("transactions", move({ fromAccount: "M28 Nueva cuenta", category: onlyFund.name }), G, { accounts: [newAcct("group")] });
+  assert(next("A file-new fund account takes the fund's categories"), r.errors.length === 0 && splitOf(r) === onlyFund.id, errs(r));
+  r = run("transactions", move({ fromAccount: "M28 Nueva cuenta", category: onlyFund.name }), G, { accounts: [newAcct("personal")] });
+  assert(next("A file-new personal account is out of scope for the fund's category"), refused(r, OUT, onlyFund.name), errs(r));
+  r = run("transactions", move({ fromAccount: "M28 Nueva cuenta", category: onlyOwn.name }), G, { accounts: [newAcct("personal")] });
+  assert(next("A file-new personal account takes the person's categories"), r.errors.length === 0 && splitOf(r) === onlyOwn.id, errs(r));
+  r = run("transactions", move({ fromAccount: "M28 Nueva cuenta", category: onlyOwn.name }), null, { accounts: [newAcct("group")] });
+  assert(next("A file-new fund account for a caller with no fund has no scope: the name alone decides"),
+    r.errors.length === 0 && splitOf(r) === onlyOwn.id, errs(r));
+
+  // A file row that updates an existing account keeps its scope, whatever placement it carries.
+  const updated: RawRow = { ...newAcct("personal"), externalRef: "m28-acct-ref", name: "M28 Fondo renombrada" };
+  r = run("transactions", move({ fromAccount: "M28 Fondo renombrada", category: onlyFund.name }), G, { accounts: [updated] });
+  assert(next("A file row that updates a fund account keeps it in the fund"),
+    r.errors.length === 0 && splitOf(r) === onlyFund.id, errs(r));
+
+  assert(next("Both languages carry the out-of-scope copy"),
+    (es.data.import.errors as Record<string, string>).categoryOutOfScope ===
+      "Esta categoría es de otro alcance que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya." &&
+      (en.data.import.errors as Record<string, string>).categoryOutOfScope ===
+        "This category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account.",
+    "categoryOutOfScope missing or reworded");
+}
+
+// M25: the two category readers that used to drop the scope say it (RF-140). A personal category and
+// the fund's carry one name, so only the scope tells the two rows apart.
+async function categoryScopeSuite(): Promise<void> {
+  console.log("");
+  const today = todayInBogota();
+  const tag = randomUUID().slice(0, 8);
+  const name = `Harness T3 Mercado ${tag}`;
+
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo alcance ${tag}`, leaderName: "Harness lider alcance", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const [seeded] = await fixtureSql<{ member_id: string; account_id: string }[]>`
+    select
+      (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
+      (select id from accounts where group_id = ${groupId} and subtype = 'cash') as account_id`;
+  track("group_members", seeded.member_id);
+  track("accounts", seeded.account_id);
+  for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${groupId}`) {
+    track("categories", row.id);
+  }
+
+  const open = async (placement: "personal" | "group"): Promise<string> => {
+    const { accountId } = await asUser(leader, () =>
+      createAccount({
+        name: `Harness alcance ${placement} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: placement === "personal" ? leader.id : null,
+        groupId: placement === "group" ? groupId : null,
+        isShared: placement === "group",
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 5_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const [ownAccount, groupAccount] = [await open("personal"), await open("group")];
+
+  const makeCategory = async (scope: { ownerUserId: string } | { groupId: string }, parentId: string | null, label: string) => {
+    const { categoryId } = await asUser(leader, () =>
+      createCategory({ scope, name: label, kind: "expense", parentId, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const ownCategory = await makeCategory({ ownerUserId: leader.id }, null, name);
+  const groupCategory = await makeCategory({ groupId }, null, name);
+  const groupChild = await makeCategory({ groupId }, groupCategory, `Harness T3 hija ${tag}`);
+
+  const spent: string[] = [];
+  const spend = async (from: string, categoryId: string, amountCents: number) => {
+    const { transactionId } = await asUser(leader, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: null,
+        amountCents,
+        occurredAt: today,
+        description: `Harness T3 alcance ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    spent.push(transactionId);
+  };
+  await spend(ownAccount, ownCategory, 120_000);
+  await spend(groupAccount, groupCategory, 340_000);
+
+  const range = currentMonthRange();
+  let tripsUsed = -1;
+  let unitTrips = -1;
+  const rows = (
+    await asUser(leader, async () => {
+      const unitStarted = roundTrips();
+      await getMonthlyFlow(range);
+      unitTrips = roundTrips() - unitStarted;
+      const started = roundTrips();
+      const read = await getExpensesByCategory(range);
+      tripsUsed = roundTrips() - started;
+      return read;
+    })
+  ).filter((row) => row.name === name);
+  const ownRow = rows.find((row) => row.categoryId === ownCategory);
+  const groupRow = rows.find((row) => row.categoryId === groupCategory);
+
+  assert(
+    next("A personal category's row says personal"),
+    ownRow?.scope === "personal" && ownRow.totalCents === 120_000,
+    JSON.stringify(ownRow),
+  );
+  assert(
+    next("A fund category's row says group"),
+    groupRow?.scope === "group" && groupRow.totalCents === 340_000,
+    JSON.stringify(groupRow),
+  );
+  assert(
+    next("Same name, two scopes, two rows, each with its own total"),
+    rows.length === 2 && ownRow !== undefined && groupRow !== undefined && ownRow.categoryId !== groupRow.categoryId,
+    JSON.stringify(rows),
+  );
+  assert(
+    next("The expenses by category still cost one round trip"),
+    unitTrips > 0 && tripsUsed === unitTrips,
+    `${tripsUsed} round trips against ${unitTrips} for one single-statement read`,
+  );
+
+  const options = await asUser(leader, () => getWebhookCredentialOptions());
+  const named = options.categories.filter((category) => category.name === name);
+  assert(
+    next("The webhook options carry the scope of both same-named categories"),
+    named.length === 2 &&
+      named.find((category) => category.id === ownCategory)?.scope === "personal" &&
+      named.find((category) => category.id === groupCategory)?.scope === "group",
+    JSON.stringify(named),
+  );
+  assert(
+    next("A fund child category inherits the group scope"),
+    options.categories.find((category) => category.id === groupChild)?.scope === "group",
+    JSON.stringify(options.categories.find((category) => category.id === groupChild)),
+  );
+
+  // A fund-account movement has no owning user, so the identity purge would leave it pinned to the fund's category.
+  await fixtureSql`delete from transactions where id in ${fixtureSql(spent)}`;
 }

@@ -127,7 +127,7 @@ export async function getReconcileSheet(
 export type ReconcileAccountArgs = {
   accountId: string;
   reconciledOn: string;
-  // The typed figure, unsigned; the account's own kind signs it in SQL.
+  // The typed figure, negative when the count fell below zero; the account's own kind signs it in SQL.
   realMagnitudeCents: number;
   // The derived figure the person was shown.
   expectedDerivedCents: number;

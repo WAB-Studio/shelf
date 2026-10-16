@@ -584,15 +584,32 @@ test.describe("refusals (B5b)", () => {
     }
   });
 
-  test("refuses a magnitude typed with a minus, and writes nothing", async ({ page }) => {
+  test("refuses a doubled minus, and writes nothing", async ({ page }) => {
     const account = await seedAccount();
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog).fill("--5000");
+      await submit(dialog).click();
+
+      await expect(dialog.getByText(amountInvalid, { exact: true })).toBeVisible();
+      expect(await reconciliationsOf(account.id)).toHaveLength(0);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("takes a minus on an asset and stores it negative", async ({ page }) => {
+    const account = await seedAccount({ openingCents: 0, spendCents: 0 });
     try {
       const dialog = await openDialog(page, account);
       await realField(dialog).fill("-5000");
       await submit(dialog).click();
 
-      await expect(dialog.getByText(amountInvalid, { exact: true })).toBeVisible();
-      expect(await reconciliationsOf(account.id)).toHaveLength(0);
+      await expect(page.getByText(accounts.reconciled, { exact: true })).toBeVisible();
+      await expect(dialog.getByText(amountInvalid, { exact: true })).toHaveCount(0);
+      const rows = await reconciliationsOf(account.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].counted).toBe("-500000");
     } finally {
       await dropAccount(account.id);
     }

@@ -13,6 +13,7 @@ import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { openRun } from "@repo/harness-registry";
+import ExcelJS from "exceljs";
 
 import messages from "@/messages/es.json";
 
@@ -844,6 +845,7 @@ void (async () => {
   try {
     await main();
     await edgeSuite();
+    await adjustmentTypeSuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -929,6 +931,106 @@ async function edgeCredential(
   track("webhook_credentials", id);
 
   return token;
+}
+
+// M24: `?type=adjustment` reaches the list and the export (RF-23, RF-118, RF-138).
+async function adjustmentTypeSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("adjustmentTypeSuite ran before the session was read");
+  const claims = JSON.stringify({
+    sub: userId,
+    role: "authenticated",
+    aud: "authenticated",
+  });
+  const tag = randomUUID().slice(0, 8);
+  const accountName = `Harness M24 ${tag}`;
+  const accountId = randomUUID();
+  const categoryId = randomUUID();
+  const expenseId = randomUUID();
+
+  // The counted balance sits below the derived one, so the trigger books one
+  // outgoing adjustment against the account (RF-137).
+  const adjustmentId = await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${accountId}, ${userId}, ${accountName}, 'asset', 'bank', 1000000, current_date)`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${categoryId}, ${userId}, ${`Harness M24 cat ${tag}`}, 'expense', '#4C8C4A')`;
+    await tx`
+      insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
+      values (${expenseId}, ${accountId}, 100000, current_date, ${`Harness M24 gasto ${tag}`})`;
+    await tx`
+      insert into transaction_splits (transaction_id, category_id, amount_cents)
+      values (${expenseId}, ${categoryId}, 100000)`;
+    await tx`
+      insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+      values (${accountId}, current_date, 800000)`;
+    const [row] = await tx<{ id: string }[]>`
+      select t.id from transactions t
+      where t.from_account_id = ${accountId} and t.reconciliation_id is not null`;
+    return row?.id;
+  });
+  track("accounts", accountId);
+  track("categories", categoryId);
+  track("transactions", expenseId);
+  if (adjustmentId) track("transactions", adjustmentId);
+  assert(
+    next("the seed books one expense and one reconciliation adjustment"),
+    adjustmentId !== undefined,
+    "the reconciliation booked no adjustment",
+  );
+
+  const cookie = await cookieHeader();
+  const columns = messages.data.columns;
+  const readSheet = async (type: string) => {
+    const response = await fetch(
+      `${HARNESS_BASE_URL}/${LOCALE}/settings/data/export?entities=transactions&type=${type}`,
+      { headers: { cookie } },
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await response.arrayBuffer());
+    const sheet = workbook.worksheets[0];
+    const header = sheet.getRow(1).values as unknown[];
+    const flagAt = header.indexOf(columns.adjustment);
+    const accountAt = header.indexOf(columns.fromAccount);
+    const rows: { account: string; flagged: boolean }[] = [];
+    sheet.eachRow((row, number) => {
+      if (number === 1) return;
+      const cells = row.values as unknown[];
+      const flag = cells[flagAt];
+      rows.push({
+        account: String(cells[accountAt] ?? ""),
+        flagged: flag !== undefined && flag !== null && flag !== "" && flag !== false,
+      });
+    });
+    return { status: response.status, flagAt, rows: rows.filter((one) => one.account === accountName) };
+  };
+
+  const adjusted = await readSheet("adjustment");
+  assert(
+    next("the export narrows to adjustments: one row, flagged in its adjustment column"),
+    adjusted.status === 200 &&
+      adjusted.flagAt > 0 &&
+      adjusted.rows.length === 1 &&
+      adjusted.rows[0].flagged,
+    `status ${adjusted.status}, flag column ${adjusted.flagAt}, rows ${JSON.stringify(adjusted.rows)}`,
+  );
+
+  const spent = await readSheet("expense");
+  assert(
+    next("the export's expense leaves the adjustment out"),
+    spent.status === 200 && spent.rows.length === 1 && !spent.rows[0].flagged,
+    `status ${spent.status}, rows ${JSON.stringify(spent.rows)}`,
+  );
+
+  const page = await get(`/${LOCALE}/movements?type=adjustment`, cookie);
+  assert(
+    next("/movements?type=adjustment answers 200 and not the error shell"),
+    page.status === 200 && !page.errorShell,
+    `it answered ${page.status}, error shell ${page.errorShell}`,
+  );
 }
 
 async function edgeSuite(): Promise<void> {

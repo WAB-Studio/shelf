@@ -9,7 +9,8 @@ import {
   recurringRules,
   transactions,
 } from "@/db/schema";
-import { withUserDb } from "@/db/session";
+import { getUserGroup } from "@/db/queries/groups";
+import { requireUser, withUserDb } from "@/db/session";
 import { type SheetEntity } from "@/lib/spreadsheet/schema";
 
 // The table each entity's `external_ref` lives on, keyed by the import's entity
@@ -25,11 +26,14 @@ const refTables = {
 
 // One referenced entity as the resolver needs it: its real id, its current name, and
 // its stable key, so a file row that renames it (matched by key) can override the
-// name in the effective post-import set.
+// name in the effective post-import set. `ownerUserId` and `groupId` say which scope
+// it lives in: exactly one is set (personal or fund), never both.
 export type ScopedEntity = {
   id: string;
   name: string;
   externalRef: string | null;
+  ownerUserId: string | null;
+  groupId: string | null;
 };
 
 // An account additionally carries what it settles in (RF-121): the pipeline checks a
@@ -44,7 +48,9 @@ export type ScopedCategory = ScopedEntity & { kind: string };
 // classifies rows without touching Postgres again. The account and category rows
 // seed the effective post-import set a reference resolves against; `existingRefs`
 // is the per-entity stable-key set the new-vs-update classification matches on.
+// `caller` is who imports and the fund a file-new row lands in, if any.
 export type ImportScope = {
+  caller: { userId: string; groupId: string | null };
   accounts: ScopedAccount[];
   categories: ScopedCategory[];
   existingRefs: Record<SheetEntity, Set<string>>;
@@ -74,17 +80,22 @@ function refsOf(rows: ScopedEntity[]): Set<string> {
  * `readExport`: the account and category rows a reference resolves through, and every
  * entity's existing `external_ref` set for new-vs-update classification. The accounts
  * and categories reads carry `external_ref`, so their key sets need no separate trip.
+ * The caller's id and fund ride the same fan-out as the entity reads.
  * Each read is its own round trip, fanned out with `Promise.all`, never chained.
  */
 export async function readImportScope(): Promise<ImportScope> {
-  const [accountRows, categoryRows, memberRefs, recurringRefs, transactionRefs] =
+  const [user, group, accountRows, categoryRows, memberRefs, recurringRefs, transactionRefs] =
     await Promise.all([
+      requireUser(),
+      getUserGroup(),
       withUserDb((tx) =>
         tx
           .select({
             id: accounts.id,
             name: accounts.name,
             externalRef: accounts.externalRef,
+            ownerUserId: accounts.ownerUserId,
+            groupId: accounts.groupId,
             settlementCurrency: accounts.settlementCurrency,
           })
           .from(accounts),
@@ -95,6 +106,8 @@ export async function readImportScope(): Promise<ImportScope> {
             id: categories.id,
             name: categories.name,
             externalRef: categories.externalRef,
+            ownerUserId: categories.ownerUserId,
+            groupId: categories.groupId,
             kind: categories.kind,
           })
           .from(categories),
@@ -105,6 +118,7 @@ export async function readImportScope(): Promise<ImportScope> {
     ]);
 
   return {
+    caller: { userId: user.id, groupId: group?.id ?? null },
     accounts: accountRows,
     categories: categoryRows,
     existingRefs: {
