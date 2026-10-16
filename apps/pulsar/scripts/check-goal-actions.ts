@@ -85,6 +85,10 @@ let createOneOff: typeof import("@/app/actions/one-offs").createOneOff;
 let scheduleOneOff: typeof import("@/app/actions/one-offs").scheduleOneOff;
 let deleteOneOff: typeof import("@/app/actions/one-offs").deleteOneOff;
 let fixTask: typeof import("@/app/actions/one-offs").fixTask;
+let completeOneOff: typeof import("@/app/actions/one-offs").completeOneOff;
+let loadWeek: typeof import("@/lib/queries/week").loadWeek;
+let loadGoal: typeof import("@/lib/queries/goal").loadGoal;
+let planMonthList: typeof import("@/lib/plan/roadmap-read").planMonthList;
 let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
 let addPhase: typeof import("@/app/actions/plan").addPhase;
 let addCommitment: typeof import("@/app/actions/plan").addCommitment;
@@ -147,7 +151,10 @@ before(async () => {
   (globalThis as unknown as { sql: unknown }).sql = appPool;
   ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal, archiveGoal, retireCommitment, setGoalMeasure } = await import("@/app/actions/plan"));
   ({ setRhythm } = await import("@/app/actions/roadmap"));
-  ({ createOneOff, scheduleOneOff, deleteOneOff, fixTask } = await import("@/app/actions/one-offs"));
+  ({ createOneOff, scheduleOneOff, deleteOneOff, fixTask, completeOneOff } = await import("@/app/actions/one-offs"));
+  ({ loadWeek } = await import("@/lib/queries/week"));
+  ({ loadGoal } = await import("@/lib/queries/goal"));
+  ({ planMonthList } = await import("@/lib/plan/roadmap-read"));
   ({ declareFact, undoFact } = await import("@/app/actions/facts"));
   ({ todayInZone } = await import("@/lib/zone"));
   ({ PAST_DAY_LIMIT } = await import("@/lib/validation/fact"));
@@ -194,6 +201,11 @@ before(async () => {
 
 after(async () => {
   // Cascades to the fixture's commitments, one-off and facts.
+  if (seededTasks.length) {
+    await sql`delete from goals.facts where one_off_id in ${sql(seededTasks)}`;
+    await sql`delete from goals.one_offs where parent_id in ${sql(seededTasks)}`;
+    await sql`delete from goals.one_offs where id in ${sql(seededTasks)}`;
+  }
   if (fixtureGoalId) await sql`delete from goals.goals where id = ${fixtureGoalId}`;
   await sql.end();
   await appPool?.end();
@@ -296,10 +308,156 @@ test("declareFact: a day after the commitment's own retirement is refused", asyn
   if (!result.ok) assert.equal(result.error, "day.errors.dayAfterRetired");
 });
 
-test("declareFact: a day on a one-off is refused — a one-off is done on the day it is done", async () => {
-  const result = await declareFact({ oneOffId, day: shiftDay(today, -1) });
+// RP-129. A task born `createdAgo` days ago (`created_at` is out of
+// `authenticated`'s grant, so it is seeded through the pooler), on its own
+// day `dayOffset` from today or on none, in the fixture goal or the one given.
+const seededTasks: string[] = [];
+async function seedTask(opts: {
+  createdAgo: number;
+  dayOffset: number | null;
+  goalId?: string;
+  estimate?: number;
+  parentId?: string;
+}): Promise<string> {
+  const day = opts.dayOffset === null ? null : shiftDay(today, opts.dayOffset);
+  const [row] = await sql<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, parent_id, name, day, estimate, created_at)
+    values (${personId}, ${opts.goalId ?? fixtureGoalId}, ${opts.parentId ?? null}, 'RP-129 fixture', ${day},
+            ${opts.estimate ?? null}, now() - ${opts.createdAgo + " days"}::interval)
+    returning id`;
+  seededTasks.push(row.id);
+  return row.id;
+}
+
+async function factsOf(oneOffId: string): Promise<{ id: string; day: string; writtenAtDay: string }[]> {
+  return sql<{ id: string; day: string; writtenAtDay: string }[]>`
+    select id, day::text as day, (written_at at time zone 'America/Bogota')::date::text as "writtenAtDay"
+    from goals.facts where one_off_id = ${oneOffId}`;
+}
+
+async function refusedWithNoFact(oneOffId: string, day: string | undefined, key: string): Promise<void> {
+  const result = await completeOneOff({ oneOffId, day });
+  assert.equal(result.ok, false, `${day}`);
+  if (!result.ok) assert.equal(result.error, key, `${day}`);
+  assert.equal((await factsOf(oneOffId)).length, 0, `${day} wrote a fact`);
+}
+
+test("completeOneOff: a task created 4 days ago and dated 3 days ago, marked done 2 days ago, keeps that day and today as the moment written", async () => {
+  const task = await seedTask({ createdAgo: 4, dayOffset: -3 });
+  const result = await completeOneOff({ oneOffId: task, day: shiftDay(today, -2) });
+  assert.equal(result.ok, true);
+  const rows = await factsOf(task);
+  assert.equal(rows.length, 1);
+  if (result.ok) assert.equal(rows[0].id, result.factId);
+  assert.equal(rows[0].day, shiftDay(today, -2));
+  assert.equal(rows[0].writtenAtDay, today);
+});
+
+test("completeOneOff: no day is today, decided on the server", async () => {
+  const task = await seedTask({ createdAgo: 4, dayOffset: -3 });
+  assert.equal((await completeOneOff({ oneOffId: task })).ok, true);
+  assert.deepEqual((await factsOf(task)).map((row) => row.day), [today]);
+});
+
+test("completeOneOff: tomorrow is dayFuture, PAST_DAY_LIMIT back lands, one more is dayTooOld, none writes on refusal", async () => {
+  const task = await seedTask({ createdAgo: 12, dayOffset: null });
+  await refusedWithNoFact(task, shiftDay(today, 1), "day.errors.dayFuture");
+  await refusedWithNoFact(task, shiftDay(today, -(PAST_DAY_LIMIT + 1)), "day.errors.dayTooOld");
+  assert.equal((await completeOneOff({ oneOffId: task, day: shiftDay(today, -PAST_DAY_LIMIT) })).ok, true);
+  assert.deepEqual((await factsOf(task)).map((row) => row.day), [shiftDay(today, -PAST_DAY_LIMIT)]);
+});
+
+test("completeOneOff: a dayless task refuses the day before its creation and takes its creation day and later", async () => {
+  const task = await seedTask({ createdAgo: 4, dayOffset: null });
+  await refusedWithNoFact(task, shiftDay(today, -5), "day.errors.dayBeforeOneOff");
+  assert.equal((await completeOneOff({ oneOffId: task, day: shiftDay(today, -4) })).ok, true);
+  assert.deepEqual((await factsOf(task)).map((row) => row.day), [shiftDay(today, -4)]);
+
+  const later = await seedTask({ createdAgo: 4, dayOffset: null });
+  assert.equal((await completeOneOff({ oneOffId: later, day: shiftDay(today, -2) })).ok, true);
+});
+
+test("completeOneOff: a day before the task's own day is dayBeforeOneOffDay, its own day lands", async () => {
+  const task = await seedTask({ createdAgo: 4, dayOffset: -3 });
+  // After the creation day, before the task's own: only the own-day rule can refuse it.
+  await refusedWithNoFact(task, shiftDay(today, -4), "day.errors.dayBeforeOneOffDay");
+  assert.equal((await completeOneOff({ oneOffId: task, day: shiftDay(today, -3) })).ok, true);
+
+  const ahead = await seedTask({ createdAgo: 4, dayOffset: 0 });
+  await refusedWithNoFact(ahead, shiftDay(today, -1), "day.errors.dayBeforeOneOffDay");
+});
+
+test("completeOneOff: a task already done keeps its fact and its day; a second mark on another day writes nothing", async () => {
+  const task = await seedTask({ createdAgo: 4, dayOffset: -3 });
+  const first = await completeOneOff({ oneOffId: task, day: shiftDay(today, -2) });
+  assert.equal(first.ok, true);
+  const second = await completeOneOff({ oneOffId: task, day: shiftDay(today, -1) });
+  assert.equal(second.ok, true);
+  if (first.ok && second.ok) assert.equal(second.factId, first.factId);
+  const rows = await factsOf(task);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].day, shiftDay(today, -2));
+});
+
+test("completeOneOff: a parent stays done by its sub-tasks, with or without a day, and writes no fact", async () => {
+  const parent = await seedTask({ createdAgo: 4, dayOffset: null });
+  await seedTask({ createdAgo: 4, dayOffset: null, parentId: parent });
+  await refusedWithNoFact(parent, shiftDay(today, -1), "month.errors.parentIsDoneByChildren");
+  await refusedWithNoFact(parent, undefined, "month.errors.parentIsDoneByChildren");
+});
+
+test("completeOneOff: a malformed day is dayInvalid, never thrown, and reaches the database with no statement", async () => {
+  const task = await seedTask({ createdAgo: 4, dayOffset: null });
+  const mark = wire.length;
+  await assert.doesNotReject(() => completeOneOff({ oneOffId: task, day: "2026-13-40" }));
+  const result = await completeOneOff({ oneOffId: task, day: "2026-13-40" });
   assert.equal(result.ok, false);
-  if (!result.ok) assert.equal(result.error, "day.errors.dayOnOneOff");
+  if (!result.ok) assert.equal(result.error, "day.errors.dayInvalid");
+  assert.equal(wire.length, mark);
+  assert.equal((await factsOf(task)).length, 0);
+});
+
+test("completeOneOff: done on a past day, the task shows on that day's week and in that day's month, and its estimate adds no measure (RP-129, RP-128)", async () => {
+  const [measured] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${personId}, 'RP-129 medida', ${shiftDay(today, 60)}, 'Cajas', 'cajas', now() - interval '10 days')
+    returning id`;
+  try {
+    const task = await seedTask({ createdAgo: 4, dayOffset: -3, goalId: measured.id, estimate: 5 });
+    const doneDay = shiftDay(today, -2);
+    const before_ = await loadGoal(measured.id);
+    assert.ok(before_);
+
+    assert.equal((await completeOneOff({ oneOffId: task, day: doneDay })).ok, true);
+
+    const week = await loadWeek(doneDay);
+    const listed = week.oneOffFacts.filter((fact) => fact.oneOffId === task);
+    assert.deepEqual(listed.map((fact) => fact.day), [doneDay]);
+
+    const view = await loadGoal(measured.id);
+    assert.ok(view);
+    assert.equal(view.tasks.find((item) => item.id === task)?.doneOn, doneDay);
+    const item = planMonthList(view.plan, `${doneDay.slice(0, 7)}-01`).find((entry) => entry.task.id === task);
+    assert.equal(item?.done, true);
+
+    assert.equal(view.measureTotal, before_.measureTotal);
+    assert.deepEqual(view.weeks, before_.weeks);
+  } finally {
+    await sql`delete from goals.goals where id = ${measured.id}`;
+  }
+});
+
+test("declareFact: a day on a one-off follows the task's rule (RP-129): a past day lands, 8 days back is refused", async () => {
+  const task = await seedTask({ createdAgo: 4, dayOffset: -3 });
+  const refused = await declareFact({ oneOffId: task, day: shiftDay(today, -(PAST_DAY_LIMIT + 1)) });
+  assert.equal(refused.ok, false);
+  if (!refused.ok) assert.equal(refused.error, "day.errors.dayTooOld");
+  assert.equal((await factsOf(task)).length, 0);
+
+  const done = await declareFact({ oneOffId: task, day: shiftDay(today, -2) });
+  assert.equal(done.ok, true);
+  const rows = await factsOf(task);
+  assert.deepEqual(rows.map((row) => row.day), [shiftDay(today, -2)]);
 });
 
 test("declareFact: a malformed day is refused gracefully, never thrown", async () => {

@@ -3,7 +3,9 @@ import test from "node:test";
 
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
+import dayMessages from "../../messages/es/day.json";
 import {
+  completeOneOffSchema,
   createOneOffSchema,
   fixTaskSchema,
   noteSchema,
@@ -142,4 +144,32 @@ test("createOneOffSchema: note is optional and parsed", () => {
   assert.equal(createOneOffSchema.parse({ name: "x", day: null }).note, undefined);
   assert.equal(createOneOffSchema.parse({ name: "x", day: null, note: " y " }).note, "y");
   assert.equal(createOneOffSchema.parse({ name: "x", day: null, note: "  " }).note, null);
+});
+
+// RP-129: the act of a task takes the day it was done on.
+test("completeOneOffSchema: a real civil day is kept, no day stays absent, a malformed one is dayInvalid", () => {
+  const id = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d";
+  const kept = completeOneOffSchema.safeParse({ oneOffId: id, day: "2026-10-12" });
+  assert.equal(kept.success, true);
+  assert.equal(kept.data?.day, "2026-10-12");
+
+  const bare = completeOneOffSchema.safeParse({ oneOffId: id });
+  assert.equal(bare.success, true);
+  assert.equal(bare.data?.day, undefined);
+
+  for (const day of ["2026-13-40", "2026-02-30", "ayer", "", "2026-10-1", 20261012]) {
+    const refused = completeOneOffSchema.safeParse({ oneOffId: id, day });
+    assert.equal(refused.success, false, String(day));
+    assert.equal(refused.error?.issues[0]?.message, "day.errors.dayInvalid", String(day));
+  }
+});
+
+test("day.json: the task's two new refusals and the past heading read as the user decided; dayOnOneOff is gone", () => {
+  // Read as plain records: the keys do not exist on the tree this is red on.
+  const errors: Record<string, string> = dayMessages.errors;
+  const done: Record<string, string> = dayMessages.doneOneOffs;
+  assert.equal(errors.dayBeforeOneOff, "Esa tarea todavía no existía ese día.");
+  assert.equal(errors.dayBeforeOneOffDay, "Esa tarea era para un día después.");
+  assert.equal(done.titlePast, "Hechas ese día");
+  assert.equal("dayOnOneOff" in errors, false);
 });
