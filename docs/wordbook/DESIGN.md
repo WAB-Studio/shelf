@@ -1740,3 +1740,16 @@ Canvas version 48. Every board draws the dark 360 face; `RegistroBorrarFila` add
   navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.» (GoalLog's words). The form below is the retry.
 - **`CuentaEnlaceNoVerificado` and `CuentaEnlaceInvalido` are stale:** drawn before «Tu cuenta» and the Copia section.
   The user asked for both redrawn so the three match.
+
+## Decisions of 2026-10-16, after the «cuenta» critic, by the user
+
+- **Sign-in on the installed iPhone app:** a six-digit code the reader types in the app, never a PKCE link. It replaces the
+  PKCE half of RL-71, which waits for a successor code, its boards and an email template the three apps share. Production's
+  template keeps `token_hash` until then. Not built yet.
+- **Deleting a row on a device with no session or no account** says its own words: «En este dispositivo. Tu cuenta lo borra
+  cuando vuelvas a entrar.» It needs one board state. Not built yet.
+- **A delete starts its own copy round** when the copy is on, right after the delete. That rewords RNL-09: one request per
+  delete. Not built yet.
+- **Anki cards also come from the words the network answered**, with their definition on the back. What still gives no
+  card is hidden from the download, which says why, and that needs a board state. The card format and its tests change. Not
+  built yet.
