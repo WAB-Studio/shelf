@@ -72,7 +72,21 @@ async function inviteRows(email: string) {
 
 // The send mints an `auth.users` row (shouldCreateUser). Registering it under the
 // run lets a crash leave it to the teardown; dropping it by exact address ends it.
+// The action writes the member, then asks Auth to send: the `auth.users` row lands
+// a moment after the member does. Waiting for it is what keeps `forget` from running
+// ahead of the send and leaving the row behind.
+async function minted(email: string, timeoutMs: number): Promise<boolean> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    const [{ n }] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from auth.users where email = ${email}`;
+    if (n > 0) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
+}
+
 async function register(email: string) {
+  await minted(email, 10_000);
   const runId = process.env.HARNESS_RUN_ID;
   if (!runId) return;
   await fixtureSql`
@@ -82,6 +96,8 @@ async function register(email: string) {
 }
 
 async function forget(email: string) {
+  // A send is under way only when the invite landed as a member.
+  if ((await inviteRows(email)).length > 0) await minted(email, 10_000);
   const ids = await fixtureSql<{ id: string }[]>`select id from auth.users where email = ${email}`;
   for (const { id } of ids) {
     await fixtureSql`delete from harness.identities where user_id = ${id}`;
