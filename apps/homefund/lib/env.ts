@@ -13,6 +13,11 @@ export const env = createEnv({
     // Supabase session pooler (5432), used by drizzle-kit only.
     MIGRATION_DATABASE_URL: z.url(),
     CRON_SECRET: z.string().min(16),
+    // RF-143's ceilings on sign-in links: per caller, then per address.
+    SIGN_IN_LINK_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(5),
+    SIGN_IN_LINK_DAILY_ADDRESS_CAP: z.coerce.number().int().positive().default(3),
+    // Salts the keys those caps count against, so the IP and the address are never stored.
+    CLIENT_KEY_SALT: z.string().min(16).optional(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
