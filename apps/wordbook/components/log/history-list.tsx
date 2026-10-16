@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NextLink from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { readWordStudy, type StudyRow } from "@/lib/log/summary";
 import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
+import { deleteStudyGroup, LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import {
@@ -35,19 +36,45 @@ type ListState =
   | { kind: "ready"; rows: StudyRow[]; totalLookups: number; totalWords: number }
   | { kind: "failed" };
 
-const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow; first: boolean }) {
+// The one row whose ✕ was pressed: a second row's ✕ replaces it, so two
+// questions are never open at once (`RegistroBorrarFilaConfirmar`).
+type DeleteTarget = { key: string; phase: "asking" | "deleting" | "failed" };
+
+type RowActions = {
+  ask: (key: string) => void;
+  keep: () => void;
+  remove: (key: string) => void;
+};
+
+const StudyRowItem = memo(function StudyRowItem({
+  row,
+  first,
+  phase,
+  actions,
+}: {
+  row: StudyRow;
+  first: boolean;
+  // Undefined on every row but the target, so pressing one ✕ re-renders one row.
+  phase: DeleteTarget["phase"] | undefined;
+  actions: RowActions;
+}) {
   const t = useTranslations("log");
   const lead = row.forms[0];
   // A phrase or a miss reached no lemma: it keeps the text as typed.
   const lemmaless = row.lastOutcome === "translated" || row.lastOutcome === "unlisted";
+  const word = lemmaless ? row.display : row.key;
+  const deleting = phase === "deleting";
   // A lone form that is the key says nothing the title does not.
   const formsLine =
     lead === undefined || (row.forms.length === 1 && lead.text === row.key)
       ? null
       : row.forms.map((form) => form.text).join(", ");
   return (
-    <Flex direction="column" gap="3">
-      {!first && <Separator size="4" />}
+    // The ✕ sits in a track of its own beside the link, never inside it, so
+    // a tap on it can never navigate (`RegistroBorrarFila`); the rule and the
+    // question under the row run under both tracks.
+    <Grid columns="minmax(0, 1fr) 44px" gapY="3" align="center">
+      {!first && <Separator size="4" spanTracks />}
       <Link asChild underline="none">
         <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
           <TapTarget direction="column" align="stretch" width="100%">
@@ -71,13 +98,13 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
               the way module 3's original code had it as the grid item
               directly (docs/wordbook/DESIGN.md "What the data forces"). */}
             <Grid
-              columns={{ initial: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 1fr) auto" }}
+              columns={{ initial: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 1fr) 40px" }}
               gap="3"
               align="center"
             >
               <Flex gridColumn="1" gridRow="1" minWidth="0" overflow="hidden">
                 <Text serif truncate english>
-                  {lemmaless ? row.display : row.key}
+                  {word}
                 </Text>
               </Flex>
               <Flex
@@ -109,7 +136,77 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
           </TapTarget>
         </NextLink>
       </Link>
-    </Flex>
+      {phase === undefined && (
+        // A ghost's negative margins stretch it past a grid track it fills;
+        // centred in a cell of its own it keeps to 44px, clear of the link.
+        <Flex justify="center">
+          <IconButton
+            type="button"
+            size="2"
+            variant="ghost"
+            color="gray"
+            quiet
+            aria-label={t("study.deleteRow", { word })}
+            onClick={() => actions.ask(row.key)}
+          >
+            <X size={16} />
+          </IconButton>
+        </Flex>
+      )}
+
+      {(phase === "asking" || phase === "deleting") && (
+        // The order and weights of `RegistroVaciarConfirmar`: the accent on
+        // the safe exit, the destructive one a grey link after it.
+        <Flex gridColumn="1 / -1" direction="column" gap="3" align="start">
+          <Flex direction="column" gap="1">
+            <Text variant="breakTitle">{t("study.deleteConfirmTitle", { word })}</Text>
+            <Text variant="breakBody" muted>
+              {t("study.deleteConfirmBody", { count: row.count })}
+            </Text>
+          </Flex>
+          <Flex gap="4" align="center" wrap="wrap">
+            <Button size="3" disabled={deleting} onClick={actions.keep}>
+              {t("study.deleteKeep")}
+            </Button>
+            <Link asChild underline="always" muted>
+              <button type="button" disabled={deleting} onClick={() => actions.remove(row.key)}>
+                <TapTarget align="center" px="1">
+                  {deleting ? t("study.deleting") : t("study.deleteConfirm")}
+                </TapTarget>
+              </button>
+            </Link>
+          </Flex>
+        </Flex>
+      )}
+
+      {phase === "failed" && (
+        // `## Failure`: a hairline, the line in full ink, the accent on the
+        // retry. The transaction aborted whole, so the row above is intact.
+        <Flex gridColumn="1 / -1" direction="column" gap="3" align="start">
+          <Separator size="4" />
+          <Flex direction="column" gap="1">
+            <Text variant="breakTitle" role="alert">
+              {t("study.deleteFailedTitle", { word })}
+            </Text>
+            <Text variant="breakBody" muted>
+              {t("study.deleteFailedBody", { count: row.count })}
+            </Text>
+          </Flex>
+          <Flex gap="4" align="center" wrap="wrap">
+            <Button size="3" onClick={() => actions.remove(row.key)}>
+              {t("retry")}
+            </Button>
+            <Link asChild underline="always" muted>
+              <button type="button" onClick={actions.keep}>
+                <TapTarget align="center" px="1">
+                  {t("study.deleteKeep")}
+                </TapTarget>
+              </button>
+            </Link>
+          </Flex>
+        </Flex>
+      )}
+    </Grid>
   );
 });
 
@@ -149,6 +246,11 @@ export function HistoryList() {
   // Every read this component starts bumps this, so a reply superseded by
   // a newer one — the flush event firing mid-read — never overwrites it.
   const requestIdRef = useRef(0);
+  const [target, setTarget] = useState<DeleteTarget | null>(null);
+  // Holds a key from its first «Borrar» to its settle: two taps inside one
+  // task both run before `disabled` paints, and only the first may reach
+  // IndexedDB.
+  const inFlightRef = useRef(new Set<string>());
 
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +268,11 @@ export function HistoryList() {
       Promise.all([readWordStudy(), countRecords()])
         .then(([study, totalLookups]) => {
           if (cancelled || requestIdRef.current !== requestId) return;
+          // A deleted row keeps «Borrando…» until this reread drops it, so its
+          // ✕ never flashes back for the frame in between.
+          setTarget((current) =>
+            current !== null && !study.rows.some((row) => row.key === current.key) ? null : current,
+          );
           setState(
             study.rows.length === 0
               ? { kind: "empty" }
@@ -208,11 +315,14 @@ export function HistoryList() {
     window.addEventListener(LOG_CLEARED_EVENT, onChange);
     // A pull that landed rows from another device changes the store the same way.
     window.addEventListener(SYNC_LANDED_EVENT, onChange);
+    // A row's ✕ deleted its group (`deleteStudyGroup`).
+    window.addEventListener(LOG_DELETED_EVENT, onChange);
     return () => {
       cancelled = true;
       window.removeEventListener(LOG_FLUSHED_EVENT, onChange);
       window.removeEventListener(LOG_CLEARED_EVENT, onChange);
       window.removeEventListener(SYNC_LANDED_EVENT, onChange);
+      window.removeEventListener(LOG_DELETED_EVENT, onChange);
     };
   }, [attempt]);
 
@@ -220,6 +330,30 @@ export function HistoryList() {
   const visible = useMemo(
     () => (readyRows === null ? [] : filterStudyRows(readyRows, query)),
     [readyRows, query],
+  );
+
+  const remove = useCallback(async (key: string): Promise<void> => {
+    if (inFlightRef.current.has(key)) return;
+    inFlightRef.current.add(key);
+    setTarget({ key, phase: "deleting" });
+    try {
+      const { deleted } = await deleteStudyGroup(key);
+      // Nothing matched: no reread will drop the row, so nothing clears it.
+      if (deleted === 0) setTarget((current) => (current?.key === key ? null : current));
+    } catch {
+      // Shown even over another row's question: a refusal nobody sees reads as done.
+      setTarget({ key, phase: "failed" });
+    } finally {
+      inFlightRef.current.delete(key);
+    }
+  }, []);
+  const actions = useMemo<RowActions>(
+    () => ({
+      ask: (key) => setTarget({ key, phase: "asking" }),
+      keep: () => setTarget(null),
+      remove: (key) => void remove(key),
+    }),
+    [remove],
   );
 
   if (state.kind === "loading") {
@@ -328,7 +462,13 @@ export function HistoryList() {
       ) : (
         <Flex direction="column" gap="3">
           {visible.map((row, index) => (
-            <StudyRowItem key={row.key} row={row} first={index === 0} />
+            <StudyRowItem
+              key={row.key}
+              row={row}
+              first={index === 0}
+              phase={target?.key === row.key ? target.phase : undefined}
+              actions={actions}
+            />
           ))}
         </Flex>
       )}

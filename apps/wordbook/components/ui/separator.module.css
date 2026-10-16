@@ -8,3 +8,8 @@
   background-color: var(--rl-border);
   margin-top: 4px;
 }
+
+/* A grid item that takes the whole row, whatever the grid's track count. */
+.spanTracks {
+  grid-column: 1 / -1;
+}
