@@ -2,8 +2,10 @@ import "server-only";
 
 import { lookupWord } from "@/lib/dictionary/lookup";
 import { env } from "@/lib/env";
+import { empty, json } from "@/lib/http/responses";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { admitWord } from "@/lib/word/admit";
+import { logDark } from "@/lib/word/dark";
 import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
@@ -20,16 +22,6 @@ export const dynamic = "force-dynamic";
 
 // Above the provider's own 20 s timeout.
 export const maxDuration = 30;
-
-const NO_STORE = { "Cache-Control": "no-store" };
-
-function json(body: unknown, status: number): Response {
-  return Response.json(body, { status, headers: NO_STORE });
-}
-
-function empty(status: 204 | 400): Response {
-  return new Response(null, { status, headers: NO_STORE });
-}
 
 export async function POST(request: Request): Promise<Response> {
   const refused = refuseCrossSiteRequest(request);
@@ -72,6 +64,7 @@ export async function POST(request: Request): Promise<Response> {
     cached = await readCachedAnswer(word);
   } catch (error) {
     console.error("[api/word/unlisted] cache read failed", error);
+    logDark("word/unlisted", "cache-error");
     return empty(204);
   }
   if (cached) {
@@ -82,24 +75,33 @@ export async function POST(request: Request): Promise<Response> {
   // cap, no salt to key a caller by, over either cap, a provider failure or
   // a generation that fails to validate all answer `204` — the same
   // "no connection" screen already drawn (RL-35).
-  if (!env.OPENAI_API_KEY || !env.WORD_UNLISTED_DAILY_CLIENT_CAP || !env.WORD_TEXT_DAILY_CALL_CAP) {
+  if (!env.OPENAI_API_KEY) {
+    logDark("word/unlisted", "no-key");
+    return empty(204);
+  }
+  if (!env.WORD_UNLISTED_DAILY_CLIENT_CAP || !env.WORD_TEXT_DAILY_CALL_CAP) {
+    logDark("word/unlisted", "no-cap");
     return empty(204);
   }
 
   const client = clientKey(request);
   if (!client) {
+    logDark("word/unlisted", "no-caller");
     return empty(204);
   }
 
   try {
     if (!(await claimCallerShare(client, env.WORD_TEXT_DAILY_CALL_CAP))) {
+      logDark("word/unlisted", "caller-share");
       return empty(204);
     }
     if (!(await claimClientCall(client, env.WORD_UNLISTED_DAILY_CLIENT_CAP))) {
+      logDark("word/unlisted", "caller-cap");
       return empty(204);
     }
   } catch (error) {
     console.error("[api/word/unlisted] client claim failed", error);
+    logDark("word/unlisted", "claim-error");
     return empty(204);
   }
 
@@ -108,10 +110,12 @@ export async function POST(request: Request): Promise<Response> {
   // OpenAI CSV does not say what this app spent").
   try {
     if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) {
+      logDark("word/unlisted", "day-cap");
       return empty(204);
     }
   } catch (error) {
     console.error("[api/word/unlisted] daily claim failed", error);
+    logDark("word/unlisted", "claim-error");
     return empty(204);
   }
 
@@ -120,6 +124,7 @@ export async function POST(request: Request): Promise<Response> {
     inflection ? { lemma: inflection.lemma, rule: inflection.rule } : null,
   );
   if (!generated) {
+    logDark("word/unlisted", "model-failed");
     return empty(204);
   }
 

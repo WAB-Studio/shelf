@@ -22,7 +22,7 @@ export type UseDictionaryResult = {
 };
 
 function unavailable(): Error {
-  return new Error("El diccionario todavía no está disponible.");
+  return new Error("The dictionary is not available yet.");
 }
 
 export function useDictionary(): UseDictionaryResult {

@@ -216,9 +216,14 @@ test("RNL-09: with no account, ten keystrokes and a hidden tab issue nothing to 
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.pressSequentially("throughout", { delay: 40 });
+  // The keystrokes committed: the answer is drawn.
+  await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible();
 
   await hideTab(page);
-  await page.waitForTimeout(2000);
+  // The hide handler queued its sync round on the driver's Web Lock
+  // ("voyager-sync", `lib/sync/driver.ts`) during the dispatch above; a
+  // request for the same lock is granted only after that round returned.
+  await page.evaluate(() => navigator.locks.request("voyager-sync", () => undefined));
 
   expect(syncRequests, `sync requests seen: ${JSON.stringify(syncRequests)}`).toHaveLength(0);
 });
