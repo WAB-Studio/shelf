@@ -1,16 +1,16 @@
 import "server-only";
 
-import { and, eq, exists, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, exists, gte, lte, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 
+import { transactionListConditions } from "@/db/queries/transactions";
 import type { TransactionListFilters } from "@/db/queries/transactions";
 import {
   accounts,
   categories,
   groupMembers,
   recurringRules,
-  transactionLabels,
   transactions,
   transactionSplits,
 } from "@/db/schema";
@@ -71,52 +71,6 @@ const dateColumn: Partial<Record<SheetEntity, PgColumn>> = {
 function toCivilDate(value: Date | string): string {
   if (typeof value === "string") return value;
   return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(value);
-}
-
-// The ledger list's own predicates, rebuilt over the same columns so the export
-// narrows to exactly the rows the list shows (RF-23, RF-89). An absent filter
-// adds nothing, so an unfiltered export runs the query it ran before.
-function transactionConditions(filters?: TransactionExportFilters): SQL[] {
-  const conditions: SQL[] = [];
-  if (!filters) return conditions;
-
-  if (filters.memberUserId) {
-    conditions.push(eq(transactions.createdBy, filters.memberUserId));
-  }
-  if (filters.accountId) {
-    conditions.push(
-      or(
-        eq(transactions.fromAccountId, filters.accountId),
-        eq(transactions.toAccountId, filters.accountId),
-      ) as SQL,
-    );
-  }
-  if (filters.categoryId) {
-    conditions.push(
-      sql`exists (select 1 from ${transactionSplits} s
-        where s.transaction_id = ${transactions.id} and s.category_id = ${filters.categoryId})`,
-    );
-  }
-  if (filters.labelId) {
-    conditions.push(
-      sql`exists (select 1 from ${transactionLabels} tl
-        where tl.transaction_id = ${transactions.id} and tl.label_id = ${filters.labelId})`,
-    );
-  }
-  if (filters.kind) conditions.push(eq(transactions.kind, filters.kind));
-  if (filters.unreviewed) {
-    conditions.push(
-      and(
-        isNotNull(transactions.recurringRuleId),
-        isNull(transactions.reviewedAt),
-      ) as SQL,
-    );
-  }
-  if (filters.recurringRuleId) {
-    conditions.push(eq(transactions.recurringRuleId, filters.recurringRuleId));
-  }
-
-  return conditions;
 }
 
 // One column seen through the shared contract: `satisfies` narrows each literal, so
@@ -313,7 +267,9 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
   const needsSplits = requested.includes("transactions");
 
   // Built once so the rows and their splits are narrowed by the very same set.
-  const listed = transactionConditions(input.transactionFilters);
+  const listed = input.transactionFilters
+    ? transactionListConditions(input.transactionFilters)
+    : [];
 
   const [sets, accountNames, categoryNames, splitCategoryIds] = await Promise.all([
     Promise.all(

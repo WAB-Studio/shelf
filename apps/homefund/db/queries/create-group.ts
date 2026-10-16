@@ -5,17 +5,13 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import { accounts, categories, groupMembers, groups } from "@/db/schema";
+import { seedCategoryTree } from "@/db/queries/seed-categories";
+import { accounts, groupMembers, groups } from "@/db/schema";
 import type { Group } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { getSessionUser, withUserDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
-import { nextCategoryColor } from "@/lib/fund/category-color";
-import {
-  GROUP_CASH_ACCOUNT_NAME,
-  PERSONAL_CASH_ACCOUNT_NAME,
-  SEED_CATEGORIES,
-} from "@/lib/fund/seed";
+import { GROUP_CASH_ACCOUNT_NAME, PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
 import { TIME_ZONE } from "@/lib/locales";
 import type { Locale } from "@/lib/locales";
 
@@ -106,51 +102,5 @@ async function insertGroup(
     });
   }
 
-  // One colour per node, walked depth-first over SEED_CATEGORIES so a category
-  // and the one drawn right after it — its own first child, or the next parent
-  // once it runs out of children — never land on the same free slot (D8: a
-  // child used to copy `category.color` straight from its parent).
-  const usedColors: string[] = [];
-  const seedColors = SEED_CATEGORIES.map((category) => {
-    const parent = nextCategoryColor(usedColors);
-    usedColors.push(parent);
-    const children = (category.children ?? []).map(() => {
-      const color = nextCategoryColor(usedColors);
-      usedColors.push(color);
-      return color;
-    });
-    return { parent, children };
-  });
-
-  // Parents first, ids read back: the leader is already a member here, so the
-  // categories SELECT policy admits the row and `returning` hands back each id
-  // a child references. Row order out of a single INSERT matches the input.
-  const parentRows = await insertRow(
-    tx,
-    categories,
-    SEED_CATEGORIES.map((category, index) => ({
-      groupId,
-      ownerUserId: null,
-      name: category.name[locale],
-      kind: category.kind,
-      color: seedColors[index].parent,
-    })),
-    { returning: { id: categories.id } },
-  );
-
-  // A subcategory copies its parent's kind (RF-27); its colour is its own — D8.
-  const childRows = SEED_CATEGORIES.flatMap((category, index) =>
-    (category.children ?? []).map((child, childIndex) => ({
-      groupId,
-      ownerUserId: null,
-      parentId: parentRows[index].id,
-      name: child.name[locale],
-      kind: category.kind,
-      color: seedColors[index].children[childIndex],
-    })),
-  );
-
-  if (childRows.length > 0) {
-    await insertRow(tx, categories, childRows);
-  }
+  await seedCategoryTree(tx, { groupId }, locale);
 }

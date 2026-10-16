@@ -321,7 +321,9 @@ export async function deleteTransaction({
   });
 }
 
-function transactionConditions(filters: TransactionListFilters): SQL[] {
+// The one listing predicate: the ledger list, its totals and the export all narrow
+// by it, so a filter selects the same movements wherever it is read (RF-23, RF-89).
+export function transactionListConditions(filters: TransactionListFilters): SQL[] {
   const conditions: SQL[] = [];
 
   if (filters.id) conditions.push(eq(transactions.id, filters.id));
@@ -391,7 +393,7 @@ export async function getTransactionTotals(
   filters: TransactionListFilters,
   outerTx?: Transaction,
 ): Promise<{ count: number; nets: { currency: CurrencyCode; netCents: number }[] }> {
-  const conditions = transactionConditions(filters);
+  const conditions = transactionListConditions(filters);
 
   return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx
@@ -423,7 +425,7 @@ export async function listTransactions(
   filters: TransactionListFilters,
   options?: { limit?: number; offset?: number; tx?: Transaction },
 ): Promise<TransactionListRow[]> {
-  const conditions = transactionConditions(filters);
+  const conditions = transactionListConditions(filters);
 
   // The outer reference is written qualified: drizzle renders an embedded column
   // bare inside a projection, and a bare `id` binds to the subquery's own table,

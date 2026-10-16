@@ -1,10 +1,7 @@
 import "server-only";
 
-import { insertRow } from "@/db/insert-row";
-import { categories } from "@/db/schema";
+import { seedCategoryTree } from "@/db/queries/seed-categories";
 import type { Transaction } from "@/db/session";
-import { nextCategoryColor } from "@/lib/fund/category-color";
-import { SEED_CATEGORIES } from "@/lib/fund/seed";
 import type { Locale } from "@/lib/locales";
 
 /**
@@ -21,53 +18,5 @@ export async function seedPersonalCategories(
   tx: Transaction,
   { userId, locale }: { userId: string; locale: Locale },
 ): Promise<number> {
-  // One colour per node, walked depth-first over SEED_CATEGORIES so a category
-  // and the one drawn right after it — its own first child, or the next parent
-  // once it runs out of children — never land on the same free slot (D8: a
-  // child used to copy `category.color` straight from its parent).
-  const usedColors: string[] = [];
-  const seedColors = SEED_CATEGORIES.map((category) => {
-    const parent = nextCategoryColor(usedColors);
-    usedColors.push(parent);
-    const children = (category.children ?? []).map(() => {
-      const color = nextCategoryColor(usedColors);
-      usedColors.push(color);
-      return color;
-    });
-    return { parent, children };
-  });
-
-  // Parents first, ids read back: the insert policy admits a row the caller
-  // owns, so `returning` hands back each id a child references. Row order out of
-  // a single INSERT matches the input.
-  const parentRows = await insertRow(
-    tx,
-    categories,
-    SEED_CATEGORIES.map((category, index) => ({
-      ownerUserId: userId,
-      groupId: null,
-      name: category.name[locale],
-      kind: category.kind,
-      color: seedColors[index].parent,
-    })),
-    { returning: { id: categories.id } },
-  );
-
-  // A subcategory copies its parent's kind (RF-27); its colour is its own — D8.
-  const childRows = SEED_CATEGORIES.flatMap((category, index) =>
-    (category.children ?? []).map((child, childIndex) => ({
-      ownerUserId: userId,
-      groupId: null,
-      parentId: parentRows[index].id,
-      name: child.name[locale],
-      kind: category.kind,
-      color: seedColors[index].children[childIndex],
-    })),
-  );
-
-  if (childRows.length > 0) {
-    await insertRow(tx, categories, childRows);
-  }
-
-  return parentRows.length + childRows.length;
+  return seedCategoryTree(tx, { ownerUserId: userId }, locale);
 }

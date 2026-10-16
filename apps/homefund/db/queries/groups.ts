@@ -19,15 +19,29 @@ export type GroupSummary = Pick<Group, "id" | "name" | "currency" | "cashMode">;
 /**
  * The caller's group id as a subselect, for a read that only needs to name the
  * group scope. It resolves inside the statement that uses it, so the read costs
- * one transaction instead of waiting behind `getUserGroup`'s. A personal-only
- * caller resolves to null, which makes the predicate it feeds false — the same
- * empty result the conditional branch used to produce.
+ * one transaction, not two. A personal-only caller resolves to null, which makes
+ * the predicate it feeds false: an empty result.
  *
  * The policies still scope every row: this narrows, it never widens.
  */
 export function callerGroupId(userId: string): SQL<string> {
   return sql`(select gm.group_id from group_members gm
     where gm.user_id = ${userId} and gm.archived_at is null limit 1)`;
+}
+
+// The caller's group, its name and their role in it, in one statement a loader
+// runs inside its own transaction; null for a personal-only caller.
+export async function callerGroupInfo(
+  tx: Transaction,
+  userId: string,
+): Promise<{ id: string; name: string; role: "leader" | "member" } | null> {
+  const rows = await tx.execute<{ id: string; name: string; role: "leader" | "member" }>(
+    sql`select g.id, g.name, gm.role from groups g
+      join group_members gm on gm.group_id = g.id
+      where gm.user_id = ${userId} and gm.archived_at is null limit 1`,
+  );
+
+  return rows[0] ?? null;
 }
 
 // The caller's group cash mode (RF-56), resolved the same way, for the statement

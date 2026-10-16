@@ -2,6 +2,7 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
+import { minimumPaymentSql } from "@/db/queries/debt-minimum";
 import { withUserDb } from "@/db/session";
 import { nextDayOfMonthOnOrAfter, todayInBogota } from "@/lib/dates";
 
@@ -41,12 +42,12 @@ export async function getCurrentStatement(
       select
         coalesce(ls.cut_off_date + 1, a.initial_balance_on) as period_start,
         b.balance_cents,
-        case
-          when dt.minimum_payment_cents is not null then dt.minimum_payment_cents
-          when dt.minimum_payment_pct is not null
-            then round(abs(b.balance_cents) * dt.minimum_payment_pct)::bigint
-          else 0
-        end as minimum_payment_cents,
+        ${minimumPaymentSql({
+          fixed: sql`dt.minimum_payment_cents`,
+          pct: sql`dt.minimum_payment_pct`,
+          balance: sql`b.balance_cents`,
+          fallback: sql`0`,
+        })} as minimum_payment_cents,
         dt.statement_cut_off_day,
         dt.payment_due_day,
         ls.cut_off_date as latest_cut_off_date,
