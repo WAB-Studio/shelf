@@ -66,7 +66,10 @@ const actsOf = (sheet: Locator) => sheet.locator("button, a").allInnerTexts();
 // A weekday that is not today's, ISO numbered.
 const NOT_TODAY = ((TODAY_INDEX + 3) % 7) + 1;
 
-const mainOf = async (page: Page) => drawn(await page.locator("main").innerText());
+const mainOf = async (page: Page) => {
+  await settled(page);
+  return drawn(await page.locator("main").innerText());
+};
 
 test.describe("the sheet of a live commitment (RP-127)", () => {
   test("with a fact the sheet retires and shows «Cambiar la frecuencia» and «Borrar el compromiso» disabled, with the reason once", async ({ person, browser, baseURL, db }) => {

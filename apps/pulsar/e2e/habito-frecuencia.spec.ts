@@ -74,6 +74,7 @@ test("saved: Hoy's loose group asks by the new days", async ({ person, browser, 
   const id = await seedHabit(db, person.id, "Estirar", { kind: "weekdays", days: [NOT_TODAY] });
   const { page, context } = await visit(browser, baseURL, person, "/", 360);
   try {
+    await settled(page);
     expect(drawn(await page.locator("main").innerText()), "control: not asked today").not.toContain("estirar");
     await page.goto(frecuencia(id));
     await settled(page);
