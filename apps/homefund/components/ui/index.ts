@@ -120,6 +120,8 @@ export { SubNav } from "./sub-nav";
 
 export { Figure } from "./figure";
 
+export { AmountField } from "./amount-field";
+
 export { Disc } from "./disc";
 
 export { PlainLink } from "./plain-link";

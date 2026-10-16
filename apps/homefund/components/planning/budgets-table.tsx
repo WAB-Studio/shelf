@@ -144,7 +144,7 @@ export function BudgetsTable({
           </Text>
           {/* Which spend the limit counts: the movements booked in this one
               currency and no other (RF-124). */}
-          <Text size="1" color="gray" style={{ whiteSpace: "nowrap" }}>
+          <Text size="1" color="gray" wrap="nowrap">
             {tKey("planning.inCurrency", { currency: row.currency })}
           </Text>
         </Flex>

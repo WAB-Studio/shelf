@@ -35,7 +35,7 @@ export type LabelTableRow = LabelManagementRow & {
 };
 
 /**
- * The dense Etiquetas of `private/design-desktop/SPEC-A3.md` (RF-70, RF-116):
+ * The dense Etiquetas of `private/design-desktop/SPEC-A3.md` (RF-70):
  * one section per scope, personal and the group's, each row carrying the two
  * counts the query already derived — `movementCount` and `budgetCount` — so a
  * label nobody uses reads 0 in both, never an em dash.

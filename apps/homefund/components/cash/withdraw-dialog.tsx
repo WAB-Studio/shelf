@@ -22,6 +22,7 @@ import {
   FieldLabel,
   FieldMessage,
   Flex,
+  PanelButton,
   Select,
   Spinner,
   Text,
@@ -56,10 +57,7 @@ export function WithdrawCashCard({
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
         <Card asChild>
-          <button
-            type="button"
-            style={{ width: "100%", textAlign: "start", font: "inherit", cursor: "pointer" }}
-          >
+          <PanelButton variant="surface">
             <Flex align="center" gap="3">
               <CategoryTile
                 color="var(--accent-3)"
@@ -72,7 +70,7 @@ export function WithdrawCashCard({
                 {t("withdrawAction")}
               </Text>
             </Flex>
-          </button>
+          </PanelButton>
         </Card>
       </Dialog.Trigger>
       <Dialog.Content>

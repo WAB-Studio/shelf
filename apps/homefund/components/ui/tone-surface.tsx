@@ -7,11 +7,14 @@ const TOKENS = {
 } as const;
 
 type Shared = {
-  tone: keyof typeof TOKENS;
+  // Absent, the surface keeps the background it has and only `faded` applies.
+  tone?: keyof typeof TOKENS;
   // Danger only: the denser of its two washes.
   strong?: boolean;
   // A Radix radius token (1–6).
   radius?: 1 | 2 | 3 | 4 | 5 | 6;
+  // A row that is switched off, drawn at 55% so it still reads.
+  faded?: boolean;
 };
 
 type ToneSurfaceProps = Shared &
@@ -22,13 +25,14 @@ type ToneSurfaceProps = Shared &
 
 /**
  * A row or card washed with the colour of its state: danger for an overspent
- * budget or an unbalanced split, success for a balanced one. A Flex by default,
- * a Radix Card with `card`.
+ * budget or an unbalanced split, success for a balanced one, or dimmed with
+ * `faded` for a rule that is paused. A Flex by default, a Radix Card with `card`.
  */
-export function ToneSurface({ tone, strong, radius, card, ...props }: ToneSurfaceProps) {
+export function ToneSurface({ tone, strong, radius, faded, card, ...props }: ToneSurfaceProps) {
   const style = {
-    background: TOKENS[tone][strong ? "strong" : "soft"],
+    ...(tone ? { background: TOKENS[tone][strong ? "strong" : "soft"] } : null),
     ...(radius ? { borderRadius: `var(--radius-${radius})` } : null),
+    ...(faded ? { opacity: 0.55 } : null),
   };
 
   if (card) return <Card {...(props as ComponentProps<typeof Card>)} style={style} />;

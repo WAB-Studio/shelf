@@ -20,8 +20,11 @@ import {
   Callout,
   Card,
   ConfirmDialog,
+  Disc,
   DropdownMenu,
   EmptyState,
+  Eyebrow,
+  Figure,
   Flex,
   FundChip,
   Heading,
@@ -161,17 +164,12 @@ export function PaymentsScreen({
         <Flex direction="column" gap="4">
           {groups.map(([monthKey, rows]) => (
             <Flex key={monthKey} direction="column" gap="3">
-              <Text
-                size="1"
-                weight="medium"
-                color="gray"
-                style={{ textTransform: "uppercase", letterSpacing: "0.06em" }}
-              >
+              <Eyebrow size="1" weight="medium" color="gray">
                 {format.dateTime(civilDateToDate(`${monthKey}-01`), {
                   month: "long",
                   year: "numeric",
                 })}
-              </Text>
+              </Eyebrow>
               {rows.map((payment) => (
                 <PaymentCard
                   key={payment.id}
@@ -343,24 +341,15 @@ function PaymentCard({
 // formatted by the caller in the active locale.
 function DateTile({ day, month }: { day: string; month: string }) {
   return (
-    <Flex
-      direction="column"
-      align="center"
-      justify="center"
-      flexShrink="0"
-      style={{
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        background: "var(--accent-a3)",
-      }}
-    >
-      <Text size="2" weight="bold" style={{ lineHeight: 1 }}>
-        {day}
-      </Text>
-      <Text size="1" color="gray">
-        {month}
-      </Text>
-    </Flex>
+    <Disc size={44} radius={14} surface="var(--accent-a3)">
+      <Flex direction="column" align="center" justify="center">
+        <Figure size="2" weight="bold" tight>
+          {day}
+        </Figure>
+        <Text size="1" color="gray">
+          {month}
+        </Text>
+      </Flex>
+    </Disc>
   );
 }
