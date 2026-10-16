@@ -51,8 +51,8 @@ const ids = {
 test.beforeAll(async () => {
   await asHarnessUser(async (tx) => {
     for (const [id, name, subtype, opening] of [
-      [ids.source, SOURCE_NAME, "bancaria", SOURCE_OPENING],
-      [ids.target, TARGET_NAME, "bancaria", TARGET_OPENING],
+      [ids.source, SOURCE_NAME, "bank", SOURCE_OPENING],
+      [ids.target, TARGET_NAME, "bank", TARGET_OPENING],
     ] as const) {
       await tx`
         insert into accounts (
@@ -65,7 +65,7 @@ test.beforeAll(async () => {
     await tx`
       insert into accounts (
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on, created_at)
-      values (${ids.cash}, ${scope.userId}, ${CASH_NAME}, 'asset', 'efectivo', 0, '2026-01-01',
+      values (${ids.cash}, ${scope.userId}, ${CASH_NAME}, 'asset', 'cash', 0, '2026-01-01',
         '1999-01-01T00:00:00Z')`;
 
     await tx`

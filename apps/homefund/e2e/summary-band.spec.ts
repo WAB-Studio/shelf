@@ -122,7 +122,7 @@ test.describe("dashboard band with a gap", () => {
       await tx`
         insert into accounts (
           id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-        values (${accountId}, ${scope.userId}, ${`Descuadre ${stamp}`}, 'asset', 'bancaria',
+        values (${accountId}, ${scope.userId}, ${`Descuadre ${stamp}`}, 'asset', 'bank',
           50_000_000, ${addCivilDays(todayInBogota(), -1)})`;
       await tx`
         insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
@@ -212,7 +212,7 @@ test.describe("movement detail", () => {
       await tx`
         insert into accounts (
           id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-        values (${adjustmentAccountId}, ${scope.userId}, ${`Ajuste ${stamp}`}, 'asset', 'bancaria',
+        values (${adjustmentAccountId}, ${scope.userId}, ${`Ajuste ${stamp}`}, 'asset', 'bank',
           50_000_000, ${addCivilDays(todayInBogota(), -30)})`;
       await tx`
         insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
