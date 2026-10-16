@@ -43,6 +43,7 @@ import { Link as LocaleLink } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
 import type { Locale } from "@/lib/locales";
+import type { ACCOUNT_SUBTYPES } from "@/lib/validation/account";
 import { formatMoney } from "@/lib/money";
 
 export async function generateMetadata(
@@ -68,10 +69,10 @@ const PHONE_RECENT_LIMIT = 3;
 // guide. The names are the accounts screen's own (RF-56 names the cash one), and
 // the subtype rides the query the accounts screen opens its form from.
 const ACCOUNT_CLASSES = [
-  { subtype: "bancaria", label: "subtypeBancaria", surface: "var(--blue-3)", ink: "var(--blue-11)" },
-  { subtype: "efectivo", label: "subtypeEfectivo", surface: "var(--jade-3)", ink: "var(--jade-11)" },
-  { subtype: "tarjeta", label: "subtypeTarjeta", surface: "var(--violet-3)", ink: "var(--violet-11)" },
-] as const;
+  { subtype: "bank", label: "subtypeBancaria", surface: "var(--blue-3)", ink: "var(--blue-11)" },
+  { subtype: "cash", label: "subtypeEfectivo", surface: "var(--jade-3)", ink: "var(--jade-11)" },
+  { subtype: "card", label: "subtypeTarjeta", surface: "var(--violet-3)", ink: "var(--violet-11)" },
+] as const satisfies readonly { subtype: (typeof ACCOUNT_SUBTYPES)[number]; label: string; surface: string; ink: string }[];
 
 // The signed-in landing. A user may run personal-only (RF-55), so an absent
 // group is expected, not a redirect to create one. With no account yet the
@@ -307,8 +308,8 @@ function AccountClassIcon({
   subtype: (typeof ACCOUNT_CLASSES)[number]["subtype"];
   color: string;
 }) {
-  if (subtype === "bancaria") return <Landmark size={22} strokeWidth={1.8} color={color} />;
-  if (subtype === "efectivo") return <Banknote size={22} strokeWidth={1.8} color={color} />;
+  if (subtype === "bank") return <Landmark size={22} strokeWidth={1.8} color={color} />;
+  if (subtype === "cash") return <Banknote size={22} strokeWidth={1.8} color={color} />;
   return <CreditCard size={22} strokeWidth={1.8} color={color} />;
 }
 
