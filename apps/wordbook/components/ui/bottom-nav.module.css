@@ -1,4 +1,4 @@
-/* docs/voyager/DESIGN.md "Viewport": a hairline above the ground, fixed under
+/* docs/wordbook/DESIGN.md "Viewport": a hairline above the ground, fixed under
    every screen at every width so Registro is one tap away, not two behind
    Fuente. Mirrors page.module.css's own ground/hairline reads.
    `--rl-keyboard-inset` (bottom-nav.tsx) rides the bar above an open
@@ -42,7 +42,7 @@
   color: var(--rl-muted);
 }
 
-/* docs/voyager/DESIGN.md "Viewport": 11px / 600 / 0.12em / uppercase, the
+/* docs/wordbook/DESIGN.md "Viewport": 11px / 600 / 0.12em / uppercase, the
    same shape as PosLabel and MetaLabel but sized to the glyph above it. */
 .label {
   font-family: var(--font-sans);
@@ -69,7 +69,7 @@
   display: none;
 }
 
-/* docs/voyager/DESIGN.md "Viewport": the bar becomes a sidebar at 1024px, a
+/* docs/wordbook/DESIGN.md "Viewport": the bar becomes a sidebar at 1024px, a
    second breakpoint distinct from the ~660px the reading column centres
    above. Same `<nav>`, same items, same `aria-current` — only the box
    changes shape. */

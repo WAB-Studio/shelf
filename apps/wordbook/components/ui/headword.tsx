@@ -9,7 +9,7 @@ function sizeClassName(size: HeadwordSize | undefined): string {
 }
 
 // The one door onto a headword's exact type: 34px / 500 / -0.02em, none of it
-// a Radix step (docs/voyager/DESIGN.md "Type"). `size="offer"` is the
+// a Radix step (docs/wordbook/DESIGN.md "Type"). `size="offer"` is the
 // smaller 27px/500 the `PalabraConFlexion` board gives a lemma offered
 // beneath a word's own entry — the size difference is the only thing that
 // tells the two headings apart.

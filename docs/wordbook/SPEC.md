@@ -345,7 +345,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RNL-04** — The dictionary asset is built from its source by a script kept in the repository, and the build records the source URL, the edition, the licence and the entry counts beside the asset.
 - [x] **RNL-05** — The sentence path never fires on a keystroke: it waits for the typing to settle, does not fire below a minimum number of tokens, never fires twice for the same text, and cancels a request already in flight when the text changes. The word path is never throttled and never delayed.
 - [x] **RNL-06** — Recording a lookup never delays, blocks or fails a lookup. The write is never awaited on the path that produces an answer, a failure to write is swallowed, and the log's storage is a separate database from the dictionary's, so a write can never contend with a read of the payload.
-- [ ] **RNL-07** — The reader chooses light or dark, and the choice is remembered on the device. The app opens in the system's mode until a choice is made. Dark is the design's primary look; light is the same design inverted, and both carry the palettes in `docs/voyager/DESIGN.md`.
+- [ ] **RNL-07** — The reader chooses light or dark, and the choice is remembered on the device. The app opens in the system's mode until a choice is made. Dark is the design's primary look; light is the same design inverted, and both carry the palettes in `docs/wordbook/DESIGN.md`.
 - [x] **RNL-08** — Exporting never touches the read path: building the file happens on a screen that
   is not the box, mounts no dictionary Worker, and with the export never opened the app behaves
   exactly as before.
@@ -379,7 +379,7 @@ Dead codes. The number stays burned and the tick stays as it was.
     word list. Disproportion would have caught this one — 67 characters answering 10 — and misses a
     short obscenity; a list has to be kept and vetoes the word when a reader looks it up on purpose.
     The model is the same one already in use, and this is the second place it is asked to judge
-    content rather than produce it (`docs/voyager/DESIGN.md`, the lazy gloss prune).
+    content rather than produce it (`docs/wordbook/DESIGN.md`, the lazy gloss prune).
   - Not built. No board drawn for the state a reader sees when every candidate is refused.
   _Retired 2026-10-15. Successor: RL-64. The user overturned the 2026-09-20 pick of the model as judge for a word list: the model costs a call per answer and a list is deterministic._
 
@@ -418,7 +418,7 @@ Dead codes. The number stays burned and the tick stays as it was.
   **When the form's suffix pins a part of speech — only a verb takes `-ing` or `-ed`, only an
   adjective takes `-ly` — that group leads the headword's own, ahead of any frequency order.** It is
   answered from the device and touches the network on no keystroke.
-  - Measured by `apps/voyager/scripts/check-dictionary.ts` (D7, D12), the figures and the two filter rules
+  - Measured by `apps/wordbook/scripts/check-dictionary.ts` (D7, D12), the figures and the two filter rules
     are RL-40's: see its Measured sub-point under «Retired». D12 reads 23 candidates before the filter, 0 after.
   - Driven, not asserted: `bed` answers with its own entry and offers nothing; `left` offers `leave`,
     `faster` offers `fast`, `gone` offers `go`, `women` offers `woman`, `people` offers `person`.
@@ -472,7 +472,7 @@ Dead codes. The number stays burned and the tick stays as it was.
   `study`. When the form typed is itself a headword, its own entry answers first and the headword it
   also inflects from is **offered below it, never instead of it**: `left` answers as «izquierda» and
   offers `leave` under it. Board: `PalabraConFlexion`.
-  - Measured 2026-09-10 by `apps/voyager/scripts/check-dictionary.ts`: **D7 back to 53/53** from the
+  - Measured 2026-09-10 by `apps/wordbook/scripts/check-dictionary.ts`: **D7 back to 53/53** from the
     34 that `#128` left, and **D12 new — 23 candidates carried a defect before the filter, 0 after** (written as 27 on 2026-09-10; re-measured 2026-10-08).
     The filter is two rules, both driven against the shipped asset: a one-letter lemma is not a lemma
     (`bed` → `b`), and a regular suffix rule loses to `IRREGULAR_FORMS` where the table governs that
@@ -497,7 +497,7 @@ Dead codes. The number stays burned and the tick stays as it was.
   the answer did not come from the dictionary, and says plainly when it failed, survives in RL-44._
 
 - [x] **RL-06** — An inflected form resolves to its headword, and the answer names both the form typed and the headword reached: `left` finds `leave`, `went` finds `go`, `children` finds `child`, `studies` finds `study`.
-  - Measured 2026-09-07 by `apps/voyager/scripts/check-dictionary.ts` (D9), over a sample of 2,345 regular surface forms generated from 301 stride-sampled single-word letter headwords by applying the regular suffix rules, plus all 386 `IRREGULAR_FORMS` surfaces: the real coverage figure is the **irregular-only rate, 367/386 = 95.1%**, the only non-circular signal since those surfaces come from a hand-written table no rule can reach. The generated forms resolve at 2345/2345 = 100.0%, a closed loop that proves the resolver inverts its own suffix rules, not real coverage. Blended (generated + irregular together, the number that includes the closed loop): 2712/2731 = 99.3%.
+  - Measured 2026-09-07 by `apps/wordbook/scripts/check-dictionary.ts` (D9), over a sample of 2,345 regular surface forms generated from 301 stride-sampled single-word letter headwords by applying the regular suffix rules, plus all 386 `IRREGULAR_FORMS` surfaces: the real coverage figure is the **irregular-only rate, 367/386 = 95.1%**, the only non-circular signal since those surfaces come from a hand-written table no rule can reach. The generated forms resolve at 2345/2345 = 100.0%, a closed loop that proves the resolver inverts its own suffix rules, not real coverage. Blended (generated + irregular together, the number that includes the closed loop): 2712/2731 = 99.3%.
   _Retired 2026-09-10. Successor: RL-40. `#128` stopped guessing at a word the dictionary already
   carries, which was right for `bed` — it was drawing «"bed" es una forma de "b"» — and wrong for
   every surface form that is also a headword. Measured that day: **19 of the 53 `INFLECTION_FIXTURE`
@@ -586,7 +586,7 @@ measurements taken from it, not estimates:
 | Multi-word entries | 16,112 |
 | Extracted payload | 8,389,666 bytes = 8.0 MiB raw, 2.9 MiB gzipped |
 
-Every figure in this table is read from `apps/voyager/public/dictionary/manifest.json`, which the
+Every figure in this table is read from `apps/wordbook/public/dictionary/manifest.json`, which the
 build writes beside the asset. Re-read it after a rebuild; do not carry a number forward. Corrected
 2026-09-09, when four of them had drifted from the shipped asset: headwords 58,946 → **58,944**,
 entries with IPA 36,320 → **36,359**, entries without 27,938 → **27,899**, and a payload written as
@@ -625,7 +625,7 @@ Principles, not recipes:
   locally; a word's answer touches the network on no keystroke (RL-35). The app has three server
   surfaces and none of them is on that path: the sentence translation (RL-09); the copy of the
   reader's record — its sync, its wipe and the devices that hold it (RL-22, RL-25) — which runs on the
-  same Supabase as `apps/orbit`, in a schema of its own, and only once the reader opened an account on
+  same Supabase as `apps/homefund`, in a schema of its own, and only once the reader opened an account on
   purpose; and the word's decoration (RL-41, RL-42), which reaches the network only after the text is
   already drawn and never changes or delays it. With no account, nothing of the reader's record leaves
   the device (RNL-09); the decoration reaches the network with or without one, because it is not the
@@ -637,7 +637,7 @@ Principles, not recipes:
   learning which word a reader is looking up. The request reaches the network only as the answer
   draws and only with a connection, and never blocks or delays the text.
 - **The server surface is eight route handlers and four pages, and nothing else.** Counted
-  2026-09-14 against the files `apps/voyager/app` serves, correcting a figure stale since before this
+  2026-09-14 against the files `apps/wordbook/app` serves, correcting a figure stale since before this
   slice: the text here read «five route handlers and one page … becoming seven» and had fallen three
   handlers and three pages behind what had already shipped.
   - `app/api/translate/route.ts` — the sentence path (RL-09). Justified by two things a client

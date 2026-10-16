@@ -1,5 +1,5 @@
 /* Doubled to outrank `.rt-Link`'s own default colour and its own default
-   underline colour, both single-class rules (docs/voyager/DESIGN.md
+   underline colour, both single-class rules (docs/wordbook/DESIGN.md
    "Tokens"): a destructive or secondary link never carries the accent's
    invitation, in the letters or in the line under them. */
 .muted.muted {

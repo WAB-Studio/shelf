@@ -12,7 +12,7 @@ import { AppTheme, Flex } from "@/components/ui";
 import "@radix-ui/themes/styles.css";
 import "./theme.css";
 
-// Labels, metadata, controls and interface copy (docs/voyager/DESIGN.md "Type").
+// Labels, metadata, controls and interface copy (docs/wordbook/DESIGN.md "Type").
 const sans = IBM_Plex_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
@@ -21,7 +21,7 @@ const sans = IBM_Plex_Sans({
   display: "swap",
 });
 
-// Headwords, translations and definitions (docs/voyager/DESIGN.md "Type").
+// Headwords, translations and definitions (docs/wordbook/DESIGN.md "Type").
 const serif = Newsreader({
   variable: "--font-serif",
   subsets: ["latin"],
@@ -61,7 +61,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // First gate: `next.config.ts` inlines the unset variable as `""`, which
   // folds this comparison to `false` at build time and drops the block below
   // as dead code — no reader of a production bundle ever sees the header
-  // check or the `throw` it guards (docs/voyager/DESIGN.md "global-error").
+  // check or the `throw` it guards (docs/wordbook/DESIGN.md "global-error").
   if (process.env.VOYAGER_E2E_HOOKS === "1") {
     // Second gate, decided per request rather than at build time: only a
     // header a real visitor never sends can arm the crash `check:e2e` drives.

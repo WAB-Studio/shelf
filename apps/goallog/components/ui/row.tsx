@@ -7,7 +7,7 @@ import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from "react
 import { Text } from "./text";
 import styles from "./row.module.css";
 
-// docs/pulsar/DESIGN.md: a row is a real `<button>`, never a div, at least 56px
+// docs/goallog/DESIGN.md: a row is a real `<button>`, never a div, at least 56px
 // tall, ruled from the next by a hairline. A border box only as `card`, a link row the boards draw so.
 // Writing a fact costs one tap, so the whole row is the target (RNP-02).
 type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & {

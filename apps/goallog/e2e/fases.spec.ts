@@ -20,7 +20,7 @@ async function createGoal(page: Page, name: string, horizonWeeks?: string): Prom
   return page.url().split("/metas/")[1];
 }
 
-// The goal's own way into a phase (docs/pulsar/DESIGN.md "A goal adds a
+// The goal's own way into a phase (docs/goallog/DESIGN.md "A goal adds a
 // commitment from its own screen" — the same pattern, a phase): a real tap
 // on the goal's own button, never a bare `page.goto`.
 async function openNewPhaseForm(page: Page, goalId: string): Promise<void> {

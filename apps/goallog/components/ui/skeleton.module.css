@@ -1,4 +1,4 @@
-/* One flat block of the line colour. Nothing animates: docs/pulsar/DESIGN.md
+/* One flat block of the line colour. Nothing animates: docs/goallog/DESIGN.md
    draws the loading day as plain blocks and nothing more. */
 .block {
   display: block;

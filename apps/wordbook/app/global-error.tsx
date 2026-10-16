@@ -37,7 +37,7 @@ function GlobalErrorBody({ reset }: { reset: () => void }) {
 
   return (
     <Flex direction="column" gap="4" align="center" justify="center" flexGrow="1">
-      {/* docs/voyager/DESIGN.md "Failure": the hairline sets the break off,
+      {/* docs/wordbook/DESIGN.md "Failure": the hairline sets the break off,
           the title stays full-weight ink, the accent lives in retry alone —
           same treatment as app/error.tsx, no shell around it here. */}
       <Separator size="4" />

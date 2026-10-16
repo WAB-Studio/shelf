@@ -3,7 +3,7 @@ import { expect, test } from "./fixtures";
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
 
-// docs/voyager/DESIGN.md "Viewport": the bar every board draws.
+// docs/wordbook/DESIGN.md "Viewport": the bar every board draws.
 test("the bottom bar carries Buscar and Registro, and each reaches its route", async ({ page }) => {
   await page.addInitScript(() => {
     delete (window as unknown as { Translator?: unknown }).Translator;
@@ -188,7 +188,7 @@ test("returning through the bar does not record the restored query again", async
   expect(manures, "three round trips record the word once, not four times").toHaveLength(1);
 });
 
-// RNL-03 / docs/voyager/DESIGN.md "Viewport": the bar's labels are 11px / 600 /
+// RNL-03 / docs/wordbook/DESIGN.md "Viewport": the bar's labels are 11px / 600 /
 // 0.12em / uppercase and read as one even run of letters at both widths — the
 // bar at 360 and the side rail at 1280 draw the same `<span>`.
 const LABEL_WIDTHS = [360, 1280] as const;

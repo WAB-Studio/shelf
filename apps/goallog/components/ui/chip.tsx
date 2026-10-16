@@ -4,7 +4,7 @@ import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from "react
 
 import styles from "./chip.module.css";
 
-// docs/pulsar/DESIGN.md "Decisions taken here": a cadence is chosen with chips
+// docs/goallog/DESIGN.md "Decisions taken here": a cadence is chosen with chips
 // and never a menu, and a quantity is offered already filled. Two shapes, one
 // control: the labelled pill, and the compact toggle the seven weekdays take.
 type ChipProps = Omit<ComponentPropsWithoutRef<"button">, "children"> & {

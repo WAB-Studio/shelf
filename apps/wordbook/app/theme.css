@@ -12,7 +12,7 @@ body {
   min-height: 100%;
 }
 
-/* docs/voyager/DESIGN.md: light is the base, dark is the primary look. No
+/* docs/wordbook/DESIGN.md: light is the base, dark is the primary look. No
    toggle lives here yet (RNL-07 is a separate module) — the OS preference
    alone picks the mode. */
 :root {

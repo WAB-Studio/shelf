@@ -43,7 +43,7 @@ type EmailFormState =
 // it neither succeeds nor fails within a reader's patience.
 const SEND_LINK_TIMEOUT_MS = 8_000;
 
-// The glyph `docs/voyager/DESIGN.md` "Settled" names for `CuentaSinRed`: two
+// The glyph `docs/wordbook/DESIGN.md` "Settled" names for `CuentaSinRed`: two
 // signal arcs and a dot, struck through — the one screen allowed to say the
 // connection is the problem.
 function OfflineGlyph() {
@@ -147,7 +147,7 @@ function SignedOutForm() {
 
   return (
     <Flex direction="column" gap="4">
-      {/* The signed-out state of the "Copia" section (`docs/voyager/DESIGN.md`
+      {/* The signed-out state of the "Copia" section (`docs/wordbook/DESIGN.md`
           "Settled", `CuentaCopiaEstados`): a state, not a control — the
           control it leads into is the email form right below it. */}
       <Flex direction="column" gap="1">
@@ -177,7 +177,7 @@ function SignedOutForm() {
           />
 
           {state.kind === "failed" && (
-            // No red in this palette (docs/voyager/DESIGN.md "Failure"): a
+            // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a
             // hairline sets the break off, full-weight ink says it. Offline
             // alone carries the glyph `CuentaSinRed` draws — the one screen
             // this app lets name the connection.
@@ -216,7 +216,7 @@ type SyncStatus = { kind: "idle" } | { kind: "syncing" } | { kind: "failed"; cau
 // (nothing leaves the device until then, RL-52), copying, retired (the server
 // or the reader ended this device's copy), and the running copy of today.
 // `DevicesPanel` is the module 21 line the contract names. No "Dejar de
-// copiar" here (`docs/voyager/DESIGN.md` "Settled"): the doors out are
+// copiar" here (`docs/wordbook/DESIGN.md` "Settled"): the doors out are
 // `signOut` below and retiring this device from `DevicesPanel`.
 function SyncedSection({
   email,
@@ -310,7 +310,7 @@ function SyncedSection({
           })
         : t("copy.failedBodyFirst");
       return (
-        // No red in this palette (docs/voyager/DESIGN.md "Failure"): a
+        // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a
         // hairline sets the break off, full-weight ink says it, and the
         // retry rides the ordinary accent button. A quota refusal has no
         // retry: another attempt gets the same answer until the UTC day turns.

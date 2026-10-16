@@ -15,7 +15,7 @@ body {
   flex-direction: column;
 }
 
-/* docs/pulsar/DESIGN.md "Tokens" — light is the primary face, dark is the
+/* docs/goallog/DESIGN.md "Tokens" — light is the primary face, dark is the
    same design inverted. The class comes from the pre-paint script, never
    from a media query, so a chosen face survives the device's own setting. */
 .light {
@@ -52,7 +52,7 @@ body {
   --pulsar-scrim: rgba(5, 7, 9, 0.62);
 }
 
-/* docs/pulsar/DESIGN.md "Type" — a figure is set in mono, a sentence in
+/* docs/goallog/DESIGN.md "Type" — a figure is set in mono, a sentence in
    Archivo; the section label, screen title, commitment name and measure
    each carry their own size so no screen invents one. */
 :root {

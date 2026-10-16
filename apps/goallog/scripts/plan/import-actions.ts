@@ -116,7 +116,7 @@ let M12: string;
 let M14: string;
 let EXAMPLE: string;
 
-// `docs/pulsar/PLANTILLA.md`'s example, its dates moved to follow today.
+// `docs/goallog/PLANTILLA.md`'s example, its dates moved to follow today.
 function exampleText(): string {
   return `pulsar · plantilla 1
 

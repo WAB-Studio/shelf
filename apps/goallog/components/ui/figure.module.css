@@ -1,4 +1,4 @@
-/* docs/pulsar/DESIGN.md "Type": every figure is DM Mono at 0.02em. The unit
+/* docs/goallog/DESIGN.md "Type": every figure is DM Mono at 0.02em. The unit
    rides the figure's baseline, not its box, so a 26px measure and an 11px
    unit sit on one line. */
 .figure {
@@ -42,7 +42,7 @@
   color: var(--pulsar-muted);
 }
 
-/* docs/pulsar/DESIGN.md "Tokens": the unit beside a figure is muted, the smallest text colour. */
+/* docs/goallog/DESIGN.md "Tokens": the unit beside a figure is muted, the smallest text colour. */
 .unit {
   font-size: var(--pulsar-text-unit-size);
   font-weight: 400;

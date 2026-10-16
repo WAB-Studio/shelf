@@ -23,7 +23,7 @@ import {
 import { boxOf } from "./box";
 
 // The review of a long plan (module 902). The board is `ImportarRevisionLarga`; the decisions are the
-// last section of docs/pulsar/DESIGN.md. The plan is the shape of a real roadmap, built with no model:
+// last section of docs/goallog/DESIGN.md. The plan is the shape of a real roadmap, built with no model:
 // five goals under one general, 51 tasks, 58 sub-tasks, a source of ~450 lines of which ~330 fall
 // under no part, spread over named sections.
 

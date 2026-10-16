@@ -7,7 +7,7 @@ import { SectionLabel } from "./section-label";
 import styles from "./sheet.module.css";
 
 // The surface a fact is written on: it rises from the foot of the screen with
-// 16px on its top corners (docs/pulsar/DESIGN.md "The marks"). Controlled, so
+// 16px on its top corners (docs/goallog/DESIGN.md "The marks"). Controlled, so
 // the screen that opens it owns when it closes.
 export function Sheet({
   open,
@@ -20,7 +20,7 @@ export function Sheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   // Names the goal or commitment the sheet's act belongs to, in the section
-  // label's own type (docs/pulsar/DESIGN.md "Decisions taken here" — "a
+  // label's own type (docs/goallog/DESIGN.md "Decisions taken here" — "a
   // field's label takes the section label's type"). Never the sheet's
   // accessible name: `title` still owns that, as the one real `<h2>`.
   label?: string;

@@ -13,7 +13,7 @@ import { Flex, Headword, Page } from "@/components/ui";
 // download and the wipe sit under them, side by side. No `useDictionary`
 // here, so no second Worker parses the payload on a screen that never looks
 // a word up (RNL-08). `measure="full"`: Registro is a list, not prose, so it
-// takes the width it needs (docs/voyager/DESIGN.md "Viewport").
+// takes the width it needs (docs/wordbook/DESIGN.md "Viewport").
 export default async function RegistroPage() {
   const t = await getTranslations("log");
   // A boolean only, never the reader itself: `ClearPanel` decides whether

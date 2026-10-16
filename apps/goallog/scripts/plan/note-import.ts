@@ -73,8 +73,8 @@ const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
 
 const goalIds: string[] = [];
 
-// `docs/pulsar/PLANTILLA.md`'s example, read from the file.
-const DOC = readFileSync(resolve(process.cwd(), "../../docs/pulsar/PLANTILLA.md"), "utf8");
+// `docs/goallog/PLANTILLA.md`'s example, read from the file.
+const DOC = readFileSync(resolve(process.cwd(), "../../docs/goallog/PLANTILLA.md"), "utf8");
 const EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
 
 // The example is a tree of three goals; a fixture renames all three, references included.

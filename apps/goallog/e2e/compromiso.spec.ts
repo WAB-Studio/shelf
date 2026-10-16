@@ -52,7 +52,7 @@ async function createGoal(page: Page, name: string): Promise<string> {
   return page.url().split("/metas/")[1];
 }
 
-// The goal's own way in (docs/pulsar/DESIGN.md "A goal adds a commitment from
+// The goal's own way in (docs/goallog/DESIGN.md "A goal adds a commitment from
 // its own screen"): a real tap on the list's own button, never a bare
 // `page.goto` to the form's route — that route has no other door today.
 async function openNewCommitmentForm(page: Page, goalId: string): Promise<void> {
@@ -201,7 +201,7 @@ test("retiring a commitment through the sheet sets retired_at, names its done-da
   }
 });
 
-test("a goal with no commitment yet draws its own way in solid, the one thing the screen asks for (docs/pulsar/DESIGN.md)", async ({
+test("a goal with no commitment yet draws its own way in solid, the one thing the screen asks for (docs/goallog/DESIGN.md)", async ({
   page,
   db,
   personId,

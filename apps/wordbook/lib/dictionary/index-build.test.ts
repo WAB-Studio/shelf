@@ -13,7 +13,7 @@
 // over the corpus. They drive the shipped asset through the same
 // `buildIndex`, and they derive the set they check instead of carrying a
 // list: that census has been written down wrong twice already
-// (docs/voyager/SPEC.md RL-51, "Measure this on the normalised headword").
+// (docs/wordbook/SPEC.md RL-51, "Measure this on the normalised headword").
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -299,7 +299,7 @@ function defectOf(index: DictionaryIndex, headword: string): string | null {
     if (places.some((place, at) => at > 0 && place < places[at - 1])) return "a block reordered its own senses";
   }
 
-  // docs/voyager/SPEC.md RL-51: the block no pronunciation heads is drawn
+  // docs/wordbook/SPEC.md RL-51: the block no pronunciation heads is drawn
   // last. `can` and `pace` are the only two entries that have one.
   const nameless = blocks.findIndex((block) => block.ipa === null);
   if (nameless !== -1 && nameless !== blocks.length - 1) return "the block with no pronunciation is not last";
@@ -320,7 +320,7 @@ test("RL-51: every headword of the shipped asset draws each of its pronunciation
   );
 });
 
-test("RL-51: the census docs/voyager/SPEC.md records is the one the app's own index produces", () => {
+test("RL-51: the census docs/wordbook/SPEC.md records is the one the app's own index produces", () => {
   const index = shippedIndex();
   assert.equal(index.sortedHeadwords.length, manifest.counts.headwords);
 

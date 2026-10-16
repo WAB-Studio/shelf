@@ -40,7 +40,7 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
   }
 
   if (state.kind === "failed") {
-    // docs/voyager/DESIGN.md "Failure": a hairline sets the break off, the
+    // docs/wordbook/DESIGN.md "Failure": a hairline sets the break off, the
     // line itself in full-weight ink — never muted, never the accent — says
     // it. No colour is added and no retry is offered: an answer that could
     // not be produced is a fact this screen states, not a control it hands
@@ -60,7 +60,7 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
   // itself would have answered `failed` (module 10's contract). `definition`
   // alone is `string | null` and reaching null here is not a failure — an
   // answer whose translation is its cognate is complete without one
-  // (docs/voyager/DESIGN.md "A word the dictionary has no entry for").
+  // (docs/wordbook/DESIGN.md "A word the dictionary has no entry for").
   const hasDefinition = answer.definition !== null;
 
   return (

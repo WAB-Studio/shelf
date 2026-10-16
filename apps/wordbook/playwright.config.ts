@@ -40,7 +40,7 @@ export default defineConfig({
         hasTouch: true,
       },
     },
-    // docs/voyager/DESIGN.md "Viewport": the second breakpoint, 1024px, where
+    // docs/wordbook/DESIGN.md "Viewport": the second breakpoint, 1024px, where
     // the bar becomes a sidebar. No `hasTouch`: a desktop, not a tablet.
     // Scoped to the specs that say something about the width, so the rest
     // never double their run time against a viewport they say nothing about.

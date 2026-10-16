@@ -17,7 +17,7 @@ import type postgres from "postgres";
 // follow it, under a label (that order is asserted in mes-siguiente.spec.ts). A goal with no rhythm draws no line,
 // and on screen no month ahead with nothing planned beyond next month. Paper never opens «ver todo» and folds the
 // empty months ahead into the line a goal with an end prints. Boards: PorMesUltimos, InformeUltimos, PorMesSiguiente
-// (private/tableros-s3/NOTAS.md §1–2, private/tableros-s4/NOTAS.md §1; docs/pulsar/DESIGN.md wins where they differ).
+// (private/tableros-s3/NOTAS.md §1–2, private/tableros-s4/NOTAS.md §1; docs/goallog/DESIGN.md wins where they differ).
 // Every month is an offset from the real current month. Each test names the mutation that kills it.
 
 test.use({ actionTimeout: 6000 });

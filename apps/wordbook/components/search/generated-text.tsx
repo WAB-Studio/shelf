@@ -11,7 +11,7 @@ export type GeneratedTextState =
   | { kind: "absent" };
 
 // A generated definition and example, marked apart from the dictionary's own
-// (docs/voyager/DESIGN.md "Generated text is marked «generada»" — a model
+// (docs/wordbook/DESIGN.md "Generated text is marked «generada»" — a model
 // mis-defined `abies` in a test of twelve, and the reader has no way to
 // doubt a line that looks like every other one).
 export function GeneratedText({ state }: { state: GeneratedTextState }) {
@@ -45,7 +45,7 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
   // carries one (the route strips it, `app/api/word/text/route.ts`). Either
   // way «Definición generada» would head nothing: the heading and the
   // hidden a11y label below it swap to the example alone, no board drawn
-  // this case (docs/voyager/DESIGN.md, `PalabraSinDefinicionOscuroMovil` is
+  // this case (docs/wordbook/DESIGN.md, `PalabraSinDefinicionOscuroMovil` is
   // the no-network/no-result/capped state, not this one).
   const hasDefinition = text.definition !== null;
   // RL-45: only a lemma the dictionary answered thin ever carries these
@@ -88,7 +88,7 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
           </Flex>
           {hasNetworkTranslations && (
             // Added under the dictionary's own translations, inside the same
-            // sense group (docs/voyager/DESIGN.md "A dictionary answer that
+            // sense group (docs/wordbook/DESIGN.md "A dictionary answer that
             // is thin"), never inside `SenseGroup` itself — this block only
             // ever sits below what `sense-list.tsx` already drew.
             <Flex direction="column" gap="2" data-network-translations="">

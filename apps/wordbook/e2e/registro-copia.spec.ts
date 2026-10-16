@@ -10,7 +10,7 @@ import { expect, test } from "./fixtures";
 // Module 549, RNL-09, RL-22, RL-32: with the copy on, opening /registro sends
 // one round to /api/log/sync and, if something came down, the list re-reads
 // without a reload; with the copy off, nothing goes out. Written from the
-// contract (docs/voyager/SPEC.md RNL-09, board RegistroEstudio: no indicator),
+// contract (docs/wordbook/SPEC.md RNL-09, board RegistroEstudio: no indicator),
 // not from the components. Every answer of the route is the test's own, so
 // no session, no address and no database row is involved.
 

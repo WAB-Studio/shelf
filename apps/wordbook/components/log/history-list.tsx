@@ -69,7 +69,7 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
               column underneath it. Making the wrapper a `Flex` (a
               container of its own) blockifies the `Text` it holds exactly
               the way module 3's original code had it as the grid item
-              directly (docs/voyager/DESIGN.md "What the data forces"). */}
+              directly (docs/wordbook/DESIGN.md "What the data forces"). */}
             <Grid
               columns={{ initial: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 1fr) auto" }}
               gap="3"
@@ -243,7 +243,7 @@ export function HistoryList() {
   }
 
   if (state.kind === "failed") {
-    // No red in this palette (docs/voyager/DESIGN.md "Failure"): a hairline
+    // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a hairline
     // sets the break off, full-weight ink says it, the accent lives in
     // retry — the same treatment as install-status.tsx and phrase-answer.tsx.
     return (

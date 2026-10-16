@@ -171,7 +171,7 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
   }
 
   if (state.kind === "failed") {
-    // No red in this palette (docs/voyager/DESIGN.md "Failure"): a hairline
+    // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a hairline
     // sets the break off, full-weight ink says it, the accent lives in
     // retry — the same treatment `history-list.tsx` gives its own failure.
     return (

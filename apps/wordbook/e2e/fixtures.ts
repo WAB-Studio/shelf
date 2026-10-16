@@ -163,7 +163,7 @@ export const test = base.extend<WordRouteFixtures>({
   },
 });
 
-// The approved words of the board `CuentaCopiaConfirmar` (docs/voyager/DESIGN.md,
+// The approved words of the board `CuentaCopiaConfirmar` (docs/wordbook/DESIGN.md,
 // 2026-10-08). The key the worker adds to `messages/es.json` is
 // `account.copy.confirmAction`; until it exists the literal stands here.
 export const COPY_CONFIRM_LABEL = "Empezar a copiar";

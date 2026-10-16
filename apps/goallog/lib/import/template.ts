@@ -4,7 +4,7 @@ import { GOAL_NAME_MAX, GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
 import { importDraftSchema, type ImportDraft, type ImportDraftV1, type Source, type Src } from "./draft";
 
-// The grammar is docs/pulsar/PLANTILLA.md's.
+// The grammar is docs/goallog/PLANTILLA.md's.
 export const TEMPLATE_HEADER = "pulsar · plantilla 2";
 export const TEMPLATE_HEADER_V1 = "pulsar · plantilla 1";
 

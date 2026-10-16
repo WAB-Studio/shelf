@@ -5,7 +5,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import { test, expect } from "./fixtures";
 import month from "../messages/es/month.json";
 
-// 821: after a goal's end nothing of it is «en curso» (docs/pulsar/DESIGN.md,
+// 821: after a goal's end nothing of it is «en curso» (docs/goallog/DESIGN.md,
 // 2026-10-11). 822: a goal with a rhythm has a plan; `/meses` does not ask for
 // an amount it never needs. `innerText` of `main` is what a person reads:
 // hidden faces drop out, and the uppercase of a label arrives uppercased, so

@@ -18,7 +18,7 @@ function readLinkError(value: string | null): LinkError | null {
   return value !== null && (LINK_ERRORS as readonly string[]).includes(value) ? (value as LinkError) : null;
 }
 
-// No red anywhere in this palette (docs/pulsar/DESIGN.md): a failed link sets
+// No red anywhere in this palette (docs/goallog/DESIGN.md): a failed link sets
 // its break off with a hairline and says it in full-weight ink, never a colour.
 function FailureNotice({ title, body }: { title: string; body?: string }) {
   return (

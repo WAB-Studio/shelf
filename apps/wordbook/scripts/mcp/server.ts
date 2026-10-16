@@ -1,6 +1,6 @@
 /**
  * A local MCP server, by stdio, over the reader's own exported log file
- * (RL-27). JSON-RPC 2.0 hand-written — no SDK, per `docs/voyager/SPEC.md`
+ * (RL-27). JSON-RPC 2.0 hand-written — no SDK, per `docs/wordbook/SPEC.md`
  * §4's closed dependency list and its "do not install" wrappers on
  * principle. Three read-only tools; not one write ever opens the file.
  *

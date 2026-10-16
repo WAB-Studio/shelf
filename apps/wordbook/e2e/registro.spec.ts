@@ -545,7 +545,7 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
   try {
     await signInAs(page, reader.hash);
 
-    // `docs/voyager/DESIGN.md` "Tokens" fixes a different hex per mode for
+    // `docs/wordbook/DESIGN.md` "Tokens" fixes a different hex per mode for
     // both roles this reads — the accent and the muted tone both change
     // between the two passes below, not just which token wins.
     const palette = {
@@ -573,7 +573,7 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
       await expect(localAction).toBeVisible();
       await expect(accountAction).toBeVisible();
 
-      // No red anywhere the break draws (`docs/voyager/DESIGN.md` "Failure"):
+      // No red anywhere the break draws (`docs/wordbook/DESIGN.md` "Failure"):
       // the accent lives only on «Conservarlo», never on either destructive
       // option, in neither mode.
       expect(await computedColor(keep, "backgroundColor")).toBe(hexToRgb(palette[scheme].accent));

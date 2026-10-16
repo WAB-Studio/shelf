@@ -49,7 +49,7 @@ async function answer(page: Page, word: string): Promise<void> {
 }
 
 // A gloss now lives inside one comma-joined translation line
-// (docs/voyager/DESIGN.md "The translations are one line, separated by
+// (docs/wordbook/DESIGN.md "The translations are one line, separated by
 // commas"), so it is no longer a text node of its own: this finds it
 // bounded by the line's own start, end or comma, never a longer gloss that
 // merely contains it (`pelea` inside `pelear`).
@@ -89,7 +89,7 @@ test("RL-51: `row` answers as two pronunciation blocks, /rɑː/ first, its fight
   await expect(blocks.nth(1)).not.toContainText("remo");
 });
 
-// docs/voyager/DESIGN.md "The translations are one line, separated by
+// docs/wordbook/DESIGN.md "The translations are one line, separated by
 // commas": `row` draws five senses, each its own comma-joined run, never one
 // gloss to a line. `glossLocator`'s presence check above would pass just as
 // well against the old one-per-line markup; this is the assertion that
@@ -261,7 +261,7 @@ test("RL-51: the generated example names the block it belongs to, and only on a 
 });
 
 // The breakdown of a phrase the dictionary cannot answer carries
-// translations alone (docs/voyager/DESIGN.md "A word block on
+// translations alone (docs/wordbook/DESIGN.md "A word block on
 // `SinEntradaFrase`"), so it never groups and never draws an IPA. Every
 // phrase the other specs drive happens to hold no multi-pronunciation word,
 // which left `compact` guarding this by accident of vocabulary: `row` and

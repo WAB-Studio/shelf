@@ -14,7 +14,7 @@
   );
 }
 
-/* docs/voyager/DESIGN.md "Viewport": the reading column narrows to a measure
+/* docs/wordbook/DESIGN.md "Viewport": the reading column narrows to a measure
    above ~660px; the bar it now carries at every width is BottomNav's own
    concern, centred the same way in bottom-nav.module.css. */
 @media (min-width: 660px) {
@@ -24,7 +24,7 @@
     width: 100%;
   }
 
-  /* docs/voyager/DESIGN.md "Viewport": Registro, Cuenta and Dispositivos are
+  /* docs/wordbook/DESIGN.md "Viewport": Registro, Cuenta and Dispositivos are
      a list and a set of controls, not prose — the reading cap wastes half
      the desktop on them, so `measure="full"` drops it. Two classes to
      outrank the single-class `.page` rule above. */
@@ -34,7 +34,7 @@
   }
 }
 
-/* docs/voyager/DESIGN.md "Viewport": the sidebar (bottom-nav.module.css)
+/* docs/wordbook/DESIGN.md "Viewport": the sidebar (bottom-nav.module.css)
    takes a fixed 240px band on the left from 1024px up. No bottom bar to
    clear any more, so the 45px reserve above goes back to a plain 6-token
    pad; the reading column centres in what is left of the viewport, not in

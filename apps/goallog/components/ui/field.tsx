@@ -5,7 +5,7 @@ import { TextField, VisuallyHidden } from "@radix-ui/themes";
 
 import styles from "./field.module.css";
 
-// A labelled control, 48px tall, 10px of radius (docs/pulsar/DESIGN.md "The
+// A labelled control, 48px tall, 10px of radius (docs/goallog/DESIGN.md "The
 // marks"). `hideLabel` is for the one-off field at the foot of the day, which
 // carries a placeholder and no visible label: the name still reaches a reader.
 // Radix's `classic` and `soft` paint from its own scales, and `color` names a

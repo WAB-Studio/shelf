@@ -3,7 +3,7 @@ import { expect, test } from "./fixtures";
 import messages from "../messages/es.json";
 
 // `app/layout.tsx` throws only past its own compile-time gate
-// (docs/voyager/DESIGN.md "global-error.tsx gets a test hook"): a build the
+// (docs/wordbook/DESIGN.md "global-error.tsx gets a test hook"): a build the
 // CI job did not arm with `VOYAGER_E2E_HOOKS=1` drops the branch below, so a
 // reader running this suite against an ordinary build sees it skip rather
 // than fail for a hole that was never actually open.

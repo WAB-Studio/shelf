@@ -50,7 +50,7 @@
 }
 
 /* Selected is the soft accent fill with a 1px accent ring, never the solid
-   fill a primary button wears (docs/pulsar/DESIGN.md "SistemaPiezas"). */
+   fill a primary button wears (docs/goallog/DESIGN.md "SistemaPiezas"). */
 .chip.selected {
   background: var(--pulsar-accent-soft);
   border-color: var(--pulsar-accent);
@@ -58,13 +58,13 @@
   font-weight: 500;
 }
 
-/* docs/pulsar/DESIGN.md "Type": a quantity offered in a chip is still a figure. */
+/* docs/goallog/DESIGN.md "Type": a quantity offered in a chip is still a figure. */
 .mono {
   font-family: var(--font-mono);
   letter-spacing: var(--pulsar-text-measure-tracking);
 }
 
-/* docs/pulsar/DESIGN.md "The controls": disabled drops the fill, in every
+/* docs/goallog/DESIGN.md "The controls": disabled drops the fill, in every
    variant — a selected chip included — and keeps muted ink and a `line` ring. */
 .chip:disabled {
   cursor: default;

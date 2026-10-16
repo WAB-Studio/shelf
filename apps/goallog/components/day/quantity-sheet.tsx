@@ -33,7 +33,7 @@ export type QuantitySheetProps = {
 };
 
 // Four consecutive integers, the target second — `HoyCantidad.dc.html`'s own
-// spread, never a fifth and never a menu (docs/pulsar/DESIGN.md "Decisions
+// spread, never a fifth and never a menu (docs/goallog/DESIGN.md "Decisions
 // taken here"). `target` is always >=1 (the column's own CHECK), so `target
 // - 1` only ever goes non-positive at `target === 1`, the one case with no
 // smaller integer to offer: `[1, 2, 3, 4]`, with 1 — still the target —
@@ -52,7 +52,7 @@ function chipsFor(target: number, unit: string): number[] {
  * Takes a commitment's number in the same gesture that satisfies it (RP-03),
  * plus one optional line (RP-04). Offered as chips, the target already
  * selected; typing is the exception a person reaches for on purpose, never
- * the path the sheet opens on (docs/pulsar/DESIGN.md "Decisions taken
+ * the path the sheet opens on (docs/goallog/DESIGN.md "Decisions taken
  * here"). Accepting never asks again — no confirmation stands between the
  * tap and the closed sheet.
  */

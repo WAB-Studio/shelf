@@ -33,7 +33,7 @@ import {
 // The row opens the amount sheet (`?planear=<mes>`) when the goal has a unit and holds no goals; every other row opens
 // its month. Under the current month the order is: next month, «los demás meses que vienen: N cada uno», «y estos
 // meses con monto propio:» and the months set by hand. «Por mes», the report and paper say it in the same order.
-// Contract: private/contrato-939.md (E1, E1-6, E1b, E1c, E1d); decisions of 2026-10-13 in docs/pulsar/DESIGN.md win over the
+// Contract: private/contrato-939.md (E1, E1-6, E1b, E1c, E1d); decisions of 2026-10-13 in docs/goallog/DESIGN.md win over the
 // board. Each test names the mutation that kills it.
 
 test.use({ actionTimeout: 6000 });

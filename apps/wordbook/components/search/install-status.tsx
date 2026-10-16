@@ -104,7 +104,7 @@ export function InstallStatus({
     );
   }
 
-  // No red in this palette (docs/voyager/DESIGN.md "Failure"): a hairline
+  // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a hairline
   // sets the break off, full-weight ink says it, the accent lives in retry.
   return (
     <Flex direction="column" gap="3" align="start">

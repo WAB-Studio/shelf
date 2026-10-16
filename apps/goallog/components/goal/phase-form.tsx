@@ -65,7 +65,7 @@ const WEEK_ERRORS: MessageKey[] = [
 
 /**
  * `/metas/[goalId]/fases/nueva`, `CompromisoNuevo.dc.html`'s own shape (RP-15,
- * docs/pulsar/DESIGN.md "A goal adds a commitment from its own screen" — the
+ * docs/goallog/DESIGN.md "A goal adds a commitment from its own screen" — the
  * same pattern, a phase): what it looks for, and which weeks — converted to
  * the civil dates `addPhaseSchema` and `addPhase` actually store with
  * `weeksToPhaseSpan`, the one convention `goal-screen.tsx`'s own

@@ -5,7 +5,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import { boxOf } from "./box";
 
 // `DiaPasado.dc.html`, `DiaPasadoPasos.dc.html`: a past day's goal heading
-// counts what «hechos» counts (docs/pulsar/DESIGN.md, «A past day's heading
+// counts what «hechos» counts (docs/goallog/DESIGN.md, «A past day's heading
 // counts what "hechos" counts»), the tally is a sentence whose figures are
 // mono, and «este mes» on the phone stands its groups one gap apart.
 

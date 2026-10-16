@@ -103,7 +103,7 @@ export function ArchiveGoalAction({
 /**
  * `Reabrir` (RP-24): a direct action, no sheet — reopening is the reversal a
  * person reaches for without a second thought, the same way undoing a tap
- * needs none (RP-05, `docs/pulsar/DESIGN.md` "Decisions taken here").
+ * needs none (RP-05, `docs/goallog/DESIGN.md` "Decisions taken here").
  */
 export function ReopenGoalButton({ goalId }: { goalId: string }) {
   const t = useTranslations();

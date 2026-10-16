@@ -14,7 +14,7 @@ const readAppearance = () => resolveAppearance(readStoredTheme());
 const serverAppearance = () => "light" as const;
 
 // The light/dark control itself, and nothing about where it sits: the screen
-// that owns the header places it (docs/pulsar/DESIGN.md "Decisions taken here").
+// that owns the header places it (docs/goallog/DESIGN.md "Decisions taken here").
 export function ThemeToggle({
   toLightLabel,
   toDarkLabel,

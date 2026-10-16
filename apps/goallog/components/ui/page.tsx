@@ -11,7 +11,7 @@ import styles from "./page.module.css";
 // rail leaves.
 //
 // `width="column"` is `full` with a one-column screen's content held to 640
-// from 1024 (docs/pulsar/DESIGN.md "The space system"), the header spanning.
+// from 1024 (docs/goallog/DESIGN.md "The space system"), the header spanning.
 //
 // `alone` is a screen outside the shell, with no rail beside it (the consent
 // screen): from 1024 its 640px column stays centred at the phone's padding.

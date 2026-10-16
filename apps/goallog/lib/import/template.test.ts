@@ -59,7 +59,7 @@ ritmo: 40 páginas
 
 // The v1 tests below read through the v1 projection of the v2 reader: same text, same content as before.
 test("PLANTILLA.md's example is the fixture's, byte for byte", () => {
-  const doc = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
+  const doc = readFileSync(new URL("../../../../docs/goallog/PLANTILLA.md", import.meta.url), "utf8");
   const fenced = /```\n([\s\S]*?)\n```/.exec(doc);
   assert.ok(fenced);
   assert.equal(fenced[1], EXAMPLE2);
@@ -269,7 +269,7 @@ test("a sub-task cannot follow a task across another section", () => {
   assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-10 · A\n## Meses\n  - c\n`).line, 9);
 });
 
-const DOC = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
+const DOC = readFileSync(new URL("../../../../docs/goallog/PLANTILLA.md", import.meta.url), "utf8");
 const DOC_EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
 
 test("PLANTILLA.md's example, read from the file, carries the task's two-line note and the sub-task's", () => {
@@ -1132,7 +1132,7 @@ test("915 ritmo: outside time stops on a time amount, on zero and on no measure"
 });
 
 test("915 the template's own words say both things", () => {
-  const doc = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
+  const doc = readFileSync(new URL("../../../../docs/goallog/PLANTILLA.md", import.meta.url), "utf8");
   assert.match(doc, /sin `horizonte:`/);
   assert.match(doc, /entero en la unidad de la medida/);
   assert.match(doc, /pulsar · plantilla 2/);

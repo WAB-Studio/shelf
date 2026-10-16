@@ -122,7 +122,7 @@ async function seedRows(page: Page, rows: SeedRow[]): Promise<void> {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // A dictionary gloss shares its line with the rest of its sense's
-// translations (docs/voyager/DESIGN.md "The translations are one line,
+// translations (docs/wordbook/DESIGN.md "The translations are one line,
 // separated by commas"), so it is no longer a text node of its own: this
 // finds it bounded by the line's own start, end or `, `, never a longer
 // gloss that merely contains it. A phrase's own stored `translation`
@@ -539,7 +539,7 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   await expect(glossLocator(page, "encamarse")).toBeVisible();
   // `glossLocator` alone would pass just as well against the old
   // one-gloss-per-line markup; this is the line that actually holds the
-  // verb sense's two glosses joined (docs/voyager/DESIGN.md "The
+  // verb sense's two glosses joined (docs/wordbook/DESIGN.md "The
   // translations are one line, separated by commas").
   await expect(
     page.getByText("encamarse, irse a la cama", { exact: true }),

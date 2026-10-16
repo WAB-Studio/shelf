@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
 
-// `app/error.tsx`'s own criterion (docs/voyager/DESIGN.md "Settled"): a
+// `app/error.tsx`'s own criterion (docs/wordbook/DESIGN.md "Settled"): a
 // render that throws below the root layout leaves `error.title` and
 // `error.retry` on screen, the shell still mounted around them, and
 // `reset()` recovers the segment with no network round trip and no reload.

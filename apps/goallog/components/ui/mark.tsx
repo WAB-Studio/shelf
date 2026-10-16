@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 
 import styles from "./mark.module.css";
 
-// docs/pulsar/DESIGN.md "The marks": one shape, four states. `evidence` is a
+// docs/goallog/DESIGN.md "The marks": one shape, four states. `evidence` is a
 // day another app wrote, and it never reads as one the person declared (RP-09).
 export type MarkState = "declared" | "evidence" | "empty" | "partial";
 
@@ -23,7 +23,7 @@ export function Mark({
 }: {
   state: MarkState;
   // The one dashed stroke in the design: the row nothing has written yet
-  // (docs/pulsar/DESIGN.md "Decisions taken here").
+  // (docs/goallog/DESIGN.md "Decisions taken here").
   dashed?: boolean;
   // Names the mark when it stands on its own, in a grid of days. Inside a row
   // the row's own text already says it, so the mark stays out of the tree.
