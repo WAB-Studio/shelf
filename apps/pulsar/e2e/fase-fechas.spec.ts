@@ -70,14 +70,14 @@ for (const [width, height] of WIDTHS) {
       const mondayFive = addWeeksToCivilDate(monday, 4);
       const sundayFive = dayBefore(addWeeksToCivilDate(monday, 5));
       const live = page.locator("#phase-weeks-hint");
-      await expect(live).toContainText(`Del lunes ${civilDateLabel(mondayFive)} al domingo ${civilDateLabel(sundayFive)}.`);
-      await expectFigures(live, [civilDateLabel(mondayFive), civilDateLabel(sundayFive), "6", civilDateLabel(lastDay)]);
+      await expect(live).toContainText(`Del ${civilDateLabel(mondayFive, true)} al ${civilDateLabel(sundayFive, true)}.`);
+      await expectFigures(live, [civilDateLabel(mondayFive, true), civilDateLabel(sundayFive, true), "6", civilDateLabel(lastDay)]);
       await expect(from).not.toHaveAttribute("aria-invalid", "true");
 
       // The goal's partial last week ends on its last day, not on a Sunday.
       await from.fill("6");
       await to.fill("6");
-      await expect(live).toContainText(`al domingo ${civilDateLabel(lastDay)}.`);
+      await expect(live).toContainText(`al ${civilDateLabel(lastDay, true)}.`);
 
       // Past the last week: the refusal in the hint, the field ringed.
       await to.fill("7");

@@ -88,6 +88,8 @@
       "tasks": "tareas"
     },
     "create": "{count, plural, one {Crear # meta} other {Crear # metas}}",
+    "updateOnly": "{count, plural, one {Actualizar # meta} other {Actualizar # metas}}",
+    "createAndUpdate": "{created, plural, one {Crear # meta} other {Crear # metas}} y actualizar {updated}",
     "creating": "Creando…",
     "failed": "No se pudo crear el plan. Inténtalo otra vez.",
     "amountOf": "Cambiar el monto de {name}, {amount}",
@@ -96,7 +98,29 @@
     "sourceFile": "leído de {name}",
     "sourceFileAnon": "leído de un archivo",
     "change": "Volver al texto",
-    "repeated": "Ya tienes una meta abierta con este nombre. Quedó desmarcada: márcala si quieres otra.",
+    "repeated": "Tienes más de una meta abierta con este nombre: no sabemos cuál actualizar. Quedó desmarcada: márcala si quieres otra.",
+    "update": "Actualiza tu meta «{goal}»",
+    "noChange": "Ya está como dice el plan.",
+    "crosses": "Se cruza con la fase «{with}» de la meta: no se agrega.",
+    "diff": {
+      "horizon": "Cambia el final al {to}",
+      "note": "{shape, select, set {Pone la nota «{to}»} other {Cambia la nota de «{from}» a «{to}»}}",
+      "measure": "Cambia la medida a «{name}», en {unit}",
+      "measureKept": "Su medida se queda: ya tiene avance contado",
+      "rhythm": "Cambia el ritmo a {amount} al mes",
+      "month": "{shape, select, set {Pone {amount} en {month}, que no tenía nada} other {Pone {amount} en {month}, en lugar de {from}}}",
+      "phaseAdded": "Agrega la fase «{aim}», del {startsOn} al {endsOn}",
+      "phaseChanged": "Mueve la fase «{aim}» del {startsOn} al {endsOn}",
+      "commitmentAdded": "Agrega el compromiso «{name}»",
+      "commitmentChanged": "Cambia cada cuándo se cumple «{name}»: de {from} a {to}",
+      "commitmentReplaced": "«{name}» ya tiene días anotados: se retira y se abre otro con el nuevo ritmo",
+      "taskAdded": "Agrega la tarea «{name}»",
+      "taskMoved": "Pasa la tarea «{name}» de {from} a {to}",
+      "taskResized": "{shape, select, set {Le pone {to} a la tarea «{name}»} drop {Quita el estimado de la tarea «{name}» ({from})} other {Cambia el estimado de la tarea «{name}» de {from} a {to}}}",
+      "subTaskAdded": "Agrega la sub-tarea «{name}» a «{task}»",
+      "phaseOverlaps": "La fase «{aim}», del {startsOn} al {endsOn}, se cruza con «{with}»: no se agrega",
+      "stays": "{part, select, phase {Se queda la fase «{name}», que el plan no nombra} commitment {Se queda el compromiso «{name}», que el plan no nombra} other {Se queda la tarea «{name}», que el plan no nombra}}"
+    },
     "edit": {
       "title": "Cambiar el monto",
       "rhythmTitle": "Cambiar el ritmo",
@@ -278,6 +302,7 @@
     "estimateDroppedNotTime": "se crea sin cifra: esta meta no mide tiempo"
   },
   "errors": {
+    "reviewStale": "Tu meta cambió mientras revisabas. Vuelve a revisar el plan.",
     "doneInFuture": "Una tarea hecha no puede tener un día por venir. Pon hoy o un día anterior.",
     "doneWithSubtasks": "Una tarea con sub-tareas se da por hecha con ellas. Quita el día.",
     "estimateNotTime": "Quita la cifra de esta línea: esta meta no mide tiempo.",
@@ -337,6 +362,7 @@
     "quantityNoAmount": "Un compromiso con cantidad lleva monto y unidad. Ponlos.",
     "noteShape": "La nota de esta parte está vacía. Quítala o escríbela.",
     "partFailed": "No se pudo escribir. El resto del plan sí se creó.",
+    "phaseOverlaps": "Esta fase se cruza con otra de la meta. Cámbiale las fechas.",
     "tapWithAmount": "Un compromiso de una vez no lleva monto ni unidad. Quítalos.",
     "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez.",
     "workbookRows": "{count, plural, one {# fila por corregir} other {# filas por corregir}}",
@@ -364,6 +390,7 @@
   "created": {
     "eyebrow": "importar · hecho",
     "title": "Plan creado",
+    "updated": "{count, plural, one {# meta actualizada} other {# metas actualizadas}}",
     "count": "{goals, plural, one {Se creó # meta} other {Se crearon # metas}} con todo su plan, menos {parts, plural, one {# parte que no se pudo escribir} other {# partes que no se pudieron escribir}}.",
     "section": "No se escribió",
     "hint": "agrégalas a mano en su meta; lo demás de tu plan ya está en Metas",
@@ -381,6 +408,7 @@
       "cadenceWeekdays": "No se escribió: los días que tenía no van con su cadencia. Agrégala en la meta con otros días.",
       "cadenceCount": "No se escribió: la cantidad de veces no iba con su cadencia. Agrégala en la meta con otra cantidad.",
       "quantityNoAmount": "No se escribió: le faltaba el monto o la unidad. Agrégala en la meta con los dos.",
+      "phaseOverlaps": "No se escribió: se cruza con otra fase de la meta. Cámbiale las fechas en la meta.",
       "partFailed": "No se pudo escribir. Agrégala en la meta a mano."
     }
   }

@@ -75,6 +75,8 @@ export type ScheduleOneOffInput = z.infer<typeof scheduleOneOffSchema>;
 
 export const completeOneOffSchema = z.object({
   oneOffId: z.uuid({ error: "day.errors.invalid" }),
+  // A day already past, up to PAST_DAY_LIMIT back (RP-129); absent is today.
+  day: civilDate("day.errors.dayInvalid").optional(),
 });
 
 export type CompleteOneOffInput = z.infer<typeof completeOneOffSchema>;

@@ -34,6 +34,7 @@ import {
   type MonthBudget,
   type MonthRow,
 } from "@/lib/plan/months";
+import { goalHasFacts, measureFed } from "@/lib/plan/fact-dependence";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { sourceKey, type SourceKey } from "@/i18n/translator";
 import {
@@ -114,6 +115,10 @@ type GoalQueryRow = {
   // The non-archived goals under this one, at any depth, each with what the
   // statement above reads for the goal itself.
   branch: BranchEntry[];
+  // `goalHasFacts` and `measureFed`, the fragments the acts refuse by (RP-127, RP-134).
+  has_facts: boolean;
+  has_children: boolean;
+  measure_fed: boolean;
 };
 
 type TreeSqlRow = {
@@ -209,6 +214,12 @@ export type GoalView = {
   createdAt: string;
   measureName: string | null;
   measureUnit: string | null;
+  // The goal can be deleted: no fact depends on it and it holds no goal, archived ones included (RP-127).
+  deletable: boolean;
+  // What keeps it from being deleted, for the line that says so: goals inside win over facts.
+  deleteBlock: "goals" | "facts" | null;
+  // A fact or evidence commitment feeds its measure, so it neither changes nor goes (RP-134).
+  measureFed: boolean;
   // Null while open, set once the moment `archiveGoal` runs (RP-24): what
   // the goal's own screen reads to draw «Reabrir» in place of «Archivar esta
   // meta» and to drop its add-commitment / add-phase ways in.
@@ -380,7 +391,10 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
               ) order by down.n, d.position, d.created_at, d.id), '[]'::json)
          from down
          join "goals"."goals" d on d.id = down.id
-        where d.archived_at is null) as branch
+        where d.archived_at is null) as branch,
+      ${goalHasFacts(sql`${goalId}::uuid`)} as has_facts,
+      exists (select 1 from "goals"."goals" k where k.parent_id = ${goalId}) as has_children,
+      ${measureFed(sql`${goalId}::uuid`)} as measure_fed
   `);
 
   return row;
@@ -801,6 +815,9 @@ export async function loadGoal(
     createdAt: row.goal.created_at,
     measureName: row.goal.measure_name,
     measureUnit,
+    deletable: !row.has_facts && !row.has_children,
+    deleteBlock: row.has_children ? "goals" : row.has_facts ? "facts" : null,
+    measureFed: row.measure_fed,
     archivedAt: row.goal.archived_at,
     measureTotal,
     phases,

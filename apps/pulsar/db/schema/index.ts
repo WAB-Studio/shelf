@@ -14,3 +14,4 @@ export * from "./oauth-clients";
 export * from "./oauth-codes";
 export * from "./oauth-refresh";
 export * from "./oauth-calls";
+export * from "./allowed-emails";

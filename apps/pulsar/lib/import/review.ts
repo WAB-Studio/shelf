@@ -8,6 +8,7 @@ import { coverage, outness } from "./coverage";
 import {
   decideWithPaths,
   draftRefusals,
+  withCutPhases,
   withoutStrayEstimates,
   type Correction,
   type CorrectionCode,
@@ -16,6 +17,7 @@ import {
   type ImportDraft,
   type Notice,
 } from "./draft";
+import { changesAnything, differences, fingerprint, matchGoals, phaseCrossing, type Difference, type GoalSnapshot } from "./differences";
 import type { StoredDraft } from "./draft-store";
 
 export type ReviewNode = {
@@ -202,21 +204,69 @@ export function remapUnmarked(stored: StoredDraft, declined: ReadonlySet<string>
   });
 }
 
+// The paths of the parts of a matched goal the import leaves exactly as they are: nothing to mark in or out, since an
+// import never removes. `changes` holds each goal's differences, keyed by its place in the draft as drawn.
+function unchangedParts(
+  work: ImportDraft,
+  matched: ReadonlyMap<number, GoalSnapshot>,
+  changes: ReadonlyMap<number, Difference[]>,
+  crosses: ReadonlyMap<string, string>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const g of matched.keys()) {
+    const list = changes.get(g);
+    if (!list) continue;
+    const goal = work.goals[g];
+    const at = `goals.${g}`;
+    const named = (kinds: Difference["kind"][], name: string) => list.some((d) => kinds.includes(d.kind) && "name" in d && nameKey(d.name) === nameKey(name));
+    if (!list.some((d) => d.kind === "rhythm")) out.add(`${at}.rhythm`);
+    goal.phases.forEach((phase, i) => {
+      const touched = list.some((d) => (d.kind === "phaseAdded" || d.kind === "phaseChanged" || d.kind === "phaseOverlaps") && nameKey(d.aim) === nameKey(phase.aim));
+      if (!touched && !crosses.has(`${at}.phases.${i}`)) out.add(`${at}.phases.${i}`);
+    });
+    goal.months.forEach((entry, i) => {
+      if (!list.some((d) => d.kind === "month" && d.month === entry.month.slice(0, 7))) out.add(`${at}.months.${i}`);
+    });
+    goal.commitments.forEach((entry, i) => {
+      if (!named(["commitmentAdded", "commitmentChanged", "commitmentReplaced"], entry.name)) out.add(`${at}.commitments.${i}`);
+    });
+    goal.tasks.forEach((task, t) => {
+      const added = named(["taskAdded"], task.name);
+      if (!added && !named(["taskMoved", "taskResized"], task.name)) out.add(`${at}.tasks.${t}`);
+      task.children.forEach((child, c) => {
+        const fresh = list.some((d) => d.kind === "subTaskAdded" && nameKey(d.name) === nameKey(child.name) && nameKey(d.task) === nameKey(task.name));
+        if (!added && !fresh) out.add(`${at}.tasks.${t}.children.${c}`);
+      });
+    });
+  }
+  return out;
+}
+
 const WRITTEN = new Set<ReviewNode["kind"]>(["goal", "group", "phase", "month", "commitment", "task", "subTask"]);
 
 // The review of a stored draft: the tree to draw, what the person is sent to confirm and what the
 // plan's lines came to. The corrections the person declined are undone, the check's proposals they
-// did not decline are applied, and a goal an open goal already names starts unmarked.
-export function reviewTree(stored: StoredDraft, today: string, openGoalNames: string[]) {
+// did not decline are applied, a goal one open goal names is drawn as an update (RP-130), and a goal
+// two open goals name starts unmarked: the import cannot choose between them.
+export function reviewTree(stored: StoredDraft, today: string, snapshots: GoalSnapshot[]) {
   const decided = decideWithPaths(stored.draft, stored.corrections, new Set(stored.declined));
   const work = withoutStrayEstimates(decided.draft);
   // A correction is drawn where its part now lies: a task the second pass moved has gone to another goal.
   const corrections = stored.corrections.map((c) => ({ ...c, at: decided.pathOf(c.at) }));
   const refusals = draftRefusals(work, today);
   const refused = new Set(refusals.map((refusal) => refusal.path));
-  const open = new Set(openGoalNames.map(nameKey));
+  const matches = matchGoals(work, snapshots);
+  // A phase the plan puts across one the goal has: it starts unmarked, as does a goal two open goals name.
+  const crosses = new Map<string, string>();
+  for (const { g, match } of matches) {
+    if (match === null || match === "ambiguous") continue;
+    work.goals[g].phases.forEach((phase, p) => {
+      const crossed = phaseCrossing(phase, work.goals[g].phases, match.phases, today);
+      if (crossed !== null) crosses.set(`goals.${g}.phases.${p}`, crossed);
+    });
+  }
   const unmarked: ReadonlySet<string> = new Set(
-    stored.unmarked ?? work.goals.flatMap((goal, g) => (open.has(nameKey(goal.name)) ? [`goals.${g}`] : [])),
+    stored.unmarked ?? [...matches.flatMap(({ g, match }) => (match === "ambiguous" ? [`goals.${g}`] : [])), ...crosses.keys()],
   );
   const out = outness(work, unmarked, refused);
   const blocked = outness(work, new Set(), refused);
@@ -287,6 +337,32 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
   for (const notice of stored.notices) nodeAt(notice.at)?.notices.push(notice);
 
   const toSend = markedDraft(work, unmarked, refused);
+
+  // The updates ride on the draft the server compares: the one with its phases cut, and the goals the person
+  // left in, so a goal's index here is its place among them.
+  const cut = withCutPhases(toSend, today);
+  const kept = work.goals.flatMap((_, g) => (out(`goals.${g}`) === null ? [g] : []));
+  const matched = new Map<number, GoalSnapshot>();
+  const ambiguous = new Set<number>();
+  for (const { g, match } of matches) {
+    if (match === "ambiguous") ambiguous.add(g);
+    else if (match !== null) matched.set(g, match);
+  }
+  const changes = new Map<number, Difference[]>();
+  const updates: { g: number; goalId: string; fingerprint: string }[] = [];
+  let matchedKept = 0;
+  kept.forEach((g, sent) => {
+    const snapshot = matched.get(g);
+    if (!snapshot) return;
+    matchedKept += 1;
+    const list = differences(cut.goals[sent], snapshot, today);
+    changes.set(g, list);
+    // A goal the plan leaves as it is is neither updated nor counted: the server leaves it alone.
+    if (changesAnything(list)) updates.push({ g: sent, goalId: snapshot.id, fingerprint: fingerprint(list) });
+  });
+  const unchanged = unchangedParts(work, matched, changes, crosses);
+  // The goal's place in the draft as drawn, for a refusal that names its place in the draft sent.
+  const drawnAt = (sent: number) => kept[sent];
   const createCount = toSend.goals.reduce(
     (n, goal) => n + 1 + goal.phases.length + goal.months.length + goal.commitments.length + goal.tasks.reduce((m, task) => m + 1 + task.children.length, 0),
     0,
@@ -298,6 +374,14 @@ export function reviewTree(stored: StoredDraft, today: string, openGoalNames: st
     unmarked,
     refused,
     createCount,
+    creating: toSend.goals.length - matchedKept,
+    unchanged,
+    crosses,
+    matched,
+    ambiguous,
+    changes,
+    updates,
+    drawnAt,
     nothingWritable: !nodes.some((n) => WRITTEN.has(n.kind) && n.markable),
     coverage: coverage(work, stored.source, unmarked, refused),
     toSend,

@@ -271,7 +271,7 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { oneOffId } = parsed.data;
+  const { oneOffId, day } = parsed.data;
 
   // A parent is done by its sub-tasks (RP-30). `facts_insert_self` refuses
   // its fact too, but as a 42501 the row could not name.
@@ -280,7 +280,7 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
   );
   if (child) return { ok: false, error: "month.errors.parentIsDoneByChildren" };
 
-  return declareFact({ oneOffId });
+  return declareFact({ oneOffId, day });
 }
 
 /**

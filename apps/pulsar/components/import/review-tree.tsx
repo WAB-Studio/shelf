@@ -8,6 +8,7 @@ import { srcLines, type Correction, type DraftGoal, type ImportDraft, type Notic
 import { bySection } from "@/lib/import/sections";
 import { cadenceWords, daysWords, rateWords } from "@/lib/import/correction-words";
 import { correctionKeys, declinedKeys, noticeKey, outKey, remapped } from "@/lib/import/reason-key";
+import { changesAnything, type Difference } from "@/lib/import/differences";
 import type { reviewTree, ReviewNode } from "@/lib/import/review";
 import { phaseCuts, phaseDrops } from "@/lib/import/draft";
 import { dayBefore } from "@/lib/day/weeks";
@@ -66,6 +67,7 @@ export function ReviewTree({
   declined,
   accepted,
   repeated,
+  stale,
   strays,
   today,
   hasLines,
@@ -78,6 +80,8 @@ export function ReviewTree({
   declined: ReadonlySet<string>;
   accepted: ReadonlySet<string>;
   repeated: ReadonlySet<number>;
+  // The goal, by its place in the draft as drawn, whose open goal changed while the person reviewed.
+  stale: number | null;
   strays: ReadonlyMap<string, string>;
   today: string;
   hasLines: boolean;
@@ -155,7 +159,7 @@ export function ReviewTree({
     }
   };
 
-  function cadenceText(commitment: Commitment): string {
+  function cadenceText(commitment: Pick<Commitment, "cadenceKind" | "cadenceWeekdays" | "cadenceN">): string {
     switch (commitment.cadenceKind) {
       case "daily":
         return t("goal.cadence.daily");
@@ -233,6 +237,8 @@ export function ReviewTree({
   };
 
   const nameOf = (node: ReviewNode): string => {
+    const open = node.kind === "goal" || node.kind === "group" ? review.matched.get(Number(node.path.split(".")[1])) : undefined;
+    if (open) return t("import.review.update", { goal: open.name });
     if (node.kind === "month") return monthName(node.label);
     if (node.kind === "rhythm") return t("import.review.rhythmName");
     return node.label;
@@ -409,6 +415,59 @@ export function ReviewTree({
     );
   }
 
+  // A note quoted in a difference line: its first words, on one line.
+  const clip = (text: string) => {
+    const flat = text.replace(/\s+/g, " ").trim();
+    return flat.length > 40 ? `${flat.slice(0, 40).trimEnd()}…` : flat;
+  };
+
+  // One line of what the import would change in an open goal, from the figures of the draft and of the goal.
+  function differenceLine(d: Difference, unit: string): string {
+    switch (d.kind) {
+      case "horizon":
+        return t("import.review.diff.horizon", { to: dayShort(dayBefore(d.to)) });
+      case "note":
+        return t("import.review.diff.note", { shape: d.from === null ? "set" : "change", from: clip(d.from ?? ""), to: clip(d.to) });
+      case "measure":
+        return d.kept === "fed" ? t("import.review.diff.measureKept") : t("import.review.diff.measure", { name: d.name, unit: d.unit });
+      case "rhythm":
+        return t("import.review.diff.rhythm", { amount: fmt(d.to, unit) });
+      case "month":
+        return t("import.review.diff.month", {
+          shape: d.from === null ? "set" : "change",
+          amount: fmt(d.amount, unit),
+          month: monthWord(d.month),
+          from: d.from === null ? "" : fmt(d.from, unit),
+        });
+      case "phaseAdded":
+      case "phaseChanged":
+        return t(`import.review.diff.${d.kind}`, { aim: d.aim, startsOn: dayShort(d.startsOn), endsOn: dayShort(d.endsOn) });
+      case "phaseOverlaps":
+        return t("import.review.diff.phaseOverlaps", { aim: d.aim, startsOn: dayShort(d.startsOn), endsOn: dayShort(d.endsOn), with: d.with });
+      case "commitmentChanged": {
+        const said = (c: typeof d.from) => cadenceText({ cadenceKind: c.kind, cadenceWeekdays: c.weekdays, cadenceN: c.n });
+        return t("import.review.diff.commitmentChanged", { name: d.name, from: said(d.from), to: said(d.to) });
+      }
+      case "commitmentAdded":
+      case "commitmentReplaced":
+      case "taskAdded":
+        return t(`import.review.diff.${d.kind}`, { name: d.name });
+      case "taskMoved":
+        return t("import.review.diff.taskMoved", { name: d.name, from: monthName(d.from), to: monthName(d.to) });
+      case "taskResized":
+        return t("import.review.diff.taskResized", {
+          name: d.name,
+          shape: d.from === null ? "set" : d.to === null ? "drop" : "change",
+          from: d.from === null ? "" : fmt(d.from, unit),
+          to: d.to === null ? "" : fmt(d.to, unit),
+        });
+      case "subTaskAdded":
+        return t("import.review.diff.subTaskAdded", { name: d.name, task: d.task });
+      case "stays":
+        return t("import.review.diff.stays", { part: d.part, name: d.name });
+    }
+  }
+
   // What hangs under a node's row: its corrections, a notice, a cut phase, a repeated name.
   function belowOf(node: ReviewNode): ReactNode {
     const items: ReactNode[] = [];
@@ -425,8 +484,45 @@ export function ReviewTree({
         </div>,
       );
     }
+    if ((node.kind === "goal" || node.kind === "group") && node.marked && review.changes.has(g)) {
+      const list = review.changes.get(g)!;
+      const goalUnit = goal.measure?.unit ?? review.matched.get(g)?.measure?.unit ?? "";
+      items.push(
+        <Flex key="changes" direction="column" gap="2">
+          {changesAnything(list) ? null : (
+            <Text as="p" variant="sentence" tone="muted">
+              {t("import.review.noChange")}
+            </Text>
+          )}
+          {list.map((d, i) => (
+            <Text key={`${d.kind}:${i}`} as="p" variant="sentence" tone="ink">
+              {differenceLine(d, goalUnit)}
+            </Text>
+          ))}
+        </Flex>,
+      );
+    }
+    if ((node.kind === "goal" || node.kind === "group") && stale === g) {
+      items.push(
+        <div key="stale" role="note">
+          <Panel as="div" bordered>
+            <Text as="p" variant="body">
+              {t("import.errors.reviewStale")}
+            </Text>
+          </Panel>
+        </div>,
+      );
+    }
     if (node.kind === "phase") {
-      const cut = phaseCuts(work, today).find((entry) => entry.path === node.path);
+      const crossed = review.crosses.get(node.path);
+      if (crossed !== undefined) {
+        items.push(
+          <Text key="crosses" as="p" variant="sentence" tone="muted">
+            {t("import.review.crosses", { with: crossed })}
+          </Text>,
+        );
+      }
+      const cut =phaseCuts(work, today).find((entry) => entry.path === node.path);
       if (cut) {
         items.push(
           <Text key="cut" as="p" variant="sentence" tone="muted">
@@ -500,12 +596,13 @@ export function ReviewTree({
                 : t("import.review.amountOf", { name, amount: fmt(node.figure.amount, unit) }),
           }
         : editable && !blocked
-          ? { amount: <Pencil size={16} aria-hidden />, amountLabel: t("import.review.tree.editName", { name }) }
+          ? { amount: <Pencil size={16} aria-hidden />, amountLabel: t("import.review.tree.editName", { name: node.label }) }
           : {};
     return (
       <CheckRow
         key={node.path}
         depth={depth as 0 | 1 | 2 | 3 | 4}
+        unboxed={!blocked && (review.unchanged.has(node.path) || review.crosses.has(node.path))}
         checked={node.marked}
         onCheckedChange={(value) => handlers.onToggle(node.path, value)}
         name={name}
@@ -617,6 +714,9 @@ export function ReviewTree({
     if (n.kind === "note" || n.kind === "rhythm" || !n.markable) return false;
     if (returning.has(n.path)) return true;
     if (!unmarked.has(n.path)) return false;
+    // A goal two open goals name, and a phase across another, are already one row with its own control in the tree.
+    if (repeated.has(Number(n.path.split(".")[1])) && (n.kind === "goal" || n.kind === "group")) return false;
+    if (review.crosses.has(n.path)) return false;
     const parent = parentOf(index);
     return parent === undefined || parent.marked;
   });

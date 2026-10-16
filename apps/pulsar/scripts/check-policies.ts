@@ -304,11 +304,12 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
         `update commitment.retired_at, sqlstate = ${retireCommitment.code ?? "none (succeeded)"}`,
       );
 
-      // `phases` holds a `phases_delete_self` policy but no `UPDATE` grant at
-      // all — driving it for real, is what turns that
-      // gap from a claim in the migration into a measurement.
-      const updatePhase = await attempt(tx, (sp) => sp`update goals.phases set aim = 'cambiada' where id = ${a.phaseId}`);
-      assert("P14", updatePhase.code === "42501", `update a phase at all, sqlstate = ${updatePhase.code ?? "none"}`);
+      // 0025 grants `aim`, `starts_on`, `ends_on` (P19c); every other column of a phase stays closed.
+      const updatePhase = await attempt(
+        tx,
+        (sp) => sp`update goals.phases set created_at = '2020-01-01T00:00:00Z' where id = ${a.phaseId}`,
+      );
+      assert("P14", updatePhase.code === "42501", `update phase.created_at, sqlstate = ${updatePhase.code ?? "none"}`);
 
       const updateGoalMeasure = await attempt(
         tx,
@@ -337,22 +338,34 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
         `update own goal.name, sqlstate = ${updateGoalName.code ?? "none"}, rows = ${updateGoalName.rows.length}`,
       );
 
-      // -- DELETE: another person's row never disappears, and "retired, never
-      // deleted" is a fact of the grant layer even before RLS is asked --
+      // -- DELETE: another person's row never disappears; an own row no fact
+      // depends on does (RP-127; the refusals are `checkDeleteAndEdit0025`) --
       const deleteForeignFact = await tx`delete from goals.facts where id = ${b.factId}`;
       assert("P17", deleteForeignFact.count === 0, `delete another person's fact, rows deleted = ${deleteForeignFact.count}`);
 
-      const deleteCommitment = await attempt(tx, (sp) => sp`delete from goals.commitments where id = ${a.commitmentId}`);
+      // RP-127: what no fact depends on deletes. `a.commitmentId` explains `a.factId`, so a fresh one.
+      const [factless] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${a.goalId}, 'sin hechos', 'daily', 'tap') returning id`;
+      const deleteCommitment = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`delete from goals.commitments where id = ${factless.id} returning id`,
+      );
       assert(
         "P18",
-        deleteCommitment.code === "42501",
-        `delete own commitment, sqlstate = ${deleteCommitment.code ?? "none"}`,
+        deleteCommitment.code === undefined && deleteCommitment.rows.length === 1,
+        `delete own fact-less commitment, sqlstate = ${deleteCommitment.code ?? "none"}, rows = ${deleteCommitment.rows.length}`,
       );
 
-      // Same shape as `commitments`: a `phases_delete_self` policy exists,
-      // no `DELETE` grant backs it, so the door never opens.
-      const deletePhase = await attempt(tx, (sp) => sp`delete from goals.phases where id = ${a.phaseId}`);
-      assert("P19", deletePhase.code === "42501", `delete own phase, sqlstate = ${deletePhase.code ?? "none"}`);
+      const deletePhase = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`delete from goals.phases where id = ${a.phaseId} returning id`,
+      );
+      assert(
+        "P19",
+        deletePhase.code === undefined && deletePhase.rows.length === 1,
+        `delete own phase, sqlstate = ${deletePhase.code ?? "none"}, rows = ${deletePhase.rows.length}`,
+      );
 
       // -- evidence_sources: configuration, read-only to everyone --
       const insertSource = await attempt(
@@ -651,8 +664,8 @@ async function checkRealDoor(): Promise<void> {
 // Read the grant back from the catalogue, never from the migration file:
 // `facts` carried DELETE from 0000 ("undoing a tap is a delete of the whole
 // row"), `one_offs` from its own migration and `month_budgets` from 0007 (a month
-// amount is removed, and moved by delete and insert). `goals`, `phases`,
-// `commitments` and `model_calls` carry none. Takes any
+// amount is removed, and moved by delete and insert), and `goals`, `phases` and
+// `commitments` from 0025 (RP-127). `model_calls` carries none. Takes any
 // executor so a mutant run can read it inside its own rollback.
 async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
   const grants = await q<{ table_name: string }[]>`
@@ -661,7 +674,7 @@ async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Pr
   const tablesWithDelete = grants.map((row) => row.table_name).sort();
   assert(
     "P38",
-    tablesWithDelete.join(",") === "facts,month_budgets,one_offs",
+    tablesWithDelete.join(",") === "commitments,facts,goals,month_budgets,one_offs,phases",
     `tables with DELETE granted to authenticated = ${tablesWithDelete.join(", ") || "none"}`,
   );
 }
@@ -708,11 +721,16 @@ async function checkOneOffDeleteGrant(): Promise<void> {
         delete from goals.one_offs where id = ${mine.id} returning id`;
       assert("P36", deleteOwn.length === 1, `delete own one-off, rows deleted = ${deleteOwn.length}`);
 
-      // -- the grant this migration adds names `one_offs` alone: `goals`,
-      // already covered for phases (P19) and commitments (P18), still
-      // refuses a DELETE with 42501 too --
-      const deleteGoal = await attempt(tx, (sp) => sp`delete from goals.goals where id = ${goal.id}`);
-      assert("P37", deleteGoal.code === "42501", `delete own goal, sqlstate = ${deleteGoal.code ?? "none"}`);
+      // An own goal no fact depends on deletes (RP-127). Its children: P37 in `checkDeleteAndEdit0025`.
+      const deleteGoal = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`delete from goals.goals where id = ${goal.id} returning id`,
+      );
+      assert(
+        "P37a",
+        deleteGoal.code === undefined && deleteGoal.rows.length === 1,
+        `delete own empty goal, sqlstate = ${deleteGoal.code ?? "none"}, rows = ${deleteGoal.rows.length}`,
+      );
 
       throw forcedRollback;
     })
@@ -1209,8 +1227,8 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   const expected: [string, string, string][] = [
     ["P108", "month_budgets", "DELETE INSERT(amount,goal_id,month,user_id) SELECT UPDATE(amount)"],
     ["P110", "model_calls", "INSERT(model,source,user_id) SELECT UPDATE(input_tokens,outcome,output_tokens)"],
-    // 0015 took the UPDATE 0008 gave: a phase is written once.
-    ["P113", "phases", "INSERT(aim,ends_on,goal_id,id,starts_on,user_id) SELECT"],
+    // 0015 took the UPDATE 0008 gave; 0025 gives back aim and span, and the delete (RP-127).
+    ["P113", "phases", "DELETE INSERT(aim,ends_on,goal_id,id,starts_on,user_id) SELECT UPDATE(aim,ends_on,starts_on)"],
   ];
   for (const [label, table, wanted] of expected) {
     const authenticated = await privilegesOf(q, table, "authenticated");
@@ -1242,7 +1260,7 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   const counts = policies.map((r) => `${r.tablename}=${r.count}`).join(",");
   assert(
     "P112",
-    counts === "model_calls=3,month_budgets=4,one_offs=4,phases=2",
+    counts === "model_calls=3,month_budgets=4,one_offs=4,phases=4",
     `policies per table = ${counts || "none"}`,
   );
 }
@@ -1526,29 +1544,38 @@ async function checkPlanByMonth(): Promise<void> {
       );
       assert("P104", badSource.code === "23514", `a call from source 'x', sqlstate = ${badSource.code ?? "none"}`);
 
-      // -- phases: written once, no UPDATE grant at all (0015 took 0008's) --
+      // -- phases: 0015 took 0008's UPDATE; 0025 gives back aim and span to the owner (RP-127) --
       const [shiftable] = await tx<{ id: string }[]>`
         insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
         values (${subject}, ${goal.id}, 'fase corrible', '2026-12-01', '2026-12-31') returning id`;
-      const phaseMoves = await attempt(
+      const phaseMoves = await attemptShape(
         tx,
         (sp) => sp`update goals.phases set starts_on = '2027-01-01', ends_on = '2027-01-31' where id = ${shiftable.id}`,
       );
-      assert("P114", phaseMoves.code === "42501", `own phase's dates move, sqlstate = ${phaseMoves.code ?? "none"}`);
-      const phaseAim = await attempt(tx, (sp) => sp`update goals.phases set aim = 'otra' where id = ${shiftable.id}`);
-      assert("P115", phaseAim.code === "42501", `update phases.aim, sqlstate = ${phaseAim.code ?? "none"}`);
-      const phaseBackwards = await attempt(
+      assert("P114", phaseMoves.code === undefined && phaseMoves.count === 1, `own phase's dates move, ${shape(phaseMoves)}`);
+      const phaseAim = await attemptShape(tx, (sp) => sp`update goals.phases set aim = 'otra' where id = ${shiftable.id}`);
+      assert("P115", phaseAim.code === undefined && phaseAim.count === 1, `update phases.aim, ${shape(phaseAim)}`);
+      // The span now runs 2027-01-01..2027-01-31: an end before its start is the CHECK's to refuse.
+      const phaseBackwards = await attemptShape(
         tx,
         (sp) => sp`update goals.phases set ends_on = '2026-12-31' where id = ${shiftable.id}`,
       );
-      assert("P116", phaseBackwards.code === "42501", `a phase's end moves, sqlstate = ${phaseBackwards.code ?? "none"}`);
+      assert(
+        "P116",
+        phaseBackwards.code === "23514" && phaseBackwards.constraint === "phases_ends_on_after_starts_on",
+        `a phase's end moves before its start, ${shape(phaseBackwards)}`,
+      );
 
       await enterUserContext(tx, intruder);
-      const foreignPhase = await attempt(
+      const foreignPhase = await attemptShape(
         tx,
         (sp) => sp`update goals.phases set starts_on = '2027-02-01', ends_on = '2027-02-28' where id = ${shiftable.id}`,
       );
-      assert("P117", foreignPhase.code === "42501", `another person's phase dates move, sqlstate = ${foreignPhase.code ?? "none"}`);
+      assert(
+        "P117",
+        foreignPhase.code === undefined && foreignPhase.count === 0,
+        `another person's phase dates move, ${shape(foreignPhase)}`,
+      );
       const foreignShift = await attempt(tx, (sp) => sp`select id from goals.month_shifts`);
       assert("P105", foreignShift.code === "42P01", `another person reads a shift, sqlstate = ${foreignShift.code ?? "none"}`);
       const foreignCall = await tx<{ id: string }[]>`select id from goals.model_calls where id = ${call.id}`;
@@ -2462,10 +2489,17 @@ async function checkAuditoria0015(): Promise<void> {
         `facts_one_off_unique = ${index?.def ?? "missing"}`,
       );
 
+      // 0015 dropped these for want of a grant; 0025 gives the grant and brings them back (RP-127).
       const deletes = await tx<{ policyname: string }[]>`
         select policyname from pg_policies
-        where schemaname = 'goals' and policyname in ('goals_delete_self', 'commitments_delete_self', 'phases_delete_self', 'phases_update_self')`;
-      assert("P209", deletes.length === 0, `policies left without a grant = ${deletes.map((r) => r.policyname).join(", ") || "none"}`);
+        where schemaname = 'goals' and policyname in ('goals_delete_self', 'commitments_delete_self', 'phases_delete_self', 'phases_update_self')
+        order by policyname`;
+      const names = deletes.map((r) => r.policyname).join(",");
+      assert(
+        "P209",
+        names === "commitments_delete_self,goals_delete_self,phases_delete_self,phases_update_self",
+        `delete and phase-update policies = ${names || "none"}`,
+      );
 
       const fns = await tx<{ name: string; src: string; secdef: boolean; config: string[] | null; auth: boolean; anon: boolean; svc: boolean }[]>`
         select p.proname as name, p.prosrc as src, p.prosecdef as secdef, p.proconfig as config,
@@ -3142,8 +3176,14 @@ async function checkCommitmentName0022(): Promise<void> {
         `rename my own commitment, ${shape(own)}, reads back ${after?.name ?? "nothing"}`,
       );
 
+      // 0025 opens the cadence of a commitment no fact names (RP-127); the guard with facts is P18c.
+      const cadence = await attemptShape(
+        tx,
+        (sp) => sp`update goals.commitments set cadence_kind = 'weekdays', cadence_weekdays = '{1,3}' where id = ${mine.id}`,
+      );
+      assert("P275", cadence.code === undefined && cadence.count === 1, `update my fact-less commitment's cadence, ${shape(cadence)}`);
+
       const closed: [string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
-        ["P275", "cadence_kind", (sp) => sp`update goals.commitments set cadence_kind = 'weekdays' where id = ${mine.id}`],
         ["P276", "target_quantity", (sp) => sp`update goals.commitments set target_quantity = 3 where id = ${mine.id}`],
         ["P277", "goal_id", (sp) => sp`update goals.commitments set goal_id = null where id = ${mine.id}`],
       ];
@@ -3196,8 +3236,6 @@ async function checkCommitmentClosedColumns(): Promise<void> {
       const closed: [string, string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
         ["P278", "created_at", tap.id, (sp) => sp`update goals.commitments set created_at = '2020-01-01T00:00:00Z' where id = ${tap.id}`],
         ["P279", "satisfaction", tap.id, (sp) => sp`update goals.commitments set satisfaction = 'tap' where id = ${tap.id}`],
-        ["P280", "cadence_n", counted.id, (sp) => sp`update goals.commitments set cadence_n = 4 where id = ${counted.id}`],
-        ["P281", "cadence_weekdays", weekdays.id, (sp) => sp`update goals.commitments set cadence_weekdays = '{2,4}' where id = ${weekdays.id}`],
         ["P282", "threshold", counted.id, (sp) => sp`update goals.commitments set threshold = 5 where id = ${counted.id}`],
         ["P283", "source_id", counted.id, (sp) => sp`update goals.commitments set source_id = ${second.id} where id = ${counted.id}`],
         ["P284", "position", tap.id, (sp) => sp`update goals.commitments set position = 99 where id = ${tap.id}`],
@@ -3215,7 +3253,10 @@ async function checkCommitmentClosedColumns(): Promise<void> {
         );
       }
 
+      // `cadence_n` and `cadence_weekdays` open in 0025 on a row no fact names (RP-127).
       const open: [string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
+        ["P280", "cadence_n", (sp) => sp`update goals.commitments set cadence_n = 4 where id = ${counted.id}`],
+        ["P281", "cadence_weekdays", (sp) => sp`update goals.commitments set cadence_weekdays = '{2,4}' where id = ${weekdays.id}`],
         ["P287", "name", (sp) => sp`update goals.commitments set name = 'tocar dos veces' where id = ${tap.id}`],
         ["P288", "note", (sp) => sp`update goals.commitments set note = 'antes de dormir' where id = ${tap.id}`],
         ["P289", "retired_at", (sp) => sp`update goals.commitments set retired_at = now() where id = ${tap.id}`],
@@ -3223,6 +3264,404 @@ async function checkCommitmentClosedColumns(): Promise<void> {
       for (const [label, column, fn] of open) {
         const r = await attemptShape(tx, fn);
         assert(label, r.code === undefined && r.count === 1, `update my own commitment.${column}, ${shape(r)}`);
+      }
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
+// RP-127 (0025): what no fact depends on is deleted and edited; what a fact depends on is refused in the database.
+// `facts.commitment_id` and `facts.goal_id` cascade, so the delete policies are all that keeps a fact. Driven bare under
+// a settled session. `DELETE_EDIT_MUTANT_SQL` runs privileged at the top of the rollback, so a mutant dies with it.
+async function checkDeleteAndEdit0025(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.DELETE_EDIT_MUTANT_SQL;
+  if (mutant) console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      if (mutant) await tx.unsafe(mutant);
+
+      const goal = async (userId: string, name: string, parentId: string | null = null) =>
+        (await tx<{ id: string }[]>`
+          insert into goals.goals (user_id, name, horizon, parent_id)
+          values (${userId}, ${name}, '2026-12-31', ${parentId}) returning id`)[0].id;
+      const commitment = async (goalId: string | null, name: string) =>
+        (await tx<{ id: string }[]>`
+          insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+          values (${subject}, ${goalId}, ${name}, 'daily', 'tap') returning id`)[0].id;
+      const factOn = async (commitmentId: string, goalId: string | null = null) =>
+        (await tx<{ id: string }[]>`
+          insert into goals.facts (user_id, commitment_id, goal_id, day)
+          values (${subject}, ${commitmentId}, ${goalId}, '2026-09-22') returning id`)[0].id;
+      const factOnTask = async (oneOffId: string) =>
+        (await tx<{ id: string }[]>`
+          insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${oneOffId}, '2026-09-22') returning id`)[0].id;
+      const task = async (goalId: string, name: string, parentId: string | null = null) =>
+        (await tx<{ id: string }[]>`
+          insert into goals.one_offs (user_id, goal_id, name, parent_id, in_plan)
+          values (${subject}, ${goalId}, ${name}, ${parentId}, true) returning id`)[0].id;
+
+      // Planted privileged: a sub-task under another goal than its parent's is a shape no insert policy lets a person
+      // write, and the only one where the sub-task arm alone refuses (docs/TRAPS.md, «A probe of a SECURITY INVOKER trigger»).
+      const empty = await goal(subject, "vacía");
+      const [emptyPhase] = await tx<{ id: string }[]>`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${subject}, ${empty}, 'fase', '2026-01-01', '2026-06-30') returning id`;
+      await commitment(empty, "sin hechos");
+      await task(empty, "tarea");
+      await tx`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${subject}, ${empty}, '2026-10-01', 30)`;
+
+      const viaCommitment = await goal(subject, "con hábito con hecho");
+      const viaCommitmentFact = await factOn(await commitment(viaCommitment, "con hecho"));
+      const viaTask = await goal(subject, "con tarea hecha");
+      const viaTaskFact = await factOnTask(await task(viaTask, "hecha"));
+      const viaSubTask = await goal(subject, "con subtarea hecha");
+      const elsewhere = await goal(subject, "otra");
+      const viaSubTaskFact = await factOnTask(await task(elsewhere, "hija", await task(viaSubTask, "madre")));
+      const viaGoalId = await goal(subject, "nombrada por un hecho");
+      const viaGoalIdFact = await factOn(await commitment(null, "suelto que la nombra"), viaGoalId);
+      const holder = await goal(subject, "con metas dentro");
+      await goal(subject, "dentro", holder);
+
+      const habits = await goal(subject, "hábitos");
+      const withFact = await commitment(habits, "explica hechos");
+      const withFactFact = await factOn(withFact);
+      const factless = await commitment(habits, "editable");
+      const retired = await commitment(habits, "retirado");
+      await tx`update goals.commitments set retired_at = now() where id = ${retired}`;
+      const looseFactless = await commitment(null, "suelto sin hechos");
+      const looseWithFact = await commitment(null, "suelto con hechos");
+      await factOn(looseWithFact);
+
+      const theirGoal = await goal(intruder, "ajena");
+      const [theirPhase] = await tx<{ id: string }[]>`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${intruder}, ${theirGoal}, 'ajena', '2026-01-01', '2026-06-30') returning id`;
+      const [ownPhases] = await tx<{ n: number }[]>`select count(*)::int as n from goals.phases where user_id = ${subject}`;
+
+      await enterUserContext(tx, subject);
+      const visible = async (table: "facts" | "goals", id: string) =>
+        (await tx<{ id: string }[]>`select id from ${tx("goals")}.${tx(table)} where id = ${id}`).length === 1;
+      const cadenceOf = async (id: string) =>
+        (await tx<{ c: string }[]>`
+          select concat_ws('|', cadence_kind, cadence_n, cadence_weekdays::text) as c from goals.commitments where id = ${id}`)[0]?.c;
+      // A 42501 is the guard's only while the grant is open: before 0025 the grant alone answers it.
+      const [{ granted }] = await tx<{ granted: boolean }[]>`
+        select bool_and(has_column_privilege('authenticated', 'goals.commitments', c, 'UPDATE')) as granted
+        from unnest(array['cadence_kind', 'cadence_n', 'cadence_weekdays']) c`;
+      const toCounted = (id: string) => (sp: postgres.TransactionSql) =>
+        sp`update goals.commitments set cadence_kind = 'times_per_week', cadence_n = 3 where id = ${id}`;
+
+      // The catalogue, not a probe: a column granted by mistake is a column anyone can write.
+      // Phases open `aim`, `starts_on`, `ends_on`; commitments open the retire stamp, the name, the note and the cadence.
+      const updatable = async (table: "phases" | "commitments") =>
+        (
+          await tx<{ column_name: string }[]>`
+            select a.attname as column_name
+            from pg_attribute a
+            where a.attrelid = ${`goals.${table}`}::regclass and a.attnum > 0 and not a.attisdropped
+              and has_column_privilege('authenticated', a.attrelid, a.attnum, 'UPDATE')
+            order by a.attname`
+        ).map((row) => row.column_name);
+      const phaseColumns = (await updatable("phases")).join(",");
+      assert("P19e", phaseColumns === "aim,ends_on,starts_on", `columns of goals.phases that authenticated may update: ${phaseColumns}`);
+      const commitmentColumns = (await updatable("commitments")).join(",");
+      assert(
+        "P18i",
+        commitmentColumns === "cadence_kind,cadence_n,cadence_weekdays,name,note,retired_at",
+        `columns of goals.commitments that authenticated may update: ${commitmentColumns}`,
+      );
+
+      // -- phases --
+      // No WHERE and no RETURNING: either one reads rows through the SELECT policy and hides a `using (true)`.
+      const span = await attemptShape(
+        tx,
+        (sp) => sp`update goals.phases set aim = 'otra meta', starts_on = '2026-02-01', ends_on = '2026-07-31'`,
+      );
+      const [mine] = await tx<{ aim: string; span: string }[]>`
+        select aim, starts_on::text || '..' || ends_on::text as span from goals.phases where id = ${emptyPhase.id}`;
+      assert(
+        "P19c",
+        span.code === undefined && span.count === ownPhases.n && mine?.aim === "otra meta" && mine.span === "2026-02-01..2026-07-31",
+        `update my phases' aim and span with no WHERE, ${shape(span)} of ${ownPhases.n} mine, reads ${mine?.aim} ${mine?.span}`,
+      );
+
+      const theirPhaseDelete = await attemptShape(tx, (sp) => sp`delete from goals.phases where id = ${theirPhase.id}`);
+      assert(
+        "P19b",
+        theirPhaseDelete.code === undefined && theirPhaseDelete.count === 0,
+        `delete another person's phase, ${shape(theirPhaseDelete)}`,
+      );
+
+      // -- commitments --
+      const withFactDelete = await attemptShape(tx, (sp) => sp`delete from goals.commitments where id = ${withFact}`);
+      const factKept = await visible("facts", withFactFact);
+      assert(
+        "P18b",
+        withFactDelete.code === undefined && withFactDelete.count === 0 && factKept,
+        `delete my commitment that explains a fact, ${shape(withFactDelete)}, fact ${factKept ? "kept" : "gone"}`,
+      );
+
+      const refused: [string, string, string][] = [
+        ["P18c", "a commitment a fact names", withFact],
+        ["P18f", "a retired commitment no fact names", retired],
+        ["P18h", "a loose habit a fact names", looseWithFact],
+      ];
+      for (const [label, what, id] of refused) {
+        const before = await cadenceOf(id);
+        const r = await attemptShape(tx, toCounted(id));
+        const after = await cadenceOf(id);
+        assert(
+          label,
+          granted && r.code === "42501" && before !== undefined && after === before,
+          `cadence of ${what}, grant ${granted ? "open" : "closed"}, ${shape(r)}, cadence ${after === before ? "unchanged" : `now ${after}`}`,
+        );
+      }
+
+      const passes: [string, string, string][] = [
+        ["P18d", "a commitment no fact names", factless],
+        ["P18g", "a loose habit no fact names", looseFactless],
+      ];
+      for (const [label, what, id] of passes) {
+        const r = await attemptShape(tx, toCounted(id));
+        const after = await cadenceOf(id);
+        assert(label, r.code === undefined && r.count === 1 && after === "times_per_week|3", `cadence of ${what}, ${shape(r)}, reads ${after ?? "nothing"}`);
+      }
+
+      // Outside the cadence a commitment with facts still moves: retiring is how it ends.
+      const stillOpen: [string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
+        ["name", (sp) => sp`update goals.commitments set name = 'explica hechos, renombrado' where id = ${withFact}`],
+        ["note", (sp) => sp`update goals.commitments set note = 'una nota' where id = ${withFact}`],
+        ["retired_at", (sp) => sp`update goals.commitments set retired_at = now() where id = ${withFact}`],
+      ];
+      for (const [column, fn] of stillOpen) {
+        const r = await attemptShape(tx, fn);
+        assert(`P18e.${column}`, r.code === undefined && r.count === 1, `update ${column} of my commitment with a fact, ${shape(r)}`);
+      }
+
+      // -- goals --
+      const refusedGoals: [string, string, string, string][] = [
+        ["P37c", "a commitment of it holds a fact", viaCommitment, viaCommitmentFact],
+        ["P37f", "a task of it holds a fact", viaTask, viaTaskFact],
+        ["P37b", "a sub-task of its task holds a fact", viaSubTask, viaSubTaskFact],
+        ["P37g", "a loose habit's fact names it by goal_id", viaGoalId, viaGoalIdFact],
+      ];
+      for (const [label, what, id, factId] of refusedGoals) {
+        const r = await attemptShape(tx, (sp) => sp`delete from goals.goals where id = ${id}`);
+        const kept = (await visible("goals", id)) && (await visible("facts", factId));
+        assert(label, r.code === undefined && r.count === 0 && kept, `delete my goal where ${what}, ${shape(r)}, goal and fact ${kept ? "kept" : "gone"}`);
+      }
+
+      const holderDelete = await attemptShape(tx, (sp) => sp`delete from goals.goals where id = ${holder}`);
+      assert(
+        "P37d",
+        holderDelete.code === "23503" && holderDelete.constraint === "goals_parent_id_goals_id_fk" && (await visible("goals", holder)),
+        `delete my goal that holds a goal, ${shape(holderDelete)}`,
+      );
+
+      const theirGoalDelete = await attemptShape(tx, (sp) => sp`delete from goals.goals where id = ${theirGoal}`);
+      assert("P37e", theirGoalDelete.code === undefined && theirGoalDelete.count === 0, `delete another person's goal, ${shape(theirGoalDelete)}`);
+
+      const emptyDelete = await attemptRows<{ id: string }>(tx, (sp) => sp`delete from goals.goals where id = ${empty} returning id`);
+      const [left] = await tx<{ n: string }[]>`
+        select concat_ws(',',
+          (select count(*) from goals.phases where goal_id = ${empty}),
+          (select count(*) from goals.commitments where goal_id = ${empty}),
+          (select count(*) from goals.one_offs where goal_id = ${empty}),
+          (select count(*) from goals.month_budgets where goal_id = ${empty})) as n`;
+      assert(
+        "P37",
+        emptyDelete.code === undefined && emptyDelete.rows.length === 1 && left.n === "0,0,0,0",
+        `delete my fact-free goal, sqlstate = ${emptyDelete.code ?? "none"}, rows = ${emptyDelete.rows.length}, phases,commitments,one-offs,budgets left = ${left.n}`,
+      );
+
+      await enterUserContext(tx, intruder);
+      const [theirs] = await tx<{ phase: string | null; goals: number }[]>`
+        select (select aim from goals.phases where id = ${theirPhase.id}) as phase,
+               (select count(*)::int from goals.goals where id = ${theirGoal}) as goals`;
+      assert(
+        "P19d",
+        theirs.phase === "ajena" && theirs.goals === 1,
+        `another person's phase and goal after my update and deletes, aim = ${theirs.phase ?? "gone"}, goals = ${theirs.goals}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // A delete that names no row and asks for none back reads nothing through the SELECT policy, so the delete policy
+  // alone says whose rows it may take. Another person's goal, phase and commitment stay (RP-127).
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      if (mutant) await tx.unsafe(mutant);
+      const mine = (
+        await tx<{ id: string }[]>`
+          insert into goals.goals (user_id, name, horizon) values (${subject}, 'mía', '2026-12-31') returning id`
+      )[0].id;
+      const theirs = (
+        await tx<{ id: string }[]>`
+          insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2026-12-31') returning id`
+      )[0].id;
+      for (const [user, goalId] of [
+        [subject, mine],
+        [intruder, theirs],
+      ] as const) {
+        await tx`insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on) values (${user}, ${goalId}, 'f', '2026-01-01', '2026-02-01')`;
+        await tx`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction) values (${user}, ${goalId}, 'c', 'daily', 'tap')`;
+      }
+      await enterUserContext(tx, subject);
+      const took: Record<string, string> = {};
+      // Children first: the goal's own delete would cascade over them and hide which statement took what.
+      for (const table of ["phases", "commitments", "goals"] as const) {
+        const r = await attemptShape(tx, (sp) => sp`delete from ${sp("goals")}.${sp(table)}`);
+        took[table] = shape(r);
+      }
+      await enterUserContext(tx, intruder);
+      const [left] = await tx<{ goals: number; phases: number; commitments: number }[]>`
+        select (select count(*)::int from goals.goals where id = ${theirs}) as goals,
+               (select count(*)::int from goals.phases where goal_id = ${theirs}) as phases,
+               (select count(*)::int from goals.commitments where goal_id = ${theirs}) as commitments`;
+      assert(
+        "P37i",
+        left.goals === 1 && left.phases === 1 && left.commitments === 1,
+        `another person's goal, phases, commitments after my bare deletes: ${left.goals},${left.phases},${left.commitments}; mine: ${JSON.stringify(took)}`,
+      );
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // `anon` deletes nothing: refused before RLS, row by row.
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject})`;
+      const [g] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'de nadie', '2026-12-31') returning id`;
+      await tx`insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on) values (${subject}, ${g.id}, 'f', '2026-01-01', '2026-02-01')`;
+      await tx`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction) values (${subject}, ${g.id}, 'c', 'daily', 'tap')`;
+      await tx`select set_config('role', 'anon', true)`;
+      for (const table of ["phases", "commitments", "goals"] as const) {
+        const r = await attemptShape(tx, (sp) => sp`delete from ${sp("goals")}.${sp(table)} where user_id = ${subject}`);
+        assert(`P37h.${table}`, r.code === "42501" && r.count === 0, `anon delete from ${table}, ${shape(r)}`);
+      }
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
+// RP-131 (0025): the list of who may ask for a link is read by the server alone, never by an API role.
+// `ALLOWED_EMAILS_MUTANT_SQL` runs privileged at the top of the rollback.
+async function checkAllowedEmails0025(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.ALLOWED_EMAILS_MUTANT_SQL;
+  if (mutant) console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject})`;
+      if (mutant) await tx.unsafe(mutant);
+
+      // -- the shape, privileged, so only the CHECK can refuse --
+      const shapes: [string, string, string | undefined][] = [
+        ["P299", "A@B.co ", "23514"],
+        ["P300", "@b.co", "23514"],
+        ["P301", "nadie", "23514"],
+        ["P302", "persona@ejemplo.co", undefined],
+      ];
+      for (const [label, email, expected] of shapes) {
+        const r = await attemptShape(tx, (sp) => sp`insert into goals.allowed_emails (email) values (${email})`);
+        assert(label, r.code === expected && (expected !== undefined || r.count === 1), `insert ${JSON.stringify(email)}, ${shape(r)}`);
+      }
+
+      // -- the seed: whoever owned a row before the list was made is on it --
+      const seed = await attemptRows<{ owners: number; missing: number; sample: string | null }>(
+        tx,
+        (sp) => sp`
+          with cutoff as (select coalesce(min(added_at), now()) as at from goals.allowed_emails),
+          owners as (
+            select user_id from goals.goals, cutoff where created_at < cutoff.at
+            union select user_id from goals.commitments, cutoff where created_at < cutoff.at
+            union select user_id from goals.one_offs, cutoff where created_at < cutoff.at
+          )
+          select count(*)::int as owners,
+                 count(*) filter (where a.email is null)::int as missing,
+                 min(u.email) filter (where a.email is null) as sample
+          from owners o
+          join auth.users u on u.id = o.user_id and u.email is not null
+          left join goals.allowed_emails a on a.email = lower(btrim(u.email))`,
+      );
+      const s = seed.rows[0];
+      assert(
+        "P298",
+        seed.code === undefined && s !== undefined && s.missing === 0,
+        `owners before the list = ${s?.owners ?? "?"}, missing from it = ${s?.missing ?? "?"}${s?.sample ? ` (${s.sample})` : ""}, sqlstate = ${seed.code ?? "none"}`,
+      );
+
+      // -- the catalogue: in a schema we made, a missing grant and a revoked one refuse alike (docs/TRAPS.md :1937) --
+      const catalogue = await attemptRows<{ grants: string | null; rls: boolean; policies: number }>(
+        tx,
+        (sp) => sp`
+          select
+            (select string_agg(grantee || ':' || privilege_type, ',') from information_schema.role_table_grants
+              where table_schema = 'goals' and table_name = 'allowed_emails'
+                and grantee in ('anon', 'authenticated', 'service_role')) as grants,
+            (select relrowsecurity from pg_class where oid = 'goals.allowed_emails'::regclass) as rls,
+            (select count(*)::int from pg_policies where schemaname = 'goals' and tablename = 'allowed_emails') as policies`,
+      );
+      const c = catalogue.rows[0];
+      assert(
+        "P296",
+        catalogue.code === undefined && c !== undefined && c.grants === null,
+        `grants to API roles on allowed_emails = ${c?.grants ?? "none"}, sqlstate = ${catalogue.code ?? "none"}`,
+      );
+      assert(
+        "P297",
+        catalogue.code === undefined && c?.rls === true && c.policies === 0,
+        `allowed_emails RLS = ${c?.rls ?? "?"}, policies = ${c?.policies ?? "?"}`,
+      );
+
+      // -- driven: `authenticated` holds USAGE on `goals`, so only the table's own grants answer it --
+      await enterUserContext(tx, subject);
+      const acts: [string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
+        ["P290", "select", (sp) => sp`select email from goals.allowed_emails`],
+        ["P291", "insert", (sp) => sp`insert into goals.allowed_emails (email) values ('colado@ejemplo.co')`],
+        ["P292", "update", (sp) => sp`update goals.allowed_emails set email = 'colado@ejemplo.co'`],
+        ["P293", "delete", (sp) => sp`delete from goals.allowed_emails`],
+      ];
+      for (const [label, act, fn] of acts) {
+        const r = await attemptShape(tx, fn);
+        assert(label, r.code === "42501", `authenticated ${act} allowed_emails, ${shape(r)}`);
+      }
+
+      // `anon` and `service_role` hold no USAGE on `goals`: P296 is what catches a grant to them.
+      for (const [label, role] of [["P294", "anon"], ["P295", "service_role"]] as const) {
+        for (const act of ["select", "insert"] as const) {
+          const r = await attemptShape(tx, async (sp) => {
+            await sp`select set_config('role', ${role}, true)`;
+            return act === "select"
+              ? sp`select email from goals.allowed_emails`
+              : sp`insert into goals.allowed_emails (email) values ('colado@ejemplo.co')`;
+          });
+          assert(`${label}.${act}`, r.code === "42501", `${role} ${act} allowed_emails, ${shape(r)}`);
+        }
       }
 
       throw forcedRollback;
@@ -3268,6 +3707,8 @@ async function main(): Promise<void> {
   await checkNoEndAndLoose0021();
   await checkCommitmentName0022();
   await checkCommitmentClosedColumns();
+  await checkDeleteAndEdit0025();
+  await checkAllowedEmails0025();
 
   if (failed) process.exit(1);
 }

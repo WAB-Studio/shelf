@@ -24,23 +24,27 @@ export const createGoalSchema = z.object({
 
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
 
+// The aim and span of a phase, shared by adding and editing one.
+export const phaseFields = {
+  aim: z
+    .string({ error: "plan.errors.aimEmpty" })
+    .trim()
+    .min(1, { error: "plan.errors.aimEmpty" })
+    .max(200, { error: "plan.errors.aimTooLong" }),
+  startsOn: civilDate("plan.errors.startsOnInvalid"),
+  endsOn: civilDate("plan.errors.endsOnInvalid"),
+};
+
+// Mirrors `phases_ends_on_after_starts_on`: a backwards phase is refused
+// here, not by the database's own CHECK.
+export const phaseNotBackwards = {
+  check: (data: { startsOn: string; endsOn: string }) => data.endsOn >= data.startsOn,
+  params: { error: "plan.errors.phaseBackwards", path: ["endsOn"] },
+};
+
 export const addPhaseSchema = z
-  .object({
-    goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
-    aim: z
-      .string({ error: "plan.errors.aimEmpty" })
-      .trim()
-      .min(1, { error: "plan.errors.aimEmpty" })
-      .max(200, { error: "plan.errors.aimTooLong" }),
-    startsOn: civilDate("plan.errors.startsOnInvalid"),
-    endsOn: civilDate("plan.errors.endsOnInvalid"),
-  })
-  // Mirrors `phases_ends_on_after_starts_on`: a backwards phase is refused
-  // here, not by the database's own CHECK.
-  .refine((data) => data.endsOn >= data.startsOn, {
-    error: "plan.errors.phaseBackwards",
-    path: ["endsOn"],
-  });
+  .object({ goalId: z.uuid({ error: "plan.errors.goalInvalid" }), ...phaseFields })
+  .refine(phaseNotBackwards.check, phaseNotBackwards.params);
 
 export type AddPhaseInput = z.infer<typeof addPhaseSchema>;
 
@@ -68,7 +72,7 @@ export function phaseWithinHorizon(span: PhaseSpan, horizon: string | null): boo
 // else, the three counted kinds ask for their count and nothing else, and
 // `daily` asks for nothing at all. The ISO range and non-empty rules mirror
 // `commitments_weekdays_iso_range` and `commitments_weekdays_for_weekdays`.
-const cadenceSchema = z.discriminatedUnion("cadenceKind", [
+export const cadenceSchema = z.discriminatedUnion("cadenceKind", [
   z.object({ cadenceKind: z.literal("daily") }),
   z.object({
     cadenceKind: z.literal("weekdays"),

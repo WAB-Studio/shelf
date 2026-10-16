@@ -173,7 +173,7 @@ test("a quantity row on a past day asks for that day and writes its number there
   }
 });
 
-test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-19, RNP-07)", async ({
+test("a past day draws the task dated two days back and no field, and holds at 360px (RP-06, RP-129, RNP-07)", async ({
   page,
   db,
   personId,
@@ -189,7 +189,7 @@ test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-1
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
     await expect(page.getByText(/hechos \d+ de \d+/).first()).toBeVisible();
-    await expect(page.getByRole("main").getByText(name, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
     await expect(page.getByLabel("Algo suelto")).toHaveCount(0);
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);

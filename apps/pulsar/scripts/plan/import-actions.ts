@@ -155,10 +155,11 @@ function draftOf(text: string): Draft {
 }
 
 // Four goals, each with every section: more of everything than the example.
-function fourGoals(rhythmLine = ""): string {
+// `label` keeps each caller's goals apart: a name an open goal already holds is skipped, not created (RP-130).
+function fourGoals(rhythmLine = "", label = "meta"): string {
   const goals = [1, 2, 3, 4].map(
     (n) => `
-# RP-37 fixture: meta ${n}
+# RP-37 fixture: ${label} ${n}
 horizonte: ${M12}-01
 medida: horas de estudio · minutos${rhythmLine}
 
@@ -316,8 +317,9 @@ test("confirmImport: a four-goal draft pays the same number of statements as the
   assert.equal(ids.length, 4);
   console.log(`# statements for 1 goal = ${measured.one}, for 4 goals = ${measured.four}`);
   assert.equal(measured.four, measured.one);
-  // Settle, goals, measure, phases, budgets, commitments, parents, children.
-  assert.equal(measured.one, 8);
+  // Settle, the snapshot of the open goals the draft names (RP-130: a matched goal is skipped), goals,
+  // measure, phases, budgets, commitments, parents, children.
+  assert.equal(measured.one, 9);
 
   const [{ tasks, children }] = await sql<{ tasks: number; children: number }[]>`
     select count(*) filter (where parent_id is null)::int as tasks,
@@ -467,7 +469,7 @@ test("confirmImport: a goal with no end is written with horizon null", async () 
 });
 
 test("confirmImport: four goals with a rhythm pay the statements of one", async () => {
-  const draft = draftOf(fourGoals("\nritmo: 12 h"));
+  const draft = draftOf(fourGoals("\nritmo: 12 h", "meta con ritmo"));
   assert.ok(draft.goals.every((goal) => goal.rhythm === 720));
   const { goalIds: ids, statements } = await confirmed(draft);
   assert.equal(ids.length, 4);
@@ -793,7 +795,8 @@ test("confirmImport: a task the table refuses is named and left out; the rest of
 
 test("confirmImport: a clean plan still pays the same statements and lists nothing failed", async () => {
   const { statements } = await confirmed(draftOf(EXAMPLE.replace("# IA aplicada", `# 898 limpia ${RUN}`)));
-  assert.equal(statements, 8);
+  // The 9 of the example: the snapshot read of RP-130 included.
+  assert.equal(statements, 9);
 });
 
 // ---- 903: survivors of the f1 and i1 mutators.

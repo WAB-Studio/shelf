@@ -19,26 +19,30 @@ function draftOf(...names: string[]): ImportDraftV1 {
   };
 }
 
-test("a name repeats an open one across case and spacing", () => {
-  assert.deepEqual(repeatedGoals(draftOf("IA aplicada"), ["ia  aplicada "]), [0]);
+test("one open goal of a name is an update, not a repeat", () => {
+  assert.deepEqual(repeatedGoals(draftOf("IA aplicada"), ["ia  aplicada "]), []);
+});
+
+test("two open goals of a name across case and spacing are a repeat", () => {
+  assert.deepEqual(repeatedGoals(draftOf("IA aplicada"), ["ia  aplicada ", "IA APLICADA"]), [0]);
 });
 
 test("accents count", () => {
-  assert.deepEqual(repeatedGoals(draftOf("Inglés"), ["Ingles"]), []);
+  assert.deepEqual(repeatedGoals(draftOf("Inglés"), ["Ingles", "Ingles"]), []);
 });
 
 test("no open names names nothing", () => {
   assert.deepEqual(repeatedGoals(draftOf("A", "B"), []), []);
 });
 
-test("the second of three repeated is the only one named", () => {
-  assert.deepEqual(repeatedGoals(draftOf("A", "B", "C"), ["b"]), [1]);
+test("the second of three is the only one named", () => {
+  assert.deepEqual(repeatedGoals(draftOf("A", "B", "C"), ["b", "B"]), [1]);
 });
 
-test("two goals with one open name are both named, ascending", () => {
-  assert.deepEqual(repeatedGoals(draftOf("X", "Y", "x"), ["X"]), [0, 2]);
+test("two draft goals of one doubled open name are both named, ascending", () => {
+  assert.deepEqual(repeatedGoals(draftOf("X", "Y", "x"), ["X", "x"]), [0, 2]);
 });
 
 test("an accent composed or decomposed is the same letter", () => {
-  assert.deepEqual(repeatedGoals(draftOf("Inglés"), ["Inglés"]), [0]);
+  assert.deepEqual(repeatedGoals(draftOf("Inglés"), ["Inglés", "Inglés"]), [0]);
 });

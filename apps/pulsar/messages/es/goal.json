@@ -25,7 +25,7 @@
     "moveHorizon": "mover el final",
     "putEnd": "ponerle final",
     "noEnd": "sin final",
-    "commitmentsCount": "{count, plural, =0 {} one {{word} compromiso} other {{word} compromisos}}",
+    "commitmentsCount": "{count, plural, =0 {{retired, plural, =0 {} one {1 retirado} other {# retirados}}} one {{word} compromiso{retired, plural, =0 {} one {, 1 retirado} other {, # retirados}}} other {{word} compromisos{retired, plural, =0 {} one {, 1 retirado} other {, # retirados}}}}",
     "phasesCount": "{count, plural, =0 {} one {{word} fase} other {{word} fases}}",
     "phaseSpan": "semanas <fig>{start}–{end}</fig>",
     "unreadableTitle": "No pudimos leer una fuente.",
@@ -68,10 +68,21 @@
     "noMeasure": "Esta meta todavía no tiene cifra."
   },
   "commitments": {
+    "changeCadence": "Cambiar la frecuencia",
+    "cadenceTitle": "¿Cada cuánto?",
+    "delete": "Borrar el compromiso",
+    "deleteBody": "Nadie lo ha hecho todavía: se borra sin dejar rastro. Retirarlo, en cambio, lo deja en la lista.",
+    "deleteConfirm": "Borrarlo",
     "retired": "retirado",
     "add": "Añadir un compromiso"
   },
   "phases": {
+    "editTitle": "Cambiar la fase",
+    "save": "Guardar",
+    "delete": "Borrar la fase",
+    "deleteBody": "Se borra la fase. Los días hechos en esas semanas siguen ahí.",
+    "deleteConfirm": "Borrarla",
+    "keep": "Dejarla como está",
     "add": "Añadir una fase"
   },
   "cadence": {
@@ -136,7 +147,22 @@
     "monthTasks": "{month} · {done} de {total} tareas",
     "archivedOnShort": "archivada el {date}"
   },
+  "delete": {
+    "action": "Borrar la meta",
+    "body": "Se borra «{goal}» con sus fases, compromisos y tareas. No tiene hechos: nada de lo vivido se pierde.",
+    "confirm": "Borrarla",
+    "keep": "Dejarla como está",
+    "refusedGoals": "Tiene metas dentro: muévelas o bórralas primero.",
+    "refusedFacts": "Tiene días hechos: no se borra, se archiva.",
+    "refusedFactsArchived": "Tiene días hechos: no se borra."
+  },
   "measure": {
+    "fedReason": "Ya hay días hechos que suman a esta medida: no se cambia ni se quita.",
+    "stops": "{count, plural, one {Este compromiso deja de sumar a la meta, porque cuenta en otra unidad: {names}.} other {Estos compromisos dejan de sumar a la meta, porque cuentan en otra unidad: {names}.}}",
+    "change": "Cambiar la medida",
+    "remove": "Quitar la medida",
+    "removeBody": "Deja de medir.{rhythm, select, yes { Se quita también su ritmo{months, plural, =0 {} one { y el monto de # mes} other { y los montos de # meses}}.} other {{months, plural, =0 {} one { Se quita el monto de # mes.} other { Se quitan los montos de # meses.}}}}",
+    "unitChangeBody": "Cambiar la unidad quita el ritmo y los montos de los meses.",
     "offer": "Ponerle medida",
     "title": "¿Qué mide?",
     "nameLabel": "qué cuenta",

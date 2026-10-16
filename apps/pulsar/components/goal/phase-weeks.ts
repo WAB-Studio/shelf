@@ -34,6 +34,24 @@ export function weeksToPhaseSpan(
   return weekSpan(openedOn, fromWeek, toWeek, horizon);
 }
 
+// The span typed weeks mean for a phase that already has dates. An edge whose week the person
+// left alone keeps its stored date (an import writes dates, not weeks); a moved edge snaps to
+// its week's Monday or Sunday. Two phases may share a week, so weeks never judge overlap.
+export function phaseSpanKeeping(
+  openedOn: string,
+  fromWeek: number,
+  toWeek: number,
+  horizon: string | null,
+  kept?: PhaseSpan,
+): PhaseSpan {
+  const typed = weeksToPhaseSpan(openedOn, fromWeek, toWeek, horizon);
+  if (!kept) return typed;
+  return {
+    startsOn: fromWeek === weekIndexOf(openedOn, kept.startsOn) ? kept.startsOn : typed.startsOn,
+    endsOn: toWeek === weekIndexOf(openedOn, kept.endsOn) ? kept.endsOn : typed.endsOn,
+  };
+}
+
 // The span the new-phase form opens on (RP-15): from the week after the last
 // phase, up to four weeks long, every week of it ending within the horizon —
 // so the default passes the form's own checks; the partial last week fits and

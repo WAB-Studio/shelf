@@ -553,6 +553,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A past day lists only what existed that day.** A commitment created after the day drawn is not
   on `/dia/<fecha>`; with nothing left, the day says it asked for nothing. Decided by
   the user 2026-09-28, over allowing a backfill before the commitment existed.
+- **A past day draws the dated tasks it still owed and those done on it, tapped as on Hoy; month tasks stay on
+  Hoy.** Overturns «no one-offs» of `DiaPasado.dc.html` (:550-551). Decided by the user 2026-10-15.
 - **A week is Monday to Sunday, on Semana and in the review alike.** A goal's week 1 is the partial
   week up to its first Sunday. Replaces «the review's week is the goal's own», taken the same morning.
   Decided by the user 2026-09-28, over 7-day runs from the opening day, and over
@@ -1752,10 +1754,10 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 
 ## Decisions of 2026-10-15 (pending list), by the user
 
-- **«Nada se borra» covers facts only.** Phases, cadences, a measure, a rhythm and goals with no facts can be edited and deleted; a goal or commitment that explains facts stays archived or retired (RP-13, RP-24). Not built yet.
+- **«Nada se borra» covers facts only.** Phases, cadences, a measure, a rhythm and goals with no facts can be edited and deleted; a goal or commitment that explains facts stays archived or retired (RP-13, RP-24). Built (RP-127, RP-134, RP-135).
 - **A goal's hours come from blocks alone,** a block's quantity. A task's estimate does not count toward hours. Built in RP-128.
-- **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Not built yet.
-- **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Not built yet.
+- **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Built (RP-129).
+- **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Built (RP-130).
 - **Three goal levels stay,** as today (RP-78).
 - **The last day of a month reads «último día»,** never «faltan 0 días». Built (RP-132).
 - **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Built (RP-133).
@@ -1768,3 +1770,19 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
   sheet.** Its name, measure line and figures lead the table. Revokes the flow of decision (3) of 2026-10-10 (train-5
   critic) and «a table of 15 printed rows or more flows» (train-6 critic). Accepted: a blank at the foot of the sheet
   before. Taken by the user 2026-10-15.
+
+## Decisions of 2026-10-15, answers to the last slice's plan, by the user
+
+- **The AI keeps a set measure fixed;** the person changes or removes a measure no fact feeds. Retires RP-117 for RP-134.
+- **A loose habit no fact names changes its cadence.** Retires RP-104 for RP-135.
+- **A cadence or a measure facts depend on never changes:** the person retires it and opens another.
+- **A goal with goals inside is not deleted** until they are moved out or deleted.
+- **An act that cannot be done is shown disabled with one line saying why, never hidden** («Borrar la meta», «Cambiar la medida», «Cambiar la frecuencia», «Borrar el compromiso»). A removal's sentence sits with its own removal control, never above the sheet's primary button.
+- **A past day lists the dated tasks it owed and the tasks done on it;** month tasks stay on Hoy.
+- **An import merges and never removes:** open goals only, matched by name; two goals of one name are not updated.
+- **Sign-ups stay on in Supabase Auth** until WordBook's and HomeFund's lists are built. Nothing to code.
+- **GoalLog's sign-in route accepts `code` and still `token_hash`;** RP-131 stays unticked until the email template moves.
+- **A stranger reads «Este correo no tiene invitación a GoalLog.»**
+- **The allowed list seeds everyone who owns a GoalLog row;** new people enter by `npm run allow-email` plus a dashboard invite.
+- **Two phases of one goal may share a calendar week when their dates do not overlap;** the person's dates are kept and both phases show that week number. Overlap is judged on dates in the form, the server and the import, never on weeks. Saving an unchanged phase moves no date. Decided by the user 2026-10-15.
+- **An import phase whose name matches none but whose dates cross an existing phase is not added:** the review reads «se cruza con «<fase>»» and leaves it unmarked, and the confirm refuses it even if sent marked. Overlap is judged on dates (phases may share a calendar week). Taken by the user 2026-10-15.

@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { EditHabitAction } from "@/components/habit/habit-edit-sheet";
-import { RetireAction } from "@/components/goal/retire-sheet";
-import { Figure, Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
+import { DeleteHabitAction, RetireAction } from "@/components/goal/retire-sheet";
+import { Button, Figure, Flex, Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import { LIST_TAIL, tailOf } from "@/lib/lists/tail";
 import type { HabitView } from "@/lib/queries/habit";
@@ -10,7 +11,7 @@ import { civilDayMonthYear } from "@/lib/zone";
 
 /**
  * `HabitoPantalla` (RP-104, RP-105, RP-106): one loose habit, its months and
- * the two acts on it. A retired habit keeps its months and offers neither act.
+ * its acts: edit and retire, and while no fact names it (RP-127) its cadence and its delete. A retired habit keeps its months and offers none.
  * `back` and `seeAllHref` arrive decided: the page owns the query string.
  */
 export async function HabitScreen({
@@ -110,6 +111,15 @@ export async function HabitScreen({
         {hidden > 0 ? <TextLink href={seeAllHref}>{t("habit.months.seeAll")}</TextLink> : null}
         {seeLess}
       </Section>
+      {retired ? null : habit.factDayCount > 0 ? (
+        <Button block variant="outline" disabled aria-describedby="habit-locked-reason">
+          {t("habit.changeCadence")}
+        </Button>
+      ) : (
+        <Button asChild block variant="outline">
+          <Link href={`/metas/habitos/${habit.id}/frecuencia`}>{t("habit.changeCadence")}</Link>
+        </Button>
+      )}
       {retired ? null : (
         <RetireAction
           label={t("habit.retire")}
@@ -117,6 +127,20 @@ export async function HabitScreen({
           name={habit.name}
           factDayCount={habit.factDayCount}
         />
+      )}
+      {retired ? null : habit.factDayCount > 0 ? (
+        <>
+          <Flex justify="start">
+            <Button variant="ghost" disabled aria-describedby="habit-locked-reason">
+              {t("habit.delete")}
+            </Button>
+          </Flex>
+          <Text as="p" id="habit-locked-reason" variant="sentence" tone="muted">
+            {t("plan.errors.cadenceHasFacts")}
+          </Text>
+        </>
+      ) : (
+        <DeleteHabitAction label={t("habit.delete")} commitmentId={habit.id} name={habit.name} />
       )}
     </Page>
   );

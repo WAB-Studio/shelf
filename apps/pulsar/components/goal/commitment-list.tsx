@@ -99,8 +99,8 @@ export async function CommitmentList({
 }) {
   const t = await getTranslations();
   // A retired commitment stays in the list — never hidden (RP-13) — but it
-  // no longer asks anything of the goal, so the count above it names only
-  // what is still active, not the whole history the list itself keeps.
+  // no longer asks anything of the goal, so the count above it names what is
+  // still active and adds the retired ones apart: it always matches the rows.
   const activeCount = commitments.filter((commitment) => commitment.retiredAt === null).length;
 
   return (
@@ -108,6 +108,7 @@ export async function CommitmentList({
       label={t("goal.detail.commitmentsCount", {
         word: countWord(activeCount, t),
         count: activeCount,
+        retired: commitments.length - activeCount,
       })}
     >
       {commitments.map((commitment) => (
@@ -118,6 +119,7 @@ export async function CommitmentList({
           retired={commitment.retiredAt !== null}
           retiredLabel={t("goal.commitments.retired")}
           factDayCount={commitment.factDayCount}
+          goalId={goalId}
           trailing={
             <Flex direction="column" align="end">
               <Text as="span" variant="sentence" tone="muted">

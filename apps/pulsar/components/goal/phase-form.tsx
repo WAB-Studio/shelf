@@ -6,12 +6,26 @@ import { useTranslations } from "next-intl";
 import { z } from "zod";
 
 import { addPhase } from "@/app/actions/plan";
+import { deletePhase, editPhase } from "@/app/actions/plan-edit";
+import { editPhaseSchema } from "@/lib/validation/plan-edit";
 import { addPhaseSchema, phasesOverlap, phaseWithinHorizon, type PhaseSpan } from "@/lib/validation/plan";
-import { Button, Field, FieldPair, Figure, Page, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
+import {
+  Button,
+  Field,
+  FieldPair,
+  Figure,
+  Page,
+  ScreenHeader,
+  Section,
+  Sheet,
+  SheetActions,
+  Text,
+  TextLink,
+} from "@/components/ui";
 import { dayBefore, horizonWeeksOf, weekIndexOf } from "@/lib/day/weeks";
 import { civilDateLabel } from "@/lib/zone";
 
-import { MAX_GOAL_WEEKS, weeksToPhaseSpan } from "./phase-weeks";
+import { MAX_GOAL_WEEKS, phaseSpanKeeping } from "./phase-weeks";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type PhaseFormProps = {
@@ -30,6 +44,8 @@ export type PhaseFormProps = {
   // Every phase the goal already has, spans alone: what the overlap refusal
   // checks against before the request ever reaches the server.
   existingPhases: (PhaseSpan & { name: string })[];
+  // Present: the form edits this phase (RP-127), prefilled from it; absent, it adds one.
+  phase?: { id: string; aim: string; startsOn: string; endsOn: string };
 };
 
 // A week number typed by hand, bounded well under any real horizon — the
@@ -64,14 +80,24 @@ export function PhaseForm({
   horizon,
   defaultFromWeek,
   defaultToWeek,
-  existingPhases,
+  existingPhases: allPhases,
+  phase,
 }: PhaseFormProps) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [aim, setAim] = useState("");
-  const [fromWeek, setFromWeek] = useState(defaultFromWeek === null ? "" : String(defaultFromWeek));
-  const [toWeek, setToWeek] = useState(defaultToWeek === null ? "" : String(defaultToWeek));
+  // A phase never clashes with its own span.
+  const existingPhases = phase
+    ? allPhases.filter((other) => other.startsOn !== phase.startsOn || other.endsOn !== phase.endsOn)
+    : allPhases;
+  const [aim, setAim] = useState(phase?.aim ?? "");
+  const [fromWeek, setFromWeek] = useState(
+    phase ? String(weekIndexOf(openedOn, phase.startsOn)) : defaultFromWeek === null ? "" : String(defaultFromWeek),
+  );
+  const [toWeek, setToWeek] = useState(
+    phase ? String(weekIndexOf(openedOn, phase.endsOn)) : defaultToWeek === null ? "" : String(defaultToWeek),
+  );
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [error, setError] = useState<MessageKey | null>(null);
   const fromRef = useRef<HTMLInputElement>(null);
   const toRef = useRef<HTMLInputElement>(null);
@@ -88,7 +114,7 @@ export function PhaseForm({
 
   // The typed weeks read live: the days they cover, or the refusal naming the
   // goal's last week, or the phase they overlap. Derived, never stored.
-  const span = ordered ? weeksToPhaseSpan(openedOn, fromData, toData, horizon) : null;
+  const span = ordered ? phaseSpanKeeping(openedOn, fromData, toData, horizon, phase) : null;
   const pastFrom = fromData !== null && fromData > lastWeek;
   const pastTo = toData !== null && toData > lastWeek;
   const beyond = ordered && (pastFrom || pastTo);
@@ -111,8 +137,8 @@ export function PhaseForm({
         })
       : span
         ? t.rich("plan.phaseForm.span", {
-            from: civilDateLabel(span.startsOn),
-            to: civilDateLabel(span.endsOn),
+            from: civilDateLabel(span.startsOn, true),
+            to: civilDateLabel(span.endsOn, true),
             ...lastWeekFigures,
           })
         : null;
@@ -143,21 +169,24 @@ export function PhaseForm({
       return;
     }
 
-    const typedSpan = weeksToPhaseSpan(openedOn, fromResult.data, toResult.data, horizon);
+    const typedSpan = phaseSpanKeeping(openedOn, fromResult.data, toResult.data, horizon, phase);
     if (!phaseWithinHorizon(typedSpan, horizon) || overlapped) {
       // The refusal already reads in the hint; focus on the ringed field announces it.
       (fromInvalid || !toInvalid ? fromRef : toRef).current?.focus();
       return;
     }
 
-    const parsed = addPhaseSchema.safeParse({ goalId, aim, ...typedSpan });
+    const parsed = phase
+      ? editPhaseSchema.safeParse({ phaseId: phase.id, aim, ...typedSpan })
+      : addPhaseSchema.safeParse({ goalId, aim, ...typedSpan });
     if (!parsed.success) {
       setError(messageKey(parsed.error.issues[0].message));
       return;
     }
 
+    const data = parsed.data;
     startTransition(() => {
-      void addPhase(parsed.data).then((result) => {
+      void ("phaseId" in data ? editPhase(data) : addPhase(data)).then((result) => {
         if (result.ok) {
           router.push(`/metas/${goalId}`);
           router.refresh();
@@ -168,9 +197,26 @@ export function PhaseForm({
     });
   }
 
+  // The sheet stays open once the delete resolves: the route leaves under it.
+  function handleDelete() {
+    if (pending || !phase) return;
+    setError(null);
+    startTransition(() => {
+      void deletePhase({ phaseId: phase.id }).then((result) => {
+        if (result.ok) {
+          router.push(`/metas/${goalId}`);
+          router.refresh();
+        } else {
+          setSheetOpen(false);
+          setError(result.error);
+        }
+      });
+    });
+  }
+
   return (
     <Page>
-      <ScreenHeader title={t("plan.phaseForm.title")} back={{ href: `/metas/${goalId}`, place: goalName }} />
+      <ScreenHeader title={t(phase ? "goal.phases.editTitle" : "plan.phaseForm.title")} back={{ href: `/metas/${goalId}`, place: goalName }} />
 
       <Field
         label={t("plan.phaseForm.aimLabel")}
@@ -222,8 +268,32 @@ export function PhaseForm({
       ) : null}
 
       <Button block onClick={handleSubmit} disabled={pending}>
-        {t("plan.phaseForm.submit")}
+        {t(phase ? "goal.phases.save" : "plan.phaseForm.submit")}
       </Button>
+
+      {phase ? (
+        <>
+          <Button block variant="outline" onClick={() => setSheetOpen(true)} disabled={pending}>
+            {t("goal.phases.delete")}
+          </Button>
+          <Sheet
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+            label={phase.aim}
+            title={t("goal.phases.delete")}
+            description={t("goal.phases.deleteBody")}
+          >
+            <SheetActions>
+              <Button block onClick={handleDelete} disabled={pending}>
+                {t("goal.phases.deleteConfirm")}
+              </Button>
+              <Button block variant="outline" onClick={() => setSheetOpen(false)} disabled={pending}>
+                {t("goal.phases.keep")}
+              </Button>
+            </SheetActions>
+          </Sheet>
+        </>
+      ) : null}
     </Page>
   );
 }

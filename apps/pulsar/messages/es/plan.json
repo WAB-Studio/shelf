@@ -25,7 +25,10 @@
     "noMeasureYet": "Esta meta todavía no tiene cifra: «{unit}» se la pone.",
     "thresholdLabel": "cuenta desde",
     "submit": "Añadirlo",
-    "submitting": "Añadiéndolo…"
+    "submitting": "Añadiéndolo…",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "cancel": "Cancelar"
   },
   "habitForm": {
     "title": "Hábito nuevo",
@@ -38,14 +41,14 @@
     "fromLabel": "desde la semana",
     "toLabel": "hasta la semana",
     "submit": "Añadir la fase",
-    "span": "Del lunes <fig>{from}</fig> al domingo <fig>{to}</fig>. La meta llega hasta la semana <fig>{lastWeek}</fig>, el <fig>{lastDay}</fig>.",
+    "span": "Del <fig>{from}</fig> al <fig>{to}</fig>. La meta llega hasta la semana <fig>{lastWeek}</fig>, el <fig>{lastDay}</fig>.",
     "beyond": "La meta llega hasta la semana <fig>{lastWeek}</fig>, el <fig>{lastDay}</fig>. Elige hasta esa semana o mueve el final.",
     "moveEnd": "Mover el final",
     "overlap": "Las semanas <fig>{from}</fig> a <fig>{to}</fig> ya son de «{aim}». Empieza en la <fig>{next}</fig>."
   },
   "retireSheet": {
     "title": "¿Retirarlo?",
-    "descriptionWithDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y los {days, plural, one {# día} other {# días}} en que lo hiciste siguen ahí.",
+    "descriptionWithDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y {days, plural, one {el día} other {los # días}} en que lo hiciste {days, plural, one {sigue} other {siguen}} ahí.",
     "descriptionNoDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual.",
     "confirm": "Retirarlo",
     "cancel": "Dejarlo como está"
@@ -62,6 +65,16 @@
     "cancel": "Dejarla abierta"
   },
   "errors": {
+    "phaseNotFound": "Esa fase ya no está.",
+    "phaseInvalid": "Esa fase no es válida.",
+    "commitmentNotFound": "Ese compromiso ya no está.",
+    "commitmentHasFacts": "Ya hay días hechos con este compromiso: se retira, no se borra.",
+    "cadenceHasFacts": "Ya hay días hechos con esta frecuencia: retíralo y abre otro.",
+    "commitmentRetired": "Este compromiso ya está retirado.",
+    "goalHasFacts": "Esta meta ya tiene hechos: se archiva, no se borra.",
+    "goalHoldsGoals": "Tiene metas dentro: sácalas o bórralas primero.",
+    "measureFed": "Su medida ya suma hechos: no cambia.",
+    "noMeasure": "Esta meta no mide nada.",
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "goalNotFound": "Esa meta ya no existe.",
     "measureKept": "Esa meta ya mide {name}. La medida puesta no cambia.",

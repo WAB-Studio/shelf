@@ -3,7 +3,24 @@ import test from "node:test";
 
 import { horizonForWeeks } from "@/lib/day/weeks";
 
-import { defaultPhaseWeeks, horizonWeeks, weekIndex, weeksToPhaseSpan } from "./phase-weeks";
+import { defaultPhaseWeeks, horizonWeeks, phaseSpanKeeping, weekIndex, weeksToPhaseSpan } from "./phase-weeks";
+
+// A phase imported in dates may start midweek or end on a Monday. Opening it and saving
+// without touching a week must hand back its own dates, not the week's Monday and Sunday.
+test("phaseSpanKeeping: a week left as it was keeps the phase's own date", () => {
+  const kept = { startsOn: "2026-12-01", endsOn: "2027-02-28" };
+  assert.deepEqual(phaseSpanKeeping("2026-10-15", 8, 20, null, kept), kept);
+});
+
+test("phaseSpanKeeping: an edge the person moved snaps to its week, the other keeps its date", () => {
+  const kept = { startsOn: "2026-12-01", endsOn: "2027-02-28" };
+  assert.deepEqual(phaseSpanKeeping("2026-10-15", 9, 20, null, kept), { startsOn: "2026-12-07", endsOn: "2027-02-28" });
+  assert.deepEqual(phaseSpanKeeping("2026-10-15", 8, 19, null, kept), { startsOn: "2026-12-01", endsOn: "2027-02-21" });
+});
+
+test("phaseSpanKeeping: with nothing to keep it is the week span", () => {
+  assert.deepEqual(phaseSpanKeeping("2026-10-15", 2, 3, null), weeksToPhaseSpan("2026-10-15", 2, 3, null));
+});
 
 // RP-15: week 1 opens exactly on the goal's own opening day; later weeks on a Monday.
 test("weeksToPhaseSpan: week 1 starts on the goal's own opening day", () => {

@@ -51,6 +51,7 @@ import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { CreateInsideAction } from "./create-inside-sheet";
 import { MoveEndRow, MoveHorizonAction } from "./horizon-sheet";
+import { DeleteGoalSheet } from "./delete-goal-sheet";
 import { MeasureAction } from "./measure-sheet";
 import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import { GoalNote } from "./goal-note-sheet";
@@ -157,11 +158,36 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   };
   const moveAction = <MoveHorizonAction {...moveProps} />;
 
+  const deleteAction = (block: boolean) =>
+    goal.deletable ? (
+      <DeleteGoalSheet goalId={goal.id} name={goal.name} above={goal.parent?.id ?? null} block={block} />
+    ) : null;
+
+  // A delete that cannot be done stays, disabled, with the reason and the way out (user, 2026-10-15).
+  const deleteRefusal =
+    goal.deletable || goal.deleteBlock === null ? null : (
+      <Section as="div">
+        <Button variant="outline" block disabled aria-describedby="delete-goal-reason">
+          {t("goal.delete.action")}
+        </Button>
+        <Text as="p" id="delete-goal-reason" variant="sentence" tone="muted">
+          {t(
+            goal.deleteBlock === "goals"
+              ? "goal.delete.refusedGoals"
+              : archived
+                ? "goal.delete.refusedFactsArchived"
+                : "goal.delete.refusedFacts",
+          )}
+        </Text>
+      </Section>
+    );
+
   const phoneActs = ended ? (
     <Face on="phone">
       <Section as="div">
         {moveAction}
         <ArchiveGoalAction goalId={goal.id} name={goal.name} short {...archiveBranch} />
+        {deleteAction(true)}
       </Section>
     </Face>
   ) : null;
@@ -371,6 +397,12 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       </Section>
     ) : null;
 
+  // The live commitments that count toward the measure by its unit: a new unit cuts them off.
+  const countingCommitments = goal.commitments.flatMap((commitment) =>
+    commitment.retiredAt === null && commitment.satisfiedBy.kind !== "tap"
+      ? [{ name: commitment.name, unit: commitment.satisfiedBy.unit }]
+      : [],
+  );
   const endPanel = (
       <Panel>
         <Face on="desktop">
@@ -398,6 +430,17 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </Text>
         )}
         {goal.measureUnit || holds || archived || ended ? null : <MeasureAction goalId={goal.id} goalName={goal.name} />}
+        {goal.measureUnit && !holds && !archived && !ended ? (
+          <MeasureAction
+            goalId={goal.id}
+            goalName={goal.name}
+            current={{ name: goal.measureName ?? "", unit: goal.measureUnit }}
+            counting={countingCommitments}
+            fed={goal.measureFed}
+            rhythm={goal.rhythm !== null}
+            months={goal.plan.budgets.length}
+          />
+        ) : null}
         {ended ? <Face on="desktop">{moveAction}</Face> : null}
       </Panel>
   );
@@ -588,7 +631,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
                 </Text>
               </Flex>
             }
-            disabled
+            href={archived || ended ? undefined : `/metas/${goal.id}/fases/${phase.id}`}
+            disabled={archived || ended}
           />
         ))}
         {archived || ended ? null : (
@@ -631,6 +675,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               <Flex gap="3">
                 <RenameGoalAction goalId={goal.id} name={goal.name} />
                 <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short {...archiveBranch} />
+                {deleteAction(false)}
               </Flex>
             </Face>
           )
@@ -652,12 +697,17 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <GoalNote goalId={goal.id} name={goal.name} note={goal.note} />
 
       {archived ? (
-        <ReopenGoalButton goalId={goal.id} />
+        <>
+          <ReopenGoalButton goalId={goal.id} />
+          {deleteAction(true)}
+        </>
       ) : ended ? null : (
         <Face on="phone">
           <ArchiveGoalAction goalId={goal.id} name={goal.name} {...archiveBranch} />
+          {deleteAction(true)}
         </Face>
       )}
+      {deleteRefusal}
     </Page>
   );
 }

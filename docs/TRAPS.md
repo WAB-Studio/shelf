@@ -3270,3 +3270,22 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   another worktree: 329–331 and Q167–Q169 read red on correct code. Ports and `HARNESS_LANE` split the apps, never the database.
 - Run a judge that alters a function, a policy or a grant alone, or after the others. Before trusting a local red, compare the object with its
   migration (`pg_get_functiondef`); the clean proof is CI's `policies` job.
+
+## `check:plan` hangs on `tree-holder.ts` in a lane with no minted session (2026-10-16)
+- The validator of RP-122..126 killed a hung `check:plan`; the 1013 fix worker reproduced it: no `harness-session-<lane>.local.json`, and
+  `tree-holder.ts` waits forever. With the dev server up on the lane's port and a session minted, 89 + 509 passed, nothing hung.
+- Mint the lane's session before `check:plan`. A hang there is the missing session, never the code.
+
+## A pulsar e2e PR run proves nothing: `pulsar-e2e` runs on push and dispatch only (2026-10-16)
+- PR #620's run was green with `pulsar-e2e` skipped (`.github/workflows/ci.yml:307`, `github.event_name != 'pull_request'`); the new spec never ran.
+- Dispatch `gh workflow run CI --ref <branch>` before merging any pulsar change that touches a spec.
+
+## Specs whose title or seed holds today's date fail when the run crosses midnight Bogotá (2026-10-16)
+- CI 38852989964 ran at 05:00Z: `plan.spec.ts:427` and `caida.spec.ts:171` red, «Test not found in the worker process» on the second, whose title
+  embeds a computed date. Neither file was in the diff; `plan.spec:427` passed locally.
+- Rerun a red that started near 05:00Z before chasing it. Never put a computed date in a test title.
+
+## The active `gh` account changes under a running session (2026-10-16)
+- Twice in one session the active account became `wilsoniridian`, which cannot write `WAB-Studio/universe`: pushes and `gh workflow run` got 403.
+- Read `gh auth status` on a 403. Push with `git push "https://x-access-token:$(gh auth token -u Cxrkeyb)@github.com/WAB-Studio/universe.git" …`
+  and `GH_TOKEN=$(gh auth token -u Cxrkeyb) gh …` rather than switching the account another session may need.

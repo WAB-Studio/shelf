@@ -21,6 +21,7 @@ const REASONS = [
   "import.errors.quantityNoAmount",
   "import.errors.noteShape",
   "import.errors.partFailed",
+  "import.errors.phaseOverlaps",
 ];
 
 test("every reason a failed part carries has a sentence of its own, and none says «tabla»", () => {
@@ -47,7 +48,7 @@ test("describePart names the goal and the kind from the path", () => {
 });
 
 test("the result is kept, read back and cleared; junk reads as nothing", () => {
-  const result = { goals: 3, parts: [{ name: "A", goal: "Casa", kind: "task" as const, month: "2026-10", reason: "import.errors.noteShape" }] };
+  const result = { goals: 3, updated: 1, parts: [{ name: "A", goal: "Casa", kind: "task" as const, month: "2026-10", reason: "import.errors.noteShape" }] };
   saveCreated(result);
   assert.deepEqual(readCreated(), result);
   clearCreated();

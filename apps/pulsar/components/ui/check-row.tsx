@@ -27,6 +27,7 @@ export function CheckRow({
   below,
   foldedNote,
   radio,
+  unboxed,
 }: {
   checked: boolean;
   onCheckedChange?: (checked: boolean) => void;
@@ -57,22 +58,28 @@ export function CheckRow({
   foldedNote?: { label: string; text: string };
   // A native radio of the named group instead of a checkbox: the row picks one of a list.
   radio?: string;
+  // A row with nothing to mark: no control, the name stays level with the rows that have one.
+  unboxed?: boolean;
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   return (
     <div className={`${styles.row} ${styles[`depth${depth}`]}`}>
-      <label className={styles.label}>
-        <input
-          type={radio ? "radio" : "checkbox"}
-          name={radio}
-          className={styles.box}
-          checked={checked}
-          disabled={disabled}
-          aria-label={boxLabel}
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            onCheckedChange?.(event.target.checked)
-          }
-        />
+      <label className={unboxed ? `${styles.label} ${styles.plain}` : styles.label}>
+        {unboxed ? (
+          <span className={styles.box} aria-hidden="true" />
+        ) : (
+          <input
+            type={radio ? "radio" : "checkbox"}
+            name={radio}
+            className={styles.box}
+            checked={checked}
+            disabled={disabled}
+            aria-label={boxLabel}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onCheckedChange?.(event.target.checked)
+            }
+          />
+        )}
         <span className={styles.body}>
           <Text
             as="span"

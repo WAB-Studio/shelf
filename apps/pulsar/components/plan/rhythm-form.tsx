@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { setRhythm } from "@/app/actions/roadmap";
-import { Button, Chip, ChipRow, Field, SheetActions, Text } from "@/components/ui";
+import { removeRhythm, setRhythm } from "@/app/actions/roadmap";
+import { Button, Chip, ChipRow, Field, Flex, SheetActions, Text } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import { daysBetween } from "@/lib/day/weeks";
 import { releasedPlan } from "@/lib/plan/first-rhythm";
@@ -144,6 +144,20 @@ export function RhythmForm({
     }
   }
 
+  async function handleRemove() {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    const result = await removeRhythm({ goalId });
+    setPending(false);
+    if (result.ok) {
+      onDone?.();
+      router.refresh();
+    } else {
+      setError(t(result.error));
+    }
+  }
+
   return (
     <>
       {time ? (
@@ -195,6 +209,18 @@ export function RhythmForm({
           </Button>
         ) : null}
       </SheetActions>
+      {sheet && initial !== null ? (
+        <>
+          <Text as="p" variant="sentence" tone="muted">
+            {t(time ? "roadmap.rhythm.removeBodyPlan" : "roadmap.rhythm.removeBody")}
+          </Text>
+          <Flex justify="start">
+            <Button variant="ghost" onClick={handleRemove} disabled={pending}>
+              {t("roadmap.rhythm.remove")}
+            </Button>
+          </Flex>
+        </>
+      ) : null}
     </>
   );
 }
