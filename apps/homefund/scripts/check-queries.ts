@@ -4746,7 +4746,7 @@ async function statementsOf<T>(run: () => Promise<T>): Promise<{ value: T; texts
 const beginsIn = (texts: string[]): number => texts.filter((t) => /^\s*begin\b/i.test(t)).length;
 const settlesIn = (texts: string[]): number => texts.filter((t) => /set_config/i.test(t)).length;
 const readsOf = (texts: string[], table: string): number =>
-  texts.filter((t) => t.includes(`from "${table}"`)).length;
+  texts.filter((t) => new RegExp(`\\bfrom\\s+(?:"\\w+"\\.)?"${table}"`, "i").test(t)).length;
 
 // A module the plan adds, or the reason it is not there: the assertion that needs it fails
 // by name instead of the whole run failing on a link error.
