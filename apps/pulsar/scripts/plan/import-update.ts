@@ -403,6 +403,55 @@ test("phases: a new one is inserted, one of the same aim has its span updated, t
   assert.equal(rows[0].id, baseId, "the span is updated, the phase is not replaced");
 });
 
+// RP-25: a phase may end ON the goal's horizon day, never after it. The edges are where the boundary lives.
+test("horizon: moved onto the very day a phase ends is written, not refused (RP-25)", async () => {
+  const name = fresh("Horizonte sobre fase");
+  const id = await seedGoal(name, { horizon: `${M(12)}-01` });
+  await seedPhase(id, "Intocada", `${M(1)}-01`, `${M(3)}-01`);
+  const draft = draftOf({ name, horizon: `${M(3)}-01` });
+  const result = ok(await confirm(draft, await review(draft)));
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  assert.equal((await goalRow(id)).horizon, `${M(3)}-01`);
+});
+
+test("horizon: moved onto the day a phase the plan rewrites now ends is written, one day short of it is refused (RP-25)", async () => {
+  const name = fresh("Horizonte sobre fase reescrita");
+  const id = await seedGoal(name, { horizon: `${M(12)}-01` });
+  await seedPhase(id, "Larga", `${M(1)}-01`, `${M(8)}-01`);
+  const draft = draftOf({ name, horizon: `${M(3)}-01`, phases: [`${M(1)}-01 a ${M(3)}-01 · Larga`] });
+  const result = ok(await confirm(draft, await review(draft)));
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  assert.equal((await goalRow(id)).horizon, `${M(3)}-01`);
+  const [phase] = await admin<{ ends_on: string }[]>`select ends_on::text from goals.phases where goal_id = ${id}`;
+  assert.equal(phase.ends_on, `${M(3)}-01`);
+
+  const short = fresh("Horizonte un día antes");
+  const shortId = await seedGoal(short, { horizon: `${M(12)}-01` });
+  await seedPhase(shortId, "Intocada", `${M(1)}-01`, `${M(3)}-02`);
+  const shorter = draftOf({ name: short, horizon: `${M(3)}-01` });
+  const refused = ok(await confirm(shorter, await review(shorter)));
+  assert.deepEqual(refused.failed.map((f) => f.reason), ["goal.errors.horizonBeforePhase"]);
+  assert.equal((await goalRow(shortId)).horizon, `${M(12)}-01`);
+});
+
+test("phases: one that ends on the day of the horizon the goal keeps, or the one it moves to, is written (RP-25)", async () => {
+  const kept = fresh("Fase hasta el horizonte");
+  const keptId = await seedGoal(kept, { horizon: `${M(12)}-01` });
+  const moved = fresh("Fase hasta el horizonte nuevo");
+  const movedId = await seedGoal(moved, { horizon: `${M(12)}-01` });
+  const draft = draftOf(
+    { name: kept, horizon: `${M(12)}-01`, phases: [`${M(2)}-01 a ${M(12)}-01 · Cierre`] },
+    { name: moved, horizon: `${M(6)}-01`, phases: [`${M(2)}-01 a ${M(6)}-01 · Cierre`] },
+  );
+  const result = ok(await confirm(draft, await review(draft)));
+  assert.equal(result.failed.length, 0, JSON.stringify(result.failed));
+  const ends = async (goalId: string) =>
+    (await admin<{ ends_on: string }[]>`select ends_on::text from goals.phases where goal_id = ${goalId}`).map((r) => r.ends_on);
+  assert.deepEqual(await ends(keptId), [`${M(12)}-01`]);
+  assert.deepEqual(await ends(movedId), [`${M(6)}-01`]);
+  assert.equal((await goalRow(movedId)).horizon, `${M(6)}-01`);
+});
+
 test("commitments: a fact-less one takes the new cadence, a new one is added, the one the plan omits stays", async () => {
   const name = fresh("Compromisos");
   const id = await seedGoal(name);
