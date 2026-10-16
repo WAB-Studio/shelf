@@ -238,6 +238,7 @@ async function main() {
   await checkSharedToggleLeaderOnly();
   await checkCategoryExistsProbe();
   await checkAllowedEmailList();
+  await checkAllowedEmailAudit();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -2895,7 +2896,7 @@ async function checkAuditLogPolicies() {
     "111. an authenticated insert, update and delete of a category each land one audit row with the right action, before/after and the caller as actor",
     "112. an authenticated insert, update and delete against the log are each refused",
     "113. the recurring generator's transaction and its split are captured with a null actor",
-    "114. every RLS-enabled table save the log, the allowed list and the sign-in counter carries the capture trigger",
+    "114. every RLS-enabled table save the log carries the capture trigger",
     "115. the purge drops a row past 24 months and keeps a recent one",
   ];
   const tailLabel = "116. the rolled-back audit transaction leaves no trace";
@@ -3010,7 +3011,7 @@ async function checkAuditLogPolicies() {
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'finances' and c.relkind = 'r' and c.relrowsecurity
-      and c.relname not in ('audit_log', 'allowed_emails', 'sign_in_claims')
+      and c.relname <> 'audit_log'
       and not exists (
         select 1 from pg_trigger t
         where t.tgrelid = c.oid and t.tgname = 'capture_audit' and not t.tgisinternal)`;
@@ -10418,6 +10419,157 @@ async function m1ScriptRows(tag: string, labels: M1Labels) {
     }
     await listSql.end();
   }
+}
+
+// Assertions 352-357: the allowed list and the sign-in counter are audited like every other write
+// (RF-43/44/45). Neither table has an `id`, so the record id is the primary key as text: the address,
+// or `client_key/day`. Both rows are unscoped, so the viewer policy shows them to their actor alone.
+// Every row runs in a transaction that rolls back, audit rows included: nothing remains afterwards.
+// The seed is expected to be audited, so the triggers must exist before the migration's INSERT runs.
+async function checkAllowedEmailAudit() {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const labels = {
+    listed: "352. a leader's invitation writes one audit row for the listed address: folded record id, INSERT, the leader as actor, no scope",
+    claim: "353. a counter row is audited with client_key/day as its record id: INSERT, UPDATE and DELETE, system actor, no scope",
+    accounts: "354. an audited table with an id column still records the id as its record id",
+    unreadable: "355. a plain member reads none of those audit rows; the leader who caused the listing reads only that one",
+    seed: "356. the migration's own seed of the list is audited: one INSERT per address, folded record id, null actor, no scope",
+    delRow: "357. removing a listed address writes a DELETE audit row with the address in before_data",
+  };
+
+  type Row = {
+    entity: string;
+    record_id: string;
+    action: string;
+    actor_user_id: string | null;
+    owner_user_id: string | null;
+    group_id: string | null;
+    before_email: string | null;
+  };
+  const audit = (tx: M1Tx, entity: string, recordId: string) => tx<Row[]>`
+    select entity, record_id, action, actor_user_id, owner_user_id, group_id, before_data->>'email' as before_email
+    from finances.audit_log where entity = ${entity} and record_id = ${recordId} order by id`;
+
+  await m1Rows([labels.listed, labels.delRow, labels.accounts], async (tx) => {
+    const group = await m1Group(tx);
+    const typed = `Inv.${tag}@Z.invalid`;
+    const folded = typed.toLowerCase();
+    await enterUserContext(tx, group.leader);
+    await tx`insert into group_members (group_id, name, role, invite_email)
+      values (${group.groupId}, 'rls m1b invited', 'member', ${typed})`;
+    const [{ id: accountId }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, initial_balance_on)
+      values (${group.leader}, 'rls m1b account', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+    await tx`reset role`;
+    const rows = await audit(tx, "allowed_emails", folded);
+    const asTyped = await audit(tx, "allowed_emails", typed);
+    const first = rows[0];
+
+    await tx`select set_config('request.jwt.claims', '', true)`;
+    await tx`delete from finances.allowed_emails where email = ${folded}`;
+    const after = await audit(tx, "allowed_emails", folded);
+    const gone = after.filter((r) => r.action === "DELETE");
+
+    const acct = await audit(tx, "accounts", accountId);
+    return [
+      {
+        ok:
+          rows.length === 1 && asTyped.length === 0 &&
+          first.action === "INSERT" && first.actor_user_id === group.leader &&
+          first.owner_user_id === null && first.group_id === null,
+        detail: `audit rows for the folded address = ${rows.length} (${rows.map((r) => r.action).join(",")}), keyed as typed = ${asTyped.length}, actor is the leader = ${first?.actor_user_id === group.leader}, owner = ${first?.owner_user_id ?? "null"}, group = ${first?.group_id ?? "null"}`,
+      },
+      {
+        ok: gone.length === 1 && gone[0].before_email === folded && gone[0].owner_user_id === null && gone[0].group_id === null,
+        detail: `DELETE rows = ${gone.length}, address in before_data = ${gone[0]?.before_email ?? "none"}`,
+      },
+      {
+        ok: acct.length === 1 && acct[0].action === "INSERT" && acct[0].actor_user_id === group.leader && acct[0].owner_user_id === group.leader,
+        detail: `audit rows keyed by the account id = ${acct.length}, owner scope kept = ${acct[0]?.owner_user_id === group.leader}`,
+      },
+    ];
+  });
+
+  await m1Rows([labels.claim], async (tx) => {
+    const key = `m1b-${tag}`;
+    const day = "2031-02-03";
+    const recordId = `${key}/${day}`;
+    // An earlier section settles a claim for the whole session; a system write must start with none.
+    await tx`select set_config('request.jwt.claims', '', true)`;
+    await tx`insert into finances.sign_in_claims (client_key, day, "count") values (${key}, ${day}, 1)`;
+    await tx`insert into finances.sign_in_claims (client_key, day, "count") values (${key}, ${day}, 1)
+      on conflict (client_key, day) do update set "count" = finances.sign_in_claims."count" + 1`;
+    await tx`delete from finances.sign_in_claims where client_key = ${key} and day = ${day}`;
+    const rows = await audit(tx, "sign_in_claims", recordId);
+    const [{ n: elsewhere }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from finances.audit_log
+      where entity = 'sign_in_claims' and record_id <> ${recordId}
+        and coalesce(after_data->>'client_key', before_data->>'client_key') = ${key}`;
+    const actions = rows.map((r) => r.action).join(",");
+    return [
+      {
+        ok:
+          actions === "INSERT,UPDATE,DELETE" && elsewhere === 0 &&
+          rows.every((r) => r.actor_user_id === null && r.owner_user_id === null && r.group_id === null),
+        detail: `rows keyed ${recordId} = ${actions || "none"}, rows for the key under another record id = ${elsewhere}`,
+      },
+    ];
+  });
+
+  await m1Rows([labels.unreadable], async (tx) => {
+    const key = `m1b-read-${tag}`;
+    await tx`select set_config('request.jwt.claims', '', true)`;
+    await tx`insert into finances.sign_in_claims (client_key, day, "count") values (${key}, current_date, 1)`;
+    const [{ d }] = await tx<{ d: string }[]>`select current_date::text as d`;
+    const claimId = `${key}/${d}`;
+    const group = await m1Group(tx);
+    const typed = `Read.${tag}@Z.invalid`;
+    await enterUserContext(tx, group.leader);
+    await tx`insert into group_members (group_id, name, role, invite_email)
+      values (${group.groupId}, 'rls m1b read', 'member', ${typed})`;
+    await tx`reset role`;
+    const count = async (who: string) => {
+      await enterUserContext(tx, who);
+      const [{ n }] = await tx<{ n: number }[]>`
+        select count(*)::int as n from finances.audit_log
+        where (entity = 'allowed_emails' and record_id = ${typed.toLowerCase()})
+           or (entity = 'sign_in_claims' and record_id = ${claimId})`;
+      await tx`reset role`;
+      return n;
+    };
+    const member = await count(group.member);
+    const leader = await count(group.leader);
+    return [
+      { ok: member === 0 && leader === 1, detail: `rows the member reads = ${member} (expected 0), rows the leader reads = ${leader} (expected 1: the listing, not the counter)` },
+    ];
+  });
+
+  const seedUser = `Seed.Audit.${tag}@Example.COM`;
+  await m1Rows(
+    [labels.seed],
+    async (tx) => {
+      const rows = await audit(tx, "allowed_emails", seedUser.toLowerCase());
+      const typed = await audit(tx, "allowed_emails", seedUser);
+      return [
+        {
+          ok:
+            rows.length === 1 && typed.length === 0 && rows[0].action === "INSERT" &&
+            rows[0].actor_user_id === null && rows[0].owner_user_id === null && rows[0].group_id === null,
+          detail: `audit rows for the seeded address = ${rows.length}, keyed as typed = ${typed.length}, actor = ${rows[0]?.actor_user_id ?? "null"}`,
+        },
+      ];
+    },
+    {
+      reinstall: true,
+      beforeMigration: async (tx) => {
+        await tx`select set_config('request.jwt.claims', '', true)`;
+        const id = randomUUID();
+        await tx`insert into auth.users (id, email) values (${id}, ${seedUser})`;
+        await tx`insert into app_users (id) values (${id})`;
+      },
+    },
+  );
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile
