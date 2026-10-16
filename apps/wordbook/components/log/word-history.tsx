@@ -85,13 +85,17 @@ function WordHistorySkeleton() {
   );
 }
 
-export function WordHistory({ normalised: served }: { normalised: string }) {
+export function WordHistory() {
   const pathname = usePathname();
-  const last = pathname.split("/").pop() ?? served;
+  // The offline shell `/registro/_` serves every word, so the address is the
+  // only place the word lives; the pathname arrives still percent-encoded.
+  const last = pathname.split("/").pop() ?? "";
   let normalised = last;
   try {
     normalised = decodeURIComponent(last);
-  } catch {}
+  } catch {
+    // A hand-typed malformed escape: the raw segment is the text the person typed.
+  }
   const t = useTranslations("log");
   const tWord = useTranslations("word");
   const format = useFormatter();
