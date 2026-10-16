@@ -24,6 +24,7 @@
     "check:mcp": "node --import tsx --env-file=.env.local --test \"scripts/mcp/*.ts\"",
     "check:plan": "node --import tsx --env-file=.env.local scripts/harness/plan-run.ts",
     "allow-email": "node --import tsx --env-file=.env.local scripts/allow-email.ts",
+    "check:allow-email": "node --import tsx --env-file=.env.local scripts/check-allow-email.ts",
     "source:add": "node --import tsx --env-file=.env.local scripts/add-evidence-source.ts",
     "harness:mint-session": "node --import tsx --env-file=.env.local scripts/harness/mint-session.ts",
     "harness:seed-goal": "node --import tsx --env-file=.env.local scripts/harness/seed-goal.ts",
