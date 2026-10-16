@@ -3336,3 +3336,7 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 ## The 0059 trigger hides old account words in test inserts (2026-10-16)
 - `private.set_account_subtype()` rewrites any subtype on INSERT (`efectivo` → `cash`, anything else from `kind`), so a fixture that still inserts `'bancaria'` lands as `bank` and no suite goes red.
 - Do: prove a fixture's words with a grep count, not a suite. Only an UPDATE, a read by the old word or a read-back equality turns red.
+
+## A push by URL leaves `origin/<branch>` stale, and `git fetch -q` may not refresh it (2026-10-16)
+- Pushing with `git push "https://x-access-token:…@github.com/…" <branch>` does not move the local `origin/<branch>`. Twice a train merged `origin/homefund-m23` or `origin/homefund-m24` after a `git fetch -q` and got the old tip: «merge 0», nothing merged, and two module branches were cut from a train that lacked the module.
+- Do: merge a module by its SHA from the worker's report, and check `git merge-base --is-ancestor <sha> origin/<train>` (or `git ls-remote`) after the push.
