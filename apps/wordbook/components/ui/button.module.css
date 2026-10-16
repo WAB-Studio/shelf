@@ -18,3 +18,9 @@
 .block.block {
   width: 100%;
 }
+
+/* `IconButton`'s `quiet`: doubled to outrank `.rt-variant-ghost`'s own
+   single-class colour. */
+.quiet.quiet {
+  color: var(--rl-muted-quiet);
+}
