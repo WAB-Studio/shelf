@@ -8,6 +8,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { readLemmaHistory, readLemmaKey, type WordHistoryRow } from "@/lib/log/summary";
 import { recalledFilter } from "@/lib/log/study-filter";
 import type { LookupOutcome } from "@/lib/log/types";
+import { decodeWordSegment } from "@/lib/word/segment";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { NetworkAnswer } from "@/components/search/network-answer";
@@ -90,12 +91,7 @@ export function WordHistory() {
   // The offline shell `/registro/_` serves every word, so the address is the
   // only place the word lives; the pathname arrives still percent-encoded.
   const last = pathname.split("/").pop() ?? "";
-  let normalised = last;
-  try {
-    normalised = decodeURIComponent(last);
-  } catch {
-    // A hand-typed malformed escape: the raw segment is the text the person typed.
-  }
+  const normalised = decodeWordSegment(last);
   const t = useTranslations("log");
   const tWord = useTranslations("word");
   const format = useFormatter();

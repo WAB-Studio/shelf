@@ -268,11 +268,11 @@ async function main(): Promise<void> {
       statuses.join() === "200,200,429",
       `statuses=${statuses.join()}`,
     );
-    // The split between the two providers is not asserted: the per-caller
+    // The exact split is not asserted, but the model must have served: the per-caller
     // share (#612) sends the caller's second call to MyMemory.
     assert(
       "T6. the refused sentence reached neither provider and claimed no model call",
-      modelCalls + mymemoryCalls === CLIENT_CAP && (await spend()) === modelCalls,
+      modelCalls >= 1 && modelCalls + mymemoryCalls === CLIENT_CAP && (await spend()) === modelCalls,
       `model=${modelCalls} mymemory=${mymemoryCalls} spend=${await spend()}`,
     );
 
