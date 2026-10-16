@@ -23,6 +23,7 @@ import {
   ConfirmDialog,
   DropdownMenu,
   EmptyState,
+  Figure,
   Flex,
   FundChip,
   Heading,
@@ -30,6 +31,7 @@ import {
   Progress,
   SegmentedControl,
   Text,
+  ToneSurface,
 } from "@/components/ui";
 import type { BudgetStatus } from "@/db/queries/budgets";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -74,6 +76,7 @@ export function BudgetsScreen({
   const t = useTranslations("budgets");
   const tKey = useTranslations();
   const format = useFormatter();
+  const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
   const onActionError = useActionErrorToast();
@@ -144,10 +147,12 @@ export function BudgetsScreen({
   }
 
   const anchor = `${month}-01`;
-  const monthLabel = format.dateTime(civilDateToDate(anchor), {
+  const monthName = format.dateTime(civilDateToDate(anchor), {
     month: "long",
     year: "numeric",
   });
+  // The month opens with a capital in the active language; the rest stays as written.
+  const monthLabel = monthName.charAt(0).toLocaleUpperCase(locale) + monthName.slice(1);
 
   // The two controls write the same query, so stepping the month keeps the tab
   // and switching tab keeps the period.
@@ -212,7 +217,7 @@ export function BudgetsScreen({
         >
           <ChevronLeft size={18} />
         </IconButton>
-        <Text weight="bold" style={{ textTransform: "capitalize" }}>
+        <Text weight="bold">
           {monthLabel}
         </Text>
         <IconButton
@@ -393,85 +398,88 @@ function BudgetCard({
           pct,
         });
 
-  return (
-    <Card
-      style={
-        budget.overspent ? { background: "var(--red-a2)" } : undefined
-      }
-    >
-      <Flex direction="column" gap="3">
-        <Flex align="center" gap="3">
-          <CategoryTile color={color} size={16} />
-          <Text weight="medium" style={{ flex: 1, minWidth: 0 }} truncate>
+  const content = (
+    <Flex direction="column" gap="3">
+      <Flex align="center" gap="3">
+        <CategoryTile color={color} size={16} />
+        <Flex flexGrow="1" minWidth="0">
+          <Text weight="medium" truncate>
             {title}
           </Text>
-          <Text
-            size="2"
-            weight="medium"
-            color={budget.overspent ? "red" : undefined}
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {formatMoney(budget.spentCents, budget.currency, locale)}
-            <Text color="gray" weight="regular">
-              {t("ofLimit", {
-                amount: formatMoney(budget.limitCents, budget.currency, locale),
-              })}
-            </Text>
+        </Flex>
+        <Figure
+          size="2"
+          weight="medium"
+          color={budget.overspent ? "red" : undefined}
+        >
+          {formatMoney(budget.spentCents, budget.currency, locale)}
+          <Text color="gray" weight="regular">
+            {t("ofLimit", {
+              amount: formatMoney(budget.limitCents, budget.currency, locale),
+            })}
           </Text>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              <IconButton
-                type="button"
-                tap
-                variant="ghost"
-                color="gray"
-                aria-label={tKey("common.actionsFor", { name: title })}
-              >
-                <EllipsisVertical size={16} />
-              </IconButton>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content>
-              {/* An archived budget is read-only: the way back is all it offers,
-                  and a mistake is corrected by restoring it first. */}
-              {archived ? (
-                <DropdownMenu.Item onSelect={onRestore}>
-                  {tKey("common.restore")}
-                </DropdownMenu.Item>
-              ) : (
-                <>
-                  <DropdownMenu.Item onSelect={onEdit}>
-                    {tKey("common.edit")}
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item onSelect={onArchive}>
-                    {tKey("common.archive")}
-                  </DropdownMenu.Item>
-                </>
-              )}
-              <DropdownMenu.Item color="red" onSelect={onDelete}>
-                {tKey("common.delete")}
+        </Figure>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            <IconButton
+              type="button"
+              tap
+              variant="ghost"
+              color="gray"
+              aria-label={tKey("common.actionsFor", { name: title })}
+            >
+              <EllipsisVertical size={16} />
+            </IconButton>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content>
+            {/* An archived budget is read-only: the way back is all it offers,
+                and a mistake is corrected by restoring it first. */}
+            {archived ? (
+              <DropdownMenu.Item onSelect={onRestore}>
+                {tKey("common.restore")}
               </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-        </Flex>
-        <Progress
-          value={pct}
-          color={tone === "gray" ? undefined : tone}
-        />
-        <Flex align="baseline" justify="between" gap="2">
-          <Text
-            size="1"
-            weight={tone === "gray" ? "regular" : "medium"}
-            color={tone}
-          >
-            {status}
-          </Text>
-          {/* Which spend the limit counts: the movements booked in this one
-              currency and no other (RF-124). */}
-          <Text size="1" color="gray" style={{ whiteSpace: "nowrap" }}>
-            {tKey("planning.inCurrency", { currency: budget.currency })}
-          </Text>
-        </Flex>
+            ) : (
+              <>
+                <DropdownMenu.Item onSelect={onEdit}>
+                  {tKey("common.edit")}
+                </DropdownMenu.Item>
+                <DropdownMenu.Item onSelect={onArchive}>
+                  {tKey("common.archive")}
+                </DropdownMenu.Item>
+              </>
+            )}
+            <DropdownMenu.Item color="red" onSelect={onDelete}>
+              {tKey("common.delete")}
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       </Flex>
-    </Card>
+      <Progress
+        value={pct}
+        color={tone === "gray" ? undefined : tone}
+      />
+      <Flex align="baseline" justify="between" gap="2">
+        <Text
+          size="1"
+          weight={tone === "gray" ? "regular" : "medium"}
+          color={tone}
+        >
+          {status}
+        </Text>
+        {/* Which spend the limit counts: the movements booked in this one
+            currency and no other (RF-124). */}
+        <Text size="1" color="gray" wrap="nowrap">
+          {tKey("planning.inCurrency", { currency: budget.currency })}
+        </Text>
+      </Flex>
+    </Flex>
+  );
+
+  return budget.overspent ? (
+    <ToneSurface card tone="danger">
+      {content}
+    </ToneSurface>
+  ) : (
+    <Card>{content}</Card>
   );
 }

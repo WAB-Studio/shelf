@@ -3,11 +3,11 @@ import "server-only";
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import { callerGroupId } from "@/db/queries/groups";
+import { callerGroupId, callerGroupInfo } from "@/db/queries/groups";
 import { categories } from "@/db/schema";
 import type { Category } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb, withUserDbOrTx } from "@/db/session";
+import { requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
 
 type CategoryKind = Category["kind"];
 
@@ -64,8 +64,9 @@ function scopeWhere(scope: CategoryScope) {
 export async function listCategories(
   scope: CategoryScope,
   kind: CategoryKind,
+  outerTx?: Transaction,
 ): Promise<CategoryNode[]> {
-  return withUserDb(async (tx) => {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx
       .select({
         id: categories.id,
@@ -111,9 +112,7 @@ export async function listCategories(
  * caller's group resolved by subselect rather than behind a transaction of its
  * own. A personal-only caller matches no group row and gets their own set alone.
  *
- * The order reproduces what the four separate reads used to arrive in — personal
- * before the group's, expense before income, then by name — so a picker built
- * from this list reads the same as before.
+ * Personal before the group's, expense before income, then by name.
  */
 export async function listScopedCategories(
   userId: string,
@@ -176,8 +175,9 @@ export async function listScopedCategories(
 export async function listParentCategories(
   scope: CategoryScope,
   kind: CategoryKind,
+  outerTx?: Transaction,
 ): Promise<{ id: string; name: string }[]> {
-  return withUserDb(async (tx) =>
+  return withUserDbOrTx(outerTx, async (tx) =>
     tx
       .select({ id: categories.id, name: categories.name })
       .from(categories)
@@ -190,8 +190,11 @@ export async function listParentCategories(
  * Both kinds, top level only: the default colour belongs to the scope, not to
  * the tab open when a category is created.
  */
-export async function listUsedCategoryColors(scope: CategoryScope): Promise<string[]> {
-  return withUserDb(async (tx) => {
+export async function listUsedCategoryColors(
+  scope: CategoryScope,
+  outerTx?: Transaction,
+): Promise<string[]> {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx
       .selectDistinct({ color: categories.color })
       .from(categories)
@@ -267,5 +270,45 @@ export async function deleteCategory({
       .returning({ id: categories.id });
 
     return rows.length > 0;
+  });
+}
+
+/**
+ * The categories screen in one transaction (RF-63, RF-70): the scope is the
+ * caller's group when they belong to one, else their personal set. A grouped
+ * caller's personal set costs one more read; an ungrouped caller's is
+ * `categories` itself, read once.
+ */
+export async function getCategoriesScreenData(kind: CategoryKind): Promise<{
+  groupName: string | null;
+  isLeader: boolean;
+  categories: CategoryNode[];
+  personal: CategoryNode[];
+  group: CategoryNode[];
+  parents: { id: string; name: string }[];
+  usedColors: string[];
+}> {
+  const user = await requireUser();
+
+  return withUserDb(async (tx) => {
+    const group = await callerGroupInfo(tx, user.id);
+    const scope: CategoryScope = group ? { groupId: group.id } : { ownerUserId: user.id };
+
+    const [scoped, parents, usedColors, personal] = await Promise.all([
+      listCategories(scope, kind, tx),
+      listParentCategories(scope, kind, tx),
+      listUsedCategoryColors(scope, tx),
+      group ? listCategories({ ownerUserId: user.id }, kind, tx) : Promise.resolve(null),
+    ]);
+
+    return {
+      groupName: group?.name ?? null,
+      isLeader: group?.role === "leader",
+      categories: scoped,
+      personal: personal ?? scoped,
+      group: group ? scoped : [],
+      parents,
+      usedColors,
+    };
   });
 }

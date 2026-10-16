@@ -19,6 +19,8 @@ type TapProp = {
   // row it sits in is the tap target, so the ledger's title link stays as tall
   // as its line.
   tap?: boolean;
+  // Shares the free space of the row it sits in with its siblings.
+  grow?: boolean;
 };
 
 function withTap(tap: boolean | undefined, className: string | undefined): string | undefined {
@@ -27,8 +29,15 @@ function withTap(tap: boolean | undefined, className: string | undefined): strin
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps & TapProp>(
-  function Button({ tap, className, ...props }, ref) {
-    return <ThemesButton ref={ref} {...props} className={withTap(tap, className)} />;
+  function Button({ tap, grow, className, style, ...props }, ref) {
+    return (
+      <ThemesButton
+        ref={ref}
+        {...props}
+        style={grow ? { flex: 1, ...style } : style}
+        className={withTap(tap, className)}
+      />
+    );
   },
 );
 

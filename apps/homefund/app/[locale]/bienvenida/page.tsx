@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { Badge, Box, Button, Flex, Heading, Text } from "@/components/ui";
+import { Badge, Box, Button, Disc, Flex, Heading, Text } from "@/components/ui";
 import { getUserGroup } from "@/db/queries/groups";
 import { requireUser } from "@/db/session";
 import { Link as LocaleLink, redirect } from "@/i18n/navigation";
@@ -54,23 +54,14 @@ export default async function WelcomePage(
       mx={{ md: "auto" }}
     >
       <main>
-        <Flex
-          align="center"
-          justify="center"
-          style={{
-            width: 96,
-            height: 96,
-            borderRadius: "50%",
-            backgroundColor: "var(--accent-9)",
-          }}
-        >
+        <Disc size={96} surface="var(--accent-9)">
           <CheckIcon
             size={46}
             color="var(--accent-contrast)"
             strokeWidth={2.4}
             aria-hidden
           />
-        </Flex>
+        </Disc>
 
         <Heading size="6" align="center">
           {t("title", { fund: group.name })}

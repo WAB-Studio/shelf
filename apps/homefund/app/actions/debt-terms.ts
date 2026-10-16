@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 
-import { deleteDebtTerms, upsertDebtTerms } from "@/db/queries/debt-terms";
+import { upsertDebtTerms } from "@/db/queries/debt-terms";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
@@ -12,7 +12,6 @@ import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
   debtTermsSchema,
-  deleteDebtTermsSchema,
   percentToFraction,
   refineDebtTermsAmounts,
 } from "@/lib/validation/debt-terms";
@@ -101,13 +100,3 @@ export const saveDebtTermsAction = authActionClient
       return { accountId: savedAccountId };
     },
   );
-
-// A denied or absent profile reports as no row (RF-78).
-export const deleteDebtTermsAction = authActionClient
-  .inputSchema(deleteDebtTermsSchema)
-  .action(async ({ parsedInput: { accountId } }) => {
-    const deleted = await deleteDebtTerms({ accountId });
-    if (!deleted) throw new ActionError("errors.notFound");
-
-    refresh();
-  });

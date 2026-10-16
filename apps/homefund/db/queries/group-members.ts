@@ -3,11 +3,11 @@ import "server-only";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import { callerGroupId } from "@/db/queries/groups";
+import { callerGroupId, callerGroupInfo } from "@/db/queries/groups";
 import { groupMembers } from "@/db/schema";
 import type { GroupMember } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb, withUserDbOrTx } from "@/db/session";
+import { requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
 
 type GroupMemberRole = GroupMember["role"];
@@ -50,8 +50,8 @@ export async function listMembers(
 }
 
 /**
- * The caller's own roster, without a group id to pass and without the transaction
- * that used to resolve one: the membership rides as a subselect. `archived: "all"`
+ * The caller's own roster, with no group id to pass: the membership rides as a
+ * subselect. `archived: "all"`
  * reads both rosters at once — a movement or an audit row outlives the member who
  * caused it, so naming one needs the archived names too.
  */
@@ -81,6 +81,29 @@ export async function listCallerMembers(
       .where(and(eq(groupMembers.groupId, callerGroupId(userId)), archivedFilter))
       .orderBy(asc(groupMembers.name)),
   );
+}
+
+/**
+ * The members screen in one transaction: the roster and the caller's role read
+ * together, the group resolved in SQL by `callerGroupId` (RF-100). `null` when the
+ * caller has no group.
+ */
+export async function getMembersScreenData({
+  archived,
+}: {
+  archived: boolean;
+}): Promise<{ members: MemberRow[]; isLeader: boolean } | null> {
+  const user = await requireUser();
+
+  return withUserDb(async (tx) => {
+    const [group, members] = await Promise.all([
+      callerGroupInfo(tx, user.id),
+      listCallerMembers(user.id, { archived }, tx),
+    ]);
+    if (!group) return null;
+
+    return { members, isLeader: group.role === "leader" };
+  });
 }
 
 // `user_id` stays null and `role` stays at its default — the only shape

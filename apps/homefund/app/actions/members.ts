@@ -20,6 +20,8 @@ import {
   archiveMemberSchema,
   createMemberSchema,
   deleteMemberSchema,
+  inviteByEmailSchema,
+  provisionalMemberName,
   restoreMemberSchema,
   transferLeadershipSchema,
   updateMemberSchema,
@@ -73,6 +75,30 @@ export const createMemberAction = authActionClient
     // A failed send leaves the member pending rather than aborting the create;
     // the caller surfaces it as a notice, not an error.
     const inviteEmailFailed = email ? !(await sendInviteEmail(email)) : false;
+
+    refresh();
+    return { memberId, inviteEmailFailed };
+  });
+
+// RF-07: the onboarding invite. The address is required and names the member
+// provisionally; the person renames it later. Refuses and sends as `createMemberAction`.
+export const inviteMemberByEmailAction = authActionClient
+  .inputSchema(inviteByEmailSchema)
+  .action(async ({ parsedInput: { email } }) => {
+    const groupId = await requireGroupId();
+    let memberId: string;
+    try {
+      ({ memberId } = await createMember({
+        groupId,
+        name: provisionalMemberName(email),
+        inviteEmail: email,
+      }));
+    } catch (error) {
+      if (pgErrorCode(error) === "42501") notLeader();
+      throw error;
+    }
+
+    const inviteEmailFailed = !(await sendInviteEmail(email));
 
     refresh();
     return { memberId, inviteEmailFailed };

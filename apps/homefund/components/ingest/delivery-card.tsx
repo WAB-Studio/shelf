@@ -27,6 +27,7 @@ import {
   Flex,
   Heading,
   IconButton,
+  RawText,
   Spinner,
   Text,
   VisuallyHidden,
@@ -295,13 +296,9 @@ export function DeliveryCard({
               <Text size="2" weight="medium">
                 {t("rawTextLabel")}
               </Text>
-              <Text
-                size="2"
-                color="gray"
-                style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
-              >
+              <RawText size="2" color="gray">
                 {delivery.rawText}
-              </Text>
+              </RawText>
             </Flex>
           )}
         </Flex>

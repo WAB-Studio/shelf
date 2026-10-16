@@ -57,4 +57,3 @@ export const deleteLabelSchema = z.object({
   labelId: z.uuid({ error: "errors.notFound" }),
 });
 
-export type DeleteLabelInput = z.infer<typeof deleteLabelSchema>;

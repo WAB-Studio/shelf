@@ -4,7 +4,7 @@ import styles from "./stat-tiles.module.css";
 
 /**
  * The row of figures a screen opens with when it has no repeating rows to show
- * (RF-83, RF-88, RF-48): equal-width cards, each a caps label over one figure and
+ * (RF-83, RF-88, RF-125): equal-width cards, each a caps label over one figure and
  * an optional note. The value arrives formatted — `Money` is what a caller passes.
  */
 export function StatTiles({

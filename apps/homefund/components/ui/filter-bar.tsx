@@ -8,7 +8,7 @@ import { Select } from "@radix-ui/themes";
 import styles from "./filter-bar.module.css";
 
 /**
- * The row of narrowing controls under a screen header (RF-23, RF-89, RF-48).
+ * The row of narrowing controls under a screen header (RF-23, RF-89, RF-125).
  * Below `md` it keeps the page's gutter; from `md` up it takes the 32px of
  * SPEC-A3 so it lines up with the table beneath it.
  */

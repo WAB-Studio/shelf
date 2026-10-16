@@ -43,15 +43,64 @@ export function maxAmountMinor(currency: CurrencyCode): number {
   return MAX_AMOUNT_MAJOR * amountScale(currency).stored;
 }
 
-// Strips the separators `Intl.NumberFormat` writes and the ones a person types
-// by hand, so a pasted "500.000" and a typed "500000" parse the same. Bank
-// messages may append zero decimals in either locale.
-// Only a separator sitting where a thousands group falls — exactly three
-// digits, then another separator or the end — is a group mark; anything else
-// is left in place so "500.5" still reads as a decimal, not a group.
+type WrittenFigure = { major: string; fraction: string };
+
+// Splits a typed figure into its whole digits and its fraction digits, or
+// `null` when the marks do not follow one convention (RF-128).
+//
+// A figure with both marks takes the last one as the decimal mark and the
+// other as the thousands group: "1.234,56" and "1,234.56" are the same
+// figure, and "1,234.567" is three decimals, refused, never a thousandfold
+// misreading. A single mark repeated is a group mark. A lone mark followed by
+// exactly three digits is a group too, whatever the digits before it, since the column never holds a third
+// decimal; any other lone mark is the decimal one. Every group after the
+// first is three digits and the first is one to three, or the figure is
+// refused.
+function splitWritten(raw: string): WrittenFigure | null {
+  // Spaces, no-break and narrow no-break spaces group like a mark does.
+  const trimmed = raw.trim().replace(/[ \u00a0\u202f](?=\d{3}(?:\D|$))/g, "");
+  if (!/^\d[\d.,]*$/.test(trimmed)) return null;
+
+  const marks: string[] = trimmed.match(/[.,]/g) ?? [];
+  if (marks.length === 0) return { major: trimmed, fraction: "" };
+
+  const groups = (whole: string, mark: string): string | null => {
+    const pattern = new RegExp(`^\\d{1,3}(?:\\${mark}\\d{3})*$`);
+    return pattern.test(whole) ? whole.replaceAll(mark, "") : null;
+  };
+
+  const decimal = trimmed[trimmed.search(/[.,][^.,]*$/)];
+  const group = decimal === "." ? "," : ".";
+  const hasBoth = marks.includes(group) && marks.includes(decimal);
+
+  if (hasBoth) {
+    const cut = trimmed.lastIndexOf(decimal);
+    const fraction = trimmed.slice(cut + 1);
+    if (fraction.length === 0) return null;
+    const major = groups(trimmed.slice(0, cut), group);
+    return major === null ? null : { major, fraction };
+  }
+
+  if (marks.length > 1) {
+    const major = groups(trimmed, decimal);
+    return major === null ? null : { major, fraction: "" };
+  }
+
+  const cut = trimmed.indexOf(decimal);
+  const whole = trimmed.slice(0, cut);
+  const tail = trimmed.slice(cut + 1);
+  if (tail.length === 0) return null;
+  if (tail.length === 3) return { major: `${whole}${tail}`, fraction: "" };
+  return { major: whole, fraction: tail };
+}
+
+// What quick entry hands on: the figure with its group marks dropped and one
+// decimal mark left, or the text untouched when it is no figure, so
+// `parseAmount` refuses it later instead of this guessing.
 function normalizeGroupMarks(raw: string): string {
-  const withoutZeroFraction = raw.trim().replace(/[.,]00$/, "");
-  return withoutZeroFraction.replace(/[.,   ](?=\d{3}(?:\D|$))/g, "");
+  const figure = splitWritten(raw);
+  if (figure === null) return raw.trim();
+  return figure.fraction === "" ? figure.major : `${figure.major},${figure.fraction}`;
 }
 
 // Reads a written figure into the integer the stored scale counts. The ceiling
@@ -65,16 +114,10 @@ function normalizeGroupMarks(raw: string): string {
 // major and fraction are read as separate digit runs and combined with
 // integer arithmetic, so no amount ever passes through a binary fraction.
 function parseWritten(raw: string): number | null {
-  const trimmed = raw.trim();
+  const figure = splitWritten(raw);
+  if (figure === null) return null;
+  const { major, fraction } = figure;
 
-  // A lone separator with exactly three digits behind it and nothing after
-  // reads as a thousands group and nothing else: a genuine fraction can never
-  // run three digits deep, since the column holds at most `STORAGE_EXPONENT`,
-  // so "1.500" is the same one thousand five hundred whichever currency asked.
-  const match = /^(\d+)(?:[.,](\d+))?$/.exec(normalizeGroupMarks(trimmed));
-  if (!match) return null;
-
-  const [, major, fraction = ""] = match;
   // A third decimal digit is rejected, not rounded: nothing a bank posts
   // needs a thousandth of its own minor unit, so a third digit is a
   // transcription slip, and guessing a rounding direction would silently
@@ -202,14 +245,11 @@ export function formatMoney(
   return formatter.format(value);
 }
 
-// COP-only wrappers, marked to retire. Forty-five files still call them, from
+// COP-only wrappers, marked to retire. Callers still bound to them date from
 // when every amount was a peso stored as a hundredth of itself. Each caller
 // drops its own as the screen it serves starts carrying a currency (RF-121).
 // They count whole pesos, which is a third scale and the reason they go: only
 // `pesosToCents` bridges them to the integer a column holds.
-
-/** @deprecated Bound an amount with `maxAmountMinor(currency)`. */
-export const MAX_AMOUNT_PESOS = MAX_AMOUNT_MAJOR;
 
 /** @deprecated Normalising is `parseAmount`'s own business. */
 export function normalizeAmountInput(raw: string): string {

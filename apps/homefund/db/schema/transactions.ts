@@ -59,8 +59,7 @@ export const transactions = finances.table(
     // tell, and still needs its other account named (RF-133, RF-135). Never derived
     // from the shape of the row: every income and every expense is one-sided by
     // design (RF-17), so `from_account_id is null or to_account_id is null` alone
-    // cannot mean "waiting" — every income/expense in the ledger matches that shape,
-    // measured at 8 462 of 8 462 the day this column was added. This is the one
+    // cannot mean "waiting": every income and expense matches that shape. This is the one
     // mark that says which ones actually are.
     awaitingCounterparty: boolean().notNull().default(false),
     externalRef: text(),

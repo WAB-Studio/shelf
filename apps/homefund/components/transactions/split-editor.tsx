@@ -5,13 +5,15 @@ import { useLocale, useTranslations } from "next-intl";
 import { useMemo } from "react";
 
 import {
+  AmountField,
   Button,
   CategoryTile,
+  Figure,
   Flex,
   IconButton,
   Select,
   Text,
-  TextField,
+  ToneSurface,
 } from "@/components/ui";
 import type { ScopedCategory } from "@/db/queries/transaction-form";
 import type { CurrencyCode } from "@/lib/currency";
@@ -128,15 +130,15 @@ export function SplitEditor({
                 ))}
               </Select.Content>
             </Select.Root>
-            <TextField.Root
+            <AmountField
               size="3"
+              width={110}
               value={split.amount}
               onChange={(event) =>
                 updateSplit(index, { amount: event.target.value })
               }
               inputMode="numeric"
               aria-label={t("splitRowAmount", { position })}
-              style={{ width: 110, fontVariantNumeric: "tabular-nums" }}
             />
             <IconButton
               type="button"
@@ -161,29 +163,26 @@ export function SplitEditor({
 
       {/* The live gap the schema refuses to let through: green at rest, red the
           moment the rows stop summing to the total. */}
-      <Flex
+      <ToneSurface
+        tone={remainderMinor === 0 ? "success" : "danger"}
+        strong
+        radius={3}
         align="center"
         justify="between"
         px="3"
         py="2"
-        style={{
-          borderRadius: "var(--radius-3)",
-          background:
-            remainderMinor === 0 ? "var(--grass-a3)" : "var(--red-a3)",
-        }}
       >
         <Text size="2" weight="medium" color={remainderMinor === 0 ? "grass" : "red"}>
           {t("splitUnassigned")}
         </Text>
-        <Text
+        <Figure
           size="2"
           weight="bold"
           color={remainderMinor === 0 ? "grass" : "red"}
-          style={{ fontVariantNumeric: "tabular-nums" }}
         >
           {formatMoney(remainderMinor, currency, locale)}
-        </Text>
-      </Flex>
+        </Figure>
+      </ToneSurface>
     </Flex>
   );
 }

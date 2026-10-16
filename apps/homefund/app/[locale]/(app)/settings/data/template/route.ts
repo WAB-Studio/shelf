@@ -40,9 +40,8 @@ export async function GET(
   const { locale } = await context.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  await requireUser();
-
-  const [source, t] = await Promise.all([
+  const [, source, t] = await Promise.all([
+    requireUser(),
     readExport({ entityKeys: ["accounts", "categories"] }),
     getTranslations({ locale, namespace: "data" }),
   ]);

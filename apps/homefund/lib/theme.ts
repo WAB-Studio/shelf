@@ -50,9 +50,10 @@ export function subscribeToTheme(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-// Runs before hydration: self-contained, throws nothing when storage is unavailable.
-export const themeScript = `(function(){try{var k=${JSON.stringify(
+// Runs before hydration, self-contained and never throwing: a failing storage read falls
+// to the system appearance, a failing `matchMedia` to light, and a class always lands.
+export const themeScript = `(function(){var k=${JSON.stringify(
   THEME_STORAGE_KEY,
 )},t=${JSON.stringify(
   THEMES,
-)},s=localStorage.getItem(k),v=t.indexOf(s)===-1?"system":s,a=v==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v,r=document.documentElement;r.classList.remove("light","dark");r.classList.add(a);r.style.colorScheme=a}catch(e){}})();`;
+)},v="system",a="light";try{var s=localStorage.getItem(k);if(t.indexOf(s)!==-1)v=s}catch(e){}if(v==="system"){try{a=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}catch(e){}}else a=v;try{var r=document.documentElement;r.classList.remove("light","dark");r.classList.add(a);r.style.colorScheme=a}catch(e){}})();`;

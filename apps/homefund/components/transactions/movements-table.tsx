@@ -57,7 +57,7 @@ const WIDTHS = {
 } as const;
 
 /**
- * The dense ledger of `private/design-desktop/SPEC-A3.md` (RF-23, RF-48): six
+ * The dense ledger of `private/design-desktop/SPEC-A3.md` (RF-23, RF-125): six
  * columns, the newest day first, and each row's own menu at the end of it
  * (RF-24). Nothing is stored here — the caller owns the page and hands over the
  * rows it wants drawn, so the ledger renders whatever the URL's filters selected.

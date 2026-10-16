@@ -3,8 +3,17 @@ import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { PLANNING_KEYS, destinations } from "@/components/fund/destinations";
-import { Box, Card, Flex, FundChip, Grid, Heading, Text } from "@/components/ui";
-import { Link as LocaleLink } from "@/i18n/navigation";
+import {
+  Box,
+  Card,
+  Disc,
+  Flex,
+  FundChip,
+  Grid,
+  Heading,
+  PlainLink,
+  Text,
+} from "@/components/ui";
 
 // The hub's own order for its five cards. `PLANNING_KEYS` stays the sidebar's
 // order — `PlanningSubNav`'s chips read it directly — so the hub keeps its own
@@ -117,20 +126,14 @@ function HubCard({
   href?: string;
 }) {
   const disc = (
-    <Flex
-      align="center"
-      justify="center"
-      style={{
-        width: 44,
-        height: 44,
-        borderRadius: "var(--radius-5)",
-        background: href ? `var(--${tint}-a3)` : "var(--gray-a3)",
-        color: href ? `var(--${tint}-11)` : "var(--gray-9)",
-        flexShrink: 0,
-      }}
+    <Disc
+      size={44}
+      radius={5}
+      surface={href ? `var(--${tint}-a3)` : "var(--gray-a3)"}
+      ink={href ? `var(--${tint}-11)` : "var(--gray-9)"}
     >
       <Icon size={21} />
-    </Flex>
+    </Disc>
   );
 
   const titleText = (
@@ -152,7 +155,7 @@ function HubCard({
       <Box display={{ initial: "block", md: "none" }}>
         <Flex align="center" gap="3">
           {disc}
-          <Flex direction="column" gap="1" style={{ flex: 1, minWidth: 0 }}>
+          <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
             {titleText}
             {summaryText}
           </Flex>
@@ -162,7 +165,7 @@ function HubCard({
 
       <Box display={{ initial: "none", md: "block" }}>
         <Grid columns="1fr 220px 210px" gap="4" align="center">
-          <Flex align="center" gap="3" style={{ minWidth: 0 }}>
+          <Flex align="center" gap="3" minWidth="0">
             {disc}
             {titleText}
           </Flex>
@@ -176,8 +179,6 @@ function HubCard({
   if (!href) return body;
 
   return (
-    <LocaleLink href={href} style={{ textDecoration: "none", color: "inherit" }}>
-      {body}
-    </LocaleLink>
+    <PlainLink href={href}>{body}</PlainLink>
   );
 }

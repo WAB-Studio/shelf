@@ -1,6 +1,5 @@
 // One entry per node SEED_CATEGORIES seeds — parent and child alike, 23 of
-// them (D8: a child used to copy its parent's colour instead of drawing its
-// own, so the palette only had to cover the 15 parents). Ordered so no two
+// them, each drawing its own colour. Ordered so no two
 // neighbours read as the same colour: redmean(a, b) — the low-cost RGB stand-in
 // for perceptual distance, weighted by mean red per the ITU/W3C formula — stays
 // above 130 for every adjacent pair here (worst case 232), well clear of the 88

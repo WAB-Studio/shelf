@@ -28,15 +28,11 @@ export const rejectDeliverySchema = z.object({
   silenceShape: z.boolean(),
 });
 
-export type RejectDeliveryInput = z.infer<typeof rejectDeliverySchema>;
-
 // The only way out of `ambiguous`, so a merchant that was learned wrong can be
 // learned again from scratch (RF-94).
 export const forgetMerchantSchema = z.object({
   merchantId: z.uuid({ error: "ingest.errors.merchantInvalid" }),
 });
-
-export type ForgetMerchantInput = z.infer<typeof forgetMerchantSchema>;
 
 // Undoing a silence (RF-99): dropping the memory returns the shape to *never
 // seen*, which RF-92 lets wait for review again, and returns with it the
@@ -45,4 +41,3 @@ export const restoreShapeSchema = z.object({
   shapeId: z.uuid({ error: "ingest.errors.shapeInvalid" }),
 });
 
-export type RestoreShapeInput = z.infer<typeof restoreShapeSchema>;

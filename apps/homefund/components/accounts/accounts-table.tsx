@@ -137,8 +137,8 @@ export function AccountsTable({
       // (RF-114), and ordered the settlement currency first (RF-121). The cell
       // leads with it and names every other currency the account holds under it,
       // the same cut the phone's card makes; no cell here adds two currencies
-      // together (RF-124). The figure carries its own minus; the expense tone it
-      // used to borrow to draw one painted a balance as if it were a movement.
+      // together (RF-124). The figure carries its own minus, so no expense tone
+      // is borrowed to draw one.
       cell: (row) => {
         const [settlement, ...others] = row.balances;
 

@@ -15,6 +15,8 @@ type HarnessClaims = {
 type HarnessSupabaseClient = {
   auth: {
     getClaims: () => Promise<{ data: { claims: HarnessClaims }; error: null }>;
+    // Sends nothing: it records the address, so an invite is driven without mail.
+    signInWithOtp: (args: { email: string }) => Promise<{ error: null }>;
   };
 };
 
@@ -37,12 +39,21 @@ export const createSupabaseServerClient: (
   return {
     auth: {
       async getClaims() {
+        // A suite that measures whether a route overlaps its session check with
+        // its reads sets this; every claims read then costs that long.
+        const delay = Number(process.env.HARNESS_CLAIMS_DELAY_MS ?? 0);
+        if (delay > 0) await new Promise((done) => setTimeout(done, delay));
         return {
           data: {
             claims: { sub, email, role: "authenticated", aud: "authenticated" },
           },
           error: null,
         };
+      },
+      async signInWithOtp({ email: to }) {
+        const sent = ((globalThis as { harnessInvitesSent?: string[] }).harnessInvitesSent ??= []);
+        sent.push(to);
+        return { error: null };
       },
     },
   };

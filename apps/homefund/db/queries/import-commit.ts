@@ -442,9 +442,9 @@ function link(value: string | null, map: Map<string, string>): string | null {
 }
 
 // The settlement currency of every account a recurring rule or transaction row names,
-// read back in one round trip now that a file-new account has a real row (RF-121). A
-// file-new account carries the settlement currency its sheet row named — but the
-// check still walks it like any other, per row, and stops at the first mismatch.
+// read back in one round trip (RF-121). A file-new account carries the settlement
+// currency its sheet row named; the check walks it like any other, per row, and
+// stops at the first mismatch.
 async function assertBaseCurrencyAccounts(
   tx: Transaction,
   rows: { fromAccountId: string | null; toAccountId: string | null }[],

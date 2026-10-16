@@ -57,10 +57,7 @@ export const issueWebhookCredentialSchema = z.object({
     .default(60),
 });
 
-export type IssueWebhookCredentialInput = z.infer<typeof issueWebhookCredentialSchema>;
-
 export const revokeWebhookCredentialSchema = z.object({
   id: z.uuid({ error: "webhooks.errors.credentialInvalid" }),
 });
 
-export type RevokeWebhookCredentialInput = z.infer<typeof revokeWebhookCredentialSchema>;
