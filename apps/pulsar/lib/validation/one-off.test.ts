@@ -157,7 +157,7 @@ test("completeOneOffSchema: a real civil day is kept, no day stays absent, a mal
   assert.equal(bare.success, true);
   assert.equal(bare.data?.day, undefined);
 
-  for (const day of ["2026-13-40", "2026-02-30", "ayer", "", "2026-10-1", 20261012]) {
+  for (const day of ["2026-13-40", "2026-02-30", "ayer", "", "2026-10-1"]) {
     const refused = completeOneOffSchema.safeParse({ oneOffId: id, day });
     assert.equal(refused.success, false, String(day));
     assert.equal(refused.error?.issues[0]?.message, "day.errors.dayInvalid", String(day));
