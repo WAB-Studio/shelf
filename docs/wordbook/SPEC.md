@@ -157,6 +157,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   was spent.
 - [ ] **RL-67** — When sending a sign-in link times out, the screen says the link may have been sent, before the reader asks for another. A board is drawn before it is built. Decided by the user 2026-10-15.
 - [ ] **RL-69** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
+  - Open, 2026-10-16: the template still sends `token_hash` and public sign-ups are still on.
 
 - [ ] **RL-07** — Autocomplete appears only while the string is being treated as a word. A sentence never raises it.
   - Open, 2026-10-16: the negative half is read too early: `e2e/phrase.spec.ts:87` counts the suggestions right after `fill`, before they settle, so it passes if they would arrive later. The positive half is driven (`e2e/word.spec.ts:227`).
@@ -268,25 +269,23 @@ this gets built, and no schema, table or column is "prepared for" it.
   and what their other devices recorded comes down to this one **and stays in its local record,
   beside its own**. It is a copy: a lookup is still answered from the device, with an account or
   without one, online or offline.
-- [x] **RL-24** — The copy never edits a row. A row names the device that recorded it and the number
+- [ ] **RL-70** *(successor of RL-24)* — The copy never edits a row. A row names the device that recorded it and the number
   it carried there, so copying it twice does not duplicate it, going up or coming down, and what one
   device copies never overwrites what another wrote. An interrupted merge leaves the record whole in
   every sense that matters: what came down is valid, what did not comes down next time.
 
-  The only thing it deletes is retiring a device, and it deletes exactly this: the searches that
-  device had copied leave the copy, and that device stops syncing. **What had already come down to
-  another device stays on that device**, and leaves it by clearing the app's data in that browser.
-  The app says this before confirming and promises no more.
+  It deletes in two ways. Retiring a device deletes exactly the searches that device had copied, and that device stops syncing; what had already come down to another device stays there and leaves it by clearing the app's data in that browser, and the app says this before confirming. A row the reader deletes from `/registro` (RL-66) leaves the account's copy and leaves a mark there for each of its searches, so every device that holds them drops them on its next pull and no device sends them up again. Decided by the user 2026-10-16.
 - [x] **RL-25** — The reader sees the list of devices that have copied to their account: which one is
   in their hand, when each was last seen, and how many searches it has copied. They can retire any of
   them, their own included.
-- [x] **RL-52** *(successor of RL-30)* — With an account open on the device, nothing leaves it until the reader
+- [ ] **RL-71** *(successor of RL-52)* — With an account open on the device, nothing leaves it until the reader
   confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
   had and brings down what the others recorded, with no further act. When the device last copied for another reader, it sends up only what is searched after this
   confirmation; the earlier rows stay on the device and never reach this account. Signing out stops it. A device the reader
   retired stays retired: it offers no copy until the reader signs out and signs in, and then it copies as a new
-  device. The sign-in link works in any browser. With no account, nothing leaves the device. Decided by the user
+  device. The sign-in link works only in the browser that asked for it. With no account, nothing leaves the device. Decided by the user
   2026-10-08.
+  - Open, 2026-10-16: production's Magic Link template sends token_hash; until it sends the PKCE link, a link still opens in any browser.
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside
   the app.
@@ -371,6 +370,22 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 Dead codes. The number stays burned and the tick stays as it was.
 
+- [x] **RL-24** — The copy never edits a row. A row names the device that recorded it and the number
+  it carried there, so copying it twice does not duplicate it, going up or coming down, and what one
+  device copies never overwrites what another wrote. An interrupted merge leaves the record whole in
+  every sense that matters: what came down is valid, what did not comes down next time.
+
+  The only thing it deletes is retiring a device, and it deletes exactly this: the searches that
+  device had copied leave the copy, and that device stops syncing. **What had already come down to
+  another device stays on that device**, and leaves it by clearing the app's data in that browser.
+  The app says this before confirming and promises no more. _Retired 2026-10-16, by the user. Successor: RL-70 (a row the reader deletes leaves every device through a mark in the account copy)._
+- [x] **RL-52** *(successor of RL-30)* — With an account open on the device, nothing leaves it until the reader
+  confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
+  had and brings down what the others recorded, with no further act. When the device last copied for another reader, it sends up only what is searched after this
+  confirmation; the earlier rows stay on the device and never reach this account. Signing out stops it. A device the reader
+  retired stays retired: it offers no copy until the reader signs out and signs in, and then it copies as a new
+  device. The sign-in link works in any browser. With no account, nothing leaves the device. Decided by the user
+  2026-10-08. _Retired 2026-10-16, by the user. Successor: RL-71 (the sign-in link works only in the browser that asked for it)._
 - [x] **RL-50** — A translation the provider's public memory supplies is judged before the reader
   reads it, and sexual or obscene content is never drawn. The reader either gets a translation that
   answers what they typed, or is told the phrase could not be answered — never the provider's
@@ -619,7 +634,7 @@ Rules the model must always guarantee, regardless of how they are implemented:
 - The interface never asserts a browser capability it has not asked for at
   runtime.
 - The device holds exactly one copy of the payload.
-- The record gains rows on its own; only the reader removes one (RL-66) or empties it, on the device and in the copy alike. A row is identified by the
+- The record gains rows on its own; only the reader removes one (RL-66, RL-70) or empties it, on the device and in the copy alike. A row is identified by the
   device that wrote it and the number it carried there.
 
 ---
@@ -653,7 +668,7 @@ Principles, not recipes:
     cannot do: keep the provider's identity and key off the client, and make swapping the provider a
     one-file change.
   - `app/api/log/sync/route.ts`, `app/api/log/clear/route.ts` and `app/api/devices/route.ts` — the
-    copy of the reader's record, its wipe, and the devices that hold it (RL-22, RL-25). They answer
+    copy of the reader's record, its wipe, and the devices that hold it (RL-22, RL-25). The sync route also carries deletion marks (RL-70). They answer
     **only** a request that carries a session the reader opened on purpose; with no account they
     answer 401 without opening a connection.
   - `app/auth/confirm/route.ts` — landing the sign-in link (RL-22).

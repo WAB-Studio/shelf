@@ -23,13 +23,20 @@ test("a wire field the driver never heard of arrives; identity is renamed; recei
   });
   Object.assign(globalThis, {
     window: { dispatchEvent: () => true },
-    fetch: async () => ({ ok: true, status: 200, json: async () => ({ accepted: 0, rows: [wire], cursor: "c1" }) }),
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({ accepted: 0, rows: [wire], cursor: "c1", tombstones: [], tombstoneCursor: null }) }),
   });
   mock.module("../log/record", {
     namedExports: {
       readSyncState: async () => ({ enabled: true, readerId: "reader-1", deviceId: DEVICE, pushedThroughLocalId: null, pulledThroughCursor: null }),
       writeSyncState: async () => undefined,
       markRetired: async () => undefined,
+    },
+  });
+  mock.module("../log/delete", {
+    namedExports: {
+      readTombstoneQueue: async () => ({ pending: [], since: null }),
+      settleTombstones: async () => undefined,
+      applyTombstones: async () => 0,
     },
   });
   mock.module("../log/merge", {

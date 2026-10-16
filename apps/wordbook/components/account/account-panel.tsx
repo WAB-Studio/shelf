@@ -33,7 +33,7 @@ type EmailFormState =
   | { kind: "sent" }
   | {
       kind: "failed";
-      error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "rateLimited" | "offline";
+      error: Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline";
     };
 
 // Driven against a production build, `context.setOffline(true)` rejects the

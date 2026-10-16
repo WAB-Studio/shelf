@@ -11,6 +11,8 @@ const calls: string[] = [];
 let mxAnswer: () => Promise<{ exchange: string; priority: number }[]>;
 let claimAnswer: "ok" | "rateLimited" | "noKey";
 let otpError: { status: number } | null;
+let listAnswer: () => Promise<boolean>;
+const listAsked: string[] = [];
 
 const notFound = () => Promise.reject(Object.assign(new Error("ENOTFOUND"), { code: "ENOTFOUND" }));
 
@@ -20,6 +22,11 @@ const double = {
     return mxAnswer();
   },
   resolveNone: notFound,
+  allowed: (email: string) => {
+    calls.push("list");
+    listAsked.push(email);
+    return listAnswer();
+  },
   claim: async () => {
     calls.push("claim");
     return claimAnswer;
@@ -43,6 +50,7 @@ const DOUBLES: Record<string, string> = {
     export const resolve6 = () => ${D}.resolveNone();`,
   "next/navigation": "export const redirect = () => undefined;",
   "next/headers": `export const headers = () => ${D}.headers();`,
+  "@/lib/auth/allowlist": `export const isEmailAllowed = (...a) => ${D}.allowed(...a);`,
   "@/lib/account/sign-in-budget": `export const claimSignInLink = (...a) => ${D}.claim(...a);`,
   "@/lib/env": `export const env = { NEXT_PUBLIC_SUPABASE_URL: "http://stub.invalid", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "stub", NEXT_PUBLIC_SITE_URL: "http://site.invalid" };`,
   "@repo/supabase-auth": `export const createSupabaseServerClient = (...a) => ${D}.createClient(...a);`,
@@ -70,6 +78,8 @@ beforeEach(() => {
   mxAnswer = async () => [{ exchange: "mx.live.test", priority: 10 }];
   claimAnswer = "ok";
   otpError = null;
+  listAnswer = async () => true;
+  listAsked.length = 0;
 });
 
 test("an address on a null-MX domain is refused before the budget or Supabase is touched", async () => {
@@ -91,10 +101,10 @@ test("the domain asked about is the one after the last @", async () => {
   assert.equal(calls[0], "mx:live.test");
 });
 
-test("a deliverable address claims the budget, then reaches Supabase, in that order", async () => {
+test("a listed deliverable address claims the budget, is checked against the list, then reaches Supabase, in that order", async () => {
   const result = await (await getAction()).sendSignInLink("reader@live.test");
   assert.deepEqual(result, { ok: true });
-  assert.deepEqual(calls, ["mx:live.test", "claim", "signInWithOtp"]);
+  assert.deepEqual(calls, ["mx:live.test", "claim", "list", "signInWithOtp"]);
 });
 
 test("a caller over their allowance never reaches Supabase", async () => {
@@ -108,4 +118,41 @@ test("a malformed address is refused before any DNS lookup", async () => {
   const result = await (await getAction()).sendSignInLink("not-an-address");
   assert.deepEqual(result, { ok: false, error: "emailInvalid" });
   assert.deepEqual(calls, []);
+});
+
+test("an address off the list is refused as notInvited after the budget claim and before Supabase", async () => {
+  listAnswer = async () => false;
+  const result = await (await getAction()).sendSignInLink("stranger@live.test");
+  assert.deepEqual(result, { ok: false, error: "notInvited" });
+  assert.deepEqual(calls, ["mx:live.test", "claim", "list"], "the refusal came out of order or reached Supabase");
+});
+
+test("the list is asked about the address the reader typed", async () => {
+  await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(listAsked, ["reader@live.test"]);
+});
+
+test("a list that cannot be read answers sendFailed and sends nothing", async () => {
+  listAnswer = async () => {
+    throw new Error("connection refused");
+  };
+  const result = await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(result, { ok: false, error: "sendFailed" });
+  assert.ok(!calls.includes("signInWithOtp"), "a failed list read still sent the link");
+});
+
+test("a dead domain is refused before the list is read", async () => {
+  listAnswer = async () => false;
+  mxAnswer = async () => [{ exchange: ".", priority: 0 }];
+  const result = await (await getAction()).sendSignInLink("stranger@dead.test");
+  assert.deepEqual(result, { ok: false, error: "domainUndeliverable" });
+  assert.ok(!calls.includes("list"));
+});
+
+test("a caller over their allowance is refused before the list is read", async () => {
+  claimAnswer = "rateLimited";
+  listAnswer = async () => false;
+  const result = await (await getAction()).sendSignInLink("stranger@live.test");
+  assert.deepEqual(result, { ok: false, error: "rateLimited" });
+  assert.ok(!calls.includes("list"));
 });

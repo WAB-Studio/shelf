@@ -3,7 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/lib/session";
-import { SYNC_BATCH, SYNC_DAILY_ROW_CAP, type Cursor, type SyncRow } from "@/lib/sync/protocol";
+import { SYNC_BATCH, SYNC_DAILY_ROW_CAP, type Cursor, type SyncRow, type Tombstone } from "@/lib/sync/protocol";
 
 // The columns `authenticated` may insert into `lookups`, in the grant's own
 // order (apps/wordbook/db/migrations/0000_shallow_hammerhead.sql:74-78).
@@ -64,7 +64,19 @@ function uploadedRows(rows: SyncRow[]): string {
   );
 }
 
-export type Upload = { status: "ok"; accepted: number } | { status: "retired" } | { status: "quota" };
+// The identities a round names for deletion, one jsonb parameter like the batch.
+function namedRows(tombstones: Tombstone[]): string {
+  return JSON.stringify(tombstones.map((tombstone) => ({ device_id: tombstone.deviceId, local_id: tombstone.localId })));
+}
+
+// A mark as it comes down: `deleted_at` is UTC wall-clock text with no zone
+// marker, for the reason `DownloadedRow` gives below.
+export type DownloadedTombstone = { device_id: string; local_id: number; deleted_at: string };
+
+export type Upload =
+  | { status: "ok"; accepted: number; buried: number; tombstones: DownloadedTombstone[] }
+  | { status: "retired" }
+  | { status: "quota" };
 
 // Seals `reading.devices` (RL-25) and inserts the device's own batch in ONE
 // statement, one round trip. `state` reads whether the device is retired and
@@ -78,6 +90,17 @@ export type Upload = { status: "ok"; accepted: number } | { status: "retired" } 
 // `on conflict … do nothing` keeps a retry after a crash from duplicating (RL-24).
 // `received_at` is the statement's `now()`: every row of a batch ties on it.
 //
+// The same statement buries what the round names (RL-66): `buried` deletes the
+// caller's rows of those identities, `marked` records each one with the row's
+// own `received_at` (0007's `sync_rows_today` counts a mark by it, so a delete
+// never refunds the day's cap), and `written` skips an identity already marked
+// or named in this round — CTEs share one snapshot, so a mark written here is
+// not yet visible to the insert's own policy, and a row named and sent at once
+// would otherwise come back with no mark. Only a row that existed leaves a
+// mark: an identity never uploaded has nothing to refuse. The final select
+// hands down the marks after `tombstonesSince` (RL-70), in the tuple order the
+// cursor compares, so a round stays settle + 2 round trips.
+//
 // `cap` is a parameter so `scripts/check-sync.ts` drives this statement with a
 // cap of a few rows instead of twenty thousand.
 export async function writeUpload(
@@ -87,8 +110,22 @@ export async function writeUpload(
   label: string,
   rows: SyncRow[],
   cap: number = SYNC_DAILY_ROW_CAP,
+  tombstones: Tombstone[] = [],
+  tombstonesSince: Cursor | null = null,
 ): Promise<Upload> {
-  const [state] = await tx.execute<{ retired: boolean; allowed: boolean; accepted: number }>(sql`
+  // Cast from text for the reason `downloadRows` gives: a mark's `deleted_at`
+  // ties to the microsecond across one statement, like a batch's `received_at`.
+  const markBoundary = tombstonesSince
+    ? sql`and (m.deleted_at, m.device_id, m.local_id) > (${tombstonesSince.receivedAt}::text::timestamptz, ${tombstonesSince.deviceId}::uuid, ${tombstonesSince.localId}::integer)`
+    : sql``;
+
+  const [state] = await tx.execute<{
+    retired: boolean;
+    allowed: boolean;
+    accepted: number;
+    buried: number;
+    tombstones: DownloadedTombstone[];
+  }>(sql`
     with state as (
       select
         exists (
@@ -107,6 +144,23 @@ export async function writeUpload(
         do update set last_seen_at = now(), label = excluded.label where devices.retired_at is null
       returning 1
     ),
+    named as (
+      select n.device_id, n.local_id
+      from jsonb_to_recordset(${namedRows(tombstones)}::text::jsonb) as n(device_id uuid, local_id integer)
+    ),
+    buried as (
+      delete from reading.lookups l
+      using named
+      where (select allowed from gate)
+        and l.user_id = ${userId} and l.device_id = named.device_id and l.local_id = named.local_id
+      returning l.device_id, l.local_id, l.received_at
+    ),
+    marked as (
+      insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at)
+      select ${userId}, device_id, local_id, received_at from buried
+      on conflict do nothing
+      returning 1
+    ),
     written as (
       insert into reading.lookups (${INSERT_COLUMNS})
       select ${userId}, r.device_id, r.local_id, r."at", r."text", r.normalised, r.kind, r.outcome,
@@ -119,15 +173,42 @@ export async function writeUpload(
         definition text, example_en text, example_es text
       )
       where (select allowed from gate)
+        and not exists (
+          select 1 from reading.lookup_tombstones k
+          where k.user_id = ${userId} and k.device_id = r.device_id and k.local_id = r.local_id
+        )
+        and not exists (select 1 from named where named.device_id = r.device_id and named.local_id = r.local_id)
       on conflict (user_id, device_id, local_id) do nothing
       returning 1
     )
-    select gate.retired, gate.allowed, (select count(*) from written)::int as accepted from gate
+    select gate.retired, gate.allowed,
+      (select count(*) from written)::int as accepted,
+      (select count(*) from buried)::int as buried,
+      (
+        select coalesce(
+          json_agg(
+            json_build_object(
+              'device_id', page.device_id, 'local_id', page.local_id,
+              'deleted_at', to_json(timezone('utc', page.deleted_at))
+            )
+            order by page.deleted_at, page.device_id, page.local_id
+          ),
+          '[]'::json
+        )
+        from (
+          select m.device_id, m.local_id, m.deleted_at
+          from reading.lookup_tombstones m
+          where m.user_id = auth.uid() ${markBoundary}
+          order by m.deleted_at, m.device_id, m.local_id
+          limit ${SYNC_BATCH}
+        ) page
+      ) as tombstones
+    from gate
   `);
 
   if (state.retired) return { status: "retired" };
   if (!state.allowed) return { status: "quota" };
-  return { status: "ok", accepted: state.accepted };
+  return { status: "ok", accepted: state.accepted, buried: state.buried, tombstones: state.tombstones };
 }
 
 // `at` and `received_at` travel as UTC wall-clock text with no zone marker,

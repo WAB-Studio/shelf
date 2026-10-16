@@ -157,6 +157,7 @@
       "sendFailed": "No se pudo enviar el enlace",
       "rateLimited": "Demasiados intentos. Prueba de nuevo en unos minutos.",
       "offline": "Sin conexión. No se pudo enviar el enlace.",
+      "notInvited": "Este correo no tiene invitación a WordBook.",
       "linkTimeoutTitle": "No se pudo comprobar el enlace",
       "linkTimeoutBody": "Falló de nuestro lado, no del enlace. Ábrelo otra vez desde el correo; si tampoco entra, pide uno nuevo aquí.",
       "linkInvalidTitle": "El enlace no vale o ya venció",

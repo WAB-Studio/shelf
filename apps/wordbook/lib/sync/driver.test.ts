@@ -71,6 +71,13 @@ async function getDriver(): Promise<Driver> {
       markRetired: async () => undefined,
     },
   });
+  mock.module("../log/delete", {
+    namedExports: {
+      readTombstoneQueue: async () => ({ pending: [], since: null }),
+      settleTombstones: async () => undefined,
+      applyTombstones: async () => 0,
+    },
+  });
   mock.module("../log/merge", {
     namedExports: {
       readSince: async () => ({ own: [], scannedThrough: null, scanned: 0 }),

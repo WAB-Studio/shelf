@@ -761,6 +761,202 @@ async function main() {
     await lateDb.end();
   }
 
+  // S33-S42 (RL-66, RL-70, RNL-10): a round deletes the searches it names, marks them,
+  // refuses their return and hands the marks to every device. Each scenario owns a
+  // committed reader (real commits: a mark's `deleted_at` must differ from a row's
+  // `received_at`), deleted at the end; the cascade takes everything it wrote.
+  type Wire = {
+    status: number;
+    json: {
+      accepted: number;
+      rows: { deviceId: string; localId: number }[];
+      tombstones: { deviceId: string; localId: number }[];
+      tombstoneCursor: string | null;
+    };
+  };
+  const tombRun = await openRun("rls", sql);
+  const scenario = async (
+    work: (ctx: {
+      reader: string;
+      db: postgres.Sql;
+      as: <T>(who: string, fn: (tx: Transaction) => Promise<T>) => Promise<T>;
+      post: (who: string, body: Record<string, unknown>) => Promise<Wire>;
+      ids: (device: string) => Promise<number[]>;
+      marks: (device: string) => Promise<number[]>;
+    }) => Promise<void>,
+  ): Promise<void> => {
+    const db = postgres(process.env.DATABASE_URL!, { prepare: false, max: 3, connection: { search_path: "reading, public" } });
+    const reader = randomUUID();
+    const email = `harness-reader-${reader}@example.invalid`;
+    await db.begin(async (tx) => {
+      await tx`insert into auth.users (id, email) values (${reader}, ${email})`;
+      await tx`insert into harness.identities (user_id, run_id, email, disposition) values (${reader}, ${tombRun}, ${email}, 'ephemeral')`;
+    });
+    const as = <T,>(who: string, fn: (tx: Transaction) => Promise<T>): Promise<T> =>
+      db.begin(async (tx) => {
+        await enterUserContext(tx, who);
+        return fn(readerTx(tx));
+      }) as Promise<T>;
+    const { POST } = await import("../app/api/log/sync/route");
+    const post = async (who: string, body: Record<string, unknown>): Promise<Wire> => {
+      sessionStub.readerId = who;
+      sessionStub.run = (fn) => as(who, fn);
+      // A route that throws is a 500 to the device, and a red here rather than a crash of the whole script.
+      const response = await POST(
+        new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify({ readerId: who, ...body }) }),
+      ).catch(() => Response.json({}, { status: 500 }));
+      return { status: response.status, json: (await response.json()) as Wire["json"] };
+    };
+    const ids = async (device: string) =>
+      (await db<{ local_id: number }[]>`select local_id from reading.lookups where user_id = ${reader} and device_id = ${device} order by local_id`).map((r) => r.local_id);
+    const marks = async (device: string) =>
+      (await db<{ local_id: number }[]>`select local_id from reading.lookup_tombstones where user_id = ${reader} and device_id = ${device} order by local_id`).map((r) => r.local_id);
+    try {
+      await work({ reader, db, as, post, ids, marks });
+    } finally {
+      await db`delete from harness.identities where user_id = ${reader}`;
+      await db`delete from auth.users where id = ${reader}`;
+      await db.end();
+    }
+  };
+  const keyOf = (tombstone: { deviceId: string; localId: number }) => `${tombstone.deviceId}:${tombstone.localId}`;
+
+  // S33-S35: a named search leaves the account with its mark; the mark keeps the row's own
+  // `received_at`; naming a search that was never uploaded marks nothing.
+  await scenario(async ({ reader, db, as, post, ids, marks }) => {
+    const [a, viewer] = [randomUUID(), randomUUID()];
+    await as(reader, (tx) => writeUpload(tx, reader, a, "chrome:android", rowsOf(a, [1, 2, 3])));
+    await db`update reading.lookups set received_at = '2020-05-05T05:05:05.123456Z'
+      where user_id = ${reader} and device_id = ${a} and local_id = 2`;
+    const sent = await as(reader, (tx) =>
+      writeUpload(tx, reader, a, "chrome:android", [], undefined, [{ deviceId: a, localId: 2 }, { deviceId: a, localId: 9 }], null),
+    );
+    const left = await ids(a);
+    const [mark] = await db<{ received_at: string }[]>`
+      select received_at::text as received_at from reading.lookup_tombstones
+      where user_id = ${reader} and device_id = ${a} and local_id = 2`;
+    const buried = sent.status === "ok" ? (sent as { buried?: number }).buried : undefined;
+    assert("S33", sent.status === "ok" && left.join() === "1,3" && buried === 1, `status = ${sent.status}, lookups left = ${left.join()}, buried = ${String(buried)}`);
+    assert("S34", mark?.received_at === "2020-05-05 05:05:05.123456+00", `mark received_at = ${mark?.received_at}`);
+    const markedIds = await marks(a);
+    assert("S35", markedIds.join() === "2", `marks = ${markedIds.join()} (the never-uploaded (A,9) must not be one)`);
+
+    const pulled = await post(reader, { deviceId: viewer, rows: [], since: null });
+    const pulledIds = pulled.json.rows.map((row) => row.localId).sort();
+    assert("S33b", pulled.status === 200 && pulledIds.join() === "1,3", `rows a second device downloads = ${pulledIds.join()}`);
+  });
+
+  // S36: a marked search sent again is skipped; the rest of the batch is stored; no 500.
+  await scenario(async ({ reader, post, ids }) => {
+    const [a, b] = [randomUUID(), randomUUID()];
+    await post(reader, { deviceId: a, rows: rowsOf(a, [1, 2, 3]), since: null });
+    await post(reader, { deviceId: b, rows: [], since: null, tombstones: [{ deviceId: a, localId: 2 }], tombstonesSince: null });
+    const again = await post(reader, { deviceId: a, rows: rowsOf(a, [2, 4]), since: null });
+    const left = await ids(a);
+    assert(
+      "S36",
+      again.status === 200 && again.json.accepted === 1 && left.join() === "1,3,4",
+      `status = ${again.status}, accepted = ${again.json.accepted}, lookups = ${left.join()}`,
+    );
+  });
+
+  // S37: another reader's search is never buried; the same identity of his own is.
+  await scenario(async ({ reader, db, as, post }) => {
+    const intruderId = randomUUID();
+    const intruderEmail = `harness-reader-${intruderId}@example.invalid`;
+    await db.begin(async (tx) => {
+      await tx`insert into auth.users (id, email) values (${intruderId}, ${intruderEmail})`;
+      await tx`insert into harness.identities (user_id, run_id, email, disposition) values (${intruderId}, ${tombRun}, ${intruderEmail}, 'ephemeral')`;
+    });
+    try {
+      const shared = randomUUID();
+      await as(reader, (tx) => writeUpload(tx, reader, shared, "chrome:android", rowsOf(shared, [1])));
+      await as(intruderId, (tx) => writeUpload(tx, intruderId, shared, "chrome:android", rowsOf(shared, [1])));
+      const round = await post(intruderId, { deviceId: shared, rows: [], since: null, tombstones: [{ deviceId: shared, localId: 1 }], tombstonesSince: null });
+      const count = async (table: string, user: string) =>
+        (await db.unsafe<{ count: string }[]>(`select count(*)::text as count from reading.${table} where user_id = $1`, [user]))[0].count;
+      const seen = [await count("lookups", reader), await count("lookup_tombstones", reader), await count("lookups", intruderId)];
+      assert(
+        "S37",
+        round.status === 200 && seen.join() === "1,0,0",
+        `status = ${round.status}, owner rows / owner marks / intruder's own row = ${seen.join()}`,
+      );
+    } finally {
+      await db`delete from harness.identities where user_id = ${intruderId}`;
+      await db`delete from auth.users where id = ${intruderId}`;
+    }
+  });
+
+  // S38: 501 marks written by one statement tie on `deleted_at`; two pages carry all of
+  // them once, in `(deleted_at, device_id, local_id)` order.
+  await scenario(async ({ reader, as, post }) => {
+    const [low, high] = [randomUUID(), randomUUID()].sort();
+    const viewer = randomUUID();
+    const lowIds = Array.from({ length: 300 }, (_, i) => i + 1);
+    const highIds = Array.from({ length: 201 }, (_, i) => i + 1);
+    await as(reader, (tx) => writeUpload(tx, reader, low, "chrome:android", rowsOf(low, lowIds)));
+    await as(reader, (tx) => writeUpload(tx, reader, high, "chrome:android", rowsOf(high, highIds)));
+    const all = [...lowIds.map((localId) => ({ deviceId: low, localId })), ...highIds.map((localId) => ({ deviceId: high, localId }))];
+    await as(reader, (tx) => writeUpload(tx, reader, viewer, "chrome:android", [], undefined, all, null));
+    const first = await post(reader, { deviceId: viewer, rows: [], since: null, tombstones: [], tombstonesSince: null });
+    const second = await post(reader, { deviceId: viewer, rows: [], since: null, tombstones: [], tombstonesSince: first.json.tombstoneCursor });
+    const pageOne = first.json.tombstones ?? [];
+    const pageTwo = second.json.tombstones ?? [];
+    const keys = [...pageOne, ...pageTwo].map(keyOf);
+    const inOrder = keys.join() === all.map(keyOf).join();
+    assert(
+      "S38",
+      pageOne.length === 500 && pageTwo.length === 1 && new Set(keys).size === 501 && inOrder,
+      `pages = ${pageOne.length} + ${pageTwo.length}, distinct = ${new Set(keys).size}, in tuple order = ${inOrder}`,
+    );
+  });
+
+  // S39/S40: a retired device, or a day past the cap, buries nothing.
+  await scenario(async ({ reader, db, as, post, ids, marks }) => {
+    const [a, retired] = [randomUUID(), randomUUID()];
+    await as(reader, (tx) => writeUpload(tx, reader, a, "chrome:android", rowsOf(a, [1, 2])));
+    await db`insert into reading.devices (user_id, device_id, label, retired_at) values (${reader}, ${retired}, 'chrome:android', now())`;
+    const refused = await post(reader, { deviceId: retired, rows: [], since: null, tombstones: [{ deviceId: a, localId: 1 }], tombstonesSince: null });
+    const afterRetired = [(await ids(a)).join(), (await marks(a)).length] as const;
+    const over = await as(reader, (tx) => writeUpload(tx, reader, a, "chrome:android", rowsOf(a, [7]), 0, [{ deviceId: a, localId: 1 }], null));
+    const afterCap = [(await ids(a)).join(), (await marks(a)).length] as const;
+    // The control: the same name, from a live device within the cap, does bury, so the two
+    // refusals above are the gate's and not an inert statement's.
+    const live = randomUUID();
+    const control = await post(reader, { deviceId: live, rows: [], since: null, tombstones: [{ deviceId: a, localId: 1 }], tombstonesSince: null });
+    const buriedByControl = control.status === 200 && (await ids(a)).join() === "2" && (await marks(a)).join() === "1";
+    assert("S39", refused.status === 409 && afterRetired[0] === "1,2" && afterRetired[1] === 0 && buriedByControl, `status = ${refused.status}, lookups = ${afterRetired[0]}, marks = ${afterRetired[1]}, control buries = ${buriedByControl}`);
+    assert("S40", over.status === "quota" && afterCap[0] === "1,2" && afterCap[1] === 0 && buriedByControl, `status = ${over.status}, lookups = ${afterCap[0]}, marks = ${afterCap[1]}, control buries = ${buriedByControl}`);
+  });
+
+  // S41/S42: a body written before the fields existed still enters and is answered with both
+  // fields; marks come down to a device that has not seen them, and the cursor resumes after.
+  await scenario(async ({ reader, db, post }) => {
+    const [a, other] = [randomUUID(), randomUUID()];
+    const oldBody = await post(reader, { deviceId: a, rows: rowsOf(a, [1, 2]), since: null });
+    assert(
+      "S41",
+      oldBody.status === 200 && Array.isArray(oldBody.json.tombstones) && oldBody.json.tombstones.length === 0 && oldBody.json.tombstoneCursor === null,
+      `status = ${oldBody.status}, tombstones = ${JSON.stringify(oldBody.json.tombstones)}, tombstoneCursor = ${String(oldBody.json.tombstoneCursor)}`,
+    );
+    await post(reader, { deviceId: a, rows: [], since: null, tombstones: [{ deviceId: a, localId: 2 }], tombstonesSince: null });
+    const [stamped] = await db<{ at: string }[]>`
+      select to_json(timezone('utc', deleted_at))::text as at from reading.lookup_tombstones where user_id = ${reader} and local_id = 2`;
+    const down = await post(reader, { deviceId: other, rows: [], since: null, tombstones: [], tombstonesSince: null });
+    const cursor = down.json.tombstoneCursor ? decodeCursor(down.json.tombstoneCursor) : null;
+    assert(
+      "S42",
+      (down.json.tombstones ?? []).map(keyOf).join() === `${a}:2` && cursor?.deviceId === a && cursor.localId === 2 && stamped !== undefined && cursor.receivedAt === `${JSON.parse(stamped.at) as string}Z`,
+      `marks = ${(down.json.tombstones ?? []).map(keyOf).join()}, cursor = ${String(down.json.tombstoneCursor)}`,
+    );
+    const resumed = await post(reader, { deviceId: other, rows: [], since: null, tombstones: [], tombstonesSince: down.json.tombstoneCursor });
+    assert(
+      "S42b",
+      typeof down.json.tombstoneCursor === "string" && (resumed.json.tombstones ?? []).length === 0 && resumed.json.tombstoneCursor === down.json.tombstoneCursor,
+      `marks after the cursor = ${(resumed.json.tombstones ?? []).length}, cursor kept = ${resumed.json.tombstoneCursor === down.json.tombstoneCursor}`,
+    );
+  });
+
   await sql.end();
   if (failed) process.exit(1);
 }

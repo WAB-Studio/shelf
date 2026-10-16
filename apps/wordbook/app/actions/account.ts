@@ -5,7 +5,7 @@ import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-// `@repo/supabase-auth` and `@/lib/account/sign-in-budget` start with
+// `@repo/supabase-auth`, `@/lib/account/sign-in-budget` and `@/lib/auth/allowlist` (through `@/db/client`) load
 // `import "server-only"`, and `@/lib/env` throws when its required vars are
 // unset — all resolvable only inside Next's own build. A plain Node import
 // (Playwright's test runner, driving `isDomainDeliverable` on its own below)
@@ -26,7 +26,7 @@ const emailSchema = z.email();
 
 export type SendSignInLinkResult =
   | { ok: true }
-  | { ok: false; error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "rateLimited" };
+  | { ok: false; error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "rateLimited" | "notInvited" };
 
 // RFC 5321 §5.1: no MX falls back to the domain's own address record
 // (implicit MX). RFC 7505: a domain that takes no mail at all publishes
@@ -124,6 +124,19 @@ export async function sendSignInLink(email: string): Promise<SendSignInLinkResul
   if ((await claimSignInLink(await headers(), parsed.data)) === "rateLimited") {
     return { ok: false, error: "rateLimited" };
   }
+
+  // RL-69: after the claim, so probing the list spends the caller's allowance like a send does;
+  // before Supabase, so an address off it never gets a row in `auth.users` or an email. A list
+  // that cannot be read refuses rather than lets the address through.
+  const { isEmailAllowed } = await import("@/lib/auth/allowlist");
+  let listed: boolean;
+  try {
+    listed = await isEmailAllowed(parsed.data);
+  } catch (error) {
+    console.error("allowed-emails read failed", error);
+    return { ok: false, error: "sendFailed" };
+  }
+  if (!listed) return { ok: false, error: "notInvited" };
 
   const [supabase, { env }] = await Promise.all([supabaseClient(), import("@/lib/env")]);
 

@@ -7,6 +7,7 @@ that drives the app. The why: `docs/agentes/historia.md` § WordBook.
 
 - Never type an address into `/cuenta`. It sends a real email through the user's own Gmail and mints a real
   `auth.users` row, whatever the domain.
+- Invite an address: `npm run allow-email -w apps/wordbook -- <correo>`, with `MIGRATION_DATABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set. It also creates the address's Auth user, confirmed, without sending an email. Never through `/cuenta`.
 - Never mutate the deliverability guard in `app/actions/account.ts` while a spec submits that form. With the guard on,
   a dead domain is refused before Supabase; with it off, the same spec sends for real. Prove the guard bites by
   calling `isDomainDeliverable` directly, never by disabling it and driving the screen.

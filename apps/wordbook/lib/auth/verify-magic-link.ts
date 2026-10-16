@@ -3,8 +3,9 @@ import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 // RL-49: `linkTimeout` is the gateway not answering — `verifyOtp` ran but
 // never completed, so the token's fate is unknown. `linkInvalid` covers a
 // malformed query string and a rejection that did complete: both are
-// failures the design attributes to the link, not to us.
-export type FailureReason = "linkTimeout" | "linkInvalid";
+// failures the design attributes to the link, not to us. RL-69: `linkOtherBrowser`
+// is a PKCE `code` opened where no verifier cookie sits; Auth is never asked.
+export type FailureReason = "linkTimeout" | "linkInvalid" | "linkOtherBrowser";
 
 export type VerifyMagicLinkResult<TUser> =
   | { ok: true; user: TUser }
