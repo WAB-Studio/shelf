@@ -562,9 +562,9 @@ export async function editHabit(input: EditHabitInput): Promise<EditHabitResult>
 }
 
 /**
- * Retires a commitment (RP-13). One UPDATE of `retired_at` alone — the grant
- * lets nothing else move, so there is no `deleteCommitment` to write in the
- * first place. Scoped by `(id, userId)` in the query itself, the way
+ * Retires a commitment (RP-13). One UPDATE of `retired_at` alone: what a fact
+ * names is retired, never deleted (`deleteCommitment` in `plan-edit.ts` deletes
+ * only one no fact names). Scoped by `(id, userId)` in the query itself, the way
  * `undoFact` scopes its delete: a commitment belonging to someone else
  * retires nothing and is reported exactly the way a missing one would be.
  */

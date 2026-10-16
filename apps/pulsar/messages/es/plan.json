@@ -63,6 +63,7 @@
   },
   "errors": {
     "phaseNotFound": "Esa fase ya no está.",
+    "phaseInvalid": "Esa fase no es válida.",
     "commitmentNotFound": "Ese compromiso ya no está.",
     "commitmentHasFacts": "Ya hay días hechos con este compromiso: se retira, no se borra.",
     "cadenceHasFacts": "Ya hay días hechos con esta frecuencia: retíralo y abre otro.",
