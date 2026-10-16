@@ -3741,6 +3741,8 @@ async function main(): Promise<void> {
   console.log("");
   await recurringRuleCategoryScopeSuite(scope, groupless);
   await recurringRuleCategoryFitSuite(userId, scope, groupless, fellow);
+  console.log("");
+  await serverEntriesSuite(scope);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -4700,4 +4702,131 @@ async function recurringRuleCategoryFitSuite(
     fundUpdateRefused?.serverError === "recurringRules.errors.scopeViolation" && fundKept?.category_id === expenseId,
     `serverError = ${fundUpdateRefused?.serverError ?? "none"}, stored category is own = ${fundKept?.category_id === expenseId}`,
   );
+}
+
+// E4: the invite validates with the schema its form uses, the two data routes overlap
+// their session check with their reads, and two uncalled write endpoints are gone.
+async function serverEntriesSuite(scope: HarnessScope): Promise<void> {
+  // Earlier suites let `groupless` found a fund, so this one needs a user who still has none.
+  const groupless = await createMembershipFreeUser();
+  const members = (await import("@/app/actions/members")) as Record<string, unknown>;
+  type InviteResult = {
+    data?: { memberId: string; inviteEmailFailed: boolean };
+    serverError?: string;
+    validationErrors?: { fieldErrors?: { email?: string[] } };
+  };
+  const invite = members.inviteMemberByEmailAction as
+    | ((input: { email: string }) => Promise<InviteResult>)
+    | undefined;
+
+  const longAddress = `${"a".repeat(81 - "@example.com".length)}@example.com`;
+  const sent = (): string[] =>
+    ((globalThis as { harnessInvitesSent?: string[] }).harnessInvitesSent ??= []);
+  const storedFor = async (email: string) =>
+    fixtureSql<{ id: string; name: string; invite_email: string | null }[]>`
+      select id, name, invite_email from group_members
+      where group_id = ${scope.groupId} and invite_email = ${email}`;
+
+  const accepted = invite ? await invite({ email: longAddress }) : undefined;
+  const rows = await storedFor(longAddress);
+  for (const row of rows) track("group_members", row.id);
+  assert(
+    next("Inviting an address of 81 characters creates the member under a name cut to 80 and sends the invite"),
+    accepted?.data?.inviteEmailFailed === false &&
+      rows.length === 1 &&
+      rows[0].name === longAddress.slice(0, 80) &&
+      rows[0].invite_email === longAddress &&
+      sent().includes(longAddress),
+    `data = ${JSON.stringify(accepted?.data)}, serverError = ${accepted?.serverError ?? "none"}, ${rows.length} row(s), name length ${rows[0]?.name.length}, mails sent = ${sent().includes(longAddress)}`,
+  );
+
+  const mailsBefore = sent().length;
+  const forged = invite ? await invite({ email: "x" }) : undefined;
+  const forgedRows = await storedFor("x");
+  assert(
+    next("A forged invite with a malformed address is refused by the form's schema, stores nothing and sends nothing"),
+    forged?.validationErrors?.fieldErrors?.email?.[0] === "members.errors.emailInvalid" &&
+      forged?.data === undefined &&
+      forgedRows.length === 0 &&
+      sent().length === mailsBefore,
+    `field error = ${forged?.validationErrors?.fieldErrors?.email?.[0] ?? "none"}, ${forgedRows.length} row(s), mails sent = ${sent().length - mailsBefore}`,
+  );
+
+  const blank = invite ? await invite({ email: "  " }) : undefined;
+  assert(
+    next("A blank invite is refused with the email-invalid key"),
+    blank?.validationErrors?.fieldErrors?.email?.[0] === "members.errors.emailInvalid" && blank?.data === undefined,
+    `field error = ${blank?.validationErrors?.fieldErrors?.email?.[0] ?? "none"}`,
+  );
+
+  const strayAddress = `stray-${randomUUID()}@example.com`;
+  const mailsBeforeStray = sent().length;
+  const stray = invite ? await asUser(groupless, () => invite({ email: strayAddress })) : undefined;
+  assert(
+    next("A caller with no fund who invites is refused as not found and sends nothing"),
+    stray?.serverError === "errors.notFound" && sent().length === mailsBeforeStray,
+    `serverError = ${stray?.serverError ?? "none"}, mails sent = ${sent().length - mailsBeforeStray}`,
+  );
+
+  const createdByHand = members.createMemberAction;
+  assert(
+    next("The name-and-email member form keeps its action"),
+    typeof createdByHand === "function",
+    `createMemberAction is ${typeof createdByHand}`,
+  );
+
+  const debtActions = (await import("@/app/actions/debt-terms")) as Record<string, unknown>;
+  const ruleActions = (await import("@/app/actions/recurring-rules")) as Record<string, unknown>;
+  assert(
+    next("The two uncalled write endpoints are gone and their live neighbours remain"),
+    !("deleteDebtTermsAction" in debtActions) &&
+      !("setRecurringRuleEndDateAction" in ruleActions) &&
+      typeof debtActions.saveDebtTermsAction === "function" &&
+      typeof ruleActions.pauseRecurringRuleAction === "function",
+    `deleteDebtTermsAction = ${"deleteDebtTermsAction" in debtActions}, setRecurringRuleEndDateAction = ${"setRecurringRuleEndDateAction" in ruleActions}`,
+  );
+
+  // Every claims read costs DELAY ms. A route that awaits its session check before its
+  // reads pays that twice; one that overlaps them pays it once, like the read alone.
+  const DELAY = 600;
+  const { NextRequest } = await import("next/server");
+  const exportRoute = await import("@/app/[locale]/(app)/settings/data/export/route");
+  const templateRoute = await import("@/app/[locale]/(app)/settings/data/template/route");
+  const call = (route: { GET: (request: never, context: never) => Promise<Response> }, path: string) =>
+    route.GET(
+      new NextRequest(`http://localhost${path}`) as never,
+      { params: Promise.resolve({ locale: "es" }) } as never,
+    );
+
+  process.env.HARNESS_CLAIMS_DELAY_MS = String(DELAY);
+  try {
+    const timed = async (run: () => Promise<unknown>): Promise<number> => {
+      const started = performance.now();
+      await run();
+      return performance.now() - started;
+    };
+    await call(exportRoute, "/es/settings/data/export"); // warms the connection
+    const readAlone = await timed(() => readExport({ entityKeys: ["accounts", "categories"] }));
+    let exportResponse: Response | undefined;
+    const exportMs = await timed(async () => {
+      exportResponse = await call(exportRoute, "/es/settings/data/export?entities=accounts,categories");
+    });
+    let templateResponse: Response | undefined;
+    const templateMs = await timed(async () => {
+      templateResponse = await call(templateRoute, "/es/settings/data/template");
+    });
+    const budget = readAlone + DELAY / 2;
+    assert(
+      next("The export route overlaps its session check with its reads: one claims delay, not two"),
+      exportResponse?.status === 200 && exportMs < budget,
+      `route ${Math.round(exportMs)} ms against ${Math.round(readAlone)} ms for the read alone (budget ${Math.round(budget)} ms), status ${exportResponse?.status}`,
+    );
+    assert(
+      next("The template route overlaps its session check with its reads: one claims delay, not two"),
+      templateResponse?.status === 200 && templateMs < budget,
+      `route ${Math.round(templateMs)} ms against ${Math.round(readAlone)} ms for the read alone (budget ${Math.round(budget)} ms), status ${templateResponse?.status}`,
+    );
+  } finally {
+    delete process.env.HARNESS_CLAIMS_DELAY_MS;
+  }
 }

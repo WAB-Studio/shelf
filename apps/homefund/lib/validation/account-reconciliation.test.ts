@@ -49,3 +49,36 @@ test("a real figure of zero is a count, a negative one is not", () => {
   assert.equal(negative.success, false);
   assert.deepEqual(messages(negative), ["transactions.errors.amountInvalid"]);
 });
+
+test("checkRealAmount reads a written figure as integer cents of the account's currency", async () => {
+  const { checkRealAmount } = await import("./account-reconciliation");
+  assert.deepEqual(checkRealAmount("12.000", "COP"), { ok: true, cents: 1_200_000 });
+  assert.deepEqual(checkRealAmount("0", "COP"), { ok: true, cents: 0 });
+  assert.deepEqual(checkRealAmount("12.34", "USD"), { ok: true, cents: 1234 });
+});
+
+test("checkRealAmount refuses with the schema's own key, never the fallback", async () => {
+  const { checkRealAmount } = await import("./account-reconciliation");
+  assert.deepEqual(checkRealAmount("12,3456", "COP"), {
+    ok: false,
+    messageKey: "transactions.errors.amountInvalid",
+  });
+  for (const value of ["abc", "-5000", "1e5"]) {
+    assert.deepEqual(checkRealAmount(value, "COP"), {
+      ok: false,
+      messageKey: "transactions.errors.amountInvalid",
+    });
+  }
+  assert.deepEqual(checkRealAmount("", "COP"), {
+    ok: false,
+    messageKey: "errors.reconcileRealRequired",
+  });
+  assert.deepEqual(checkRealAmount("   ", "COP"), {
+    ok: false,
+    messageKey: "errors.reconcileRealRequired",
+  });
+  assert.deepEqual(checkRealAmount("999999999999", "COP"), {
+    ok: false,
+    messageKey: "transactions.errors.amountTooLarge",
+  });
+});

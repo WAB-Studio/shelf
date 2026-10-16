@@ -176,31 +176,16 @@ export const pauseRecurringRuleSchema = z.object({
   id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
 });
 
-export type PauseRecurringRuleInput = z.infer<typeof pauseRecurringRuleSchema>;
-
 export const resumeRecurringRuleSchema = z.object({
   id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
 });
 
-export type ResumeRecurringRuleInput = z.infer<typeof resumeRecurringRuleSchema>;
-
-// Clearing the end date sends null, so it lets the rule run on (RF-32).
-export const setRecurringRuleEndDateSchema = z.object({
-  id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
-  endsOn: endsOnSchema,
-});
-
-export type SetRecurringRuleEndDateInput = z.infer<typeof setRecurringRuleEndDateSchema>;
-
 export const deleteRecurringRuleSchema = z.object({
   id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
 });
-
-export type DeleteRecurringRuleInput = z.infer<typeof deleteRecurringRuleSchema>;
 
 // Confirming a generated movement leaves nothing to change but its reviewed stamp (RF-31).
 export const markMovementReviewedSchema = z.object({
   transactionId: z.uuid({ error: "recurringRules.errors.transactionInvalid" }),
 });
 
-export type MarkMovementReviewedInput = z.infer<typeof markMovementReviewedSchema>;

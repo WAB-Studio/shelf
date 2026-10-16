@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import type { CurrencyCode } from "@/lib/currency";
 import { isCivilDate, todayInBogota } from "@/lib/dates";
+import { maxAmountMinor, parseAmount } from "@/lib/money";
 import {
-  minorAmountSchema,
   anyCurrencyAmountSchema,
   occurredAtSchema,
   pesoAmountSchema,
@@ -36,23 +36,39 @@ export const reconcileAccountSchema = z.object({
 
 export type ReconcileAccountInput = z.infer<typeof reconcileAccountSchema>;
 
-const readRealAmount = minorAmountSchema(realAmountKeys);
+// The written magnitude read in one currency; the parsed value is its integer cents.
+function realAmountInCurrency(currency: CurrencyCode) {
+  return z.string().transform((value, ctx) => {
+    if (value.trim().length === 0) {
+      ctx.addIssue({ code: "custom", message: realAmountKeys.required });
+      return z.NEVER;
+    }
+
+    const cents = parseAmount(value);
+    if (cents === null) {
+      ctx.addIssue({ code: "custom", message: realAmountKeys.invalid });
+      return z.NEVER;
+    }
+
+    if (cents > maxAmountMinor(currency)) {
+      ctx.addIssue({ code: "custom", message: realAmountKeys.tooLarge });
+      return z.NEVER;
+    }
+
+    return cents;
+  });
+}
 
 /** The written magnitude in the account's own currency, or the refusal's key. */
 export function checkRealAmount(
   value: string,
   currency: CurrencyCode,
 ): { ok: true; cents: number } | { ok: false; messageKey: string } {
-  let messageKey: string | null = null;
-  const cents = readRealAmount(value, currency, [], {
-    addIssue(issue: { message?: string }) {
-      messageKey ??= issue.message ?? null;
-    },
-  } as z.RefinementCtx);
+  const result = realAmountInCurrency(currency).safeParse(value);
 
-  return cents === null
-    ? { ok: false, messageKey: messageKey ?? "errors.unexpected" }
-    : { ok: true, cents };
+  return result.success
+    ? { ok: true, cents: result.data }
+    : { ok: false, messageKey: result.error.issues[0]?.message ?? "errors.unexpected" };
 }
 
 /**

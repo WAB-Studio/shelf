@@ -41,7 +41,7 @@ function requestedEntities(params: URLSearchParams): SheetEntity[] {
 /**
  * The export download (RF-50, RF-118). Streams an `.xlsx` of the caller's rows —
  * one sheet per requested entity, headers and tab names localized, references
- * shown as names, money as decimal COP. RLS in `readExport` bounds every row to
+ * shown as names, money as decimal in each row's own currency (RF-121). RLS in `readExport` bounds every row to
  * the caller's scope. The query carries the movement list's own filters, parsed
  * by the schema that page and its filter bar parse (RNF-10), so the transactions
  * sheet holds exactly the rows the list shows; with none it holds them all.
@@ -52,8 +52,6 @@ export async function GET(
 ): Promise<Response> {
   const { locale } = await context.params;
   if (!hasLocale(routing.locales, locale)) notFound();
-
-  await requireUser();
 
   const params = request.nextUrl.searchParams;
   const entityKeys = requestedEntities(params);
@@ -71,7 +69,8 @@ export async function GET(
     recurringRuleId: filters.rule,
   };
 
-  const [data, t] = await Promise.all([
+  const [, data, t] = await Promise.all([
+    requireUser(),
     readExport({
       entityKeys,
       from: filters.from,

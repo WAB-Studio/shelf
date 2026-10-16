@@ -171,9 +171,3 @@ export const debtTermsSchema = z
   .superRefine(requireMinimumNotBoth);
 
 export type DebtTermsInput = z.infer<typeof debtTermsSchema>;
-
-export const deleteDebtTermsSchema = z.object({
-  accountId: z.uuid({ error: "debts.errors.accountInvalid" }),
-});
-
-export type DeleteDebtTermsInput = z.infer<typeof deleteDebtTermsSchema>;
