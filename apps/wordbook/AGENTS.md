@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # WordBook (`apps/wordbook`)
 
-Contract: `docs/voyager/SPEC.md`. Design: `docs/voyager/DESIGN.md`. Read `docs/agentes/voyager.md` before driving
+Contract: `docs/wordbook/SPEC.md`. Design: `docs/wordbook/DESIGN.md`. Read `docs/agentes/wordbook.md` before driving
 this app, probing its auth or touching its keys.
 
 - Never type an address into `/cuenta`: it sends a real email and mints a real `auth.users` row.

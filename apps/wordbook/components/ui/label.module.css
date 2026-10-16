@@ -1,4 +1,4 @@
-/* docs/voyager/DESIGN.md: 11px / 600 / 0.12em / uppercase / accent — a plain
+/* docs/wordbook/DESIGN.md: 11px / 600 / 0.12em / uppercase / accent — a plain
    label, not a chip. Doubled to outrank `.rt-Text:where(.rt-r-size-N)`. */
 .label.label {
   font-size: 11px;
@@ -8,7 +8,7 @@
   color: var(--rl-accent);
 }
 
-/* docs/voyager/DESIGN.md "PalabraConFlexion": the offer label's own colour —
+/* docs/wordbook/DESIGN.md "PalabraConFlexion": the offer label's own colour —
    apagado, never the accent, so it reads as a pointer and not a category. */
 .muted.muted {
   color: var(--rl-muted);

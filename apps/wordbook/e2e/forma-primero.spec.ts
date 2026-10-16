@@ -52,7 +52,7 @@ async function headingOrder(page: Page): Promise<string[]> {
 }
 
 // A gloss shares its line with the rest of its sense's translations
-// (docs/voyager/DESIGN.md "The translations are one line, separated by
+// (docs/wordbook/DESIGN.md "The translations are one line, separated by
 // commas"), so it is no longer a text node of its own: this finds it
 // bounded by the line's own start, end or `, `.
 function glossLocator(page: Page, gloss: string): Locator {
@@ -135,7 +135,7 @@ test("RL-47 keeps the bed clause: bed answers alone, reading still leads over re
   await expect(glossLocator(page, "leída")).toBeVisible();
   // `glossLocator` alone would pass just as well against the old
   // one-gloss-per-line markup; this is the line that actually holds
-  // `reading`'s own two glosses joined (docs/voyager/DESIGN.md "The
+  // `reading`'s own two glosses joined (docs/wordbook/DESIGN.md "The
   // translations are one line, separated by commas").
   await expect(page.getByText("lectura, leída", { exact: true })).toBeVisible();
 

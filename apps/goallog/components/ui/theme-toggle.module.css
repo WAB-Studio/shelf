@@ -1,4 +1,4 @@
-/* No colour here: docs/pulsar/DESIGN.md "The controls" gives the ghost variant
+/* No colour here: docs/goallog/DESIGN.md "The controls" gives the ghost variant
    its own muted ink, and button.module.css is where that lives. */
 .icon {
   inline-size: 20px;

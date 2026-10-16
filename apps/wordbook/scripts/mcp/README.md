@@ -39,7 +39,7 @@ restart the server to pick up newer rows.
 ## Protocol
 
 JSON-RPC 2.0 over stdin/stdout, one message per line. No SDK: MCP over
-stdio is a handful of methods, and `docs/voyager/SPEC.md` §4 rejects
+stdio is a handful of methods, and `docs/wordbook/SPEC.md` §4 rejects
 wrapper libraries on principle.
 
 - `initialize` — capability handshake.

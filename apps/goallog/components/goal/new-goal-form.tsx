@@ -30,7 +30,7 @@ const HORIZON_ERRORS: MessageKey[] = ["goal.errors.horizonWeeksInvalid", "plan.e
  * horizon is «con final» — typed in weeks and turned into the civil date the shared schema
  * and `createGoal` actually store, with `lib/zone.ts`'s own arithmetic — or «sin final», sent with
  * no horizon at all —
- * never the browser's zone (docs/pulsar/DESIGN.md "The day is `America/
+ * never the browser's zone (docs/goallog/DESIGN.md "The day is `America/
  * Bogota`"). `createGoalSchema.safeParse` runs here first, so a name or a
  * horizon the server would refuse is refused before the request ever leaves
  * the device, with the same message either would carry.

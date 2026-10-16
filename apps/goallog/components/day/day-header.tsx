@@ -9,7 +9,7 @@ type HeaderLink = { href: string; label: string };
 // `DiaPasadoEscritorio.dc.html`): the shared `ScreenHeader`, its controls row
 // holding the step back to the day before. Today's title is its `h1`, with the
 // date as its eyebrow and the light/dark control at its end (RNP-08):
-// docs/pulsar/DESIGN.md "Decisions taken here" puts it here and nowhere else —
+// docs/goallog/DESIGN.md "Decisions taken here" puts it here and nowhere else —
 // there is no `/cuenta` screen in this app. A past day's date is its `h1`, and
 // «volver a hoy» takes the control's place.
 export function DayHeader({

@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # GoalLog (`apps/goallog`)
 
-Contract: `docs/pulsar/SPEC.md`. Design: `docs/pulsar/DESIGN.md`. CI and mutations: `docs/agentes/verificacion.md`.
+Contract: `docs/goallog/SPEC.md`. Design: `docs/goallog/DESIGN.md`. CI and mutations: `docs/agentes/verificacion.md`.
 
 - Run specs with `PULSAR_BASE_URL=http://localhost:320<n-1>`. Its Playwright ignores `HARNESS_BASE_URL`.
 - Run a spec that needs `PULSAR_FAULT_BASE_URL` (`mes-todas.spec.ts:183` and kin) beside a fault server:

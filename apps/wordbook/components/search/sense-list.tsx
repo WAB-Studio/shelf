@@ -31,7 +31,7 @@ function correctionHref(word: string): string {
   return `/?${CORRECTION_QUERY_PARAM}=${encodeURIComponent(word)}`;
 }
 
-// docs/voyager/DESIGN.md "Viewport": stroke-width 1.75, round caps and
+// docs/wordbook/DESIGN.md "Viewport": stroke-width 1.75, round caps and
 // joins, fill none — the same glyph shape `bottom-nav.tsx` draws, sized down
 // for an inline word.
 function ChevronGlyph() {
@@ -81,7 +81,7 @@ function BlockHeading({
   );
 }
 
-// The glyph docs/voyager/DESIGN.md "Settled" fixes exactly: a play triangle
+// The glyph docs/wordbook/DESIGN.md "Settled" fixes exactly: a play triangle
 // and two sound arcs, 1.75px strokes, round caps and joins. Drawn here
 // rather than pulled from lucide because the path itself is what the board
 // settles, not a stand-in for "speaker".
@@ -167,17 +167,17 @@ export function leadPronunciation(senses: readonly Sense[]): string | null {
 }
 
 // One sense's own body: every translation on one comma-joined line
-// (docs/voyager/DESIGN.md "The translations are one line, separated by
+// (docs/wordbook/DESIGN.md "The translations are one line, separated by
 // commas"), its English
 // definition drawn open beneath its own label when the entry carries one
-// (docs/voyager/DESIGN.md "The English definition draws open, always"), and
+// (docs/wordbook/DESIGN.md "The English definition draws open, always"), and
 // its own IPA only when it is a different sound from the one already drawn
 // on its segment's label row — repeating an identical IPA on every sense
 // would say nothing a reader does not already have. Compared through
 // `ipaKey`, the same key the grouping runs on: two notations of one sound
 // are not two sounds, which used to cost `god`, `majesty` and `mass` a dead
 // line each (`/ɡɑ(d)/` over `/ɡɑd/`, `/ˈmæs/` over `/mæs/`). `compact` drops the IPA and
-// the definition (docs/voyager/DESIGN.md "A word block on `SinEntradaFrase`
+// the definition (docs/wordbook/DESIGN.md "A word block on `SinEntradaFrase`
 // carries its translations alone"): only `NoEntryAnswer`'s per-word
 // breakdown ever sets it.
 function SenseDetail({
@@ -229,7 +229,7 @@ function SenseDetail({
 
 // A contiguous run of same-part-of-speech senses: one `PosLabel`, one IPA
 // taken from the run's first sense, and every sense's own body ruled apart
-// with a hairline. Never a card, never a border box (docs/voyager/DESIGN.md).
+// with a hairline. Never a card, never a border box (docs/wordbook/DESIGN.md).
 function PosSegment({
   segment,
   compact,
@@ -240,7 +240,7 @@ function PosSegment({
   compact: boolean;
   // True inside a pronunciation block (RL-51): the block's head already
   // named the IPA, so the label row stops carrying one of its own
-  // (docs/voyager/DESIGN.md "The pronunciation groups the entry").
+  // (docs/wordbook/DESIGN.md "The pronunciation groups the entry").
   ipaHeaded: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
@@ -257,7 +257,7 @@ function PosSegment({
           // no intrinsic width limit of its own, so the row's flex-shrink
           // alone would starve it too; the clamp has to come from `Grid`,
           // whose `minmax(0, 1fr)` governs the item regardless
-          // (docs/voyager/DESIGN.md "What the data forces").
+          // (docs/wordbook/DESIGN.md "What the data forces").
           <Grid flexGrow="1" minWidth="0">
             <Text size="2" color="gray" align="right" truncate>
               {segmentIpa}
@@ -333,7 +333,7 @@ function PosSegments({
 // headwords, `leave` and `grudge` among them — and draws exactly what it
 // drew before, through
 // the same branch the breakdown takes. `compact` never groups: that variant
-// carries no IPA at all (docs/voyager/DESIGN.md "A word block on
+// carries no IPA at all (docs/wordbook/DESIGN.md "A word block on
 // `SinEntradaFrase` carries its translations alone"), so a head there would
 // name a pronunciation nothing under it repeats.
 function SenseGroup({
@@ -361,7 +361,7 @@ function SenseGroup({
           {index > 0 && <Separator size="4" />}
           {/* The block head is the IPA alone — no headword repeated, no
               number — one step up from the sense IPA it replaces, in the
-              muted metadata tone (docs/voyager/DESIGN.md). The block that
+              muted metadata tone (docs/wordbook/DESIGN.md). The block that
               gathers senses carrying no IPA draws no head: `can` and `pace`
               are the only two entries that reach it, each through a proper
               noun normalising into the word. */}
@@ -422,15 +422,15 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
 // `full` is a direct lookup's own answer — IPA, definition, voice, the lot.
 // `compact` is a word block inside the no-entry breakdown
 // (`no-entry-answer.tsx`): headword, category and translations alone
-// (docs/voyager/DESIGN.md "A word block on `SinEntradaFrase` carries its
+// (docs/wordbook/DESIGN.md "A word block on `SinEntradaFrase` carries its
 // translations alone"), and no voice control — that belongs to the word
-// screen's own four boards, never to the breakdown (docs/voyager/DESIGN.md
+// screen's own four boards, never to the breakdown (docs/wordbook/DESIGN.md
 // "RL-26").
 export type SenseListVariant = "full" | "compact";
 
 // A headword's full answer: its own senses first, then every inflected form
 // that reached one, each carrying its own senses in turn (RL-04, RL-58).
-// docs/voyager/DESIGN.md "PalabraConFlexion": the entry answers; this offers,
+// docs/wordbook/DESIGN.md "PalabraConFlexion": the entry answers; this offers,
 // never replaces. The 2px rule marks where the entry pauses and the offer
 // begins, and each hit sits in its own indented rail — a smaller heading and
 // a muted label are the only things that rank it under the entry, no colour a
@@ -481,7 +481,7 @@ export function SenseList({
 }: {
   answer: WordAnswer;
   variant?: SenseListVariant;
-  // The breakdown's own door back to `/?q=<word>` (docs/voyager/DESIGN.md
+  // The breakdown's own door back to `/?q=<word>` (docs/wordbook/DESIGN.md
   // "Every block of the breakdown is a way back in"). Set by
   // `no-entry-answer.tsx` alone; a direct lookup passes nothing, so its
   // headword stays plain.
@@ -510,7 +510,7 @@ export function SenseList({
   const tSearch = useTranslations("search");
   const compact = variant === "compact";
   // Null on every compact call: the breakdown groups nothing, so it names
-  // nothing either (docs/voyager/DESIGN.md "A word block on
+  // nothing either (docs/wordbook/DESIGN.md "A word block on
   // `SinEntradaFrase` carries its translations alone").
   const exactLead = !compact && answer.exact !== null ? leadPronunciation(answer.exact.senses) : null;
 
@@ -585,7 +585,7 @@ export function SenseList({
           // different word wearing the same spelling, so the form the
           // reader typed leads and the lemma it comes from sits under the
           // 2px rule, in the same rail the `exact` branch above offers it
-          // from (docs/voyager/DESIGN.md "The form the reader typed leads
+          // from (docs/wordbook/DESIGN.md "The form the reader typed leads
           // the answer"). Every hit shares one `surface` (`lookupWord`
           // fixes it once per query), so the headword and its network
           // answer draw once, ahead of however many lemma candidates follow.

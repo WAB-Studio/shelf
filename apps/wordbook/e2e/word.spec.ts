@@ -49,7 +49,7 @@ async function exposeDictionaryWorker(page: Page): Promise<void> {
 const SUGGESTIONS_SETTLE_MS = 900;
 
 // A gloss now lives inside one comma-joined translation line
-// (docs/voyager/DESIGN.md "The translations are one line, separated by
+// (docs/wordbook/DESIGN.md "The translations are one line, separated by
 // commas"), so it is no longer a text node of its own: this finds it
 // bounded by the line's own start, end or comma, never a longer gloss that
 // merely contains it.

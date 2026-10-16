@@ -1,4 +1,4 @@
-/* docs/pulsar/DESIGN.md "The marks": a 24px circle at the head of the row.
+/* docs/goallog/DESIGN.md "The marks": a 24px circle at the head of the row.
    `border-box` so every state occupies the same 24px and the marks of a column
    line up on one edge. */
 .mark {
@@ -57,7 +57,7 @@
 }
 
 /* Not done: a stroke and nothing inside. Quiet, because an empty mark is a
-   stroke, not a word (docs/pulsar/DESIGN.md "Tokens"). The design has no
+   stroke, not a word (docs/goallog/DESIGN.md "Tokens"). The design has no
    colour for failure, so this is as far as an unmet day is drawn. */
 .empty {
   background: transparent;

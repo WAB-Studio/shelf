@@ -81,7 +81,7 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): ReactNode
  * left, the cadence over the satisfaction right-aligned in mono. A retired
  * commitment stays in the list — never hidden — marked in its own second
  * line rather than by hue, since this design has none for it. Below the
- * rows, the goal's own way into `CompromisoNuevo.dc.html` (docs/pulsar/
+ * rows, the goal's own way into `CompromisoNuevo.dc.html` (docs/goallog/
  * DESIGN.md "A goal adds a commitment from its own screen"): solid while the
  * list is empty, because then it is the only thing the screen asks for;
  * outlined once a first commitment already carries the goal.

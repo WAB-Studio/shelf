@@ -208,7 +208,7 @@ test("a phrase whose translation fails falls to the per-word breakdown, capped a
   await expect(mainHeadings(page)).toHaveCount(8);
   await expect(page.getByText("…y 1 palabra más: pig.")).toBeVisible();
 
-  // docs/voyager/DESIGN.md "A word block on `SinEntradaFrase` carries its
+  // docs/wordbook/DESIGN.md "A word block on `SinEntradaFrase` carries its
   // translations alone": no IPA, no definition anywhere in the breakdown.
   // "dog" (eng-spa-2025.11.23.json) carries both on a direct lookup —
   // "/dɑɡ/" and "(transitive) To pursue with the intent to catch." — and
@@ -218,7 +218,7 @@ test("a phrase whose translation fails falls to the per-word breakdown, capped a
   await expect(page.getByText(messages.word.definitionEnglish)).toHaveCount(0);
 
   // The voice control belongs to the word screen's own four boards alone
-  // (docs/voyager/DESIGN.md), never to this breakdown.
+  // (docs/wordbook/DESIGN.md), never to this breakdown.
   await expect(page.getByRole("button", { name: /^Escuchar/ })).toHaveCount(0);
 
   // RL-37: the breakdown itself answers from the device — the one request
@@ -275,7 +275,7 @@ test("a one-token miss never reaches the translator", async ({ page }) => {
   expect(translateCount, "a single token never reaches the translate route").toBe(0);
 });
 
-// docs/voyager/DESIGN.md "Every block of the breakdown is a way back in":
+// docs/wordbook/DESIGN.md "Every block of the breakdown is a way back in":
 // every shown block, hit or miss, and the "more" line all lead to
 // `/?q=<word>` — the only door out of a breakdown used to be retyping the
 // box from scratch.
@@ -326,7 +326,7 @@ test("every block and the trailing line lead back to /?q=<word>, and that screen
   await expect(page.getByRole("heading", { name: "bitter", exact: true })).toBeVisible();
 });
 
-// RL-57 / module 559 (docs/voyager/DESIGN.md `SinEntradaFraseFuncion`): in the
+// RL-57 / module 559 (docs/wordbook/DESIGN.md `SinEntradaFraseFuncion`): in the
 // per-word breakdown a function word leads with the table's translation and
 // the dictionary's own line follows, muted. The expected strings come from the
 // table's own function, never from the component.

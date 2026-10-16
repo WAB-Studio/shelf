@@ -57,7 +57,7 @@
   color: var(--pulsar-ink);
 }
 
-/* docs/pulsar/DESIGN.md "The controls": disabled and read-only both drop the
+/* docs/goallog/DESIGN.md "The controls": disabled and read-only both drop the
    fill and read as one thing — "this does not move" — muted ink over the
    surface behind them, with a `line` ring; a field never leaves the two half
    dressed, one with a ring and the other without (see "Decisions taken here").

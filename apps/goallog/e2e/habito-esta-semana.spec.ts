@@ -8,7 +8,7 @@ import { seedFact, seedHabit, shift } from "./sin-final-seed";
 
 // Module 940, RP-112: a weekly habit reads «{done} de {count} esta semana» for the week in progress, on its own
 // screen and in «Mes»; a retired habit keeps the retirement week it had met and never reads «en curso» nor «esta
-// semana». Board HabitoSemanaRetiro, E3–E6 of private/contrato-940.md, decisions of 2026-10-13 in docs/pulsar/DESIGN.md.
+// semana». Board HabitoSemanaRetiro, E3–E6 of private/contrato-940.md, decisions of 2026-10-13 in docs/goallog/DESIGN.md.
 // Written from the contract before the screens draw the line. What depends on today is computed from it (a Monday,
 // a Sunday, the 1st of a month all read the same rule); the fixed examples use days already past.
 

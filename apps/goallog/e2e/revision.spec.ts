@@ -35,7 +35,7 @@ async function createGoal(page: Page, name: string): Promise<string> {
   return page.url().split("/metas/")[1];
 }
 
-// The goal's own way in (docs/pulsar/DESIGN.md "A goal adds a commitment
+// The goal's own way in (docs/goallog/DESIGN.md "A goal adds a commitment
 // from its own screen"): a real tap on the list's own link, never a bare
 // `page.goto` to the form's route.
 async function addQuantityCommitment(

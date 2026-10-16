@@ -184,7 +184,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   }, []);
 
   // A block of the breakdown links to `/?q=<word>` while this very screen
-  // stays mounted (docs/voyager/DESIGN.md "Every block of the breakdown is
+  // stays mounted (docs/wordbook/DESIGN.md "Every block of the breakdown is
   // a way back in"): Next re-renders `app/page.tsx` with the new
   // `searchParams`, but nothing unmounts this component to make the mount
   // effect above run again. `committedTextRef` is what tells the two apart

@@ -4,7 +4,7 @@
   font-family: var(--font-serif);
 }
 
-/* docs/voyager/DESIGN.md: a translation line runs 21px / 1.5, no Radix step. */
+/* docs/wordbook/DESIGN.md: a translation line runs 21px / 1.5, no Radix step. */
 .translation.translation {
   font-size: 21px;
   line-height: 1.5;
@@ -14,7 +14,7 @@
   overflow-wrap: anywhere;
 }
 
-/* docs/voyager/DESIGN.md "Tokens": the muted role, never Radix's own
+/* docs/wordbook/DESIGN.md "Tokens": the muted role, never Radix's own
    `color="gray"`. */
 .muted.muted {
   color: var(--rl-muted);
@@ -44,7 +44,7 @@
   line-height: 1.5;
 }
 
-/* docs/voyager/DESIGN.md "The English definition draws open, always": the
+/* docs/wordbook/DESIGN.md "The English definition draws open, always": the
    label above the prose, 13px/600/0.06em, sans. */
 .definitionLabel.definitionLabel {
   font-size: 13px;
@@ -67,7 +67,7 @@
 }
 
 /* The small «GENERADA» pill beside the generated label: bordered and
-   padded, never a coloured badge (docs/voyager/DESIGN.md "Metadata
+   padded, never a coloured badge (docs/wordbook/DESIGN.md "Metadata
    labels" — a chip reads as a status pill from another app). */
 .generatedMark.generatedMark {
   display: inline-block;

@@ -22,7 +22,7 @@ function resolveLinkFailure(raw: string | string[] | undefined): LinkFailure {
 // calls `/api/devices` or `/api/log/sync`, and only once a reader exists
 // (RNL-09). No `useDictionary` here: this screen never resolves a word
 // (RNL-08). `measure="full"`: Cuenta is a set of controls, not prose, so it
-// takes the width it needs (docs/voyager/DESIGN.md "Viewport").
+// takes the width it needs (docs/wordbook/DESIGN.md "Viewport").
 export default async function CuentaPage({
   searchParams,
 }: {
@@ -42,7 +42,7 @@ export default async function CuentaPage({
         <AccountTabs />
 
         {linkFailure && tab === "account" && (
-          // No red in this palette (docs/voyager/DESIGN.md "Failure"): a
+          // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a
           // hairline sets the break off, the title in full-weight ink, the
           // reason muted below it. No retry button of its own — the email
           // form right below is the retry.

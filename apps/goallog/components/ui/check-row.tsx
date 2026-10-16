@@ -5,7 +5,7 @@ import { useState, type ChangeEvent, type ReactNode } from "react";
 import { Text } from "./text";
 import styles from "./check-row.module.css";
 
-// docs/pulsar/DESIGN.md "Importar": a row the person marks in or out, the
+// docs/goallog/DESIGN.md "Importar": a row the person marks in or out, the
 // review's one shape. The checkbox is the native one, so a reader and the
 // keyboard get it whole. The amount button sits beside the label, not in it:
 // a label names one control, and the checkbox must not take the amount's name.

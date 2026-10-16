@@ -31,7 +31,7 @@ export type NewOneOffProps = {
 /**
  * The field at the foot of the day (RP-19), permanently visible under the
  * one-offs it feeds: type a name, submit, and it lands on today with no
- * sheet and no screen of its own (docs/pulsar/DESIGN.md "Decisions taken
+ * sheet and no screen of its own (docs/goallog/DESIGN.md "Decisions taken
  * here"). The mark beside it is the design's one dashed stroke, drawn empty
  * because this is the one row nothing has written yet.
  *

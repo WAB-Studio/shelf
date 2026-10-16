@@ -125,7 +125,7 @@ for (const word of ["swish", "clamp", "black", "read"]) {
 }
 
 // The 8 words the chosen rule catches out of the 45 distinct words one real
-// reader looked up in one chapter, 2026-09-12 (`docs/voyager/DESIGN.md`,
+// reader looked up in one chapter, 2026-09-12 (`docs/wordbook/DESIGN.md`,
 // "What one real chapter measured"). Proof against use, not only the asset.
 const CHAPTER_THIN_WORDS = [
   "gilded",

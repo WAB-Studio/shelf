@@ -1,4 +1,4 @@
-/* docs/voyager/DESIGN.md "Metadata labels": PosLabel's 11px / 600 / 0.12em /
+/* docs/wordbook/DESIGN.md "Metadata labels": PosLabel's 11px / 600 / 0.12em /
    uppercase shape, in muted. Doubled to outrank `.rt-Text:where(.rt-r-size-N)`. */
 .label.label {
   font-size: 11px;

@@ -27,7 +27,7 @@ async function loadDictionary(page: Page): Promise<void> {
 // the screen's own leading sense is whichever one a reader's eye meets
 // first, not whichever label a query happens to name first. A gloss can
 // share its line with the sense's other translations
-// (docs/voyager/DESIGN.md "The translations are one line, separated by
+// (docs/wordbook/DESIGN.md "The translations are one line, separated by
 // commas"), so the match is bounded by the line's own start, end or `, `
 // rather than an exact `textContent` — a POS label such as "verbo" is a
 // line of its own either way and still matches.
@@ -55,7 +55,7 @@ function glossLocator(page: Page, gloss: string): Locator {
 }
 
 // The five forms the validator measured live against the screen on
-// 2026-09-12 (docs/voyager/DESIGN.md "Pruning the dictionary was measured
+// 2026-09-12 (docs/wordbook/DESIGN.md "Pruning the dictionary was measured
 // and refused"): each carries a suffix only one category takes, and each
 // used to lead with the other one.
 test("`sternly`'s `-ly` fixes the adjective, so `stern` leads with «severo», not «popa»", async ({ page }) => {
@@ -70,7 +70,7 @@ test("`sternly`'s `-ly` fixes the adjective, so `stern` leads with «severo», n
   expect(await textLeads(page, "severo", "popa")).toBe(true);
   // `glossLocator` alone would pass just as well against the old
   // one-gloss-per-line markup; this is the line that actually holds the
-  // adjective's translations joined (docs/voyager/DESIGN.md "The
+  // adjective's translations joined (docs/wordbook/DESIGN.md "The
   // translations are one line, separated by commas").
   await expect(page.getByText("severo, apremiante, adusto", { exact: true })).toBeVisible();
 });

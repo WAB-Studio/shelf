@@ -19,7 +19,7 @@
  *   2. `CHECK_NOTES_PAID=1 npm run check:notes` — against that same server
  *      restarted once with `CLIENT_KEY_SALT`, `PHRASE_NOTES_DAILY_CALL_CAP`
  *      and `PHRASE_NOTES_DAILY_CLIENT_CAP=1` exported in the shell that
- *      started it, never written to `.env.local` (docs/agentes/voyager.md, "Leave
+ *      started it, never written to `.env.local` (docs/agentes/wordbook.md, "Leave
  *      apps/wordbook/.env.local alone"). Runs the real model calls, the
  *      cache-repeat check, the no-leak check and the per-caller cap check,
  *      then restores `model_spend` and deletes every row it wrote.

@@ -90,7 +90,7 @@ function DeviceRowItem({
   return (
     <Flex direction="column" gap="2">
       {/* `1fr auto`: the label's own width is fixed, so the track beside it is
-          what has to clamp (docs/voyager/DESIGN.md "What the data forces"). */}
+          what has to clamp (docs/wordbook/DESIGN.md "What the data forces"). */}
       <Grid columns="1fr auto" gap="3" align="center">
         <Text weight="medium" truncate>
           {name}
@@ -153,7 +153,7 @@ function DeviceRowItem({
       )}
 
       {status.kind === "failed" && (
-        // No red in this palette (docs/voyager/DESIGN.md "Failure"): a hairline
+        // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a hairline
         // sets the break off, full-weight ink says it, the accent lives in retry.
         <Flex direction="column" gap="3" align="start">
           <Separator size="4" />

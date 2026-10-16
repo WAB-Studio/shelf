@@ -9,7 +9,7 @@ import { boxOf } from "./box";
 
 // Module 948, RP-113: in «Mes», a habit retired this month keeps its line and gets «retirado el {d mmm}» on its own line
 // under it, in the month it was retired and no other. Board MesRetirado (H1–H4 of private/contrato-948.md), decision of
-// 2026-10-13 in docs/pulsar/DESIGN.md. Written from the contract before the screen draws the line.
+// 2026-10-13 in docs/goallog/DESIGN.md. Written from the contract before the screen draws the line.
 // The day is the one the server reads (`serverDays`), so the spec says the same thing on any day of the week or month.
 
 test.use({ actionTimeout: 6000 });

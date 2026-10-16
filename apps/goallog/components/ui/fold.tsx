@@ -5,7 +5,7 @@ import { ChevronDown } from "lucide-react";
 
 import styles from "./fold.module.css";
 
-// docs/pulsar/DESIGN.md "Decisions of 2026-10-06": what no longer matters folds shut
+// docs/goallog/DESIGN.md "Decisions of 2026-10-06": what no longer matters folds shut
 // at the foot of its group (`ConexionesPlegadas`). The folded rows follow the
 // button once it opens; shut, they are not in the page at all.
 // `depth` lines the button up with a tree's rows, 16px in a level as `CheckRow` does; left out, it keeps the group's own edge.

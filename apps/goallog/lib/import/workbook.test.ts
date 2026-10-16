@@ -13,7 +13,7 @@ const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json
 const say = (key: string) =>
   (createTranslator({ locale: "es", messages: { import: catalogue }, namespace: "import" }) as unknown as (k: string) => string)(key);
 
-const DOC = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
+const DOC = readFileSync(new URL("../../../../docs/goallog/PLANTILLA.md", import.meta.url), "utf8");
 const DOC_EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
 
 const HEADERS = {

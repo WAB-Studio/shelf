@@ -105,7 +105,7 @@ export function ExportPanel() {
       {countState.kind !== "ready" || countState.count > 0 ? (
         <>
           {/* An underlined link, not a filled button: `/registro`'s weight is the
-              study above, not this download (docs/voyager/DESIGN.md "Settled",
+              study above, not this download (docs/wordbook/DESIGN.md "Settled",
               "The study replaces the download as the weight of `/registro`"). */}
           <Link asChild underline="always">
             <button type="button" onClick={() => void handleExport()} disabled={exportState.kind === "building"}>

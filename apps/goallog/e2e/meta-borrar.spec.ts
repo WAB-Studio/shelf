@@ -14,7 +14,7 @@ import { PAGES, dialog, monthLabel, postCounter, rhythmOfGoal, seedOpenGoal, see
 
 // Module 1016, RP-127 and RP-134: the goal's own screen deletes a goal nothing has happened in, changes or removes a
 // measure no fact feeds, drops its rhythm from the rhythm sheet, and opens a phase from its row. Written from the
-// contract (private/asignaciones/1016.md, docs/pulsar/SPEC.md), not from the screen. Every test names the mutation that
+// contract (private/asignaciones/1016.md, docs/goallog/SPEC.md), not from the screen. Every test names the mutation that
 // kills it.
 
 test.use({ actionTimeout: 6000 });

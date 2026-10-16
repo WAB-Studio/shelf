@@ -1,4 +1,4 @@
-/* docs/pulsar/DESIGN.md: rows ruled by a hairline, never a border box, no
+/* docs/goallog/DESIGN.md: rows ruled by a hairline, never a border box, no
    shadow, no fill for the current row. Every size is a `--pulsar-text-*`
    role; where the boards draw a size no role holds (20 and 24 on the
    figure, 13 on the label, 14 on text) the nearest role stands in, as

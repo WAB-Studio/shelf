@@ -2,7 +2,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// 846: a goal that has ended draws no running-month pace line (821, docs/pulsar/DESIGN.md).
+// 846: a goal that has ended draws no running-month pace line (821, docs/goallog/DESIGN.md).
 // The pace line exists from the 20th of the month, so both tests skip before it; run them
 // under `PULSAR_CLOCK=2026-10-31` exported to the server and the spec alike.
 

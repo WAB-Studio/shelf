@@ -4,7 +4,7 @@ import { type ChangeEvent } from "react";
 
 import styles from "./file-pick.module.css";
 
-// A file control drawn as the outline button of docs/pulsar/DESIGN.md
+// A file control drawn as the outline button of docs/goallog/DESIGN.md
 // "Importar": a label over a muted hint. The native input stays in the page,
 // out of sight, so a reader and a keyboard still reach it.
 export function FilePick({

@@ -10,7 +10,7 @@ import { dayFromToday, noonFromToday } from "./reloj";
 // `SemanaHoyEvidencia` and its dark face: inside today's
 // column the evidence mark (soft fill, accent ring) must stand out from the
 // column's own fill. It was lost: both were `--pulsar-accent-soft`. Written
-// from the board and `docs/pulsar/DESIGN.md`'s token table, not from the CSS.
+// from the board and `docs/goallog/DESIGN.md`'s token table, not from the CSS.
 // Hex values are never repeated here: the tokens are the contract, read off
 // the page the way a person's browser resolves them.
 

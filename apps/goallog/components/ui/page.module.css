@@ -1,4 +1,4 @@
-/* docs/pulsar/DESIGN.md "Tokens": the ground. The column is a flex stack so a
+/* docs/goallog/DESIGN.md "Tokens": the ground. The column is a flex stack so a
    screen spaces its groups with `gap` instead of a margin of its own. */
 .page {
   box-sizing: border-box;

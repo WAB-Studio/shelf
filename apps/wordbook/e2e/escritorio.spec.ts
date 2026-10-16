@@ -3,7 +3,7 @@ import { expect, test } from "./fixtures";
 import messages from "../messages/es.json";
 
 // Runs against the `desktop` project alone (playwright.config.ts scopes it
-// there): 1280x800, no touch. docs/voyager/DESIGN.md "Viewport": the bar
+// there): 1280x800, no touch. docs/wordbook/DESIGN.md "Viewport": the bar
 // becomes a sidebar at 1024px, a second breakpoint distinct from the ~660px
 // the reading column centres above.
 

@@ -34,7 +34,7 @@ function getServerQuery(): string {
   return "";
 }
 
-// docs/voyager/DESIGN.md "Viewport": stroke-width 1.75, round caps and
+// docs/wordbook/DESIGN.md "Viewport": stroke-width 1.75, round caps and
 // joins, fill none, 20px — read from the published boards, not guessed.
 const GLYPH_PROPS = {
   width: 20,
@@ -87,7 +87,7 @@ const items = [
   { route: "/cuenta", key: "account" } as const,
 ];
 
-// docs/voyager/DESIGN.md "Viewport": the same three sections the bar has
+// docs/wordbook/DESIGN.md "Viewport": the same three sections the bar has
 // always carried (`## Settled`: it shipped with two, Cuenta joined with the
 // account slice), now also the desktop sidebar's three destinations — one
 // `<nav>`, one CSS media query at 1024px, never a second tree mounted

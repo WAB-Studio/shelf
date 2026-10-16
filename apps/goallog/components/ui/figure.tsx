@@ -39,7 +39,7 @@ export function TimeParts({ time, unitClass, unitPart }: { time: TimeFigure; uni
   ));
 }
 
-// docs/pulsar/DESIGN.md: hours, counts, minutes, dates and quantities are the
+// docs/goallog/DESIGN.md: hours, counts, minutes, dates and quantities are the
 // log's substance, so they are set in mono and their unit sits beside them in
 // quiet. `measure` is the 26px figure; `meta` the 12px one inside a row. A
 // time (RP-35) carries its own «h» and «min», so its unit word is not drawn.

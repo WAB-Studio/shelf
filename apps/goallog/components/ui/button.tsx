@@ -10,12 +10,12 @@ import {
 
 import styles from "./button.module.css";
 
-// docs/pulsar/DESIGN.md "The marks": every control is at least 48px on its
+// docs/goallog/DESIGN.md "The marks": every control is at least 48px on its
 // shorter side. 44 is the one exception the design names, the light/dark
 // control in the day's header, and it is asked for by name.
 type TapSize = 44 | 48 | 52;
 
-// docs/pulsar/DESIGN.md "The controls" dresses these three and no more. A
+// docs/goallog/DESIGN.md "The controls" dresses these three and no more. A
 // variant the design has not dressed is not reachable: Radix's own `soft`,
 // `surface` and `classic` paint from its scales, so they are typed away rather
 // than left one keystroke behind a legal prop. `color` and `highContrast` go

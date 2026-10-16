@@ -1,7 +1,7 @@
 # Goal log — design guide
 
-Governs `apps/pulsar` alone. `docs/DESIGN.md` governs `apps/orbit` and `docs/voyager/DESIGN.md`
-governs `apps/voyager`; neither applies here and no pattern crosses over because it exists next door.
+Governs `apps/goallog` alone. `docs/DESIGN.md` governs `apps/homefund` and `docs/wordbook/DESIGN.md`
+governs `apps/wordbook`; neither applies here and no pattern crosses over because it exists next door.
 
 Approved by the user 2026-09-22 from the canvas
 <https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp>.
@@ -14,7 +14,7 @@ A ship's log: what happened, when, and who wrote it down.
   empty outline. No red anywhere, no broken streak, no badge, no praise. Decided by the user
   2026-09-22. A palette with no red is what enforces it — a later screen cannot reach for one.
 - **Light is the primary face.** Dark is the same design inverted, never a second design.
-  `apps/voyager` is dark-first; this app inherits nothing from it.
+  `apps/wordbook` is dark-first; this app inherits nothing from it.
 - **A figure is set in mono, a sentence in Archivo.** Hours, counts, minutes, dates and quantities
   are the log's substance: they read as a log or they read as decoration.
 - **Writing a fact costs one tap.** No form stands on the day's path. What needs a number offers it
@@ -718,7 +718,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   Decided 2026-09-30 by the user.
 - **The export and the import are built as the 15 boards of «Exportar» and «Importar» draw them.**
   Approved by the user 2026-09-30.
-- **Words no board drew, worded by module 134 in the boards' voice** (`apps/pulsar/messages/es/`): the
+- **Words no board drew, worded by module 134 in the boards' voice** (`apps/goallog/messages/es/`): the
   amount and task sheets' labels («horas», «minutos», «cuánto, en {unit}», «Guardar», «Cancelar»), the
   plan errors (`month.errors.*`, e.g. «Ese mes queda fuera del plazo de la meta.», «Esta tarea se da
   por hecha cuando lo están sus sub-tareas.»), the import errors no board shows (`horizonPast`,

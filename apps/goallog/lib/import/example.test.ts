@@ -5,7 +5,7 @@ import test from "node:test";
 import { parseTemplate } from "./template";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
-const DOC = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
+const DOC = readFileSync(new URL("../../../../docs/goallog/PLANTILLA.md", import.meta.url), "utf8");
 const DOC_EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
 
 test("the catalogue's template example is PLANTILLA.md's, byte for byte", () => {

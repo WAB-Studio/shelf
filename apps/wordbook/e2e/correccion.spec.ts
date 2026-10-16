@@ -78,7 +78,7 @@ test("tapping the offer opens the corrected word's own entry", async ({ page }) 
 // Decided by the user 2026-09-11: no cap on the candidate count, so a real
 // English word the dictionary lacks (`fettle`) draws all four headwords one
 // substitution away (kettle, mettle, nettle, settle) — wrong, and known to
-// be wrong (`docs/voyager/DESIGN.md`, dated the same day) — until RL-29
+// be wrong (`docs/wordbook/DESIGN.md`, dated the same day) — until RL-29
 // gives that reader a door that isn't a guess.
 test("a word one edit from several headwords at once offers all of them", async ({ page }) => {
   await deleteTranslator(page);
@@ -99,7 +99,7 @@ test("a word one edit from several headwords at once offers all of them", async 
 // its own to suppress the miss with (RL-18). `suggestCorrection` sorts
 // alphabetically, not by anything the reader meant, so cutting the list
 // would drop the intended word by accident of spelling — decided
-// 2026-09-11 (`docs/voyager/DESIGN.md`) to draw every candidate instead, at
+// 2026-09-11 (`docs/wordbook/DESIGN.md`) to draw every candidate instead, at
 // 360px, the narrowest viewport this suite runs.
 test("nine candidates all draw, none of them off screen at 360px", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });

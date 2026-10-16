@@ -1,6 +1,6 @@
 # Reading app — design guide
 
-Governs `apps/voyager` alone. `docs/DESIGN.md` governs `apps/orbit` and does not apply here.
+Governs `apps/wordbook` alone. `docs/DESIGN.md` governs `apps/homefund` and does not apply here.
 Approved by the user 2026-09-07 from the canvas in `private/design-lectura/`.
 
 ## The direction: Impreso
@@ -347,7 +347,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
     headword" is true of all four and a plain one-edit guard shows every one of them. Building RL-28
     on 2026-09-11 found this by running it, not by reading the paragraph above, and a cap of three
     candidates was added to make the old sentence true — with no textual basis in either the 2026-09-08
-    decision above or in `docs/voyager/SPEC.md`'s RL-28. Measured against that cap, over 4,000 real
+    decision above or in `docs/wordbook/SPEC.md`'s RL-28. Measured against that cap, over 4,000 real
     one-edit typos: **90.2% have exactly one candidate**, and the cap **silenced the 2.9% with more
     than three** — dropping recovery from 100% to 97.1% (cap 3) or 95.5% (cap 2). Put to the user with
     that number: **decided 2026-09-11, no cap.** RL-28 corrects 100% of one-edit typos, and `fettle`
@@ -573,7 +573,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   this session and it bought nothing the measurement did not already say.
 
 - **The photo's bytes go to a Supabase Storage bucket, and the project gains its first storage
-  credential.** Decided by the user 2026-09-10, told plainly that `apps/voyager/lib/env.ts:3-7`
+  credential.** Decided by the user 2026-09-10, told plainly that `apps/wordbook/lib/env.ts:3-7`
   forbids a server-side Supabase key in writing, citing RNL-10, and told the alternative that needed
   no credential at all — the bytes as `bytea` in the `reading` schema, written over the
   `DATABASE_URL` connection that already exists. They chose the bucket: a database is scarcer and
@@ -882,7 +882,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   proof this screen renders is a hand-made hook a validator wrote and deleted.
 
 - **The 429 stays proven by reading, not by driving.** Decided by the user 2026-09-09: no vitest, no
-  jest, one test layer in this repo. `apps/voyager/app/actions/account.ts` classifies
+  jest, one test layer in this repo. `apps/wordbook/app/actions/account.ts` classifies
   `error.status === 429` into its own line, and a validator mutation confirmed 2026-09-09 that
   breaking that branch reddens nothing in `check:e2e`. The type it leans on is
   `AuthError.status: number | undefined`. Known gap, not an oversight.
@@ -918,7 +918,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   hits. Guessing is what a miss earns. **The measured price: `left` no longer offers `leave`.** It is
   a real headword itself, so it is answered as itself; the reader of «he left» loses the one-tap path
   to the verb. Taken knowingly — reversing it is one line in
-  `apps/voyager/lib/dictionary/lookup.ts`.
+  `apps/wordbook/lib/dictionary/lookup.ts`.
 
 - **A paused prefix keeps its suggestions on screen.** Decided by the user 2026-09-09. **Superseded
   the same day by the entry above** — kept for its measurement, not as law. Typing `ru`
@@ -1342,7 +1342,7 @@ production carries no `SUPABASE_STORAGE_*` and no `WORD_PHOTO_DAILY_CAP`, so `/a
 answered `204` for every word outside the 26 rows already cached. Five decisions follow from it.
 
 1. **`RL-36` is retired whole, not hidden.** The code, the route, the table, the credits and the
-   requirement all go. `docs/voyager/SPEC.md` moves it to `### Retired` with its full text; this
+   requirement all go. `docs/wordbook/SPEC.md` moves it to `### Retired` with its full text; this
    file marks retired every decision that named the photo, dated the same day.
 2. **The bucket stays in the project, empty.** Its 26 objects are deleted; the Storage credential is
    untouched. A decision to keep something is still a decision.
@@ -1360,7 +1360,7 @@ Numbers 2 and 5 are decisions to do nothing, written down so the next session do
 ### The model judges what the provider's memory returns, 2026-09-20
 
 `RL-50`. The user was shown three mechanisms and took this one. What ruled the other two out is in
-`docs/voyager/SPEC.md` under the code; what belongs here is the shape it leaves on the screen.
+`docs/wordbook/SPEC.md` under the code; what belongs here is the shape it leaves on the screen.
 
 **Two boards do not exist, and this slice cannot be dispatched without them.**
 
@@ -1706,5 +1706,5 @@ Taken by the user («2. b 3. b»).
 - **A row of `/registro` can be deleted with a ✕ per row.** Replaces the premise that the record only gains rows. Not built yet.
 - **When sending a sign-in link times out, the screen says it may have been sent:** a new line, with a board drawn before it is built. Not built yet.
 - **The dead RL-45 «swishing» path is deleted.** No visible behaviour changes.
-- **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/voyager/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Needs boards before any work. Not built yet.
+- **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/wordbook/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Needs boards before any work. Not built yet.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.

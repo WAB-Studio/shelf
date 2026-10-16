@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { test, expect, settled, type Person } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
-// Module 857 (docs/pulsar/DESIGN.md "Tokens", taken 2026-10-11): the unit beside a figure, in a `Figure`, a table cell
+// Module 857 (docs/goallog/DESIGN.md "Tokens", taken 2026-10-11): the unit beside a figure, in a `Figure`, a table cell
 // and a table header, is `--pulsar-muted` on both faces; `--pulsar-quiet` keeps its value and draws strokes. Colours are
 // read off the page's own tokens, never typed here.
 

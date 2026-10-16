@@ -5,7 +5,7 @@
  * fact the build script's own header already states.
  *
  * `manifest.json`'s `withIpa` (36,359) differs from the source-table figure
- * `docs/voyager/SPEC.md` §2 quotes (36,320): that 39-entry gap is
+ * `docs/wordbook/SPEC.md` §2 quotes (36,320): that 39-entry gap is
  * unreconciled and is the build script's finding, not this script's. D3
  * checks the payload against the manifest's own counts, never against the
  * older SPEC table.

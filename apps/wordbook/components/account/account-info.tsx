@@ -13,7 +13,7 @@ import { Flex, Link, MetaLabel, Separator, TapTarget, Text } from "@/components/
 // so this tab pays no request.
 const manifest = manifestSchema.parse(manifestJson);
 
-// `docs/voyager/SPEC.md`'s own model table reads the payload in MiB, so the
+// `docs/wordbook/SPEC.md`'s own model table reads the payload in MiB, so the
 // figure here is 1024^2, not the decimal megabyte.
 const BYTES_PER_MIB = 1024 * 1024;
 
@@ -29,7 +29,7 @@ function Credit({ href, children }: { href: string; children: ReactNode }) {
 }
 
 /**
- * `CuentaInformacion` (`docs/voyager/DESIGN.md` "Settled"): the dictionary's
+ * `CuentaInformacion` (`docs/wordbook/DESIGN.md` "Settled"): the dictionary's
  * source, its edition and its CC BY-SA 3.0 licence, plus SUBTLEX-US's own
  * CC BY-NC-SA 4.0 credit for the sense order it feeds RL-43 — reachable
  * with no session because `/cuenta` already renders without one (RL-33),

@@ -8,7 +8,7 @@ import { TimeParts, useTimeWords } from "./figure";
 import { formatFigureValue, isTimeFigure } from "./format-figure";
 import styles from "./table.module.css";
 
-// docs/pulsar/DESIGN.md, the review (RP-17): one set of props, two faces. The
+// docs/goallog/DESIGN.md, the review (RP-17): one set of props, two faces. The
 // phone draws `Revision.dc.html`'s stack of ruled rows; past the kit's 700px
 // breakpoint the same rows become `RevisionEscritorio.dc.html`'s real
 // `<table>`. Both are always in the markup and CSS shows one, so a screen

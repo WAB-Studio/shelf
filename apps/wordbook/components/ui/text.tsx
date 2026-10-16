@@ -4,7 +4,7 @@ import styles from "./text.module.css";
 
 // The one door onto Radix Themes' Text, so a headword's translation or
 // definition can opt into Newsreader without a screen writing its own class
-// (docs/voyager/DESIGN.md "Type").
+// (docs/wordbook/DESIGN.md "Type").
 type SerifProps = {
   // Sets the family to Newsreader; the size and weight stay whatever `size`
   // and `weight` already say.
@@ -13,7 +13,7 @@ type SerifProps = {
   // `RegistroVaciarConfirmar`'s own break — 15px/600 and 15px/1.6 — neither
   // a Radix step covers. `caption`: its two destructive options' own lines
   // underneath, 13px/1.5. `definitionLabel`: the label sitting above the
-  // always-open English definition, 13px/600/0.06em (docs/voyager/DESIGN.md
+  // always-open English definition, 13px/600/0.06em (docs/wordbook/DESIGN.md
   // "The English definition draws open, always"). `generatedProse`: the
   // generated block's own definition and example line, 16px/1.65 — a step
   // past the dictionary definition's Radix `size="2"`, since a generated
@@ -21,7 +21,7 @@ type SerifProps = {
   // `exampleTranslation`: the example's Spanish line beneath it, 15px, no
   // Radix step. `generatedMark`: the small «GENERADA» pill beside the
   // generated label — bordered, never a coloured badge
-  // (docs/voyager/DESIGN.md "Metadata labels"). `pendingHint`: the one line
+  // (docs/wordbook/DESIGN.md "Metadata labels"). `pendingHint`: the one line
   // `PalabraGenerandoOscuroMovil` draws while the network is still out,
   // 14px italic — the translation above is already whole and this line
   // only holds the block's place.
@@ -36,7 +36,7 @@ type SerifProps = {
     | "generatedMark"
     | "pendingHint";
   // The muted tone every caption, status line and secondary link takes
-  // (docs/voyager/DESIGN.md "Tokens"), so a screen never reaches for Radix's
+  // (docs/wordbook/DESIGN.md "Tokens"), so a screen never reaches for Radix's
   // own `color="gray"`. `"quietest"` is the second, dimmer muted role the
   // same table names — first needed by `RegistroVaciarConfirmar`'s captions.
   muted?: boolean | "quietest";

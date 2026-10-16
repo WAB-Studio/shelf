@@ -1,7 +1,7 @@
 /* Every class is doubled to outrank `.rt-Text:where(.rt-r-size-N)`, which sets
    the size and the family a screen would otherwise inherit from Radix. */
 
-/* docs/pulsar/DESIGN.md "Type": the screen title on the phone. */
+/* docs/goallog/DESIGN.md "Type": the screen title on the phone. */
 .title.title {
   font-size: var(--pulsar-text-title-size);
   font-weight: var(--pulsar-text-title-weight);

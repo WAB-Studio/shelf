@@ -23,7 +23,7 @@ export type NoEntryState =
   | { kind: "resolving"; query: string };
 
 // Sixty answers are not an answer, and eight is already a lot to read on a
-// bus: the rest folds into one line (docs/voyager/DESIGN.md "Settled").
+// bus: the rest folds into one line (docs/wordbook/DESIGN.md "Settled").
 const MAX_BLOCKS = 8;
 
 // `search-screen.tsx`'s own query name: every door this screen opens is
@@ -38,7 +38,7 @@ function hasHit(answer: WordAnswer | null): answer is WordAnswer {
   return answer !== null && (answer.exact !== null || answer.viaInflection.length > 0);
 }
 
-// docs/voyager/DESIGN.md "Viewport": stroke-width 1.75, round caps and
+// docs/wordbook/DESIGN.md "Viewport": stroke-width 1.75, round caps and
 // joins, fill none — `sense-list.tsx` draws the same shape for its own
 // headword's door; this file has no import onto that one to share it.
 function ChevronGlyph() {
@@ -65,7 +65,7 @@ function ChevronGlyph() {
 // under the word that hit it and not a second "no tiene esa palabra" that
 // already answered the phrase above it. The block that carries the
 // breakdown's answer draws `compact`: translations alone, no IPA, no
-// definition, no voice control (docs/voyager/DESIGN.md "A word block on
+// definition, no voice control (docs/wordbook/DESIGN.md "A word block on
 // `SinEntradaFrase` carries its translations alone").
 function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useTranslations> }) {
   if (!hasHit(part.answer)) {
@@ -89,7 +89,7 @@ function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useT
   }
   // RL-59: a function word leads with the table's translation, the
   // dictionary's own block following whole and muted
-  // (docs/voyager/DESIGN.md `SinEntradaFraseFuncion`). `SenseList` draws its
+  // (docs/wordbook/DESIGN.md `SinEntradaFraseFuncion`). `SenseList` draws its
   // exact headword itself, so it is hidden there and drawn here, above the
   // table line.
   const heading = part.answer.exact?.headword ?? part.token;
@@ -213,7 +213,7 @@ export function NoEntryAnswer({ state }: { state: NoEntryState }) {
           <Separator size="4" />
           {/* Names every cut word, matching `SinEntradaFraseEnlaces`: the
               line wraps on a narrow phone rather than overflow it, checked
-              against `docs/voyager/DESIGN.md`'s own 52-word worst case
+              against `docs/wordbook/DESIGN.md`'s own 52-word worst case
               (`PHRASE_MAX_TOKENS` minus `MAX_BLOCKS`). One door, to the
               first of them — the same order the blocks above already read
               in. */}

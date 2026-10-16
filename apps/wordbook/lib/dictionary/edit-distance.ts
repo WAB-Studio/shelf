@@ -33,7 +33,7 @@ function editsAtDistanceOne(word: string): Set<string> {
 // Every headword one edit from `normalised` that the index actually has,
 // ranked for a stable order on screen — empty only when there is none
 // (`zzqqxv`). No cap, against
-// `docs/voyager/DESIGN.md`'s "One edit, no cap" — a real word the
+// `docs/wordbook/DESIGN.md`'s "One edit, no cap" — a real word the
 // dictionary lacks (`fettle`) can sit one edit from several headwords at
 // once and still surface all of them here; RL-44 is what tells that reader
 // none of them is what they meant, not this function withholding the list.
@@ -41,7 +41,7 @@ function editsAtDistanceOne(word: string): Set<string> {
 // Ranking: `POS_FREQUENCY_ORDER` carries no number, only a per-headword
 // part-of-speech order, so it cannot say a rowed candidate is used more
 // than another rowed one — inventing a score on top of it was refused
-// (`docs/voyager/DESIGN.md`, RL-28, 2026-09-11). What it can say is which
+// (`docs/wordbook/DESIGN.md`, RL-28, 2026-09-11). What it can say is which
 // candidates it has ever measured at all: those sort ahead as one block,
 // alphabetical among themselves; the rest keep today's alphabetical order
 // behind them. `fettle`'s four candidates carry no row, so it is unchanged.

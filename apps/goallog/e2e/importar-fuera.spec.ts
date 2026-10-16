@@ -8,7 +8,7 @@ import { boxOf } from "./box";
 
 // What the import leaves out is listed under «No se puede crear», one row for a part and the
 // parts it drags with it, and the bar holds the button alone (RP-37, RP-97). The boards are
-// `ImportarFuera` and `ImportarArbol`; the words are the ones written in docs/pulsar/DESIGN.md.
+// `ImportarFuera` and `ImportarArbol`; the words are the ones written in docs/goallog/DESIGN.md.
 
 const plus = (days: number) => {
   const date = civilDateToDate(todayInZone());

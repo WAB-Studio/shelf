@@ -9,7 +9,7 @@ import { ThemeScript } from "@/components/theme-script";
 import "@radix-ui/themes/styles.css";
 import "./theme.css";
 
-// Sentences, headings, commitment names and controls (docs/pulsar/DESIGN.md "Type").
+// Sentences, headings, commitment names and controls (docs/goallog/DESIGN.md "Type").
 const sans = Archivo({
   variable: "--font-sans",
   subsets: ["latin"],

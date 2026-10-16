@@ -16,7 +16,7 @@
   --focus-8: var(--pulsar-accent);
   border-radius: 10px;
   /* Radix sets a control's label from its own scale — 14px at size 2, a size
-     docs/pulsar/DESIGN.md has no role for. A label on a control reads at the
+     docs/goallog/DESIGN.md has no role for. A label on a control reads at the
      same step a commitment name does. */
   font-size: var(--pulsar-text-name-size);
   font-weight: var(--pulsar-text-name-weight);
@@ -32,7 +32,7 @@
   min-block-size: 48px;
 }
 
-/* docs/pulsar/DESIGN.md "Decisions taken here": the 44px icon button in the
+/* docs/goallog/DESIGN.md "Decisions taken here": the 44px icon button in the
    day's header. The one control the design holds under 48. */
 .tap44.tap44 {
   box-sizing: border-box;
@@ -78,7 +78,7 @@
   font-weight: 400;
 }
 
-/* docs/pulsar/DESIGN.md "The controls": outline is a transparent fill, a 1.5px
+/* docs/goallog/DESIGN.md "The controls": outline is a transparent fill, a 1.5px
    `border` ring and ink — never a tint of the accent, which is what Radix's own
    `--accent-a8` draws. The ring is an inset shadow at zero blur because
    Chromium floors a border-width to a whole CSS pixel and a 1.5px border paints
@@ -95,7 +95,7 @@
   background-color: transparent;
 }
 
-/* docs/pulsar/DESIGN.md "The controls": the day's theme control — a glyph with
+/* docs/goallog/DESIGN.md "The controls": the day's theme control — a glyph with
    no fill, no ring and muted ink. */
 .ghost.ghost {
   background-color: transparent;
@@ -110,7 +110,7 @@
   color: var(--pulsar-accent);
 }
 
-/* docs/pulsar/DESIGN.md "The controls": solid is the accent filled, with no
+/* docs/goallog/DESIGN.md "The controls": solid is the accent filled, with no
    ring of its own. */
 .solid.solid {
   background-color: var(--pulsar-accent);
@@ -126,7 +126,7 @@
   filter: none;
 }
 
-/* docs/pulsar/DESIGN.md "The controls": disabled drops the fill in every
+/* docs/goallog/DESIGN.md "The controls": disabled drops the fill in every
    variant — muted ink on the surface behind it, with a `line` ring. Keeping
    the variant's own fill measured 1.08:1 on the light face and 1.19:1 on the
    dark one, which is unreadable; this reads 4.92 and 6.86. It never changes

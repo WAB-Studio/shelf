@@ -45,7 +45,7 @@ async function mockKeyboardOpen(page: Page, visibleHeight: number): Promise<void
   await page.waitForTimeout(200);
 }
 
-// docs/voyager/DESIGN.md "Viewport": a bottom bar under 1024px, a sidebar
+// docs/wordbook/DESIGN.md "Viewport": a bottom bar under 1024px, a sidebar
 // from it up — this test drives both without a second project, since
 // `playwright.config.ts` is not a file this module may touch.
 async function navBox(page: Page) {
@@ -78,7 +78,7 @@ test("with nothing mocked, the bar sits exactly where it does today, bar and sid
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(300);
   const sidebarBox = await navBox(page);
-  // docs/voyager/DESIGN.md "Viewport": the 240px band, full height — the
+  // docs/wordbook/DESIGN.md "Viewport": the 240px band, full height — the
   // desktop rule sets `inset-block: 0` outright and never reads the
   // variable at all, mocked or not.
   expect(sidebarBox.x).toBe(0);

@@ -2,7 +2,7 @@ import { Text, type TextProps } from "@radix-ui/themes";
 
 import styles from "./label.module.css";
 
-// A part-of-speech label's exact type (docs/voyager/DESIGN.md "Type"): the
+// A part-of-speech label's exact type (docs/wordbook/DESIGN.md "Type"): the
 // sense it sits on is ruled with a hairline, never boxed, so this stays text.
 // `muted` swaps the accent for `--rl-muted` — the `PalabraConFlexion` board's
 // own offer label ("'left' también es una forma de 'leave'") reuses this

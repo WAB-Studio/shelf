@@ -7,7 +7,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-// RP-71, RP-32 (module 805, `ReporteImpresoTablaLarga.dc.html` and docs/pulsar/DESIGN.md): on the wide face of
+// RP-71, RP-32 (module 805, `ReporteImpresoTablaLarga.dc.html` and docs/goallog/DESIGN.md): on the wide face of
 // `Table`, every figure of a row sits on the label's FIRST line. A row's `detail` («en curso», «cerrado · N % pasó a …»,
 // a week's dates) sits under the label alone. Rows without a detail keep the height they had.
 //
