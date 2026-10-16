@@ -669,10 +669,11 @@ test.describe("the last-copy line keeps time", () => {
       page.on("request", (request) => {
         if (request.url().includes("/api/")) calls.push(`${request.method()} ${request.url()}`);
       });
-      // The device list asks once on open; the snapshot is taken after it.
+      // The open asks twice, the device list and the held pull; the snapshot is taken after both.
       const devicesAsked = page.waitForRequest((request) => request.url().includes("/api/devices"));
+      const pullAsked = page.waitForRequest((request) => request.url().includes("/api/log/sync"));
       await page.goto("/cuenta");
-      await devicesAsked;
+      await Promise.all([devicesAsked, pullAsked]);
       await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
       const before = [...calls];
 

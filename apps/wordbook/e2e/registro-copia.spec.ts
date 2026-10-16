@@ -252,12 +252,16 @@ test("RNL-09: one round per open: each visit sends one, re-rendering the screen 
 
   // Leave and come back by the bar, a client navigation: a new open.
   const nav = page.getByRole("navigation", { name: messages.nav.label });
+  // The URL is the app's own signal that the screen changed: the log screen's
+  // filter field also reads «Buscar», so the field alone cannot say we left.
   await nav.getByRole("link", { name: messages.nav.search }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/");
   await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
   await page.waitForLoadState("networkidle");
   expect(posts.count(), "the home screen must not sync").toBe(1);
 
   await nav.getByRole("link", { name: messages.nav.log }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/registro");
   await expect(rowLink(page, "alpha")).toBeVisible();
   await expect.poll(posts.count).toBe(2);
   await page.waitForLoadState("networkidle");
