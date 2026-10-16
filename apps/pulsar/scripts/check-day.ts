@@ -1155,10 +1155,8 @@ async function runReplaceRaceCheck(): Promise<void> {
  * "done leaves the list for good", true on any day the fact was written, not
  * only today's; and never carries one dated tomorrow. Built through
  * `createOneOff` (`app/actions/one-offs.ts`) for every row, plus one raw
- * insert for the "got a fact yesterday" case: `declareFact` itself refuses a
- * caller-supplied day for a one-off (`requireDayForSubject`'s own
- * `dayOnOneOff`, RP-06 never redates one), so a fact dated anywhere but
- * today can only be seeded the way `runZoneCheck` above already seeds state
+ * insert for the "got a fact yesterday" case: a fact dated
+ * yesterday is seeded raw here, the way `runZoneCheck` above already seeds state
  * `declareFact` cannot reach. The `loadDay(today)` call itself is wrapped in
  * `reportRun` the same way the cold/warm calls in `runMain` are, so the
  * carrying oneOffs list and the four-statement count are proven from the

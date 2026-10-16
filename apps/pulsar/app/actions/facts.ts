@@ -122,16 +122,22 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
         goalId = commitment.goalId;
       } else if (oneOffId != null) {
         const [oneOff] = await tx
-          .select({ goalId: oneOffs.goalId })
+          .select({ goalId: oneOffs.goalId, createdAt: oneOffs.createdAt, day: oneOffs.day })
           .from(oneOffs)
           .where(eq(oneOffs.id, oneOffId));
 
         if (!oneOff) throw new NamedError("day.errors.notFound");
 
-        // RP-06: a one-off is done on the day it is done, never redated.
+        // RP-129: a past day, but never before the task existed or its own day.
         const dayCheck = z
           .custom<{ day?: string | null }>()
-          .superRefine(requireDayForSubject({ kind: "oneOff" }))
+          .superRefine(
+            requireDayForSubject({
+              kind: "oneOff",
+              createdDay: civilDateInZone(oneOff.createdAt),
+              ownDay: oneOff.day,
+            }),
+          )
           .safeParse({ day: parsed.data.day });
         if (!dayCheck.success) {
           throw new NamedError(dayCheck.error.issues[0].message);
