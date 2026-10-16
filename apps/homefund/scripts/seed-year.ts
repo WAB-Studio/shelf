@@ -26,6 +26,7 @@ import { createAccount } from "@/db/queries/accounts";
 import { createCategory } from "@/db/queries/categories";
 import { insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
+import type { Account } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { BASE_CURRENCY, type OfferedCurrency } from "@/lib/currency";
 import { addCivilDays, todayInBogota } from "@/lib/dates";
@@ -312,7 +313,7 @@ async function ensureScaffold(userId: string): Promise<Scaffold> {
   const account = async (
     name: string,
     kind: "asset" | "liability",
-    subtype: "bank" | "cash" | "card",
+    subtype: Account["subtype"],
     amountMinor: number,
     currency: OfferedCurrency = BASE_CURRENCY,
   ): Promise<string> => {

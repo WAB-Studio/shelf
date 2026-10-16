@@ -335,9 +335,9 @@ export async function seedHarnessScope(userId: string): Promise<HarnessScope> {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values
-        (${scope.assetAccountId}, ${userId}, 'Harness bank', 'asset', 'bancaria', 5000000, ${today}),
-        (${scope.cashAccountId}, ${userId}, 'Harness cash', 'asset', 'efectivo', 0, ${today}),
-        (${scope.liabilityAccountId}, ${userId}, 'Harness card', 'liability', 'tarjeta', -300000, ${today})`;
+        (${scope.assetAccountId}, ${userId}, 'Harness bank', 'asset', 'bank', 5000000, ${today}),
+        (${scope.cashAccountId}, ${userId}, 'Harness cash', 'asset', 'cash', 0, ${today}),
+        (${scope.liabilityAccountId}, ${userId}, 'Harness card', 'liability', 'card', -300000, ${today})`;
 
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)

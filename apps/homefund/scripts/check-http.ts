@@ -347,7 +347,7 @@ async function seedHttpScope(userId: string): Promise<HttpScope> {
 
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-      values (${scope.accountId}, ${userId}, 'Harness HTTP bank', 'asset', 'bancaria', 5000000, current_date)`;
+      values (${scope.accountId}, ${userId}, 'Harness HTTP bank', 'asset', 'bank', 5000000, current_date)`;
 
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)
@@ -369,7 +369,7 @@ async function seedHttpScope(userId: string): Promise<HttpScope> {
     // a debt owes, and every balance is derived (RNF-05, RNF-07).
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-      values (${scope.debtAccountId}, ${userId}, ${DEBT_NAME}, 'liability', 'tarjeta',
+      values (${scope.debtAccountId}, ${userId}, ${DEBT_NAME}, 'liability', 'card',
         -24000000, (current_date - interval '3 months')::date)`;
 
     await tx`
@@ -1098,8 +1098,8 @@ async function edgeSuite(): Promise<void> {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on, last_four)
       values
-        (${namedAccountId}, ${userId}, 'Harness HTTP named card', 'asset', 'bancaria', 0, current_date, ${namedTail}),
-        (${decoyAccountId}, ${userId}, 'Harness HTTP decoy card', 'asset', 'bancaria', 0, current_date, ${decoyTail})`;
+        (${namedAccountId}, ${userId}, 'Harness HTTP named card', 'asset', 'bank', 0, current_date, ${namedTail}),
+        (${decoyAccountId}, ${userId}, 'Harness HTTP decoy card', 'asset', 'bank', 0, current_date, ${decoyTail})`;
   });
   track("accounts", namedAccountId);
   track("accounts", decoyAccountId);
