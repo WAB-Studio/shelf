@@ -536,6 +536,7 @@ export function MovementForm({
           variant="ghost"
           color="gray"
           onClick={onDone}
+          disabled={isPending}
           aria-label={tKey("common.cancel")}
         >
           <ChevronLeftIcon size={18} />
