@@ -252,7 +252,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   «No se pudo traducir». The paid model's answer is not filtered. Decided by the user 2026-10-15.
   - Measured 2026-09-20, `i love you`, `en|es`: `translatedText` held an explicit sentence at `match: 1`, `quality: 74`,
     which passed every other gate; `te quiero` sat in `matches[1]` with the same score.
-- [ ] **RL-66** — A row of `/registro` is deleted with a ✕ on its row. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-10-15.
+- [x] **RL-66** — A row of `/registro` is deleted with a ✕ on its row. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-10-15.
+  - Proved 2026-10-16, CI run 38960715884 on 9f50d5d1: `apps/wordbook/e2e/registro-borrar.spec.ts:234,270,298,340,362,411,423,441,486,497,536`, green.
 - [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: an entry in the dictionary, a translation for a
   sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that
@@ -269,10 +270,11 @@ this gets built, and no schema, table or column is "prepared for" it.
   and what their other devices recorded comes down to this one **and stays in its local record,
   beside its own**. It is a copy: a lookup is still answered from the device, with an account or
   without one, online or offline.
-- [ ] **RL-70** *(successor of RL-24)* — The copy never edits a row. A row names the device that recorded it and the number
+- [x] **RL-70** *(successor of RL-24)* — The copy never edits a row. A row names the device that recorded it and the number
   it carried there, so copying it twice does not duplicate it, going up or coming down, and what one
   device copies never overwrites what another wrote. An interrupted merge leaves the record whole in
   every sense that matters: what came down is valid, what did not comes down next time.
+  - Proved 2026-10-16, CI run 38960715884 on 9f50d5d1: `apps/wordbook/scripts/check-sync.ts:839,840,842` (S33-S35: a named search leaves the account with its mark) and `apps/wordbook/e2e/registro-borrar.spec.ts:596` (a delete leaves every device), green.
 
   It deletes in two ways. Retiring a device deletes exactly the searches that device had copied, and that device stops syncing; what had already come down to another device stays there and leaves it by clearing the app's data in that browser, and the app says this before confirming. A row the reader deletes from `/registro` (RL-66) leaves the account's copy and leaves a mark there for each of its searches, so every device that holds them drops them on its next pull and no device sends them up again. Decided by the user 2026-10-16.
 - [x] **RL-25** — The reader sees the list of devices that have copied to their account: which one is
@@ -293,7 +295,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   file to an MCP client: the most looked-up words, the most recent ones, and the full history of one
   word. It only ever reads the file; no tool modifies it. The server is not part of the deployed app.
   - Open, 2026-10-16: `scripts/mcp/server.ts` has no test: the MCP protocol, the tools it offers and its reading of the file are undriven. Only the queries are (`scripts/mcp/aggregate.test.ts:40,67,76,85`).
-- [ ] **RL-65** *(successor of RL-20)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The export also offers a CSV for Anki beside it. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-15.
+- [x] **RL-65** *(successor of RL-20)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The export also offers a CSV for Anki beside it. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-15.
+  - Proved 2026-10-16, CI run 38960715884 on 9f50d5d1: `apps/wordbook/e2e/export.spec.ts:397,408,423,441,487,526,586,639` (the Anki controls, the file and its name, its type, pending, failed, zero, rows landed by a sync, no Worker), green.
 - [ ] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Boards are drawn before any work. Decided by the user 2026-10-15.
 - [x] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
   has, the answer offers the words it might have been, and reaching one of them is a tap. The
