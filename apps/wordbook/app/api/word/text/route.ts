@@ -3,7 +3,9 @@ import "server-only";
 import { normaliseHeadword } from "@/lib/dictionary/format";
 import { groupFor } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
+import { empty, json } from "@/lib/http/responses";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
+import { logDark, type DarkReason } from "@/lib/word/dark";
 import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey, scopedClientKey } from "@/lib/word/client-budget";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
@@ -16,7 +18,7 @@ import {
   translationsWereAnswered,
   writeCachedText,
 } from "@/lib/word/text-cache";
-import { inflectionReallyMovedReader, isInflectionDisagreement, isThinAnswer } from "@/lib/word/thin";
+import { isThinAnswer } from "@/lib/word/thin";
 
 // RL-41 and RL-42's decoration: no reader session reaches this route, the
 // cache is keyed on the headword alone (`db/schema/word-texts.ts`), and its
@@ -27,30 +29,24 @@ export const dynamic = "force-dynamic";
 // than the platform killing the function mid-claim.
 export const maxDuration = 30;
 
-const NO_STORE = { "Cache-Control": "no-store" };
-
-function json(body: unknown, status: number): Response {
-  return Response.json(body, { status, headers: NO_STORE });
-}
-
-function empty(status: 204 | 400): Response {
-  return new Response(null, { status, headers: NO_STORE });
-}
-
 // The caller's cap, then the day's, in series: run in parallel, a caller
 // already refused would still take one of the day's calls. No chargeable
 // caller (no salt, no address) reaches the model at all.
-async function claimModelCall(request: Request, dailyCap: number): Promise<boolean> {
+async function claimModelCall(
+  request: Request,
+  dailyCap: number,
+): Promise<"ok" | Extract<DarkReason, "no-caller" | "caller-share" | "caller-cap" | "day-cap" | "claim-error">> {
   try {
     const client = scopedClientKey("text", request.headers);
-    if (!client) return false;
+    if (!client) return "no-caller";
     const caller = clientKey(request);
-    if (!caller || !(await claimCallerShare(caller, dailyCap))) return false;
-    if (!(await claimClientCall(client, env.WORD_TEXT_DAILY_CLIENT_CAP))) return false;
-    return await claimDailyCall(dailyCap);
+    if (!caller) return "no-caller";
+    if (!(await claimCallerShare(caller, dailyCap))) return "caller-share";
+    if (!(await claimClientCall(client, env.WORD_TEXT_DAILY_CLIENT_CAP))) return "caller-cap";
+    return (await claimDailyCall(dailyCap)) ? "ok" : "day-cap";
   } catch (error) {
     console.error("[api/word/text] claim failed", error);
-    return false;
+    return "claim-error";
   }
 }
 
@@ -80,22 +76,14 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: "invalid" }, 400);
   }
 
-  // RL-45's own decision, over this route's own group and its own re-check
-  // of the client's `surface`/`rule` pair — the client sends a claim, never
-  // a flag, and a claim that does not hold up is treated as a plain lookup.
-  const { surface, rule } = parsed.data;
-  const disagrees =
-    surface !== undefined &&
-    rule !== undefined &&
-    inflectionReallyMovedReader(index, headword, surface, rule) &&
-    isInflectionDisagreement(group, rule);
-  const thin = isThinAnswer(group) || disagrees;
+  const thin = isThinAnswer(group);
 
   let cached: Awaited<ReturnType<typeof readCachedText>>;
   try {
     cached = await readCachedText(headword);
   } catch (error) {
     console.error("[api/word/text] cache read failed", error);
+    logDark("word/text", "cache-error");
     return empty(204);
   }
   if (cached) {
@@ -106,19 +94,22 @@ export async function POST(request: Request): Promise<Response> {
     // cached — over either, or with the model off, the row's definition and
     // example still return; only the enrichment is skipped, and it stays
     // open for a later lookup.
-    if (
-      thin &&
-      !cached.translationsAsked &&
-      env.OPENAI_API_KEY &&
-      env.WORD_TEXT_DAILY_CALL_CAP &&
-      (await claimModelCall(request, env.WORD_TEXT_DAILY_CALL_CAP))
-    ) {
-      const generated = await generateWordText(headword, false, group.senses);
-      translations = generated?.translations ?? null;
-      try {
-        await markTranslationsAsked(headword, translations);
-      } catch (error) {
-        console.error(`[api/word/text] cache write failed key=${headword}`, error);
+    if (thin && !cached.translationsAsked) {
+      const dark = !env.OPENAI_API_KEY
+        ? "no-key"
+        : !env.WORD_TEXT_DAILY_CALL_CAP
+          ? "no-cap"
+          : await claimModelCall(request, env.WORD_TEXT_DAILY_CALL_CAP);
+      if (dark !== "ok") {
+        logDark("word/text", dark);
+      } else {
+        const generated = await generateWordText(headword, false, group.senses);
+        translations = generated?.translations ?? null;
+        try {
+          await markTranslationsAsked(headword, translations);
+        } catch (error) {
+          console.error(`[api/word/text] cache write failed key=${headword}`, error);
+        }
       }
     }
     return json(
@@ -132,14 +123,21 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Absence is one shape everywhere: no key configured, no cap configured,
-  // over the cap, a provider failure, or a generation that fails to
-  // validate, or no chargeable caller all answer `204`, the same "no connection" screen already
-  // drawn (RL-35).
-  if (!env.OPENAI_API_KEY || !env.WORD_TEXT_DAILY_CALL_CAP) {
+  // over the cap, a provider failure, a generation that fails to validate
+  // or no chargeable caller all answer `204`, the same "no connection"
+  // screen already drawn (RL-35). Each logs its reason.
+  if (!env.OPENAI_API_KEY) {
+    logDark("word/text", "no-key");
+    return empty(204);
+  }
+  if (!env.WORD_TEXT_DAILY_CALL_CAP) {
+    logDark("word/text", "no-cap");
     return empty(204);
   }
 
-  if (!(await claimModelCall(request, env.WORD_TEXT_DAILY_CALL_CAP))) {
+  const claim = await claimModelCall(request, env.WORD_TEXT_DAILY_CALL_CAP);
+  if (claim !== "ok") {
+    logDark("word/text", claim);
     return empty(204);
   }
 
@@ -149,10 +147,10 @@ export async function POST(request: Request): Promise<Response> {
   const entryLacksDefinition = group.senses.every((sense) => sense.definition === null);
   const wantDefinition = parsed.data.needDefinition && entryLacksDefinition;
 
-  // RL-45 rides this same call when the entry is thin — no second call, so
-  // no second daily-cap claim for the one lookup.
+  // A thin entry rides this same call: one daily-cap claim for the lookup.
   const generated = await generateWordText(headword, wantDefinition, thin ? group.senses : null);
   if (!generated) {
+    logDark("word/text", "model-failed");
     return empty(204);
   }
 

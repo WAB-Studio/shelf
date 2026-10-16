@@ -1,5 +1,6 @@
 import "server-only";
 
+import { json } from "@/lib/http/responses";
 import { getReader, withReaderDb } from "@/lib/session";
 import { deviceLabel } from "@/lib/sync/device-label";
 import { syncRequestSchema, decodeCursor, encodeCursor, type SyncResponse } from "@/lib/sync/protocol";
@@ -8,12 +9,6 @@ import { downloadRows, writeUpload, type DownloadedRow } from "@/lib/sync/upload
 // Reads the session per request and answers a moving cursor: never a candidate
 // for the full route cache, on top of the `Cache-Control` this route also sets.
 export const dynamic = "force-dynamic";
-
-const NO_STORE = { "Cache-Control": "no-store" };
-
-function json(body: unknown, status: number): Response {
-  return Response.json(body, { status, headers: NO_STORE });
-}
 
 function toWireRow(row: DownloadedRow): SyncResponse["rows"][number] {
   return {
