@@ -1,12 +1,14 @@
 /**
  * Drives the real `sendSignInLink` (`app/actions/account.ts`) against the
- * local stack's `reading.client_spend`, with three modules swapped at load
+ * local stack's `reading.client_spend`, with four modules swapped at load
  * (`server-only` too, which throws outside Next):
  *
  * - `@repo/supabase-auth` is a double whose client factory counts its call
  *   and throws, so no path here ever reaches `signInWithOtp`. A request that
  *   gets past every cap is seen as one double call and a rejection.
  * - `next/headers` answers the caller's headers the test sets.
+ * - `@/lib/auth/allowlist` answers the list the test sets (`true` unless a case
+ *   says otherwise): the list is not under test here, the order around it is.
  * - `node:dns/promises` answers MX for `example.invalid` and nothing for any
  *   other domain. The deliverability guard itself runs unchanged.
  *
@@ -32,6 +34,7 @@ process.env.SIGN_IN_LINK_DAILY_ADDRESS_CAP = String(ADDRESS_CAP);
 
 let supabaseCalls = 0;
 let currentHeaders = new Headers();
+let listed = true;
 
 function notFound(): never {
   throw Object.assign(new Error("queryMx ENOTFOUND"), { code: "ENOTFOUND" });
@@ -47,6 +50,7 @@ const double = {
     throw new Error("check-sign-in-budget: the Supabase double was reached");
   },
   headers: async () => currentHeaders,
+  isEmailAllowed: async () => listed,
   resolveMx: async (domain: string) =>
     domain.toLowerCase() === "example.invalid" ? [{ exchange: "mx.example.invalid", priority: 10 }] : notFound(),
   resolveNone: async () => notFound(),
@@ -57,6 +61,7 @@ const DOUBLES: Record<string, string> = {
   "server-only": "export {};",
   "@repo/supabase-auth":
     "export const createSupabaseServerClient = (...a) => globalThis.__signInDouble.createSupabaseServerClient(...a);",
+  "@/lib/auth/allowlist": "export const isEmailAllowed = (...a) => globalThis.__signInDouble.isEmailAllowed(...a);",
   "next/headers": "export const headers = () => globalThis.__signInDouble.headers();",
   "node:dns/promises":
     "export const resolveMx = (d) => globalThis.__signInDouble.resolveMx(d);" +
@@ -108,6 +113,7 @@ const ADDRESSES = [
   "a@example.invalid",
   "x@nonexistent.invalid",
   ...Array.from({ length: 8 }, (_, i) => `race-${i}@example.invalid`),
+  "stranger@example.invalid",
 ];
 const KEYS = [...IPS.map(callerKey), ...ADDRESSES.map(addressKey)];
 
@@ -221,6 +227,17 @@ async function main() {
       "a caller with no address to key is not capped",
       noKey === "reachedSupabase" && supabaseCalls === 1,
       `outcome=${noKey} supabaseCalls=${supabaseCalls}`,
+    );
+
+    // Off the list: refused as notInvited and the Supabase double is never reached.
+    supabaseCalls = 0;
+    listed = false;
+    const stranger = await send(IPS[12], "stranger@example.invalid");
+    listed = true;
+    assert(
+      "an address off the list answers notInvited and never reaches Supabase's double",
+      stranger === "notInvited" && supabaseCalls === 0,
+      `outcome=${stranger} supabaseCalls=${supabaseCalls}`,
     );
 
     // Parallel: eight links at once from one caller, to eight addresses.

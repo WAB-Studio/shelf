@@ -12,11 +12,15 @@ const supabaseConfig = {
 
 // `magiclink` and `signup` are what `signInWithOtp` sends depending on
 // whether the address already had an account; `email` covers a custom
-// template that names the OTP type directly.
-const confirmSchema = z.object({
-  token_hash: z.string().min(1),
-  type: z.enum(["magiclink", "signup", "email"]),
-});
+// template that names the OTP type directly. `code` is the PKCE link (RL-69);
+// `token_hash` stays until the template shared with the other apps moves.
+const confirmSchema = z
+  .object({
+    code: z.string().min(1).optional(),
+    token_hash: z.string().min(1).optional(),
+    type: z.enum(["magiclink", "signup", "email"]).optional(),
+  })
+  .refine((query) => query.code !== undefined || (query.token_hash !== undefined && query.type !== undefined));
 
 function failure(request: NextRequest, headers: Headers, reason: FailureReason): NextResponse {
   const url = new URL("/cuenta", request.url);
@@ -38,14 +42,21 @@ export async function GET(request: NextRequest) {
 
   // The no-store directives `setAll` hands back have to ride on the redirect.
   const authHeaders = new Headers();
-  // A parse failure never reached `verifyOtp`, so it is not a timeout.
+  // A parse failure never reached Auth, so it is not a timeout.
   if (!query.success) return failure(request, authHeaders, "linkInvalid");
 
+  // Only the browser that asked holds the verifier `@supabase/ssr` set when it sent the link; a
+  // session cookie from an earlier sign-in is no proof of that.
+  const { code, token_hash, type } = query.data;
+  if (code !== undefined) {
+    const holdsVerifier = request.cookies.getAll().some(({ name }) => name.endsWith("-code-verifier"));
+    if (!holdsVerifier) return failure(request, authHeaders, "linkOtherBrowser");
+  }
+
   const supabase = await createSupabaseServerClient(supabaseConfig, authHeaders);
-  const result = await verifyMagicLink(
-    (params) => supabase.auth.verifyOtp(params),
-    { type: query.data.type, token_hash: query.data.token_hash },
-  );
+  const result = await (code !== undefined
+    ? verifyMagicLink((authCode: string) => supabase.auth.exchangeCodeForSession(authCode), code)
+    : verifyMagicLink((params) => supabase.auth.verifyOtp(params), { type: type!, token_hash: token_hash! }));
 
   if (!result.ok) {
     console.error("magic link verification failed", result.reason);
