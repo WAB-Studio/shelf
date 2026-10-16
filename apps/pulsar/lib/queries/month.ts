@@ -17,7 +17,7 @@ import {
   type Tree,
   type TreeRow,
 } from "@/lib/goals/tree";
-import { estimateFacts, type MonthItem } from "@/lib/plan/carry";
+import type { MonthItem } from "@/lib/plan/carry";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { planMonthList } from "@/lib/plan/roadmap-read";
@@ -257,13 +257,11 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       const declared = row.facts
         .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
         .map(toDeclaredFact);
-      // Done tasks of earlier months stay out: only this month's reach counts.
-      const doneTasks = estimateFacts(tasks, unit).filter((fact) => monthOf(fact.day) === month);
       const evidence =
         outcome.status === "read" ? evidenceDaysForMeasure(row.goal, row.commitments, outcome.bySourceKey) : [];
       // Every fact and evidence day the statements returned is already this month's.
       let reached = 0;
-      for (const amount of reachedByMonth({ unit, facts: [...declared, ...doneTasks], evidence }).values()) {
+      for (const amount of reachedByMonth({ unit, facts: declared, evidence }).values()) {
         reached += amount;
       }
       const budget = holds ? null : (row.budgets.find((entry) => entry.month === month) ?? null);

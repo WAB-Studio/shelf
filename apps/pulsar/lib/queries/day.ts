@@ -16,7 +16,6 @@ import type {
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
-import { estimateFacts, type Task } from "@/lib/plan/carry";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planMoved, type PlanNotice } from "@/lib/plan/roadmap-read";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
@@ -95,10 +94,6 @@ type FactRow = {
   quantity: number | null;
   note: string | null;
   commitment_unit: string | null;
-  // A one-off's fact only (RP-36): the one-off's own estimate and whether it
-  // holds sub-tasks, from the join inside the facts subquery.
-  one_off_estimate: number | null;
-  one_off_has_children: boolean | null;
 };
 
 type MonthBudgetRow = { goal_id: string; month: string; amount: number };
@@ -248,15 +243,10 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
          from "goals"."phases" p) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit,
-                 'one_off_estimate', fo.estimate,
-                 'one_off_has_children', case when fo.id is null then null else exists (
-                   select 1 from "goals"."one_offs" k where k.parent_id = fo.id
-                 ) end
+                 'commitment_unit', c.unit
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         left join "goals"."one_offs" fo on fo.id = f.one_off_id
          where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
          from "goals"."month_budgets" b
@@ -545,34 +535,6 @@ function toFactForCommitment(row: FactRow) {
   };
 }
 
-// RP-36: each done leaf one-off of the goal with an estimate, as the quantity
-// it declared. Feeds the measure only; a slot never reads these.
-function estimateFactsOf(
-  row: GoalsQueryRow,
-  goalId: string,
-  unit: string,
-  from: string,
-): DeclaredFact[] {
-  const tasks: Task[] = row.facts
-    .filter(
-      (fact): fact is FactRow & { one_off_id: string } =>
-        fact.goal_id === goalId &&
-        fact.one_off_id !== null &&
-        fact.one_off_has_children === false &&
-        fact.day >= from,
-    )
-    .map((fact) => ({
-      id: fact.one_off_id,
-      parentId: null,
-      name: "",
-      plannedMonth: null,
-      day: null,
-      estimate: fact.one_off_estimate,
-      doneOn: fact.day,
-    }));
-  return estimateFacts(tasks, unit);
-}
-
 // Every goal with a measure: this month's amount, what was reached in it and
 // whether it runs under pace (RP-28, RP-29), over the month's facts by their
 // own `goal_id` and evidence in the goal's unit.
@@ -595,7 +557,6 @@ function monthLineOf(
           fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= month,
       )
       .map(toDeclaredFact);
-    facts.push(...estimateFactsOf(row, goal.id, unit, month));
     const evidence = evidenceDaysFor(
       unit,
       row.measure_sources.filter((source) => source.goal_id === goal.id),
@@ -730,7 +691,6 @@ function weekMeasureOf(
           fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= weekStart,
       )
       .map(toDeclaredFact);
-    facts.push(...estimateFactsOf(row, goal.id, unit, weekStart));
     const evidence = evidenceDaysFor(
       unit,
       row.measure_sources.filter((source) => source.goal_id === goal.id),

@@ -311,7 +311,7 @@ for (const width of [390, 1440]) {
       }
     });
 
-    test("the figure counts tasks, never facts: a 2 h fact moves «lo medido» to 7 h and neither the header nor the row", async ({ mine: page, db, person }) => {
+    test("the figure counts tasks, never facts: a 2 h fact is all «lo medido» holds, the done tasks' estimates adding none (RP-128), and neither the header nor the row moves", async ({ mine: page, db, person }) => {
       const goalId = await seedGoal(db, person.id, 720);
       try {
         await seedTask(db, person.id, goalId, "Hecha 3", 180, true, 1);
@@ -327,7 +327,7 @@ for (const width of [390, 1440]) {
         await expect(current(page).getByText("2 de 3 tareas hechas", { exact: true })).toBeVisible();
         await page.goto(`/metas/${goalId}`);
         await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 2 de 3 tareas hechas`, { exact: true })).toBeVisible();
-        const measured = page.locator("section").filter({ has: page.getByText(monthName, { exact: true }) }).filter({ hasText: /7 h/ });
+        const measured = page.locator("section").filter({ has: page.getByText(monthName, { exact: true }) }).filter({ hasText: /2 h de 12 h/ });
         await expect(measured.first()).toBeVisible();
         await expect(measured.first()).not.toContainText("tareas hechas");
       } finally {

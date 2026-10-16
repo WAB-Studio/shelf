@@ -100,7 +100,7 @@ test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, an
   }
 });
 
-test("the goal says the month's amount, moves with a done task, and links to its months (RP-28, RP-29, RP-36)", async ({
+test("the goal says the month's amount, never moves with a done task, and links to its months (RP-28, RP-29, RP-128)", async ({
   person,
   browser,
   baseURL,
@@ -110,7 +110,7 @@ test("the goal says the month's amount, moves with a done task, and links to its
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   const page = await context.newPage();
   try {
-    // 720 planned: 300 + 90 declared, 390 reached; a done 15-minute task makes 405.
+    // 720 planned: 300 + 90 declared, 390 reached; a done 15-minute task adds nothing (RP-128).
     const goalId = await seedGoal(db, person, { name: `Meta mes ${stamp}`, budget: 720 });
     await quantity(db, person, goalId, 300, monthStart);
     await quantity(db, person, goalId, 90, today);
@@ -122,7 +122,7 @@ test("the goal says the month's amount, moves with a done task, and links to its
     const line = (percent: number, reached: string) =>
       late
         ? `día ${day} · ${reached} de 12 h, bajo el 60 %`
-        : `llevas ${percent} % · faltan ${daysLeft === 1 ? "1 día" : `${daysLeft} días`}`;
+        : `llevas ${percent} % · ${daysLeft === 0 ? "último día" : daysLeft === 1 ? "faltan 1 día" : `faltan ${daysLeft} días`}`;
 
     for (const width of [360, 1280]) {
       await page.setViewportSize({ width, height: 800 });
@@ -140,9 +140,9 @@ test("the goal says the month's amount, moves with a done task, and links to its
         values (${person.id}, ${goalId}, ${task.id}, ${monthStart}::date)
       `;
       await page.goto(`/metas/${goalId}`);
-      await expect(seen(page, "6 h 45 min")).toHaveCount(2);
-      await expect(seen(page, "6 h 30 min")).toHaveCount(0);
-      await expect(seen(page, line(56, "6 h 45 min"))).toHaveCount(1);
+      await expect(seen(page, "6 h 30 min")).toHaveCount(2);
+      await expect(seen(page, "6 h 45 min")).toHaveCount(0);
+      await expect(seen(page, line(54, "6 h 30 min"))).toHaveCount(1);
       // Pace speaks from the 20th alone, in ink words, never before.
       await expect(visible(page, /bajo el 60 %/)).toHaveCount(late ? 1 : 0);
       await expect(visible(page, /llevas \d+ %/)).toHaveCount(late ? 0 : 1);

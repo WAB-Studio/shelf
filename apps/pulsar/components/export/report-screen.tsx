@@ -257,14 +257,14 @@ function MeasureLine({
     .join(" · ");
 }
 
-// One line per live commitment, «Estirar · todos los días»; a goal inside a general prints them under its row (RP-124).
+// One line per live commitment, «Estirar · martes y jueves», its days in full (RP-133); a goal inside a general prints them under its row (RP-124).
 function CommitmentLines({ goal, t }: { goal: GoalReport; t: Translator<"export"> }) {
   const rootT = useTranslations();
   const words = useTimeWords();
   return (goal.commitments ?? []).map((commitment, index) => {
     const cadence =
       cadencePhrase((key, values) => rootT(key, values), commitment.cadence, {
-        weekdayShort: rootT.raw("day.cadence.weekdayName") as string[],
+        weekdayName: rootT.raw("day.weekdayLong") as string[],
         weekdayPlural: rootT.raw("day.cadence.weekdayPlural") as string[],
       }) ?? rootT("day.cadence.everyDay");
     return (

@@ -177,7 +177,7 @@ before(async () => {
   const [owner] = await sql<{ user_id: string }[]>`
     select user_id from goals.goals where id = ${minutesGoalId}`;
   // A parent planned last month with one undone child (carried into this
-  // month), and one done task this month whose estimate counts (RP-36).
+  // month), and one done task this month whose estimate counts toward no hours (RP-128).
   const [parent] = await sql<{ id: string }[]>`
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
     values (${owner.user_id}, ${minutesGoalId}, 'RP-49 fixture: arrastrada', ${`${monthFrom(today, -1)}-01`})
@@ -317,7 +317,7 @@ test("loadReport: a goal's month and to-date figures are what loadGoal reads", a
 });
 
 // Figures written down from the fixtures, not read back through `loadGoal`:
-// the minutes goal holds a 30-minute tap and a done 25-minute task against a
+// the minutes goal holds a 30-minute tap and a done 25-minute task that adds nothing against a
 // plan of 720; the searches goal holds the stubbed 5 + 3 + 2 lookups and no
 // plan this month. `loadReport` takes the day as an argument, so the pace
 // rule (RP-29, from the 20th) is driven on days the test picks, not the day
@@ -327,13 +327,13 @@ test("loadReport: this month's figures, and under 60 % is flagged from the 20th 
   const month = today.slice(0, 7);
   const onTwentieth = await loadReport(`${month}-20`);
   const minutes = onTwentieth.goals.find((goal) => goal.id === minutesGoalId)!;
-  assert.deepEqual(minutes.thisMonth, { planned: 720, reached: 55, underPace: true });
+  assert.deepEqual(minutes.thisMonth, { planned: 720, reached: 30, underPace: true });
   const searches = onTwentieth.goals.find((goal) => goal.id === searchesGoalId)!;
   assert.deepEqual(searches.thisMonth, { planned: null, reached: 10, underPace: false });
 
   const onNineteenth = await loadReport(`${month}-19`);
   const early = onNineteenth.goals.find((goal) => goal.id === minutesGoalId)!;
-  assert.deepEqual(early.thisMonth, { planned: 720, reached: 55, underPace: false });
+  assert.deepEqual(early.thisMonth, { planned: 720, reached: 30, underPace: false });
 });
 
 test("loadReport: phases and the carried task read as the goal holds them", async () => {
@@ -383,7 +383,7 @@ test("loadReport: evidence that cannot be read says so and both goals keep their
       [minutesGoalId, searchesGoalId].sort(),
     );
     const minutes = report.goals.find((goal) => goal.id === minutesGoalId)!;
-    assert.equal(minutes.thisMonth.reached, 55);
+    assert.equal(minutes.thisMonth.reached, 30);
     const searches = report.goals.find((goal) => goal.id === searchesGoalId)!;
     assert.equal(searches.thisMonth.reached, 0);
   } finally {
@@ -523,16 +523,23 @@ test("loadReport: the second part of a week cut by a month ends the week's last 
     unit: "minutos",
   });
   const user = await ownerId();
-  for (const [name, day, estimate] of [
-    ["RP-17 semana: antes del corte", "2026-03-30", 20],
-    ["RP-17 semana: despues del corte", "2026-04-01", 7],
-    ["RP-17 semana: ultimo dia", "2026-04-05", 30],
+  const [commitment] = await sql<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+    values (${user}, ${goalId}, 'RP-17 semana: bloque', 'daily', 'quantity', 10, 'minutos') returning id`;
+  for (const [day, quantity] of [
+    ["2026-03-30", 20],
+    ["2026-04-01", 7],
+    ["2026-04-05", 30],
   ] as const) {
-    const [task] = await sql<{ id: string }[]>`
-      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
-      values (${user}, ${goalId}, ${name}, '2026-04-01', ${estimate}) returning id`;
-    await sql`insert into goals.facts (user_id, goal_id, one_off_id, day) values (${user}, ${goalId}, ${task.id}, ${day})`;
+    await sql`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${user}, ${goalId}, ${commitment.id}, ${day}, ${quantity})`;
   }
+  // A done task's estimate adds to no week (RP-128).
+  const [task] = await sql<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+    values (${user}, ${goalId}, 'RP-17 semana: tarea', '2026-04-01', 99) returning id`;
+  await sql`insert into goals.facts (user_id, goal_id, one_off_id, day) values (${user}, ${goalId}, ${task.id}, '2026-04-02')`;
 
   const report = await loadReport("2026-04-06");
   const entry = report.goals.find((goal) => goal.id === goalId)!;

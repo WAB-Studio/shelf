@@ -2590,7 +2590,7 @@ async function runSurvivorsOf92To94Check(): Promise<void> {
 }
 
 // Hoy's month line (RP-28, RP-29), the month task leaving the
-// dayless list (RP-31) and a done estimate joining the measure (RP-36).
+// dayless list (RP-31) and a done estimate staying out of the measure (RP-128).
 // Fixed October 2010: Wed 2010-10-20 is the pace day, Tue 10-19 is not.
 async function runMonthLineCheck(): Promise<void> {
   const { loadDay } = await import("@/lib/queries/day");
@@ -2672,9 +2672,9 @@ async function runMonthLineCheck(): Promise<void> {
       `monthLine = ${JSON.stringify(eve)}`,
     );
 
-    // Estimates: a done leaf adds its 60, its undone sibling nothing.
+    // Estimates: a done leaf adds nothing, nor does its undone sibling (RP-128).
     const estimated = await seedGoal("month-line estimate probe");
-    // Only a goal measured in time counts a task's figure (RP-65).
+    // A goal measured in time still counts hours from blocks alone (RP-128).
     await db`update goals.goals set measure_name = 'minutos', measure_unit = 'minutos' where id = ${estimated}`;
     const [slotCommitment] = await db<{ id: string }[]>`
       insert into goals.commitments
@@ -2701,8 +2701,8 @@ async function runMonthLineCheck(): Promise<void> {
     `;
     const withEstimate = await loadDay("2010-10-20");
     assert(
-      "a done task estimated at 60 adds 60 to weekMeasure and to the month's reached, its undone sibling nothing",
-      withEstimate.weekMeasure[estimated] === 60 && withEstimate.monthLine[estimated]?.reached === 60,
+      "a done task estimated at 60 adds nothing to weekMeasure nor to the month's reached (RP-128)",
+      withEstimate.weekMeasure[estimated] === 0 && withEstimate.monthLine[estimated]?.reached === 0,
       `weekMeasure = ${withEstimate.weekMeasure[estimated]}, monthLine = ${JSON.stringify(withEstimate.monthLine[estimated])}`,
     );
     assert(

@@ -30,7 +30,7 @@ export async function HabitScreen({
   const monthNames = t.raw("day.monthLong") as string[];
   const cadence =
     cadencePhrase((key, values) => t(key, values), habit.cadence, {
-      weekdayShort: t.raw("day.cadence.weekdayName") as string[],
+      weekdayName: t.raw("day.cadence.weekdayName") as string[],
       weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
     }) ?? t("day.cadence.everyDay");
   const retired = habit.retiredOn !== null;

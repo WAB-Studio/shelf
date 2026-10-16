@@ -55,7 +55,7 @@ export async function seedBudget(db: Db, personId: string, goalId: string, amoun
   `;
 }
 
-// A task of the month already done today: `minutes` reached in the month.
+// A task of the month already done today, with `minutes` as its estimate: it plans the month and reaches nothing (RP-128).
 export async function seedReached(db: Db, personId: string, goalId: string, minutes: number) {
   const [task] = await db<{ id: string }[]>`
     insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)

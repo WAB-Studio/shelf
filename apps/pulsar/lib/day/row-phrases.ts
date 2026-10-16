@@ -6,7 +6,7 @@ type Translate = (key: MessageKey, values?: Record<string, string | number>) => 
 
 export type CadenceNames = {
   // Monday first, three letters each: a weekdays cadence of several days.
-  weekdayShort: string[];
+  weekdayName: string[];
   // Monday first, «martes», «sábados»: read after «solo los».
   weekdayPlural: string[];
 };
@@ -22,7 +22,7 @@ export function cadencePhrase(translate: Translate, cadence: Cadence, names: Cad
         ? translate("day.cadence.onlyWeekday", { weekday: names.weekdayPlural[cadence.days[0] - 1] })
         : cadence.days.length === 7
           ? translate("day.cadence.everyDay")
-          : weekdaysSentence(translate, cadence.days, names.weekdayShort);
+          : weekdaysSentence(translate, cadence.days, names.weekdayName);
     case "times_per_week":
       return translate("day.cadence.timesPerWeek", { count: cadence.count });
     case "every_n_days":

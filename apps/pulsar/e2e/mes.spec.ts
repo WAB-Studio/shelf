@@ -153,8 +153,9 @@ test("this month lists the carried parent first, then its own task; marking the 
     await expect(parentRow).toHaveAttribute("data-done", "true");
     await expect(page.locator("[data-state=declared]")).toHaveCount(2);
     await expect(parentRow).toContainText(`Padre ${stamp}`);
-    await expect(page.getByText("incluye 3 h de tareas hechas")).toBeVisible();
-    await expectFigures(page.getByText("incluye 3 h de tareas hechas"), ["3 h"]);
+    // The done task's 3 h add nothing to the month: hours come from blocks alone (RP-128).
+    await expect(page.getByText(/incluye .* de tareas hechas/)).toHaveCount(0);
+    expect((await page.locator("main").innerText()).replace(/\s+/g, " ")).toContain("0 min de 12 h");
 
     // Undone again with no reload: the done child is the one to take back.
     await page.getByRole("button", { name: `Deshacer: Hijo pendiente ${stamp}` }).click();

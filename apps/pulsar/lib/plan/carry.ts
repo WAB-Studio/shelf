@@ -1,6 +1,4 @@
-import type { DeclaredFact } from "@/lib/day/types";
 import { dayBefore } from "@/lib/day/weeks";
-import { isTimeUnit } from "@/lib/units/time";
 import { monthOf, nextMonth } from "./months";
 
 export type Task = {
@@ -125,25 +123,4 @@ export function monthList(tasks: Task[], month: string, today: string): MonthIte
     ...item,
     done: isDoneBy(item.task, item.children, readAt),
   }));
-}
-
-// A done leaf's estimate as the quantity it declared (RP-65). A parent adds
-// nothing: its leaves already did. Only time counts: a figure in a goal
-// measured in km or pages would count the same distance twice.
-export function estimateFacts(tasks: Task[], unit: string | null): DeclaredFact[] {
-  if (!isTimeUnit(unit)) return [];
-  const parents = new Set(tasks.map((task) => task.parentId));
-  const facts: DeclaredFact[] = [];
-  for (const task of tasks) {
-    if (parents.has(task.id) || task.estimate === null || task.doneOn === null) continue;
-    facts.push({
-      commitmentId: task.id,
-      day: task.doneOn,
-      writtenAt: task.doneOn,
-      quantity: task.estimate,
-      unit,
-      note: null,
-    });
-  }
-  return facts;
 }

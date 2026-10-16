@@ -5,7 +5,7 @@ import test from "node:test";
 import { weekdaysSentence, cadencePhrase, flexibleWords, metPhrase, phaseLine, partialPair, phasePositions, rowMeta, type RowMetaPart } from "./row-phrases";
 
 const names = {
-  weekdayShort: ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
+  weekdayName: ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
   weekdayPlural: ["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"],
 };
 const catalogue: Record<string, string> = {
