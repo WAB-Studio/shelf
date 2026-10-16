@@ -125,6 +125,19 @@ test("loadGoal alone is four statements and the rail alone is two", async () => 
   assert.equal(await statementsOf(() => goalQueries.listGoals()), 2);
 });
 
+// RP-127: «Borrar la meta» and the measure's edit are offered off two flags of the one existing statement.
+test("loadGoal carries deletable and measureFed in its four statements", async () => {
+  let loaded: Awaited<ReturnType<typeof goalQueries.loadGoal>> = null;
+  const count = await statementsOf(async () => {
+    loaded = await goalQueries.loadGoal(goalId);
+  });
+  assert.equal(count, 4);
+  assert.equal(typeof loaded!.deletable, "boolean");
+  assert.equal(typeof loaded!.measureFed, "boolean");
+  assert.equal(loaded!.deletable, true);
+  assert.equal(loaded!.measureFed, false);
+});
+
 // A general with two large goals and a small one under the first: one load
 // reads the whole branch, so the count does not move (RNP-12).
 test("a general with goals under it: loadGoal is still four statements and the page six", async () => {
@@ -147,6 +160,8 @@ test("a general with goals under it: loadGoal is still four statements and the p
     values (${subject.id}, 'statements small', ${horizon}, 'Medida', 'min', 1, ${kids[0]})`;
 
   assert.equal(await statementsOf(() => goalQueries.loadGoal(general.id)), 4);
+  // A goal holding goals is not deletable: the flag is false whatever its facts.
+  assert.equal((await session.actAs(asResolved(subject), () => goalQueries.loadGoal(general.id)))!.deletable, false);
   goalId = general.id;
   assert.equal(await pageStatements(), 6);
 });
