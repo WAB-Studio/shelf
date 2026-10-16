@@ -3983,6 +3983,7 @@ async function main(): Promise<void> {
   await e6Suite();
   await importScopeOwnerSuite(userId, scope);
   await adjustmentFilterSuite(userId, scope);
+  await negativeCountSuite(userId);
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -6227,5 +6228,106 @@ async function adjustmentFilterSuite(userId: string, scope: HarnessScope): Promi
       xAdjust.length === 2 && xAdjust.every((row) => row.adjustment === true) &&
       xAll.length === 5 && xAll.filter((row) => row.adjustment === true).length === 2,
     `export expense ${xExpense.length}, income ${xIncome.length}, adjustments ${xAdjust.length} (${xAdjust.map((row) => row.adjustment).join(",")}), all ${xAll.length}`,
+  );
+}
+
+// M22: a signed counted figure reaches the ledger with the account's sign (RF-137). The countings
+// start from a derived 0, so the expected books are the whole story: nothing else moves them.
+async function negativeCountSuite(userId: string): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const open = async (name: string, kind: "asset" | "liability"): Promise<string> => {
+    const { accountId } = await createAccount({
+      name: `${name} ${tag}`,
+      kind,
+      subtype: kind === "asset" ? "bank" : "card",
+      ownerUserId: userId,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 0,
+      balanceOn: shiftDate(today, -10),
+    });
+    keep("accounts", accountId);
+    return accountId;
+  };
+  const asset = await open("Harness M22 activo", "asset");
+  const card = await open("Harness M22 tarjeta", "liability");
+
+  type Marked = { from_account_id: string | null; to_account_id: string | null; amount_cents: string };
+  const markedOf = (reconciliationId: string) =>
+    fixtureSql<Marked[]>`
+      select from_account_id, to_account_id, amount_cents::text
+      from transactions where reconciliation_id = ${reconciliationId}`;
+  const balanceOf = async (accountId: string) =>
+    (await fixtureSql<{ balance: string }[]>`
+      select private.account_settlement_balance_on(${accountId}, ${today}::date)::text as balance`)[0].balance;
+
+  const assetCount = await reconcileAccount({ accountId: asset, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: 0 });
+  const cardCount = await reconcileAccount({ accountId: card, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: 0 });
+  const assetId = assetCount.ok ? assetCount.id : "";
+  const cardId = cardCount.ok ? cardCount.id : "";
+
+  const assetStored = assetId ? await readColumn<string>("account_reconciliations", "id", assetId, "counted_balance_cents") : undefined;
+  assert(
+    next("An asset's negative count is stored negative"),
+    assetStored === "-500000",
+    `counted_balance_cents = ${assetStored}, ${JSON.stringify(assetCount)}`,
+  );
+  const assetMarked = assetId ? await markedOf(assetId) : [];
+  assert(
+    next("A negative count books the gap out of the asset"),
+    assetCount.ok && assetCount.gapCents === -500_000 && assetMarked.length === 1 &&
+      assetMarked[0].from_account_id === asset && assetMarked[0].to_account_id === null &&
+      assetMarked[0].amount_cents === "500000",
+    `${JSON.stringify(assetCount)} / ${JSON.stringify(assetMarked)}`,
+  );
+
+  const cardStored = cardId ? await readColumn<string>("account_reconciliations", "id", cardId, "counted_balance_cents") : undefined;
+  assert(
+    next("An overpaid card's negative count is stored positive"),
+    cardStored === "500000",
+    `counted_balance_cents = ${cardStored}, ${JSON.stringify(cardCount)}`,
+  );
+  const cardMarked = cardId ? await markedOf(cardId) : [];
+  assert(
+    next("An overpaid card's gap is booked into the card"),
+    cardCount.ok && cardCount.gapCents === 500_000 && cardMarked.length === 1 &&
+      cardMarked[0].to_account_id === card && cardMarked[0].from_account_id === null &&
+      cardMarked[0].amount_cents === "500000",
+    `${JSON.stringify(cardCount)} / ${JSON.stringify(cardMarked)}`,
+  );
+
+  const assetHistory = await listAccountReconciliations(asset);
+  const cardHistory = await listAccountReconciliations(card);
+  assert(
+    next("The asset's history reads counted -500000, gap -500000, derived 0"),
+    assetHistory.length === 1 && assetHistory[0].countedCents === -500_000 &&
+      assetHistory[0].gapCents === -500_000 && assetHistory[0].derivedCents === 0,
+    JSON.stringify(assetHistory),
+  );
+  assert(
+    next("The card's history reads counted +500000, gap +500000, derived 0"),
+    cardHistory.length === 1 && cardHistory[0].countedCents === 500_000 &&
+      cardHistory[0].gapCents === 500_000 && cardHistory[0].derivedCents === 0,
+    JSON.stringify(cardHistory),
+  );
+
+  const [assetBalance, cardBalance] = await Promise.all([balanceOf(asset), balanceOf(card)]);
+  assert(
+    next("Each balance afterwards equals what was counted"),
+    assetBalance === "-500000" && cardBalance === "500000",
+    `asset ${assetBalance}, card ${cardBalance}`,
+  );
+
+  const again = await reconcileAccount({ accountId: asset, reconciledOn: today, realMagnitudeCents: -500_000, expectedDerivedCents: -500_000 });
+  const againMarked = again.ok ? await markedOf(again.id) : [];
+  assert(
+    next("A negative count that matches the ledger books nothing"),
+    again.ok && again.gapCents === 0 && againMarked.length === 0,
+    `${JSON.stringify(again)} / ${JSON.stringify(againMarked)}`,
   );
 }
