@@ -119,7 +119,7 @@ const partsOf = async (db: Db, id: string) =>
 
 const DIFFS = (second: string) => [
   /^Cambia el final al \S/,
-  new RegExp(`^Pone 2 h en ${word(second)}`),
+  new RegExp(`^Pone 2 h en ${word(second)}, en lugar de 1 h$`),
   `Agrega el compromiso «${REPASAR}»`,
   `Agrega la tarea «${CHAPTER}»`,
   `Se queda el compromiso «${RELEER}», que el plan no nombra`,
@@ -457,11 +457,33 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock({ phases: [`${from} a ${to} · Base aeróbica`] }), newBlock()));
       await openParts(page);
-      await expect(rowOf(page, /^Base aeróbica/)).not.toBeChecked();
-      await expect(line(page, /^Se cruza con la fase «Base aeróbica suave»/)).toBeVisible();
+      // The server refuses it whatever the review sends, so the row has nothing to mark and offers no retry.
+      await expect(rowOf(page, /^Base aeróbica/)).toHaveCount(0);
+      await expect(line(page, "Se cruza con la fase «Base aeróbica suave» de la meta: no se agrega.")).toBeVisible();
+      await expect(page.getByText("Márcala", { exact: false })).toHaveCount(0);
       await confirm(page, 1).click();
       await expect(page).toHaveURL(/\/metas$/);
       expect((await db`select aim from goals.phases where goal_id = ${id}`).map((r) => r.aim)).toEqual(["Base aeróbica suave"]);
+    });
+  });
+
+  test("a commitment whose cadence changes says the old cadence and the new one", async ({ person, browser, baseURL, db }) => {
+    // Kills: «Cambia cada cuándo se cumple» with neither value.
+    await openLeer(db, person.id);
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf(leerBlock({ commitments: [`${RELEER} · lunes, miércoles y viernes · toque`] }), newBlock()));
+      await expect(line(page, `Cambia cada cuándo se cumple «${RELEER}»: de todos los días a lunes, miércoles y viernes`)).toBeVisible();
+    });
+  });
+
+  test("a month the goal had no budget for says it had nothing", async ({ person, browser, baseURL, db }) => {
+    // Kills: «Pone … en …» with no word on what it replaces.
+    const id = await openGoal(db, person.id, LEER);
+    const { first, second } = months();
+    await budget(db, person.id, id, first, 60);
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toOpenReview(page, planOf(leerBlock({ months: [`${first} · 1 h`, `${second} · 2 h`] }), newBlock()));
+      await expect(line(page, new RegExp(`^Pone 2 h en ${word(second)}, que no tenía nada$`))).toBeVisible();
     });
   });
 
