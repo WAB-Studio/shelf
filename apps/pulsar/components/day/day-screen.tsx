@@ -96,9 +96,9 @@ function dayPhrase(key: DayPhraseKey, day: string, t: Translator, extra: Record<
  * an earlier day rides first, naming the day it was meant for.
  *
  * Given a `day` before today (RP-06, `/dia/[fecha]`), the same rows draw
- * for that day and every fact they write names it. No one-off draws there:
- * an undone one already rides today, and a one-off is done the day it is
- * done (`requireDayForSubject`).
+ * for that day and every fact they write names it. The dated one-offs it
+ * still owed draw too, and those done on it, tapped as on Hoy (RP-129); a
+ * month task with no day, the field and «Darle otro día» stay on Hoy.
  */
 export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const t = await getTranslations();
@@ -193,6 +193,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         note={oneOff.note}
         noteEyebrow={noteEyebrow(oneOff.goalId)}
         goalName={goalNameOf(oneOff.goalId)}
+        doneOn={past ? day : undefined}
         carriedFrom={
           isCarried(oneOff, day)
             ? dayPhrase("day.oneOffs.carriedFrom", oneOff.day, t)
@@ -225,11 +226,11 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             }) !== null,
         )
         .map((entry) => entry.commitment);
-      const asks = rows.length > 0 || (!past && oneOffs.some((oneOff) => oneOff.goalId === goal.id));
+      const asks = rows.length > 0 || oneOffs.some((oneOff) => oneOff.goalId === goal.id);
       return { goal, rows, met, asks };
     })
-    // A past day draws no goal that had no row and no met row.
-    .filter(({ rows, met }) => !past || rows.length > 0 || met.length > 0)
+    // A past day draws no goal that had no row, no met row and no task owed.
+    .filter(({ rows, met, asks }) => !past || asks || met.length > 0)
     .sort((a, b) => Number(!a.asks) - Number(!b.asks));
 
   type SectionItem = (typeof sections)[number];
@@ -502,7 +503,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   };
 
   // One block, so the past day's two columns never split the title from its line.
-  const goalsMain = past && sections.length === 0 && !habitsGroup ? (
+  const goalsMain = past && sections.length === 0 && !habitsGroup && oneOffs.length === 0 && doneOneOffs.length === 0 ? (
     <Flex direction="column" gap="2">
       <Text as="p" variant="title">
         {t("day.past.nothingTitle")}
@@ -535,7 +536,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       </Button>
     </Panel>
   ) : goals.length === 0 ? (
-    habitsGroup ? null : <EmptyDay />
+    habitsGroup || past ? null : <EmptyDay />
   ) : (
     <>
       {groupBlocks.map(({ rootId, items, asks, tree }) => {
@@ -553,7 +554,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 {items.map((item) => (
                   <Fragment key={item.goal.id}>
                     {itemBody(item, tree && item.goal.id !== rootId ? item.goal.name : undefined)}
-                    {past ? null : carriedFirst.filter((oneOff) => oneOff.goalId === item.goal.id).map(oneOffRow)}
+                    {carriedFirst.filter((oneOff) => oneOff.goalId === item.goal.id).map(oneOffRow)}
                     {tree && !past && item.goal.id !== rootId ? embeddedMonth(item.goal, true) : null}
                   </Fragment>
                 ))}
@@ -577,7 +578,43 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   // under, so it gets a group of its own — always on screen, even with
   // no goal open yet, because RP-19 asks for no goal behind it either.
   const phoneMonthGoals = monthGoals.filter((goal) => !embedded.has(goal.id));
-  const goalless = past ? undefined : (
+  const looseTasks = carriedFirst.filter((oneOff) => oneOff.goalId === null);
+  const doneBlock =
+    doneOneOffs.length > 0 ? (
+      <Panel as="div">
+        <Section label={t(past ? "day.doneOneOffs.titlePast" : "day.doneOneOffs.title")}>
+          <Flex direction="column">
+            {doneOneOffs.map((done) => (
+              <DoneOneOffRow
+                key={done.id}
+                factId={done.factId}
+                name={done.name}
+                oneOffId={done.id}
+                note={done.note}
+                noteEyebrow={noteEyebrow(done.goalId)}
+                goalName={goalNameOf(done.goalId)}
+                time={timeInZone(done.writtenAt)}
+              />
+            ))}
+          </Flex>
+        </Section>
+      </Panel>
+    ) : null;
+  // A past day: the goal-less tasks it owed, with no field and no link to the
+  // ones that wait, then what was done on it. Month tasks stay on Hoy.
+  const pastTasks = (
+    <>
+      {looseTasks.length > 0 ? (
+        <Panel as="div">
+          <Section label={t("day.oneOffs.title")}>
+            <Flex direction="column">{looseTasks.map(oneOffRow)}</Flex>
+          </Section>
+        </Panel>
+      ) : null}
+      {doneBlock}
+    </>
+  );
+  const goalless = past ? pastTasks : (
     <>
       {figures.map((goal) => (
         <Panel as="div" key={goal.id}>
@@ -636,7 +673,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             ) : null}
           </Flex>
           <Flex direction="column">
-            {carriedFirst.filter((oneOff) => oneOff.goalId === null).map(oneOffRow)}
+            {looseTasks.map(oneOffRow)}
             <Face on="desktop">
               <NewOneOff daylessCount={daylessCount} />
             </Face>
@@ -652,26 +689,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           </Flex>
         </Section>
       </Panel>
-      {doneOneOffs.length > 0 ? (
-        <Panel as="div">
-          <Section label={t("day.doneOneOffs.title")}>
-            <Flex direction="column">
-              {doneOneOffs.map((done) => (
-                <DoneOneOffRow
-                  key={done.id}
-                  factId={done.factId}
-                  name={done.name}
-                  oneOffId={done.id}
-                  note={done.note}
-                  noteEyebrow={noteEyebrow(done.goalId)}
-                  goalName={goalNameOf(done.goalId)}
-                  time={timeInZone(done.writtenAt)}
-                />
-              ))}
-            </Flex>
-          </Section>
-        </Panel>
-      ) : null}
+      {doneBlock}
     </>
   );
 

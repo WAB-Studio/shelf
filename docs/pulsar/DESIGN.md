@@ -553,6 +553,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A past day lists only what existed that day.** A commitment created after the day drawn is not
   on `/dia/<fecha>`; with nothing left, the day says it asked for nothing. Decided by
   the user 2026-09-28, over allowing a backfill before the commitment existed.
+- **A past day draws the dated tasks it still owed and those done on it, tapped as on Hoy; month tasks stay on
+  Hoy.** Overturns «no one-offs» of `DiaPasado.dc.html` (:550-551). Decided by the user 2026-10-15.
 - **A week is Monday to Sunday, on Semana and in the review alike.** A goal's week 1 is the partial
   week up to its first Sunday. Replaces «the review's week is the goal's own», taken the same morning.
   Decided by the user 2026-09-28, over 7-day runs from the opening day, and over
@@ -1754,7 +1756,7 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 
 - **«Nada se borra» covers facts only.** Phases, cadences, a measure, a rhythm and goals with no facts can be edited and deleted; a goal or commitment that explains facts stays archived or retired (RP-13, RP-24). Not built yet.
 - **A goal's hours come from blocks alone,** a block's quantity. A task's estimate does not count toward hours. Built in RP-128.
-- **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Not built yet.
+- **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Built (RP-129).
 - **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Not built yet.
 - **Three goal levels stay,** as today (RP-78).
 - **The last day of a month reads «último día»,** never «faltan 0 días». Built (RP-132).

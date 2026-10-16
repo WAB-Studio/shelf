@@ -27,6 +27,9 @@ export type OneOffRowProps = {
   noteEyebrow: string;
   // Set for a goal's own dated one-off: its sheet then names the goal.
   goalName?: string;
+  // The past day it is drawn on (RP-129): the mark writes the fact there, and
+  // «Darle otro día» is Hoy's act (RP-61), so neither the sheet entry nor its step is built.
+  doneOn?: string;
 };
 
 /**
@@ -39,7 +42,7 @@ export type OneOffRowProps = {
  * (`onLeadingClick`), the name opens its sheet (`onClick`) —
  * `Row`'s own split, so neither tap reaches the other's act by mistake.
  */
-export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow, goalName }: OneOffRowProps) {
+export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow, goalName, doneOn }: OneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
@@ -64,7 +67,7 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
     setError(null);
 
     startTransition(() => {
-      void completeOneOff({ oneOffId }).then((result) => {
+      void completeOneOff({ oneOffId, day: doneOn }).then((result) => {
         if (!result.ok) setError(result.error);
       });
     });
@@ -123,17 +126,19 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
         canDelete
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        onGiveDay={() => setScheduleOpen(true)}
+        onGiveDay={doneOn ? undefined : () => setScheduleOpen(true)}
         giveDayLabel="oneOffs.sheet.giveOtherDay"
       />
-      <ScheduleSheet
-        key={day}
-        open={scheduleOpen}
-        onOpenChange={setScheduleOpen}
-        oneOffId={oneOffId}
-        name={name}
-        current={{ day, label: dayLabel }}
-      />
+      {doneOn ? null : (
+        <ScheduleSheet
+          key={day}
+          open={scheduleOpen}
+          onOpenChange={setScheduleOpen}
+          oneOffId={oneOffId}
+          name={name}
+          current={{ day, label: dayLabel }}
+        />
+      )}
     </>
   );
 }
