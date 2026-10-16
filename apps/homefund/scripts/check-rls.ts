@@ -68,9 +68,10 @@ async function enterUserContext(
     // `auth.email()` reads this claim; the invite-claim policy matches it against `invite_email`.
     ...(email ? { email } : {}),
   });
-  await tx`select set_config('request.jwt.claims', ${claims}, true)`;
-  await tx`select set_config('statement_timeout', '8000', true)`;
-  await tx`select set_config('role', 'authenticated', true)`;
+  await tx`select
+    set_config('request.jwt.claims', ${claims}, true),
+    set_config('statement_timeout', '8000', true),
+    set_config('role', 'authenticated', true)`;
 }
 
 async function main() {
@@ -2494,10 +2495,11 @@ async function checkImpersonationBounds() {
       // built with json_build_object and the authenticated role, both transaction-local. This is the
       // webhook ingest's session — a resolved user id, never a request payload — and it must obey RLS.
       await tx`reset role`;
-      await tx`select set_config('request.jwt.claims',
-        json_build_object('sub', ${userA}::text, 'role', 'authenticated', 'aud', 'authenticated')::text, true)`;
-      await tx`select set_config('statement_timeout', '8000', true)`;
-      await tx`set local role authenticated`;
+      await tx`select
+        set_config('request.jwt.claims',
+          json_build_object('sub', ${userA}::text, 'role', 'authenticated', 'aud', 'authenticated')::text, true),
+        set_config('statement_timeout', '8000', true),
+        set_config('role', 'authenticated', true)`;
 
       // 95: the impersonated session writes A's own account — a movement row plus its one split, the ledger's
       // insert shape replicated inline. The scope trigger stamps created_by from the synthesised claims.

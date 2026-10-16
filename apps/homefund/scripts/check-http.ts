@@ -843,6 +843,7 @@ async function main(): Promise<void> {
 void (async () => {
   try {
     await main();
+    await edgeSuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -878,3 +879,324 @@ void (async () => {
 
   report();
 })();
+
+// The ingest endpoint's other answers, the keepalive and the export's guard.
+// Appended after the run's first suites: each case below owns the credential it
+// drives, so no bucket and no delivery is shared with the cases above.
+
+type EdgeReply = { status: number; body: Record<string, unknown> };
+
+async function postRaw(
+  headers: Record<string, string>,
+  body: string,
+): Promise<EdgeReply> {
+  const response = await fetch(`${HARNESS_BASE_URL}/api/webhooks/ingest`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body,
+  });
+
+  return {
+    status: response.status,
+    body: (await response.json()) as Record<string, unknown>,
+  };
+}
+
+async function edgeCredential(
+  userId: string,
+  options: {
+    rateLimitPerMin?: number;
+    defaultAccountId?: string;
+  } = {},
+): Promise<string> {
+  const id = randomUUID();
+  const token = `whk_${randomBytes(32).toString("base64url")}`;
+  const claims = JSON.stringify({
+    sub: userId,
+    role: "authenticated",
+    aud: "authenticated",
+  });
+
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into webhook_credentials
+        (id, owner_user_id, name, token_hash, rate_limit_per_min, default_account_id)
+      values (${id}, ${userId}, 'Harness HTTP edge credential',
+        ${createHash("sha256").update(token).digest("hex")},
+        ${options.rateLimitPerMin ?? 60}, ${options.defaultAccountId ?? null})`;
+  });
+  track("webhook_credentials", id);
+
+  return token;
+}
+
+async function edgeSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("edgeSuite ran before the session was read");
+  const claims = JSON.stringify({
+    sub: userId,
+    role: "authenticated",
+    aud: "authenticated",
+  });
+
+  // Each run reads and sends its own merchant, so no earlier run's memory
+  // answers for it. Uppercase keeps the fragment out of the kept tokens.
+  const tag = randomUUID().slice(0, 8).toUpperCase();
+  const sms = (verb: string, merchant: string, tail = "4872"): string =>
+    `Bancolombia: ${verb} COP12.000,00 en ${merchant} con tu T.Cred *${tail}, el 25/08/2026 a las 20:07.`;
+
+  const stored = async (
+    message: string,
+  ): Promise<{
+    direction: string | null;
+    accountId: string | null;
+    categoryId: string | null;
+    source: string | null;
+  } | null> => {
+    const [row] = await fixtureSql<
+      {
+        direction: string | null;
+        accountId: string | null;
+        categoryId: string | null;
+        source: string | null;
+      }[]
+    >`select proposed_direction as direction,
+        proposed_account_id as "accountId", proposed_category_id as "categoryId",
+        category_source as source
+      from ingest_deliveries
+      where owner_user_id = ${userId} and raw_text = ${message}`;
+
+    return row ?? null;
+  };
+
+  const deliveriesOf = async (message: string): Promise<number> => {
+    const [{ count }] = await fixtureSql<{ count: string }[]>`
+      select count(*)::text as count from ingest_deliveries
+      where owner_user_id = ${userId} and raw_text = ${message}`;
+
+    return Number(count);
+  };
+
+  const remember = (id: string | undefined) => {
+    if (id) landedDeliveries.push(id);
+  };
+
+  // Refusals before any body is read.
+  const refusedText = sms("Compraste", `REFUSED ${tag}`);
+  const refusedBody = JSON.stringify({ text: refusedText });
+  const goodToken = await edgeCredential(userId);
+
+  const noHeader = await postRaw({}, refusedBody);
+  assert(
+    next("an ingest POST without Authorization is refused and lands nothing"),
+    noHeader.status === 401 &&
+      noHeader.body.error === "unauthorized" &&
+      (await deliveriesOf(refusedText)) === 0,
+    `it answered ${noHeader.status} — ${JSON.stringify(noHeader.body)}`,
+  );
+
+  const basic = await postRaw({ authorization: `Basic ${goodToken}` }, refusedBody);
+  assert(
+    next("a Basic scheme carrying a valid token is refused"),
+    basic.status === 401 &&
+      basic.body.error === "unauthorized" &&
+      (await deliveriesOf(refusedText)) === 0,
+    `it answered ${basic.status} — ${JSON.stringify(basic.body)}`,
+  );
+
+  // Authentication comes first: a broken body from a stranger is a 401, never
+  // the 400 that would tell a stranger the parser ran.
+  const strangerBadJson = await postRaw(
+    { authorization: `Bearer whk_${randomBytes(32).toString("base64url")}` },
+    "{",
+  );
+  assert(
+    next("a malformed body from an unknown token is a 401, not a 400"),
+    strangerBadJson.status === 401 &&
+      strangerBadJson.body.error === "unauthorized",
+    `it answered ${strangerBadJson.status} — ${JSON.stringify(strangerBadJson.body)}`,
+  );
+
+  const badJson = await postRaw({ authorization: `Bearer ${goodToken}` }, "{");
+  assert(
+    next("a valid token with a malformed body is 400 invalid_json"),
+    badJson.status === 400 && badJson.body.error === "invalid_json",
+    `it answered ${badJson.status} — ${JSON.stringify(badJson.body)}`,
+  );
+
+  const badPayload = await postRaw({ authorization: `Bearer ${goodToken}` }, "{}");
+  const fields = badPayload.body.fields as Record<string, unknown> | undefined;
+  assert(
+    next("a valid token with an empty object is 422 invalid_payload naming text"),
+    badPayload.status === 422 &&
+      badPayload.body.error === "invalid_payload" &&
+      Array.isArray(fields?.text) &&
+      fields.text.length > 0,
+    `it answered ${badPayload.status} — ${JSON.stringify(badPayload.body)}`,
+  );
+
+  // The bucket: one request a minute, the second is over.
+  const limited = await edgeCredential(userId, { rateLimitPerMin: 1 });
+  const limitedFirstText = sms("Compraste", `LIMIT ONE ${tag}`);
+  const limitedSecondText = sms("Compraste", `LIMIT TWO ${tag}`);
+  const limitedFirst = await postRaw(
+    { authorization: `Bearer ${limited}` },
+    JSON.stringify({ text: limitedFirstText }),
+  );
+  remember(limitedFirst.body.deliveryId as string | undefined);
+  const limitedSecond = await postRaw(
+    { authorization: `Bearer ${limited}` },
+    JSON.stringify({ text: limitedSecondText }),
+  );
+  remember(limitedSecond.body.deliveryId as string | undefined);
+  assert(
+    next("past rate_limit_per_min the request is 429 rate_limited and lands nothing"),
+    limitedFirst.status === 200 &&
+      limitedSecond.status === 429 &&
+      limitedSecond.body.error === "rate_limited" &&
+      (await deliveriesOf(limitedFirstText)) === 1 &&
+      (await deliveriesOf(limitedSecondText)) === 0,
+    `first ${limitedFirst.status}, second ${limitedSecond.status} — ${JSON.stringify(limitedSecond.body)}`,
+  );
+
+  // The proposal, read back from the stored delivery.
+  const incomeText = `Bancolombia: Recibiste una transferencia de CARLOS ${tag} por $50.000 en tu cuenta *4872, el 25/08/2026.`;
+  const expenseText = sms("Compraste", `GASTO ${tag}`);
+  const proposals = await edgeCredential(userId);
+  for (const text of [incomeText, expenseText]) {
+    const reply = await postRaw(
+      { authorization: `Bearer ${proposals}` },
+      JSON.stringify({ text }),
+    );
+    remember(reply.body.deliveryId as string | undefined);
+  }
+  const income = await stored(incomeText);
+  const expense = await stored(expenseText);
+  assert(
+    next("a message announcing a received transfer is proposed as income, a purchase as expense"),
+    income?.direction === "income" && expense?.direction === "expense",
+    `income landed ${income?.direction ?? "(no row)"}, purchase ${expense?.direction ?? "(no row)"}`,
+  );
+
+  // The account a message names by its last four. The credential's default is a
+  // decoy: only the tail can pick the other account.
+  const taken = await fixtureSql<{ lastFour: string }[]>`
+    select last_four as "lastFour" from accounts
+    where owner_user_id = ${userId} and last_four is not null`;
+  const used = new Set(taken.map((row) => row.lastFour));
+  const free: string[] = [];
+  for (let n = 1000; free.length < 2 && n < 10000; n += 1) {
+    const candidate = String(Math.floor(Math.random() * 9000) + 1000);
+    if (!used.has(candidate) && !free.includes(candidate)) free.push(candidate);
+  }
+  const [namedTail, decoyTail] = free;
+  const namedAccountId = randomUUID();
+  const decoyAccountId = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on, last_four)
+      values
+        (${namedAccountId}, ${userId}, 'Harness HTTP named card', 'asset', 'bancaria', 0, current_date, ${namedTail}),
+        (${decoyAccountId}, ${userId}, 'Harness HTTP decoy card', 'asset', 'bancaria', 0, current_date, ${decoyTail})`;
+  });
+  track("accounts", namedAccountId);
+  track("accounts", decoyAccountId);
+  const tailToken = await edgeCredential(userId, {
+    defaultAccountId: decoyAccountId,
+  });
+  const tailText = sms("Compraste", `COLA ${tag}`, namedTail);
+  const tailReply = await postRaw(
+    { authorization: `Bearer ${tailToken}` },
+    JSON.stringify({ text: tailText }),
+  );
+  remember(tailReply.body.deliveryId as string | undefined);
+  const tailRow = await stored(tailText);
+  assert(
+    next("a message naming *last four proposes the account that carries them, not the default"),
+    tailRow?.accountId === namedAccountId,
+    `it proposed ${tailRow?.accountId ?? "(no row)"}, expected ${namedAccountId} (decoy ${decoyAccountId})`,
+  );
+
+  // Trust: nothing is prefilled after one approval; the second under the same
+  // category makes the merchant trusted and the next message arrives filled.
+  const categoryId = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${categoryId}, ${userId}, 'Harness HTTP trusted', 'expense', '#4C8C4A')`;
+  });
+  track("categories", categoryId);
+  const merchantLabel = `TIENDA ${tag}`;
+  const trustToken = await edgeCredential(userId);
+  const approve = () =>
+    asOwner(userId, async (tx) => {
+      await tx`select private.remember_ingest_merchant(${merchantLabel}, ${merchantLabel}, ${categoryId})`;
+    });
+  const trustText = (n: number) =>
+    `Bancolombia: Compraste COP${n}.000,00 en ${merchantLabel} con tu T.Cred *4872, el 25/08/2026 a las 20:07.`;
+  const arrive = async (text: string) => {
+    const reply = await postRaw(
+      { authorization: `Bearer ${trustToken}` },
+      JSON.stringify({ text }),
+    );
+    remember(reply.body.deliveryId as string | undefined);
+
+    return stored(text);
+  };
+
+  const beforeAny = await arrive(trustText(11));
+  await approve();
+  const afterOne = await arrive(trustText(12));
+  await approve();
+  const afterTwo = await arrive(trustText(13));
+  assert(
+    next("a merchant approved twice under one category prefills it; once, or never, does not"),
+    beforeAny?.categoryId === null &&
+      afterOne?.categoryId === null &&
+      afterTwo?.categoryId === categoryId &&
+      afterTwo?.source === "merchant",
+    `categories landed ${beforeAny?.categoryId ?? "null"} / ${afterOne?.categoryId ?? "null"} / ${afterTwo?.categoryId ?? "null"} (source ${afterTwo?.source ?? "null"})`,
+  );
+
+  // The keepalive.
+  const keepalive = (authorization?: string) =>
+    fetch(`${HARNESS_BASE_URL}/api/cron/keepalive`, {
+      headers: authorization ? { authorization } : undefined,
+    });
+  const secret = process.env.CRON_SECRET;
+  if (!secret) throw new Error("CRON_SECRET is not in the harness environment");
+
+  const keepNone = await keepalive();
+  const keepWrong = await keepalive(`Bearer ${secret}x`);
+  const keepEmpty = await keepalive("Bearer ");
+  assert(
+    next("the keepalive refuses no header, a wrong secret and an empty one"),
+    keepNone.status === 401 && keepWrong.status === 401 && keepEmpty.status === 401,
+    `no header ${keepNone.status}, wrong ${keepWrong.status}, empty ${keepEmpty.status}`,
+  );
+
+  const keepRight = await keepalive(`Bearer ${secret}`);
+  const keepBody = (await keepRight.json()) as Record<string, unknown>;
+  assert(
+    next("the keepalive answers 200 ok: true to the right secret"),
+    keepRight.status === 200 && keepBody.ok === true,
+    `it answered ${keepRight.status} — ${JSON.stringify(keepBody)}`,
+  );
+
+  // The export, with no session: the proxy turns it away before a file exists.
+  const exported = await fetch(`${HARNESS_BASE_URL}/${LOCALE}/settings/data/export`, {
+    redirect: "manual",
+  });
+  const exportedTo = exported.headers.get("location");
+  assert(
+    next("the export without a session redirects to the login and sends no file"),
+    exported.status === 307 &&
+      new URL(exportedTo ?? "/", HARNESS_BASE_URL).pathname === `/${LOCALE}/login` &&
+      exported.headers.get("content-disposition") === null &&
+      !(exported.headers.get("content-type") ?? "").includes("spreadsheet"),
+    `it answered ${exported.status} to ${exportedTo ?? "(no location)"} typed ${exported.headers.get("content-type") ?? "(none)"}`,
+  );
+}
