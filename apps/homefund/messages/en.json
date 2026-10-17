@@ -26,18 +26,22 @@
   "auth": {
     "signOut": "Sign out",
     "tagline": "The household's accounts, clear and shared.",
-    "passwordlessHint": "We send you a link to sign in without a password.",
+    "passwordlessHint": "We send you a code to sign in without a password.",
     "loginDescription": "Enter your email and we will send you a link to sign in. No password needed.",
     "emailLabel": "Email address",
     "emailPlaceholder": "you@example.com",
-    "sendLink": "Send link",
-    "sending": "Sending the link",
-    "sentTitle": "Check your inbox",
-    "sentDescription": "We sent a sign-in link to {email}. Open it anywhere, even in another browser.",
-    "sentHint": "If it does not arrive within a few minutes, check your spam folder.",
+    "sendLink": "Send code",
+    "codeLabel": "Code from the email",
+    "enter": "Sign in",
+    "checking": "Checking the code",
+    "sending": "Sending the code",
+    "sentTitle": "Check your email",
+    "sentDescription": "We sent a six-digit code to {email}. Type it here to sign in.",
+    "sentHint": "The email also has a link: open it in this browser. If nothing arrives in a few minutes, check your spam folder.",
     "useAnotherEmail": "Use another address",
     "errors": {
-      "emailInvalid": "Enter a valid email address."
+      "emailInvalid": "Enter a valid email address.",
+      "codeShape": "Type the six digits from the email."
     }
   },
   "fund": {
@@ -1112,6 +1116,9 @@
     "unexpected": "Something went wrong. Please try again.",
     "unauthenticated": "Your session expired. Sign in again.",
     "emailRateLimited": "You requested too many links in a row. Wait a moment and try again.",
+    "codeInvalid": "That code is wrong or expired. Use the one in the latest email or ask for another.",
+    "codeTimeout": "We could not check the code. Try again; if it fails, ask for another.",
+    "codeRateLimited": "Too many tries with the code. Wait a few minutes.",
     "linkInvalid": "This link is invalid or has expired. Request a new one.",
     "notInvited": "This email has no invitation to HomeFund. Enter the email you were invited with.",
     "domainUndeliverable": "Messages can't reach that email. Check what comes after the @.",
