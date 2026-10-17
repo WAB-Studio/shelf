@@ -148,7 +148,91 @@ async function deviceState(
   return row && { label: row.label, seenYear: row.seen_year, retired: row.retired };
 }
 
+type RoundAnswer = {
+  status: number;
+  json: { accepted: number; tombstones?: { deviceId: string; localId: number }[]; tombstoneCursor: string | null };
+};
+
+// `SYNC_ONLY=S43` or `S44` runs that case alone, so a mutant is proved against the case that kills it.
+async function checkRolledBackRounds(only?: string): Promise<void> {
+  const keyOf = (tombstone: { deviceId: string; localId: number }) => `${tombstone.deviceId}:${tombstone.localId}`;
+  // S43-S44: the route driven inside one transaction that always rolls back. The reader's `auth.users` row is
+  // inserted in it, and every round of the block runs on that same settled transaction.
+  const rolledBack = async (
+    label: string,
+    work: (ctx: {
+      reader: string;
+      tx: postgres.TransactionSql;
+      post: (body: Record<string, unknown>) => Promise<RoundAnswer>;
+    }) => Promise<void>,
+  ): Promise<void> => {
+    const forcedRollback = Symbol("forced rollback");
+    const { POST } = await import("../app/api/log/sync/route");
+    const reader = randomUUID();
+    await sql
+      .begin(async (tx) => {
+        await tx`insert into auth.users (id) values (${reader})`;
+        const post = async (body: Record<string, unknown>): Promise<RoundAnswer> => {
+          sessionStub.readerId = reader;
+          sessionStub.run = async (fn) => {
+            await enterUserContext(tx, reader);
+            return fn(readerTx(tx));
+          };
+          const response = await POST(
+            new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify({ readerId: reader, ...body }) }),
+          );
+          return { status: response.status, json: (await response.json()) as RoundAnswer["json"] };
+        };
+        await work({ reader, tx, post });
+        throw forcedRollback;
+      })
+      .catch((error: unknown) => {
+        if (error === forcedRollback) return;
+        assert(`${label} aborted`, false, `${pgCode(error) ?? "no sqlstate"} ${error instanceof Error ? error.message : String(error)}`);
+      });
+  };
+
+  // S43: 501 marks one second apart, the newest on the smallest identity, so neither the identity nor a
+  // descending clock can stand in for the tuple order; two pages hand down all of them once, oldest first.
+  if (!only || only === "S43") await rolledBack("S43", async ({ reader, tx, post }) => {
+    const [low, high] = [randomUUID(), randomUUID()].sort();
+    const viewer = randomUUID();
+    await tx`insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at, deleted_at)
+      select ${reader}, case when i % 2 = 0 then ${low}::uuid else ${high}::uuid end, 502 - i, now(),
+             timestamptz '2026-01-01 00:00:00.123456+00' + i * interval '1 second'
+      from generate_series(1, 501) as i`;
+    const owed = Array.from({ length: 501 }, (_, k) => `${(k + 1) % 2 === 0 ? low : high}:${501 - k}`);
+    const first = await post({ deviceId: viewer, rows: [], since: null, tombstones: [], tombstonesSince: null });
+    const second = await post({ deviceId: viewer, rows: [], since: null, tombstones: [], tombstonesSince: first.json.tombstoneCursor });
+    const keys = [...(first.json.tombstones ?? []), ...(second.json.tombstones ?? [])].map(keyOf);
+    const missing = owed.filter((key) => !keys.includes(key)).length;
+    const inOrder = keys.join() === owed.join();
+    assert(
+      "S43",
+      first.status === 200 && second.status === 200 && keys.length === 501 && new Set(keys).size === 501 && missing === 0 && inOrder,
+      `status = ${first.status}/${second.status}, pages = ${(first.json.tombstones ?? []).length} + ${(second.json.tombstones ?? []).length}, distinct = ${new Set(keys).size}, missing = ${missing}, oldest first = ${inOrder}`,
+    );
+  });
+
+  // S44: on an empty copy, a round that sends (A,9) and names it for deletion stores nothing.
+  // S44b: the deleted search does not come back when a later round sends it alone (RL-70: no device sends it up again).
+  if (!only || only === "S44") await rolledBack("S44", async ({ reader, tx, post }) => {
+    const a = randomUUID();
+    const stored = async () =>
+      (await tx<{ n: string }[]>`select count(*)::text as n from reading.lookups where user_id = ${reader} and device_id = ${a} and local_id = 9`)[0].n;
+    const both = await post({ deviceId: a, rows: rowsOf(a, [9]), since: null, tombstones: [{ deviceId: a, localId: 9 }], tombstonesSince: null });
+    const afterBoth = await stored();
+    assert("S44", both.status === 200 && both.json.accepted === 0 && afterBoth === "0", `status = ${both.status}, accepted = ${both.json.accepted}, lookups (A,9) = ${afterBoth}`);
+  });
+}
+
 async function main() {
+  if (process.env.SYNC_ONLY) {
+    await checkRolledBackRounds(process.env.SYNC_ONLY);
+    await sql.end();
+    process.exit(failed ? 1 : 0);
+  }
+
   const { downloadRows, writeUpload } = await import("../lib/sync/upload");
   const { listDevices, retireDevice } = await import("../lib/sync/devices");
 
@@ -957,6 +1041,7 @@ async function main() {
     );
   });
 
+  await checkRolledBackRounds();
   await sql.end();
   if (failed) process.exit(1);
 }
