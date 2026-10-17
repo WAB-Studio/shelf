@@ -582,6 +582,9 @@ test.describe("the invitation is Auth's own mail, sent from the server (RF-148)"
       await inviteThroughStep(page, email);
       await register(email);
       await expect.poll(() => mailCount(email)).toBe(1);
+      // The claim clears `invite_email`, so the member is found by its id from here on.
+      const [{ id: memberId }] = await fixtureSql<{ id: string }[]>`
+        select id from group_members where group_id = ${groupId} and lower(invite_email) = ${email}`;
 
       const visitor = await context.newPage();
       await visitor.goto("/es/login");
@@ -606,7 +609,7 @@ test.describe("the invitation is Auth's own mail, sent from the server (RF-148)"
       await expect(visitor).toHaveURL(/\/es\/bienvenida$/);
 
       const [member] = await fixtureSql<{ user_id: string | null }[]>`
-        select user_id from group_members where group_id = ${groupId} and lower(invite_email) = ${email}`;
+        select user_id from group_members where id = ${memberId}`;
       const [user] = await fixtureSql<{ id: string }[]>`select id from auth.users where email = ${email}`;
       expect(member.user_id).toBe(user.id);
     } finally {
