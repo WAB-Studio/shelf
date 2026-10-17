@@ -432,7 +432,8 @@ test.describe("the code step", () => {
     try {
       await fieldOf(page).pressSequentially(code);
       await enterOf(page).click();
-      await expect(page).toHaveURL(/\/es\/movements$/);
+      // The whole URL: `/es/login?next=/es/movements` also ends in «/es/movements».
+      await expect(page).toHaveURL(new URL("/es/movements", baseURL!).href);
     } finally {
       await context.close();
     }
