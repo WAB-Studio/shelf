@@ -94,8 +94,9 @@ function track(headers: Headers, to: string) {
   keys.push(callerKey(headers, salt!)!, addressKey(to, salt!));
 }
 async function rowsFor(key: string) {
-  return fixtures<{ count: number; day: string }[]>`
-    select count, day::text as day from finances.sign_in_claims where client_key = ${key}`;
+  const rows = await fixtures<{ count: number; day: string }[]>`
+    select count, day::text as day from finances.sign_in_claims where client_key = ${key} order by day`;
+  return rows.map(({ count, day }) => ({ count, day }));
 }
 
 // Mutation: drop lower(btrim()) from the lookup.
@@ -273,8 +274,8 @@ test("a release touches no other day and no other key", async () => {
   assert.deepEqual(await rowsFor(a), [
     { count: 3, day: yesterday },
     { count: 2, day: today },
-  ].sort((x, y) => x.day.localeCompare(y.day)));
-  assert.deepEqual((await rowsFor(b)).sort((x, y) => x.day.localeCompare(y.day)), [
+  ]);
+  assert.deepEqual(await rowsFor(b), [
     { count: 1, day: yesterday },
     { count: 3, day: today },
   ]);
