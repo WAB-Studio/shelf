@@ -165,6 +165,7 @@
     "sending": "Enviando…",
     "sent": "Revisa tu correo y escribe aquí el código que te mandamos",
     "retry": "Reintentar",
+    "sentLinkHint": "También puedes abrir el enlace del correo en este navegador.",
     "signedInAs": "Sesión iniciada como {email}",
     "signOut": "Cerrar sesión",
     "errors": {
