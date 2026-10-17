@@ -182,7 +182,7 @@ Canvas «HomeFund», page «Entrar con código», from y=2100. Not built yet.
   demasiados códigos seguidos. Espera un momento y vuelve a intentarlo.» The page description: «Entra con un código
   enviado a tu correo, sin contraseña.»
 - **«CorreoV2»** (HTML and text): the code mail gains a muted English line after the code, «Your sign-in code: type it
-  on the screen where you asked for it. It expires in one hour.», and a sender name, pending the user's answer. It
+  on the screen where you asked for it. It expires in one hour.», and the sender name «Acceso a tus apps» (decided by the user 2026-10-17; one name for the three apps, since they share the template and the Supabase project). The name shows only with the hosted project's own SMTP; the local stack's mailpit does not draw it. It
   supersedes the 2026-10-17 «no app name» line above for the sender only; the old mail boards moved to «Archivo».
 - **«CorreoInvitación»** (new): subject «Te invitaron a HomeFund»; «Te agregaron a un fondo compartido en HomeFund, para
   llevar juntos las cuentas de la casa.»; «Para entrar, abre HomeFund (link to `/login`) y escribe este correo: te
