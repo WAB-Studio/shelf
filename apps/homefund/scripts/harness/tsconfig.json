@@ -7,6 +7,7 @@
       "next-intl/server": ["./scripts/harness/stubs/next-intl-server.ts"],
       "next/cache": ["./scripts/harness/stubs/next-cache.ts"],
       "@/lib/supabase/server": ["./scripts/harness/stubs/supabase-server.ts"],
+      "@/lib/supabase/admin": ["./scripts/harness/stubs/supabase-admin.ts"],
       "@/*": ["./*"]
     }
   }

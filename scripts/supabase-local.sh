@@ -13,19 +13,23 @@ cli() { (cd "$ROOT" && npx --yes "supabase@${SUPABASE_VERSION}" "$@"); }
 
 is_up() { docker ps --format '{{.Names}}' | grep -q '^supabase_db_universo$'; }
 
-publishable_key() {
-  cli status -o env 2>/dev/null | sed -n 's/^PUBLISHABLE_KEY="\(.*\)"$/\1/p' | head -1
-}
+# Reads one KEY="value" line out of `status -o env` text on stdin.
+status_value() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" | head -1; }
 
 print_env() {
-  local key
-  key="$(publishable_key)"
+  local status key secret
+  # One status call for both keys: each costs an npx round.
+  status="$(cli status -o env 2>/dev/null)"
+  key="$(status_value PUBLISHABLE_KEY <<<"$status")"
+  secret="$(status_value SECRET_KEY <<<"$status")"
   [ -n "$key" ] || { echo "supabase-local: no publishable key from the stack" >&2; return 1; }
+  [ -n "$secret" ] || { echo "supabase-local: no secret key from the stack" >&2; return 1; }
   cat <<EOF
 export DATABASE_URL='${DB_URL}'
 export MIGRATION_DATABASE_URL='${DB_URL}'
 export NEXT_PUBLIC_SUPABASE_URL='${API_URL}'
 export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY='${key}'
+export SUPABASE_SECRET_KEY='${secret}'
 export OPENAI_API_KEY=
 export GEMINI_API_KEY=
 export SUPABASE_STORAGE_S3_ENDPOINT=

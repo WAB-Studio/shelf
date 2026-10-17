@@ -1,9 +1,9 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
-// This project has no server-side Supabase key variable and none is to be added:
-// the server reaches Postgres through `DATABASE_URL` and Auth through the
-// publishable key. A Supabase secret key here would bypass every access policy.
+// The server reaches Postgres through `DATABASE_URL` and Auth through the
+// publishable key. The one secret key is RF-148's: only `lib/supabase/admin.ts`
+// reads it, because it bypasses every access policy.
 
 // The only reader of `process.env` in the codebase; everything else imports `env`.
 export const env = createEnv({
@@ -18,6 +18,9 @@ export const env = createEnv({
     SIGN_IN_LINK_DAILY_ADDRESS_CAP: z.coerce.number().int().positive().default(3),
     // Salts the keys those caps count against, so the IP and the address are never stored.
     CLIENT_KEY_SALT: z.string().min(16).optional(),
+    // Auth's admin API for the invitation (RF-148). The prefix check rejects a
+    // publishable key or a legacy JWT; without it the invitation is a notice.
+    SUPABASE_SECRET_KEY: z.string().startsWith("sb_secret_").optional(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
