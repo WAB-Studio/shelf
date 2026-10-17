@@ -95,3 +95,16 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - **HomeFund gets WordBook's email deliverability guard and its sign-in link cap,** under a new RF code; it changes the surroundings of RF-01. Not built yet.
 - **Bank statements are imported through an MCP server that Claude drives,** following GoalLog's MCP pattern: the person hands the file to Claude in a conversation, Claude reads it, calls a preview tool, the person confirms, then an import tool writes. No paid model runs inside the app. The preview is mandatory, and a re-import of the same statement never duplicates movements (RF-134's source reference is the key). Earlier statements serve as examples, never as a template. Not built yet.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
+
+## Boards of T4, drawn 2026-10-17 (canvas «HomeFund», page «T4 · pantallas»)
+
+- The words and structure are those of `private/plan-homefund-t4-2026-10-17.md` § Boards. The canvas draws 32 artboards: C1a–C1h
+  (the reconcile sheet with a minus), C2a–C2e (movements' «Descuadre», with the laptop at 1280 and the sidebar at 768),
+  C3a–C3i (each category with its scope, «{name} · fondo»), several split by surface and face.
+- After a cuadre the sheet's «Según HomeFund» line carries the figure's sign as derived: an asset counted at −5 000 reads
+  «−$ 5.000»; a card with a balance in its favour reads «$ 5.000».
+- An adjustment row in the list is plain ink, not the transfer tone.
+- Under «Descuadre» the meta shows only «N descuadres», with no net (the net is always $ 0 there).
+- The categories settings screen names the fund with a heading, never on every row. A plain member sees neither edit,
+  delete nor «Añadir categoría» on the fund's categories (decided by the user 2026-10-17).
+- Quick entry's interpreter, the export, the template and the import keep the bare category names.
