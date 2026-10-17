@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
@@ -39,6 +39,8 @@ type EmailFormState =
       error: Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline";
     };
 
+type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline";
+
 type CodeError = Extract<VerifySignInCodeResult, { ok: false }>["error"] | "short" | "offline";
 
 // Driven against a production build, `context.setOffline(true)` rejects the
@@ -47,6 +49,8 @@ type CodeError = Extract<VerifySignInCodeResult, { ok: false }>["error"] | "shor
 // a hang. This clock is the second line of defence, for a connection so slow
 // it neither succeeds nor fails within a reader's patience.
 const SEND_LINK_TIMEOUT_MS = 8_000;
+// How long after a send the reader may ask for another code.
+const RESEND_WAIT_MS = 60_000;
 
 // The glyph `docs/wordbook/DESIGN.md` "Settled" names for `CuentaSinRed`: two
 // signal arcs and a dot, struck through — the one screen allowed to say the
@@ -83,6 +87,14 @@ function SignedOutForm() {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [codeState, setCodeState] = useState<{ kind: "idle" } | { kind: "checking" } | { kind: "failed"; error: CodeError }>({ kind: "idle" });
+  // `at` is the last send the countdown counts from; `now` is the clock it reads, so a render never calls `Date.now()`.
+  const [sentAt, setSentAt] = useState<number | null>(null);
+  const [now, setNow] = useState(0);
+  const [resend, setResend] = useState<
+    { kind: "idle" } | { kind: "sending" } | { kind: "done" } | { kind: "failed"; error: SendError }
+  >({ kind: "idle" });
+  const codeField = useRef<HTMLInputElement>(null);
+  const [focusCode, setFocusCode] = useState(0);
 
   // A reload or relaunch inside the code's hour reopens the code step (RL-73).
   useEffect(() => {
@@ -92,13 +104,57 @@ function SignedOutForm() {
       await Promise.resolve();
       const pending = readPending();
       if (cancelled || !pending) return;
-      setEmail(pending);
+      setEmail(pending.email);
+      setSentAt(pending.at);
+      setNow(Date.now());
       setState({ kind: "sent" });
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const busy = codeState.kind === "checking" || resend.kind === "sending";
+  // Before the first read of the clock, or without a record, the wait is not counted.
+  const waitSeconds = sentAt === null || now === 0 ? 0 : Math.max(0, Math.ceil((sentAt + RESEND_WAIT_MS - now) / 1_000));
+  const counting = state.kind === "sent" && sentAt !== null;
+  useEffect(() => {
+    if (!counting) return;
+    const tick = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(tick);
+  }, [counting]);
+
+  // The field is disabled while a resend runs, so focus waits for it to be enabled again.
+  useEffect(() => {
+    if (focusCode > 0) codeField.current?.focus();
+  }, [focusCode]);
+
+  async function handleResend(): Promise<void> {
+    setResend({ kind: "sending" });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timedOut = new Promise<{ ok: false; error: "offline" }>((resolve) => {
+      timer = setTimeout(() => resolve({ ok: false, error: "offline" }), SEND_LINK_TIMEOUT_MS);
+    });
+    let result: SendSignInLinkResult | { ok: false; error: "offline" };
+    try {
+      result = await Promise.race([sendSignInLink(email), timedOut]);
+    } catch {
+      result = { ok: false, error: "offline" };
+    }
+    if (timer) clearTimeout(timer);
+    if (!result.ok) {
+      setResend({ kind: "failed", error: result.error });
+      return;
+    }
+    const at = Date.now();
+    savePending(email, at);
+    setSentAt(at);
+    setNow(at);
+    setCode("");
+    setCodeState({ kind: "idle" });
+    setResend({ kind: "done" });
+    setFocusCode((current) => current + 1);
+  }
 
   async function handleVerify(): Promise<void> {
     if (!signInCodeSchema.safeParse(code).success) {
@@ -130,6 +186,8 @@ function SignedOutForm() {
     clearPending();
     setCode("");
     setCodeState({ kind: "idle" });
+    setResend({ kind: "idle" });
+    setSentAt(null);
     setState({ kind: "idle" });
   }
 
@@ -185,7 +243,13 @@ function SignedOutForm() {
       result = { ok: false, error: "offline" };
     }
     if (timer) clearTimeout(timer);
-    if (result.ok) savePending(email);
+    if (result.ok) {
+      const at = Date.now();
+      savePending(email, at);
+      setSentAt(at);
+      setNow(at);
+    }
+    setResend({ kind: "idle" });
     setState(result.ok ? { kind: "sent" } : { kind: "failed", error: result.error });
   }
 
@@ -219,47 +283,82 @@ function SignedOutForm() {
       {state.kind === "sent" ? (
         <Flex direction="column" gap="3" maxWidth="400px">
           <Text size="2" role="status">
-            {t("sent")}
+            {t("sent", { email })}
           </Text>
-          <TextField.Root
-            size="3"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            placeholder={t("codeLabel")}
-            aria-label={t("codeLabel")}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            autoFocus
-            disabled={codeState.kind === "checking"}
-          />
-          {codeState.kind === "failed" && (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleVerify();
+            }}
+          >
+            <Flex direction="column" gap="3">
+              <TextField.Root
+                ref={codeField}
+                size="3"
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder={t("codeLabel")}
+                aria-label={t("codeLabel")}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                autoFocus
+                disabled={busy}
+              />
+              {codeState.kind === "failed" && (
+                <Flex direction="column" gap="3" align="start">
+                  <Separator size="4" />
+                  <Flex gap="2" align="center">
+                    {codeState.error === "offline" && <OfflineGlyph />}
+                    <Text size="2" weight="bold" role="alert">
+                      {t(`codeErrors.${codeState.error}`)}
+                    </Text>
+                  </Flex>
+                </Flex>
+              )}
+              <Button
+                type="submit"
+                size="2"
+                block={codeState.kind === "failed" && codeState.error === "offline"}
+                disabled={busy}
+              >
+                {codeState.kind === "checking"
+                  ? t("checking")
+                  : codeState.kind === "failed" && codeState.error === "offline"
+                    ? t("retry")
+                    : t("enter")}
+              </Button>
+            </Flex>
+          </form>
+          <Text size="2" color="gray">
+            {t("sentLinkHint")}
+          </Text>
+          <Button
+            type="button"
+            size="2"
+            variant="soft"
+            onClick={() => void handleResend()}
+            disabled={busy || waitSeconds > 0}
+          >
+            {resend.kind === "sending" ? t("resending") : waitSeconds > 0 ? t("resendIn", { seconds: waitSeconds }) : t("resend")}
+          </Button>
+          {resend.kind === "done" && (
+            <Text size="2" role="status">
+              {t("resent", { email })}
+            </Text>
+          )}
+          {resend.kind === "failed" && (
             <Flex direction="column" gap="3" align="start">
               <Separator size="4" />
               <Flex gap="2" align="center">
-                {codeState.error === "offline" && <OfflineGlyph />}
+                {resend.error === "offline" && <OfflineGlyph />}
                 <Text size="2" weight="bold" role="alert">
-                  {t(`codeErrors.${codeState.error}`)}
+                  {t(`errors.${resend.error}`)}
                 </Text>
               </Flex>
             </Flex>
           )}
-          <Button
-            size="2"
-            block={codeState.kind === "failed" && codeState.error === "offline"}
-            onClick={() => void handleVerify()}
-            disabled={codeState.kind === "checking"}
-          >
-            {codeState.kind === "checking"
-              ? t("checking")
-              : codeState.kind === "failed" && codeState.error === "offline"
-                ? t("retry")
-                : t("enter")}
-          </Button>
-          <Text size="2" color="gray">
-            {t("sentLinkHint")}
-          </Text>
-          <Button size="2" variant="soft" color="gray" onClick={chooseOtherEmail}>
+          <Button type="button" size="2" variant="soft" color="gray" onClick={chooseOtherEmail} disabled={busy}>
             {t("otherEmail")}
           </Button>
         </Flex>
@@ -534,6 +633,11 @@ function SignedInPanel({ reader }: { reader: { id: string; email: string } }) {
     setNow(Date.now());
     await runSync();
   }
+
+  // A signed-in reader has no code step to reopen (RL-73).
+  useEffect(() => {
+    clearPending();
+  }, []);
 
   // Local only: the line's age moves with the clock, never with a request.
   useEffect(() => {
