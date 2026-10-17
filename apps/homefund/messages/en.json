@@ -102,7 +102,7 @@
       "addWithoutEmail": "Add without email",
       "toDashboard": "Go to dashboard",
       "skip": "Skip for now",
-      "emailFailed": "We added the person, but could not send the invite email."
+      "emailFailed": "We added the person, but could not send the email; they can sign in to HomeFund with that address now."
     }
   },
   "dashboard": {
@@ -225,6 +225,8 @@
     "addTitle": "Add member",
     "editTitle": "Edit member",
     "nameLabel": "Name",
+    "emailLabel": "Email (optional)",
+    "emailHint": "If you add it, we send them an invitation to HomeFund.",
     "activeTab": "Active",
     "archivedTab": "Archived",
     "you": "You",
@@ -259,7 +261,8 @@
     "errors": {
       "nameRequired": "Enter the member's name.",
       "nameTooLong": "The name cannot exceed 80 characters.",
-      "emailInvalid": "Enter a valid email."
+      "emailInvalid": "Enter a valid email.",
+      "emailTaken": "That email already has an invitation in this group."
     }
   },
   "bienvenida": {
