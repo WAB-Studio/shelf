@@ -1,12 +1,12 @@
 {
   "title": "Entra",
   "eyebrow": "GoalLog",
-  "lead": "Te mandamos un enlace a tu correo. Ábrelo en este dispositivo y entras; no hay contraseña.",
+  "lead": "Te mandamos un código a tu correo. Lo escribes aquí y entras; no hay contraseña.",
   "emailLabel": "Correo electrónico",
-  "action": "Enviar enlace",
+  "action": "Enviar código",
   "sending": "Enviando…",
   "sentTitle": "Revisa tu correo",
-  "sentBody": "Te mandamos el enlace a <fig>{email}</fig>. Vence en una hora.",
+  "sentBody": "Te mandamos un código de seis números a <fig>{email}</fig>. Vence en una hora.",
   "sentOther": "Usar otro correo",
   "errors": {
     "emailInvalid": "Escribe un correo válido.",
@@ -19,6 +19,13 @@
     "linkOtherBrowserTitle": "Abre el enlace en el navegador donde lo pediste",
     "linkOtherBrowserBody": "Por seguridad el enlace solo entra en el navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.",
     "linkInvalidTitle": "El enlace no vale o ya venció",
-    "linkInvalidBody": "Pide uno nuevo aquí abajo. Cada enlace sirve una sola vez."
-  }
+    "linkInvalidBody": "Pide uno nuevo aquí abajo. Cada enlace sirve una sola vez.",
+    "codeShape": "Escribe los seis números del correo.",
+    "codeInvalid": "Ese código no vale o ya venció.",
+    "codeTimeout": "No se pudo comprobar el código. Escríbelo otra vez; si no entra, pide otro."
+  },
+  "codeLabel": "Código del correo",
+  "enter": "Entrar",
+  "checking": "Comprobando…",
+  "linkLine": "También puedes abrir el enlace del correo en este navegador."
 }

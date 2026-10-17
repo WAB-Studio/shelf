@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { sendSignInLink, signOut } from "@/app/actions/account";
-import type { SendSignInLinkResult } from "@/app/actions/account";
+import { sendSignInLink, signOut, verifySignInCode } from "@/app/actions/account";
+import type { SendSignInLinkResult, VerifySignInCodeResult } from "@/app/actions/account";
+import { signInCodeSchema } from "@/lib/account/sign-in-code";
+import { clearPending, readPending, savePending } from "@/lib/account/pending-sign-in";
 import { countPendingUpload, readSyncState, signOutSync, startCopyFor, writeSyncState } from "@/lib/log/record";
 import { clearNavQuery } from "@/lib/nav/query-storage";
 import { elapsed, type Elapsed } from "@/lib/format/elapsed";
@@ -35,6 +38,8 @@ type EmailFormState =
       kind: "failed";
       error: Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline";
     };
+
+type CodeError = Extract<VerifySignInCodeResult, { ok: false }>["error"] | "short" | "offline";
 
 // Driven against a production build, `context.setOffline(true)` rejects the
 // browser's own POST to this Server Action outright (`TypeError: Failed to
@@ -75,6 +80,58 @@ function SignedOutForm() {
   const [state, setState] = useState<EmailFormState>({ kind: "idle" });
   const [held, setHeld] = useState<{ at: number | null; now: number } | null>(null);
   const format = useFormatter();
+  const router = useRouter();
+  const [code, setCode] = useState("");
+  const [codeState, setCodeState] = useState<{ kind: "idle" } | { kind: "checking" } | { kind: "failed"; error: CodeError }>({ kind: "idle" });
+
+  // A reload or relaunch inside the code's hour reopens the code step (RL-73).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Read after a tick, as the effect below does: the server render never knew the address.
+      await Promise.resolve();
+      const pending = readPending();
+      if (cancelled || !pending) return;
+      setEmail(pending);
+      setState({ kind: "sent" });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleVerify(): Promise<void> {
+    if (!signInCodeSchema.safeParse(code).success) {
+      setCodeState({ kind: "failed", error: "short" });
+      return;
+    }
+    setCodeState({ kind: "checking" });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timedOut = new Promise<{ ok: false; error: CodeError }>((resolve) => {
+      timer = setTimeout(() => resolve({ ok: false, error: "offline" }), SEND_LINK_TIMEOUT_MS);
+    });
+    let result: { ok: true } | { ok: false; error: CodeError };
+    try {
+      result = await Promise.race([verifySignInCode(email, code.trim()), timedOut]);
+    } catch {
+      result = { ok: false, error: "offline" };
+    }
+    if (timer) clearTimeout(timer);
+    if (result.ok) {
+      clearPending();
+      setCodeState({ kind: "idle" });
+      router.refresh();
+      return;
+    }
+    setCodeState({ kind: "failed", error: result.error });
+  }
+
+  function chooseOtherEmail(): void {
+    clearPending();
+    setCode("");
+    setCodeState({ kind: "idle" });
+    setState({ kind: "idle" });
+  }
 
   // Half of RNL-09 this component has to hold by hand: `signOut` redirects
   // to `/registro`, so this never mounts on the way out of a session. It
@@ -128,6 +185,7 @@ function SignedOutForm() {
       result = { ok: false, error: "offline" };
     }
     if (timer) clearTimeout(timer);
+    if (result.ok) savePending(email);
     setState(result.ok ? { kind: "sent" } : { kind: "failed", error: result.error });
   }
 
@@ -159,9 +217,52 @@ function SignedOutForm() {
       </Flex>
 
       {state.kind === "sent" ? (
-        <Text size="2" role="status">
-          {t("sent")}
-        </Text>
+        <Flex direction="column" gap="3" maxWidth="400px">
+          <Text size="2" role="status">
+            {t("sent")}
+          </Text>
+          <TextField.Root
+            size="3"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            placeholder={t("codeLabel")}
+            aria-label={t("codeLabel")}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            autoFocus
+            disabled={codeState.kind === "checking"}
+          />
+          {codeState.kind === "failed" && (
+            <Flex direction="column" gap="3" align="start">
+              <Separator size="4" />
+              <Flex gap="2" align="center">
+                {codeState.error === "offline" && <OfflineGlyph />}
+                <Text size="2" weight="bold" role="alert">
+                  {t(`codeErrors.${codeState.error}`)}
+                </Text>
+              </Flex>
+            </Flex>
+          )}
+          <Button
+            size="2"
+            block={codeState.kind === "failed" && codeState.error === "offline"}
+            onClick={() => void handleVerify()}
+            disabled={codeState.kind === "checking"}
+          >
+            {codeState.kind === "checking"
+              ? t("checking")
+              : codeState.kind === "failed" && codeState.error === "offline"
+                ? t("retry")
+                : t("enter")}
+          </Button>
+          <Text size="2" color="gray">
+            {t("sentLinkHint")}
+          </Text>
+          <Button size="2" variant="soft" color="gray" onClick={chooseOtherEmail}>
+            {t("otherEmail")}
+          </Button>
+        </Flex>
       ) : (
         <Flex direction="column" gap="3" maxWidth="400px">
           <TextField.Root

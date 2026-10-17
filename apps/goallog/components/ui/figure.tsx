@@ -51,6 +51,7 @@ export function Figure({
   variant = "measure",
   bare = false,
   breakUnit,
+  breakValue,
 }: {
   value: ReactNode;
   unit?: string;
@@ -60,6 +61,8 @@ export function Figure({
   // búsquedas»): the figure flows as text, so a no-break space before it keeps
   // it with the word it follows. A time keeps its line.
   breakUnit?: boolean;
+  // A value a person typed (an address): a run longer than the line breaks anywhere rather than overflow it.
+  breakValue?: boolean;
 }) {
   const words = useTimeWords();
   const size = variant === "meta" ? styles.meta : styles.measure;
@@ -67,7 +70,7 @@ export function Figure({
   const wordUnit = unit && !bare && !isTimeFigure(formatted) ? unit : null;
   const breaks = Boolean(breakUnit && wordUnit);
   return (
-    <span data-part="figure" className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""}`}>
+    <span data-part="figure" className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""} ${breakValue ? styles.breaksValue : ""}`}>
       {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} unitPart="figure-unit" /> : formatted}
       {/* A no-break space for copy and a screen reader to hear «20 páginas»; it draws no width, the spacer's padding does. */}
       {wordUnit ? <span className={styles.space}>{breaks ? " " : "\u00a0"}</span> : null}

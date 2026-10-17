@@ -27,6 +27,7 @@
     "check:sign-in-budget": "node --import tsx --env-file=.env.local scripts/check-sign-in-budget.ts",
     "allow-email": "node --import tsx --env-file=.env.local scripts/allow-email.ts",
     "check:allow-email": "node --import tsx --env-file=.env.local scripts/check-allow-email.ts",
+    "check:sign-in-code": "node --import tsx --env-file=.env.local scripts/check-sign-in-code.ts",
     "check:admission": "node --import tsx --env-file=.env.local scripts/check-admission.ts",
     "check:thinness": "node --import tsx --env-file=.env.local scripts/check-thinness.ts",
     "check:unlisted": "node --import tsx --env-file=.env.local scripts/check-unlisted.ts",

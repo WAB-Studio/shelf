@@ -1786,3 +1786,38 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **The allowed list seeds everyone who owns a GoalLog row;** new people enter by `npm run allow-email` plus a dashboard invite.
 - **Two phases of one goal may share a calendar week when their dates do not overlap;** the person's dates are kept and both phases show that week number. Overlap is judged on dates in the form, the server and the import, never on weeks. Saving an unchanged phase moves no date. Decided by the user 2026-10-15.
 - **An import phase whose name matches none but whose dates cross an existing phase is not added:** the review reads «se cruza con «<fase>»» and leaves it unmarked, and the confirm refuses it even if sent marked. Overlap is judged on dates (phases may share a calendar week). Taken by the user 2026-10-15.
+
+## Boards of 2026-10-17: sign in with a six-digit code (RF-146 / RL-73 / RP-136)
+
+Board «EntrarCódigo», GoalLog, 360 and 1280, for `/entrar` and `AutorizarSinSesion`. Decided by the user 2026-10-17. Not built yet.
+
+- **`EntrarEnviado` was superseded on 2026-10-17 by the code step** (`EntrarCódigo`).
+- **The canvas page «Archivo» now holds every superseded board joined in one board, `Archivo.dc.html`** (2026-10-17, by the user's decision, to free room: the canvas had hit 511 files).
+- **Sent (`EntrarCódigo`):** `ScreenHeader` eyebrow «GoalLog», title «Revisa tu correo», sentence meta «Te mandamos un
+  código de seis números a {email}. Vence en una hora.» (address as `Figure` meta); `Field` «Código del correo»
+  (numeric keyboard, one-time-code autofill, 6 characters, autofocus); `Button` block «Entrar»; muted sentence «También
+  puedes abrir el enlace del correo en este navegador.»; ghost accent `Button` «Usar otro correo».
+- **Pending (`EntrarCódigoComprobando`):** «Comprobando…», disabled.
+- **Incomplete / Refused / Our side / Too many:** the field's `invalid` + hint, as the email refusals: «Escribe los seis
+  números del correo.» / «Ese código no vale o ya venció.» / «No se pudo comprobar el código. Escríbelo otra vez; si no
+  entra, pide otro.» / «Demasiados intentos. Prueba de nuevo en unos minutos.»
+- **Done:** no board; `/` or the consent.
+- **Form before the send:** lead «Te mandamos un código a tu correo. Lo escribes aquí y entras; no hay contraseña.»;
+  button «Enviar código»; on the consent, «Entra primero. Te mandamos un código a tu correo, lo escribes aquí y decides.»
+  and «Enviar código».
+- **Notes (what the boards take for granted):**
+  - The mail is the shared template of `docs/DESIGN.md`: no app name, the code drawn as the example 482913 in place of
+    `{{ .Token }}`, the subject painted by the mail client and not part of the body, the text part carrying the link as a
+    bare URL.
+  - `/entrar` is a single centred page, no tab bar; the light face is the primary one.
+  - The field follows the app's `Field` (no letter spacing); the address is mono as `Figure` meta.
+  - The sentence and «Usar otro correo» group under the button.
+  - «Comprobando…» dims the controls to 55 %.
+  - The consent's client name is drawn as «Claude».
+  - 1280 is drawn only for the state that asks for the code.
+  - An interrupted code step comes back: the address is kept on the device for the code's hour; «Usar otro correo» or a code that lands clears it.
+
+## Decisions of 2026-10-17, after the critic of the six-digit code (#651), by the user
+
+- **Another code: a «Pedir otro código» button on the code step, with a countdown.** It sends a new code to the same address without typing it again; a send that Auth refuses gives the daily send back. Its boards are not drawn yet.
+- **The code mail names its sender and carries one English line.** One shared template still; a sender name and a short English line under the code. Its board is not drawn yet.

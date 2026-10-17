@@ -1,21 +1,28 @@
 "use server";
 
+import { hasLocale } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { cookies, headers } from "next/headers";
+import { redirect as nextRedirect } from "next/navigation";
 import { z } from "zod";
 
 import { isEmailAllowed } from "@/db/queries/allowlist";
 import { claimSignInLink } from "@/db/queries/sign-in-claims";
 import { redirect } from "@/i18n/navigation";
+import { routing } from "@/i18n/routing";
+import { landSession } from "@/lib/auth/land-session";
+import { verifySignInCode } from "@/lib/auth/verify-code";
 import { deliverabilityExempt, isDomainDeliverable } from "@/lib/auth/deliverability";
 import { env } from "@/lib/env";
 import { ActionError } from "@/lib/errors";
 import { isInternalPath } from "@/lib/internal-path";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/locales";
 import { actionClient, authActionClient } from "@/lib/safe-action";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { signInSchema } from "@/lib/validation/auth";
+import { signInCodeSchema, signInSchema } from "@/lib/validation/auth";
 
 const POST_LOGIN_REDIRECT_MAX_AGE = 60 * 15;
+const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /**
  * Sends the sign-in link (RF-01). The bind argument carries the destination the
@@ -75,6 +82,33 @@ export const signInAction = actionClient
     // Identical whether or not that address already has an account: the answer
     // must not tell a stranger who is registered.
     return { sent: true };
+  });
+
+/**
+ * Verifies the six-digit code the person typed (RF-146) and lands them where
+ * the link would have. Nothing is sent here, so no list, DNS or cap check: the
+ * code was already behind them. Auth is asked once; a refusal is a reason.
+ */
+export const verifyCodeAction = actionClient
+  .inputSchema(signInCodeSchema)
+  .action(async ({ parsedInput: { email, code } }) => {
+    const supabase = await createSupabaseServerClient();
+    const result = await verifySignInCode((params) => supabase.auth.verifyOtp(params), { email, code });
+    if (!result.ok) throw new ActionError(`errors.${result.reason}`);
+
+    const requestLocale = await getLocale();
+    const fallbackLocale: Locale = hasLocale(routing.locales, requestLocale) ? requestLocale : DEFAULT_LOCALE;
+    const { target, locale } = await landSession({ user: result.user, fallbackLocale });
+
+    const cookieStore = await cookies();
+    cookieStore.set("NEXT_LOCALE", locale, {
+      path: "/",
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+      sameSite: "lax",
+    });
+
+    // `target` already carries its locale prefix, so the plain redirect, not the localized one.
+    nextRedirect(target);
   });
 
 export const signOutAction = authActionClient.action(async () => {

@@ -100,6 +100,7 @@ jobs:
       - run: npm run check:grants -w apps/wordbook
       - run: npm run check:sign-in-budget -w apps/wordbook
       - run: npm run check:allow-email -w apps/wordbook
+      - run: npm run check:sign-in-code -w apps/wordbook
 
   # The pure modules, mirrors voyager's `unit` job. No database, no secret.
   pulsar-unit:

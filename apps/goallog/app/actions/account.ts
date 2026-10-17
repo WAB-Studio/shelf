@@ -1,9 +1,13 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { isEmailAllowed } from "@/lib/auth/allowlist";
 import { isDomainDeliverable } from "@/lib/auth/deliverability";
+import { landingAfterSignIn } from "@/lib/auth/verify-magic-link";
+import { verifyCode } from "@/lib/auth/verify-code";
 import { consentReturnPath } from "@/lib/validation/oauth";
-import { signInEmailSchema } from "@/lib/validation/sign-in";
+import { signInCodeSchema, signInEmailSchema } from "@/lib/validation/sign-in";
 
 // `@repo/supabase-auth` starts with `import "server-only"`, and `@/lib/env`
 // throws when its required vars are unset — both resolvable only inside
@@ -68,4 +72,32 @@ export async function sendSignInLink(email: string, next?: string): Promise<Send
   // Identical whether or not that address already has an account: the answer
   // must not tell a stranger who is registered.
   return { ok: true };
+}
+
+export type VerifySignInCodeResult = {
+  ok: false;
+  error: "emailInvalid" | "codeShape" | "codeInvalid" | "codeTimeout" | "rateLimited";
+};
+
+/**
+ * Turns the address and its six-digit code into a session (RP-136) and lands the person on the
+ * consent they came from, or `/`. Auth is asked once: the code is spent by the asking.
+ */
+export async function verifySignInCode(email: string, code: string, next?: string): Promise<VerifySignInCodeResult> {
+  const parsedEmail = signInEmailSchema.safeParse(email);
+  if (!parsedEmail.success) return { ok: false, error: "emailInvalid" };
+  const parsedCode = signInCodeSchema.safeParse(code);
+  if (!parsedCode.success) return { ok: false, error: "codeShape" };
+
+  const [supabase, { env }] = await Promise.all([supabaseClient(), import("@/lib/env")]);
+  const result = await verifyCode((params) => supabase.auth.verifyOtp(params), {
+    email: parsedEmail.data,
+    code: parsedCode.data,
+  });
+  if (!result.ok) {
+    console.error("sign-in code verification failed", result.reason, result.detail);
+    return { ok: false, error: result.reason };
+  }
+
+  redirect(landingAfterSignIn(next, env.NEXT_PUBLIC_SITE_URL));
 }

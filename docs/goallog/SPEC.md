@@ -206,7 +206,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 #### The account
 
-- [x] **RP-18** — A person signs in with a link sent to their address, with the session and the claim verification `apps/wordbook` already uses. The log is theirs and reaches every device they sign in on.
+- [ ] **RP-136** *(successor of RP-18)* — A person signs in with a six-digit code sent to their address, typed on the screen where they asked for it, in the browser or the installed app, or with the email's link in the browser that asked for it, with the session and the claim verification `apps/wordbook` already uses. A code typed on the consent's screen returns to that consent. A wrong or expired code says so; nothing verifies a code twice on the person's behalf. The log is theirs and reaches every device they sign in on. Decided by the user 2026-10-16.
 - [ ] **RP-131** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
 
 ### Non-functional requirements
@@ -250,6 +250,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 ### Retired
 
+- [x] **RP-18** — A person signs in with a link sent to their address, with the session and the claim verification `apps/wordbook` already uses. The log is theirs and reaches every device they sign in on.
+  - Retired 2026-10-17 by the user: a person signs in with a six-digit code typed on the device; the link works only in the browser that asked. Successor: **RP-136**.
 - [x] **RP-117** — A connected AI sets and changes a goal's rhythm (RP-50, RP-101, RP-102) and gives a goal with no measure its measure, its name and its unit (RP-66 for hours), as the goal's own screen does with «Ponerle medida»; a goal that already measures keeps its measure, for the AI and the person alike. The same refusals as the screen. So it can build a whole plan without the import. Decided by the user 2026-10-14.
   - Retired 2026-10-15 by the user: the person changes or removes a measure no fact feeds (RP-127); a set measure stays fixed for the AI alone. Successor: **RP-134**.
 - [x] **RP-104** — A person changes a live loose habit's name and note from its screen. Its cadence, what satisfies it and its amount do not change, so past weeks and months read as they were. A retired habit is not edited. Decided by the user 2026-10-13.

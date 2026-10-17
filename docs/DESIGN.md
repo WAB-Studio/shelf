@@ -121,3 +121,42 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - **Category selects follow the account's scope** in payments, budgets and webhook credentials, as recurring rules already do:
   once an account is picked, only the categories of its scope are offered; with no account, or «Todas las cuentas», both.
   Not built yet.
+
+## Boards of 2026-10-17: sign in with a six-digit code (RF-146 / RL-73 / RP-136)
+
+Board «LoginCódigo», HomeFund, 360 and 1280, inside the existing `Card`. Decided by the user 2026-10-17 (D1–D9). Not built yet.
+
+- **Sent (`LoginCódigo`):** `MailCheckIcon` 24 centred; h2 «Revisa tu correo»; gray centred «Enviamos un código de seis
+  números a {email}. Escríbelo aquí para entrar.»; `Field` label «Código del correo», `TextField` size 3, numeric
+  keyboard, one-time-code autofill, 6 characters, autofocus; primary `Button` «Entrar» (the form's sizes); gray centred
+  «El correo también trae un enlace: ábrelo en este navegador. Si no llega en unos minutos, revisa la carpeta de
+  spam.»; outline `Button` «Usar otro correo».
+- **Pending (`LoginCódigoComprobando`):** field and «Usar otro correo» disabled; «Entrar» becomes spinner + «Comprobando el código».
+- **Incomplete (`LoginCódigoIncompleto`):** field invalid; `FieldMessage` «Escribe los seis números del correo.»
+- **Refused (`LoginCódigoInválido`):** field invalid, code kept; `FieldMessage` «Ese código no vale o ya venció. Usa el
+  del último correo o pide otro.»
+- **Our side (`LoginCódigoSinRespuesta`):** `FieldMessage` «No se pudo comprobar el código. Vuelve a intentarlo; si no
+  entra, pide otro.»
+- **Too many (`LoginCódigoDemasiados`):** `FieldMessage` «Demasiados intentos con el código. Espera unos minutos.»
+- **Done:** no board; the page navigates where the link lands.
+- **Around the board:** login hint «Te enviamos un código para entrar sin contraseña.»; button «Enviar código»; pending
+  «Enviando el código».
+- **English:** «Check your email» / «We sent a six-digit code to {email}. Type it here to sign in.» / «Code from the
+  email» / «Sign in» / «Checking the code» / «Type the six digits from the email.» / «That code is wrong or expired. Use
+  the one in the latest email or ask for another.» / «We could not check the code. Try again; if it fails, ask for
+  another.» / «Too many tries with the code. Wait a few minutes.» / «The email also has a link: open it in this
+  browser. If nothing arrives in a few minutes, check your spam folder.» / «Send code» / «Sending the code» / «We send
+  you a code to sign in without a password.»
+- **The mail is shared by HomeFund, WordBook and GoalLog:** one template, no app name. Subject «Tu código para entrar:
+  {{ .Token }}». The code is drawn with the example 482913 in place of `{{ .Token }}`. The link beside the code is
+  `{{ .ConfirmationURL }}`, the PKCE link: it works only in the browser that asked. The text part carries the link as a
+  bare URL. The subject is painted by the mail client and is not part of the body.
+- **Member invitation mail:** keeps the shared template; it will show a code.
+- **An interrupted code step comes back:** the address is kept on the device for the code's hour and the screen reopens on
+  the code step; «Usar otro correo» or a code that lands clears it.
+
+## Decisions of 2026-10-17, after the critic of the six-digit code (#651), by the user
+
+- **Another code: a «Pedir otro código» button on the code step, with a countdown.** It sends a new code to the same address without typing it again; a send that Auth refuses gives the daily send back. Its boards are not drawn yet.
+- **The member invitation gets its own path (supersedes the 2026-10-17 «keeps the shared template» line above).** Inviting adds the invitee to the invitation list and sends its own mail in its own words; the invitee signs in by asking for a code at `/login`. Its boards are not drawn yet.
+- **The code mail names its sender and carries one English line.** One shared template still; a sender name and a short English line under the code. Its board is not drawn yet.
