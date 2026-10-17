@@ -17,11 +17,13 @@ const released: Claimed[] = [];
 const otpCalls: unknown[] = [];
 let claimAnswer: Claim;
 let otpAnswer: { error: unknown };
+let gate: Promise<void> | null = null;
 
 const double = {
   claim: async () => claimAnswer,
   release: async (claimed: Claimed) => {
     released.push(claimed);
+    if (gate) await gate;
   },
   createClient: async () => ({
     auth: {
@@ -77,6 +79,7 @@ beforeEach(() => {
   otpCalls.length = 0;
   claimAnswer = { status: "ok", claimed: CLAIMED };
   otpAnswer = { error: null };
+  gate = null;
 });
 
 // Mutation: remove the release call.
@@ -138,4 +141,25 @@ test("a capped send never reaches Auth and releases nothing", async () => {
   assert.equal(result?.serverError, "errors.signInLinkCapped");
   assert.equal(otpCalls.length, 0);
   assert.equal(released.length, 0);
+});
+
+// Mutation: drop the `await` before releaseSignInLink (the action answers before the claim is back).
+test("the action does not answer until the release has finished", async () => {
+  let open!: () => void;
+  gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  otpAnswer = { error: { status: 500 } };
+  let settled = false;
+  const pending = send().then((r) => {
+    settled = true;
+    return r;
+  });
+  while (released.length === 0) await new Promise((r) => setImmediate(r));
+  for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
+  assert.equal(settled, false, "still pending while the release is");
+  open();
+  const result = await pending;
+  assert.equal(settled, true);
+  assert.equal(result?.serverError, "errors.unexpected");
 });
