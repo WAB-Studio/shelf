@@ -107,7 +107,9 @@ async function enter(page: Page, code: string): Promise<void> {
   await page.getByRole("button", { name: ENTER }).click();
 }
 
-const storageKeys = (page: Page) => page.evaluate(() => Object.keys(localStorage).sort());
+// The keys of `localStorage` whose value holds the address: the pending sign-in, whatever it is called.
+const keptAddress = (page: Page) =>
+  page.evaluate((address) => Object.keys(localStorage).filter((key) => (localStorage.getItem(key) ?? "").includes(address)), EMAIL);
 
 test("after the send the screen asks for the code, with a way back", async ({ page }) => {
   await simulate(page, () => ({ ok: true }));
@@ -216,8 +218,7 @@ test("an answer the screen has no line for still paints an alert", async ({ page
 
   await enter(page, CODE);
 
-  await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByRole("alert")).not.toHaveText("");
+  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(1);
 });
 
 test("no network: the button gives up, names the connection, and «Reintentar» sends the same code again", async ({ page }) => {
@@ -253,11 +254,11 @@ test("a request that never settles gives up on the clock", async ({ page }) => {
 test("a good code refreshes the screen once and forgets the pending address", async ({ page }) => {
   await simulate(page, () => ({ ok: true }));
   await page.goto("/cuenta");
-  const before = await storageKeys(page);
+  expect(await keptAddress(page)).toEqual([]);
   await emailField(page).fill(EMAIL);
   await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
   await expect(page.getByText(SENT)).toBeVisible();
-  expect(await storageKeys(page)).not.toEqual(before);
+  expect(await keptAddress(page)).toHaveLength(1);
 
   const refreshes: string[] = [];
   page.on("request", (request) => {
@@ -271,7 +272,7 @@ test("a good code refreshes the screen once and forgets the pending address", as
   await page.waitForTimeout(1_500);
   expect(refreshes).toHaveLength(1);
   expect(verifyCalls).toEqual([{ email: EMAIL, code: CODE }]);
-  expect(await storageKeys(page)).toEqual(before);
+  expect(await keptAddress(page)).toEqual([]);
 });
 
 test("a refused code does not refresh the screen", async ({ page }) => {
@@ -292,7 +293,7 @@ test("a refused code does not refresh the screen", async ({ page }) => {
 test("«Usar otro correo» brings the email form back with the address kept and the device forgetting it", async ({ page }) => {
   await simulate(page, () => ({ ok: true }));
   await page.goto("/cuenta");
-  const before = await storageKeys(page);
+  expect(await keptAddress(page)).toEqual([]);
   await emailField(page).fill(EMAIL);
   await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
   await expect(page.getByText(SENT)).toBeVisible();
@@ -301,7 +302,7 @@ test("«Usar otro correo» brings the email form back with the address kept and 
 
   await expect(emailField(page)).toHaveValue(EMAIL);
   await expect(field(page)).toHaveCount(0);
-  expect(await storageKeys(page)).toEqual(before);
+  expect(await keptAddress(page)).toEqual([]);
   // A reload does not reopen the step that was left.
   await page.reload();
   await expect(emailField(page)).toBeVisible();

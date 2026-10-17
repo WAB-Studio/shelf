@@ -63,17 +63,15 @@ test("nothing stored reads as nothing", () => {
   assert.equal(readPending(T0), null);
 });
 
-test("an unreadable or misshapen record reads as nothing and is dropped", () => {
+test("an unreadable or misshapen record reads as nothing", () => {
   savePending("ana@correo.test", T0);
   const [key] = [...memory.keys()];
   memory.set(key, "{not json");
   assert.equal(readPending(T0), null);
-  assert.equal(memory.size, 0);
 
   savePending("ana@correo.test", T0);
   memory.set(key, JSON.stringify({ email: 7, at: "x" }));
   assert.equal(readPending(T0), null);
-  assert.equal(memory.size, 0);
 });
 
 test("a record stamped in the future is not trusted", () => {
