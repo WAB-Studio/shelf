@@ -1,8 +1,8 @@
-// RL-65: the Anki CSV holds one quoted card per translated study group.
+// RL-72: the Anki CSV holds one quoted card per study group with a translation or a definition.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildAnkiCsv, cardFront } from "./anki";
+import { buildAnkiCsv, cardBack, cardFront } from "./anki";
 import type { StudyRow } from "./summary";
 
 function row(key: string, over: Partial<StudyRow> = {}): StudyRow {
@@ -14,6 +14,7 @@ function row(key: string, over: Partial<StudyRow> = {}): StudyRow {
     count: 1,
     lastAt: 1,
     lastTranslation: `t-${key}`,
+    lastDefinition: null,
     lastOutcome: "inflected",
     ...over,
   };
@@ -81,8 +82,9 @@ test("the back is the logged translation verbatim", () => {
 
 test("a group with no translation is left out", () => {
   // Mutation: emit an empty back.
-  const { csv, cards } = buildAnkiCsv([row("a"), row("b", { lastTranslation: null }), row("c")]);
+  const { csv, cards, skipped } = buildAnkiCsv([row("a"), row("b", { lastTranslation: null }), row("c")]);
   assert.equal(cards, 2);
+  assert.equal(skipped, 1);
   assert.equal(parse(csv).length, 4);
   assert.ok(!csv.includes('"b"'));
 });
@@ -95,7 +97,40 @@ test("commas, quotes and newlines round-trip through a CSV parser", () => {
 });
 
 test("an empty study is the header alone", () => {
-  const { csv, cards } = buildAnkiCsv([]);
+  const { csv, cards, skipped } = buildAnkiCsv([]);
   assert.equal(cards, 0);
+  assert.equal(skipped, 0);
   assert.equal(csv, "#separator:Comma\n#html:false\n");
+});
+
+test("a network word with only a definition gets a card", () => {
+  // Mutation: drop the definition fallback.
+  const { csv, cards, skipped } = buildAnkiCsv([
+    row("boat", { lastOutcome: "unlisted", lastTranslation: null, lastDefinition: "a small boat" }),
+  ]);
+  assert.equal(cards, 1);
+  assert.equal(skipped, 0);
+  assert.equal(csv.split("\n")[2], '"boat","a small boat"');
+});
+
+test("a translation still wins over the definition", () => {
+  // Mutation: definition first.
+  const both = row("a", { lastTranslation: "uno", lastDefinition: "one" });
+  assert.equal(cardBack(both), "uno");
+  assert.equal(buildAnkiCsv([both]).csv.split("\n")[2], '"a","uno"');
+});
+
+test("a group with neither is skipped and counted", () => {
+  // Mutation: count it as a card.
+  const { csv, cards, skipped } = buildAnkiCsv([row("a", { lastTranslation: null, lastDefinition: null })]);
+  assert.equal(cards, 0);
+  assert.equal(skipped, 1);
+  assert.equal(csv, "#separator:Comma\n#html:false\n");
+});
+
+test("a definition with commas, quotes and newlines round-trips", () => {
+  // Mutation: skip doubling `"`.
+  const back = 'a, b "quoted"\nsecond line';
+  const { csv } = buildAnkiCsv([row("w", { lastTranslation: null, lastDefinition: back })]);
+  assert.deepEqual(parse(csv).slice(2), [["w", back]]);
 });

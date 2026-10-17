@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { ClearPanel } from "@/components/log/clear-panel";
 import { ExportPanel } from "@/components/log/export-panel";
 import { HistoryList } from "@/components/log/history-list";
+import { SyncOnDelete } from "@/components/sync/sync-on-delete";
 import { SyncOnOpen } from "@/components/sync/sync-on-open";
 import { getReader } from "@/lib/session";
 import { Flex, Headword, Page } from "@/components/ui";
@@ -23,6 +24,7 @@ export default async function RegistroPage() {
   return (
     <Page measure="full">
       <SyncOnOpen />
+      <SyncOnDelete />
       <Flex direction="column" gap="5">
         <Headword>{t("title")}</Headword>
 

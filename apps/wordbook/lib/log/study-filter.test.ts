@@ -18,6 +18,7 @@ function row(
     count: 1,
     lastAt: 0,
     lastTranslation: null,
+    lastDefinition: null,
     lastOutcome: "exact",
     ...rest,
   };

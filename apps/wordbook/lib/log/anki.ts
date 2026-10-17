@@ -16,17 +16,34 @@ function field(value: string): string {
 }
 
 /**
- * One Anki-importable CSV: the header, then a line per group that has a
- * logged translation, in the order given. Every field is quoted, so commas,
- * quotes and newlines inside a translation survive the import.
+ * The card's back (RL-72): the logged translation, else the network's
+ * definition; `null` when the group has neither.
  */
-export function buildAnkiCsv(rows: readonly StudyRow[]): { csv: string; cards: number } {
-  const cards = rows.flatMap((row) =>
-    row.lastTranslation === null ? [] : [`${field(cardFront(row))},${field(row.lastTranslation)}`],
-  );
-  return { csv: [...HEADER, ...cards].join("\n") + "\n", cards: cards.length };
+export function cardBack(row: StudyRow): string | null {
+  return row.lastTranslation ?? row.lastDefinition;
 }
 
-export async function buildAnkiExport(): Promise<{ csv: string; cards: number }> {
+type AnkiExport = { csv: string; cards: number; skipped: number };
+
+/**
+ * One Anki-importable CSV: the header, then a line per group that has a back,
+ * in the order given; `skipped` counts the groups with none. Every field is
+ * quoted, so commas, quotes and newlines survive the import.
+ */
+export function buildAnkiCsv(rows: readonly StudyRow[]): AnkiExport {
+  const cards = rows.flatMap((row) => {
+    const back = cardBack(row);
+    return back === null ? [] : [`${field(cardFront(row))},${field(back)}`];
+  });
+  return { csv: [...HEADER, ...cards].join("\n") + "\n", cards: cards.length, skipped: rows.length - cards.length };
+}
+
+export async function buildAnkiExport(): Promise<AnkiExport> {
   return buildAnkiCsv((await readWordStudy()).rows);
+}
+
+export async function readAnkiCounts(): Promise<{ cards: number; skipped: number; words: number }> {
+  const { rows, total } = await readWordStudy();
+  const { cards, skipped } = buildAnkiCsv(rows);
+  return { cards, skipped, words: total };
 }

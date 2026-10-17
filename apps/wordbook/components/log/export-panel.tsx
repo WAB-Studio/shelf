@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { buildAnkiExport } from "@/lib/log/anki";
+import { buildAnkiExport, readAnkiCounts } from "@/lib/log/anki";
 import { LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { buildExport } from "@/lib/log/export";
 import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
@@ -12,7 +12,12 @@ import { Button, Flex, Link, Separator, Spinner, TapTarget, Text } from "@/compo
 
 type CountState = { kind: "loading" } | { kind: "ready"; count: number } | { kind: "failed" };
 type ExportState = { kind: "idle" } | { kind: "building" } | { kind: "done" } | { kind: "failed" };
-type AnkiState = { kind: "idle" } | { kind: "building" } | { kind: "done"; cards: number } | { kind: "failed" };
+type AnkiState =
+  | { kind: "idle" }
+  | { kind: "building" }
+  | { kind: "done"; cards: number; skipped: number }
+  | { kind: "failed" };
+type AnkiCounts = { kind: "loading" } | { kind: "ready"; cards: number; words: number } | { kind: "failed" };
 
 function pad(value: number): string {
   return value.toString().padStart(2, "0");
@@ -41,6 +46,7 @@ export function ExportPanel() {
   const t = useTranslations("log");
   const [countState, setCountState] = useState<CountState>({ kind: "loading" });
   const [exportState, setExportState] = useState<ExportState>({ kind: "idle" });
+  const [ankiCounts, setAnkiCounts] = useState<AnkiCounts>({ kind: "loading" });
   const [ankiState, setAnkiState] = useState<AnkiState>({ kind: "idle" });
 
   useEffect(() => {
@@ -58,6 +64,15 @@ export function ExportPanel() {
         })
         .catch(() => {
           if (!cancelled && thisRequest === requestId) setCountState({ kind: "failed" });
+        });
+      // The card count rides the same request id: the newer reply wins.
+      readAnkiCounts()
+        .then(({ cards, words }) => {
+          if (cancelled || thisRequest !== requestId) return;
+          setAnkiCounts({ kind: "ready", cards, words });
+        })
+        .catch(() => {
+          if (!cancelled && thisRequest === requestId) setAnkiCounts({ kind: "failed" });
         });
     }
 
@@ -95,9 +110,9 @@ export function ExportPanel() {
   async function handleAnki(): Promise<void> {
     setAnkiState({ kind: "building" });
     try {
-      const { csv, cards } = await buildAnkiExport();
+      const { csv, cards, skipped } = await buildAnkiExport();
       downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), exportFileName(new Date(), "-anki.csv"));
-      setAnkiState({ kind: "done", cards });
+      setAnkiState({ kind: "done", cards, skipped });
     } catch {
       setAnkiState({ kind: "failed" });
     }
@@ -148,18 +163,38 @@ export function ExportPanel() {
             </Text>
           )}
 
-          <Link asChild underline="always">
-            <button type="button" onClick={() => void handleAnki()} disabled={ankiState.kind === "building"}>
-              <TapTarget align="center" px="1">
-                {ankiState.kind === "building" ? t("study.ankiPreparing") : t("study.downloadAnki")}
-              </TapTarget>
-            </button>
-          </Link>
-
-          {ankiState.kind === "done" && (
+          {/* No card to give: the link is gone and its place says why
+              (RL-72). Until the count is known the link does not draw; a
+              failed count draws it, and the click builds and reports. */}
+          {ankiCounts.kind === "ready" && ankiCounts.cards === 0 && (
             <Text size="2" muted>
-              {t("study.ankiDone", { cards: ankiState.cards })}
+              {t("study.ankiNone", { words: ankiCounts.words })}
             </Text>
+          )}
+
+          {(ankiCounts.kind === "failed" || (ankiCounts.kind === "ready" && ankiCounts.cards > 0)) && (
+            <>
+            <Link asChild underline="always">
+              <button type="button" onClick={() => void handleAnki()} disabled={ankiState.kind === "building"}>
+                <TapTarget align="center" px="1">
+                  {ankiState.kind === "building" ? t("study.ankiPreparing") : t("study.downloadAnki")}
+                </TapTarget>
+              </button>
+            </Link>
+
+              {ankiState.kind === "done" && (
+                <Flex direction="column" gap="1">
+                  <Text size="2" muted>
+                    {t("study.ankiDone", { cards: ankiState.cards })}
+                  </Text>
+                  {ankiState.skipped > 0 && (
+                    <Text size="2" muted>
+                      {t("study.ankiSkipped", { count: ankiState.skipped })}
+                    </Text>
+                  )}
+                </Flex>
+              )}
+            </>
           )}
 
           {ankiState.kind === "failed" && (
