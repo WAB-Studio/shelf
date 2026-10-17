@@ -254,8 +254,21 @@ test("the harness person is on the list; a run's drop takes its address by exact
 });
 
 test.describe("npm run allow-email", () => {
+  // CI's .env.local carries no service-role key; the local stack's comes from the CLI, as in check:allow-email.
+  let serviceKey = "";
+  test.beforeAll(() => {
+    const out = execFileSync("npx", ["--yes", "supabase@2.119.0", "status", "-o", "env"], {
+      cwd: resolve(process.cwd(), "../.."),
+      encoding: "utf8",
+    });
+    serviceKey = /^SERVICE_ROLE_KEY="(.*)"$/m.exec(out)?.[1] ?? "";
+    expect(serviceKey, "the local stack gave no service-role key").not.toBe("");
+  });
   const run = (...args: string[]) =>
-    spawnSync("npm", ["run", "--silent", "allow-email", "--", ...args], { env: process.env, encoding: "utf8" });
+    spawnSync("npm", ["run", "--silent", "allow-email", "--", ...args], {
+      env: { ...process.env, SUPABASE_SERVICE_ROLE_KEY: serviceKey },
+      encoding: "utf8",
+    });
 
   test("lists the address in lowercase, says «ya estaba» the second time, and refuses a malformed one", async ({ db }) => {
     // Kills: the address stored as typed, a second run that does not say it was already there,
