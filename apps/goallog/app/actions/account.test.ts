@@ -13,6 +13,11 @@ const probed: string[] = [];
 // RP-131: the list stands in for `goals.allowed_emails`; every address below is on it unless a test says not.
 let allowed = true;
 const listChecked: string[] = [];
+// RP-136: what `verifyOtp` answers and every call it received. One entry per real invocation.
+type VerifyAnswer = { data: { user: { id: string } | null; session: unknown }; error: unknown };
+const signedIn: VerifyAnswer = { data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null };
+let verifyAnswer: VerifyAnswer = signedIn;
+const verifyCalls: unknown[] = [];
 
 // The seam is `@supabase/ssr` and `next/headers`, under the real `@repo/supabase-auth`: the act
 // loads that package with a dynamic import, which `mock.module` does not intercept (the real
@@ -34,6 +39,10 @@ const fakes: Record<string, unknown> = {
         signInWithOtp: async (call: (typeof otpCalls)[number]) => {
           otpCalls.push(call);
           return answer;
+        },
+        verifyOtp: async (params: unknown) => {
+          verifyCalls.push(params);
+          return verifyAnswer;
         },
       },
     }),
@@ -64,9 +73,10 @@ untyped._load = (request, parent, isMain) =>
   request in fakes ? fakes[request] : innerLoad(request, parent, isMain);
 
 let sendSignInLink: typeof import("./account").sendSignInLink;
+let verifySignInCode: typeof import("./account").verifySignInCode;
 
 before(async () => {
-  ({ sendSignInLink } = await import("./account"));
+  ({ sendSignInLink, verifySignInCode } = await import("./account"));
   // The act logs the provider's error on a failed send; the tests below read the result instead.
   mock.method(console, "error", () => {});
 });
@@ -78,6 +88,8 @@ beforeEach(() => {
   probed.length = 0;
   allowed = true;
   listChecked.length = 0;
+  verifyAnswer = signedIn;
+  verifyCalls.length = 0;
 });
 
 test("a valid address on a deliverable domain asks Auth once, for a link back to /auth/confirm", async () => {
@@ -159,4 +171,87 @@ test("the refusal and the two link screens read the words the user chose", async
     errors.linkOtherBrowserBody,
     "Por seguridad el enlace solo entra en el navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.",
   );
+});
+
+// RP-136 · the six-digit code. `redirect` is the real one from `next/navigation`: it throws, and its
+// digest carries the target, so a landing is read from what the action threw, never from a double.
+async function landing(run: Promise<unknown>): Promise<string> {
+  let returned: unknown;
+  try {
+    returned = await run;
+  } catch (error) {
+    const digest = (error as { digest?: unknown }).digest;
+    assert.equal(typeof digest, "string", `threw something that is not a redirect: ${String(error)}`);
+    const [kind, , target] = (digest as string).split(";");
+    assert.equal(kind, "NEXT_REDIRECT");
+    const url = new URL(target, SITE);
+    assert.equal(url.origin, SITE, `left the site: ${target}`);
+    return url.pathname + url.search;
+  }
+  assert.fail(`a verified code returned instead of landing: ${JSON.stringify(returned)}`);
+}
+
+test("RP-136 a code that is not six digits is codeShape, and Auth is never asked", async () => {
+  for (const code of ["12345", "1234567", "12a456", "abcdef", ""]) {
+    assert.deepEqual(await verifySignInCode("ana@correo.test", code), { ok: false, error: "codeShape" }, code);
+  }
+  assert.deepEqual(verifyCalls, []);
+});
+
+test("RP-136 an address that is not one is emailInvalid, and Auth is never asked", async () => {
+  assert.deepEqual(await verifySignInCode("x", "123456"), { ok: false, error: "emailInvalid" });
+  assert.deepEqual(verifyCalls, []);
+});
+
+test("RP-136 a code Auth could not answer is asked once, with the address, the code and type email", async () => {
+  const { AuthRetryableFetchError } = await import("@supabase/supabase-js");
+  verifyAnswer = { data: { user: null, session: null }, error: new AuthRetryableFetchError("Gateway Timeout", 504) };
+  assert.deepEqual(await verifySignInCode("ana@correo.test", "123456"), { ok: false, error: "codeTimeout" });
+  assert.deepEqual(verifyCalls, [{ email: "ana@correo.test", token: "123456", type: "email" }]);
+});
+
+test("RP-136 a verified code is asked once and sends nothing", async () => {
+  await landing(verifySignInCode("ana@correo.test", "654321"));
+  assert.deepEqual(verifyCalls, [{ email: "ana@correo.test", token: "654321", type: "email" }]);
+  assert.equal(otpCalls.length, 0);
+});
+
+test("RP-136 a wrong or expired code is codeInvalid, a rate limit rateLimited, and each logs its detail", async () => {
+  const { AuthApiError } = await import("@supabase/supabase-js");
+  const logged = (console.error as unknown as { mock: { calls: { arguments: unknown[] }[]; resetCalls(): void } })
+    .mock;
+
+  logged.resetCalls();
+  verifyAnswer = { data: { user: null, session: null }, error: new AuthApiError("Token has expired or is invalid", 403, "otp_expired") };
+  assert.deepEqual(await verifySignInCode("ana@correo.test", "123456"), { ok: false, error: "codeInvalid" });
+  assert.match(logged.calls.map((call) => call.arguments.map(String).join(" ")).join("\n"), /otp_expired/);
+
+  logged.resetCalls();
+  verifyAnswer = {
+    data: { user: null, session: null },
+    error: new AuthApiError("For security purposes, you can only request this after 30 seconds.", 429, "over_request_rate_limit"),
+  };
+  assert.deepEqual(await verifySignInCode("ana@correo.test", "123456"), { ok: false, error: "rateLimited" });
+  assert.match(logged.calls.map((call) => call.arguments.map(String).join(" ")).join("\n"), /429/);
+  assert.equal(verifyCalls.length, 2);
+});
+
+test("RP-136 an answer with no error and no user is codeInvalid, not a session", async () => {
+  verifyAnswer = { data: { user: null, session: null }, error: null };
+  assert.deepEqual(await verifySignInCode("ana@correo.test", "123456"), { ok: false, error: "codeInvalid" });
+});
+
+test("RP-136 a verified code with no next lands on /", async () => {
+  assert.equal(await landing(verifySignInCode("ana@correo.test", "123456")), "/");
+});
+
+test("RP-136 a verified code typed on the consent returns to that consent, query and all", async () => {
+  const consent = "/oauth/autorizar?response_type=code&client_id=abc&state=s1";
+  assert.equal(await landing(verifySignInCode("ana@correo.test", "123456", consent)), consent);
+});
+
+test("RP-136 a next that is not the consent lands on /", async () => {
+  for (const next of ["https://evil.test/x", "//evil.test/x", "/entrar", "/oauth/autorizar/../../x"]) {
+    assert.equal(await landing(verifySignInCode("ana@correo.test", "123456", next)), "/", next);
+  }
 });
