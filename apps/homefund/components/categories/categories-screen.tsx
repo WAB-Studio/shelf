@@ -246,7 +246,7 @@ export function CategoriesScreen({
       <Box display={{ initial: "block", lg: "none" }}>
       {groupName !== null && (
         <Flex direction="column" gap="1" mb="3">
-          <Text size="2" weight="bold" color="gray">
+          <Text size="3" weight="bold" color="gray">
             {groupName}
           </Text>
           {!canManageGroup && (
