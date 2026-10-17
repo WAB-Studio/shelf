@@ -281,14 +281,16 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-25** — The reader sees the list of devices that have copied to their account: which one is
   in their hand, when each was last seen, and how many searches it has copied. They can retire any of
   them, their own included.
-- [ ] **RL-71** *(successor of RL-52)* — With an account open on the device, nothing leaves it until the reader
+- [ ] **RL-73** *(successor of RL-71)* — With an account open on the device, nothing leaves it until the reader
   confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
-  had and brings down what the others recorded, with no further act. When the device last copied for another reader, it sends up only what is searched after this
-  confirmation; the earlier rows stay on the device and never reach this account. Signing out stops it. A device the reader
-  retired stays retired: it offers no copy until the reader signs out and signs in, and then it copies as a new
-  device. The sign-in link works only in the browser that asked for it. With no account, nothing leaves the device. Decided by the user
-  2026-10-08.
-  - Open, 2026-10-16: production's Magic Link template sends token_hash; until it sends the PKCE link, a link still opens in any browser.
+  had and brings down what the others recorded, with no further act. When the device last copied for another reader,
+  it sends up only what is searched after this confirmation; the earlier rows stay on the device and never reach this
+  account. Signing out stops it. A device the reader retired stays retired: it offers no copy until the reader signs
+  out and signs in, and then it copies as a new device. The reader signs in with the six-digit code the email carries,
+  typed on the same device, in the browser or in the installed app; the email's link works only in the browser that
+  asked for it. A code that does not let the reader in says whether it is wrong or expired or our side did not answer,
+  and nothing verifies it twice on the reader's behalf. With no account, nothing leaves the device. Decided by the
+  user 2026-10-16.
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside
   the app.
@@ -371,6 +373,13 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 Dead codes. The number stays burned and the tick stays as it was.
 
+- [ ] **RL-71** *(successor of RL-52)* — With an account open on the device, nothing leaves it until the reader
+  confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
+  had and brings down what the others recorded, with no further act. When the device last copied for another reader, it sends up only what is searched after this
+  confirmation; the earlier rows stay on the device and never reach this account. Signing out stops it. A device the reader
+  retired stays retired: it offers no copy until the reader signs out and signs in, and then it copies as a new
+  device. The sign-in link works only in the browser that asked for it. With no account, nothing leaves the device. Decided by the user
+  2026-10-08. _Retired 2026-10-17, by the user. Successor: RL-73 (the reader signs in with a six-digit code typed on the device; the link works only in the browser that asked)._
 - [x] **RNL-09** — The copy is never on the read path: **with no account turned on the app opens not
   one connection, and the box still opens, focuses and answers the same**; with the box in view not
   one request leaves while typing; the copy fires only when the reader confirms or retries it, when the tab
