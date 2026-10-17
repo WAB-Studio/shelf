@@ -24,8 +24,8 @@
   "working": "Un momento…",
   "footer": "entraste como {email} · lo revocas cuando quieras en Metas › Conectar una IA",
   "signedOut": {
-    "send": "Enviar enlace",
-    "lead": "Entra primero. Te mandamos un enlace a tu correo y vuelves aquí para decidir."
+    "send": "Enviar código",
+    "lead": "Entra primero. Te mandamos un código a tu correo, lo escribes aquí y decides."
   },
   "invalid": {
     "title": "Este pedido no es válido",
