@@ -100,7 +100,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-63** — CRUD for categories with one level of subcategories, scoped to a user (personal) or a group; a subcategory shares its parent's scope.
 - [x] **RF-27** — Each category is either expense or income.
 - [x] **RF-64** — Creating a personal space or a group seeds an initial category set in the active language.
-- [ ] **RF-140** — Every screen that names a category shows its scope — «Mercado · fondo» for a fund category, with no mark for a personal one — and the importer resolves a category name by the scope of the account the movement lands in. Both seeded sets (RF-64), personal and fund, stay. Decided by the user 2026-10-15.
+- [x] **RF-140** — Every screen that names a category shows its scope — «Mercado · fondo» for a fund category, with no mark for a personal one — and the importer resolves a category name by the scope of the account the movement lands in. Both seeded sets (RF-64), personal and fund, stay. Decided by the user 2026-10-15.
 - [x] **RF-70** — Labels, independent of category, attach to transactions through a transaction_labels join; a group's labels are managed by its leader, a user's by their owner.
 
 #### Recurring
@@ -131,8 +131,8 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-35** — Six-month comparison of income and expense.
 - [x] **RF-67** — In every report grouped by member, the group's shared accounts appear as their own group. Shared accounts are not split across people.
 
-- [ ] **RF-137** — A person reconciles one account at a time: they enter the money it really holds on a day, and the app shows the balance it derives for that day, the real one and the gap between them. On confirm, the gap is recorded as one adjustment movement on that account, dated that day, so the derived balance equals the real one from then on; no balance is stored (RF-114). Each account lists its reconciliations: the day, what the app derived, what was real and the gap. Decided by the user 2026-10-14.
-- [ ] **RF-138** — A reconciliation's adjustment reports as its own line, «Descuadre», apart from expenses and income: it counts in no expense or income total and in no budget. Decided by the user 2026-10-14.
+- [x] **RF-137** — A person reconciles one account at a time: they enter the money it really holds on a day, and the app shows the balance it derives for that day, the real one and the gap between them. On confirm, the gap is recorded as one adjustment movement on that account, dated that day, so the derived balance equals the real one from then on; no balance is stored (RF-114). Each account lists its reconciliations: the day, what the app derived, what was real and the gap. Decided by the user 2026-10-14.
+- [x] **RF-138** — A reconciliation's adjustment reports as its own line, «Descuadre», apart from expenses and income: it counts in no expense or income total and in no budget. Decided by the user 2026-10-14.
 
 #### Cash
 
