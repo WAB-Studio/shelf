@@ -36,6 +36,7 @@ import { civilDateToDate } from "@/lib/dates";
 import { deriveRate } from "@/lib/money";
 import { foreignSettlementCurrency } from "@/lib/validation/transaction";
 import { useActionErrorToast } from "@/lib/use-action-toast";
+import { categoryNamesById } from "@/lib/fund/category-names";
 
 // The side pane of the DetalleMovimiento artboard, beside a main pane that takes
 // what is left.
@@ -75,6 +76,7 @@ export function MovementDetailDesktop({
   causedCharges?: TransactionListRow[];
 }) {
   const t = useTranslations("transactions");
+  const tc = useTranslations("categories");
   const tKey = useTranslations();
   const format = useFormatter();
   const router = useRouter();
@@ -102,13 +104,13 @@ export function MovementDetailDesktop({
   // A name and colour per account and per category id — children included — so
   // both panes read their names without a second lookup.
   const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
-  const categoryNames = new Map<string, string>();
+  const categoryNames = categoryNamesById(options.categories, (name) =>
+    tc("scopedName", { name }),
+  );
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
-    categoryNames.set(category.id, category.name);
     categoryColors.set(category.id, category.color);
     for (const child of category.children) {
-      categoryNames.set(child.id, child.name);
       categoryColors.set(child.id, child.color);
     }
   }

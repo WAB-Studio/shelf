@@ -36,6 +36,7 @@ import {
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
+import { categoryNamesById } from "@/lib/fund/category-names";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -91,13 +92,13 @@ export function PaymentsScreen({
   // A name and colour per category id — children included — and a name per
   // account id, so the desktop table reads a payment's row without a lookup
   // of its own.
-  const categoryNames = new Map<string, string>();
+  const categoryNames = categoryNamesById(options.categories, (name) =>
+    tKey("categories.scopedName", { name }),
+  );
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
-    categoryNames.set(category.id, category.name);
     categoryColors.set(category.id, category.color);
     for (const child of category.children) {
-      categoryNames.set(child.id, child.name);
       categoryColors.set(child.id, child.color);
     }
   }

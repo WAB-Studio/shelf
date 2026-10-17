@@ -36,6 +36,7 @@ import type {
 } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { todayInBogota } from "@/lib/dates";
+import { categoryNamesById } from "@/lib/fund/category-names";
 import { centsToPesos } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
@@ -94,16 +95,18 @@ function completeInput(
 
 function categoryInfo(
   options: TransactionFormOptions,
+  names: ReadonlyMap<string, string>,
   categoryId: string | null,
 ): { name: string; color: string | null } | null {
   if (categoryId === null) return null;
 
+  const name = names.get(categoryId);
+  if (name === undefined) return null;
+
   for (const category of options.categories) {
-    if (category.id === categoryId) {
-      return { name: category.name, color: category.color };
-    }
+    if (category.id === categoryId) return { name, color: category.color };
     const child = category.children.find((one) => one.id === categoryId);
-    if (child) return { name: child.name, color: child.color };
+    if (child) return { name, color: child.color };
   }
 
   return null;
@@ -169,6 +172,9 @@ export function InboxScreen({
     else setReviewId(id);
   }
 
+  const categoryNames = categoryNamesById(options.categories, (name) =>
+    tKey("categories.scopedName", { name }),
+  );
   const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
   const settlementByAccount = new Map(
     options.accounts.map((a) => [a.id, a.settlementCurrency]),
@@ -179,7 +185,7 @@ export function InboxScreen({
     createdAt: delivery.createdAt,
     merchantLabel: delivery.merchantLabel,
     rawText: delivery.rawText,
-    category: categoryInfo(options, delivery.proposedCategoryId),
+    category: categoryInfo(options, categoryNames, delivery.proposedCategoryId),
     account: delivery.proposedAccountId
       ? (accountNames.get(delivery.proposedAccountId) ?? null)
       : null,

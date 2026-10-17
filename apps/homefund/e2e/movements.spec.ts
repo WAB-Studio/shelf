@@ -16,7 +16,7 @@ import messages from "@/messages/es.json";
 import { TIME_ZONE } from "@/lib/locales";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
+import { asHarnessUser, clearGroup, clearLedger, readScope, seedGroup, test } from "./global-setup";
 
 const transactions = messages.transactions;
 const common = messages.common;
@@ -748,5 +748,391 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
     const [kept] = await fixtureSql<{ amount: string }[]>`
       select amount_cents::text as amount from transactions where id = ${adjustmentId}`;
     expect(kept.amount).toBe("1200000");
+  });
+});
+
+// RF-138, RF-23, RF-140 (module 32, boards C2 and C3a): the type control offers
+// «Descuadre» at every width, the laptop's meta counts the adjustments and
+// drops the net, and a category of the fund reads «{nombre} · fondo» wherever
+// the ledger names one. Written from the plan's Done table, not from the code.
+test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
+  const STAMP = randomUUID().slice(0, 8);
+  const DESCUADRE = transactions.filterAdjustments;
+  const TYPE_ORDER = [
+    transactions.filterAll,
+    transactions.filterExpenses,
+    transactions.filterIncome,
+    transactions.filterTransfers,
+    DESCUADRE,
+  ];
+  const flat = (text: string) => text.replace(/[  ]/g, " ").replace(/\s+/g, " ").trim();
+
+  let accountId = "";
+
+  // Two adjustments on one account, booked by the database's own trigger from
+  // two reconciliations: +$ 12.000 the day before yesterday, then −$ 8.000.
+  test.beforeEach(async () => {
+    accountId = randomUUID();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (
+          id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (
+          ${accountId}, ${scope.userId}, ${`Banco ${STAMP}`}, 'asset', 'bank',
+          50_000_000, ${addCivilDays(todayInBogota(), -30)})`;
+      await tx`
+        insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+        values (${accountId}, ${addCivilDays(todayInBogota(), -2)}, ${51_200_000})`;
+      await tx`
+        insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+        values (${accountId}, ${addCivilDays(todayInBogota(), -1)}, ${50_400_000})`;
+    });
+  });
+
+  test.afterEach(async () => {
+    await fixtureSql`
+      delete from transactions where from_account_id = ${accountId} or to_account_id = ${accountId}`;
+    await fixtureSql`delete from account_reconciliations where account_id = ${accountId}`;
+    await fixtureSql`delete from accounts where id = ${accountId}`;
+  });
+
+  const typeRadios = (page: import("@playwright/test").Page) =>
+    page.getByRole("radio").filter({ visible: true });
+  const adjustmentCards = (page: import("@playwright/test").Page) =>
+    page.getByRole("link").filter({ hasText: DESCUADRE }).filter({ visible: true });
+  const metaOf = (page: import("@playwright/test").Page, pattern: RegExp) =>
+    page.getByText(pattern).filter({ visible: true }).first();
+
+  test("the phone offers five types in order, Descuadre last (C2a)", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "the stacked control is the phone's");
+    // Kills: the fifth item omitted.
+    await page.goto("/es/movements");
+    await expect(typeRadios(page)).toHaveCount(TYPE_ORDER.length);
+    for (const [index, name] of TYPE_ORDER.entries()) {
+      await expect(typeRadios(page).nth(index)).toHaveAccessibleName(name);
+    }
+  });
+
+  test("picking Descuadre on the phone narrows to the two adjustments (C2b)", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "the stacked control is the phone's");
+    // Kills: the fifth item carrying another value (the URL says transfer).
+    await page.goto("/es/movements");
+    await expect(page.getByRole("link", { name: scope.categoryName })).toBeVisible();
+
+    await page.getByRole("radio", { name: DESCUADRE, exact: true }).click();
+
+    await expect(page).toHaveURL("/es/movements?type=adjustment");
+    await expect(adjustmentCards(page)).toHaveCount(2);
+    const texts = (await adjustmentCards(page).allInnerTexts()).map(flat).join(" | ");
+    expect(texts).toContain(`Banco ${STAMP}`);
+    expect(texts).toContain("+$ 12.000");
+    expect(texts).toContain("−$ 8.000");
+    await expect(page.getByRole("link", { name: scope.categoryName })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: incomeCategoryName })).toHaveCount(0);
+  });
+
+  test("on the laptop the select, the chip and the rows say Descuadre (C2d)", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the select and the chip are the laptop's");
+    // Kills: `types` left at four (the select is blank, the chip reads «adjustment»).
+    await page.goto("/es/movements?type=adjustment");
+
+    await expect(
+      page.getByLabel(transactions.typeLabel, { exact: true }).filter({ visible: true }),
+    ).toContainText(DESCUADRE);
+    await expect(
+      page.getByRole("button", {
+        name: common.removeFilter.replace("{label}", DESCUADRE),
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("table", { name: transactions.listTitle })
+        .getByRole("row")
+        .filter({ hasText: `Banco ${STAMP}` }),
+    ).toHaveCount(2);
+  });
+
+  test("under Descuadre the laptop's meta counts the adjustments and drops the net", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the meta is the laptop's");
+    // Kills: `listMeta` and the nets kept for every type.
+    await page.goto("/es/movements?type=adjustment");
+
+    const meta = metaOf(page, /descuadres/);
+    await expect(meta).toBeVisible();
+    const text = flat(await meta.innerText());
+    expect(text).toContain("2 descuadres");
+    expect(text).not.toContain("$");
+    expect(text).not.toContain("neto");
+  });
+
+  test("one adjustment reads in the singular", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the meta is the laptop's");
+    // Kills: the plural branch dropped (always «descuadres»).
+    await fixtureSql`
+      delete from transactions
+      where reconciliation_id is not null and from_account_id = ${accountId}`;
+    await page.goto("/es/movements?type=adjustment");
+
+    const meta = metaOf(page, /1 descuadre/);
+    await expect(meta).toBeVisible();
+    expect(flat(await meta.innerText())).not.toContain("descuadres");
+  });
+
+  test("every other type keeps the count and the net", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the meta is the laptop's");
+    // Kills: the count-only meta applied to every type but «all».
+    await page.goto("/es/movements?type=expense");
+
+    const meta = metaOf(page, /· neto/);
+    await expect(meta).toBeVisible();
+    const text = flat(await meta.innerText());
+    expect(text).toContain("1 · neto");
+    expect(text).toContain("−$ 32.000");
+    expect(text).not.toContain("descuadre");
+  });
+
+  test("no adjustment: the filtered-empty state offers Quitar filtros, which returns to Todos (C2c)", async ({
+    page,
+  }) => {
+    // Kills: the first-run empty state shown under a filter; the clear that
+    // leaves `type` in the URL.
+    await page.goto(`/es/movements?type=adjustment&account=${scope.accountId}`);
+
+    await expect(
+      page.getByText(transactions.filteredEmptyTitle, { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByText(transactions.filteredEmptyDescription, { exact: true })
+        .filter({ visible: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: transactions.clearFilters, exact: true })
+      .filter({ visible: true })
+      .click();
+
+    await expect(page).toHaveURL("/es/movements");
+  });
+
+  test("removing the Descuadre chip returns to every type", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the chip is the laptop's");
+    // Kills: the chip clearing to «expense» instead of dropping the key.
+    await page.goto("/es/movements?type=adjustment");
+    await page
+      .getByRole("button", {
+        name: common.removeFilter.replace("{label}", DESCUADRE),
+        exact: true,
+      })
+      .click();
+
+    await expect(page).toHaveURL("/es/movements");
+    const ledger = page.getByRole("table", { name: transactions.listTitle });
+    await expect(ledger.getByText(scope.categoryName, { exact: true })).toBeVisible();
+    await expect(ledger.getByRole("row").filter({ hasText: `Banco ${STAMP}` })).toHaveCount(2);
+  });
+
+  test("an unknown type reads Todos on the phone", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "the stacked control is the phone's");
+    // Kills: the unknown value passed through to the control (nothing checked).
+    await page.goto("/es/movements?type=Adjustment");
+
+    await expect(
+      page.getByRole("radio", { name: transactions.filterAll, exact: true }),
+    ).toBeChecked();
+    await expect(
+      page.getByRole("radio", { name: DESCUADRE, exact: true }),
+    ).not.toBeChecked();
+  });
+
+  test("at 360 px five rows hold: no sideways scroll, each at least 44 px tall", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "the stacked control is the phone's");
+    // Kills: the primitive's 44 px floor removed.
+    await page.goto("/es/movements");
+    await expect(typeRadios(page)).toHaveCount(5);
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    for (const radio of await typeRadios(page).all()) {
+      const box = await radio.boundingBox();
+      expect(Math.min(box!.width, box!.height)).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test.describe("at 768 px (C2e)", () => {
+    test.use({ viewport: { width: 768, height: 900 } });
+
+    test("the five options lie in one row and every label is whole", async ({ page }, testInfo) => {
+      test.skip(testInfo.project.name !== "mobile", "the phone band is the mobile project's");
+      // Kills: the options' `min-width: max-content` returning with five labels.
+      await page.goto("/es/movements");
+      await expect(typeRadios(page)).toHaveCount(5);
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+
+      const radios = await typeRadios(page).all();
+      const tops = [];
+      for (const radio of radios) tops.push((await radio.boundingBox())!.y);
+      expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(4);
+
+      const clipped = await typeRadios(page).evaluateAll((nodes) =>
+        nodes.flatMap((node) =>
+          [node, ...node.querySelectorAll("*")]
+            .filter((el) => el.scrollWidth > el.clientWidth + 1)
+            .map((el) => `${el.tagName}.${el.className}`),
+        ),
+      );
+      expect(clipped).toEqual([]);
+      const right = await typeRadios(page).last().evaluate((el) => el.getBoundingClientRect().right);
+      expect(right).toBeLessThanOrEqual(768);
+    });
+  });
+});
+
+// RF-140 (board C3a): the ledger names a fund category «{nombre} · fondo» and a
+// personal one bare. The person holds both under one name, so only the mark
+// tells the two apart.
+test.describe("a category of the fund among the movements (RF-140, board C3a)", () => {
+  const STAMP = randomUUID().slice(0, 8);
+  const NAME = `T4 Mercado ${STAMP}`;
+  const MARKED = `${NAME} · fondo`;
+  const ids = {
+    account: randomUUID(),
+    fund: randomUUID(),
+    own: randomUUID(),
+  };
+
+  test.beforeEach(async () => {
+    const { groupId } = await seedGroup();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (
+          id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${ids.account}, ${groupId}, true, ${`Cuenta del fondo ${STAMP}`}, 'asset', 'bank',
+          0, '2026-01-01')`;
+      await tx`
+        insert into categories (id, group_id, name, kind, color)
+        values (${ids.fund}, ${groupId}, ${NAME}, 'expense', '#8C4A4A')`;
+      await tx`
+        insert into categories (id, owner_user_id, name, kind, color)
+        values (${ids.own}, ${scope.userId}, ${NAME}, 'expense', '#4C8C4A')`;
+      for (const [account, category, cents] of [
+        [ids.account, ids.fund, 4_500_000],
+        [scope.accountId, ids.own, 1_100_000],
+      ] as const) {
+        const [movement] = await tx<{ id: string }[]>`
+          insert into transactions (from_account_id, amount_cents, occurred_at)
+          values (${account}, ${cents}, (now() at time zone ${TIME_ZONE})::date)
+          returning id`;
+        await tx`
+          insert into transaction_splits (transaction_id, category_id, amount_cents)
+          values (${movement.id}, ${category}, ${cents})`;
+      }
+    });
+  });
+
+  test.afterEach(async () => {
+    await fixtureSql`
+      delete from transactions
+      where id in (
+        select transaction_id from transaction_splits where category_id in (${ids.fund}, ${ids.own}))`;
+    await fixtureSql`delete from categories where id in (${ids.fund}, ${ids.own})`;
+    await fixtureSql`delete from accounts where id = ${ids.account}`;
+    await clearGroup();
+  });
+
+  const flat = (text: string) => text.replace(/[  ]/g, " ").replace(/\s+/g, " ").trim();
+
+  // Every line a row draws, so a title is told from a longer one that contains it.
+  async function rowLines(page: import("@playwright/test").Page, desktop: boolean) {
+    const cells = desktop
+      ? page.getByRole("table", { name: transactions.listTitle }).getByRole("cell")
+      : page.getByRole("link").filter({ visible: true });
+    const texts = await cells.allInnerTexts();
+    return texts.flatMap((text) => text.split("\n").map(flat)).filter(Boolean);
+  }
+
+  test("the fund's movement reads «· fondo» and the personal one bare", async ({ page }, testInfo) => {
+    const desktop = testInfo.project.name === "desktop";
+    // Kills: the names map built from bare names; every category marked.
+    await page.goto("/es/movements");
+    await expect(
+      desktop
+        ? page.getByRole("table", { name: transactions.listTitle }).getByText(NAME).first()
+        : page.getByRole("link").filter({ hasText: NAME }).first(),
+    ).toBeVisible();
+
+    // A row with no description is titled by its category, so on the laptop the
+    // title and the category cell both say it: the cell is counted alone.
+    let lines: string[];
+    if (desktop) {
+      const table = page.getByRole("table", { name: transactions.listTitle });
+      const headers = await table.getByRole("columnheader").allInnerTexts();
+      const at = headers.findIndex((header) => flat(header).toLowerCase() === transactions.categoryLabel.toLowerCase());
+      expect(at, JSON.stringify(headers)).toBeGreaterThanOrEqual(0);
+      const rows = await table.getByRole("row").all();
+      lines = [];
+      for (const row of rows.slice(1)) {
+        const cell = row.getByRole("cell").nth(at);
+        if (await cell.count()) lines.push(flat(await cell.innerText()));
+      }
+      const all = await rowLines(page, true);
+      expect(all.filter((line) => line === MARKED)).toHaveLength(2);
+      expect(all.filter((line) => line === NAME)).toHaveLength(2);
+    } else {
+      lines = await rowLines(page, false);
+    }
+    expect(lines.filter((line) => line === MARKED)).toHaveLength(1);
+    expect(lines.filter((line) => line === NAME)).toHaveLength(1);
+    expect(lines.filter((line) => line.includes("· fondo") && line !== MARKED)).toEqual([]);
+  });
+
+  test("the category select offers the bare name and the marked one", async ({ page }, testInfo) => {
+    const desktop = testInfo.project.name === "desktop";
+    // Kills: the select's list built bare (one option, or two alike).
+    await page.goto("/es/movements");
+    if (!desktop) {
+      await page
+        .getByRole("button", { name: transactions.filtersLabel, exact: true })
+        .click();
+    }
+    await page
+      .getByLabel(transactions.categoryLabel, { exact: true })
+      .filter({ visible: true })
+      .click();
+
+    await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(1);
+  });
+
+  test("the category chip names the fund's scope", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the chip is the laptop's");
+    // Kills: the chip resolved from a bare list.
+    await page.goto(`/es/movements?category=${ids.fund}`);
+
+    await expect(
+      page.getByRole("button", {
+        name: common.removeFilter.replace("{label}", MARKED),
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
+
+  test("the chip of the personal category stays bare", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "the chip is the laptop's");
+    // Kills: every category's chip marked.
+    await page.goto(`/es/movements?category=${ids.own}`);
+
+    await expect(
+      page.getByRole("button", {
+        name: common.removeFilter.replace("{label}", NAME),
+        exact: true,
+      }),
+    ).toBeVisible();
   });
 });

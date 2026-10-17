@@ -35,6 +35,7 @@ import {
 import type { PendingDeliveryRow } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { todayInBogota } from "@/lib/dates";
+import { categoryNamesById } from "@/lib/fund/category-names";
 import { centsToPesos } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
@@ -85,21 +86,6 @@ function completeInput(
     ...movementDefaults(delivery),
     labelIds: [],
   };
-}
-
-function categoryName(
-  options: TransactionFormOptions,
-  categoryId: string | null,
-): string | null {
-  if (categoryId === null) return null;
-
-  for (const category of options.categories) {
-    if (category.id === categoryId) return category.name;
-    const child = category.children.find((one) => one.id === categoryId);
-    if (child) return child.name;
-  }
-
-  return null;
 }
 
 export function DeliveryCard({
@@ -159,7 +145,12 @@ export function DeliveryCard({
   const account =
     options.accounts.find((one) => one.id === delivery.proposedAccountId)
       ?.name ?? null;
-  const category = categoryName(options, delivery.proposedCategoryId);
+  const category =
+    delivery.proposedCategoryId === null
+      ? null
+      : (categoryNamesById(options.categories, (name) =>
+          tKey("categories.scopedName", { name }),
+        ).get(delivery.proposedCategoryId) ?? null);
   const receivedOn = format.dateTime(delivery.createdAt, {
     dateStyle: "medium",
     timeStyle: "short",

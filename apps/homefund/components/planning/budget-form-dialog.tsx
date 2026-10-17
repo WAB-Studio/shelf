@@ -30,6 +30,7 @@ import type { BudgetStatus } from "@/db/queries/budgets";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 // The field takes the decimals the row's currency is written with, so
 // reopening a figure and saving it back stores the integer it already held.
+import { scopedCategoryName } from "@/lib/fund/category-names";
 import { amountToInput } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
@@ -111,6 +112,7 @@ function BudgetForm({
   const tKey = useTranslations();
 
   const isEdit = !!budget;
+  const mark = (name: string) => tKey("categories.scopedName", { name });
 
   // The limit is measured against an expense category's spend, so only expense
   // categories can carry a budget (RF-71); children are offered alongside their
@@ -118,8 +120,14 @@ function BudgetForm({
   const expenseCategories = options.categories
     .filter((category) => category.kind === "expense")
     .flatMap((category) => [
-      { id: category.id, name: category.name },
-      ...category.children.map((child) => ({ id: child.id, name: child.name })),
+      {
+        id: category.id,
+        name: scopedCategoryName(category.name, category.scope, mark),
+      },
+      ...category.children.map((child) => ({
+        id: child.id,
+        name: scopedCategoryName(child.name, category.scope, mark),
+      })),
     ]);
   const categoryName = expenseCategories.find(
     (category) => category.id === budget?.categoryId,

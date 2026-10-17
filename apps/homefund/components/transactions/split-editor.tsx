@@ -2,7 +2,7 @@
 
 import { PlusIcon, XIcon } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import {
   AmountField,
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui";
 import type { ScopedCategory } from "@/db/queries/transaction-form";
 import type { CurrencyCode } from "@/lib/currency";
+import { scopedCategoryName } from "@/lib/fund/category-names";
 import { formatMoney, parseAmount } from "@/lib/money";
 
 // A split as the form owns it: a category and a typed string, minor units only
@@ -55,7 +56,12 @@ export function SplitEditor({
   onChange: (splits: Split[]) => void;
 }) {
   const t = useTranslations("transactions");
+  const tc = useTranslations("categories");
   const locale = useLocale();
+  const mark = useCallback(
+    (name: string) => tc("scopedName", { name }),
+    [tc],
+  );
 
   // Only the movement's scope and kind, parents and their children flattened
   // into one pickable list (a child wears its parent's colour already).
@@ -64,14 +70,20 @@ export function SplitEditor({
       categories
         .filter((category) => category.scope === scope && category.kind === kind)
         .flatMap((category) => [
-          { id: category.id, name: category.name, color: category.color },
+          {
+            id: category.id,
+            name: category.name,
+            label: scopedCategoryName(category.name, category.scope, mark),
+            color: category.color,
+          },
           ...category.children.map((child) => ({
             id: child.id,
             name: child.name,
+            label: scopedCategoryName(child.name, category.scope, mark),
             color: child.color,
           })),
         ]),
-    [categories, scope, kind],
+    [categories, scope, kind, mark],
   );
 
   const remainderMinor =
@@ -125,7 +137,7 @@ export function SplitEditor({
               <Select.Content position="popper">
                 {options.map((option) => (
                   <Select.Item key={option.id} value={option.id}>
-                    {option.name}
+                    {option.label}
                   </Select.Item>
                 ))}
               </Select.Content>

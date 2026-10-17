@@ -74,6 +74,7 @@ async function seedAccount(
     openingCents?: number;
     spendCents?: number;
     archived?: boolean;
+    currency?: string;
   } = {},
 ): Promise<Seeded> {
   const id = randomUUID();
@@ -84,11 +85,12 @@ async function seedAccount(
   await asHarnessUser(async (tx) => {
     await tx`
       insert into accounts (
-        id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on,
+        settlement_currency)
       values (
         ${id}, ${scope.userId}, ${name}, ${kind},
         ${options.subtype ?? (kind === "asset" ? "bank" : "card")},
-        ${opening}, ${OPENED})`;
+        ${opening}, ${OPENED}, ${options.currency ?? "COP"})`;
 
     const spend = options.spendCents ?? (kind === "asset" ? SPEND : 0);
     if (spend > 0) {
@@ -206,10 +208,22 @@ function historyFigures(dialog: Locator): Locator {
   return dialog.getByText(/^Según HomeFund .+ · Real .+$/);
 }
 
+// A history figure as the person types it, with the glyph `Money` writes below zero.
+function figure(pesos: number): string {
+  return `${pesos < 0 ? MINUS : ""}${peso(pesos)}`;
+}
+
 function figuresText(derived: number, real: number): string {
   return accounts.reconciliationFigures
-    .replace("{derived}", peso(derived))
-    .replace("{real}", peso(real));
+    .replace("{derived}", figure(derived))
+    .replace("{real}", figure(real));
+}
+
+const hintAsset = accounts.reconcileRealHintAsset;
+const hintLiability = accounts.reconcileRealHintLiability;
+
+function hint(dialog: Locator, text: string): Locator {
+  return dialog.getByText(text, { exact: true });
 }
 
 // Server actions are POSTs carrying `next-action`; the counter says whether the
@@ -768,7 +782,13 @@ test.describe("confirming (B7)", () => {
         .or(page.getByRole("link", { name: account.name }))
         .filter({ visible: true });
       await expect(spent.first()).toBeVisible();
-      await expect(page.getByText("Descuadre", { exact: true })).toHaveCount(0);
+      // Scoped to the movement rows (the laptop's table rows, the phone's card links): the type filter also offers «Descuadre».
+      await expect(
+        page
+          .getByRole("row")
+          .or(page.locator('a[href*="/movements/"]'))
+          .getByText("Descuadre", { exact: true }),
+      ).toHaveCount(0);
     } finally {
       await dropAccount(account.id);
     }
@@ -841,10 +861,10 @@ test.describe("the history", () => {
   });
 });
 
-test.describe("at 390 px", () => {
-  test.use({ viewport: { width: 390, height: 780 }, hasTouch: true });
+test.describe("at 360 px", () => {
+  test.use({ viewport: { width: 360, height: 740 }, hasTouch: true });
 
-  test("overflows nowhere and keeps every control at least 32 px on its short side", async ({
+  test("overflows nowhere and keeps every control at least 44 px on its short side, the hint drawn", async ({
     page,
   }) => {
     const account = await seedAccount();
@@ -854,6 +874,7 @@ test.describe("at 390 px", () => {
       await realField(dialog).fill("492000");
       await expect(line(dialog, accounts.reconcileGap)).toBeVisible();
       await expect(historyFigures(dialog)).toHaveCount(1);
+      await expect(hint(dialog, hintAsset)).toBeVisible();
 
       const overflow = await page.evaluate(() => {
         const wide = (el: Element) => el.scrollWidth > el.clientWidth + 1;
@@ -872,10 +893,225 @@ test.describe("at 390 px", () => {
         const box = await controls.nth(i).boundingBox();
         const label = await controls.nth(i).evaluate((el) => el.outerHTML.slice(0, 80));
         expect(box, label).not.toBeNull();
-        expect(Math.min(box!.width, box!.height), label).toBeGreaterThanOrEqual(32);
+        expect(Math.min(box!.width, box!.height), label).toBeGreaterThanOrEqual(44);
       }
     } finally {
       await dropAccount(account.id);
+    }
+  });
+});
+
+test.describe("a figure below zero (board C1)", () => {
+  test("opens the full keyboard, on a COP and on a USD account (C1d)", async ({ page }) => {
+    const cop = await seedAccount();
+    const usd = await seedAccount({ currency: "USD" });
+    try {
+      const copDialog = await openDialog(page, cop);
+      await expect(realField(copDialog)).toHaveAttribute("inputmode", "text");
+      await page.keyboard.press("Escape");
+      await expect(copDialog).toBeHidden();
+
+      const usdDialog = await openDialog(page, usd);
+      await expect(realField(usdDialog)).toHaveAttribute("inputmode", "text");
+    } finally {
+      await dropAccount(cop.id);
+      await dropAccount(usd.id);
+    }
+  });
+
+  test("an asset empty sheet carries its help line and not the liability's (C1a)", async ({
+    page,
+  }) => {
+    const account = await seedAccount();
+    try {
+      const dialog = await openDialog(page, account);
+      await expect(hint(dialog, hintAsset)).toBeVisible();
+      await expect(hint(dialog, hintLiability)).toHaveCount(0);
+      await expect(dialog.getByText(accounts.reconciliationsEmpty, { exact: true })).toBeVisible();
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a liability empty sheet carries its own help line and not the asset's (C1b)", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -12_000_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      await expect(dialog.getByText(accounts.reconcileRealLiability, { exact: true })).toBeVisible();
+      await expect(hint(dialog, hintLiability)).toBeVisible();
+      await expect(hint(dialog, hintAsset)).toHaveCount(0);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("the help line sits under the field and above the gap line", async ({ page }) => {
+    const account = await seedAccount();
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog).fill("492000");
+      await expect(line(dialog, accounts.reconcileGap)).toBeVisible();
+
+      const input = await realField(dialog).boundingBox();
+      const help = await hint(dialog, hintAsset).boundingBox();
+      const gap = await dialog.getByText(accounts.reconcileGap, { exact: true }).boundingBox();
+      expect(input).not.toBeNull();
+      expect(help).not.toBeNull();
+      expect(gap).not.toBeNull();
+      expect(help!.y).toBeGreaterThan(input!.y);
+      expect(help!.y).toBeLessThan(gap!.y);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("typing -5000 on an asset deriving 0 reads the gap as −$ 5.000 (C1c)", async ({ page }) => {
+    const account = await seedAccount({ openingCents: 0, spendCents: 0 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog).fill("-5000");
+
+      await expect(realField(dialog)).toHaveValue("-5000");
+      const gap = line(dialog, accounts.reconcileGap);
+      await expect(gap).toBeVisible();
+      expect(flat(await gap.innerText())).toContain(`${MINUS}$ 5.000`);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a doubled minus keeps the help line beside the refusal, and writes nothing (C1e)", async ({
+    page,
+  }) => {
+    const account = await seedAccount();
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog).fill("--5000");
+      await submit(dialog).click();
+
+      await expect(dialog.getByText(amountInvalid, { exact: true })).toBeVisible();
+      await expect(hint(dialog, hintAsset)).toBeVisible();
+      await expect(realField(dialog)).toHaveValue("--5000");
+      expect(await reconciliationsOf(account.id)).toHaveLength(0);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("keeps the help line, and the field read-only, while «Cuadrando…» shows (C1f)", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ openingCents: 0, spendCents: 0 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog).fill("-5000");
+
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => (release = resolve));
+      await page.route("**/*", async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"] !== undefined) {
+          await held;
+        }
+        await route.continue();
+      });
+
+      await submit(dialog).click();
+      await expect(
+        dialog.getByRole("button", { name: accounts.reconcilePending, exact: true }),
+      ).toBeVisible();
+      await expect(hint(dialog, hintAsset)).toBeVisible();
+      await expect(realField(dialog)).toHaveJSProperty("readOnly", true);
+
+      release();
+      await expect(dialog.getByText(accounts.reconciled).or(historyFigures(dialog))).toBeVisible();
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("an asset counted at -5000 reads «Real −$ 5.000» in the history (C1g)", async ({ page }) => {
+    const account = await seedAccount({ openingCents: 0, spendCents: 0 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog).fill("-5000");
+      await submit(dialog).click();
+
+      await expect(page.getByText(accounts.reconciled, { exact: true })).toBeVisible();
+      const first = historyFigures(dialog).first();
+      await expect(first).toBeVisible();
+      expect(flat(await first.innerText())).toBe(`Según HomeFund $ 0 · Real ${MINUS}$ 5.000`);
+      expect(flat(await first.locator("..").innerText())).toContain(signed(-5_000));
+      expect((await reconciliationsOf(account.id))[0].counted).toBe("-500000");
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("an overpaid card counted at -5000 reads «Real −$ 5.000» and stores 500000 (C1h)", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: 0 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog, accounts.reconcileRealLiability).fill("-5000");
+      await submit(dialog).click();
+
+      await expect(page.getByText(accounts.reconciled, { exact: true })).toBeVisible();
+      const first = historyFigures(dialog).first();
+      await expect(first).toBeVisible();
+      expect(flat(await first.innerText())).toBe(`Según HomeFund $ 0 · Real ${MINUS}$ 5.000`);
+      expect(flat(await first.locator("..").innerText())).toContain(signed(5_000));
+      expect((await reconciliationsOf(account.id))[0].counted).toBe("500000");
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a card owing 120 000 counted at 100 000 still reads as a magnitude (C1h)", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -12_000_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog, accounts.reconcileRealLiability).fill("100000");
+      await submit(dialog).click();
+
+      const first = historyFigures(dialog).first();
+      await expect(first).toBeVisible();
+      expect(flat(await first.innerText())).toBe("Según HomeFund $ 120.000 · Real $ 100.000");
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a history row seeded below zero on each kind reads its figures signed", async ({
+    page,
+  }) => {
+    // The sheet draws the row from storage, never from what the session just typed.
+    const asset = await seedAccount({ openingCents: 0, spendCents: 0 });
+    const card = await seedAccount({ kind: "liability", openingCents: -12_000_000 });
+    try {
+      await seedReconciliation(asset.id, addCivilDays(TODAY, -3), -500_000);
+      // Counted +$ 5.000 of credit on a card that owed $ 120.000.
+      await seedReconciliation(card.id, addCivilDays(TODAY, -3), 500_000);
+
+      const assetDialog = await openDialog(page, asset);
+      expect(flat(await historyFigures(assetDialog).first().innerText())).toBe(
+        `Según HomeFund $ 0 · Real ${MINUS}$ 5.000`,
+      );
+      await page.keyboard.press("Escape");
+      await expect(assetDialog).toBeHidden();
+
+      const cardDialog = await openDialog(page, card);
+      expect(flat(await historyFigures(cardDialog).first().innerText())).toBe(
+        `Según HomeFund $ 120.000 · Real ${MINUS}$ 5.000`,
+      );
+    } finally {
+      await dropAccount(asset.id);
+      await dropAccount(card.id);
     }
   });
 });

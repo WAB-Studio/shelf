@@ -216,12 +216,16 @@ export function CategoriesScreen({
     router.push({ pathname, query: { kind: nextKind } }, { scroll: false });
   }
 
-  const addButton = (
+  // RF-57: in a fund only its leader manages the fund's categories; a caller
+  // with no fund manages their own.
+  const manageable = groupName === null || canManageGroup;
+
+  const addButton = manageable ? (
     <Button type="button" onClick={() => setFormTarget({})}>
       <Plus size={16} />
       {t("add")}
     </Button>
-  );
+  ) : null;
 
   return (
     <Flex direction="column" gap="4">
@@ -240,6 +244,18 @@ export function CategoriesScreen({
       {/* The laptop's dense table and the phone's cards: exactly one of the
           two is displayed at any width. */}
       <Box display={{ initial: "block", lg: "none" }}>
+      {groupName !== null && (
+        <Flex direction="column" gap="1" mb="3">
+          <Text size="3" weight="bold" color="gray">
+            {groupName}
+          </Text>
+          {!canManageGroup && (
+            <Text size="2" color="gray">
+              {t("leaderOnly")}
+            </Text>
+          )}
+        </Flex>
+      )}
       {categories.length === 0 ? (
         <EmptyState
           title={t("emptyTitle")}
@@ -270,57 +286,59 @@ export function CategoriesScreen({
                       </Text>
                     </Flex>
                   </Flex>
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger>
-                      <IconButton
-                        type="button"
-                        variant="ghost"
-                        color="gray"
-                        size="3"
-                        aria-label={tKey("common.actionsFor", {
-                          name: category.name,
-                        })}
-                      >
-                        <EllipsisVertical size={16} />
-                      </IconButton>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Content>
-                      <DropdownMenu.Item
-                        onSelect={() =>
-                          setFormTarget({
-                            category: {
+                  {manageable && (
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger>
+                        <IconButton
+                          type="button"
+                          variant="ghost"
+                          color="gray"
+                          size="3"
+                          aria-label={tKey("common.actionsFor", {
+                            name: category.name,
+                          })}
+                        >
+                          <EllipsisVertical size={16} />
+                        </IconButton>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Content>
+                        <DropdownMenu.Item
+                          onSelect={() =>
+                            setFormTarget({
+                              category: {
+                                id: category.id,
+                                name: category.name,
+                                parentId: null,
+                                color: category.color,
+                              },
+                              hasChildren: category.children.length > 0,
+                            })
+                          }
+                        >
+                          {tKey("common.edit")}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          onSelect={() =>
+                            setFormTarget({ defaultParentId: category.id })
+                          }
+                        >
+                          {t("addSub")}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Separator />
+                        <DropdownMenu.Item
+                          color="red"
+                          onSelect={() =>
+                            setDeleteTarget({
                               id: category.id,
-                              name: category.name,
-                              parentId: null,
-                              color: category.color,
-                            },
-                            hasChildren: category.children.length > 0,
-                          })
-                        }
-                      >
-                        {tKey("common.edit")}
-                      </DropdownMenu.Item>
-                      <DropdownMenu.Item
-                        onSelect={() =>
-                          setFormTarget({ defaultParentId: category.id })
-                        }
-                      >
-                        {t("addSub")}
-                      </DropdownMenu.Item>
-                      <DropdownMenu.Separator />
-                      <DropdownMenu.Item
-                        color="red"
-                        onSelect={() =>
-                          setDeleteTarget({
-                            id: category.id,
-                            childCount: category.children.length,
-                          })
-                        }
-                      >
-                        {tKey("common.delete")}
-                      </DropdownMenu.Item>
-                    </DropdownMenu.Content>
-                  </DropdownMenu.Root>
+                              childCount: category.children.length,
+                            })
+                          }
+                        >
+                          {tKey("common.delete")}
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Root>
+                  )}
                 </Flex>
                 {category.children.length > 0 && (
                   <Box pl="6">
@@ -333,46 +351,48 @@ export function CategoriesScreen({
                           gap="3"
                         >
                           <Text truncate>{child.name}</Text>
-                          <DropdownMenu.Root>
-                            <DropdownMenu.Trigger>
-                              <IconButton
-                                type="button"
-                                variant="ghost"
-                                color="gray"
-                                size="3"
-                                aria-label={tKey("common.actionsFor", {
-                                  name: child.name,
-                                })}
-                              >
-                                <EllipsisVertical size={16} />
-                              </IconButton>
-                            </DropdownMenu.Trigger>
-                            <DropdownMenu.Content>
-                              <DropdownMenu.Item
-                                onSelect={() =>
-                                  setFormTarget({
-                                    category: {
-                                      id: child.id,
-                                      name: child.name,
-                                      parentId: category.id,
-                                      color: child.color,
-                                    },
-                                  })
-                                }
-                              >
-                                {tKey("common.edit")}
-                              </DropdownMenu.Item>
-                              <DropdownMenu.Separator />
-                              <DropdownMenu.Item
-                                color="red"
-                                onSelect={() =>
-                                  setDeleteTarget({ id: child.id, childCount: 0 })
-                                }
-                              >
-                                {tKey("common.delete")}
-                              </DropdownMenu.Item>
-                            </DropdownMenu.Content>
-                          </DropdownMenu.Root>
+                          {manageable && (
+                            <DropdownMenu.Root>
+                              <DropdownMenu.Trigger>
+                                <IconButton
+                                  type="button"
+                                  variant="ghost"
+                                  color="gray"
+                                  size="3"
+                                  aria-label={tKey("common.actionsFor", {
+                                    name: child.name,
+                                  })}
+                                >
+                                  <EllipsisVertical size={16} />
+                                </IconButton>
+                              </DropdownMenu.Trigger>
+                              <DropdownMenu.Content>
+                                <DropdownMenu.Item
+                                  onSelect={() =>
+                                    setFormTarget({
+                                      category: {
+                                        id: child.id,
+                                        name: child.name,
+                                        parentId: category.id,
+                                        color: child.color,
+                                      },
+                                    })
+                                  }
+                                >
+                                  {tKey("common.edit")}
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Separator />
+                                <DropdownMenu.Item
+                                  color="red"
+                                  onSelect={() =>
+                                    setDeleteTarget({ id: child.id, childCount: 0 })
+                                  }
+                                >
+                                  {tKey("common.delete")}
+                                </DropdownMenu.Item>
+                              </DropdownMenu.Content>
+                            </DropdownMenu.Root>
+                          )}
                         </Flex>
                       ))}
                     </Flex>

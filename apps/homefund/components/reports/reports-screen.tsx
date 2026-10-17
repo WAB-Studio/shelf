@@ -21,6 +21,7 @@ import type { ReportsData } from "@/db/queries/reports/reports-screen";
 import type { MemberContributionNamed } from "@/db/queries/reports/reports-screen";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import { scopedCategoryName } from "@/lib/fund/category-names";
 
 // The two flow series carry the fund's colours: jade for what comes in, tomato
 // for what goes out.
@@ -179,6 +180,7 @@ function ExpenseBands({
   months: MonthFlow[];
 }) {
   const t = useTranslations("reports");
+  const tKey = useTranslations();
 
   // The window's last month per currency; the chart never draws the adjustment.
   const adjustments = new Map<CurrencyCode, MonthFlow>();
@@ -213,7 +215,9 @@ function ExpenseBands({
             <CategoryTile color={row.color} size={28} />
             <Box asChild flexGrow="1" minWidth="0">
               <Text as="div" size="3" truncate>
-                {row.name}
+                {scopedCategoryName(row.name, row.scope, (name) =>
+                  tKey("categories.scopedName", { name }),
+                )}
               </Text>
             </Box>
             <Text size="3" weight="medium">

@@ -1,0 +1,8 @@
+/* The 44px floor on the text input itself: the native input sits one border inside
+   Radix's field root, so the root is raised by both borders and a rounding pixel. Doubled to outrank
+   Radix's own size class. */
+.tap.tap {
+  box-sizing: border-box;
+  min-height: 47px;
+  height: auto;
+}
