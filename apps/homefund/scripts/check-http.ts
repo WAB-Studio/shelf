@@ -954,19 +954,19 @@ async function adjustmentTypeSuite(): Promise<void> {
     await tx`select set_config('request.jwt.claims', ${claims}, true)`;
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-      values (${accountId}, ${userId}, ${accountName}, 'asset', 'bank', 1000000, current_date)`;
+      values (${accountId}, ${userId}, ${accountName}, 'asset', 'bank', 1000000, (now() at time zone 'America/Bogota')::date)`;
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)
       values (${categoryId}, ${userId}, ${`Harness M24 cat ${tag}`}, 'expense', '#4C8C4A')`;
     await tx`
       insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
-      values (${expenseId}, ${accountId}, 100000, current_date, ${`Harness M24 gasto ${tag}`})`;
+      values (${expenseId}, ${accountId}, 100000, (now() at time zone 'America/Bogota')::date, ${`Harness M24 gasto ${tag}`})`;
     await tx`
       insert into transaction_splits (transaction_id, category_id, amount_cents)
       values (${expenseId}, ${categoryId}, 100000)`;
     await tx`
       insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
-      values (${accountId}, current_date, 800000)`;
+      values (${accountId}, (now() at time zone 'America/Bogota')::date, 800000)`;
     const [row] = await tx<{ id: string }[]>`
       select t.id from transactions t
       where t.from_account_id = ${accountId} and t.reconciliation_id is not null`;
