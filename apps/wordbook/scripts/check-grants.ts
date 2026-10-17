@@ -237,6 +237,8 @@ async function k1Tx(block: string, fn: (tx: postgres.TransactionSql) => Promise<
   const forcedRollback = Symbol("forced rollback");
   const prelude = process.env.K1_PRELUDE_SQL_FILE;
   const mutant = process.env.K1_MUTANT_SQL;
+  // `K1_ONLY` runs one block alone, so a mutant is proved against the case that kills it and nothing else.
+  if (process.env.K1_ONLY && process.env.K1_ONLY !== block) return;
   await sql
     .begin(async (tx) => {
       if (prelude) await tx.file(prelude);
@@ -553,6 +555,69 @@ async function checkAllowedEmails(): Promise<void> {
   });
 }
 
+// A row and a mark of the same identity while the row is still there: the client may write the mark itself (its
+// insert policy allows it), and the day's cap must not count that search twice.
+async function checkMarkBesideItsRow(): Promise<void> {
+  await k1Tx("cap-live", async (tx) => {
+    const a = randomUUID();
+    const dev = randomUUID();
+    await tx`insert into auth.users (id) values (${a})`;
+    await enterUserContext(tx, a);
+    await tx`insert into reading.lookups
+      (user_id, device_id, local_id, at, text, normalised, kind, outcome, senses, dictionary_ready, record_schema)
+      values (${a}, ${dev}, 1, now(), 'x', 'x', 'word', 'exact', 0, true, 1)`;
+    const [before] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    const [{ received_at: receivedAt }] = await tx<{ received_at: Date }[]>`
+      select received_at from reading.lookups where user_id = ${a} and device_id = ${dev} and local_id = 1`;
+    const markCode = await attemptCode(tx, (sp) => sp`insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at)
+      values (${a}, ${dev}, 1, ${receivedAt})`);
+    const [after] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    assert("C4", before.n === "1" && markCode === undefined && after.n === "1", `rows today with the row alone = ${before.n}, mark insert sqlstate = ${markCode ?? "ok"}, with the row and its own mark = ${after.n}`);
+  });
+}
+
+// The migration's own seed, read from 0008 and run against readers this block creates: one keeps only a device, one
+// only searches, one an untidy address, two a malformed one, one nothing at all.
+async function checkSeedBranches(): Promise<void> {
+  const migration = readFileSync(new URL("../db/migrations/0008_allowed_emails.sql", import.meta.url), "utf8");
+  const seed = migration.split("--> statement-breakpoint").find((chunk) => /INSERT INTO\s+"reading"\."allowed_emails"/i.test(chunk));
+  await k1Tx("seed", async (tx) => {
+    if (!seed) {
+      assert("E6", false, "no INSERT into allowed_emails in 0008_allowed_emails.sql");
+      return;
+    }
+    const tag = randomUUID().slice(0, 8);
+    const readers = {
+      device: { id: randomUUID(), email: `seed-device-${tag}@example.invalid` },
+      lookup: { id: randomUUID(), email: `seed-lookup-${tag}@example.invalid` },
+      untidy: { id: randomUUID(), email: ` Ana-${tag}@X.co ` },
+      noAt: { id: randomUUID(), email: `nomail${tag}` },
+      bareAt: { id: randomUUID(), email: `@${tag}.co` },
+      idle: { id: randomUUID(), email: `seed-idle-${tag}@example.invalid` },
+    };
+    for (const { id, email } of Object.values(readers)) await tx`insert into auth.users (id, email) values (${id}, ${email})`;
+    await tx`insert into reading.devices (user_id, device_id, label) values (${readers.device.id}, ${randomUUID()}, 'x:y')`;
+    for (const who of [readers.lookup, readers.untidy, readers.noAt, readers.bareAt]) {
+      await tx`insert into reading.lookups
+        (user_id, device_id, local_id, at, text, normalised, kind, outcome, senses, dictionary_ready, record_schema)
+        values (${who.id}, ${randomUUID()}, 1, now(), 'x', 'x', 'word', 'exact', 0, true, 1)`;
+    }
+    const mine = Object.values(readers).map((r) => r.email.trim().toLowerCase());
+    const listed = async () =>
+      (await tx<{ email: string }[]>`select email from reading.allowed_emails where email in ${tx(mine)}`).map((r) => r.email);
+    const before = await listed();
+    const seedCode = await attemptCode(tx, (sp) => sp.unsafe(seed));
+    const after = await listed();
+    const expected = [readers.device.email, readers.lookup.email, `ana-${tag}@x.co`];
+    assert("E6", before.length === 0 && sameSet(after, expected), `listed before the seed = ${before.length}, after = [${after.sort().join(", ")}], owed = [${expected.sort().join(", ")}]`);
+    assert(
+      "E7",
+      seedCode === undefined && !after.includes(`nomail${tag}`) && !after.includes(`@${tag}.co`),
+      `seed sqlstate = ${seedCode ?? "ok"}, malformed listed = ${after.filter((e) => !e.includes("@") || e.startsWith("@")).join(", ") || "none"}`,
+    );
+  });
+}
+
 async function checkMigrationsInOrder(): Promise<void> {
   const journal = JSON.parse(readFileSync(new URL("../db/migrations/meta/_journal.json", import.meta.url), "utf8")) as {
     entries: { idx: number; when: number; tag: string }[];
@@ -581,6 +646,8 @@ async function main() {
   await checkMarkRefusesReturn();
   await checkCapCountsBuried();
   await checkAllowedEmails();
+  await checkMarkBesideItsRow();
+  await checkSeedBranches();
   await checkMigrationsInOrder();
 
   await sql.end();
