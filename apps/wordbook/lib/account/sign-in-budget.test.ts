@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import Module from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { clientKeyFromAddress, scopeClientKey } from "../word/client-key";
 import { after, afterEach, beforeEach, mock, test } from "node:test";
 
 const here = (p: string) => new URL(p, import.meta.url).href;
@@ -54,7 +55,7 @@ const ADDRESS = "Reader.Person@example.invalid";
 test("no salt: noKey, one signin no-caller line, no claim spent", async () => {
   env.CLIENT_KEY_SALT = undefined;
   const { claimSignInLink } = await import("./sign-in-budget");
-  assert.equal(await claimSignInLink(new Headers({ "x-forwarded-for": "9.9.9.9" }), ADDRESS), "noKey");
+  assert.deepEqual(await claimSignInLink(new Headers({ "x-forwarded-for": "9.9.9.9" }), ADDRESS), { status: "noKey" });
   assert.deepEqual(warns, [["[paid-dark]", "signin", "no-caller"]]);
   assert.equal(state.claims.length, 0);
 });
@@ -62,14 +63,15 @@ test("no salt: noKey, one signin no-caller line, no claim spent", async () => {
 test("a salt but no caller address: noKey, the same one line, no claim spent", async () => {
   state.caller = null;
   const { claimSignInLink } = await import("./sign-in-budget");
-  assert.equal(await claimSignInLink(new Headers(), ADDRESS), "noKey");
+  assert.deepEqual(await claimSignInLink(new Headers(), ADDRESS), { status: "noKey" });
   assert.deepEqual(warns, [["[paid-dark]", "signin", "no-caller"]]);
   assert.equal(state.claims.length, 0);
 });
 
 test("a salt and a caller: ok, both claims, and the log stays silent", async () => {
   const { claimSignInLink } = await import("./sign-in-budget");
-  assert.equal(await claimSignInLink(new Headers(), ADDRESS), "ok");
+  const recipient = scopeClientKey("signin-to", clientKeyFromAddress(ADDRESS.toLowerCase(), env.CLIENT_KEY_SALT!))!;
+  assert.deepEqual(await claimSignInLink(new Headers(), ADDRESS), { status: "ok", keys: ["ck-7e1d", recipient] });
   assert.equal(state.claims.length, 2);
   assert.deepEqual(state.claims[0], ["ck-7e1d", 5]);
   assert.equal(state.claims[1][1], 3);
@@ -79,7 +81,7 @@ test("a salt and a caller: ok, both claims, and the log stays silent", async () 
 test("refused at the caller's cap: rateLimited, one claim, no dark line", async () => {
   state.allows = [false, true];
   const { claimSignInLink } = await import("./sign-in-budget");
-  assert.equal(await claimSignInLink(new Headers(), ADDRESS), "rateLimited");
+  assert.deepEqual(await claimSignInLink(new Headers(), ADDRESS), { status: "rateLimited" });
   assert.equal(state.claims.length, 1);
   assert.deepEqual(warns, []);
 });
@@ -87,7 +89,7 @@ test("refused at the caller's cap: rateLimited, one claim, no dark line", async 
 test("refused at the address's cap: rateLimited, no dark line, and the address never reaches the log", async () => {
   state.allows = [true, false];
   const { claimSignInLink } = await import("./sign-in-budget");
-  assert.equal(await claimSignInLink(new Headers(), ADDRESS), "rateLimited");
+  assert.deepEqual(await claimSignInLink(new Headers(), ADDRESS), { status: "rateLimited" });
   assert.deepEqual(warns, []);
 });
 
