@@ -15,13 +15,32 @@ const memory = new Map<string, string>();
 const T0 = 1_000_000;
 const MINUTE = 60_000;
 
+test("the record carries the moment it was saved, the resend countdown's origin, not the moment it is read", () => {
+  memory.clear();
+  savePending("ana@correo.test", T0);
+  const early = readPending(T0 + MINUTE);
+  const late = readPending(T0 + 59 * MINUTE);
+  assert.equal(early?.at, T0);
+  assert.equal(late?.at, T0);
+  assert.deepEqual(Object.keys(early ?? {}).sort(), ["at", "email"]);
+  clearPending();
+});
+
+test("saving again restarts the stamp for the same address", () => {
+  memory.clear();
+  savePending("ana@correo.test", T0);
+  savePending("ana@correo.test", T0 + 2 * MINUTE);
+  assert.deepEqual(readPending(T0 + 3 * MINUTE), { email: "ana@correo.test", at: T0 + 2 * MINUTE });
+  clearPending();
+});
+
 test("the lifetime is the hour the mailed code lasts", () => {
   assert.equal(PENDING_LIFETIME_MS, 60 * MINUTE);
 });
 
 test("a saved address is read back at minute 5, exactly as typed", () => {
   savePending("Ana.Lopez+x@correo.test", T0);
-  assert.equal(readPending(T0 + 5 * MINUTE), "Ana.Lopez+x@correo.test");
+  assert.deepEqual(readPending(T0 + 5 * MINUTE), { email: "Ana.Lopez+x@correo.test", at: T0 });
   clearPending();
 });
 
@@ -31,13 +50,13 @@ test("the address lives under one key", () => {
   assert.equal(memory.size, 1);
   savePending("otra@correo.test", T0 + MINUTE);
   assert.equal(memory.size, 1);
-  assert.equal(readPending(T0 + MINUTE), "otra@correo.test");
+  assert.deepEqual(readPending(T0 + MINUTE), { email: "otra@correo.test", at: T0 + MINUTE });
   clearPending();
 });
 
 test("it is still there one millisecond before the hour and gone at the hour", () => {
   savePending("ana@correo.test", T0);
-  assert.equal(readPending(T0 + 60 * MINUTE - 1), "ana@correo.test");
+  assert.deepEqual(readPending(T0 + 60 * MINUTE - 1), { email: "ana@correo.test", at: T0 });
   assert.equal(readPending(T0 + 60 * MINUTE), null);
 });
 

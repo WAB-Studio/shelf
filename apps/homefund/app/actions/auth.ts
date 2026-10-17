@@ -4,10 +4,11 @@ import { hasLocale } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { cookies, headers } from "next/headers";
 import { redirect as nextRedirect } from "next/navigation";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { isEmailAllowed } from "@/db/queries/allowlist";
-import { claimSignInLink } from "@/db/queries/sign-in-claims";
+import { claimSignInLink, releaseSignInLink } from "@/db/queries/sign-in-claims";
 import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { landSession } from "@/lib/auth/land-session";
@@ -43,9 +44,8 @@ export const signInAction = actionClient
     if (!deliverable) throw new ActionError("errors.domainUndeliverable");
 
     // `noKey` passes: Auth's own per-hour limit still stands behind it.
-    if ((await claimSignInLink(await headers(), email)) === "rateLimited") {
-      throw new ActionError("errors.signInLinkCapped");
-    }
+    const claim = await claimSignInLink(await headers(), email);
+    if (claim.status === "rateLimited") throw new ActionError("errors.signInLinkCapped");
 
     const supabase = await createSupabaseServerClient();
 
@@ -61,6 +61,10 @@ export const signInAction = actionClient
 
     if (error) {
       console.error("sign-in link request failed", error);
+      // A timeout may have left the mail, so it keeps the claim; any other refusal hands it back.
+      if (claim.status === "ok" && !isAuthRetryableFetchError(error)) {
+        await releaseSignInLink(claim.claimed);
+      }
       throw new ActionError(
         error.status === 429 || error.code === "over_email_send_rate_limit"
           ? "errors.emailRateLimited"

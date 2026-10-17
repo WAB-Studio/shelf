@@ -27,5 +27,9 @@
   "codeLabel": "Código del correo",
   "enter": "Entrar",
   "checking": "Comprobando…",
+  "resend": "Pedir otro código",
+  "resendIn": "Pedir otro en {seconds} s",
+  "resending": "Enviando…",
+  "resent": "Te mandamos otro código a <fig>{email}</fig>. Usa el del último correo.",
   "linkLine": "También puedes abrir el enlace del correo en este navegador."
 }

@@ -40,7 +40,7 @@ enabled = false
 enabled = true
 site_url = "http://localhost:3000"
 # Every lane's port: 3000-3009, 3100-3109, 3200-3229.
-additional_redirect_urls = ["http://localhost:*/auth/confirm", "http://127.0.0.1:*/auth/confirm"]
+additional_redirect_urls = ["http://localhost:*/auth/confirm", "http://127.0.0.1:*/auth/confirm", "http://localhost:*/login", "http://127.0.0.1:*/login"]
 signing_keys_path = "./signing_keys.json"
 enable_signup = true
 enable_anonymous_sign_ins = false
@@ -50,6 +50,8 @@ enable_signup = true
 enable_confirmations = true
 otp_length = 6
 otp_expiry = 3600
+# The suites resend at once, faking only the browser clock. "0s" falls back to Auth's 60 s default; "1s" still refuses.
+max_frequency = "1ms"
 
 [auth.email.template.magic_link]
 subject = "Tu código para entrar: {{ .Token }}"
@@ -58,6 +60,10 @@ content_path = "./supabase/templates/magic-link.html"
 [auth.email.template.confirmation]
 subject = "Tu código para entrar: {{ .Token }}"
 content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.invite]
+subject = "Te invitaron a HomeFund"
+content_path = "./supabase/templates/invite.html"
 
 [auth.rate_limit]
 email_sent = 10000

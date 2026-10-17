@@ -12,8 +12,8 @@ export function savePending(email: string, now: number = Date.now()): void {
   }
 }
 
-// `null` for nothing stored, a record past its hour, or anything unreadable. An expired record is dropped.
-export function readPending(now: number = Date.now()): string | null {
+// The address and the moment of its last send. `null` for nothing stored, a record past its hour, or anything unreadable. An expired record is dropped.
+export function readPending(now: number = Date.now()): { email: string; at: number } | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
@@ -26,7 +26,7 @@ export function readPending(now: number = Date.now()): string | null {
       clearPending();
       return null;
     }
-    return parsed.email;
+    return { email: parsed.email, at: parsed.at };
   } catch {
     return null;
   }

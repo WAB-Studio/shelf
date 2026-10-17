@@ -115,7 +115,16 @@ const ADDRESSES = [
   ...Array.from({ length: 8 }, (_, i) => `race-${i}@example.invalid`),
   "stranger@example.invalid",
 ];
-const KEYS = [...IPS.map(callerKey), ...ADDRESSES.map(addressKey)];
+const REL_IPS = ["198.51.100.90", "198.51.100.91"];
+const REL_ADDRESSES = ["release-a@example.invalid", "release-b@example.invalid"];
+const textKey = (ip: string) => scopeClientKey("text", clientKeyFromAddress(ip, SALT))!;
+const KEYS = [
+  ...IPS.map(callerKey),
+  ...ADDRESSES.map(addressKey),
+  ...REL_IPS.map(callerKey),
+  ...REL_IPS.map(textKey),
+  ...REL_ADDRESSES.map(addressKey),
+];
 
 async function calls(client: string): Promise<number | null> {
   const [row] = await sql<{ calls: number }[]>`
@@ -238,6 +247,58 @@ async function main() {
       "an address off the list answers notInvited and never reaches Supabase's double",
       stranger === "notInvited" && supabaseCalls === 0,
       `outcome=${stranger} supabaseCalls=${supabaseCalls}`,
+    );
+
+    assert(
+      "an address the list refused still spent the caller's allowance",
+      (await calls(callerKey(IPS[12]))) === 1,
+      `caller=${await calls(callerKey(IPS[12]))}`,
+    );
+
+    // Release: gives back what a claim took, and only that.
+    const { claimSignInLink, releaseSignInLink } = await import("../lib/account/sign-in-budget");
+    const relHeaders = new Headers({ "x-forwarded-for": REL_IPS[0] });
+    await claimSignInLink(relHeaders, REL_ADDRESSES[0]);
+    const second = await claimSignInLink(relHeaders, REL_ADDRESSES[0]);
+    const keys = second.status === "ok" ? second.keys : [];
+    assert(
+      "a claim returns the caller key then the recipient key",
+      keys[0] === callerKey(REL_IPS[0]) && keys[1] === addressKey(REL_ADDRESSES[0]),
+      `keys=${keys.join()}`,
+    );
+    await sql`insert into reading.client_spend (day, client, calls) values (current_date, ${textKey(REL_IPS[0])}, 4)`;
+    await releaseSignInLink(keys);
+    assert(
+      "release gives both rows back to the count before the claim",
+      (await calls(callerKey(REL_IPS[0]))) === 1 && (await calls(addressKey(REL_ADDRESSES[0]))) === 1,
+      `caller=${await calls(callerKey(REL_IPS[0]))} address=${await calls(addressKey(REL_ADDRESSES[0]))}`,
+    );
+    assert(
+      "release leaves the same caller's text-scope row alone",
+      (await calls(textKey(REL_IPS[0]))) === 4,
+      `text=${await calls(textKey(REL_IPS[0]))}`,
+    );
+    await releaseSignInLink(keys);
+    await releaseSignInLink(keys);
+    let belowZero = "none";
+    try {
+      await releaseSignInLink(keys);
+    } catch (error) {
+      belowZero = error instanceof Error ? error.message : String(error);
+    }
+    assert(
+      "release at zero stays at zero and raises no check violation",
+      belowZero === "none" &&
+        (await calls(callerKey(REL_IPS[0]))) === 0 &&
+        (await calls(addressKey(REL_ADDRESSES[0]))) === 0 &&
+        (await calls(textKey(REL_IPS[0]))) === 4,
+      `error=${belowZero} caller=${await calls(callerKey(REL_IPS[0]))} address=${await calls(addressKey(REL_ADDRESSES[0]))} text=${await calls(textKey(REL_IPS[0]))}`,
+    );
+    await releaseSignInLink([callerKey(REL_IPS[1])]);
+    assert(
+      "release of a key with no row today creates none",
+      (await calls(callerKey(REL_IPS[1]))) === null,
+      `caller=${await calls(callerKey(REL_IPS[1]))}`,
     );
 
     // Parallel: eight links at once from one caller, to eight addresses.

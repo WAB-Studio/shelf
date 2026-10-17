@@ -81,7 +81,9 @@ function loadCookies(): StoredCookie[] {
 // payload: the session file outlives `auth.users` rows a reset or a reap
 // removed, and `loadDay` answers that with a message about a missing session.
 function sessionUserId(cookies: StoredCookie[]): string {
-  const value = [...cookies]
+  // The landing also leaves cookies that are not the session, such as the signed-in marker.
+  const value = cookies
+    .filter((cookie) => cookie.name.includes("-auth-token"))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((cookie) => cookie.value)
     .join("");

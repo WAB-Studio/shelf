@@ -266,3 +266,53 @@ test("refuses to delete a member whose person owns an account, and says so", asy
 
   await fixtureSql`delete from accounts where id = ${accountId}`;
 });
+
+// RF-148: the create dialog tells the leader when the invitation mail did not go. The dialog asks
+// for a name alone, so the answer is the only thing that can say `inviteEmailFailed: true`; the
+// action's real response is fetched and its flag rewritten on the way back.
+async function addMember(page: Page, name: string, flag: boolean | null) {
+  if (flag !== null) {
+    await page.route("**/settings/members", async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST" || !request.headers()["next-action"]) {
+        return route.fallback();
+      }
+      const response = await route.fetch();
+      const body = (await response.text()).replace(
+        /"inviteEmailFailed":(true|false)/,
+        `"inviteEmailFailed":${flag}`,
+      );
+      return route.fulfill({ response, body });
+    });
+  }
+  await page.goto("/es/settings/members");
+  await page
+    .getByRole("button", { name: members.add, exact: true })
+    .filter({ visible: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(members.nameLabel).fill(name);
+  await dialog.locator("form").evaluate((form: HTMLFormElement) => form.requestSubmit());
+
+  return dialog;
+}
+
+const toastsOf = (page: Page) => page.locator("[data-sonner-toast]");
+
+for (const [title, flag, warned] of [
+  ["a failed invitation mail raises the warning once", true, true],
+  ["a sent invitation mail raises none", false, false],
+  ["a create with no address raises none", null, false],
+] as const) {
+  test(`${title}, and the dialog still closes with the member listed`, async ({ page }) => {
+    // Kills: dropping the branch; toasting unconditionally; returning early on the warning.
+    const name = `Invitada ${stamp}`;
+    const dialog = await addMember(page, name, flag);
+
+    await expect(page.getByText(members.created, { exact: true })).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await expect(await nameRow(page, name)).toBeVisible();
+    const warning = toastsOf(page).filter({ hasText: messages.onboarding.inviteStep.emailFailed });
+    await expect(warning).toHaveCount(warned ? 1 : 0);
+  });
+}

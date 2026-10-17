@@ -44,7 +44,12 @@ const stamp = randomUUID().slice(0, 8);
 const listed: string[] = [];
 const keys: string[] = [];
 let isEmailAllowed: (email: string) => Promise<boolean>;
-let claimSignInLink: (headers: Headers, address: string) => Promise<"ok" | "rateLimited" | "noKey">;
+type Claimed = { day: string; keys: string[] };
+let claimSignInLink: (
+  headers: Headers,
+  address: string,
+) => Promise<{ status: "ok"; claimed: Claimed } | { status: "rateLimited" } | { status: "noKey" }>;
+let releaseSignInLink: (claimed: Claimed) => Promise<void>;
 let callerKey: (headers: Headers, salt: string) => string | null;
 let addressKey: (address: string, salt: string) => string;
 let todayInBogota: () => string;
@@ -53,7 +58,7 @@ let addressCap: number;
 
 before(async () => {
   ({ isEmailAllowed } = await import("@/db/queries/allowlist"));
-  ({ claimSignInLink } = await import("@/db/queries/sign-in-claims"));
+  ({ claimSignInLink, releaseSignInLink } = await import("@/db/queries/sign-in-claims"));
   ({ callerKey, addressKey } = await import("@/lib/auth/client-key"));
   ({ todayInBogota } = await import("@/lib/dates"));
   const { env } = await import("@/lib/env");
@@ -89,8 +94,9 @@ function track(headers: Headers, to: string) {
   keys.push(callerKey(headers, salt!)!, addressKey(to, salt!));
 }
 async function rowsFor(key: string) {
-  return fixtures<{ count: number; day: string }[]>`
-    select count, day::text as day from finances.sign_in_claims where client_key = ${key}`;
+  const rows = await fixtures<{ count: number; day: string }[]>`
+    select count, day::text as day from finances.sign_in_claims where client_key = ${key} order by day`;
+  return rows.map(({ count, day }) => ({ count, day }));
 }
 
 // Mutation: drop lower(btrim()) from the lookup.
@@ -116,7 +122,7 @@ test("one address takes the address cap from any number of callers, then refuses
   for (let i = 0; i < addressCap + 1; i += 1) {
     const h = caller();
     track(h, to);
-    results.push(await claimSignInLink(h, to.toUpperCase()));
+    results.push((await claimSignInLink(h, to.toUpperCase())).status);
   }
   assert.deepEqual(results, [...Array(addressCap).fill("ok"), "rateLimited"]);
   const [row] = await rowsFor(addressKey(to, salt!));
@@ -132,7 +138,7 @@ test("one caller takes the caller cap across addresses, then refuses", async () 
     const to = address();
     track(h, to);
     sent.push(to);
-    results.push(await claimSignInLink(h, to));
+    results.push((await claimSignInLink(h, to)).status);
   }
   assert.deepEqual(results, [...Array(clientCap).fill("ok"), "rateLimited"]);
   const [row] = await rowsFor(callerKey(h, salt!)!);
@@ -150,13 +156,13 @@ test("a claim is one statement: two round trips for a send, one for a refused ca
     const to = address();
     track(h, to);
     statements = 0;
-    assert.equal(await claimSignInLink(h, to), "ok");
+    assert.equal((await claimSignInLink(h, to)).status, "ok");
     assert.equal(statements, 2);
   }
   const to = address();
   track(h, to);
   statements = 0;
-  assert.equal(await claimSignInLink(h, to), "rateLimited");
+  assert.equal((await claimSignInLink(h, to)).status, "rateLimited");
   assert.equal(statements, 1);
 });
 
@@ -165,7 +171,7 @@ test("a request that names no caller gets noKey and writes nothing", async () =>
   const to = address();
   keys.push(addressKey(to, salt!));
   statements = 0;
-  assert.equal(await claimSignInLink(new Headers(), to), "noKey");
+  assert.deepEqual(await claimSignInLink(new Headers(), to), { status: "noKey" });
   assert.equal(statements, 0);
   assert.equal((await rowsFor(addressKey(to, salt!))).length, 0);
 });
@@ -175,7 +181,7 @@ test("the day is Bogotá's, whatever zone the session is in", async () => {
   const h = caller();
   const to = address();
   track(h, to);
-  assert.equal(await claimSignInLink(h, to), "ok");
+  assert.equal((await claimSignInLink(h, to)).status, "ok");
   const [session] = await appPool<{ today: string }[]>`select current_date::text as today`;
   assert.notEqual(session.today, todayInBogota(), "the zone this suite picked must differ from Bogotá's day");
   for (const key of [callerKey(h, salt!)!, addressKey(to, salt!)]) {
@@ -197,4 +203,101 @@ test("neither the caller's address nor the recipient's is stored", async () => {
   for (const { client_key } of stored) {
     assert.ok(!client_key.includes(to) && !client_key.includes(h.get("x-forwarded-for")!));
   }
+});
+
+// Mutation: release only the address key.
+test("a claim then its release leaves the caller and the address where they were", async () => {
+  const h = caller();
+  const to = address();
+  track(h, to);
+  const [callerK, addressK] = [callerKey(h, salt!)!, addressKey(to, salt!)];
+
+  // The caller already holds one send today, the address none.
+  const other = address();
+  track(h, other);
+  const first = await claimSignInLink(h, other);
+  assert.equal(first.status, "ok");
+  const before = await rowsFor(callerK);
+  assert.equal(before[0].count, 1);
+
+  const second = await claimSignInLink(h, to);
+  assert.ok(second.status === "ok");
+  assert.deepEqual(second.claimed, { day: todayInBogota(), keys: [callerK, addressK] });
+  assert.equal((await rowsFor(callerK))[0].count, 2);
+
+  await releaseSignInLink(second.claimed);
+  assert.deepEqual(await rowsFor(callerK), before, "the caller is back at its prior count");
+  assert.equal((await rowsFor(addressK)).length, 0, "the address row is gone: it did not exist before");
+});
+
+// Mutation: release in more than one statement.
+test("a release is one statement whatever the number of keys", async () => {
+  const h = caller();
+  const to = address();
+  track(h, to);
+  const claim = await claimSignInLink(h, to);
+  assert.ok(claim.status === "ok");
+  statements = 0;
+  await releaseSignInLink(claim.claimed);
+  assert.equal(statements, 1);
+});
+
+// Mutation: `count = count - 1` without the delete branch (23514 on the CHECK count between 1 and 1000).
+test("releasing a row at count 1 removes it and violates no CHECK", async () => {
+  const k = `check-${stamp}-one`;
+  keys.push(k);
+  const day = todayInBogota();
+  await fixtures`insert into finances.sign_in_claims (client_key, day, count) values (${k}, ${day}, 1)`;
+  await releaseSignInLink({ day, keys: [k] });
+  assert.equal((await rowsFor(k)).length, 0);
+});
+
+// Mutation: delete at every count.
+test("releasing a row above 1 takes exactly one off", async () => {
+  const k = `check-${stamp}-many`;
+  keys.push(k);
+  const day = todayInBogota();
+  await fixtures`insert into finances.sign_in_claims (client_key, day, count) values (${k}, ${day}, 5)`;
+  await releaseSignInLink({ day, keys: [k] });
+  assert.deepEqual(await rowsFor(k), [{ count: 4, day }]);
+});
+
+// Mutation: drop `day =` from the where; drop the key filter.
+test("a release touches no other day and no other key", async () => {
+  const [a, b] = [`check-${stamp}-ka`, `check-${stamp}-kb`];
+  keys.push(a, b);
+  const today = todayInBogota();
+  const yesterday = (await fixtures<{ d: string }[]>`select (${today}::date - 1)::text as d`)[0].d;
+  await fixtures`insert into finances.sign_in_claims (client_key, day, count) values
+    (${a}, ${today}, 3), (${a}, ${yesterday}, 3), (${b}, ${today}, 3), (${b}, ${yesterday}, 1)`;
+  await releaseSignInLink({ day: today, keys: [a] });
+  assert.deepEqual(await rowsFor(a), [
+    { count: 3, day: yesterday },
+    { count: 2, day: today },
+  ]);
+  assert.deepEqual(await rowsFor(b), [
+    { count: 1, day: yesterday },
+    { count: 3, day: today },
+  ]);
+});
+
+// Mutation: a release of a key with no row inserts or throws.
+test("releasing a key that holds no row does nothing", async () => {
+  const k = `check-${stamp}-ghost`;
+  keys.push(k);
+  await releaseSignInLink({ day: todayInBogota(), keys: [k] });
+  assert.equal((await rowsFor(k)).length, 0);
+});
+
+// Mutation: the refused-caller path claims the address or hands back keys.
+test("a refusal hands back nothing to release", async () => {
+  const h = caller();
+  for (let i = 0; i < clientCap; i += 1) {
+    const to = address();
+    track(h, to);
+    await claimSignInLink(h, to);
+  }
+  const to = address();
+  track(h, to);
+  assert.deepEqual(await claimSignInLink(h, to), { status: "rateLimited" });
 });

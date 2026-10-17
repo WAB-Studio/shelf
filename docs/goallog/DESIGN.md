@@ -1826,3 +1826,18 @@ Board «EntrarCódigo», GoalLog, 360 and 1280, for `/entrar` and `AutorizarSinS
 
 - **A daily cap on sign-in links per client, the twin of HomeFund's RF-143.** It takes the next free RP when the planner
   cuts it. Not built yet.
+
+## Boards of 2026-10-17: «Pedir otro código» (codigo-6b)
+
+Canvas «Bitácora de metas», page «Armazón», from y=13700. 360 five states and the signed-out consent waiting, 1280
+waiting. Not built yet.
+
+- Between the muted link sentence and the ghost «Usar otro correo», a ghost accent `Button`:
+  - Waiting: disabled «Pedir otro en {seconds} s», counted from the last send (60 s).
+  - Ready: «Pedir otro código».
+  - Pending: «Enviando…», the controls at 55 %.
+  - Done: the sentence «Te mandamos otro código a {email}. Usa el del último correo.», the address as `Figure` meta;
+    the wait restarts.
+  - Refused: a sentence with `role="alert"` under the button, `errors.rateLimited`'s words.
+- The signed-out consent shows the same step; its other states are the ones of `/entrar`.
+- The mail is HomeFund's shared template (canvas «HomeFund», «CorreoV2»).

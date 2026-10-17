@@ -85,7 +85,11 @@ function MemberForm({
   // Two hooks, not one behind a ternary: the actions' input types differ, and
   // rules of hooks forbid picking which one to call.
   const create = useAction(createMemberAction, {
-    onSuccess: onActionSuccess,
+    onSuccess({ data }) {
+      onActionSuccess();
+      // A failed send still lands the member as pending; surface it, don't fail.
+      if (data?.inviteEmailFailed) toast.warning(tKey("onboarding.inviteStep.emailFailed"));
+    },
     onError: onActionError,
   });
   const update = useAction(updateMemberAction, {

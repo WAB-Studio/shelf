@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { env } from "@/lib/env";
+import { SIGNED_IN_MARKER } from "@/lib/auth/signed-in-marker";
 import { landingAfterSignIn, verifyMagicLink, type FailureReason } from "@/lib/auth/verify-magic-link";
 
 const supabaseConfig = {
@@ -67,5 +68,7 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(new URL(landingAfterSignIn(query.data.next, env.NEXT_PUBLIC_SITE_URL), request.url));
   authHeaders.forEach((value, name) => response.headers.set(name, value));
+  // Script-readable on purpose (RP-136): the code step reads it, so it is not httpOnly.
+  response.cookies.set(SIGNED_IN_MARKER, String(Date.now()), { path: "/", maxAge: 3600, sameSite: "lax" });
   return response;
 }

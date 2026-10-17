@@ -45,6 +45,11 @@ const ES = {
   invalid: "Ese código no vale o ya venció. Usa el del último correo o pide otro.",
   timeout: "No se pudo comprobar el código. Vuelve a intentarlo; si no entra, pide otro.",
   tooMany: "Demasiados intentos con el código. Espera unos minutos.",
+  resend: "Pedir otro código",
+  resendIn: (seconds: number) => `Pedir otro en ${seconds} s`,
+  resending: "Enviando otro código",
+  resent: (email: string) => `Te mandamos otro código a ${email}. Usa el del último correo.`,
+  capped: "Ya pediste varios códigos hoy. Usa el último que te llegó o vuelve mañana.",
 };
 const EN = {
   hint: "We send you a code to sign in without a password.",
@@ -55,6 +60,12 @@ const EN = {
   enter: "Sign in",
   incomplete: "Type the six digits from the email.",
   invalid: "That code is wrong or expired. Use the one in the latest email or ask for another.",
+  resend: "Ask for another code",
+  resendIn: (seconds: number) => `Ask again in ${seconds} s`,
+  resending: "Sending another code",
+  resent: (email: string) => `We sent another code to ${email}. Use the one in the latest email.`,
+  capped: "You already asked for several codes today. Use the latest one you got, or come back tomorrow.",
+  rateLimited: "You asked for too many codes in a row. Wait a moment and try again.",
 };
 
 const stamp = randomUUID().slice(0, 8);
@@ -599,5 +610,277 @@ test.describe("the 360 face", () => {
     } finally {
       await context.close();
     }
+  });
+});
+
+// Another code (board «LoginCódigoOtro»): the countdown is read on a paused clock that starts at the stored
+// `sentAt`, so «60 s» and «30 s» are exact and no test waits a real minute.
+const PENDING_KEY = "homefund.pending-sign-in";
+const MARKER = "homefund-signed-in-at";
+const resendOf = (page: Page, name = ES.resend) => page.getByRole("button", { name, exact: true });
+
+async function storedSentAt(page: Page): Promise<number> {
+  const raw = await page.evaluate((key) => localStorage.getItem(key), PENDING_KEY);
+  expect(raw, "the send left its record on the device").not.toBeNull();
+  return (JSON.parse(raw!) as { sentAt: number }).sentAt;
+}
+
+// A relaunch of the installed app, `offsetMs` after the send, with the page's clock frozen there.
+async function reopenAt(context: BrowserContext, path: string, sentAt: number, offsetMs: number): Promise<Page> {
+  const page = await context.newPage();
+  await page.clock.install({ time: sentAt + offsetMs - 1_000 });
+  await page.clock.pauseAt(sentAt + offsetMs);
+  await page.goto(path);
+  return page;
+}
+
+// The code step of a send that has already happened, reopened on a frozen clock.
+async function sentAndReopened(browser: Browser, baseURL: string, offsetMs: number, path = "/es/login") {
+  const asked = await askForCode(browser, baseURL, { path });
+  const sentAt = await storedSentAt(asked.page);
+  await asked.page.close();
+  const page = await reopenAt(asked.context, path, sentAt, offsetMs);
+  await expect(fieldOf(page)).toBeVisible();
+  return { ...asked, page, sentAt };
+}
+
+async function mailCount(email: string): Promise<number> {
+  const found = (await (await fetch(`${MAILBOX}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)).json()) as {
+    messages_count: number;
+  };
+  return found.messages_count;
+}
+
+async function waitForMails(email: string, count: number) {
+  await expect.poll(() => mailCount(email)).toBe(count);
+}
+
+// A tap on «Pedir otro código» once it is ready: a button that never arrives fails here, not on a 30 s click.
+async function tap(page: Page) {
+  await expect(resendOf(page)).toBeEnabled();
+  await resendOf(page).click();
+}
+
+test.describe("another code", () => {
+  test.skip(({ viewport }) => viewport?.width === 360, "the states are read once, on the laptop");
+
+  test("the wait is 60 s from the send: disabled at 60 s and at +59 s, ready at +60 s", async ({ browser, baseURL }) => {
+    // Kills: RESEND_WAIT_MS = 0.
+    const { context, page } = await sentAndReopened(browser, baseURL!, 0);
+    try {
+      const waiting = resendOf(page, ES.resendIn(60));
+      await expect(waiting).toBeVisible();
+      await expect(waiting).toBeDisabled();
+      await page.clock.runFor(59_000);
+      await expect(page.getByRole("button", { name: /^Pedir otro en \d+ s$/ })).toBeDisabled();
+      await page.clock.runFor(1_000);
+      await expect(resendOf(page)).toBeEnabled();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a relaunch 30 s after the send resumes the wait at 30 s", async ({ browser, baseURL }) => {
+    // Kills: counting from the mount instead of from the stored `sentAt`.
+    const { context, page } = await sentAndReopened(browser, baseURL!, 30_000);
+    try {
+      await expect(resendOf(page, ES.resendIn(30))).toBeDisabled();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("pending: one send for the stored address; spinner and «Enviando otro código»; the rest disabled; a second tap sends nothing", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: no `disabled` while pending; «Usar otro correo» left enabled; a send to another address.
+    const { email, context, page } = await sentAndReopened(browser, baseURL!, 60_000);
+    try {
+      const bodies: string[] = [];
+      let release!: () => void;
+      const held = new Promise<void>((done) => (release = done));
+      await page.route(ACTION_URL, async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"]) {
+          bodies.push(request.postData() ?? "");
+          await held;
+        }
+        await route.continue();
+      });
+      await tap(page);
+
+      const sending = resendOf(page, ES.resending);
+      await expect(sending).toBeVisible();
+      await expect(sending).toBeDisabled();
+      await expect(sending.locator(".rt-Spinner")).toBeVisible();
+      await expect(enterOf(page)).toBeDisabled();
+      await expect(fieldOf(page)).toBeDisabled();
+      await expect(anotherOf(page)).toBeDisabled();
+
+      await sending.dispatchEvent("click");
+      release();
+      await expect(page.getByText(ES.resent(email), { exact: true })).toBeVisible();
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]).toContain(email);
+      await waitForMails(email, 2);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("done: the status line names the address, the field is empty and focused, the wait is back at 60 s, the newest code lands", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: keeping the old code in the field; not restarting the wait; no status line.
+    const { email, code: first, context, page } = await sentAndReopened(browser, baseURL!, 60_000);
+    try {
+      const field = fieldOf(page);
+      await field.fill(wrongCode(first));
+      await tap(page);
+      await expect(page.getByText(ES.resent(email), { exact: true })).toBeVisible();
+      await expect(field).toHaveValue("");
+      await expect(field).toBeFocused();
+      await expect(resendOf(page, ES.resendIn(60))).toBeDisabled();
+
+      await waitForMails(email, 2);
+      const newest = await mailedCode(email);
+      await field.pressSequentially(newest);
+      await enterOf(page).click();
+      await expect(page).toHaveURL(/\/es$/);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a send the day's cap refuses: the toast in the new words, the button ready again, the wait not restarted", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: restarting the wait on error; the old «enlaces» words; a refused send that still stores a new `sentAt`.
+    const { email, context, page } = await sentAndReopened(browser, baseURL!, 60_000);
+    try {
+      await tap(page);
+      await waitForMails(email, 2);
+      await expect(resendOf(page, ES.resendIn(60))).toBeDisabled();
+      await page.clock.runFor(60_000);
+      await expect(resendOf(page)).toBeEnabled();
+      await tap(page);
+      await waitForMails(email, 3);
+      await expect(resendOf(page, ES.resendIn(60))).toBeDisabled();
+      await page.clock.runFor(60_000);
+      await expect(resendOf(page)).toBeEnabled();
+
+      const before = await storedSentAt(page);
+      await tap(page);
+      // Sonner mounts a toast inside a setTimeout, which a paused clock never fires: tick until the answer has landed.
+      await expect(async () => {
+        await page.clock.runFor(1);
+        await expect(toasts(page).filter({ hasText: ES.capped })).toBeVisible({ timeout: 250 });
+      }).toPass();
+      await expect(resendOf(page)).toBeEnabled();
+      expect(await storedSentAt(page)).toBe(before);
+      expect(await mailCount(email)).toBe(3);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("the page asked for is kept: a resend from /login?next=… still lands there", async ({ browser, baseURL }) => {
+    // Kills: binding `undefined` instead of `next` to the resend.
+    const { email, context, page } = await sentAndReopened(browser, baseURL!, 60_000, "/es/login?next=/es/movements");
+    try {
+      await tap(page);
+      await expect(page.getByText(ES.resent(email), { exact: true })).toBeVisible();
+      await waitForMails(email, 2);
+      await fieldOf(page).pressSequentially(await mailedCode(email));
+      await enterOf(page).click();
+      await expect(page).toHaveURL(new URL("/es/movements", baseURL!).href);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("while the code is being checked the resend is disabled", async ({ browser, baseURL }) => {
+    // Kills: a resend that ignores the verification in flight.
+    const { code, context, page } = await sentAndReopened(browser, baseURL!, 60_000);
+    try {
+      await expect(resendOf(page)).toBeEnabled();
+      let release!: () => void;
+      const held = new Promise<void>((done) => (release = done));
+      await answerActionWith(page, "errors.codeTimeout", held);
+      await fieldOf(page).fill(code);
+      await enterOf(page).click();
+      await expect(page.getByRole("button", { name: ES.checking, exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Pedir otro/ })).toBeDisabled();
+      release();
+      await expect(resendOf(page)).toBeEnabled();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a link that landed after the send clears the pending code: the login opens on the email form and the record is gone", async ({
+    browser,
+    baseURL,
+  }) => {
+    // Kills: ignoring the marker cookie.
+    const { context, page } = await askForCode(browser, baseURL!);
+    try {
+      const sentAt = await storedSentAt(page);
+      await context.addCookies([{ name: MARKER, value: String(sentAt + 5_000), url: baseURL! }]);
+      await page.goto("/es/login");
+      await settled(page);
+      await expect(page.getByLabel(messages.auth.emailLabel)).toBeVisible();
+      await expect(fieldOf(page)).toHaveCount(0);
+      expect(await page.evaluate((key) => localStorage.getItem(key), PENDING_KEY)).toBeNull();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a marker older than the send does not clear it: the code step opens", async ({ browser, baseURL }) => {
+    // Kills: comparing the marker the wrong way round.
+    const { context, page } = await askForCode(browser, baseURL!);
+    try {
+      const sentAt = await storedSentAt(page);
+      await context.addCookies([{ name: MARKER, value: String(sentAt - 60_000), url: baseURL! }]);
+      await page.goto("/es/login");
+      await expect(fieldOf(page)).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("words: «código» in the page description and both toasts, never «enlace»; the old description is gone", () => {
+    // Kills: leaving the link words in es.json or en.json; keeping `auth.loginDescription`.
+    // The keys do not exist until the worker adds them, so the files are read as plain records.
+    const esAuth = messages.auth as unknown as Record<string, string>;
+    const enAuth = en.auth as unknown as Record<string, string>;
+    expect(esAuth.resend).toBe(ES.resend);
+    expect(esAuth.resendIn).toBe("Pedir otro en {seconds} s");
+    expect(esAuth.resending).toBe(ES.resending);
+    expect(esAuth.resent).toBe("Te mandamos otro código a {email}. Usa el del último correo.");
+    expect(messages.errors.signInLinkCapped).toBe(ES.capped);
+    expect(messages.errors.emailRateLimited).toBe("Pediste demasiados códigos seguidos. Espera un momento y vuelve a intentarlo.");
+    expect(messages.metadata.loginDescription).toBe("Entra con un código enviado a tu correo, sin contraseña.");
+    expect(enAuth.resend).toBe(EN.resend);
+    expect(enAuth.resendIn).toBe("Ask again in {seconds} s");
+    expect(enAuth.resending).toBe(EN.resending);
+    expect(enAuth.resent).toBe("We sent another code to {email}. Use the one in the latest email.");
+    expect(en.errors.signInLinkCapped).toBe(EN.capped);
+    expect(en.errors.emailRateLimited).toBe(EN.rateLimited);
+    expect(en.metadata.loginDescription).toBe("Sign in with a code sent to your email, no password needed.");
+    for (const text of [messages.metadata.loginDescription, messages.errors.signInLinkCapped, messages.errors.emailRateLimited]) {
+      expect(text).toContain("código");
+      expect(text).not.toContain("enlace");
+    }
+    for (const text of [en.metadata.loginDescription, en.errors.signInLinkCapped, en.errors.emailRateLimited]) {
+      expect(text).toContain("code");
+      expect(text).not.toMatch(/link/i);
+    }
+    expect("loginDescription" in esAuth).toBe(false);
+    expect("loginDescription" in enAuth).toBe(false);
   });
 });

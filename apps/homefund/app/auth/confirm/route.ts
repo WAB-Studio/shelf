@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { routing } from "@/i18n/routing";
 import { landSession } from "@/lib/auth/land-session";
+import { SIGNED_IN_MARKER, SIGNED_IN_MARKER_MAX_AGE } from "@/lib/auth/signed-in-marker";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/locales";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -91,6 +92,12 @@ export async function GET(request: NextRequest) {
   response.cookies.set("NEXT_LOCALE", locale, {
     path: "/",
     maxAge: LOCALE_COOKIE_MAX_AGE,
+    sameSite: "lax",
+  });
+
+  response.cookies.set(SIGNED_IN_MARKER, String(Date.now()), {
+    path: "/",
+    maxAge: SIGNED_IN_MARKER_MAX_AGE,
     sameSite: "lax",
   });
 

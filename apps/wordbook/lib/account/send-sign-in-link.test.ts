@@ -5,12 +5,16 @@
 // `await import` of a symlinked workspace package, and the real client loaded.
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
+import { AuthRetryableFetchError } from "@supabase/supabase-js";
 import { beforeEach, test } from "node:test";
 
 const calls: string[] = [];
 let mxAnswer: () => Promise<{ exchange: string; priority: number }[]>;
-let claimAnswer: "ok" | "rateLimited" | "noKey";
+const CLAIMED_KEYS = ["signin:caller-key", "signin-to:recipient-key"];
+type Claim = { status: "ok"; keys: string[] } | { status: "rateLimited" } | { status: "noKey" };
+let claimAnswer: Claim;
 let otpError: { status: number } | null;
+const released: string[][] = [];
 let listAnswer: () => Promise<boolean>;
 const listAsked: string[] = [];
 
@@ -30,6 +34,10 @@ const double = {
   claim: async () => {
     calls.push("claim");
     return claimAnswer;
+  },
+  release: async (keys: string[]) => {
+    calls.push("release");
+    released.push(keys);
   },
   createClient: () => ({
     auth: {
@@ -51,7 +59,8 @@ const DOUBLES: Record<string, string> = {
   "next/navigation": "export const redirect = () => undefined;",
   "next/headers": `export const headers = () => ${D}.headers();`,
   "@/lib/auth/allowlist": `export const isEmailAllowed = (...a) => ${D}.allowed(...a);`,
-  "@/lib/account/sign-in-budget": `export const claimSignInLink = (...a) => ${D}.claim(...a);`,
+  "@/lib/account/sign-in-budget": `export const claimSignInLink = (...a) => ${D}.claim(...a);
+    export const releaseSignInLink = (...a) => ${D}.release(...a);`,
   "@/lib/env": `export const env = { NEXT_PUBLIC_SUPABASE_URL: "http://stub.invalid", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "stub", NEXT_PUBLIC_SITE_URL: "http://site.invalid" };`,
   "@repo/supabase-auth": `export const createSupabaseServerClient = (...a) => ${D}.createClient(...a);`,
 };
@@ -76,7 +85,8 @@ async function getAction() {
 beforeEach(() => {
   calls.length = 0;
   mxAnswer = async () => [{ exchange: "mx.live.test", priority: 10 }];
-  claimAnswer = "ok";
+  claimAnswer = { status: "ok", keys: CLAIMED_KEYS };
+  released.length = 0;
   otpError = null;
   listAnswer = async () => true;
   listAsked.length = 0;
@@ -108,7 +118,7 @@ test("a listed deliverable address claims the budget, is checked against the lis
 });
 
 test("a caller over their allowance never reaches Supabase", async () => {
-  claimAnswer = "rateLimited";
+  claimAnswer = { status: "rateLimited" };
   const result = await (await getAction()).sendSignInLink("reader@live.test");
   assert.deepEqual(result, { ok: false, error: "rateLimited" });
   assert.deepEqual(calls, ["mx:live.test", "claim"], "a refused claim reached Supabase");
@@ -150,9 +160,67 @@ test("a dead domain is refused before the list is read", async () => {
 });
 
 test("a caller over their allowance is refused before the list is read", async () => {
-  claimAnswer = "rateLimited";
+  claimAnswer = { status: "rateLimited" };
   listAnswer = async () => false;
   const result = await (await getAction()).sendSignInLink("stranger@live.test");
   assert.deepEqual(result, { ok: false, error: "rateLimited" });
   assert.ok(!calls.includes("list"));
+});
+
+// Auth-accepted sends only: a send Auth refused or never took gives the allowance back.
+test("Auth answering 429 releases exactly the claimed keys and the result stays rateLimited", async () => {
+  otpError = { status: 429 };
+  const result = await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(result, { ok: false, error: "rateLimited" });
+  assert.deepEqual(released, [CLAIMED_KEYS]);
+});
+
+test("Auth answering 500 releases the claimed keys and the result stays sendFailed", async () => {
+  otpError = { status: 500 };
+  const result = await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(result, { ok: false, error: "sendFailed" });
+  assert.deepEqual(released, [CLAIMED_KEYS]);
+});
+
+test("a timeout from Auth keeps the allowance: Auth may have sent the mail", async () => {
+  otpError = new AuthRetryableFetchError("fetch failed", 0) as unknown as { status: number };
+  const result = await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(result, { ok: false, error: "sendFailed" });
+  assert.deepEqual(released, []);
+});
+
+test("an address off the list keeps the allowance spent", async () => {
+  listAnswer = async () => false;
+  const result = await (await getAction()).sendSignInLink("stranger@live.test");
+  assert.deepEqual(result, { ok: false, error: "notInvited" });
+  assert.deepEqual(released, []);
+});
+
+test("a list that cannot be read keeps the allowance spent", async () => {
+  listAnswer = async () => {
+    throw new Error("connection refused");
+  };
+  await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(released, []);
+});
+
+test("a send Auth accepted keeps the allowance spent", async () => {
+  const result = await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(released, []);
+});
+
+test("no claim, no release: a refused claim has nothing to give back", async () => {
+  claimAnswer = { status: "rateLimited" };
+  await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(released, []);
+});
+
+test("noKey claim: Auth failing releases nothing (there are no keys) and the send still ran", async () => {
+  claimAnswer = { status: "noKey" };
+  otpError = { status: 500 };
+  const result = await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(result, { ok: false, error: "sendFailed" });
+  assert.ok(calls.includes("signInWithOtp"));
+  assert.deepEqual(released.filter((k) => k.length > 0), []);
 });

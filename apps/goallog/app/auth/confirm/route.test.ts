@@ -5,6 +5,8 @@ import test, { before, beforeEach, mock } from "node:test";
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest } from "next/server";
 
+import { SIGNED_IN_MARKER } from "@/lib/auth/signed-in-marker";
+
 // RP-131 and RP-18: `/auth/confirm` lands a `code` link only in the browser that holds its verifier, and
 // still lands a `token_hash` link. The real `@repo/supabase-auth` and `@supabase/ssr` run; Supabase itself
 // is a fake `fetch`, so every request the route makes to Auth is counted and nothing leaves the process.
@@ -200,4 +202,47 @@ test("a link with neither a code nor a token_hash is linkInvalid and Auth is nev
   const response = await land("type=magiclink");
   assert.equal(target(response), "/entrar?error=linkInvalid");
   assert.equal(authCalls.length, 0);
+});
+
+// RP-136: a landed link leaves a readable marker so the code step can tell its pending code is spent.
+const marker = (response: Response) =>
+  response.headers.getSetCookie().find((line) => line.startsWith(`${SIGNED_IN_MARKER}=`));
+
+test("a landed link leaves the signed-in marker, readable by script, for an hour", async () => {
+  await askForLink();
+  const line = marker(await land("code=c-123"));
+  assert.ok(line, "the marker is set");
+  assert.match(line, new RegExp(`^${SIGNED_IN_MARKER}=\\d+;`));
+  assert.match(line, /Path=\//i);
+  assert.match(line, /Max-Age=3600/i);
+  assert.match(line, /SameSite=lax/i);
+  assert.doesNotMatch(line, /HttpOnly/i);
+});
+
+test("a landed token_hash link leaves the marker too", async () => {
+  assert.ok(marker(await land("token_hash=h-1&type=magiclink")));
+});
+
+test("a landing on the consent leaves the marker and keeps its target", async () => {
+  await askForLink();
+  const next = "/oauth/autorizar?client_id=a";
+  const response = await land(`code=c-123&next=${encodeURIComponent(next)}`);
+  assert.equal(target(response), next);
+  assert.ok(marker(response));
+});
+
+test("a refused link leaves no marker", async () => {
+  await askForLink();
+  tokenAnswer = "refused";
+  assert.equal(marker(await land("code=c-123")), undefined);
+});
+
+test("a timed-out link leaves no marker", async () => {
+  await askForLink();
+  tokenAnswer = "timeout";
+  assert.equal(marker(await land("code=c-123")), undefined);
+});
+
+test("a link opened in another browser leaves no marker", async () => {
+  assert.equal(marker(await land("code=c-123")), undefined);
 });

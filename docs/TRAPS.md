@@ -3347,3 +3347,24 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   two unpushed commits. They came back with `git branch <name> <sha>` because the objects were still in the shared `.git`.
 - Do: push and check `git ls-remote` in one command; remove a worktree or delete a branch in a later command, after reading
   that the remote holds the tip.
+
+## Auth's per-address mail window outlives a faked browser clock (2026-10-17)
+
+- `page.clock` moves only the browser. A spec that sends a code, fast-forwards 60 s and taps «Pedir otro código» reaches
+  Auth well under a second of real time after the first send.
+- Measured 2026-10-17, train codigo-6b: with Auth's default window (60 s) every resend spec in HomeFund and GoalLog went
+  red with «you can only request this after N seconds»; with `max_frequency = "1s"` two of them still flaked
+  («after 0 seconds»). `"0s"` is read as unset: the log says «after 59 seconds», Auth's default again.
+- Do: keep `max_frequency = "1ms"` under `[auth.email]` in `supabase/config.toml` for the local stack. The hosted project
+  keeps its own window; the app's 60 s countdown matches it.
+- A change to `config.toml` loads only on a stack restart: restart from a lane with `node_modules` whose checkout holds the
+  change, while no lane runs a suite.
+
+## A lane's dev server keeps the environment it started with (2026-10-17)
+
+- `scripts/supabase-local.sh exec` exports the stack's variables once, when the server starts. A server started before a
+  branch added a variable to `print_env` never sees it, and Next's lock on the directory stops a second one.
+- Measured 2026-10-17, train codigo-6b: the validator's HomeFund server on :3001 dated from before M3 had no
+  `SUPABASE_SECRET_KEY`; 10 of 54 invite and members specs went red («invite email not sent: SUPABASE_SECRET_KEY is not
+  set»). Restarted under the wrapper: 54/54.
+- Do: restart a lane's dev server after any change to `scripts/supabase-local.sh` or `.env.local`, before judging a spec.

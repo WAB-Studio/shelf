@@ -1,6 +1,7 @@
 // Adds one address to `finances.allowed_emails`, the list of people invited to HomeFund (RF-145), and gives it a
 // confirmed Auth user so its first sign-in link finds one. Usage: npm run allow-email -- <address>.
-// The service-role key comes from this machine's environment alone: never `lib/env.ts`, never a Vercel project.
+// It reads the service-role key from this machine's environment; the server's own `SUPABASE_SECRET_KEY` (`lib/env.ts`,
+// the invitation's mail, RF-148) is another variable and never reaches this script.
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 

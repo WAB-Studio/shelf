@@ -15,7 +15,7 @@ import { pgErrorCode } from "@/lib/db-error";
 import { env } from "@/lib/env";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   archiveMemberSchema,
   createMemberSchema,
@@ -41,17 +41,18 @@ function notLeader(): never {
   throw new ActionError("errors.notLeader");
 }
 
-// RF-06: the same passwordless path as sign-in, so the invited person accepts by
-// clicking the link. `shouldCreateUser` provisions the address if it has none.
-// Returns false on failure so the create stays non-fatal — the member still lands.
+// RF-06 / RF-148: Auth's own invitation, sent from the server with the secret key,
+// so nothing runs in the inviter's browser and the mail is the invite template.
+// The 0058 trigger has already put the address on the list. Returns false on any
+// failure, an address Auth already holds included, so the member still lands.
 async function sendInviteEmail(email: string): Promise<boolean> {
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      shouldCreateUser: true,
-      emailRedirectTo: `${env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
-    },
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    console.error("invite email not sent: SUPABASE_SECRET_KEY is not set");
+    return false;
+  }
+  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${env.NEXT_PUBLIC_SITE_URL}/login`,
   });
   if (error) {
     console.error("invite email request failed", error);

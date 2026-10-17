@@ -4963,8 +4963,12 @@ async function serverEntriesSuite(scope: HarnessScope): Promise<void> {
     | undefined;
 
   const longAddress = `${"a".repeat(81 - "@example.com".length)}@example.com`;
-  const sent = (): string[] =>
+  // RF-148: the invitation is Auth's admin invite; the code mail must never be asked for here.
+  const invites = (): { email: string; redirectTo?: string }[] =>
+    ((globalThis as { harnessAdminInvites?: { email: string; redirectTo?: string }[] }).harnessAdminInvites ??= []);
+  const codeMails = (): string[] =>
     ((globalThis as { harnessInvitesSent?: string[] }).harnessInvitesSent ??= []);
+  const sent = (): string[] => [...invites().map((i) => i.email), ...codeMails()];
   const storedFor = async (email: string) =>
     fixtureSql<{ id: string; name: string; invite_email: string | null }[]>`
       select id, name, invite_email from group_members
@@ -4974,13 +4978,14 @@ async function serverEntriesSuite(scope: HarnessScope): Promise<void> {
   const rows = await storedFor(longAddress);
   for (const row of rows) track("group_members", row.id);
   assert(
-    next("Inviting an address of 81 characters creates the member under a name cut to 80 and sends the invite"),
+    next("Inviting an address of 81 characters creates the member under a name cut to 80 and asks Auth for the invitation, not the code mail"),
     accepted?.data?.inviteEmailFailed === false &&
       rows.length === 1 &&
       rows[0].name === longAddress.slice(0, 80) &&
       rows[0].invite_email === longAddress &&
-      sent().includes(longAddress),
-    `data = ${JSON.stringify(accepted?.data)}, serverError = ${accepted?.serverError ?? "none"}, ${rows.length} row(s), name length ${rows[0]?.name.length}, mails sent = ${sent().includes(longAddress)}`,
+      invites().some((i) => i.email === longAddress && i.redirectTo?.endsWith("/login")) &&
+      !codeMails().includes(longAddress),
+    `data = ${JSON.stringify(accepted?.data)}, serverError = ${accepted?.serverError ?? "none"}, ${rows.length} row(s), name length ${rows[0]?.name.length}, invites asked = ${JSON.stringify(invites().filter((i) => i.email === longAddress))}, code mail = ${codeMails().includes(longAddress)}`,
   );
 
   const mailsBefore = sent().length;
