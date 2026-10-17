@@ -1763,3 +1763,18 @@ Canvas version 48. Every board draws the dark 360 face; `RegistroBorrarFila` add
     palabra no tuvo resultado todavía.} other {ninguna de tus # palabras tuvo resultado todavía.}}»;
   - the card: the front as today; the back the logged translation or, when the network answered, its definition.
   Preparando and Falló are those of `RegistroExportarAnkiEstados`. Not built yet.
+
+## Decisions of 2026-10-17, after the critic of train 4 (#646), by the user
+
+- **No note on a device with no reader on record.** A device that never had an account, or signed in and never started its
+  copy, queues no mark (`lib/log/delete.ts:90`), so «Tu cuenta lo borra cuando vuelvas a entrar.» was false there: the
+  deleted word came back when that device started its copy. That device shows only «Se borran … No se puede deshacer.».
+  The note stays on a signed-out device that keeps its reader, where it is true. Needs the board `RegistroBorrarFilaSinCuenta`
+  redrawn with the two cases and one condition in `history-list.tsx`. Not built yet.
+- **The Anki line says why old searches give no card.** Dictionary hits recorded before the log stored translations have
+  no back, and «sin resultado… todavía» contradicted the word's own page. The line says the truth and the fix, for
+  example «N palabras no van: se buscaron antes de que el registro guardara su traducción. Búscalas otra vez y tendrán
+  tarjeta.». Two strings and the board `RegistroExportarAnkiSinTarjeta` redrawn. Not built yet.
+- **Found by the same critic, no decision needed:** «Vaciar el registro» in one tab can wipe more than it names when
+  another tab records searches (the recount events stay in their tab); RL-72's definition back is unreachable today,
+  because the network route refuses an answer with no translation (`unlisted-protocol.ts:18`).
