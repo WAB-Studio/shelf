@@ -129,6 +129,11 @@ async function askForCode(page: Page, db: postgres.Sql, email: string, path = "/
   await register(db, email);
 }
 
+// Kills: a landed code that leaves the pending address on the device, so a later sign-out reopens the code step.
+async function expectNoPending(page: Page) {
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("goallog.pending-sign-in"))).toBeNull();
+}
+
 const codeField = (page: Page) => page.getByLabel(W.codeLabel);
 
 let consentPath = "";
@@ -356,6 +361,7 @@ test("Done · /entrar: the mailed code, typed, lands on / with a session; the ma
     await page.getByRole("button", { name: W.enter, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`^${baseURL!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/$`));
     expect(await sessionsOf(db, email)).toBe(1);
+    await expectNoPending(page);
   } finally {
     await context.close();
     await forget(db, email);
@@ -379,6 +385,7 @@ test("Done · consent: a code typed on the signed-out consent lands back on that
     await expect(page).toHaveURL(`${baseURL}${consentPath}`);
     await expect(page.getByRole("button", { name: "Permitir", exact: true })).toBeVisible();
     expect(await sessionsOf(db, email)).toBe(1);
+    await expectNoPending(page);
   } finally {
     await context.close();
     await forget(db, email);

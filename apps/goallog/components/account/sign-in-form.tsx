@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -45,6 +45,16 @@ export function SignInForm({
   const t = useTranslations("account");
   const [email, setEmail] = useState("");
   const [state, setState] = useState<FormState>({ kind: "idle" });
+  // True from the verify call until a refusal comes back: the form unmounting in between is the code landing.
+  const verifying = useRef(false);
+
+  // A good code redirects and the action never returns, so the landing is seen as the form leaving.
+  useEffect(
+    () => () => {
+      if (verifying.current) clearPending();
+    },
+    [],
+  );
 
   // The step is reopened after a reload, or a relaunch of the installed app, within the code's hour.
   useEffect(() => {
@@ -66,7 +76,9 @@ export function SignInForm({
     }
     setState({ kind: "sent", email: address, code, checking: true });
     // A good code redirects and never returns; only a refusal comes back.
+    verifying.current = true;
     const result = await verifySignInCode(address, code, next);
+    verifying.current = false;
     if (result?.error) setState({ kind: "sent", email: address, code, checking: false, error: result.error });
   }
 
