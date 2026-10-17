@@ -27,7 +27,7 @@ const emailSchema = z.email();
 
 export type SendSignInLinkResult =
   | { ok: true }
-  | { ok: false; error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "rateLimited" | "notInvited" };
+  | { ok: false; error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "rateLimited" | "capped" | "notInvited" };
 
 // RFC 5321 §5.1: no MX falls back to the domain's own address record
 // (implicit MX). RFC 7505: a domain that takes no mail at all publishes
@@ -123,7 +123,7 @@ export async function sendSignInLink(email: string): Promise<SendSignInLinkResul
     import("@/lib/account/sign-in-budget"),
   ]);
   const claim = await claimSignInLink(await headers(), parsed.data);
-  if (claim.status === "rateLimited") return { ok: false, error: "rateLimited" };
+  if (claim.status === "rateLimited") return { ok: false, error: "capped" };
   const spent = claim.status === "ok" ? claim.keys : [];
 
   // RL-69: after the claim, so probing the list spends the caller's allowance like a send does;
