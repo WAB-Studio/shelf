@@ -3340,3 +3340,10 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 ## A push by URL leaves `origin/<branch>` stale, and `git fetch -q` may not refresh it (2026-10-16)
 - Pushing with `git push "https://x-access-token:…@github.com/…" <branch>` does not move the local `origin/<branch>`. Twice a train merged `origin/homefund-m23` or `origin/homefund-m24` after a `git fetch -q` and got the old tip: «merge 0», nothing merged, and two module branches were cut from a train that lacked the module.
 - Do: merge a module by its SHA from the worker's report, and check `git merge-base --is-ancestor <sha> origin/<train>` (or `git ls-remote`) after the push.
+
+## A failed first step in a `;` chain still drops the lane (2026-10-17)
+- `git log …..<sha> && git push … ; … ; git worktree remove … --force && git branch -D <branch>` ran on: `git log` failed on an
+  unknown `origin/homefund-t4`, so the push never ran, and the `;` went on to remove the lane and delete the only branch holding
+  two unpushed commits. They came back with `git branch <name> <sha>` because the objects were still in the shared `.git`.
+- Do: push and check `git ls-remote` in one command; remove a worktree or delete a branch in a later command, after reading
+  that the remote holds the tip.
