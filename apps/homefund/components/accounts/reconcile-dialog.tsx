@@ -13,6 +13,7 @@ import {
   Dialog,
   Field,
   FieldControl,
+  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -26,7 +27,6 @@ import {
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import type { ReconcileSheet } from "@/db/queries/account-reconciliations";
-import { minorUnitExponent } from "@/lib/currency";
 import { formatMoney } from "@/lib/money";
 import { civilDateToDate, isCivilDate, todayInBogota } from "@/lib/dates";
 import { useActionErrorToast, type MessageKey } from "@/lib/use-action-toast";
@@ -159,6 +159,12 @@ function ReconcileForm({ account }: { account: AccountRow }) {
       ...(withYear ? { year: "numeric" } : {}),
     });
 
+  // A figure as the field takes it: an asset as stored, a debt in magnitude, a minus below zero.
+  const typedFigure = (cents: number) => {
+    const shown = isLiability ? -cents : cents;
+    return `${shown < 0 ? "−" : ""}${formatMoney(Math.abs(shown), currency, locale)}`;
+  };
+
   return (
     <form
       onSubmit={form.handleSubmit((values) => {
@@ -234,10 +240,13 @@ function ReconcileForm({ account }: { account: AccountRow }) {
                   }}
                   id="reconcile-real"
                   size="3"
-                  inputMode={minorUnitExponent(currency) > 0 ? "decimal" : "numeric"}
+                  inputMode="text"
                   readOnly={isPending}
                 />
               </FieldControl>
+              <FieldDescription>
+                {t(isLiability ? "reconcileRealHintLiability" : "reconcileRealHintAsset")}
+              </FieldDescription>
               <FieldError
                 errors={
                   fieldState.error?.message
@@ -269,11 +278,11 @@ function ReconcileForm({ account }: { account: AccountRow }) {
 
         <Flex gap="3" justify="end">
           <Dialog.Close>
-            <Button type="button" size="3" variant="ghost" color="gray" disabled={isPending}>
+            <Button type="button" size="3" tap variant="ghost" color="gray" disabled={isPending}>
               {tKey("common.cancel")}
             </Button>
           </Dialog.Close>
-          <Button type="submit" size="3" disabled={isPending || !sheet}>
+          <Button type="submit" size="3" tap disabled={isPending || !sheet}>
             {isPending && <Spinner />}
             {isPending ? t("reconcilePending") : t("reconcileSubmit")}
           </Button>
@@ -308,8 +317,8 @@ function ReconcileForm({ account }: { account: AccountRow }) {
                 </Flex>
                 <Text size="2" color="gray">
                   {t("reconciliationFigures", {
-                    derived: formatMoney(row.derivedCents, currency, locale),
-                    real: formatMoney(row.countedCents, currency, locale),
+                    derived: typedFigure(row.derivedCents),
+                    real: typedFigure(row.countedCents),
                   })}
                 </Text>
               </Flex>
