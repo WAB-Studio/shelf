@@ -3368,3 +3368,14 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   `SUPABASE_SECRET_KEY`; 10 of 54 invite and members specs went red («invite email not sent: SUPABASE_SECRET_KEY is not
   set»). Restarted under the wrapper: 54/54.
 - Do: restart a lane's dev server after any change to `scripts/supabase-local.sh` or `.env.local`, before judging a spec.
+
+## A harness script that reads every cookie as the session breaks on a new cookie (2026-10-17)
+
+- `apps/goallog/scripts/check-day.ts` joined every cookie of the minted session file and parsed the result as the
+  Supabase session. Train codigo-6b made `/auth/confirm` also set `goallog-signed-in-at`; the minter keeps every
+  `Set-Cookie` of the landing, so the join stopped being JSON.
+- Measured 2026-10-17, CI run 39071089606: `pulsar-checks` red, «session-7.json carries a cookie that is not a session»;
+  every lane's local `check:day` passed because their session files were minted before the change. Re-minting lane 4
+  reproduced it; filtering on `-auth-token` (c0df782c) made it pass.
+- Do: read a session only from the cookies whose name holds `-auth-token`. Re-mint a lane's session after a change to
+  `/auth/confirm`, before trusting a local `check:*`.
