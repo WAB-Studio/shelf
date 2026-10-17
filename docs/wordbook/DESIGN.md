@@ -1801,3 +1801,19 @@ Board «CuentaCódigo», WordBook, dark 360 primary and 1280, under the Copia bl
 
 - **Another code: a «Pedir otro código» button on the code step, with a countdown.** It sends a new code to the same address without typing it again; a send that Auth refuses gives the daily send back. Its boards are not drawn yet.
 - **The code mail names its sender and carries one English line.** One shared template still; a sender name and a short English line under the code. Its board is not drawn yet.
+
+## Boards of 2026-10-17: «Pedir otro código», the address and Enter (codigo-6b)
+
+Canvas «Diccionario de lectura», page «Cuenta», from y=25060. Dark 360 primary (six states), 1280 waiting. Not built yet.
+
+- The status line names the address: «Revisa tu correo y escribe aquí el código que te mandamos a {email}», in the same
+  15 px line.
+- The code field and «Entrar» are one form: Enter sends the code.
+- Under the muted link line, a `Button size 2 variant="soft"`:
+  - Waiting: disabled «Pedir otro en {seconds} s», counted from the last send (60 s).
+  - Ready: «Pedir otro código».
+  - Pending: «Enviando…», every control dimmed.
+  - Done: «Te mandamos otro código a {email}. Usa el del último correo.»; the field empty; the wait restarts.
+  - Refused and Offline: the form's failure shape, with `errors.rateLimited` and `errors.offline`. The offline words
+    still say «enlace»: left for polish.
+- «Usar otro correo» keeps its words and place. A signed-in panel clears the pending code step.

@@ -165,3 +165,28 @@ Board «LoginCódigo», HomeFund, 360 and 1280, inside the existing `Card`. Deci
 
 - **A past month's weekly budget shows that month's last week.** Navigating to a past month, the weekly budget reads the
   last week of that month, not the current one. Not built yet.
+
+## Boards of 2026-10-17: «Pedir otro código» and the mails (codigo-6b)
+
+Canvas «HomeFund», page «Entrar con código», from y=2100. Not built yet.
+
+- **«LoginCódigoOtro»** (360 five states, 1280 waiting), inside the code step's `Card`: under the gray hint «El correo
+  también trae un enlace…» and above «Usar otro correo», a soft `Button` at the form's sizes.
+  - Waiting: disabled «Pedir otro en {seconds} s», counted from the last send (60 s).
+  - Ready: «Pedir otro código».
+  - Pending: spinner + «Enviando otro código»; the field, «Entrar» and «Usar otro correo» disabled.
+  - Done: a status line above the field, «Te mandamos otro código a {email}. Usa el del último correo.»; the field
+    empty and focused; the wait restarts.
+  - Refused: the send's toast (where the app's toaster puts it), the button ready again.
+- **Words of the cap toasts:** «Ya pediste varios códigos hoy. Usa el último que te llegó o vuelve mañana.» and «Pediste
+  demasiados códigos seguidos. Espera un momento y vuelve a intentarlo.» The page description: «Entra con un código
+  enviado a tu correo, sin contraseña.»
+- **«CorreoV2»** (HTML and text): the code mail gains a muted English line after the code, «Your sign-in code: type it
+  on the screen where you asked for it. It expires in one hour.», and a sender name, pending the user's answer. It
+  supersedes the 2026-10-17 «no app name» line above for the sender only; the old mail boards moved to «Archivo».
+- **«CorreoInvitación»** (new): subject «Te invitaron a HomeFund»; «Te agregaron a un fondo compartido en HomeFund, para
+  llevar juntos las cuentas de la casa.»; «Para entrar, abre HomeFund (link to `/login`) y escribe este correo: te
+  mandaremos un código de seis números. No hay contraseña.»; muted English «You were invited to a shared fund on
+  HomeFund. Open the link above and type this email to get a sign-in code.»; muted «Si no esperabas esta invitación,
+  ignora este correo.» No code, no sign-in link, no inviter or fund name.
+- No board for the members dialog's warning; it waits on the user's answer.
