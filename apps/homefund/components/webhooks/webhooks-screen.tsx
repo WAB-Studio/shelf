@@ -28,6 +28,7 @@ import type {
   WebhookCredentialOptions,
   WebhookCredentialRow,
 } from "@/db/queries/webhook-credentials";
+import { scopedCategoryName } from "@/lib/fund/category-names";
 import { TIME_ZONE } from "@/lib/locales";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -84,7 +85,14 @@ export function WebhooksScreen({
   });
 
   const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
-  const categoryNames = new Map(options.categories.map((c) => [c.id, c.name]));
+  const categoryNames = new Map(
+    options.categories.map((c) => [
+      c.id,
+      scopedCategoryName(c.name, c.scope, (name) =>
+        tKey("categories.scopedName", { name }),
+      ),
+    ]),
+  );
 
   function formatDate(value: Date): string {
     return format.dateTime(value, {

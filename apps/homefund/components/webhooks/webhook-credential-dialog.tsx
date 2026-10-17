@@ -27,6 +27,7 @@ import {
   TextField,
 } from "@/components/ui";
 import type { WebhookCredentialOptions } from "@/db/queries/webhook-credentials";
+import { scopedCategoryName } from "@/lib/fund/category-names";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { issueWebhookCredentialSchema } from "@/lib/validation/webhook";
 
@@ -259,7 +260,11 @@ function WebhookCredentialBody({
                         {/* Two categories may share a name across kinds; the kind
                             is what tells them apart. */}
                         <Flex as="span" align="center" gap="2">
-                          {category.name}
+                          {scopedCategoryName(
+                            category.name,
+                            category.scope,
+                            (name) => tKey("categories.scopedName", { name }),
+                          )}
                           <Text size="1" color="gray">
                             {tKey(
                               category.kind === "income"
