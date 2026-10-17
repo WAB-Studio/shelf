@@ -12,10 +12,10 @@ import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
 import { expect, test } from "./fixtures";
 
-// K10, RL-66, RL-70, RNL-09: each /registro row carries a ✕ that deletes its
-// group. Written from SPEC RL-66/RL-70/RNL-09 and the boards RegistroBorrarFila,
-// RegistroBorrarFilaConfirmar and RegistroBorrarFilaFallo (approved 2026-10-16),
-// not from the component. Names come from the message catalogue through the
+// K10, RL-66, RL-70, RNL-11: each /registro row carries a ✕ that deletes its
+// group. Written from SPEC RL-66/RL-70, RNL-11 (successor of RNL-09, approved
+// 2026-10-17) and the boards RegistroBorrarFila, RegistroBorrarFilaConfirmar,
+// RegistroBorrarFilaFallo and RegistroBorrarFilaSinCuenta, not from the component. Names come from the message catalogue through the
 // same ICU runtime the app renders with.
 
 try {
@@ -203,6 +203,31 @@ const confirmTitle = (page: Page, word: string) =>
   page.getByText(study("deleteConfirmTitle", { word }), { exact: true });
 const header = (page: Page, lookups: number, words: number) =>
   page.getByText(study("header", { lookups, words }), { exact: true });
+// The two bodies differ only by « en todos tus dispositivos»: exact or nothing.
+const bodyEveryDevice = (page: Page, count: number) =>
+  page.getByText(study("deleteConfirmBody", { count }), { exact: true });
+const bodyThisDevice = (page: Page, count: number) =>
+  page.getByText(study("deleteConfirmBodyLocal", { count }), { exact: true });
+const localNote = (page: Page) => page.getByText(study("deleteConfirmLocalNote"), { exact: true });
+
+// Every POST to the copy route answers an empty round: a random reader never
+// meets the server, so no 409 rewrites the seeded state under the question.
+async function answerRoundsEmpty(page: Page): Promise<void> {
+  await page.route("**/api/log/sync", (route) => answerJson(route, emptyRound));
+}
+
+function apiRequests(page: Page): string[] {
+  const api: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/")) api.push(request.url());
+  });
+  return api;
+}
+
+const groupIds = async (page: Page, key: string) =>
+  (await readLookups(page)).filter((row) => (row.headword ?? row.normalised) === key).map((row) => row.id).sort();
+const sentMarks = (bodies: Array<{ tombstones: Mark[] }>) =>
+  bodies.flatMap((body) => body.tombstones.map((mark) => mark.localId)).sort();
 
 async function openRegistro(page: Page, seedRows: Parameters<typeof seed>[1]): Promise<void> {
   await deleteTranslator(page);
@@ -267,7 +292,47 @@ for (const viewport of [
 
 // ------------------------------------------------------------- Confirm
 
-test("Confirm: the ✕ opens a question naming the word and its searches; «Conservar» closes it and nothing is deleted; another row's question closes the first", async ({
+test("Asking, copy on: the question promises every device and carries no local note", async ({ page }) => {
+  await answerRoundsEmpty(page);
+  const opened = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
+  await openRegistro(page, { sync: copyOn(), lookups: leaveRows() });
+  await opened;
+  await expect(rowLink(page, "leave")).toBeVisible();
+
+  await deleteX(page, "leave").click();
+  await expect(confirmTitle(page, "leave")).toBeVisible();
+  await expect(bodyEveryDevice(page, 2)).toBeVisible();
+  await expect(bodyThisDevice(page, 2)).toHaveCount(0);
+  await expect(localNote(page)).toHaveCount(0);
+});
+
+// The copy is on only when enabled, with a reader on record and not retired.
+for (const [variant, makeSync] of [
+  ["no account", () => undefined],
+  ["signed out", () => copyOn({ enabled: false })],
+  ["retired", () => copyOn({ retired: true })],
+] as const) {
+  test(`Asking, ${variant}: the question promises this device alone, and the note follows on its own muted 15 px line`, async ({
+    page,
+  }) => {
+    await answerRoundsEmpty(page);
+    await openRegistro(page, { sync: makeSync(), lookups: leaveRows() });
+    await expect(rowLink(page, "leave")).toBeVisible();
+    await page.waitForLoadState("networkidle");
+
+    await deleteX(page, "leave").click();
+    await expect(confirmTitle(page, "leave")).toBeVisible();
+    await expect(bodyThisDevice(page, 2)).toBeVisible();
+    await expect(bodyEveryDevice(page, 2), "promised every device").toHaveCount(0);
+    await expect(localNote(page)).toBeVisible();
+    const body = (await bodyThisDevice(page, 2).boundingBox())!;
+    const note = (await localNote(page).boundingBox())!;
+    expect(note.y, "the note sits below the body, on its own line").toBeGreaterThanOrEqual(body.y + body.height);
+    expect(await localNote(page).evaluate((el) => getComputedStyle(el).fontSize)).toBe("15px");
+  });
+}
+
+test("Cancelled: «Conservar» closes the local question and nothing is deleted; another row's question closes the first", async ({
   page,
 }) => {
   await openRegistro(page, { lookups: leaveRows() });
@@ -275,19 +340,20 @@ test("Confirm: the ✕ opens a question naming the word and its searches; «Cons
 
   await deleteX(page, "leave").click();
   await expect(confirmTitle(page, "leave")).toBeVisible();
-  await expect(page.getByText(study("deleteConfirmBody", { count: 2 }), { exact: true })).toBeVisible();
+  await expect(bodyThisDevice(page, 2)).toBeVisible();
   await expect(deleteX(page, "leave"), "the row's ✕ hides while its question is open").toHaveCount(0);
   await expect(page).toHaveURL((url) => url.pathname === "/registro");
 
   // A second row's question closes the first.
   await deleteX(page, "left").click();
   await expect(confirmTitle(page, "left")).toBeVisible();
-  await expect(page.getByText(study("deleteConfirmBody", { count: 1 }), { exact: true })).toBeVisible();
+  await expect(bodyThisDevice(page, 1)).toBeVisible();
   await expect(confirmTitle(page, "leave")).toHaveCount(0);
   await expect(deleteX(page, "leave")).toBeVisible();
 
   await action(page, study("deleteKeep")).click();
   await expect(confirmTitle(page, "left")).toHaveCount(0);
+  await expect(localNote(page)).toHaveCount(0);
   await expect(deleteX(page, "left")).toBeVisible();
   expect(await readLookups(page), "«Conservar» deleted something").toHaveLength(4);
   await expect(header(page, 4, 3)).toBeVisible();
@@ -326,6 +392,8 @@ test("Pending: a double tap on «Borrar» deletes once and shows «Borrando…»
     (el as HTMLElement).click();
   });
   await expect(page.getByText(study("deleting"), { exact: true })).toBeVisible();
+  await expect(action(page, study("deleting")), "«Borrando…» still takes a tap").toBeDisabled();
+  await expect(action(page, study("deleteKeep")), "«Conservar» still takes a tap").toBeDisabled();
   await expect(rowLink(page, "leave")).toBeVisible();
 
   await page.evaluate(() => ((window as unknown as { __release: boolean }).__release = true));
@@ -378,9 +446,14 @@ test("Failed: an aborted transaction leaves the row and says so; «Conservar» c
   });
 
   const failure = page.getByRole("alert").filter({ hasText: study("deleteFailedTitle", { word: "leave" }) });
-  await deleteViaUi(page, "leave");
+  // No account: the question carries the note, the failure block never does.
+  await deleteX(page, "leave").click();
+  await expect(localNote(page)).toBeVisible();
+  await action(page, study("deleteConfirm")).click();
   await expect(failure).toBeVisible();
   await expect(page.getByText(study("deleteFailedBody", { count: 2 }), { exact: true })).toBeVisible();
+  await expect(localNote(page), "the note followed into the failure").toHaveCount(0);
+  await expect(bodyThisDevice(page, 2)).toHaveCount(0);
   await expect(rowLink(page, "leave"), "the row never left").toBeVisible();
   await expect(header(page, 4, 3)).toBeVisible();
   expect(await readLookups(page)).toHaveLength(4);
@@ -436,61 +509,123 @@ test("Filtered: deleting while filtering keeps the filter and updates «N de M»
   await expect(rowLink(page, "left"), "the filter was reset").toHaveCount(0);
 });
 
-// ---------------------------------------------------- No request on tap
+// ------------------------------------------------- A delete's own round
 
-test("RNL-09: deleting sends no request; the marks wait and leave with the next trigger, once", async ({ page }) => {
+test("RNL-11, copy on: a delete starts exactly one round of its own, with no hide, carrying the group's marks once", async ({
+  page,
+}) => {
   const sync = copyOn();
-  await page.route("**/api/log/sync", (route) => answerJson(route, emptyRound));
+  await answerRoundsEmpty(page);
   const rounds = trackRounds(page);
-  const api: string[] = [];
-  page.on("request", (request) => {
-    if (new URL(request.url()).pathname.startsWith("/api/")) api.push(request.url());
-  });
   await openRegistro(page, { sync, lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
   await expect.poll(rounds.count).toBe(1);
   await page.waitForLoadState("networkidle");
-  const before = { rounds: rounds.count(), api: api.length };
-  const ids = (await readLookups(page)).filter((row) => (row.headword ?? row.normalised) === "leave").map((row) => row.id);
+  const before = rounds.count();
+  const ids = await groupIds(page, "leave");
   expect(ids).toHaveLength(2);
 
   await deleteViaUi(page, "leave");
   await expect(rowLink(page, "leave")).toHaveCount(0);
+  await expect.poll(rounds.count, { message: "the delete started no round", timeout: 3_000 }).toBeGreaterThan(before);
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(500);
-  expect(rounds.count(), "a delete started a round").toBe(before.rounds);
-  expect(api.length, "a delete sent a request").toBe(before.api);
-  expect(await syncKeys(page), "the marks wait in the sync store").toContain("tombstones");
+  expect(rounds.count(), "one delete, one round").toBe(before + 1);
+  const own = rounds.bodies[before];
+  expect(own.tombstones.map((mark) => mark.localId).sort()).toEqual(ids);
+  expect(new Set(own.tombstones.map((mark) => mark.deviceId))).toEqual(new Set([sync.deviceId]));
 
-  // The next trigger carries them.
-  await expect
-    .poll(async () => {
-      await hideTab(page);
-      return rounds.bodies.some((body) => body.tombstones.length > 0);
-    })
-    .toBe(true);
-  const carrying = rounds.bodies.filter((body) => body.tombstones.length > 0);
-  expect(carrying[0].tombstones.map((mark) => mark.localId).sort()).toEqual([...ids].sort());
-  expect(new Set(carrying[0].tombstones.map((mark) => mark.deviceId))).toEqual(new Set([sync.deviceId]));
-
-  // And only once: the next trigger, a fresh open, carries none.
-  const settled = rounds.bodies.length;
+  // Sent once: the next trigger, a fresh open, carries none.
+  const settled = rounds.count();
   await page.goto("/registro");
   await expect.poll(rounds.count).toBeGreaterThan(settled);
   await page.waitForLoadState("networkidle");
   expect(rounds.bodies.at(-1)!.tombstones, "marks sent twice").toEqual([]);
 });
 
-// ----------------------------------------------------------- No account
-
-test("No account: the row leaves and no queue is written", async ({ page }) => {
-  await openRegistro(page, { lookups: leaveRows() });
+test("RNL-11, one round per delete: two deletes add at most three rounds, every mark leaves once, and the next round carries none", async ({
+  page,
+}) => {
+  await answerRoundsEmpty(page);
+  const rounds = trackRounds(page);
+  await openRegistro(page, { sync: copyOn(), lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
+  await expect.poll(rounds.count).toBe(1);
+  await page.waitForLoadState("networkidle");
+  const before = rounds.count();
+  const ids = [...(await groupIds(page, "leave")), ...(await groupIds(page, "leaf"))].sort();
+  expect(ids).toHaveLength(3);
+
   await deleteViaUi(page, "leave");
   await expect(rowLink(page, "leave")).toHaveCount(0);
-  expect(shape(await readLookups(page))).toEqual(["leave>leaf", "left>left"]);
-  expect(await syncKeys(page)).not.toContain("tombstones");
+  await page.waitForLoadState("networkidle");
+  await deleteViaUi(page, "leaf");
+  await expect(rowLink(page, "leaf")).toHaveCount(0);
+  await expect
+    .poll(() => sentMarks(rounds.bodies), { message: "the marks never left", timeout: 3_000 })
+    .toEqual(ids);
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(500);
+  expect(rounds.count() - before, "rounds per delete").toBeLessThanOrEqual(2 + 1);
+  expect(sentMarks(rounds.bodies), "a mark sent twice").toEqual(ids);
+
+  const settled = rounds.count();
+  await page.goto("/registro");
+  await expect.poll(rounds.count).toBeGreaterThan(settled);
+  await page.waitForLoadState("networkidle");
+  expect(rounds.bodies.at(-1)!.tombstones, "marks sent twice").toEqual([]);
 });
+
+test("RNL-11, a round in flight: a delete made while the open round is held leaves in a round after it, with no hide", async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let held = 0;
+  await page.route("**/api/log/sync", async (route) => {
+    if (held++ === 0) await gate;
+    await answerJson(route, emptyRound);
+  });
+  const rounds = trackRounds(page);
+  await openRegistro(page, { sync: copyOn(), lookups: leaveRows() });
+  await expect(rowLink(page, "leave")).toBeVisible();
+  await expect.poll(rounds.count, { message: "the open round never left" }).toBe(1);
+  expect(rounds.bodies[0].tombstones).toEqual([]);
+  const ids = await groupIds(page, "leave");
+
+  await deleteViaUi(page, "leave");
+  await expect(rowLink(page, "leave")).toHaveCount(0);
+  release();
+  await expect
+    .poll(() => sentMarks(rounds.bodies), { message: "the marks waited for a hide", timeout: 3_000 })
+    .toEqual(ids);
+  expect(rounds.bodies.slice(1).some((body) => body.tombstones.length === 2)).toBe(true);
+});
+
+// ----------------------------------------------------------- No account
+
+for (const [variant, makeSync] of [
+  ["no account", () => undefined],
+  ["signed out", () => copyOn({ enabled: false })],
+] as const) {
+  test(`Copy off, ${variant}: the row leaves and no request leaves the device`, async ({ page }) => {
+    await answerRoundsEmpty(page);
+    const api = apiRequests(page);
+    await openRegistro(page, { sync: makeSync(), lookups: leaveRows() });
+    await expect(rowLink(page, "leave")).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    const before = api.length;
+
+    await deleteViaUi(page, "leave");
+    await expect(rowLink(page, "leave")).toHaveCount(0);
+    await page.waitForTimeout(2_000);
+    expect(api.slice(before), "a delete with the copy off sent a request").toEqual([]);
+    expect(shape(await readLookups(page))).toEqual(["leave>leaf", "left>left"]);
+    if (variant === "no account") expect(await syncKeys(page)).not.toContain("tombstones");
+    // Signed out keeps the reader: the marks wait for the next sign-in.
+    else expect(await syncKeys(page)).toContain("tombstones");
+  });
+}
 
 // -------------------------------------------------------------- Offline
 
@@ -510,12 +645,14 @@ test("Offline: the row leaves with no network and the next round online carries 
 
   offline = true;
   await context.setOffline(true);
+  // The delete's own round, with no hide, fails offline and must keep the marks.
+  const failedRound = page.waitForEvent("requestfailed", {
+    predicate: (request) => request.url().includes("/api/log/sync"),
+    timeout: 3_000,
+  });
   await deleteViaUi(page, "leave");
   await expect(rowLink(page, "leave")).toHaveCount(0);
   await expect(page.getByText(study("deleteFailedTitle", { word: "leave" }))).toHaveCount(0);
-  // A round offline fails and must keep the marks.
-  const failedRound = page.waitForEvent("requestfailed", (request) => request.url().includes("/api/log/sync"));
-  await hideTab(page);
   await failedRound;
 
   offline = false;
@@ -625,14 +762,14 @@ test("RL-70: a delete on one device leaves every device of the reader, and no la
     await pageB.goto("/registro");
     await expect(rowLink(pageB, "zebra"), "device B never received the word").toBeVisible({ timeout: 20_000 });
 
-    // A deletes `zebra`; its tab hiding sends the marks.
-    await deleteViaUi(page, "zebra");
-    await expect(rowLink(page, "zebra")).toHaveCount(0);
+    // A deletes `zebra`; the delete's own round sends the marks, with no hide.
     const sent = page.waitForResponse(
       (response) =>
         isSync(response) && (response.request().postDataJSON() as { tombstones: Mark[] }).tombstones.length === 2,
+      { timeout: 5_000 },
     );
-    await hideTab(page);
+    await deleteViaUi(page, "zebra");
+    await expect(rowLink(page, "zebra")).toHaveCount(0);
     expect((await sent).status()).toBe(200);
 
     // B opens /registro again: a round, and `zebra` is gone from list and store.
