@@ -239,6 +239,19 @@ export async function clearGroup(): Promise<void> {
   const users = [scope.userId, scope.memberUserId];
 
   await asUser(scope.userId, async (tx) => {
+    // Movements on the group's accounts or categories go first; see `purge`.
+    await tx`
+      delete from transactions
+      where id in (
+        select s.transaction_id from transaction_splits s
+        join categories c on c.id = s.category_id
+        where c.group_id in (select group_id from group_members where user_id in ${tx(users)}))
+         or from_account_id in (
+        select id from accounts
+        where group_id in (select group_id from group_members where user_id in ${tx(users)}))
+         or to_account_id in (
+        select id from accounts
+        where group_id in (select group_id from group_members where user_id in ${tx(users)}))`;
     await tx`
       delete from groups
       where id in (
@@ -323,6 +336,21 @@ async function purge(userId: string): Promise<void> {
     await tx`
       delete from debt_terms
       where account_id in (select id from accounts where owner_user_id = ${userId})`;
+    // A group's categories and accounts are referenced by movements the other
+    // harness identity, or an earlier run, recorded against the fund; they would
+    // block the group's cascade. Movements go first, splits ride them.
+    await tx`
+      delete from transactions
+      where id in (
+        select s.transaction_id from transaction_splits s
+        join categories c on c.id = s.category_id
+        where c.group_id in (select group_id from group_members where user_id = ${userId}))
+         or from_account_id in (
+        select id from accounts
+        where group_id in (select group_id from group_members where user_id = ${userId}))
+         or to_account_id in (
+        select id from accounts
+        where group_id in (select group_id from group_members where user_id = ${userId}))`;
     // Splits and labels ride the movement's cascade; see `clearLedger`.
     await tx`delete from transactions where owner_user_id = ${userId}`;
     await tx`delete from recurring_rules where owner_user_id = ${userId}`;
