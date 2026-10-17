@@ -1821,3 +1821,8 @@ Board «EntrarCódigo», GoalLog, 360 and 1280, for `/entrar` and `AutorizarSinS
 
 - **Another code: a «Pedir otro código» button on the code step, with a countdown.** It sends a new code to the same address without typing it again; a send that Auth refuses gives the daily send back. Its boards are not drawn yet.
 - **The code mail names its sender and carries one English line.** One shared template still; a sender name and a short English line under the code. Its board is not drawn yet.
+
+## Decisions of 2026-10-17 (afternoon), by the user
+
+- **A daily cap on sign-in links per client, the twin of HomeFund's RF-143.** It takes the next free RP when the planner
+  cuts it. Not built yet.

@@ -281,7 +281,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-25** — The reader sees the list of devices that have copied to their account: which one is
   in their hand, when each was last seen, and how many searches it has copied. They can retire any of
   them, their own included.
-- [ ] **RL-73** *(successor of RL-71)* — With an account open on the device, nothing leaves it until the reader
+- [x] **RL-73** *(successor of RL-71)* — With an account open on the device, nothing leaves it until the reader
   confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
   had and brings down what the others recorded, with no further act. When the device last copied for another reader,
   it sends up only what is searched after this confirmation; the earlier rows stay on the device and never reach this

@@ -160,3 +160,8 @@ Board «LoginCódigo», HomeFund, 360 and 1280, inside the existing `Card`. Deci
 - **Another code: a «Pedir otro código» button on the code step, with a countdown.** It sends a new code to the same address without typing it again; a send that Auth refuses gives the daily send back. Its boards are not drawn yet.
 - **The member invitation gets its own path (supersedes the 2026-10-17 «keeps the shared template» line above).** Inviting adds the invitee to the invitation list and sends its own mail in its own words; the invitee signs in by asking for a code at `/login`. Its boards are not drawn yet.
 - **The code mail names its sender and carries one English line.** One shared template still; a sender name and a short English line under the code. Its board is not drawn yet.
+
+## Decisions of 2026-10-17 (afternoon), by the user
+
+- **A past month's weekly budget shows that month's last week.** Navigating to a past month, the weekly budget reads the
+  last week of that month, not the current one. Not built yet.
