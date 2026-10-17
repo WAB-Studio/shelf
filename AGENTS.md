@@ -99,7 +99,6 @@ This file is the core every agent loads. Read the file the index names before th
 - Fetch before you compare. Ask GitHub whether a branch landed: a squash merge is never an ancestor.
 
 ## Verification
-
 - `npm run typecheck` is tsgo, `npm run lint` is eslint cached. Both take seconds. Run them freely.
 - Size the proof by what the change reaches:
   - A pure function, or a file nothing imports yet: `typecheck`, `lint`, `check:unit` and its own tests.

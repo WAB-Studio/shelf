@@ -291,6 +291,9 @@ this gets built, and no schema, table or column is "prepared for" it.
   asked for it. A code that does not let the reader in says whether it is wrong or expired or our side did not answer,
   and nothing verifies it twice on the reader's behalf. With no account, nothing leaves the device. Decided by the
   user 2026-10-16.
+- [ ] **RL-74** — On the code step, «Pedir otro código» sends a new code to the same address without typing it again,
+  once a countdown of Auth's wait between sends has run out; the new code replaces the last. A send Auth refuses does
+  not count against the daily caps. Decided by the user 2026-10-17.
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside
   the app.
