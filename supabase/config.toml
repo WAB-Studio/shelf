@@ -1,5 +1,5 @@
 # Local stack for the suites. Driven by scripts/supabase-local.sh; the remote project is never read here.
-project_id = "universo"
+project_id = "shelf"
 
 [api]
 enabled = true

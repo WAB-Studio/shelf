@@ -8,22 +8,22 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Universo: HomeFund, WordBook, GoalLog
+# Shelf: HomeFund, WordBook, GoalLog
 
 This file is the core every agent loads. Read the file the index names before the work it names.
 
 ## Apps and contracts
 
 - Call the apps by their names: `apps/homefund` is **HomeFund**, `apps/wordbook` **WordBook**, `apps/goallog` **GoalLog**,
-  `apps/portal` «Universo». Vercel projects: `homefund`, `wordbook`, `goallog`; the repo stays `universe`. Production deploys the
+  `apps/portal` «Shelf». Vercel projects: `homefund`, `wordbook`, `goallog`; the repo is `WAB-Studio/shelf`. Production deploys the
   old folders until the final merge moves each to `<app>app.vercel.app`; `our-piggy-bank`, `reading-neon`, `pulsar-psi-six` keep answering.
 - HomeFund: contract `docs/SPEC.md` §1, model and invariants §2, stack §4, flows `docs/FLOWS.md`, design `docs/DESIGN.md`.
 - WordBook: `docs/wordbook/SPEC.md`, `docs/wordbook/DESIGN.md`. GoalLog: `docs/goallog/SPEC.md`, `docs/goallog/DESIGN.md`.
-  Universo: `docs/portal/DESIGN.md`. Give every app its own design; never carry a pattern across.
+  Shelf: `docs/portal/DESIGN.md`. Give every app its own design; never carry a pattern across.
 - `apps/` holds the apps, `packages/` the code two of them share: npm workspaces, one lockfile, `node_modules` hoisted
   to the root (a script reaches a binary as `../../node_modules/...`). Promote nothing until a second app asks for it.
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.
-- `apps/portal` is one static page with no build, live at https://universo-apps.vercel.app. Deploy it by hand from
+- `apps/portal` is one static page with no build, live at https://universo-apps.vercel.app until its Shelf address ships with the deploy. Deploy it by hand from
   `apps/portal` with `npx vercel deploy --prod --yes`; update its links when an app's URL changes.
 - Add `https://<the app's URL>/auth/confirm` to Supabase's Redirect URLs before an app that signs in by email first deploys.
 

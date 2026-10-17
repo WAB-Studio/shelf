@@ -5,7 +5,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONTAINER="supabase_db_universo"
+CONTAINER="supabase_db_shelf"
 SCHEMAS="finances goals reading harness private"
 SCHEMA_LIST="'finances','goals','reading','harness','private'"
 NORMALISE="${NORMALISE:-1}"

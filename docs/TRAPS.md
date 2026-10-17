@@ -3287,8 +3287,8 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - Rerun a red that started near 05:00Z before chasing it. Never put a computed date in a test title.
 
 ## The active `gh` account changes under a running session (2026-10-16)
-- Twice in one session the active account became `wilsoniridian`, which cannot write `WAB-Studio/universe`: pushes and `gh workflow run` got 403.
-- Read `gh auth status` on a 403. Push with `git push "https://x-access-token:$(gh auth token -u Cxrkeyb)@github.com/WAB-Studio/universe.git" …`
+- Twice in one session the active account became `wilsoniridian`, which cannot write `WAB-Studio/shelf` (then `universe`): pushes and `gh workflow run` got 403.
+- Read `gh auth status` on a 403. Push with `git push "https://x-access-token:$(gh auth token -u Cxrkeyb)@github.com/WAB-Studio/shelf.git" …`
   and `GH_TOKEN=$(gh auth token -u Cxrkeyb) gh …` rather than switching the account another session may need.
 
 ## A rebase across a folder rename leaves the branch's new files in conflict (2026-10-16)

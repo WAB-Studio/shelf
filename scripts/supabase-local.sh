@@ -11,7 +11,7 @@ API_URL="http://127.0.0.1:54321"
 
 cli() { (cd "$ROOT" && npx --yes "supabase@${SUPABASE_VERSION}" "$@"); }
 
-is_up() { docker ps --format '{{.Names}}' | grep -q '^supabase_db_universo$'; }
+is_up() { docker ps --format '{{.Names}}' | grep -q '^supabase_db_shelf$'; }
 
 # Reads one KEY="value" line out of `status -o env` text on stdin.
 status_value() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" | head -1; }
