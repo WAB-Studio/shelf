@@ -62,6 +62,7 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { usePathname, useRouter, Link as LocaleLink } from "@/i18n/navigation";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { addCivilDays, civilDateToDate, todayInBogota } from "@/lib/dates";
+import { categoryNamesById } from "@/lib/fund/category-names";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 // A Radix Select item may not carry an empty value, so the "any" option rides
@@ -100,12 +101,16 @@ export function MovementsScreen({
   rows: TransactionListRow[];
   // Counted in SQL over every movement the filter matches: `rows` stops at the
   // server's cap, these figures never do.
-  totals: { count: number; nets: { currency: CurrencyCode; netCents: number }[] };
+  totals: {
+    count: number;
+    nets: { currency: CurrencyCode; netCents: number }[];
+  };
   options: TransactionFormOptions;
   filters: MovementsFilters;
   ruleName: string | null;
 }) {
   const t = useTranslations("transactions");
+  const tc = useTranslations("categories");
   const tKey = useTranslations();
   const format = useFormatter();
   const locale = useLocale();
@@ -138,13 +143,13 @@ export function MovementsScreen({
   // A name and colour per account and per category id — children included — so a
   // row reads its title, subtitle and tile without a second lookup.
   const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
-  const categoryNames = new Map<string, string>();
+  const categoryNames = categoryNamesById(options.categories, (name) =>
+    tc("scopedName", { name }),
+  );
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
-    categoryNames.set(category.id, category.name);
     categoryColors.set(category.id, category.color);
     for (const child of category.children) {
-      categoryNames.set(child.id, child.name);
       categoryColors.set(child.id, child.color);
     }
   }
@@ -214,12 +219,12 @@ export function MovementsScreen({
     filters.unreviewed ||
     Boolean(
       filters.from ||
-        filters.to ||
-        filters.member ||
-        filters.account ||
-        filters.category ||
-        filters.label ||
-        filters.rule,
+      filters.to ||
+      filters.member ||
+      filters.account ||
+      filters.category ||
+      filters.label ||
+      filters.rule,
     );
 
   // Only the well-formed values ride the query; a cleared field drops its key so
@@ -311,23 +316,27 @@ export function MovementsScreen({
         <ScreenHeader
           title={t("listTitle")}
           meta={
-            <>
-              {t("listMeta", { count: totals.count })}{" "}
-              {/* One figure per currency, each naming the one it counts: no
+            filters.type === "adjustment" ? (
+              t("listMetaAdjustments", { count: totals.count })
+            ) : (
+              <>
+                {t("listMeta", { count: totals.count })}{" "}
+                {/* One figure per currency, each naming the one it counts: no
                   total on this screen is the sum of two of them (RF-124). */}
-              {nets.map(([currency, net], index) => (
-                <span key={currency}>
-                  {index > 0 && " · "}
-                  <Money
-                    minor={net}
-                    currency={currency}
-                    tone={net < 0 ? "expense" : "income"}
-                    size="inherit"
-                  />{" "}
-                  {currency}
-                </span>
-              ))}
-            </>
+                {nets.map(([currency, net], index) => (
+                  <span key={currency}>
+                    {index > 0 && " · "}
+                    <Money
+                      minor={net}
+                      currency={currency}
+                      tone={net < 0 ? "expense" : "income"}
+                      size="inherit"
+                    />{" "}
+                    {currency}
+                  </span>
+                ))}
+              </>
+            )
           }
           actions={
             rows.length > 0 && (
@@ -368,9 +377,9 @@ export function MovementsScreen({
             </IconButton>
           </Flex>
 
-          {/* Four kinds do not fit one line on a phone, and Radix's own root
+          {/* Five kinds do not fit one line on a phone, and Radix's own root
               refuses to shrink under them: stacked, each kind is a row of its
-              own until the pane is wide enough to hold the four side by side. */}
+              own until the pane is wide enough to hold the five side by side. */}
           <StackedSegmentedControl.Root
             value={filters.type}
             onValueChange={(value) =>
@@ -388,6 +397,9 @@ export function MovementsScreen({
             </StackedSegmentedControl.Item>
             <StackedSegmentedControl.Item value="transfer">
               {t("filterTransfers")}
+            </StackedSegmentedControl.Item>
+            <StackedSegmentedControl.Item value="adjustment">
+              {t("filterAdjustments")}
             </StackedSegmentedControl.Item>
           </StackedSegmentedControl.Root>
 
@@ -431,7 +443,9 @@ export function MovementsScreen({
                     >
                       <Select.Trigger id={id} />
                       <Select.Content position="popper">
-                        <Select.Item value={ANY}>{t("allAccounts")}</Select.Item>
+                        <Select.Item value={ANY}>
+                          {t("allAccounts")}
+                        </Select.Item>
                         {options.accounts.map((account) => (
                           <Select.Item key={account.id} value={account.id}>
                             {account.name}
@@ -478,7 +492,9 @@ export function MovementsScreen({
                       >
                         <Select.Trigger id={id} />
                         <Select.Content position="popper">
-                          <Select.Item value={ANY}>{t("allLabels")}</Select.Item>
+                          <Select.Item value={ANY}>
+                            {t("allLabels")}
+                          </Select.Item>
                           {options.labels.map((label) => (
                             <Select.Item key={label.id} value={label.id}>
                               <Flex as="span" align="center" gap="2">
@@ -512,7 +528,10 @@ export function MovementsScreen({
                             {t("allMembers")}
                           </Select.Item>
                           {options.members.map((member) => (
-                            <Select.Item key={member.userId} value={member.userId}>
+                            <Select.Item
+                              key={member.userId}
+                              value={member.userId}
+                            >
                               {member.name}
                             </Select.Item>
                           ))}
@@ -596,7 +615,9 @@ export function MovementsScreen({
                         )
                       }
                       badge={
-                        row.recurringRuleId !== null ? t("autoBadge") : undefined
+                        row.recurringRuleId !== null
+                          ? t("autoBadge")
+                          : undefined
                       }
                       caused={
                         row.causedByTransactionId !== null
@@ -723,7 +744,8 @@ function rowSubtitle(
     return (accountId && accountNames.get(accountId)) ?? undefined;
   }
   if (row.kind === "transfer") {
-    const from = (row.fromAccountId && accountNames.get(row.fromAccountId)) ?? "";
+    const from =
+      (row.fromAccountId && accountNames.get(row.fromAccountId)) ?? "";
     const to = (row.toAccountId && accountNames.get(row.toAccountId)) ?? "";
     return `${from} → ${to}`;
   }
@@ -755,9 +777,7 @@ function rowCategory(
 
 // The union both `Money` and `MovementRow` accept, so the phone's card and the
 // table's row read one derivation of the kind (RF-18).
-function rowTone(
-  row: TransactionListRow,
-): "income" | "transfer" | "expense" {
+function rowTone(row: TransactionListRow): "income" | "transfer" | "expense" {
   if (row.reconciliationId !== null) return "transfer";
   if (row.kind === "income") return "income";
   if (row.kind === "transfer") return "transfer";
