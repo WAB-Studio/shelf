@@ -460,3 +460,283 @@ test("Relaunch: a reload within the code's hour reopens the code step for the sa
     await forget(db, email);
   }
 });
+
+// RP-136, «EntrarCódigoOtro»: another code to the same address, after a countdown. The words are the
+// board's, written as literals.
+const R = {
+  resend: "Pedir otro código",
+  waiting: (seconds: number) => `Pedir otro en ${seconds} s`,
+  anyWait: /^Pedir otro en \d+ s$/,
+  sending: "Enviando…",
+  resent: (email: string) => `Te mandamos otro código a ${email}. Usa el del último correo.`,
+};
+
+const RESEND_MS = 60_000;
+
+const resendButton = (page: Page) => page.getByRole("button", { name: /^Pedir otro (código|en \d+ s)$/ });
+
+// Codes of the address, newest first, once at least `count` mails have landed.
+async function mailedCodes(email: string, count: number): Promise<string[]> {
+  let ids: string[] = [];
+  await expect
+    .poll(async () => {
+      const found = await (await fetch(`${MAILBOX}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)).json();
+      ids = (found.messages ?? []).map((m: { ID: string }) => m.ID);
+      return ids.length;
+    })
+    .toBeGreaterThanOrEqual(count);
+  const codes: string[] = [];
+  for (const id of ids) {
+    const message = await (await fetch(`${MAILBOX}/api/v1/message/${id}`)).json();
+    codes.push(/^\s*(\d{6})\s*$/m.exec(`${message.Text}`)?.[1] ?? "");
+  }
+  return codes;
+}
+
+// Fakes the page's clock before any script runs, so the countdown is walked, not waited.
+async function openWithClock(browser: Browser, baseURL: string) {
+  const opened = await open(browser, baseURL);
+  await opened.page.clock.install({ time: Date.now() });
+  return opened;
+}
+
+function sendPosts(page: Page): { url: string; body: string }[] {
+  const posts: { url: string; body: string }[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.headers()["next-action"]) {
+      posts.push({ url: request.url(), body: request.postData() ?? "" });
+    }
+  });
+  return posts;
+}
+
+test("Countdown: the button waits 60 s from the send, is ready at +60 s, and a reload at +30 s reads the time left", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: the countdown counted from mount (the reload would read 60 again), a wait other than 60 s,
+  // or a button enabled before the wait is up.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await openWithClock(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const button = resendButton(page);
+    await expect(button).toBeDisabled();
+    await expect(button).toHaveText(/^Pedir otro en (59|60) s$/);
+
+    await page.clock.fastForward(30_000);
+    await page.reload();
+    await settled(page);
+    await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
+    await expect(resendButton(page)).toBeDisabled();
+    await expect(resendButton(page)).toHaveText(/^Pedir otro en (29|30) s$/);
+
+    await page.clock.fastForward(29_000);
+    await expect(resendButton(page)).toBeDisabled();
+    await page.clock.fastForward(2_000);
+    await expect(page.getByRole("button", { name: R.resend, exact: true })).toBeEnabled();
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Layout: the resend button sits between the link sentence and «Usar otro correo», at 360 with a 44 px target", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: the button drawn above the sentence or below the escape, or a target under 44 px.
+  const email = shortInvitee();
+  await listAddress(db, email);
+  const { context, page } = await openWithClock(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const sentence = await boxOf(page.getByText(W.link, { exact: true }));
+    const resend = await boxOf(resendButton(page));
+    const other = await boxOf(page.getByRole("button", { name: W.other, exact: true }));
+    expect(resend.y).toBeGreaterThanOrEqual(sentence.y + sentence.height);
+    expect(other.y).toBeGreaterThanOrEqual(resend.y + resend.height);
+    expect(resend.height).toBeGreaterThanOrEqual(44);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Pending: a tap sends once to the stored address; the button reads «Enviando…» and the field, «Entrar» and «Usar otro correo» are disabled", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: the button left enabled while the send runs (a second tap posts again), a send to another
+  // address, or the other controls left live.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await openWithClock(browser, baseURL!);
+  let release!: () => void;
+  const gate = new Promise<void>((resolveGate) => (release = resolveGate));
+  try {
+    await askForCode(page, db, email);
+    await page.clock.fastForward(RESEND_MS + 1_000);
+    const posts = sendPosts(page);
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      if (request.method() === "POST" && request.headers()["next-action"]) await gate;
+      await route.continue();
+    });
+    const ready = page.getByRole("button", { name: R.resend, exact: true });
+    await ready.click();
+    const pending = page.getByRole("button", { name: R.sending, exact: true });
+    await expect(pending).toBeVisible();
+    await expect(pending).toBeDisabled();
+    await expect(codeField(page)).toBeDisabled();
+    await expect(page.getByRole("button", { name: W.enter, exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: W.other, exact: true })).toBeDisabled();
+    await pending.click({ force: true }).catch(() => undefined);
+    release();
+    await expect(page.getByText(R.resent(email), { exact: true })).toBeVisible();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body).toContain(email);
+  } finally {
+    release();
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Done · /entrar: «Te mandamos otro código…», the field emptied and focused, the wait back at 60 s, and the newest mail's code lands on /", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: the old code kept in the field, focus lost, no confirmation line, the wait not restarted,
+  // or a resend that did not mail a new code.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await openWithClock(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const [first] = await mailedCodes(email, 1);
+    await codeField(page).fill(first);
+    await page.clock.fastForward(RESEND_MS + 1_000);
+    await page.getByRole("button", { name: R.resend, exact: true }).click();
+    await expect(page.getByText(R.resent(email), { exact: true })).toBeVisible();
+    await expect(codeField(page)).toHaveValue("");
+    await expect(codeField(page)).toBeFocused();
+    await expect(resendButton(page)).toBeDisabled();
+    await expect(resendButton(page)).toHaveText(/^Pedir otro en (59|60) s$/);
+
+    const [newest] = await mailedCodes(email, 2);
+    await codeField(page).fill(newest);
+    await page.getByRole("button", { name: W.enter, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`^${baseURL!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/$`));
+    expect(await sessionsOf(db, email)).toBe(1);
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Done · consent: a resend from the signed-out consent keeps `next`; the newest code lands back on the consent", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: `next` dropped from the resend (the newest mail's link or the landing leaves the consent).
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await openWithClock(browser, baseURL!);
+  try {
+    await askForCode(page, db, email, consentPath, W.send);
+    await page.clock.fastForward(RESEND_MS + 1_000);
+    const posts = sendPosts(page);
+    await page.getByRole("button", { name: R.resend, exact: true }).click();
+    await expect(page.getByText(R.resent(email), { exact: true })).toBeVisible();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body).toContain(email);
+    expect(posts[0].body).toContain("estado-m7");
+    const [newest] = await mailedCodes(email, 2);
+    await codeField(page).fill(newest);
+    await page.getByRole("button", { name: W.enter, exact: true }).click();
+    await expect(page).toHaveURL(`${baseURL}${consentPath}`);
+    await expect(page.getByRole("button", { name: "Permitir", exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Refused: a resend Auth refuses reads «Demasiados intentos…» as an alert under the button, and the button stays ready", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: the countdown restarted on an error, the refusal drawn on the field or not as an alert,
+  // or the confirmation line shown for a send that did not happen. The refusal is answered by hand:
+  // Auth's own window is not the suite's to wait for.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await openWithClock(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    await page.clock.fastForward(RESEND_MS + 1_000);
+    const calls: string[] = [];
+    await answerActions(page, { ok: false, error: "rateLimited" }, calls);
+    await page.getByRole("button", { name: R.resend, exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: W.rate })).toBeVisible();
+    await expect(page.getByRole("button", { name: R.resend, exact: true })).toBeEnabled();
+    await expect(page.getByText(R.resent(email))).toHaveCount(0);
+    expect(calls).toHaveLength(1);
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Link landing: a marker at or after the record's moment clears it, and /entrar shows the address form", async ({
+  browser,
+  baseURL,
+}) => {
+  // Kills: the marker ignored (the code step reopens for an address whose code a landed link spent).
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await visit(page, "/entrar");
+    const at = Date.now();
+    await page.evaluate(
+      (record) => localStorage.setItem("goallog.pending-sign-in", JSON.stringify(record)),
+      { email: "landed@correo.test", at },
+    );
+    await context.addCookies([{ name: "goallog-signed-in-at", value: String(at + 1_000), url: baseURL! }]);
+    await visit(page, "/entrar");
+    await expect(page.getByLabel(W.emailLabel)).toBeVisible();
+    await expect(codeField(page)).toHaveCount(0);
+    await expectNoPending(page);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Older marker: a marker before the record's moment leaves the code step standing", async ({ browser, baseURL }) => {
+  // Kills: any marker clearing the record, whatever its time.
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await visit(page, "/entrar");
+    const at = Date.now();
+    await page.evaluate(
+      (record) => localStorage.setItem("goallog.pending-sign-in", JSON.stringify(record)),
+      { email: "waiting@correo.test", at },
+    );
+    await context.addCookies([{ name: "goallog-signed-in-at", value: String(at - 1_000), url: baseURL! }]);
+    await visit(page, "/entrar");
+    await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
+    await expect(page.getByText(W.sentBody("waiting@correo.test"), { exact: true })).toBeVisible();
+    await expect(codeField(page)).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
