@@ -7,3 +7,15 @@ export const signInSchema = z.object({
 });
 
 export type SignInInput = z.infer<typeof signInSchema>;
+
+// RF-146: every whitespace goes first, so a code pasted as "123 456" is the six
+// digits it shows; then exactly six digits.
+export const signInCodeSchema = z.object({
+  email: signInSchema.shape.email,
+  code: z
+    .string()
+    .transform((value) => value.replace(/\s+/g, ""))
+    .pipe(z.string().regex(/^\d{6}$/, { error: "auth.errors.codeShape" })),
+});
+
+export type SignInCodeInput = z.infer<typeof signInCodeSchema>;
