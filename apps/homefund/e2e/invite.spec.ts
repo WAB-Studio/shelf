@@ -13,10 +13,11 @@
  * and never reach a real mailbox. The `auth.users` row a send mints is registered
  * under the run at once and dropped by exact address at the end.
  */
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { expect, type Locator, type Page, type Route } from "@playwright/test";
 
+import { addressKey, callerKey } from "@/lib/auth/client-key";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
@@ -434,5 +435,245 @@ test.describe("a refusal reads as the one that happened", () => {
     } finally {
       await forget(email);
     }
+  });
+});
+
+/**
+ * RF-148: the invitation is Auth's own template, asked of Auth from the server with the project's
+ * secret key; the inviter's browser never requests a sign-in code. Written from the contract:
+ * the subject «Te invitaron a HomeFund», one link and no code in the mail; no PKCE verifier in the
+ * leader's cookies; the invitee listed (RF-145, by the 0058 trigger); the invitee signs in with a
+ * code and lands on /es/bienvenida as the member; an address Auth already holds gets no mail and
+ * the leader a notice; no key reaches a client chunk.
+ *
+ * These rows need the stack to run M1's `invite.html` (subject, no code) and a server holding
+ * `SUPABASE_SECRET_KEY` (M3's `print_env`); until both are there they go red for that reason too.
+ * The «no key» row lives in `lib/auth/invite-email.test.ts`: a dev server cannot drop its key per test.
+ */
+const INVITE_SUBJECT = "Te invitaron a HomeFund";
+const SIX_DIGITS = /(?<!\d)\d{6}(?!\d)/;
+// What Auth itself writes into `raw_user_meta_data` for an email invitation; anything else was passed in.
+const AUTH_OWN_META = new Set(["email", "sub", "email_verified", "phone_verified"]);
+
+type MailSummary = { ID: string; Subject: string };
+
+async function mailsTo(email: string): Promise<MailSummary[]> {
+  const found = (await (
+    await fetch(`${MAILBOX}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)
+  ).json()) as { messages?: MailSummary[] };
+  return found.messages ?? [];
+}
+
+async function mailBody(id: string): Promise<{ Subject: string; Text: string; HTML: string }> {
+  return (await (await fetch(`${MAILBOX}/api/v1/message/${id}`)).json()) as {
+    Subject: string;
+    Text: string;
+    HTML: string;
+  };
+}
+
+async function listed(email: string): Promise<number> {
+  const [{ n }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from finances.allowed_emails where email = ${email.toLowerCase()}`;
+  return n;
+}
+
+async function dropListing(email: string) {
+  await fixtureSql`delete from finances.allowed_emails where email = ${email.toLowerCase()}`;
+}
+
+// Invites through the step the way the leader does and waits until the whole send is over.
+async function inviteThroughStep(page: Page, email: string) {
+  const { input, send } = await openStep(page);
+  await input.fill(email);
+  await send.click();
+  await expect(cards(page).filter({ hasText: email })).toHaveCount(1);
+}
+
+test.describe("the invitation is Auth's own mail, sent from the server (RF-148)", () => {
+  test("the invitee gets one mail, «Te invitaron a HomeFund», with no six-digit code", async ({ page }) => {
+    // Kills: restoring `signInWithOtp` (the mail is the code mail: another subject, a code in it).
+    const email = invitee();
+    try {
+      await inviteThroughStep(page, email);
+      await register(email);
+      await expect.poll(() => mailCount(email)).toBe(1);
+
+      const [mail] = await mailsTo(email);
+      const body = await mailBody(mail.ID);
+      expect(body.Subject).toBe(INVITE_SUBJECT);
+      expect(body.Text).not.toMatch(SIX_DIGITS);
+      expect(body.HTML).not.toMatch(SIX_DIGITS);
+    } finally {
+      await dropListing(email);
+      await forget(email);
+    }
+  });
+
+  test("nothing of a sign-in code lands in the leader's browser: no cookie ends in -code-verifier", async ({
+    page,
+  }) => {
+    // Kills: calling `signInWithOtp` from the leader's client (PKCE stores a verifier cookie for the leader).
+    const email = invitee();
+    try {
+      await inviteThroughStep(page, email);
+      await register(email);
+      await expect.poll(() => mailCount(email)).toBe(1);
+
+      const names = (await page.context().cookies()).map((cookie) => cookie.name);
+      expect(names.filter((name) => name.endsWith("-code-verifier"))).toEqual([]);
+    } finally {
+      await dropListing(email);
+      await forget(email);
+    }
+  });
+
+  test("the invitee is on the allowed list once the member is created", async ({ page }) => {
+    // Kills: nothing here (check-rls 346 kills the trigger); this ties the list to the create from the screen.
+    const email = invitee();
+    try {
+      expect(await listed(email)).toBe(0);
+      await inviteThroughStep(page, email);
+      await register(email);
+
+      expect(await listed(email)).toBe(1);
+    } finally {
+      await dropListing(email);
+      await forget(email);
+    }
+  });
+
+  test("the invitation carries no data of ours into the Auth user", async ({ page }) => {
+    // Kills: passing `{ data: { inviter } }` (or any name) to `inviteUserByEmail`.
+    const email = invitee();
+    try {
+      await inviteThroughStep(page, email);
+      await register(email);
+
+      const [row] = await fixtureSql<{ meta: Record<string, unknown> }[]>`
+        select raw_user_meta_data as meta from auth.users where email = ${email}`;
+      expect(row, "Auth holds the invited address").toBeTruthy();
+      const ours = Object.keys(row.meta).filter((key) => !AUTH_OWN_META.has(key));
+      expect(ours).toEqual([]);
+    } finally {
+      await dropListing(email);
+      await forget(email);
+    }
+  });
+
+  test("the invitee types the address, gets a code, signs in and is the member the leader added", async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    // Kills: skipping `claimInviteForUser` (the user lands but the member's user_id stays null),
+    // and an invitation that leaves the invitee unable to sign in by code.
+    const email = invitee();
+    const salt = process.env.CLIENT_KEY_SALT ?? "";
+    const ip = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::1`;
+    const callerClaim = callerKey(new Headers({ "x-forwarded-for": ip }), salt);
+    const addressClaim = addressKey(email, salt);
+    const context = await browser.newContext({
+      baseURL,
+      storageState: { cookies: [], origins: [] },
+      extraHTTPHeaders: { "x-forwarded-for": ip },
+    });
+    try {
+      await inviteThroughStep(page, email);
+      await register(email);
+      await expect.poll(() => mailCount(email)).toBe(1);
+
+      const visitor = await context.newPage();
+      await visitor.goto("/es/login");
+      await visitor.getByLabel(messages.auth.emailLabel).fill(email);
+      await visitor.getByRole("button", { name: "Enviar código", exact: true }).click();
+      await expect(visitor.getByRole("heading", { name: "Revisa tu correo", exact: true })).toBeVisible();
+
+      // The newest mail is the sign-in code; the invitation before it carries none.
+      let code = "";
+      await expect
+        .poll(async () => {
+          const all = await mailsTo(email);
+          if (all.length < 2) return "";
+          const text = (await mailBody(all[0].ID)).Text;
+          code = text.match(/^\d{6}$/m)?.[0] ?? "";
+          return code;
+        })
+        .toMatch(/^\d{6}$/);
+
+      await visitor.getByLabel("Código del correo", { exact: true }).fill(code);
+      await visitor.getByRole("button", { name: "Entrar", exact: true }).click();
+      await expect(visitor).toHaveURL(/\/es\/bienvenida$/);
+
+      const [member] = await fixtureSql<{ user_id: string | null }[]>`
+        select user_id from group_members where group_id = ${groupId} and lower(invite_email) = ${email}`;
+      const [user] = await fixtureSql<{ id: string }[]>`select id from auth.users where email = ${email}`;
+      expect(member.user_id).toBe(user.id);
+    } finally {
+      await context.close();
+      const [user] = await fixtureSql<{ id: string }[]>`select id from auth.users where email = ${email}`;
+      if (user) {
+        await fixtureSql`update group_members set user_id = null where user_id = ${user.id}`;
+      }
+      await fixtureSql`delete from finances.sign_in_claims where client_key in ${fixtureSql([callerClaim, addressClaim].filter((key): key is string => Boolean(key)))}`;
+      await dropListing(email);
+      await forget(email);
+    }
+  });
+
+  test("an address Auth already holds: the member is added, the leader sees the notice, no mail leaves", async ({
+    page,
+  }) => {
+    // Kills: treating `email_exists` as a success (no notice), or falling back to a code mail for that address.
+    const email = invitee();
+    const id = randomUUID();
+    await fixtureSql`
+      insert into auth.users (
+        id, instance_id, aud, role, email, email_confirmed_at,
+        encrypted_password, confirmation_token, recovery_token,
+        email_change, email_change_token_current, email_change_token_new,
+        email_change_confirm_status, phone_change, phone_change_token,
+        reauthentication_token, raw_app_meta_data, raw_user_meta_data,
+        is_sso_user, is_anonymous, created_at, updated_at)
+      values (
+        ${id}, '00000000-0000-0000-0000-000000000000', 'authenticated',
+        'authenticated', ${email}, now(),
+        '', '', '',
+        '', '', '',
+        0, '', '',
+        '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+        false, false, now(), now())`;
+    try {
+      const { input, send } = await openStep(page);
+      await input.fill(email);
+      await send.click();
+
+      await expect(page.getByText(step.emailFailed, { exact: true })).toBeVisible();
+      await expect(cards(page).filter({ hasText: email })).toHaveCount(1);
+      expect(await inviteRows(email)).toHaveLength(1);
+      expect(await mailCount(email)).toBe(0);
+    } finally {
+      await dropListing(email);
+      await forget(email);
+    }
+  });
+
+  test("no client chunk carries the project's secret key", async ({ page }) => {
+    // Kills: importing `lib/supabase/admin.ts` (or reading the key) from a client component.
+    const key = process.env.SUPABASE_SECRET_KEY ?? "";
+    expect(key, "SUPABASE_SECRET_KEY reaches the suite through scripts/supabase-local.sh exec").toMatch(/^sb_secret_/);
+
+    const scripts: Promise<string>[] = [];
+    page.on("response", (response) => {
+      const url = response.url();
+      if (/\.js(\?|$)/.test(url) || url.includes("/_next/static/")) scripts.push(response.text().catch(() => ""));
+    });
+    await openStep(page);
+    await page.goto("/es/settings/members");
+    await page.waitForLoadState("networkidle");
+
+    const bodies = await Promise.all(scripts);
+    expect(bodies.length).toBeGreaterThan(0);
+    for (const body of bodies) expect(body.includes(key)).toBe(false);
   });
 });
