@@ -782,7 +782,13 @@ test.describe("confirming (B7)", () => {
         .or(page.getByRole("link", { name: account.name }))
         .filter({ visible: true });
       await expect(spent.first()).toBeVisible();
-      await expect(page.getByText("Descuadre", { exact: true })).toHaveCount(0);
+      // Scoped to the movement rows (the laptop's table rows, the phone's card links): the type filter also offers «Descuadre».
+      await expect(
+        page
+          .getByRole("row")
+          .or(page.locator('a[href*="/movements/"]'))
+          .getByText("Descuadre", { exact: true }),
+      ).toHaveCount(0);
     } finally {
       await dropAccount(account.id);
     }
