@@ -807,7 +807,10 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
     test.skip(testInfo.project.name !== "mobile", "the stacked control is the phone's");
     // Kills: the fifth item omitted.
     await page.goto("/es/movements");
-    await expect(typeRadios(page)).toHaveText(TYPE_ORDER);
+    await expect(typeRadios(page)).toHaveCount(TYPE_ORDER.length);
+    for (const [index, name] of TYPE_ORDER.entries()) {
+      await expect(typeRadios(page).nth(index)).toHaveAccessibleName(name);
+    }
   });
 
   test("picking Descuadre on the phone narrows to the two adjustments (C2b)", async ({ page }, testInfo) => {
@@ -1064,7 +1067,26 @@ test.describe("a category of the fund among the movements (RF-140, board C3a)", 
         : page.getByRole("link").filter({ hasText: NAME }).first(),
     ).toBeVisible();
 
-    const lines = await rowLines(page, desktop);
+    // A row with no description is titled by its category, so on the laptop the
+    // title and the category cell both say it: the cell is counted alone.
+    let lines: string[];
+    if (desktop) {
+      const table = page.getByRole("table", { name: transactions.listTitle });
+      const headers = await table.getByRole("columnheader").allInnerTexts();
+      const at = headers.findIndex((header) => flat(header).toLowerCase() === transactions.categoryLabel.toLowerCase());
+      expect(at, JSON.stringify(headers)).toBeGreaterThanOrEqual(0);
+      const rows = await table.getByRole("row").all();
+      lines = [];
+      for (const row of rows.slice(1)) {
+        const cell = row.getByRole("cell").nth(at);
+        if (await cell.count()) lines.push(flat(await cell.innerText()));
+      }
+      const all = await rowLines(page, true);
+      expect(all.filter((line) => line === MARKED)).toHaveLength(2);
+      expect(all.filter((line) => line === NAME)).toHaveLength(2);
+    } else {
+      lines = await rowLines(page, false);
+    }
     expect(lines.filter((line) => line === MARKED)).toHaveLength(1);
     expect(lines.filter((line) => line === NAME)).toHaveLength(1);
     expect(lines.filter((line) => line.includes("· fondo") && line !== MARKED)).toEqual([]);
