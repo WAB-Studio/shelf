@@ -55,3 +55,4 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-17	homefund-t4	critic	13	13	0	186669
 2026-10-17	codigo-6	validator	3	2	3	108573
 2026-10-17	codigo-6	mutator	19	17	2	76967
+2026-10-17	codigo-6	critic	10	10	0	152341

@@ -1796,3 +1796,8 @@ Board «CuentaCódigo», WordBook, dark 360 primary and 1280, under the Copia bl
 - **Done:** no board; `CuentaCopiaConfirmar` follows.
 - **«Entrar con mi correo» keeps its words.**
 - **An interrupted code step comes back:** the address is kept on the device for the code's hour; «Usar otro correo» or a code that lands clears it.
+
+## Decisions of 2026-10-17, after the critic of the six-digit code (#651), by the user
+
+- **Another code: a «Pedir otro código» button on the code step, with a countdown.** It sends a new code to the same address without typing it again; a send that Auth refuses gives the daily send back. Its boards are not drawn yet.
+- **The code mail names its sender and carries one English line.** One shared template still; a sender name and a short English line under the code. Its board is not drawn yet.
