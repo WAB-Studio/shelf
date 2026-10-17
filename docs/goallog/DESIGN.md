@@ -1841,3 +1841,12 @@ waiting. Not built yet.
   - Refused: a sentence with `role="alert"` under the button, `errors.rateLimited`'s words.
 - The signed-out consent shows the same step; its other states are the ones of `/entrar`.
 - The mail is HomeFund's shared template (canvas «HomeFund», «CorreoV2»).
+
+## Boards of 2026-10-17: «EntrarSinConexión», the code step offline (codigo-6c)
+
+Canvas «Bitácora de metas», page «Armazón», from y=15460. 360, three states. Not built yet.
+
+- Offline send: the field's hint «Sin conexión. No se pudo enviar el código.», the button enabled, the address kept.
+- Offline resend: the alert sentence «Sin conexión. No se pudo enviar el código.» under «Pedir otro código»; every
+  control enabled; the countdown keeps the last send's clock.
+- Offline check: the field's hint «Sin conexión. No se pudo comprobar el código.», the code kept, controls enabled.

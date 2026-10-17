@@ -1817,3 +1817,12 @@ Canvas «Diccionario de lectura», page «Cuenta», from y=25060. Dark 360 prima
   - Refused and Offline: the form's failure shape, with `errors.rateLimited` and `errors.offline`. The offline words
     still say «enlace»: left for polish.
 - «Usar otro correo» keeps its words and place. A signed-in panel clears the pending code step.
+
+## Boards of 2026-10-17: «CuentaTopeDiario», the daily cap says «mañana» (codigo-6c)
+
+Canvas «Diccionario de lectura», page «Cuenta», from y=27060. Dark 360, two states. Not built yet.
+
+- WordBook's own daily cap refuses in the form's failure shape with «Ya pediste varios códigos hoy. Prueba de nuevo
+  mañana.», on the address form and on the code step's resend. The button stays ready (a refused tap still spends,
+  decided by the user 2026-10-17).
+- Auth's own 429 keeps «Demasiados intentos. Prueba de nuevo en unos minutos.»
