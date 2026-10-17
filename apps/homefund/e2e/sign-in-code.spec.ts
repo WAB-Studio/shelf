@@ -774,7 +774,11 @@ test.describe("another code", () => {
 
       const before = await storedSentAt(page);
       await tap(page);
-      await expect(toasts(page).filter({ hasText: ES.capped })).toBeVisible();
+      // Sonner mounts a toast inside a setTimeout, which a paused clock never fires: tick until the answer has landed.
+      await expect(async () => {
+        await page.clock.runFor(1);
+        await expect(toasts(page).filter({ hasText: ES.capped })).toBeVisible({ timeout: 250 });
+      }).toPass();
       await expect(resendOf(page)).toBeEnabled();
       expect(await storedSentAt(page)).toBe(before);
       expect(await mailCount(email)).toBe(3);
