@@ -14,6 +14,8 @@ import { Flex, Text } from "@radix-ui/themes";
 
 import type { MessageKey } from "@/lib/use-action-toast";
 
+import styles from "./field.module.css";
+
 // Carries a Field's invalid flag and error id down to its label and control.
 const FieldContext = createContext({ invalid: false, errorId: "" });
 
@@ -69,8 +71,15 @@ function useFieldControl() {
 // screen calls: the scope that renders `<Field>` sits above the context Field
 // provides, so reading it there yields the ambient value and both attributes
 // come back undefined.
-export function FieldControl({ children }: { children: ReactElement }) {
-  return cloneElement(children, useFieldControl());
+// `tap` holds a text input to the 44px floor; off, the control renders as it was.
+export function FieldControl({ children, tap }: { children: ReactElement; tap?: boolean }) {
+  const attributes = useFieldControl();
+  if (!tap) return cloneElement(children, attributes);
+  const { className } = children.props as { className?: string };
+  return cloneElement(children as ReactElement<{ className?: string }>, {
+    ...attributes,
+    className: className ? `${styles.tap} ${className}` : styles.tap,
+  });
 }
 
 export function FieldLabel({
