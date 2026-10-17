@@ -309,11 +309,11 @@ test.describe("a plain member", () => {
     test.use({ storageState: MEMBER_STORAGE_STATE });
 
     test("sees the fund's categories and no menu on any of them", async ({ page }) => {
-      // Kills: the categories page granting the fund's controls to everyone (`canManageGroup` forced true).
+      // Kills p09 at both widths: the categories page granting the fund's controls to everyone (`canManageGroup` forced true),
+      // and the phone's card drawing its menu whatever the role (RF-57).
       await page.goto("/es/settings/categories");
 
       await expect(band(page).getByText(categoryName, { exact: true })).toHaveCount(1);
-      if (!laptop(page)) return;
       await expect(menuOf(page, categoryName)).toHaveCount(0);
     });
 
@@ -338,7 +338,7 @@ test.describe("a plain member", () => {
 
     await page.goto("/es/settings/categories");
     await expect(band(page).getByText(categoryName, { exact: true })).toHaveCount(1);
-    if (laptop(page)) await expect(menuOf(page, categoryName)).toHaveCount(1);
+    await expect(menuOf(page, categoryName)).toHaveCount(1);
   });
 });
 
@@ -378,5 +378,162 @@ test.describe("income parents", () => {
     const options = page.getByRole("option");
     await expect(options.filter({ hasText: incomeName })).toHaveCount(1);
     await expect(options.filter({ hasText: expenseName })).toHaveCount(0);
+  });
+});
+
+// Every «Añadir categoría» a person can see: the header's and an empty state's (RF-57, Q1 a of 2026-10-17).
+function addButtons(page: Page): Locator {
+  return page
+    .getByRole("button", { name: messages.categories.add, exact: true })
+    .filter({ visible: true });
+}
+
+// Asserts `upper` is drawn above `lower` on the page, both visible.
+async function expectAbove(upper: Locator, lower: Locator): Promise<void> {
+  await expect(upper).toBeVisible();
+  await expect(lower).toBeVisible();
+  const [top, bottom] = await Promise.all([upper.boundingBox(), lower.boundingBox()]);
+  expect(top && bottom && top.y < bottom.y).toBe(true);
+}
+
+// Board C3i: the categories phone in a fund names the fund once and offers a
+// role only the controls it may use; the laptop already did (RF-57, RF-63, RF-140).
+test.describe("the fund's categories by role (C3i)", () => {
+  const parentId = randomUUID();
+  const childId = randomUUID();
+  const parentName = `Mercado del fondo ${stamp}`;
+  const childName = `Verduras del fondo ${stamp}`;
+
+  test.beforeEach(async () => {
+    const { groupId } = await seedGroup();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into categories (id, group_id, name, kind, color)
+        values (${parentId}, ${groupId}, ${parentName}, 'expense', '#8C4A4A')`;
+      await tx`
+        insert into categories (id, group_id, parent_id, name, kind)
+        values (${childId}, ${groupId}, ${parentId}, ${childName}, 'expense')`;
+    });
+  });
+
+  test.afterEach(async () => {
+    await fixtureSql`delete from categories where id in (${childId}, ${parentId})`;
+  });
+
+  test.describe("a plain member", () => {
+    test.use({ storageState: MEMBER_STORAGE_STATE });
+
+    test("sees no menu on the fund's child row", async ({ page }) => {
+      // Kills: the card's menu gated on the role and the child's left drawn.
+      await page.goto("/es/settings/categories");
+
+      await expect(band(page).getByText(childName, { exact: true })).toHaveCount(1);
+      await expect(menuOf(page, childName)).toHaveCount(0);
+    });
+
+    test("is offered no «Añadir categoría», on a full list or an empty one", async ({ page }) => {
+      // Kills: `addButton` rendered whatever the role, in the header or in the empty state's action.
+      await page.goto("/es/settings/categories");
+      await expect(band(page).getByText(parentName, { exact: true })).toHaveCount(1);
+      await expect(addButtons(page)).toHaveCount(0);
+
+      await page.goto("/es/settings/categories?kind=income");
+      await expect(page.getByRole("heading", { name: messages.categories.title })).toBeVisible();
+      await expect(addButtons(page)).toHaveCount(0);
+    });
+
+    test("on the phone reads the fund's name, then the leader-only line, above the cards", async ({ page }) => {
+      // Kills: the phone drawing no fund heading, or no leader-only line for a member.
+      test.skip(laptop(page), "the laptop's sections already name the fund");
+      await page.goto("/es/settings/categories");
+
+      const shown = band(page);
+      const heading = shown.getByText(GROUP_NAME, { exact: true });
+      const note = shown.getByText(messages.categories.leaderOnly, { exact: true });
+      await expect(heading).toHaveCount(1);
+      await expect(note).toHaveCount(1);
+      await expectAbove(heading, note);
+      await expectAbove(note, shown.getByText(parentName, { exact: true }));
+    });
+  });
+
+  test.describe("the leader", () => {
+    test("keeps the menu on the fund's card and its child", async ({ page }) => {
+      // Kills: the menus gated on `groupName === null`, taking the leader's controls in their own fund.
+      await page.goto("/es/settings/categories");
+
+      await expect(menuOf(page, parentName)).toHaveCount(1);
+      await expect(menuOf(page, childName)).toHaveCount(1);
+    });
+
+    test("is offered «Añadir categoría» once", async ({ page }) => {
+      // Kills: the add button gated on `groupName === null` or drawn twice on the phone.
+      await page.goto("/es/settings/categories");
+
+      await expect(band(page).getByText(parentName, { exact: true })).toHaveCount(1);
+      await expect(addButtons(page)).toHaveCount(1);
+    });
+
+    test("reads the fund's rows by their bare names", async ({ page }) => {
+      // Kills: the cards or the table built from the scoped names (`{name} · fondo`); the heading names the scope.
+      await page.goto("/es/settings/categories");
+
+      const shown = band(page);
+      await expect(shown.getByText(parentName, { exact: true })).toHaveCount(1);
+      await expect(shown.getByText(childName, { exact: true })).toHaveCount(1);
+      const marked = (name: string) => messages.categories.scopedName.replace("{name}", name);
+      await expect(shown.getByText(marked(parentName))).toHaveCount(0);
+      await expect(shown.getByText(marked(childName))).toHaveCount(0);
+    });
+
+    test("on the phone reads the fund's name above the cards and no leader-only line", async ({ page }) => {
+      // Kills: the phone drawing no fund heading, or the leader-only line shown to everyone in a fund.
+      test.skip(laptop(page), "the laptop's sections already name the fund");
+      await page.goto("/es/settings/categories");
+
+      const shown = band(page);
+      await expectAbove(
+        shown.getByText(GROUP_NAME, { exact: true }),
+        shown.getByText(parentName, { exact: true }),
+      );
+      await expect(shown.getByText(messages.categories.leaderOnly, { exact: true })).toHaveCount(0);
+    });
+
+    test("on the phone an empty kind shows its empty state under the fund's name", async ({ page }) => {
+      // Kills: the fund heading drawn only when the fund's list is non-empty.
+      test.skip(laptop(page), "the laptop's sections already name the fund");
+      await page.goto("/es/settings/categories?kind=income");
+
+      const shown = band(page);
+      await expectAbove(
+        shown.getByText(GROUP_NAME, { exact: true }),
+        shown.getByText(messages.categories.emptyTitle, { exact: true }),
+      );
+    });
+  });
+});
+
+test.describe("a caller with no fund on the categories phone (C3i)", () => {
+  test.beforeEach(async () => {
+    await clearGroup();
+  });
+
+  test("keeps the menu on every personal category and the add button", async ({ page }) => {
+    // Kills: the menus or the add button gated on `canManageGroup` alone, which is false for a caller with no fund.
+    await page.goto("/es/settings/categories");
+
+    await expect(menuOf(page, scope.categoryName)).toHaveCount(1);
+    await expect(addButtons(page)).toHaveCount(1);
+  });
+
+  test("on the phone draws no fund heading and no leader-only line", async ({ page }) => {
+    // Kills: the fund heading drawn with `groupName ?? ""` (an empty heading and its member line for a caller with no fund).
+    test.skip(laptop(page), "the laptop's sections are guarded above");
+    await page.goto("/es/settings/categories");
+
+    const shown = band(page);
+    await expect(shown.getByText(scope.categoryName, { exact: true })).toHaveCount(1);
+    await expect(shown.getByText(GROUP_NAME, { exact: true })).toHaveCount(0);
+    await expect(shown.getByText(messages.categories.leaderOnly, { exact: true })).toHaveCount(0);
   });
 });
