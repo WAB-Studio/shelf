@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { MailCheckIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Controller, useForm } from "react-hook-form";
 
 import { signInAction, verifyCodeAction } from "@/app/actions/auth";
@@ -20,7 +20,12 @@ import {
   Text,
   TextField,
 } from "@/components/ui";
-import { clearPending, readPending, writePending } from "@/lib/auth/pending-sign-in";
+import {
+  clearPending,
+  readPending,
+  RESEND_WAIT_MS,
+  writePending,
+} from "@/lib/auth/pending-sign-in";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   signInCodeSchema,
@@ -31,17 +36,26 @@ import {
 
 const subscribeNothing = () => () => {};
 
+// The snapshot must be a stable value, so the record travels as its JSON text.
+const readPendingText = () => JSON.stringify(readPending());
+
+type Sent = { email: string; sentAt: number; resent: boolean };
+
 export function LoginForm({ next }: { next?: string }) {
   const t = useTranslations("auth");
 
   // The address the link went to, and the whole "sent" state: not a route, so
   // the browser's back button never lands on a stale inbox panel.
-  const [sent, setSentTo] = useState<string | null>(null);
+  const [sent, setSentTo] = useState<Sent | null>(null);
 
   // A relaunch opens on the code step while the last send is still fresh. The
   // server render has no storage, so it reads null and the client re-reads.
-  const stored = useSyncExternalStore(subscribeNothing, readPending, () => null);
-  const sentTo = sent ?? stored;
+  const storedText = useSyncExternalStore(subscribeNothing, readPendingText, () => "null");
+  const stored = useMemo(
+    () => (JSON.parse(storedText) as { email: string; sentAt: number } | null),
+    [storedText],
+  );
+  const sentTo = sent ?? (stored && { ...stored, resent: false });
 
   const form = useForm({
     resolver: zodResolver(signInSchema),
@@ -54,7 +68,7 @@ export function LoginForm({ next }: { next?: string }) {
   const { execute, isPending, reset } = useAction(signIn, {
     onSuccess({ input }) {
       writePending(input.email);
-      setSentTo(input.email);
+      setSentTo({ email: input.email, sentAt: Date.now(), resent: false });
     },
     onError: useActionErrorToast(),
   });
@@ -71,7 +85,18 @@ export function LoginForm({ next }: { next?: string }) {
   }
 
   if (sentTo) {
-    return <CodeStep email={sentTo} onBack={backToIdle} />;
+    // Keyed by the send, so a new code remounts the step: empty field, focus, a fresh countdown.
+    return (
+      <CodeStep
+        key={sentTo.sentAt}
+        email={sentTo.email}
+        sentAt={sentTo.sentAt}
+        resent={sentTo.resent}
+        next={next}
+        onResent={(sentAt) => setSentTo({ email: sentTo.email, sentAt, resent: true })}
+        onBack={backToIdle}
+      />
+    );
   }
 
   return (
@@ -115,8 +140,40 @@ export function LoginForm({ next }: { next?: string }) {
   );
 }
 
-function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
+function CodeStep({
+  email,
+  sentAt,
+  resent,
+  next,
+  onResent,
+  onBack,
+}: {
+  email: string;
+  sentAt: number;
+  resent: boolean;
+  next?: string;
+  onResent: (sentAt: number) => void;
+  onBack: () => void;
+}) {
   const t = useTranslations("auth");
+
+  const [now, setNow] = useState(() => Date.now());
+  const remaining = Math.max(0, Math.ceil((sentAt + RESEND_WAIT_MS - now) / 1000));
+  const waiting = remaining > 0;
+  useEffect(() => {
+    if (!waiting) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [waiting]);
+
+  const signIn = useMemo(() => signInAction.bind(null, next), [next]);
+  const { execute: resend, isPending: isResending } = useAction(signIn, {
+    onSuccess({ input }) {
+      writePending(input.email);
+      onResent(Date.now());
+    },
+    onError: useActionErrorToast(),
+  });
 
   // The server's refusal is a catalogue key that lives under the field, not in a toast.
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -126,13 +183,15 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
     defaultValues: { email, code: "" },
   });
 
-  const { execute, isPending } = useAction(verifyCodeAction, {
+  const { execute, isPending: isChecking } = useAction(verifyCodeAction, {
     onSuccess: clearPending,
     onNavigation: clearPending,
     onError({ error }) {
       setRefusal(error.serverError ?? "errors.unexpected");
     },
   });
+
+  const busy = isChecking || isResending;
 
   function onSubmit(values: SignInCodeInput) {
     setRefusal(null);
@@ -155,6 +214,11 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
             {t("sentDescription", { email })}
           </Text>
         </Flex>
+        {resent && (
+          <Text size="2" align="center" role="status">
+            {t("resent", { email })}
+          </Text>
+        )}
         <Controller
           name="code"
           control={form.control}
@@ -176,7 +240,7 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
                     autoComplete="one-time-code"
                     maxLength={6}
                     autoFocus
-                    disabled={isPending}
+                    disabled={busy}
                   />
                 </FieldControl>
                 <FieldMessage error={message} />
@@ -188,10 +252,10 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
           tap
           type="submit"
           size={{ initial: "2", md: "4" }}
-          disabled={isPending}
+          disabled={busy}
         >
-          {isPending && <Spinner />}
-          {isPending ? t("checking") : t("enter")}
+          {isChecking && <Spinner />}
+          {isChecking ? t("checking") : t("enter")}
         </Button>
         <Text size="2" color="gray" align="center">
           {t("sentHint")}
@@ -199,10 +263,25 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
         <Button
           tap
           type="button"
+          variant="soft"
+          size={{ initial: "2", md: "3" }}
+          onClick={() => resend({ email })}
+          disabled={busy || waiting}
+        >
+          {isResending && <Spinner />}
+          {isResending
+            ? t("resending")
+            : remaining > 0
+              ? t("resendIn", { seconds: remaining })
+              : t("resend")}
+        </Button>
+        <Button
+          tap
+          type="button"
           variant="outline"
           size={{ initial: "2", md: "3" }}
           onClick={onBack}
-          disabled={isPending}
+          disabled={busy}
         >
           {t("useAnotherEmail")}
         </Button>
