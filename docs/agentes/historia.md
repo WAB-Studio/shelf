@@ -40,6 +40,10 @@ Each entry names the rule and the file it lives in now.
   that 1 (`tree-readers.ts`) CI 38852989964 caught on its own; 179k tokens for nothing unique. First-pass validators
   found something unique in 4 of 7, the mutator in 5 of 5, the critic in 2 of 2: kept. The second critic found 2
   real Hostile findings for 121k over the whole slice: kept, scoped to the fixed screens.
+- Third pruning review, 2026-10-16, over 6 trains (#635–#641): validators found something unique in 2 of 6 (635,
+  639) for about 50k each: kept. Mutators found 59 survivors, all unique, in 5 of 5, and 0 were fixed; in the review
+  before, 11 of 84. Nothing pruned. The survivors that cost money, a delete, a permission or stored data now become a
+  `tester` module of the next train instead of a handoff line.
 
 ## Retired 2026-10-14 by the user
 
