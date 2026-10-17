@@ -190,3 +190,13 @@ Canvas «HomeFund», page «Entrar con código», from y=2100. Not built yet.
   HomeFund. Open the link above and type this email to get a sign-in code.»; muted «Si no esperabas esta invitación,
   ignora este correo.» No code, no sign-in link, no inviter or fund name.
 - No board for the members dialog's warning; it waits on the user's answer.
+
+## Decisions of 2026-10-17, after the critic of codigo-6b, by the user
+
+- **Inviting after onboarding: an optional «correo» field in the members dialog.** «Añadir miembro» with an address
+  invites, and the dialog's warning becomes reachable. Level 3 (it sends mail and lists the address). Its board is not
+  drawn yet. Not built yet.
+- **Inviting an address Auth already holds: words only.** The warning reads «…no pudimos enviar el correo; puede entrar
+  ya en HomeFund con ese correo». The person gets no mail. Not built yet.
+- **The per-caller daily cap rises from 5 to 10** (`SIGN_IN_LINK_DAILY_CLIENT_CAP`, HomeFund and WordBook); the address
+  cap stays at 3, and a refused tap still spends. Not built yet.
