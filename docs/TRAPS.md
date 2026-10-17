@@ -3359,3 +3359,12 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   keeps its own window; the app's 60 s countdown matches it.
 - A change to `config.toml` loads only on a stack restart: restart from a lane with `node_modules` whose checkout holds the
   change, while no lane runs a suite.
+
+## A lane's dev server keeps the environment it started with (2026-10-17)
+
+- `scripts/supabase-local.sh exec` exports the stack's variables once, when the server starts. A server started before a
+  branch added a variable to `print_env` never sees it, and Next's lock on the directory stops a second one.
+- Measured 2026-10-17, train codigo-6b: the validator's HomeFund server on :3001 dated from before M3 had no
+  `SUPABASE_SECRET_KEY`; 10 of 54 invite and members specs went red («invite email not sent: SUPABASE_SECRET_KEY is not
+  set»). Restarted under the wrapper: 54/54.
+- Do: restart a lane's dev server after any change to `scripts/supabase-local.sh` or `.env.local`, before judging a spec.
