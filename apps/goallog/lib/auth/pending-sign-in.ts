@@ -1,3 +1,5 @@
+import { SIGNED_IN_MARKER } from "./signed-in-marker";
+
 const KEY = "goallog.pending-sign-in";
 
 // The code the mail carries stops working after an hour (RP-136); a record older than that is not a step to reopen.
@@ -12,8 +14,24 @@ export function savePending(email: string, now: number = Date.now()): void {
   }
 }
 
-// `null` for nothing stored, a record past its hour, or anything unreadable. An expired record is dropped.
-export function readPending(now: number = Date.now()): string | null {
+// The moment the last link landed on this device, or `null` when there is no readable marker.
+function readLandingMarker(): number | null {
+  try {
+    for (const part of document.cookie.split(";")) {
+      const [name, ...rest] = part.trim().split("=");
+      if (name !== SIGNED_IN_MARKER) continue;
+      const value = Number(rest.join("="));
+      return rest.length > 0 && rest.join("=") !== "" && Number.isFinite(value) ? value : null;
+    }
+  } catch {
+    // No cookie jar: no marker.
+  }
+  return null;
+}
+
+// `null` for nothing stored, a record past its hour, a record a later landing spent, or anything unreadable.
+// A record that is no longer a step to reopen is dropped.
+export function readPending(now: number = Date.now()): { email: string; at: number } | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
@@ -26,7 +44,12 @@ export function readPending(now: number = Date.now()): string | null {
       clearPending();
       return null;
     }
-    return parsed.email;
+    const landed = readLandingMarker();
+    if (landed !== null && landed >= parsed.at) {
+      clearPending();
+      return null;
+    }
+    return { email: parsed.email, at: parsed.at };
   } catch {
     return null;
   }

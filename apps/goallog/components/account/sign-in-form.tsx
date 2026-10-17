@@ -13,14 +13,29 @@ import { clearPending, readPending, savePending } from "@/lib/auth/pending-sign-
 import { signInCodeSchema, signInEmailSchema } from "@/lib/validation/sign-in";
 import { Button, Field, Figure, Flex, ScreenHeader, Text } from "@/components/ui";
 
+type SentState = Extract<FormState, { kind: "sent" }>;
+
 type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"];
 
 type CodeError = VerifySignInCodeResult["error"];
 
+type ResendState = { kind: "idle" } | { kind: "sending" } | { kind: "done" } | { kind: "failed"; error: SendError };
+
+const RESEND_WAIT_MS = 60_000;
+
 type FormState =
   | { kind: "idle" }
   | { kind: "sending" }
-  | { kind: "sent"; email: string; code: string; checking: boolean; error?: CodeError }
+  | {
+      kind: "sent";
+      email: string;
+      // When the code on its way was sent; the resend counts its wait from here.
+      at: number;
+      code: string;
+      checking: boolean;
+      error?: CodeError;
+      resend: ResendState;
+    }
   | { kind: "failed"; error: SendError };
 
 // `EntrarFormulario`, `EntrarCódigo`: the one form that asks for an address and
@@ -47,6 +62,22 @@ export function SignInForm({
   const [state, setState] = useState<FormState>({ kind: "idle" });
   // True from the verify call until a refusal comes back: the form unmounting in between is the code landing.
   const verifying = useRef(false);
+  const codeField = useRef<HTMLInputElement>(null);
+  const [now, setNow] = useState(0);
+  const resendDone = state.kind === "sent" && state.resend.kind === "done";
+
+  // The countdown reads the clock, so a reload keeps counting from the send.
+  const counting = state.kind === "sent";
+  useEffect(() => {
+    if (!counting) return;
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, [counting]);
+
+  // A new code empties the field; the person's next move is typing it.
+  useEffect(() => {
+    if (resendDone) codeField.current?.focus();
+  }, [resendDone]);
 
   // A good code redirects and the action never returns, so the landing is seen as the form leaving.
   useEffect(
@@ -62,24 +93,45 @@ export function SignInForm({
     queueMicrotask(() => {
       const pending = readPending();
       // Only the untouched form gives way: a person already typing keeps their place.
-      if (live && pending) setState((now) => (now.kind === "idle" ? { kind: "sent", email: pending, code: "", checking: false } : now));
+      if (live && pending) {
+        setNow(Date.now());
+        setState((current) =>
+          current.kind === "idle"
+            ? { kind: "sent", email: pending.email, at: pending.at, code: "", checking: false, resend: { kind: "idle" } }
+            : current,
+        );
+      }
     });
     return () => {
       live = false;
     };
   }, []);
 
-  async function handleVerify(address: string, code: string): Promise<void> {
+  async function handleVerify(current: SentState, code: string): Promise<void> {
+    const { email: address, at } = current;
     if (!signInCodeSchema.safeParse(code).success) {
-      setState({ kind: "sent", email: address, code, checking: false, error: "codeShape" });
+      setState({ ...current, code, checking: false, error: "codeShape" });
       return;
     }
-    setState({ kind: "sent", email: address, code, checking: true });
+    setState({ ...current, code, checking: true, error: undefined });
     // A good code redirects and never returns; only a refusal comes back.
     verifying.current = true;
     const result = await verifySignInCode(address, code, next);
     verifying.current = false;
-    if (result?.error) setState({ kind: "sent", email: address, code, checking: false, error: result.error });
+    if (result?.error) setState({ kind: "sent", email: address, at, code, checking: false, error: result.error, resend: { kind: "idle" } });
+  }
+
+  async function handleResend(current: SentState): Promise<void> {
+    setState({ ...current, resend: { kind: "sending" } });
+    const result = await sendSignInLink(current.email, next);
+    if (!result.ok) {
+      setState({ ...current, resend: { kind: "failed", error: result.error } });
+      return;
+    }
+    const at = Date.now();
+    savePending(current.email, at);
+    setNow(at);
+    setState({ ...current, at, code: "", error: undefined, resend: { kind: "done" } });
   }
 
   async function handleSend(): Promise<void> {
@@ -93,11 +145,17 @@ export function SignInForm({
       setState({ kind: "failed", error: result.error });
       return;
     }
-    savePending(email);
-    setState({ kind: "sent", email, code: "", checking: false });
+    const at = Date.now();
+    savePending(email, at);
+    setNow(at);
+    setState({ kind: "sent", email, at, code: "", checking: false, resend: { kind: "idle" } });
   }
 
   if (state.kind === "sent") {
+    const sentState = state;
+    const waitLeft = Math.max(0, Math.ceil((state.at + RESEND_WAIT_MS - now) / 1000));
+    const resending = state.resend.kind === "sending";
+    const busy = state.checking || resending;
     return (
       <>
         <ScreenHeader
@@ -113,7 +171,7 @@ export function SignInForm({
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              void handleVerify(state.email, state.code);
+              void handleVerify(sentState, sentState.code);
             }}
           >
             <Field
@@ -123,12 +181,14 @@ export function SignInForm({
               autoComplete="one-time-code"
               maxLength={6}
               autoFocus
+              ref={codeField}
+              disabled={resending}
               value={state.code}
               onChange={(event) => setState({ ...state, code: event.target.value, error: undefined })}
               invalid={state.error !== undefined}
               hint={state.error ? t(`errors.${state.error}`) : undefined}
             />
-            <Button type="submit" block disabled={state.checking}>
+            <Button type="submit" block disabled={busy}>
               {state.checking ? t("checking") : t("enter")}
             </Button>
           </form>
@@ -139,6 +199,28 @@ export function SignInForm({
         <Button
           variant="ghost"
           tone="accent"
+          disabled={busy || waitLeft > 0}
+          onClick={() => void handleResend(sentState)}
+        >
+          {resending ? t("resending") : waitLeft > 0 ? t("resendIn", { seconds: waitLeft }) : t("resend")}
+        </Button>
+        {state.resend.kind === "done" ? (
+          <Text as="p" variant="sentence">
+            {t.rich("resent", {
+              email: state.email,
+              fig: (chunks) => <Figure variant="meta" value={chunks} breakValue />,
+            })}
+          </Text>
+        ) : null}
+        {state.resend.kind === "failed" ? (
+          <Text as="p" variant="sentence" role="alert">
+            {t(`errors.${state.resend.error}`)}
+          </Text>
+        ) : null}
+        <Button
+          variant="ghost"
+          tone="accent"
+          disabled={busy}
           onClick={() => {
             clearPending();
             setState({ kind: "idle" });
