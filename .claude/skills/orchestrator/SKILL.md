@@ -50,7 +50,8 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
 5. Put any `Questions` to the user. Re-dispatch that assignment with the answers.
 6. Merge each finished branch into its train and mark its module `## [x]`. Judge per train, never per module: when
    every module of a train has landed, dispatch one `validator` over the train and one `mutator` over its level-3
-   lines, together. On `FAIL`, re-dispatch the module's worker with the `Fixes`. A mutator survivor goes to the handoff.
+   lines, together. On `FAIL`, re-dispatch the module's worker with the `Fixes`. Hand the mutator's survivors that
+   cost money, a delete, a permission or stored data to a `tester` as a module of the next train; the rest go to the handoff.
 7. Append one row per judge to `docs/agentes/rendimiento-jueces.tsv` (see § Judges).
 8. Repeat with the assignments the merged ones unblocked.
 9. Run `npm run typecheck` (tsgo) and `npm run lint` (eslint cache).
