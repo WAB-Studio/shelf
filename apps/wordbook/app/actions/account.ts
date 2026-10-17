@@ -2,6 +2,7 @@
 
 import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -117,13 +118,13 @@ export async function sendSignInLink(email: string): Promise<SendSignInLinkResul
 
   // After the guard, so a dead address never spends a caller's allowance; before
   // Supabase, so a caller over it never spends the project's mail quota.
-  const [{ headers }, { claimSignInLink }] = await Promise.all([
+  const [{ headers }, { claimSignInLink, releaseSignInLink }] = await Promise.all([
     import("next/headers"),
     import("@/lib/account/sign-in-budget"),
   ]);
-  if ((await claimSignInLink(await headers(), parsed.data)) === "rateLimited") {
-    return { ok: false, error: "rateLimited" };
-  }
+  const claim = await claimSignInLink(await headers(), parsed.data);
+  if (claim.status === "rateLimited") return { ok: false, error: "rateLimited" };
+  const spent = claim.status === "ok" ? claim.keys : [];
 
   // RL-69: after the claim, so probing the list spends the caller's allowance like a send does;
   // before Supabase, so an address off it never gets a row in `auth.users` or an email. A list
@@ -150,6 +151,8 @@ export async function sendSignInLink(email: string): Promise<SendSignInLinkResul
 
   if (error) {
     console.error("sign-in link request failed", error);
+    // A send Auth refused spends nothing; a timed-out one may have been delivered, so it keeps its count.
+    if (!isAuthRetryableFetchError(error)) await releaseSignInLink(spent);
     // 429 (over_email_send_rate_limit) names the wait, not just the
     // failure to send — every other status keeps the generic copy.
     return { ok: false, error: error.status === 429 ? "rateLimited" : "sendFailed" };
