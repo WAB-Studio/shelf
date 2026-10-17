@@ -169,3 +169,23 @@ export async function signOut(): Promise<void> {
 
   redirect("/registro");
 }
+
+export type VerifySignInCodeResult =
+  | { ok: true }
+  | { ok: false; error: "emailInvalid" | "codeShape" | "codeInvalid" | "codeTimeout" | "rateLimited" };
+
+// RL-73: shape before Auth; nothing is sent, so no DNS, cap or list. The session
+// cookie is set by the server client; the caller refreshes.
+export async function verifySignInCode(email: string, code: string): Promise<VerifySignInCodeResult> {
+  const parsedEmail = emailSchema.safeParse(email);
+  if (!parsedEmail.success) return { ok: false, error: "emailInvalid" };
+  const [{ signInCodeSchema }, { verifyCode }] = await Promise.all([
+    import("@/lib/account/sign-in-code"),
+    import("@/lib/auth/verify-code"),
+  ]);
+  const parsedCode = signInCodeSchema.safeParse(code);
+  if (!parsedCode.success) return { ok: false, error: "codeShape" };
+  const supabase = await supabaseClient();
+  const result = await verifyCode((params) => supabase.auth.verifyOtp(params), { email: parsedEmail.data, code: parsedCode.data });
+  return result.ok ? { ok: true } : { ok: false, error: result.reason };
+}
