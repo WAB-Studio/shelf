@@ -29,7 +29,7 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
    Check each carries its risk level (`AGENTS.md` § Modules) and fits the size cap (400 lines of code, tests not counted).
    Check the slice is cut by layer, not by function: all its loaders in one module, the screens of one area in one
    module. About eight modules a slice, never seventeen. Split only what shares no file and needs no other module's result.
-5. Put any `Questions` to the user. Wait for the answers.
+5. Put any `Questions` on the roadmap artifact (`AGENTS.md` § Working here). Take other work while they wait.
 6. Send the answers and any fixes back to the same planner with SendMessage. Take the second plan as final.
 7. Fix the slice's list there. What a judge finds after that goes to the handoff as pending, never into a new train
    in the same session. A module that ends red leaves the train for the next session.
@@ -47,7 +47,7 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
    Dispatch one agent per lane, all in one message. Mark the plan's module `## [~]` the moment you dispatch it.
 4. Take each report the moment it lands. Never wait for the batch: a lane that finished gets its next agent
    while the others still run. Resolve its `Unresolved`. Collect its `Deferred`.
-5. Put any `Questions` to the user. Re-dispatch that assignment with the answers.
+5. Put any `Questions` on the roadmap artifact. Re-dispatch that assignment with the answers.
 6. Merge each finished branch into its train and mark its module `## [x]`. Judge per train, never per module: when
    every module of a train has landed, dispatch one `validator` over the train and one `mutator` over its level-3
    lines, together. On `FAIL`, re-dispatch the module's worker with the `Fixes`. Hand the mutator's survivors that
@@ -202,7 +202,7 @@ Re-dispatch the worker, not the validator, when the verdict is `FAIL`. Hand the 
 - Dispatch every independent subagent in one message. Serialize only on a dependency.
 - Never hand a subagent the plan file or another subagent's report.
 - Take the decisions a subagent leaves `Unresolved`.
-- Pass every `Questions` to the user. Never answer one yourself.
+- Pass every `Questions` to the user through the roadmap artifact. Never answer one yourself.
 - Re-dispatch a failed assignment once, naming the failure. Escalate the second failure.
 - Hold the slice's scope. Push new work to `Deferred`.
 - Never renumber, reuse or retire an RF or RNF code. Put it to the user.
