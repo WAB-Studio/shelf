@@ -45,6 +45,7 @@ import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
 import type { Locale } from "@/lib/locales";
 import type { ACCOUNT_SUBTYPES } from "@/lib/validation/account";
 import { formatMoney } from "@/lib/money";
+import { categoryNamesById } from "@/lib/fund/category-names";
 
 export async function generateMetadata(
   props: PageProps<"/[locale]">,
@@ -92,7 +93,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
   // movements list fans out (RF-23); the amount is formatted for display only.
-  const [, group, dashboardData, rows, options, withdrawal, t, td, ta] =
+  const [, group, dashboardData, rows, options, withdrawal, t, td, ta, tc] =
     await Promise.all([
       requireUser(),
       getUserGroup(),
@@ -103,6 +104,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       getTranslations("transactions"),
       getTranslations("dashboard"),
       getTranslations("accounts"),
+      getTranslations("categories"),
     ]);
 
   if (dashboardData.hasAccounts === false) {
@@ -200,13 +202,13 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // A name and colour per account and per category id — children included — so a
   // row reads its title, subtitle and tile without a second lookup.
   const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
-  const categoryNames = new Map<string, string>();
+  const categoryNames = categoryNamesById(options.categories, (name) =>
+    tc("scopedName", { name }),
+  );
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
-    categoryNames.set(category.id, category.name);
     categoryColors.set(category.id, category.color);
     for (const child of category.children) {
-      categoryNames.set(child.id, child.name);
       categoryColors.set(child.id, child.color);
     }
   }

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
+import { categoryNamesById } from "@/lib/fund/category-names";
 import type { MovementTypeValue } from "@/lib/validation/transaction";
 
 // The type filter's value, mirrored one-to-one onto the `?type=` query and, on
@@ -38,7 +39,11 @@ const ANY = "all";
 
 // One narrowing already applied, named by the value it holds and paired with the
 // patch that drops it.
-type ActiveChip = { key: string; label: string; clear: Partial<MovementsFilters> };
+type ActiveChip = {
+  key: string;
+  label: string;
+  clear: Partial<MovementsFilters>;
+};
 
 /**
  * The laptop's filter row (RF-23, RF-89, RF-31): a labelled control per filter,
@@ -58,6 +63,7 @@ export function MovementsFilterBar({
   onChange: (next: MovementsFilters) => void;
 }) {
   const t = useTranslations("transactions");
+  const tc = useTranslations("categories");
   const format = useFormatter();
 
   function set(patch: Partial<MovementsFilters>) {
@@ -66,16 +72,18 @@ export function MovementsFilterBar({
 
   // A subcategory rides beside its parent, so one flat list serves both the
   // select and the chip that names the pick.
-  const categories = options.categories.flatMap((category) => [
-    { id: category.id, name: category.name },
-    ...category.children.map((child) => ({ id: child.id, name: child.name })),
-  ]);
+  const categories = [
+    ...categoryNamesById(options.categories, (name) =>
+      tc("scopedName", { name }),
+    ),
+  ].map(([id, name]) => ({ id, name }));
 
   const types: { value: MovementType; label: string }[] = [
     { value: "all", label: t("filterAll") },
     { value: "expense", label: t("filterExpenses") },
     { value: "income", label: t("filterIncome") },
     { value: "transfer", label: t("filterTransfers") },
+    { value: "adjustment", label: t("filterAdjustments") },
   ];
 
   function chipDate(value: string, key: "chipFrom" | "chipTo"): string {
@@ -95,7 +103,8 @@ export function MovementsFilterBar({
   if (filters.type !== "all") {
     chips.push({
       key: "type",
-      label: types.find((one) => one.value === filters.type)?.label ?? filters.type,
+      label:
+        types.find((one) => one.value === filters.type)?.label ?? filters.type,
       clear: { type: "all" },
     });
   }
@@ -174,7 +183,9 @@ export function MovementsFilterBar({
       <FilterSelect
         label={t("accountLabel")}
         value={filters.account ?? ANY}
-        onValueChange={(value) => set({ account: value === ANY ? null : value })}
+        onValueChange={(value) =>
+          set({ account: value === ANY ? null : value })
+        }
         items={[
           { value: ANY, label: t("allAccounts") },
           ...options.accounts.map((account) => ({
@@ -188,7 +199,9 @@ export function MovementsFilterBar({
       <FilterSelect
         label={t("categoryLabel")}
         value={filters.category ?? ANY}
-        onValueChange={(value) => set({ category: value === ANY ? null : value })}
+        onValueChange={(value) =>
+          set({ category: value === ANY ? null : value })
+        }
         items={[
           { value: ANY, label: t("allCategories") },
           ...categories.map((category) => ({
@@ -205,7 +218,9 @@ export function MovementsFilterBar({
         <FilterSelect
           label={t("labelFilterLabel")}
           value={filters.label ?? ANY}
-          onValueChange={(value) => set({ label: value === ANY ? null : value })}
+          onValueChange={(value) =>
+            set({ label: value === ANY ? null : value })
+          }
           items={[
             { value: ANY, label: t("allLabels") },
             ...options.labels.map((label) => ({
@@ -221,7 +236,9 @@ export function MovementsFilterBar({
         <FilterSelect
           label={t("createdBy")}
           value={filters.member ?? ANY}
-          onValueChange={(value) => set({ member: value === ANY ? null : value })}
+          onValueChange={(value) =>
+            set({ member: value === ANY ? null : value })
+          }
           items={[
             { value: ANY, label: t("allMembers") },
             ...options.members.map((member) => ({
