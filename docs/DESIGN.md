@@ -108,3 +108,16 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - The categories settings screen names the fund with a heading, never on every row. A plain member sees neither edit,
   delete nor «Añadir categoría» on the fund's categories (decided by the user 2026-10-17).
 - Quick entry's interpreter, the export, the template and the import keep the bare category names.
+
+## Decisions of 2026-10-17, after the T4 critic (#649), by the user
+
+- **Your own categories inside a fund.** The phone's categories screen gains «Mis categorías» beside the fund's, and
+  «Añadir categoría» asks where it goes: «Mías» or «del fondo», the second only for the fund's leader. Today nobody in a
+  fund can create a personal category (`app/actions/categories.ts:34-36` writes every new one into the fund). Needs a
+  board (C3i redrawn) and the action taking a scope. Not built yet.
+- **«Según HomeFund» on a card uses the field's frame.** Line 3 of the reconcile sheet writes a debt as a positive amount and
+  a balance in the card's favour with a minus, like the field and, since T4, the history (Visa Nu «$ 315.000»; a card in
+  credit «−$ 5.000»). Line 3 redrawn on board C1. Not built yet.
+- **Category selects follow the account's scope** in payments, budgets and webhook credentials, as recurring rules already do:
+  once an account is picked, only the categories of its scope are offered; with no account, or «Todas las cuentas», both.
+  Not built yet.
