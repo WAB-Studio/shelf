@@ -6,16 +6,15 @@ The main session reads this before a screen is dispatched. The why: `docs/agente
 
 - Draw a screen on its app's canvas before any worker writes it. The canvas is the artifact; the app's `DESIGN.md`
   is the law it obeys.
-- Put the board in front of the user and take their answer before dispatching. A screen the user first sees as
-  code is a screen they review too late to change cheaply.
+- Dispatch the worker once the board is drawn. Never wait for the user to approve it; show it in the report.
 - Apply it to a new screen, a new state of one, and a change a person can see. Never to work behind the screen.
 - Draw every state the screen really has (empty, loading, failed, full), not the happy one.
 - Draw one board per state, on the app's primary face. Add a second face only where the design really changes: a
   different layout, control or order. Never where only colours or padding change: the token table already says
   what dark is.
 - Say in the board's own note what it takes for granted. A face nobody drew must read as a face nobody needed.
-- Write the decision into the app's `DESIGN.md` the moment the user takes it, with its date. The canvas shows what was
-  drawn; only `DESIGN.md` says what was chosen.
+- Write the board's words and choices into the app's `DESIGN.md` the day it is drawn, and a user's decision the
+  moment they take it, with its date. The canvas shows what was drawn; only `DESIGN.md` says what was chosen.
 - When a board and its `DESIGN.md` disagree, the file wins.
 - Say in `DESIGN.md` which boards do not exist. A gap nobody wrote down reads as a gap nobody noticed.
 - Move a superseded board to the canvas's «Archivo» page the same day. Never leave it beside the live one.

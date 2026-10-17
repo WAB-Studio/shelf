@@ -42,7 +42,7 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen 
    module's branch, writes the Done table's tests from the contract, red; then the `worker` makes them green.
    Level 2, a new screen or a new state of one: the same chain, `tester` then `worker`. Level 2, a change to an
    existing screen or a query: one `worker` writes its Done table red first, then makes it green. Level 1: one `worker`.
-   Before a screen: the user approved its board (`docs/agentes/canvas.md`), and the query that feeds it exists.
+   Before a screen: its board is drawn (`docs/agentes/canvas.md`), and the query that feeds it exists.
    Measure what the module's claim includes, in real rows, before dispatching it.
    Dispatch one agent per lane, all in one message. Mark the plan's module `## [~]` the moment you dispatch it.
 4. Take each report the moment it lands. Never wait for the batch: a lane that finished gets its next agent
