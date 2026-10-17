@@ -7,7 +7,7 @@ import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { readWordStudy, type StudyRow } from "@/lib/log/summary";
-import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
+import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, readSyncState } from "@/lib/log/record";
 import { deleteStudyGroup, LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
@@ -38,7 +38,8 @@ type ListState =
 
 // The one row whose ✕ was pressed: a second row's ✕ replaces it, so two
 // questions are never open at once (`RegistroBorrarFilaConfirmar`).
-type DeleteTarget = { key: string; phase: "asking" | "deleting" | "failed" };
+// `local`: the copy is off, so the delete reaches this device alone (RNL-11).
+type DeleteTarget = { key: string; phase: "asking" | "deleting" | "failed"; local: boolean };
 
 type RowActions = {
   ask: (key: string) => void;
@@ -50,12 +51,14 @@ const StudyRowItem = memo(function StudyRowItem({
   row,
   first,
   phase,
+  local,
   actions,
 }: {
   row: StudyRow;
   first: boolean;
   // Undefined on every row but the target, so pressing one ✕ re-renders one row.
   phase: DeleteTarget["phase"] | undefined;
+  local: boolean;
   actions: RowActions;
 }) {
   const t = useTranslations("log");
@@ -161,8 +164,13 @@ const StudyRowItem = memo(function StudyRowItem({
           <Flex direction="column" gap="1">
             <Text variant="breakTitle">{t("study.deleteConfirmTitle", { word })}</Text>
             <Text variant="breakBody" muted>
-              {t("study.deleteConfirmBody", { count: row.count })}
+              {t(local ? "study.deleteConfirmBodyLocal" : "study.deleteConfirmBody", { count: row.count })}
             </Text>
+            {local && (
+              <Text variant="breakBody" muted>
+                {t("study.deleteConfirmLocalNote")}
+              </Text>
+            )}
           </Flex>
           <Flex gap="4" align="center" wrap="wrap">
             <Button size="3" disabled={deleting} onClick={actions.keep}>
@@ -247,6 +255,8 @@ export function HistoryList() {
   // a newer one — the flush event firing mid-read — never overwrites it.
   const requestIdRef = useRef(0);
   const [target, setTarget] = useState<DeleteTarget | null>(null);
+  const localRef = useRef(true);
+  const askIdRef = useRef(0);
   // Holds a key from its first «Borrar» to its settle: two taps inside one
   // task both run before `disabled` paints, and only the first may reach
   // IndexedDB.
@@ -335,22 +345,33 @@ export function HistoryList() {
   const remove = useCallback(async (key: string): Promise<void> => {
     if (inFlightRef.current.has(key)) return;
     inFlightRef.current.add(key);
-    setTarget({ key, phase: "deleting" });
+    setTarget({ key, phase: "deleting", local: localRef.current });
     try {
       const { deleted } = await deleteStudyGroup(key);
       // Nothing matched: no reread will drop the row, so nothing clears it.
       if (deleted === 0) setTarget((current) => (current?.key === key ? null : current));
     } catch {
       // Shown even over another row's question: a refusal nobody sees reads as done.
-      setTarget({ key, phase: "failed" });
+      setTarget({ key, phase: "failed", local: localRef.current });
     } finally {
       inFlightRef.current.delete(key);
     }
   }, []);
   const actions = useMemo<RowActions>(
     () => ({
-      ask: (key) => setTarget({ key, phase: "asking" }),
-      keep: () => setTarget(null),
+      ask: (key) => {
+        const askId = ++askIdRef.current;
+        // Read once as the question opens; the newest ✕ wins a slow read.
+        void readSyncState().then((sync) => {
+          if (askIdRef.current !== askId) return;
+          localRef.current = !(sync.enabled && sync.readerId !== null && !sync.retired);
+          setTarget({ key, phase: "asking", local: localRef.current });
+        });
+      },
+      keep: () => {
+        askIdRef.current++;
+        setTarget(null);
+      },
       remove: (key) => void remove(key),
     }),
     [remove],
@@ -467,6 +488,7 @@ export function HistoryList() {
               row={row}
               first={index === 0}
               phase={target?.key === row.key ? target.phase : undefined}
+              local={target?.key === row.key && target.local}
               actions={actions}
             />
           ))}
