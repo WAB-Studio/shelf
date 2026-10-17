@@ -3347,3 +3347,15 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   two unpushed commits. They came back with `git branch <name> <sha>` because the objects were still in the shared `.git`.
 - Do: push and check `git ls-remote` in one command; remove a worktree or delete a branch in a later command, after reading
   that the remote holds the tip.
+
+## Auth's per-address mail window outlives a faked browser clock (2026-10-17)
+
+- `page.clock` moves only the browser. A spec that sends a code, fast-forwards 60 s and taps «Pedir otro código» reaches
+  Auth well under a second of real time after the first send.
+- Measured 2026-10-17, train codigo-6b: with Auth's default window (60 s) every resend spec in HomeFund and GoalLog went
+  red with «you can only request this after N seconds»; with `max_frequency = "1s"` two of them still flaked
+  («after 0 seconds»). With `"0s"` they pass.
+- Do: keep `max_frequency = "0s"` under `[auth.email]` in `supabase/config.toml` for the local stack. The hosted project
+  keeps its own window; the app's 60 s countdown matches it.
+- A change to `config.toml` loads only on a stack restart: restart from a lane with `node_modules` whose checkout holds the
+  change, while no lane runs a suite.
