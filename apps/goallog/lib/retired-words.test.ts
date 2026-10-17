@@ -51,6 +51,6 @@ test("the plan of a goal with no measure and the sign-in lead say the board's wo
   );
   assert.equal(
     read("account.json").lead,
-    "Te mandamos un enlace a tu correo. Ábrelo en este dispositivo y entras; no hay contraseña.",
+    "Te mandamos un código a tu correo. Lo escribes aquí y entras; no hay contraseña.",
   );
 });
