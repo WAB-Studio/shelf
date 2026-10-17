@@ -1778,3 +1778,21 @@ Canvas version 48. Every board draws the dark 360 face; `RegistroBorrarFila` add
 - **Found by the same critic, no decision needed:** «Vaciar el registro» in one tab can wipe more than it names when
   another tab records searches (the recount events stay in their tab); RL-72's definition back is unreachable today,
   because the network route refuses an answer with no translation (`unlisted-protocol.ts:18`).
+
+## Boards of 2026-10-17: sign in with a six-digit code (RF-146 / RL-73 / RP-136)
+
+Board «CuentaCódigo», WordBook, dark 360 primary and 1280, under the Copia block, `maxWidth 400px` as the form. The mail is the shared one of `docs/DESIGN.md`. Decided by the user 2026-10-17. Not built yet.
+
+- **Sent (`CuentaCódigo`):** `role="status"` 15 px «Revisa tu correo y escribe aquí el código que te mandamos»;
+  `TextField` size 3 «Código del correo» (placeholder = label, numeric keyboard, one-time-code autofill, 6 characters,
+  autofocus); `Button` size 2 «Entrar»; muted 14 px «También puedes abrir el enlace del correo en este navegador.»;
+  accent link «Usar otro correo», 44 px.
+- **Pending (`CuentaCódigoComprobando`):** field dimmed, «Comprobando…», no tap.
+- **Incomplete / Refused / Our side / Too many:** the form's failure shape (rule, full ink 600, `role="alert"`, as
+  `CuentaNoInvitado`): «Escribe los seis números del correo» / «Ese código no vale o ya venció» / «No se pudo comprobar
+  el código. Escríbelo otra vez; si no entra, pide otro.» / «Demasiados intentos. Prueba de nuevo en unos minutos.»
+- **Offline (`CuentaCódigoSinRed`):** `CuentaSinRed`'s glyph + «Sin conexión. No se pudo comprobar el código.»; the
+  button reads «Reintentar», block width.
+- **Done:** no board; `CuentaCopiaConfirmar` follows.
+- **«Entrar con mi correo» keeps its words.**
+- **An interrupted code step comes back:** the address is kept on the device for the code's hour; «Usar otro correo» or a code that lands clears it.
