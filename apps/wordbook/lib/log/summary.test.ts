@@ -186,6 +186,21 @@ test("readWordStudy: a schema-1 row with no translation field reads as null, not
   assert.equal(rows[0].lastTranslation, null);
 });
 
+test("readWordStudy: lastDefinition is the newest record's, null when it has none", async () => {
+  // Mutation: keep the first.
+  const { readWordStudy } = await getSummary();
+  currentRows = [
+    row(1, "cat", { at: 1000, definition: "old def" }),
+    row(2, "cat", { at: 2000, definition: null }),
+  ];
+  assert.equal((await readWordStudy()).rows[0].lastDefinition, null);
+  currentRows = [
+    row(1, "cat", { at: 1000, definition: null }),
+    row(2, "cat", { at: 2000, definition: "new def" }),
+  ];
+  assert.equal((await readWordStudy()).rows[0].lastDefinition, "new def");
+});
+
 // --- the network's answer on the row (RL-62) ---
 
 test("historia de lema: a schema-2 row reads with definition and both examples as null", async () => {

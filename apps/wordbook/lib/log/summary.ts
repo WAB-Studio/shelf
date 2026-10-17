@@ -36,6 +36,8 @@ export type StudyRow = {
   count: number;
   lastAt: number;
   lastTranslation: string | null;
+  // The newest record's network definition; `null` when that record has none.
+  lastDefinition: string | null;
   lastOutcome: LookupOutcome;
 };
 
@@ -69,6 +71,7 @@ function foldRow(group: Group | undefined, record: LookupRecord): Group {
       count: 1,
       lastAt: record.at,
       lastTranslation: record.translation,
+      lastDefinition: record.definition ?? null,
       lastOutcome: record.outcome,
     };
   }
@@ -81,6 +84,7 @@ function foldRow(group: Group | undefined, record: LookupRecord): Group {
     count: group.count + 1,
     lastAt: newer ? record.at : group.lastAt,
     lastTranslation: newer ? record.translation : group.lastTranslation,
+    lastDefinition: newer ? (record.definition ?? null) : group.lastDefinition,
     lastOutcome: newer ? record.outcome : group.lastOutcome,
   };
 }
