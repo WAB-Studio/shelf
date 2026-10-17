@@ -185,7 +185,7 @@ function ReconcileForm({ account }: { account: AccountRow }) {
           render={({ field, fieldState }) => (
             <Field invalid={fieldState.invalid || refusal?.field === "reconciledOn"}>
               <FieldLabel htmlFor="reconcile-day">{t("reconcileDay")}</FieldLabel>
-              <FieldControl>
+              <FieldControl tap>
                 <TextField.Root
                   {...field}
                   onChange={(event) => {
@@ -231,7 +231,7 @@ function ReconcileForm({ account }: { account: AccountRow }) {
               <FieldLabel htmlFor="reconcile-real">
                 {t(isLiability ? "reconcileRealLiability" : "reconcileRealAsset")}
               </FieldLabel>
-              <FieldControl>
+              <FieldControl tap>
                 <TextField.Root
                   {...field}
                   onChange={(event) => {
