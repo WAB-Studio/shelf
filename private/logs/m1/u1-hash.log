@@ -1,0 +1,17 @@
+supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322
+Stopped services: [supabase_realtime_universo supabase_rest_universo supabase_storage_universo supabase_imgproxy_universo supabase_pg_meta_universo supabase_studio_universo supabase_edge_runtime_universo supabase_analytics_universo supabase_vector_universo supabase_pooler_universo]
+A new version of Supabase CLI is available: v2.121.0 (currently installed v2.119.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+— confirmed address (magic-link mail)
+PASS  U1 · the send is PKCE — code-verifier cookie set: true
+PASS  U1 · the link's token is a PKCE token — pkce_6824c8f
+PASS  U1 · the send's code is six digits — recovered
+PASS  U1 · verifyOtp({ email, token, type: 'email' }) signs that address in — session true, user.email harness-code-3df9f0e4-0857-42f3-be1f-0e635dec8365@example.invalid
+PASS  U1 · the code serves once — second verify: otp_expired Token has expired or is invalid
+— new address (confirmation mail)
+PASS  U1 · the send is PKCE — code-verifier cookie set: true
+PASS  U1 · the link's token is a PKCE token — pkce_3690681
+PASS  U1 · the send's code is six digits — recovered
+PASS  U1 · verifyOtp({ email, token, type: 'email' }) signs that address in — session true, user.email harness-code-2c669904-6351-465a-abd7-79b2aa605b31@example.invalid
+PASS  U1 · the code serves once — second verify: otp_expired Token has expired or is invalid
+GREEN

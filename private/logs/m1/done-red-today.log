@@ -1,0 +1,25 @@
+supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322
+Stopped services: [supabase_realtime_universo supabase_rest_universo supabase_storage_universo supabase_imgproxy_universo supabase_pg_meta_universo supabase_studio_universo supabase_edge_runtime_universo supabase_analytics_universo supabase_vector_universo supabase_pooler_universo]
+A new version of Supabase CLI is available: v2.121.0 (currently installed v2.119.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+PASS  U1 · the send is PKCE — code-verifier cookie set: true
+FAIL  U1 · the mail shows one six-digit code — Text runs [], HTML runs []
+FAIL  Magic-link mail carries the code — Text [], HTML []
+FAIL  Magic-link mail: Subject is «Tu código para entrar: <code>» — Subject "Your sign-in link", code null
+FAIL  Magic-link mail: HTML holds the board's four lines — missing ["Tu código para entrar","Escríbelo en la pantalla donde lo pediste. Vence en una hora y sirve una sola vez.","¿Lo pediste desde el navegador? También puedes entrar con este enlace, en ese mismo navegador.","Si no lo pediste tú, ignora este correo."]; got " Your sign-in link Follow the link below to sign in. This link expires shortly and can only be used once. Sign in "
+FAIL  Magic-link mail: HTML keeps the board's order — positions [-1,-1,-1,-1,-1]
+FAIL  Magic-link mail: Text holds the board's four lines — missing ["Tu código para entrar","Escríbelo en la pantalla donde lo pediste. Vence en una hora y sirve una sola vez.","¿Lo pediste desde el navegador? También puedes entrar con este enlace, en ese mismo navegador.","Si no lo pediste tú, ignora este correo."]; got "----------------- Your sign-in link ----------------- Follow the link below to sign in. This link expires shortly and can only be used once. Sign in"
+FAIL  Magic-link mail: Text keeps the board's order — positions [-1,-1,-1,-1,-1]
+FAIL  Magic-link mail: «entrar con este enlace» is the verify link's anchor — no such anchor
+PASS  Magic-link mail: HTML carries the PKCE verify link to http://localhost:3101/auth/confirm — token=pkce_274cf… type=magiclink redirect_to=http://localhost:3101/auth/confirm
+PASS  Magic-link mail: Text carries the PKCE verify link to http://localhost:3101/auth/confirm — token=pkce_274cf… type=magiclink redirect_to=http://localhost:3101/auth/confirm
+FAIL  Confirmation mail carries the code — Text [], HTML []
+FAIL  Confirmation mail: Subject is «Tu código para entrar: <code>» — Subject "Confirm your email address", code null
+FAIL  Confirmation mail: HTML holds the board's four lines — missing ["Tu código para entrar","Escríbelo en la pantalla donde lo pediste. Vence en una hora y sirve una sola vez.","¿Lo pediste desde el navegador? También puedes entrar con este enlace, en ese mismo navegador.","Si no lo pediste tú, ignora este correo."]; got " Confirm your email address Follow the link below to confirm this email address and finish signing up. Confirm email address "
+FAIL  Confirmation mail: HTML keeps the board's order — positions [-1,-1,-1,-1,-1]
+FAIL  Confirmation mail: Text holds the board's four lines — missing ["Tu código para entrar","Escríbelo en la pantalla donde lo pediste. Vence en una hora y sirve una sola vez.","¿Lo pediste desde el navegador? También puedes entrar con este enlace, en ese mismo navegador.","Si no lo pediste tú, ignora este correo."]; got "-------------------------- Confirm your email address -------------------------- Follow the link below to confirm this email address and finish signing up. Confirm email address"
+FAIL  Confirmation mail: Text keeps the board's order — positions [-1,-1,-1,-1,-1]
+FAIL  Confirmation mail: «entrar con este enlace» is the verify link's anchor — no such anchor
+PASS  Confirmation mail: HTML carries the PKCE verify link to http://localhost:3101/auth/confirm — token=pkce_76745… type=signup redirect_to=http://localhost:3101/auth/confirm
+PASS  Confirmation mail: Text carries the PKCE verify link to http://localhost:3101/auth/confirm — token=pkce_76745… type=signup redirect_to=http://localhost:3101/auth/confirm
+RED
