@@ -50,3 +50,6 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-17	wordbook-tren4	mutator	8	8	0	51395
 2026-10-17	wordbook-tren4	tester-b2	1	1	0	86150
 2026-10-17	wordbook-tren4	critic	4	4	0	137697
+2026-10-17	homefund-t4	validator	3	2	3	94330
+2026-10-17	homefund-t4	mutator	8	8	0	60428
+2026-10-17	homefund-t4	critic	13	13	0	186669
