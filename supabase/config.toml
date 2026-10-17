@@ -50,6 +50,8 @@ enable_signup = true
 enable_confirmations = true
 otp_length = 6
 otp_expiry = 3600
+# The suites resend a code within seconds; Auth's default per-address window is 60 s.
+max_frequency = "1s"
 
 [auth.email.template.magic_link]
 subject = "Tu código para entrar: {{ .Token }}"
