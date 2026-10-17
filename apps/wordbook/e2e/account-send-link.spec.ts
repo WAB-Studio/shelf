@@ -27,6 +27,9 @@ async function mockSendSignInLinkResult(page: Page, result: { ok: true } | { ok:
   });
 }
 
+// «Revisa tu correo…» now names the address the code went to (RL-73, Board «CuentaCódigo»).
+const SENT_TO_READER = "Revisa tu correo y escribe aquí el código que te mandamos a reader@example.com";
+
 // THE RULE: no test in this file may run the real `sendSignInLink`. The guard
 // in `app/actions/account.ts` fails open on a DNS error, so a send that
 // reaches it on a machine without DNS mails a real address and mints an
@@ -175,7 +178,7 @@ test("no network: the button gives up, names the connection, keeps the email, an
   await context.setOffline(false);
   await retryButton.click();
 
-  await expect(page.getByText(messages.account.sent)).toBeVisible();
+  await expect(page.getByText(SENT_TO_READER)).toBeVisible();
 });
 
 // The clock in `SEND_LINK_TIMEOUT_MS` is the second line of defence, for a
@@ -209,7 +212,7 @@ test("on a real connection the happy path is unchanged: no wait for the offline 
 
   // Well inside `SEND_LINK_TIMEOUT_MS`: a working request must never wait on
   // the offline clock to answer.
-  await expect(page.getByText(messages.account.sent)).toBeVisible({ timeout: 2_000 });
+  await expect(page.getByText(SENT_TO_READER)).toBeVisible({ timeout: 2_000 });
 });
 
 // The dead-domain screen is driven with the action's answer simulated: the

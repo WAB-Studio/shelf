@@ -1,4 +1,10 @@
+import { randomBytes, randomUUID } from "node:crypto";
+import path from "node:path";
+
 import type { Page, Request } from "@playwright/test";
+import postgres from "postgres";
+
+import { closeRun, openRun } from "@repo/harness-registry";
 
 import messages from "../messages/es.json";
 import { expect, test } from "./fixtures";
@@ -7,6 +13,12 @@ import { expect, test } from "./fixtures";
 // component. Every action POST is simulated: `sendSignInLink` and
 // `verifySignInCode` are told apart by their arguments (`[email]` against
 // `[email, code]`). Words are the board's, written here whole.
+
+try {
+  process.loadEnvFile(path.join(__dirname, "../.env.local"));
+} catch {
+  // No .env.local: whatever the shell already exported.
+}
 
 const SENT = "Revisa tu correo y escribe aquí el código que te mandamos";
 const FIELD = "Código del correo";
@@ -30,6 +42,7 @@ const RULE_MESSAGE =
   "a Server Action POST left the browser with no simulated answer: account-send-code.spec.ts never runs the real actions";
 
 type Result = { ok: true } | { ok: false; error: string };
+type SendAnswer = (call: { email: string }) => Promise<Result> | Result;
 type VerifyAnswer = (call: { email: string; code: string; request: Request }) => Promise<Result | "abort"> | Result | "abort";
 
 let unsimulated: string[] = [];
@@ -59,7 +72,11 @@ function flight(result: Result): string {
   return ['0:{"a":"$@1","f":"","q":"","i":false,"b":"e2e0000000000000000"}', `1:${JSON.stringify(result)}`, ""].join("\n");
 }
 
-async function simulate(page: Page, verify: VerifyAnswer): Promise<void> {
+async function simulate(
+  page: Page,
+  verify: VerifyAnswer,
+  send: SendAnswer = () => ({ ok: true }),
+): Promise<void> {
   await page.route("**/cuenta", async (route) => {
     const request = route.request();
     if (request.method() !== "POST" || !request.headers()["next-action"]) {
@@ -74,7 +91,8 @@ async function simulate(page: Page, verify: VerifyAnswer): Promise<void> {
     }
     if (Array.isArray(args) && args.length === 1 && typeof args[0] === "string") {
       sendCalls.push(args[0]);
-      await route.fulfill({ status: 200, contentType: "text/x-component", body: flight({ ok: true }) });
+      const sent = await send({ email: args[0] });
+      await route.fulfill({ status: 200, contentType: "text/x-component", body: flight(sent) });
       return;
     }
     if (Array.isArray(args) && args.length === 2 && typeof args[0] === "string" && typeof args[1] === "string") {
@@ -96,9 +114,9 @@ async function simulate(page: Page, verify: VerifyAnswer): Promise<void> {
 const field = (page: Page) => page.getByRole("textbox", { name: FIELD });
 const emailField = (page: Page) => page.getByRole("textbox", { name: messages.account.emailLabel });
 
-async function askForCode(page: Page): Promise<void> {
+async function askForCode(page: Page, address: string = EMAIL): Promise<void> {
   await page.goto("/cuenta");
-  await emailField(page).fill(EMAIL);
+  await emailField(page).fill(address);
   await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
   await expect(page.getByText(SENT)).toBeVisible();
 }
@@ -353,4 +371,325 @@ test("the 360 face has no overflow and every control is at least 44 px tall", as
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(360);
   }
+});
+
+// ---------------------------------------------------------------------------
+// RL-73, Board «CuentaCódigo»: Enter submits, the address is named, another
+// code after a countdown, and a signed-in reader never sees the step.
+// ---------------------------------------------------------------------------
+
+const RESEND = "Pedir otro código";
+const RESENDING = "Enviando…";
+const waitLabel = (seconds: number) => `Pedir otro en ${seconds} s`;
+const RESENT = `Te mandamos otro código a ${EMAIL}. Usa el del último correo.`;
+const SEND_RATE_LIMITED = "Demasiados intentos. Prueba de nuevo en unos minutos.";
+const SEND_OFFLINE = "Sin conexión. No se pudo enviar el enlace.";
+const T0 = new Date("2026-10-17T10:00:00Z");
+
+const resendButton = (page: Page) => page.getByRole("button", { name: /^Pedir otro/ });
+
+// The pending record, whatever key holds it.
+const pendingRecord = (page: Page) =>
+  page.evaluate((address) => {
+    for (const key of Object.keys(localStorage)) {
+      const raw = localStorage.getItem(key) ?? "";
+      if (raw.includes(address)) return JSON.parse(raw) as { email: string; at: number };
+    }
+    return null;
+  }, EMAIL);
+
+// The page clock is frozen before the send, so «60 s» is exact and only
+// `page.clock.runFor` moves the countdown.
+async function askForCodeOnFrozenClock(page: Page, send?: SendAnswer, verify?: VerifyAnswer): Promise<void> {
+  await page.clock.install({ time: T0 });
+  await simulate(page, verify ?? (() => ({ ok: false, error: "codeInvalid" })), send);
+  await page.goto("/cuenta");
+  await emailField(page).fill(EMAIL);
+  await page.clock.pauseAt(new Date(T0.getTime() + 5_000));
+  await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
+  await expect(page.getByText(SENT)).toBeVisible();
+}
+
+test("Enter in the code field verifies once, with the typed code", async ({ page }) => {
+  await simulate(page, () => ({ ok: false, error: "codeInvalid" }));
+  await askForCode(page);
+
+  await field(page).fill(CODE);
+  await field(page).press("Enter");
+
+  await expect(page.getByText(REFUSED)).toBeVisible();
+  expect(verifyCalls).toEqual([{ email: EMAIL, code: CODE }]);
+});
+
+test("Enter with a short code says so on the screen and asks the server nothing", async ({ page }) => {
+  await simulate(page, () => ({ ok: true }));
+  await askForCode(page);
+
+  await field(page).fill("12");
+  await field(page).press("Enter");
+
+  const line = page.getByText(SHORT);
+  await expect(line).toBeVisible();
+  await expect(line).toHaveAttribute("role", "alert");
+  await page.waitForTimeout(500);
+  expect(verifyCalls).toEqual([]);
+});
+
+test("Enter on «Usar otro correo» leaves the step and verifies nothing", async ({ page }) => {
+  await simulate(page, () => ({ ok: true }));
+  await askForCode(page);
+  await field(page).fill(CODE);
+
+  await page.getByRole("button", { name: OTHER }).focus();
+  await page.keyboard.press("Enter");
+
+  await expect(emailField(page)).toBeVisible();
+  await expect(field(page)).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(verifyCalls).toEqual([]);
+});
+
+test("Enter on a ready resend asks for another code and never verifies the typed one", async ({ page }) => {
+  await askForCodeOnFrozenClock(page);
+  await field(page).fill(CODE);
+  await page.clock.runFor(60_000);
+  await expect(resendButton(page)).toHaveText(RESEND);
+
+  await resendButton(page).focus();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByText(RESENT)).toBeVisible();
+  // Actions run one at a time, so a stray verify would leave after the resend's answer.
+  await page.waitForTimeout(500);
+  expect(sendCalls).toEqual([EMAIL, EMAIL]);
+  expect(verifyCalls).toEqual([]);
+});
+
+test("the status line names the address that was typed", async ({ page }) => {
+  await simulate(page, () => ({ ok: true }));
+  await askForCode(page, "otra.persona@example.org");
+
+  const line = page.getByText(`${SENT} a otra.persona@example.org`);
+  await expect(line).toBeVisible();
+  await expect(line).toHaveAttribute("role", "status");
+  await expect(page.getByText(`${SENT} a ${EMAIL}`)).toHaveCount(0);
+});
+
+test("the resend waits sixty seconds from the send: disabled and counting, ready at +60 s", async ({ page }) => {
+  await askForCodeOnFrozenClock(page);
+
+  await expect(resendButton(page)).toHaveText(waitLabel(60));
+  await expect(resendButton(page)).toBeDisabled();
+  await page.clock.runFor(1_000);
+  await expect(resendButton(page)).toHaveText(waitLabel(59));
+  await page.clock.runFor(58_000);
+  await expect(resendButton(page)).toHaveText(waitLabel(1));
+  await expect(resendButton(page)).toBeDisabled();
+  await page.clock.runFor(1_000);
+  await expect(resendButton(page)).toHaveText(RESEND);
+  await expect(resendButton(page)).toBeEnabled();
+});
+
+test("the countdown counts from the send, not from the mount: a reload at +30 s shows what is left", async ({ page }) => {
+  await askForCodeOnFrozenClock(page);
+
+  await page.clock.runFor(30_000);
+  await page.reload();
+
+  await expect(page.getByText(SENT)).toBeVisible();
+  const label = (await resendButton(page).textContent()) ?? "";
+  const left = Number(/en (\d+) s/.exec(label)?.[1]);
+  expect(left, label).toBeGreaterThanOrEqual(25);
+  expect(left, label).toBeLessThanOrEqual(30);
+  await expect(resendButton(page)).toBeDisabled();
+});
+
+test("«Usar otro correo» is untouched by the resend: same words, still below the link line", async ({ page }) => {
+  await askForCodeOnFrozenClock(page);
+
+  const [hint, resend, other] = await Promise.all([
+    page.getByText(LINK_HINT).boundingBox(),
+    resendButton(page).boundingBox(),
+    page.getByRole("button", { name: OTHER }).boundingBox(),
+  ]);
+  // Under the muted link line, above «Usar otro correo».
+  expect(resend!.y).toBeGreaterThanOrEqual(hint!.y + hint!.height);
+  expect(resend!.y + resend!.height).toBeLessThanOrEqual(other!.y);
+});
+
+test("while the new code is on its way every control is locked, and a second tap sends nothing", async ({ page }) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await askForCodeOnFrozenClock(page, async () => {
+    if (sendCalls.length > 1) await held;
+    return { ok: true };
+  });
+  await page.clock.runFor(60_000);
+
+  await resendButton(page).click();
+
+  const pending = page.getByRole("button", { name: RESENDING });
+  await expect(pending).toBeVisible();
+  await expect(pending).toBeDisabled();
+  await expect(page.getByRole("button", { name: ENTER })).toBeDisabled();
+  await expect(page.getByRole("button", { name: OTHER })).toBeDisabled();
+  await pending.dispatchEvent("click");
+  await pending.dispatchEvent("click");
+  await page.waitForTimeout(300);
+  expect(sendCalls).toEqual([EMAIL, EMAIL]);
+  release();
+  await expect(page.getByText(RESENT)).toBeVisible();
+});
+
+test("a new code sent: the address is named, the field is empty and focused, the wait is back at 60 s", async ({ page }) => {
+  await askForCodeOnFrozenClock(page);
+  const first = await pendingRecord(page);
+  await field(page).fill("987");
+  await page.clock.runFor(60_000);
+
+  await resendButton(page).click();
+
+  await expect(page.getByText(RESENT)).toBeVisible();
+  expect(sendCalls).toEqual([EMAIL, EMAIL]);
+  // A beat of the frozen clock, so a focus deferred to a timer still lands; the wait stays at 60 s.
+  await page.clock.runFor(50);
+  await expect(field(page)).toHaveValue("");
+  await expect(field(page)).toBeFocused();
+  await expect(resendButton(page)).toHaveText(waitLabel(60));
+  await expect(resendButton(page)).toBeDisabled();
+  // The device keeps the new send's moment: a reload counts from it.
+  const second = await pendingRecord(page);
+  expect(second?.email).toBe(EMAIL);
+  expect(second!.at).toBe(first!.at + 60_000);
+});
+
+test("a send the server refuses says why in an alert, keeps the code, and does not restart the wait", async ({ page }) => {
+  await askForCodeOnFrozenClock(page, ({ email }) =>
+    sendCalls.length > 1 ? { ok: false, error: "rateLimited" } : { ok: true },
+  );
+  const first = await pendingRecord(page);
+  await field(page).fill("123");
+  await page.clock.runFor(60_000);
+
+  await resendButton(page).click();
+
+  const line = page.getByRole("alert").filter({ hasText: SEND_RATE_LIMITED });
+  await expect(line).toBeVisible();
+  await expect(page.getByText(RESENT)).toHaveCount(0);
+  await expect(resendButton(page)).toHaveText(RESEND);
+  await expect(resendButton(page)).toBeEnabled();
+  await expect(field(page)).toHaveValue("123");
+  expect(await pendingRecord(page)).toEqual(first);
+});
+
+test("a send that never answers gives up as offline, with the glyph, and the button is ready again", async ({ page }) => {
+  await askForCodeOnFrozenClock(page, () => (sendCalls.length > 1 ? new Promise<never>(() => {}) : { ok: true }));
+  const first = await pendingRecord(page);
+  await page.clock.runFor(60_000);
+
+  await resendButton(page).click();
+  await expect(page.getByRole("button", { name: RESENDING })).toBeVisible();
+  await page.clock.runFor(9_000);
+
+  const line = page.getByRole("alert").filter({ hasText: SEND_OFFLINE });
+  await expect(line).toBeVisible();
+  await expect(line.locator("xpath=..").locator("svg")).toHaveCount(1);
+  await expect(resendButton(page)).toBeEnabled();
+  expect(await pendingRecord(page)).toEqual(first);
+});
+
+test("a relaunch with nobody signed in reopens the code step for the same address", async ({ page }) => {
+  await simulate(page, () => ({ ok: true }));
+  await askForCode(page);
+
+  await page.reload();
+
+  await expect(page.getByText(`${SENT} a ${EMAIL}`)).toBeVisible();
+  await expect(field(page)).toBeVisible();
+  await expect(emailField(page)).toHaveCount(0);
+});
+
+// A reader signed in through the harness (a recovery token landed on
+// /auth/confirm), never through the form: no address is typed.
+async function withSignedInReader(page: Page, body: () => Promise<void>): Promise<void> {
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const runId = await openRun("e2e", sql);
+  const id = randomUUID();
+  const email = `harness-reader-${id}@example.invalid`;
+  try {
+    await sql.begin(async (tx) => {
+      await tx`
+        insert into auth.users (
+          id, instance_id, aud, role, email, email_confirmed_at,
+          encrypted_password, confirmation_token, recovery_token,
+          email_change, email_change_token_current, email_change_token_new,
+          email_change_confirm_status, phone_change, phone_change_token,
+          reauthentication_token, raw_app_meta_data, raw_user_meta_data,
+          is_sso_user, is_anonymous, created_at, updated_at)
+        values (
+          ${id}, '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', ${email}, now(),
+          '', '', '',
+          '', '', '',
+          0, '', '',
+          '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+          false, false, now(), now())`;
+      await tx`
+        insert into harness.identities (user_id, run_id, email, disposition)
+        values (${id}, ${runId}, ${email}, 'ephemeral')`;
+    });
+    const hash = randomBytes(32).toString("hex");
+    await sql`
+      update auth.users
+      set recovery_token = ${hash}, recovery_sent_at = now(), updated_at = now()
+      where id = ${id}`;
+    await sql`
+      insert into auth.one_time_tokens
+        (id, user_id, token_type, token_hash, relates_to, created_at, updated_at)
+      values
+        (${randomUUID()}, ${id}, 'recovery_token', ${hash}, ${email}, now(), now())`;
+    const response = await page.request.get(`/auth/confirm?token_hash=${hash}&type=magiclink`, { maxRedirects: 0 });
+    const location = response.headers()["location"];
+    expect(location?.includes("error="), `redirected to ${location ?? "nowhere"}`).toBe(false);
+    await body();
+  } finally {
+    await sql`delete from harness.identities where user_id = ${id}`;
+    await sql`delete from auth.users where id = ${id}`;
+    await closeRun(sql);
+    await sql.end();
+  }
+}
+
+test("a signed-in reader clears the pending step; after signing out /cuenta asks for the email, not the code", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await simulate(page, () => ({ ok: true }));
+  await askForCode(page);
+  expect(await keptAddress(page)).toHaveLength(1);
+  // The sign-out action (no arguments) is the one POST allowed through.
+  await page.route("**/cuenta", async (route) => {
+    const request = route.request();
+    if (request.method() === "POST" && request.headers()["next-action"] && request.postData() === "[]") {
+      await route.continue();
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route("**/api/devices", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ devices: [] }) }),
+  );
+
+  await withSignedInReader(page, async () => {
+    await page.goto("/cuenta");
+    await expect(page.getByRole("button", { name: messages.account.signOut })).toBeVisible();
+    await expect.poll(() => keptAddress(page)).toEqual([]);
+
+    await page.getByRole("button", { name: messages.account.signOut }).click();
+    await expect(page).toHaveURL(/\/registro$/);
+    await page.goto("/cuenta");
+    await expect(emailField(page)).toBeVisible();
+    await expect(field(page)).toHaveCount(0);
+    await expect(page.getByText(SENT)).toHaveCount(0);
+  });
 });
