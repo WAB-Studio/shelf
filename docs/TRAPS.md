@@ -3354,8 +3354,8 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   Auth well under a second of real time after the first send.
 - Measured 2026-10-17, train codigo-6b: with Auth's default window (60 s) every resend spec in HomeFund and GoalLog went
   red with «you can only request this after N seconds»; with `max_frequency = "1s"` two of them still flaked
-  («after 0 seconds»). With `"0s"` they pass.
-- Do: keep `max_frequency = "0s"` under `[auth.email]` in `supabase/config.toml` for the local stack. The hosted project
+  («after 0 seconds»). `"0s"` is read as unset: the log says «after 59 seconds», Auth's default again.
+- Do: keep `max_frequency = "1ms"` under `[auth.email]` in `supabase/config.toml` for the local stack. The hosted project
   keeps its own window; the app's 60 s countdown matches it.
 - A change to `config.toml` loads only on a stack restart: restart from a lane with `node_modules` whose checkout holds the
   change, while no lane runs a suite.

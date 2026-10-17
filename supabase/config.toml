@@ -50,8 +50,8 @@ enable_signup = true
 enable_confirmations = true
 otp_length = 6
 otp_expiry = 3600
-# The suites resend a code at once, faking only the browser clock; Auth's default per-address window is 60 s.
-max_frequency = "0s"
+# The suites resend at once, faking only the browser clock. "0s" falls back to Auth's 60 s default; "1s" still refuses.
+max_frequency = "1ms"
 
 [auth.email.template.magic_link]
 subject = "Tu código para entrar: {{ .Token }}"
