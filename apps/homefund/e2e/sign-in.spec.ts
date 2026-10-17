@@ -314,7 +314,7 @@ test("every address this file minted is in the harness registry under this run",
 });
 
 // RF-145 and RF-143: the list and the daily caps answer before any mail is sent.
-const CLIENT_CAP = Number(process.env.SIGN_IN_LINK_DAILY_CLIENT_CAP ?? 5);
+const CLIENT_CAP = Number(process.env.SIGN_IN_LINK_DAILY_CLIENT_CAP ?? 10);
 const ADDRESS_CAP = Number(process.env.SIGN_IN_LINK_DAILY_ADDRESS_CAP ?? 3);
 
 type Attempt = { kind: "sent"; panel: string } | { kind: "refused"; text: string };
@@ -404,7 +404,7 @@ test.describe("the list and the daily caps", () => {
     const targets: string[] = [];
     let last: Attempt | undefined;
 
-    test("takes five links a day to different addresses; the sixth is refused", async ({ browser, baseURL }) => {
+    test("takes ten links a day to different addresses; the eleventh is refused", async ({ browser, baseURL }) => {
       // Kills: skipping the caller claim; `<` -> `<=`; mapping `rateLimited` to a sent link.
       const outcomes: string[] = [];
       for (let i = 0; i <= CLIENT_CAP; i += 1) {
