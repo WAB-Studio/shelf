@@ -30,6 +30,7 @@ import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 // The field takes the decimals the row's currency is written with, so
 // reopening a figure and saving it back stores the integer it already held.
+import { scopedCategoryName } from "@/lib/fund/category-names";
 import { amountToInput } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
@@ -378,7 +379,9 @@ function PaymentForm({
                   </Select.Item>
                   {options.categories.map((category) => (
                     <Select.Item key={category.id} value={category.id}>
-                      {category.name}
+                      {scopedCategoryName(category.name, category.scope, (name) =>
+                        tKey("categories.scopedName", { name }),
+                      )}
                     </Select.Item>
                   ))}
                 </Select.Content>

@@ -37,6 +37,7 @@ import type { BudgetStatus } from "@/db/queries/budgets";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { addCivilMonths, civilDateToDate } from "@/lib/dates";
+import { categoryNamesById } from "@/lib/fund/category-names";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -113,13 +114,13 @@ export function BudgetsScreen({
 
   // A name and colour per category id — children included — so a card reads its
   // title and dot without a second lookup.
-  const categoryNames = new Map<string, string>();
+  const categoryNames = categoryNamesById(options.categories, (name) =>
+    tKey("categories.scopedName", { name }),
+  );
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
-    categoryNames.set(category.id, category.name);
     categoryColors.set(category.id, category.color);
     for (const child of category.children) {
-      categoryNames.set(child.id, child.name);
       categoryColors.set(child.id, child.color);
     }
   }

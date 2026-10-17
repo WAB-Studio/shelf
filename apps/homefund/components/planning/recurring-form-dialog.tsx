@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -33,6 +33,7 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { isCivilDate } from "@/lib/dates";
 // The field takes the decimals the row's currency is written with, so
 // reopening a figure and saving it back stores the integer it already held.
+import { scopedCategoryName } from "@/lib/fund/category-names";
 import { amountToInput } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
@@ -116,6 +117,10 @@ function RecurringForm({
   const tKey = useTranslations();
 
   const isEdit = !!rule;
+  const mark = useCallback(
+    (name: string) => tKey("categories.scopedName", { name }),
+    [tKey],
+  );
 
   // A rule names exactly one account, and the values under validation name it:
   // the resolver reads what it settles in off the map the options already carry
@@ -202,13 +207,16 @@ function RecurringForm({
           (category) => category.scope === scope && category.kind === direction,
         )
         .flatMap((category) => [
-          { id: category.id, name: category.name },
+          {
+            id: category.id,
+            name: scopedCategoryName(category.name, category.scope, mark),
+          },
           ...category.children.map((child) => ({
             id: child.id,
-            name: child.name,
+            name: scopedCategoryName(child.name, category.scope, mark),
           })),
         ]),
-    [options.categories, scope, direction],
+    [options.categories, scope, direction, mark],
   );
 
   // Switching direction or moving to an account of the other scope strands the
