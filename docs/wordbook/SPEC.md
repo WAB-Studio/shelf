@@ -661,7 +661,7 @@ Principles, not recipes:
   same Supabase as `apps/homefund`, in a schema of its own, and only once the reader opened an account on
   purpose; and the word's decoration (RL-41, RL-42), which reaches the network only after the text is
   already drawn and never changes or delays it. With no account, nothing of the reader's record leaves
-  the device (RNL-09); the decoration reaches the network with or without one, because it is not the
+  the device (RNL-11); the decoration reaches the network with or without one, because it is not the
   reader's record.
 - **A word's definition and its example are the things on that path that do reach the network**
   (RL-41, RL-42), and each goes through a route handler of the app's own, not straight to a party of
@@ -692,13 +692,13 @@ Principles, not recipes:
     reader's own record.
 - **The word's text never passes through any of them.** That is the claim "no backend" actually
   protects, and it is the one to check before adding a ninth: not how many handlers exist, but whether
-  the answer's text still touches none of them (RL-35, RNL-09). The word's decoration — its
+  the answer's text still touches none of them (RL-35, RNL-11). The word's decoration — its
   definition and its example (RL-41, RL-42) — does touch one of them, but only once the text already
   stands on its own: it arrives late, arrives only sometimes, and its absence never changes or delays
   the text it decorates.
 - **A local MCP server (RL-27) is not part of the deployed app.** It is a
   script the reader runs on their own machine, over the file `/registro`
-  exported (RL-65), never over the deployed app's network. It does not
+  exported (RL-72), never over the deployed app's network. It does not
   contradict "there is no backend": nothing about it ships, runs on Vercel,
   or answers a request from a browser.
 - **IndexedDB is the durable payload cache.** It is the only store with the
