@@ -256,6 +256,9 @@ function SignedOutForm() {
                 ? t("retry")
                 : t("enter")}
           </Button>
+          <Text size="2" color="gray">
+            {t("sentLinkHint")}
+          </Text>
           <Button size="2" variant="soft" color="gray" onClick={chooseOtherEmail}>
             {t("otherEmail")}
           </Button>

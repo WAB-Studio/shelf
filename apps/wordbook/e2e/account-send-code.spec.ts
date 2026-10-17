@@ -12,6 +12,7 @@ const SENT = "Revisa tu correo y escribe aquí el código que te mandamos";
 const FIELD = "Código del correo";
 const ENTER = "Entrar";
 const OTHER = "Usar otro correo";
+const LINK_HINT = "También puedes abrir el enlace del correo en este navegador.";
 const CHECKING = "Comprobando…";
 const SHORT = "Escribe los seis números del correo";
 const REFUSED = "Ese código no vale o ya venció";
@@ -120,6 +121,16 @@ test("after the send the screen asks for the code, with a way back", async ({ pa
   await expect(field(page)).toBeVisible();
   await expect(page.getByRole("button", { name: ENTER })).toBeVisible();
   await expect(page.getByRole("button", { name: OTHER })).toBeVisible();
+  // Between «Entrar» and «Usar otro correo», as the board draws it.
+  const hint = page.getByText(LINK_HINT);
+  await expect(hint).toBeVisible();
+  const [enterBox, hintBox, otherBox] = await Promise.all([
+    page.getByRole("button", { name: ENTER }).boundingBox(),
+    hint.boundingBox(),
+    page.getByRole("button", { name: OTHER }).boundingBox(),
+  ]);
+  expect(hintBox!.y).toBeGreaterThanOrEqual(enterBox!.y + enterBox!.height);
+  expect(hintBox!.y + hintBox!.height).toBeLessThanOrEqual(otherBox!.y);
   // The email form is gone while the code is asked.
   await expect(emailField(page)).toHaveCount(0);
   await expect(field(page)).toHaveAttribute("maxlength", "6");
