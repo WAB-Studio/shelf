@@ -646,3 +646,143 @@ test("RNL-08: building the Anki CSV mounts no dictionary Worker and fetches no d
   expect(await page.evaluate(() => (window as unknown as { __workersBuilt: number }).__workersBuilt)).toBe(0);
   expect(requests.some((url) => url.includes(manifest.asset.path))).toBe(false);
 });
+
+// ---------------------------------------------------------------------------
+// RL-72: the Anki link hides when no row gives a card and says what stays out
+// (board RegistroExportarAnkiSinTarjeta).
+// ---------------------------------------------------------------------------
+
+function unlistedRow(word: string, definition: string | null, at: number): SeedLookup {
+  return studyRow(word, null, at, { outcome: "unlisted", kind: "word", definition });
+}
+
+async function openRows(page: Page, rows: SeedLookup[]): Promise<void> {
+  await deleteTranslator(page);
+  await seedStudy(page, rows);
+  await page.goto("/registro");
+  await expect(jsonControl(page)).toBeVisible();
+}
+
+test("RL-72: a record with no card offers no Anki file and says why, the JSON link stays", async ({ page }) => {
+  await openRows(page, [unlistedRow("blorp", null, NOW - 20), unlistedRow("flarn", null, NOW - 10)]);
+  await expect(page.getByText(t("log.study.ankiNone", { words: 2 }), { exact: true })).toBeVisible();
+  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(jsonControl(page)).toBeVisible();
+});
+
+test("RL-72: one word with no card says «tu palabra…»", async ({ page }) => {
+  await openRows(page, [unlistedRow("blorp", null, NOW)]);
+  await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toBeVisible();
+  await expect(ankiControl(page)).toHaveCount(0);
+});
+
+test("RL-72: a network word with a definition gives a card whose back is the definition", async ({ page }) => {
+  await openRows(page, [unlistedRow("blorp", "a made-up word", NOW)]);
+  await expect(ankiControl(page)).toBeVisible();
+  await expect(page.getByText(/^Para Anki:/)).toHaveCount(0);
+  const file = await downloadAnki(page);
+  expect(file.text.split("\n").slice(2).filter((line) => line !== "")).toEqual(['"blorp","a made-up word"']);
+});
+
+test("RL-72: after a download, the words left out are named under the done line", async ({ page }) => {
+  await openSeeded(page);
+  await downloadAnki(page);
+  const done = page.getByText(t("log.study.ankiDone", { cards: 3 }), { exact: true });
+  const skipped = page.getByText(t("log.study.ankiSkipped", { count: 1 }), { exact: true });
+  await expect(done).toBeVisible();
+  await expect(skipped).toBeVisible();
+  expect((await skipped.boundingBox())!.y).toBeGreaterThan((await done.boundingBox())!.y);
+});
+
+test("RL-72: when every word gives a card, no left-out line shows", async ({ page }) => {
+  await openRows(page, [studyRow("alpha", "alfa", NOW - 20), studyRow("zebra", "cebra", NOW - 10)]);
+  await downloadAnki(page);
+  await expect(page.getByText(t("log.study.ankiDone", { cards: 2 }), { exact: true })).toBeVisible();
+  await expect(page.getByText(/sin resultado no van?/)).toHaveCount(0);
+});
+
+test("RL-72: deleting the only card's row leaves the no-card line, without a reload", async ({ page }) => {
+  await openRows(page, [studyRow("alpha", "alfa", NOW - 20), unlistedRow("blorp", null, NOW - 10)]);
+  await expect(ankiControl(page)).toBeVisible();
+  let loads = 0;
+  page.on("load", () => (loads += 1));
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction("lookups", "readwrite");
+          const store = tx.objectStore("lookups");
+          store.openCursor().onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+            if (!cursor) return;
+            if (cursor.value.text === "alpha") cursor.delete();
+            cursor.continue();
+          };
+          tx.oncomplete = () => {
+            db.close();
+            window.dispatchEvent(new Event("voyager:log-deleted"));
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+  await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toBeVisible();
+  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(jsonControl(page)).toBeVisible();
+  expect(loads, "the page reloaded").toBe(0);
+});
+
+test("RL-72: a sync round that lands a translated row on a no-card record brings the link, without a reload", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await seedStudy(page, [unlistedRow("blorp", null, NOW)], copyOn());
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/log/sync", async (route) => {
+    await gate;
+    await answerJson(route, {
+      accepted: 0,
+      rows: [
+        {
+          deviceId: randomUUID(),
+          localId: 1,
+          at: Date.now(),
+          text: "zebra",
+          normalised: "zebra",
+          kind: "word",
+          outcome: "exact",
+          headword: "zebra",
+          rule: null,
+          senses: 1,
+          translation: "cebra",
+          dictionaryReady: true,
+          origin: "device",
+          recordSchema: 2,
+          definition: null,
+          exampleEn: null,
+          exampleEs: null,
+          receivedAt: new Date().toISOString(),
+        },
+      ],
+      cursor: "zebra-cursor",
+    });
+  });
+  let loads = 0;
+  page.on("load", () => (loads += 1));
+
+  await page.goto("/registro");
+  await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toBeVisible();
+  await expect(ankiControl(page)).toHaveCount(0);
+  const loadsBefore = loads;
+
+  release();
+  await expect(ankiControl(page)).toBeVisible();
+  await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toHaveCount(0);
+  expect(loads).toBe(loadsBefore);
+});

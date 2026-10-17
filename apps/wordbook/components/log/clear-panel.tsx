@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { readWordStudy } from "@/lib/log/summary";
-import { clearLocalLookups, countRecords } from "@/lib/log/record";
+import { clearLocalLookups, countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
+import { LOG_DELETED_EVENT } from "@/lib/log/delete";
+import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import { clearAccountLookups } from "@/lib/sync/clear";
 import { Button, Flex, Link, Separator, TapTarget, Text } from "@/components/ui";
 
@@ -43,17 +45,59 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
   const [count, setCount] = useState<CountState>({ kind: "loading" });
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
 
+  // The newest read wins: a reply older than the one in flight never paints.
+  const requestIdRef = useRef(0);
+
   useEffect(() => {
     let cancelled = false;
-    Promise.all([readWordStudy(), countRecords()])
-      .then(([study, lookups]) => {
-        if (!cancelled) setCount({ kind: "ready", words: study.total, lookups });
-      })
-      .catch(() => {
-        if (!cancelled) setCount({ kind: "failed" });
-      });
+    // One cursor at a time (the pattern of `HistoryList`): an event during a
+    // read queues a single rerun instead of opening a second pass.
+    let reading = false;
+    let rerunQueued = false;
+
+    function read(): void {
+      const requestId = ++requestIdRef.current;
+      reading = true;
+      Promise.all([readWordStudy(), countRecords()])
+        .then(([study, lookups]) => {
+          if (!cancelled && requestIdRef.current === requestId) {
+            setCount({ kind: "ready", words: study.total, lookups });
+          }
+        })
+        .catch(() => {
+          // A recount that fails keeps the last ready figures.
+          if (!cancelled && requestIdRef.current === requestId) {
+            setCount((current) => (current.kind === "ready" ? current : { kind: "failed" }));
+          }
+        })
+        .finally(() => {
+          reading = false;
+          if (!cancelled && rerunQueued) {
+            rerunQueued = false;
+            read();
+          }
+        });
+    }
+
+    function onChange(): void {
+      if (reading) {
+        rerunQueued = true;
+        return;
+      }
+      read();
+    }
+
+    read();
+    window.addEventListener(LOG_FLUSHED_EVENT, onChange);
+    window.addEventListener(LOG_CLEARED_EVENT, onChange);
+    window.addEventListener(LOG_DELETED_EVENT, onChange);
+    window.addEventListener(SYNC_LANDED_EVENT, onChange);
     return () => {
       cancelled = true;
+      window.removeEventListener(LOG_FLUSHED_EVENT, onChange);
+      window.removeEventListener(LOG_CLEARED_EVENT, onChange);
+      window.removeEventListener(LOG_DELETED_EVENT, onChange);
+      window.removeEventListener(SYNC_LANDED_EVENT, onChange);
     };
   }, []);
 
