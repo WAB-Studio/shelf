@@ -1747,9 +1747,19 @@ Canvas version 48. Every board draws the dark 360 face; `RegistroBorrarFila` add
   PKCE half of RL-71, which waits for a successor code, its boards and an email template the three apps share. Production's
   template keeps `token_hash` until then. Not built yet.
 - **Deleting a row on a device with no session or no account** says its own words: «En este dispositivo. Tu cuenta lo borra
-  cuando vuelvas a entrar.» It needs one board state. Not built yet.
+  cuando vuelvas a entrar.» Board `RegistroBorrarFilaSinCuenta` (2026-10-17): the confirmation's body drops «en todos
+  tus dispositivos» and reads «Se borran {count, plural, one {su # búsqueda} other {sus # búsquedas}} y sus formas. No se
+  puede deshacer.»; the user's sentence follows on its own muted 15 px line. The same words serve a device that never had
+  an account. Borrando, Conservada and Falló are unchanged. Not built yet.
 - **A delete starts its own copy round** when the copy is on, right after the delete. That rewords RNL-09: one request per
   delete. Not built yet.
 - **Anki cards also come from the words the network answered**, with their definition on the back. What still gives no
-  card is hidden from the download, which says why, and that needs a board state. The card format and its tests change. Not
-  built yet.
+  card is hidden from the download, which says why. The card format and its tests change. Board
+  `RegistroExportarAnkiSinTarjeta` (2026-10-17):
+  - after a download, under «N tarjetas para Anki descargadas», a muted 14 px line: «{count, plural, one {# palabra sin
+    resultado no va: no tiene traducción ni definición.} other {# palabras sin resultado no van: no tienen traducción ni
+    definición.}}», only when the count is above zero;
+  - with no card to give, the «Descargar para Anki» link is gone and its place reads «Para Anki: {words, plural, one {tu
+    palabra no tuvo resultado todavía.} other {ninguna de tus # palabras tuvo resultado todavía.}}»;
+  - the card: the front as today; the back the logged translation or, when the network answered, its definition.
+  Preparando and Falló are those of `RegistroExportarAnkiEstados`. Not built yet.

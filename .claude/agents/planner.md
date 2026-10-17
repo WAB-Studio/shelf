@@ -35,7 +35,7 @@ A slice: a set of codes from the app's spec (`docs/SPEC.md` for HomeFund, `docs/
   is a clause nobody tests. Measured 2026-10-06: four modules came back from the validator for clauses
   the Done never named (a silent submit, «Cancelar» while pending, a done row's rename, a lost `next`).
 - For a screen: the query that feeds every figure on its board, by file and line. A figure with no
-  query is a question for the user before the board is approved, never a gap the worker finds.
+  query is a question for the user before the board is drawn, never a gap the worker finds.
 - Dependencies: numbers of prior modules.
 - Track, and the docs to read cited by heading and line range, never a whole file.
 

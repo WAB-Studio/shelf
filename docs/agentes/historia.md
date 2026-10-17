@@ -67,6 +67,8 @@ Each entry names the rule and the file it lives in now.
   faces of one state went up and three of them were a regex over the fourth.
 - Paste the board's words and structure into the dispatch. On 2026-10-05 module 191 invented half its copy and
   module 169 drew a card the board does not have, both because the worker could not see the board.
+- No board waits for the user's approval. Decided by the user 2026-10-17: «Esa regla de aprobar tableros no me gusta
+  quitemosla ya me molesta».
 
 ## Lanes (`docs/agentes/lanes.md`)
 
