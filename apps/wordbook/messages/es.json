@@ -163,7 +163,7 @@
     "title": "Tu cuenta",
     "emailLabel": "Correo electrónico",
     "sending": "Enviando…",
-    "sent": "Revisa tu correo y abre el enlace que te mandamos",
+    "sent": "Revisa tu correo y escribe aquí el código que te mandamos",
     "retry": "Reintentar",
     "signedInAs": "Sesión iniciada como {email}",
     "signOut": "Cerrar sesión",
@@ -266,6 +266,19 @@
       "labelPlatformOnly": "Navegador desconocido en {platform}",
       "since": "Desde el {date}",
       "sinceDate": "{day} de {month}."
+    },
+    "codeLabel": "Código del correo",
+    "enter": "Entrar",
+    "otherEmail": "Usar otro correo",
+    "checking": "Comprobando…",
+    "codeErrors": {
+      "short": "Escribe los seis números del correo",
+      "codeInvalid": "Ese código no vale o ya venció",
+      "codeShape": "Ese código no vale o ya venció",
+      "emailInvalid": "Ese código no vale o ya venció",
+      "codeTimeout": "No se pudo comprobar el código. Escríbelo otra vez; si no entra, pide otro.",
+      "rateLimited": "Demasiados intentos. Prueba de nuevo en unos minutos.",
+      "offline": "Sin conexión. No se pudo comprobar el código."
     }
   },
   "error": {

@@ -32,7 +32,7 @@ export function AccountTabs() {
         </NextLink>
       </Link>
       <Link asChild underline="none">
-        <NextLink href="/cuenta?tab=info" aria-current={info ? "page" : undefined}>
+        <NextLink href="/cuenta?tab=info" prefetch={false} aria-current={info ? "page" : undefined}>
           <TapTarget>
             <Text size="2" weight={info ? "bold" : undefined} muted={!info}>
               {t("tabs.info")}
