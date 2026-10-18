@@ -4201,6 +4201,7 @@ async function main(): Promise<void> {
   await survivorsSuite();
   await idempotencySuite();
   await recurringVersionSuite();
+  await debtPaymentSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -7867,5 +7868,199 @@ async function recurringVersionSuite(): Promise<void> {
       afterSaved.amount_cents === "2000" &&
       afterSaved.updated_at !== quietLoaded.updated_at,
     `result = ${JSON.stringify(saved)}, amount = ${afterSaved.amount_cents}, stamp ${quietLoaded.updated_at} -> ${afterSaved.updated_at}`,
+  );
+}
+
+// M44: two payments of one card never share an installment line, and a resent payment books once.
+async function debtPaymentSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const LINE = 100_000;
+  const user = await createMembershipFreeUser();
+  const open = async (kind: "asset" | "liability", name: string) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness m44 ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: kind === "asset" ? 1_000_000_000 : 1_000_000,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await open("asset", "bank");
+
+  // A card owing two lines of one payment each, the older line due first.
+  const newCard = async (name: string): Promise<{ cardId: string; l1: string; l2: string; planId: string }> => {
+    const cardId = await open("liability", name);
+    const { planId } = await asUser(user, () =>
+      createInstallmentPlan({
+        accountId: cardId,
+        description: `m44 ${name} ${tag}`,
+        principalCents: LINE * 2,
+        nInstallments: 2,
+        frequency: "monthly",
+        interestRate: null,
+        downPaymentCents: null,
+        avalCents: null,
+        startDate: shiftDate(today, -30),
+        merchant: null,
+        lines: [
+          { seq: 1, dueDate: shiftDate(today, -30), amountCents: LINE },
+          { seq: 2, dueDate: shiftDate(today, -1), amountCents: LINE },
+        ],
+      }),
+    );
+    keep("installment_plans", planId);
+    const lines = await fixtureSql<{ id: string }[]>`
+      select id from installment_lines where plan_id = ${planId} order by seq`;
+    return { cardId, planId, l1: lines[0].id, l2: lines[1].id };
+  };
+  type Answer = {
+    serverError?: string;
+    data?: { transactionId: string; paidLineIds: string[]; remainderCents: number };
+  };
+  const pay = (cardId: string, over: Record<string, unknown> = {}) =>
+    asUser(user, () =>
+      recordDebtPaymentAction({
+        fromAccountId: bank,
+        toAccountId: cardId,
+        amount: "1000",
+        occurredAt: today,
+        ...over,
+      } as Parameters<typeof recordDebtPaymentAction>[0]),
+    ) as Promise<Answer | undefined>;
+  const links = (planId: string) =>
+    fixtureSql<{ id: string; paid: string | null }[]>`
+      select id, paid_transaction_id as paid from installment_lines where plan_id = ${planId} order by seq`;
+  const movements = async (cardId: string) => {
+    const rows = await fixtureSql<{ id: string; external_ref: string | null; amount_cents: string }[]>`
+      select id, external_ref, amount_cents::text from transactions where to_account_id = ${cardId}`;
+    for (const r of rows) track("transactions", r.id);
+    return rows;
+  };
+
+  // Q: two payments at once, repeated so a lucky ordering cannot hide the overlap
+  let worst = "";
+  let allRight = true;
+  let answersTrue = true;
+  let answerDetail = "";
+  for (let round = 0; round < 5; round++) {
+    const card = await newCard(`race${round}`);
+    const [a, b] = await Promise.all([pay(card.cardId), pay(card.cardId)]);
+    const rows = await movements(card.cardId);
+    const stored = await links(card.planId);
+    const linked = stored.map((l) => l.paid);
+    const ids = rows.map((r) => r.id);
+    const right =
+      rows.length === 2 &&
+      linked.every((p) => p !== null && ids.includes(p)) &&
+      new Set(linked).size === 2;
+    if (!right) {
+      allRight = false;
+      worst ||= `round ${round}: ${rows.length} movement(s), links ${JSON.stringify(linked)}, ids ${JSON.stringify(ids)}`;
+    }
+    for (const answer of [a, b]) {
+      const mine = stored.filter((l) => l.paid === answer?.data?.transactionId).map((l) => l.id).sort();
+      const said = [...(answer?.data?.paidLineIds ?? [])].sort();
+      if (answer?.data === undefined || JSON.stringify(mine) !== JSON.stringify(said)) {
+        answersTrue = false;
+        answerDetail ||= `round ${round}: said ${JSON.stringify(said)}, stored ${JSON.stringify(mine)}, answer ${JSON.stringify(answer)}`;
+      }
+    }
+  }
+  assert(
+    next("Two payments of one card at once book two movements, and lines L1 and L2 each link to a different one"),
+    allRight,
+    worst || "5 rounds clean",
+  );
+
+  // Q: the answer matches the stored links
+  assert(
+    next("Each concurrent payment's paidLineIds names exactly the lines stored against its own movement"),
+    answersTrue,
+    answerDetail || "5 rounds clean",
+  );
+
+  // Q: the lock is taken on the card, as the first thing the payment does
+  const held = await newCard("lock");
+  const lockKey = held.cardId;
+  let settled = false;
+  let settledWhileHeld = false;
+  let blocked: Promise<Answer | undefined> | undefined;
+  await fixtureSql.begin(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtextextended(${lockKey}::text, 0))`;
+    blocked = pay(held.cardId);
+    blocked.then(() => {
+      settled = true;
+    });
+    await new Promise((r) => setTimeout(r, 1500));
+    // Read before the commit releases the lock; after it the payment settles by design.
+    settledWhileHeld = settled;
+  });
+  const afterRelease = await blocked;
+  const heldLinks = await links(held.planId);
+  await movements(held.cardId);
+  assert(
+    next("A payment of a card waits on the advisory lock keyed by the card id, then books once it is released"),
+    !settledWhileHeld &&
+      afterRelease?.data?.paidLineIds.length === 1 &&
+      heldLinks[0].paid === afterRelease.data.transactionId,
+    `settled while held = ${settledWhileHeld}, answer = ${JSON.stringify(afterRelease)}`,
+  );
+
+  // Q: one request sent twice
+  const resend = await newCard("resend");
+  const ref = randomUUID();
+  const first = await pay(resend.cardId, { requestRef: ref });
+  const second = await pay(resend.cardId, { requestRef: ref });
+  const sent = await movements(resend.cardId);
+  const sentLinks = await links(resend.planId);
+  assert(
+    next("A payment sent twice with the same requestRef books one movement under form:<ref>, and both answers name it"),
+    sent.length === 1 &&
+      sent[0].external_ref === `form:${ref}` &&
+      first?.data?.transactionId === sent[0].id &&
+      second?.data?.transactionId === sent[0].id &&
+      sentLinks[0].paid === sent[0].id &&
+      sentLinks[1].paid === null,
+    `${sent.length} movement(s), refs ${JSON.stringify(sent.map((r) => r.external_ref))}, links ${JSON.stringify(sentLinks.map((l) => l.paid))}, first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
+  );
+
+  // Q: two requests, two payments
+  const apart = await newCard("apart");
+  const x = await pay(apart.cardId, { requestRef: randomUUID() });
+  const y = await pay(apart.cardId, { requestRef: randomUUID() });
+  const both = await movements(apart.cardId);
+  const apartLinks = await links(apart.planId);
+  assert(
+    next("Two payments with different requestRefs book two movements, each closing its own line"),
+    both.length === 2 &&
+      x?.data?.transactionId !== y?.data?.transactionId &&
+      apartLinks[0].paid === x?.data?.transactionId &&
+      apartLinks[1].paid === y?.data?.transactionId,
+    `${both.length} movement(s), links ${JSON.stringify(apartLinks.map((l) => l.paid))}, x = ${JSON.stringify(x)}, y = ${JSON.stringify(y)}`,
+  );
+
+  // Q: the sequential allocation stays oldest first and its answer is true
+  const seq = await newCard("seq");
+  const both2 = await pay(seq.cardId, { amount: "2000" });
+  const seqLinks = await links(seq.planId);
+  await movements(seq.cardId);
+  assert(
+    next("One payment covering two lines links both to its movement and reports both"),
+    both2?.data !== undefined &&
+      seqLinks.every((l) => l.paid === both2.data?.transactionId) &&
+      [...both2.data.paidLineIds].sort().join() === [seq.l1, seq.l2].sort().join(),
+    `answer = ${JSON.stringify(both2)}, links ${JSON.stringify(seqLinks.map((l) => l.paid))}`,
   );
 }

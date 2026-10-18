@@ -79,6 +79,8 @@ function mapPlanError(error: unknown): never {
   if (code === "42501") throw new ActionError("errors.notFound");
   if (code === "23514") throw new ActionError("installments.errors.notLiability");
   if (code === "23503") throw new ActionError("errors.referenceGone");
+  // A line this payment chose was linked by another first; the whole payment rolled back.
+  if (code === "40001") throw new ActionError("errors.stale");
   throw error;
 }
 
@@ -129,6 +131,8 @@ function mapPaymentError(error: unknown): never {
     throw new ActionError("installments.errors.paymentInvalid");
   }
   if (code === "23503") throw new ActionError("errors.referenceGone");
+  // A line this payment chose was linked by another first; the whole payment rolled back.
+  if (code === "40001") throw new ActionError("errors.stale");
   throw error;
 }
 
@@ -219,10 +223,14 @@ export const createInstallmentPlanAction = authActionClient
  * that settle in different currencies make a movement that carries a rate, which
  * this path names no second amount for: `transactions_verify_currency` refuses
  * it, and the refusal maps below.
+ *
+ * A resent `requestRef` answers with the movement the first copy booked and the
+ * lines stored against it. A link someone else's payment took between the read
+ * and the write reports `errors.stale`, and nothing is booked.
  */
 export const recordDebtPaymentAction = authActionClient
   .inputSchema(recordDebtPaymentSchema)
-  .action(async ({ parsedInput: { fromAccountId, toAccountId, amount, occurredAt } }) => {
+  .action(async ({ parsedInput: { fromAccountId, toAccountId, amount, occurredAt, requestRef } }) => {
     const settlement = await getSettlementCurrencies({ fromAccountId, toAccountId });
     const currency = settlement.from ?? BASE_CURRENCY;
 
@@ -230,17 +238,14 @@ export const recordDebtPaymentAction = authActionClient
 
     const amountCents = toMinor(amount);
 
-    let result: {
-      transactionId: string;
-      paidLineIds: string[];
-      remainderCents: number;
-    };
+    let result: Awaited<ReturnType<typeof recordDebtPayment>>;
     try {
       result = await recordDebtPayment({
         fromAccountId,
         toAccountId,
         amountCents,
         occurredAt,
+        requestRef,
       });
     } catch (error) {
       mapPaymentError(error);
