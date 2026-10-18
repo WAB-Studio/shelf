@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { Controller, useForm } from "react-hook-form";
@@ -9,6 +10,7 @@ import { toast } from "sonner";
 import { recordDebtPaymentAction } from "@/app/actions/installment-plans";
 import {
   Button,
+  Callout,
   Dialog,
   Field,
   FieldControl,
@@ -101,6 +103,13 @@ function PaymentForm({
   const tKey = useTranslations();
   const locale = useLocale();
 
+  // One key per opening: a payment sent again after a lost answer carries the same one, and
+  // the form unmounts on close, so the next opening mints its own.
+  const [requestRef] = useState(() => crypto.randomUUID());
+  const [refusal, setRefusal] = useState<
+    "errors.stale" | "errors.resendChanged" | null
+  >(null);
+
   const form = useForm<RecordDebtPaymentInput>({
     resolver: zodResolver(recordDebtPaymentSchema),
     defaultValues: {
@@ -144,14 +153,24 @@ function PaymentForm({
       );
       onOpenChange(false);
     },
-    onError: onActionError,
+    onError: (result) => {
+      const refused = result.error.serverError;
+      if (refused === "errors.stale" || refused === "errors.resendChanged") {
+        setRefusal(refused);
+      } else {
+        onActionError(result);
+      }
+    },
   });
 
   const isPending = pay.isPending;
 
   return (
     <form
-      onSubmit={form.handleSubmit((values) => pay.execute(values))}
+      onSubmit={form.handleSubmit((values) => {
+        setRefusal(null);
+        pay.execute({ ...values, requestRef });
+      })}
       noValidate
     >
       <FieldGroup>
@@ -251,6 +270,12 @@ function PaymentForm({
             </Field>
           )}
         />
+
+        {refusal && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey(refusal)}</Callout.Text>
+          </Callout.Root>
+        )}
 
         <Field>
           <Flex gap="3" justify="end">

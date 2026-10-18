@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { BanknoteArrowDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -55,6 +56,12 @@ export function WithdrawPanel({
   const t = useTranslations("cash");
   const onActionError = useActionErrorToast();
 
+  // One key per attempt: a withdrawal sent again after a lost answer carries the same one; the
+  // panel never unmounts, so a booked one renews it.
+  const [requestRef, setRequestRef] = useState(() => crypto.randomUUID());
+  const [refusal, setRefusal] = useState(false);
+  const tKey = useTranslations();
+
   const form = useForm<WithdrawCashInput>({
     resolver: zodResolver(withdrawCashSchema),
     mode: "onChange",
@@ -67,14 +74,22 @@ export function WithdrawPanel({
   const withdraw = useAction(withdrawCashAction, {
     onSuccess() {
       toast.success(t("withdrawSaved"));
+      setRequestRef(crypto.randomUUID());
       // The panel stays open for the next withdrawal; only the amount is cleared.
       form.reset({ sourceAccountId: form.getValues("sourceAccountId"), amount: "" });
     },
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.resendChanged") {
+        // The panel has no reopening, so the refusal renews the key for the corrected amount.
+        setRefusal(true);
+        setRequestRef(crypto.randomUUID());
+      } else onActionError(result);
+    },
   });
 
   function onSubmit(values: WithdrawCashInput) {
-    withdraw.execute(values);
+    setRefusal(false);
+    withdraw.execute({ ...values, requestRef });
   }
 
   return (
@@ -161,6 +176,12 @@ export function WithdrawPanel({
               </Text>
               {willCreate && <FieldDescription>{t("willCreateHint")}</FieldDescription>}
             </Field>
+
+            {refusal && (
+              <Callout.Root color="red" variant="soft" role="alert">
+                <Callout.Text>{tKey("errors.resendChanged")}</Callout.Text>
+              </Callout.Root>
+            )}
 
             <Button
               type="submit"
