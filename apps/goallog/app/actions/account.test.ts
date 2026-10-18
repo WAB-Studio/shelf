@@ -174,7 +174,7 @@ test("a valid address on a deliverable domain asks Auth once, for a link back to
   assert.equal(otpCalls.length, 1);
   assert.deepEqual(otpCalls[0], {
     email: "ana@correo.test",
-    options: { shouldCreateUser: true, emailRedirectTo: `${SITE}/auth/confirm` },
+    options: { shouldCreateUser: false, emailRedirectTo: `${SITE}/auth/confirm` },
   });
 });
 
@@ -203,6 +203,14 @@ test("a 429 reads rateLimited and any other failure sendFailed", async () => {
   assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: false, error: "sendFailed" });
 });
 
+test("a listed address Auth has no user for (it refuses a sign-up with 422) reads sendFailed, never ok", async () => {
+  // Kills: a refusal from Auth swallowed as success, so the person waits for a mail that never comes.
+  answer = { error: { status: 422 } };
+  assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: false, error: "sendFailed" });
+  assert.equal(otpCalls.length, 1);
+  assert.equal(otpCalls[0].options.shouldCreateUser, false);
+});
+
 test("an address that is not one is refused with no probe and no call", async () => {
   assert.deepEqual(await sendSignInLink("x"), { ok: false, error: "emailInvalid" });
   assert.equal(probed.length, 0);
@@ -222,7 +230,7 @@ test("an address on the list is checked once, probed once and sent once", async 
   assert.deepEqual(listChecked, ["ana@correo.test"]);
   assert.deepEqual(probed, ["correo.test"]);
   assert.equal(otpCalls.length, 1);
-  assert.equal(otpCalls[0].options.shouldCreateUser, true);
+  assert.equal(otpCalls[0].options.shouldCreateUser, false);
 });
 
 test("an address on the list whose domain takes no mail is still refused as domainUndeliverable", async () => {

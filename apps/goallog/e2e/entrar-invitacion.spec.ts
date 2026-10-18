@@ -7,6 +7,7 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import account from "../messages/es/account.json";
+import { invite } from "./entrar-invitado";
 import { test, expect, seededPerson, visit } from "./fixtures";
 
 // RP-131: GoalLog lets in only the addresses on `goals.allowed_emails`. Every send here goes to the
@@ -22,12 +23,7 @@ function invitee(): string {
   return `harness-inv-${randomUUID()}@gmail.com`;
 }
 
-async function listAddress(db: postgres.Sql, email: string) {
-  await db`insert into goals.allowed_emails (email) values (${email}) on conflict do nothing`;
-}
-
-// The send creates the `auth.users` row (shouldCreateUser): registered under the suite's run so a
-// crash leaves it to the teardown, and dropped by exact address here.
+// The invited user is registered under the suite's run, so a crash leaves it to the teardown; dropped by exact address here.
 async function forget(db: postgres.Sql, email: string) {
   const ids = await db<{ id: string }[]>`select id from auth.users where email = ${email}`;
   for (const { id } of ids) {
@@ -35,14 +31,6 @@ async function forget(db: postgres.Sql, email: string) {
     await db`delete from auth.users where id = ${id}`;
   }
   await db`delete from goals.allowed_emails where email = ${email}`;
-}
-
-async function register(db: postgres.Sql, email: string) {
-  const runId = process.env.HARNESS_RUN_ID!;
-  await db`
-    insert into harness.identities (user_id, run_id, email, disposition)
-    select id, ${runId}, email, 'ephemeral' from auth.users where email = ${email}
-    on conflict do nothing`;
 }
 
 async function open(browser: Browser, baseURL: string, viewport = { width: 360, height: 740 }) {
@@ -116,14 +104,13 @@ test("a listed address reads «Revisa tu correo» with the address, and the mail
 }) => {
   // Kills: the list refusing an address it holds (compared without lower/trim, or inverted).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     // Typed in capitals: the list holds it lowercase.
     await submit(page, email.toUpperCase());
     await expect(page.getByRole("heading", { name: account.sentTitle, exact: true })).toBeVisible();
     await expect(page.getByText(account.errors.notInvited, { exact: true })).toHaveCount(0);
-    await register(db, email);
     await expect
       .poll(async () => {
         const found = await (await fetch(`${MAILBOX}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)).json();
@@ -143,7 +130,7 @@ test("the button reads «Enviando…» and stays disabled until the answer comes
 }) => {
   // Kills: the pending label dropped or the button left enabled while the action runs.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   let release!: () => void;
   const gate = new Promise<void>((resolveGate) => (release = resolveGate));
@@ -162,7 +149,6 @@ test("the button reads «Enviando…» and stays disabled until the answer comes
   } finally {
     release();
     await context.close();
-    await register(db, email);
     await forget(db, email);
   }
 });
@@ -175,13 +161,12 @@ test("the code link opened in a second browser lands on the other-browser notice
   // Kills: `linkOtherBrowser` dropped from LINK_ERRORS (the notice never draws), or the route
   // exchanging the code without the asking browser's verifier (a session appears in the second).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const first = await open(browser, baseURL!);
   const second = await open(browser, baseURL!);
   try {
     await submit(first.page, email);
     await expect(first.page.getByRole("heading", { name: account.sentTitle, exact: true })).toBeVisible();
-    await register(db, email);
     const link = await codeLink(email);
 
     await second.page.goto(link);
