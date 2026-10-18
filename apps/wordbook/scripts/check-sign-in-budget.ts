@@ -21,7 +21,7 @@ import { registerHooks } from "node:module";
 import { assertSuiteDatabase } from "@repo/harness-registry";
 import postgres from "postgres";
 
-import { clientKeyFromAddress, scopeClientKey } from "../lib/word/client-key";
+import { clientKeyFromAddress, clientKeyFromHeaders, scopeClientKey } from "../lib/word/client-key";
 
 assertSuiteDatabase();
 
@@ -100,7 +100,8 @@ function assert(name: string, ok: boolean, detail: string): void {
 }
 
 function callerKey(ip: string): string {
-  return scopeClientKey("signin", clientKeyFromAddress(ip, SALT))!;
+  // The code keys the caller's network (an IPv6 address as its /64), so the cleanup does too.
+  return scopeClientKey("signin", clientKeyFromHeaders(new Headers({ "x-forwarded-for": ip }), SALT))!;
 }
 
 function addressKey(address: string): string {
