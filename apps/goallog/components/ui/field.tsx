@@ -14,7 +14,9 @@ type FieldProps = Omit<TextField.RootProps, "size" | "variant" | "color" | "radi
   label: string;
   hideLabel?: boolean;
   hint?: ReactNode;
-  // The refusal reads in the hint's place, in ink, and the ring darkens.
+  // The refusal reads in the hint's place, in ink, and the ring darkens. It
+  // mounts as an alert, so a reader hears it the moment it appears; a hint
+  // that is not refused stays a plain span.
   invalid?: boolean;
   // A unit read after the typed value («h», «min»), inside the control.
   suffix?: ReactNode;
@@ -54,8 +56,12 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
           </TextField.Slot>
         ) : null}
       </TextField.Root>
-      {hint ? (
-        <span id={hintId} className={invalid ? styles.refusal : styles.hint}>
+      {hint && invalid ? (
+        <span key="refusal" id={hintId} className={styles.refusal} role="alert">
+          {hint}
+        </span>
+      ) : hint ? (
+        <span key="hint" id={hintId} className={styles.hint}>
           {hint}
         </span>
       ) : null}

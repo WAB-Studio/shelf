@@ -8,7 +8,7 @@ type TextAreaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "classNam
   label: string;
   // The value was refused: the ring turns ink.
   invalid?: boolean;
-  // The refusal's sentence under the area, in ink.
+  // The refusal's sentence under the area, in ink; it mounts as an alert.
   hint?: ReactNode;
 };
 
@@ -35,7 +35,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         className={styles.control}
       />
       {hint ? (
-        <span id={hintId} className={styles.refusal}>
+        <span id={hintId} className={styles.refusal} role="alert">
           {hint}
         </span>
       ) : null}
