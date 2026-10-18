@@ -17,6 +17,7 @@ const VARIABLES = [
   "SIGN_IN_LINK_DAILY_CLIENT_CAP",
   "SIGN_IN_LINK_DAILY_ADDRESS_CAP",
   "SUPABASE_SECRET_KEY",
+  "CLIENT_KEY_SALT",
   "SKIP_ENV_VALIDATION",
 ];
 
@@ -68,4 +69,36 @@ test("a legacy JWT is refused as the secret key", async () => {
 test("a secret key is accepted and kept", async () => {
   const { env } = await load({ SUPABASE_SECRET_KEY: "sb_secret_x" });
   assert.equal(env.SUPABASE_SECRET_KEY, "sb_secret_x");
+});
+
+// Mutation: `.nonnegative()` in place of `.positive()` on a cap lets 0 through; dropping `.int()` lets 2.5 through.
+for (const name of ["SIGN_IN_LINK_DAILY_CLIENT_CAP", "SIGN_IN_LINK_DAILY_ADDRESS_CAP"]) {
+  test(`${name} of 0 is refused`, async () => {
+    await assert.rejects(load({ [name]: "0" }), /Invalid environment variables/);
+  });
+
+  test(`${name} of 2.5 is refused`, async () => {
+    await assert.rejects(load({ [name]: "2.5" }), /Invalid environment variables/);
+  });
+
+  test(`${name} of 7 is kept`, async () => {
+    const { env } = await load({ [name]: "7" });
+    assert.equal(env[name as "SIGN_IN_LINK_DAILY_CLIENT_CAP"], 7);
+  });
+}
+
+// Mutation: `min(16)` -> `min(1)`.
+test("a client key salt of 15 characters is refused", async () => {
+  await assert.rejects(load({ CLIENT_KEY_SALT: "a".repeat(15) }), /Invalid environment variables/);
+});
+
+test("a client key salt of 16 characters is accepted and kept", async () => {
+  const { env } = await load({ CLIENT_KEY_SALT: "a".repeat(16) });
+  assert.equal(env.CLIENT_KEY_SALT, "a".repeat(16));
+});
+
+// Mutation: `emptyStringAsUndefined: false`.
+test("an empty secret key boots as if unset", async () => {
+  const { env } = await load({ SUPABASE_SECRET_KEY: "" });
+  assert.equal(env.SUPABASE_SECRET_KEY, undefined);
 });
