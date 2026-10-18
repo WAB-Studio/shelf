@@ -4200,6 +4200,7 @@ async function main(): Promise<void> {
   await categoryScopeSuite();
   await survivorsSuite();
   await idempotencySuite();
+  await recurringVersionSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -7735,5 +7736,136 @@ async function idempotencySuite(): Promise<void> {
     next("A create whose cause vanished before the write ended rolls back whole: an error, and no movement left behind"),
     leftovers.length === 0 && (refused.serverError !== undefined || refused.data?.ok === false),
     `cause rows = ${causeLeft.length}, movement rows = ${leftovers.length}, result = ${JSON.stringify(refused)}`,
+  );
+}
+
+// M43: a rule's edit form opened before the 00:15 run is refused after it, so the cursor never rewinds (RF-31).
+async function recurringVersionSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const { accountId } = await asUser(user, () =>
+    createAccount({
+      name: `Harness m43 ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000_000,
+      balanceOn: shiftDate(today, -30),
+    }),
+  );
+  track("accounts", accountId);
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m43 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", categoryId);
+
+  type RuleState = { updated_at: string; next_run_on: string; amount_cents: string };
+  const makeRule = async (dueIn: number): Promise<string> => {
+    const { recurringRuleId } = await asUser(user, () =>
+      createRecurringRule({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 1_000,
+        categoryId,
+        description: `m43 ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: shiftDate(today, dueIn),
+        endsOn: null,
+      }),
+    );
+    keep("recurring_rules", recurringRuleId);
+    return recurringRuleId;
+  };
+  const read = async (ruleId: string): Promise<RuleState> =>
+    (
+      await fixtureSql<RuleState[]>`
+        select updated_at::text as updated_at, next_run_on::text as next_run_on, amount_cents::text as amount_cents
+        from recurring_rules where id = ${ruleId}`
+    )[0];
+  const run = () => fixtureSql`select private.run_due_recurring_rules(${user.id}::uuid)`;
+  const booked = async (ruleId: string): Promise<number> => {
+    const rows = await fixtureSql<{ id: string }[]>`select id from transactions where recurring_rule_id = ${ruleId}`;
+    for (const r of rows) keep("transactions", r.id);
+    return rows.length;
+  };
+  // The form seeds every field from the rule it loaded, the next run included.
+  const save = (ruleId: string, loaded: RuleState, over: Record<string, unknown> = {}) =>
+    asUser(user, () =>
+      updateRecurringRuleAction({
+        id: ruleId,
+        fromAccountId: accountId,
+        toAccountId: null,
+        amount: "20",
+        categoryId,
+        description: `m43 ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: loaded.next_run_on,
+        endsOn: null,
+        expectedUpdatedAt: loaded.updated_at,
+        ...over,
+      } as Parameters<typeof updateRecurringRuleAction>[0]),
+    ) as Promise<{ serverError?: string; data?: { ok?: boolean; reason?: string } } | undefined>;
+  const isStale = (r: Awaited<ReturnType<typeof save>>) =>
+    r?.serverError === "errors.stale" || (r?.data?.ok === false && r.data.reason === "stale");
+
+  // Q: the form is open, the run lands, the person saves
+  const runRule = await makeRule(-7);
+  const loaded = await read(runRule);
+  await run();
+  const afterRun = await read(runRule);
+  const bookedByRun = await booked(runRule);
+  const refused = await save(runRule, loaded);
+  const afterRefused = await read(runRule);
+  assert(
+    next("A save carrying the updated_at loaded before the run is refused stale and leaves the run's next_run_on and amount"),
+    afterRun.updated_at !== loaded.updated_at &&
+      isStale(refused) &&
+      afterRefused.next_run_on === afterRun.next_run_on &&
+      afterRefused.next_run_on !== loaded.next_run_on &&
+      afterRefused.amount_cents === "1000",
+    `loaded ${loaded.updated_at}, run ${afterRun.updated_at}, result = ${JSON.stringify(refused)}, next_run_on ${loaded.next_run_on} -> ${afterRefused.next_run_on}, amount ${afterRefused.amount_cents}`,
+  );
+
+  // Q: the same stale form, but its date sits ahead of the run's, so no booked-period guard can catch it
+  const skipForm = await save(runRule, loaded, { nextRunOn: shiftDate(today, 21) });
+  const afterSkip = await read(runRule);
+  assert(
+    next("A stale save is refused by its version even when the date it carries is ahead of the run's"),
+    isStale(skipForm) && afterSkip.next_run_on === afterRun.next_run_on && afterSkip.amount_cents === "1000",
+    `result = ${JSON.stringify(skipForm)}, next_run_on ${afterRun.next_run_on} -> ${afterSkip.next_run_on}`,
+  );
+
+  // Q: the refusal opens no second booking
+  await run();
+  const bookedAgain = await booked(runRule);
+  assert(
+    next("After the refused save the next run books nothing for the same period"),
+    bookedByRun >= 1 && bookedAgain === bookedByRun,
+    `${bookedByRun} booked by the first run, ${bookedAgain} after the second`,
+  );
+
+  // Q: no run in between
+  const quietRule = await makeRule(7);
+  const quietLoaded = await read(quietRule);
+  const saved = await save(quietRule, quietLoaded);
+  const afterSaved = await read(quietRule);
+  assert(
+    next("A save carrying the rule's own updated_at::text is accepted, changes the amount and moves the stamp"),
+    saved?.serverError === undefined &&
+      !isStale(saved) &&
+      afterSaved.amount_cents === "2000" &&
+      afterSaved.updated_at !== quietLoaded.updated_at,
+    `result = ${JSON.stringify(saved)}, amount = ${afterSaved.amount_cents}, stamp ${quietLoaded.updated_at} -> ${afterSaved.updated_at}`,
   );
 }
