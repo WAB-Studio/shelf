@@ -69,7 +69,9 @@ export const createMemberAction = authActionClient
     try {
       ({ memberId } = await createMember({ groupId, name, inviteEmail: email }));
     } catch (error) {
-      if (pgErrorCode(error) === "42501") notLeader();
+      const code = pgErrorCode(error);
+      if (code === "42501") notLeader();
+      if (code === "23505") throw new ActionError("members.errors.emailTaken");
       throw error;
     }
 
@@ -95,7 +97,9 @@ export const inviteMemberByEmailAction = authActionClient
         inviteEmail: email,
       }));
     } catch (error) {
-      if (pgErrorCode(error) === "42501") notLeader();
+      const code = pgErrorCode(error);
+      if (code === "42501") notLeader();
+      if (code === "23505") throw new ActionError("members.errors.emailTaken");
       throw error;
     }
 
