@@ -189,6 +189,9 @@
     },
     "copy": {
       "label": "Copia",
+      "keepLine": "El navegador puede borrar tu registro si te falta espacio.",
+      "keepAction": "Pedirlo",
+      "keepAsking": "Pidiéndolo…",
       "neverSynced": "Aún no ha habido una copia.",
       "failedTitle": "La copia no salió",
       "failedAction": "Reintentar",

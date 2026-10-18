@@ -17,6 +17,7 @@ import { syncNow } from "@/lib/sync/driver";
 import type { SyncFailure } from "@/lib/sync/failure";
 import type { SyncState } from "@/lib/log/types";
 import { Button, Flex, MetaLabel, Separator, Text, TextField } from "@/components/ui";
+import { askToKeepStorage, storageKept } from "@/lib/storage/persist";
 import { DevicesPanel } from "./devices-panel";
 
 // `lastCopy` and `failedOffline` open on "hace", so the span they take carries
@@ -73,6 +74,50 @@ function OfflineGlyph() {
       <circle cx="12" cy="20" r="0.75" fill="currentColor" stroke="none" />
       <path d="M3 3l18 18" />
     </svg>
+  );
+}
+
+// Drawn only while the browser has not kept the log and the API exists; the
+// ask goes out on the reader's tap alone.
+function KeepLog() {
+  const t = useTranslations("account");
+  const [state, setState] = useState<"hidden" | "offer" | "asking">("hidden");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const kept = await storageKept();
+      if (!cancelled && kept === false) setState("offer");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleAsk(): Promise<void> {
+    setState("asking");
+    const kept = await askToKeepStorage();
+    setState(kept === true ? "hidden" : "offer");
+  }
+
+  if (state === "hidden") return null;
+  return (
+    <Flex direction="column" gap="2" align="start">
+      <Text size="2" muted>
+        {t("copy.keepLine")}
+      </Text>
+      <Button
+        type="button"
+        size="2"
+        variant="outline"
+        heavy
+        onClick={() => void handleAsk()}
+        disabled={state === "asking"}
+        aria-busy={state === "asking"}
+      >
+        {state === "asking" ? t("copy.keepAsking") : t("copy.keepAction")}
+      </Button>
+    </Flex>
   );
 }
 
@@ -278,6 +323,7 @@ function SignedOutForm() {
         <Text size="2" muted>
           {t("copy.noSessionBody")}
         </Text>
+        <KeepLog />
       </Flex>
 
       {state.kind === "sent" ? (
@@ -578,6 +624,7 @@ function SyncedSection({
       <Flex direction="column" gap="1">
         <MetaLabel>{t("copy.label")}</MetaLabel>
         {renderCopyState()}
+        <KeepLog />
       </Flex>
 
       <Separator size="4" />
