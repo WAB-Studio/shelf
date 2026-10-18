@@ -307,12 +307,14 @@ test("Asking, copy on: the question promises every device and carries no local n
 });
 
 // The copy is on only when enabled, with a reader on record and not retired.
-for (const [variant, makeSync] of [
-  ["no account", () => undefined],
-  ["signed out", () => copyOn({ enabled: false })],
-  ["retired", () => copyOn({ retired: true })],
+// The note is true only where a reader is kept and signed out: it will delete on return.
+for (const [variant, makeSync, noted] of [
+  ["no account", () => undefined, false],
+  ["signed in, copy never started", () => copyOn({ enabled: true, readerId: null }), false],
+  ["signed out, reader kept", () => copyOn({ enabled: false }), true],
+  ["retired", () => copyOn({ retired: true }), false],
 ] as const) {
-  test(`Asking, ${variant}: the question promises this device alone, and the note follows on its own muted 15 px line`, async ({
+  test(`Asking, ${variant}: the question promises this device alone, ${noted ? "and the note follows on its own muted 15 px line" : "with no note"}`, async ({
     page,
   }) => {
     await answerRoundsEmpty(page);
@@ -324,6 +326,10 @@ for (const [variant, makeSync] of [
     await expect(confirmTitle(page, "leave")).toBeVisible();
     await expect(bodyThisDevice(page, 2)).toBeVisible();
     await expect(bodyEveryDevice(page, 2), "promised every device").toHaveCount(0);
+    if (!noted) {
+      await expect(localNote(page)).toHaveCount(0);
+      return;
+    }
     await expect(localNote(page)).toBeVisible();
     const body = (await bodyThisDevice(page, 2).boundingBox())!;
     const note = (await localNote(page).boundingBox())!;
@@ -430,8 +436,10 @@ test("Done: the row leaves, the header drops its searches and one word, and the 
 test("Failed: an aborted transaction leaves the row and says so; «Conservar» closes the block; «Reintentar» deletes without a second question", async ({
   page,
 }) => {
-  await openRegistro(page, { lookups: leaveRows() });
+  await answerRoundsEmpty(page);
+  await openRegistro(page, { sync: copyOn({ enabled: false }), lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
+  await page.waitForLoadState("networkidle");
 
   // The commit is refused: every delete is followed by an abort.
   await page.evaluate(() => {
@@ -446,7 +454,7 @@ test("Failed: an aborted transaction leaves the row and says so; «Conservar» c
   });
 
   const failure = page.getByRole("alert").filter({ hasText: study("deleteFailedTitle", { word: "leave" }) });
-  // No account: the question carries the note, the failure block never does.
+  // Signed out with its reader: the question carries the note, the failure block never does.
   await deleteX(page, "leave").click();
   await expect(localNote(page)).toBeVisible();
   await action(page, study("deleteConfirm")).click();
