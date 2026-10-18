@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import test from "node:test";
+import { syncBuiltinESMExports } from "node:module";
+import test, { mock } from "node:test";
 
 import ExcelJS from "exceljs";
 import { createTranslator } from "next-intl";
@@ -445,4 +446,130 @@ test("zipTooBig: the byte at the cap passes, the next does not; a zip64 marker o
   const broken = Buffer.from(zipDeclaring([60 * 1024 * 1024]));
   broken.writeUInt32LE(0, 0);
   assert.equal(zipTooBig(new Uint8Array(broken)), false);
+});
+
+// M14: the directory's sizes are the archive's own claim; what counts is what the entries inflate to.
+type ZipGuard = { zipInflatesWithin: (bytes: Uint8Array) => boolean };
+const guard = async () => (await import("./workbook")) as unknown as ZipGuard;
+
+// Overwrites a field of every central-directory entry whose name matches, and of its local header.
+function forge(zip: Uint8Array, name: string, patch: { size?: number; method?: number }): Uint8Array {
+  const out = Buffer.from(zip);
+  const end = out.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const entries = out.readUInt16LE(end + 10);
+  let at = out.readUInt32LE(end + 16);
+  let patched = 0;
+  for (let i = 0; i < entries; i++) {
+    const nameLength = out.readUInt16LE(at + 28);
+    if (out.subarray(at + 46, at + 46 + nameLength).toString() === name) {
+      const local = out.readUInt32LE(at + 42);
+      if (patch.size !== undefined) {
+        out.writeUInt32LE(patch.size, at + 24);
+        out.writeUInt32LE(patch.size, local + 22);
+      }
+      if (patch.method !== undefined) {
+        out.writeUInt16LE(patch.method, at + 10);
+        out.writeUInt16LE(patch.method, local + 8);
+      }
+      patched++;
+    }
+    at += 46 + nameLength + out.readUInt16LE(at + 30) + out.readUInt16LE(at + 32);
+  }
+  assert.equal(patched, 1, `${name} found once`);
+  return new Uint8Array(out);
+}
+
+async function withEntries(entries: Record<string, Buffer>, options: { compression: "DEFLATE" | "STORE" }, base?: Uint8Array) {
+  const { default: JSZip } = await import("jszip");
+  const zip = base ? await JSZip.loadAsync(base) : new JSZip();
+  for (const [name, data] of Object.entries(entries)) zip.file(name, data, options);
+  return new Uint8Array(await zip.generateAsync({ type: "uint8array", ...options }));
+}
+
+const MIB = 1024 * 1024;
+
+test("M14 forged directory: an entry that inflates 60 MiB under a directory that says 1 KB is refused by readWorkbook and by the guard", async () => {
+  const { zipTooBig } = await import("./workbook");
+  const honest = await book({ Metas: [GOAL] });
+  assert.equal((await readWorkbook(honest)).matched, true, "the workbook under the padding is a real one");
+  const forged = forge(await withEntries({ "bomb.bin": Buffer.alloc(60 * MIB) }, { compression: "DEFLATE" }, honest), "bomb.bin", {
+    size: 1024,
+  });
+  assert.equal(zipTooBig(forged), false, "the directory is what lies");
+  const xlsx = Object.getPrototypeOf(new ExcelJS.Workbook().xlsx) as { load: (...args: unknown[]) => Promise<unknown> };
+  const load = mock.method(xlsx, "load", xlsx.load);
+  try {
+    assert.deepEqual(await readWorkbook(forged), { matched: false });
+    assert.equal(load.mock.callCount(), 0, "ExcelJS never loads the archive");
+  } finally {
+    load.mock.restore();
+  }
+  assert.equal((await guard()).zipInflatesWithin(forged), false);
+});
+
+test("M14 bounded output: no inflate call returns more than the cap, however much the entry would inflate to", async () => {
+  const zlib = (await import("node:zlib")).default;
+  const returned: number[] = [];
+  const real = zlib.inflateRawSync;
+  const spy = mock.method(zlib, "inflateRawSync", (...args: Parameters<typeof real>) => {
+    const out = real(...args);
+    returned.push(out.length);
+    return out;
+  });
+  // A named import of a built-in is a live binding: publish the spy to it, and take it back after.
+  syncBuiltinESMExports();
+  try {
+    const bomb = await withEntries({ "bomb.bin": Buffer.alloc(200 * MIB) }, { compression: "DEFLATE" });
+    assert.equal((await guard()).zipInflatesWithin(bomb), false);
+  } finally {
+    spy.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.ok(spy.mock.callCount() >= 1, "the entries were inflated by the guard, not skipped");
+  for (const length of returned) assert.ok(length <= ZIP_INFLATED_MAX, `an inflate returned ${length} bytes`);
+});
+
+test("M14 total: the cap counts every entry together, and the byte at the cap still passes", async () => {
+  const { zipInflatesWithin } = await guard();
+  const two = await withEntries({ "a.bin": Buffer.alloc(30 * MIB), "b.bin": Buffer.alloc(30 * MIB) }, { compression: "DEFLATE" });
+  assert.equal(zipInflatesWithin(two), false);
+  const atCap = await withEntries({ "a.bin": Buffer.alloc(ZIP_INFLATED_MAX) }, { compression: "DEFLATE" });
+  assert.equal(zipInflatesWithin(atCap), true);
+  const past = await withEntries({ "a.bin": Buffer.alloc(ZIP_INFLATED_MAX + 1) }, { compression: "DEFLATE" });
+  assert.equal(zipInflatesWithin(past), false);
+});
+
+test("M14 too many entries: 200 stored entries pass, 201 do not", async () => {
+  const { zipInflatesWithin } = await guard();
+  const many = (n: number) =>
+    withEntries(Object.fromEntries(Array.from({ length: n }, (_, i) => [`e${i}.txt`, Buffer.from("x")])), { compression: "STORE" });
+  assert.equal(zipInflatesWithin(await many(ZIP_ENTRIES_MAX)), true);
+  assert.equal(zipInflatesWithin(await many(ZIP_ENTRIES_MAX + 1)), false);
+});
+
+test("M14 template reads: the delivered template and a real workbook pass the guard and still import", async () => {
+  const { zipInflatesWithin } = await guard();
+  const template = await templateWorkbook(say);
+  assert.equal(zipInflatesWithin(template), true);
+  const result = await read(template);
+  assert.ok("draft" in result);
+  const expected = parseTemplate(DOC_EXAMPLE);
+  assert.ok(expected.matched && "draft" in expected);
+  assert.deepEqual(strip(result.draft), strip(expected.draft));
+  const small = await book({ Metas: [GOAL] });
+  assert.equal(zipInflatesWithin(small), true);
+  assert.equal((await readWorkbook(small)).matched, true);
+});
+
+test("M14 unknown method: an entry stored under method 12 is refused, never read as stored", async () => {
+  const { zipInflatesWithin } = await guard();
+  const stored = await withEntries({ "a.txt": Buffer.from("hello") }, { compression: "STORE" });
+  assert.equal(zipInflatesWithin(stored), true);
+  assert.equal(zipInflatesWithin(forge(stored, "a.txt", { method: 12 })), false);
+});
+
+test("M14 unreadable header: a local header cut short is refused", async () => {
+  const { zipInflatesWithin } = await guard();
+  const stored = await withEntries({ "a.txt": Buffer.from("hello") }, { compression: "STORE" });
+  assert.equal(zipInflatesWithin(stored.slice(0, 20)), false);
 });
