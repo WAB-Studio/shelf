@@ -24,8 +24,9 @@ const env = {
   CLIENT_KEY_SALT: "salt-salt-salt-salt-1234" as string | undefined,
   SIGN_IN_LINK_DAILY_CLIENT_CAP: 5,
   SIGN_IN_LINK_DAILY_ADDRESS_CAP: 3,
+  SIGN_IN_LINK_DAILY_ADDRESS_CEILING: 10,
 };
-const state = { caller: "ck-7e1d" as string | null, allows: [true, true], claims: [] as unknown[][] };
+const state = { caller: "ck-7e1d" as string | null, allows: [true, true, true], claims: [] as unknown[][] };
 
 mock.module(here("../env.ts"), { namedExports: { env } });
 mock.module(here("../word/client-budget.ts"), {
@@ -45,7 +46,7 @@ beforeEach(() => {
   console.warn = (...a: unknown[]) => void warns.push(a);
   env.CLIENT_KEY_SALT = "salt-salt-salt-salt-1234";
   state.caller = "ck-7e1d";
-  state.allows = [true, true];
+  state.allows = [true, true, true];
   state.claims = [];
 });
 afterEach(() => Object.assign(console, real));
@@ -68,12 +69,54 @@ test("a salt but no caller address: noKey, the same one line, no claim spent", a
   assert.equal(state.claims.length, 0);
 });
 
-test("a salt and a caller: ok, both claims, and the log stays silent", async () => {
+test("a salt and a caller: ok, three claims at 5, 3 and 10, and the log stays silent", async () => {
   const { claimSignInLink } = await import("./sign-in-budget");
   const recipient = scopeClientKey("signin-to", clientKeyFromAddress(ADDRESS.toLowerCase(), env.CLIENT_KEY_SALT!))!;
-  assert.deepEqual(await claimSignInLink(new Headers(), ADDRESS), { status: "ok", keys: ["ck-7e1d", recipient] });
+  const result = await claimSignInLink(new Headers(), ADDRESS);
+  assert.equal(result.status, "ok");
+  const keys = result.status === "ok" ? result.keys : [];
+  assert.equal(keys.length, 3);
+  assert.equal(keys[0], "ck-7e1d");
+  assert.ok(keys[1].startsWith("signin-pair:"), `the middle key is ${keys[1]}`);
+  assert.equal(keys[2], recipient);
+  assert.deepEqual(
+    state.claims.map((c) => [c[0], c[1]]),
+    [["ck-7e1d", 5], [keys[1], 3], [recipient, 10]],
+  );
+  assert.deepEqual(warns, []);
+});
+
+test("RL-75 the pair key is the address and the caller together: it moves with either, not with the address's case", async () => {
+  const { claimSignInLink } = await import("./sign-in-budget");
+  const pairOf = async (caller: string, address: string) => {
+    state.caller = caller;
+    const result = await claimSignInLink(new Headers({ "x-forwarded-for": `2001:db8:${caller}::1` }), address);
+    return result.status === "ok" ? result.keys[1] : "";
+  };
+  const base = await pairOf("a1", ADDRESS);
+  assert.notEqual(base, "");
+  assert.equal(await pairOf("a1", ADDRESS), base);
+  assert.equal(await pairOf("a1", ADDRESS.toUpperCase()), base);
+  assert.notEqual(await pairOf("b1", ADDRESS), base);
+  assert.notEqual(await pairOf("a1", "someone.else@example.invalid"), base);
+  assert.ok(!base.includes("reader.person"), "the pair key carries the address");
+});
+
+test("RL-75 the ceiling is its own env variable, not the pair cap's", async () => {
+  env.SIGN_IN_LINK_DAILY_ADDRESS_CEILING = 7;
+  const { claimSignInLink } = await import("./sign-in-budget");
+  await claimSignInLink(new Headers(), ADDRESS);
+  env.SIGN_IN_LINK_DAILY_ADDRESS_CEILING = 10;
+  assert.equal(state.claims[1][1], 3);
+  assert.equal(state.claims[2][1], 7);
+});
+
+test("refused at the pair cap: rateLimited, and the address ceiling is not spent", async () => {
+  state.allows = [true, false, true];
+  const { claimSignInLink } = await import("./sign-in-budget");
+  assert.deepEqual(await claimSignInLink(new Headers(), ADDRESS), { status: "rateLimited" });
   assert.equal(state.claims.length, 2);
-  assert.deepEqual(state.claims[0], ["ck-7e1d", 5]);
+  assert.ok(String(state.claims[1][0]).startsWith("signin-pair:"), "the second claim is the pair's");
   assert.equal(state.claims[1][1], 3);
   assert.deepEqual(warns, []);
 });
@@ -86,8 +129,8 @@ test("refused at the caller's cap: rateLimited, one claim, no dark line", async 
   assert.deepEqual(warns, []);
 });
 
-test("refused at the address's cap: rateLimited, no dark line, and the address never reaches the log", async () => {
-  state.allows = [true, false];
+test("refused at the address ceiling: rateLimited, no dark line, and the address never reaches the log", async () => {
+  state.allows = [true, true, false];
   const { claimSignInLink } = await import("./sign-in-budget");
   assert.deepEqual(await claimSignInLink(new Headers(), ADDRESS), { status: "rateLimited" });
   assert.deepEqual(warns, []);

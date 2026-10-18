@@ -28,9 +28,11 @@ assertSuiteDatabase();
 const SALT = "check-sign-in-salt-not-a-reader";
 const CLIENT_CAP = 5;
 const ADDRESS_CAP = 3;
+const ADDRESS_CEILING = 10;
 process.env.CLIENT_KEY_SALT = SALT;
 process.env.SIGN_IN_LINK_DAILY_CLIENT_CAP = String(CLIENT_CAP);
 process.env.SIGN_IN_LINK_DAILY_ADDRESS_CAP = String(ADDRESS_CAP);
+process.env.SIGN_IN_LINK_DAILY_ADDRESS_CEILING = String(ADDRESS_CEILING);
 
 let supabaseCalls = 0;
 let currentHeaders = new Headers();
@@ -114,11 +116,17 @@ const ADDRESSES = [
   "x@nonexistent.invalid",
   ...Array.from({ length: 8 }, (_, i) => `race-${i}@example.invalid`),
   "stranger@example.invalid",
+  "pair@example.invalid",
+  "ceiling@example.invalid",
 ];
+// RL-75: callers on IPv6, grouped by /64. Two hosts of one prefix are one caller.
+const v6 = (prefix: string, host: number) => `2001:db8:${prefix}::${host}`;
 const REL_IPS = ["198.51.100.90", "198.51.100.91", "198.51.100.92"];
 const REL_ADDRESSES = ["release-a@example.invalid", "release-b@example.invalid"];
 const textKey = (ip: string) => scopeClientKey("text", clientKeyFromAddress(ip, SALT))!;
+const V6_CALLERS = ["a1", "b1", "c1", "c2", "c3", "c4"].map((prefix) => v6(prefix, 1));
 const KEYS = [
+  ...V6_CALLERS.map(callerKey),
   ...IPS.map(callerKey),
   ...ADDRESSES.map(addressKey),
   ...REL_IPS.map(callerKey),
@@ -150,7 +158,15 @@ async function main() {
     }
   }
 
-  const clear = () => sql`delete from reading.client_spend where client = any(${KEYS})`;
+  // Pair keys hash an address with a prefix this script cannot recompute, so
+  // cleanup deletes the pair rows that were not there before the run.
+  const pairsBefore = (await sql<{ client: string }[]>`select client from reading.client_spend where client like 'signin-pair:%'`).map(
+    (row) => row.client,
+  );
+  const clear = async () => {
+    await sql`delete from reading.client_spend where client = any(${KEYS})`;
+    return sql`delete from reading.client_spend where client like 'signin-pair:%' and not (client = any(${pairsBefore}))`;
+  };
 
   try {
     await clear();
@@ -186,12 +202,12 @@ async function main() {
       `signin-to=${refusedAddress}`,
     );
 
-    // Per address: three links from three callers, then a fourth caller is refused.
+    // Per address and caller: three links from one caller, the fourth is refused (the pair cap, RL-75).
     supabaseCalls = 0;
     const addressCap: Outcome[] = [];
-    for (let i = 0; i < ADDRESS_CAP + 1; i += 1) addressCap.push(await send(IPS[2 + i], "shared@example.invalid"));
+    for (let i = 0; i < ADDRESS_CAP + 1; i += 1) addressCap.push(await send(IPS[2], "shared@example.invalid"));
     assert(
-      `the ${ADDRESS_CAP + 1}th link to one address from distinct callers at SIGN_IN_LINK_DAILY_ADDRESS_CAP=${ADDRESS_CAP} is capped`,
+      `the ${ADDRESS_CAP + 1}th link to one address from one caller at SIGN_IN_LINK_DAILY_ADDRESS_CAP=${ADDRESS_CAP} is capped`,
       addressCap.slice(0, ADDRESS_CAP).every((o) => o === "reachedSupabase") &&
         addressCap[ADDRESS_CAP] === "capped" &&
         supabaseCalls === ADDRESS_CAP,
@@ -201,10 +217,10 @@ async function main() {
     // Case: `A@` and `a@` are one address.
     supabaseCalls = 0;
     const cased: Outcome[] = [];
-    for (let i = 0; i < ADDRESS_CAP; i += 1) cased.push(await send(IPS[6 + i], "A@example.invalid"));
-    cased.push(await send(IPS[9], "a@example.invalid"));
+    for (let i = 0; i < ADDRESS_CAP; i += 1) cased.push(await send(IPS[6], "A@example.invalid"));
+    cased.push(await send(IPS[6], "a@example.invalid"));
     assert(
-      "A@example.invalid and a@example.invalid count against one address cap",
+      "A@example.invalid and a@example.invalid count against one pair cap",
       cased.slice(0, ADDRESS_CAP).every((o) => o === "reachedSupabase") &&
         cased[ADDRESS_CAP] === "capped" &&
         supabaseCalls === ADDRESS_CAP,
@@ -255,6 +271,46 @@ async function main() {
       `caller=${await calls(callerKey(IPS[12]))}`,
     );
 
+    // RL-75: the pair cap counts per address and caller /64, the ceiling per address.
+    supabaseCalls = 0;
+    const pairA: Outcome[] = [];
+    for (let host = 1; host <= ADDRESS_CAP + 1; host += 1) pairA.push(await send(v6("a1", host), "pair@example.invalid"));
+    assert(
+      `four hosts of one /64 asking one address: ${ADDRESS_CAP} reach Supabase, the 4th is capped`,
+      pairA.slice(0, ADDRESS_CAP).every((o) => o === "reachedSupabase") &&
+        pairA[ADDRESS_CAP] === "capped" &&
+        supabaseCalls === ADDRESS_CAP,
+      `outcomes=${pairA.join()} supabaseCalls=${supabaseCalls}`,
+    );
+    supabaseCalls = 0;
+    const owner: Outcome[] = [];
+    for (let host = 1; host <= ADDRESS_CAP; host += 1) owner.push(await send(v6("b1", host), "pair@example.invalid"));
+    assert(
+      "the owner, on another /64, still gets 3 links to the address a stranger exhausted from theirs",
+      owner.every((o) => o === "reachedSupabase") && supabaseCalls === ADDRESS_CAP,
+      `outcomes=${owner.join()} supabaseCalls=${supabaseCalls}`,
+    );
+
+    supabaseCalls = 0;
+    const ceiling: Outcome[] = [];
+    for (const prefix of ["c1", "c2", "c3"]) {
+      for (let host = 1; host <= ADDRESS_CAP; host += 1) ceiling.push(await send(v6(prefix, host), "ceiling@example.invalid"));
+    }
+    ceiling.push(await send(v6("c4", 1), "ceiling@example.invalid"));
+    ceiling.push(await send(v6("c4", 2), "ceiling@example.invalid"));
+    assert(
+      `across four /64s the ${ADDRESS_CEILING}th claim on one address is accepted and the ${ADDRESS_CEILING + 1}th refused`,
+      ceiling.slice(0, ADDRESS_CEILING).every((o) => o === "reachedSupabase") &&
+        ceiling[ADDRESS_CEILING] === "capped" &&
+        supabaseCalls === ADDRESS_CEILING,
+      `outcomes=${ceiling.join()} supabaseCalls=${supabaseCalls}`,
+    );
+    assert(
+      "the address row stops at the ceiling",
+      (await calls(addressKey("ceiling@example.invalid"))) === ADDRESS_CEILING,
+      `address=${await calls(addressKey("ceiling@example.invalid"))}`,
+    );
+
     // Release: gives back what a claim took, and only that.
     const { claimSignInLink, releaseSignInLink } = await import("../lib/account/sign-in-budget");
     const relHeaders = new Headers({ "x-forwarded-for": REL_IPS[0] });
@@ -262,16 +318,27 @@ async function main() {
     const second = await claimSignInLink(relHeaders, REL_ADDRESSES[0]);
     const keys = second.status === "ok" ? second.keys : [];
     assert(
-      "a claim returns the caller key then the recipient key",
-      keys[0] === callerKey(REL_IPS[0]) && keys[1] === addressKey(REL_ADDRESSES[0]),
+      "a claim returns three distinct keys: the caller's first, the address's last",
+      keys.length === 3 &&
+        new Set(keys).size === 3 &&
+        keys[0] === callerKey(REL_IPS[0]) &&
+        keys[2] === addressKey(REL_ADDRESSES[0]) &&
+        keys[1].startsWith("signin-pair:"),
       `keys=${keys.join()}`,
+    );
+    const afterClaims = await Promise.all(keys.map(calls));
+    assert(
+      "two claims left every one of the three rows at 2",
+      afterClaims.every((n) => n === 2),
+      `calls=${afterClaims.join()}`,
     );
     await sql`insert into reading.client_spend (day, client, calls) values (current_date, ${textKey(REL_IPS[0])}, 4)`;
     await releaseSignInLink(keys);
+    const afterRelease = await Promise.all(keys.map(calls));
     assert(
-      "release gives both rows back to the count before the claim",
-      (await calls(callerKey(REL_IPS[0]))) === 1 && (await calls(addressKey(REL_ADDRESSES[0]))) === 1,
-      `caller=${await calls(callerKey(REL_IPS[0]))} address=${await calls(addressKey(REL_ADDRESSES[0]))}`,
+      "release gives all three rows back to the count before the claim",
+      afterRelease.every((n) => n === 1),
+      `calls=${afterRelease.join()}`,
     );
     assert(
       "release leaves the same caller's text-scope row alone",
@@ -286,13 +353,11 @@ async function main() {
     } catch (error) {
       belowZero = error instanceof Error ? error.message : String(error);
     }
+    const atZero = await Promise.all(keys.map(calls));
     assert(
-      "release at zero stays at zero and raises no check violation",
-      belowZero === "none" &&
-        (await calls(callerKey(REL_IPS[0]))) === 0 &&
-        (await calls(addressKey(REL_ADDRESSES[0]))) === 0 &&
-        (await calls(textKey(REL_IPS[0]))) === 4,
-      `error=${belowZero} caller=${await calls(callerKey(REL_IPS[0]))} address=${await calls(addressKey(REL_ADDRESSES[0]))} text=${await calls(textKey(REL_IPS[0]))}`,
+      "release at zero stays at zero on all three rows and raises no check violation",
+      belowZero === "none" && atZero.every((n) => n === 0) && (await calls(textKey(REL_IPS[0]))) === 4,
+      `error=${belowZero} calls=${atZero.join()} text=${await calls(textKey(REL_IPS[0]))}`,
     );
     await releaseSignInLink([callerKey(REL_IPS[1])]);
     assert(
