@@ -8,6 +8,7 @@ import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { logDark, type DarkReason } from "@/lib/word/dark";
 import { claimCallerShare } from "@/lib/word/caller-share";
 import { claimClientCall, clientKey, scopedClientKey } from "@/lib/word/client-budget";
+import { wantsDefinition } from "@/lib/word/definition-need";
 import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { generateWordText, MODEL_NAME } from "@/lib/word/model";
 import { textRequestSchema, textResponseSchema } from "@/lib/word/protocol";
@@ -139,11 +140,9 @@ export async function POST(request: Request): Promise<Response> {
     return empty(204);
   }
 
-  // RL-41 fires only when every sense the group carries is definition-less:
-  // one dictionary definition anywhere in the group is "already has one",
+  // One dictionary definition anywhere in the group is "already has one",
   // whatever the caller's own `needDefinition` claims.
-  const entryLacksDefinition = group.senses.every((sense) => sense.definition === null);
-  const wantDefinition = parsed.data.needDefinition && entryLacksDefinition;
+  const wantDefinition = wantsDefinition(parsed.data.needDefinition, group.senses);
 
   // A thin entry rides this same call: one daily-cap claim for the lookup.
   const generated = await generateWordText(headword, wantDefinition, thin ? group.senses : null);
