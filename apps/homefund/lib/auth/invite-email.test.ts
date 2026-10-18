@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { beforeEach, test } from "node:test";
 
+import { updateMemberSchema } from "../validation/member";
+
 // RF-148 / RF-06. The real `createMemberAction` and `inviteMemberByEmailAction` run; the roster
 // write, Auth's server client, Auth's admin client and the env are doubled at module resolution.
 // Contract: the invitation is asked of Auth's admin API (`inviteUserByEmail`) with the redirect to
@@ -25,6 +27,9 @@ let mxAnswer: "mail" | "nullMx" | "servfail";
 const entered: string[] = [];
 let gate: Promise<void> = Promise.resolve();
 let memberAsked: string[] = [];
+const updates: { groupId: string; memberId: string; name: string; inviteEmail?: string }[] = [];
+let updateAnswer: unknown;
+let updateFails: unknown;
 let mxAsked = 0;
 let groupAsked = 0;
 
@@ -51,6 +56,12 @@ const double = {
     await gate;
     if (mxAnswer === "servfail") throw Object.assign(new Error("servfail"), { code: "ESERVFAIL" });
     return mxAnswer === "nullMx" ? [{ exchange: "", priority: 0 }] : [{ exchange: "mx.mail.test", priority: 10 }];
+  },
+  updateMember: async (input: { groupId: string; memberId: string; name: string; inviteEmail?: string }) => {
+    entered.push("update");
+    if (updateFails) throw updateFails;
+    updates.push(input);
+    return updateAnswer ?? (input.inviteEmail ? "updated" : true);
   },
   createMember: async (input: unknown) => {
     if (createFails) throw createFails;
@@ -88,7 +99,7 @@ const DOUBLES: Record<string, string> = {
   "@/db/queries/group-members": `export const createMember = (...a) => ${D}.createMember(...a);
     export const archiveMember = async () => {}; export const deleteMember = async () => {};
     export const restoreMember = (...a) => ${D}.restoreMember(...a); export const transferLeadership = async () => {};
-    export const updateMember = async () => {};
+    export const updateMember = (...a) => ${D}.updateMember(...a);
     export const inviteEmailIsMember = (...a) => ${D}.isMember(...a);`,
   "@/db/queries/groups": `export const getUserGroup = (...a) => ${D}.group(...a);`,
   "node:dns/promises": `export const resolveMx = (...a) => ${D}.resolveMx(...a);
@@ -135,6 +146,9 @@ beforeEach(() => {
   memberAsked = [];
   mxAsked = 0;
   groupAsked = 0;
+  updates.length = 0;
+  updateAnswer = undefined;
+  updateFails = undefined;
   inviteAnswer = { data: { user: { id: "u" } }, error: null };
 });
 
@@ -383,4 +397,177 @@ test("a restore that changes no row is still the not-leader refusal", async () =
   const { restoreMemberAction } = await actions();
   const result = await restoreMemberAction({ memberId: "22222222-2222-4222-8222-222222222222" });
   assert.equal(result?.serverError, "errors.notLeader");
+});
+
+// RF-153. The edit that gives a placeholder an address runs the create path's guards and sends the same
+// invitation. `updateMember` is doubled: with an address it answers a status, without one a boolean.
+const MEMBER = "22222222-2222-4222-8222-222222222222";
+type EditResult = {
+  data?: { inviteEmailFailed: boolean };
+  serverError?: string;
+  validationErrors?: { fieldErrors?: { email?: string[] } };
+};
+const edit = async (input: { name?: string; email?: string }) =>
+  (await (await actions()).updateMemberAction({ memberId: MEMBER, name: "Abuela", ...input })) as EditResult | undefined;
+
+// Mutation: ignore the address in the schema (today's), or send it without the redirect.
+test("an edit with an address stores it through updateMember and asks Auth for one invitation", async () => {
+  const result = await edit({ email: `  ${EMAIL} ` });
+  assert.equal(result?.serverError, undefined);
+  assert.deepEqual(result?.data, { inviteEmailFailed: false });
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].memberId, MEMBER);
+  assert.equal(updates[0].name, "Abuela");
+  assert.equal(updates[0].groupId, "group-1");
+  assert.equal(updates[0].inviteEmail, EMAIL, "trimmed address reaches the query");
+  assert.deepEqual(invited, [[EMAIL, { redirectTo: "http://site.invalid/login" }]]);
+  assert.equal(otpCalls.length, 0);
+});
+
+// Mutation: send an empty string as an address; or run the member and DNS checks without one.
+test("an edit with no address, or a blank one, renames only: no address to the query, no check, no invitation", async () => {
+  mxAnswer = "nullMx";
+  isMember = true;
+  for (const input of [{}, { email: "   " }]) {
+    const result = await edit(input);
+    assert.equal(result?.serverError, undefined);
+    assert.equal(result?.data?.inviteEmailFailed ?? false, false);
+  }
+  assert.equal(updates.length, 2);
+  for (const call of updates) assert.equal(call.inviteEmail, undefined);
+  assert.equal(memberAsked.length, 0);
+  assert.equal(mxAsked, 0);
+  assert.equal(invited.length, 0);
+});
+
+// Mutation: raise on a missing admin client; or roll the stored address back.
+test("an edit whose invitation cannot leave keeps the address and raises the notice", async () => {
+  admin = "none";
+  const none = await edit({ email: EMAIL });
+  assert.equal(none?.serverError, undefined);
+  assert.equal(none?.data?.inviteEmailFailed, true);
+  admin = "client";
+  inviteAnswer = { data: { user: null }, error: { message: "boom", status: 500 } };
+  const failed = await edit({ email: EMAIL });
+  assert.equal(failed?.data?.inviteEmailFailed, true);
+  assert.equal(updates.length, 2, "both addresses were stored");
+  assert.equal(otpCalls.length, 0);
+});
+
+// Mutation: skip the member check on update.
+test("an edit giving a live member's address is refused as already in the group, with nothing written or sent", async () => {
+  isMember = true;
+  const result = await edit({ email: EMAIL });
+  assert.equal(result?.serverError, "members.errors.alreadyMember");
+  assert.equal(result?.data, undefined);
+  assert.equal(updates.length, 0);
+  assert.equal(invited.length, 0);
+});
+
+// Mutation: skip the DNS call on update.
+test("an edit giving an address whose domain takes no mail is refused, with nothing written or sent", async () => {
+  mxAnswer = "nullMx";
+  const result = await edit({ email: EMAIL });
+  assert.equal(result?.serverError, "errors.domainUndeliverable");
+  assert.equal(updates.length, 0);
+  assert.equal(invited.length, 0);
+});
+
+// Mutation: check deliverability before membership on update.
+test("an edit giving a live member's address on an undeliverable domain says member", async () => {
+  isMember = true;
+  mxAnswer = "nullMx";
+  const result = await edit({ email: EMAIL });
+  assert.equal(result?.serverError, "members.errors.alreadyMember");
+});
+
+// Mutation: chain the awaits; or resolve the fund without the fan-out.
+test("an edit with an address asks the fund, the member check and DNS together, before any answers", async () => {
+  let open!: () => void;
+  gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  const pending = edit({ email: EMAIL });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const seen = [...entered].sort();
+  open();
+  await pending;
+  assert.deepEqual(seen, ["dns", "group", "member"]);
+});
+
+// Mutation: ask the member check before the fund is known.
+test("an edit by a caller with no fund is told not found, not undeliverable", async () => {
+  mxAnswer = "nullMx";
+  const original = double.group;
+  double.group = async () => null as never;
+  try {
+    const result = await edit({ email: EMAIL });
+    assert.equal(result?.serverError, "errors.notFound");
+    assert.equal(updates.length, 0);
+    assert.equal(invited.length, 0);
+  } finally {
+    double.group = original;
+  }
+});
+
+// Mutation: map a status to the wrong key, or let a refusal send the mail.
+for (const [status, key] of [
+  ["notLeader", "errors.notLeader"],
+  ["gone", "errors.notFound"],
+  ["hasUser", "members.errors.alreadyMember"],
+  ["hasInvite", "members.errors.emailTaken"],
+] as const) {
+  test(`updateMember answering ${status} is refused as ${key}, with no invitation`, async () => {
+    updateAnswer = status;
+    const result = await edit({ email: EMAIL });
+    assert.equal(result?.serverError, key);
+    assert.equal(result?.data, undefined);
+    assert.equal(invited.length, 0);
+    assert.equal(otpCalls.length, 0);
+  });
+}
+
+// Mutation: leave the 23505 unmapped on update.
+test("a unique violation on the edit is refused as emailTaken, with no invitation", async () => {
+  updateFails = pgError("23505");
+  const result = await edit({ email: EMAIL });
+  assert.equal(result?.serverError, "members.errors.emailTaken");
+  assert.equal(invited.length, 0);
+});
+
+// Mutation: map every database error to emailTaken on update.
+test("any other database error on the edit is not the emailTaken refusal", async () => {
+  updateFails = pgError("23514");
+  const result = await edit({ email: EMAIL });
+  assert.notEqual(result?.serverError, "members.errors.emailTaken");
+  assert.notEqual(result?.serverError, undefined);
+  assert.equal(invited.length, 0);
+});
+
+// Mutation: trust a falsy answer as success without an address.
+test("a rename that changes no row is still the not-leader refusal", async () => {
+  updateAnswer = false;
+  const result = await edit({});
+  assert.equal(result?.serverError, "errors.notLeader");
+});
+
+// Mutation: a second schema for the form.
+test("updateMemberSchema reads a blank address as none, trims a real one and names a malformed one", () => {
+  const base = { memberId: MEMBER, name: "Abuela" };
+  const blank = updateMemberSchema.safeParse({ ...base, email: " " });
+  assert.equal(blank.success, true);
+  assert.equal((blank.data as { email?: string }).email, undefined);
+  const real = updateMemberSchema.safeParse({ ...base, email: `  ${EMAIL} ` });
+  assert.equal((real.data as { email?: string } | undefined)?.email, EMAIL);
+  const bad = updateMemberSchema.safeParse({ ...base, email: "x" });
+  assert.equal(bad.success, false);
+  assert.equal(bad.error?.issues[0].message, "members.errors.emailInvalid");
+});
+
+// Mutation: validate the action with a looser schema than the form's.
+test("an edit with a malformed address is refused by the schema and reaches nothing", async () => {
+  const result = await edit({ email: "x" });
+  assert.equal(result?.validationErrors?.fieldErrors?.email?.[0], "members.errors.emailInvalid");
+  assert.equal(updates.length, 0);
+  assert.equal(invited.length, 0);
 });

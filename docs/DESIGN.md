@@ -212,7 +212,7 @@ Canvas «HomeFund», page «Miembros». 360 seven states, 1280 empty. Built in c
   disabled, spinner on «Guardar»); sent (the dialog closes, «Miembro añadido.» and the new row with «Invitación
   pendiente» and the address in gray under the name); mail not sent (the same, plus the warning «Añadimos a la persona,
   pero no pudimos enviar el correo; puede entrar ya en HomeFund con ese correo.»); already invited (the field's error
-  «Ese correo ya tiene una invitación en este grupo.», from the dialog and from onboarding); «Editar miembro» has no address.
+  «Ese correo ya tiene una invitación en este grupo.», from the dialog and from onboarding); «Editar miembro» shows the address field only for a member with no login and no pending invitation (RF-153, boards «MiembroCorreo · editar …» of 2026-10-18).
 - Onboarding's warning toast reads the same new words.
 - The address line on the row is new: today's member card shows no address.
 
@@ -300,3 +300,21 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Orphaned personal subcategories** (critic-6c Q8 b): migration 0061 deletes the ones nothing uses and brings back as
   top-level categories the ones a movement, budget, payment or rule names, before it adds the cascading key.
 - **«Eso ya no existe.» stays** (critic-6c Q9 a) for a write to an account the person cannot use.
+
+## Decisions of 2026-10-18, on the cierre-d17 plan, by the user
+
+- «Editar miembro» with an address opens **RF-153** (Q0 a); RF-149 stays as written.
+- When an edit saves the address but the invitation mail is not sent, the warning is a key of its own,
+  `members.editEmailFailed`: «Guardamos el correo, pero no pudimos enviar la invitación. Avísale que entre con ese correo;
+  si ya está en otro grupo, no se unirá a este.» (Q1 b).
+- Only the phone's empty-state button inside «Mis categorías» opens «Añadir categoría» on «Mías» (Q2 a). A button under a
+  non-empty «Mis categorías» and an empty state at 1280 do not exist and are not planned.
+- Boards drawn 2026-10-18 on the HomeFund canvas. Page «T4 · pantallas»: C1i (a card owing $ 404.900, typed 400000,
+  «Descuadre −$ 4.900» in the good tone), C1j (owing $ 120.000, typed 130000, «+$ 10.000» in the plain dark tone), C1k (the
+  history in the field's frame: «−$ 4.900», «−$ 5.000», «−$ 20.000»); C1h moved to «Archivo». Page «Miembros»: «Editar
+  miembro» on «Abuela», a member with no login and no invitation: empty with the hint «Si lo escribes, le mandamos una
+  invitación para entrar a HomeFund.», saving, done («Miembro actualizado.», the row «Invitación pendiente» with the address
+  in gray), mail not sent (`members.editEmailFailed` as a warning toast), and the three refusals on the field
+  («Esa persona ya está en este grupo.», `errors.domainUndeliverable`, «Ese correo ya tiene una invitación en este grupo.»).
+  No desktop board: the same dialog opens from the 1280 row menu. A note on C3iCategoriasMiasVaciaMovil: the empty state's
+  button opens on «Mías».

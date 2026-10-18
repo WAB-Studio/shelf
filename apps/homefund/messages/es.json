@@ -227,6 +227,7 @@
     "nameLabel": "Nombre",
     "emailLabel": "Correo (opcional)",
     "emailHint": "Si lo escribes, le mandamos una invitación para entrar a HomeFund.",
+    "editEmailFailed": "Guardamos el correo, pero no pudimos enviar la invitación. Avísale que entre con ese correo; si ya está en otro grupo, no se unirá a este.",
     "activeTab": "Activos",
     "archivedTab": "Archivados",
     "you": "Tú",

@@ -3980,6 +3980,7 @@ async function main(): Promise<void> {
   console.log("");
   await serverEntriesSuite(scope);
   await inviteRefusalSuite();
+  await inviteOnEditSuite();
   await e5Suite();
   await e6Suite();
   await importScopeOwnerSuite(userId, scope);
@@ -6157,6 +6158,177 @@ async function inviteRefusalSuite(): Promise<void> {
   );
 
   await trackAll();
+}
+
+// RF-153, RF-148, RF-149, RF-150, RF-152: the leader gives an address to a placeholder member. The
+// edit stores it, audits it, invites, and the person who signs in with it becomes that member; every
+// refusal of the create path refuses the edit with the row untouched and Auth unasked, and a row that
+// is not an unclaimed live placeholder is never given an address, whatever the caller forges.
+async function inviteOnEditSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  type EditResult = { data?: { inviteEmailFailed: boolean }; serverError?: string };
+  const members = (await import("@/app/actions/members")) as unknown as {
+    updateMemberAction: (input: { memberId: string; name: string; email?: string }) => Promise<EditResult>;
+  };
+
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo edita ${tag}`, leaderName: "Harness lider edita", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const fellow = await seedFellowMember(leader.id, groupId);
+  const groupless = await createMembershipFreeUser();
+  const [{ id: fellowRowId }] = await fixtureSql<{ id: string }[]>`
+    select id from group_members where group_id = ${groupId} and user_id = ${fellow.id}`;
+
+  const fresh = (kind: string) => `${kind}-${tag}-${randomUUID().slice(0, 6)}@mail.example.invalid`;
+  const asked = (): { email: string; redirectTo?: string }[] =>
+    ((globalThis as { harnessAdminInvites?: { email: string; redirectTo?: string }[] }).harnessAdminInvites ??= []);
+  const onAllowList = async (email: string): Promise<boolean> =>
+    (await fixtureSql`select 1 from allowed_emails where email = ${email.toLowerCase()}`).length > 0;
+  const rowOf = async (id: string) =>
+    (await fixtureSql<MemberSnapshot[]>`
+      select id, user_id, invite_email, name, archived_at::text as archived_at from group_members where id = ${id}`)[0];
+
+  // Rows are written as the owner under the leader's claims, as `seedPendingInvite` does.
+  const seed = async (name: string, state: "placeholder" | "archived" | "pending", email?: string): Promise<string> => {
+    const id = randomUUID();
+    await fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: leader.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      await tx`
+        insert into group_members (id, group_id, name, role, invite_email, archived_at)
+        values (${id}, ${groupId}, ${name}, 'member', ${state === "pending" ? email! : null},
+          ${state === "archived" ? tx`now()` : null})`;
+    });
+    track("group_members", id);
+    return id;
+  };
+
+  // One edit, one expectation: the named refusal, the row as it was (name included), the allow list as
+  // it was, Auth unasked.
+  const refusedEdit = async (
+    label: string,
+    caller: { id: string; email: string },
+    memberId: string,
+    email: string,
+    key: string,
+  ): Promise<void> => {
+    const before = await rowOf(memberId);
+    const askedBefore = asked().length;
+    const listedBefore = await onAllowList(email);
+    const result = await asUser(caller, () => members.updateMemberAction({ memberId, name: `Harness renombrada ${randomUUID().slice(0, 4)}`, email }));
+    const after = await rowOf(memberId);
+    const listed = await onAllowList(email);
+    assert(
+      next(`${label}: refused as ${key}, the row unchanged, no invitation asked`),
+      result?.serverError === key &&
+        result.data === undefined &&
+        JSON.stringify(before) === JSON.stringify(after) &&
+        asked().length === askedBefore &&
+        listed === listedBefore,
+      `serverError = ${result?.serverError ?? "none"}, row ${JSON.stringify(before)} -> ${JSON.stringify(after)}, invitations asked = ${asked().length - askedBefore}, on list ${listedBefore} -> ${listed}`,
+    );
+  };
+
+  // The happy path, and the claim that follows it. The invitee is a real identity so the claim runs as them.
+  const invitee = await createMembershipFreeUser();
+  const abuela = await seed("Abuela", "placeholder");
+  const askedBeforeInvite = asked().length;
+  const invited = await asUser(leader, () => members.updateMemberAction({ memberId: abuela, name: "Abuela Rosa", email: invitee.email.toUpperCase() }));
+  const stored = await rowOf(abuela);
+  const askedNow = asked().slice(askedBeforeInvite);
+  assert(
+    next("A leader giving a placeholder an address stores it, renames, lists it lowercased and asks Auth for one invitation"),
+    invited?.serverError === undefined &&
+      invited?.data?.inviteEmailFailed === false &&
+      stored.invite_email?.toLowerCase() === invitee.email.toLowerCase() &&
+      stored.name === "Abuela Rosa" &&
+      stored.user_id === null &&
+      (await onAllowList(invitee.email)) &&
+      askedNow.length === 1 &&
+      askedNow[0].email.toLowerCase() === invitee.email.toLowerCase() &&
+      askedNow[0].redirectTo?.endsWith("/login") === true,
+    `serverError = ${invited?.serverError ?? "none"}, data = ${JSON.stringify(invited?.data)}, row = ${JSON.stringify(stored)}, invitations = ${JSON.stringify(askedNow)}`,
+  );
+
+  const audits = await fixtureSql<{ after_data: { invite_email?: string; name?: string } | null }[]>`
+    select after_data from audit_log where record_id = ${abuela} and action = 'UPDATE'`;
+  assert(
+    next("The edit left one audit_log UPDATE row for the member carrying the stored address (RF-45)"),
+    audits.length === 1 && audits[0].after_data?.invite_email?.toLowerCase() === invitee.email.toLowerCase(),
+    `${audits.length} UPDATE row(s), invite_email = ${audits[0]?.after_data?.invite_email}`,
+  );
+
+  const claimed = await asUser(invitee, () => claimInviteForUser({ email: invitee.email }));
+  const claimedRow = await rowOf(abuela);
+  const rowsForUser = await fixtureSql<{ id: string }[]>`select id from group_members where user_id = ${invitee.id}`;
+  assert(
+    next("The person who signs in with that address becomes that member: the same row, their user, no invitation left, the name the group gave"),
+    claimed === "claimed" &&
+      claimedRow.user_id === invitee.id &&
+      claimedRow.invite_email === null &&
+      claimedRow.name === "Abuela Rosa" &&
+      rowsForUser.length === 1 &&
+      rowsForUser[0].id === abuela,
+    `claim = ${claimed}, row = ${JSON.stringify(claimedRow)}, rows for the user = ${rowsForUser.map((r) => r.id).join(",")}`,
+  );
+
+  // No address: a rename, and nothing else.
+  const plain = await seed("Tio", "placeholder");
+  const askedBeforePlain = asked().length;
+  const renamed = await asUser(leader, () => members.updateMemberAction({ memberId: plain, name: "Tio Beto" }));
+  const blank = await asUser(leader, () => members.updateMemberAction({ memberId: plain, name: "Tio Beto 2", email: "   " }));
+  const plainRow = await rowOf(plain);
+  assert(
+    next("A rename with no address, or a blank one, renames, leaves invite_email null and asks Auth for nothing"),
+    renamed?.serverError === undefined &&
+      blank?.serverError === undefined &&
+      renamed?.data?.inviteEmailFailed !== true &&
+      plainRow.name === "Tio Beto 2" &&
+      plainRow.invite_email === null &&
+      asked().length === askedBeforePlain,
+    `renamed = ${renamed?.serverError ?? "ok"}, blank = ${blank?.serverError ?? "ok"}, row = ${JSON.stringify(plainRow)}, invitations = ${asked().length - askedBeforePlain}`,
+  );
+
+  const target = await seed("Primo", "placeholder");
+  await refusedEdit("A joined member's address in another case", leader, target, fellow.email.toUpperCase(), "members.errors.alreadyMember");
+  await refusedEdit("The leader's own address", leader, target, leader.email, "members.errors.alreadyMember");
+  await refusedEdit("An address whose domain takes no mail", leader, target, `x-${randomUUID()}@example.com`, "errors.domainUndeliverable");
+
+  const held = fresh("held");
+  await seed("Otra pendiente", "pending", held);
+  await refusedEdit("The address of another live pending row", leader, target, held.toUpperCase(), "members.errors.emailTaken");
+
+  // Forged ids: the form never offers these rows, so the server must refuse them itself.
+  const pendingA = fresh("a");
+  const pendingRow = await seed("Pendiente A", "pending", pendingA);
+  await refusedEdit("A row already pending with another address", leader, pendingRow, fresh("b"), "members.errors.emailTaken");
+  const pendingAfter = await rowOf(pendingRow);
+  assert(
+    next("The pending row still holds its own address after the refused edit"),
+    pendingAfter.invite_email === pendingA,
+    `invite_email = ${pendingAfter.invite_email}`,
+  );
+  await refusedEdit("A member with a user", leader, fellowRowId, fresh("c"), "members.errors.alreadyMember");
+  const archivedRow = await seed("Archivada", "archived");
+  await refusedEdit("An archived placeholder", leader, archivedRow, fresh("d"), "errors.notFound");
+
+  // The plain member: another's placeholder, then their own row.
+  await refusedEdit("A plain member giving a placeholder an address", fellow, target, fresh("f"), "errors.notLeader");
+  await refusedEdit("A plain member giving their own row an address", fellow, fellowRowId, fresh("g"), "errors.notLeader");
+
+  const noFund = await asUser(groupless, () =>
+    members.updateMemberAction({ memberId: target, name: "Nadie", email: `x-${randomUUID()}@example.com` }),
+  );
+  assert(
+    next("A caller with no fund giving an address whose domain takes no mail is told not found, not undeliverable"),
+    noFund?.serverError === "errors.notFound",
+    `serverError = ${noFund?.serverError ?? "none"}`,
+  );
+
+  const rows = await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${groupId}`;
+  for (const row of rows) track("group_members", row.id);
 }
 
 // The invite step's server half (RF-06, RF-07): the member an address becomes,

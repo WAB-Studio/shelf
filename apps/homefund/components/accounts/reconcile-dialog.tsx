@@ -152,6 +152,9 @@ function ReconcileForm({ account }: { account: AccountRow }) {
       ? (isLiability ? -typed.cents : typed.cents) - sheet.account.derivedCents
       : null;
 
+  // The gap as the field reads it: typed debt minus «Según HomeFund». The tone stays on the balance's frame.
+  const fieldGap = (cents: number) => (isLiability ? -cents : cents);
+
   const dayLabel = (value: string, withYear = false) =>
     format.dateTime(civilDateToDate(value), {
       day: "numeric",
@@ -271,8 +274,9 @@ function ReconcileForm({ account }: { account: AccountRow }) {
             <Flex justify="between" align="center" gap="3">
               <Text size="2">{t("reconcileGap")}</Text>
               <Money
-                minor={Math.abs(gapCents)}
+                minor={fieldGap(gapCents)}
                 currency={currency}
+                signed="always"
                 tone={gapCents > 0 ? "income" : gapCents < 0 ? "expense" : "plain"}
               />
             </Flex>
@@ -315,8 +319,9 @@ function ReconcileForm({ account }: { account: AccountRow }) {
                     <Text size="2">{t("reconciliationBalanced")}</Text>
                   ) : (
                     <Money
-                      minor={Math.abs(row.gapCents)}
+                      minor={fieldGap(row.gapCents)}
                       currency={currency}
+                      signed="always"
                       tone={row.gapCents > 0 ? "income" : "expense"}
                     />
                   )}
