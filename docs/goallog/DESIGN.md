@@ -1869,3 +1869,13 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   antes de pedir otro.»; «Entrar» that hangs says «No sabemos si se comprobó el código. Espera un momento antes de
   escribirlo otra vez.» Board «EntrarSinRespuesta».
 
+
+## Decisions of 2026-10-18, after the critic of critic-6c, by the user
+
+- **A refusal that arrives after the 8 s sentence replaces it.** When it answers the newest attempt and the sentence
+  still shows, «Ese código no vale o ya venció.», «Demasiados intentos. Prueba de nuevo en unos minutos.» or «Este correo
+  no tiene invitación a GoalLog.» takes the sentence's place, in the same spot an on-time refusal would read. The sentence
+  may change in front of the person (Q3 b). A refusal for an older attempt, or after the person typed, sent again or left
+  the step, changes nothing; a late rejection that is not a refusal leaves the sentence. No pending record is written or
+  cleared by it.
+- Supersedes «A late refusal is dropped» (critic-6c M7) and the board's «the screen says nothing more».
