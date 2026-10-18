@@ -100,7 +100,52 @@ test("a bank message keeps reading its own amount", () => {
   assert.equal(stored("Compraste $25.000 en KFC"), 2_500_000);
 });
 
-test("«millón» is not a multiplier", () => {
-  assert.equal(stored("2 millones"), 200);
-  assert.equal(stored("1 millón"), 100);
+// The widened multiplier (Q12, 2026-10-18): «m», «millón» and «millones» are a
+// million. 2 000 000 pesos is 200 000 000 cents.
+
+test("«m», «millón» and «millones» multiply by a million", () => {
+  assert.equal(stored("2m"), 200_000_000);
+  assert.equal(stored("3 M arriendo"), 300_000_000);
+  assert.equal(stored("1 millón"), 100_000_000);
+  assert.equal(stored("2 millones"), 200_000_000);
+  assert.equal(stored("1 MILLONES"), 100_000_000);
+  // Typed on a phone without the accent, the word is the same.
+  assert.equal(stored("1 millon"), 100_000_000);
+});
+
+test("a decimal mantissa before a million is read without float", () => {
+  assert.equal(stored("1,5 millones"), 150_000_000);
+  assert.equal(stored("2.5m"), 250_000_000);
+  assert.equal(stored("1,15 m"), 115_000_000);
+  assert.equal(stored("0,07m"), 7_000_000);
+});
+
+test("a million proposal is an integer peso string", () => {
+  const read = (text: string) => interpretQuickEntry(text, ctx).amountPesos;
+  assert.equal(read("2m"), "2000000");
+  assert.equal(read("1,5 millones"), "1500000");
+});
+
+test("«mil» stays a thousand, never a million", () => {
+  assert.equal(stored("5 mil pesos"), 500_000);
+  assert.equal(stored("1 mil"), 100_000);
+});
+
+test("a separator and exactly three digits before a million proposes no amount", () => {
+  assert.equal(interpretQuickEntry("1.500 m", ctx).amountPesos, null);
+  assert.equal(interpretQuickEntry("1,500 millones", ctx).amountPesos, null);
+});
+
+test("«m» inside a word is not a multiplier", () => {
+  assert.equal(stored("5 metros de cable"), 500);
+  assert.equal(stored("2 mangos"), 200);
+  assert.equal(stored("4 m2"), 400);
+});
+
+test("the million token leaves the description with the amount", () => {
+  assert.equal(
+    interpretQuickEntry("arriendo 1,5 millones", ctx).description,
+    "arriendo",
+  );
+  assert.equal(interpretQuickEntry("2m carro", ctx).description, "carro");
 });

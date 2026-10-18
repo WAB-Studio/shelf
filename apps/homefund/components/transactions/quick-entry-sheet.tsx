@@ -202,6 +202,10 @@ function QuickEntryForm({
     [options.labels, scope],
   );
 
+  // The amount the interpreter last wrote into the field, so a later reading
+  // with no amount can take back its own figure and leave a typed one alone.
+  const proposedAmount = useRef<string | null>(null);
+
   // Everything the interpreter proposes stays a suggestion the fields may
   // overwrite (RF-22): the account fills only while still empty so a manual
   // pick survives further typing.
@@ -216,6 +220,15 @@ function QuickEntryForm({
 
     if (proposal.amountPesos !== null) {
       form.setValue("amount", proposal.amountPesos, { shouldValidate: true });
+      proposedAmount.current = proposal.amountPesos;
+    } else if (
+      proposedAmount.current !== null &&
+      form.getValues("amount") === proposedAmount.current
+    ) {
+      // «1.500» on its way to «1.500 mil» proposed 1500, and «25 m» on its way
+      // to «25 mil» 25 000 000; neither may outlive the text that proposed it.
+      form.setValue("amount", "");
+      proposedAmount.current = null;
     }
     if (proposal.accountId && !form.getValues("fromAccountId")) {
       form.setValue("fromAccountId", proposal.accountId, { shouldValidate: true });

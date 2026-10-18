@@ -8,6 +8,16 @@ import { normalizeAmountInput } from "@/lib/money";
 // The first run of digits, optionally carrying the thousands separators a
 // person types by hand; `normalizeAmountInput` strips those to a peso string.
 const AMOUNT_PATTERN = /\d[\d.,]*\d|\d/;
+// A spoken multiplier right after the amount (RF-22): «mil» and «k» are a
+// thousand, «m», «millón» and «millones» a million. A letter or digit after the
+// token makes it part of a word: «3 milanesas», «4 kg», «4 m2».
+const MULTIPLIER_PATTERN =
+  /^\s*(millones|mill[oó]n|mil|k|m)(?![\p{L}\p{N}_])/iu;
+const MULTIPLIER_ZEROS: Record<string, number> = { mil: 3, k: 3 };
+const MILLION_ZEROS = 6;
+// What may stand before a multiplier: whole digits, or up to two decimals.
+// «1.500 mil» could be 1 500 000 or 1 500; neither is guessed.
+const MANTISSA_PATTERN = /^(\d+)(?:[.,](\d{1,2}))?$/;
 const INCOME_PATTERN = /\brecibiste\s+una\s+transferencia\b/iu;
 const EXPENSE_PATTERN =
   /\b(?:transferiste|compraste|pagaste)\b|\btu\s+compra\b[\s\S]*\bfue\s+aprobada\b/iu;
@@ -46,6 +56,16 @@ function readOccurredAt(text: string): string | null {
   return isCivilDate(civil) ? civil : null;
 }
 
+// The mantissa shifted by the multiplier's zeros, as whole pesos: the digits are
+// concatenated, never multiplied, so «2,01k» is 2010 and not 2009.99….
+function multiplyPesos(mantissa: string, zeros: number): string | null {
+  const parts = MANTISSA_PATTERN.exec(mantissa);
+  if (!parts) return null;
+  const [, whole, fraction = ""] = parts;
+  const digits = `${whole}${fraction.padEnd(zeros, "0")}`;
+  return digits.replace(/^0+(?=\d)/, "");
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -57,9 +77,18 @@ export function interpretQuickEntry(
   const lower = text.toLowerCase();
 
   const amountMatch = AMOUNT_PATTERN.exec(text);
-  const amountPesos = amountMatch
-    ? normalizeAmountInput(amountMatch[0])
+  const amountEnd = amountMatch ? amountMatch.index + amountMatch[0].length : 0;
+  const multiplierMatch = amountMatch
+    ? MULTIPLIER_PATTERN.exec(text.slice(amountEnd))
     : null;
+  const amountPesos = !amountMatch
+    ? null
+    : multiplierMatch
+      ? multiplyPesos(
+          amountMatch[0],
+          MULTIPLIER_ZEROS[multiplierMatch[1].toLowerCase()] ?? MILLION_ZEROS,
+        )
+      : normalizeAmountInput(amountMatch[0]);
   const mentionedTails = new Set(
     ACCOUNT_TAIL_PATTERNS.flatMap((pattern) =>
       [...text.matchAll(pattern)].map((match) => match[1]),
@@ -79,10 +108,12 @@ export function interpretQuickEntry(
       return name.length > 0 && lower.includes(name);
     }) ?? null;
 
-  // What is left once the amount and any matched category token are removed.
+  // What is left once the amount, its multiplier and any matched category
+  // token are removed.
   let description = text;
   if (amountMatch) {
-    description = description.replace(amountMatch[0], " ");
+    const cutEnd = amountEnd + (multiplierMatch?.[0].length ?? 0);
+    description = `${text.slice(0, amountMatch.index)} ${text.slice(cutEnd)}`;
   }
   if (matchedCategory) {
     const pattern = new RegExp(escapeRegExp(matchedCategory.name.trim()), "i");
