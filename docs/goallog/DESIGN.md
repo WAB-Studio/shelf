@@ -1879,3 +1879,12 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   the step, changes nothing; a late rejection that is not a refusal leaves the sentence. No pending record is written or
   cleared by it.
 - Supersedes «A late refusal is dropped» (critic-6c M7) and the board's «the screen says nothing more».
+
+## Decisions of 2026-10-18, on the dependency map of the open findings, by the user
+
+- **«pulsar» becomes «goallog»** (Q3 a) in the template's first line and the MCP server's name; the reader still accepts an
+  old `pulsar ·` header, and every connected AI is added again once. Not built yet.
+- **Open sign-up closes** (Q10 a) once respuestas-18 lands: only an address on the list gets a code, as HomeFund and
+  WordBook already do. Not built yet.
+- **Contrast** (Q6 a): the token-table borders and the `quiet` tone are darkened to the nearest same-hue value that
+  passes; the token table follows. Not built yet.
