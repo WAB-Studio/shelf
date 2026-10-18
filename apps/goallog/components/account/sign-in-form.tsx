@@ -16,14 +16,33 @@ import { Button, Field, Figure, Flex, ScreenHeader, Text } from "@/components/ui
 
 type SentState = Extract<FormState, { kind: "sent" }>;
 
-// "offline" is the client's own: the call never reached the server.
-type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline";
+// "offline" and "timedOut" are the client's own: the call never reached the server, or it gave no answer in time.
+type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline" | "timedOut";
 
-type CodeError = VerifySignInCodeResult["error"] | "offlineCheck";
+type CodeError = VerifySignInCodeResult["error"] | "offlineCheck" | "timedOutCheck";
 
 type ResendState = { kind: "idle" } | { kind: "sending" } | { kind: "done" } | { kind: "failed"; error: SendError };
 
 const RESEND_WAIT_MS = 60_000;
+const ANSWER_TIMEOUT_MS = 8_000;
+const TIMED_OUT = "timedOut" as const;
+
+// Settles with the call, or with TIMED_OUT when it gives no answer in time. The call itself is left running.
+function answerWithin<T>(call: Promise<T>): Promise<T | typeof TIMED_OUT> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(TIMED_OUT), ANSWER_TIMEOUT_MS);
+    call.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 type FormState =
   | { kind: "idle" }
@@ -62,8 +81,10 @@ export function SignInForm({
   const t = useTranslations("account");
   const [email, setEmail] = useState("");
   const [state, setState] = useState<FormState>({ kind: "idle" });
-  // True from the verify call until a refusal comes back: the form unmounting in between is the code landing.
-  const verifying = useRef(false);
+  // Verify calls not yet refused, timed out or not: the form unmounting while any runs is the code landing.
+  const verifying = useRef(0);
+  // Tags each send, resend and check; an answer that comes late applies only to the newest.
+  const attempt = useRef(0);
   const codeField = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState(0);
   const resendDone = state.kind === "sent" && state.resend.kind === "done";
@@ -84,7 +105,7 @@ export function SignInForm({
   // A good code redirects and the action never returns, so the landing is seen as the form leaving.
   useEffect(
     () => () => {
-      if (verifying.current) clearPending();
+      if (verifying.current > 0) clearPending();
     },
     [],
   );
@@ -115,30 +136,72 @@ export function SignInForm({
       setState({ ...current, code, checking: false, error: "codeShape" });
       return;
     }
+    attempt.current += 1;
     setState({ ...current, code, checking: true, error: undefined });
     // A good code redirects and never returns; only a refusal comes back.
-    verifying.current = true;
-    let result: VerifySignInCodeResult | undefined;
+    verifying.current += 1;
+    const call = verifySignInCode(address, code, next);
+    let result: VerifySignInCodeResult | typeof TIMED_OUT | undefined;
     try {
-      result = await verifySignInCode(address, code, next);
+      result = await answerWithin(call);
     } catch (error) {
       // A good code lands through a redirect that rejects here; it is the landing, not a failure.
       unstable_rethrow(error);
-      verifying.current = false;
+      verifying.current -= 1;
       setState({ kind: "sent", email: address, at, code, checking: false, error: "offlineCheck", resend: { kind: "idle" } });
       return;
     }
-    verifying.current = false;
+    if (result === TIMED_OUT) {
+      // The call still runs: a good code lands by its own redirect, a late refusal is dropped.
+      call.then(
+        () => {
+          verifying.current -= 1;
+        },
+        (error: unknown) => {
+          try {
+            unstable_rethrow(error);
+          } catch {
+            return;
+          }
+          verifying.current -= 1;
+        },
+      );
+      setState({ kind: "sent", email: address, at, code, checking: false, error: "timedOutCheck", resend: { kind: "idle" } });
+      return;
+    }
+    verifying.current -= 1;
     if (result?.error) setState({ kind: "sent", email: address, at, code, checking: false, error: result.error, resend: { kind: "idle" } });
   }
 
   async function handleResend(current: SentState): Promise<void> {
+    const mine = (attempt.current += 1);
     setState({ ...current, resend: { kind: "sending" } });
-    let result: SendSignInLinkResult;
+    const call = sendSignInLink(current.email, next);
+    let result: SendSignInLinkResult | typeof TIMED_OUT;
     try {
-      result = await sendSignInLink(current.email, next);
-    } catch {
+      result = await answerWithin(call);
+    } catch (error) {
+      unstable_rethrow(error);
       setState({ ...current, resend: { kind: "failed", error: "offline" } });
+      return;
+    }
+    if (result === TIMED_OUT) {
+      call.then(
+        (late) => {
+          if (!late.ok || mine !== attempt.current) return;
+          const sentAt = Date.now();
+          savePending(current.email, sentAt);
+          setNow(sentAt);
+          // Only the timeout sentence gives way, and the code typed since stays.
+          setState((cur) =>
+            cur.kind === "sent" && cur.resend.kind === "failed" && cur.resend.error === "timedOut"
+              ? { ...cur, at: sentAt, error: undefined, resend: { kind: "done" } }
+              : cur,
+          );
+        },
+        () => {},
+      );
+      setState({ ...current, resend: { kind: "failed", error: "timedOut" } });
       return;
     }
     if (!result.ok) {
@@ -156,12 +219,34 @@ export function SignInForm({
       setState({ kind: "failed", error: "emailInvalid" });
       return;
     }
+    const mine = (attempt.current += 1);
+    const address = email;
     setState({ kind: "sending" });
-    let result: SendSignInLinkResult;
+    const call = sendSignInLink(address, next);
+    let result: SendSignInLinkResult | typeof TIMED_OUT;
     try {
-      result = await sendSignInLink(email, next);
-    } catch {
+      result = await answerWithin(call);
+    } catch (error) {
+      unstable_rethrow(error);
       setState({ kind: "failed", error: "offline" });
+      return;
+    }
+    if (result === TIMED_OUT) {
+      call.then(
+        (late) => {
+          if (!late.ok || mine !== attempt.current) return;
+          const sentAt = Date.now();
+          savePending(address, sentAt);
+          setNow(sentAt);
+          setState((cur) =>
+            cur.kind === "failed" && cur.error === "timedOut"
+              ? { kind: "sent", email: address, at: sentAt, code: "", checking: false, resend: { kind: "idle" } }
+              : cur,
+          );
+        },
+        () => {},
+      );
+      setState({ kind: "failed", error: "timedOut" });
       return;
     }
     if (!result.ok) {
@@ -169,9 +254,9 @@ export function SignInForm({
       return;
     }
     const at = Date.now();
-    savePending(email, at);
+    savePending(address, at);
     setNow(at);
-    setState({ kind: "sent", email, at, code: "", checking: false, resend: { kind: "idle" } });
+    setState({ kind: "sent", email: address, at, code: "", checking: false, resend: { kind: "idle" } });
   }
 
   if (state.kind === "sent") {
@@ -245,6 +330,7 @@ export function SignInForm({
           tone="accent"
           disabled={busy}
           onClick={() => {
+            attempt.current += 1;
             clearPending();
             setState({ kind: "idle" });
           }}
