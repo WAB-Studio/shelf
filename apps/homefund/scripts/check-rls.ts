@@ -189,6 +189,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "c6c") {
+    await checkMemberAddress();
+    return;
+  }
+
   await checkRepivotPolicies();
   await checkLedgerPolicies();
   await checkAnalyticsAggregates();
@@ -245,6 +250,7 @@ async function main() {
   await checkAllowedEmailList();
   await checkAllowedEmailAudit();
   await checkAccountSubtypeWords();
+  await checkMemberAddress();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -10890,6 +10896,321 @@ async function checkAccountSubtypeWords() {
     labels.tail,
     afterUser === "postgres" && leftovers === 0,
     `current_user = ${afterUser}, accounts carrying this run's tag = ${leftovers}`,
+  );
+}
+
+// Assertions 367-379: migration 0060 (RF-150, RF-151). The leader of a fund asks the database whether
+// an address already belongs to a live member of that fund, and an archived invitation stops
+// holding the address. Every row replays the migration inside its own transaction and rolls back.
+//
+//   C6C_MIGRATION_FILE  a path to a SQL file installed instead of db/migrations/0060_*.sql, so a
+//                       mutation can be proved red without touching the shared database.
+async function c6cInstall(tx: M1Tx): Promise<void> {
+  const override = process.env.C6C_MIGRATION_FILE;
+  const dir = path.join(process.cwd(), "db", "migrations");
+  const found = readdirSync(dir).find((name) => /^0060_.*\.sql$/.test(name));
+  const file = override ?? (found ? path.join(dir, found) : null);
+  if (!file) throw new Error("db/migrations/0060_*.sql does not exist");
+  await tx.unsafe(`drop function if exists private.invite_email_is_member(text)`);
+  for (const statement of readFileSync(file, "utf8").split("--> statement-breakpoint")) {
+    if (statement.trim()) await tx.unsafe(statement);
+  }
+}
+
+async function c6cRows(labels: string[], body: (tx: M1Tx) => Promise<M1Verdict[]>): Promise<void> {
+  await m1Rows(labels, body);
+}
+
+type C6cFund = {
+  leader: string;
+  member: string;
+  archived: string;
+  stranger: string;
+  loner: string;
+  leaderOfOther: string;
+  groupId: string;
+  otherGroupId: string;
+  addr: Record<string, string>;
+};
+
+// A fund with a leader, a plain member and an archived member who each have a login, a pending
+// invitation, and a second fund with its own leader and member. Stored addresses carry case and
+// spaces on purpose; the people asked about are typed differently.
+async function c6cFund(tx: M1Tx, tag: string): Promise<C6cFund> {
+  const ids = { leader: randomUUID(), member: randomUUID(), archived: randomUUID(), stranger: randomUUID(), loner: randomUUID(), leaderOfOther: randomUUID() };
+  const addr = {
+    leader: `lead.${tag}@example.com`,
+    member: `mem.${tag}@example.com`,
+    archived: `gone.${tag}@example.com`,
+    stranger: `other.${tag}@example.com`,
+    loner: `loner.${tag}@example.com`,
+    pending: `pend.${tag}@example.com`,
+    unknown: `nobody.${tag}@example.com`,
+  };
+  await tx`insert into auth.users (id, email) values
+    (${ids.leader}, ${addr.leader}),
+    (${ids.member}, ${" Mem." + tag + "@Example.COM "}),
+    (${ids.archived}, ${addr.archived}),
+    (${ids.stranger}, ${addr.stranger}),
+    (${ids.loner}, ${addr.loner}),
+    (${ids.leaderOfOther}, ${"lead2." + tag + "@example.com"})`;
+  await tx`insert into app_users (id) values (${ids.leader}), (${ids.member}), (${ids.archived}), (${ids.stranger}), (${ids.loner}), (${ids.leaderOfOther})`;
+  const groupId = randomUUID();
+  const otherGroupId = randomUUID();
+  await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls c6c', 'shared'), (${otherGroupId}, 'rls c6c other', 'shared')`;
+  await tx`insert into group_members (group_id, user_id, name, role) values
+    (${groupId}, ${ids.leader}, 'rls c6c leader', 'leader'),
+    (${groupId}, ${ids.member}, 'rls c6c member', 'member'),
+    (${otherGroupId}, ${ids.leaderOfOther}, 'rls c6c other leader', 'leader'),
+    (${otherGroupId}, ${ids.stranger}, 'rls c6c other member', 'member')`;
+  await tx`insert into group_members (group_id, user_id, name, role, archived_at) values
+    (${groupId}, ${ids.archived}, 'rls c6c archived', 'member', now())`;
+  await tx`insert into group_members (group_id, name, role, invite_email) values
+    (${groupId}, 'rls c6c pending', 'member', ${addr.pending})`;
+  return { ...ids, groupId, otherGroupId, addr };
+}
+
+// What `private.invite_email_is_member` answers to a signed-in caller; a sqlstate when it refuses.
+async function c6cAsk(tx: M1Tx, caller: string, email: string): Promise<boolean | string> {
+  await enterUserContext(tx, caller);
+  try {
+    return await tx.savepoint(async (sp) => {
+      const [{ r }] = await (sp as unknown as M1Tx)<{ r: boolean | null }[]>`select private.invite_email_is_member(${email}) as r`;
+      return r as boolean;
+    });
+  } catch (error) {
+    return pgErrorCode(error) ?? "none";
+  } finally {
+    await tx`reset role`;
+  }
+}
+
+async function c6cRefusal(tx: M1Tx, run: (sp: M1Tx) => Promise<unknown>): Promise<{ code: string | null; constraint: string | null }> {
+  try {
+    await tx.savepoint(async (sp) => {
+      await run(sp as unknown as M1Tx);
+    });
+    return { code: null, constraint: null };
+  } catch (error) {
+    return { code: pgErrorCode(error) ?? "none", constraint: (error as { constraint_name?: string }).constraint_name ?? null };
+  }
+}
+
+async function checkMemberAddress() {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const labels = {
+    found: "367. the leader learns that an address is a live member of the fund, however it is cased or spaced, and that an unknown one is not",
+    own: "368. the leader's own address is a live member of the fund",
+    pending: "369. a pending invitation's address is not a member",
+    archived: "370. an archived member's address is not a live member",
+    otherFund: "371. a live member of another fund is never looked at",
+    memberCaller: "372. a plain member of the same fund learns nothing",
+    noFund: "373. a caller with no fund, and a leader whose own row is archived, learn nothing",
+    grants: "374. the function is a stable definer with a fixed search path; authenticated may execute it, anon, service_role and PUBLIC may not",
+    unauthenticated: "375. anon and service_role are refused when they call it",
+    archivedFree: "376. an archived pending invitation no longer holds its address; a new one lands and the archived row is untouched",
+    twoLive: "377. a second live pending invitation to the same address is still refused, in any case, and another fund may hold it",
+    restore: "378. restoring the archived invitation while a live one holds the address is a 23505 on group_members_group_invite_email_unique",
+    claim: "379. signing in with an archived and a live invitation to the address claims the live one",
+    live: "380. the live database carries the function and the narrowed index",
+  };
+
+  await c6cRows([labels.found], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const lower = await c6cAsk(tx, f.leader, f.addr.member);
+    const shouted = await c6cAsk(tx, f.leader, `  MEM.${tag.toUpperCase()}@EXAMPLE.COM `);
+    const unknown = await c6cAsk(tx, f.leader, f.addr.unknown);
+    return [{ ok: lower === true && shouted === true && unknown === false, detail: `lower-case ask = ${lower}, shouted and spaced ask = ${shouted}, unknown address = ${unknown}` }];
+  });
+
+  await c6cRows([labels.own], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const own = await c6cAsk(tx, f.leader, `  ${f.addr.leader.toUpperCase()} `);
+    return [{ ok: own === true, detail: `the leader's own address = ${own}` }];
+  });
+
+  await c6cRows([labels.pending], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const pending = await c6cAsk(tx, f.leader, f.addr.pending);
+    const folded = await c6cAsk(tx, f.leader, f.addr.pending.toUpperCase());
+    return [{ ok: pending === false && folded === false, detail: `pending address = ${pending}, folded = ${folded}` }];
+  });
+
+  await c6cRows([labels.archived], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const archived = await c6cAsk(tx, f.leader, f.addr.archived);
+    return [{ ok: archived === false, detail: `archived member's address = ${archived}` }];
+  });
+
+  await c6cRows([labels.otherFund], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const other = await c6cAsk(tx, f.leader, f.addr.stranger);
+    const reverse = await c6cAsk(tx, f.leaderOfOther, f.addr.member);
+    return [{ ok: other === false && reverse === false, detail: `another fund's member asked by this leader = ${other}, this fund's member asked by the other leader = ${reverse}` }];
+  });
+
+  await c6cRows([labels.memberCaller], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const asMember = await c6cAsk(tx, f.member, f.addr.leader);
+    const ownAddress = await c6cAsk(tx, f.member, f.addr.member);
+    return [{ ok: asMember === false && ownAddress === false, detail: `plain member asks about the leader = ${asMember}, about itself = ${ownAddress}` }];
+  });
+
+  await c6cRows([labels.noFund], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const loner = await c6cAsk(tx, f.loner, f.addr.leader);
+    const aboutSelf = await c6cAsk(tx, f.loner, f.addr.loner);
+    await tx`update group_members set archived_at = now() where group_id = ${f.groupId} and user_id = ${f.leader}`;
+    const demoted = await c6cAsk(tx, f.leader, f.addr.member);
+    return [{ ok: loner === false && aboutSelf === false && demoted === false, detail: `no fund asks = ${loner}, asks about itself = ${aboutSelf}, archived leader asks = ${demoted}` }];
+  });
+
+  await c6cRows([labels.grants], async (tx) => {
+    await c6cInstall(tx);
+    const [fn] = await tx<{ definer: boolean; stable: boolean; fixed_path: boolean; returns: string }[]>`
+      select p.prosecdef as definer, p.provolatile = 's' as stable,
+        coalesce('search_path=""' = any (p.proconfig), false) as fixed_path,
+        p.prorettype::regtype::text as returns
+      from pg_proc p where p.oid = 'private.invite_email_is_member(text)'::regprocedure`;
+    const [acl] = await tx<{ authenticated: boolean; anon: boolean; service: boolean; pub: boolean }[]>`
+      select has_function_privilege('authenticated', 'private.invite_email_is_member(text)', 'execute') as authenticated,
+        has_function_privilege('anon', 'private.invite_email_is_member(text)', 'execute') as anon,
+        has_function_privilege('service_role', 'private.invite_email_is_member(text)', 'execute') as service,
+        has_function_privilege(0, 'private.invite_email_is_member(text)', 'execute') as pub`;
+    const routine = await tx<{ grantee: string }[]>`
+      select grantee from information_schema.routine_privileges
+      where routine_schema = 'private' and routine_name = 'invite_email_is_member' and privilege_type = 'EXECUTE'
+        and grantee in ('authenticated', 'anon', 'service_role', 'PUBLIC')`;
+    const grantees = routine.map((r) => r.grantee).sort();
+    return [
+      {
+        ok: fn.definer && fn.stable && fn.fixed_path && fn.returns === "boolean" && acl.authenticated && !acl.anon && !acl.service && !acl.pub && grantees.length === 1 && grantees[0] === "authenticated",
+        detail: `definer = ${fn.definer}, stable = ${fn.stable}, search_path fixed = ${fn.fixed_path}, returns ${fn.returns}; execute authenticated = ${acl.authenticated}, anon = ${acl.anon}, service_role = ${acl.service}, PUBLIC = ${acl.pub}; routine_privileges grantees = ${JSON.stringify(grantees)}`,
+      },
+    ];
+  });
+
+  await c6cRows([labels.unauthenticated], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const verdict: string[] = [];
+    let closed = true;
+    for (const role of ["anon", "service_role"] as const) {
+      await m1Become(tx, role, f.leader);
+      const code = await m1Refusal(tx, (sp) => sp`select private.invite_email_is_member(${f.addr.member})`);
+      await tx`reset role`;
+      verdict.push(`${role} = ${code ?? "accepted"}`);
+      if (code !== "42501") closed = false;
+    }
+    return [{ ok: closed, detail: verdict.join(", ") }];
+  });
+
+  await c6cRows([labels.archivedFree], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const x = f.addr.pending;
+    await tx`update group_members set archived_at = now() - interval '1 day' where group_id = ${f.groupId} and invite_email = ${x}`;
+    const [before] = await tx<{ id: string; archived_at: string; invite_email: string }[]>`
+      select id, archived_at::text, invite_email from group_members where group_id = ${f.groupId} and invite_email = ${x}`;
+    await enterUserContext(tx, f.leader);
+    const again = await c6cRefusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+      values (${f.groupId}, 'rls c6c reinvited', 'member', ${x.toUpperCase()})`);
+    await tx`reset role`;
+    const rows = await tx<{ id: string; archived_at: string | null; invite_email: string }[]>`
+      select id, archived_at::text, invite_email from group_members
+      where group_id = ${f.groupId} and lower(invite_email) = ${x} order by created_at, id`;
+    const live = rows.filter((r) => r.archived_at === null);
+    const old = rows.find((r) => r.id === before.id);
+    return [
+      {
+        ok: again.code === null && rows.length === 2 && live.length === 1 && old?.archived_at === before.archived_at && old?.invite_email === before.invite_email,
+        detail: `second invitation = ${again.code ?? "accepted"}, rows = ${rows.length}, live = ${live.length}, archived row unchanged = ${old?.archived_at === before.archived_at}`,
+      },
+    ];
+  });
+
+  await c6cRows([labels.twoLive], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    await enterUserContext(tx, f.leader);
+    const same = await c6cRefusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+      values (${f.groupId}, 'rls c6c twice', 'member', ${f.addr.pending})`);
+    const folded = await c6cRefusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+      values (${f.groupId}, 'rls c6c twice folded', 'member', ${f.addr.pending.toUpperCase()})`);
+    await tx`reset role`;
+    await enterUserContext(tx, f.leaderOfOther);
+    const elsewhere = await c6cRefusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+      values (${f.otherGroupId}, 'rls c6c elsewhere', 'member', ${f.addr.pending})`);
+    await tx`reset role`;
+    return [
+      {
+        ok: same.code === "23505" && folded.code === "23505" && same.constraint === "group_members_group_invite_email_unique" && elsewhere.code === null,
+        detail: `same address = ${same.code ?? "accepted"} (${same.constraint}), other case = ${folded.code ?? "accepted"}, another fund = ${elsewhere.code ?? "accepted"}`,
+      },
+    ];
+  });
+
+  await c6cRows([labels.restore], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const x = f.addr.pending;
+    await tx`update group_members set archived_at = now() where group_id = ${f.groupId} and invite_email = ${x}`;
+    await tx`insert into group_members (group_id, name, role, invite_email) values (${f.groupId}, 'rls c6c live twin', 'member', ${x})`;
+    await enterUserContext(tx, f.leader);
+    const restored = await c6cRefusal(tx, (sp) => sp`
+      update group_members set archived_at = null where group_id = ${f.groupId} and invite_email = ${x} and archived_at is not null`);
+    await tx`reset role`;
+    return [
+      {
+        ok: restored.code === "23505" && restored.constraint === "group_members_group_invite_email_unique",
+        detail: `restore = ${restored.code ?? "accepted"} on ${restored.constraint}`,
+      },
+    ];
+  });
+
+  await c6cRows([labels.claim], async (tx) => {
+    await c6cInstall(tx);
+    const f = await c6cFund(tx, tag);
+    const x = `claim.${tag}@example.com`;
+    const claimer = randomUUID();
+    await tx`insert into auth.users (id, email) values (${claimer}, ${x})`;
+    await tx`insert into app_users (id) values (${claimer})`;
+    const [dead] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role, invite_email, archived_at)
+      values (${f.groupId}, 'rls c6c old invitation', 'member', ${x}, now() - interval '2 days') returning id`;
+    const [live] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role, invite_email) values (${f.groupId}, 'rls c6c new invitation', 'member', ${x}) returning id`;
+    await enterUserContext(tx, claimer, x);
+    const [{ id }] = await tx<{ id: string | null }[]>`select private.claim_group_invite() as id`;
+    await tx`reset role`;
+    const rows = await tx<{ id: string; user_id: string | null }[]>`select id, user_id from group_members where id in (${dead.id}, ${live.id})`;
+    const claimedLive = rows.find((r) => r.id === live.id)?.user_id === claimer;
+    const deadUntouched = rows.find((r) => r.id === dead.id)?.user_id === null;
+    return [
+      {
+        ok: id === live.id && claimedLive && deadUntouched,
+        detail: `claimed = ${id === live.id ? "the live row" : id}, live row holds the user = ${claimedLive}, archived row untouched = ${deadUntouched}`,
+      },
+    ];
+  });
+
+  // No replay here: the database the app runs against must itself carry the migration.
+  const [state] = await sql<{ fn: string | null; def: string | null }[]>`
+    select to_regprocedure('private.invite_email_is_member(text)')::text as fn,
+      (select indexdef from pg_indexes where schemaname = 'finances' and indexname = 'group_members_group_invite_email_unique') as def`;
+  const def = (state.def ?? "").toLowerCase();
+  assert(
+    labels.live,
+    state.fn !== null && def.includes("archived_at is null") && def.includes("invite_email is not null") && def.includes("unique"),
+    `function = ${state.fn ?? "absent"}, index = ${state.def ?? "absent"}`,
   );
 }
 
