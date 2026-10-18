@@ -32,6 +32,9 @@ const W = {
   timedOut: "No sabemos si se envió. Revisa tu correo antes de pedir otro.",
   timedOutCheck: "No sabemos si se comprobó el código. Espera un momento antes de escribirlo otra vez.",
   rate: "Demasiados intentos. Prueba de nuevo en unos minutos.",
+  codeInvalid: "Ese código no vale o ya venció.",
+  notInvited: "Este correo no tiene invitación a GoalLog.",
+  offlineCheck: "Sin conexión. No se pudo comprobar el código.",
 };
 
 const PENDING_KEY = "goallog.pending-sign-in";
@@ -90,6 +93,7 @@ type Held = {
   body: string;
   proceed(): Promise<void>;
   answer(result: { ok: false; error: string }): Promise<void>;
+  abort(): Promise<void>;
 };
 
 function holdActions(page: Page): Promise<Held[]> {
@@ -118,6 +122,7 @@ function holdActions(page: Page): Promise<Held[]> {
               ].join("\n"),
             }),
           )(),
+        abort: used((r) => r.abort()),
       } as Held);
       await (
         await turn
@@ -480,12 +485,214 @@ test("Cancelled · resend: after «Usar otro correo» the released resend does n
   }
 });
 
-test("Late refusal dropped: a resend answered «rateLimited» after the timeout leaves the timeout sentence alone", async ({
+// A check held and timed out: the field's hint reads the check timeout.
+async function timeOutCheck(page: Page, held: Held[], code = "123456") {
+  await codeField(page).fill(code);
+  await enterButton(page).click();
+  await heldCount(held, 1);
+  await page.clock.fastForward(AFTER);
+  await expect(page.getByText(W.timedOutCheck, { exact: true })).toBeVisible();
+}
+
+async function expectLateCheckRefusal(page: Page, words: string) {
+  await expect(page.getByText(words, { exact: true })).toBeVisible();
+  await expect(page.getByText(W.timedOutCheck, { exact: true })).toHaveCount(0);
+  await expect(codeField(page)).toHaveValue("123456");
+  await expect(codeField(page)).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("button", { name: W.checking, exact: true })).toHaveCount(0);
+  await expectCodeStepUsable(page);
+  await expectNoOverflow(page);
+}
+
+test("Refused late · check, wrong code: released «codeInvalid» after the timeout, the field's hint reads it in the timeout's place, the code kept, at 360", async ({
   browser,
   baseURL,
   db,
 }) => {
-  // Kills: applying late refusals (a second sentence replaces or joins the first).
+  // Kills: dropping late refusals (the timeout sentence stays for good).
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const held = await holdActions(page);
+    try {
+      await timeOutCheck(page, held);
+      await held[0].answer({ ok: false, error: "codeInvalid" });
+      await expectLateCheckRefusal(page, W.codeInvalid);
+    } finally {
+      await drain(held);
+    }
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Refused late · check, too many: released «rateLimited» reads its own words on the field, not the wrong-code ones, at 360", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: mapping every late refusal to one key.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const held = await holdActions(page);
+    try {
+      await timeOutCheck(page, held);
+      await held[0].answer({ ok: false, error: "rateLimited" });
+      await expectLateCheckRefusal(page, W.rate);
+      await expect(page.getByText(W.codeInvalid, { exact: true })).toHaveCount(0);
+    } finally {
+      await drain(held);
+    }
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Refused late · resend: «rateLimited» released after the timeout is the one alert, the timeout sentence gone, the countdown still the first send's, the typed code kept, at 360", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: appending the refusal beside the sentence (two alerts), `at` moved, the code cleared.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const before = await pendingRaw(page);
+    await codeField(page).fill("123456");
+    const held = await holdActions(page);
+    try {
+      await startResend(page, held);
+      await page.clock.fastForward(AFTER);
+      await expect(page.getByRole("alert").filter({ hasText: W.timedOut })).toBeVisible();
+      await held[0].answer({ ok: false, error: "rateLimited" });
+      await expect(page.getByRole("alert").filter({ hasText: W.rate })).toBeVisible();
+      await expect(page.getByText(W.timedOut)).toHaveCount(0);
+      await expect(page.getByRole("alert").filter({ hasText: /^(Demasiados|No sabemos)/ })).toHaveCount(1);
+      await expect(resendButton(page)).toHaveText(W.resend);
+      await expect(resendButton(page)).toBeEnabled();
+      await expect(codeField(page)).toHaveValue("123456");
+      expect(await pendingRaw(page)).toBe(before);
+      await expect(page.getByText(W.resent(email))).toHaveCount(0);
+      await expectCodeStepUsable(page);
+      await expectNoOverflow(page);
+    } finally {
+      await drain(held);
+    }
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Refused late · send: «notInvited» released after the timeout reads on the address field, the address kept, «Enviar código» enabled, no pending record, at 360", async ({
+  browser,
+  baseURL,
+}) => {
+  // Kills: applying late refusals on resend and check only.
+  const email = invitee();
+  const { context, page } = await open(browser, baseURL!);
+  const held = await holdActions(page);
+  try {
+    await startSend(page, email);
+    await heldCount(held, 1);
+    await page.clock.fastForward(AFTER);
+    await expect(page.getByText(W.timedOut, { exact: true })).toBeVisible();
+    await held[0].answer({ ok: false, error: "notInvited" });
+    await expect(page.getByText(W.notInvited, { exact: true })).toBeVisible();
+    await expect(page.getByText(W.timedOut, { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel(W.emailLabel)).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByLabel(W.emailLabel)).toHaveValue(email);
+    await expect(page.getByRole("button", { name: W.send, exact: true })).toBeEnabled();
+    await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toHaveCount(0);
+    expect(await pendingRaw(page)).toBeNull();
+    await expectNoOverflow(page);
+  } finally {
+    await drain(held);
+    await context.close();
+  }
+});
+
+test("Cancelled · typed since: the check timed out, one digit is typed, then «codeInvalid» is released: no hint on the field", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: applying whenever newest, ignoring that the timeout sentence is no longer shown.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const held = await holdActions(page);
+    try {
+      await timeOutCheck(page, held);
+      await codeField(page).fill("12345");
+      await expect(page.getByText(W.timedOutCheck, { exact: true })).toHaveCount(0);
+      await held[0].answer({ ok: false, error: "codeInvalid" });
+      await lateAnswerGrace(page);
+      await expect(page.getByText(W.codeInvalid, { exact: true })).toHaveCount(0);
+      await expect(codeField(page)).toHaveValue("12345");
+      await expect(codeField(page)).not.toHaveAttribute("aria-invalid", "true");
+    } finally {
+      await drain(held);
+    }
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Cancelled · newer attempt: the first check timed out, a second «Entrar» is held and times out in turn; the first released «codeInvalid» leaves the second's timeout sentence and no hint", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: dropping the attempt tag in handleVerify (the stale refusal lands on the second attempt).
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const held = await holdActions(page);
+    try {
+      await timeOutCheck(page, held);
+      await codeField(page).fill("654321");
+      await enterButton(page).click();
+      // Next runs one action at a time: the second check waits behind the first, which is still held.
+      await page.getByRole("button", { name: W.checking, exact: true }).waitFor();
+      await expect(page.getByText(W.timedOutCheck, { exact: true })).toHaveCount(0);
+      // The second attempt times out too: the sentence on screen is now the second's, and only it may give way.
+      await page.clock.fastForward(AFTER);
+      await expect(page.getByText(W.timedOutCheck, { exact: true })).toBeVisible();
+      await held[0].answer({ ok: false, error: "codeInvalid" });
+      await lateAnswerGrace(page);
+      await expect(page.getByText(W.timedOutCheck, { exact: true })).toBeVisible();
+      await expect(page.getByText(W.codeInvalid, { exact: true })).toHaveCount(0);
+      await expect(codeField(page)).toHaveValue("654321");
+    } finally {
+      await drain(held);
+    }
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Cancelled · left the step: the resend timed out, «Usar otro correo», then «rateLimited» is released: the address step, no alert", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: applying a late refusal after the attempt bump of «Usar otro correo».
   const email = invitee();
   await listAddress(db, email);
   const { context, page } = await open(browser, baseURL!);
@@ -496,11 +703,73 @@ test("Late refusal dropped: a resend answered «rateLimited» after the timeout 
       await startResend(page, held);
       await page.clock.fastForward(AFTER);
       await expect(page.getByRole("alert").filter({ hasText: W.timedOut })).toBeVisible();
+      await otherButton(page).click();
+      await expect(page.getByLabel(W.emailLabel)).toBeVisible();
       await held[0].answer({ ok: false, error: "rateLimited" });
       await lateAnswerGrace(page);
-      await expect(page.getByRole("alert").filter({ hasText: W.timedOut })).toBeVisible();
+      await expect(page.getByLabel(W.emailLabel)).toBeVisible();
+      await expect(codeField(page)).toHaveCount(0);
       await expect(page.getByText(W.rate)).toHaveCount(0);
-      await expect(page.getByRole("alert").filter({ hasText: /^(Demasiados|No sabemos)/ })).toHaveCount(1);
+      await expect(page.getByRole("alert").filter({ hasText: /^(Demasiados|No sabemos)/ })).toHaveCount(0);
+    } finally {
+      await drain(held);
+    }
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Unknown stays unknown: the check timed out and its POST is aborted; the timeout sentence stays", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: treating a late rejection as «Sin conexión» (offlineCheck) or as a refusal.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const held = await holdActions(page);
+    try {
+      await timeOutCheck(page, held);
+      await held[0].abort();
+      await lateAnswerGrace(page);
+      await expect(page.getByText(W.timedOutCheck, { exact: true })).toBeVisible();
+      await expect(page.getByText(W.offlineCheck, { exact: true })).toHaveCount(0);
+      await expect(codeField(page)).toHaveValue("123456");
+    } finally {
+      await drain(held);
+    }
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Record kept: after the late «codeInvalid» the pending record still holds the address and a reload reopens the code step", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: clearing the pending record on a late refusal.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const before = await pendingRaw(page);
+    const held = await holdActions(page);
+    try {
+      await timeOutCheck(page, held);
+      await held[0].answer({ ok: false, error: "codeInvalid" });
+      await expect(page.getByText(W.codeInvalid, { exact: true })).toBeVisible();
+      expect(JSON.parse((await pendingRaw(page))!).email).toBe(email);
+      expect(await pendingRaw(page)).toBe(before);
+      await page.reload();
+      await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
+      await expect(page.getByText(W.sentBody(email), { exact: true })).toBeVisible();
     } finally {
       await drain(held);
     }
