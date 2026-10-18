@@ -276,7 +276,8 @@ test("register, approve, exchange, list, refresh, revoke", async () => {
   assert.equal(await listStatus(second.access), 401);
 });
 
-test("the same code twice answers invalid_grant and revokes what the first issued", async () => {
+// Inside 30 s the second exchange is a retry and spares the first token; past it, a replay and revokes (Q22 a).
+test("the same code twice answers invalid_grant and spares the first token; past 30 s it revokes", async () => {
   const verifier = newVerifier();
   const code = await approve(verifier);
   const first = await exchange(code, verifier);
@@ -284,6 +285,14 @@ test("the same code twice answers invalid_grant and revokes what the first issue
   const { access } = remember(first.body);
   assert.equal(await listStatus(access), 200);
 
+  const retry = await exchange(code, verifier);
+  assert.equal(retry.status, 400);
+  assert.deepEqual(retry.body, { error: "invalid_grant" });
+  assert.equal(await listStatus(access), 200, "the retry killed the first token");
+
+  const aged = await admin`update goals.oauth_codes set used_at = now() - interval '31 seconds'
+    where code_hash = ${fingerprint(code)} returning id`;
+  assert.equal(aged.length, 1, "no code row to age");
   const replay = await exchange(code, verifier);
   assert.equal(replay.status, 400);
   assert.deepEqual(replay.body, { error: "invalid_grant" });

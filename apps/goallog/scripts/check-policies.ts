@@ -1913,12 +1913,16 @@ async function checkAiDoor(): Promise<void> {
       const refresh1 = sha256();
       const once = await exchange(code, { access: access1, refresh: refresh1 });
       assert("P155", once === subject && (await resolves(access1)), `the matching code yields the person, got ${once}`);
+      // Inside 30 s a second redemption is a retry and spares; past it, a replay and revokes (Q22 a).
       const access1b = sha256();
       const twice = await exchange(code, { access: access1b });
+      const spared = (await resolves(access1)) && !(await resolves(access1b));
+      await tx`update goals.oauth_codes set used_at = now() - interval '31 seconds' where code_hash = ${code}`;
+      const late = await exchange(code, { access: sha256() });
       assert(
         "P156",
-        twice === null && !(await resolves(access1)) && !(await resolves(access1b)),
-        `a second redemption yields ${twice}, the connection it produced still resolves = ${await resolves(access1)}`,
+        twice === null && spared && late === null && !(await resolves(access1)),
+        `a second redemption yields ${twice} and spares = ${spared}; past 30 s yields ${late}, the connection still resolves = ${await resolves(access1)}`,
       );
       const stale2 = await newCode(true);
       const expiredToken = sha256();
@@ -1945,7 +1949,14 @@ async function checkAiDoor(): Promise<void> {
         `a refresh rotates once: wrong client ${wrongClient}, rotated ${rotated}, old key still resolves = ${await resolves(access2)}`,
       );
       const replay = await rotate(refreshA, sha256(), sha256());
-      assert("P159", replay === null && !(await resolves(access3)), `a reused refresh yields ${replay}, the connection still resolves = ${await resolves(access3)}`);
+      const kept = await resolves(access3);
+      await tx`update goals.oauth_refresh set used_at = now() - interval '31 seconds' where refresh_hash = ${refreshA}`;
+      const lateReplay = await rotate(refreshA, sha256(), sha256());
+      assert(
+        "P159",
+        replay === null && kept && lateReplay === null && !(await resolves(access3)),
+        `a reused refresh yields ${replay} and keeps = ${kept}; past 30 s yields ${lateReplay}, the connection still resolves = ${await resolves(access3)}`,
+      );
 
       throw forcedRollback;
     })
