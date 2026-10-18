@@ -11,6 +11,8 @@
   "errors": {
     "offline": "Sin conexión. No se pudo enviar el código.",
     "offlineCheck": "Sin conexión. No se pudo comprobar el código.",
+    "timedOut": "No sabemos si se envió. Revisa tu correo antes de pedir otro.",
+    "timedOutCheck": "No sabemos si se comprobó el código. Espera un momento antes de escribirlo otra vez.",
     "emailInvalid": "Escribe un correo válido.",
     "notInvited": "Este correo no tiene invitación a GoalLog.",
     "domainUndeliverable": "Ese dominio no recibe correo.",
