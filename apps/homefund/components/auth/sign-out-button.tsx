@@ -6,10 +6,11 @@ import { useAction } from "next-safe-action/hooks";
 
 import { signOutAction } from "@/app/actions/auth";
 import { Box, Button, Text } from "@/components/ui";
+import { useActionErrorToast } from "@/lib/use-action-toast";
 
 export function SignOutButton() {
   const t = useTranslations("auth");
-  const { execute, isPending } = useAction(signOutAction);
+  const { execute, isPending } = useAction(signOutAction, { onError: useActionErrorToast() });
 
   return (
     <Button
