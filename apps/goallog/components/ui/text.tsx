@@ -7,9 +7,8 @@ import styles from "./text.module.css";
 // note, an empty state) in Archivo; `meta` stays for figures and dates only. `body` inherits the base step and only takes a tone.
 type Variant = "title" | "heading" | "name" | "meta" | "sentence" | "line" | "body";
 
-// docs/goallog/DESIGN.md "Tokens": `quiet` never carries a word a person must
-// read, so a screen reaching for it is asking for decoration, not a sentence.
-type Tone = "ink" | "secondary" | "muted" | "quiet" | "accent";
+// docs/goallog/DESIGN.md "Tokens": `quiet` draws strokes only, so no tone reaches it.
+type Tone = "ink" | "secondary" | "muted" | "accent";
 
 type PulsarTextProps = {
   variant?: Variant;
@@ -47,7 +46,6 @@ const tones: Record<Tone, string> = {
   ink: styles.ink,
   secondary: styles.secondary,
   muted: styles.muted,
-  quiet: styles.quiet,
   accent: styles.accent,
 };
 

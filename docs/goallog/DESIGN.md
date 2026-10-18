@@ -38,6 +38,7 @@ Light, the primary:
 | ink, secondary | `#333C45` |
 | muted | `#5E6874` |
 | quiet (strokes and decoration only) | `#8A939E` |
+| control edge (a field, a text area, an unselected chip; 3.11:1 on raised) | `#8A939E` |
 | accent | `#1C6E5A` |
 | accent, soft (the evidence mark's fill) | `#DCEAE5` |
 | today (Semana's today column from 1024; the phone keeps `raised`) | `#E3E8EE` |
@@ -55,6 +56,7 @@ Dark, the same design inverted:
 | ink, secondary | `#C3CBD3` |
 | muted | `#949EA9` |
 | quiet | `#5C666F` |
+| control edge (3.24:1 on raised `#161B20`, 3.49:1 on the ground) | `#626C77` |
 | accent | `#4FBEA0` |
 | accent, soft | `#17332C` |
 | today | `#1E252C` |

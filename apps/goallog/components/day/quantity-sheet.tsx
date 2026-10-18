@@ -186,7 +186,7 @@ export function QuantitySheet({
         {/* The heading stays neutral; a unit inside it would need a gender.
             A time carries its own «h» and «min», so no word follows it. */}
         {isTimeUnit(unit) ? null : (
-          <Text variant="meta" tone="quiet">
+          <Text variant="meta" tone="muted">
             {unit}
           </Text>
         )}

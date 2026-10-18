@@ -20,7 +20,7 @@
   padding: 12px 14px;
   background: var(--pulsar-raised);
   color: var(--pulsar-ink);
-  border: 1.5px solid var(--pulsar-border);
+  border: 1.5px solid var(--pulsar-control-edge);
   border-radius: 10px;
   font-family: var(--font-sans);
   font-size: 14px;

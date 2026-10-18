@@ -7,7 +7,7 @@
   justify-content: center;
   gap: 6px;
   margin: 0;
-  border: 1px solid var(--pulsar-border);
+  border: 1px solid var(--pulsar-control-edge);
   border-radius: 10px;
   background: var(--pulsar-raised);
   color: var(--pulsar-ink-secondary);
@@ -32,7 +32,7 @@
   padding: 0 14px;
   border-radius: 20px;
   border-width: 1.5px;
-  border-color: var(--pulsar-border);
+  border-color: var(--pulsar-control-edge);
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 400;

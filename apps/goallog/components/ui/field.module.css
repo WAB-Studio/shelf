@@ -26,7 +26,7 @@
   --text-field-selection-color: var(--pulsar-accent-soft);
   background-color: var(--pulsar-raised);
   color: var(--pulsar-ink);
-  box-shadow: inset 0 0 0 1px var(--pulsar-border);
+  box-shadow: inset 0 0 0 1px var(--pulsar-control-edge);
   border-radius: 10px;
 }
 
