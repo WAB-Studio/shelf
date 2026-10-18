@@ -8076,6 +8076,127 @@ async function debtPaymentSuite(): Promise<void> {
       [...both2.data.paidLineIds].sort().join() === [seq.l1, seq.l2].sort().join(),
     `answer = ${JSON.stringify(both2)}, links ${JSON.stringify(seqLinks.map((l) => l.paid))}`,
   );
+
+  // M53: a card in credit owes nothing; it never adds to what the screen says is owed.
+  const holder = await createMembershipFreeUser();
+  const OWED = 50_000;
+  const OVERPAID = 50_000;
+  const USD_CREDIT = 3_000;
+  const openFor = async (
+    kind: "asset" | "liability",
+    name: string,
+    currency: "COP" | "USD",
+    amountMinor: number,
+  ) => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness m53 ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: currency,
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const transfer = async (fromAccountId: string, toAccountId: string, amountCents: number) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId,
+        toAccountId,
+        amountCents,
+        occurredAt: today,
+        description: `m53 ${tag}`,
+        externalRef: null,
+        splits: [],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  // A refund in dollars on a card that bills in pesos lands in the card's dollar pocket,
+  // as an estimate until the statement says what it settled for.
+  const refundInDollars = async (toAccountId: string, amountCents: number) => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({
+        scope: { ownerUserId: holder.id },
+        name: `Harness m53 refund ${tag}`,
+        kind: "income",
+        parentId: null,
+        color: "#B4542F",
+      }),
+    );
+    keep("categories", categoryId);
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: null,
+        toAccountId,
+        amountCents,
+        currency: "USD",
+        counterAmountCents: amountCents * 4_000,
+        counterIsEstimate: true,
+        occurredAt: today,
+        description: `m53 refund ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const screenOf = () => asUser(holder, () => getDebtsScreenData());
+  const owedOf = (screen: DebtsScreenData, accountId: string) =>
+    screen.withoutTerms.find((debt) => debt.accountId === accountId);
+  const setOf = (screen: DebtsScreenData, currency: string) =>
+    screen.totals.byCurrency.find((set) => set.currency === currency);
+
+  const copBank = await openFor("asset", "bank", "COP", 1_000_000_000);
+  const owing = await openFor("liability", "owing", "COP", OWED);
+  const credit = await openFor("liability", "credit", "COP", 0);
+  const mixed = await openFor("liability", "mixed", "COP", 0);
+
+  const beforeCredit = await screenOf();
+  await transfer(copBank, credit, OVERPAID);
+  await refundInDollars(mixed, USD_CREDIT);
+  const afterCredit = await screenOf();
+
+  assert(
+    next("A card overpaid by 50000 owes 0, and the peso total is what it was before the overpayment"),
+    owedOf(afterCredit, credit)?.owedCents === 0 &&
+      setOf(afterCredit, "COP")?.owedCents === setOf(beforeCredit, "COP")?.owedCents &&
+      setOf(afterCredit, "COP")?.owedCents === OWED &&
+      afterCredit.totals.owedCents === OWED,
+    `credit card owes ${owedOf(afterCredit, credit)?.owedCents}, peso set ${setOf(beforeCredit, "COP")?.owedCents} before and ${setOf(afterCredit, "COP")?.owedCents} after, flat ${afterCredit.totals.owedCents}, expected ${OWED}`,
+  );
+
+  assert(
+    next("A card owing 50000 owes 50000 beside a card in credit"),
+    owedOf(afterCredit, owing)?.owedCents === OWED,
+    `owing card owes ${owedOf(afterCredit, owing)?.owedCents}, expected ${OWED}`,
+  );
+
+  const usdPocket = owedOf(afterCredit, mixed)?.otherOwed.find((pocket) => pocket.currency === "USD");
+  assert(
+    next("A dollar pocket in credit on a peso card owes 0 and adds nothing to the dollar total"),
+    usdPocket?.owedCents === 0 && (setOf(afterCredit, "USD")?.owedCents ?? 0) === 0,
+    `dollar pocket owes ${usdPocket?.owedCents ?? "no pocket"}, dollar set owes ${setOf(afterCredit, "USD")?.owedCents ?? "no set"}`,
+  );
+
+  // The same relation from the other side: a debt in dollars is still counted in full.
+  const usdCard = await openFor("liability", "usd card", "USD", 4_000);
+  const withUsdDebt = await screenOf();
+  assert(
+    next("A dollar card owing 4000 adds 4000 to the dollar total while the pocket in credit adds 0"),
+    owedOf(withUsdDebt, usdCard)?.owedCents === 4_000 && setOf(withUsdDebt, "USD")?.owedCents === 4_000,
+    `dollar card owes ${owedOf(withUsdDebt, usdCard)?.owedCents}, dollar set owes ${setOf(withUsdDebt, "USD")?.owedCents}, expected 4000`,
+  );
 }
 
 // M74: a form ref resent with other figures is refused, never answered ok (RF-158).
