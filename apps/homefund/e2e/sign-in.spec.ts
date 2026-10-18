@@ -15,7 +15,10 @@
  * created it, and its rows are dropped after the file, so the census finds no
  * identity the registry does not know.
  */
+import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
+import { createServer, type AddressInfo } from "node:net";
+import path from "node:path";
 
 import { closeRun, openRun, runId } from "@repo/harness-registry";
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
@@ -858,6 +861,164 @@ test.describe("the login's words", () => {
       await expect(page.locator("main").getByRole("alert")).toHaveText(en.errors.linkOtherBrowser);
       await typeAndSend(page, email, en.auth);
       await expect(toastOf(page)).toHaveText(en.errors.notInvited);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+// RF-01, a link that Auth could not judge or that landed on a failure of ours: the person is told to open
+// the link again, never that it is invalid, and never meets a bare 500.
+const LINK_TIMEOUT_LINE = "No pudimos comprobar el enlace. Ábrelo otra vez desde el correo.";
+
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as AddressInfo;
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+test.describe("the link's landing when the answer is a timeout or the landing fails", () => {
+  let stalled: ChildProcess | undefined;
+  let stalledOrigin = "";
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    const port = await freePort();
+    stalledOrigin = `http://127.0.0.1:${port}`;
+    stalled = spawn(
+      process.execPath,
+      [path.resolve(process.cwd(), "../../node_modules/next/dist/bin/next"), "start", "-p", String(port)],
+      {
+        cwd: process.cwd(),
+        env: { ...process.env, NODE_OPTIONS: `--require ${path.resolve(process.cwd(), "e2e/support/stall-auth.cjs")}` },
+        stdio: "ignore",
+      },
+    );
+    await expect
+      .poll(async () => (await fetch(`${stalledOrigin}/es/login`).catch(() => null))?.status ?? 0, { timeout: 90_000 })
+      .toBe(200);
+  });
+
+  test.afterAll(() => {
+    stalled?.kill("SIGTERM");
+  });
+
+  test("the login says to open the link again, in Spanish and in English", async ({ browser, baseURL }) => {
+    // Kills: a login that does not know `linkTimeout`, and a catalogue without its line.
+    expect((messages.errors as Record<string, string>).linkTimeout).toBe(LINK_TIMEOUT_LINE);
+    expect((en.errors as Record<string, string>).linkTimeout?.length ?? 0).toBeGreaterThan(0);
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await page.goto("/es/login?error=linkTimeout");
+      await expect(page.locator("main").getByRole("alert")).toHaveText(LINK_TIMEOUT_LINE);
+      await expect(page.locator("main").getByRole("alert")).not.toHaveText(messages.errors.linkInvalid);
+      await page.goto("/en/login?error=linkTimeout");
+      await expect(page.locator("main").getByRole("alert")).toHaveText((en.errors as Record<string, string>).linkTimeout);
+    } finally {
+      await context.close();
+    }
+  });
+
+  for (const [how, token] of [
+    ["answers 504", "stall-504"],
+    ["is unreachable", "stall-refused"],
+  ] as const) {
+    test(`Auth ${how}: the link lands on the login with linkTimeout and its line, not linkInvalid`, async ({ browser }) => {
+      // Kills: a route that maps every Auth error to linkInvalid.
+      const { context, page } = await fresh(browser, stalledOrigin);
+      try {
+        const answer = await page.request.get(`/auth/confirm?token_hash=${token}-${stamp}&type=magiclink`, { maxRedirects: 0 });
+        expect(answer.status()).toBeGreaterThanOrEqual(300);
+        expect(answer.status()).toBeLessThan(400);
+        expect(new URL(answer.headers().location!).pathname + new URL(answer.headers().location!).search).toBe(
+          "/es/login?error=linkTimeout",
+        );
+
+        await page.goto(`/auth/confirm?token_hash=${token}-${stamp}&type=magiclink`);
+        await expect(page).toHaveURL(/\/es\/login\?error=linkTimeout$/);
+        await expect(page.locator("main").getByRole("alert")).toHaveText(LINK_TIMEOUT_LINE);
+        expect(await context.cookies()).not.toContainEqual(
+          expect.objectContaining({ name: expect.stringMatching(/auth-token/) }),
+        );
+      } finally {
+        await context.close();
+      }
+    });
+  }
+
+  test("a link Auth rejects, on the server that stalls other tokens, still lands on linkInvalid", async ({ browser }) => {
+    // Kills: a route that sends every failure to linkTimeout.
+    const { context, page } = await fresh(browser, stalledOrigin);
+    try {
+      await page.goto(`/auth/confirm?token_hash=${randomBytes(16).toString("hex")}&type=magiclink`);
+      await expect(page).toHaveURL(/\/es\/login\?error=linkInvalid$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveText(messages.errors.linkInvalid);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("an invalid hash lands on the login with linkInvalid and its line", async ({ browser, baseURL }) => {
+    // Kills: a timeout split that sends a rejection Auth completed to linkTimeout.
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await page.goto(`/auth/confirm?token_hash=${randomBytes(16).toString("hex")}&type=magiclink`);
+      await expect(page).toHaveURL(/\/es\/login\?error=linkInvalid$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveText(messages.errors.linkInvalid);
+      expect(await context.cookies()).not.toContainEqual(
+        expect.objectContaining({ name: expect.stringMatching(/auth-token/) }),
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("the landing throws after Auth verified: the answer is the linkTimeout landing, not a 500", async ({ browser, baseURL }) => {
+    // Kills: a route with no try around the landing.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, baseURL!);
+    let constraint = "";
+    try {
+      await requestLink(page, email);
+      const confirm = await confirmPath(email);
+      const userId = await userIdOf(email);
+      // Refuses this one user's `app_users` row and nobody else's: the landing's insert throws.
+      constraint = `m40_refuse_${stamp}_${serial}`;
+      await fixtureSql.unsafe(
+        `alter table finances.app_users add constraint ${constraint} check (id <> '${userId}'::uuid) not valid`,
+      );
+
+      const answer = await page.request.get(confirm, { maxRedirects: 0 });
+      expect(answer.status(), "a bare 500 is the failure").toBeGreaterThanOrEqual(300);
+      expect(answer.status()).toBeLessThan(400);
+      const location = new URL(answer.headers().location!);
+      expect(location.pathname + location.search).toBe("/es/login?error=linkTimeout");
+
+      await page.goto("/es/login?error=linkTimeout");
+      await expect(page.locator("main").getByRole("alert")).toHaveText(LINK_TIMEOUT_LINE);
+    } finally {
+      if (constraint) await fixtureSql.unsafe(`alter table finances.app_users drop constraint if exists ${constraint}`);
+      await context.close();
+    }
+  });
+
+  test("a good link still lands on the home page, signed in, with no notice", async ({ browser, baseURL }) => {
+    // Kills: a try that sends a landing that works to the login.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await requestLink(page, email);
+      await page.goto(await confirmPath(email));
+      await expect(page).toHaveURL(/\/es$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
+      expect(await context.cookies()).toContainEqual(expect.objectContaining({ name: expect.stringMatching(/auth-token/) }));
     } finally {
       await context.close();
     }

@@ -1,5 +1,6 @@
 import { hasLocale } from "next-intl";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { routing } from "@/i18n/routing";
@@ -23,7 +24,9 @@ const confirmSchema = z
   })
   .refine((query) => query.code !== undefined || (query.token_hash !== undefined && query.type !== undefined));
 
-type LinkFailure = "linkInvalid" | "linkOtherBrowser";
+// `linkTimeout` is Auth or the landing not answering: the token's fate is unknown,
+// so the person is told to open the link again, not to ask for a new one.
+type LinkFailure = "linkInvalid" | "linkOtherBrowser" | "linkTimeout";
 
 function applyHeaders(response: NextResponse, headers: Headers): NextResponse {
   headers.forEach((value, name) => response.headers.set(name, value));
@@ -79,10 +82,20 @@ export async function GET(request: NextRequest) {
 
   if (error || !data.user) {
     console.error("magic link verification failed", error);
-    return invalidLink(request, fallbackLocale, authHeaders);
+    const reason = isAuthRetryableFetchError(error) ? "linkTimeout" : "linkInvalid";
+    return invalidLink(request, fallbackLocale, authHeaders, reason);
   }
 
-  const { target, locale } = await landSession({ user: data.user, fallbackLocale });
+  let landed: Awaited<ReturnType<typeof landSession>>;
+  try {
+    landed = await landSession({ user: data.user, fallbackLocale });
+  } catch (landingError) {
+    console.error("magic link landing failed", landingError);
+    // A session left in place sends the login on to the app and the line never shows.
+    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+    return invalidLink(request, fallbackLocale, authHeaders, "linkTimeout");
+  }
+  const { target, locale } = landed;
 
   const response = applyHeaders(
     NextResponse.redirect(new URL(target, request.url)),
