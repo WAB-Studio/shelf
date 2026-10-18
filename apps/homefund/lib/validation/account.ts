@@ -3,6 +3,7 @@ import { z } from "zod";
 import { currencySchema, type CurrencyCode } from "@/lib/currency";
 import { isCivilDate, todayInBogota } from "@/lib/dates";
 import { maxAmountMinor, parseAmount } from "@/lib/money";
+import { POSTGRES_TIMESTAMPTZ_TEXT } from "@/lib/validation/transaction";
 
 // The list the screens and both sides of validation read for an account's kind (RF-09).
 export const ACCOUNT_KINDS = ["asset", "liability"] as const;
@@ -159,6 +160,11 @@ export const updateAccountSchema = z
     settlementCurrency: accountCurrencySchema,
     amount: accountAmountSchema,
     balanceOn: accountBalanceOnSchema,
+    // The stamp the form loaded the row with; a save after someone else's is refused stale.
+    expectedUpdatedAt: z
+      .string()
+      .regex(POSTGRES_TIMESTAMPTZ_TEXT, { error: "errors.unexpected" })
+      .optional(),
   })
   .superRefine(requireSubtypeUnderKind)
   .superRefine(requireAmountInCurrency);

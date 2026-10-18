@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { BASE_CURRENCY } from "@/lib/currency";
 import { isCivilDate } from "@/lib/dates";
+import { POSTGRES_TIMESTAMPTZ_TEXT } from "@/lib/validation/transaction";
 import {
   accountRefSchema,
   anyCurrencyAmountSchema,
@@ -111,6 +112,11 @@ export const updatePlannedPaymentSchema = z
   .object({
     plannedPaymentId: z.uuid({ error: "plannedPayments.errors.plannedPaymentInvalid" }),
     ...plannedPaymentFields,
+    // The stamp the form loaded the row with; a save after someone else's is refused stale.
+    expectedUpdatedAt: z
+      .string()
+      .regex(POSTGRES_TIMESTAMPTZ_TEXT, { error: "errors.unexpected" })
+      .optional(),
   })
   .superRefine(requireAnAccount)
   .superRefine(requireRemindOnBeforeDue);

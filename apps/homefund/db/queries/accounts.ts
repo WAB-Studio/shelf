@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { accounts } from "@/db/schema";
@@ -186,8 +186,14 @@ export type UpdateAccountArgs = {
   settlementCurrency: CurrencyCode;
   amountMinor: number;
   balanceOn: string;
+  expectedUpdatedAt?: string;
 };
 
+// Without a stamp the answer is only whether a row was written; with one it may be "stale".
+export async function updateAccount(
+  args: UpdateAccountArgs & { expectedUpdatedAt?: undefined },
+): Promise<boolean>;
+export async function updateAccount(args: UpdateAccountArgs): Promise<boolean | "stale">;
 export async function updateAccount({
   accountId,
   name,
@@ -198,7 +204,8 @@ export async function updateAccount({
   settlementCurrency,
   amountMinor,
   balanceOn,
-}: UpdateAccountArgs): Promise<boolean> {
+  expectedUpdatedAt,
+}: UpdateAccountArgs): Promise<boolean | "stale"> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .update(accounts)
@@ -218,10 +225,27 @@ export async function updateAccount({
         initialBalanceCents: sql`case when ${accounts.kind} = 'liability' then -${amountMinor}::bigint else ${amountMinor}::bigint end`,
         initialBalanceOn: balanceOn,
       })
-      .where(eq(accounts.id, accountId))
+      .where(
+        and(
+          eq(accounts.id, accountId),
+          // Compared as text: a JS Date would drop the microseconds (docs/TRAPS.md).
+          expectedUpdatedAt
+            ? sql`${accounts.updatedAt} = ${expectedUpdatedAt}::text::timestamptz`
+            : undefined,
+        ),
+      )
       .returning({ id: accounts.id });
 
-    return rows.length > 0;
+    if (rows.length > 0) return true;
+    if (!expectedUpdatedAt) return false;
+
+    // Only a refused write pays for this: a readable row means the stamp moved.
+    const [row] = await tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+    return row ? "stale" : false;
   });
 }
 

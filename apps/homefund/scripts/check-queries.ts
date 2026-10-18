@@ -98,6 +98,7 @@ import {
   createPlannedPayment,
   listPlannedPayments,
   settlePlannedPayment,
+  updatePlannedPayment,
 } from "@/db/queries/planned-payments";
 import {
   categoryFitsRuleAccount,
@@ -4204,6 +4205,7 @@ async function main(): Promise<void> {
   await debtPaymentSuite();
   await resendChangedSuite();
   await withdrawalResendSuite();
+  await accountPlannedVersionSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -8306,5 +8308,178 @@ async function withdrawalResendSuite(): Promise<void> {
       l2?.data?.transactionId === lateRows[0].id &&
       (await cashAccounts()).length === cashBefore,
     `${lateRows.length} transfer(s), ${cashBefore} -> ${(await cashAccounts()).length} cash account(s), second = ${JSON.stringify(l2)}`,
+  );
+}
+
+type StaleAnswer = { serverError?: string; validationErrors?: unknown; data?: { ok?: boolean; reason?: string } } | undefined;
+
+// M46: an account or a planned payment opened before another save is refused on save, and nothing moves (RF-156).
+async function accountPlannedVersionSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const accountActions = (await import("@/app/actions/accounts")) as unknown as {
+    updateAccountAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const plannedActions = (await import("@/app/actions/planned-payments")) as unknown as {
+    updatePlannedPaymentAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const user = await createMembershipFreeUser();
+  const { accountId } = await asUser(user, () =>
+    createAccount({
+      name: `Harness m46 ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  track("accounts", accountId);
+  const { plannedPaymentId } = await asUser(user, () =>
+    createPlannedPayment({
+      fromAccountId: accountId,
+      toAccountId: null,
+      amountCents: 10_000,
+      categoryId: null,
+      dueDate: shiftDate(today, 5),
+      remindOn: null,
+      description: `m46 ${tag}`,
+    }),
+  );
+  track("planned_payments", plannedPaymentId);
+
+  const isStale = (r: StaleAnswer) =>
+    r?.serverError === "errors.stale" || (r?.data?.ok === false && r.data.reason === "stale");
+  const accountStamp = async () =>
+    (await fixtureSql<{ t: string }[]>`select updated_at::text as t from accounts where id = ${accountId}`)[0]?.t ?? "";
+  const plannedStamp = async () =>
+    (await fixtureSql<{ t: string }[]>`select updated_at::text as t from planned_payments where id = ${plannedPaymentId}`)[0]?.t ?? "";
+  const opening = async () =>
+    (await fixtureSql<{ c: string }[]>`select initial_balance_cents::text as c from accounts where id = ${accountId}`)[0]?.c;
+  const plannedAmount = async () =>
+    (await fixtureSql<{ c: string }[]>`select amount_cents::text as c from planned_payments where id = ${plannedPaymentId}`)[0]?.c;
+  // Another person's save: a raw update would lose the session the scope trigger reads.
+  const touchPlanned = (description: string) =>
+    asUser(user, () =>
+      updatePlannedPayment({
+        plannedPaymentId,
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        categoryId: null,
+        dueDate: shiftDate(today, 5),
+        remindOn: null,
+        description,
+      }),
+    );
+  // The comparison must be able to fail on a dropped microsecond, so the stamp is touched until it has some.
+  const hasMicros = (t: string) => /\.\d{6}/.test(t) && !t.replace(/[+-]\d+$/, "").endsWith("000");
+  for (let i = 0; i < 10 && !hasMicros(await accountStamp()); i++) {
+    await fixtureSql`update accounts set name = name where id = ${accountId}`;
+  }
+  for (let i = 0; i < 10 && !hasMicros(await plannedStamp()); i++) {
+    await touchPlanned(`m46 ${tag}`);
+  }
+
+  const saveAccount = (amount: string, expectedUpdatedAt?: string) =>
+    asUser(user, () =>
+      accountActions.updateAccountAction({
+        accountId,
+        name: `Harness m46 ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        isShared: false,
+        institution: "",
+        lastFour: "",
+        settlementCurrency: "COP",
+        amount,
+        balanceOn: shiftDate(today, -10),
+        ...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt }),
+      }),
+    );
+  const savePlanned = (amount: string, expectedUpdatedAt?: string) =>
+    asUser(user, () =>
+      plannedActions.updatePlannedPaymentAction({
+        plannedPaymentId,
+        fromAccountId: accountId,
+        toAccountId: null,
+        amount,
+        categoryId: null,
+        dueDate: shiftDate(today, 5),
+        remindOn: null,
+        description: `m46 ${tag}`,
+        ...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt }),
+      }),
+    );
+
+  // Q: the account form is open, someone else saves, the opening balance is saved
+  const openedAccount = await accountStamp();
+  assert(next("The account's updated_at::text carries microseconds the test can compare"), hasMicros(openedAccount), openedAccount);
+  const before = await opening();
+  await fixtureSql`update accounts set name = ${`Harness m46 ${tag} elsewhere`} where id = ${accountId}`;
+  const movedAccount = await accountStamp();
+  const staleAccount = await saveAccount("777", openedAccount);
+  assert(
+    next("An account saved with a stamp older than the row is refused as stale and leaves the opening balance as it was"),
+    movedAccount !== openedAccount && isStale(staleAccount) && (await opening()) === before,
+    `result = ${JSON.stringify(staleAccount)}, opening ${before} -> ${await opening()}, stamp ${openedAccount} -> ${movedAccount}`,
+  );
+
+  // Q: the account form carrying the row's own stamp
+  const freshAccount = await saveAccount("123", await accountStamp());
+  assert(
+    next("An account saved with the row's own updated_at::text, microseconds and all, is updated"),
+    freshAccount?.serverError === undefined && !isStale(freshAccount) && (await opening()) === "12300",
+    `result = ${JSON.stringify(freshAccount)}, opening = ${await opening()}`,
+  );
+
+  // Q: an account save naming no stamp still lands
+  const blindAccount = await saveAccount("456");
+  assert(
+    next("An account saved with no expectedUpdatedAt is not refused"),
+    blindAccount?.serverError === undefined && !isStale(blindAccount) && (await opening()) === "45600",
+    `result = ${JSON.stringify(blindAccount)}, opening = ${await opening()}`,
+  );
+
+  // Q: the planned payment form is open, someone else saves, the amount is saved
+  for (let i = 0; i < 10 && !hasMicros(await plannedStamp()); i++) {
+    await touchPlanned(`m46 ${tag}`);
+  }
+  const openedPlanned = await plannedStamp();
+  assert(next("The planned payment's updated_at::text carries microseconds the test can compare"), hasMicros(openedPlanned), openedPlanned);
+  const plannedBefore = await plannedAmount();
+  await touchPlanned(`m46 ${tag} elsewhere`);
+  const movedPlanned = await plannedStamp();
+  const stalePlanned = await savePlanned("77", openedPlanned);
+  assert(
+    next("A planned payment saved with a stamp older than the row is refused as stale and leaves the amount as it was"),
+    movedPlanned !== openedPlanned && isStale(stalePlanned) && (await plannedAmount()) === plannedBefore,
+    `result = ${JSON.stringify(stalePlanned)}, amount ${plannedBefore} -> ${await plannedAmount()}, stamp ${openedPlanned} -> ${movedPlanned}`,
+  );
+
+  // Q: the planned payment form carrying the row's own stamp
+  for (let i = 0; i < 10 && !hasMicros(await plannedStamp()); i++) {
+    await touchPlanned(`m46 ${tag}`);
+  }
+  const freshStamp = await plannedStamp();
+  const freshPlanned = await savePlanned("55", freshStamp);
+  assert(
+    next("A planned payment saved with the row's own updated_at::text, microseconds and all, is updated"),
+    hasMicros(freshStamp) && freshPlanned?.serverError === undefined && !isStale(freshPlanned) && (await plannedAmount()) === "5500",
+    `result = ${JSON.stringify(freshPlanned)}, amount = ${await plannedAmount()}, stamp ${freshStamp}`,
+  );
+
+  // Q: a planned payment save naming no stamp still lands
+  const blindPlanned = await savePlanned("66");
+  assert(
+    next("A planned payment saved with no expectedUpdatedAt is not refused"),
+    blindPlanned?.serverError === undefined && !isStale(blindPlanned) && (await plannedAmount()) === "6600",
+    `result = ${JSON.stringify(blindPlanned)}, amount = ${await plannedAmount()}`,
   );
 }

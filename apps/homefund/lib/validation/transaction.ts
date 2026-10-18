@@ -467,7 +467,7 @@ export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 
 // `updated_at::text` as Postgres prints it, microseconds and offset included; never a JS `Date`,
 // which keeps milliseconds only and would make the row look newer than itself.
-const POSTGRES_TIMESTAMPTZ_TEXT =
+export const POSTGRES_TIMESTAMPTZ_TEXT =
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2}){0,2}$/;
 
 export const updateTransactionSchema = z
