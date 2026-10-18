@@ -358,3 +358,11 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Region** (Q13 b): HomeFund's and WordBook's Vercel region is measured with `vercel inspect` before anything is pinned.
 - **«Revisar el mes»** (2026-10-18, the user's idea): RF-155 opened. A screen and an MCP tool list the month's anomalies
   by fixed rules; Claude does any AI review through MCP. Its own train with its board, after wave 2. Not built yet.
+- **Quick entry, lowercase «m»** (critic C2 b, later the same day): a lowercase «m» is never a million; only «M» or
+  «millón/millones» multiply. «25 m» is 25, «5 m de cable» is 5; «3 M arriendo» asks. Supersedes the «m» lines above.
+- **Fund labels read «· fondo»** in the budget forms (critic C1 a), as categories do.
+- **RF-156 and RF-157 opened** (Q24 a): the stale-edit refusal, and the paused rule's reason with the 12-month limit on a
+  rule's next run (Q16 a, Q17 a).
+- **A foreign purchase estimated on a debit account is confirmed on the account in «Cuentas»** (Q18 a), with the debt
+  screen's «Confirmar monto» row. Board to draw before its module.
+- **A second «efectivo» stays allowed** (Q23 a); the first withdrawal's race is closed by a lock, with nothing visible.

@@ -1888,3 +1888,8 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   WordBook already do. Not built yet.
 - **Contrast** (Q6 a): the token-table borders and the `quiet` tone are darkened to the nearest same-hue value that
   passes; the token table follows. Not built yet.
+- **The OAuth consent title names the return site** (Q15 a): «evil.example quiere ver tus metas», with «se presenta como
+  «Claude»» under it. Not built yet.
+- **A goal's note reaches the AI cut to 2.000 characters** with its length, and `get_note` reads the whole (Q20 a), with
+  the chat work of wave 3. MCP refusals keep their per-tool sentences (Q21 b).
+- **A refresh token or code reused within 30 s answers `invalid_grant` without revoking the connection** (Q22 a).
