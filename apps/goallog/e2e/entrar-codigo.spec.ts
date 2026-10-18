@@ -951,3 +951,115 @@ test("Consent too: a resend offline on the signed-out consent ends in the alert,
     await forget(db, email);
   }
 });
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+test("Refused then retried: «Entrar» is enabled again, «Comprobando…» is gone, and the mailed code typed next lands on /", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: a refusal that leaves checking true («Comprobando…» for good, the person locked out of the right code).
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const real = await mailedCode(email);
+    await codeField(page).fill(real === "000000" ? "000001" : "000000");
+    await page.getByRole("button", { name: W.enter, exact: true }).click();
+    await expect(page.getByText(W.refused, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: W.checking, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: W.enter, exact: true })).toBeEnabled();
+    await codeField(page).fill(real);
+    await page.getByRole("button", { name: W.enter, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`^${escapeRe(baseURL!)}/$`));
+    expect(await sessionsOf(db, email)).toBe(1);
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Verify offline survives an unmount: leaving /entrar client-side and coming back reopens the code step for the same address", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: the offline catch leaving the "a code is landing" flag set, so the unmount clears the pending address.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    await codeField(page).fill("123456");
+    await context.setOffline(true);
+    await page.getByRole("button", { name: W.enter, exact: true }).click();
+    await expect(page.getByText(OFFLINE.check, { exact: true })).toBeVisible();
+    await context.setOffline(false);
+    const go = (path: string) => page.evaluate((p) => (window as unknown as { next: { router: { push(p: string): void } } }).next.router.push(p), path);
+    // A soft navigation keeps this marker; a full load would drop it and the form's cleanup would never run.
+    await page.evaluate(() => ((window as unknown as { __soft: boolean }).__soft = true));
+    await go("/oauth/autorizar");
+    await expect(page).toHaveURL(/\/oauth\/autorizar$/);
+    await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __soft?: boolean }).__soft)).toBe(true);
+    await go("/entrar");
+    await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
+    await expect(page.getByText(W.sentBody(email), { exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("Resend clock survives a reload: after a resend at +61 s the button reads the new wait and the record holds the resend's moment", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  // Kills: the resend not saving its moment, so a reload counts from the first send and offers another code at once.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await openWithClock(browser, baseURL!);
+  try {
+    await askForCode(page, db, email);
+    const first = JSON.parse((await pendingRaw(page))!) as { at: number };
+    await page.clock.fastForward(RESEND_MS + 1_000);
+    await page.getByRole("button", { name: R.resend, exact: true }).click();
+    await expect(page.getByText(R.resent(email), { exact: true })).toBeVisible();
+    const stored = JSON.parse((await pendingRaw(page))!) as { at: number };
+    expect(stored.at - first.at).toBeGreaterThanOrEqual(RESEND_MS);
+    await page.reload();
+    await settled(page);
+    await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
+    const button = resendButton(page);
+    await expect(button).toBeDisabled();
+    const seconds = Number(/(\d+) s$/.exec((await button.textContent()) ?? "")?.[1]);
+    expect(seconds).toBeGreaterThanOrEqual(55);
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});
+
+test("First send from the signed-out consent carries the consent's state in its POST", async ({ browser, baseURL, db }) => {
+  // Kills: the first send called without `next`, so the code lands on / instead of the consent.
+  const email = invitee();
+  await listAddress(db, email);
+  const { context, page } = await open(browser, baseURL!);
+  try {
+    const posts = sendPosts(page);
+    await visit(page, consentPath);
+    await page.getByLabel(W.emailLabel).fill(email);
+    await page.getByRole("button", { name: W.send, exact: true }).click();
+    await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
+    await register(db, email);
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body).toContain(email);
+    expect(posts[0].body).toContain("estado-m7");
+  } finally {
+    await context.close();
+    await forget(db, email);
+  }
+});

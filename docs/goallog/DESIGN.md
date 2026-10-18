@@ -1850,3 +1850,19 @@ Canvas «Bitácora de metas», page «Armazón», from y=15460. 360, three state
 - Offline resend: the alert sentence «Sin conexión. No se pudo enviar el código.» under «Pedir otro código»; every
   control enabled; the countdown keeps the last send's clock.
 - Offline check: the field's hint «Sin conexión. No se pudo comprobar el código.», the code kept, controls enabled.
+
+## Boards of 2026-10-17: «EntrarTopeDiario», the daily cap says «mañana» (decidido-17)
+
+Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states. Not built yet.
+
+- GoalLog's own daily cap (RP-138) refuses in the failure shape of the offline boards with «Ya pediste varios códigos
+  hoy. Prueba de nuevo mañana.» (`account.errors.capped`): on the address form as the field's hint, and on the code
+  step as the alert sentence under «Pedir otro código», the button ready.
+- Auth's own 429 keeps «Demasiados intentos… en unos minutos.»
+
+## Decisions of 2026-10-17 (night), after the critic of codigo-6c, by the user
+
+- **A send or a check that hangs ends at 8 s, like WordBook.** «Enviar código», «Pedir otro código» and «Entrar» that
+  get no answer in 8 s say «No sabemos si se envió. Revisa tu correo antes de pedir otro.» and every control is usable
+  again. Supersedes the «no timeout» line of codigo-6c M8. Needs a board. Not built yet.
+

@@ -204,6 +204,33 @@ export async function listUsedCategoryColors(
   });
 }
 
+/**
+ * The top-level colours of the caller's own set and of the fund's, apart, in one
+ * read. With no fund `group` stays empty and no second scope is asked for.
+ */
+async function listUsedColorsByPlacement(
+  userId: string,
+  groupId: string | null,
+  tx: Transaction,
+): Promise<{ personal: string[]; group: string[] }> {
+  const rows = await tx
+    .selectDistinct({ color: categories.color, groupId: categories.groupId })
+    .from(categories)
+    .where(
+      and(
+        isNull(categories.parentId),
+        groupId
+          ? or(eq(categories.ownerUserId, userId), eq(categories.groupId, groupId))
+          : eq(categories.ownerUserId, userId),
+      ),
+    );
+
+  const colorsOf = (inGroup: boolean): string[] =>
+    rows.flatMap((row) => (row.color && (row.groupId !== null) === inGroup ? [row.color] : []));
+
+  return { personal: colorsOf(false), group: colorsOf(true) };
+}
+
 export async function createCategory(
   args: CreateCategoryArgs,
 ): Promise<{ categoryId: string }> {
@@ -287,6 +314,7 @@ export async function getCategoriesScreenData(kind: CategoryKind): Promise<{
   group: CategoryNode[];
   parents: { id: string; name: string }[];
   usedColors: string[];
+  usedColorsByPlacement: { personal: string[]; group: string[] };
 }> {
   const user = await requireUser();
 
@@ -294,10 +322,10 @@ export async function getCategoriesScreenData(kind: CategoryKind): Promise<{
     const group = await callerGroupInfo(tx, user.id);
     const scope: CategoryScope = group ? { groupId: group.id } : { ownerUserId: user.id };
 
-    const [scoped, parents, usedColors, personal] = await Promise.all([
+    const [scoped, parents, usedColorsByPlacement, personal] = await Promise.all([
       listCategories(scope, kind, tx),
       listParentCategories(scope, kind, tx),
-      listUsedCategoryColors(scope, tx),
+      listUsedColorsByPlacement(user.id, group?.id ?? null, tx),
       group ? listCategories({ ownerUserId: user.id }, kind, tx) : Promise.resolve(null),
     ]);
 
@@ -308,7 +336,8 @@ export async function getCategoriesScreenData(kind: CategoryKind): Promise<{
       personal: personal ?? scoped,
       group: group ? scoped : [],
       parents,
-      usedColors,
+      usedColors: group ? usedColorsByPlacement.group : usedColorsByPlacement.personal,
+      usedColorsByPlacement,
     };
   });
 }

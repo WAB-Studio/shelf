@@ -37,6 +37,7 @@ import type {
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
+import { scopeOfAccounts } from "@/lib/fund/category-scope";
 import { centsToPesos } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
@@ -50,17 +51,41 @@ type ReviewDefaults = {
   splits: { categoryId: string; amount: string }[];
 };
 
+// A proposed category of another scope than the proposed account is read as no
+// category: the split trigger would refuse it, so it is neither shown nor sent,
+// and the person picks one of the account's own scope (RF-140).
+function proposedCategoryId(
+  delivery: PendingDeliveryRow,
+  options: TransactionFormOptions,
+): string | null {
+  const categoryId = delivery.proposedCategoryId;
+  if (categoryId === null) return null;
+  const category = options.categories.find(
+    (one) =>
+      one.id === categoryId ||
+      one.children.some((child) => child.id === categoryId),
+  );
+  const scope = scopeOfAccounts([delivery.proposedAccountId], options.accounts);
+  return category && scope !== null && category.scope !== scope
+    ? null
+    : categoryId;
+}
+
 // Mirrors `DeliveryCard`'s own prefill, so the desktop table opens the exact
 // same form a phone would (RF-91). Kept private to this screen: the card owns
 // its copy for the same reason a movement's kind is derived at each write path
 // rather than shared through an import that would couple the two.
-function movementDefaults(delivery: PendingDeliveryRow): ReviewDefaults {
+function movementDefaults(
+  delivery: PendingDeliveryRow,
+  options: TransactionFormOptions,
+): ReviewDefaults {
   const amount =
     delivery.proposedAmountCents === null
       ? ""
       : String(centsToPesos(delivery.proposedAmountCents));
   const accountId = delivery.proposedAccountId;
   const isIncome = delivery.proposedDirection === "income";
+  const categoryId = proposedCategoryId(delivery, options);
 
   return {
     fromAccountId: isIncome ? null : accountId,
@@ -68,27 +93,26 @@ function movementDefaults(delivery: PendingDeliveryRow): ReviewDefaults {
     amount,
     occurredAt: delivery.proposedOccurredAt ?? todayInBogota(),
     description: delivery.proposedDescription,
-    splits: delivery.proposedCategoryId
-      ? [{ categoryId: delivery.proposedCategoryId, amount }]
-      : [],
+    splits: categoryId ? [{ categoryId, amount }] : [],
   };
 }
 
 function completeInput(
   delivery: PendingDeliveryRow,
+  options: TransactionFormOptions,
 ): AcceptDeliveryInput | null {
   if (
     !delivery.isComplete ||
     delivery.proposedAmountCents === null ||
     delivery.proposedAccountId === null ||
-    delivery.proposedCategoryId === null
+    proposedCategoryId(delivery, options) === null
   ) {
     return null;
   }
 
   return {
     deliveryId: delivery.id,
-    ...movementDefaults(delivery),
+    ...movementDefaults(delivery, options),
     labelIds: [],
   };
 }
@@ -167,7 +191,7 @@ export function InboxScreen({
   // opens the same form "openForm" does, rather than calling the action.
   function acceptOrReview(id: string) {
     const delivery = deliveries.find((one) => one.id === id);
-    const input = delivery && completeInput(delivery);
+    const input = delivery && completeInput(delivery, options);
     if (input) accept.execute(input);
     else setReviewId(id);
   }
@@ -185,7 +209,11 @@ export function InboxScreen({
     createdAt: delivery.createdAt,
     merchantLabel: delivery.merchantLabel,
     rawText: delivery.rawText,
-    category: categoryInfo(options, categoryNames, delivery.proposedCategoryId),
+    category: categoryInfo(
+      options,
+      categoryNames,
+      proposedCategoryId(delivery, options),
+    ),
     account: delivery.proposedAccountId
       ? (accountNames.get(delivery.proposedAccountId) ?? null)
       : null,
@@ -260,7 +288,8 @@ export function InboxScreen({
               mode="create"
               options={options}
               deliveryId={reviewing.id}
-              defaults={movementDefaults(reviewing)}
+              defaults={movementDefaults(reviewing, options)}
+              onSaved={() => toast.success(t("acceptedToast"))}
               onDone={() => setReviewId(null)}
             />
           )}

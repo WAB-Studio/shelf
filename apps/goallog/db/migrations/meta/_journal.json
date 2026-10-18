@@ -176,6 +176,13 @@
       "when": 1792112578070,
       "tag": "0025_borrar_y_lista",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792288002770,
+      "tag": "0026_sign_in_claims",
+      "breakpoints": true
     }
   ]
 }

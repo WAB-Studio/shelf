@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { Controller, useForm, type Resolver } from "react-hook-form";
+import { useEffect } from "react";
+import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
 import {
@@ -31,6 +32,7 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 // The field takes the decimals the row's currency is written with, so
 // reopening a figure and saving it back stores the integer it already held.
 import { scopedCategoryName } from "@/lib/fund/category-names";
+import { categoriesInScope, scopeOfAccounts } from "@/lib/fund/category-scope";
 import { amountToInput } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
@@ -154,6 +156,24 @@ function PaymentForm({
           description: null,
         },
   });
+
+  const fromAccountId = useWatch({ control: form.control, name: "fromAccountId" });
+  const toAccountId = useWatch({ control: form.control, name: "toAccountId" });
+  const pickedCategoryId = useWatch({ control: form.control, name: "categoryId" });
+
+  // Any group account among the two fixes the scope the category list is cut to
+  // (RF-74); with none, both scopes are offered.
+  const categories = categoriesInScope(
+    options.categories,
+    scopeOfAccounts([fromAccountId, toAccountId], options.accounts),
+  );
+
+  // An account of the other scope strands the picked category outside the list.
+  useEffect(() => {
+    if (pickedCategoryId && !categories.some((one) => one.id === pickedCategoryId)) {
+      form.setValue("categoryId", null, { shouldValidate: true });
+    }
+  }, [categories, pickedCategoryId, form]);
 
   function onActionSuccess() {
     toast.success(t(isEdit ? "updated" : "created"));
@@ -377,7 +397,7 @@ function PaymentForm({
                   <Select.Item value={NO_CATEGORY}>
                     {t("categoryNone")}
                   </Select.Item>
-                  {options.categories.map((category) => (
+                  {categories.map((category) => (
                     <Select.Item key={category.id} value={category.id}>
                       {scopedCategoryName(category.name, category.scope, (name) =>
                         tKey("categories.scopedName", { name }),

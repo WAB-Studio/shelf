@@ -47,13 +47,11 @@ export default async function CategoriesPage(
     <Page>
       <CategoriesScreen
         kind={kind}
-        categories={data.categories}
         personal={data.personal}
         group={data.group}
         groupName={data.groupName}
         canManageGroup={data.isLeader}
-        parents={data.parents}
-        usedColors={data.usedColors}
+        usedColorsByPlacement={data.usedColorsByPlacement}
       />
     </Page>
   );

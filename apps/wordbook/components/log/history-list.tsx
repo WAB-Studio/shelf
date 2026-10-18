@@ -39,7 +39,8 @@ type ListState =
 // The one row whose ✕ was pressed: a second row's ✕ replaces it, so two
 // questions are never open at once (`RegistroBorrarFilaConfirmar`).
 // `local`: the copy is off, so the delete reaches this device alone (RNL-11).
-type DeleteTarget = { key: string; phase: "asking" | "deleting" | "failed"; local: boolean };
+// `note`: signed out with its reader kept, so the account deletes on return.
+type DeleteTarget = { key: string; phase: "asking" | "deleting" | "failed"; local: boolean; note: boolean };
 
 type RowActions = {
   ask: (key: string) => void;
@@ -52,6 +53,7 @@ const StudyRowItem = memo(function StudyRowItem({
   first,
   phase,
   local,
+  note,
   actions,
 }: {
   row: StudyRow;
@@ -59,6 +61,7 @@ const StudyRowItem = memo(function StudyRowItem({
   // Undefined on every row but the target, so pressing one ✕ re-renders one row.
   phase: DeleteTarget["phase"] | undefined;
   local: boolean;
+  note: boolean;
   actions: RowActions;
 }) {
   const t = useTranslations("log");
@@ -166,7 +169,7 @@ const StudyRowItem = memo(function StudyRowItem({
             <Text variant="breakBody" muted>
               {t(local ? "study.deleteConfirmBodyLocal" : "study.deleteConfirmBody", { count: row.count })}
             </Text>
-            {local && (
+            {note && (
               <Text variant="breakBody" muted>
                 {t("study.deleteConfirmLocalNote")}
               </Text>
@@ -256,6 +259,7 @@ export function HistoryList() {
   const requestIdRef = useRef(0);
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const localRef = useRef(true);
+  const noteRef = useRef(false);
   const askIdRef = useRef(0);
   // Holds a key from its first «Borrar» to its settle: two taps inside one
   // task both run before `disabled` paints, and only the first may reach
@@ -345,14 +349,14 @@ export function HistoryList() {
   const remove = useCallback(async (key: string): Promise<void> => {
     if (inFlightRef.current.has(key)) return;
     inFlightRef.current.add(key);
-    setTarget({ key, phase: "deleting", local: localRef.current });
+    setTarget({ key, phase: "deleting", local: localRef.current, note: noteRef.current });
     try {
       const { deleted } = await deleteStudyGroup(key);
       // Nothing matched: no reread will drop the row, so nothing clears it.
       if (deleted === 0) setTarget((current) => (current?.key === key ? null : current));
     } catch {
       // Shown even over another row's question: a refusal nobody sees reads as done.
-      setTarget({ key, phase: "failed", local: localRef.current });
+      setTarget({ key, phase: "failed", local: localRef.current, note: false });
     } finally {
       inFlightRef.current.delete(key);
     }
@@ -365,7 +369,8 @@ export function HistoryList() {
         void readSyncState().then((sync) => {
           if (askIdRef.current !== askId) return;
           localRef.current = !(sync.enabled && sync.readerId !== null && !sync.retired);
-          setTarget({ key, phase: "asking", local: localRef.current });
+          noteRef.current = localRef.current && sync.readerId !== null && !sync.retired;
+          setTarget({ key, phase: "asking", local: localRef.current, note: noteRef.current });
         });
       },
       keep: () => {
@@ -489,6 +494,7 @@ export function HistoryList() {
               first={index === 0}
               phase={target?.key === row.key ? target.phase : undefined}
               local={target?.key === row.key && target.local}
+              note={target?.key === row.key && target.note}
               actions={actions}
             />
           ))}

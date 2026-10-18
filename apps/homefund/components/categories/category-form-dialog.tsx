@@ -29,14 +29,19 @@ import {
 import { CATEGORY_COLORS, nextCategoryColor } from "@/lib/fund/category-color";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
-  createCategorySchema,
+  createCategoryInputSchema,
   updateCategorySchema,
+  type CATEGORY_PLACEMENTS,
   type CreateCategoryInput,
   type UpdateCategoryInput,
 } from "@/lib/validation/category";
 
 // Radix's Select rejects an empty-string item value, so "no parent" needs its own sentinel.
 const NO_PARENT_VALUE = "none";
+
+export type CategoryPlacement = (typeof CATEGORY_PLACEMENTS)[number];
+
+type ParentOption = { id: string; name: string; hasChildren: boolean };
 
 // A superset of both schemas' shapes: the resolver strips whichever key the
 // active schema does not declare, so only the fields that schema needs ever
@@ -47,6 +52,7 @@ type CategoryFormValues = {
   name: string;
   parentId: string | null;
   color: string | null;
+  placement: CategoryPlacement;
 };
 
 type Category = {
@@ -58,8 +64,13 @@ type Category = {
 
 type CategoryFormProps = {
   kind: "expense" | "income";
-  parents: { id: string; name: string; hasChildren: boolean }[];
-  usedColors: string[];
+  // The places the caller may write to; the first is the default. Two of
+  // them draw the «Dónde va» select, one draws nothing.
+  placements: CategoryPlacement[];
+  parentsByPlacement: Record<CategoryPlacement, ParentOption[]>;
+  usedColorsByPlacement: Record<CategoryPlacement, string[]>;
+  // Fixed when editing or adding under a parent: the row's own place.
+  placement?: CategoryPlacement;
   onOpenChange: (open: boolean) => void;
   category?: Category;
   defaultParentId?: string | null;
@@ -88,8 +99,10 @@ export function CategoryFormDialog({
 
 function CategoryForm({
   kind,
-  parents,
-  usedColors,
+  placements,
+  parentsByPlacement,
+  usedColorsByPlacement,
+  placement: fixedPlacement,
   onOpenChange,
   category,
   defaultParentId,
@@ -101,10 +114,12 @@ function CategoryForm({
 
   const isEdit = !!category;
 
+  const initialPlacement = fixedPlacement ?? placements[0] ?? "personal";
+
   const form = useForm<CategoryFormValues>({
     resolver: (isEdit
       ? zodResolver(updateCategorySchema)
-      : zodResolver(createCategorySchema)) as unknown as Resolver<CategoryFormValues>,
+      : zodResolver(createCategoryInputSchema)) as unknown as Resolver<CategoryFormValues>,
     defaultValues: (() => {
       const parentId = category ? category.parentId : (defaultParentId ?? null);
       return {
@@ -114,7 +129,10 @@ function CategoryForm({
         parentId,
         // Own colour whether this node is a parent or a child (D8): a
         // subcategory picks its own instead of inheriting one at write time.
-        color: category?.color ?? nextCategoryColor(usedColors),
+        color:
+          category?.color ??
+          nextCategoryColor(usedColorsByPlacement[initialPlacement]),
+        placement: initialPlacement,
       };
     })(),
   });
@@ -153,9 +171,10 @@ function CategoryForm({
   // parent at all, and a category that already has children never appears as
   // an option — except the option that is already this subcategory's parent,
   // kept selectable so an existing value is never orphaned mid-edit.
+  const placement = form.watch("placement");
   const parentOptions = hasChildren
     ? []
-    : parents.filter(
+    : parentsByPlacement[placement].filter(
         (parent) =>
           parent.id !== category?.id &&
           (!parent.hasChildren || parent.id === category?.parentId),
@@ -186,6 +205,70 @@ function CategoryForm({
             </Field>
           )}
         />
+        {isEdit ? (
+          <Field>
+            {/* Not labelable: a read-only Text names nothing a <label> can target. */}
+            <FieldLabel>{t("placementLabel")}</FieldLabel>
+            <Text size="3">
+              {t(
+                placement === "group" ? "placementGroup" : "placementPersonal",
+              )}
+            </Text>
+            <FieldDescription>{t("placementLocked")}</FieldDescription>
+          </Field>
+        ) : (
+          !fixedPlacement &&
+          placements.length > 1 && (
+            <Controller
+              name="placement"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="category-placement">
+                    {t("placementLabel")}
+                  </FieldLabel>
+                  <Select.Root
+                    value={field.value}
+                    onValueChange={(value) => {
+                      const next = value as CategoryPlacement;
+                      field.onChange(next);
+                      // Each place spends its own colours and holds its own
+                      // parents, so both follow the set the category lands in.
+                      form.setValue(
+                        "color",
+                        nextCategoryColor(usedColorsByPlacement[next]),
+                      );
+                      const parentId = form.getValues("parentId");
+                      if (
+                        parentId &&
+                        !parentsByPlacement[next].some((p) => p.id === parentId)
+                      ) {
+                        form.setValue("parentId", null);
+                      }
+                    }}
+                    disabled={isPending}
+                  >
+                    <FieldControl>
+                      <Select.Trigger id="category-placement" />
+                    </FieldControl>
+                    <Select.Content>
+                      {placements.map((option) => (
+                        <Select.Item key={option} value={option}>
+                          {t(
+                            option === "group"
+                              ? "placementGroup"
+                              : "placementPersonal",
+                          )}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
+              )}
+            />
+          )
+        )}
         <Controller
           name="parentId"
           control={form.control}

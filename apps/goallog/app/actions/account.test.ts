@@ -18,6 +18,51 @@ type VerifyAnswer = { data: { user: { id: string } | null; session: unknown }; e
 const signedIn: VerifyAnswer = { data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null };
 let verifyAnswer: VerifyAnswer = signedIn;
 const verifyCalls: unknown[] = [];
+// RP-138: the daily caps live in `sign-in-budget`, which the action loads with a dynamic import that no
+// module mock reaches; its own `db` and `env` are what get simulated. Every statement it sends is recorded.
+// `refuseAt` is the claim (0 the caller's, 1 the address's) the database refuses; `salt` unset is no key.
+// A release settles on a later tick, or only when the test lets it when `holdRelease` is set.
+type Statement = { kind: "claim" | "release"; keys: Buffer[]; day: string };
+const statements: Statement[] = [];
+let refuseAt: number | null = null;
+let salt: string | undefined = "test-salt-0123456789abcdef";
+let holdRelease = false;
+let releaseGate: (() => void) | null = null;
+let order: string[] = [];
+
+function params(node: unknown): unknown[] {
+  if (Buffer.isBuffer(node) || typeof node === "string" || typeof node === "number") return [node];
+  if (Array.isArray(node)) return node.flatMap(params);
+  const chunks = (node as { queryChunks?: unknown[] } | null)?.queryChunks;
+  if (!chunks) return [];
+  return chunks.flatMap((chunk) => ("value" in Object(chunk) && Array.isArray((chunk as { value: unknown }).value) ? [] : params(chunk)));
+}
+function textOf(node: unknown): string {
+  const chunks = (node as { queryChunks?: unknown[] } | null)?.queryChunks;
+  if (!chunks) return "";
+  return chunks.map((chunk) => (Array.isArray((chunk as { value?: unknown })?.value) ? (chunk as { value: string[] }).value.join("") : textOf(chunk))).join("");
+}
+const fakeDb = {
+  execute: async (query: unknown) => {
+    const text = textOf(query);
+    const found = params(query);
+    const keys = found.filter((value): value is Buffer => Buffer.isBuffer(value));
+    const day = found.find((value): value is string => typeof value === "string") as string;
+    if (text.includes("sign_in_release")) {
+      order.push("release");
+      statements.push({ kind: "release", keys, day });
+      await new Promise<void>((resolve) => {
+        if (holdRelease) releaseGate = resolve;
+        else setTimeout(resolve, 5);
+      });
+      return [];
+    }
+    order.push("claim");
+    const at = statements.filter((statement) => statement.kind === "claim").length;
+    statements.push({ kind: "claim", keys, day });
+    return [{ ok: refuseAt !== at }];
+  },
+};
 
 // The seam is `@supabase/ssr` and `next/headers`, under the real `@repo/supabase-auth`: the act
 // loads that package with a dynamic import, which `mock.module` does not intercept (the real
@@ -32,11 +77,15 @@ Object.assign(process.env, {
 });
 const fakes: Record<string, unknown> = {
   "server-only": {},
-  "next/headers": { cookies: async () => ({ getAll: () => [], set() {} }) },
+  "next/headers": {
+    cookies: async () => ({ getAll: () => [], set() {} }),
+    headers: async () => new Headers({ "x-forwarded-for": "203.0.113.7" }),
+  },
   "@supabase/ssr": {
     createServerClient: () => ({
       auth: {
         signInWithOtp: async (call: (typeof otpCalls)[number]) => {
+          order.push("auth");
           otpCalls.push(call);
           return answer;
         },
@@ -67,10 +116,27 @@ mock.module("@/lib/auth/deliverability", {
   },
 });
 
+// The action reads the caller's headers with a dynamic import, which only `mock.module` intercepts.
+mock.module("next/headers", {
+  namedExports: {
+    cookies: fakes["next/headers"] && (fakes["next/headers"] as { cookies: unknown }).cookies,
+    headers: async () => new Headers({ "x-forwarded-for": "203.0.113.7" }),
+  },
+});
+
 const untyped = Module as unknown as { _load: (request: string, parent: unknown, isMain: boolean) => unknown };
 const innerLoad = untyped._load;
-untyped._load = (request, parent, isMain) =>
-  request in fakes ? fakes[request] : innerLoad(request, parent, isMain);
+let budgetEnv: unknown;
+untyped._load = (request, parent, isMain) => {
+  if (request === "@/db/client") return { db: fakeDb };
+  if (request === "@/lib/env") {
+    // Only `sign-in-budget` requires it: the real values, with the salt the test chooses.
+    const real = (innerLoad(request, parent, isMain) as { env: object }).env;
+    budgetEnv ??= { env: Object.create(real, { CLIENT_KEY_SALT: { get: () => salt } }) };
+    return budgetEnv;
+  }
+  return request in fakes ? fakes[request] : innerLoad(request, parent, isMain);
+};
 
 let sendSignInLink: typeof import("./account").sendSignInLink;
 let verifySignInCode: typeof import("./account").verifySignInCode;
@@ -90,7 +156,16 @@ beforeEach(() => {
   listChecked.length = 0;
   verifyAnswer = signedIn;
   verifyCalls.length = 0;
+  statements.length = 0;
+  refuseAt = null;
+  salt = "test-salt-0123456789abcdef";
+  releaseGate = null;
+  holdRelease = false;
+  order = [];
 });
+
+// Lets every already-queued continuation run; a promise still pending after this is waiting on something.
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 20));
 
 test("a valid address on a deliverable domain asks Auth once, for a link back to /auth/confirm", async () => {
   const result = await sendSignInLink("ana@correo.test");
@@ -254,4 +329,99 @@ test("RP-136 a next that is not the consent lands on /", async () => {
   for (const next of ["https://evil.test/x", "//evil.test/x", "/entrar", "/oauth/autorizar/../../x"]) {
     assert.equal(await landing(verifySignInCode("ana@correo.test", "123456", next)), "/", next);
   }
+});
+
+// RP-138 · the daily caps on sign-in codes.
+const claims = () => statements.filter((statement) => statement.kind === "claim");
+const releases = () => statements.filter((statement) => statement.kind === "release");
+
+test("RP-138 a caller past its cap answers capped, Auth is never asked and the address spends nothing", async () => {
+  refuseAt = 0;
+  assert.deepEqual(await sendSignInLink("Ana@correo.test"), { ok: false, error: "capped" });
+  assert.equal(otpCalls.length, 0);
+  assert.equal(claims().length, 1);
+  assert.equal(releases().length, 0);
+});
+
+test("RP-138 an address past its cap answers capped and Auth is never asked", async () => {
+  refuseAt = 1;
+  assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: false, error: "capped" });
+  assert.equal(otpCalls.length, 0);
+  assert.equal(claims().length, 2);
+});
+
+test("RP-138 an address off the list spends no claim", async () => {
+  allowed = false;
+  assert.deepEqual(await sendSignInLink("extrano@correo.test"), { ok: false, error: "notInvited" });
+  assert.deepEqual(statements, []);
+});
+
+test("RP-138 a domain that takes no mail spends no claim", async () => {
+  deliverable = false;
+  assert.deepEqual(await sendSignInLink("ana@muerto.test"), { ok: false, error: "domainUndeliverable" });
+  assert.deepEqual(statements, []);
+});
+
+test("RP-138 an address that is not one spends no claim", async () => {
+  assert.deepEqual(await sendSignInLink("x"), { ok: false, error: "emailInvalid" });
+  assert.deepEqual(statements, []);
+});
+
+test("RP-138 the claim is made before Auth is asked, and a sent link keeps it", async () => {
+  assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: true });
+  assert.deepEqual(order, ["claim", "claim", "auth"]);
+});
+
+test("RP-138 a send Auth refuses with a 500 gives back exactly the keys and day it claimed, and reads sendFailed", async () => {
+  answer = { error: { status: 500 } };
+  assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: false, error: "sendFailed" });
+  assert.equal(releases().length, 1);
+  assert.equal(releases()[0].keys.length, 2);
+  assert.deepEqual(releases()[0].keys, claims().flatMap((claim) => claim.keys));
+  assert.equal(releases()[0].day, claims()[0].day);
+});
+
+test("RP-138 a 429 gives the claim back and still reads rateLimited", async () => {
+  answer = { error: { status: 429 } };
+  assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: false, error: "rateLimited" });
+  assert.equal(releases().length, 1);
+});
+
+test("RP-138 a timeout keeps the claim", async () => {
+  const { AuthRetryableFetchError } = await import("@supabase/supabase-js");
+  answer = { error: new AuthRetryableFetchError("Gateway Timeout", 504) as unknown as { status?: number } };
+  const result = await sendSignInLink("ana@correo.test");
+  assert.equal(result.ok, false);
+  assert.equal(otpCalls.length, 1);
+  assert.equal(claims().length, 2);
+  assert.equal(releases().length, 0);
+});
+
+test("RP-138 the action does not answer until the release has settled", async () => {
+  answer = { error: { status: 500 } };
+  holdRelease = true;
+  let answered = false;
+  const run = sendSignInLink("ana@correo.test").then((result) => {
+    answered = true;
+    return result;
+  });
+  await settle();
+  assert.equal(releases().length, 1);
+  assert.equal(answered, false, "answered while the release was still pending");
+  releaseGate?.();
+  assert.deepEqual(await run, { ok: false, error: "sendFailed" });
+});
+
+test("RP-138 with no key the action stays open: Auth is asked, the link is sent, nothing is counted", async () => {
+  salt = undefined;
+  assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: true });
+  assert.equal(otpCalls.length, 1);
+  assert.deepEqual(statements, []);
+});
+
+test("RP-138 with no key a refused send has nothing to give back", async () => {
+  salt = undefined;
+  answer = { error: { status: 500 } };
+  assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: false, error: "sendFailed" });
+  assert.deepEqual(statements, []);
 });

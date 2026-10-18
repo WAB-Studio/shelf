@@ -14,6 +14,11 @@ export const env = createEnv({
     PULSAR_MODEL_STUB: z.string().optional(),
     // Test servers only: answers the chat from a script, never the model.
     PULSAR_CHAT_STUB: z.string().optional(),
+    // Daily sign-in-link caps (RP-138): per caller, and per address.
+    SIGN_IN_LINK_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(10),
+    SIGN_IN_LINK_DAILY_ADDRESS_CAP: z.coerce.number().int().positive().default(3),
+    // Salt the caller key hashes with. Unset, the app still boots.
+    CLIENT_KEY_SALT: z.string().min(16).optional(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),

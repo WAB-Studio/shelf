@@ -382,6 +382,12 @@
     "expenseTab": "Expenses",
     "incomeTab": "Income",
     "personalSection": "My categories",
+    "placementLabel": "Where it goes",
+    "placementPersonal": "Mine",
+    "placementGroup": "The fund's",
+    "placementLocked": "Where a category goes cannot change after it is created.",
+    "personalEmptyTitle": "You have no categories of your own yet",
+    "personalEmptyDescription": "Create a category of your own to classify the movements of your personal accounts.",
     "scopedName": "{name} · fund",
     "leaderOnly": "Ask the fund's owner to create or change the fund's categories.",
     "subcategoryCount": "{count, plural, one {# subcategory} other {# subcategories}}",
@@ -401,7 +407,8 @@
       "nameTooLong": "The name cannot exceed 80 characters.",
       "kindInvalid": "Choose a valid category kind.",
       "parentInvalid": "Choose a valid parent category.",
-      "colorRequired": "Choose a color."
+      "colorRequired": "Choose a color.",
+      "placementInvalid": "Choose where the category goes."
     }
   },
   "labels": {
@@ -1290,7 +1297,8 @@
       "amountRequired": "Enter an amount.",
       "amountInvalid": "Enter a valid amount.",
       "amountTooLarge": "The amount is too large.",
-      "directionInvalid": "The «direction» field only accepts «expense» or «income»."
+      "directionInvalid": "The «direction» field only accepts «expense» or «income».",
+      "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
     }
   },
   "ingest": {

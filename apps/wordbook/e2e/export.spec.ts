@@ -698,7 +698,7 @@ test("RL-72: when every word gives a card, no left-out line shows", async ({ pag
   await openRows(page, [studyRow("alpha", "alfa", NOW - 20), studyRow("zebra", "cebra", NOW - 10)]);
   await downloadAnki(page);
   await expect(page.getByText(t("log.study.ankiDone", { cards: 2 }), { exact: true })).toBeVisible();
-  await expect(page.getByText(/sin resultado no van?/)).toHaveCount(0);
+  await expect(page.getByText(/palabras? no van?:/)).toHaveCount(0);
 });
 
 test("RL-72: deleting the only card's row leaves the no-card line, without a reload", async ({ page }) => {

@@ -190,6 +190,11 @@ function line(dialog: Locator, label: string): Locator {
   return dialog.getByText(label, { exact: true }).locator("..");
 }
 
+// Line 3 of the sheet, flattened: the label and the figure beside it, as one reads them.
+async function derivedLine(dialog: Locator): Promise<string> {
+  return flat(await line(dialog, accounts.reconcileDerived).innerText());
+}
+
 function realField(dialog: Locator, label = accounts.reconcileRealAsset): Locator {
   return dialog.getByRole("textbox", { name: label, exact: true });
 }
@@ -457,9 +462,7 @@ test.describe("the dialog's states", () => {
     try {
       const dialog = await openDialog(page, account);
 
-      expect(flat(await line(dialog, accounts.reconcileDerived).innerText())).toContain(
-        signed(-owed / 100),
-      );
+      expect(await derivedLine(dialog)).toBe(`${accounts.reconcileDerived} ${peso(owed / 100)}`);
       await expect(dialog.getByText(accounts.reconcileRealAsset, { exact: true })).toHaveCount(0);
 
       // Typing the debt as a magnitude: owing $ 100.000 instead of $ 120.000
@@ -1112,6 +1115,98 @@ test.describe("a figure below zero (board C1)", () => {
     } finally {
       await dropAccount(asset.id);
       await dropAccount(card.id);
+    }
+  });
+});
+
+test.describe("line 3 «Según HomeFund» in the field's frame (RF-137, board C1)", () => {
+  test("a card owing $ 120.000 reads «$ 120.000», with no minus", async ({ page }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -12_000_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      expect(await derivedLine(dialog)).toBe(`${accounts.reconcileDerived} $ 120.000`);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a card in credit by $ 5.000 reads «−$ 5.000»", async ({ page }) => {
+    // A card cannot open in credit; a count of +$ 5.000 on a card opened at 0 books the credit.
+    const account = await seedAccount({ kind: "liability", openingCents: 0 });
+    try {
+      await seedReconciliation(account.id, addCivilDays(TODAY, -3), 500_000);
+      const dialog = await openDialog(page, account);
+      expect(await derivedLine(dialog)).toBe(`${accounts.reconcileDerived} ${MINUS}$ 5.000`);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("an asset at −$ 5.000 keeps its sign, one minus only", async ({ page }) => {
+    const account = await seedAccount({ openingCents: 0, spendCents: 500_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      expect(await derivedLine(dialog)).toBe(`${accounts.reconcileDerived} ${MINUS}$ 5.000`);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a card owing $ 315.000 counted at $ 300.000 reads the same frame in line 3 and the history", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -31_500_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      expect(await derivedLine(dialog)).toBe(`${accounts.reconcileDerived} $ 315.000`);
+
+      await realField(dialog, accounts.reconcileRealLiability).fill("300000");
+      await submit(dialog).click();
+
+      const first = historyFigures(dialog).first();
+      await expect(first).toBeVisible();
+      expect(flat(await first.innerText())).toBe("Según HomeFund $ 315.000 · Real $ 300.000");
+      // The sheet refreshes to the debt the count made true.
+      await expect
+        .poll(async () => derivedLine(dialog))
+        .toBe(`${accounts.reconcileDerived} $ 300.000`);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("an asset history seeded at −$ 5.000 reads exactly, with no doubled minus anywhere", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ openingCents: 0, spendCents: 0 });
+    try {
+      await seedReconciliation(account.id, addCivilDays(TODAY, -3), -500_000);
+      const dialog = await openDialog(page, account);
+
+      const first = historyFigures(dialog).first();
+      await expect(first).toBeVisible();
+      expect(flat(await first.innerText())).toBe(`Según HomeFund $ 0 · Real ${MINUS}$ 5.000`);
+      expect(await derivedLine(dialog)).toBe(`${accounts.reconcileDerived} ${MINUS}$ 5.000`);
+      expect(await dialog.innerText()).not.toMatch(/[−-]\s*[−-]/);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a history row whose derived figure was −$ 5.000 on an asset keeps that minus", async ({
+    page,
+  }) => {
+    // 3 days ago the account stood at −$ 5.000 (it spent that from nothing 10 days ago); the count was $ 0.
+    const account = await seedAccount({ openingCents: 0, spendCents: 500_000 });
+    try {
+      await seedReconciliation(account.id, addCivilDays(TODAY, -3), 0);
+      const dialog = await openDialog(page, account);
+
+      const first = historyFigures(dialog).first();
+      await expect(first).toBeVisible();
+      expect(flat(await first.innerText())).toBe(`Según HomeFund ${MINUS}$ 5.000 · Real $ 0`);
+    } finally {
+      await dropAccount(account.id);
     }
   });
 });

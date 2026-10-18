@@ -166,6 +166,7 @@ export function MovementForm({
   defaults,
   causeOptions = [],
   causedByTransactionId = null,
+  onSaved,
   onDone,
 }: {
   mode: "create" | "edit";
@@ -186,6 +187,8 @@ export function MovementForm({
     description?: string | null;
     splits?: { categoryId: string; amount: string }[];
   };
+  // Runs on a stored write only; `onDone` also runs on the back button.
+  onSaved?: () => void;
   onDone: () => void;
 }) {
   const t = useTranslations("transactions");
@@ -419,6 +422,7 @@ export function MovementForm({
   }, [scope, form]);
 
   function onActionSuccess() {
+    onSaved?.();
     onDone();
   }
 

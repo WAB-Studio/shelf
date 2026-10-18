@@ -164,7 +164,8 @@ Board «LoginCódigo», HomeFund, 360 and 1280, inside the existing `Card`. Deci
 ## Decisions of 2026-10-17 (afternoon), by the user
 
 - **A past month's weekly budget shows that month's last week.** Navigating to a past month, the weekly budget reads the
-  last week of that month, not the current one. Not built yet.
+  last week of that month, not the current one. Built in #613 (`lib/dates.ts:161-164`); the user closed it with no
+  module on 2026-10-17 (decidido-17 Q5).
 
 ## Boards of 2026-10-17: «Pedir otro código» and the mails (codigo-6b)
 
@@ -214,3 +215,61 @@ Canvas «HomeFund», page «Miembros». 360 seven states, 1280 empty. Built in c
   «Ese correo ya tiene una invitación en este grupo.», from the dialog and from onboarding); «Editar miembro» has no address.
 - Onboarding's warning toast reads the same new words.
 - The address line on the row is new: today's member card shows no address.
+
+## Boards of 2026-10-17: «Mis categorías» (C3i redrawn) and «Dónde va» (C3j) (decidido-17)
+
+Canvas «HomeFund», page «T4 · pantallas», from y=4164. 360, seven boards. The two earlier C3i boards are in «Archivo».
+Words and structure (keys are `categories.*`; sample names are data, not copy):
+Data names (Gimnasio, Salidas, Cine, Restaurantes, Mercado, Verduras, Carnes, Transporte, Servicios, «Casa») are sample data, not copy.
+
+### C3iCategoriasMiasLiderMovil (leader, in a fund)
+1. `h1` «Categorías» (`title`), then the button «Añadir categoría» (`add`), then the Gastos/Ingresos toggle (`expenseTab`, `incomeTab`).
+2. `h2` «Mis categorías» (`personalSection`), then own cards with a menu on every row: Gimnasio (0 subcategorías), Salidas (2: Cine, Restaurantes). `subcategoryCount`.
+3. `h2` «Casa» (fund name), then the fund's cards with menus: Mercado (2: Verduras, Carnes), Transporte, Servicios. No `leaderOnly` line.
+
+### C3iCategoriasMiasMiembroMovil (plain member, in a fund)
+1. Same top: `h1`, button «Añadir categoría» (the member now has it), toggle.
+2. `h2` «Mis categorías», own cards with menus (as the leader's).
+3. `h2` «Casa», then the line `leaderOnly` «Pide al propietario del fondo que cree o cambie las categorías del fondo.», then the fund's cards with no menu on any row.
+
+### C3iCategoriasSinFondoMovil (no fund)
+`h1`, button «Añadir categoría», toggle, one list of cards with menus (Mercado 2, Transporte, Servicios). No section heading, no «Mis categorías», no fund name. Today's screen.
+
+### C3iCategoriasMiasVaciaMovil (member, no own category of the kind)
+1. `h1`, button «Añadir categoría», toggle.
+2. `h2` «Mis categorías», then the empty state, centred: title `personalEmptyTitle` «Todavía no tienes categorías propias»; description `personalEmptyDescription` «Crea una categoría tuya para clasificar los movimientos de tus cuentas personales.»; action button «Añadir categoría» (the same `addButton` the top row holds, as today's empty state does).
+3. `h2` «Casa», the `leaderOnly` line, fund cards without menus (Mercado 2, Transporte).
+
+### C3jDondeVaLiderMovil (leader, «Añadir categoría»)
+Dialog title `addTitle` «Añadir categoría». Fields in order: Nombre (`nameLabel`) · Dónde va (`placementLabel`) a Select, default «Del fondo» (`placementGroup`), drawn open with two options in this order: «Del fondo» (selected, check), «Mías» (`placementPersonal`) · Categoría principal (`parentLabel`) Select, «Sin categoría principal» (`parentNone`) · Tipo (`kindLabel`) as text «Gasto» with `kindLocked` beneath · Color (`colorLabel`) swatches · buttons «Cancelar», «Guardar» (`common.cancel`, `common.save`). Changing the placement re-reads the parent list and the default colour.
+
+### C3jDondeVaMiembroMovil (plain member or no fund)
+Same dialog with no «Dónde va» field at all: one placement offered means no Select and no line. The category goes to «Mías» by the server and the dialog says nothing. Fields: Nombre · Categoría principal (personal parents only) · Tipo + `kindLocked` · Color · «Cancelar» / «Guardar».
+
+### C3jDondeVaEditarMovil (edit)
+Title `editTitle` «Editar categoría». Fields: Nombre «Gimnasio» · Dónde va as a label with the text «Mías» and `placementLocked` «El lugar no se puede cambiar después de crear la categoría.» beneath (same pattern as the Tipo line; the labels dialog's precedent) · Categoría principal · Tipo + `kindLocked` · Color · buttons. The edit sends no `placement`.
+
+Field order in every create dialog: Nombre, Dónde va, Categoría principal, Tipo, Color (placement before parent because it decides the parent list; name first as in the labels dialog).
+
+Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 5.000» on line 3, the field's frame
+(decision above). Not built yet.
+
+## Decisions of 2026-10-17 (night), after the critic of codigo-6c and the decidido-17 plan, by the user
+
+- **«Mis categorías» opens no code** (Q2 a): RF-63 already scopes a category to a person or a group and RF-57 gives the
+  fund's to its leader; decidido-17 makes that reachable inside a fund.
+- **From onboarding, «Agregar sin correo» asks for the name alone** (Q1 a); «Añadir miembro» on «Miembros» keeps
+  «Correo (opcional)». Note on board «MiembroCorreo». Built in decidido-17 M2.
+- **A budget takes the place of the account it is on** (Q6 a): a personal account gives a personal budget, a fund's
+  account the fund's. Today every budget inside a fund is the fund's (`app/actions/budgets.ts:76`). Level 3. Not built yet.
+- **Inviting someone already in this fund is refused** (critic codigo-6c, 1 a): an address that is a live member of
+  this fund, the leader's own included, is refused with «Esa persona ya está en este grupo.»; the warning for an
+  address Auth already holds is reworded so it no longer promises entry into this fund. Another fund is never looked
+  at. Level 3. Not built yet.
+- **An archived invitation no longer blocks a new one** (critic codigo-6c, 2 a): the unique index on a group's invite
+  address skips archived rows, so inviting again creates a fresh pending member; the archived row stays as history.
+  A migration, level 3. Not built yet.
+- **An address whose domain takes no mail is refused when inviting** (critic codigo-6c, 3 a), with `/login`'s own
+  words, from the dialog and from onboarding. One DNS lookup per invitation; a domain whose DNS is down at that moment
+  is refused. Level 3. Not built yet.
+

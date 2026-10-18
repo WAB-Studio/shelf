@@ -352,6 +352,90 @@ test("a roster disc is 36 by 36 and round", async ({ page }) => {
   expect(radius).toBeGreaterThanOrEqual(18);
 });
 
+/**
+ * RF-07, RF-149: from onboarding, «Agregar sin correo» opens the members dialog with the name alone.
+ */
+test.describe("«Agregar sin correo» asks for a name alone", () => {
+  async function openDialog(page: Page) {
+    await openStep(page);
+    await page.getByRole("button", { name: step.addWithoutEmail, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("textbox", { name: members.nameLabel })).toBeVisible();
+    return dialog;
+  }
+
+  test("the dialog shows «Nombre» and no address field", async ({ page }) => {
+    // Kills: defaulting `withEmail` to true from onboarding.
+    const dialog = await openDialog(page);
+
+    await expect(dialog.getByRole("textbox")).toHaveCount(1);
+    await expect(dialog.getByRole("textbox", { name: members.emailLabel })).toHaveCount(0);
+    await expect(dialog.getByText(members.emailHint)).toHaveCount(0);
+  });
+
+  test("saving adds a member with no address, no mail and a POST without an email key", async ({ page }) => {
+    // Kills: sending `email: ""` as an address; spreading the defaults into the payload.
+    const name = `Sin correo ${randomUUID().slice(0, 8)}`;
+    const posts = countActionPosts(page);
+    const dialog = await openDialog(page);
+
+    await dialog.getByRole("textbox", { name: members.nameLabel }).fill(name);
+    await dialog.getByRole("button", { name: messages.common.save, exact: true }).click();
+
+    await expect(page.getByText(members.created, { exact: true })).toBeVisible();
+    await expect(dialog).toBeHidden();
+    const card = cards(page).filter({ hasText: name });
+    await expect(card).toHaveCount(1);
+    await expect(card.getByText(members.pendingBadge, { exact: true })).toHaveCount(0);
+
+    expect(posts.count()).toBe(1);
+    const sent = JSON.parse(posts.bodies[0]) as Record<string, unknown>[];
+    expect(Object.keys(sent[0])).toEqual(["name"]);
+    const rows = await rosterRows();
+    expect(rows.find((row) => row.name === name)?.invite_email).toBeNull();
+    expect(await mailCount(name)).toBe(0);
+  });
+
+  test("while the save is held «Nombre» and «Cancelar» are disabled and «Guardar» shows a spinner", async ({ page }) => {
+    // Kills: the dialog left editable while the action runs.
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/onboarding/invite*", async (route) => {
+      if (!isAction(route)) return route.fallback();
+      await gate;
+      await route.continue();
+    });
+    const dialog = await openDialog(page);
+    try {
+      await dialog.getByRole("textbox", { name: members.nameLabel }).fill(`Retenido ${randomUUID().slice(0, 8)}`);
+      const save = dialog.getByRole("button", { name: messages.common.save, exact: true });
+      await save.click();
+
+      await expect(save).toBeDisabled();
+      await expect(dialog.getByRole("button", { name: messages.common.cancel, exact: true })).toBeDisabled();
+      await expect(dialog.getByRole("textbox", { name: members.nameLabel })).toBeDisabled();
+    } finally {
+      release();
+    }
+  });
+
+  test("«Cancelar» closes the dialog, sends nothing and adds no card", async ({ page }) => {
+    // Kills: submitting on close.
+    const posts = countActionPosts(page);
+    const dialog = await openDialog(page);
+
+    await dialog.getByRole("textbox", { name: members.nameLabel }).fill("Nadie");
+    await dialog.getByRole("button", { name: messages.common.cancel, exact: true }).click();
+
+    await expect(dialog).toBeHidden();
+    expect(posts.count()).toBe(0);
+    await expect(cards(page)).toHaveCount(1);
+    expect(await rosterRows()).toHaveLength(1);
+  });
+});
+
 test.describe("a refusal reads as the one that happened", () => {
   test.describe("a plain member", () => {
     test.use({ storageState: MEMBER_STORAGE_STATE });

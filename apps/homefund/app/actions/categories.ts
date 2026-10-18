@@ -9,7 +9,7 @@ import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
 import {
-  createCategorySchema,
+  createCategoryInputSchema,
   deleteCategorySchema,
   updateCategorySchema,
 } from "@/lib/validation/category";
@@ -29,17 +29,23 @@ function categoryConstraintErrorKey(parentId: string | null): string {
  * is the caller's group when they belong to one, otherwise their personal set.
  */
 export const createCategoryAction = authActionClient
-  .inputSchema(createCategorySchema)
-  .action(async ({ parsedInput, ctx }) => {
-    const group = await getUserGroup();
-    const scope: CategoryScope = group
-      ? { groupId: group.id }
-      : { ownerUserId: ctx.user.id };
+  .inputSchema(createCategoryInputSchema)
+  .action(async ({ parsedInput: { placement, ...input }, ctx }) => {
+    let scope: CategoryScope;
+    if (placement === "personal") {
+      scope = { ownerUserId: ctx.user.id };
+    } else {
+      const group = await getUserGroup();
+      if (placement === "group" && !group) throw new ActionError("errors.notFound");
+      scope = group ? { groupId: group.id } : { ownerUserId: ctx.user.id };
+    }
+    const parsedInput = input;
 
     let categoryId: string;
     try {
       ({ categoryId } = await createCategory({ ...parsedInput, scope }));
     } catch (error) {
+      if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
       if (pgErrorCode(error) === "23514") {
         throw new ActionError(categoryConstraintErrorKey(parsedInput.parentId));
       }

@@ -50,3 +50,38 @@ test("sign-in links are capped at 10 a day per client", () => {
 test("sign-in links are capped at 3 a day per address", () => {
   assert.equal(env.SIGN_IN_LINK_DAILY_ADDRESS_CAP, 3);
 });
+
+// Each case loads the real module afresh with the given variables, then restores the environment.
+let loads = 0;
+
+async function load(vars: Record<string, string>) {
+  const keys = [...CAPS, ...Object.keys(REQUIRED), "CLIENT_KEY_SALT", "SKIP_ENV_VALIDATION"];
+  const before = new Map(keys.map((key) => [key, process.env[key]]));
+  try {
+    for (const key of keys) delete process.env[key];
+    Object.assign(process.env, REQUIRED, vars);
+    loads += 1;
+    return (await import(`./env.ts?case=${loads}-${Date.now()}`)) as typeof import("./env");
+  } finally {
+    for (const [key, value] of before) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+// Mutation: `.nonnegative()` in place of `.positive()` lets 0 through; dropping `.int()` lets 2.5 through.
+for (const name of ["SIGN_IN_LINK_DAILY_CLIENT_CAP", "SIGN_IN_LINK_DAILY_ADDRESS_CAP"] as const) {
+  test(`${name} of 0 is refused`, async () => {
+    await assert.rejects(load({ [name]: "0" }), /Invalid environment variables/);
+  });
+
+  test(`${name} of 2.5 is refused`, async () => {
+    await assert.rejects(load({ [name]: "2.5" }), /Invalid environment variables/);
+  });
+
+  test(`${name} of 7 is kept`, async () => {
+    const loaded = await load({ [name]: "7" });
+    assert.equal(loaded.env[name], 7);
+  });
+}
