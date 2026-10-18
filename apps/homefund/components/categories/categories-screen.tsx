@@ -50,6 +50,7 @@ type FormTarget = {
   defaultParentId?: string | null;
   hasChildren?: boolean;
   placement?: CategoryPlacement;
+  defaultPlacement?: CategoryPlacement;
 };
 
 // A top-level category names its children before the cascade removes them;
@@ -203,6 +204,16 @@ export function CategoriesScreen({
   // Everyone adds to their own set; the fund's is the leader's alone (RF-57).
   const addButton = (
     <Button type="button" onClick={() => setFormTarget({})}>
+      <Plus size={16} />
+      {t("add")}
+    </Button>
+  );
+  // Under an empty «Mis categorías» the dialog opens on «Mías».
+  const addOwnButton = (
+    <Button
+      type="button"
+      onClick={() => setFormTarget({ defaultPlacement: "personal" })}
+    >
       <Plus size={16} />
       {t("add")}
     </Button>
@@ -382,7 +393,7 @@ export function CategoriesScreen({
                 description={t(
                   hasFund ? "personalEmptyDescription" : "emptyDescription",
                 )}
-                action={addButton}
+                action={addOwnButton}
               />
             ) : (
               cards(personal, "personal", true)
@@ -438,6 +449,7 @@ export function CategoriesScreen({
         parentsByPlacement={parentsByPlacement}
         usedColorsByPlacement={usedColorsByPlacement}
         placement={formTarget?.placement}
+        defaultPlacement={formTarget?.defaultPlacement}
         open={formTarget !== null}
         onOpenChange={(open) => {
           if (!open) setFormTarget(null);

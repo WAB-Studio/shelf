@@ -318,3 +318,51 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   («Esa persona ya está en este grupo.», `errors.domainUndeliverable`, «Ese correo ya tiene una invitación en este grupo.»).
   No desktop board: the same dialog opens from the 1280 row menu. A note on C3iCategoriasMiasVaciaMovil: the empty state's
   button opens on «Mías».
+
+## Decisions of 2026-10-18, after the critic of critic-6c, by the user
+
+- «Editar presupuesto» offers only the accounts of the budget's place (Q1 a): a personal category's budget the person's own
+  accounts, a fund category's the fund's; the scope refusal reads on its field inside the dialog, at 360 too. Level 2. Built
+  (respuestas-18, M1).
+- A delete blocked by a subcategory in use (Q2 a): `errors.categoryInUse` reads «Esta categoría, o una de sus subcategorías,
+  está en uso y no se puede eliminar.», for the parent and the subcategory alike; no query names the child.
+- Q-A (a), 2026-10-18: the label list of «Nuevo presupuesto» and «Editar presupuesto» is cut by the budget's scope too, as the
+  accounts are.
+- Q-B (b), 2026-10-18: toasts hidden under an open dialog at 360 across HomeFund are fixed in the next train by the toast
+  primitive itself, for every dialog; this train moves only the budget dialog's scope refusal onto its field.
+- Boards: C3k «Editar presupuesto · cuentas de su ámbito» and C3l «Editar presupuesto · rechazo en el campo» (HomeFund
+  canvas, page «T4 · pantallas», 2026-10-18); no desktop face, the dialog is the same.
+
+## Decisions of 2026-10-18, on the dependency map of the open findings, by the user
+
+- **A stale edit is refused** (Q1 a): when a money form was opened before the row changed (another form, or the 00:15
+  cron), saving reads «Esto cambió mientras lo editabas. Vuelve a abrirlo.» and nothing is saved.
+- **An invitation is accepted** (Q2 a): RF-154 opened. Boards «X te invitó · Aceptar / Rechazar» and «Salir del fondo»
+  are drawn before any worker. Not built yet.
+- **Planned payments promise no notice** (Q4 a): «Son recordatorios: aparecen aquí en su fecha, y tú registras el gasto
+  cuando lo pagas.» «te avisan» comes back with RF-141.
+- **The five open debt cases** of the 2026-10-15 audit (Q7 a) are settled one by one in a question session before their
+  module; the rest of the debt fixes do not wait.
+- **Deleting what an ingest rule learned from keeps the rule** (Q8 a), its target set to null: the next delivery proposes
+  no account or category.
+- **Quick entry reads thousands and millions** (Q12): «mil» and «k» are a thousand; «m», «millón» and «millones» are a
+  million. «mil» never means a million («mil pesos» is a thousand). Refined the same day (Q12-b, c, d): «m» is a million
+  only right after the number («5m») or as the amount's last word («2 m»), never when text follows («5 m de cable»);
+  «millon» without the accent is a million; «mil» alone proposes 1.000. When the «m» has words after it («3 M arriendo»), the sheet asks «¿Cuánto es «3 M»?» with the bare number and the
+  million as two choices, and saves nothing until one is picked or an amount is typed (Q12-e; boards C3m, C3n); «un millón»
+  with no number before it proposes 1.000.000 (Q12-f a).
+- **Contrast** (Q6 a): every token under WCAG is darkened to the nearest same-hue value that passes, and this file's token
+  table follows. Not measured yet.
+- **Shared packages** (Q11 a): `@repo/sign-in` and `@repo/caller` are promoted once GoalLog's call wrapper and WordBook's
+  sign-in settle their shapes.
+- **Region** (Q13 b): HomeFund's and WordBook's Vercel region is measured with `vercel inspect` before anything is pinned.
+- **«Revisar el mes»** (2026-10-18, the user's idea): RF-155 opened. A screen and an MCP tool list the month's anomalies
+  by fixed rules; Claude does any AI review through MCP. Its own train with its board, after wave 2. Not built yet.
+- **Quick entry, lowercase «m»** (critic C2 b, later the same day): a lowercase «m» is never a million; only «M» or
+  «millón/millones» multiply. «25 m» is 25, «5 m de cable» is 5; «3 M arriendo» asks. Supersedes the «m» lines above.
+- **Fund labels read «· fondo»** in the budget forms (critic C1 a), as categories do.
+- **RF-156 and RF-157 opened** (Q24 a): the stale-edit refusal, and the paused rule's reason with the 12-month limit on a
+  rule's next run (Q16 a, Q17 a).
+- **A foreign purchase estimated on a debit account is confirmed on the account in «Cuentas»** (Q18 a), with the debt
+  screen's «Confirmar monto» row. Board to draw before its module.
+- **A second «efectivo» stays allowed** (Q23 a); the first withdrawal's race is closed by a lock, with nothing visible.

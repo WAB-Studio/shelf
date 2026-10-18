@@ -1869,3 +1869,27 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   antes de pedir otro.»; «Entrar» that hangs says «No sabemos si se comprobó el código. Espera un momento antes de
   escribirlo otra vez.» Board «EntrarSinRespuesta».
 
+
+## Decisions of 2026-10-18, after the critic of critic-6c, by the user
+
+- **A refusal that arrives after the 8 s sentence replaces it.** When it answers the newest attempt and the sentence
+  still shows, «Ese código no vale o ya venció.», «Demasiados intentos. Prueba de nuevo en unos minutos.» or «Este correo
+  no tiene invitación a GoalLog.» takes the sentence's place, in the same spot an on-time refusal would read. The sentence
+  may change in front of the person (Q3 b). A refusal for an older attempt, or after the person typed, sent again or left
+  the step, changes nothing; a late rejection that is not a refusal leaves the sentence. No pending record is written or
+  cleared by it.
+- Supersedes «A late refusal is dropped» (critic-6c M7) and the board's «the screen says nothing more».
+
+## Decisions of 2026-10-18, on the dependency map of the open findings, by the user
+
+- **«pulsar» becomes «goallog»** (Q3 a) in the template's first line and the MCP server's name; the reader still accepts an
+  old `pulsar ·` header, and every connected AI is added again once. Not built yet.
+- **Open sign-up closes** (Q10 a) once respuestas-18 lands: only an address on the list gets a code, as HomeFund and
+  WordBook already do. Not built yet.
+- **Contrast** (Q6 a): the token-table borders and the `quiet` tone are darkened to the nearest same-hue value that
+  passes; the token table follows. Not built yet.
+- **The OAuth consent title names the return site** (Q15 a): «evil.example quiere ver tus metas», with «se presenta como
+  «Claude»» under it. Not built yet.
+- **A goal's note reaches the AI cut to 2.000 characters** with its length, and `get_note` reads the whole (Q20 a), with
+  the chat work of wave 3. MCP refusals keep their per-tool sentences (Q21 b).
+- **A refresh token or code reused within 30 s answers `invalid_grant` without revoking the connection** (Q22 a).

@@ -136,7 +136,7 @@ export function SignInForm({
       setState({ ...current, code, checking: false, error: "codeShape" });
       return;
     }
-    attempt.current += 1;
+    const mine = (attempt.current += 1);
     setState({ ...current, code, checking: true, error: undefined });
     // A good code redirects and never returns; only a refusal comes back.
     verifying.current += 1;
@@ -152,10 +152,15 @@ export function SignInForm({
       return;
     }
     if (result === TIMED_OUT) {
-      // The call still runs: a good code lands by its own redirect, a late refusal is dropped.
+      // The call still runs: a good code lands by its own redirect; a refusal replaces the sentence while it still shows.
       call.then(
-        () => {
+        (late) => {
           verifying.current -= 1;
+          const refusal = late?.error;
+          if (!refusal || mine !== attempt.current) return;
+          setState((cur) =>
+            cur.kind === "sent" && cur.error === "timedOutCheck" ? { ...cur, checking: false, error: refusal } : cur,
+          );
         },
         (error: unknown) => {
           try {
@@ -188,7 +193,16 @@ export function SignInForm({
     if (result === TIMED_OUT) {
       call.then(
         (late) => {
-          if (!late.ok || mine !== attempt.current) return;
+          if (mine !== attempt.current) return;
+          if (!late.ok) {
+            const refusal = late.error;
+            setState((cur) =>
+              cur.kind === "sent" && cur.resend.kind === "failed" && cur.resend.error === "timedOut"
+                ? { ...cur, resend: { kind: "failed", error: refusal } }
+                : cur,
+            );
+            return;
+          }
           const sentAt = Date.now();
           savePending(current.email, sentAt);
           setNow(sentAt);
@@ -234,7 +248,14 @@ export function SignInForm({
     if (result === TIMED_OUT) {
       call.then(
         (late) => {
-          if (!late.ok || mine !== attempt.current) return;
+          if (mine !== attempt.current) return;
+          if (!late.ok) {
+            const refusal = late.error;
+            setState((cur) =>
+              cur.kind === "failed" && cur.error === "timedOut" ? { kind: "failed", error: refusal } : cur,
+            );
+            return;
+          }
           const sentAt = Date.now();
           savePending(address, sentAt);
           setNow(sentAt);

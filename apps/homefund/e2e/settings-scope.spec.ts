@@ -1154,3 +1154,203 @@ test.describe("a caller with no fund, «Mis categorías» and «Dónde va» (dec
     expect(row.group_id).toBeNull();
   });
 });
+
+test.describe("the add inside «Mis categorías» (cierre-d17)", () => {
+  let groupId: string;
+  const INCOME = "/es/settings/categories?kind=income";
+
+  test.beforeEach(async () => {
+    ({ groupId } = await seedGroup());
+  });
+
+  test.afterEach(async () => {
+    await dropRowsOfRun();
+  });
+
+  // On the phone the page draws the top button, then «Mis categorías»' empty one, then the fund's.
+  const personalEmptyAdd = (page: Page): Locator => addButtons(page).nth(1);
+  const fundEmptyAdd = (page: Page): Locator => addButtons(page).nth(2);
+
+  async function openPersonalEmpty(page: Page): Promise<void> {
+    await page.goto(INCOME);
+    await expect(band(page).getByText(categories.personalEmptyTitle, { exact: true })).toBeVisible();
+    await personalEmptyAdd(page).click();
+    await expect(dialogOf(page)).toBeVisible();
+  }
+
+  test.describe("on the phone", () => {
+    test.beforeEach(({ page }) => {
+      test.skip(laptop(page), "the empty «Mis categorías» is the phone's");
+    });
+
+    test("opens on «Mías», still a choice, «Del fondo» first in the list", async ({ page }) => {
+      // Kills: keeping placements[0]; presetting through the fixed placement (hides the select).
+      await openPersonalEmpty(page);
+
+      await expect(placementSelect(page)).toBeVisible();
+      await expect(placementSelect(page)).toBeEnabled();
+      await expect(placementSelect(page)).toHaveText(categories.placementPersonal);
+      await placementSelect(page).click();
+      expect(await optionTexts(page)).toEqual([categories.placementGroup, categories.placementPersonal]);
+    });
+
+    test("the parents and the first colour follow «Mías»", async ({ page }) => {
+      // Kills: the colour or the parents read from placements[0].
+      const fundParent = tagged("Ingreso del fondo");
+      await fixtureSql`
+        insert into categories (id, group_id, name, kind, color)
+        values (${randomUUID()}, ${groupId}, ${fundParent}, 'income', ${CATEGORY_COLORS[0]})`;
+      await openPersonalEmpty(page);
+
+      const colorOption = (index: number) => categories.colorOption.replace("{number}", String(index + 1));
+      await expect(dialogOf(page).getByRole("radio", { name: colorOption(0), exact: true })).toBeChecked();
+      await parentSelect(page).click();
+      await expect(page.getByRole("option").filter({ hasText: fundParent })).toHaveCount(0);
+    });
+
+    test("saves a category of their own", async ({ page }) => {
+      // Kills: a placement dropped on submit (the row lands in the fund).
+      const name = tagged("Freelance");
+      await openPersonalEmpty(page);
+      await nameField(page).fill(name);
+      await saveButton(page).click();
+
+      await expect(page.getByText(categories.created, { exact: true }).first()).toBeVisible();
+      await expect(dialogOf(page)).toBeHidden();
+      await expectAbove(
+        band(page).getByRole("heading", { name: categories.personalSection }),
+        band(page).getByText(name, { exact: true }),
+      );
+      const row = await rowOf(name);
+      expect(row.owner_user_id).toBe(scope.userId);
+      expect(row.group_id).toBeNull();
+    });
+
+    test("switched to «Del fondo» saves into the fund", async ({ page }) => {
+      // Kills: pinning the placement.
+      const name = tagged("Freelance fondo");
+      await openPersonalEmpty(page);
+      await placementSelect(page).click();
+      await page.getByRole("option", { name: categories.placementGroup, exact: true }).click();
+      await nameField(page).fill(name);
+      await saveButton(page).click();
+
+      await expect(page.getByText(categories.created, { exact: true }).first()).toBeVisible();
+      const row = await rowOf(name);
+      expect(row.group_id).toBe(groupId);
+      expect(row.owner_user_id).toBeNull();
+    });
+
+    test("the top button still opens on «Del fondo»", async ({ page }) => {
+      // Kills: defaulting every button to «Mías».
+      await page.goto(INCOME);
+      await addButtons(page).first().click();
+      await expect(placementSelect(page)).toHaveText(categories.placementGroup);
+    });
+
+    test("the fund's empty state still opens on «Del fondo»", async ({ page }) => {
+      // Kills: passing `personal` from both empty states.
+      await page.goto(INCOME);
+      await fundEmptyAdd(page).click();
+      await expect(placementSelect(page)).toHaveText(categories.placementGroup);
+    });
+
+    test("pending: every field and both buttons are disabled, «Guardar» spins", async ({ page }) => {
+      const name = tagged("Pendiente mia");
+      const held = holdActions(page);
+      await held.ready;
+      await openPersonalEmpty(page);
+      await nameField(page).fill(name);
+      await saveButton(page).click();
+
+      await expect(saveButton(page)).toBeDisabled();
+      await expect(saveButton(page).locator(".rt-Spinner")).toBeVisible();
+      await expect(nameField(page)).toBeDisabled();
+      await expect(placementSelect(page)).toBeDisabled();
+      await expect(parentSelect(page)).toBeDisabled();
+      await expect(dialogOf(page).getByRole("button", { name: common.cancel, exact: true })).toBeDisabled();
+
+      held.release();
+      await expect(dialogOf(page)).toBeHidden();
+      expect((await rowOf(name)).owner_user_id).toBe(scope.userId);
+    });
+
+    test("«Cancelar» sends nothing and adds no row", async ({ page }) => {
+      // Kills: submitting on close.
+      const name = tagged("Cancelada mia");
+      const sent = watchActions(page);
+      await openPersonalEmpty(page);
+      await nameField(page).fill(name);
+      await dialogOf(page).getByRole("button", { name: common.cancel, exact: true }).click();
+
+      await expect(dialogOf(page)).toBeHidden();
+      expect(sent).toHaveLength(0);
+      expect(await rowOf(name)).toBeUndefined();
+    });
+
+    test("a refusal shows a toast and the dialog stays on «Mías»", async ({ page }) => {
+      // Kills: resetting the placement on error.
+      const name = tagged("Refusada mia");
+      const foreignParent = await seedFundCategory(groupId, tagged("Gasto del fondo"));
+      // The picker offers no such parent, so the request is forged: an expense parent of the fund under a personal income.
+      await page.route("**/*", async (route) => {
+        const request = route.request();
+        const body = request.postData();
+        if (request.method() === "POST" && request.headers()["next-action"] && body?.includes(name)) {
+          await route.continue({ postData: body.replace('"parentId":null', `"parentId":"${foreignParent}"`) });
+          return;
+        }
+        await route.continue();
+      });
+      await openPersonalEmpty(page);
+      await nameField(page).fill(name);
+      await saveButton(page).click();
+
+      await expect(page.locator("[data-sonner-toast], [role='status']").first()).toBeVisible();
+      const closed = await expect(dialogOf(page))
+        .toBeHidden({ timeout: 1500 })
+        .then(
+          () => true,
+          () => false,
+        );
+      expect(closed).toBe(false);
+      await expect(placementSelect(page)).toHaveText(categories.placementPersonal);
+      expect(await rowOf(name)).toBeUndefined();
+    });
+
+    test("360: no horizontal overflow with the dialog open", async ({ page }) => {
+      await openPersonalEmpty(page);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      );
+      expect(overflow).toBe(false);
+    });
+  });
+
+  test("the laptop's all-empty table still opens on «Del fondo»", async ({ page }) => {
+    // Kills: defaulting the laptop's empty button to «Mías».
+    test.skip(!laptop(page), "the laptop's table is the wide band's");
+    await page.goto(INCOME);
+    await addButtons(page).last().click();
+    await expect(placementSelect(page)).toHaveText(categories.placementGroup);
+  });
+
+  test.describe("a plain member", () => {
+    test.use({ storageState: MEMBER_STORAGE_STATE });
+
+    test("the empty state's button has no «Dónde va» and saves personal", async ({ page }) => {
+      // Kills: drawing the select for a member.
+      test.skip(laptop(page), "the empty «Mis categorías» is the phone's");
+      const name = tagged("Miembro vacia");
+      await page.goto(INCOME);
+      await addButtons(page).first().click();
+      await expect(dialogOf(page)).toBeVisible();
+      await expect(placementSelect(page)).toHaveCount(0);
+      await nameField(page).fill(name);
+      await saveButton(page).click();
+
+      await expect(page.getByText(categories.created, { exact: true }).first()).toBeVisible();
+      expect((await rowOf(name)).owner_user_id).toBe(scope.memberUserId);
+    });
+  });
+});

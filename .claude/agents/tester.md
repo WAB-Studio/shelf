@@ -42,6 +42,7 @@ reading app, `docs/goallog/SPEC.md` for the goals app, the plan's done criterion
 - Never disable the deliverability guard in `app/actions/account.ts` to drive a form. Call
   `isDomainDeliverable` directly.
 - Never `git stash` in a lane. Every worktree shares one `refs/stash`.
+- Never commit anything under `private/`. Your report stays in the lane, untracked.
 - Never run `db:migrate` or write to the database outside the harness.
 
 # Reach for, in this order

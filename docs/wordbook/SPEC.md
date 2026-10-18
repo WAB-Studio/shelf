@@ -294,6 +294,8 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-74** — On the code step, «Pedir otro código» sends a new code to the same address without typing it again,
   once a countdown of Auth's wait between sends has run out; the new code replaces the last. A send Auth refuses does
   not count against the daily caps. Decided by the user 2026-10-17.
+- [ ] **RL-75** — The daily sign-in mail cap counts per address and per requesting IP /64 together, with a ceiling of 10
+  per address, so a stranger cannot spend the owner's mails. RL-74 stays as written. Decided by the user 2026-10-18 (Q5).
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside
   the app.

@@ -1840,3 +1840,16 @@ Canvas «Diccionario de lectura», page «Registro», v55. Dark 360. Built in de
   no tiene traducción guardada. Si la buscaste hace tiempo, búscala otra vez y tendrá tarjeta.»); the no-card line
   «Para Anki: ninguna de tus 4 palabras tiene traducción guardada. Si las buscaste hace tiempo, búscalas otra vez y
   tendrán tarjeta.» (`log.study.ankiNone`).
+
+## Decisions of 2026-10-18, on the dependency map of the open findings, by the user
+
+- **The daily sign-in cap counts per address and per requesting IP /64 together** (Q5 a), with a per-address ceiling of
+  10, so a stranger cannot spend the owner's mails. Not built yet.
+- **Persistent storage is asked only from «Copia»** (Q9 b), with one line saying why. Not built yet.
+- **`/cuenta` keeps its board** (Q14 a): no visible label above the field; the refusal is tied to the field (built,
+  oleada-1).
+- **Contrast** (Q6 a): the quietest role and the search border are darkened to the nearest same-hue value that passes;
+  the token tables follow. Not built yet.
+- **«Copia» asks for persistent storage** (Q19 a): the line «El navegador puede borrar tu registro si te falta espacio.»
+  and a «Pedirlo» button, while not kept and the API exists, signed in or out. Board to draw before its module.
+- **RL-75 opened, RL-74 kept** (the user, 2026-10-18).

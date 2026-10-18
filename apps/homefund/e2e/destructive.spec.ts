@@ -115,6 +115,68 @@ test("creates a category and deletes it from the screen and the table", async ({
   expect(left).toHaveLength(0);
 });
 
+test("refuses a parent whose subcategory is in use, naming the subcategories", async ({
+  page,
+}) => {
+  const categories = messages.categories;
+  const sentence =
+    "Esta categoría, o una de sus subcategorías, está en uso y no se puede eliminar.";
+  const parentId = randomUUID();
+  const childId = randomUUID();
+  const budgetId = randomUUID();
+  const parentName = `Padre ${stamp}`;
+
+  async function refuseDelete(): Promise<void> {
+    await page.goto("/es/settings/categories?kind=expense");
+    // The seeded scope category shares the expense tab: pick this parent's own row.
+    const trigger = rowMenus(page).and(
+      page.getByRole("button", { name: new RegExp(parentName) }),
+    );
+    await expect(trigger).toHaveCount(1);
+    await trigger.click();
+    await page.getByRole("menuitem", { name: common.delete, exact: true }).click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toBeVisible();
+    if (await dialog.getByText(categories.deleteWithChildrenDescription.split("{")[0]).count()) {
+      await expect(
+        dialog.getByText("Esta acción también elimina su subcategoría.", { exact: true }),
+      ).toBeVisible();
+    }
+    await dialog.getByRole("button", { name: common.delete, exact: true }).click();
+    await expect(page.getByText(sentence, { exact: true })).toBeVisible();
+  }
+
+  try {
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into categories (id, owner_user_id, name, kind, color)
+        values (${parentId}, ${scope.userId}, ${parentName}, 'expense', '#4C8C4A')`;
+      await tx`
+        insert into categories (id, owner_user_id, parent_id, name, kind, color)
+        values (${childId}, ${scope.userId}, ${parentId}, ${`Hijo ${stamp}`}, 'expense', '#4C8C4A')`;
+      await tx`
+        insert into budgets (id, owner_user_id, category_id, period, limit_cents, threshold_pct)
+        values (${budgetId}, ${scope.userId}, ${childId}, 'monthly', 100000, 80)`;
+    });
+
+    // The child is in use: the parent's delete is refused with the new sentence.
+    await refuseDelete();
+
+    // The parent itself in use: the same sentence.
+    await fixtureSql`update budgets set category_id = ${parentId} where id = ${budgetId}`;
+    await refuseDelete();
+
+    const left = await fixtureSql`
+      select id from categories where id in (${parentId}, ${childId})`;
+    expect(left).toHaveLength(2);
+    expect(await fixtureSql`select id from budgets where id = ${budgetId}`).toHaveLength(1);
+  } finally {
+    await fixtureSql`delete from budgets where id = ${budgetId}`;
+    await fixtureSql`delete from categories where id = ${childId}`;
+    await fixtureSql`delete from categories where id = ${parentId}`;
+  }
+});
+
 test("creates a label and deletes it from the screen and the table", async ({
   page,
 }) => {

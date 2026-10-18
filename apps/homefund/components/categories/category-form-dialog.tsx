@@ -71,6 +71,8 @@ type CategoryFormProps = {
   usedColorsByPlacement: Record<CategoryPlacement, string[]>;
   // Fixed when editing or adding under a parent: the row's own place.
   placement?: CategoryPlacement;
+  // Where a create opens when it is on offer; the select still changes it.
+  defaultPlacement?: CategoryPlacement;
   onOpenChange: (open: boolean) => void;
   category?: Category;
   defaultParentId?: string | null;
@@ -103,6 +105,7 @@ function CategoryForm({
   parentsByPlacement,
   usedColorsByPlacement,
   placement: fixedPlacement,
+  defaultPlacement,
   onOpenChange,
   category,
   defaultParentId,
@@ -114,7 +117,12 @@ function CategoryForm({
 
   const isEdit = !!category;
 
-  const initialPlacement = fixedPlacement ?? placements[0] ?? "personal";
+  const initialPlacement =
+    fixedPlacement ??
+    (defaultPlacement && placements.includes(defaultPlacement)
+      ? defaultPlacement
+      : placements[0]) ??
+    "personal";
 
   const form = useForm<CategoryFormValues>({
     resolver: (isEdit
