@@ -985,6 +985,8 @@
       "pending": "Pendientes de facturar",
       "spent": "Gastado",
       "estimate": "Estimado",
+      "confirm": "Confirmar monto",
+      "billedHint": "Lo que el banco cobró en pesos.",
       "billedLabel": "Monto facturado",
       "rate": "Tasa",
       "save": "Guardar monto",

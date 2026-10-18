@@ -1,18 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { Fragment, useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
-import { recordBilledAmountAction } from "@/app/actions/debt-settlement";
 import { deleteInstallmentPlanAction } from "@/app/actions/installment-plans";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
 import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
+import { SettlementRow } from "@/components/planning/settlement-row";
 import { StatementsSection } from "@/components/planning/statements-section";
 import {
   Badge,
@@ -20,10 +18,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  Field,
-  FieldControl,
-  FieldLabel,
-  FieldMessage,
   Flex,
   Heading,
   Link,
@@ -32,10 +26,8 @@ import {
   RowMenu,
   ScreenHeader,
   Separator,
-  Spinner,
   StatTiles,
   Text,
-  TextField,
   type DataColumn,
 } from "@/components/ui";
 import type { DebtDetailData } from "@/db/queries/debt-detail";
@@ -45,14 +37,10 @@ import type {
   InstallmentPlanRow,
 } from "@/db/queries/installment-plans";
 import { Link as LocaleLink } from "@/i18n/navigation";
-import { minorUnitExponent, type CurrencyCode } from "@/lib/currency";
+import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
-import { deriveRate, formatMoney, parseAmount } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
-import {
-  recordBilledAmountSchema,
-  type RecordBilledAmountInput,
-} from "@/lib/validation/debt-settlement";
 
 // The em dash a cell or a tile with nothing to name reads as (SPEC-A3), not a
 // word a translator would ever change.
@@ -66,11 +54,6 @@ const LINE_WIDTHS = {
   status: "120px",
   movement: "minmax(0, 1fr)",
 } as const;
-
-// A currency with decimals needs the keypad that types one (RF-121).
-function amountInputMode(currency: CurrencyCode): "decimal" | "numeric" {
-  return minorUnitExponent(currency) > 0 ? "decimal" : "numeric";
-}
 
 /**
  * One liability read in full (RF-16, RF-81, RF-82, RF-129): its derived saldo over
@@ -622,149 +605,5 @@ function SettlementSection({
         </Flex>
       )}
     </>
-  );
-}
-
-/**
- * One purchase waiting for its statement. The rate is the quotient of the two
- * amounts on the row and is stored nowhere (RF-122); it follows the figure being
- * typed as soon as that reads as an amount, so the tasa on screen always divides
- * the two cifras beside it.
- */
-function SettlementRow({
-  movement,
-  accountId,
-  currency,
-  canWrite,
-}: {
-  movement: PendingSettlement;
-  accountId: string;
-  currency: CurrencyCode;
-  canWrite: boolean;
-}) {
-  const t = useTranslations("debts.settlement");
-  const format = useFormatter();
-  const onActionError = useActionErrorToast();
-
-  const form = useForm<RecordBilledAmountInput>({
-    resolver: zodResolver(recordBilledAmountSchema),
-    defaultValues: {
-      transactionId: movement.id,
-      accountId,
-      // What the typed string is read in, and what the write refuses to differ
-      // from: the same schema validates both ends (RNF-10).
-      currency,
-      billedAmount: "",
-    },
-  });
-
-  const save = useAction(recordBilledAmountAction, {
-    onSuccess() {
-      toast.success(t("saved"), { description: t("replacedEstimate") });
-    },
-    onError: onActionError,
-  });
-
-  const typed = useWatch({ control: form.control, name: "billedAmount" });
-
-  // Both integers are in the scale the columns keep, which is what `deriveRate`
-  // divides: the rate is their quotient and lands in no column of its own.
-  const spentCents = movement.amountCents;
-  const billedCents = parseAmount(typed) ?? movement.counterAmountCents;
-  const rate = deriveRate(spentCents, movement.currency, billedCents, currency);
-
-  const occurred = format.dateTime(civilDateToDate(movement.occurredAt), {
-    day: "numeric",
-    month: "short",
-  });
-
-  return (
-    <Flex direction="column" gap="2" py="3">
-      <Flex align="center" justify="between" gap="4">
-        <Text size="2" weight="medium" truncate>
-          {movement.description ?? occurred}
-        </Text>
-        {movement.description !== null && (
-          <Text size="2" color="gray">
-            {occurred}
-          </Text>
-        )}
-      </Flex>
-
-      <Flex align="center" justify="between" gap="4">
-        <Text size="2" color="gray">
-          {t("spent")}
-        </Text>
-        <Text size="2" weight="medium">
-          <Money
-            minor={spentCents}
-            currency={movement.currency}
-            signed={false}
-            size="inherit"
-          />
-        </Text>
-      </Flex>
-
-      <Flex align="center" justify="between" gap="4">
-        <Text size="2" color="gray">
-          {t("estimate")}
-        </Text>
-        <Text size="2" weight="medium">
-          <Money
-            minor={movement.counterAmountCents}
-            currency={currency}
-            estimate
-            signed={false}
-            size="inherit"
-          />
-        </Text>
-      </Flex>
-
-      <Flex align="center" justify="between" gap="4">
-        <Text size="2" color="gray">
-          {t("rate")}
-        </Text>
-        <Text size="2" weight="medium">
-          {format.number(rate, { maximumFractionDigits: 2 })}
-        </Text>
-      </Flex>
-
-      {/* Exactly what the policies would admit: a reader sees the two figures and
-          is offered no field to replace one with. */}
-      {canWrite && (
-        <form
-          onSubmit={form.handleSubmit((values) => save.execute(values))}
-          noValidate
-        >
-          <Controller
-            name="billedAmount"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field invalid={fieldState.invalid}>
-                <FieldLabel htmlFor={`billed-${movement.id}`}>
-                  {t("billedLabel")}
-                </FieldLabel>
-                <FieldControl>
-                  <TextField.Root
-                    {...field}
-                    id={`billed-${movement.id}`}
-                    size="3"
-                    inputMode={amountInputMode(currency)}
-                    disabled={save.isPending}
-                  />
-                </FieldControl>
-                <FieldMessage error={fieldState.error} />
-              </Field>
-            )}
-          />
-          <Flex justify="end" pt="2">
-            <Button type="submit" disabled={save.isPending}>
-              {save.isPending && <Spinner />}
-              {t("save")}
-            </Button>
-          </Flex>
-        </form>
-      )}
-    </Flex>
   );
 }

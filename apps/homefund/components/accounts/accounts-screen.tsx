@@ -14,6 +14,11 @@ import {
   restoreAccountAction,
 } from "@/app/actions/accounts";
 import { AccountFormDialog } from "@/components/accounts/account-form-dialog";
+import {
+  BilledAmountDialog,
+  ForeignEstimates,
+  type BilledTarget,
+} from "@/components/accounts/foreign-estimates";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
 import { AccountsTable } from "@/components/accounts/accounts-table";
 import {
@@ -32,9 +37,11 @@ import {
   Money,
   ScreenHeader,
   SegmentedControl,
+  Separator,
   Text,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
+import type { AccountPendingSettlement } from "@/db/queries/debt-statements";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -84,11 +91,14 @@ function groupByPlacement(
 export function AccountsScreen({
   accounts,
   groupName,
+  pendingSettlements,
   archived,
   newSubtype,
 }: {
   accounts: AccountRow[];
   groupName: string | null;
+  // Foreign estimates still unbilled on the asset accounts, every account's together.
+  pendingSettlements: AccountPendingSettlement[];
   archived: boolean;
   // The class a caller arrived asking to open, already validated by the page.
   newSubtype?: (typeof ACCOUNT_SUBTYPES)[number] | null;
@@ -114,6 +124,7 @@ export function AccountsScreen({
   );
   const [reconcileTarget, setReconcileTarget] = useState<AccountRow | null>(null);
   const [rowAction, setRowAction] = useState<RowAction | null>(null);
+  const [billedTarget, setBilledTarget] = useState<BilledTarget | null>(null);
 
   const archiveState = useAction(archiveAccountAction, {
     onSuccess() {
@@ -195,6 +206,12 @@ export function AccountsScreen({
         .filter((institution): institution is string => Boolean(institution)),
     ),
   ).sort((a, b) => a.localeCompare(b));
+  const pendingFor = (account: AccountRow) =>
+    pendingSettlements.filter((movement) => movement.accountId === account.id);
+  const withPending = filteredAccounts.filter(
+    (account) => pendingFor(account).length > 0,
+  );
+
   const addButton = (
     <Button type="button" onClick={() => setFormTarget("new")}>
       <Plus size={16} />
@@ -325,6 +342,21 @@ export function AccountsScreen({
             onDelete={(account) => setRowAction({ kind: "delete", account })}
             onHandOver={(account) => setRowAction({ kind: "handOver", account })}
           />
+
+          {/* The table has no room for a purchase list, so each account that has
+              one gets the card's own section beneath it. */}
+          {withPending.map((account) => (
+            <Card key={account.id}>
+              <Flex direction="column" gap="3">
+                <Text weight="medium">{account.name}</Text>
+                <ForeignEstimates
+                  account={account}
+                  pending={pendingFor(account)}
+                  onConfirm={setBilledTarget}
+                />
+              </Flex>
+            </Card>
+          ))}
         </Flex>
       </Box>
 
@@ -361,6 +393,8 @@ export function AccountsScreen({
                         key={account.id}
                         account={account}
                         archived={archived}
+                        pending={pendingFor(account)}
+                        onConfirm={setBilledTarget}
                         onEdit={() => setFormTarget(account)}
                         onReconcile={() => setReconcileTarget(account)}
                         onArchive={() => setRowAction({ kind: "archive", account })}
@@ -394,6 +428,13 @@ export function AccountsScreen({
         account={formTarget === "new" ? undefined : (formTarget ?? undefined)}
         defaultSubtype={newSubtype ?? undefined}
       />
+
+      {billedTarget !== null && (
+        <BilledAmountDialog
+          target={billedTarget}
+          onClose={() => setBilledTarget(null)}
+        />
+      )}
 
       {reconcileTarget !== null && (
         <ReconcileDialog
@@ -474,6 +515,8 @@ export function AccountsScreen({
 function AccountCard({
   account,
   archived,
+  pending,
+  onConfirm,
   onEdit,
   onReconcile,
   onArchive,
@@ -483,6 +526,8 @@ function AccountCard({
 }: {
   account: AccountRow;
   archived: boolean;
+  pending: AccountPendingSettlement[];
+  onConfirm: (target: BilledTarget) => void;
   onEdit: () => void;
   onReconcile: () => void;
   onArchive: () => void;
@@ -500,6 +545,7 @@ function AccountCard({
 
   return (
     <Card>
+      <Flex direction="column" gap="3">
       <Flex justify="between" align="start" gap="3">
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2" wrap="wrap">
@@ -613,6 +659,17 @@ function AccountCard({
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
+      </Flex>
+      {pending.length > 0 && (
+        <>
+          <Separator size="4" />
+          <ForeignEstimates
+            account={account}
+            pending={pending}
+            onConfirm={onConfirm}
+          />
+        </>
+      )}
       </Flex>
     </Card>
   );

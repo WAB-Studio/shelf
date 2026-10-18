@@ -1,6 +1,6 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { minimumPaymentSql } from "@/db/queries/debt-minimum";
 import { withUserDb } from "@/db/session";
@@ -106,9 +106,10 @@ export type PendingSettlement = {
 };
 
 /**
- * The card's purchases in another currency the issuer has not billed yet (RF-123):
+ * The purchases in another currency the issuer has not billed yet (RF-123):
  * a movement whose `currency` is not the account's settlement currency and whose
- * second amount is still an estimate. ONE round trip.
+ * second amount is still an estimate. ONE round trip. A liability and an asset
+ * both answer: a foreign purchase on a debit account is estimated too (RF-137).
  *
  * Each row is bounded to the statement period it falls in — the cut-off on or
  * after the purchase, none while the period is still open — and the list leads
@@ -118,9 +119,31 @@ export type PendingSettlement = {
 export async function listPendingSettlements(
   accountId: string,
 ): Promise<PendingSettlement[]> {
+  return readPendingSettlements(sql`a.id = ${accountId}`);
+}
+
+export type AccountPendingSettlement = PendingSettlement & { accountId: string };
+
+/**
+ * Every pending foreign estimate on the caller's live asset accounts, for the
+ * accounts screen: one statement for all of them, so the screen fans it out beside
+ * its roster instead of asking once per account. Scope is the policies', as above.
+ */
+export async function listPendingAssetSettlements(): Promise<
+  AccountPendingSettlement[]
+> {
+  return readPendingSettlements(
+    sql`a.kind = 'asset' and a.archived_at is null`,
+  );
+}
+
+async function readPendingSettlements(
+  accountFilter: SQL,
+): Promise<AccountPendingSettlement[]> {
   return withUserDb(async (tx) => {
     const rows = await tx.execute<{
       id: string;
+      account_id: string;
       occurred_at: string;
       description: string | null;
       currency: string;
@@ -129,6 +152,7 @@ export async function listPendingSettlements(
     }>(sql`
       select
         t.id,
+        a.id as account_id,
         t.occurred_at,
         t.description,
         t.currency,
@@ -142,8 +166,7 @@ export async function listPendingSettlements(
         from account_statements s
         where s.account_id = a.id and s.cut_off_date >= t.occurred_at
       ) p on true
-      where a.id = ${accountId}
-        and a.kind = 'liability'
+      where ${accountFilter}
         and t.currency <> a.settlement_currency
         and t.counter_is_estimate
       order by p.cut_off_date asc nulls last, t.occurred_at desc, t.id
@@ -151,6 +174,7 @@ export async function listPendingSettlements(
 
     return rows.map((row) => ({
       id: row.id,
+      accountId: row.account_id,
       occurredAt: row.occurred_at,
       description: row.description,
       currency: row.currency,

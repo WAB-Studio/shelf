@@ -985,6 +985,8 @@
       "pending": "Pending billing",
       "spent": "Spent",
       "estimate": "Estimated",
+      "confirm": "Confirm amount",
+      "billedHint": "What the bank charged in pesos.",
       "billedLabel": "Billed amount",
       "rate": "Rate",
       "save": "Save amount",
