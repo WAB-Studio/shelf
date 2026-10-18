@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
+import { useEffect } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -31,6 +32,7 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 // The field takes the decimals the row's currency is written with, so
 // reopening a figure and saving it back stores the integer it already held.
 import { scopedCategoryName } from "@/lib/fund/category-names";
+import { categoriesInScope, scopeOfAccounts } from "@/lib/fund/category-scope";
 import { amountToInput } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
@@ -117,19 +119,21 @@ function BudgetForm({
   // The limit is measured against an expense category's spend, so only expense
   // categories can carry a budget (RF-71); children are offered alongside their
   // parent so a budget can narrow to a subcategory.
-  const expenseCategories = options.categories
+  const allExpenseCategories = options.categories
     .filter((category) => category.kind === "expense")
     .flatMap((category) => [
       {
         id: category.id,
+        scope: category.scope,
         name: scopedCategoryName(category.name, category.scope, mark),
       },
       ...category.children.map((child) => ({
         id: child.id,
+        scope: category.scope,
         name: scopedCategoryName(child.name, category.scope, mark),
       })),
     ]);
-  const categoryName = expenseCategories.find(
+  const categoryName = allExpenseCategories.find(
     (category) => category.id === budget?.categoryId,
   )?.name;
 
@@ -197,6 +201,25 @@ function BudgetForm({
   const isPending = isEdit ? update.isPending : create.isPending;
 
   const threshold = useWatch({ control: form.control, name: "thresholdPct" });
+  const accountId = useWatch({ control: form.control, name: "accountId" });
+
+  // The picked account fixes the scope the category list is cut to; with none,
+  // both scopes are offered (RF-71).
+  const expenseCategories = categoriesInScope(
+    allExpenseCategories,
+    scopeOfAccounts([accountId ?? null], options.accounts),
+  );
+  const pickedCategoryId = useWatch({ control: form.control, name: "categoryId" });
+
+  // An account of the other scope strands the picked category outside the list.
+  useEffect(() => {
+    if (
+      pickedCategoryId &&
+      !expenseCategories.some((one) => one.id === pickedCategoryId)
+    ) {
+      form.setValue("categoryId", "", { shouldValidate: true });
+    }
+  }, [expenseCategories, pickedCategoryId, form]);
 
   function onSubmit(values: BudgetFormValues) {
     // The resolver already parsed `values` against the schema for this mode,

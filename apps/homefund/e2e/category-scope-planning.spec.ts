@@ -107,7 +107,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  await fixtureSql`delete from budgets where account_id = ${ids.personalAccount}`;
+  await fixtureSql`delete from budgets where account_id in ${fixtureSql([ids.fundAccount, ids.personalAccount])}`;
   await fixtureSql`delete from recurring_rules where id = ${ids.rule}`;
   await fixtureSql`delete from planned_payments where id = ${ids.payment}`;
   await fixtureSql`delete from budgets where id in ${fixtureSql([ids.fundBudget, ids.namedBudget, ids.personalBudget])}`;
@@ -195,18 +195,21 @@ test.describe("budgets", () => {
     await expect(page.locator("#budget-category")).toHaveText(MARKED);
     await pick(page, "#budget-account", PERSONAL_ACCOUNT);
 
-    await expect(page.locator("#budget-category")).toHaveText(budgets.categoryPlaceholder);
+    await expect(page.locator("#budget-category")).toHaveText("");
   });
 
-  test("a budget on a personal account and its category saves", async ({ page }) => {
+  test("a budget on the fund's account and its category saves", async ({ page }) => {
+    // A member of a group files every budget under it, so the saving pair is the fund's.
     await page.goto("/es/planning/budgets");
     await page.getByRole("button", { name: budgets.add, exact: true }).first().click();
-    await pick(page, "#budget-account", PERSONAL_ACCOUNT);
-    await pick(page, "#budget-category", NAME);
+    await pick(page, "#budget-account", FUND_ACCOUNT);
+    await pick(page, "#budget-category", MARKED);
     await page.getByRole("dialog").locator("#budget-limit").fill("100000");
     await page.getByRole("dialog").getByRole("button", { name: budgets.save, exact: true }).click();
 
     await expect(page.getByText(budgets.created, { exact: true })).toBeVisible();
+    // The new row would double the marked title the specs below count.
+    await fixtureSql`delete from budgets where account_id = ${ids.fundAccount}`;
   });
 
   test("the edit dialog's locked category reads the marked name", async ({ page }) => {
