@@ -348,7 +348,9 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Quick entry reads thousands and millions** (Q12): «mil» and «k» are a thousand; «m», «millón» and «millones» are a
   million. «mil» never means a million («mil pesos» is a thousand). Refined the same day (Q12-b, c, d): «m» is a million
   only right after the number («5m») or as the amount's last word («2 m»), never when text follows («5 m de cable»);
-  «millon» without the accent is a million; «mil» alone proposes 1.000.
+  «millon» without the accent is a million; «mil» alone proposes 1.000. When the «m» has words after it («3 M arriendo»), the sheet asks «¿Cuánto es «3 M»?» with the bare number and the
+  million as two choices, and saves nothing until one is picked or an amount is typed (Q12-e; boards C3m, C3n); «un millón»
+  with no number before it proposes 1.000.000 (Q12-f a).
 - **Contrast** (Q6 a): every token under WCAG is darkened to the nearest same-hue value that passes, and this file's token
   table follows. Not measured yet.
 - **Shared packages** (Q11 a): `@repo/sign-in` and `@repo/caller` are promoted once GoalLog's call wrapper and WordBook's
