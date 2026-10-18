@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { draftRefusals, importDraftJsonSchema } from "./draft";
 import { coverage } from "./coverage";
-import { parseTemplate as parseV2, parseTemplateV1 as parseTemplate, templateSource } from "./template";
+import { parseTemplate as parseV2, parseTemplateV1 as parseTemplate, templateSource, TEMPLATE_HEADER } from "./template";
 import { GOAL_NAME_MAX, GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
@@ -12,7 +12,7 @@ const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json
 // The first template's example, as the catalogue showed it before the second: the v1 tests read it.
 const EXAMPLE = "pulsar · plantilla 1\n\n# IA aplicada\nhorizonte: 2027-10-01\nmedida: horas de estudio · minutos\nritmo: 12 h\n\n## Fases\n- 2026-10-01 a 2026-12-31 · Evals y harness\n\n## Meses\n- 2026-10 · 12 h\n- 2026-11 · 20 h\n\n## Compromisos\n- Tema técnico · martes y jueves · 2 h\n- Inglés pasivo · cada día · toque\n\n## Tareas\n- 2026-10 · 4 h · Leer AI Engineering cap. 1–4\n- 2026-10 · Tutor\n  nota: Preguntar por la tarifa por hora.\n  nota: Pedir una clase de prueba antes de pagar.\n  - 1 h · Elegir tutor\n    nota: Comparar tres perfiles.\n  - 6 h · Sesiones 1–4";
 
-const EXAMPLE2 = `pulsar · plantilla 2
+const EXAMPLE2 = `goallog · plantilla 2
 
 # Carrera en IA
 horizonte: 2028-10-01
@@ -659,7 +659,7 @@ test("801 first line: «pulsar ·» with another version is refused on line 1, m
 
 test("801 first line: the refusal names the first line and the header the plantilla wants", () => {
   const [only] = mistakesOf("pulsar · plantilla 3\n# A\nhorizonte: 2027-10-01\n");
-  assert.equal(said(only), "La primera línea va como «pulsar · plantilla 2».");
+  assert.equal(said(only), "La primera línea va como «goallog · plantilla 2».");
 });
 
 test("801 first line: a text that does not start with «pulsar ·» still goes to the AI reading", () => {
@@ -1316,4 +1316,40 @@ test("992 task unit: a task in the wrong unit is named, and the lines under it a
       [9, "import.errors.form.child"],
     ],
   );
+});
+
+test("M63: the text template's header starts «goallog ·»", () => {
+  assert.ok(TEMPLATE_HEADER.startsWith("goallog ·"));
+  assert.equal(TEMPLATE_HEADER, "goallog · plantilla 2");
+  const result = parseV2(`${TEMPLATE_HEADER}\n# A\nhorizonte: 2027-10-01\n`);
+  assert.ok(result.matched && "draft" in result);
+});
+
+test("M63: «pulsar · plantilla 2» still reads, to the draft «goallog · plantilla 2» gives", () => {
+  const body = "\n# A\nhorizonte: 2027-10-01\nmedida: estudio · horas\n## Meses\n- 2026-10 · 2 h\n";
+  const old = parseV2(`pulsar · plantilla 2${body}`);
+  const fresh = parseV2(`goallog · plantilla 2${body}`);
+  assert.ok(old.matched && "draft" in old, JSON.stringify(old));
+  assert.ok(fresh.matched && "draft" in fresh, JSON.stringify(fresh));
+  assert.equal(old.draft.goals[0].name, "A");
+  assert.deepEqual(JSON.parse(JSON.stringify(old.draft, (k, v) => (k === "src" || k === "noteSrc" ? undefined : v))),
+    JSON.parse(JSON.stringify(fresh.draft, (k, v) => (k === "src" || k === "noteSrc" ? undefined : v))));
+});
+
+test("M63: «pulsar · plantilla 1» still reads", () => {
+  const old = parseV2("pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\n");
+  assert.ok(old.matched && "draft" in old, JSON.stringify(old));
+});
+
+test("M63: a first line «goallog ·» or «pulsar ·» with an unknown version is the first-line error, cut", () => {
+  for (const first of ["goallog · plantilla 9", "pulsar · plantilla 9", "goallog · plantilla 1x", "goallog · algo"]) {
+    const result = parseV2(`${first}\n# A\nhorizonte: 2027-10-01\n`);
+    assert.ok(result.matched && "error" in result, first);
+    assert.equal(result.cut, true, first);
+    assert.deepEqual(result.errors, [{ line: 1, expected: "import.errors.form.firstLine" }], first);
+  }
+});
+
+test("M63: a first line of another name is not matched", () => {
+  assert.deepEqual(parseV2("otra · plantilla 2\n# A\nhorizonte: 2027-10-01\n"), { matched: false });
 });

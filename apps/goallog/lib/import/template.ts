@@ -5,7 +5,8 @@ import { GOAL_NAME_MAX, GOAL_NOTE_MAX } from "@/lib/validation/plan";
 import { importDraftSchema, type ImportDraft, type ImportDraftV1, type Source, type Src } from "./draft";
 
 // The grammar is docs/goallog/PLANTILLA.md's.
-export const TEMPLATE_HEADER = "pulsar · plantilla 2";
+export const TEMPLATE_HEADER = "goallog · plantilla 2";
+export const TEMPLATE_HEADER_PULSAR = "pulsar · plantilla 2";
 export const TEMPLATE_HEADER_V1 = "pulsar · plantilla 1";
 
 // A template's goals: the version 1 file holds 12, the version 2 file 40.
@@ -197,14 +198,19 @@ export function templateSource(text: string): Source {
   return { kind: "lines", lines: lines.map((l) => { const m = NOTE_LINE.exec(l); return m ? (m[2] ?? "") : l; }) };
 }
 
+/** The current header and the two the product wrote under its old name. */
+export function isTemplateHeader(line: string): boolean {
+  return line === TEMPLATE_HEADER || line === TEMPLATE_HEADER_PULSAR || line === TEMPLATE_HEADER_V1;
+}
+
 export function parseTemplate(text: string): TemplateResult {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).map((l) => l.trimEnd());
   const first = lines.findIndex((l) => l.trim() !== "");
   if (first === -1) return { matched: false };
-  if (lines[first] !== TEMPLATE_HEADER && lines[first] !== TEMPLATE_HEADER_V1) {
-    return lines[first].startsWith("pulsar ·") ? cut(first + 1, FORMS.firstLine) : { matched: false };
+  if (!isTemplateHeader(lines[first])) {
+    return lines[first].startsWith("goallog ·") || lines[first].startsWith("pulsar ·") ? cut(first + 1, FORMS.firstLine) : { matched: false };
   }
-  const version = lines[first] === TEMPLATE_HEADER ? 2 : 1;
+  const version = lines[first] === TEMPLATE_HEADER_V1 ? 1 : 2;
 
   const errors: TemplateError[] = [];
   const report = (line: number, expected: FormCode, unit?: string) => {

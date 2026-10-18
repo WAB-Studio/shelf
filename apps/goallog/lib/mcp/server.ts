@@ -20,7 +20,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
       registerReadTools(server);
       registerWriteTools(server);
     },
-    { serverInfo: { name: "pulsar", version: pkg.version }, instructions: mcp.instructions },
+    { serverInfo: { name: "goallog", version: pkg.version }, instructions: mcp.instructions },
   );
 }
 
@@ -31,7 +31,7 @@ export function resourceMetadataResponse(): Response {
   const metadata = generateProtectedResourceMetadata({
     authServerUrls: [SITE_URL],
     resourceUrl: MCP_URL,
-    additionalMetadata: { bearer_methods_supported: ["header"], resource_name: "pulsar" },
+    additionalMetadata: { bearer_methods_supported: ["header"], resource_name: "goallog" },
   });
 
   return new Response(JSON.stringify(metadata), {
