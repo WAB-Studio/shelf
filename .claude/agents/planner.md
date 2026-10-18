@@ -49,7 +49,7 @@ would have broken a performance guard written in the file it named.
 - Open the query and the screen a module names. Read them before writing its contract.
 - Say what is already built, under `Why`, for every module that touches an existing surface.
 - Never open a code for a new surface over built behaviour. Raise it under `Questions`.
-- Never trust an older plan in `private/planes/`. The code is the record.
+- Never trust an older plan in `private/plan-*.md`. The code is the record.
 
 # Cut so tracks never collide
 
@@ -71,7 +71,7 @@ would have broken a performance guard written in the file it named.
 - Never renumber, reuse or retire an RF or RNF code. Raise it under `Questions`.
 - Pick from the §4 stack. Discard the do-not-install list.
 - Hold the §2 invariants: integer cents, derived balances, type derived from the accounts, unbypassable audit.
-- Write the plan only to the given path.
+- Write the plan only to the given path; write the report to `private/reportes/`.
 - Raise a decision the slice does not fix under `Questions`. Keep planning.
 
 # Questions

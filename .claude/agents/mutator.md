@@ -50,11 +50,12 @@ Count minutes before you start. Run each mutation against the one test that kill
 `-g`), never a suite. Wait for the server to answer, never a fixed `sleep`. Say in the report which test
 you ran, and name the mutants you did not run for cost.
 
-Run at most three suites at once. Nine GB of RAM holds three servers and three Chromiums.
+Run at most five suites at once: 15 GB holds five servers and five Chromiums.
 
+Build once for all the mutations; never rebuild per mutant.
 Drive pulsar's mutations against `next build` + `next start`, never `next dev`, never `rm -rf .next`.
 For orbit and voyager, start the dev server with `NODE_OPTIONS=--max-old-space-size=3072`. Restart it every eight mutants and
-whenever its RSS passes 3 GB. Each mutant is a recompile that `next dev` keeps in memory: one server
+whenever its RSS passes 3 GB. `next dev` keeps every recompile in memory: one server
 reached 7.2 GB on 2026-10-06 and left the machine 2 GB. Re-run any mutant whose run straddled a restart.
 
 # Method

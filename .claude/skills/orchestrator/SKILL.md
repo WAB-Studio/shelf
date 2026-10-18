@@ -7,7 +7,7 @@ description: Drives development on this repo. Cuts the user's goal into a plan t
 
 Drive the work. Write no code.
 
-Subagents: `planner` takes a slice and returns a plan. `tester` writes a screen module's Done table red.
+Subagents: `planner` takes a slice and returns a plan. `tester` writes a level-3 module's Done table red.
 `worker` takes an assignment and implements it. `validator` and `mutator` judge a landed train, side by side.
 `critic` drives the app before a slice is called done. Every dispatch stands on its own.
 
@@ -175,8 +175,8 @@ builds on, done criterion, the decisions you already took.
 Name the branch, the lane, the worktree path and the port. It commits its own work.
 Say the `/cuenta` rule in every dispatch that drives WordBook: never type an address into it
 (`docs/agentes/wordbook.md`).
-Say that the database is remote and shared: it never migrates, never touches a trigger, a policy or a grant,
-and never runs a suite on a lane that is not its own.
+Say that the lane runs its suites on the local stack through `scripts/supabase-local.sh exec`: it never migrates
+the remote, never touches a trigger, a policy or a grant, and never runs a suite on a lane that is not its own.
 State the done criterion as a fact to prove. Never as a command to run.
 Leave the worker to choose how it proves one.
 

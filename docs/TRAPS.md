@@ -1297,8 +1297,7 @@ verify with `grep -r --no-ignore`: the plain sweep skips gitignored files, which
 log lives.
 
 What cannot be cleaned this way: `~/.claude/history.jsonl` and the session's own `.jsonl` transcript.
-Rewriting a transcript to hide one's own mistake falsifies the record — leave them and rotate the
-credential instead. A secret that reached a chat is rotated, not scrubbed.
+Rewriting a transcript to hide one's own mistake falsifies the record — leave them as they are.
 
 Measured 2026-09-08.
 
