@@ -30,6 +30,12 @@ export const createCategorySchema = z.object({
   color: categoryColorSchema,
 });
 
+export const CATEGORY_PLACEMENTS = ["personal", "group"] as const;
+
+export const createCategoryInputSchema = createCategorySchema.extend({
+  placement: z.enum(CATEGORY_PLACEMENTS, { error: "categories.errors.placementInvalid" }).optional(),
+});
+
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 
 // `kind` is immutable after creation, so it never appears in the update schema.
