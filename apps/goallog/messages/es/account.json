@@ -9,6 +9,8 @@
   "sentBody": "Te mandamos un código de seis números a <fig>{email}</fig>. Vence en una hora.",
   "sentOther": "Usar otro correo",
   "errors": {
+    "offline": "Sin conexión. No se pudo enviar el código.",
+    "offlineCheck": "Sin conexión. No se pudo comprobar el código.",
     "emailInvalid": "Escribe un correo válido.",
     "notInvited": "Este correo no tiene invitación a GoalLog.",
     "domainUndeliverable": "Ese dominio no recibe correo.",

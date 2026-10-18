@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import {
@@ -15,9 +16,10 @@ import { Button, Field, Figure, Flex, ScreenHeader, Text } from "@/components/ui
 
 type SentState = Extract<FormState, { kind: "sent" }>;
 
-type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"];
+// "offline" is the client's own: the call never reached the server.
+type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline";
 
-type CodeError = VerifySignInCodeResult["error"];
+type CodeError = VerifySignInCodeResult["error"] | "offlineCheck";
 
 type ResendState = { kind: "idle" } | { kind: "sending" } | { kind: "done" } | { kind: "failed"; error: SendError };
 
@@ -116,14 +118,29 @@ export function SignInForm({
     setState({ ...current, code, checking: true, error: undefined });
     // A good code redirects and never returns; only a refusal comes back.
     verifying.current = true;
-    const result = await verifySignInCode(address, code, next);
+    let result: VerifySignInCodeResult | undefined;
+    try {
+      result = await verifySignInCode(address, code, next);
+    } catch (error) {
+      // A good code lands through a redirect that rejects here; it is the landing, not a failure.
+      unstable_rethrow(error);
+      verifying.current = false;
+      setState({ kind: "sent", email: address, at, code, checking: false, error: "offlineCheck", resend: { kind: "idle" } });
+      return;
+    }
     verifying.current = false;
     if (result?.error) setState({ kind: "sent", email: address, at, code, checking: false, error: result.error, resend: { kind: "idle" } });
   }
 
   async function handleResend(current: SentState): Promise<void> {
     setState({ ...current, resend: { kind: "sending" } });
-    const result = await sendSignInLink(current.email, next);
+    let result: SendSignInLinkResult;
+    try {
+      result = await sendSignInLink(current.email, next);
+    } catch {
+      setState({ ...current, resend: { kind: "failed", error: "offline" } });
+      return;
+    }
     if (!result.ok) {
       setState({ ...current, resend: { kind: "failed", error: result.error } });
       return;
@@ -140,7 +157,13 @@ export function SignInForm({
       return;
     }
     setState({ kind: "sending" });
-    const result = await sendSignInLink(email, next);
+    let result: SendSignInLinkResult;
+    try {
+      result = await sendSignInLink(email, next);
+    } catch {
+      setState({ kind: "failed", error: "offline" });
+      return;
+    }
     if (!result.ok) {
       setState({ kind: "failed", error: result.error });
       return;
