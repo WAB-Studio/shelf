@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
+import { useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -113,12 +114,22 @@ export function DebtFormDialog({
   currency?: OfferedCurrency;
 }) {
   const t = useTranslations("debts");
+  // Set once the account exists but its terms did not land: the dialog then
+  // edits that account, so a retry never creates a second one.
+  const [createdId, setCreatedId] = useState<string | null>(null);
+
+  function handleOpenChange(next: boolean) {
+    if (!next) setCreatedId(null);
+    onOpenChange(next);
+  }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Content>
         <Dialog.Title>
-          {mode === "create" ? t("addTitle") : t("completeTermsTitle")}
+          {mode === "create" && !createdId
+            ? t("addTitle")
+            : t("completeTermsTitle")}
         </Dialog.Title>
         {/* Closing unmounts the content, and the key remounts on a change of
             subject, so the form below is always born with fresh defaults. */}
@@ -128,7 +139,9 @@ export function DebtFormDialog({
           hasGroup={hasGroup}
           account={account}
           currency={currency}
-          onOpenChange={onOpenChange}
+          createdId={createdId}
+          onCreated={setCreatedId}
+          onOpenChange={handleOpenChange}
         />
       </Dialog.Content>
     </Dialog.Root>
@@ -140,12 +153,16 @@ function DebtForm({
   hasGroup,
   account,
   currency,
+  createdId,
+  onCreated,
   onOpenChange,
 }: {
   mode: "create" | "complete";
   hasGroup: boolean;
   account?: DebtAccount;
   currency: OfferedCurrency;
+  createdId: string | null;
+  onCreated: (accountId: string) => void;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("debts");
@@ -153,9 +170,10 @@ function DebtForm({
   const tKey = useTranslations();
   const locale = useLocale();
 
-  const isCreate = mode === "create";
-
+  // Create until the account exists; after that only its terms are saved.
+  const isCreate = mode === "create" && !createdId;
   const form = useForm<DebtFormValues>({
+    // useForm reads the option on every render, so the resolver follows the mode.
     resolver: (isCreate
       ? zodResolver(createDebtSchema)
       : zodResolver(debtTermsSchema)) as unknown as Resolver<DebtFormValues>,
@@ -194,13 +212,18 @@ function DebtForm({
     onError: onActionError,
   });
 
+  const [termsFailed, setTermsFailed] = useState(false);
+
   const isPending = createAccount.isPending || saveTerms.isPending;
 
   // Drives which minimum input shows; the toggle nulls the other value so the
   // schema's amount-XOR-percentage check can never fail through this form.
   const minimumMode = useWatch({ control: form.control, name: "minimumMode" });
 
-  function termsInput(values: DebtFormValues, accountId: string): DebtTermsInput {
+  function termsInput(
+    values: DebtFormValues,
+    accountId: string,
+  ): DebtTermsInput {
     return {
       accountId,
       debtKind: values.debtKind,
@@ -214,7 +237,19 @@ function DebtForm({
     };
   }
 
+  // A refusal returns no data and a dead request throws: both leave the account
+  // in place and put the dialog on its terms.
+  async function saveTermsFor(values: DebtFormValues, accountId: string) {
+    try {
+      const saved = await saveTerms.executeAsync(termsInput(values, accountId));
+      return Boolean(saved?.data);
+    } catch {
+      return false;
+    }
+  }
+
   async function onSubmit(values: DebtFormValues) {
+    let accountId = createdId ?? account?.accountId ?? values.accountId;
     if (isCreate) {
       // Step one: the account. A liability's opening balance is submitted as a
       // positive string in the currency it settles in; the query signs it
@@ -231,18 +266,18 @@ function DebtForm({
         balanceOn: values.balanceOn,
       } satisfies CreateAccountInput);
 
-      const accountId = created?.data?.accountId;
-      if (!accountId) return;
+      const createdAccountId = created?.data?.accountId;
+      if (!createdAccountId) return;
+      accountId = createdAccountId;
+    }
 
-      // Step two: its terms. A failure here leaves a bare liability that
-      // reappears under "Completar términos"; the account is not rolled back.
-      const saved = await saveTerms.executeAsync(termsInput(values, accountId));
-      if (!saved?.data) return;
-    } else {
-      const saved = await saveTerms.executeAsync(
-        termsInput(values, values.accountId),
-      );
-      if (!saved?.data) return;
+    form.setValue("accountId", accountId);
+    // Step two: its terms. A failure keeps the account and holds its id, so the
+    // next submit saves terms only (RF-78).
+    if (!(await saveTermsFor(values, accountId))) {
+      if (isCreate) onCreated(accountId);
+      setTermsFailed(true);
+      return;
     }
 
     toast.success(t("saved"));
@@ -252,6 +287,11 @@ function DebtForm({
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
       <FieldGroup>
+        {termsFailed && (
+          <Text as="div" role="alert" size="2" color="red">
+            {t("errors.termsNotSaved")}
+          </Text>
+        )}
         {isCreate ? (
           <Controller
             name="name"
@@ -279,16 +319,22 @@ function DebtForm({
           <>
             <Field>
               <FieldLabel>{t("nameLabel")}</FieldLabel>
-              <Text size="3">{account?.name}</Text>
+              <Text size="3">{account?.name ?? form.getValues("name")}</Text>
             </Field>
-            <Field>
-              <FieldLabel>{t("openingBalanceLabel")}</FieldLabel>
-              <Text size="3">
-                {/* JSX cannot travel through `t()`, and this is the same figure
+            {account && (
+              <Field>
+                <FieldLabel>{t("openingBalanceLabel")}</FieldLabel>
+                <Text size="3">
+                  {/* JSX cannot travel through `t()`, and this is the same figure
                     `Money` draws, character for character (RF-121). */}
-                {formatMoney(Math.abs(account?.owedCents ?? 0), currency, locale)}
-              </Text>
-            </Field>
+                  {formatMoney(
+                    Math.abs(account?.owedCents ?? 0),
+                    currency,
+                    locale,
+                  )}
+                </Text>
+              </Field>
+            )}
           </>
         )}
 
@@ -408,7 +454,9 @@ function DebtForm({
           control={form.control}
           render={({ field, fieldState }) => (
             <Field invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="debt-rate">{t("annualRateLabel")}</FieldLabel>
+              <FieldLabel htmlFor="debt-rate">
+                {t("annualRateLabel")}
+              </FieldLabel>
               <FieldControl>
                 <TextField.Root
                   {...field}
@@ -537,7 +585,9 @@ function DebtForm({
                   size="3"
                   inputMode={amountInputMode(currency)}
                   value={field.value ?? ""}
-                  onChange={(event) => field.onChange(event.target.value || null)}
+                  onChange={(event) =>
+                    field.onChange(event.target.value || null)
+                  }
                   onBlur={field.onBlur}
                   disabled={isPending}
                 />
@@ -636,7 +686,9 @@ function DebtForm({
                   size="3"
                   inputMode={amountInputMode(currency)}
                   value={field.value ?? ""}
-                  onChange={(event) => field.onChange(event.target.value || null)}
+                  onChange={(event) =>
+                    field.onChange(event.target.value || null)
+                  }
                   onBlur={field.onBlur}
                   disabled={isPending}
                 />
