@@ -3672,6 +3672,160 @@ async function checkAllowedEmails0025(): Promise<void> {
   await sql.end();
 }
 
+// RP-138: `0026`'s daily claim counter for sign-in codes. `SIGN_IN_CLAIMS_MUTANT_SQL` runs privileged at the
+// top of the transaction (a mutant, or the whole migration to prove the suite can go green); it rolls back with it.
+async function checkSignInClaims0026(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.SIGN_IN_CLAIMS_MUTANT_SQL;
+  if (mutant) console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+
+  const today = "2026-10-17";
+  const yesterday = "2026-10-16";
+  const keyA = randomUUID().replace(/-/g, "");
+  const keyB = randomUUID().replace(/-/g, "");
+  const keyC = randomUUID().replace(/-/g, "");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject})`;
+      if (mutant) await tx.unsafe(mutant);
+
+      const claim = async (key: string, day: string, cap: number): Promise<string> => {
+        const r = await attemptRows<{ ok: boolean | null }>(
+          tx,
+          (sp) => sp`select goals.sign_in_claim(decode(${key}, 'hex'), ${day}::date, ${cap}::integer) as ok`,
+        );
+        return r.code ? `err ${r.code}` : String(r.rows[0]?.ok);
+      };
+      const release = async (keys: string[], day: string): Promise<string | undefined> => {
+        const r = await attemptRows(
+          tx,
+          (sp) => sp`select goals.sign_in_release(coalesce((select array_agg(decode(k, 'hex')) from unnest(${tx.array(keys)}::text[]) k), '{}'::bytea[]), ${day}::date)`,
+        );
+        return r.code;
+      };
+      const countOf = async (key: string, day: string): Promise<number | null> => {
+        const r = await attemptRows<{ count: number }>(
+          tx,
+          (sp) => sp`select count from goals.sign_in_claims where client_key = decode(${key}, 'hex') and day = ${day}::date`,
+        );
+        return r.code ? -1 : (r.rows[0]?.count ?? null);
+      };
+      const snapshot = async (): Promise<string> => {
+        const r = await attemptRows<{ s: string | null }>(
+          tx,
+          (sp) => sp`select string_agg(encode(client_key, 'hex') || '/' || day || '/' || count, ',' order by client_key, day) as s from goals.sign_in_claims`,
+        );
+        return r.code ? `err ${r.code}` : (r.rows[0]?.s ?? "");
+      };
+
+      // -- the cap holds, and a refusal leaves the count where it was --
+      const sent = [await claim(keyA, today, 2), await claim(keyA, today, 2), await claim(keyA, today, 2)];
+      assert("S01", sent.join() === "true,true,false", `claim x3 at cap 2 = ${sent.join()}`);
+      assert("S02", (await countOf(keyA, today)) === 2, `count after the refusal = ${await countOf(keyA, today)}`);
+      const again = await claim(keyA, today, 2);
+      assert("S03", again === "false" && (await countOf(keyA, today)) === 2, `a fourth claim = ${again}, count = ${await countOf(keyA, today)}`);
+
+      // -- the first claim opens the row at 1; a cap of 1 refuses the second --
+      const first = await claim(keyB, today, 1);
+      assert("S04", first === "true" && (await countOf(keyB, today)) === 1, `first claim = ${first}, count = ${await countOf(keyB, today)}`);
+      const second = await claim(keyB, today, 1);
+      assert("S05", second === "false" && (await countOf(keyB, today)) === 1, `second claim at cap 1 = ${second}, count = ${await countOf(keyB, today)}`);
+
+      // -- a day apart, a key apart --
+      const nextDay = await claim(keyA, yesterday, 2);
+      assert("S06", nextDay === "true" && (await countOf(keyA, yesterday)) === 1 && (await countOf(keyA, today)) === 2, `same key, other day = ${nextDay}, yesterday = ${await countOf(keyA, yesterday)}, today = ${await countOf(keyA, today)}`);
+      const otherKey = await claim(keyC, today, 2);
+      assert("S07", otherKey === "true" && (await countOf(keyC, today)) === 1, `other key, same day = ${otherKey}, count = ${await countOf(keyC, today)}`);
+
+      // -- release: named keys, named day only --
+      await claim(keyC, today, 2);
+      const before = [await countOf(keyA, today), await countOf(keyA, yesterday), await countOf(keyC, today)];
+      const r1 = await release([keyA], today);
+      const after = [await countOf(keyA, today), await countOf(keyA, yesterday), await countOf(keyC, today)];
+      assert("S08", r1 === undefined && before.join() === "2,1,2" && after.join() === "1,1,2", `release A today: ${before.join()} -> ${after.join()}, sqlstate = ${r1 ?? "none"}`);
+
+      const r2 = await release([keyB], today);
+      assert("S09", r2 === undefined && (await countOf(keyB, today)) === null, `release a key at 1: sqlstate = ${r2 ?? "none"}, row = ${await countOf(keyB, today)}`);
+
+      await claim(keyB, today, 5);
+      await claim(keyB, today, 5);
+      await claim(keyB, today, 5);
+      const r3 = await release([keyB, keyC, keyA], today);
+      const many = [await countOf(keyB, today), await countOf(keyC, today), await countOf(keyA, today), await countOf(keyA, yesterday)];
+      assert("S10", r3 === undefined && many[0] === 2 && many[1] === 1 && many[2] === null && many[3] === 1, `release three keys (3, 2, 1 -> 2, 1, none), yesterday kept: ${many.join()}`);
+
+      const snap = await snapshot();
+      const r4 = await release([], today);
+      assert("S11", r4 === undefined && (await snapshot()) === snap && !snap.startsWith("err"), `empty release: sqlstate = ${r4 ?? "none"}, rows unchanged = ${(await snapshot()) === snap}`);
+      const r5 = await release([keyA], yesterday);
+      const r6 = await release([keyB], "2020-01-01");
+      assert("S12", r5 === undefined && r6 === undefined && (await countOf(keyB, today)) === 2, `release of an absent key/day: ${r5 ?? "none"}, ${r6 ?? "none"}, B today = ${await countOf(keyB, today)}`);
+
+      // -- the table's own shape, privileged so only the CHECK and the key can refuse --
+      const lo = await attemptShape(tx, (sp) => sp`insert into goals.sign_in_claims (client_key, day, count) values (${"\\x00"}::bytea, ${today}::date, 0)`);
+      const hi = await attemptShape(tx, (sp) => sp`insert into goals.sign_in_claims (client_key, day, count) values (${"\\x01"}::bytea, ${today}::date, 10001)`);
+      const top = await attemptShape(tx, (sp) => sp`insert into goals.sign_in_claims (client_key, day, count) values (${"\\x02"}::bytea, ${today}::date, 10000)`);
+      const dup = await attemptShape(tx, (sp) => sp`insert into goals.sign_in_claims (client_key, day, count) values (${"\\x02"}::bytea, ${today}::date, 1)`);
+      assert("S13", lo.code === "23514" && hi.code === "23514" && top.code === undefined && dup.code === "23505", `count 0 ${shape(lo)}; 10001 ${shape(hi)}; 10000 ${shape(top)}; duplicate key ${shape(dup)}`);
+
+      // -- the catalogue --
+      const cat = await attemptRows<{
+        rls: boolean; forced: boolean; policies: number; definer: number; pinned: number; fns: number;
+        anyone: number; grants: string | null;
+      }>(
+        tx,
+        (sp) => sp`
+          select
+            (select relrowsecurity from pg_class where oid = 'goals.sign_in_claims'::regclass) as rls,
+            (select relforcerowsecurity from pg_class where oid = 'goals.sign_in_claims'::regclass) as forced,
+            (select count(*)::int from pg_policies where schemaname = 'goals' and tablename = 'sign_in_claims') as policies,
+            (select count(*)::int from pg_proc p where p.pronamespace = 'goals'::regnamespace and p.proname in ('sign_in_claim', 'sign_in_release') and p.prosecdef) as definer,
+            (select count(*)::int from pg_proc p where p.pronamespace = 'goals'::regnamespace and p.proname in ('sign_in_claim', 'sign_in_release') and p.proconfig @> array['search_path=""']) as pinned,
+            (select count(*)::int from pg_proc p where p.pronamespace = 'goals'::regnamespace and p.proname in ('sign_in_claim', 'sign_in_release')) as fns,
+            (select count(*)::int from pg_proc p, unnest(array['public', 'anon', 'authenticated', 'service_role']) r
+              where p.pronamespace = 'goals'::regnamespace and p.proname in ('sign_in_claim', 'sign_in_release')
+                and has_function_privilege(case when r = 'public' then 0::oid else r::regrole::oid end, p.oid, 'execute')) as anyone,
+            (select string_agg(grantee || ':' || privilege_type, ',') from information_schema.role_table_grants
+              where table_schema = 'goals' and table_name = 'sign_in_claims'
+                and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')) as grants`,
+      );
+      const c = cat.rows[0];
+      assert("S14", cat.code === undefined && c?.rls === true && c.forced === true && c.policies === 0, `sign_in_claims RLS = ${c?.rls ?? "?"}, forced = ${c?.forced ?? "?"}, policies = ${c?.policies ?? "?"}`);
+      assert("S15", c?.fns === 2 && c.definer === 2 && c.pinned === 2, `functions = ${c?.fns ?? "?"}, security definer = ${c?.definer ?? "?"}, search_path pinned = ${c?.pinned ?? "?"}`);
+      assert("S16", c?.fns === 2 && c.anyone === 0 && c.grants === null, `roles able to execute = ${c?.anyone ?? "?"} (public, anon, authenticated, service_role), table grants = ${c?.grants ?? "none"}`);
+
+      // -- driven: `authenticated` holds USAGE on `goals`, so only the object's own grants answer it --
+      await enterUserContext(tx, subject);
+      const acts: [string, string, (sp: postgres.TransactionSql) => Promise<{ count: number }>][] = [
+        ["S17", "select the table", (sp) => sp`select count from goals.sign_in_claims`],
+        ["S18", "run sign_in_claim", (sp) => sp`select goals.sign_in_claim(decode(${keyA}, 'hex'), ${today}::date, 100::integer)`],
+        ["S19", "run sign_in_release", (sp) => sp`select goals.sign_in_release(array[decode(${keyA}, 'hex')], ${today}::date)`],
+      ];
+      for (const [label, act, fn] of acts) {
+        const r = await attemptShape(tx, fn);
+        assert(label, r.code === "42501", `authenticated ${act}, ${shape(r)}`);
+      }
+      for (const [label, role] of [["S20", "anon"], ["S21", "service_role"]] as const) {
+        for (const [inner, act, fn] of acts) {
+          const r = await attemptShape(tx, async (sp) => {
+            await sp`select set_config('role', ${role}, true)`;
+            return fn(sp);
+          });
+          assert(`${label}.${inner}`, r.code === "42501", `${role} ${act}, ${shape(r)}`);
+        }
+      }
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -3709,6 +3863,7 @@ async function main(): Promise<void> {
   await checkCommitmentClosedColumns();
   await checkDeleteAndEdit0025();
   await checkAllowedEmails0025();
+  await checkSignInClaims0026();
 
   if (failed) process.exit(1);
 }
