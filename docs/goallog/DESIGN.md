@@ -1860,3 +1860,9 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   step as the alert sentence under «Pedir otro código», the button ready.
 - Auth's own 429 keeps «Demasiados intentos… en unos minutos.»
 
+## Decisions of 2026-10-17 (night), after the critic of codigo-6c, by the user
+
+- **A send or a check that hangs ends at 8 s, like WordBook.** «Enviar código», «Pedir otro código» and «Entrar» that
+  get no answer in 8 s say «No sabemos si se envió. Revisa tu correo antes de pedir otro.» and every control is usable
+  again. Supersedes the «no timeout» line of codigo-6c M8. Needs a board. Not built yet.
+

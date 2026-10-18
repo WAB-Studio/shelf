@@ -1829,8 +1829,8 @@ Canvas «Diccionario de lectura», page «Cuenta», from y=27060. Dark 360, two 
 
 ## Boards of 2026-10-17: the delete note only where it is true, and the Anki lines (decidido-17)
 
-Canvas «Diccionario de lectura», page «Registro», v55. Dark 360. Not built yet. Built on the planner's picks for Q3 (a)
-and Q4 (a), which wait on the user in the roadmap.
+Canvas «Diccionario de lectura», page «Registro», v55. Dark 360. Not built yet. Q3 (a) and Q4 (a) decided by the user
+2026-10-17: no note on a retired reader; two sentences true for both causes.
 
 - `RegistroBorrarFilaSinCuenta` redrawn with three cases: no account, a copy never started, or a retired reader asks
   «Se borran sus N búsquedas y sus formas. No se puede deshacer.» with no note; signed out with its reader kept adds

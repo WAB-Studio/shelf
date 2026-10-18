@@ -164,7 +164,8 @@ Board «LoginCódigo», HomeFund, 360 and 1280, inside the existing `Card`. Deci
 ## Decisions of 2026-10-17 (afternoon), by the user
 
 - **A past month's weekly budget shows that month's last week.** Navigating to a past month, the weekly budget reads the
-  last week of that month, not the current one. Not built yet.
+  last week of that month, not the current one. Built in #613 (`lib/dates.ts:161-164`); the user closed it with no
+  module on 2026-10-17 (decidido-17 Q5).
 
 ## Boards of 2026-10-17: «Pedir otro código» and the mails (codigo-6b)
 
@@ -252,4 +253,23 @@ Field order in every create dialog: Nombre, Dónde va, Categoría principal, Tip
 
 Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 5.000» on line 3, the field's frame
 (decision above). Not built yet.
+
+## Decisions of 2026-10-17 (night), after the critic of codigo-6c and the decidido-17 plan, by the user
+
+- **«Mis categorías» opens no code** (Q2 a): RF-63 already scopes a category to a person or a group and RF-57 gives the
+  fund's to its leader; decidido-17 makes that reachable inside a fund.
+- **From onboarding, «Agregar sin correo» asks for the name alone** (Q1 a); «Añadir miembro» on «Miembros» keeps
+  «Correo (opcional)». Note on board «MiembroCorreo». Built in decidido-17 M2.
+- **A budget takes the place of the account it is on** (Q6 a): a personal account gives a personal budget, a fund's
+  account the fund's. Today every budget inside a fund is the fund's (`app/actions/budgets.ts:76`). Level 3. Not built yet.
+- **Inviting someone already in this fund is refused** (critic codigo-6c, 1 a): an address that is a live member of
+  this fund, the leader's own included, is refused with «Esa persona ya está en este grupo.»; the warning for an
+  address Auth already holds is reworded so it no longer promises entry into this fund. Another fund is never looked
+  at. Level 3. Not built yet.
+- **An archived invitation no longer blocks a new one** (critic codigo-6c, 2 a): the unique index on a group's invite
+  address skips archived rows, so inviting again creates a fresh pending member; the archived row stays as history.
+  A migration, level 3. Not built yet.
+- **An address whose domain takes no mail is refused when inviting** (critic codigo-6c, 3 a), with `/login`'s own
+  words, from the dialog and from onboarding. One DNS lookup per invitation; a domain whose DNS is down at that moment
+  is refused. Level 3. Not built yet.
 
