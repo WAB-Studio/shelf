@@ -5161,6 +5161,7 @@ type E5CategoriesScreen = {
   group: E5Node[];
   parents: { id: string; name: string }[];
   usedColors: string[];
+  usedColorsByPlacement: { personal: string[]; group: string[] };
 };
 type E5Label = { id: string; name: string; color: string | null; movementCount: number; budgetCount: number };
 type E5LabelsScreen = {
@@ -5560,6 +5561,18 @@ async function e5Suite(): Promise<void> {
       sameSet(cats.value.usedColors, catsColors),
     cats.value ? `parents ${cats.value.parents.length}/${catsParents.length}, colours ${cats.value.usedColors.length}/${catsColors.length}` : cats.error,
   );
+  const leaderColors = await rawTopColors(leaderOwner);
+  assert(
+    next("getCategoriesScreenData names the used colours of the caller's own set and of the fund's, apart"),
+    cats.value?.usedColorsByPlacement !== undefined &&
+      leaderColors.includes("#0E7490") &&
+      !sameSet(leaderColors, catsColors) &&
+      sameSet(cats.value.usedColorsByPlacement.personal, leaderColors) &&
+      sameSet(cats.value.usedColorsByPlacement.group, catsColors),
+    cats.value?.usedColorsByPlacement
+      ? `personal ${cats.value.usedColorsByPlacement.personal.join(",")}, group ${cats.value.usedColorsByPlacement.group.join(",")}`
+      : cats.error || "usedColorsByPlacement is missing",
+  );
   assert(
     next("getCategoriesScreenData follows the kind it is given"),
     catsIncome.value !== null &&
@@ -5584,6 +5597,16 @@ async function e5Suite(): Promise<void> {
       sameList(soloCats.value.parents.map((p) => p.id), await rawParentIds(soloOwner, "expense")) &&
       sameSet(soloCats.value.usedColors, await rawTopColors(soloOwner)),
     soloCats.value ? `categories [${foldNodes(soloCats.value.categories).join(" ")}], group ${soloCats.value.group.length}, name ${soloCats.value.groupName}` : soloCats.error,
+  );
+  assert(
+    next("getCategoriesScreenData for an ungrouped caller: no fund colours, the personal colours equal usedColors"),
+    soloCats.value?.usedColorsByPlacement !== undefined &&
+      soloCats.value.usedColorsByPlacement.group.length === 0 &&
+      soloCats.value.usedColorsByPlacement.personal.length > 0 &&
+      sameSet(soloCats.value.usedColorsByPlacement.personal, soloCats.value.usedColors),
+    soloCats.value?.usedColorsByPlacement
+      ? `personal ${soloCats.value.usedColorsByPlacement.personal.join(",")}, group ${soloCats.value.usedColorsByPlacement.group.join(",")}`
+      : soloCats.error || "usedColorsByPlacement is missing",
   );
   if (categoriesLoader) {
     await asLeader(() => categoriesLoader("expense"));
@@ -6649,6 +6672,14 @@ async function categoryScopeSuite(): Promise<void> {
       named.find((category) => category.id === ownCategory)?.scope === "personal" &&
       named.find((category) => category.id === groupCategory)?.scope === "group",
     JSON.stringify(named),
+  );
+  const optionAccounts = new Map(options.accounts.map((account) => [account.id, account.scope]));
+  assert(
+    next("Every webhook account option says its scope: the fund's shared account group, the leader's own personal"),
+    optionAccounts.get(groupAccount) === "group" &&
+      optionAccounts.get(ownAccount) === "personal" &&
+      options.accounts.every((account) => account.scope === "personal" || account.scope === "group"),
+    JSON.stringify(options.accounts),
   );
   assert(
     next("A fund child category inherits the group scope"),
