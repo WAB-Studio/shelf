@@ -449,6 +449,9 @@ async function readGroupMembers(groupId: string): Promise<MemberSnapshot[]> {
 
 // The limit the write suite's card is given, and the only limit in the run: the
 // consolidated credit totals are asserted against it.
+// Round trips of getShellSummary, measured before the fund joined it: BEGIN, settle, the statement, COMMIT.
+const SHELL_TRIPS = 4;
+
 const CREDIT_LIMIT_CENTS = 500000000;
 
 // The write suite's own plan: three lines of this, one closed by its payment.
@@ -4335,6 +4338,39 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
       String(netTotal) === sql_.net &&
       truth.count === SEEDED,
     `${drawn.length} rows drawn, count ${totals.count} against ${sql_.count}, net ${netTotal} against ${sql_.net}`,
+  );
+
+  // The shell carries the caller's fund in its one statement (RF-55), so the layout
+  // does not pay `getUserGroup` another trip.
+  const shell = await getShellSummary();
+  const fund = await getUserGroup();
+  assert(
+    next("The shell summary names the leader's fund as getUserGroup does"),
+    fund !== null && shell.group?.id === fund.id && shell.group?.name === fund.name,
+    `shell ${JSON.stringify(shell.group)} against ${JSON.stringify(fund && { id: fund.id, name: fund.name })}`,
+  );
+  const loner = await createMembershipFreeUser();
+  const lonerShell = await asUser(loner, () => getShellSummary());
+  assert(
+    next("The shell summary of a caller with no fund has no group"),
+    lonerShell.group === null,
+    `group ${JSON.stringify(lonerShell.group)}`,
+  );
+  const archivedMember = await seedFellowMember(userId, scope.groupId);
+  await fixtureSql`update group_members set archived_at = now() where user_id = ${archivedMember.id}`;
+  const archivedShell = await asUser(archivedMember, () => getShellSummary());
+  const archivedGroup = await asUser(archivedMember, () => getUserGroup());
+  assert(
+    next("The shell summary of an archived member has no group, as getUserGroup"),
+    archivedShell.group === null && archivedGroup === null,
+    `shell ${JSON.stringify(archivedShell.group)}, getUserGroup ${JSON.stringify(archivedGroup)}`,
+  );
+  await getShellSummary();
+  const shellTrips = await trips(() => getShellSummary());
+  assert(
+    next("The shell summary stays one statement"),
+    shellTrips === SHELL_TRIPS,
+    `${shellTrips} round trips against ${SHELL_TRIPS}`,
   );
 }
 
