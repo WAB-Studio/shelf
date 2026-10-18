@@ -64,6 +64,13 @@
       "when": 1792175117877,
       "tag": "0008_allowed_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792354808397,
+      "tag": "0009_sync_gate",
+      "breakpoints": true
     }
   ]
 }
