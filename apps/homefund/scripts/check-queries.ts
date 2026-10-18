@@ -64,6 +64,7 @@ import { getDebtOverview } from "@/db/queries/debt-overview";
 import { getCurrentStatement } from "@/db/queries/debt-statements";
 import { getDebtTerms, upsertDebtTerms } from "@/db/queries/debt-terms";
 import { getDebtsScreenData } from "@/db/queries/debts-screen";
+import { listDueReminders } from "@/db/queries/due-reminders";
 import type { DebtsScreenData } from "@/db/queries/debts-screen";
 import { readExport } from "@/db/queries/export";
 import {
@@ -1966,6 +1967,7 @@ async function readSuite(
   await checkRead("listBudgetsWithStatus", () => listBudgetsWithStatus());
   await checkRead("listGoalsWithProgress", () => listGoalsWithProgress());
   await checkRead("listPlannedPayments", () => listPlannedPayments());
+  await checkRead("listDueReminders", () => listDueReminders(3));
   await checkRead("listRecurringRules", () => listRecurringRules());
   await checkRead("countUnreviewedGenerated", () => countUnreviewedGenerated());
   await checkRead("getDebtsScreenData", () => getDebtsScreenData());
