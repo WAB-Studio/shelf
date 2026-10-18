@@ -607,7 +607,7 @@ jobs:
           name: orbit-checks-log
           path: /tmp/next-dev.log
 
-  e2e:
+  e2e-shard:
     runs-on: ubuntu-latest
     needs: changes
     # Off until the repository variable E2E_IN_CI is "true":
@@ -620,8 +620,17 @@ jobs:
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository) &&
       needs.changes.outputs.orbit == 'true'
-    timeout-minutes: 40
+    # 1348 tests on one worker ran past 40 minutes (about 1070 done at 38).
+    # Four shards leave each near a quarter of that plus the setup.
+    timeout-minutes: 30
+    # Each shard owns a runner and so a stack of its own; the lane stays 9 in
+    # all four. `e2e` below is the one check name for the suite.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
+      SHARD_TOTAL: 4
       # Its own harness identities and seeded rows, so a CI run never touches the
       # rows a local lane is driving. Lanes 1 to 5 are the checkouts.
       HARNESS_LANE: 9
@@ -648,6 +657,11 @@ jobs:
       # Lane 9's two identities and their token rows. Idempotent.
       - run: npm run harness:token -w apps/homefund
 
+      # `next start` describes in `sign-in.spec.ts` spawn a production server of
+      # their own on a free port. `next dev` writes `.next/dev`, so the build in
+      # `.next` and the dev server coexist.
+      - run: npm run build -w apps/homefund
+
       - name: Start the dev server and wait for it to answer
         run: |
           npm run dev -w apps/homefund > /tmp/next-dev.log 2>&1 &
@@ -662,22 +676,67 @@ jobs:
           done
           echo "the dev server never answered"; tail -50 /tmp/next-dev.log; exit 1
 
-      - run: npm run check:e2e -w apps/homefund
+      - name: Run shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }}
+        run: npm run check:e2e -w apps/homefund -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
+
+      - name: Upload the blob report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: e2e-blob-${{ matrix.shard }}
+          path: apps/homefund/blob-report
+          retention-days: 3
 
       # The server log is where a red spec is explained.
       - name: Upload the dev server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: next-dev-log
+          name: next-dev-log-${{ matrix.shard }}
           path: /tmp/next-dev.log
 
       - name: Upload the Playwright artefacts
         if: failure()
         uses: actions/upload-artifact@v5
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.shard }}
           path: apps/homefund/private/playwright-results-9/
+
+  # Red when any shard is, green when all are; skipped when the shards were.
+  e2e:
+    runs-on: ubuntu-latest
+    needs: e2e-shard
+    if: always() && needs.e2e-shard.result != 'skipped'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: e2e-blob-*
+          path: apps/homefund/all-blobs
+          merge-multiple: true
+
+      - name: Merge the shards' reports
+        run: npx playwright merge-reports --reporter html,list ./all-blobs
+        working-directory: apps/homefund
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: e2e-report
+          path: apps/homefund/playwright-report
+
+      - name: Fail when a shard failed
+        if: needs.e2e-shard.result != 'success'
+        run: |
+          echo "e2e: ${{ needs.e2e-shard.result }}"
+          exit 1
 
   # `apps/wordbook`'s own browser suite. It ran nowhere until 2026-09-08, and
   # that is how two seeded specs sat red on `main` unnoticed: they opened
