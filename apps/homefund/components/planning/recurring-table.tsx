@@ -62,6 +62,7 @@ export type RecurringTableRow = {
   category: { name: string; color: string | null };
   account: string;
   isActive: boolean;
+  pausedReason: RecurringRuleRow["pausedReason"];
   amountCents: number;
   // What the amount is drawn in: the settlement currency of the one account the
   // rule names (RF-121).
@@ -270,7 +271,11 @@ function StatusCell({ row }: { row: RecurringTableRow }) {
         }
       />
       <Text size="2" color="gray">
-        {row.isActive ? t("stateActive") : t("statePaused")}
+        {row.isActive
+          ? t("stateActive")
+          : row.pausedReason === "failed"
+            ? t("pausedFailed")
+            : t("statePaused")}
       </Text>
     </Flex>
   );
