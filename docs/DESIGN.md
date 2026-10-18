@@ -332,3 +332,24 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   primitive itself, for every dialog; this train moves only the budget dialog's scope refusal onto its field.
 - Boards: C3k «Editar presupuesto · cuentas de su ámbito» and C3l «Editar presupuesto · rechazo en el campo» (HomeFund
   canvas, page «T4 · pantallas», 2026-10-18); no desktop face, the dialog is the same.
+
+## Decisions of 2026-10-18, on the dependency map of the open findings, by the user
+
+- **A stale edit is refused** (Q1 a): when a money form was opened before the row changed (another form, or the 00:15
+  cron), saving reads «Esto cambió mientras lo editabas. Vuelve a abrirlo.» and nothing is saved.
+- **An invitation is accepted** (Q2 a): RF-154 opened. Boards «X te invitó · Aceptar / Rechazar» and «Salir del fondo»
+  are drawn before any worker. Not built yet.
+- **Planned payments promise no notice** (Q4 a): «Son recordatorios: aparecen aquí en su fecha, y tú registras el gasto
+  cuando lo pagas.» «te avisan» comes back with RF-141.
+- **The five open debt cases** of the 2026-10-15 audit (Q7 a) are settled one by one in a question session before their
+  module; the rest of the debt fixes do not wait.
+- **Deleting what an ingest rule learned from keeps the rule** (Q8 a), its target set to null: the next delivery proposes
+  no account or category.
+- **Quick entry reads thousands and millions** (Q12): «mil» and «k» are a thousand; «m», «millón» and «millones» are a
+  million. «mil» never means a million («mil pesos» is a thousand).
+- **Contrast** (Q6 a): every token under WCAG is darkened to the nearest same-hue value that passes, and this file's token
+  table follows. Not measured yet.
+- **Shared packages** (Q11 a): `@repo/sign-in` and `@repo/caller` are promoted once GoalLog's call wrapper and WordBook's
+  sign-in settle their shapes.
+- **Region** (Q13 b): HomeFund's and WordBook's Vercel region is measured with `vercel inspect` before anything is pinned.
+
