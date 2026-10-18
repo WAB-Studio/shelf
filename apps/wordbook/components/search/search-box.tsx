@@ -28,6 +28,7 @@ export function SearchBox({
     <TextField.Root
       ref={inputRef}
       size="3"
+      edge
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={t("placeholder")}
