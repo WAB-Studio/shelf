@@ -8,7 +8,7 @@ import { shareInFlight } from "./in-flight";
 import { planUploadRound } from "./upload-page";
 
 const SYNC_ENDPOINT = "/api/log/sync";
-const SYNC_LOCK = "voyager-sync";
+export const SYNC_LOCK = "voyager-sync";
 
 // A hostile record can never tie a hidden tab up forever: this many round
 // trips per call, then the rest waits for the next hide.
