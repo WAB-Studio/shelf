@@ -189,6 +189,12 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "m8") {
+    await checkCategoryParentScope();
+    await checkSubcategoryFollowsParent();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -228,6 +234,7 @@ async function main() {
   await checkWriteGrantMap();
   await checkSelfTransferRefused();
   await checkCategoryParentScope();
+  await checkSubcategoryFollowsParent();
   await checkGroupCommitsWithLeader();
   await checkInstallmentAllocation();
   await checkGoalAccountScope();
@@ -6604,6 +6611,265 @@ async function checkCategoryParentScope() {
     tailLabel,
     afterUser === "postgres" && probeCount === "0",
     `current_user = ${afterUser}, rows named 'rls category scope%' = ${probeCount}`,
+  );
+}
+
+// Assertions 381-388: RF-63's delete, "a subcategory goes with its parent", in both scopes. The
+// composite key is MATCH SIMPLE, so with `group_id` null it never cascades: a personal parent went
+// alone and left its subcategory naming a row that no longer exists, while a fund parent took its
+// subcategory with it or, when that subcategory was in use, refused with 23503. Both scopes are driven
+// here as the person who deletes, and the cascaded row's audit trail and the catalogue are read as
+// `postgres`. Fixtures live in one transaction forced to roll back; each delete runs in its own savepoint.
+async function checkSubcategoryFollowsParent() {
+  console.log("");
+  const ownerUser = randomUUID();
+  const groupId = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  const labels = [
+    "381. deleting a personal parent deletes its subcategory",
+    "382. deleting a personal parent whose subcategory carries a split is refused with 23503 and deletes nothing",
+    "383. deleting a personal parent whose subcategory a budget names is refused with 23503 and deletes nothing",
+    "384. deleting a fund parent still deletes its subcategory",
+    "385. deleting a fund parent whose subcategory carries a split is still refused with 23503 and deletes nothing",
+    "386. the cascaded personal subcategory's delete writes one audit row scoped to its owner",
+    "387. the catalogue carries the single-column parent key with ON DELETE CASCADE beside the unchanged composite key",
+  ];
+  const tailLabel = "388. the rolled-back subcategory-cascade transaction leaves no trace";
+
+  type OrmTx = Parameters<Parameters<typeof orm.transaction>[0]>[0];
+  const enter = (tx: OrmTx, subject: string) =>
+    tx.execute(dsql`select
+      set_config('request.jwt.claims', ${JSON.stringify({ sub: subject, role: "authenticated", aud: "authenticated" })}, true),
+      set_config('statement_timeout', '8000', true),
+      set_config('role', 'authenticated', true)`);
+
+  await orm
+    .transaction(async (tx) => {
+      const refusalOf = async (run: (sp: OrmTx) => Promise<unknown>): Promise<string> => {
+        let refusal = "no refusal — the statement was accepted";
+        await tx
+          .transaction(async (sp) => {
+            await run(sp);
+          })
+          .catch((error: unknown) => {
+            refusal = describeRefusal(error);
+          });
+        return refusal;
+      };
+      // A delete expected to land still runs in a savepoint, so a refusal reads as a FAIL and not an abort.
+      const deletedBy = async (parent: string): Promise<string> => {
+        let outcome = "";
+        await tx
+          .transaction(async (sp) => {
+            const rows = await sp.execute<{ id: string }>(
+              dsql`delete from categories where id = ${parent} returning id`,
+            );
+            outcome = `${rows.length} row`;
+          })
+          .catch((error: unknown) => {
+            outcome = describeRefusal(error);
+          });
+        return outcome;
+      };
+      // Read past RLS, then hand the session back to the person: a row the policies hide must still count.
+      const asPostgres = async <T>(read: () => Promise<T>): Promise<T> => {
+        await tx.execute(dsql`reset role`);
+        const result = await read();
+        await enter(tx, ownerUser);
+        return result;
+      };
+      const rowsHeld = (ids: string[]) =>
+        asPostgres(async () => {
+          const rows = await tx.execute<{ id: string }>(
+            dsql`select id from categories where id in (${dsql.join(ids.map((id) => dsql`${id}`), dsql`, `)})`,
+          );
+          return rows.length;
+        });
+
+      await tx.execute(dsql`insert into auth.users (id) values (${ownerUser})`);
+      await tx.execute(dsql`insert into app_users (id) values (${ownerUser})`);
+      await enter(tx, ownerUser);
+      await tx.execute(
+        dsql`insert into groups (id, name, cash_mode) values (${groupId}, 'rls subcategory cascade', 'shared')`,
+      );
+      await tx.execute(
+        dsql`insert into group_members (group_id, user_id, name, role)
+          values (${groupId}, ${ownerUser}, 'rls subcategory cascade leader', 'leader')`,
+      );
+      const [ownAccount] = await tx.execute<{ id: string }>(
+        dsql`insert into accounts (owner_user_id, name, kind, initial_balance_on)
+          values (${ownerUser}, 'rls subcategory cascade own cash', 'asset',
+            (now() at time zone 'America/Bogota')::date) returning id`,
+      );
+      const [fundAccount] = await tx.execute<{ id: string }>(
+        dsql`insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
+          values (${groupId}, true, 'rls subcategory cascade fund cash', 'asset',
+            (now() at time zone 'America/Bogota')::date) returning id`,
+      );
+
+      // One parent and one subcategory per scenario, so no delete leans on another's outcome.
+      const pair = async (scope: "own" | "fund", tag: string) => {
+        const scopeColumn = scope === "own" ? dsql`owner_user_id` : dsql`group_id`;
+        const scopeValue = scope === "own" ? ownerUser : groupId;
+        const [parent] = await tx.execute<{ id: string }>(
+          dsql`insert into categories (${scopeColumn}, name, kind)
+            values (${scopeValue}, ${`rls subcategory cascade ${tag} parent`}, 'expense') returning id`,
+        );
+        const [child] = await tx.execute<{ id: string }>(
+          dsql`insert into categories (${scopeColumn}, parent_id, name, kind)
+            values (${scopeValue}, ${parent.id}, ${`rls subcategory cascade ${tag} child`}, 'expense') returning id`,
+        );
+        return { parent: parent.id, child: child.id };
+      };
+      const splitOn = async (account: string, category: string) => {
+        const [movement] = await tx.execute<{ id: string }>(
+          dsql`insert into transactions (from_account_id, amount_cents, occurred_at)
+            values (${account}, 1500, (now() at time zone 'America/Bogota')::date) returning id`,
+        );
+        const [split] = await tx.execute<{ id: string }>(
+          dsql`insert into transaction_splits (transaction_id, category_id, amount_cents)
+            values (${movement.id}, ${category}, 1500) returning id`,
+        );
+        return { movement: movement.id, split: split.id };
+      };
+
+      // 381, 386: the bare cascade, then what the trail kept of the row the cascade removed.
+      const bare = await pair("own", "bare");
+      const bareDeleted = await deletedBy(bare.parent);
+      const bareChildHeld = await rowsHeld([bare.child]);
+      assert(
+        labels[0],
+        bareDeleted === "1 row" && bareChildHeld === 0,
+        `delete returned ${bareDeleted}, the subcategory holds ${bareChildHeld} row`,
+      );
+      const childTrail = await asPostgres(() =>
+        tx.execute<{ owner_user_id: string | null }>(
+          dsql`select owner_user_id from audit_log
+            where entity = 'categories' and record_id = ${bare.child} and action = 'DELETE'`,
+        ),
+      );
+      assert(
+        labels[5],
+        childTrail.length === 1 && childTrail[0].owner_user_id === ownerUser,
+        `DELETE audit rows for the subcategory = ${childTrail.length}, owner_user_id = ${childTrail[0]?.owner_user_id ?? "none"}`,
+      );
+
+      // 382: a split on the subcategory holds the parent, as it holds a fund parent.
+      const spent = await pair("own", "spent");
+      const spentSplit = await splitOn(ownAccount.id, spent.child);
+      const spentRefusal = await refusalOf((sp) =>
+        sp.execute(dsql`delete from categories where id = ${spent.parent}`),
+      );
+      const spentHeld = await rowsHeld([spent.parent, spent.child]);
+      const [spentSplitAfter] = await asPostgres(() =>
+        tx.execute<{ category_id: string; amount_cents: string; transaction_id: string }>(
+          dsql`select category_id, amount_cents::text as amount_cents, transaction_id
+            from transaction_splits where id = ${spentSplit.split}`,
+        ),
+      );
+      assert(
+        labels[1],
+        spentRefusal.includes("23503") &&
+          spentHeld === 2 &&
+          spentSplitAfter?.category_id === spent.child &&
+          spentSplitAfter?.amount_cents === "1500" &&
+          spentSplitAfter?.transaction_id === spentSplit.movement,
+        `${spentRefusal}; parent and subcategory hold ${spentHeld} of 2 rows; split category = ${spentSplitAfter?.category_id ?? "gone"}, amount = ${spentSplitAfter?.amount_cents ?? "gone"}`,
+      );
+
+      // 383: the second referrer, a budget, holds it the same way.
+      const budgeted = await pair("own", "budgeted");
+      await tx.execute(
+        dsql`insert into budgets (owner_user_id, category_id, period, limit_cents, threshold_pct)
+          values (${ownerUser}, ${budgeted.child}, 'monthly', 100000, 80)`,
+      );
+      const budgetedRefusal = await refusalOf((sp) =>
+        sp.execute(dsql`delete from categories where id = ${budgeted.parent}`),
+      );
+      const budgetedHeld = await rowsHeld([budgeted.parent, budgeted.child]);
+      assert(
+        labels[2],
+        budgetedRefusal.includes("23503") && budgetedHeld === 2,
+        `${budgetedRefusal}; parent and subcategory hold ${budgetedHeld} of 2 rows`,
+      );
+
+      // 384, 385: the fund's answers, which the personal ones above must now equal.
+      const fundBare = await pair("fund", "fund bare");
+      const fundBareDeleted = await deletedBy(fundBare.parent);
+      const fundBareHeld = await rowsHeld([fundBare.parent, fundBare.child]);
+      assert(
+        labels[3],
+        fundBareDeleted === "1 row" && fundBareHeld === 0,
+        `delete returned ${fundBareDeleted}, parent and subcategory hold ${fundBareHeld} rows`,
+      );
+
+      const fundSpent = await pair("fund", "fund spent");
+      await splitOn(fundAccount.id, fundSpent.child);
+      const fundSpentRefusal = await refusalOf((sp) =>
+        sp.execute(dsql`delete from categories where id = ${fundSpent.parent}`),
+      );
+      const fundSpentHeld = await rowsHeld([fundSpent.parent, fundSpent.child]);
+      assert(
+        labels[4],
+        fundSpentRefusal.includes("23503") && fundSpentHeld === 2,
+        `${fundSpentRefusal}; parent and subcategory hold ${fundSpentHeld} of 2 rows`,
+      );
+
+      // 387: the key by name and action, and the composite one it stands beside.
+      const keys = await asPostgres(() =>
+        tx.execute<{
+          conname: string;
+          confdeltype: string;
+          columns: string;
+          target_columns: string;
+          self_reference: boolean;
+          definition: string;
+        }>(
+          dsql`select c.conname, c.confdeltype::text as confdeltype,
+              (select string_agg(a.attname, ',' order by k.ord)
+                 from unnest(c.conkey) with ordinality k(attnum, ord)
+                 join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum) as columns,
+              (select string_agg(a.attname, ',' order by k.ord)
+                 from unnest(c.confkey) with ordinality k(attnum, ord)
+                 join pg_attribute a on a.attrelid = c.confrelid and a.attnum = k.attnum) as target_columns,
+              (c.confrelid = 'finances.categories'::regclass) as self_reference,
+              pg_get_constraintdef(c.oid) as definition
+            from pg_constraint c
+            where c.conrelid = 'finances.categories'::regclass and c.contype = 'f'
+              and c.conname in ('categories_parent_id_categories_id_fk',
+                                'categories_parent_id_group_id_categories_id_group_id_fk')`,
+        ),
+      );
+      const single = keys.find((k) => k.conname === "categories_parent_id_categories_id_fk");
+      const composite = keys.find((k) => k.conname === "categories_parent_id_group_id_categories_id_group_id_fk");
+      assert(
+        labels[6],
+        single?.confdeltype === "c" &&
+          single.columns === "parent_id" &&
+          single.target_columns === "id" &&
+          single.self_reference &&
+          composite?.confdeltype === "c" &&
+          composite.columns === "parent_id,group_id" &&
+          composite.target_columns === "id,group_id" &&
+          composite.self_reference,
+        `single = ${single ? `${single.columns} → ${single.definition}` : "absent"}; composite = ${composite?.definition ?? "absent"}`,
+      );
+
+      // Nothing this section wrote may survive; force the ROLLBACK.
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ count: probeCount }] = await sql<{ count: string }[]>`
+    select count(*)::text as count from categories where name like 'rls subcategory cascade%'`;
+  assert(
+    tailLabel,
+    afterUser === "postgres" && probeCount === "0",
+    `current_user = ${afterUser}, rows named 'rls subcategory cascade%' = ${probeCount}`,
   );
 }
 
