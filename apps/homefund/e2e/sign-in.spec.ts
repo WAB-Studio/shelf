@@ -1084,3 +1084,52 @@ test.describe("sign-out", () => {
     }
   });
 });
+
+test.describe("sign-out when Auth refuses the logout", () => {
+  test.describe.configure({ mode: "serial" });
+  let refusing: ChildProcess | undefined;
+  let refusingOrigin = "";
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    const port = await freePort();
+    refusingOrigin = `http://localhost:${port}`;
+    refusing = spawn(
+      process.execPath,
+      [path.resolve(process.cwd(), "../../node_modules/next/dist/bin/next"), "start", "-p", String(port)],
+      {
+        cwd: process.cwd(),
+        env: { ...process.env, NODE_OPTIONS: `--require ${path.resolve(process.cwd(), "e2e/support/refuse-logout.cjs")}` },
+        stdio: "ignore",
+      },
+    );
+    await expect
+      .poll(async () => (await fetch(`${refusingOrigin}/es/login`).catch(() => null))?.status ?? 0, { timeout: 90_000 })
+      .toBe(200);
+  });
+
+  test.afterAll(() => {
+    refusing?.kill("SIGTERM");
+  });
+
+  test("Auth refusing the logout shows signOutFailed and keeps the person signed in", async ({ browser }) => {
+    // Kills: an action that logs Auth's error and redirects to the login anyway.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, refusingOrigin);
+    try {
+      await requestLink(page, email);
+      await page.goto(await confirmPath(email));
+      await expect(page).toHaveURL(/\/es$/);
+      await page.goto("/es/settings");
+
+      await page.getByRole("button", { name: auth.signOut, exact: true }).click();
+      await expect(page.getByText(messages.errors.signOutFailed)).toBeVisible();
+      await expect(page).toHaveURL(/\/es\/settings$/);
+      await page.goto("/es/movements");
+      await expect(page).toHaveURL(/\/es\/movements$/);
+    } finally {
+      await context.close();
+    }
+  });
+});
