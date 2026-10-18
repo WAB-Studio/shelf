@@ -48,6 +48,8 @@ import {
 // own sentinel; it maps back to null the moment it is picked.
 const ANY = "none";
 
+const SCOPE_REFUSAL = "budgets.errors.scopeViolation";
+
 // A superset of both schemas' shapes: the resolver strips whichever key the
 // active schema does not declare, so `categoryId` never reaches the edit action
 // and `budgetId` never reaches the create one.
@@ -185,7 +187,18 @@ function BudgetForm({
     onOpenChange(false);
   }
 
-  const onActionError = useActionErrorToast();
+  const toastActionError = useActionErrorToast();
+
+  // The scope refusal belongs to the label when one is picked, else to the
+  // account; every other refusal stays a toast.
+  function onActionError(args: { error: { serverError?: string } }) {
+    if (args.error.serverError === SCOPE_REFUSAL) {
+      const field = form.getValues("labelId") ? "labelId" : "accountId";
+      form.setError(field, { message: SCOPE_REFUSAL });
+      return;
+    }
+    toastActionError(args);
+  }
 
   // Two hooks, not one behind a ternary: the actions' input types differ, and
   // rules of hooks forbid picking which one to call.
@@ -205,12 +218,28 @@ function BudgetForm({
 
   // A budget may be filed under any fund account and the person's own, never a
   // fellow member's personal one; an edit keeps naming its account.
-  const filingAccounts = options.accounts.filter(
+  const todayFilingAccounts = options.accounts.filter(
     (account) =>
       account.ownerUserId === null ||
       account.canWrite ||
       account.id === budget?.accountId,
   );
+
+  // The category is locked on edit, so its scope fixes the places the budget may
+  // name: a personal one the caller's own accounts, a fund one every fund account.
+  const editScope = isEdit
+    ? allExpenseCategories.find((category) => category.id === budget.categoryId)
+        ?.scope
+    : undefined;
+  const filingAccounts = editScope
+    ? options.accounts.filter(
+        (account) =>
+          account.id === budget?.accountId ||
+          (editScope === "personal"
+            ? account.groupId === null && account.canWrite
+            : account.groupId !== null),
+      )
+    : todayFilingAccounts;
 
   // The picked account fixes the scope the category list is cut to; with none,
   // both scopes are offered (RF-71).
@@ -219,6 +248,19 @@ function BudgetForm({
     scopeOfAccounts([accountId ?? null], options.accounts),
   );
   const pickedCategoryId = useWatch({ control: form.control, name: "categoryId" });
+  const pickedLabelId = useWatch({ control: form.control, name: "labelId" });
+
+  // Labels follow the same scope as the accounts: the budget's category on edit,
+  // the picked account or category on create; the held label is always kept.
+  const labelScope = isEdit
+    ? editScope
+    : (scopeOfAccounts([accountId ?? null], options.accounts) ??
+      allExpenseCategories.find((category) => category.id === pickedCategoryId)
+        ?.scope);
+  const scopedLabels = options.labels.filter(
+    (label) =>
+      !labelScope || label.scope === labelScope || label.id === budget?.labelId,
+  );
 
   // An account of the other scope strands the picked category outside the list.
   useEffect(() => {
@@ -229,6 +271,17 @@ function BudgetForm({
       form.setValue("categoryId", "", { shouldValidate: true });
     }
   }, [expenseCategories, pickedCategoryId, form]);
+
+  // A new scope strands the picked label outside the list.
+  useEffect(() => {
+    if (
+      !isEdit &&
+      pickedLabelId &&
+      !scopedLabels.some((one) => one.id === pickedLabelId)
+    ) {
+      form.setValue("labelId", null);
+    }
+  }, [isEdit, scopedLabels, pickedLabelId, form]);
 
   function onSubmit(values: BudgetFormValues) {
     // The resolver already parsed `values` against the schema for this mode,
@@ -467,7 +520,7 @@ function BudgetForm({
                   </FieldControl>
                   <Select.Content position="popper">
                     <Select.Item value={ANY}>{t("labelAny")}</Select.Item>
-                    {options.labels.map((label) => (
+                    {scopedLabels.map((label) => (
                       <Select.Item key={label.id} value={label.id}>
                         {label.name}
                       </Select.Item>
