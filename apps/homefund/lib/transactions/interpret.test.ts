@@ -186,6 +186,14 @@ test("a lowercase «m» after a number asks with three choices and proposes no a
   }
 });
 
+test("«1,15 m» asks with whole-peso choices only, never a figure with cents", () => {
+  assert.equal(interpretQuickEntry("1,15 m", ctx).amountPesos, null);
+  assert.deepEqual(askOf("1,15 m"), {
+    token: "1,15 m",
+    choices: [115_000, 115_000_000],
+  });
+});
+
 test("«5m arriendo» asks and keeps «arriendo» as the description", () => {
   assert.equal(interpretQuickEntry("5m arriendo", ctx).description, "arriendo");
 });
