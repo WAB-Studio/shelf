@@ -485,7 +485,7 @@ test("a body that is no form: 422 import.errors.blank, no row, no model", async 
     new Request("http://localhost/importar/leer", {
       method: "POST",
       body: "not a form",
-      headers: { "content-type": "text/plain" },
+      headers: { "content-type": "multipart/form-data; boundary=x" },
     }) as unknown as Parameters<typeof route.POST>[0],
   );
   assert.equal(response.status, 422);
