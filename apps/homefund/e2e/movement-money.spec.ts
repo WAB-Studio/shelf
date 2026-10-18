@@ -154,8 +154,8 @@ function isDesktop(testInfo: TestInfo): boolean {
 
 // The dashboard's two ways into the full form: the laptop draws a button of its
 // own beside the quick-entry row, the phone reaches it through the quick sheet.
-async function openFullForm(page: Page, testInfo: TestInfo): Promise<Locator> {
-  await page.goto("/es");
+async function openFullForm(page: Page, testInfo: TestInfo, reload = true): Promise<Locator> {
+  if (reload) await page.goto("/es");
   if (isDesktop(testInfo)) {
     await page.getByRole("button", { name: transactions.quickTypeLink, exact: true }).click();
   } else {
@@ -605,6 +605,23 @@ test.describe("a resent save and a stale edit", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].amount_cents).toBe("400000");
     expect(await splitsOf(rows[0].id)).toHaveLength(1);
+  });
+
+  test("two separate openings, saved once each, leave two movements", async ({ page }, testInfo) => {
+    // Kills: a request ref that outlives its opening, so the second save answers the first movement.
+    // The page is not reloaded between them: a ref held by the module would survive.
+    await page.goto("/es");
+    for (const amount of ["4000", "5000"]) {
+      const dialog = await openFullForm(page, testInfo, false);
+      await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
+      await field(dialog, "movement-amount").fill(amount);
+      await choose(page, splitCategory(dialog, 1), scope.categoryName);
+      await saveButton(dialog).click();
+      await expect(dialog).toBeHidden();
+    }
+
+    const rows = await movements();
+    expect(rows.map((row) => row.amount_cents).sort()).toEqual(["400000", "500000"]);
   });
 
   test("a stale edit keeps the form open with what was typed, shows the refusal and writes nothing", async ({

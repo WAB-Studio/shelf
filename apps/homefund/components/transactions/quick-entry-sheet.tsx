@@ -134,6 +134,9 @@ function QuickEntryForm({
   const t = useTranslations("transactions");
   const locale = useLocale();
   const onActionError = useActionErrorToast();
+  // One key per opening (the content unmounts on close): a save sent again after a lost
+  // answer carries the same one.
+  const [requestRef] = useState(() => crypto.randomUUID());
 
   const [text, setText] = useState("");
   // An «M» the interpreter would not guess («3 M arriendo»), and which of its
@@ -328,7 +331,7 @@ function QuickEntryForm({
         : t("quickUnrecognized");
 
   function onSubmit(values: QuickEntryValues) {
-    create.execute(values);
+    create.execute({ ...values, requestRef });
   }
 
   return (
