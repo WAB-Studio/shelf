@@ -466,9 +466,9 @@ test.describe("the dialog's states", () => {
       await expect(dialog.getByText(accounts.reconcileRealAsset, { exact: true })).toHaveCount(0);
 
       // Typing the debt as a magnitude: owing $ 100.000 instead of $ 120.000
-      // is a gap of +$ 20.000, not of $ 220.000.
+      // is a gap of −$ 20.000 in the field's frame, not of $ 220.000.
       await realField(dialog, accounts.reconcileRealLiability).fill("100000");
-      await expect(line(dialog, accounts.reconcileGap)).toContainText(signed(20_000));
+      await expect(line(dialog, accounts.reconcileGap)).toContainText(signed(-20_000));
 
       await submit(dialog).click();
       await expect(dialog.getByText(accounts.reconciled).or(historyFigures(dialog))).toBeVisible();
@@ -1066,7 +1066,7 @@ test.describe("a figure below zero (board C1)", () => {
       const first = historyFigures(dialog).first();
       await expect(first).toBeVisible();
       expect(flat(await first.innerText())).toBe(`Según HomeFund $ 0 · Real ${MINUS}$ 5.000`);
-      expect(flat(await first.locator("..").innerText())).toContain(signed(5_000));
+      expect(flat(await first.locator("..").innerText())).toContain(signed(-5_000));
       expect((await reconciliationsOf(account.id))[0].counted).toBe("500000");
     } finally {
       await dropAccount(account.id);
@@ -1210,3 +1210,124 @@ test.describe("line 3 «Según HomeFund» in the field's frame (RF-137, board C1
     }
   });
 });
+
+test.describe("the gap in the field's frame (RF-137, board C1)", () => {
+  // The span `Money` draws for a figure, found by its text inside a line.
+  function gapFigure(dialog: Locator, text: string): Locator {
+    return line(dialog, accounts.reconcileGap).locator("span").filter({ hasText: text }).last();
+  }
+
+  test("a card owing $ 404.900 counted at $ 400.000 reads −$ 4.900 in the good tone", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -40_490_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog, accounts.reconcileRealLiability).fill("400000");
+
+      const figureSpan = gapFigure(dialog, signed(-4_900));
+      await expect(figureSpan).toBeVisible();
+      expect(flat(await figureSpan.innerText())).toBe(signed(-4_900));
+      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--accent-11"));
+
+      await submit(dialog).click();
+      const first = historyFigures(dialog).first();
+      await expect(first).toBeVisible();
+      expect(flat(await first.innerText())).toBe("Según HomeFund $ 404.900 · Real $ 400.000");
+      expect(flat(await first.locator("..").innerText())).toContain(signed(-4_900));
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a card owing $ 120.000 counted at $ 130.000 reads +$ 10.000 in the plain dark tone", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -12_000_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog, accounts.reconcileRealLiability).fill("130000");
+
+      const figureSpan = gapFigure(dialog, signed(10_000));
+      await expect(figureSpan).toBeVisible();
+      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--gray-12"));
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a card at $ 0 counted at −5000 reads −$ 5.000 in the good tone", async ({ page }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: 0 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog, accounts.reconcileRealLiability).fill("-5000");
+
+      const figureSpan = gapFigure(dialog, signed(-5_000));
+      await expect(figureSpan).toBeVisible();
+      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--accent-11"));
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a card owing $ 120.000 counted at $ 120.000 says it balances, with no sign", async ({
+    page,
+  }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -12_000_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog, accounts.reconcileRealLiability).fill("120000");
+
+      await expect(dialog.getByText(accounts.reconcileBalanced, { exact: true })).toBeVisible();
+      const gap = line(dialog, accounts.reconcileGap);
+      await expect(gap).toContainText(peso(0));
+      expect(flat(await gap.innerText())).not.toMatch(/[+−]/);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a card seeded in credit reads its history gap as −$ 125.000", async ({ page }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -12_000_000 });
+    try {
+      await seedReconciliation(account.id, addCivilDays(TODAY, -3), 500_000);
+      const dialog = await openDialog(page, account);
+
+      const first = historyFigures(dialog).first();
+      await expect(first).toBeVisible();
+      expect(flat(await first.locator("..").innerText())).toContain(signed(-125_000));
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+
+  test("a card booking keeps the adjustment in the balance's frame", async ({ page }) => {
+    const account = await seedAccount({ kind: "liability", openingCents: -12_000_000 });
+    try {
+      const dialog = await openDialog(page, account);
+      await realField(dialog, accounts.reconcileRealLiability).fill("100000");
+      await expect(line(dialog, accounts.reconcileGap)).toContainText(signed(-20_000));
+      await submit(dialog).click();
+      await expect(historyFigures(dialog).first()).toBeVisible();
+
+      expect((await reconciliationsOf(account.id)).map((r) => r.counted)).toEqual(["-10000000"]);
+      expect(await adjustmentsOf(account.id)).toEqual([
+        { amount: "2000000", to_me: true, on: TODAY },
+      ]);
+    } finally {
+      await dropAccount(account.id);
+    }
+  });
+});
+
+// A theme variable resolved to the colour the browser computes for it.
+async function colorOf(dialog: Locator, variable: string): Promise<string> {
+  return dialog.evaluate((node, name) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${name})`;
+    node.appendChild(probe);
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    return resolved;
+  }, variable);
+}
