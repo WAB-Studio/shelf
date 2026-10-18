@@ -4391,10 +4391,20 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
     namedRight && dashboard.netWorth.length > 0,
     `${dashboard.netWorth.length} buckets: ${JSON.stringify(dashboard.netWorth.map((b) => [b.bucket, b.name, b.isSelf]))}`,
   );
+  // A personal account gives the groupless caller a bucket to label; without one
+  // the dashboard is empty and the fallback never runs.
+  const lonerAccountId = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${lonerAccountId}, ${loner.id}, 'Harness solitario', 'asset', 'bank', 1000, current_date)`;
+  track("accounts", lonerAccountId);
   const lonerDashboard = await asUser(loner, () => getDashboardData());
   assert(
     next("The dashboard of a caller with no fund falls back to isSelf"),
-    lonerDashboard.netWorth.every((bucket) => bucket.bucket !== "group" && bucket.name === null),
+    lonerDashboard.netWorth.length > 0 &&
+      lonerDashboard.netWorth.every(
+        (bucket) => bucket.bucket !== "group" && bucket.name === null && bucket.isSelf,
+      ),
     `${JSON.stringify(lonerDashboard.netWorth.map((b) => [b.bucket, b.name, b.isSelf]))}`,
   );
   const DASH_DELAY = 150;
