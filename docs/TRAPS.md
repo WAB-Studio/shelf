@@ -3409,3 +3409,22 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   failed on stale code.
 - Do: set `HARNESS_BASE_URL=http://localhost:300<n-1>` on every e2e run in lane n, and read the first log line for the
   base URL before believing a red or a green.
+
+## A unit test that measures growth on a real-size log can eat the machine (2026-10-18)
+
+- A tester measured a quadratic merge in `apps/wordbook/lib/log/delete.ts` by building a 9 512-row log inside
+  `delete.test.ts`. The node process reached 9,5 GB, the machine had 0 GB free, and every lane's suite was at risk.
+- Measured 2026-10-18, wave 2 (M35): killed by hand; the rewrite counts visits over 100, 200 and 400 marks (6 275,
+  25 050, 100 100) and runs in ~1 s at ~110 MB.
+- Do: measure work as a count (visits, calls, comparisons) over small inputs and assert the growth ratio; never a
+  real-size dataset in a unit test. Run such a test with `node --max-old-space-size=512`, so a regression fails instead.
+
+## The plan hook reads a `Depende de:` line only up to its first period (2026-10-18)
+
+- `.claude/hooks/plan-watch.sh` takes the ids before the first `.` of the line. A file name such as `layout.tsx` or
+  `errors.stale` inside the line ends it early, the later ids are dropped, and the hook names a module whose dependency
+  is still in flight. A train name like `respuestas-18` reads as the number 18, which the hook treats as done.
+- Measured 2026-10-18, `private/plan-paralelo.md`: seven lines (M24, M42, M45, M54, M68 and two more) had hidden ids;
+  the hook named M24 and M37 while M22 and M71 were in flight.
+- Do: write the ids first, bare, then a period, then the reasons: `**Depende de:** M2, M22. M2 (…)`. Model an outside
+  gate (a PR to merge) as a module of its own, `## [~] M0 · … merged`, and depend on `M0`.
