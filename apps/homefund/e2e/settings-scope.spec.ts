@@ -439,7 +439,7 @@ test.describe("the fund's categories by role (C3i)", () => {
       await expect(addButtons(page).first()).toBeVisible();
 
       await page.goto("/es/settings/categories?kind=income");
-      await expect(page.getByRole("heading", { name: messages.categories.title })).toBeVisible();
+      await expect(page.getByRole("heading", { name: messages.categories.title, exact: true })).toBeVisible();
       await expect(addButtons(page).first()).toBeVisible();
     });
 
@@ -621,7 +621,7 @@ async function seedFundCategory(
   await asHarnessUser(async (tx) => {
     await tx`
       insert into categories (id, group_id, parent_id, name, kind, color)
-      values (${id}, ${groupId}, ${opts.parentId ?? null}, ${name}, 'expense', ${opts.color ?? "#8C4A4A"})`;
+      values (${id}, ${groupId}, ${opts.parentId ?? null}, ${name}, 'expense', ${opts.color ?? CATEGORY_COLORS[10]})`;
   });
   return id;
 }
@@ -637,7 +637,7 @@ async function seedPersonalCategory(
   await run(async (tx) => {
     await tx`
       insert into categories (id, owner_user_id, parent_id, name, kind, color)
-      values (${id}, ${userId}, ${opts.parentId ?? null}, ${name}, 'expense', ${opts.color ?? "#4C8C4A"})`;
+      values (${id}, ${userId}, ${opts.parentId ?? null}, ${name}, 'expense', ${opts.color ?? CATEGORY_COLORS[11]})`;
   });
   return id;
 }
@@ -724,7 +724,7 @@ test.describe("«Mis categorías» and «Dónde va» (decidido-17)", () => {
       await expect(shown.getByText(fundParent, { exact: true })).toHaveCount(1);
       await expect(menuOf(page, own)).toHaveCount(1);
       await expect(menuOf(page, fundParent)).toHaveCount(0);
-      await expect(shown.getByRole("heading", { name: categories.personalSection })).toBeVisible();
+      await expect(shown.getByText(categories.personalSection, { exact: true }).first()).toBeVisible();
       if (mobile(page)) {
         await expectAbove(
           shown.getByRole("heading", { name: categories.personalSection }),
@@ -826,7 +826,7 @@ test.describe("«Mis categorías» and «Dónde va» (decidido-17)", () => {
       const parent = tagged("Padre sub");
       const child = tagged("Hijo sub");
       const parentId = await seedPersonalCategory("member", parent);
-      await seedPersonalCategory("member", child, { parentId, color: "#8C4A4A" });
+      await seedPersonalCategory("member", child, { parentId, color: CATEGORY_COLORS[12] });
 
       await page.goto("/es/settings/categories");
 
@@ -947,9 +947,9 @@ test.describe("«Mis categorías» and «Dónde va» (decidido-17)", () => {
       const ownParent = tagged("Padre P");
       const ownChild = tagged("Hijo P");
       const fundParentId = await seedFundCategory(groupId, fundParent);
-      await seedFundCategory(groupId, fundChild, { parentId: fundParentId, color: "#4C8C4A" });
+      await seedFundCategory(groupId, fundChild, { parentId: fundParentId, color: CATEGORY_COLORS[13] });
       const ownParentId = await seedPersonalCategory("leader", ownParent);
-      await seedPersonalCategory("leader", ownChild, { parentId: ownParentId, color: "#8C4A4A" });
+      await seedPersonalCategory("leader", ownChild, { parentId: ownParentId, color: CATEGORY_COLORS[12] });
 
       await page.goto("/es/settings/categories");
 
