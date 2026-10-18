@@ -132,6 +132,18 @@ export async function createMember({
   });
 }
 
+// RF-150: whether the address belongs to a live member of the caller's own fund, the
+// caller included. The function answers false to anyone who does not lead the fund.
+export async function inviteEmailIsMember(email: string): Promise<boolean> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ member: boolean }>(
+      sql`select private.invite_email_is_member(${email}) as member`,
+    );
+
+    return rows[0]?.member === true;
+  });
+}
+
 // RF-06: the invited person claims their pending row on first sign-in. No row id
 // and no user id cross the boundary — `private.claim_group_invite` reads
 // auth.uid() and auth.email() from the caller's own verified session and picks

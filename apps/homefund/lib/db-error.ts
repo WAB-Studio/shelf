@@ -23,3 +23,22 @@ export function pgErrorCode(error: unknown): string | undefined {
 
   return undefined;
 }
+
+// A unique violation names the index it hit in `constraint_name`, the property
+// check-rls reads too; the call site tells two indexes on one table apart by it.
+export function pgConstraintName(error: unknown): string | undefined {
+  let current: unknown = error;
+
+  for (let hop = 0; hop < MAX_CAUSE_HOPS; hop++) {
+    if (typeof current !== "object" || current === null) return undefined;
+
+    if ("constraint_name" in current) {
+      const { constraint_name: name } = current as { constraint_name: unknown };
+      if (typeof name === "string") return name;
+    }
+
+    current = "cause" in current ? (current as { cause: unknown }).cause : undefined;
+  }
+
+  return undefined;
+}
