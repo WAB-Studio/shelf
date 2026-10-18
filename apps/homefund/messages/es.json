@@ -102,7 +102,7 @@
       "addWithoutEmail": "Agregar sin correo",
       "toDashboard": "Ir al panel",
       "skip": "Omitir por ahora",
-      "emailFailed": "Añadimos a la persona, pero no pudimos enviar el correo; puede entrar ya en HomeFund con ese correo."
+      "emailFailed": "Añadimos a la persona, pero no pudimos enviar el correo. Avísale que entre con ese correo; si ya está en otro grupo, no se unirá a este."
     }
   },
   "dashboard": {
@@ -262,7 +262,8 @@
       "nameRequired": "Escribe el nombre del miembro.",
       "nameTooLong": "El nombre no puede pasar de 80 caracteres.",
       "emailInvalid": "Escribe un correo válido.",
-      "emailTaken": "Ese correo ya tiene una invitación en este grupo."
+      "emailTaken": "Ese correo ya tiene una invitación en este grupo.",
+      "alreadyMember": "Esa persona ya está en este grupo."
     }
   },
   "bienvenida": {
@@ -1141,7 +1142,7 @@
     "referenceGone": "Algo que elegiste ya no existe. Recarga la pantalla y vuelve a elegir.",
     "categoryInUse": "Esta categoría está en uso y no se puede eliminar.",
     "selfArchive": "No puedes archivarte a ti mismo.",
-    "categoryNesting": "Las categorías solo admiten un nivel de subcategorías.",
+    "categoryNesting": "Esa categoría principal ya no sirve: elige otra del mismo lugar que no sea subcategoría.",
     "categoryKindMismatch": "La subcategoría debe tener el mismo tipo que su categoría principal.",
     "notLeader": "Solo el propietario del fondo puede hacer este cambio.",
     "memberHasHistory": "Esta persona tiene movimientos. Archívala en su lugar.",

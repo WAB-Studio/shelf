@@ -102,7 +102,7 @@
       "addWithoutEmail": "Add without email",
       "toDashboard": "Go to dashboard",
       "skip": "Skip for now",
-      "emailFailed": "We added the person, but could not send the email; they can sign in to HomeFund with that address now."
+      "emailFailed": "We added the person, but could not send the email. Tell them to sign in with that address; if it is already in another group, they will not join this one."
     }
   },
   "dashboard": {
@@ -262,7 +262,8 @@
       "nameRequired": "Enter the member's name.",
       "nameTooLong": "The name cannot exceed 80 characters.",
       "emailInvalid": "Enter a valid email.",
-      "emailTaken": "That email already has an invitation in this group."
+      "emailTaken": "That email already has an invitation in this group.",
+      "alreadyMember": "That person is already in this group."
     }
   },
   "bienvenida": {
@@ -1141,7 +1142,7 @@
     "referenceGone": "Something you picked no longer exists. Reload the screen and choose again.",
     "categoryInUse": "This category is in use and cannot be deleted.",
     "selfArchive": "You cannot archive yourself.",
-    "categoryNesting": "Categories only allow one level of subcategories.",
+    "categoryNesting": "That parent can no longer hold it: pick another from the same place that is not a subcategory.",
     "categoryKindMismatch": "The subcategory must have the same kind as its parent category.",
     "notLeader": "Only the fund's owner can make this change.",
     "memberHasHistory": "This person has movements. Archive them instead.",
