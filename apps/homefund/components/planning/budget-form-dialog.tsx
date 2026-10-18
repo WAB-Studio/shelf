@@ -84,7 +84,9 @@ export function BudgetFormDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content>
+      {/* A long label is one nowrap line that sizes the dialog past the screen;
+          the cap makes the trigger ellipsize instead. */}
+      <Dialog.Content maxWidth="min(600px, calc(100vw - 32px))">
         <Dialog.Title>{budget ? t("editTitle") : t("addTitle")}</Dialog.Title>
         {/* Closing unmounts the content, and the key remounts on a change of
             subject, so the form below is always born with fresh defaults. */}
@@ -518,11 +520,13 @@ function BudgetForm({
                   <FieldControl>
                     <Select.Trigger id="budget-label" />
                   </FieldControl>
-                  <Select.Content position="popper">
+                  {/* Item-aligned, not popper: popper sizes to its longest item and
+                      runs off a 360 px screen; this one is clamped to it. */}
+                  <Select.Content>
                     <Select.Item value={ANY}>{t("labelAny")}</Select.Item>
                     {scopedLabels.map((label) => (
                       <Select.Item key={label.id} value={label.id}>
-                        {label.name}
+                        {scopedCategoryName(label.name, label.scope, mark)}
                       </Select.Item>
                     ))}
                   </Select.Content>
