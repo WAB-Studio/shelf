@@ -81,11 +81,11 @@ test("a weekdays commitment with an untyped goal's first quantity lands in goals
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
 
-    await page.getByRole("button", { name: "días sueltos", exact: true }).click();
+    await page.getByRole("radio", { name: "días sueltos", exact: true }).click();
     // Tuesday and Thursday: two toggles, never one, so the array the row
     // writes is provably the two picked, not a single default.
-    await page.getByRole("button", { name: "M", exact: true }).click();
-    await page.getByRole("button", { name: "J", exact: true }).click();
+    await page.getByRole("button", { name: "martes", exact: true }).click();
+    await page.getByRole("button", { name: "jueves", exact: true }).click();
 
     await page.getByRole("button", { name: "un número", exact: true }).click();
     await page.getByLabel("cantidad", { exact: true }).fill("15");

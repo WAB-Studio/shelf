@@ -286,7 +286,7 @@ export function TaskSheet({
                 </>
               ) : null}
               {pin || !timed ? (
-                <ChipRow>
+                <ChipRow radio label={t("roadmap.fijar.month")}>
                   {offered.map((value) => (
                     <Chip key={value} radio selected={month === value} onClick={() => setMonth(value)}>
                       {monthName(value, thisYear)}

@@ -4,6 +4,7 @@
     "title": "¿Qué quieres sostener?",
     "nameLabel": "nombre",
     "horizonLabel": "final",
+    "endLabel": "cómo termina",
     "withEnd": "con final",
     "noEnd": "sin final",
     "noEndSentence": "No termina nunca. Se le puede dar un final después.",

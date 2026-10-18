@@ -283,7 +283,7 @@ test.describe("the delete (RP-127)", () => {
 
 test.describe("the cadence page of a commitment (RP-127, RP-12)", () => {
   const path = (goal: string, id: string) => `/metas/${goal}/compromisos/${id}`;
-  const chip = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
+  const chip = (page: Page, name: string) => page.getByRole("radio", { name, exact: true });
 
   test("opens with the current cadence chosen and its numbers filled", async ({ person, browser, baseURL, db }) => {
     // Kills: chips that default to «todos los días» whatever the row holds; a count field left empty.
@@ -297,11 +297,11 @@ test.describe("the cadence page of a commitment (RP-127, RP-12)", () => {
     {
       const { page, context } = await open(days);
       try {
-        await expect(chip(page, "días sueltos")).toHaveAttribute("aria-pressed", "true");
-        await expect(chip(page, "M")).toHaveAttribute("aria-pressed", "true");
-        await expect(chip(page, "J")).toHaveAttribute("aria-pressed", "true");
-        await expect(chip(page, "L")).toHaveAttribute("aria-pressed", "false");
-        await expect(chip(page, "todos los días")).toHaveAttribute("aria-pressed", "false");
+        await expect(chip(page, "días sueltos")).toHaveAttribute("aria-checked", "true");
+        await expect(page.getByRole("button", { name: "martes", exact: true })).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByRole("button", { name: "jueves", exact: true })).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByRole("button", { name: "lunes", exact: true })).toHaveAttribute("aria-pressed", "false");
+        await expect(chip(page, "todos los días")).toHaveAttribute("aria-checked", "false");
       } finally {
         await context.close();
       }
@@ -313,17 +313,17 @@ test.describe("the cadence page of a commitment (RP-127, RP-12)", () => {
     ] as const) {
       const { page, context } = await open(id);
       try {
-        await expect(chip(page, kind)).toHaveAttribute("aria-pressed", "true");
+        await expect(chip(page, kind)).toHaveAttribute("aria-checked", "true");
         await expect(page.getByRole("spinbutton", { name: label })).toHaveValue(value);
-        await expect(chip(page, "todos los días")).toHaveAttribute("aria-pressed", "false");
+        await expect(chip(page, "todos los días")).toHaveAttribute("aria-checked", "false");
       } finally {
         await context.close();
       }
     }
     const { page, context } = await open(daily);
     try {
-      await expect(chip(page, "todos los días")).toHaveAttribute("aria-pressed", "true");
-      await expect(chip(page, "días sueltos")).toHaveAttribute("aria-pressed", "false");
+      await expect(chip(page, "todos los días")).toHaveAttribute("aria-checked", "true");
+      await expect(chip(page, "días sueltos")).toHaveAttribute("aria-checked", "false");
     } finally {
       await context.close();
     }
