@@ -16,6 +16,7 @@
     "domainUndeliverable": "Ese dominio no recibe correo.",
     "sendFailed": "No se pudo enviar el enlace.",
     "rateLimited": "Demasiados intentos. Prueba de nuevo en unos minutos.",
+    "capped": "Ya pediste varios códigos hoy. Prueba de nuevo mañana.",
     "linkTimeoutTitle": "No pudimos comprobar el enlace",
     "linkTimeoutBody": "Falló de nuestro lado, no del enlace. Ábrelo otra vez desde el correo; si tampoco entra, pide uno nuevo aquí abajo.",
     "linkOtherBrowserTitle": "Abre el enlace en el navegador donde lo pediste",
