@@ -1135,6 +1135,7 @@
     "stale": "This changed while you were editing it. Open it again.",
     "linkTimeout": "We could not check the link. Open it again from the email.",
     "signOutFailed": "We could not sign you out. Please try again.",
+    "signOutPartial": "You signed out here, but we couldn't sign you out on your other devices.",
     "notFoundTitle": "This page does not exist",
     "notFoundDescription": "The link may be misspelled, or the page may have moved.",
     "unexpected": "Something went wrong. Please try again.",

@@ -1112,8 +1112,8 @@ test.describe("sign-out when Auth refuses the logout", () => {
     refusing?.kill("SIGTERM");
   });
 
-  test("Auth refusing the logout shows signOutFailed and keeps the person signed in", async ({ browser }) => {
-    // Kills: an action that logs Auth's error and redirects to the login anyway.
+  test("Auth refusing the logout signs this device out and the login says the rest is still open", async ({ browser }) => {
+    // Kills: an action that restores the session, and one that redirects to the login without saying so.
     const email = newAddress();
     await listAddress(email);
     const { context, page } = await fresh(browser, refusingOrigin);
@@ -1124,10 +1124,11 @@ test.describe("sign-out when Auth refuses the logout", () => {
       await page.goto("/es/settings");
 
       await page.getByRole("button", { name: auth.signOut, exact: true }).click();
-      await expect(page.getByText(messages.errors.signOutFailed)).toBeVisible();
-      await expect(page).toHaveURL(/\/es\/settings$/);
+      await expect(page).toHaveURL(/\/es\/login\?error=signOutPartial$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveText(messages.errors.signOutPartial);
+      expect(en.errors.signOutPartial).toBe("You signed out here, but we couldn't sign you out on your other devices.");
       await page.goto("/es/movements");
-      await expect(page).toHaveURL(/\/es\/movements$/);
+      await expect(page).toHaveURL(/\/es\/login/);
     } finally {
       await context.close();
     }

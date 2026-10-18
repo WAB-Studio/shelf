@@ -118,20 +118,11 @@ export const verifyCodeAction = actionClient
 export const signOutAction = authActionClient.action(async () => {
   const supabase = await createSupabaseServerClient();
 
-  const { data: held } = await supabase.auth.getSession();
-
   const { error } = await supabase.auth.signOut();
-  // No redirect on a failure: the person must learn they are still signed in.
+  // `signOut` drops this device's cookies even when Auth kept the session, so the person is out here: say what is left.
   if (error) {
     console.error("sign-out failed", error);
-    // `signOut` drops the local cookies even when Auth kept the session: put them back, so what the page shows is true.
-    if (held.session) {
-      await supabase.auth.setSession({
-        access_token: held.session.access_token,
-        refresh_token: held.session.refresh_token,
-      });
-    }
-    throw new ActionError("errors.signOutFailed");
+    redirect({ href: { pathname: "/login", query: { error: "signOutPartial" } }, locale: await getLocale() });
   }
 
   redirect({ href: "/login", locale: await getLocale() });
