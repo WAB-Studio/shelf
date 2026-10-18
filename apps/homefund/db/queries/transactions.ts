@@ -135,6 +135,13 @@ const FORM_REF_INDEXES = {
   transactions_group_external_ref_unique: sql`group_id is not null`,
 } as const;
 
+// A resent form ref whose figures differ from the first copy's: nothing is saved.
+export class ResendChangedError extends Error {
+  constructor() {
+    super("resendChanged");
+  }
+}
+
 export type CreateMovementArgs = CreateTransactionArgs & {
   // The key a form mints when it opens; it is stored as `form:<requestRef>` and wins over
   // `externalRef`, so a copy of the same submit answers with the movement the first one booked.
@@ -178,13 +185,19 @@ export async function createTransaction({
     if (!requestRef || pgErrorCode(error) !== "23505" || scope === null) throw error;
 
     const [existing] = await withUserDb((tx) =>
-      tx.execute<{ id: string }>(sql`
-        select id from transactions
+      tx.execute<{ id: string; same: boolean }>(sql`
+        select id,
+          from_account_id is not distinct from ${args.fromAccountId}::uuid
+            and to_account_id is not distinct from ${args.toAccountId}::uuid
+            and amount_cents = ${args.amountCents}::bigint
+            and occurred_at = ${args.occurredAt}::date as same
+        from transactions
         where external_ref = ${externalRef} and ${scope}
         limit 1
       `),
     );
     if (!existing) throw error;
+    if (!existing.same) throw new ResendChangedError();
     return { transactionId: existing.id };
   }
 }

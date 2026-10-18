@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   createTransaction,
   deleteTransaction,
+  ResendChangedError,
   getSettlementCurrencies,
   updateTransaction,
 } from "@/db/queries/transactions";
@@ -111,6 +112,7 @@ const CURRENCY_REFUSAL = "23901";
 // What is left for 23503 is a reference the row names that vanished after it was
 // picked.
 function mapTransactionError(error: unknown): never {
+  if (error instanceof ResendChangedError) throw new ActionError("errors.resendChanged");
   const code = pgErrorCode(error);
   if (code === "42501") throw new ActionError("errors.notFound");
   if (code === CURRENCY_REFUSAL) {

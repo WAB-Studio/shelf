@@ -1133,6 +1133,7 @@
   },
   "errors": {
     "stale": "This changed while you were editing it. Open it again.",
+    "resendChanged": "We already saved this movement with another amount; open it to correct it.",
     "linkTimeout": "We could not check the link. Open it again from the email.",
     "signOutFailed": "We could not sign you out. Please try again.",
     "notFoundTitle": "This page does not exist",
