@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { getLocale } from "next-intl/server";
 
 import { withdrawCash } from "@/db/queries/cash";
+import { ResendChangedError } from "@/db/queries/transactions";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
@@ -23,7 +24,7 @@ import { withdrawCashSchema } from "@/lib/validation/cash";
  */
 export const withdrawCashAction = authActionClient
   .inputSchema(withdrawCashSchema)
-  .action(async ({ parsedInput: { sourceAccountId, amount } }) => {
+  .action(async ({ parsedInput: { sourceAccountId, amount, requestRef } }) => {
     const amountCents = parseAmount(amount);
     if (amountCents === null) throw new ActionError("cash.errors.amountInvalid");
 
@@ -34,7 +35,12 @@ export const withdrawCashAction = authActionClient
       PERSONAL_CASH_ACCOUNT_NAME[isLocale(locale) ? locale : DEFAULT_LOCALE];
 
     try {
-      const result = await withdrawCash({ sourceAccountId, amountCents, cashAccountName });
+      const result = await withdrawCash({
+        sourceAccountId,
+        amountCents,
+        cashAccountName,
+        requestRef,
+      });
       refresh();
       return result;
     } catch (error) {
@@ -43,6 +49,7 @@ export const withdrawCashAction = authActionClient
       // ahead of any foreign key; 23901 is a withdrawal into cash that settles in
       // another currency, refused by `0032`; 23514 is the check trigger; 23503 the
       // net under all three, a reference gone after it was picked.
+      if (error instanceof ResendChangedError) throw new ActionError("errors.resendChanged");
       const code = pgErrorCode(error);
       if (code === "42501") throw new ActionError("errors.notFound");
       if (code === "23901") throw new ActionError("transactions.errors.currencyMismatch");

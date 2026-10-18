@@ -4203,6 +4203,7 @@ async function main(): Promise<void> {
   await recurringVersionSuite();
   await debtPaymentSuite();
   await resendChangedSuite();
+  await withdrawalResendSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -8169,5 +8170,141 @@ async function resendChangedSuite(): Promise<void> {
     next("A resend of a form ref with the same amount but another date is refused resendChanged and keeps the first date"),
     refused(d2) && dayRows.length === 1 && dayRows[0].occurred_at.startsWith(today),
     `result = ${JSON.stringify(d2)}, rows = ${JSON.stringify(dayRows)}`,
+  );
+}
+
+// M45: a withdrawal sent twice books once, and the cash it created is created once (RF-68, RF-158).
+async function withdrawalResendSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { withdrawCashAction } = (await import("@/app/actions/cash")) as unknown as {
+    withdrawCashAction: (input: Record<string, unknown>) => Promise<{
+      serverError?: string;
+      validationErrors?: unknown;
+      data?: { transactionId: string; targetCashAccountId: string; createdCashAccount: boolean };
+    } | undefined>;
+  };
+  const user = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(user, () =>
+    createAccount({
+      name: `Harness m45 bank ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 1_000_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  track("accounts", bank);
+  const withdraw = (over: Record<string, unknown> = {}) =>
+    asUser(user, () => withdrawCashAction({ sourceAccountId: bank, amount: "100", ...over }));
+  const transfers = async () => {
+    const rows = await fixtureSql<{ id: string; external_ref: string | null; amount_cents: string; to_account_id: string }[]>`
+      select id, external_ref, amount_cents::text, to_account_id from transactions where from_account_id = ${bank}`;
+    for (const r of rows) track("transactions", r.id);
+    return rows;
+  };
+  const cashAccounts = async () => {
+    const rows = await fixtureSql<{ id: string }[]>`
+      select id from accounts where owner_user_id = ${user.id} and subtype = 'cash'`;
+    for (const r of rows) track("accounts", r.id);
+    return rows;
+  };
+
+  // Q: the very first withdrawal, which creates the cash, sent twice
+  const firstRef = randomUUID();
+  const c1 = await withdraw({ requestRef: firstRef });
+  const c2 = await withdraw({ requestRef: firstRef });
+  const cashAfter = await cashAccounts();
+  const movedAfter = await transfers();
+  assert(
+    next("A first withdrawal sent twice with one requestRef creates one cash account and books one transfer, both answers naming it"),
+    cashAfter.length === 1 &&
+      movedAfter.length === 1 &&
+      movedAfter[0].external_ref === `form:${firstRef}` &&
+      movedAfter[0].to_account_id === cashAfter[0].id &&
+      c1?.data?.transactionId === movedAfter[0].id &&
+      c2?.data?.transactionId === movedAfter[0].id &&
+      c2?.data?.targetCashAccountId === cashAfter[0].id,
+    `${cashAfter.length} cash account(s), ${movedAfter.length} transfer(s), first = ${JSON.stringify(c1)}, second = ${JSON.stringify(c2)}`,
+  );
+
+  // Q: the cash exists now; the same request sent twice
+  const ref = randomUUID();
+  const r1 = await withdraw({ requestRef: ref });
+  const r2 = await withdraw({ requestRef: ref });
+  const sent = (await transfers()).filter((r) => r.external_ref === `form:${ref}`);
+  assert(
+    next("A withdrawal sent twice with the same requestRef books one transfer under form:<ref> and both answers name it"),
+    sent.length === 1 &&
+      sent[0].amount_cents === "10000" &&
+      r1?.data?.transactionId === sent[0].id &&
+      r2?.data?.transactionId === sent[0].id &&
+      (await cashAccounts()).length === 1,
+    `${sent.length} transfer(s), first = ${JSON.stringify(r1)}, second = ${JSON.stringify(r2)}`,
+  );
+
+  // Q: two requests with the same figures
+  const refA = randomUUID();
+  const refB = randomUUID();
+  const a = await withdraw({ requestRef: refA });
+  const b = await withdraw({ requestRef: refB });
+  const apart = (await transfers()).filter((r) => r.external_ref === `form:${refA}` || r.external_ref === `form:${refB}`);
+  assert(
+    next("Two withdrawals with different requestRefs and the same amount book two transfers, each answered with its own id"),
+    apart.length === 2 &&
+      a?.data?.transactionId !== b?.data?.transactionId &&
+      apart.some((r) => r.id === a?.data?.transactionId) &&
+      apart.some((r) => r.id === b?.data?.transactionId),
+    `${apart.length} transfer(s), a = ${JSON.stringify(a)}, b = ${JSON.stringify(b)}`,
+  );
+
+  // Q: no requestRef, nothing deduplicates
+  const priorIds = new Set((await transfers()).map((r) => r.id));
+  const before = priorIds.size;
+  await withdraw();
+  await withdraw();
+  const bare = await transfers();
+  assert(
+    next("Two withdrawals with no requestRef book two transfers, neither under a form: key"),
+    bare.length === before + 2 && bare.filter((r) => !priorIds.has(r.id)).every((r) => !r.external_ref?.startsWith("form:")),
+    `${before} -> ${bare.length} transfer(s), refs ${JSON.stringify(bare.map((r) => r.external_ref))}`,
+  );
+
+  // Q: the same request resent with another amount
+  const changedRef = randomUUID();
+  const k1 = await withdraw({ requestRef: changedRef, amount: "100" });
+  const k2 = await withdraw({ requestRef: changedRef, amount: "250" });
+  const kept = (await transfers()).filter((r) => r.external_ref === `form:${changedRef}`);
+  assert(
+    next("A resent requestRef with another amount answers resendChanged and leaves the one transfer at the first amount"),
+    k1?.data?.transactionId !== undefined &&
+      kept.length === 1 &&
+      kept[0].amount_cents === "10000" &&
+      JSON.stringify(k2).includes("resendChanged") &&
+      k2?.data?.transactionId === undefined,
+    `${kept.length} transfer(s) at ${kept[0]?.amount_cents}, second = ${JSON.stringify(k2)}`,
+  );
+
+  // Q: the cash archived between the send and the resend must not be replaced by a new one
+  const lateRef = randomUUID();
+  const l1 = await withdraw({ requestRef: lateRef });
+  const cashBefore = (await cashAccounts()).length;
+  await fixtureSql`update accounts set archived_at = now() where owner_user_id = ${user.id} and subtype = 'cash'`;
+  const l2 = await withdraw({ requestRef: lateRef });
+  const lateRows = (await transfers()).filter((r) => r.external_ref === `form:${lateRef}`);
+  assert(
+    next("A resend after the cash was archived answers the booked transfer and creates no new cash account"),
+    lateRows.length === 1 &&
+      l1?.data?.transactionId === lateRows[0].id &&
+      l2?.data?.transactionId === lateRows[0].id &&
+      (await cashAccounts()).length === cashBefore,
+    `${lateRows.length} transfer(s), ${cashBefore} -> ${(await cashAccounts()).length} cash account(s), second = ${JSON.stringify(l2)}`,
   );
 }

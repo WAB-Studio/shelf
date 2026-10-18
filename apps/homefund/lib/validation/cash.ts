@@ -15,6 +15,7 @@ export const withdrawCashSchema = z.object({
     invalid: "cash.errors.amountInvalid",
     tooLarge: "cash.errors.amountTooLarge",
   }),
+  requestRef: z.uuid({ error: "errors.unexpected" }).optional(),
 });
 
 export type WithdrawCashInput = z.infer<typeof withdrawCashSchema>;
