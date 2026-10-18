@@ -102,7 +102,7 @@ export function NewGoalForm() {
       />
 
       <Section>
-        <ChipRow>
+        <ChipRow radio label={t("goal.new.endLabel")}>
           <Chip radio selected={withEnd} onClick={() => setWithEnd(true)}>
             {t("goal.new.withEnd")}
           </Chip>

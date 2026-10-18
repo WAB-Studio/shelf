@@ -90,6 +90,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
   const [threshold, setThreshold] = useState("1");
 
   const weekdayShort = t.raw("day.cadence.weekdayShort") as string[];
+  const weekdayFull = t.raw("day.cadence.weekdayFull") as string[];
 
   function toggleWeekday(day: number) {
     setWeekdays((current) =>
@@ -219,9 +220,9 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
       ) : null}
 
       <Section label={t("plan.commitmentForm.whenLabel")}>
-        <ChipRow>
+        <ChipRow radio label={t("plan.commitmentForm.whenLabel")}>
           {CADENCE_KINDS.map((kind) => (
-            <Chip key={kind} selected={cadenceKind === kind} onClick={() => setCadenceKind(kind)}>
+            <Chip key={kind} radio selected={cadenceKind === kind} onClick={() => setCadenceKind(kind)}>
               {t(`plan.commitmentForm.cadence.${kind}`)}
             </Chip>
           ))}
@@ -234,6 +235,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
                 key={day}
                 shape="day"
                 mono
+                aria-label={weekdayFull[day - 1]}
                 selected={weekdays.includes(day)}
                 onClick={() => toggleWeekday(day)}
               >

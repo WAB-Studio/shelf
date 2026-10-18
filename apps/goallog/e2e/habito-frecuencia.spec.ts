@@ -44,9 +44,9 @@ test("saved: «Cambiar la frecuencia» opens the page prefilled, saving returns 
     await mainLower(page);
     await page.getByRole("link", { name: "Cambiar la frecuencia", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${frecuencia(id)}$`));
-    await expect(page.getByRole("button", { name: "días sueltos", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("button", { name: "J", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "veces por semana", exact: true }).click();
+    await expect(page.getByRole("radio", { name: "días sueltos", exact: true })).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByRole("button", { name: "jueves", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("radio", { name: "veces por semana", exact: true }).click();
     await page.getByRole("spinbutton", { name: "veces por semana" }).fill("2");
     await save(page).click();
     await expect(page).toHaveURL(new RegExp(`${habitPath(id)}$`));
@@ -78,7 +78,7 @@ test("saved: Hoy's loose group asks by the new days", async ({ person, browser, 
     expect(drawn(await page.locator("main").innerText()), "control: not asked today").not.toContain("estirar");
     await page.goto(frecuencia(id));
     await settled(page);
-    await page.getByRole("button", { name: "todos los días", exact: true }).click();
+    await page.getByRole("radio", { name: "todos los días", exact: true }).click();
     await save(page).click();
     await expect(page).toHaveURL(new RegExp(`${habitPath(id)}$`));
     await page.goto("/");
@@ -96,7 +96,7 @@ test("pending: the button is disabled while the act runs and sends one request",
   const id = await seedHabit(db, person.id, "Estirar", { kind: "daily" });
   const { page, context } = await visit(browser, baseURL, person, frecuencia(id), 360);
   try {
-    await page.getByRole("button", { name: "veces por semana", exact: true }).click();
+    await page.getByRole("radio", { name: "veces por semana", exact: true }).click();
     await page.getByRole("spinbutton", { name: "veces por semana" }).fill("3");
     await holdActions(page, 1500);
     const posts = postCounter(page);
@@ -117,7 +117,7 @@ test("cancelled: «Cancelar» returns to the habit's screen and the cadence is u
   const { page, context } = await visit(browser, baseURL, person, frecuencia(id), 360);
   try {
     const posts = postCounter(page);
-    await page.getByRole("button", { name: "veces por semana", exact: true }).click();
+    await page.getByRole("radio", { name: "veces por semana", exact: true }).click();
     await page.getByRole("spinbutton", { name: "veces por semana" }).fill("3");
     await page.getByRole("link", { name: "Cancelar", exact: true }).or(page.getByRole("button", { name: "Cancelar", exact: true })).click();
     await expect(page).toHaveURL(new RegExp(`${habitPath(id)}$`));
@@ -158,7 +158,7 @@ test("a habit with a fact, a retired one, an unknown one, another person's and a
   try {
     const control = await visit(browser, baseURL, person, frecuencia(open), 360);
     try {
-      await expect(control.page.getByRole("button", { name: "todos los días", exact: true })).toBeVisible();
+      await expect(control.page.getByRole("radio", { name: "todos los días", exact: true })).toBeVisible();
     } finally {
       await control.context.close();
     }
@@ -166,7 +166,7 @@ test("a habit with a fact, a retired one, an unknown one, another person's and a
       const { page, context } = await visit(browser, baseURL, person, frecuencia(id), 360);
       try {
         await expect(page.getByRole("heading", { name: "Esta página no existe" }), id).toBeVisible();
-        await expect(page.getByRole("button", { name: "días sueltos", exact: true }), id).toHaveCount(0);
+        await expect(page.getByRole("radio", { name: "días sueltos", exact: true }), id).toHaveCount(0);
         await expect(page.getByText("Secreto ajeno"), id).toHaveCount(0);
       } finally {
         await context.close();
