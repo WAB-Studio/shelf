@@ -1,3 +1,5 @@
+import zlib from "node:zlib";
+
 import ExcelJS from "exceljs";
 
 import { isHourUnit, isTimeUnit } from "@/lib/units/time";
@@ -146,10 +148,55 @@ export function zipTooBig(bytes: Uint8Array): boolean {
   return false;
 }
 
+/**
+ * Whether the entries really inflate to a template's size, measured by inflating each with an output
+ * bound of what the total still allows. The directory's own sizes are not believed: it supplies only
+ * where each entry sits and how many bytes it spans.
+ */
+export function zipInflatesWithin(bytes: Uint8Array): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let end = -1;
+  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 0xffff); at--) {
+    if (view.getUint32(at, true) === 0x06054b50) {
+      end = at;
+      break;
+    }
+  }
+  if (end < 0) return false;
+  const entries = view.getUint16(end + 10, true);
+  let dir = view.getUint32(end + 16, true);
+  if (entries === 0xffff || dir === 0xffffffff || entries > ZIP_ENTRIES_MAX) return false;
+  let remaining = ZIP_INFLATED_MAX;
+  for (let i = 0; i < entries; i++) {
+    if (dir + 46 > bytes.length || view.getUint32(dir, true) !== 0x02014b50) return false;
+    const span = view.getUint32(dir + 20, true);
+    const local = view.getUint32(dir + 42, true);
+    dir += 46 + view.getUint16(dir + 28, true) + view.getUint16(dir + 30, true) + view.getUint16(dir + 32, true);
+    if (local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50) return false;
+    const method = view.getUint16(local + 8, true);
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    if (start > bytes.length) return false;
+    const data = bytes.subarray(start, Math.min(bytes.length, start + span));
+    if (method === 0) {
+      if (data.length > remaining) return false;
+      remaining -= data.length;
+    } else if (method === 8) {
+      try {
+        remaining -= zlib.inflateRawSync(data, { maxOutputLength: Math.max(1, remaining) }).length;
+      } catch {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function readWorkbook(
   bytes: Uint8Array,
 ): Promise<{ matched: false } | { matched: true; draft: ImportDraft; source: Source } | { matched: true; errors: WorkbookError[] }> {
-  if (zipTooBig(bytes)) return { matched: false };
+  if (zipTooBig(bytes) || !zipInflatesWithin(bytes)) return { matched: false };
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(Buffer.from(bytes) as never);
