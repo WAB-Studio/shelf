@@ -290,3 +290,83 @@ for (const [error, words] of [
     await expect(alert).toHaveText(words);
   });
 }
+
+// The refusal is tied to the field it refuses: a screen reader that lands on
+// the email box hears the line below it, and `aria-invalid` says the box is
+// the one at fault. Every answer is faked; no POST reaches Supabase.
+const emailBox = (page: Page) => page.getByRole("textbox", { name: messages.account.emailLabel });
+
+async function expectTiedTo(page: Page, text: string): Promise<void> {
+  const field = emailBox(page);
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  const id = await field.getAttribute("aria-describedby");
+  expect(id).toBeTruthy();
+  await expect(page.locator(`[id="${id}"]`)).toHaveText(text);
+}
+
+test("a refused address is tied to its refusal: notInvited", async ({ page }) => {
+  await mockSendSignInLinkResult(page, { ok: false, error: "notInvited" });
+  await submit(page, "reader@example.com");
+
+  await expectTiedTo(page, messages.account.errors.notInvited);
+});
+
+test("a refused address is tied to its refusal: sendFailed", async ({ page }) => {
+  await mockSendSignInLinkResult(page, { ok: false, error: "sendFailed" });
+  await submit(page, "reader@example.com");
+
+  await expectTiedTo(page, messages.account.errors.sendFailed);
+});
+
+test("while the send is pending the field is tied to nothing", async ({ page }) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/cuenta", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await held;
+    const body = [
+      '0:{"a":"$@1","f":"","q":"","i":false,"b":"e2e0000000000000000"}',
+      `1:${JSON.stringify({ ok: false, error: "notInvited" })}`,
+      "",
+    ].join("\n");
+    await route.fulfill({ status: 200, contentType: "text/x-component", body });
+  });
+  await submit(page, "reader@example.com");
+
+  await expect(page.getByRole("button", { name: messages.account.sending })).toBeVisible();
+  await expect(emailBox(page)).not.toHaveAttribute("aria-describedby", /.+/);
+  await expect(emailBox(page)).not.toHaveAttribute("aria-invalid", /.+/);
+
+  release();
+  await expectTiedTo(page, messages.account.errors.notInvited);
+});
+
+test("after a refusal, a new address sent fine leaves the field untied", async ({ page }) => {
+  await mockSendSignInLinkResult(page, { ok: false, error: "notInvited" });
+  await submit(page, "reader@example.com");
+  await expectTiedTo(page, messages.account.errors.notInvited);
+
+  await mockSendSignInLinkResult(page, { ok: true });
+  await emailBox(page).fill("other@example.com");
+  await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
+
+  await expect(page.getByText(SENT_TO_READER.replace("reader@", "other@"))).toBeVisible();
+  await page.getByRole("button", { name: messages.account.otherEmail }).click();
+  await expect(emailBox(page)).not.toHaveAttribute("aria-describedby", /.+/);
+  await expect(emailBox(page)).not.toHaveAttribute("aria-invalid", /.+/);
+});
+
+test("no network: the field is tied to the offline line", async ({ page, context }) => {
+  await page.goto("/cuenta");
+  await emailBox(page).fill("reader@example.com");
+  await abortSendSignInLink(page);
+  await context.setOffline(true);
+  await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
+
+  await expectTiedTo(page, messages.account.errors.offline);
+});
