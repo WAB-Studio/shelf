@@ -30,6 +30,9 @@ export const groupMembers = finances.table(
     // The stable per-scope import key (RF-51): a re-import matches on it to update instead of duplicate.
     // Auto-filled to `id::text` by a trigger when omitted; a webhook or upsert value survives untouched.
     externalRef: text(),
+    // RF-154: 'pending' until the invited person accepts. A trigger sets it from `invite_email`, and no
+    // role holds a write grant on it: acceptance and decline are server functions.
+    inviteState: text({ enum: ["pending", "accepted", "declined"] }).notNull().default("accepted"),
     archivedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -41,6 +44,14 @@ export const groupMembers = finances.table(
     check("group_members_leader_has_user", sql`${table.role} <> 'leader' or ${table.userId} is not null`),
     // An invite only pends on an unclaimed row: claiming it (RF-06) clears the email as it sets the user.
     check("group_members_invite_email_unclaimed", sql`${table.inviteEmail} is null or ${table.userId} is null`),
+    // A pending row waits on an address and has no user; an accepted row holds no invite; a declined row is archived.
+    check("group_members_invite_state_valid", sql`${table.inviteState} in ('pending', 'accepted', 'declined')`),
+    check(
+      "group_members_pending_unclaimed",
+      sql`${table.inviteState} <> 'pending' or (${table.userId} is null and ${table.inviteEmail} is not null)`,
+    ),
+    check("group_members_accepted_has_no_invite", sql`${table.inviteState} <> 'accepted' or ${table.inviteEmail} is null`),
+    check("group_members_declined_archived", sql`${table.inviteState} <> 'declined' or ${table.archivedAt} is not null`),
     check("group_members_external_ref_length", sql`length(${table.externalRef}) <= 200`),
     // `external_ref` is unique within the group scope, so re-importing the same person updates instead of duplicating (RF-51).
     uniqueIndex("group_members_group_external_ref_unique")

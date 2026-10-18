@@ -2604,9 +2604,9 @@ async function checkInviteClaimPolicies() {
   const busyGroupId = randomUUID();
 
   const labels = [
-    "98. the invited caller claims their pending row, setting user_id and clearing the invite",
+    "98. the invited caller's sign-in claims nothing: the pending row stays pending, unseen and unclaimed (RF-154)",
     "99. a caller whose email does not match the invite claims nothing",
-    "100. a caller who already holds a live membership is refused a second by the one-group index",
+    "100. accepting an invitation puts a caller who already holds a live membership in a second: the one-group index refuses it",
     "101. row security stays enabled and forced on group_members",
   ];
   const tailLabel = "102. the rolled-back invite transaction leaves no trace";
@@ -2662,11 +2662,9 @@ async function checkInviteClaimPolicies() {
       assert(
         labels[0],
         preClaimVisible === "0" &&
-          claimedId === pendingInvited &&
-          claimed.user_id === invitedUser &&
-          claimed.invite_email === null &&
-          claimed.role === "member",
-        `pre-claim visible = ${preClaimVisible}, claimed = ${claimedId === pendingInvited ? "the pending row" : claimedId}, user_id = ${claimed?.user_id === invitedUser ? "self" : claimed?.user_id}, invite_email = ${claimed?.invite_email}, role = ${claimed?.role}`,
+          claimedId === null &&
+          claimed === undefined,
+        `pre-claim visible = ${preClaimVisible}, claim returned ${claimedId ?? "null"}, row visible to the caller = ${claimed ? "yes" : "no"}`,
       );
 
       // 99: a caller whose email matches no invite claims nothing — the function matches on auth.email()
@@ -2681,10 +2679,10 @@ async function checkInviteClaimPolicies() {
       // 100: the busy caller's email matches the invite, so the function picks the pending row; the
       // one-group-per-user index then refuses it, since the caller already holds a live membership.
       await tx`reset role`;
-      await enterUserContext(tx, busyUser, busyEmail);
       await tx
         .savepoint(async (sp) => {
-          await sp`select private.claim_group_invite()`;
+          await sp`update group_members set user_id = ${busyUser}, invite_email = null, invite_state = 'accepted'
+            where group_id = ${groupId} and lower(invite_email) = lower(${busyEmail})`;
           assert(labels[2], false, "a second live membership landed, which it must not");
         })
         .catch((error: unknown) => {
@@ -5008,7 +5006,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   categories: ["created_at", "id", "updated_at"],
   debt_terms: ["created_at", "updated_at"],
   goal_contributions: ["created_at", "id"],
-  group_members: ["archived_at", "created_at", "id", "updated_at"],
+  group_members: ["archived_at", "created_at", "id", "invite_state", "updated_at"],
   groups: ["created_at", "updated_at"],
   // Every column, both here and in the UPDATE map: `private.remember_counterparty` is the
   // sole writer, so a client cannot forge a state transition. Forgetting one is the DELETE.
@@ -5155,6 +5153,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "external_ref",
     "group_id",
     "id",
+    "invite_state",
     "role",
     "updated_at",
     "user_id",
@@ -5627,7 +5626,7 @@ async function checkGroupMemberUserIdLock() {
   const forcedRollback = Symbol("forced rollback");
 
   const labels = [
-    "179. the invited caller's claim lands on their own pending row and clears the invite",
+    "179. the invited caller's claim joins nobody and leaves the pending row alone (RF-154)",
     "180. a second claim by the same caller returns null",
     "181. a plain member cannot repoint the leader's user_id at an account of his own",
     "182. a plain member still renames their own row",
@@ -5690,12 +5689,17 @@ async function checkGroupMemberUserIdLock() {
       }>(dsql`select user_id, invite_email, role from group_members where id = ${pending.id}`);
       assert(
         labels[0],
-        claimedId === pending.id &&
-          claimedRow.user_id === memberUser &&
-          claimedRow.invite_email === null &&
-          claimedRow.role === "member",
-        `claimed = ${claimedId === pending.id ? "the pending row" : claimedId}, user_id = ${claimedRow?.user_id === memberUser ? "self" : claimedRow?.user_id}, invite_email = ${claimedRow?.invite_email}, role = ${claimedRow?.role}`,
+        claimedId === null && claimedRow === undefined,
+        `claim returned ${claimedId ?? "null"}, row visible to the caller = ${claimedRow ? "yes" : "no"}`,
       );
+
+      // The acceptance M68 writes, run as the owner so 181 and 182 keep a member to attack with.
+      await tx.execute(dsql`reset role`);
+      await tx.execute(
+        dsql`update group_members set user_id = ${memberUser}, invite_email = null, invite_state = 'accepted'
+          where id = ${pending.id}`,
+      );
+      await enter(tx, memberUser, memberEmail);
 
       // 180: nothing pends on that email any more, so the same call claims nothing.
       const [{ claim_group_invite: repeatId }] = await tx.execute<{
@@ -11286,7 +11290,7 @@ async function checkMemberAddress() {
     archivedFree: "376. an archived pending invitation no longer holds its address; a new one lands and the archived row is untouched",
     twoLive: "377. a second live pending invitation to the same address is still refused, in any case, and another fund may hold it",
     restore: "378. restoring the archived invitation while a live one holds the address is a 23505 on group_members_group_invite_email_unique",
-    claim: "379. signing in with an archived and a live invitation to the address claims the live one",
+    claim: "379. signing in with an archived and a live invitation to the address claims neither (RF-154)",
     live: "380. the live database carries the function and the narrowed index",
   };
 
@@ -11468,10 +11472,11 @@ async function checkMemberAddress() {
     const rows = await tx<{ id: string; user_id: string | null }[]>`select id, user_id from group_members where id in (${dead.id}, ${live.id})`;
     const claimedLive = rows.find((r) => r.id === live.id)?.user_id === claimer;
     const deadUntouched = rows.find((r) => r.id === dead.id)?.user_id === null;
+    const liveUntouched = rows.find((r) => r.id === live.id)?.user_id === null;
     return [
       {
-        ok: id === live.id && claimedLive && deadUntouched,
-        detail: `claimed = ${id === live.id ? "the live row" : id}, live row holds the user = ${claimedLive}, archived row untouched = ${deadUntouched}`,
+        ok: id === null && !claimedLive && liveUntouched && deadUntouched,
+        detail: `claim returned ${id ?? "null"}, live row holds the user = ${claimedLive}, live row untouched = ${liveUntouched}, archived row untouched = ${deadUntouched}`,
       },
     ];
   });
