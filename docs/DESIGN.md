@@ -273,3 +273,16 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   words, from the dialog and from onboarding. One DNS lookup per invitation; a domain whose DNS is down at that moment
   is refused. Level 3. Not built yet.
 
+
+## Decisions of 2026-10-17 (closing), after the critic of decidido-17, by the user
+
+- **The card's gap on «Cuadrar» reads in the field's frame** (Q1 b): typed debt 400.000 against «Según HomeFund
+  $ 404.900» reads «−$ 4.900», so the three figures subtract; the tone keeps saying good or bad. Level 2, board C1
+  redrawn. Not built yet.
+- **«Editar miembro» gains «Correo (opcional)»** (Q2 a) for a member with no user and no pending invitation; saving it
+  invites, as RF-149 does from «Añadir miembro». Level 3, board «MiembroCorreo» redrawn. Not built yet.
+- **The «Añadir categoría» inside «Mis categorías» opens on «Mías»** (Q3 a); the top button keeps «Del fondo». Level 2.
+  Not built yet.
+- **Orphaned personal subcategories** (critic-6c Q8 b): migration 0061 deletes the ones nothing uses and brings back as
+  top-level categories the ones a movement, budget, payment or rule names, before it adds the cascading key.
+- **«Eso ya no existe.» stays** (critic-6c Q9 a) for a write to an account the person cannot use.
