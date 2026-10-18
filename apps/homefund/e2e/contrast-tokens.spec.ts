@@ -85,6 +85,20 @@ test.describe("dark", () => {
 
   test("the focus ring stays the accent's own step", async ({ page }) => {
     expect(await resolved(page, "var(--focus-8)")).toBe(await resolved(page, "var(--accent-8)"));
-    expect(await resolved(page, "var(--accent-9)")).toBe(await resolved(page, "#29a383"));
+  });
+
+  test("the primary button's white label reads at 4.5:1", async ({ page }) => {
+    const bg = await send(page).evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(ratio(bg, "rgb(255, 255, 255)")).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(await resolved(page, "var(--accent-10)"), "rgb(255, 255, 255)")).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`${theme}: the danger button's white label reads at 4.5:1`, async ({ page }) => {
+    await open(page, theme);
+    for (const token of ["--red-9", "--red-10"]) {
+      expect(ratio(await resolved(page, `var(${token})`), "rgb(255, 255, 255)"), token).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+}
