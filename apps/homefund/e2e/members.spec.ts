@@ -660,3 +660,158 @@ test.describe("RF-149: adding a member with an optional address", () => {
     }
   });
 });
+
+// Survivors of codigo-6c: the refusals and pending states the dialog owes the person using it.
+test.describe("the members dialog's refusals and pending state", () => {
+  // The field's own group: holds `#member-email` and not `#member-name`.
+  const emailGroup = (dialog: Locator) =>
+    dialog
+      .getByRole("group")
+      .filter({ has: dialog.page().locator("#member-email") })
+      .filter({ hasNot: dialog.page().locator("#member-name") });
+
+  async function typeTakenAddress(page: Page) {
+    const email = freshAddress();
+    await seedPending(`Pendiente ${stamp}`, email);
+    const dialog = await openCreate(page);
+    await nameField(dialog).fill(freshName());
+    await emailField(dialog).fill(email);
+    await saveButton(dialog).click();
+    return { dialog, email };
+  }
+
+  test("a taken address marks the address field invalid, with the refusal in its own group, not the name", async ({
+    page,
+  }) => {
+    // Kills: C10, `setError("name", …)` (the refusal lands on the wrong field).
+    const taken = await typeTakenAddress(page);
+    try {
+      const { dialog } = taken;
+      await expect(emailGroup(dialog).getByText(members.errors.emailTaken, { exact: true })).toBeVisible();
+      await expect(dialog.locator("#member-email")).toHaveAttribute("aria-invalid", "true");
+      await expect(dialog.locator("#member-name")).not.toHaveAttribute("aria-invalid", "true");
+    } finally {
+      await forget(taken.email, { sent: false });
+    }
+  });
+
+  test("a taken address raises no toast: the field is the only place the refusal shows", async ({
+    page,
+  }) => {
+    // Kills: C09, the early `return` after `setError` deleted (the generic error toast fires too).
+    // A toast can come and go between two polls, so every toast ever mounted is recorded.
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      Object.assign(window, { __toastsSeen: seen });
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (!(node instanceof Element)) continue;
+            const toasts = node.matches("[data-sonner-toast]")
+              ? [node]
+              : [...node.querySelectorAll("[data-sonner-toast]")];
+            for (const toast of toasts) seen.push(toast.textContent ?? "");
+          }
+        }
+      }).observe(document, { childList: true, subtree: true });
+    });
+    const taken = await typeTakenAddress(page);
+    try {
+      const { dialog } = taken;
+      await expect(emailGroup(dialog).getByText(members.errors.emailTaken, { exact: true })).toBeVisible();
+      // Two frames after the field error: a toast raised in the same handler has been mounted by now.
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      const seen = await page.evaluate(
+        () => (window as unknown as { __toastsSeen: string[] }).__toastsSeen,
+      );
+      expect(seen).toEqual([]);
+    } finally {
+      await forget(taken.email, { sent: false });
+    }
+  });
+
+  test("an edit whose row is gone says so in a toast and keeps the dialog and the typed name", async ({
+    page,
+  }) => {
+    // Kills: D09/D09b, the update's `onError` swallowed (the person saves into silence).
+    const old = `Efimera ${stamp}`;
+    await asHarnessUser(async (tx) => {
+      await tx`insert into group_members (group_id, name, role) values (${groupId}, ${old}, 'member')`;
+    });
+    await page.goto("/es/settings/members");
+    await rowMenu(page, old).click();
+    await page.getByRole("menuitem", { name: common.edit, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(nameField(dialog)).toHaveValue(old);
+
+    await fixtureSql`delete from group_members where group_id = ${groupId} and name = ${old}`;
+    const renamed = `Renombrada ${stamp}`;
+    await nameField(dialog).fill(renamed);
+    await saveButton(dialog).click();
+
+    await expect(toastsOf(page).filter({ hasText: errors.notLeader })).toHaveCount(1);
+    await expect(dialog).toHaveAttribute("data-state", "open");
+    await expect(nameField(dialog)).toHaveValue(renamed);
+    await expect(page.getByText(members.updated, { exact: true })).toHaveCount(0);
+  });
+
+  test("while an edit saves, the name, «Cancelar» and «Guardar» are disabled and «Guardar» spins", async ({
+    page,
+  }) => {
+    // Kills: C11, `isPending = create.isPending` (an edit in flight stays editable and cancellable).
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/settings/members", async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST" || !request.headers()["next-action"]) return route.fallback();
+      await gate;
+      return route.fallback();
+    });
+    await page.goto("/es/settings/members");
+    await rowMenu(page, PLAIN_MEMBER_NAME).click();
+    await page.getByRole("menuitem", { name: common.edit, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    try {
+      await nameField(dialog).fill(`Renombrada ${stamp}`);
+      await saveButton(dialog).click();
+
+      await expect(nameField(dialog)).toBeDisabled();
+      await expect(cancelButton(dialog)).toBeDisabled();
+      await expect(saveButton(dialog)).toBeDisabled();
+      await expect(saveButton(dialog).locator(".rt-Spinner")).toBeVisible();
+    } finally {
+      release();
+    }
+    await expect(page.getByText(members.updated, { exact: true })).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test("at 360, a member with no login and no address shows her name and «Sin acceso» and no empty line", async ({
+    page,
+  }) => {
+    // Kills: S02, the address guard dropped (an empty gray line under every no-login member).
+    const name = `Sinacceso ${stamp}`;
+    await asHarnessUser(async (tx) => {
+      await tx`insert into group_members (group_id, name, role) values (${groupId}, ${name}, 'member')`;
+    });
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto("/es/settings/members");
+    await nameRow(page, name);
+    // The whole card: the name's own row would leave out a line stacked under it.
+    const card = band(page).locator(".rt-Card").filter({ hasText: name });
+    await expect(card).toHaveCount(1);
+
+    await expect(card).toContainText(members.noLoginBadge);
+    const lines = (await card.innerText()).split("\n").map((line) => line.trim()).filter(Boolean);
+    expect(lines).toEqual([name, members.noLoginBadge]);
+    // An empty `Text` takes no line in `innerText`; it is still a node the card should not carry.
+    await expect(card.locator(".rt-Text")).toHaveCount(1);
+  });
+});
