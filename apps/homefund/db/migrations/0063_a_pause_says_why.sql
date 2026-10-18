@@ -3,10 +3,13 @@
 -- pauses a rule records why (`paused_reason = 'failed'`); a trigger clears it when the rule resumes,
 -- so no role needs a write grant on the column. A rule that ends by `ends_on` also stored a
 -- `next_run_on` past its end, which the ends-after-next-run check refused: the run paused it as failed
--- and lost its back-fill. It now keeps the end date as its last `next_run_on`.
+-- and lost its back-fill. The check now binds only active rules, so an ended rule keeps the real
+-- advanced `next_run_on` and resuming it is refused (23514) instead of booking a phantom on `ends_on`.
 -- Hand-written: the snapshot chain forks at 0052-0054, so drizzle-kit cannot generate from it.
 ALTER TABLE "finances"."recurring_rules" ADD COLUMN "paused_reason" text;--> statement-breakpoint
 ALTER TABLE "finances"."recurring_rules" ADD CONSTRAINT "recurring_rules_paused_reason_valid" CHECK ("finances"."recurring_rules"."paused_reason" is null or "finances"."recurring_rules"."paused_reason" = 'failed');--> statement-breakpoint
+ALTER TABLE "finances"."recurring_rules" DROP CONSTRAINT "recurring_rules_ends_on_after_next_run";--> statement-breakpoint
+ALTER TABLE "finances"."recurring_rules" ADD CONSTRAINT "recurring_rules_ends_on_after_next_run" CHECK (not "finances"."recurring_rules"."is_active" or "finances"."recurring_rules"."ends_on" is null or "finances"."recurring_rules"."ends_on" >= "finances"."recurring_rules"."next_run_on");--> statement-breakpoint
 CREATE FUNCTION "private"."clear_paused_reason"() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
 AS $$
@@ -88,8 +91,7 @@ begin
         end if;
       end loop;
       update finances.recurring_rules
-        set next_run_on = case when v_active then v_next else least(v_next, r.ends_on) end,
-            is_active = v_active
+        set next_run_on = v_next, is_active = v_active
         where id = r.id;
     exception when others then
       raise warning 'recurring rule % skipped and paused: % (%)', r.id, sqlerrm, sqlstate;

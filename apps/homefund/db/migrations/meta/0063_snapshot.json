@@ -3246,7 +3246,7 @@
         },
         "recurring_rules_ends_on_after_next_run": {
           "name": "recurring_rules_ends_on_after_next_run",
-          "value": "\"finances\".\"recurring_rules\".\"ends_on\" is null or \"finances\".\"recurring_rules\".\"ends_on\" >= \"finances\".\"recurring_rules\".\"next_run_on\""
+          "value": "not \"finances\".\"recurring_rules\".\"is_active\" or \"finances\".\"recurring_rules\".\"ends_on\" is null or \"finances\".\"recurring_rules\".\"ends_on\" >= \"finances\".\"recurring_rules\".\"next_run_on\""
         },
         "recurring_rules_description_length": {
           "name": "recurring_rules_description_length",

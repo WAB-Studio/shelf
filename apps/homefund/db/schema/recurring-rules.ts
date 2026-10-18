@@ -86,10 +86,11 @@ export const recurringRules = finances.table(
       "recurring_rules_day_of_month_by_frequency",
       sql`case when ${table.frequency} = 'weekly' then ${table.dayOfMonth} is null else ${table.dayOfMonth} is not null end`,
     ),
-    // An end date never falls before the next run.
+    // An active rule's end date never falls before its next run; an ended rule keeps the advanced date,
+    // so resuming it is refused.
     check(
       "recurring_rules_ends_on_after_next_run",
-      sql`${table.endsOn} is null or ${table.endsOn} >= ${table.nextRunOn}`,
+      sql`not ${table.isActive} or ${table.endsOn} is null or ${table.endsOn} >= ${table.nextRunOn}`,
     ),
     check(
       "recurring_rules_paused_reason_valid",

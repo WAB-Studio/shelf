@@ -8993,4 +8993,33 @@ async function recurringPauseSuite(): Promise<void> {
       detail: `result = ${JSON.stringify(result)}, is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
     };
   });
+
+  await row("Resuming a rule that ran to its end is refused by the database, books nothing and leaves it inactive", async () => {
+    const { recurringRuleId: id } = await asUser(user, () =>
+      createRecurringRule({
+        fromAccountId: own.accountId,
+        toAccountId: null,
+        amountCents: 1_000,
+        categoryId: own.categoryId,
+        description: `m49 end ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: shiftDate(today, -7),
+        endsOn: shiftDate(today, -1),
+      }),
+    );
+    keep("recurring_rules", id);
+    await fixtureSql`select private.run_due_recurring_rules(${user.id}::uuid)`;
+    const ended = await read(id);
+    const before = await booked(id);
+    const result = await asUser(user, () => resumeRecurringRuleAction({ id }));
+    const after = await read(id);
+    return {
+      ok:
+        ended.is_active === false && before === 1 && result?.serverError !== undefined &&
+        after.is_active === false && (await booked(id)) === before,
+      detail: `ended inactive = ${!ended.is_active}, booked ${before}, resume = ${JSON.stringify(result)}, is_active = ${after.is_active}`,
+    };
+  });
 }
