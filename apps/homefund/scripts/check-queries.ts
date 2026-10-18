@@ -4201,6 +4201,7 @@ async function main(): Promise<void> {
   await survivorsSuite();
   await idempotencySuite();
   await recurringVersionSuite();
+  await resendChangedSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -7867,5 +7868,111 @@ async function recurringVersionSuite(): Promise<void> {
       afterSaved.amount_cents === "2000" &&
       afterSaved.updated_at !== quietLoaded.updated_at,
     `result = ${JSON.stringify(saved)}, amount = ${afterSaved.amount_cents}, stamp ${quietLoaded.updated_at} -> ${afterSaved.updated_at}`,
+  );
+}
+
+// M74: a form ref resent with other figures is refused, never answered ok (RF-158).
+async function resendChangedSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: (input: Record<string, unknown>) => Promise<MovementResult>;
+  };
+  const user = await createMembershipFreeUser();
+  const mkAccount = async (name: string): Promise<string> => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const accountA = await mkAccount("Harness m74 A");
+  const accountB = await mkAccount("Harness m74 B");
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m74 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", categoryId);
+
+  const send = (ref: string, over: Record<string, unknown> = {}) =>
+    asUser(user, () =>
+      actions.createTransactionAction({
+        requestRef: ref,
+        fromAccountId: accountA,
+        toAccountId: null,
+        amount: "100",
+        occurredAt: today,
+        description: `m74 ${tag}`,
+        splits: [{ categoryId, amount: String(over.amount ?? "100") }],
+        labelIds: [],
+        ...over,
+      }),
+    );
+  type Row = { id: string; amount_cents: string; from_account_id: string | null; occurred_at: string };
+  const rowsOf = async (ref: string) => {
+    const rows = await fixtureSql<Row[]>`
+      select id, amount_cents::text, from_account_id, occurred_at::text from transactions
+      where owner_user_id = ${user.id} and external_ref = ${`form:${ref}`}`;
+    rows.forEach((r) => track("transactions", r.id));
+    return rows;
+  };
+  const refused = (r: MovementResult) =>
+    r.serverError === "errors.resendChanged" || (r.data?.ok === false && r.data.reason === "resendChanged");
+
+  // Q: the same figures
+  const same = randomUUID();
+  const s1 = await send(same);
+  const s2 = await send(same);
+  const sameRows = await rowsOf(same);
+  assert(
+    next("A resend of a form ref with the same amount, account and date answers ok with the existing id and books one row"),
+    sameRows.length === 1 && s1.data?.ok === true && s2.data?.ok === true &&
+      s2.data.transactionId === sameRows[0].id && s1.data.transactionId === sameRows[0].id,
+    `${sameRows.length} row(s), first = ${JSON.stringify(s1)}, second = ${JSON.stringify(s2)}`,
+  );
+
+  // Q: another amount
+  const amt = randomUUID();
+  await send(amt);
+  const a2 = await send(amt, { amount: "250" });
+  const amtRows = await rowsOf(amt);
+  assert(
+    next("A resend of a form ref with another amount is refused resendChanged, books nothing and keeps the first amount"),
+    refused(a2) && amtRows.length === 1 && amtRows[0].amount_cents === "10000" && a2.data?.ok !== true,
+    `result = ${JSON.stringify(a2)}, rows = ${JSON.stringify(amtRows)}`,
+  );
+
+  // Q: another account
+  const acc = randomUUID();
+  await send(acc);
+  const c2 = await send(acc, { fromAccountId: accountB });
+  const accRows = await rowsOf(acc);
+  assert(
+    next("A resend of a form ref with the same amount but another account is refused resendChanged and keeps the first account"),
+    refused(c2) && accRows.length === 1 && accRows[0].from_account_id === accountA,
+    `result = ${JSON.stringify(c2)}, rows = ${JSON.stringify(accRows)}`,
+  );
+
+  // Q: another date
+  const day = randomUUID();
+  await send(day);
+  const d2 = await send(day, { occurredAt: shiftDate(today, -1) });
+  const dayRows = await rowsOf(day);
+  assert(
+    next("A resend of a form ref with the same amount but another date is refused resendChanged and keeps the first date"),
+    refused(d2) && dayRows.length === 1 && dayRows[0].occurred_at.startsWith(today),
+    `result = ${JSON.stringify(d2)}, rows = ${JSON.stringify(dayRows)}`,
   );
 }
