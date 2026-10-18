@@ -19,7 +19,6 @@ import { admitPhrase, notesRequestSchema, notesResponseSchema, tokenisePhrase } 
 // closed, or a caller-chosen but dictionary-listed string). Its gate and its
 // budget are written here because nothing upstream of this file has ever
 // had to earn either.
-export const dynamic = "force-dynamic";
 
 // Above the provider's own 20 s timeout.
 export const maxDuration = 30;

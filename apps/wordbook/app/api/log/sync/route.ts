@@ -6,10 +6,6 @@ import { deviceLabel } from "@/lib/sync/device-label";
 import { syncRequestSchema, decodeCursor, encodeCursor, type SyncResponse } from "@/lib/sync/protocol";
 import { downloadRows, writeUpload, type DownloadedRow } from "@/lib/sync/upload";
 
-// Reads the session per request and answers a moving cursor: never a candidate
-// for the full route cache, on top of the `Cache-Control` this route also sets.
-export const dynamic = "force-dynamic";
-
 function toWireRow(row: DownloadedRow): SyncResponse["rows"][number] {
   return {
     deviceId: row.device_id,
