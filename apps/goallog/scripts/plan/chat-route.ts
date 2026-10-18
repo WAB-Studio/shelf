@@ -414,3 +414,62 @@ test("RP-126: the person's own fifty spent while the app has room still says .ca
     assert.equal((await body(response)).error, "chat.errors.cap");
   });
 });
+
+// M18: the guard runs before the session, the body and the claim. A page on another site can post a
+// CORS "simple" request with the person's cookie; none of it may reach a claim.
+test("M18: a foreign Origin is refused 403 and claims nothing, the model is not asked", async () => {
+  const response = await route.POST(request(say("¿Cómo voy?"), { origin: "https://evil.example" }));
+  assert.equal(response.status, 403);
+  assert.equal((await chatRows()).length, 0);
+  assert.equal(fetchCalls.length, 0);
+});
+
+test("M18: a foreign Origin on the real path claims nothing and the key is never used", async () => {
+  delete envHandle.PULSAR_CHAT_STUB;
+  envHandle.OPENAI_API_KEY = "sk-never-sent";
+  modelAnswer = () => Response.json({ choices: [{ message: { content: "no" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } });
+  const response = await route.POST(request(say("¿Cómo voy?"), { origin: "https://evil.example" }));
+  assert.equal(response.status, 403);
+  assert.equal(fetchCalls.length, 0);
+  assert.equal((await chatRows()).length, 0);
+});
+
+test("M18: a text/plain body (a form's simple request) is refused 415 and claims nothing", async () => {
+  const response = await route.POST(request(say("¿Cómo voy?"), { "content-type": "text/plain" }));
+  assert.equal(response.status, 415);
+  assert.equal((await chatRows()).length, 0);
+});
+
+test("M18: a multipart body is refused 415 on the chat, a json one with a charset passes", async () => {
+  const wrong = await route.POST(request(say("¿Cómo voy?"), { "content-type": "multipart/form-data; boundary=x" }));
+  assert.equal(wrong.status, 415);
+  assert.equal((await chatRows()).length, 0);
+  const right = await route.POST(request(say("¿Cómo voy?"), { "content-type": "application/json; charset=utf-8" }));
+  assert.equal(right.status, 200);
+});
+
+test("M18: the app's own Origin passes: 200 and one claimed row", async () => {
+  const response = await route.POST(request(say("¿Cómo voy?"), { origin: "http://localhost" }));
+  assert.equal(response.status, 200);
+  assert.equal((await body(response)).reply, "Vas bien.");
+  assert.equal((await chatRows()).length, 1);
+});
+
+test("M18: the guard answers before the session: foreign Origin with no session is 403, not 401", async () => {
+  standing = [];
+  const response = await route.POST(request(say("¿Cómo voy?"), { origin: "https://evil.example" }));
+  assert.equal(response.status, 403);
+});
+
+test("M18: a foreign Origin is refused before the body is read", async () => {
+  let read = false;
+  const spied = request(say("¿Cómo voy?"), { origin: "https://evil.example" });
+  const original = spied.json.bind(spied);
+  spied.json = (async () => {
+    read = true;
+    return original();
+  }) as typeof spied.json;
+  const response = await route.POST(spied);
+  assert.equal(response.status, 403);
+  assert.equal(read, false);
+});
