@@ -17,6 +17,7 @@ import Module from "node:module";
 
 import { assertSuiteDatabase, closeRun, openRun } from "@repo/harness-registry";
 import { settleSessionSql } from "@repo/supabase-auth/settle";
+import { sql as dsql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -730,8 +731,8 @@ async function main() {
     for (let attempt = 0; attempt < 100 && !roundWaited && !roundDone; attempt += 1) {
       const [{ count }] = await lateDb<{ count: string }[]>`
         select count(*)::text as count from pg_stat_activity
-        where datname = current_database() and wait_event_type = 'Lock' and wait_event = 'transactionid'
-          and query like '%sealed as%' and query like '%sync_rows_today%'`;
+        where datname = current_database() and wait_event_type = 'Lock'
+          and (query like '%reading.sync_gate(%' or (query like '%sealed as%' and query like '%sync_rows_today%'))`;
       roundWaited = count !== "0";
       if (!roundWaited) await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -1038,6 +1039,149 @@ async function main() {
       "S42b",
       typeof down.json.tombstoneCursor === "string" && (resumed.json.tombstones ?? []).length === 0 && resumed.json.tombstoneCursor === down.json.tombstoneCursor,
       `marks after the cursor = ${(resumed.json.tombstones ?? []).length}, cursor kept = ${resumed.json.tombstoneCursor === down.json.tombstoneCursor}`,
+    );
+  });
+
+  // S45-S49 (M31, RL-24, RL-25): retire, «vaciar» and an upload in flight queue on the reader's `:sync-quota`
+  // lock, so a batch never lands after them. Each case holds one side inside its open transaction with a
+  // promise it releases, then waits on the lock table (not on a clock) to see the other side queue.
+  const { DELETE: clearAccount } = await import("../app/api/log/clear/route");
+  const gate = () => {
+    let open!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return { promise, open };
+  };
+  // True when a backend queues on this reader's quota lock; false once `settled()` or five seconds pass.
+  const queuedOnQuota = async (db: postgres.Sql, reader: string, settled: () => boolean): Promise<boolean> => {
+    for (const deadline = Date.now() + 5000; Date.now() < deadline && !settled(); ) {
+      const [row] = await db<{ n: number }[]>`
+        select count(*)::int as n from pg_locks
+        where locktype = 'advisory' and not granted
+          and ((classid::bigint << 32) | objid::bigint) = hashtextextended(${reader}::text || ':sync-quota', 0)`;
+      if (row.n > 0) return true;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return false;
+  };
+
+  // S45: B retires D and holds; A's batch for D queues, and after B commits it is refused: no row of D, and
+  // D keeps the label of its first seal, not the one A's batch would have written.
+  await scenario(async ({ reader, db, as, ids }) => {
+    const d = randomUUID();
+    await as(reader, (tx) => writeUpload(tx, reader, d, "chrome:android", rowsOf(d, [1])));
+    const held = gate();
+    const release = gate();
+    const retiring = as(reader, async (tx) => {
+      await retireDevice(tx, reader, d);
+      held.open();
+      await release.promise;
+    });
+    await held.promise;
+    let done = false;
+    const uploading = as(reader, (tx) => writeUpload(tx, reader, d, "firefox:linux", rowsOf(d, [2, 3]))).finally(() => {
+      done = true;
+    });
+    const queued = await queuedOnQuota(db, reader, () => done);
+    release.open();
+    await retiring;
+    const answer = await uploading;
+    const left = await ids(d);
+    const state = await db<{ label: string }[]>`select label from reading.devices where user_id = ${reader} and device_id = ${d}`;
+    assert(
+      "S45",
+      queued && answer.status === "retired" && left.length === 0 && state[0]?.label === "chrome:android",
+      `upload queued = ${queued}, status = ${answer.status}, lookups of D = ${left.join()}, label = ${state[0]?.label}`,
+    );
+  });
+
+  // S46: the gate is read after the lock. B takes the lock by hand and marks D retired; A (queued) must still see it.
+  await scenario(async ({ reader, db, as, ids }) => {
+    const d = randomUUID();
+    const held = gate();
+    const release = gate();
+    const retiring = as(reader, async (tx) => {
+      await tx.execute(dsql`select pg_advisory_xact_lock(hashtextextended(${reader}::text || ':sync-quota', 0))`);
+      await tx.execute(dsql`insert into reading.devices (user_id, device_id, label, retired_at) values (${reader}, ${d}, 'unknown:unknown', now())`);
+      held.open();
+      await release.promise;
+    });
+    await held.promise;
+    let done = false;
+    const uploading = as(reader, (tx) => writeUpload(tx, reader, d, "firefox:linux", rowsOf(d, [1, 2]))).finally(() => {
+      done = true;
+    });
+    const queued = await queuedOnQuota(db, reader, () => done);
+    release.open();
+    await retiring;
+    const answer = await uploading;
+    const left = await ids(d);
+    assert("S46", queued && answer.status === "retired" && left.length === 0, `upload queued = ${queued}, status = ${answer.status}, lookups of D = ${left.join()}`);
+  });
+
+  // S47: A's batch is in flight (uncommitted); B's «vaciar» queues behind it, and once A commits it empties the account.
+  await scenario(async ({ reader, db, as, ids }) => {
+    const d = randomUUID();
+    const held = gate();
+    const release = gate();
+    const uploading = as(reader, async (tx) => {
+      await writeUpload(tx, reader, d, "chrome:android", rowsOf(d, [1, 2, 3]));
+      held.open();
+      await release.promise;
+    });
+    await held.promise;
+    sessionStub.readerId = reader;
+    sessionStub.run = (fn) => as(reader, fn);
+    let done = false;
+    const clearing = clearAccount().finally(() => {
+      done = true;
+    });
+    const queued = await queuedOnQuota(db, reader, () => done);
+    release.open();
+    await uploading;
+    const answer = await clearing;
+    const left = await ids(d);
+    assert("S47", queued && answer.status === 200 && left.length === 0, `clear queued = ${queued}, status = ${answer.status}, lookups left = ${left.join()}`);
+  });
+
+  // S48: A's batch is in flight; B retires D, queues, and its delete then removes the batch (upload first: today's behaviour).
+  await scenario(async ({ reader, db, as, ids }) => {
+    const d = randomUUID();
+    const held = gate();
+    const release = gate();
+    const uploading = as(reader, async (tx) => {
+      await writeUpload(tx, reader, d, "chrome:android", rowsOf(d, [1, 2]));
+      held.open();
+      await release.promise;
+    });
+    await held.promise;
+    let done = false;
+    const retiring = as(reader, (tx) => retireDevice(tx, reader, d)).finally(() => {
+      done = true;
+    });
+    const queued = await queuedOnQuota(db, reader, () => done);
+    release.open();
+    await uploading;
+    const retired = await retiring;
+    const left = await ids(d);
+    const [state] = await db<{ retired: boolean }[]>`select retired_at is not null as retired from reading.devices where user_id = ${reader} and device_id = ${d}`;
+    assert("S48", queued && retired.lookups === 2 && left.length === 0 && state?.retired === true, `retire queued = ${queued}, lookups removed = ${retired.lookups}, left = ${left.join()}, retired = ${state?.retired}`);
+  });
+
+  // S49: the gate is ONE statement of its own before the write: two round trips, the first asking `sync_gate`.
+  await scenario(async ({ reader, as }) => {
+    const d = randomUUID();
+    const sent: SQL[] = [];
+    const answer = await as(reader, (tx) => {
+      const spy = { execute: (query: SQL) => (sent.push(query), tx.execute(query)) };
+      return writeUpload(spy as unknown as Transaction, reader, d, "chrome:android", rowsOf(d, [1, 2]));
+    });
+    const texts = sent.map((query) => new PgDialect().sqlToQuery(query).sql);
+    assert(
+      "S49",
+      answer.status === "ok" && texts.length === 2 && /sync_gate/.test(texts[0] ?? "") && !/sync_gate|sync_rows_today/.test(texts[1] ?? ""),
+      `statements = ${texts.length}, first asks sync_gate = ${/sync_gate/.test(texts[0] ?? "")}, status = ${answer.status}`,
     );
   });
 
