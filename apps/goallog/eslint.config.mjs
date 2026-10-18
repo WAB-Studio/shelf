@@ -106,7 +106,7 @@ const eslintConfig = defineConfig([
   // `allowlist.ts` reads the invitation list before a person exists (RP-131).
   // `spend.ts` counts the whole app's day (RP-126), rows its person's role cannot see.
   {
-    files: ["lib/mcp/tokens.ts", "lib/oauth/grants.ts", "lib/oauth/throttle.ts", "lib/import/spend.ts", "lib/auth/allowlist.ts"],
+    files: ["lib/mcp/tokens.ts", "lib/oauth/grants.ts", "lib/oauth/throttle.ts", "lib/import/spend.ts", "lib/auth/allowlist.ts", "lib/auth/sign-in-budget.ts"],
     rules: { "no-restricted-imports": "off" },
   },
   // A spec asserts what the device really holds, so it reads the store the
