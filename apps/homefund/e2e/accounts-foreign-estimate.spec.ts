@@ -39,28 +39,16 @@ const CONFIRM = "Confirmar monto";
 
 const created: string[] = [];
 
-async function seedForeignPurchase(options: {
-  shared?: { groupId: string };
-}): Promise<{ accountId: string; name: string; movementId: string; description: string }> {
+async function seedForeignPurchase(): Promise<{ accountId: string; name: string; movementId: string; description: string }> {
   const accountId = randomUUID();
   const name = `Débito ${stamp}-${created.length}`;
   const description = `Netflix ${stamp}-${created.length}`;
   let movementId = "";
-  const categoryId = options.shared ? randomUUID() : scope.categoryId;
+  const categoryId = scope.categoryId;
   await asHarnessUser(async (tx) => {
-    if (options.shared) {
-      await tx`
-        insert into categories (id, group_id, name, kind, color)
-        values (${categoryId}, ${options.shared.groupId}, ${`Fondo ${stamp}`}, 'expense', '#8C4A4A')`;
-
-      await tx`
-        insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
-        values (${accountId}, ${options.shared.groupId}, true, ${name}, 'asset', 'bank', ${OPENING_CENTS}, ${todayInBogota()})`;
-    } else {
-      await tx`
-        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-        values (${accountId}, ${scope.userId}, ${name}, 'asset', 'bank', ${OPENING_CENTS}, ${todayInBogota()})`;
-    }
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${accountId}, ${scope.userId}, ${name}, 'asset', 'bank', ${OPENING_CENTS}, ${todayInBogota()})`;
     created.push(accountId);
     const [movement] = await tx<{ id: string }[]>`
       insert into transactions (
@@ -112,7 +100,7 @@ test.afterEach(async () => {
 });
 
 test("Pending: an asset account lists its estimate with «Confirmar monto»", async ({ page }) => {
-  const seeded = await seedForeignPurchase({});
+  const seeded = await seedForeignPurchase();
   await page.goto("/es/settings/accounts");
 
   await expect(page.getByText(seeded.name, { exact: false }).filter({ visible: true }).first()).toBeVisible();
@@ -123,7 +111,7 @@ test("Pending: an asset account lists its estimate with «Confirmar monto»", as
 });
 
 test("Done: confirming stores the billed amount, toasts, and the purchase leaves the card", async ({ page }) => {
-  const seeded = await seedForeignPurchase({});
+  const seeded = await seedForeignPurchase();
   await page.goto("/es/settings/accounts");
   await visible(page, CONFIRM).click();
 
@@ -152,7 +140,7 @@ test("Done: confirming stores the billed amount, toasts, and the purchase leaves
 });
 
 test("Refused: a reconciliation on the purchase's day shows M54's line, keeps the dialog, writes nothing", async ({ page }) => {
-  const seeded = await seedForeignPurchase({});
+  const seeded = await seedForeignPurchase();
   await asHarnessUser(async (tx) => {
     await tx`
       insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
@@ -191,10 +179,12 @@ test("Empty: an asset account with no estimate draws no section and no button", 
 test.describe("under a plain member", () => {
   test.use({ storageState: MEMBER_STORAGE_STATE });
 
-  test("a reader of a shared account is offered no «Confirmar monto»", async ({ page }) => {
-    const { groupId } = await seedGroup();
+  // A shared group account is any member's to write; the leader's own account is one a member reads and
+  // cannot write, which is the case the button must respect (as debts.spec seeds its reader).
+  test("a member reading the leader's account is offered no «Confirmar monto»", async ({ page }) => {
+    await seedGroup();
     try {
-      const seeded = await seedForeignPurchase({ shared: { groupId } });
+      const seeded = await seedForeignPurchase();
       await page.goto("/es/settings/accounts");
 
       await expect(page.getByText(seeded.name, { exact: false }).filter({ visible: true }).first()).toBeVisible();
@@ -206,7 +196,6 @@ test.describe("under a plain member", () => {
         await fixtureSql`delete from transactions where from_account_id = ${id} or to_account_id = ${id}`;
         await fixtureSql`delete from accounts where id = ${id}`;
       }
-      await fixtureSql`delete from categories where name = ${`Fondo ${stamp}`}`;
       await clearGroup();
     }
   });
