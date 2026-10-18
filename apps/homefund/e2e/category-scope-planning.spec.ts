@@ -35,9 +35,12 @@ const MARKED = messages.categories.scopedName.replace("{name}", NAME);
 const NAMED_BUDGET = `Comida ${stamp}`;
 const PAYMENT = `Pago fondo ${stamp}`;
 const RULE = `Regla fondo ${stamp}`;
+const PERSONAL_ACCOUNT = `Bancolombia ${stamp}`;
+const FUND_ACCOUNT = `Cuenta fondo ${stamp}`;
 
 const ids = {
   fundAccount: randomUUID(),
+  personalAccount: randomUUID(),
   personalCategory: randomUUID(),
   fundCategory: randomUUID(),
   fundBudget: randomUUID(),
@@ -69,7 +72,11 @@ test.beforeAll(async () => {
     await tx`
       insert into accounts (
         id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
-      values (${ids.fundAccount}, ${groupId}, true, ${`Cuenta fondo ${stamp}`}, 'asset', 'bank', 0, '2026-01-01')`;
+      values (${ids.fundAccount}, ${groupId}, true, ${FUND_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into accounts (
+        id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.personalAccount}, ${scope.userId}, ${PERSONAL_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)
       values (${ids.personalCategory}, ${scope.userId}, ${NAME}, 'expense', '#4C8C4A')`;
@@ -100,13 +107,19 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  await fixtureSql`delete from budgets where account_id = ${ids.personalAccount}`;
   await fixtureSql`delete from recurring_rules where id = ${ids.rule}`;
   await fixtureSql`delete from planned_payments where id = ${ids.payment}`;
   await fixtureSql`delete from budgets where id in ${fixtureSql([ids.fundBudget, ids.namedBudget, ids.personalBudget])}`;
   await fixtureSql`delete from categories where id in ${fixtureSql([ids.personalCategory, ids.fundCategory])}`;
-  await fixtureSql`delete from accounts where id = ${ids.fundAccount}`;
+  await fixtureSql`delete from accounts where id in ${fixtureSql([ids.fundAccount, ids.personalAccount])}`;
   await clearGroup();
 });
+
+async function pick(page: Page, trigger: string, option: string) {
+  await page.getByRole("dialog").locator(trigger).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
 
 test.describe("budgets", () => {
   test("a fund budget with no name is titled with the marked category", async ({ page }) => {
@@ -140,6 +153,62 @@ test.describe("budgets", () => {
     await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(1);
   });
 
+  test("a personal account offers only the personal category", async ({ page }) => {
+    // Kills: the account ignored by the category list.
+    await page.goto("/es/planning/budgets");
+    await page.getByRole("button", { name: budgets.add, exact: true }).first().click();
+    await pick(page, "#budget-account", PERSONAL_ACCOUNT);
+    await page.getByRole("dialog").getByRole("combobox", { name: budgets.categoryLabel }).click();
+
+    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(1);
+  });
+
+  test("the fund's account offers only the fund category", async ({ page }) => {
+    // Kills: the filter applied to personal accounts alone.
+    await page.goto("/es/planning/budgets");
+    await page.getByRole("button", { name: budgets.add, exact: true }).first().click();
+    await pick(page, "#budget-account", FUND_ACCOUNT);
+    await page.getByRole("dialog").getByRole("combobox", { name: budgets.categoryLabel }).click();
+
+    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(0);
+  });
+
+  test("«Todas las cuentas» offers both again", async ({ page }) => {
+    // Kills: the unset account kept as the last scope.
+    await page.goto("/es/planning/budgets");
+    await page.getByRole("button", { name: budgets.add, exact: true }).first().click();
+    await pick(page, "#budget-account", PERSONAL_ACCOUNT);
+    await pick(page, "#budget-account", budgets.accountAny);
+    await page.getByRole("dialog").getByRole("combobox", { name: budgets.categoryLabel }).click();
+
+    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(1);
+  });
+
+  test("switching to a personal account empties a picked fund category", async ({ page }) => {
+    // Kills: a stranded category kept after the account changes.
+    await page.goto("/es/planning/budgets");
+    await page.getByRole("button", { name: budgets.add, exact: true }).first().click();
+    await pick(page, "#budget-category", MARKED);
+    await expect(page.locator("#budget-category")).toHaveText(MARKED);
+    await pick(page, "#budget-account", PERSONAL_ACCOUNT);
+
+    await expect(page.locator("#budget-category")).toHaveText(budgets.categoryPlaceholder);
+  });
+
+  test("a budget on a personal account and its category saves", async ({ page }) => {
+    await page.goto("/es/planning/budgets");
+    await page.getByRole("button", { name: budgets.add, exact: true }).first().click();
+    await pick(page, "#budget-account", PERSONAL_ACCOUNT);
+    await pick(page, "#budget-category", NAME);
+    await page.getByRole("dialog").locator("#budget-limit").fill("100000");
+    await page.getByRole("dialog").getByRole("button", { name: budgets.save, exact: true }).click();
+
+    await expect(page.getByText(budgets.created, { exact: true })).toBeVisible();
+  });
+
   test("the edit dialog's locked category reads the marked name", async ({ page }) => {
     // Kills: the locked name read from a bare list.
     await page.goto("/es/planning/budgets");
@@ -167,6 +236,41 @@ test.describe("payments", () => {
 
     await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(1);
     await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(1);
+  });
+});
+
+test.describe("payment categories follow the accounts", () => {
+  test("a personal source offers only personal categories", async ({ page }) => {
+    // Kills: only toAccountId read.
+    await page.goto("/es/planning/payments");
+    await page.getByRole("button", { name: payments.add, exact: true }).first().click();
+    await pick(page, "#payment-from", PERSONAL_ACCOUNT);
+    await page.getByRole("dialog").getByRole("combobox", { name: payments.categoryLabel }).click();
+
+    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(1);
+  });
+
+  test("any group account offers only fund categories", async ({ page }) => {
+    // Kills: both accounts required to be the group's.
+    await page.goto("/es/planning/payments");
+    await page.getByRole("button", { name: payments.add, exact: true }).first().click();
+    await pick(page, "#payment-from", PERSONAL_ACCOUNT);
+    await pick(page, "#payment-to", FUND_ACCOUNT);
+    await page.getByRole("dialog").getByRole("combobox", { name: payments.categoryLabel }).click();
+
+    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(0);
+  });
+
+  test("switching accounts drops a stranded category", async ({ page }) => {
+    // Kills: the picked category kept after its scope left.
+    await page.goto("/es/planning/payments");
+    await page.getByRole("button", { name: payments.add, exact: true }).first().click();
+    await pick(page, "#payment-category", MARKED);
+    await pick(page, "#payment-from", PERSONAL_ACCOUNT);
+
+    await expect(page.locator("#payment-category")).toHaveText(payments.categoryNone);
   });
 });
 
