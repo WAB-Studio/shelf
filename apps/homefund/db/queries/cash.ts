@@ -74,6 +74,13 @@ function cashScope(userId: string): SQL {
     else ${accounts.ownerUserId} = ${userId} end`;
 }
 
+// The id `cashScope` keys on, as text: the group's under 'shared', the
+// caller's own otherwise. Resolved inside the statement, like the predicate.
+function cashScopeId(userId: string): SQL<string> {
+  return sql`case when ${callerCashMode(userId)} = 'shared'
+    then ${callerGroupId(userId)}::text else ${userId}::text end`;
+}
+
 /**
  * Resolves a withdrawal's cash destination and its possible sources. The target
  * lookup and the source list are independent, so they fan out — with nothing
@@ -149,6 +156,13 @@ export async function withdrawCash({
   const targetScope = cashScope(user.id);
 
   return withUserDb(async (tx) => {
+    // Two first withdrawals at once would each find no cash and each create one.
+    // The lock queues them per scope, and it is a statement of its own: under
+    // READ COMMITTED the lookup below then takes its snapshot after the lock is
+    // granted, so it sees the cash the first one committed (docs/TRAPS.md).
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(
+      'cash:' || ${cashScopeId(user.id)}, 0))`);
+
     let targetCashAccountId = await findCashAccountIdTx(tx, targetScope);
     let createdCashAccount = false;
 
