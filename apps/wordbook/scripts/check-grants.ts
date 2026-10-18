@@ -626,15 +626,146 @@ async function checkMigrationsInOrder(): Promise<void> {
   const increasing = journal.entries.every((e, i) => e.idx === i && (i === 0 || e.when > journal.entries[i - 1].when));
   assert(
     "M1",
-    journal.entries.length === 9 &&
+    journal.entries.length === 10 &&
       tags[7] === "0007_lookup_tombstones" &&
       tags[8] === "0008_allowed_emails" &&
+      tags[9]?.startsWith("0009_") &&
       journal.entries[7].when > 1791606395820 &&
       increasing,
-    `entries = ${journal.entries.length}, tags 7..8 = [${tags.slice(7, 9)}], idx and when strictly increasing = ${increasing}`,
+    `entries = ${journal.entries.length}, tags 7..9 = [${tags.slice(7, 10)}], idx and when strictly increasing = ${increasing}`,
   );
   const [applied] = await sql<{ n: string }[]>`select count(*)::text as n from drizzle.__drizzle_migrations_reading`;
-  assert("M2", applied.n === "9", `rows in __drizzle_migrations_reading = ${applied.n}`);
+  assert("M2", applied.n === "10", `rows in __drizzle_migrations_reading = ${applied.n}`);
+}
+
+// `reading.sync_gate(user, device)`, written from the plan's M30 contract and never from the migration: it takes the
+// reader's `:sync-quota` lock, then returns the day's count and whether the device is retired, both read after the lock.
+const insertGateLookup = (tx: postgres.TransactionSql, user: string, device: string, localId: number) =>
+  tx`insert into reading.lookups
+    (user_id, device_id, local_id, at, text, normalised, kind, outcome, senses, dictionary_ready, record_schema)
+    values (${user}, ${device}, ${localId}, now(), 'x', 'x', 'word', 'exact', 0, true, 1)`;
+
+async function checkGateRetiredAfterLock(): Promise<void> {
+  const user = randomUUID();
+  const device = randomUUID();
+  const lockKey = `${user}:sync-quota`;
+  const url = process.env.DATABASE_URL!;
+  const options = { prepare: false, max: 1, connection: { search_path: "reading, public" } };
+  const holder = postgres(url, options);
+  const caller = postgres(url, options);
+  let released!: () => void;
+  const release = new Promise<void>((resolve) => (released = resolve));
+  let holding!: () => void;
+  const held = new Promise<void>((resolve) => (holding = resolve));
+  let result: { retired: boolean | undefined; code: string | undefined; blockedBeforeCommit: boolean } | undefined;
+  try {
+    await sql`insert into auth.users (id) values (${user})`;
+    await sql`insert into reading.devices (user_id, device_id, label) values (${user}, ${device}, 'x:y')`;
+    // B: takes the reader's quota lock, retires the device, and holds both until told to commit.
+    const b = holder.begin(async (tx) => {
+      await tx`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+      await tx`update reading.devices set retired_at = now() where user_id = ${user} and device_id = ${device}`;
+      holding();
+      await release;
+    });
+    await held;
+    // A: the reader's own session asks the gate while B still holds.
+    let answered = false;
+    const [{ pid: callerPid }] = await caller<{ pid: number }[]>`select pg_backend_pid() as pid`;
+    const a = caller
+      .begin(async (tx) => {
+        await enterUserContext(tx, user);
+        const [row] = await tx<{ retired: boolean }[]>`select retired from reading.sync_gate(${user}::uuid, ${device}::uuid)`;
+        answered = true;
+        return row.retired;
+      })
+      .then((retired) => ({ retired, code: undefined as string | undefined }))
+      .catch((error: unknown) => ({ retired: undefined, code: pgCode(error) ?? String(error) }))
+      .finally(() => {
+        answered = true;
+      });
+    // Wait for the real block, not a sleep: A is queued on B's advisory lock.
+    const deadline = Date.now() + 5000;
+    let waiting = false;
+    while (Date.now() < deadline && !answered && !waiting) {
+      const [w] = await sql<{ n: string }[]>`
+        select count(*)::text as n from pg_locks where locktype = 'advisory' and not granted and pid = ${callerPid}`;
+      waiting = w.n !== "0";
+      if (!waiting) await new Promise((r) => setTimeout(r, 25));
+    }
+    const blockedBeforeCommit = waiting && !answered;
+    released();
+    await b;
+    const outcome = await a;
+    result = { ...outcome, blockedBeforeCommit };
+  } finally {
+    released();
+    await sql`delete from reading.devices where user_id = ${user}`.catch(() => undefined);
+    await sql`delete from auth.users where id = ${user}`.catch(() => undefined);
+    await holder.end();
+    await caller.end();
+  }
+  assert(
+    "SG1",
+    result?.blockedBeforeCommit === true && result.retired === true,
+    `call waited on the quota lock = ${result?.blockedBeforeCommit}, retired read after B committed = ${result?.retired ?? "n/a"} (sqlstate ${result?.code ?? "none"})`,
+  );
+}
+
+async function checkGateCountAndReader(): Promise<void> {
+  await k1Tx("gate", async (tx) => {
+    const a = randomUUID();
+    const b = randomUUID();
+    const devA = randomUUID();
+    const devB = randomUUID();
+    await tx`insert into auth.users (id) values (${a}), (${b})`;
+    await tx`insert into reading.devices (user_id, device_id, label, retired_at)
+      values (${a}, ${devA}, 'x:y', null), (${b}, ${devB}, 'x:y', now())`;
+    await enterUserContext(tx, a);
+    await insertGateLookup(tx, a, devA, 1);
+    await insertGateLookup(tx, a, devA, 2);
+    await insertGateLookup(tx, a, devA, 3);
+    const [{ received_at: receivedAt }] = await tx<{ received_at: Date }[]>`
+      select received_at from reading.lookups where user_id = ${a} and device_id = ${devA} and local_id = 3`;
+    await tx`delete from reading.lookups where user_id = ${a} and device_id = ${devA} and local_id = 3`;
+    await tx`insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at) values (${a}, ${devA}, 3, ${receivedAt})`;
+    await tx`insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at)
+      values (${a}, ${devA}, 4, now() - interval '3 days')`;
+
+    const [own] = await tx<{ today: string; retired: boolean }[]>`
+      select today::text as today, retired from reading.sync_gate(${a}::uuid, ${devA}::uuid)`;
+    const [quota] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    assert("SG2", own.today === "3" && own.today === quota.n && own.retired === false, `gate today = ${own.today}, sync_rows_today = ${quota.n} (2 rows and 1 buried mark, an old mark ignored), live device retired = ${own.retired}`);
+
+    // B has a retired device and rows today; A's claims must see neither through the gate.
+    await tx`reset role`;
+    await insertGateLookup(tx, b, devB, 1);
+    await insertGateLookup(tx, b, devB, 2);
+    await enterUserContext(tx, a);
+    const [other] = await tx<{ today: string; retired: boolean }[]>`
+      select today::text as today, retired from reading.sync_gate(${b}::uuid, ${devB}::uuid)`;
+    assert("SG3", other.today === "0" && other.retired === false, `under A's claims, B's gate: today = ${other.today}, retired = ${other.retired}`);
+  });
+}
+
+async function checkGateGrants(): Promise<void> {
+  await k1Tx("gate-grants", async (tx) => {
+    const fn = "reading.sync_gate(uuid,uuid)";
+    const [can] = await tx<{ anon: boolean; authenticated: boolean; service_role: boolean; pub: boolean }[]>`
+      select has_function_privilege('anon', ${fn}, 'execute') as anon,
+             has_function_privilege('authenticated', ${fn}, 'execute') as authenticated,
+             has_function_privilege('service_role', ${fn}, 'execute') as service_role,
+             exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                     where p.oid = ${fn}::regprocedure and a.grantee = 0) as pub`;
+    assert("SG4", !can.anon && can.authenticated && !can.service_role && !can.pub, `EXECUTE: anon = ${can.anon}, authenticated = ${can.authenticated}, service_role = ${can.service_role}, PUBLIC = ${can.pub}`);
+    const who = randomUUID();
+    for (const role of ["anon", "service_role"] as const) {
+      await tx`select set_config('role', ${role}, true)`;
+      const code = await attemptCode(tx, (sp) => sp`select * from reading.sync_gate(${who}::uuid, ${who}::uuid)`);
+      assert(`SG5 ${role}`, code === "42501", `sqlstate = ${code ?? "none — the call went through"}`);
+      await tx`reset role`;
+    }
+  });
 }
 
 async function main() {
@@ -648,6 +779,9 @@ async function main() {
   await checkAllowedEmails();
   await checkMarkBesideItsRow();
   await checkSeedBranches();
+  await checkGateRetiredAfterLock();
+  await checkGateCountAndReader();
+  await checkGateGrants();
   await checkMigrationsInOrder();
 
   await sql.end();
