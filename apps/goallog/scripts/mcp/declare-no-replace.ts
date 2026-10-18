@@ -1,6 +1,6 @@
 // Proves RP-56 and RNP-15 for `declare_fact`: the contract carries no
-// `replace`, a client's `replace: true` is dropped at the edge and a day
-// already noted answers the fact that was there, the description says so, and
+// `replace`, a client's `replace: true` is refused as an unknown key and a day
+// already noted keeps the fact that was there, the description says so, and
 // a tool that fails logs its error's name and SQLSTATE and never the driver's
 // message. Handlers are called in-process as `write-tools.ts` calls them, but
 // through the registered `inputSchema` first, the way the SDK parses a call.
@@ -113,17 +113,21 @@ test("declare_fact's contract has no replace, and its description says a noted d
   assert.equal(tool.description, mcp.tools.declare_fact);
 });
 
-test("replace: true does not delete: the same fact answers, with its quantity and its note", async () => {
+test("replace: true is refused as an unknown key and the fact that was there stands untouched", async () => {
   const day = dayFrom(-5);
   const first = await call("declare_fact", { commitment_id: commitment, quantity: 30, note: "n", day });
   assert.equal(first.isError, undefined);
   const factId = first.structuredContent?.factId;
   assert.equal(typeof factId, "string");
 
-  const again = await call("declare_fact", { commitment_id: commitment, quantity: 45, replace: true, day });
-  assert.notEqual(again.isError, true);
-  assert.equal(again.structuredContent?.ok, true);
-  assert.equal(again.structuredContent?.factId, factId);
+  // The SDK answers a shape that refuses a call with isError and the issue's text; the handler never runs.
+  const tool = registered.get("declare_fact")!;
+  const parsed = tool.inputSchema.safeParse({ commitment_id: commitment, quantity: 45, replace: true, day });
+  assert.equal(parsed.success, false);
+  const issue = parsed.error!.issues[0] as { code: string; keys?: string[]; message: string };
+  assert.equal(issue.code, "unrecognized_keys");
+  assert.deepEqual(issue.keys, ["replace"]);
+  assert.match(issue.message, /Unrecognized key.*replace/);
 
   const rows = await door`select id, quantity, note from goals.facts where commitment_id = ${commitment} and day = ${day}`;
   assert.equal(rows.length, 1);
