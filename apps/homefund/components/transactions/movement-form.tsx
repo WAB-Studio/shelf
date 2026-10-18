@@ -197,6 +197,10 @@ export function MovementForm({
   const format = useFormatter();
   const locale = useLocale();
   const onActionError = useActionErrorToast();
+  // One key per opening: a save sent again after a lost answer carries the same one, and the
+  // form unmounts on close, so the next opening mints its own.
+  const [requestRef] = useState(() => crypto.randomUUID());
+  const [stale, setStale] = useState(false);
 
   const isEdit = mode === "edit";
   const isAccept = !movement && deliveryId !== undefined;
@@ -451,7 +455,10 @@ export function MovementForm({
   });
   const update = useAction(updateTransactionAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.stale") setStale(true);
+      else onActionError(result);
+    },
   });
   const accept = useAction(acceptDeliveryAction, {
     onSuccess: onActionSuccess,
@@ -469,11 +476,15 @@ export function MovementForm({
     // other mode's action refuses: `external_ref` on edit, `transaction_id` on
     // create.
     if (isEdit) {
-      update.execute(values as UpdateTransactionInput);
+      setStale(false);
+      update.execute({
+        ...(values as UpdateTransactionInput),
+        expectedUpdatedAt: movement?.updatedAt,
+      });
     } else if (isAccept) {
       accept.execute({ ...values, deliveryId } as AcceptDeliveryInput);
     } else {
-      create.execute(values as CreateTransactionInput);
+      create.execute({ ...(values as CreateTransactionInput), requestRef });
     }
   }
 
@@ -985,6 +996,15 @@ export function MovementForm({
               </Callout.Icon>
               <Callout.Text>{t("kindDerivedHint")}</Callout.Text>
             </Callout.Root>
+
+            {stale && (
+              <Callout.Root color="red" variant="soft" role="alert">
+                <Callout.Icon>
+                  <InfoIcon size={16} />
+                </Callout.Icon>
+                <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+              </Callout.Root>
+            )}
 
             {/* Never dead: while the form is short of something, submitting is what
                 makes it say so. */}

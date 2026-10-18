@@ -123,6 +123,9 @@ export type TransactionListRow = {
   // The reconciliation that booked this movement as its adjustment (RF-138); null for every
   // movement a person made.
   reconciliationId: string | null;
+  // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
+  // else's is refused. Never a Date: its milliseconds make the row look newer than itself.
+  updatedAt: string;
 };
 
 // Where a resent create lands: the scope-keyed index it hit says which scope the first copy
@@ -541,6 +544,8 @@ export async function listTransactions(
         reviewedAt: transactions.reviewedAt,
         causedByTransactionId: transactions.causedByTransactionId,
         reconciliationId: transactions.reconciliationId,
+        // Qualified: the joined accounts carry an `updated_at` of their own.
+        updatedAt: sql<string>`transactions.updated_at::text`,
         // Written with the joined alias, never a Drizzle column reference: a
         // reference inside a projection fragment renders bare and binds inward.
         fromSettlementCurrency: sql<
