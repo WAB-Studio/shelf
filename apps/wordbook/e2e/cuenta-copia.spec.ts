@@ -663,17 +663,16 @@ test.describe("the last-copy line keeps time", () => {
       await page.clock.install({ time: t0 });
       await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: t0 - 10_000 }) });
       await signIn();
-      // The pull on open is held for the whole test: only the clock moves the line.
-      await page.route("**/api/log/sync", () => new Promise<never>(() => {}));
       const calls: string[] = [];
       page.on("request", (request) => {
         if (request.url().includes("/api/")) calls.push(`${request.method()} ${request.url()}`);
       });
-      // The open asks twice, the device list and the held pull; the snapshot is taken after both.
+      // The pull on open is let through and answered before the snapshot: a held one ends as a failed round
+      // when its fetch times out under the moved clock, and from then on only the clock moves the line.
       const devicesAsked = page.waitForRequest((request) => request.url().includes("/api/devices"));
-      const pullAsked = page.waitForRequest((request) => request.url().includes("/api/log/sync"));
+      const pullAnswered = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
       await page.goto("/cuenta");
-      await Promise.all([devicesAsked, pullAsked]);
+      await Promise.all([devicesAsked, pullAnswered]);
       await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
       const before = [...calls];
 
