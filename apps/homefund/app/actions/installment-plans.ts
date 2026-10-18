@@ -234,6 +234,7 @@ export const recordDebtPaymentAction = authActionClient
       transactionId: string;
       paidLineIds: string[];
       remainderCents: number;
+      hasPlans: boolean;
     };
     try {
       result = await recordDebtPayment({
@@ -251,6 +252,7 @@ export const recordDebtPaymentAction = authActionClient
       transactionId: result.transactionId,
       paidLineIds: result.paidLineIds,
       remainderCents: result.remainderCents,
+      hasPlans: result.hasPlans,
     };
   });
 

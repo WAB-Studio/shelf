@@ -26,6 +26,19 @@ body {
   --focus-8: var(--jade-11);
 }
 
+/* A control with its own colour (gray «Cancelar», red «Eliminar») re-declares
+   --focus-8 from its own step 8, 1.9:1 on white. Its step 11 clears 3:1 on the
+   white panel and on the ground. */
+.light [data-accent-color][data-accent-color] {
+  --focus-8: var(--accent-11);
+}
+
+/* The soft variants draw their ring from step 8 directly, not --focus-8. */
+.light .rt-BaseButton.rt-variant-soft:focus-visible,
+.light .rt-SelectTrigger.rt-variant-soft:focus-visible {
+  outline-color: var(--accent-11);
+}
+
 .dark .radix-themes.radix-themes {
   --color-background: #141310;
 }

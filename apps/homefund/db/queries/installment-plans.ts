@@ -282,6 +282,7 @@ export async function recordDebtPayment({
   transactionId: string;
   paidLineIds: string[];
   remainderCents: number;
+  hasPlans: boolean;
 }> {
   return withUserDb(async (tx) => {
     // The two kinds ride the read of the unpaid lines: one statement, and the
@@ -289,14 +290,16 @@ export async function recordDebtPayment({
     const rows = await tx.execute<{
       from_kind: Account["kind"] | null;
       to_kind: Account["kind"] | null;
+      has_plans: boolean;
       line_id: string | null;
       amount_cents: string | null;
     }>(sql`
-      select k.from_kind, k.to_kind, l.id as line_id, l.amount_cents
+      select k.from_kind, k.to_kind, k.has_plans, l.id as line_id, l.amount_cents
       from (
         select
           (select a.kind from accounts a where a.id = ${fromAccountId}) as from_kind,
-          (select a.kind from accounts a where a.id = ${toAccountId}) as to_kind
+          (select a.kind from accounts a where a.id = ${toAccountId}) as to_kind,
+          exists (select 1 from installment_plans p where p.account_id = ${toAccountId}) as has_plans
       ) k
       left join lateral (
         select l.id, l.amount_cents, l.due_date, l.seq
@@ -347,7 +350,7 @@ export async function recordDebtPayment({
     }
 
     // What is left after the last fully-covered line, and it stays unallocated.
-    return { transactionId, paidLineIds, remainderCents: remainder };
+    return { transactionId, paidLineIds, remainderCents: remainder, hasPlans: head.has_plans };
   });
 }
 

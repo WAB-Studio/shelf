@@ -628,6 +628,43 @@ test.describe("a fund label reads «· fondo»", () => {
   });
 });
 
+test.describe("the Etiqueta list at 360 px", () => {
+  test("every option is one line, none prints over the next, and the full name is its name", async ({
+    page,
+  }) => {
+    // Kills: a long fund label wrapping to three lines over «Colegio · fondo».
+    await page.setViewportSize({ width: 360, height: 740 });
+    const dialog = await openCreate(page);
+    await dialog.locator("#budget-label").click();
+
+    const options = page.getByRole("option");
+    await expect(page.getByRole("option", { name: LONG_LABEL + FUND_MARK, exact: true })).toBeVisible();
+    const boxes = await options.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, height: r.height, right: r.right };
+      }),
+    );
+    expect(boxes.length).toBeGreaterThanOrEqual(3);
+    const line = Math.min(...boxes.map((b) => b.height));
+    for (const [i, box] of boxes.entries()) {
+      expect(box.height, `option ${i} is one line`).toBeLessThanOrEqual(line * 1.2);
+      expect(box.right).toBeLessThanOrEqual(360);
+      if (i > 0) expect(box.top, `option ${i} starts below option ${i - 1}`).toBeGreaterThanOrEqual(boxes[i - 1].bottom - 1);
+    }
+    // Truncated by the stylesheet, so the DOM still carries the whole name.
+    const clipped = await page
+      .getByRole("option", { name: LONG_LABEL + FUND_MARK, exact: true })
+      .evaluate((el) => {
+        return [...el.querySelectorAll<HTMLElement>("*")].some(
+          (node) =>
+            getComputedStyle(node).textOverflow === "ellipsis" && node.scrollWidth > node.clientWidth,
+        );
+      });
+    expect(clipped).toBe(true);
+  });
+});
+
 test.describe("a caller with no fund", () => {
   test("edits a personal budget onto the own account and saves", async ({ page }) => {
     // Kills: a missing fund breaking the personal cut.
