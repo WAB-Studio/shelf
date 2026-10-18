@@ -3428,3 +3428,17 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   the hook named M24 and M37 while M22 and M71 were in flight.
 - Do: write the ids first, bare, then a period, then the reasons: `**Depende de:** M2, M22. M2 (…)`. Model an outside
   gate (a PR to merge) as a module of its own, `## [~] M0 · … merged`, and depend on `M0`.
+
+## Two suites appended to `check-queries.ts` interleave on merge (2026-10-18)
+
+- Two branches that each append a suite at the end of `apps/homefund/scripts/check-queries.ts` merge into one conflict
+  that splices the two functions line by line (oleada-2: M44's `debtPaymentSuite` and M74's `resendChangedSuite`, four
+  hunks). Take one side whole, paste the other suite whole after it with its call last in the runner, then run
+  `check:queries` on the merged tip (361/0 that day). Never resolve hunk by hunk.
+
+## A worktree made by hand cannot reach the local stack (2026-10-18)
+
+- `git worktree add` without `scripts/worktree.sh` leaves out `supabase/signing_keys.json` and `node_modules`:
+  `scripts/supabase-local.sh exec` fails and `node --test` cannot resolve `@/lib`. The oleada-2 critic's lane hit it and
+  borrowed the main checkout's env. Open lanes with `worktree.sh`; for a branch that already exists, cut a new branch from
+  it (`worktree.sh <n> <new> <existing>`).
