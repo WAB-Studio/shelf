@@ -34,6 +34,7 @@ const stamp = randomUUID().slice(0, 8);
 
 const LEADER_ACCOUNT = `Zafiro ${stamp}`;
 const MEMBER_ACCOUNT = `Esmeralda ${stamp}`;
+const STRAY_ACCOUNT = `Trasladada ${stamp}`;
 const SHARED_ACCOUNT = `Compartida ${stamp}`;
 const UNSHARED_ACCOUNT = `Reservada ${stamp}`;
 const LEADER_LABEL = `Etiqueta mia ${stamp}`;
@@ -44,6 +45,7 @@ const MEMBER_CATEGORY = `Cat miembro ${stamp}`;
 const FUND_CATEGORY = `Cat fondo ${stamp}`;
 const PERSONAL_BUDGET = `Presupuesto personal ${stamp}`;
 const HELD_BUDGET = `Presupuesto con cuenta ${stamp}`;
+const STRAY_BUDGET = `Presupuesto fuera de alcance ${stamp}`;
 const FUND_BUDGET = `Presupuesto fondo ${stamp}`;
 const MEMBER_BUDGET = `Presupuesto miembro ${stamp}`;
 const CREATED = `Presupuesto nuevo ${stamp}`;
@@ -52,6 +54,7 @@ const ids = {
   leaderAccount: randomUUID(),
   memberAccount: randomUUID(),
   sharedAccount: randomUUID(),
+  strayAccount: randomUUID(),
   unsharedAccount: randomUUID(),
   leaderLabel: randomUUID(),
   memberLabel: randomUUID(),
@@ -61,11 +64,12 @@ const ids = {
   fundCategory: randomUUID(),
   personalBudget: randomUUID(),
   heldBudget: randomUUID(),
+  strayBudget: randomUUID(),
   fundBudget: randomUUID(),
   memberBudget: randomUUID(),
 };
 
-const BUDGET_IDS = [ids.personalBudget, ids.heldBudget, ids.fundBudget, ids.memberBudget];
+const BUDGET_IDS = [ids.personalBudget, ids.heldBudget, ids.strayBudget, ids.fundBudget, ids.memberBudget];
 
 let groupId = "";
 
@@ -150,6 +154,7 @@ test.afterAll(async () => {
     ids.memberAccount,
     ids.sharedAccount,
     ids.unsharedAccount,
+    ids.strayAccount,
   ])}`;
   await clearGroup();
 });
@@ -272,6 +277,30 @@ test.describe("the leader edits", () => {
     const dialog = await openEdit(page, HELD_BUDGET);
 
     await expect(dialog.locator("#budget-account")).toHaveText(LEADER_ACCOUNT);
+  });
+
+  test("a personal budget saved on a fund account keeps it listed and selected", async ({ page }) => {
+    // Kills: the held account dropped from the scoped list when the scope would not offer it.
+    // The account joins the fund after the budget is filed on it, which the trigger allows.
+    await as(scope.userId, async (tx) => {
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${ids.strayAccount}, ${scope.userId}, ${STRAY_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
+      await tx`
+        insert into budgets (id, owner_user_id, category_id, period, limit_cents, threshold_pct, name, account_id)
+        values (${ids.strayBudget}, ${scope.userId}, ${ids.leaderCategory}, 'monthly', 600000, 80, ${STRAY_BUDGET}, ${ids.strayAccount})`;
+      await tx`update accounts set owner_user_id = null, group_id = ${groupId} where id = ${ids.strayAccount}`;
+    });
+    try {
+      const dialog = await openEdit(page, STRAY_BUDGET);
+
+      await expect(dialog.locator("#budget-account")).toHaveText(STRAY_ACCOUNT);
+      const names = await offered(page, dialog.locator("#budget-account"));
+      expectOnly(names, [budgets.accountAny, LEADER_ACCOUNT, STRAY_ACCOUNT], [SHARED_ACCOUNT, UNSHARED_ACCOUNT, MEMBER_ACCOUNT]);
+    } finally {
+      await dropBudgets();
+      await fixtureSql`delete from accounts where id = ${ids.strayAccount}`;
+    }
   });
 
   test("a personal budget moves to the own account and saves", async ({ page }) => {

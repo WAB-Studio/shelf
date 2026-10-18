@@ -322,8 +322,8 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 ## Decisions of 2026-10-18, after the critic of critic-6c, by the user
 
 - «Editar presupuesto» offers only the accounts of the budget's place (Q1 a): a personal category's budget the person's own
-  accounts, a fund category's the fund's; the scope refusal reads on its field inside the dialog, at 360 too. Level 2. Not
-  built yet.
+  accounts, a fund category's the fund's; the scope refusal reads on its field inside the dialog, at 360 too. Level 2. Built
+  (respuestas-18, M1).
 - A delete blocked by a subcategory in use (Q2 a): `errors.categoryInUse` reads «Esta categoría, o una de sus subcategorías,
   está en uso y no se puede eliminar.», for the parent and the subcategory alike; no query names the child.
 - Q-A (a), 2026-10-18: the label list of «Nuevo presupuesto» and «Editar presupuesto» is cut by the budget's scope too, as the
