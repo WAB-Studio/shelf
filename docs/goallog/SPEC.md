@@ -208,6 +208,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 - [x] **RP-136** *(successor of RP-18)* — A person signs in with a six-digit code sent to their address, typed on the screen where they asked for it, in the browser or the installed app, or with the email's link in the browser that asked for it, with the session and the claim verification `apps/wordbook` already uses. A code typed on the consent's screen returns to that consent. A wrong or expired code says so; nothing verifies a code twice on the person's behalf. The log is theirs and reaches every device they sign in on. Decided by the user 2026-10-16.
 - [x] **RP-137** — On the code step, «Pedir otro código» sends a new code to the same address without typing it again, once a countdown of Auth's wait between sends has run out; the new code replaces the last. Decided by the user 2026-10-17.
+- [ ] **RP-138** — Asking for a code is capped per caller and per address each day, as `apps/homefund` does (RF-143): past either cap the screen says it opens again tomorrow and Auth is not asked. A send Auth refuses does not count against the caps. Decided by the user 2026-10-17.
 - [ ] **RP-131** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
 
 ### Non-functional requirements
