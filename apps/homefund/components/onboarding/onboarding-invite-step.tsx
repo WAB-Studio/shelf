@@ -84,7 +84,7 @@ export function OnboardingInviteStep({
         </Flex>
       </Flex>
 
-      <MemberFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <MemberFormDialog open={dialogOpen} onOpenChange={setDialogOpen} withEmail={false} />
     </Flex>
   );
 }

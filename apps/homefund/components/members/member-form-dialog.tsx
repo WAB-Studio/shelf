@@ -31,10 +31,12 @@ export function MemberFormDialog({
   open,
   onOpenChange,
   member,
+  withEmail = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member?: Member;
+  withEmail?: boolean;
 }) {
   const t = useTranslations("members");
 
@@ -48,6 +50,7 @@ export function MemberFormDialog({
           <MemberForm
             key={member?.id ?? "create"}
             member={member}
+            withEmail={withEmail}
             onOpenChange={onOpenChange}
           />
         </Flex>
@@ -58,9 +61,11 @@ export function MemberFormDialog({
 
 function MemberForm({
   member,
+  withEmail,
   onOpenChange,
 }: {
   member?: Member;
+  withEmail: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("members");
@@ -111,7 +116,7 @@ function MemberForm({
     if (isEdit) {
       update.execute({ memberId: values.memberId!, name: values.name });
     } else {
-      create.execute({ name: values.name, email: values.email });
+      create.execute(withEmail ? { name: values.name, email: values.email } : { name: values.name });
     }
   }
 
@@ -138,7 +143,7 @@ function MemberForm({
             </Field>
           )}
         />
-        {!isEdit && (
+        {!isEdit && withEmail && (
           <Controller
             name="email"
             control={form.control}
