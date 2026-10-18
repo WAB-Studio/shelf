@@ -12,6 +12,7 @@ import {
   Dialog,
   Field,
   FieldControl,
+  FieldDescription,
   FieldGroup,
   FieldLabel,
   FieldMessage,
@@ -22,7 +23,7 @@ import {
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { createMemberSchema, updateMemberSchema } from "@/lib/validation/member";
 
-type FormValues = { memberId?: string; name: string };
+type FormValues = { memberId?: string; name: string; email?: string };
 
 type Member = { id: string; name: string };
 
@@ -72,7 +73,7 @@ function MemberForm({
     resolver: zodResolver(schema) as Resolver<FormValues>,
     defaultValues: member
       ? { memberId: member.id, name: member.name }
-      : { name: "" },
+      : { name: "", email: "" },
   });
 
   function onActionSuccess() {
@@ -90,7 +91,14 @@ function MemberForm({
       // A failed send still lands the member as pending; surface it, don't fail.
       if (data?.inviteEmailFailed) toast.warning(tKey("onboarding.inviteStep.emailFailed"));
     },
-    onError: onActionError,
+    onError(args) {
+      // The one refusal that belongs to a field: keep the dialog and the typing.
+      if (args.error.serverError === "members.errors.emailTaken") {
+        form.setError("email", { message: "members.errors.emailTaken" });
+        return;
+      }
+      onActionError(args);
+    },
   });
   const update = useAction(updateMemberAction, {
     onSuccess: onActionSuccess,
@@ -103,7 +111,7 @@ function MemberForm({
     if (isEdit) {
       update.execute({ memberId: values.memberId!, name: values.name });
     } else {
-      create.execute({ name: values.name });
+      create.execute({ name: values.name, email: values.email });
     }
   }
 
@@ -130,6 +138,29 @@ function MemberForm({
             </Field>
           )}
         />
+        {!isEdit && (
+          <Controller
+            name="email"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="member-email">{t("emailLabel")}</FieldLabel>
+                <FieldControl>
+                  <TextField.Root
+                    {...field}
+                    id="member-email"
+                    type="email"
+                    size="3"
+                    autoComplete="off"
+                    disabled={isPending}
+                  />
+                </FieldControl>
+                <FieldDescription>{t("emailHint")}</FieldDescription>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
         <Field>
           <Flex gap="3" justify="end">
             <Dialog.Close>

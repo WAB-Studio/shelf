@@ -216,6 +216,11 @@ export function MembersScreen({
                             <Badge color="amber">{t("pendingBadge")}</Badge>
                           )}
                         </Flex>
+                        {member.userId === null && member.inviteEmail && (
+                          <Text size="1" color="gray" truncate>
+                            {member.inviteEmail}
+                          </Text>
+                        )}
                       </Flex>
 
                       <Box flexShrink="0">
