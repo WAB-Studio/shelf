@@ -823,6 +823,7 @@
   },
   "recurringRules": {
     "title": "Recurrentes",
+    "pausedFailed": "Pausada: no se pudo generar el movimiento. Revisa la regla y reanúdala.",
     "add": "Nueva regla",
     "addTitle": "Nueva regla",
     "editTitle": "Editar regla",
@@ -887,6 +888,7 @@
     "resumeSwitchLabel": "Reanudar {name}",
     "rowViewGenerated": "Ver movimientos generados",
     "errors": {
+      "nextRunOnTooEarly": "La próxima fecha no puede ser más de 12 meses antes de hoy.",
       "amountRequired": "Escribe un monto.",
       "amountInvalid": "Escribe un monto válido.",
       "amountTooLarge": "El monto es demasiado alto.",
@@ -984,6 +986,7 @@
       "replacedEstimate": "Reemplaza el estimado."
     },
     "errors": {
+      "beforeReconciliation": "Ya cuadraste esta cuenta después de esa compra: confírmala desde el cuadre.",
       "termsNotSaved": "La deuda quedó creada, pero sus condiciones no. Guárdalas otra vez.",
       "accountInvalid": "Elige una cuenta válida.",
       "kindInvalid": "Elige un tipo de deuda válido.",
@@ -1129,6 +1132,7 @@
     "system": "Sistema"
   },
   "errors": {
+    "stale": "Esto cambió mientras lo editabas. Vuelve a abrirlo.",
     "linkTimeout": "No pudimos comprobar el enlace. Ábrelo otra vez desde el correo.",
     "signOutFailed": "No pudimos cerrar tu sesión. Inténtalo otra vez.",
     "notFoundTitle": "Esta página no existe",

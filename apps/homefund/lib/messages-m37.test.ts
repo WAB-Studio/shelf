@@ -33,3 +33,13 @@ test("es and en hold the same keys", () => {
       : [p];
   assert.deepEqual(keys(es).sort(), keys(en).sort());
 });
+
+test("stale, closed-period and paused-rule refusals exist in both languages", () => {
+  assert.equal(es.errors.stale, "Esto cambió mientras lo editabas. Vuelve a abrirlo.");
+  assert.equal(en.errors.stale, "This changed while you were editing it. Open it again.");
+  for (const m of [es, en]) {
+    assert.ok(m.debts.errors.beforeReconciliation);
+    assert.ok(m.recurringRules.pausedFailed);
+    assert.ok(m.recurringRules.errors.nextRunOnTooEarly);
+  }
+});

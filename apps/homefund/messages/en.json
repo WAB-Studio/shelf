@@ -823,6 +823,7 @@
   },
   "recurringRules": {
     "title": "Recurring",
+    "pausedFailed": "Paused: the transaction could not be generated. Check the rule and resume it.",
     "add": "New rule",
     "addTitle": "New rule",
     "editTitle": "Edit rule",
@@ -887,6 +888,7 @@
     "resumeSwitchLabel": "Resume {name}",
     "rowViewGenerated": "View generated movements",
     "errors": {
+      "nextRunOnTooEarly": "The next run can't be more than 12 months before today.",
       "amountRequired": "Enter an amount.",
       "amountInvalid": "Enter a valid amount.",
       "amountTooLarge": "The amount is too high.",
@@ -984,6 +986,7 @@
       "replacedEstimate": "Replaces the estimate."
     },
     "errors": {
+      "beforeReconciliation": "You already reconciled this account after that purchase: confirm it from the reconciliation.",
       "termsNotSaved": "The debt was created, but its terms were not saved. Save them again.",
       "accountInvalid": "Choose a valid account.",
       "kindInvalid": "Choose a valid debt type.",
@@ -1129,6 +1132,7 @@
     "system": "System"
   },
   "errors": {
+    "stale": "This changed while you were editing it. Open it again.",
     "linkTimeout": "We could not check the link. Open it again from the email.",
     "signOutFailed": "We could not sign you out. Please try again.",
     "notFoundTitle": "This page does not exist",
