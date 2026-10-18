@@ -1133,6 +1133,7 @@
   },
   "errors": {
     "stale": "Esto cambió mientras lo editabas. Vuelve a abrirlo.",
+    "resendChanged": "Ya guardamos este movimiento con otro monto; ábrelo para corregirlo.",
     "linkTimeout": "No pudimos comprobar el enlace. Ábrelo otra vez desde el correo.",
     "signOutFailed": "No pudimos cerrar tu sesión. Inténtalo otra vez.",
     "notFoundTitle": "Esta página no existe",

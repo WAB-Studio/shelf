@@ -200,7 +200,7 @@ export function MovementForm({
   // One key per opening: a save sent again after a lost answer carries the same one, and the
   // form unmounts on close, so the next opening mints its own.
   const [requestRef] = useState(() => crypto.randomUUID());
-  const [stale, setStale] = useState(false);
+  const [refusal, setRefusal] = useState<"errors.stale" | "errors.resendChanged" | null>(null);
 
   const isEdit = mode === "edit";
   const isAccept = !movement && deliveryId !== undefined;
@@ -451,12 +451,15 @@ export function MovementForm({
   // rules of hooks forbid picking which one to call.
   const create = useAction(createTransactionAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.resendChanged") setRefusal("errors.resendChanged");
+      else onActionError(result);
+    },
   });
   const update = useAction(updateTransactionAction, {
     onSuccess: onActionSuccess,
     onError: (result) => {
-      if (result.error.serverError === "errors.stale") setStale(true);
+      if (result.error.serverError === "errors.stale") setRefusal("errors.stale");
       else onActionError(result);
     },
   });
@@ -476,7 +479,7 @@ export function MovementForm({
     // other mode's action refuses: `external_ref` on edit, `transaction_id` on
     // create.
     if (isEdit) {
-      setStale(false);
+      setRefusal(null);
       update.execute({
         ...(values as UpdateTransactionInput),
         expectedUpdatedAt: movement?.updatedAt,
@@ -997,12 +1000,12 @@ export function MovementForm({
               <Callout.Text>{t("kindDerivedHint")}</Callout.Text>
             </Callout.Root>
 
-            {stale && (
+            {refusal && (
               <Callout.Root color="red" variant="soft" role="alert">
                 <Callout.Icon>
                   <InfoIcon size={16} />
                 </Callout.Icon>
-                <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+                <Callout.Text>{tKey(refusal)}</Callout.Text>
               </Callout.Root>
             )}
 

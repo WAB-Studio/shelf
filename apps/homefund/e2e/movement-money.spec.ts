@@ -27,6 +27,9 @@ const transactions = messages.transactions;
 const common = messages.common;
 const cash = messages.cash;
 
+// The contract's text (RF-158), written here so a missing message key fails the test, not the compile.
+const RESEND_CHANGED = "Ya guardamos este movimiento con otro monto; ábrelo para corregirlo.";
+
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
 
@@ -605,6 +608,44 @@ test.describe("a resent save and a stale edit", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].amount_cents).toBe("400000");
     expect(await splitsOf(rows[0].id)).toHaveLength(1);
+  });
+
+  test("a save whose answer was lost, saved again with another amount, shows the refusal and keeps the first amount", async ({ page }, testInfo) => {
+    // Kills: a resend answered ok whatever the amount, so the form closes over a figure never saved.
+    let dropped = 0;
+    await page.route(
+      (url) => url.pathname.startsWith("/es"),
+      async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
+          dropped += 1;
+          await route.fetch();
+          await route.abort("failed");
+          return;
+        }
+        await route.continue();
+      },
+    );
+
+    const dialog = await openFullForm(page, testInfo);
+    await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
+    await field(dialog, "movement-amount").fill("4000");
+    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+
+    await saveButton(dialog).click();
+    await expect.poll(() => dropped).toBe(1);
+    await expect.poll(async () => (await movements()).length).toBe(1);
+    await expect(saveButton(dialog)).toBeEnabled();
+
+    await field(dialog, "movement-amount").fill("9000");
+    await saveButton(dialog).click();
+
+    await expect(dialog.getByText(RESEND_CHANGED, { exact: true })).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await expect(field(dialog, "movement-amount")).toHaveValue("9000");
+    const rows = await movements();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amount_cents).toBe("400000");
   });
 
   test("two separate openings, saved once each, leave two movements", async ({ page }, testInfo) => {
