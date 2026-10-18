@@ -326,18 +326,32 @@ async function registry(): Promise<Map<string, Registered>> {
   return seen;
 }
 
-test("the registry holds twenty-four tools: six read and eighteen write, each with its annotations", async () => {
+test("the registry holds twenty-four tools: six read and eighteen write, each with the annotations its effect deserves", async () => {
   const seen = await registry();
   assert.equal(seen.size, 24);
   const reads = new Set(handlers.keys());
   assert.equal(reads.size, 6);
+  const destructive = new Set(["set_goal_note", "set_task_note", "set_measure", "retire_commitment", "move_horizon", "set_rhythm"]);
+  const creates = new Set(["create_task", "create_goal", "add_phase", "add_commitment"]);
   for (const [name, config] of seen) {
     const expected = reads.has(name)
       ? { readOnlyHint: true, destructiveHint: false, idempotentHint: true }
-      : { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+      : destructive.has(name)
+        ? { readOnlyHint: false, destructiveHint: true, idempotentHint: true }
+        : creates.has(name)
+          ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false }
+          : { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
     assert.deepEqual(config.annotations, expected, name);
   }
   assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 18);
+});
+
+test("every registered read refuses a key it does not declare", async () => {
+  const seen = await registry();
+  for (const name of handlers.keys()) {
+    const shape = seen.get(name)!.inputSchema;
+    assert.equal(shape.safeParse({ goal_id: "7f1c2b3a-4d5e-4f60-8a9b-0c1d2e3f4a5b", month: "2027-01", include: [] }).success, false, name);
+  }
 });
 
 test("get_month refuses the month 2026-00 and never answers data", async () => {

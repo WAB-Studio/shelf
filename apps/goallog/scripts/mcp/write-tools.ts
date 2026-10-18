@@ -130,6 +130,12 @@ const asSdk = (name: string, input: Record<string, unknown>) => {
   return shape.parse(input);
 };
 
+// RP-119: the sentences an agent reads for a refusal that has a tool-specific text.
+const TASK_NOT_FOUND = "No hay una tarea o compromiso con ese id para esta persona. Lee los ids con get_goal, get_today o list_loose_one_offs.";
+const PLAN_NOT_FOUND = "No hay nada con ese id para esta persona. Vuelve a leerlo con list_goals o get_goal.";
+const COMBINATION =
+  "Combinación no válida. Usa una de estas: suelta (solo name, y day opcional); del mes (goal_id + planned_month, sin day); en el plan (goal_id + in_plan: true, sin day ni parent_id); sub-tarea (parent_id, sin goal_id ni planned_month ni day).";
+
 const body = (result: { content: { text: string }[] }) => JSON.parse(result.content[0].text);
 
 async function succeeds(name: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -512,19 +518,19 @@ test("the intruder's fingerprint sees its facts: adding one moves the digest, re
 
 test("every tool on the intruder's target answers the act's not-found key and writes nothing", async () => {
   const cases: [string, Record<string, unknown>, string, string][] = [
-    ["declare_fact", { commitment_id: intruderCommitment, quantity: 5 }, "day.errors.notFound", day.errors.notFound],
-    ["complete_task", { one_off_id: intruderLoose }, "day.errors.notFound", day.errors.notFound],
+    ["declare_fact", { commitment_id: intruderCommitment, quantity: 5 }, "day.errors.notFound", TASK_NOT_FOUND],
+    ["complete_task", { one_off_id: intruderLoose }, "day.errors.notFound", TASK_NOT_FOUND],
     ["create_task", { name: "x", goal_id: intruderGoal, estimate: 5, planned_month: currentMonth }, "plan.errors.goalNotFound", plan.errors.goalNotFound],
     ["create_task", { name: "x", parent_id: intruderTask, estimate: 5 }, "month.errors.notFound", month.errors.notFound],
-    ["schedule_task", { one_off_id: intruderLoose, day: dayFrom(2) }, "day.errors.notFound", day.errors.notFound],
+    ["schedule_task", { one_off_id: intruderLoose, day: dayFrom(2) }, "day.errors.notFound", TASK_NOT_FOUND],
     ["set_month_amount", { goal_id: intruderGoal, month: nextMonth, amount: 5 }, "month.errors.notFound", month.errors.notFound],
-    ["rename_goal", { goal_id: intruderGoal, name: "mía" }, "plan.errors.notFound", plan.errors.notFound],
+    ["rename_goal", { goal_id: intruderGoal, name: "mía" }, "plan.errors.notFound", PLAN_NOT_FOUND],
     ["add_phase", { goal_id: intruderGoal, aim: "x", starts_on: dayFrom(40), ends_on: dayFrom(50) }, "plan.errors.goalNotFound", plan.errors.goalNotFound],
     ["add_commitment", { goal_id: intruderGoal, name: "x", cadence_kind: "daily", satisfaction: "tap" }, "plan.errors.goalNotFound", plan.errors.goalNotFound],
-    ["move_horizon", { goal_id: intruderGoal, horizon: dayFrom(200) }, "plan.errors.notFound", plan.errors.notFound],
-    ["fix_task", { one_off_id: intruderTask, month: nextMonth }, "plan.errors.notFound", plan.errors.notFound],
-    ["unfix_task", { one_off_id: intruderTask }, "plan.errors.notFound", plan.errors.notFound],
-    ["retire_commitment", { commitment_id: intruderCommitment }, "plan.errors.notFound", plan.errors.notFound],
+    ["move_horizon", { goal_id: intruderGoal, horizon: dayFrom(200) }, "plan.errors.notFound", PLAN_NOT_FOUND],
+    ["fix_task", { one_off_id: intruderTask, month: nextMonth }, "plan.errors.notFound", PLAN_NOT_FOUND],
+    ["unfix_task", { one_off_id: intruderTask }, "plan.errors.notFound", PLAN_NOT_FOUND],
+    ["retire_commitment", { commitment_id: intruderCommitment }, "plan.errors.notFound", PLAN_NOT_FOUND],
   ];
   const before = await fingerprint();
   for (const [name, input, key, sentence] of cases) {
@@ -696,4 +702,29 @@ test("move_horizon before a goal inside is refused with that goal's name and its
   await refused("move_horizon", { goal_id: above, horizon: dayFrom(90) }, "tree.errors.belowEndsLater", sentence);
   const [row] = await door`select horizon::text as horizon from goals.goals where id = ${above}`;
   assert.equal(row.horizon, dayFrom(120));
+});
+
+test("create_task with goalId in camelCase is refused by the registered shape and creates no task (M19)", async () => {
+  const [before] = await admin`select count(*)::int as n from goals.one_offs where user_id = ${subject.id}`;
+  assert.throws(() => asSdk("create_task", { name: "no debe nacer", goalId: goal }), /Unrecognized key|goalId/);
+  const [after] = await admin`select count(*)::int as n from goals.one_offs where user_id = ${subject.id}`;
+  assert.equal(after.n, before.n);
+  const [named] = await admin`select count(*)::int as n from goals.one_offs where user_id = ${subject.id} and name = 'no debe nacer'`;
+  assert.equal(named.n, 0);
+});
+
+test("create_task mixing the modes answers which combinations are valid, and creates nothing (M19)", async () => {
+  const parent = await freshTask();
+  const [before] = await admin`select count(*)::int as n from goals.one_offs where user_id = ${subject.id}`;
+  await refused("create_task", { name: "mezcla", parent_id: parent, goal_id: goal, estimate: 5 }, "month.errors.invalid", COMBINATION);
+  const [after] = await admin`select count(*)::int as n from goals.one_offs where user_id = ${subject.id}`;
+  assert.equal(after.n, before.n);
+});
+
+test("another tool refused with month.errors.invalid reads the wildcard, not create_task's text (M19)", async () => {
+  const result = await call("fix_task", { one_off_id: "no-es-un-uuid", month: nextMonth });
+  assert.equal(result.isError, true);
+  const answer = body(result);
+  assert.notEqual(answer.message, COMBINATION);
+  assert.equal(answer.message, "Algún campo no es válido. Revisa el formato: ids uuid, meses AAAA-MM, días AAAA-MM-DD, montos enteros.");
 });
