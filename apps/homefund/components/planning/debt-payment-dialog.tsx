@@ -122,8 +122,16 @@ function PaymentForm({
     onSuccess({ data }) {
       const remainderCents = data?.remainderCents ?? 0;
 
+      // The installment lines speak only for a debt that has a plan: on a
+      // revolving card "no cuota closed" would read as a failed payment.
+      if (!data?.hasPlans) {
+        toast.success(t("paymentSaved"));
+        onOpenChange(false);
+        return;
+      }
+
       toast.success(
-        t("paymentPaidLines", { count: data?.paidLineIds.length ?? 0 }),
+        t("paymentPaidLines", { count: data.paidLineIds.length }),
         remainderCents > 0
           ? {
               description: t("paymentRemainder", {

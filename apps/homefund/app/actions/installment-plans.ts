@@ -256,6 +256,7 @@ export const recordDebtPaymentAction = authActionClient
       transactionId: result.transactionId,
       paidLineIds: result.paidLineIds,
       remainderCents: result.remainderCents,
+      hasPlans: result.hasPlans,
     };
   });
 

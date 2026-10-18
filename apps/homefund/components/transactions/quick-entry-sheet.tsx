@@ -219,6 +219,10 @@ function QuickEntryForm({
   // with no amount can take back its own figure and leave a typed one alone.
   const proposedAmount = useRef<string | null>(null);
 
+  // The figure a pick wrote, so a changed token takes back that figure and
+  // leaves one typed into Monto alone.
+  const pickedAmount = useRef<string | null>(null);
+
   // Everything the interpreter proposes stays a suggestion the fields may
   // overwrite (RF-22): the account fills only while still empty so a manual
   // pick survives further typing.
@@ -231,7 +235,16 @@ function QuickEntryForm({
       defaultAccountId: lastUsedAccountId,
     });
 
-    if (proposal.ask?.token !== ask?.token) setPickedChoice("");
+    if (proposal.ask?.token !== ask?.token) {
+      setPickedChoice("");
+      if (
+        pickedAmount.current !== null &&
+        form.getValues("amount") === pickedAmount.current
+      ) {
+        form.setValue("amount", "");
+      }
+      pickedAmount.current = null;
+    }
     setAsk(proposal.ask);
 
     if (proposal.amountPesos !== null) {
@@ -312,9 +325,9 @@ function QuickEntryForm({
     if (!ask) return;
     setPickedChoice(index);
     proposedAmount.current = null;
-    form.setValue("amount", amountToInput(ask.choices[Number(index)], accountCurrency), {
-      shouldValidate: true,
-    });
+    const picked = amountToInput(ask.choices[Number(index)], accountCurrency);
+    pickedAmount.current = picked;
+    form.setValue("amount", picked, { shouldValidate: true });
   }
 
   const hasAmount = amount.trim().length > 0;

@@ -482,3 +482,31 @@ test("a quick save whose answer was lost, saved again, leaves exactly one moveme
   expect(rows).toHaveLength(1);
   expect(rows[0].amount_cents).toBe(String(AMOUNT_CENTS));
 });
+
+test("changing the «M» a pick answered drops the pick and clears Monto; a typed Monto stays", async ({
+  page,
+}) => {
+  const { sheet, quick, amount, save } = await openSheet(page);
+  await quick.pressSequentially(`${scope.categoryName} 1,5 M arriendo`);
+  const first = sheet.getByRole("radiogroup", { name: "¿Cuánto es «1,5 M»?", exact: true });
+  await first.getByRole("radio", { name: "$ 1.500.000", exact: true }).check();
+  await expect(amount).toHaveValue("1500000");
+  await pickAccount(page, sheet);
+
+  await quick.fill(`${scope.categoryName} 2 M arriendo`);
+  const second = sheet.getByRole("radiogroup", { name: "¿Cuánto es «2 M»?", exact: true });
+  await expect(second).toBeVisible();
+  await expect(second.getByRole("radio", { checked: true })).toHaveCount(0);
+  await expect(amount).toHaveValue("");
+  await expect(sheet.getByText(ASK_HINT, { exact: true })).toBeVisible();
+  await expect(sheet.getByText(transactions.quickInterpreted, { exact: true })).toBeHidden();
+  await expect(save).toBeDisabled();
+  expect(await storedAmounts()).toEqual([]);
+
+  // A figure typed into Monto after a pick is the person's: a new token leaves it.
+  await second.getByRole("radio", { name: "$ 2.000.000", exact: true }).check();
+  await amount.fill("777");
+  await quick.fill(`${scope.categoryName} 4 M arriendo`);
+  await expect(sheet.getByRole("radiogroup", { name: "¿Cuánto es «4 M»?", exact: true })).toBeVisible();
+  await expect(amount).toHaveValue("777");
+});
