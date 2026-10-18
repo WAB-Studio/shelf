@@ -27,6 +27,12 @@ type FormValues = { memberId?: string; name: string; email?: string };
 
 type Member = { id: string; name: string };
 
+const EMAIL_FIELD_REFUSALS: ReadonlySet<string> = new Set([
+  "members.errors.emailTaken",
+  "members.errors.alreadyMember",
+  "errors.domainUndeliverable",
+]);
+
 export function MemberFormDialog({
   open,
   onOpenChange,
@@ -97,9 +103,10 @@ function MemberForm({
       if (data?.inviteEmailFailed) toast.warning(tKey("onboarding.inviteStep.emailFailed"));
     },
     onError(args) {
-      // The one refusal that belongs to a field: keep the dialog and the typing.
-      if (args.error.serverError === "members.errors.emailTaken") {
-        form.setError("email", { message: "members.errors.emailTaken" });
+      // Refusals that belong to the address: keep the dialog and the typing.
+      const key = args.error.serverError;
+      if (key && EMAIL_FIELD_REFUSALS.has(key)) {
+        form.setError("email", { message: key });
         return;
       }
       onActionError(args);
