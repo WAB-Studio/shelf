@@ -16,9 +16,11 @@ const invited: unknown[][] = [];
 const otpCalls: unknown[] = [];
 let admin: "none" | "client";
 let inviteAnswer: { data: unknown; error: AuthError };
+let createFails: unknown;
 
 const double = {
   createMember: async (input: unknown) => {
+    if (createFails) throw createFails;
     created.push(input);
     return { memberId: "11111111-1111-4111-8111-111111111111" };
   },
@@ -87,6 +89,7 @@ beforeEach(() => {
   invited.length = 0;
   otpCalls.length = 0;
   admin = "client";
+  createFails = undefined;
   inviteAnswer = { data: { user: { id: "u" } }, error: null };
 });
 
@@ -157,3 +160,44 @@ test("a member with no address asks Auth for nothing", async () => {
   assert.equal(invited.length, 0);
   assert.equal(otpCalls.length, 0);
 });
+
+// RF-149. The unique index on (group, lower(invite_email)) raises 23505 in the roster write; the
+// driver error sits under drizzle's `.cause`, as in production.
+function pgError(code: string) {
+  return Object.assign(new Error("Failed query"), { cause: Object.assign(new Error("pg"), { code }) });
+}
+
+const BOTH = [
+  ["createMemberAction", (a: Awaited<ReturnType<typeof actions>>) => a.createMemberAction({ name: "Ana", email: EMAIL })],
+  ["inviteMemberByEmailAction", (a: Awaited<ReturnType<typeof actions>>) => a.inviteMemberByEmailAction({ email: EMAIL })],
+] as const;
+
+for (const [name, run] of BOTH) {
+  // Mutation: drop the 23505 branch; or map it in only one action.
+  test(`${name}: a pending address in the group is refused by name and no mail is sent`, async () => {
+    createFails = pgError("23505");
+    const result = await run(await actions());
+    assert.equal(result?.serverError, "members.errors.emailTaken");
+    assert.equal(result?.data, undefined);
+    assert.equal(invited.length, 0, "no invitation on a refusal");
+    assert.equal(otpCalls.length, 0);
+    assert.equal(created.length, 0);
+  });
+
+  // Mutation: swap the two codes.
+  test(`${name}: 42501 is still the not-leader refusal`, async () => {
+    createFails = pgError("42501");
+    const result = await run(await actions());
+    assert.equal(result?.serverError, "errors.notLeader");
+    assert.equal(invited.length, 0);
+  });
+
+  // Mutation: map every pg error to emailTaken.
+  test(`${name}: any other database error is not the emailTaken refusal`, async () => {
+    createFails = pgError("23514");
+    const result = await run(await actions());
+    assert.notEqual(result?.serverError, "members.errors.emailTaken");
+    assert.notEqual(result?.serverError, "errors.notLeader");
+    assert.equal(invited.length, 0);
+  });
+}

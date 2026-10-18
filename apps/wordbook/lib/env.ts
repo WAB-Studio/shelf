@@ -43,7 +43,7 @@ export const env = createEnv({
     // shared quota.
     TRANSLATE_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(300),
     // RL-22's ceilings on sign-in links: per caller, then per address.
-    SIGN_IN_LINK_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(5),
+    SIGN_IN_LINK_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(10),
     SIGN_IN_LINK_DAILY_ADDRESS_CAP: z.coerce.number().int().positive().default(3),
     // Salts the per-caller hash every client cap above counts against, so
     // the IP (or the address, for sign-in links) itself is never stored.

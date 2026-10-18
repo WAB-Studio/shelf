@@ -12,7 +12,7 @@
  */
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { after, before, test } from "node:test";
+import { after, before, mock, test } from "node:test";
 
 import postgres from "postgres";
 
@@ -300,4 +300,65 @@ test("a refusal hands back nothing to release", async () => {
   const to = address();
   track(h, to);
   assert.deepEqual(await claimSignInLink(h, to), { status: "rateLimited" });
+});
+
+// Mutation: delete without `day =` (the key's other days go with it).
+test("a release of a count-1 row today leaves the same key's row on another day", async () => {
+  const a = `check-${stamp}-day`;
+  keys.push(a);
+  const today = todayInBogota();
+  const yesterday = (await fixtures<{ d: string }[]>`select (${today}::date - 1)::text as d`)[0].d;
+  await fixtures`insert into finances.sign_in_claims (client_key, day, count) values (${a}, ${yesterday}, 1), (${a}, ${today}, 2)`;
+  await releaseSignInLink({ day: today, keys: [a] });
+  assert.deepEqual(await rowsFor(a), [
+    { count: 1, day: yesterday },
+    { count: 1, day: today },
+  ]);
+});
+
+// Mutation: delete without the key filter (every key's count-1 row that day goes).
+test("a release deletes no other key's count-1 row", async () => {
+  const [a, b] = [`check-${stamp}-keya`, `check-${stamp}-keyb`];
+  keys.push(a, b);
+  const today = todayInBogota();
+  await fixtures`insert into finances.sign_in_claims (client_key, day, count) values (${a}, ${today}, 2), (${b}, ${today}, 1)`;
+  await releaseSignInLink({ day: today, keys: [a] });
+  assert.deepEqual(await rowsFor(a), [{ count: 1, day: today }]);
+  assert.deepEqual(await rowsFor(b), [{ count: 1, day: today }]);
+});
+
+// Mutation: `count = 1` -> `count >= 1` (the row is deleted at any count and the cap resets).
+test("releasing a row above 1 updates it and never deletes it", async () => {
+  const today = todayInBogota();
+  for (const start of [2, 5]) {
+    const k = `check-${stamp}-audit${start}`;
+    keys.push(k);
+    await fixtures`insert into finances.sign_in_claims (client_key, day, count) values (${k}, ${today}, ${start})`;
+    await releaseSignInLink({ day: today, keys: [k] });
+    assert.deepEqual(await rowsFor(k), [{ count: start - 1, day: today }]);
+    const trail = await fixtures<{ action: string }[]>`
+      select action from finances.audit_log
+      where entity = 'sign_in_claims' and record_id = ${`${k}/${today}`} and action <> 'INSERT'
+      order by id`;
+    assert.deepEqual(trail.map((r) => r.action), ["UPDATE"], "one UPDATE and no DELETE");
+  }
+});
+
+// Mutation: the UTC date instead of todayInBogota().
+test("at 21:00 in Bogotá on the 16th the claim lands on the 16th, though UTC is already the 17th", async () => {
+  const h = caller();
+  const to = address();
+  track(h, to);
+  mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-17T02:00:00Z") });
+  let claim;
+  try {
+    claim = await claimSignInLink(h, to);
+  } finally {
+    mock.timers.reset();
+  }
+  assert.ok(claim.status === "ok");
+  assert.equal(claim.claimed.day, "2026-10-16");
+  for (const key of [callerKey(h, salt!)!, addressKey(to, salt!)]) {
+    assert.deepEqual(await rowsFor(key), [{ count: 1, day: "2026-10-16" }]);
+  }
 });

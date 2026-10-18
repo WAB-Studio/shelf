@@ -24,6 +24,7 @@ import {
   LEADER_MEMBER_NAME,
   MEMBER_STORAGE_STATE,
   PLAIN_MEMBER_NAME,
+  asHarnessUser,
   clearGroup,
   readScope,
   seedGroup,
@@ -316,3 +317,346 @@ for (const [title, flag, warned] of [
     await expect(warning).toHaveCount(warned ? 1 : 0);
   });
 }
+
+// RF-149: «Añadir miembro» takes an optional address, and with one it invites (RF-148) and lists.
+// Every address here is `harness-m2-<uuid>@example.invalid`: it goes to the local stack's inbox
+// only, and the `auth.users` row a send mints is registered under the run and dropped by address.
+const MAILBOX = "http://127.0.0.1:54324";
+const inviteStepWarning = messages.onboarding.inviteStep.emailFailed;
+
+function freshAddress(): string {
+  return `harness-m2-${randomUUID()}@example.invalid`;
+}
+
+let memberSeq = 0;
+function freshName(): string {
+  memberSeq += 1;
+  return `Nuevo ${stamp} ${memberSeq}`;
+}
+
+async function minted(email: string, timeoutMs: number): Promise<boolean> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    const [{ n }] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from auth.users where email = ${email}`;
+    if (n > 0) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
+}
+
+async function register(email: string) {
+  await minted(email, 10_000);
+  const runId = process.env.HARNESS_RUN_ID;
+  if (!runId) return;
+  await fixtureSql`
+    insert into harness.identities (user_id, run_id, email, disposition)
+    select id, ${runId}, email, 'ephemeral' from auth.users where email = ${email}
+    on conflict do nothing`;
+}
+
+// `sent: false` for an address seeded as a roster row, which no send ever followed.
+async function forget(email: string, { sent = true }: { sent?: boolean } = {}) {
+  if (sent) await minted(email, 10_000);
+  const ids = await fixtureSql<{ id: string }[]>`select id from auth.users where email = ${email}`;
+  for (const { id } of ids) {
+    await fixtureSql`delete from harness.identities where user_id = ${id}`;
+    await fixtureSql`delete from auth.users where id = ${id}`;
+  }
+  await fixtureSql`delete from finances.allowed_emails where email = ${email.toLowerCase()}`;
+}
+
+async function mailCount(email: string): Promise<number> {
+  const found = await (
+    await fetch(`${MAILBOX}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)
+  ).json();
+  return found.messages_count ?? 0;
+}
+
+async function listed(email: string): Promise<number> {
+  const [{ n }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from finances.allowed_emails where email = ${email.toLowerCase()}`;
+  return n;
+}
+
+async function rowsWithAddress(email: string) {
+  return fixtureSql<{ name: string; invite_email: string | null }[]>`
+    select name, invite_email from group_members
+    where group_id = ${groupId} and lower(invite_email) = ${email.toLowerCase()}`;
+}
+
+function actionPosts(page: Page): string[] {
+  const bodies: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && "next-action" in request.headers()) {
+      bodies.push(request.postData() ?? "");
+    }
+  });
+  return bodies;
+}
+
+async function openCreate(page: Page): Promise<Locator> {
+  await page.goto("/es/settings/members");
+  await page
+    .getByRole("button", { name: members.add, exact: true })
+    .filter({ visible: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+const nameField = (dialog: Locator) => dialog.getByLabel(members.nameLabel, { exact: true });
+const emailField = (dialog: Locator) => dialog.getByLabel(members.emailLabel, { exact: true });
+const saveButton = (dialog: Locator) =>
+  dialog.getByRole("button", { name: common.save, exact: true });
+const cancelButton = (dialog: Locator) =>
+  dialog.getByRole("button", { name: common.cancel, exact: true });
+const warningsOf = (page: Page) =>
+  page.locator("[data-sonner-toast]").filter({ hasText: inviteStepWarning });
+
+// A pending member, written the way the invite writes it, without sending anything.
+async function seedPending(name: string, email: string) {
+  await asHarnessUser(async (tx) => {
+    await tx`
+      insert into group_members (group_id, name, role, invite_email)
+      values (${groupId}, ${name}, 'member', ${email})`;
+  });
+}
+
+// The new row as the leader reads it: the name, «Invitación pendiente», and the address,
+// in whichever band the width displays (the table at 1280, the cards at 360).
+async function expectPendingRow(page: Page, name: string, email: string) {
+  const row = await nameRow(page, name);
+  await expect(row).toContainText(members.pendingBadge);
+  await expect(band(page).getByText(email, { exact: true })).toBeVisible();
+  // The address sits with the name in one row or card, not elsewhere on the page.
+  await expect(
+    band(page).locator("div, tr").filter({ hasText: name }).filter({ hasText: email }).first(),
+  ).toBeVisible();
+}
+
+test.describe("RF-149: adding a member with an optional address", () => {
+  test("the create dialog opens on «Nombre», with «Correo (opcional)» empty and its hint", async ({
+    page,
+  }) => {
+    // Kills: omitting the field; focus moved off the name; the hint dropped; a field that is not an email input.
+    const dialog = await openCreate(page);
+
+    await expect(nameField(dialog)).toBeFocused();
+    const email = emailField(dialog);
+    await expect(email).toBeVisible();
+    await expect(email).toHaveValue("");
+    await expect(email).toHaveAttribute("type", "email");
+    await expect(email).toHaveAttribute("id", "member-email");
+    await expect(email).toHaveAttribute("autocomplete", "off");
+    await expect(dialog.getByText(members.emailHint, { exact: true })).toBeVisible();
+  });
+
+  test("«Editar miembro» has no address field", async ({ page }) => {
+    // Kills: showing the address field on edit.
+    await page.goto("/es/settings/members");
+    await rowMenu(page, PLAIN_MEMBER_NAME).click();
+    await page.getByRole("menuitem", { name: common.edit, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+
+    await expect(dialog.getByRole("heading", { name: members.editTitle })).toBeVisible();
+    await expect(nameField(dialog)).toBeVisible();
+    await expect(dialog.getByLabel(members.emailLabel)).toHaveCount(0);
+    await expect(dialog.getByText(members.emailHint, { exact: true })).toHaveCount(0);
+  });
+
+  test("a malformed address is refused on the field and no request leaves", async ({ page }) => {
+    // Kills: the email dropped from the client schema path (a malformed address goes to the server).
+    const posts = actionPosts(page);
+    const dialog = await openCreate(page);
+
+    await nameField(dialog).fill(freshName());
+    await emailField(dialog).fill("ana@");
+    await saveButton(dialog).click();
+
+    await expect(dialog.getByText(members.errors.emailInvalid, { exact: true })).toBeVisible();
+    await expect(dialog).toBeVisible();
+    expect(posts).toHaveLength(0);
+  });
+
+  test("while saving, both fields and both buttons are disabled and «Guardar» spins", async ({
+    page,
+  }) => {
+    // Kills: leaving the address field enabled while pending; dropping the spinner.
+    const email = freshAddress();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/settings/members", async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST" || !request.headers()["next-action"]) return route.fallback();
+      await gate;
+      return route.fallback();
+    });
+    const dialog = await openCreate(page);
+    const name = freshName();
+    try {
+      await nameField(dialog).fill(name);
+      await emailField(dialog).fill(email);
+      await saveButton(dialog).click();
+
+      await expect(nameField(dialog)).toBeDisabled();
+      await expect(emailField(dialog)).toBeDisabled();
+      await expect(cancelButton(dialog)).toBeDisabled();
+      await expect(saveButton(dialog)).toBeDisabled();
+      await expect(saveButton(dialog).locator(".rt-Spinner")).toBeVisible();
+    } finally {
+      release();
+      await expect(dialog).toHaveCount(0);
+      await register(email);
+      await forget(email);
+    }
+  });
+
+  test("«Cancelar» closes the dialog and sends nothing: no request, no row, no mail", async ({
+    page,
+  }) => {
+    // Kills: submitting on close.
+    const email = freshAddress();
+    const name = freshName();
+    const posts = actionPosts(page);
+    const dialog = await openCreate(page);
+
+    await nameField(dialog).fill(name);
+    await emailField(dialog).fill(email);
+    await cancelButton(dialog).click();
+
+    await expect(dialog).toHaveCount(0);
+    expect(posts).toHaveLength(0);
+    await expect(band(page).getByText(name)).toHaveCount(0);
+    expect(await rowsWithAddress(email)).toHaveLength(0);
+    expect(await mailCount(email)).toBe(0);
+  });
+
+  test("a name and a fresh address invite: the dialog closes, the row shows the badge and the address, one mail, listed", async ({
+    page,
+  }) => {
+    // Kills: sending `{ name }` only; toasting the warning on any `data`; not listing the address.
+    const email = freshAddress();
+    const name = freshName();
+    const dialog = await openCreate(page);
+    try {
+      await nameField(dialog).fill(name);
+      await emailField(dialog).fill(email);
+      await saveButton(dialog).click();
+
+      await expect(page.getByText(members.created, { exact: true })).toBeVisible();
+      await expect(dialog).toHaveCount(0);
+      await expectPendingRow(page, name, email);
+      expect(await warningsOf(page).count()).toBe(0);
+
+      await register(email);
+      await expect.poll(() => mailCount(email)).toBe(1);
+      expect(await rowsWithAddress(email)).toEqual([{ name, invite_email: email }]);
+      expect(await listed(email)).toBe(1);
+    } finally {
+      await forget(email);
+    }
+  });
+
+  test("an address Auth already holds adds the member and raises exactly one warning", async ({
+    page,
+  }) => {
+    // Kills: the warning branch dropped, inverted, or raised twice.
+    const email = freshAddress();
+    const name = freshName();
+    await fixtureSql`
+      insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at)
+      values ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated',
+              'authenticated', ${email}, now(), now())`;
+    await register(email);
+    const dialog = await openCreate(page);
+    try {
+      await nameField(dialog).fill(name);
+      await emailField(dialog).fill(email);
+      await saveButton(dialog).click();
+
+      await expect(page.getByText(members.created, { exact: true })).toBeVisible();
+      await expect(dialog).toHaveCount(0);
+      await expect(warningsOf(page)).toHaveCount(1);
+      await expectPendingRow(page, name, email);
+      expect(await mailCount(email)).toBe(0);
+    } finally {
+      await forget(email);
+    }
+  });
+
+  test("a name alone adds a member with no warning, no mail, no badge and no stored address", async ({
+    page,
+  }) => {
+    // Kills: passing "" through as an address (stored blank, a mail attempted, a warning raised).
+    const name = freshName();
+    const dialog = await openCreate(page);
+
+    await nameField(dialog).fill(name);
+    await saveButton(dialog).click();
+
+    await expect(page.getByText(members.created, { exact: true })).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    const row = await nameRow(page, name);
+    await expect(row).toBeVisible();
+    await expect(row).not.toContainText(members.pendingBadge);
+    expect(await warningsOf(page).count()).toBe(0);
+    const stored = await fixtureSql<{ invite_email: string | null }[]>`
+      select invite_email from group_members where group_id = ${groupId} and name = ${name}`;
+    expect(stored).toEqual([{ invite_email: null }]);
+  });
+
+  // Needs M1 (lane 2): the server refuses a second pending invitation to one address. Red until it lands.
+  test("an address already invited is refused on the field, the dialog stays open and keeps it", async ({
+    page,
+  }) => {
+    // Kills: closing the dialog on the error; clearing the address; adding a second row.
+    const email = freshAddress();
+    await seedPending(`Pendiente ${stamp}`, email);
+    const dialog = await openCreate(page);
+    try {
+      await nameField(dialog).fill(freshName());
+      await emailField(dialog).fill(email);
+      await saveButton(dialog).click();
+
+      await expect(dialog.getByText(members.errors.emailTaken, { exact: true })).toBeVisible();
+      // `data-state` flips to "closed" the instant a close starts, before the exit animation unmounts it.
+      await expect(dialog).toHaveAttribute("data-state", "open");
+      await expect(emailField(dialog)).toHaveValue(email);
+      expect(await rowsWithAddress(email)).toHaveLength(1);
+      expect(await mailCount(email)).toBe(0);
+    } finally {
+      await forget(email, { sent: false });
+    }
+  });
+
+  test("editing a pending member's name sends no address and keeps hers", async ({ page }) => {
+    // Kills: reusing the create payload on edit.
+    const email = freshAddress();
+    const old = `Pendiente ${stamp}`;
+    await seedPending(old, email);
+    const posts = actionPosts(page);
+    await page.goto("/es/settings/members");
+    try {
+      await rowMenu(page, old).click();
+      await page.getByRole("menuitem", { name: common.edit, exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      const renamed = `Renombrada ${stamp}`;
+      await nameField(dialog).fill(renamed);
+      await saveButton(dialog).click();
+
+      await expect(page.getByText(members.updated, { exact: true })).toBeVisible();
+      await expect(dialog).toHaveCount(0);
+      expect(posts).toHaveLength(1);
+      expect(posts[0]).not.toContain("email");
+      expect(posts[0]).not.toContain(email);
+      await expectPendingRow(page, renamed, email);
+      expect(await rowsWithAddress(email)).toEqual([{ name: renamed, invite_email: email }]);
+      expect(await mailCount(email)).toBe(0);
+    } finally {
+      await forget(email, { sent: false });
+    }
+  });
+});

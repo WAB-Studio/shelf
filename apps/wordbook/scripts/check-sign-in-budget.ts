@@ -115,7 +115,7 @@ const ADDRESSES = [
   ...Array.from({ length: 8 }, (_, i) => `race-${i}@example.invalid`),
   "stranger@example.invalid",
 ];
-const REL_IPS = ["198.51.100.90", "198.51.100.91"];
+const REL_IPS = ["198.51.100.90", "198.51.100.91", "198.51.100.92"];
 const REL_ADDRESSES = ["release-a@example.invalid", "release-b@example.invalid"];
 const textKey = (ip: string) => scopeClientKey("text", clientKeyFromAddress(ip, SALT))!;
 const KEYS = [
@@ -150,7 +150,7 @@ async function main() {
     }
   }
 
-  const clear = () => sql`delete from reading.client_spend where day = current_date and client = any(${KEYS})`;
+  const clear = () => sql`delete from reading.client_spend where client = any(${KEYS})`;
 
   try {
     await clear();
@@ -173,9 +173,9 @@ async function main() {
     const ipCap: Outcome[] = [];
     for (let i = 0; i < CLIENT_CAP + 1; i += 1) ipCap.push(await send(IPS[1], `ip-cap-${i}@example.invalid`));
     assert(
-      `the ${CLIENT_CAP + 1}th link from one caller at SIGN_IN_LINK_DAILY_CLIENT_CAP=${CLIENT_CAP} is rateLimited before Supabase`,
+      `the ${CLIENT_CAP + 1}th link from one caller at SIGN_IN_LINK_DAILY_CLIENT_CAP=${CLIENT_CAP} is capped before Supabase`,
       ipCap.slice(0, CLIENT_CAP).every((o) => o === "reachedSupabase") &&
-        ipCap[CLIENT_CAP] === "rateLimited" &&
+        ipCap[CLIENT_CAP] === "capped" &&
         supabaseCalls === CLIENT_CAP,
       `outcomes=${ipCap.join()} supabaseCalls=${supabaseCalls}`,
     );
@@ -191,9 +191,9 @@ async function main() {
     const addressCap: Outcome[] = [];
     for (let i = 0; i < ADDRESS_CAP + 1; i += 1) addressCap.push(await send(IPS[2 + i], "shared@example.invalid"));
     assert(
-      `the ${ADDRESS_CAP + 1}th link to one address from distinct callers at SIGN_IN_LINK_DAILY_ADDRESS_CAP=${ADDRESS_CAP} is rateLimited`,
+      `the ${ADDRESS_CAP + 1}th link to one address from distinct callers at SIGN_IN_LINK_DAILY_ADDRESS_CAP=${ADDRESS_CAP} is capped`,
       addressCap.slice(0, ADDRESS_CAP).every((o) => o === "reachedSupabase") &&
-        addressCap[ADDRESS_CAP] === "rateLimited" &&
+        addressCap[ADDRESS_CAP] === "capped" &&
         supabaseCalls === ADDRESS_CAP,
       `outcomes=${addressCap.join()} supabaseCalls=${supabaseCalls}`,
     );
@@ -206,7 +206,7 @@ async function main() {
     assert(
       "A@example.invalid and a@example.invalid count against one address cap",
       cased.slice(0, ADDRESS_CAP).every((o) => o === "reachedSupabase") &&
-        cased[ADDRESS_CAP] === "rateLimited" &&
+        cased[ADDRESS_CAP] === "capped" &&
         supabaseCalls === ADDRESS_CAP,
       `outcomes=${cased.join()} supabaseCalls=${supabaseCalls}`,
     );
@@ -301,12 +301,39 @@ async function main() {
       `caller=${await calls(callerKey(REL_IPS[1]))}`,
     );
 
+    // Release is pinned to today: an earlier day's count is history.
+    const histKey = callerKey(REL_IPS[2]);
+    await sql`insert into reading.client_spend (day, client, calls) values (current_date - 1, ${histKey}, 2), (current_date, ${histKey}, 1)`;
+    await releaseSignInLink([histKey]);
+    const [yesterday] = await sql<{ calls: number }[]>`
+      select calls from reading.client_spend where day = current_date - 1 and client = ${histKey}`;
+    assert(
+      "release takes one off today's row and leaves yesterday's count at 2",
+      yesterday?.calls === 2 && (await calls(histKey)) === 0,
+      `yesterday=${yesterday?.calls} today=${await calls(histKey)}`,
+    );
+
+    // No keys (a noKey claim): the release resolves and writes nothing.
+    const before = await sql`select day, client, calls from reading.client_spend where client = any(${KEYS}) order by client, day`;
+    let emptyRelease = "resolved";
+    try {
+      await releaseSignInLink([]);
+    } catch (error) {
+      emptyRelease = error instanceof Error ? error.message : String(error);
+    }
+    const after = await sql`select day, client, calls from reading.client_spend where client = any(${KEYS}) order by client, day`;
+    assert(
+      "release of no keys resolves and writes nothing",
+      emptyRelease === "resolved" && JSON.stringify(before) === JSON.stringify(after),
+      `result=${emptyRelease} rowsBefore=${before.length} rowsAfter=${after.length}`,
+    );
+
     // Parallel: eight links at once from one caller, to eight addresses.
     supabaseCalls = 0;
     const race = await Promise.all(
       Array.from({ length: 8 }, (_, i) => send(IPS[11], `race-${i}@example.invalid`)),
     );
-    const raceLimited = race.filter((o) => o === "rateLimited").length;
+    const raceLimited = race.filter((o) => o === "capped").length;
     assert(
       `eight parallel links from one caller: exactly ${CLIENT_CAP} reach Supabase, the counter stops at the cap`,
       supabaseCalls === CLIENT_CAP && raceLimited === 8 - CLIENT_CAP && (await calls(callerKey(IPS[11]))) === CLIENT_CAP,

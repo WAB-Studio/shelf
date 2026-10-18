@@ -15,6 +15,7 @@ type Claim = { status: "ok"; keys: string[] } | { status: "rateLimited" } | { st
 let claimAnswer: Claim;
 let otpError: { status: number } | null;
 const released: string[][] = [];
+let releaseGate: Promise<void> = Promise.resolve();
 let listAnswer: () => Promise<boolean>;
 const listAsked: string[] = [];
 
@@ -38,6 +39,7 @@ const double = {
   release: async (keys: string[]) => {
     calls.push("release");
     released.push(keys);
+    await releaseGate;
   },
   createClient: () => ({
     auth: {
@@ -87,6 +89,7 @@ beforeEach(() => {
   mxAnswer = async () => [{ exchange: "mx.live.test", priority: 10 }];
   claimAnswer = { status: "ok", keys: CLAIMED_KEYS };
   released.length = 0;
+  releaseGate = Promise.resolve();
   otpError = null;
   listAnswer = async () => true;
   listAsked.length = 0;
@@ -120,7 +123,7 @@ test("a listed deliverable address claims the budget, is checked against the lis
 test("a caller over their allowance never reaches Supabase", async () => {
   claimAnswer = { status: "rateLimited" };
   const result = await (await getAction()).sendSignInLink("reader@live.test");
-  assert.deepEqual(result, { ok: false, error: "rateLimited" });
+  assert.deepEqual(result, { ok: false, error: "capped" });
   assert.deepEqual(calls, ["mx:live.test", "claim"], "a refused claim reached Supabase");
 });
 
@@ -163,7 +166,7 @@ test("a caller over their allowance is refused before the list is read", async (
   claimAnswer = { status: "rateLimited" };
   listAnswer = async () => false;
   const result = await (await getAction()).sendSignInLink("stranger@live.test");
-  assert.deepEqual(result, { ok: false, error: "rateLimited" });
+  assert.deepEqual(result, { ok: false, error: "capped" });
   assert.ok(!calls.includes("list"));
 });
 
@@ -223,4 +226,23 @@ test("noKey claim: Auth failing releases nothing (there are no keys) and the sen
   assert.deepEqual(result, { ok: false, error: "sendFailed" });
   assert.ok(calls.includes("signInWithOtp"));
   assert.deepEqual(released.filter((k) => k.length > 0), []);
+});
+
+test("the release is awaited: the result waits for a release that has not finished", async () => {
+  otpError = { status: 500 };
+  let open!: () => void;
+  releaseGate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let settled = false;
+  const pending = (await getAction()).sendSignInLink("reader@live.test").then((r) => {
+    settled = true;
+    return r;
+  });
+  for (let i = 0; i < 20 && !calls.includes("release"); i += 1) await new Promise((r) => setImmediate(r));
+  assert.ok(calls.includes("release"), "the release never started");
+  for (let i = 0; i < 5; i += 1) await new Promise((r) => setImmediate(r));
+  assert.equal(settled, false, "the action answered before the release finished");
+  open();
+  assert.deepEqual(await pending, { ok: false, error: "sendFailed" });
 });

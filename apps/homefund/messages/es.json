@@ -102,7 +102,7 @@
       "addWithoutEmail": "Agregar sin correo",
       "toDashboard": "Ir al panel",
       "skip": "Omitir por ahora",
-      "emailFailed": "Añadimos a la persona, pero no pudimos enviar el correo de invitación."
+      "emailFailed": "Añadimos a la persona, pero no pudimos enviar el correo; puede entrar ya en HomeFund con ese correo."
     }
   },
   "dashboard": {
@@ -225,6 +225,8 @@
     "addTitle": "Añadir miembro",
     "editTitle": "Editar miembro",
     "nameLabel": "Nombre",
+    "emailLabel": "Correo (opcional)",
+    "emailHint": "Si lo escribes, le mandamos una invitación para entrar a HomeFund.",
     "activeTab": "Activos",
     "archivedTab": "Archivados",
     "you": "Tú",
@@ -259,7 +261,8 @@
     "errors": {
       "nameRequired": "Escribe el nombre del miembro.",
       "nameTooLong": "El nombre no puede pasar de 80 caracteres.",
-      "emailInvalid": "Escribe un correo válido."
+      "emailInvalid": "Escribe un correo válido.",
+      "emailTaken": "Ese correo ya tiene una invitación en este grupo."
     }
   },
   "bienvenida": {

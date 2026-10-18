@@ -44,6 +44,10 @@ Each entry names the rule and the file it lives in now.
   639) for about 50k each: kept. Mutators found 59 survivors, all unique, in 5 of 5, and 0 were fixed; in the review
   before, 11 of 84. Nothing pruned. The survivors that cost money, a delete, a permission or stored data now become a
   `tester` module of the next train instead of a handoff line.
+- Fourth pruning review, 2026-10-17, over 6 trains (#645–#654): validators found something unique in 3 of 5, all 7
+  fixed: kept. Mutators found 47 unique survivors, 2 fixed in-train; the rest became codigo-6c's M3, M4 and M6: kept.
+  Critics found 35 unique in 4 of 4, 0 fixed in-train, every one turned into a user decision or a codigo-6c module, at
+  140k–187k each, the dearest judge: kept, scoped. The full CI on codigo-6b caught what no judge did. Nothing pruned.
 
 ## Retired 2026-10-14 by the user
 

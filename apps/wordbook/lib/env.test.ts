@@ -43,8 +43,8 @@ test("a call to translate is capped at 300 a day per client", () => {
   assert.equal(env.TRANSLATE_DAILY_CLIENT_CAP, 300);
 });
 
-test("sign-in links are capped at 5 a day per client", () => {
-  assert.equal(env.SIGN_IN_LINK_DAILY_CLIENT_CAP, 5);
+test("sign-in links are capped at 10 a day per client", () => {
+  assert.equal(env.SIGN_IN_LINK_DAILY_CLIENT_CAP, 10);
 });
 
 test("sign-in links are capped at 3 a day per address", () => {

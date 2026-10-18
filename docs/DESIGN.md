@@ -194,9 +194,23 @@ Canvas «HomeFund», page «Entrar con código», from y=2100. Not built yet.
 ## Decisions of 2026-10-17, after the critic of codigo-6b, by the user
 
 - **Inviting after onboarding: an optional «correo» field in the members dialog.** «Añadir miembro» with an address
-  invites, and the dialog's warning becomes reachable. Level 3 (it sends mail and lists the address). Its board is not
-  drawn yet. Not built yet.
+  invites, and the dialog's warning becomes reachable. Level 3 (it sends mail and lists the address). Board «MiembroCorreo»
+  below. Built in codigo-6c (#657), RF-149.
 - **Inviting an address Auth already holds: words only.** The warning reads «…no pudimos enviar el correo; puede entrar
-  ya en HomeFund con ese correo». The person gets no mail. Not built yet.
+  ya en HomeFund con ese correo». The person gets no mail. Built in codigo-6c (#657).
 - **The per-caller daily cap rises from 5 to 10** (`SIGN_IN_LINK_DAILY_CLIENT_CAP`, HomeFund and WordBook); the address
-  cap stays at 3, and a refused tap still spends. Not built yet.
+  cap stays at 3, and a refused tap still spends. Built in codigo-6c (#657).
+
+## Boards of 2026-10-17: «MiembroCorreo», adding a member with an address (codigo-6c)
+
+Canvas «HomeFund», page «Miembros». 360 seven states, 1280 empty. Built in codigo-6c (#657).
+
+- «Añadir miembro»: «Nombre», then «Correo (opcional)» with the gray hint «Si lo escribes, le mandamos una invitación
+  para entrar a HomeFund.», then «Cancelar» / «Guardar». With an address, «Guardar» invites.
+- States: empty; invalid address (the field's error, `members.errors.emailInvalid`); saving (inputs and buttons
+  disabled, spinner on «Guardar»); sent (the dialog closes, «Miembro añadido.» and the new row with «Invitación
+  pendiente» and the address in gray under the name); mail not sent (the same, plus the warning «Añadimos a la persona,
+  pero no pudimos enviar el correo; puede entrar ya en HomeFund con ese correo.»); already invited (the field's error
+  «Ese correo ya tiene una invitación en este grupo.», from the dialog and from onboarding); «Editar miembro» has no address.
+- Onboarding's warning toast reads the same new words.
+- The address line on the row is new: today's member card shows no address.
