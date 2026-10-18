@@ -713,3 +713,61 @@ test.describe("a resent save and a stale edit", () => {
     expect((await movements())[0].amount_cents).toBe("1800000");
   });
 });
+
+// A withdrawal whose answer never reached the browser (RNF-10, Q24): the server moved
+// the money, the browser saw the request fail, and the person presses save again.
+test.describe("a cash withdrawal sent again", () => {
+  test.skip(({ viewport }) => viewport?.width === 360, "the panel is the laptop's; the phone's dialog shares the action");
+
+  const save = (page: Page) =>
+    page.getByRole("button", { name: cash.withdrawSave, exact: true }).filter({ visible: true });
+
+  test("a withdrawal whose answer was lost, saved again, moves the money once", async ({ page }) => {
+    // Kills: a new request ref per click, or none sent, so the resend is a second transfer.
+    let dropped = 0;
+    await page.route(
+      (url) => url.pathname.startsWith("/es"),
+      async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
+          dropped += 1;
+          await route.fetch();
+          await route.abort("failed");
+          return;
+        }
+        await route.continue();
+      },
+    );
+    const bankBefore = await balanceOf(ids.source);
+
+    await page.goto("/es");
+    await choose(page, page.locator("#withdraw-panel-source"), SOURCE_NAME);
+    await page.locator("#withdraw-panel-amount").fill("100000");
+    await save(page).click();
+    await expect.poll(() => dropped).toBe(1);
+    await expect.poll(async () => (await movements()).length).toBe(1);
+    await expect(save(page)).toBeEnabled();
+
+    await save(page).click();
+    await expect(page.getByText(cash.withdrawSaved, { exact: true })).toBeVisible();
+
+    const rows = await movements();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amount_cents).toBe("10000000");
+    expect(await balanceOf(ids.source)).toBe(bankBefore - 10_000_000);
+  });
+
+  test("two withdrawals one after the other, without reloading, are two transfers", async ({ page }) => {
+    // Kills: a request ref that outlives its attempt, so the second withdrawal answers the first.
+    await page.goto("/es");
+    await choose(page, page.locator("#withdraw-panel-source"), SOURCE_NAME);
+    for (const amount of ["100000", "50000"]) {
+      await page.locator("#withdraw-panel-amount").fill(amount);
+      await save(page).click();
+      await expect(page.locator("#withdraw-panel-amount")).toHaveValue("");
+    }
+
+    const rows = await movements();
+    expect(rows.map((row) => row.amount_cents).sort()).toEqual(["10000000", "5000000"]);
+  });
+});

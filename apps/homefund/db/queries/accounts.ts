@@ -32,6 +32,10 @@ export type AccountRow = {
   // the database would refuse (RF-58, RF-100).
   canWrite: boolean;
   archivedAt: Date | null;
+  // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
+  // else's is refused stale.
+  // Absent on the rows `cash.ts` builds, which no form edits.
+  updatedAt?: string;
 };
 
 // Every account the caller may read: their personal accounts and their group's
@@ -85,6 +89,7 @@ export async function listAccounts(
         // reference inside a projection fragment renders bare and binds inward.
         canWrite: sql<boolean>`private.can_write_account(accounts.id)`,
         archivedAt: accounts.archivedAt,
+        updatedAt: sql<string>`accounts.updated_at::text`,
       })
       .from(accounts)
       .where(

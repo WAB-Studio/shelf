@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -117,6 +117,8 @@ function RecurringForm({
   const tKey = useTranslations();
 
   const isEdit = !!rule;
+  // A save over someone else's change is refused here, in the dialog, with what was typed kept.
+  const [stale, setStale] = useState(false);
   const mark = useCallback(
     (name: string) => tKey("categories.scopedName", { name }),
     [tKey],
@@ -284,7 +286,10 @@ function RecurringForm({
   });
   const update = useAction(updateRecurringRuleAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.stale") setStale(true);
+      else onActionError(result);
+    },
   });
 
   const isPending = isEdit ? update.isPending : create.isPending;
@@ -293,7 +298,11 @@ function RecurringForm({
     // The resolver already parsed `values` against the schema for this mode; the
     // server re-validates and strips the form-only `direction` helper.
     if (isEdit) {
-      update.execute(values as unknown as UpdateRecurringRuleInput);
+      setStale(false);
+      update.execute({
+        ...(values as unknown as UpdateRecurringRuleInput),
+        expectedUpdatedAt: rule?.updatedAt,
+      });
     } else {
       create.execute(values as unknown as CreateRecurringRuleInput);
     }
@@ -590,6 +599,12 @@ function RecurringForm({
           </Callout.Icon>
           <Callout.Text>{t("autoHint")}</Callout.Text>
         </Callout.Root>
+
+        {stale && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+          </Callout.Root>
+        )}
 
         <Field>
           <Flex gap="3" justify="end">

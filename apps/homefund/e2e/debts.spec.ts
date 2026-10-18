@@ -1635,3 +1635,94 @@ test.describe("a debt whose terms fail to save", () => {
     await dropAccounts(rows.map((row) => row.id));
   });
 });
+
+// A payment whose answer never reached the browser (RNF-10, Q24): the server
+// booked it, the browser saw the request fail, and the person presses save again.
+// One opening of the dialog is one payment, however many times it is sent.
+test.describe("a debt payment sent again", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  const sourceId = randomUUID();
+  const sourceName = `Cuenta de reenvío ${stamp}`;
+  const debtId = randomUUID();
+  const debtName = `Deuda de reenvío ${stamp}`;
+
+  test.beforeEach(async () => {
+    await seedAsset({ id: sourceId, name: sourceName, openingCents: 900_000_000 });
+    await seedDebt({ id: debtId, name: debtName, owedCents: 80_000_000 });
+  });
+
+  test.afterEach(async () => {
+    await dropAccounts([debtId, sourceId]);
+  });
+
+  async function booked(): Promise<{ amount_cents: string }[]> {
+    return fixtureSql<{ amount_cents: string }[]>`
+      select amount_cents::text as amount_cents from transactions
+      where to_account_id = ${debtId} order by created_at`;
+  }
+
+  async function openPayment(page: Page): Promise<Locator> {
+    await rowMenu(page, debtName).click();
+    await page.getByRole("menuitem", { name: debts.rowPay, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel(installments.fromLabel).click();
+    await page.getByRole("option", { name: sourceName, exact: true }).click();
+    return dialog;
+  }
+
+  const save = (dialog: Locator) =>
+    dialog.getByRole("button", { name: installments.paymentSave, exact: true });
+
+  test("a save whose answer was lost, saved again, books exactly one payment", async ({ page }) => {
+    // Kills: a new request ref minted on every click, or none sent, so the resend books a second payment.
+    let dropped = 0;
+    await page.route(
+      (url) => url.pathname.startsWith("/es"),
+      async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
+          dropped += 1;
+          await route.fetch();
+          await route.abort("failed");
+          return;
+        }
+        await route.continue();
+      },
+    );
+
+    await page.goto("/es/planning/debts");
+    const dialog = await openPayment(page);
+    await dialog.getByRole("textbox", { name: installments.amountLabel }).fill("120000");
+
+    await save(dialog).click();
+    await expect.poll(() => dropped).toBe(1);
+    // The server booked it; the person never heard.
+    await expect.poll(async () => (await booked()).length).toBe(1);
+    await expect(dialog).toBeVisible();
+    await expect(save(dialog)).toBeEnabled();
+
+    await save(dialog).click();
+    await expect(dialog).toBeHidden();
+
+    const rows = await booked();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amount_cents).toBe("12000000");
+  });
+
+  test("two separate openings, saved once each, book two payments", async ({ page }) => {
+    // Kills: a request ref that outlives its opening, so the second payment answers the first.
+    // The page is not reloaded between them: a ref held by the module would survive.
+    await page.goto("/es/planning/debts");
+    for (const amount of ["120000", "130000"]) {
+      const dialog = await openPayment(page);
+      await dialog.getByRole("textbox", { name: installments.amountLabel }).fill(amount);
+      await save(dialog).click();
+      await expect(dialog).toBeHidden();
+    }
+
+    const rows = await booked();
+    expect(rows.map((row) => row.amount_cents).sort()).toEqual(["12000000", "13000000"]);
+  });
+});

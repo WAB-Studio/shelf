@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -106,6 +106,8 @@ function PaymentForm({
   const tKey = useTranslations();
 
   const isEdit = !!payment;
+  // A save over someone else's change is refused here, in the dialog, with what was typed kept.
+  const [stale, setStale] = useState(false);
 
   // Only accounts the person may write, plus the ones an edit already names.
   const writableAccounts = options.accounts.filter(
@@ -198,7 +200,10 @@ function PaymentForm({
   });
   const update = useAction(updatePlannedPaymentAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.stale") setStale(true);
+      else onActionError(result);
+    },
   });
 
   const isPending = isEdit ? update.isPending : create.isPending;
@@ -207,7 +212,11 @@ function PaymentForm({
     // The resolver already parsed `values` against the schema for this mode,
     // stripping the field the other mode's action does not accept.
     if (isEdit) {
-      update.execute(values as UpdatePlannedPaymentInput);
+      setStale(false);
+      update.execute({
+        ...(values as UpdatePlannedPaymentInput),
+        expectedUpdatedAt: payment?.updatedAt,
+      });
     } else {
       create.execute(values as CreatePlannedPaymentInput);
     }
@@ -425,6 +434,12 @@ function PaymentForm({
           </Callout.Icon>
           <Callout.Text>{t("reminderHint")}</Callout.Text>
         </Callout.Root>
+
+        {stale && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+          </Callout.Root>
+        )}
 
         <Field>
           <Flex gap="3" justify="end">

@@ -34,6 +34,9 @@ export type RecurringRuleRow = {
   nextRunOn: string;
   endsOn: string | null;
   isActive: boolean;
+  // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
+  // else's is refused stale.
+  updatedAt: string;
 };
 
 // Every readable rule, soonest next run first, in ONE round trip (RF-29); scope is
@@ -56,6 +59,8 @@ export async function listRecurringRules(): Promise<RecurringRuleRow[]> {
         nextRunOn: recurringRules.nextRunOn,
         endsOn: recurringRules.endsOn,
         isActive: recurringRules.isActive,
+        // Qualified: the joined accounts carry an `updated_at` of their own.
+        updatedAt: sql<string>`recurring_rules.updated_at::text`,
       })
       .from(recurringRules)
       .leftJoin(

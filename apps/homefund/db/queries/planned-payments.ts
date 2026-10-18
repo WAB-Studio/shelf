@@ -38,6 +38,9 @@ export type PlannedPaymentRow = {
   description: string | null;
   status: PlannedPaymentStatus;
   settledTransactionId: string | null;
+  // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
+  // else's is refused stale.
+  updatedAt: string;
 };
 
 // Every readable planned payment, soonest due first, in ONE round trip (RF-74).
@@ -62,6 +65,8 @@ export async function listPlannedPayments({
         description: plannedPayments.description,
         status: plannedPayments.status,
         settledTransactionId: plannedPayments.settledTransactionId,
+        // Qualified: the joined accounts carry an `updated_at` of their own.
+        updatedAt: sql<string>`planned_payments.updated_at::text`,
       })
       .from(plannedPayments)
       .leftJoin(

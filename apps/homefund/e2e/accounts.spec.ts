@@ -826,3 +826,67 @@ test("writes nothing when a ?new=cash dialog is cancelled", async ({ page }) => 
     select id from accounts where owner_user_id = ${scope.userId} and name = ${name}`;
   expect(rows).toHaveLength(0);
 });
+
+// Two people open the same account; the second to save wins, and the first is told
+// to reopen it rather than overwriting the other's change (Q24).
+test("an edit saved after another tab changed the account is refused as stale, keeping what was typed", async ({
+  page,
+  context,
+}) => {
+  // Kills: no expected version sent, or the stale answer ignored, so the form closes over the other tab's change.
+  const account = await seedAccount({ openingCents: 500_000 });
+  const nameFromB = `Cuenta de la otra pestaña ${stamp}`;
+  const nameFromA = `Cuenta de esta pestaña ${stamp}`;
+  const other = await context.newPage();
+
+  const openEdit = async (tab: Page) => {
+    await tab.goto("/es/settings/accounts");
+    await rowMenu(tab, account.name).click();
+    await tab.getByRole("menuitem", { name: common.edit, exact: true }).click();
+    const dialog = tab.getByRole("dialog");
+    await expect(dialog.getByRole("textbox", { name: accounts.nameLabel })).toHaveValue(account.name);
+    return dialog;
+  };
+  const dialogA = await openEdit(page);
+  const dialogB = await openEdit(other);
+
+  await dialogA.getByRole("textbox", { name: accounts.nameLabel }).fill(nameFromA);
+
+  await dialogB.getByRole("textbox", { name: accounts.nameLabel }).fill(nameFromB);
+  await dialogB.getByRole("button", { name: common.save, exact: true }).click();
+  await expect(dialogB).toBeHidden();
+
+  await dialogA.getByRole("button", { name: common.save, exact: true }).click();
+
+  await expect(dialogA.getByText(messages.errors.stale, { exact: true })).toBeVisible();
+  await expect(dialogA).toBeVisible();
+  await expect(dialogA.getByRole("textbox", { name: accounts.nameLabel })).toHaveValue(nameFromA);
+  await expect(dialogA.getByRole("button", { name: common.save, exact: true })).toBeEnabled();
+
+  const [saved] = await fixtureSql<{ name: string; initial_balance_cents: string }[]>`
+    select name, initial_balance_cents::text as initial_balance_cents from accounts where id = ${account.id}`;
+  expect(saved.name).toBe(nameFromB);
+  expect(saved.initial_balance_cents).toBe("500000");
+
+  await other.close();
+  await dropAccount(account.id);
+});
+
+test("an account edit nobody else touched saves, even after the dialog sat open", async ({ page }) => {
+  // Kills: an expected version that never matches, so every ordinary edit is refused.
+  const account = await seedAccount({ openingCents: 500_000 });
+  const renamed = `Cuenta vigente ${stamp}`;
+
+  await page.goto("/es/settings/accounts");
+  await rowMenu(page, account.name).click();
+  await page.getByRole("menuitem", { name: common.edit, exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: accounts.nameLabel }).fill(renamed);
+  await dialog.getByRole("button", { name: common.save, exact: true }).click();
+
+  await expect(dialog).toBeHidden();
+  const [saved] = await fixtureSql<{ name: string }[]>`select name from accounts where id = ${account.id}`;
+  expect(saved.name).toBe(renamed);
+
+  await dropAccount(account.id);
+});
