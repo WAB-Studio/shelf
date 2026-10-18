@@ -51,7 +51,10 @@ const FIELDS: Record<string, Field[]> = {
     { as: "month", from: "planned_month", to: "month", optional: true },
     { as: "day", from: "day", to: "day", optional: true },
   ],
-  set_task_note: [{ as: "task", from: "one_off_id", to: "task" }],
+  set_task_note: [
+    { as: "task", from: "one_off_id", to: "task" },
+    { as: "text", from: "note", to: "note" },
+  ],
   schedule_task: [
     { as: "task", from: "one_off_id", to: "task" },
     { as: "day", from: "day", to: "day" },
@@ -93,7 +96,10 @@ const FIELDS: Record<string, Field[]> = {
     { as: "goal", from: "goal_id", to: "goal" },
     { as: "goal", from: "parent_id", to: "parent", optional: true },
   ],
-  set_goal_note: [{ as: "goal", from: "goal_id", to: "goal" }],
+  set_goal_note: [
+    { as: "goal", from: "goal_id", to: "goal" },
+    { as: "text", from: "note", to: "note" },
+  ],
   retire_commitment: [{ as: "commitment", from: "commitment_id", to: "commitment" }],
   set_rhythm: [
     { as: "goal", from: "goal_id", to: "goal" },
@@ -108,6 +114,15 @@ const FIELDS: Record<string, Field[]> = {
 
 const say = (key: keyof typeof chat.before): string => translate(`chat.before.${key}` as Parameters<typeof translate>[0]);
 const perMonth = (amount: string): string => translate("chat.perMonth", { amount });
+
+const NOTE_SHOWN = 200;
+
+// What a note change will write, so a planted proposal is not approved blind.
+function noteWords(note: string): string {
+  const chars = [...note];
+  const text = chars.length > NOTE_SHOWN ? `${chars.slice(0, NOTE_SHOWN).join("")}…` : note;
+  return `${translate("chat.change.noteText", { text, count: chars.length })}, ${translate("chat.change.noteReplaces")}`;
+}
 
 function quantity(n: number, unit: string | null): string {
   return unit === null ? String(n) : formatQuantity(n, unit, words);
@@ -131,9 +146,9 @@ function replaced(change: Change, names: ChangeNames, values: Record<string, str
     case "schedule_task":
       return { before: task?.day ? civilDayMonthShort(task.day) : say("noDay"), after: values.day };
     case "set_task_note":
-      return { before: task?.hasNote ? say("withNote") : say("noNote"), after: say("withNote") };
+      return { before: task?.hasNote ? say("withNote") : say("noNote"), after: noteWords(values.note) };
     case "set_goal_note":
-      return { before: goal?.hasNote ? say("withNote") : say("noNote"), after: say("withNote") };
+      return { before: goal?.hasNote ? say("withNote") : say("noNote"), after: noteWords(values.note) };
     case "move_horizon":
       return {
         before: goal?.horizon ? civilDayMonthShort(goal.horizon) : say("noEnd"),

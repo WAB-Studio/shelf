@@ -60,6 +60,8 @@
     "set_goal_note": "Cambiar la nota de la meta «{goal}»",
     "retire_commitment": "Retirar el compromiso «{commitment}»",
     "set_rhythm": "Cambiar el ritmo de «{goal}»",
-    "set_measure": "Ponerle medida a «{goal}»"
+    "set_measure": "Ponerle medida a «{goal}»",
+    "noteText": "nota nueva: «{text}» ({count} caracteres)",
+    "noteReplaces": "reemplaza la nota entera"
   }
 }
