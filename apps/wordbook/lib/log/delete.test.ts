@@ -246,6 +246,7 @@ function makeTransaction(scope: string[], mode: string) {
       delete: (q: unknown) =>
         request(() => {
           assert.equal(txMode, "readwrite", "delete in a readonly transaction");
+          if (!isRange(q) && q !== undefined && q !== null) return void store.rows.delete(q);
           for (const e of ordered(store, null, q)) store.rows.delete(e.primary);
         }),
       clear: () => request(() => void store.rows.clear()),
@@ -560,4 +561,116 @@ test("applying marks does not queue them back up", async () => {
   const { applyTombstones, readTombstoneQueue } = await load();
   await applyTombstones([{ deviceId: OWN, localId: 1 }, { deviceId: OTHER, localId: 5 }], OWN);
   assert.deepEqual((await readTombstoneQueue("reader-1")).pending, []);
+});
+
+// ---- the queue merge (M35) ----
+
+const queueRow = (pending: { deviceId: string; localId: number }[]): Row => ({
+  key: "tombstones", readerId: "reader-1", pending, since: null,
+});
+
+test("a mark already queued is not queued twice, and the fresh ones follow the queue in row order", async () => {
+  put("lookups", lookup({ normalised: "cat", headword: "cat" })); // 1
+  put("lookups", lookup({ normalised: "cat", headword: "cat" })); // 2
+  put("lookups", lookup({ normalised: "cat", headword: "cat", device: OTHER, deviceSeq: 7 })); // 3
+  put("sync", syncState());
+  put("sync", queueRow([{ deviceId: OTHER, localId: 7 }, { deviceId: THIRD, localId: 40 }, { deviceId: OWN, localId: 2 }]));
+  const { deleteStudyGroup, readTombstoneQueue } = await load();
+  await deleteStudyGroup("cat");
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, [
+    { deviceId: OTHER, localId: 7 },
+    { deviceId: THIRD, localId: 40 },
+    { deviceId: OWN, localId: 2 },
+    { deviceId: OWN, localId: 1 },
+  ]);
+});
+
+test("a second delete of the same group queues nothing new", async () => {
+  put("lookups", lookup({ normalised: "cat", headword: "cat" }));
+  put("sync", syncState());
+  const { deleteStudyGroup, readTombstoneQueue } = await load();
+  await deleteStudyGroup("cat");
+  put("lookups", lookup({ id: 1, normalised: "cat", headword: "cat" })); // the same identity comes back
+  await deleteStudyGroup("cat");
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, [{ deviceId: OWN, localId: 1 }]);
+});
+
+test("a queued mark of another device with the same localId does not hide a fresh mark", async () => {
+  put("lookups", lookup({ normalised: "cat", headword: "cat" })); // own, id 1
+  put("sync", syncState());
+  put("sync", queueRow([{ deviceId: OTHER, localId: 1 }]));
+  const { deleteStudyGroup, readTombstoneQueue } = await load();
+  await deleteStudyGroup("cat");
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, [
+    { deviceId: OTHER, localId: 1 },
+    { deviceId: OWN, localId: 1 },
+  ]);
+});
+
+test("the same localId under two devices is two marks, and a device is not confused with another by its prefix", async () => {
+  put("lookups", lookup({ normalised: "cat", headword: "cat", device: OTHER, deviceSeq: 12 }));
+  put("lookups", lookup({ normalised: "cat", headword: "cat", device: THIRD, deviceSeq: 12 }));
+  put("sync", syncState());
+  put("sync", queueRow([{ deviceId: OTHER, localId: 12 }]));
+  const { deleteStudyGroup, readTombstoneQueue } = await load();
+  await deleteStudyGroup("cat");
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, [
+    { deviceId: OTHER, localId: 12 },
+    { deviceId: THIRD, localId: 12 },
+  ]);
+});
+
+// Work done, not time: each element a search method visits on a long array is
+// counted. A merge that scans the queue once per mark visits ~N^2 of them.
+function countSearchVisits<T>(run: () => Promise<T>): Promise<{ visits: number; value: T }> {
+  const proto = Array.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
+  const originals: Record<string, (...args: unknown[]) => unknown> = {};
+  let visits = 0;
+  for (const name of ["some", "find", "findIndex", "findLast", "findLastIndex", "every"]) {
+    originals[name] = proto[name];
+    proto[name] = function (this: unknown[], callback: (...a: unknown[]) => unknown, ...rest: unknown[]) {
+      if (this.length <= 10) return originals[name].call(this, callback, ...rest);
+      return originals[name].call(this, (...a: unknown[]) => (visits++, callback(...a)), ...rest);
+    };
+  }
+  for (const name of ["includes", "indexOf", "lastIndexOf"]) {
+    originals[name] = proto[name];
+    proto[name] = function (this: unknown[], ...args: unknown[]) {
+      if (this.length > 10) visits += this.length;
+      return originals[name].call(this, ...args);
+    };
+  }
+  const restore = () => {
+    for (const name of Object.keys(originals)) proto[name] = originals[name];
+  };
+  return run().then(
+    (value) => (restore(), { visits, value }),
+    (error) => (restore(), Promise.reject(error)),
+  );
+}
+
+async function mergeOf(N: number) {
+  stores = freshStores();
+  for (let i = 0; i < N; i++) put("lookups", lookup({ normalised: "big", headword: "big" })); // own ids 1..N
+  put("sync", syncState());
+  // Half the queue repeats the group's first marks; the rest belong to another device.
+  const queued = [
+    ...Array.from({ length: N / 2 }, (_, i) => ({ deviceId: OWN, localId: i + 1 })),
+    ...Array.from({ length: N / 2 }, (_, i) => ({ deviceId: OTHER, localId: i + 1 })),
+  ];
+  put("sync", queueRow(queued));
+  const { deleteStudyGroup, readTombstoneQueue } = await load();
+  const { visits, value } = await countSearchVisits(() => deleteStudyGroup("big"));
+  assert.deepEqual(value, { deleted: N });
+  const expected = [...queued, ...Array.from({ length: N / 2 }, (_, i) => ({ deviceId: OWN, localId: N / 2 + i + 1 }))];
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, expected);
+  return visits;
+}
+
+test("the merge's work grows linearly with the marks: 400 marks cost at most 4x of 100, plus a constant", async () => {
+  const small = await mergeOf(100);
+  const mid = await mergeOf(200);
+  const large = await mergeOf(400);
+  assert.ok(large <= 4 * small + 400, `visits for 100/200/400 marks: ${small}/${mid}/${large}: not linear`);
+  assert.ok(mid <= 2 * small + 200, `visits for 100/200 marks: ${small}/${mid}: not linear`);
 });
