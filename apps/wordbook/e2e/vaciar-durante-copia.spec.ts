@@ -252,3 +252,27 @@ test("Failed: a store that refuses to clear shows the failed line and a retry", 
   await expect(page.getByRole("button", { name: clear("retry"), exact: true })).toBeVisible();
   expect(await lookupCount(page)).toBe(3);
 });
+
+// A round that never answers must not hold «Vaciar» hostage: the sync's fetch
+// times out (20 s), the lock frees and the wipe lands.
+test("Hung round: a sync route that never answers still lets «Vaciar» end, and the person can act again", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await deleteTranslator(page);
+  await seed(page, { sync: copyOn(), lookups: rows() });
+  await page.route("**/api/log/sync", () => new Promise<void>(() => undefined));
+  const seen = page.waitForRequest((r) => r.url().includes("/api/log/sync"));
+  await page.goto("/registro");
+  await seen;
+
+  await trigger(page).click();
+  await wipeLocal(page).click();
+  await expect(wiping(page)).toBeVisible();
+
+  // Either end frees the person: done (empty log) or failed (retry shown).
+  const done = page.getByText(study("emptyTitle"), { exact: true });
+  const failed = page.getByRole("alert").filter({ hasText: clear("failed") });
+  await expect(done.or(failed)).toBeVisible({ timeout: 40_000 });
+  await expect(wiping(page)).toHaveCount(0);
+});
