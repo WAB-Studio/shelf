@@ -106,6 +106,12 @@
     }
   },
   "dashboard": {
+    "dueTitle": "Por pagar",
+    "dueSee": "Ver pagos",
+    "dueSeeAll": "Ver los {count}",
+    "dueSoon": "Vence el {date}",
+    "dueLate": "Venció el {date}",
+    "dueNoName": "Pago sin nombre",
     "emptyTitle": "Todavía no hay movimientos",
     "emptyDescription": "Aquí vas a ver los saldos y los movimientos del fondo.",
     "createAccount": "Crear cuenta",

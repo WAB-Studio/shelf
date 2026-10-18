@@ -106,6 +106,12 @@
     }
   },
   "dashboard": {
+    "dueTitle": "To pay",
+    "dueSee": "See payments",
+    "dueSeeAll": "See all {count}",
+    "dueSoon": "Due {date}",
+    "dueLate": "Was due {date}",
+    "dueNoName": "Unnamed payment",
     "emptyTitle": "No movements yet",
     "emptyDescription": "This is where the fund's balances and movements will appear.",
     "createAccount": "Create account",
