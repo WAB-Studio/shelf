@@ -35,11 +35,14 @@ export type ToolOutcome =
   | { ok: true; value: Record<string, unknown> }
   | { ok: false; error: string; values?: { name?: string; date?: string } };
 
+export type ToolAnnotations = { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean };
+
 export type ToolSpec = {
   name: keyof typeof mcp.tools;
   kind: "read" | "write";
   description: string;
   input: z.ZodObject;
+  annotations: ToolAnnotations;
   run(input: Record<string, unknown>): Promise<ToolOutcome>;
 };
 
@@ -67,33 +70,54 @@ function camelKeys(input: Record<string, unknown>): Record<string, unknown> {
   );
 }
 
+const READ_ONLY: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
+const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true };
+const IDEMPOTENT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
+const CREATES: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+
+// A replaced note, measure, end or rhythm cannot be read back after the write, so a client asks first.
+const DESTRUCTIVE_WRITES: ReadonlySet<string> = new Set([
+  "set_goal_note",
+  "set_task_note",
+  "set_measure",
+  "retire_commitment",
+  "move_horizon",
+  "set_rhythm",
+]);
+const CREATING_WRITES: ReadonlySet<string> = new Set(["create_task", "create_goal", "add_phase", "add_commitment"]);
+
+function writeAnnotations(name: string): ToolAnnotations {
+  if (DESTRUCTIVE_WRITES.has(name)) return DESTRUCTIVE;
+  return CREATING_WRITES.has(name) ? CREATES : IDEMPOTENT;
+}
+
 function read(
   name: keyof typeof mcp.tools,
   input: z.ZodObject,
   load: (input: Record<string, unknown>) => Promise<ToolOutcome>,
 ): ToolSpec {
-  return { name, kind: "read", description: mcp.tools[name], input, run: load };
+  return { name, kind: "read", description: mcp.tools[name], input, annotations: READ_ONLY, run: load };
 }
 
 export const readTools: readonly ToolSpec[] = [
-  read("list_goals", z.object({}), async () => {
+  read("list_goals", z.strictObject({}), async () => {
     const [list, loose] = await Promise.all([listGoalsForMetas(), listLooseCommitments()]);
     return { ok: true, value: shapeGoalList(list, loose) };
   }),
-  read("get_goal", z.object({ goal_id: goalId }), async (input) => {
+  read("get_goal", z.strictObject({ goal_id: goalId }), async (input) => {
     const view = await loadGoal(input.goal_id as string);
     return view === null ? { ok: false, error: "mcp.errors.goalNotFound" } : { ok: true, value: shapeGoal(view) };
   }),
-  read("get_month", z.object({ goal_id: goalId, month }), async (input) => {
+  read("get_month", z.strictObject({ goal_id: goalId, month }), async (input) => {
     const view = await loadGoal(input.goal_id as string);
     if (view === null) return { ok: false, error: "mcp.errors.goalNotFound" };
     const first = `${input.month as string}-01`;
     const items = planMonthList(view.plan, first);
     return { ok: true, value: shapeMonth({ goalId: view.id, month: first, unit: view.measureUnit, items }) };
   }),
-  read("get_today", z.object({}), async () => ({ ok: true, value: shapeDay(await loadDay(todayInZone())) })),
-  read("get_report", z.object({}), async () => ({ ok: true, value: shapeReport(await loadReport(todayInZone())) })),
-  read("list_loose_one_offs", z.object({}), async () => {
+  read("get_today", z.strictObject({}), async () => ({ ok: true, value: shapeDay(await loadDay(todayInZone())) })),
+  read("get_report", z.strictObject({}), async () => ({ ok: true, value: shapeReport(await loadReport(todayInZone())) })),
+  read("list_loose_one_offs", z.strictObject({}), async () => {
     const [dayless, scheduled] = await Promise.all([listDaylessOneOffs(), listScheduledOneOffs(todayInZone())]);
     return { ok: true, value: shapeLoose({ dayless, scheduled }) };
   }),
@@ -108,7 +132,8 @@ function write<S extends z.ZodRawShape>(
     name,
     kind: "write",
     description: mcp.tools[name],
-    input: z.object(shape),
+    input: z.strictObject(shape),
+    annotations: writeAnnotations(name),
     run: async (input) => {
       const result = await act(camelKeys(input));
       return result.ok ? { ok: true, value: result } : { ok: false, error: result.error, ...(result.values && { values: result.values }) };

@@ -31,14 +31,23 @@ function hasSentence(key: string): boolean {
   return typeof node === "string";
 }
 
+function overrideOf(tool: string, key: string): string | undefined {
+  const table = mcp.errors.byTool as Record<string, string>;
+  return Object.hasOwn(table, `${tool}:${key}`) ? table[`${tool}:${key}`] : Object.hasOwn(table, `*:${key}`) ? table[`*:${key}`] : undefined;
+}
+
 // What an act's error key says, in Spanish. The key survives beside it so a
 // caller can branch on it; an unknown one is `mcp.errors.unknown`, never an
 // echo of its input. `values` fills a refusal's `{name}` and `{date}` (RP-56).
+// With a `tool`, `mcp.errors.byTool["<tool>:<key>"]` then `["*:<key>"]` say what to fix.
 export function errorOf(
   key: string,
   values?: { name?: string; date?: string },
+  tool?: string,
 ): { key: string; message: string } {
   if (!hasSentence(key)) return { key: "mcp.errors.unknown", message: translate("mcp.errors.unknown") };
+  const byTool = tool === undefined ? undefined : overrideOf(tool, key);
+  if (byTool !== undefined) return { key, message: byTool };
   const filled: Record<string, string> = {};
   if (values?.name !== undefined) filled.name = values.name;
   if (values?.date !== undefined) filled.date = `${civilDayMonthShort(values.date)} ${values.date.slice(0, 4)}`;

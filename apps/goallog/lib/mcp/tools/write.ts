@@ -6,9 +6,9 @@ import type { ResolvedPerson } from "@/lib/mcp/tokens";
 import { actAs } from "@/lib/session";
 import { writeTools, type ToolOutcome } from "@/lib/tools/catalogue";
 
-function answer(outcome: ToolOutcome): CallToolResult {
+function answer(outcome: ToolOutcome, tool?: string): CallToolResult {
   if (!outcome.ok) {
-    return { content: [{ type: "text", text: JSON.stringify(errorOf(outcome.error, outcome.values)) }], isError: true };
+    return { content: [{ type: "text", text: JSON.stringify(errorOf(outcome.error, outcome.values, tool)) }], isError: true };
   }
   return { content: [{ type: "text", text: JSON.stringify(outcome.value) }], structuredContent: outcome.value };
 }
@@ -20,27 +20,25 @@ function personOf(ctx: ServerContext): ResolvedPerson | null {
   return typeof person?.id === "string" && typeof person.email === "string" ? (person as ResolvedPerson) : null;
 }
 
-async function run(ctx: ServerContext, act: () => Promise<ToolOutcome>): Promise<CallToolResult> {
+async function run(ctx: ServerContext, tool: string, act: () => Promise<ToolOutcome>): Promise<CallToolResult> {
   const person = personOf(ctx);
   if (person === null) return answer({ ok: false, error: "mcp.errors.unauthorized" });
   try {
-    return answer(await actAs(person, act));
+    return answer(await actAs(person, act), tool);
   } catch (error) {
     // The name and the SQLSTATE only: a driver's message carries the query and its parameters (RNP-15).
     console.error("mcp write tool failed:", error instanceof Error ? error.name : "unknown", pgCode(error) ?? "");
-    return answer({ ok: false, error: "mcp.errors.unknown" });
+    return answer({ ok: false, error: "mcp.errors.unknown" }, tool);
   }
 }
 
 export function registerWriteTools(server: McpServer): void {
-  const writes = { readOnlyHint: false, destructiveHint: false, idempotentHint: false } as const;
-
   // Every act runs unchanged through the catalogue: its schema, its policy checks, its statements.
   for (const spec of writeTools) {
     server.registerTool(
       spec.name,
-      { description: spec.description, inputSchema: spec.input, annotations: writes },
-      (input: Record<string, unknown>, ctx) => run(ctx, () => spec.run(input)),
+      { description: spec.description, inputSchema: spec.input, annotations: spec.annotations },
+      (input: Record<string, unknown>, ctx) => run(ctx, spec.name, () => spec.run(input)),
     );
   }
 }

@@ -33,12 +33,10 @@ async function run(ctx: ServerContext, load: () => Promise<ToolOutcome>): Promis
 }
 
 export function registerReadTools(server: McpServer): void {
-  const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true } as const;
-
   for (const spec of readTools) {
     server.registerTool(
       spec.name,
-      { description: spec.description, inputSchema: spec.input, annotations: readOnly },
+      { description: spec.description, inputSchema: spec.input, annotations: spec.annotations },
       (input: Record<string, unknown>, ctx) => run(ctx, () => spec.run(input)),
     );
   }
