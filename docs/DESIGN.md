@@ -354,4 +354,5 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Shared packages** (Q11 a): `@repo/sign-in` and `@repo/caller` are promoted once GoalLog's call wrapper and WordBook's
   sign-in settle their shapes.
 - **Region** (Q13 b): HomeFund's and WordBook's Vercel region is measured with `vercel inspect` before anything is pinned.
-
+- **«Revisar el mes»** (2026-10-18, the user's idea): RF-155 opened. A screen and an MCP tool list the month's anomalies
+  by fixed rules; Claude does any AI review through MCP. Its own train with its board, after wave 2. Not built yet.
