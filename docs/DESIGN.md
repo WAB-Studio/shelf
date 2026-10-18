@@ -376,3 +376,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **A foreign purchase estimated on a debit account is confirmed on the account in «Cuentas»** (Q18 a), with the debt
   screen's «Confirmar monto» row. Board to draw before its module.
 - **A second «efectivo» stays allowed** (Q23 a); the first withdrawal's race is closed by a lock, with nothing visible.
+- **A resend with another amount is refused** (Q25 b, RF-158): «Ya guardamos este movimiento con otro monto; ábrelo para
+  corregirlo.» and nothing is saved. Not built yet.
+- **One send never changes scope** (Q26 a): the same send to a personal account and then to a fund account books two rows;
+  the form keeps one scope per opening, so no cross-scope check is built.
