@@ -1853,7 +1853,7 @@ Canvas «Bitácora de metas», page «Armazón», from y=15460. 360, three state
 
 ## Boards of 2026-10-17: «EntrarTopeDiario», the daily cap says «mañana» (decidido-17)
 
-Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states. Not built yet.
+Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states. Built in decidido-17 (#659).
 
 - GoalLog's own daily cap (RP-138) refuses in the failure shape of the offline boards with «Ya pediste varios códigos
   hoy. Prueba de nuevo mañana.» (`account.errors.capped`): on the address form as the field's hint, and on the code
