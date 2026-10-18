@@ -13,14 +13,14 @@ test("the catalogue's template example is PLANTILLA.md's, byte for byte", () => 
 });
 
 test("the catalogue's example is a second template and reads without a mistake", () => {
-  assert.ok(catalogue.template.example.startsWith("pulsar · plantilla 2\n"));
+  assert.ok(catalogue.template.example.startsWith("goallog · plantilla 2\n"));
   const result = parseTemplate(catalogue.template.example);
   assert.ok(result.matched && "draft" in result);
 });
 
 test("the text for another AI carries the template whole, its mark first", () => {
   const instruction: string = catalogue.entry.instruction;
-  assert.ok(instruction.includes("pulsar · plantilla 2"));
+  assert.ok(instruction.includes("goallog · plantilla 2"));
   assert.ok(instruction.includes(catalogue.template.example));
   assert.ok(instruction.includes("[pega aquí tu plan]"));
   assert.ok(instruction.endsWith(catalogue.template.example), "the template closes the text");

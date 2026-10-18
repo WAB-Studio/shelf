@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { draftRefusals, importDraftJsonSchema } from "./draft";
 import { coverage } from "./coverage";
-import { parseTemplate as parseV2, parseTemplateV1 as parseTemplate, templateSource } from "./template";
+import { parseTemplate as parseV2, parseTemplateV1 as parseTemplate, templateSource, TEMPLATE_HEADER } from "./template";
 import { GOAL_NAME_MAX, GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
@@ -1316,4 +1316,40 @@ test("992 task unit: a task in the wrong unit is named, and the lines under it a
       [9, "import.errors.form.child"],
     ],
   );
+});
+
+test("M63: the text template's header starts «goallog ·»", () => {
+  assert.ok(TEMPLATE_HEADER.startsWith("goallog ·"));
+  assert.equal(TEMPLATE_HEADER, "goallog · plantilla 2");
+  const result = parseV2(`${TEMPLATE_HEADER}\n# A\nhorizonte: 2027-10-01\n`);
+  assert.ok(result.matched && "draft" in result);
+});
+
+test("M63: «pulsar · plantilla 2» still reads, to the draft «goallog · plantilla 2» gives", () => {
+  const body = "\n# A\nhorizonte: 2027-10-01\nmedida: estudio · horas\n## Meses\n- 2026-10 · 2 h\n";
+  const old = parseV2(`pulsar · plantilla 2${body}`);
+  const fresh = parseV2(`goallog · plantilla 2${body}`);
+  assert.ok(old.matched && "draft" in old, JSON.stringify(old));
+  assert.ok(fresh.matched && "draft" in fresh, JSON.stringify(fresh));
+  assert.equal(old.draft.goals[0].name, "A");
+  assert.deepEqual(JSON.parse(JSON.stringify(old.draft, (k, v) => (k === "src" || k === "noteSrc" ? undefined : v))),
+    JSON.parse(JSON.stringify(fresh.draft, (k, v) => (k === "src" || k === "noteSrc" ? undefined : v))));
+});
+
+test("M63: «pulsar · plantilla 1» still reads", () => {
+  const old = parseV2("pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\n");
+  assert.ok(old.matched && "draft" in old, JSON.stringify(old));
+});
+
+test("M63: a first line «goallog ·» or «pulsar ·» with an unknown version is the first-line error, cut", () => {
+  for (const first of ["goallog · plantilla 9", "pulsar · plantilla 9", "goallog · plantilla 1x", "goallog · algo"]) {
+    const result = parseV2(`${first}\n# A\nhorizonte: 2027-10-01\n`);
+    assert.ok(result.matched && "error" in result, first);
+    assert.equal(result.cut, true, first);
+    assert.deepEqual(result.errors, [{ line: 1, expected: "import.errors.form.firstLine" }], first);
+  }
+});
+
+test("M63: a first line of another name is not matched", () => {
+  assert.deepEqual(parseV2("otra · plantilla 2\n# A\nhorizonte: 2027-10-01\n"), { matched: false });
 });

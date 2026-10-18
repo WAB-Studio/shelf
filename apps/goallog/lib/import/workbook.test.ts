@@ -73,7 +73,7 @@ test("the delivered workbook has the mark in Metas!A1 and its headers where the 
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
   assert.deepEqual(wb.worksheets.map((s) => s.name), Object.keys(HEADERS));
-  assert.equal(wb.getWorksheet("Metas")!.getCell("A1").value, TEMPLATE_HEADER);
+  assert.equal(wb.getWorksheet("Metas")!.getCell("A1").value, "goallog · plantilla 2");
   const header = (name: string, row: number) =>
     (wb.getWorksheet(name)!.getRow(row).values as unknown[]).slice(1).map(String);
   assert.deepEqual(header("Metas", 2), [...HEADERS.Metas]);
@@ -572,4 +572,32 @@ test("M14 unreadable header: a local header cut short is refused", async () => {
   const { zipInflatesWithin } = await guard();
   const stored = await withEntries({ "a.txt": Buffer.from("hello") }, { compression: "STORE" });
   assert.equal(zipInflatesWithin(stored.slice(0, 20)), false);
+});
+
+test("M63: the delivered workbook's A1 starts «goallog ·»", async () => {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
+  assert.ok(String(wb.getWorksheet("Metas")!.getCell("A1").value).startsWith("goallog ·"));
+});
+
+test("M63: a workbook marked «goallog · plantilla 2» reads", async () => {
+  const result = await readWorkbook(await book({ Metas: [GOAL] }, "goallog · plantilla 2"));
+  assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+});
+
+test("M63: a workbook marked with the old «pulsar · plantilla 2» still reads", async () => {
+  const old = await readWorkbook(await book({ Metas: [HOURS] }, "pulsar · plantilla 2"));
+  assert.ok(old.matched && "draft" in old, JSON.stringify(old));
+  assert.equal(old.draft.goals[0].name, "Meta");
+});
+
+test("M63: a workbook marked «pulsar · plantilla 1» in A1 reads", async () => {
+  const result = await readWorkbook(await book({ Metas: [GOAL] }, "pulsar · plantilla 1"));
+  assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+});
+
+test("M63: a workbook marked with another name or version is not matched", async () => {
+  for (const mark of ["goallog · plantilla 9", "otra · plantilla 2"]) {
+    assert.deepEqual(await readWorkbook(await book({ Metas: [GOAL] }, mark)), { matched: false }, mark);
+  }
 });
