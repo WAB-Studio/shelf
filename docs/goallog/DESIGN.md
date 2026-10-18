@@ -1865,4 +1865,7 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
 - **A send or a check that hangs ends at 8 s, like WordBook.** «Enviar código», «Pedir otro código» and «Entrar» that
   get no answer in 8 s say «No sabemos si se envió. Revisa tu correo antes de pedir otro.» and every control is usable
   again. Supersedes the «no timeout» line of codigo-6c M8. Needs a board. Not built yet.
+- **Q3 b, same night:** «Enviar código» and «Pedir otro código» that hang say «No sabemos si se envió. Revisa tu correo
+  antes de pedir otro.»; «Entrar» that hangs says «No sabemos si se comprobó el código. Espera un momento antes de
+  escribirlo otra vez.» Board «EntrarSinRespuesta».
 

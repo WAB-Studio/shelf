@@ -273,6 +273,20 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   words, from the dialog and from onboarding. One DNS lookup per invitation; a domain whose DNS is down at that moment
   is refused. Level 3. Not built yet.
 
+## Decisions of 2026-10-17 (late night), on the critic-6c plan, by the user
+
+- RF-150, RF-151 and RF-152 opened (Q0 a).
+- A budget on «Todas las cuentas» inside a fund takes its category's place (Q1 a).
+- The warning when the invitation mail is not sent: «Añadimos a la persona, pero no pudimos enviar el correo. Avísale que
+  entre con ese correo; si ya está en otro grupo, no se unirá a este.» (Q2 b).
+- `errors.categoryNesting` is reworded to hold for depth and for place; no new string (Q4 a).
+- Restoring an archived invitation whose address has a newer pending one is refused with «Ese correo ya tiene una
+  invitación en este grupo.» (Q5 a).
+- A DNS outage while inviting: the `/login` guard as it is; the invitation goes through (Q6 a). Supersedes «a domain whose
+  DNS is down at that moment is refused» above.
+- Pending invitations that already exist for a live member are left; the leader deletes them (Q7 a).
+- Note on board «MiembroCorreo»: the address field also shows «Esa persona ya está en este grupo.» and `/login`'s
+  no-mail refusal; from onboarding the dialog asks for the name alone.
 
 ## Decisions of 2026-10-17 (closing), after the critic of decidido-17, by the user
 
