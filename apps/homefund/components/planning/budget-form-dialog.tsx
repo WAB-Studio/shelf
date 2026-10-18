@@ -203,6 +203,15 @@ function BudgetForm({
   const threshold = useWatch({ control: form.control, name: "thresholdPct" });
   const accountId = useWatch({ control: form.control, name: "accountId" });
 
+  // A budget may be filed under any fund account and the person's own, never a
+  // fellow member's personal one; an edit keeps naming its account.
+  const filingAccounts = options.accounts.filter(
+    (account) =>
+      account.ownerUserId === null ||
+      account.canWrite ||
+      account.id === budget?.accountId,
+  );
+
   // The picked account fixes the scope the category list is cut to; with none,
   // both scopes are offered (RF-71).
   const expenseCategories = categoriesInScope(
@@ -419,7 +428,7 @@ function BudgetForm({
                 </FieldControl>
                 <Select.Content position="popper">
                   <Select.Item value={ANY}>{t("accountAny")}</Select.Item>
-                  {options.accounts.map((account) => (
+                  {filingAccounts.map((account) => (
                     <Select.Item key={account.id} value={account.id}>
                       {account.name}
                     </Select.Item>

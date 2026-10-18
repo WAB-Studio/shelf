@@ -6,12 +6,14 @@ import {
   archiveMember,
   createMember,
   deleteMember,
+  inviteEmailIsMember,
   restoreMember,
   transferLeadership,
   updateMember,
 } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
-import { pgErrorCode } from "@/lib/db-error";
+import { deliverabilityExempt, isDomainDeliverable } from "@/lib/auth/deliverability";
+import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { env } from "@/lib/env";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
@@ -32,6 +34,25 @@ async function requireGroupId(): Promise<string> {
   const group = await getUserGroup();
   if (!group) throw new ActionError("errors.notFound");
   return group.id;
+}
+
+// RF-150 / RF-151: the group, the membership and the domain are asked together, and a
+// refusal lands before any row is written or any mail asked. The caller who does not
+// lead the fund learns false from the membership read and meets the leader guard later.
+async function requireInvitableGroupId(email: string | undefined): Promise<string> {
+  if (!email) return requireGroupId();
+
+  const domain = email.trim().toLowerCase().split("@").pop() ?? "";
+  const [groupId, isMember, deliverable] = await Promise.all([
+    requireGroupId(),
+    inviteEmailIsMember(email),
+    Promise.resolve(
+      deliverabilityExempt(domain, env.NEXT_PUBLIC_SUPABASE_URL) || isDomainDeliverable(domain),
+    ),
+  ]);
+  if (isMember) throw new ActionError("members.errors.alreadyMember");
+  if (!deliverable) throw new ActionError("errors.domainUndeliverable");
+  return groupId;
 }
 
 // RF-100 gave every member write to the leader alone, and the policies filter rather
@@ -64,7 +85,7 @@ async function sendInviteEmail(email: string): Promise<boolean> {
 export const createMemberAction = authActionClient
   .inputSchema(createMemberSchema)
   .action(async ({ parsedInput: { name, email } }) => {
-    const groupId = await requireGroupId();
+    const groupId = await requireInvitableGroupId(email);
     let memberId: string;
     try {
       ({ memberId } = await createMember({ groupId, name, inviteEmail: email }));
@@ -88,7 +109,7 @@ export const createMemberAction = authActionClient
 export const inviteMemberByEmailAction = authActionClient
   .inputSchema(inviteByEmailSchema)
   .action(async ({ parsedInput: { email } }) => {
-    const groupId = await requireGroupId();
+    const groupId = await requireInvitableGroupId(email);
     let memberId: string;
     try {
       ({ memberId } = await createMember({
@@ -142,7 +163,19 @@ export const restoreMemberAction = authActionClient
   .inputSchema(restoreMemberSchema)
   .action(async ({ parsedInput: { memberId } }) => {
     const groupId = await requireGroupId();
-    const restored = await restoreMember({ groupId, memberId });
+    let restored: boolean;
+    try {
+      restored = await restoreMember({ groupId, memberId });
+    } catch (error) {
+      // RF-149: a newer invitation holds the address this one would take back.
+      if (
+        pgErrorCode(error) === "23505" &&
+        pgConstraintName(error) === "group_members_group_invite_email_unique"
+      ) {
+        throw new ActionError("members.errors.emailTaken");
+      }
+      throw error;
+    }
     if (!restored) notLeader();
 
     refresh();

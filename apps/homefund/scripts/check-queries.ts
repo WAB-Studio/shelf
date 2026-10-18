@@ -3979,6 +3979,7 @@ async function main(): Promise<void> {
   await recurringRuleCategoryFitSuite(userId, scope, groupless, fellow);
   console.log("");
   await serverEntriesSuite(scope);
+  await inviteRefusalSuite();
   await e5Suite();
   await e6Suite();
   await importScopeOwnerSuite(userId, scope);
@@ -4962,7 +4963,7 @@ async function serverEntriesSuite(scope: HarnessScope): Promise<void> {
     | ((input: { email: string }) => Promise<InviteResult>)
     | undefined;
 
-  const longAddress = `${"a".repeat(81 - "@example.com".length)}@example.com`;
+  const longAddress = `${"a".repeat(81 - "@example.invalid".length)}@example.invalid`;
   // RF-148: the invitation is Auth's admin invite; the code mail must never be asked for here.
   const invites = (): { email: string; redirectTo?: string }[] =>
     ((globalThis as { harnessAdminInvites?: { email: string; redirectTo?: string }[] }).harnessAdminInvites ??= []);
@@ -5950,6 +5951,212 @@ async function e5SeedWalk(): Promise<void> {
       new Set(groupRows.map((row) => row.color)).size === groupRows.length,
     direct.error || `${new Set(soloRows.map((row) => row.color)).size}/${soloRows.length} personal, ${new Set(groupRows.map((row) => row.color)).size}/${groupRows.length} group distinct colours`,
   );
+}
+
+// RF-150, RF-151, RF-152, RF-149: both invite actions refuse a live member of the leader's fund
+// (the leader's own address included) and an address whose domain takes no mail before a row is
+// written or Auth is asked; an archived invitation's address invites again; a restore that meets
+// a newer invitation is refused by name. The real actions run against the real tables.
+async function inviteRefusalSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const members = (await import("@/app/actions/members")) as unknown as {
+    createMemberAction: (input: { name: string; email?: string }) => Promise<InviteResult>;
+    inviteMemberByEmailAction: (input: { email: string }) => Promise<InviteResult>;
+    archiveMemberAction: (input: { memberId: string }) => Promise<{ serverError?: string }>;
+    restoreMemberAction: (input: { memberId: string }) => Promise<{ serverError?: string }>;
+  };
+  type InviteResult = {
+    data?: { memberId: string; inviteEmailFailed: boolean };
+    serverError?: string;
+  };
+  const kinds: { name: string; run: (email: string) => Promise<InviteResult> }[] = [
+    { name: "createMemberAction", run: (email) => members.createMemberAction({ name: `Harness invita ${tag}`, email }) },
+    { name: "inviteMemberByEmailAction", run: (email) => members.inviteMemberByEmailAction({ email }) },
+  ];
+
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo rechazos ${tag}`, leaderName: "Harness lider rechaza", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const fellow = await seedFellowMember(leader.id, groupId);
+  const otherGroupIds: string[] = [];
+  const foreignLeader = async (): Promise<HarnessUser> => {
+    const user = await createMembershipFreeUser();
+    const { groupId: id } = await asUser(user, () =>
+      createGroup({ name: `Harness otro fondo ${tag}`, leaderName: "Harness lider ajeno", cashMode: "shared", locale: "es" }),
+    );
+    track("groups", id);
+    otherGroupIds.push(id);
+    return user;
+  };
+  const groupless = await createMembershipFreeUser();
+  let wandererGroupId = groupId;
+
+  const trackAll = async (): Promise<void> => {
+    const rows = await fixtureSql<{ id: string }[]>`
+      select id from group_members where group_id in ${fixtureSql([groupId, ...otherGroupIds, wandererGroupId])}`;
+    for (const row of rows) track("group_members", row.id);
+    const categories = await fixtureSql<{ id: string }[]>`
+      select id from categories where group_id in ${fixtureSql([groupId, ...otherGroupIds, wandererGroupId])}`;
+    for (const row of categories) track("categories", row.id);
+    const accounts = await fixtureSql<{ id: string }[]>`
+      select id from accounts where group_id in ${fixtureSql([groupId, ...otherGroupIds, wandererGroupId])}`;
+    for (const row of accounts) track("accounts", row.id);
+  };
+  const countRows = async (): Promise<number> => {
+    const [{ n }] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from group_members where group_id = ${groupId}`;
+    return n;
+  };
+  const rowsFor = (email: string) =>
+    fixtureSql<{ id: string; archived_at: string | null; user_id: string | null }[]>`
+      select id, archived_at::text, user_id from group_members
+      where group_id = ${groupId} and lower(invite_email) = ${email.toLowerCase()} order by created_at, id`;
+  const onAllowList = async (email: string): Promise<boolean> =>
+    (await fixtureSql`select 1 from allowed_emails where email = ${email.toLowerCase()}`).length > 0;
+  const asked = (): { email: string }[] =>
+    ((globalThis as { harnessAdminInvites?: { email: string }[] }).harnessAdminInvites ??= []);
+
+  // Both actions, one expectation: nothing written, nobody asked, the named refusal.
+  const refused = async (
+    label: string,
+    caller: { id: string; email: string },
+    email: string,
+    key: string,
+  ): Promise<void> => {
+    for (const kind of kinds) {
+      const rowsBefore = await countRows();
+      const askedBefore = asked().length;
+      const result = await asUser(caller, () => kind.run(email));
+      const rowsAfter = await countRows();
+      assert(
+        next(`${label} via ${kind.name}: refused as ${key}, no row, no invitation asked`),
+        result?.serverError === key && result.data === undefined && rowsAfter === rowsBefore && asked().length === askedBefore,
+        `serverError = ${result?.serverError ?? "none"}, rows ${rowsBefore} -> ${rowsAfter}, invitations asked = ${asked().length - askedBefore}`,
+      );
+    }
+  };
+
+  await refused("A joined member's address in another case", leader, fellow.email.toUpperCase(), "members.errors.alreadyMember");
+  await refused("The leader's own address", leader, leader.email, "members.errors.alreadyMember");
+
+  const fresh = (kind: string) => `${kind}-${tag}-${randomUUID().slice(0, 6)}@mail.example.invalid`;
+
+  // A plain member learns nothing about who belongs: the refusal is the leader's, not the roster's.
+  await refused("A plain member inviting the leader's address", fellow, leader.email, "errors.notLeader");
+
+  const noFundAddress = `x-${randomUUID()}@example.com`;
+  const noFund = await asUser(groupless, () => kinds[1].run(noFundAddress));
+  assert(
+    next("A caller with no fund inviting an address whose domain takes no mail is told not found, not undeliverable"),
+    noFund?.serverError === "errors.notFound",
+    `serverError = ${noFund?.serverError ?? "none"}`,
+  );
+
+  for (const kind of kinds) {
+    const pending = fresh("pending");
+    const first = await asUser(leader, () => kind.run(pending));
+    const again = await asUser(leader, () => kind.run(pending.toUpperCase()));
+    assert(
+      next(`An address already invited and pending is refused as emailTaken, not as a member, via ${kind.name}`),
+      first?.data !== undefined && again?.serverError === "members.errors.emailTaken" && (await rowsFor(pending)).length === 1,
+      `first = ${first?.serverError ?? "ok"}, second = ${again?.serverError ?? "ok"}`,
+    );
+
+    const elsewhere = (await foreignLeader()).email;
+    const askedBefore = asked().length;
+    const invitedLeader = await asUser(leader, () => kind.run(elsewhere));
+    const elsewhereRows = await rowsFor(elsewhere);
+    assert(
+      next(`A live member of another fund can be invited to this one via ${kind.name}`),
+      invitedLeader?.serverError === undefined &&
+        invitedLeader?.data !== undefined &&
+        elsewhereRows.length === 1 &&
+        elsewhereRows[0].user_id === null &&
+        asked().length === askedBefore + 1,
+      `serverError = ${invitedLeader?.serverError ?? "none"}, ${elsewhereRows.length} row(s), invitations asked = ${asked().length - askedBefore}`,
+    );
+
+    const dead = `x-${randomUUID()}@example.com`;
+    const rowsBefore = await countRows();
+    const askedBeforeDead = asked().length;
+    const undeliverable = await asUser(leader, () => kind.run(dead));
+    assert(
+      next(`An address whose domain takes no mail is refused as undeliverable: no row, no invitation, not on the allow list, via ${kind.name}`),
+      undeliverable?.serverError === "errors.domainUndeliverable" &&
+        undeliverable.data === undefined &&
+        (await countRows()) === rowsBefore &&
+        asked().length === askedBeforeDead &&
+        !(await onAllowList(dead)),
+      `serverError = ${undeliverable?.serverError ?? "none"}, rows ${rowsBefore} -> ${await countRows()}, invitations asked = ${asked().length - askedBeforeDead}, on list = ${await onAllowList(dead)}`,
+    );
+
+    const exempt = fresh("exempt");
+    const exemptResult = await asUser(leader, () => kind.run(exempt));
+    assert(
+      next(`A reserved .invalid address passes the deliverability guard on the local stack via ${kind.name}`),
+      exemptResult?.data !== undefined && (await rowsFor(exempt)).length === 1 && (await onAllowList(exempt)),
+      `serverError = ${exemptResult?.serverError ?? "none"}, ${(await rowsFor(exempt)).length} row(s)`,
+    );
+  }
+
+  // RF-151 and RF-149: an archived invitation lets its address invite again, and restoring the old
+  // one while the new one lives is refused by name and leaves it archived.
+  const reused = fresh("reused");
+  const original = await asUser(leader, () => kinds[0].run(reused));
+  const archive = original?.data ? await asUser(leader, () => members.archiveMemberAction({ memberId: original.data!.memberId })) : undefined;
+  const [archivedBefore] = await rowsFor(reused);
+  const reinvited = await asUser(leader, () => kinds[1].run(reused.toUpperCase()));
+  const afterReinvite = await rowsFor(reused);
+  const archivedRow = afterReinvite.find((row) => row.id === archivedBefore?.id);
+  assert(
+    next("An archived invitation's address invites again: a new live row, the archived row unchanged"),
+    archive?.serverError === undefined &&
+      reinvited?.data !== undefined &&
+      afterReinvite.length === 2 &&
+      afterReinvite.filter((row) => row.archived_at === null).length === 1 &&
+      archivedRow?.archived_at === archivedBefore?.archived_at &&
+      archivedRow?.archived_at !== null,
+    `archive = ${archive?.serverError ?? "ok"}, re-invite = ${reinvited?.serverError ?? "ok"}, ${afterReinvite.length} row(s)`,
+  );
+
+  const restoreCollision = await asUser(leader, () => members.restoreMemberAction({ memberId: archivedBefore.id }));
+  const [stillArchived] = await fixtureSql<{ archived_at: string | null }[]>`
+    select archived_at::text from group_members where id = ${archivedBefore.id}`;
+  assert(
+    next("Restoring an archived invitation while a newer one holds its address is refused as emailTaken and stays archived"),
+    restoreCollision?.serverError === "members.errors.emailTaken" && stillArchived?.archived_at !== null,
+    `serverError = ${restoreCollision?.serverError ?? "none"}, archived_at = ${stillArchived?.archived_at}`,
+  );
+
+  // A restore that fails for another reason keeps today's answer: a joined member whose user now
+  // belongs to another fund trips the one-live-membership index, not the invitation one.
+  const wanderer = await createMembershipFreeUser();
+  ({ groupId: wandererGroupId } = await asUser(wanderer, () =>
+    createGroup({ name: `Harness fondo errante ${tag}`, leaderName: "Harness errante", cashMode: "shared", locale: "es" }),
+  ));
+  track("groups", wandererGroupId);
+  const oldSeat = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: leader.id, role: "authenticated", aud: "authenticated" })}, true)`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role, archived_at)
+      values (${oldSeat}, ${groupId}, ${wanderer.id}, 'Harness errante archivado', 'member', now())`;
+  });
+  track("group_members", oldSeat);
+  const otherRestore = await asUser(leader, () => members.restoreMemberAction({ memberId: oldSeat }));
+  const [seatAfter] = await fixtureSql<{ archived_at: string | null }[]>`
+    select archived_at::text from group_members where id = ${oldSeat}`;
+  assert(
+    next("A restore refused for another reason is not reported as emailTaken and the member stays archived"),
+    otherRestore?.serverError !== undefined &&
+      otherRestore.serverError !== "members.errors.emailTaken" &&
+      seatAfter?.archived_at !== null,
+    `serverError = ${otherRestore?.serverError ?? "none"}, archived_at = ${seatAfter?.archived_at}`,
+  );
+
+  await trackAll();
 }
 
 // The invite step's server half (RF-06, RF-07): the member an address becomes,

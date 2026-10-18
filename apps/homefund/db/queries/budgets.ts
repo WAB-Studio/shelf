@@ -56,7 +56,8 @@ export async function listBudgetsWithStatus(
   // No future period is served: an anchor past today collapses onto today. Both
   // sides are civil `YYYY-MM-DD`, so the ordering is the calendar's (RNF-06) and
   // no instant — hence no zone offset — enters the comparison.
-  const anchor = anchorDate !== undefined && anchorDate < today ? anchorDate : today;
+  const anchor =
+    anchorDate !== undefined && anchorDate < today ? anchorDate : today;
 
   const archivedFilter = options?.archived
     ? sql`b.archived_at is not null`
@@ -186,6 +187,64 @@ export async function resolveBudgetCurrency({
     `);
 
     return row.code;
+  });
+}
+
+/**
+ * The place a new budget is filed in, and the currency it derives, in ONE round
+ * trip (RF-71, RF-140): the named account's place when there is one, else the
+ * category's. The currency is the account's, else the place's own (the fund's,
+ * or the caller's settlement currency for their own place), else the base.
+ * `null` when the account or the category is not readable. A category of
+ * another member comes back with that member as owner, so the insert policy
+ * refuses it rather than the budget being filed as the caller's.
+ */
+export async function resolveBudgetPlace({
+  categoryId,
+  accountId = null,
+}: {
+  categoryId: string;
+  accountId?: string | null;
+}): Promise<{
+  ownerUserId: string | null;
+  groupId: string | null;
+  currency: string;
+} | null> {
+  return withUserDb(async (tx) => {
+    const [row] = await tx.execute<{
+      owner_user_id: string | null;
+      group_id: string | null;
+      currency: string;
+    }>(sql`
+      with place as (
+        select
+          case when ${accountId}::uuid is not null then a.owner_user_id else c.owner_user_id end as owner_user_id,
+          case when ${accountId}::uuid is not null then a.group_id else c.group_id end as group_id,
+          a.settlement_currency as account_currency
+        from (select 1) one
+        left join accounts a on a.id = ${accountId}::uuid
+        left join categories c on c.id = ${categoryId}::uuid
+        where (${accountId}::uuid is null or a.id is not null)
+          and (${accountId}::uuid is not null or c.id is not null)
+      )
+      select
+        p.owner_user_id,
+        p.group_id,
+        coalesce(
+          p.account_currency,
+          (select g.currency from groups g where g.id = p.group_id),
+          (select u.settlement_currency from app_users u where u.id = p.owner_user_id),
+          ${BASE_CURRENCY}
+        ) as currency
+      from place p
+    `);
+
+    if (!row) return null;
+    return {
+      ownerUserId: row.owner_user_id,
+      groupId: row.group_id,
+      currency: row.currency,
+    };
   });
 }
 

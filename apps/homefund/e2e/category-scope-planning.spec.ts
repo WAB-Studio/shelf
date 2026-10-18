@@ -9,12 +9,13 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Browser, type Locator, type Page } from "@playwright/test";
 
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import {
+  STORAGE_STATE,
   asHarnessUser,
   clearGroup,
   readScope,
@@ -296,5 +297,196 @@ test.describe("recurring rules", () => {
 
     await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(1);
     await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(0);
+  });
+});
+
+// A budget is filed in the place of the account it names, and with none in the
+// place of its category (RF-71, RF-140).
+const FORGED = `Presupuesto forjado ${stamp}`;
+const SEEDED = [ids.fundBudget, ids.namedBudget, ids.personalBudget];
+const memberCategory = randomUUID();
+
+type SavedBudget = { owner_user_id: string | null; group_id: string | null; account_id: string | null };
+
+// Every budget a test of this block wrote: not the three the file seeded.
+async function written(categoryId: string): Promise<SavedBudget[]> {
+  return fixtureSql<SavedBudget[]>`
+    select owner_user_id, group_id, account_id from budgets
+    where category_id = ${categoryId} and id not in ${fixtureSql(SEEDED)}`;
+}
+
+async function writtenByName(name: string): Promise<number> {
+  const rows = await fixtureSql`select id from budgets where name = ${name}`;
+  return rows.length;
+}
+
+async function saveThroughDialog(page: Page, account: string, category: string) {
+  await page.goto("/es/planning/budgets");
+  await page.getByRole("button", { name: budgets.add, exact: true }).first().click();
+  await pick(page, "#budget-account", account);
+  await pick(page, "#budget-category", category);
+  await page.getByRole("dialog").locator("#budget-limit").fill("100000");
+  await page.getByRole("dialog").getByRole("button", { name: budgets.save, exact: true }).click();
+  await expect(page.getByText(budgets.created, { exact: true })).toBeVisible({ timeout: 15_000 });
+}
+
+test.afterEach(async () => {
+  await fixtureSql`delete from budgets where name = ${FORGED}`;
+  await fixtureSql`
+    delete from budgets
+    where category_id in ${fixtureSql([ids.personalCategory, ids.fundCategory, memberCategory])}
+      and id not in ${fixtureSql(SEEDED)}`;
+  await fixtureSql`delete from categories where id = ${memberCategory}`;
+});
+
+let learnedBudget: { id: string; url: string } | null = null;
+
+// The leader's own save of the fund's pair, caught on the wire for its action id.
+async function learnBudgetAction(browser: Browser) {
+  if (learnedBudget) return learnedBudget;
+  const context = await browser.newContext({ storageState: STORAGE_STATE });
+  try {
+    const page = await context.newPage();
+    const seen: { id: string; url: string }[] = [];
+    page.on("request", (request) => {
+      const id = request.headers()["next-action"];
+      if (request.method() === "POST" && id) seen.push({ id, url: request.url() });
+    });
+    await saveThroughDialog(page, FUND_ACCOUNT, MARKED);
+    await expect.poll(() => seen.length).toBeGreaterThan(0);
+    learnedBudget = seen[0];
+    return learnedBudget;
+  } finally {
+    await context.close();
+    await fixtureSql`delete from budgets where account_id = ${ids.fundAccount}`;
+  }
+}
+
+async function forgeBudget(page: Page, action: { id: string; url: string }, input: Record<string, unknown>) {
+  const answer = await page.request.post(action.url, {
+    headers: {
+      "next-action": action.id,
+      "content-type": "text/plain;charset=UTF-8",
+      accept: "text/x-component",
+    },
+    data: JSON.stringify([
+      { period: "monthly", limit: "100000", thresholdPct: 80, name: FORGED, accountId: null, labelId: null, ...input },
+    ]),
+  });
+  const flight = await answer.text();
+  const line = flight.split("\n").find((candidate) => /^\w+:\{"(data|serverError|validationErrors)"/.test(candidate));
+  expect(line, "the answer carries no action result").toBeDefined();
+  return line ?? "";
+}
+
+test.describe("a budget takes the place of its account", () => {
+  test("a personal account with a personal category files a personal budget", async ({ page }) => {
+    // Kills: the budget filed under the caller's group (the old rule).
+    await saveThroughDialog(page, PERSONAL_ACCOUNT, NAME);
+
+    const rows = await written(ids.personalCategory);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].owner_user_id).toBe(scope.userId);
+    expect(rows[0].group_id).toBeNull();
+    expect(rows[0].account_id).toBe(ids.personalAccount);
+    // The seeded personal budget and the new one both title bare; the fund's stays alone marked.
+    await page.goto("/es/planning/budgets");
+    await expect(band(page).getByText(NAME, { exact: true })).toHaveCount(2);
+    await expect(band(page).getByText(MARKED, { exact: true })).toHaveCount(1);
+  });
+
+  test("the fund's account with a fund category files the fund's budget", async ({ page }) => {
+    // Kills: every budget filed as personal.
+    const [{ group_id: fundId }] = await fixtureSql`select group_id from accounts where id = ${ids.fundAccount}`;
+    await saveThroughDialog(page, FUND_ACCOUNT, MARKED);
+
+    const rows = await written(ids.fundCategory);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].group_id).toBe(fundId);
+    expect(rows[0].owner_user_id).toBeNull();
+    expect(rows[0].account_id).toBe(ids.fundAccount);
+  });
+
+  test("«Todas las cuentas» with a personal category files a personal budget", async ({ page }) => {
+    // Kills: the account's place used alone, with the group by default.
+    await saveThroughDialog(page, budgets.accountAny, NAME);
+
+    const rows = await written(ids.personalCategory);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].owner_user_id).toBe(scope.userId);
+    expect(rows[0].group_id).toBeNull();
+    expect(rows[0].account_id).toBeNull();
+  });
+
+  test("«Todas las cuentas» with a fund category files the fund's budget", async ({ page }) => {
+    // Kills: every unset account filed as personal.
+    await saveThroughDialog(page, budgets.accountAny, MARKED);
+
+    const rows = await written(ids.fundCategory);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].group_id).not.toBeNull();
+    expect(rows[0].owner_user_id).toBeNull();
+  });
+});
+
+test.describe("a forged body writes nothing it should not", () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name === "mobile", "the action is the same at both widths");
+  });
+
+  test("a personal account with a fund category is refused by name", async ({ page, browser }) => {
+    // Kills: the trigger's 23514 left unmapped.
+    const action = await learnBudgetAction(browser);
+
+    const text = await forgeBudget(page, action, {
+      categoryId: ids.fundCategory,
+      accountId: ids.personalAccount,
+    });
+
+    expect(text).toContain("budgets.errors.scopeViolation");
+    expect(await writtenByName(FORGED)).toBe(0);
+  });
+
+  test("a fellow member's personal category reads as absent", async ({ page, browser }) => {
+    // Kills: the budget filed with that member as owner.
+    const action = await learnBudgetAction(browser);
+    await fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({
+        sub: scope.memberUserId,
+        role: "authenticated",
+        aud: "authenticated",
+      })}, true)`;
+      await tx`
+        insert into categories (id, owner_user_id, name, kind, color)
+        values (${memberCategory}, ${scope.memberUserId}, ${`Ajena ${stamp}`}, 'expense', '#4C8C4A')`;
+    });
+
+    const text = await forgeBudget(page, action, { categoryId: memberCategory });
+
+    expect(text).toContain("errors.notFound");
+    expect(await writtenByName(FORGED)).toBe(0);
+  });
+
+  test("a category nobody can read reads as absent", async ({ page, browser }) => {
+    // Kills: the foreign key left to answer.
+    const action = await learnBudgetAction(browser);
+
+    const text = await forgeBudget(page, action, { categoryId: randomUUID() });
+
+    expect(text).toContain("errors.notFound");
+    expect(await writtenByName(FORGED)).toBe(0);
+  });
+});
+
+test.describe("a caller with no fund", () => {
+  test("a personal pair files a personal budget", async ({ page }) => {
+    // Kills: a missing fund breaking the personal path.
+    await clearGroup();
+    await saveThroughDialog(page, PERSONAL_ACCOUNT, NAME);
+
+    const rows = await written(ids.personalCategory);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].owner_user_id).toBe(scope.userId);
+    expect(rows[0].group_id).toBeNull();
   });
 });

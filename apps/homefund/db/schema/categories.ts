@@ -48,6 +48,11 @@ export const categories = finances.table(
       columns: [table.parentId, table.groupId],
       foreignColumns: [table.id, table.groupId],
     }).onDelete("cascade"),
+    // The composite key is MATCH SIMPLE, so it skips a personal category (null `group_id`); this one cascades it.
+    foreignKey({
+      columns: [table.parentId],
+      foreignColumns: [table.id],
+    }).onDelete("cascade"),
     check("categories_external_ref_length", sql`length(${table.externalRef}) <= 200`),
     index("categories_group_id_idx").on(table.groupId),
     index("categories_owner_user_id_idx").on(table.ownerUserId),

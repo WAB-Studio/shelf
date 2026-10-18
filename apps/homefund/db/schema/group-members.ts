@@ -50,10 +50,11 @@ export const groupMembers = finances.table(
     uniqueIndex("group_members_user_unique")
       .on(table.userId)
       .where(sql`${table.userId} is not null and ${table.archivedAt} is null`),
-    // One pending invite per email per group; case-folded so a re-invite under a different case is caught.
+    // One live pending invite per email per group; case-folded so a re-invite under a different case is
+    // caught. An archived invite no longer holds the address (RF-151).
     uniqueIndex("group_members_group_invite_email_unique")
       .on(table.groupId, sql`lower(${table.inviteEmail})`)
-      .where(sql`${table.inviteEmail} is not null`),
+      .where(sql`${table.inviteEmail} is not null and ${table.archivedAt} is null`),
     index("group_members_group_id_idx").on(table.groupId),
     index("group_members_user_id_idx").on(table.userId),
     // The self-disjunct mirrors the owner exception on accounts and categories:

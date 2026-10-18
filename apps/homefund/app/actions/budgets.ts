@@ -9,10 +9,10 @@ import {
   createBudget,
   deleteBudget,
   resolveBudgetCurrency,
+  resolveBudgetPlace,
   restoreBudget,
   updateBudget,
 } from "@/db/queries/budgets";
-import { getUserGroup } from "@/db/queries/groups";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
@@ -59,41 +59,44 @@ function mapBudgetError(error: unknown): never {
 }
 
 /**
- * Creates a budget (RF-71, RF-73). The scope is the caller's group when they
- * belong to one, otherwise their personal set; the account, label and category
- * must all share it, which the trigger checks.
+ * Creates a budget (RF-71, RF-73, RF-140). It is filed in the place of the
+ * account it names, else of its category; the account, label and category must
+ * all share it, which the trigger checks.
  */
 export const createBudgetAction = authActionClient
   .inputSchema(createBudgetSchema)
-  .action(async ({ parsedInput: { limit, accountId, labelId, name, ...budget }, ctx }) => {
-    // The currency and the scope ride one fan-out: neither read waits on the other.
-    const [currency, group] = await Promise.all([
-      resolveBudgetCurrency({ accountId: accountId ?? null }),
-      getUserGroup(),
-    ]);
-    const limitCents = toMinor(limit, currency);
-
-    const scope = group
-      ? { ownerUserId: null, groupId: group.id }
-      : { ownerUserId: ctx.user.id, groupId: null };
-
-    let budgetId: string;
-    try {
-      ({ budgetId } = await createBudget({
-        ...budget,
-        ...scope,
+  .action(
+    async ({
+      parsedInput: { limit, accountId, labelId, name, ...budget },
+      ctx,
+    }) => {
+      const place = await resolveBudgetPlace({
+        categoryId: budget.categoryId,
         accountId: accountId ?? null,
-        labelId: labelId ?? null,
-        name: name ?? null,
-        limitCents,
-      }));
-    } catch (error) {
-      mapBudgetError(error);
-    }
+      });
+      if (!place) throw new ActionError("errors.notFound");
+      const limitCents = toMinor(limit, place.currency as CurrencyCode);
 
-    refresh();
-    return { budgetId };
-  });
+      const scope = { ownerUserId: place.ownerUserId, groupId: place.groupId };
+
+      let budgetId: string;
+      try {
+        ({ budgetId } = await createBudget({
+          ...budget,
+          ...scope,
+          accountId: accountId ?? null,
+          labelId: labelId ?? null,
+          name: name ?? null,
+          limitCents,
+        }));
+      } catch (error) {
+        mapBudgetError(error);
+      }
+
+      refresh();
+      return { budgetId };
+    },
+  );
 
 /**
  * Rewrites a budget's editable fields (RF-71, RF-73). The category and the
@@ -102,30 +105,32 @@ export const createBudgetAction = authActionClient
  */
 export const updateBudgetAction = authActionClient
   .inputSchema(updateBudgetSchema)
-  .action(async ({ parsedInput: { limit, accountId, labelId, name, ...budget } }) => {
-    const currency = await resolveBudgetCurrency({
-      budgetId: budget.budgetId,
-      accountId: accountId ?? null,
-    });
-    const limitCents = toMinor(limit, currency);
-
-    let updated: boolean;
-    try {
-      updated = await updateBudget({
-        ...budget,
+  .action(
+    async ({ parsedInput: { limit, accountId, labelId, name, ...budget } }) => {
+      const currency = await resolveBudgetCurrency({
+        budgetId: budget.budgetId,
         accountId: accountId ?? null,
-        labelId: labelId ?? null,
-        name: name ?? null,
-        limitCents,
       });
-    } catch (error) {
-      mapBudgetError(error);
-    }
+      const limitCents = toMinor(limit, currency);
 
-    if (!updated) throw new ActionError("errors.notFound");
+      let updated: boolean;
+      try {
+        updated = await updateBudget({
+          ...budget,
+          accountId: accountId ?? null,
+          labelId: labelId ?? null,
+          name: name ?? null,
+          limitCents,
+        });
+      } catch (error) {
+        mapBudgetError(error);
+      }
 
-    refresh();
-  });
+      if (!updated) throw new ActionError("errors.notFound");
+
+      refresh();
+    },
+  );
 
 /**
  * Archives a budget (RF-120). The scope is not re-derived: the budget already
