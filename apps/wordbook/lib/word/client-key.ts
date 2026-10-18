@@ -70,8 +70,8 @@ export function clientKey(request: Request, salt: string | undefined): string | 
 
 // Each scope is its own `reading.client_spend` row: a caller's translations
 // never eat into their word lookups or their sign-in links. `signin-to` keys
-// an address, not a caller.
-export type ClientScope = "text" | "translate" | "signin" | "signin-to";
+// an address, `signin-pair` an address together with one caller.
+export type ClientScope = "text" | "translate" | "signin" | "signin-to" | "signin-pair";
 
 export function scopeClientKey(scope: ClientScope, key: string | null): string | null {
   return key ? `${scope}:${key}` : null;
