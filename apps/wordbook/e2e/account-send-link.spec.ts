@@ -241,7 +241,7 @@ test("a not-invited answer paints its own line under the kept address, and no ot
 
   await expect(page.getByText("Este correo no tiene invitación a WordBook.", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: messages.account.emailLabel })).toHaveValue(email);
-  for (const key of ["sendFailed", "rateLimited", "emailInvalid", "domainUndeliverable", "offline"] as const) {
+  for (const key of ["sendFailed", "rateLimited", "capped", "emailInvalid", "domainUndeliverable", "offline"] as const) {
     await expect(page.getByText(messages.account.errors[key], { exact: true })).toHaveCount(0);
   }
 });

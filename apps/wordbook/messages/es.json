@@ -177,6 +177,7 @@
       "domainUndeliverable": "Ese dominio no recibe correo",
       "sendFailed": "No se pudo enviar el enlace",
       "rateLimited": "Demasiados intentos. Prueba de nuevo en unos minutos.",
+      "capped": "Ya pediste varios códigos hoy. Prueba de nuevo mañana.",
       "offline": "Sin conexión. No se pudo enviar el enlace.",
       "notInvited": "Este correo no tiene invitación a WordBook.",
       "linkOtherBrowserTitle": "Abre el enlace en el navegador donde lo pediste",

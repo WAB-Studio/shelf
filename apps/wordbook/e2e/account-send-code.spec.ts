@@ -564,7 +564,7 @@ test("a new code sent: the address is named, the field is empty and focused, the
 });
 
 test("a send the server refuses says why in an alert, keeps the code, and does not restart the wait", async ({ page }) => {
-  await askForCodeOnFrozenClock(page, ({ email }) =>
+  await askForCodeOnFrozenClock(page, () =>
     sendCalls.length > 1 ? { ok: false, error: "rateLimited" } : { ok: true },
   );
   const first = await pendingRecord(page);

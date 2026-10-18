@@ -353,7 +353,7 @@ function SignedOutForm() {
               <Flex gap="2" align="center">
                 {resend.error === "offline" && <OfflineGlyph />}
                 <Text size="2" weight="bold" role="alert">
-                  {t(`errors.${resend.error === "capped" ? "rateLimited" : resend.error}`)}
+                  {t(`errors.${resend.error}`)}
                 </Text>
               </Flex>
             </Flex>
@@ -386,7 +386,7 @@ function SignedOutForm() {
               <Flex gap="2" align="center">
                 {state.error === "offline" && <OfflineGlyph />}
                 <Text size="2" weight="bold" role="alert">
-                  {t(`errors.${state.error === "capped" ? "rateLimited" : state.error}`)}
+                  {t(`errors.${state.error}`)}
                 </Text>
               </Flex>
             </Flex>
