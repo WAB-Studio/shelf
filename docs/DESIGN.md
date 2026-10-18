@@ -347,8 +347,25 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 
 - **A stale edit is refused** (Q1 a): when a money form was opened before the row changed (another form, or the 00:15
   cron), saving reads «Esto cambió mientras lo editabas. Vuelve a abrirlo.» and nothing is saved.
-- **An invitation is accepted** (Q2 a): RF-154 opened. Boards «X te invitó · Aceptar / Rechazar» and «Salir del fondo»
-  are drawn before any worker. Not built yet.
+- **An invitation is accepted** (Q2 a): RF-154 opened. Not built yet. Boards on the HomeFund canvas, page «Miembros»,
+  2026-10-18:
+  - «Invitación» (six boards): on signing in, before Inicio, a card «Invitación» · «Carlos te invitó a su fondo «Casa»» ·
+    «Si aceptas, los miembros de «Casa» verán tus cuentas y movimientos personales, y tú verás los suyos y los del
+    fondo.» (RF-58 reads a member's personal accounts) · «Si rechazas, sigues con tus cuentas solo para ti. Puedes unirte
+    más tarde si Carlos te invita otra vez.» · «Aceptar» (primary, full width) over «Rechazar» (ghost). While accepting
+    both wait («Aceptando…»). Accepted: Inicio with «Ya eres parte de «Casa».». Declined: Inicio with «Rechazaste la
+    invitación de Carlos.». Gone: «Esta invitación ya no está vigente» · «Carlos la retiró o ya pasó. Si quieres unirte a
+    «Casa», pídele que te invite otra vez.» · «Ir a mis cuentas». Already in another fund (RF-55): «Ya estás en el fondo
+    «Familia Ruiz»» · «Se puede estar en un solo fondo. Para unirte a «Casa», sal primero de «Familia Ruiz» desde
+    «Grupo».» · «Ir a mis cuentas». No invitation: the screen does not exist.
+  - «Salir del fondo» (five boards): a last card in «Grupo», «Salir del fondo» · «Lo que escribiste en «Casa» se queda con
+    el fondo. Tus cuentas personales vuelven a ser solo tuyas.» · a soft «Salir del fondo» button. It opens «¿Salir de
+    «Casa»?» · «Lo que escribiste en el fondo se queda con el fondo: sus cuentas, sus movimientos y lo que anotaste en
+    ellas.» · «Tus cuentas personales vuelven a ser solo tuyas: los miembros de «Casa» dejan de verlas.» · «Cancelar» and
+    the red «Salir del fondo»; while leaving «Saliendo…». Done: Inicio with «Saliste de «Casa». Tus cuentas siguen
+    contigo.» and the fund leaves the shell. The leader with other members: «No puedes salir todavía» · «Eres el líder de
+    «Casa». Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».» · «Entendido» (RF-59). A leader alone in
+    the fund leaves like anyone. No desktop face for either.
 - **Planned payments promise no notice** (Q4 a): «Son recordatorios: aparecen aquí en su fecha, y tú registras el gasto
   cuando lo pagas.» «te avisan» comes back with RF-141.
 - **The five open debt cases** of the 2026-10-15 audit (Q7 a) are settled one by one in a question session before their
@@ -373,8 +390,14 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Fund labels read «· fondo»** in the budget forms (critic C1 a), as categories do.
 - **RF-156 and RF-157 opened** (Q24 a): the stale-edit refusal, and the paused rule's reason with the 12-month limit on a
   rule's next run (Q16 a, Q17 a).
-- **A foreign purchase estimated on a debit account is confirmed on the account in «Cuentas»** (Q18 a), with the debt
-  screen's «Confirmar monto» row. Board to draw before its module.
+- **A foreign purchase estimated on a debit account is confirmed on the account in «Cuentas»** (Q18 a). Boards C4a–C4d
+  (HomeFund canvas, page «T4 · pantallas», 2026-10-18): the account card gains a section «Compras en otra moneda», one
+  line per pending purchase («Netflix · 12 oct», what was spent in its currency, «Estimado ≈ $ …») and a «Confirmar
+  monto» button for whoever can write the account. The button opens «Confirmar monto» with the debt screen's body:
+  «Gastado», «Estimado», the field «Monto facturado» (hint «Lo que el banco cobró en pesos.») and «Tasa»; «Cancelar» and
+  «Guardar monto». M54's refusal («Ya cuadraste esta cuenta después de esa compra: confírmala desde el cuadre.») shows
+  under the field and the dialog stays open. Saved: «Monto facturado guardado. Reemplaza el estimado.» and the line
+  leaves the card. No pending purchase: the card is as today (no board). No desktop face.
 - **A second «efectivo» stays allowed** (Q23 a); the first withdrawal's race is closed by a lock, with nothing visible.
 - **A resend with another amount is refused** (Q25 b, RF-158): «Ya guardamos este movimiento con otro monto; ábrelo para
   corregirlo.» and nothing is saved. Not built yet.
