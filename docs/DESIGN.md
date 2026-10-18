@@ -252,7 +252,7 @@ Title `editTitle` «Editar categoría». Fields: Nombre «Gimnasio» · Dónde v
 Field order in every create dialog: Nombre, Dónde va, Categoría principal, Tipo, Color (placement before parent because it decides the parent list; name first as in the labels dialog).
 
 Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 5.000» on line 3, the field's frame
-(decision above). Not built yet.
+(decision above). Built in decidido-17 (#659).
 
 ## Decisions of 2026-10-17 (night), after the critic of codigo-6c and the decidido-17 plan, by the user
 

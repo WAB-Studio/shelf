@@ -3389,3 +3389,14 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   `unstable_rethrow(error)` first (`next/navigation`) made them green, 27/27.
 - Do: open every client `catch` around a server action that may `redirect()` with `unstable_rethrow(error)`. A catch
   around an action that only returns needs none.
+
+## Next runs a page's server actions one at a time (2026-10-17)
+
+- A server action whose request hangs blocks every later server action from the same page: the next tap is queued
+  behind it, so a timeout on the client frees the button but the second send stays on «Enviando…» until the first call
+  ends. A redirect from the abandoned call still lands when it finally answers.
+- Measured 2026-10-17, train critic-6c M7 (`apps/goallog/e2e/entrar-sin-respuesta.spec.ts`, tester report
+  `private/lanes/l4-close/reportes/tester-m7.md`): after a timed-out send, a second «Enviar código» showed «Enviando…»
+  until the hung call returned; a good code answered after the 8 s race still landed on `/` with one session.
+- Do: a client timeout only changes the words and frees the controls; it never assumes the call ended. Keep the
+  "in flight" flag until the original promise settles, so a late landing clears its pending record.
