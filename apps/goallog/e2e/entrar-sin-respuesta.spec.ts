@@ -4,6 +4,7 @@ import type { Browser, Page, Route } from "@playwright/test";
 import { registerOAuthClient } from "@repo/harness-registry";
 import postgres from "postgres";
 
+import { invite } from "./entrar-invitado";
 import { test, expect, visit } from "./fixtures";
 
 // RP-136, RP-137, board «EntrarSinRespuesta»: a send, a resend or a check that gets no answer in
@@ -44,18 +45,6 @@ const AFTER = 8_100;
 
 function invitee(): string {
   return `harness-inv-${randomUUID().slice(0, 6)}@gmail.com`;
-}
-
-async function listAddress(db: postgres.Sql, email: string) {
-  await db`insert into goals.allowed_emails (email) values (${email}) on conflict do nothing`;
-}
-
-async function register(db: postgres.Sql, email: string) {
-  const runId = process.env.HARNESS_RUN_ID!;
-  await db`
-    insert into harness.identities (user_id, run_id, email, disposition)
-    select id, ${runId}, email, 'ephemeral' from auth.users where email = ${email}
-    on conflict do nothing`;
 }
 
 async function forget(db: postgres.Sql, email: string) {
@@ -159,7 +148,6 @@ async function askForCode(page: Page, db: postgres.Sql, email: string, path = "/
   await page.getByLabel(W.emailLabel).fill(email);
   await page.getByRole("button", { name: W.send, exact: true }).click();
   await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
-  await register(db, email);
 }
 
 const codeField = (page: Page) => page.getByLabel(W.codeLabel);
@@ -247,7 +235,7 @@ test("Refused · resend timed out: the alert under the button, every control ena
 }) => {
   // Kills: a timer missing, `at` reset on the timeout (the button would count 60 s again), the code cleared.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -284,7 +272,7 @@ test("Refused · check timed out: the field's hint reads the check timeout, the 
 }) => {
   // Kills: `checking` left true («Comprobando…» for good), the code cleared, the resend's sentence used for a check.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -320,7 +308,7 @@ test("Done · late send: released after the timeout, the code step opens for tha
 }) => {
   // Kills: a late answer dropped (WordBook's way), the pending record not saved.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   const held = await holdActions(page);
   try {
@@ -333,7 +321,6 @@ test("Done · late send: released after the timeout, the code step opens for tha
     await expect(page.getByText(W.sentBody(email), { exact: true })).toBeVisible();
     await expect(page.getByText(W.timedOut, { exact: true })).toHaveCount(0);
     expect(JSON.parse((await pendingRaw(page))!).email).toBe(email);
-    await register(db, email);
   } finally {
     await drain(held);
     await context.close();
@@ -348,7 +335,7 @@ test("Done · late resend: released after the timeout, the confirmation shows, t
 }) => {
   // Kills: late answers dropped, the code cleared as an on-time resend does, `at` not saved.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -383,7 +370,7 @@ test("Done · late check: a good code released after the timeout lands on /, the
   // Kills: the unmount clearing the record only while the check is not timed out ("clear the flag on timeout"),
   // or a landing that never happens once the promise lost the race.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -416,8 +403,8 @@ test("Cancelled · send: a new address sent after a timeout owns the screen; the
   // Kills: applying every late answer (the screen would jump back to the first address and its record).
   const first = invitee();
   const second = invitee();
-  await listAddress(db, first);
-  await listAddress(db, second);
+  await invite(db, first);
+  await invite(db, second);
   const { context, page } = await open(browser, baseURL!);
   const held = await holdActions(page);
   try {
@@ -441,8 +428,6 @@ test("Cancelled · send: a new address sent after a timeout owns the screen; the
     await expect(page.getByText(W.sentBody(second), { exact: true })).toBeVisible();
     await expect(page.getByText(W.sentBody(first), { exact: true })).toHaveCount(0);
     expect(JSON.parse((await pendingRaw(page))!).email).toBe(second);
-    await register(db, first);
-    await register(db, second);
   } finally {
     await drain(held);
     await context.close();
@@ -458,7 +443,7 @@ test("Cancelled · resend: after «Usar otro correo» the released resend does n
 }) => {
   // Kills: applying every late answer (the code step returns for a person who left it).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -511,7 +496,7 @@ test("Refused late · check, wrong code: released «codeInvalid» after the time
 }) => {
   // Kills: dropping late refusals (the timeout sentence stays for good).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -536,7 +521,7 @@ test("Refused late · check, too many: released «rateLimited» reads its own wo
 }) => {
   // Kills: mapping every late refusal to one key.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -562,7 +547,7 @@ test("Refused late · resend: «rateLimited» released after the timeout is the 
 }) => {
   // Kills: appending the refusal beside the sentence (two alerts), `at` moved, the code cleared.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -628,7 +613,7 @@ test("Cancelled · typed since: the check timed out, one digit is typed, then «
 }) => {
   // Kills: applying whenever newest, ignoring that the timeout sentence is no longer shown.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -658,7 +643,7 @@ test("Cancelled · newer attempt: the first check timed out, a second «Entrar»
 }) => {
   // Kills: dropping the attempt tag in handleVerify (the stale refusal lands on the second attempt).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -694,7 +679,7 @@ test("Cancelled · left the step: the resend timed out, «Usar otro correo», th
 }) => {
   // Kills: applying a late refusal after the attempt bump of «Usar otro correo».
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -727,7 +712,7 @@ test("Unknown stays unknown: the check timed out and its POST is aborted; the ti
 }) => {
   // Kills: treating a late rejection as «Sin conexión» (offlineCheck) or as a refusal.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -755,7 +740,7 @@ test("Record kept: after the late «codeInvalid» the pending record still holds
 }) => {
   // Kills: clearing the pending record on a late refusal.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -786,7 +771,7 @@ test("On time: a refusal inside 8 s reads as today and the timer is spent, so 10
 }) => {
   // Kills: a timer not cleared on settle (the timeout sentence overwrites the refusal afterwards).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -816,7 +801,7 @@ test("On time: a send answered inside 8 s opens the code step and 10 s later no 
 }) => {
   // Kills: a send timer not cleared on settle.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   const held = await holdActions(page);
   try {
@@ -825,7 +810,6 @@ test("On time: a send answered inside 8 s opens the code step and 10 s later no 
     await page.clock.fastForward(3_000);
     await held[0].proceed();
     await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
-    await register(db, email);
     await page.clock.fastForward(10_000);
     await lateAnswerGrace(page);
     await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
@@ -845,7 +829,7 @@ test("Consent too: on the signed-out consent a resend timed out and tapped again
 }) => {
   // Kills: `next` dropped from the retry after a timeout.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const meta = await fetch(`${baseURL}/.well-known/oauth-protected-resource`);
   const { resource } = (await meta.json()) as { resource: string };
   const registered = await fetch(`${baseURL}/oauth/registro`, {

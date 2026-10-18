@@ -44,8 +44,7 @@ export async function sendSignInLink(email: string, next?: string): Promise<Send
 
   const domain = parsed.data.slice(parsed.data.lastIndexOf("@") + 1);
   // Before Supabase ever sees the address: a domain that cannot take mail
-  // must not get a row in `auth.users` or a send against the project's own
-  // quota, both spent whether or not the message can land.
+  // must not spend a send against the project's own quota.
   if (!(await isDomainDeliverable(domain))) return { ok: false, error: "domainUndeliverable" };
 
   const [{ headers }, { claimSignInLink, releaseSignInLink }] = await Promise.all([import("next/headers"), import("@/lib/auth/sign-in-budget")]);
@@ -62,7 +61,9 @@ export async function sendSignInLink(email: string, next?: string): Promise<Send
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data,
     options: {
-      shouldCreateUser: true,
+      // Sign-up is closed: a listed address with no Auth user is refused by Auth
+      // and reads `sendFailed`; asking for a code never creates an account.
+      shouldCreateUser: false,
       emailRedirectTo: redirect.toString(),
     },
   });
