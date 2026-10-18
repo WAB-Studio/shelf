@@ -912,7 +912,8 @@
       "exactlyOneAccount": "Choose a single account: a source for an expense or a destination for income.",
       "ruleInvalid": "That rule is not valid.",
       "transactionInvalid": "That movement is not valid.",
-      "scopeViolation": "The account or category does not belong to the same scope."
+      "scopeViolation": "The account or category does not belong to the same scope.",
+      "ended": "This rule has already ended. Change its end date to resume it."
     }
   },
   "debts": {

@@ -912,7 +912,8 @@
       "exactlyOneAccount": "Elige una sola cuenta: origen para un gasto o destino para un ingreso.",
       "ruleInvalid": "Esa regla no es válida.",
       "transactionInvalid": "Ese movimiento no es válido.",
-      "scopeViolation": "La cuenta o la categoría no pertenecen al mismo ámbito."
+      "scopeViolation": "La cuenta o la categoría no pertenecen al mismo ámbito.",
+      "ended": "Esta regla ya terminó. Cambia su fecha de fin para reanudarla."
     }
   },
   "debts": {

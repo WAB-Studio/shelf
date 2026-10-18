@@ -166,7 +166,11 @@ export const pauseRecurringRuleAction = authActionClient
 export const resumeRecurringRuleAction = authActionClient
   .inputSchema(resumeRecurringRuleSchema)
   .action(async ({ parsedInput: { id } }) => {
-    const resumed = await setRecurringRuleActive({ id, isActive: true });
+    // 23514: the check refuses an active rule whose end date has passed.
+    const resumed = await setRecurringRuleActive({ id, isActive: true }).catch((error) => {
+      if (pgErrorCode(error) === "23514") throw new ActionError("recurringRules.errors.ended");
+      throw error;
+    });
     if (!resumed) throw new ActionError("errors.notFound");
 
     refresh();

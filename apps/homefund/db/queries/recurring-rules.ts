@@ -34,6 +34,8 @@ export type RecurringRuleRow = {
   nextRunOn: string;
   endsOn: string | null;
   isActive: boolean;
+  // Why a paused rule is paused: the run set it when it could not generate (RF-157); null when a person paused it.
+  pausedReason: RecurringRule["pausedReason"];
   // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
   // else's is refused stale.
   updatedAt: string;
@@ -59,6 +61,7 @@ export async function listRecurringRules(): Promise<RecurringRuleRow[]> {
         nextRunOn: recurringRules.nextRunOn,
         endsOn: recurringRules.endsOn,
         isActive: recurringRules.isActive,
+        pausedReason: recurringRules.pausedReason,
         // Qualified: the joined accounts carry an `updated_at` of their own.
         updatedAt: sql<string>`recurring_rules.updated_at::text`,
       })
