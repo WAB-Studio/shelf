@@ -215,7 +215,8 @@ const twoFrames = (page: Page) =>
 async function expectPendingRow(page: Page, name: string, email: string) {
   const row = await nameRow(page, name);
   await expect(row).toContainText(members.pendingBadge);
-  await expect(row).toContainText(members.noLoginBadge);
+  // Only the phone's card keeps «Sin acceso» beside the pending badge; the laptop's table swaps one for the other.
+  if ((page.viewportSize()?.width ?? 0) < 1024) await expect(row).toContainText(members.noLoginBadge);
   await expect(band(page).getByText(email, { exact: true })).toBeVisible();
   await expect(
     band(page).locator("div, tr").filter({ hasText: name }).filter({ hasText: email }).first(),
@@ -384,7 +385,8 @@ test.describe("RF-153: «Editar miembro» on a member with no login and no invit
     await expect(page.getByText(members.updated, { exact: true })).toBeVisible();
     await expect(dialog).toHaveCount(0);
     expect(posts).toHaveLength(1);
-    expect(posts[0]).not.toContain("email");
+    // An absent address crosses the wire as `$undefined`; `""` or a value would be a send.
+    expect(posts[0]).not.toMatch(/"email":(?!"\$undefined")/);
     const row = await nameRow(page, renamed);
     await expect(row).toContainText(members.noLoginBadge);
     await expect(row).not.toContainText(members.pendingBadge);
