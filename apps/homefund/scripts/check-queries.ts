@@ -47,6 +47,7 @@ import {
   archiveBudget,
   createBudget,
   listBudgetsWithStatus,
+  resolveBudgetPlace,
   updateBudget,
 } from "@/db/queries/budgets";
 import { resolveWithdrawalTarget, withdrawCash } from "@/db/queries/cash";
@@ -4197,6 +4198,7 @@ async function main(): Promise<void> {
   await negativeCountSuite(userId);
   await importCategoryScopeSuite();
   await categoryScopeSuite();
+  await survivorsSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -7348,4 +7350,160 @@ async function categoryScopeSuite(): Promise<void> {
 
   // A fund-account movement has no owning user, so the identity purge would leave it pinned to the fund's category.
   await fixtureSql`delete from transactions where id in ${fixtureSql(spent)}`;
+}
+
+// Survivors of mutation testing: the budget's place and currency (RF-71, RF-140, RF-121) and a
+// rename that touches one row. Appended last so the numbering of the checks above does not move.
+async function survivorsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { budgetAction, updateMember: renameMember } = {
+    budgetAction: ((await import("@/app/actions/budgets")) as unknown as {
+      createBudgetAction: (input: {
+        categoryId: string;
+        accountId?: string | null;
+        period: string;
+        limit: string;
+        thresholdPct: number;
+      }) => Promise<{ data?: { budgetId: string }; serverError?: string }>;
+    }).createBudgetAction,
+    updateMember: (await import("@/db/queries/group-members")).updateMember,
+  };
+
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo sobrevivientes ${tag}`, leaderName: "Harness lider sobrevivientes", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const [seeded] = await fixtureSql<{ member_id: string; account_id: string }[]>`
+    select
+      (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
+      (select id from accounts where group_id = ${groupId} and subtype = 'cash') as account_id`;
+  track("group_members", seeded.member_id);
+  track("accounts", seeded.account_id);
+  for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${groupId}`) {
+    track("categories", row.id);
+  }
+  // A personal currency that is neither the fund's nor the account's: any fallback to it shows.
+  await fixtureSql`update app_users set settlement_currency = 'EUR' where id = ${leader.id}`;
+
+  const { accountId: usdAccount } = await asUser(leader, () =>
+    createAccount({
+      name: `Harness dolares ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: null,
+      groupId,
+      isShared: true,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "USD",
+      amountMinor: 100_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  keep("accounts", usdAccount);
+  const groupCategory = (
+    await asUser(leader, () =>
+      createCategory({ scope: { groupId }, name: `Harness sobrev fondo ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    )
+  ).categoryId;
+  track("categories", groupCategory);
+  const ownCategory = (
+    await asUser(leader, () =>
+      createCategory({ scope: { ownerUserId: leader.id }, name: `Harness sobrev propia ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    )
+  ).categoryId;
+  track("categories", ownCategory);
+
+  const onUsd = await asUser(leader, () => resolveBudgetPlace({ categoryId: groupCategory, accountId: usdAccount }));
+  assert(
+    next("A budget placed on a dollar account inside a peso fund takes the account's currency, in the fund's place"),
+    onUsd?.currency === "USD" && onUsd.groupId === groupId && onUsd.ownerUserId === null,
+    JSON.stringify(onUsd),
+  );
+  const onFund = await asUser(leader, () => resolveBudgetPlace({ categoryId: groupCategory }));
+  assert(
+    next("A fund budget with no account takes the fund's currency, not the caller's personal one"),
+    onFund?.currency === "COP" && onFund.groupId === groupId,
+    JSON.stringify(onFund),
+  );
+  const onOwn = await asUser(leader, () => resolveBudgetPlace({ categoryId: ownCategory }));
+  assert(
+    next("A personal budget with no account takes the caller's own settlement currency"),
+    onOwn?.currency === "EUR" && onOwn.ownerUserId === leader.id && onOwn.groupId === null,
+    JSON.stringify(onOwn),
+  );
+
+  const created = await asUser(leader, () =>
+    budgetAction({ categoryId: groupCategory, accountId: usdAccount, period: "monthly", limit: "12.34", thresholdPct: 80 }),
+  );
+  const [stored] = created?.data
+    ? await fixtureSql<{ limit_cents: string; account_id: string | null; group_id: string | null }[]>`
+        select limit_cents::text, account_id, group_id from budgets where id = ${created.data.budgetId}`
+    : [];
+  if (created?.data) keep("budgets", created.data.budgetId);
+  assert(
+    next("createBudgetAction on a dollar account in a peso fund stores the limit in dollar cents against that account"),
+    created?.serverError === undefined && stored?.limit_cents === "1234" && stored.account_id === usdAccount && stored.group_id === groupId,
+    `serverError = ${created?.serverError ?? "none"}, row = ${JSON.stringify(stored)}`,
+  );
+
+  // The account the action is handed is the account the place is resolved from: one the caller cannot
+  // read refuses as not found, before anything is inserted.
+  const stranger = await createMembershipFreeUser();
+  const { accountId: strangerAccount } = await asUser(stranger, () =>
+    createAccount({
+      name: `Harness ajena ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: stranger.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "USD",
+      amountMinor: 100_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  keep("accounts", strangerAccount);
+  const budgetsBefore = (await fixtureSql<{ n: number }[]>`select count(*)::int as n from budgets where category_id = ${groupCategory}`)[0].n;
+  const refusals = [
+    await asUser(leader, () => budgetAction({ categoryId: groupCategory, accountId: strangerAccount, period: "monthly", limit: "5", thresholdPct: 80 })),
+    await asUser(leader, () => budgetAction({ categoryId: groupCategory, accountId: randomUUID(), period: "monthly", limit: "5", thresholdPct: 80 })),
+  ];
+  const budgetsAfter = (await fixtureSql<{ n: number }[]>`select count(*)::int as n from budgets where category_id = ${groupCategory}`)[0].n;
+  assert(
+    next("createBudgetAction on an account the caller cannot read, or that does not exist, refuses as not found and files nothing"),
+    refusals.every((r) => r?.serverError === "errors.notFound" && r.data === undefined) && budgetsAfter === budgetsBefore,
+    `refusals = ${refusals.map((r) => r?.serverError ?? "ok").join(", ")}, budgets ${budgetsBefore} -> ${budgetsAfter}`,
+  );
+
+  // A rename changes the row it names and no sibling.
+  const seedPlaceholder = async (name: string): Promise<string> => {
+    const id = randomUUID();
+    await fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: leader.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      await tx`insert into group_members (id, group_id, name, role) values (${id}, ${groupId}, ${name}, 'member')`;
+    });
+    track("group_members", id);
+    return id;
+  };
+  const target = await seedPlaceholder("Harness primo objetivo");
+  const sibling = await seedPlaceholder("Harness primo hermano");
+  const nameOf = async (id: string) =>
+    (await fixtureSql<{ name: string }[]>`select name from group_members where id = ${id}`)[0]?.name;
+  const leaderBefore = await nameOf(seeded.member_id);
+  const done = await asUser(leader, () => renameMember({ groupId, memberId: target, name: "Harness primo renombrado" }));
+  const [targetName, siblingName, leaderAfter] = [await nameOf(target), await nameOf(sibling), await nameOf(seeded.member_id)];
+  assert(
+    next("Renaming a member without an address changes that row alone: a sibling and the leader keep their names"),
+    done === true &&
+      targetName === "Harness primo renombrado" &&
+      siblingName === "Harness primo hermano" &&
+      leaderAfter === leaderBefore,
+    `target = ${targetName}, sibling = ${siblingName}, leader ${leaderBefore} -> ${leaderAfter}`,
+  );
 }
