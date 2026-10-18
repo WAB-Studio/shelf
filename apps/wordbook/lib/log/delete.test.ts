@@ -628,8 +628,9 @@ function countSearchVisits<T>(run: () => Promise<T>): Promise<{ visits: number; 
   let visits = 0;
   for (const name of ["some", "find", "findIndex", "findLast", "findLastIndex", "every"]) {
     originals[name] = proto[name];
-    proto[name] = function (this: unknown[], callback: (...a: unknown[]) => unknown, ...rest: unknown[]) {
-      if (this.length <= 10) return originals[name].call(this, callback, ...rest);
+    proto[name] = function (this: unknown[], ...args: unknown[]) {
+      if (this.length <= 10) return originals[name].call(this, ...args);
+      const [callback, ...rest] = args as [(...a: unknown[]) => unknown, ...unknown[]];
       return originals[name].call(this, (...a: unknown[]) => (visits++, callback(...a)), ...rest);
     };
   }
