@@ -839,6 +839,73 @@ async function main(): Promise<void> {
   );
 }
 
+// The four headers every answer carries, so no other site frames a delete button
+// or has a browser guess a type. Redirects are not probed: they carry no document.
+const SECURITY_HEADERS: Record<string, string> = {
+  "content-security-policy": "frame-ancestors 'none'",
+  "x-frame-options": "DENY",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
+};
+
+function missingHeaders(response: Response): string[] {
+  return Object.entries(SECURITY_HEADERS)
+    .filter(([name, value]) => response.headers.get(name) !== value)
+    .map(([name]) => `${name}=${response.headers.get(name) ?? "(none)"}`);
+}
+
+async function securityHeadersSuite(): Promise<void> {
+  const cookie = await cookieHeader();
+  const probe = (path: string, signedIn: boolean) =>
+    fetch(`${HARNESS_BASE_URL}${path}`, {
+      redirect: "manual",
+      headers: signedIn ? { cookie } : {},
+    });
+
+  const login = await probe(`/${LOCALE}/login`, false);
+  const loginMissing = missingHeaders(login);
+  assert(
+    next("the signed-out login page forbids framing"),
+    login.status === 200 &&
+      login.headers.get("content-security-policy") === "frame-ancestors 'none'" &&
+      login.headers.get("x-frame-options") === "DENY",
+    `it answered ${login.status}, missing ${loginMissing.join(", ") || "nothing"}`,
+  );
+
+  const home = await probe(`/${LOCALE}`, true);
+  assert(
+    next("the signed-in page forbids framing and sniffing"),
+    home.status === 200 &&
+      home.headers.get("content-security-policy") === "frame-ancestors 'none'" &&
+      home.headers.get("x-frame-options") === "DENY" &&
+      home.headers.get("x-content-type-options") === "nosniff",
+    `it answered ${home.status}, missing ${missingHeaders(home).join(", ") || "nothing"}`,
+  );
+
+  const refused = await probe(`/${LOCALE}/settings/members`, true);
+  assert(
+    next("a refused page (404) carries all four headers"),
+    refused.status === 404 && missingHeaders(refused).length === 0,
+    `it answered ${refused.status}, missing ${missingHeaders(refused).join(", ") || "nothing"}`,
+  );
+
+  const keepalive = await probe("/api/cron/keepalive", false);
+  assert(
+    next("a route handler's refusal carries all four headers"),
+    keepalive.status === 401 && missingHeaders(keepalive).length === 0,
+    `it answered ${keepalive.status}, missing ${missingHeaders(keepalive).join(", ") || "nothing"}`,
+  );
+
+  const policies = [login, home, refused, keepalive].map((response) =>
+    response.headers.get("referrer-policy"),
+  );
+  assert(
+    next("every probe sends the strict-origin-when-cross-origin referrer policy"),
+    policies.every((value) => value === "strict-origin-when-cross-origin"),
+    `they sent ${policies.map((value) => value ?? "(none)").join(", ")}`,
+  );
+}
+
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile this
 // to CJS and run it on any Node version, not only Node 22's native strip.
 void (async () => {
@@ -846,6 +913,7 @@ void (async () => {
     await main();
     await edgeSuite();
     await adjustmentTypeSuite();
+    await securityHeadersSuite();
   } catch (error) {
     assert(
       next("the run completed"),
