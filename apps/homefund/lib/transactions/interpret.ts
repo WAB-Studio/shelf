@@ -13,6 +13,13 @@ const AMOUNT_PATTERN = /\d[\d.,]*\d|\d/;
 // token makes it part of a word: «3 milanesas», «4 kg», «4 m2».
 const MULTIPLIER_PATTERN =
   /^\s*(millones|mill[oó]n|mil|k|m)(?![\p{L}\p{N}_])/iu;
+// A spaced «m» is a million only as the last word: «2 m», but «5 m de cable» is
+// five metres. Glued, «5m» is a million wherever it stands.
+const SPACED_M_PATTERN = /^\s+m$/iu;
+// «mil» standing as its own word with no digits before it: «pagué mil» is a
+// thousand pesos, never a million.
+const BARE_THOUSAND_PATTERN = /(?<![\p{L}\p{N}_])mil(?![\p{L}\p{N}_])/iu;
+const BARE_THOUSAND_PESOS = "1000";
 const MULTIPLIER_ZEROS: Record<string, number> = { mil: 3, k: 3 };
 const MILLION_ZEROS = 6;
 // What may stand before a multiplier: whole digits, or up to two decimals.
@@ -76,19 +83,34 @@ export function interpretQuickEntry(
 ): QuickEntryProposal {
   const lower = text.toLowerCase();
 
-  const amountMatch = AMOUNT_PATTERN.exec(text);
+  const digitsMatch = AMOUNT_PATTERN.exec(text);
+  const bareThousand = BARE_THOUSAND_PATTERN.exec(text);
+  const amountMatch =
+    bareThousand && (!digitsMatch || bareThousand.index < digitsMatch.index)
+      ? bareThousand
+      : digitsMatch;
+  const isBareThousand = amountMatch !== null && amountMatch === bareThousand;
   const amountEnd = amountMatch ? amountMatch.index + amountMatch[0].length : 0;
-  const multiplierMatch = amountMatch
-    ? MULTIPLIER_PATTERN.exec(text.slice(amountEnd))
-    : null;
+  const afterAmount = text.slice(amountEnd);
+  const tokenMatch =
+    amountMatch && !isBareThousand ? MULTIPLIER_PATTERN.exec(afterAmount) : null;
+  const multiplierMatch =
+    tokenMatch &&
+    tokenMatch[1].toLowerCase() === "m" &&
+    /^\s/u.test(tokenMatch[0]) &&
+    !SPACED_M_PATTERN.test(afterAmount.trimEnd())
+      ? null
+      : tokenMatch;
   const amountPesos = !amountMatch
     ? null
-    : multiplierMatch
-      ? multiplyPesos(
-          amountMatch[0],
-          MULTIPLIER_ZEROS[multiplierMatch[1].toLowerCase()] ?? MILLION_ZEROS,
-        )
-      : normalizeAmountInput(amountMatch[0]);
+    : isBareThousand
+      ? BARE_THOUSAND_PESOS
+      : multiplierMatch
+        ? multiplyPesos(
+            amountMatch[0],
+            MULTIPLIER_ZEROS[multiplierMatch[1].toLowerCase()] ?? MILLION_ZEROS,
+          )
+        : normalizeAmountInput(amountMatch[0]);
   const mentionedTails = new Set(
     ACCOUNT_TAIL_PATTERNS.flatMap((pattern) =>
       [...text.matchAll(pattern)].map((match) => match[1]),

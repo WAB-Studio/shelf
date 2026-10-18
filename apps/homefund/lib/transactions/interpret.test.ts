@@ -105,7 +105,7 @@ test("a bank message keeps reading its own amount", () => {
 
 test("«m», «millón» and «millones» multiply by a million", () => {
   assert.equal(stored("2m"), 200_000_000);
-  assert.equal(stored("3 M arriendo"), 300_000_000);
+  assert.equal(stored("3 M"), 300_000_000);
   assert.equal(stored("1 millón"), 100_000_000);
   assert.equal(stored("2 millones"), 200_000_000);
   assert.equal(stored("1 MILLONES"), 100_000_000);
@@ -148,4 +148,50 @@ test("the million token leaves the description with the amount", () => {
     "arriendo",
   );
   assert.equal(interpretQuickEntry("2m carro", ctx).description, "carro");
+});
+
+// Where «m» stands (Q12, 2026-10-18): glued to the number, or spaced as the last
+// word of the text, it is a million. Spaced with text after it, it is a word of
+// its own («5 m de cable» is five metres), so the number reads bare.
+
+test("«m» glued to the number is a million, whatever follows", () => {
+  assert.equal(stored("5m"), 500_000_000);
+  assert.equal(stored("5m de cable"), 500_000_000);
+});
+
+test("«m» spaced as the last word is a million", () => {
+  assert.equal(stored("2 m"), 200_000_000);
+  assert.equal(stored("gasté 2 m"), 200_000_000);
+  assert.equal(stored("gasté 2 M  "), 200_000_000);
+});
+
+test("«m» spaced with text after it is no multiplier: the number reads bare", () => {
+  assert.equal(stored("5 m de cable"), 500);
+  assert.equal(stored("3 M arriendo"), 300);
+  assert.equal(interpretQuickEntry("5 m de cable", ctx).description, "m de cable");
+});
+
+test("«millón» and «millones» stay a million with text after them", () => {
+  assert.equal(stored("2 millones arriendo"), 200_000_000);
+  assert.equal(stored("1 millón de pesos"), 100_000_000);
+  assert.equal(stored("3 millon carro"), 300_000_000);
+});
+
+test("«mil» with no number before it is a thousand pesos", () => {
+  const read = (text: string) => interpretQuickEntry(text, ctx).amountPesos;
+  assert.equal(read("mil pesos"), "1000");
+  assert.equal(stored("pagué mil"), 100_000);
+  assert.equal(stored("Mil"), 100_000);
+  assert.equal(stored("pagué mil por 3 empanadas"), 100_000);
+});
+
+test("«mil» alone leaves the description", () => {
+  assert.equal(interpretQuickEntry("pagué mil", ctx).description, "pagué");
+  assert.equal(interpretQuickEntry("mil pesos", ctx).description, "pesos");
+});
+
+test("«mil» alone never reads as a million, nor inside a word", () => {
+  assert.notEqual(stored("mil"), 100_000_000);
+  assert.equal(interpretQuickEntry("milanesa", ctx).amountPesos, null);
+  assert.equal(interpretQuickEntry("almuerzo", ctx).amountPesos, null);
 });
