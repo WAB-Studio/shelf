@@ -3379,3 +3379,13 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   reproduced it; filtering on `-auth-token` (c0df782c) made it pass.
 - Do: read a session only from the cookies whose name holds `-auth-token`. Re-mint a lane's session after a change to
   `/auth/confirm`, before trusting a local `check:*`.
+
+## A server action that redirects rejects its promise on the client (2026-10-17)
+
+- `verifySignInCode` in GoalLog ends a good code with `redirect()`. On the client the awaited action rejects with
+  `NEXT_REDIRECT`; a bare `catch` around it swallows the landing and paints the offline words instead.
+- Measured 2026-10-17, train codigo-6c M8: a bare catch in `handleVerify` turned the «Done · /entrar» and «Done ·
+  consent» rows of `apps/goallog/e2e/entrar-codigo.spec.ts` red (the pending record was never cleared). Calling
+  `unstable_rethrow(error)` first (`next/navigation`) made them green, 27/27.
+- Do: open every client `catch` around a server action that may `redirect()` with `unstable_rethrow(error)`. A catch
+  around an action that only returns needs none.
