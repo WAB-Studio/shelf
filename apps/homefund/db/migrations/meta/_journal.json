@@ -442,6 +442,13 @@
       "when": 1792220000000,
       "tag": "0062_a_deleted_target_keeps_the_learned_rule",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792230000000,
+      "tag": "0063_a_pause_says_why",
+      "breakpoints": true
     }
   ]
 }
