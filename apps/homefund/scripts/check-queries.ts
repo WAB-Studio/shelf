@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { openRun } from "@repo/harness-registry";
+import postgres from "postgres";
 import type { z } from "zod";
 
 // FIRST, and it has to stay first: it plants the counted pool `@/db/client` picks
@@ -3904,6 +3905,211 @@ async function cashSuite(): Promise<void> {
       createdRows[0].group_id === null,
     `before ${before.targetCashAccountId}/${before.reason}, first ${first.createdCashAccount}, second ${second.createdCashAccount}, stored [${found_(createdRows)}]`,
   );
+
+  // M22. The lock is taken from outside the app on the exact key the contract names
+  // (`cash:` + the scope id), so a withdrawal that takes the same lock must queue behind it
+  // and one that takes none, or another key, runs straight through. Polling `pg_locks` says
+  // when the app is waiting; nothing here sleeps for a fixed time.
+  const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+  // Its own connection: `fixtureSql` holds one, and the polling below has to keep using it.
+  const holderSql = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1 });
+  const holdScopeLock = async (scopeId: string) => {
+    let open_!: () => void;
+    const gate = new Promise<void>((done) => (open_ = done));
+    let taken!: () => void;
+    const acquired = new Promise<void>((done) => (taken = done));
+    const tx = holderSql.begin(async (sql) => {
+      await sql`select pg_advisory_xact_lock(hashtextextended(${`cash:${scopeId}`}, 0))`;
+      taken();
+      await gate;
+    });
+    await acquired;
+    return async () => {
+      open_();
+      await tx;
+    };
+  };
+  const waitingOn = async (scopeId: string) => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from pg_locks
+      where locktype = 'advisory' and not granted
+        and ((classid::bigint << 32) | objid::bigint) = hashtextextended(${`cash:${scopeId}`}, 0)`;
+    return row.n;
+  };
+  const waitUntilWaiting = async (scopeId: string, count: number) => {
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline) {
+      if ((await waitingOn(scopeId)) >= count) return true;
+      await pause(25);
+    }
+    return false;
+  };
+  const cashRows = (userId: string) =>
+    fixtureSql<{ id: string; archived: boolean; created_at: Date }[]>`
+      select id, archived_at is not null as archived, created_at from accounts
+      where owner_user_id = ${userId} and subtype = 'cash' order by created_at`;
+
+  // Two first withdrawals at once: one new cash, both movements in it.
+  const racer = await createMembershipFreeUser();
+  const racerBank = await open(racer, "Harness banco carrera", "bank", null);
+  const releaseRace = await holdScopeLock(racer.id);
+  const raceRun = asUser(racer, () =>
+    Promise.all([
+      withdrawCash({ sourceAccountId: racerBank, amountCents: 100_000, cashAccountName: "Efectivo" }),
+      withdrawCash({ sourceAccountId: racerBank, amountCents: 100_000, cashAccountName: "Efectivo" }),
+    ]),
+  );
+  const bothQueued = await waitUntilWaiting(racer.id, 2);
+  await releaseRace();
+  const raced = await raceRun;
+  for (const r of raced) track("transactions", r.transactionId);
+  const racerCash = await cashRows(racer.id);
+  for (const row of racerCash) track("accounts", row.id);
+  const racerMoves = await fixtureSql<{ id: string }[]>`
+    select id from transactions where owner_user_id = ${racer.id}`;
+  assert(
+    next("Two first withdrawals at once queue on the caller's scope lock and land in one new cash"),
+    bothQueued &&
+      racerCash.length === 1 &&
+      raced.filter((r) => r.createdCashAccount).length === 1 &&
+      raced.every((r) => r.targetCashAccountId === racerCash[0]?.id) &&
+      racerMoves.length === 2,
+    `both waited on cash:${racer.id} = ${bothQueued}, ${racerCash.length} cash accounts, created [${raced.map((r) => r.createdCashAccount)}], ${racerMoves.length} movements`,
+  );
+  const personalMoves = await fixtureSql<
+    { from_account_id: string; to_account_id: string; kind: string; splits: number }[]
+  >`
+    select t.from_account_id, t.to_account_id, t.kind,
+      (select count(*)::int from transaction_splits s where s.transaction_id = t.id) as splits
+    from transactions t where t.owner_user_id = ${personal.id}`;
+  const personalBalance = await readColumn<string>("account_balances", "id", first.targetCashAccountId, "balance_cents");
+  assert(
+    next("A withdrawal is a plain transfer source to cash with no split, and the cash balance is the sum of what came in"),
+    personalMoves.length === 2 &&
+      personalMoves.every(
+        (m) =>
+          m.kind === "transfer" &&
+          m.from_account_id === personalBank &&
+          m.to_account_id === first.targetCashAccountId &&
+          m.splits === 0,
+      ) &&
+      Number(personalBalance) === 200_000,
+    `moves [${personalMoves.map((m) => `${m.kind}/${m.splits}`)}], cash balance ${personalBalance}`,
+  );
+
+  // The cash is archived: it is no target, and the next withdrawal opens a new one.
+  const archiver = await createMembershipFreeUser();
+  const archiverBank = await open(archiver, "Harness banco archivada", "bank", null);
+  const archivedCash = await open(archiver, "Harness caja archivada", "cash", null);
+  await asUser(archiver, () => archiveAccount({ accountId: archivedCash }));
+  const archivedTarget = await asUser(archiver, () => resolveWithdrawalTarget());
+  const reopened = await asUser(archiver, () =>
+    withdrawCash({ sourceAccountId: archiverBank, amountCents: 50_000, cashAccountName: "Efectivo" }),
+  );
+  track("transactions", reopened.transactionId);
+  const archiverCash = await cashRows(archiver.id);
+  for (const row of archiverCash) track("accounts", row.id);
+  assert(
+    next("An archived cash is no withdrawal target, and withdrawing opens a new cash"),
+    archivedTarget.targetCashAccountId === null &&
+      archivedTarget.reason === "no-cash-account" &&
+      reopened.createdCashAccount === true &&
+      reopened.targetCashAccountId !== archivedCash &&
+      archiverCash.length === 2 &&
+      archiverCash.filter((r) => !r.archived).length === 1 &&
+      archiverCash.find((r) => !r.archived)?.id === reopened.targetCashAccountId,
+    `target ${archivedTarget.targetCashAccountId}/${archivedTarget.reason}, reopened ${reopened.targetCashAccountId} (created ${reopened.createdCashAccount}), ${archiverCash.length} cash rows`,
+  );
+
+  // The group's cash is archived, then the fund goes shared: a live group cash appears.
+  const archivedGroupCash = await asUser(perMemberLeader, () => archiveAccount({ accountId: groupCash }));
+  await asUser(perMemberLeader, () =>
+    updateGroupSettings({ groupId: perMemberGroup, name: "Harness fondo por miembro", cashMode: "shared", locale: "es" }),
+  );
+  const groupCashRows = await fixtureSql<{ id: string; archived: boolean }[]>`
+    select id, archived_at is not null as archived from accounts
+    where group_id = ${perMemberGroup} and subtype = 'cash' order by created_at`;
+  for (const row of groupCashRows) track("accounts", row.id);
+  const liveGroupCash = groupCashRows.filter((r) => !r.archived);
+  const groupTarget = await asUser(perMemberLeader, () => resolveWithdrawalTarget());
+  assert(
+    next("Going shared with the group's only cash archived creates a second, live group cash"),
+    archivedGroupCash &&
+      groupCashRows.length === 2 &&
+      liveGroupCash.length === 1 &&
+      liveGroupCash[0].id !== groupCash &&
+      groupTarget.targetCashAccountId === liveGroupCash[0]?.id,
+    `${groupCashRows.length} group cash rows, ${liveGroupCash.length} live, target ${groupTarget.targetCashAccountId}`,
+  );
+
+  // Two live cash accounts: the older one is the target, for the read and for the write.
+  const twin = await createMembershipFreeUser();
+  const twinBank = await open(twin, "Harness banco gemelas", "bank", null);
+  const olderCash = await open(twin, "Harness caja mayor", "cash", null);
+  await pause(20);
+  await open(twin, "Harness caja menor", "cash", null);
+  const twinRows = await cashRows(twin.id);
+  const twinTarget = await asUser(twin, () => resolveWithdrawalTarget());
+  const twinMove = await asUser(twin, () =>
+    withdrawCash({ sourceAccountId: twinBank, amountCents: 10_000, cashAccountName: "Efectivo" }),
+  );
+  track("transactions", twinMove.transactionId);
+  assert(
+    next("With two live cash accounts the oldest is the withdrawal target"),
+    twinRows.length === 2 &&
+      twinRows[0].id === olderCash &&
+      twinTarget.targetCashAccountId === olderCash &&
+      twinMove.targetCashAccountId === olderCash &&
+      twinMove.createdCashAccount === false,
+    `oldest ${olderCash}, read target ${twinTarget.targetCashAccountId}, write target ${twinMove.targetCashAccountId}`,
+  );
+
+  // Another scope's lock never makes this caller wait: A is held, B runs straight through.
+  const slowOne = await createMembershipFreeUser();
+  const slowBank = await open(slowOne, "Harness banco lenta", "bank", null);
+  const quickOne = await createMembershipFreeUser();
+  const quickBank = await open(quickOne, "Harness banco rapida", "bank", null);
+  const releaseSlow = await holdScopeLock(slowOne.id);
+  let slowSettled = false;
+  const slowRun = asUser(slowOne, () =>
+    withdrawCash({ sourceAccountId: slowBank, amountCents: 10_000, cashAccountName: "Efectivo" }),
+  ).finally(() => {
+    slowSettled = true;
+  });
+  const slowQueued = await waitUntilWaiting(slowOne.id, 1);
+  const quickStarted = Date.now();
+  const quick = await asUser(quickOne, () =>
+    withdrawCash({ sourceAccountId: quickBank, amountCents: 10_000, cashAccountName: "Efectivo" }),
+  );
+  const quickMs = Date.now() - quickStarted;
+  const slowStillWaiting = !slowSettled;
+  await releaseSlow();
+  const slow = await slowRun;
+  track("transactions", quick.transactionId);
+  track("transactions", slow.transactionId);
+  for (const u of [slowOne, quickOne]) for (const row of await cashRows(u.id)) track("accounts", row.id);
+  assert(
+    next("A withdrawal waits only on its own scope: another caller's finishes while the first is still queued"),
+    slowQueued && slowStillWaiting && quickMs < 2_000 && quick.createdCashAccount && slow.createdCashAccount,
+    `first queued ${slowQueued}, still waiting when the second finished ${slowStillWaiting}, second took ${quickMs} ms`,
+  );
+
+  // Under 'shared' the scope id is the group's, not the caller's.
+  const sharedBank = await open(sharedLeader, "Harness banco del lider compartido", "bank", null);
+  const releaseGroup = await holdScopeLock(sharedGroup);
+  const groupRun = asUser(sharedLeader, () =>
+    withdrawCash({ sourceAccountId: sharedBank, amountCents: 10_000, cashAccountName: "Efectivo" }),
+  );
+  const groupQueued = await waitUntilWaiting(sharedGroup, 1);
+  await releaseGroup();
+  const groupMove = await groupRun;
+  track("transactions", groupMove.transactionId);
+  assert(
+    next("Under shared the withdrawal queues on the group's lock and lands in the group's cash"),
+    groupQueued && groupMove.targetCashAccountId === sharedSeeded[0]?.id && groupMove.createdCashAccount === false,
+    `queued on cash:${sharedGroup} = ${groupQueued}, target ${groupMove.targetCashAccountId}`,
+  );
+  await holderSql.end();
 }
 
 async function main(): Promise<void> {
