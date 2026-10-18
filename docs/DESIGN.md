@@ -21,6 +21,16 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - Hold the floor at 44 px (decided by the user 2026-10-15, raised from 32 px). Enforce it in the `components/ui` primitives, never in a screen.
 - `TapTarget` in `components/ui` owns that floor for a link's content.
 
+## Tokens
+
+| Token | Light | Dark | Ratio |
+|---|---|---|---|
+| `--focus-8` (ring) | `--jade-11` `#208368` | Radix's `--accent-8`, unchanged | 4.20:1 on `#f5f3ef` |
+| `--accent-9` (primary button) | `#1f7a62` | `#1f7a62` (Radix `#29a383` was 3.15:1) | 5.23:1 with white |
+| `--accent-10` (primary hover) | `#1b6e57` | `#1b6e57` (Radix `#27b08b` was 2.74:1) | 6.15:1 with white |
+| `--red-9` (danger button) | `#d13a3f` (Radix `#e5484d` was 3.91:1) | `#d13a3f` | 4.79:1 with white |
+| `--red-10` (danger hover) | `#c42a2f` (Radix `#dc3e42` was 4.37:1) | `#c42a2f` (Radix `#ec5d5e`) | 5.65:1 with white |
+
 ## Navigation
 
 - Carry the mobile navigation on a fixed bottom tab bar. It is the primary pattern.

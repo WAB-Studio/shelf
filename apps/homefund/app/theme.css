@@ -22,8 +22,20 @@ body {
 .light .radix-themes.radix-themes {
   --color-background: #f5f3ef;
   --gray-12: #1b1a16;
+  /* Radix's focus step meets the ground at 1.9:1; jade-11 rings at 4.20:1. */
+  --focus-8: var(--jade-11);
 }
 
 .dark .radix-themes.radix-themes {
   --color-background: #141310;
+}
+
+/* The solid button's white label: Radix's jade-9 and red-9 carry it at 3.15:1
+   and 3.91:1. These steps reach 5.23:1 and 6.15:1 (jade), 4.79:1 and 5.65:1
+   (red), in both appearances. */
+.radix-themes.radix-themes {
+  --accent-9: #1f7a62;
+  --accent-10: #1b6e57;
+  --red-9: #d13a3f;
+  --red-10: #c42a2f;
 }
