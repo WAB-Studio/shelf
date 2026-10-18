@@ -1024,3 +1024,113 @@ test.describe("the link's landing when the answer is a timeout or the landing fa
     }
   });
 });
+
+test.describe("sign-out", () => {
+  // Signs a new person in through the mailed link, so ending the session never touches the harness user's.
+  async function signedIn(browser: Browser, baseURL: string) {
+    const email = newAddress();
+    await listAddress(email);
+    const opened = await fresh(browser, baseURL);
+    await requestLink(opened.page, email);
+    await opened.page.goto(await confirmPath(email));
+    await expect(opened.page).toHaveURL(/\/es$/);
+    await opened.page.goto("/es/settings");
+    return opened;
+  }
+
+  test("a sign-out the action refused shows signOutFailed and leaves the person on the page", async ({ browser, baseURL }) => {
+    // Kills: a sign-out button with no onError, whose refusal is silent.
+    const { context, page } = await signedIn(browser, baseURL!);
+    try {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let calls = 0;
+      await page.route("**/es/settings", async (route) => {
+        if (!route.request().headers()["next-action"]) return route.continue();
+        calls += 1;
+        await held;
+        await route.fulfill({
+          status: 200,
+          contentType: "text/x-component",
+          body: '0:{"a":"$@1","f":"","b":"x"}\n1:{"serverError":"errors.signOutFailed"}\n',
+        });
+      });
+
+      const button = page.getByRole("button", { name: auth.signOut, exact: true });
+      await button.click();
+      // While the action runs the button refuses a second press.
+      await expect(button).toBeDisabled();
+      release();
+
+      await expect(page.getByText(messages.errors.signOutFailed)).toBeVisible();
+      await expect(button).toBeEnabled();
+      await expect(page).toHaveURL(/\/es\/settings$/);
+      expect(calls).toBe(1);
+      expect(await context.cookies()).toContainEqual(expect.objectContaining({ name: expect.stringMatching(/auth-token/) }));
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("an ordinary sign-out lands on the login", async ({ browser, baseURL }) => {
+    // Kills: an onError that toasts a sign-out that worked.
+    const { context, page } = await signedIn(browser, baseURL!);
+    try {
+      await page.getByRole("button", { name: auth.signOut, exact: true }).click();
+      await expect(page).toHaveURL(/\/es\/login/);
+      await expect(page.getByText(messages.errors.signOutFailed)).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+test.describe("sign-out when Auth refuses the logout", () => {
+  test.describe.configure({ mode: "serial" });
+  let refusing: ChildProcess | undefined;
+  let refusingOrigin = "";
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    const port = await freePort();
+    refusingOrigin = `http://localhost:${port}`;
+    refusing = spawn(
+      process.execPath,
+      [path.resolve(process.cwd(), "../../node_modules/next/dist/bin/next"), "start", "-p", String(port)],
+      {
+        cwd: process.cwd(),
+        env: { ...process.env, NODE_OPTIONS: `--require ${path.resolve(process.cwd(), "e2e/support/refuse-logout.cjs")}` },
+        stdio: "ignore",
+      },
+    );
+    await expect
+      .poll(async () => (await fetch(`${refusingOrigin}/es/login`).catch(() => null))?.status ?? 0, { timeout: 90_000 })
+      .toBe(200);
+  });
+
+  test.afterAll(() => {
+    refusing?.kill("SIGTERM");
+  });
+
+  test("Auth refusing the logout signs this device out and the login says the rest is still open", async ({ browser }) => {
+    // Kills: an action that restores the session, and one that redirects to the login without saying so.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, refusingOrigin);
+    try {
+      await requestLink(page, email);
+      await page.goto(await confirmPath(email));
+      await expect(page).toHaveURL(/\/es$/);
+      await page.goto("/es/settings");
+
+      await page.getByRole("button", { name: auth.signOut, exact: true }).click();
+      await expect(page).toHaveURL(/\/es\/login\?error=signOutPartial$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveText(messages.errors.signOutPartial);
+      expect(en.errors.signOutPartial).toBe("You signed out here, but we couldn't sign you out on your other devices.");
+      await page.goto("/es/movements");
+      await expect(page).toHaveURL(/\/es\/login/);
+    } finally {
+      await context.close();
+    }
+  });
+});

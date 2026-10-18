@@ -1136,6 +1136,7 @@
     "resendChanged": "Ya guardamos este movimiento con otro monto; ábrelo para corregirlo.",
     "linkTimeout": "No pudimos comprobar el enlace. Ábrelo otra vez desde el correo.",
     "signOutFailed": "No pudimos cerrar tu sesión. Inténtalo otra vez.",
+    "signOutPartial": "Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.",
     "notFoundTitle": "Esta página no existe",
     "notFoundDescription": "Puede que el enlace esté mal escrito o que la página se haya movido.",
     "unexpected": "Algo salió mal. Vuelve a intentarlo.",
