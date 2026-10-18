@@ -3826,6 +3826,116 @@ async function checkSignInClaims0026(): Promise<void> {
   await sql.end();
 }
 
+// 0027 (RNP-05): a row hangs only off a parent the person can see. Every
+// refusal is the policy's own `42501`, never an FK's `23503`: a uuid that
+// exists nowhere must answer exactly as a uuid that belongs to someone else.
+async function checkParentOwner0027(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const owner = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${owner}), (${intruder})`;
+
+      await enterUserContext(tx, owner);
+      const a = await seedFixtures(tx, owner);
+      const [aTask] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${owner}, ${a.goalId}, 'tarea ajena', true) returning id`;
+
+      await enterUserContext(tx, intruder);
+      const b = await seedFixtures(tx, intruder);
+
+      const refused = async (label: string, what: string, fn: (sp: postgres.TransactionSql) => Promise<unknown>) => {
+        const r = await attempt(tx, fn);
+        assert(label, r.code === "42501", `${what}, sqlstate = ${r.code ?? "none"}`);
+      };
+
+      await refused("O01", "phase on another person's goal", (sp) => sp`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${intruder}, ${a.goalId}, 'ajena', '2026-01-01', '2026-01-02')`);
+      await refused("O02", "month amount on another person's goal", (sp) => sp`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${intruder}, ${a.goalId}, '2026-11-01', 5)`);
+      await refused("O03", "task on another person's goal", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${intruder}, ${a.goalId}, 'ajena', true)`);
+      await refused("O04", "fact on another person's commitment", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day)
+        values (${intruder}, ${a.commitmentId}, '2026-10-01')`);
+      await refused("O05", "fact on another person's task", (sp) => sp`
+        insert into goals.facts (user_id, one_off_id, day)
+        values (${intruder}, ${aTask.id}, '2026-10-01')`);
+      await refused("O06", "fact naming another person's goal under an own commitment", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, goal_id, day)
+        values (${intruder}, ${b.commitmentId}, ${a.goalId}, '2026-10-02')`);
+
+      // A uuid that exists nowhere is no different from a foreign one.
+      const nowhere = randomUUID();
+      await refused("O07.phase", "phase on a goal that exists nowhere", (sp) => sp`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${intruder}, ${nowhere}, 'x', '2026-01-01', '2026-01-02')`);
+      await refused("O07.month", "month amount on a goal that exists nowhere", (sp) => sp`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${intruder}, ${nowhere}, '2026-11-01', 5)`);
+      await refused("O07.task", "task on a goal that exists nowhere", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${intruder}, ${nowhere}, 'x', true)`);
+      await refused("O07.commitment", "fact on a commitment that exists nowhere", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day)
+        values (${intruder}, ${nowhere}, '2026-10-03')`);
+      await refused("O07.oneoff", "fact on a task that exists nowhere", (sp) => sp`
+        insert into goals.facts (user_id, one_off_id, day)
+        values (${intruder}, ${nowhere}, '2026-10-03')`);
+      await refused("O07.goal", "fact naming a goal that exists nowhere", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, goal_id, day)
+        values (${intruder}, ${b.commitmentId}, ${nowhere}, '2026-10-04')`);
+
+      // -- the person's own rows still land --
+      const own = async (label: string, what: string, fn: (sp: postgres.TransactionSql) => Promise<{ id: string }[]>) => {
+        const r = await attemptRows<{ id: string }>(tx, fn);
+        assert(label, r.code === undefined && r.rows.length === 1, `own ${what}, sqlstate = ${r.code ?? "none"}, rows = ${r.rows.length}`);
+        return r.rows[0]?.id;
+      };
+      await own("O08.phase", "phase on own goal", (sp) => sp`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${intruder}, ${b.goalId}, 'propia', '2026-01-01', '2026-01-02') returning id`);
+      await own("O08.month", "month amount on own goal", (sp) => sp`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${intruder}, ${b.goalId}, '2026-11-01', 5) returning id`);
+      const task = await own("O08.task", "task on own goal", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${intruder}, ${b.goalId}, 'propia', true) returning id`);
+      await own("O08.loose", "task on no goal", (sp) => sp`
+        insert into goals.one_offs (user_id, name) values (${intruder}, 'suelta') returning id`);
+      await own("O08.subtask", "sub-task under own task", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, parent_id)
+        values (${intruder}, ${b.goalId}, 'hija', ${task}) returning id`);
+      await own("O08.factCommitment", "fact on own commitment and goal", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, goal_id, day)
+        values (${intruder}, ${b.commitmentId}, ${b.goalId}, '2026-10-05') returning id`);
+      const [lone] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${intruder}, ${b.goalId}, 'con hecho', true) returning id`;
+      await own("O08.factTask", "fact on own task", (sp) => sp`
+        insert into goals.facts (user_id, one_off_id, goal_id, day)
+        values (${intruder}, ${lone.id}, ${b.goalId}, '2026-10-05') returning id`);
+
+      // -- unchanged: a sub-task under a parent that carries a fact --
+      await refused("O09", "sub-task under a parent that carries a fact", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, parent_id)
+        values (${intruder}, ${b.goalId}, 'hija tardia', ${lone.id})`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -3864,6 +3974,7 @@ async function main(): Promise<void> {
   await checkDeleteAndEdit0025();
   await checkAllowedEmails0025();
   await checkSignInClaims0026();
+  await checkParentOwner0027();
 
   if (failed) process.exit(1);
 }
