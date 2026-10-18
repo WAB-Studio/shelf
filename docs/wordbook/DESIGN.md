@@ -1820,7 +1820,7 @@ Canvas «Diccionario de lectura», page «Cuenta», from y=25060. Dark 360 prima
 
 ## Boards of 2026-10-17: «CuentaTopeDiario», the daily cap says «mañana» (codigo-6c)
 
-Canvas «Diccionario de lectura», page «Cuenta», from y=27060. Dark 360, two states. Not built yet.
+Canvas «Diccionario de lectura», page «Cuenta», from y=27060. Dark 360, two states. Built in codigo-6c (#657).
 
 - WordBook's own daily cap refuses in the form's failure shape with «Ya pediste varios códigos hoy. Prueba de nuevo
   mañana.», on the address form and on the code step's resend. The button stays ready (a refused tap still spends,

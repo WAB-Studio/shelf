@@ -1844,7 +1844,7 @@ waiting. Not built yet.
 
 ## Boards of 2026-10-17: «EntrarSinConexión», the code step offline (codigo-6c)
 
-Canvas «Bitácora de metas», page «Armazón», from y=15460. 360, three states. Not built yet.
+Canvas «Bitácora de metas», page «Armazón», from y=15460. 360, three states. Built in codigo-6c (#657).
 
 - Offline send: the field's hint «Sin conexión. No se pudo enviar el código.», the button enabled, the address kept.
 - Offline resend: the alert sentence «Sin conexión. No se pudo enviar el código.» under «Pedir otro código»; every

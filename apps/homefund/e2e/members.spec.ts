@@ -609,7 +609,7 @@ test.describe("RF-149: adding a member with an optional address", () => {
   });
 
   // Needs M1 (lane 2): the server refuses a second pending invitation to one address. Red until it lands.
-  test("[needs M1] an address already invited is refused on the field, the dialog stays open and keeps it", async ({
+  test("an address already invited is refused on the field, the dialog stays open and keeps it", async ({
     page,
   }) => {
     // Kills: closing the dialog on the error; clearing the address; adding a second row.
