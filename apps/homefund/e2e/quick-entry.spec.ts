@@ -441,3 +441,44 @@ test("an amount typed first stays when the text typed after it has no number", a
   await expect(sheet).toBeHidden();
   expect(await storedAmounts()).toEqual(["900000"]);
 });
+
+// RNF-10: the sheet's save carries a request ref too.
+test("a quick save whose answer was lost, saved again, leaves exactly one movement", async ({ page }) => {
+  // Kills: a new request ref minted on every click, so the resend writes a second row.
+  let dropped = 0;
+  await page.route(
+    (url) => url.pathname.startsWith("/es"),
+    async (route) => {
+      const request = route.request();
+      if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
+        dropped += 1;
+        await route.fetch();
+        await route.abort("failed");
+        return;
+      }
+      await route.continue();
+    },
+  );
+
+  await page.goto("/es");
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await sheet
+    .getByRole("textbox", { name: transactions.quickTitle, exact: true })
+    .fill(`${scope.categoryName} ${AMOUNT_PESOS}`);
+  await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
+  await page.getByRole("option", { name: scope.accountName, exact: true }).click();
+
+  const save = sheet.getByRole("button", { name: transactions.quickSave, exact: true });
+  await save.click();
+  await expect.poll(() => dropped).toBe(1);
+  await expect(sheet).toBeVisible();
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(sheet).toBeHidden();
+
+  const rows = await fixtureSql<{ amount_cents: string }[]>`
+    select amount_cents::text as amount_cents from transactions where owner_user_id = ${scope.userId}`;
+  expect(rows).toHaveLength(1);
+  expect(rows[0].amount_cents).toBe(String(AMOUNT_CENTS));
+});
