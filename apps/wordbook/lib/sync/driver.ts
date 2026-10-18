@@ -14,6 +14,10 @@ export const SYNC_LOCK = "voyager-sync";
 // trips per call, then the rest waits for the next hide.
 const MAX_BATCHES = 40;
 
+// A round that never answers ends as a failed one and frees the lock: «Vaciar»
+// and the next round wait behind it, so this is also the longest they wait.
+export const SYNC_FETCH_TIMEOUT_MS = 20_000;
+
 export const SYNC_LANDED_EVENT = "voyager:sync-landed";
 
 class SyncFailureError extends Error {
@@ -55,6 +59,7 @@ async function postBatch(
   const response = await fetch(SYNC_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(SYNC_FETCH_TIMEOUT_MS),
     body: JSON.stringify(syncRequestSchema.parse({ deviceId, readerId, rows, since, tombstones, tombstonesSince })),
   });
   if (!response.ok) {
