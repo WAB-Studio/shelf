@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { hasLocale } from "next-intl";
 import createMiddleware from "next-intl/middleware";
-import { NextResponse, type NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { routing } from "@/i18n/routing";
 import { env } from "@/lib/env";
@@ -45,12 +45,15 @@ function carryOver(
  * data layer is imported here.
  */
 export async function proxy(request: NextRequest) {
-  // Set before next-intl runs, which clones these onto the request it forwards,
-  // and set on every request, so a caller cannot smuggle in a path of their own.
-  request.headers.set(PATHNAME_HEADER, request.nextUrl.pathname);
+  // A copy of the incoming headers, with the path set (never appended) so a caller
+  // cannot smuggle in one of their own. next-intl forwards the request it is
+  // handed, so the layout reads this value and the incoming request stays as sent.
+  const forwardedHeaders = new Headers(request.headers);
+  forwardedHeaders.set(PATHNAME_HEADER, request.nextUrl.pathname);
+  const forwarded = new NextRequest(request, { headers: forwardedHeaders });
 
   // URL first, then the `NEXT_LOCALE` cookie, then `accept-language`, then Spanish.
-  const response = handleLocaleRouting(request);
+  const response = handleLocaleRouting(forwarded);
 
   // Carried onto whichever response finally leaves this function.
   const headers = new Headers();

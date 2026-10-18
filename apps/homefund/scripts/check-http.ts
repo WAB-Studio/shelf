@@ -9,7 +9,7 @@
  * suite follows nothing: the redirect itself is what it asserts.
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { openRun } from "@repo/harness-registry";
@@ -906,6 +906,39 @@ async function securityHeadersSuite(): Promise<void> {
   );
 }
 
+// The proxy hands the shell its path through a request it builds. A caller's own
+// `x-pathname` must neither refuse a page nor lift a refusal.
+async function pathnameHeaderSuite(): Promise<void> {
+  const cookie = await cookieHeader();
+  const forged = (path: string, claimed: string) =>
+    fetch(`${HARNESS_BASE_URL}${path}`, {
+      redirect: "manual",
+      headers: { cookie, "x-pathname": claimed },
+    });
+
+  const refusedStill = await forged(`/${LOCALE}/settings/members`, `/${LOCALE}/inbox`);
+  assert(
+    next("a forged x-pathname does not lift the members refusal"),
+    refusedStill.status === 404,
+    `it answered ${refusedStill.status}`,
+  );
+
+  const servedStill = await forged(`/${LOCALE}/inbox`, `/${LOCALE}/settings/members`);
+  assert(
+    next("a forged x-pathname does not refuse the inbox"),
+    servedStill.status === 200,
+    `it answered ${servedStill.status}`,
+  );
+
+  const source = readFileSync(resolve(process.cwd(), "proxy.ts"), "utf8");
+  const writes = source.match(/request\.headers\.(set|delete)/g) ?? [];
+  assert(
+    next("the proxy never writes onto the incoming request's headers"),
+    writes.length === 0,
+    `proxy.ts holds ${writes.length} write(s) onto request.headers`,
+  );
+}
+
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile this
 // to CJS and run it on any Node version, not only Node 22's native strip.
 void (async () => {
@@ -914,6 +947,7 @@ void (async () => {
     await edgeSuite();
     await adjustmentTypeSuite();
     await securityHeadersSuite();
+    await pathnameHeaderSuite();
   } catch (error) {
     assert(
       next("the run completed"),
