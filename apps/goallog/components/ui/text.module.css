@@ -77,10 +77,6 @@
   color: var(--pulsar-muted);
 }
 
-.quiet.quiet {
-  color: var(--pulsar-quiet);
-}
-
 .accent.accent {
   color: var(--pulsar-accent);
 }

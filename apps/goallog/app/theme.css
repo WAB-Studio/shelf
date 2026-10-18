@@ -27,6 +27,7 @@ body {
   --pulsar-ink-secondary: #333c45;
   --pulsar-muted: #5e6874;
   --pulsar-quiet: #8a939e;
+  --pulsar-control-edge: #8a939e;
   --pulsar-accent: #1c6e5a;
   --pulsar-accent-soft: #dceae5;
   --pulsar-today: #e3e8ee;
@@ -43,6 +44,7 @@ body {
   --pulsar-ink-secondary: #c3cbd3;
   --pulsar-muted: #949ea9;
   --pulsar-quiet: #5c666f;
+  --pulsar-control-edge: #626c77;
   --pulsar-accent: #4fbea0;
   --pulsar-accent-soft: #17332c;
   --pulsar-today: #1e252c;

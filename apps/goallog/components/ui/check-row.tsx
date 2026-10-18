@@ -84,17 +84,17 @@ export function CheckRow({
           <Text
             as="span"
             variant="body"
-            tone={disabled && !checked && reason ? "quiet" : "ink"}
+            tone={disabled && !checked && reason ? "muted" : "ink"}
           >
             {name}
           </Text>
           {meta ? (
-            <Text as="span" variant="meta" tone="quiet">
+            <Text as="span" variant="meta" tone="muted">
               {meta}
             </Text>
           ) : null}
           {metaMore ? (
-            <Text as="span" variant="meta" tone="quiet">
+            <Text as="span" variant="meta" tone="muted">
               {metaMore}
             </Text>
           ) : null}
