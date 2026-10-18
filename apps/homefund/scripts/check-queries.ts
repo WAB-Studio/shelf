@@ -4206,6 +4206,7 @@ async function main(): Promise<void> {
   await resendChangedSuite();
   await withdrawalResendSuite();
   await accountPlannedVersionSuite();
+  await learnedRuleSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -8482,4 +8483,339 @@ async function accountPlannedVersionSuite(): Promise<void> {
     blindPlanned?.serverError === undefined && !isStale(blindPlanned) && (await plannedAmount()) === "6600",
     `result = ${JSON.stringify(blindPlanned)}, amount = ${await plannedAmount()}`,
   );
+}
+
+// M52: deleting the account or category a learned rule trusts keeps the rule and forgets the target (Q8 a).
+async function learnedRuleSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { deleteAccount } = await import("@/db/queries/accounts");
+  const { deleteCategory } = await import("@/db/queries/categories");
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const { fingerprintMessage } = await import("@/lib/ingest/fingerprint");
+  const { counterpartyPatternKey } = await import("@/lib/ingest/counterparty-pattern");
+  const user = await createMembershipFreeUser();
+
+  const mkAccount = async (name: string): Promise<string> => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness m52 ${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const mkCategory = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(user, () =>
+      createCategory({ scope: { ownerUserId: user.id }, name: `Harness m52 ${name} ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const origin = await mkAccount("origin");
+  const spendCategory = await mkCategory("spend");
+
+  const code = async (fn: (tx: Parameters<Parameters<typeof asOwner>[1]>[0]) => Promise<unknown>): Promise<string> => {
+    try {
+      await asOwner(user.id, async (tx) => {
+        await fn(tx);
+      });
+      return "ok";
+    } catch (error) {
+      return pgErrorCode(error) ?? rootMessage(error);
+    }
+  };
+
+  // ----- merchants -----
+  const credentialId = randomUUID();
+  await asOwner(user.id, async (tx) => {
+    await tx`
+      insert into webhook_credentials (id, owner_user_id, name, token_hash)
+      values (${credentialId}, ${user.id}, 'Harness m52', ${createHash("sha256").update(`m52-${tag}`).digest("hex")})`;
+  });
+  track("webhook_credentials", credentialId);
+
+  const smsFor = (shop: string) =>
+    `Bancolombia: Compraste COP11.000,00 en ${shop} con tu T.Cred *4872, el 25/08/2026 a las 20:07.`;
+  const merchantKeyOf = (shop: string) => fingerprintMessage(smsFor(shop)).merchant?.key ?? "";
+  type MerchantRow = { state: string; streak: number; candidate: string | null; trusted: string | null };
+  const merchantRow = async (shop: string): Promise<MerchantRow | undefined> =>
+    (await fixtureSql<MerchantRow[]>`
+      select state, streak::int as streak, candidate_category_id as candidate, trusted_category_id as trusted
+      from ingest_merchants where owner_user_id = ${user.id} and merchant_key = ${merchantKeyOf(shop)}`)[0];
+  const teachMerchant = (shop: string, category: string) =>
+    asOwner(user.id, async (tx) => {
+      await tx`select private.remember_ingest_merchant(${merchantKeyOf(shop)}, ${shop}, ${category})`;
+    });
+  const trustMerchant = async (shop: string, category: string) => {
+    await teachMerchant(shop, category);
+    await teachMerchant(shop, category);
+  };
+  const deliver = async (shop: string) => {
+    const result = await recordIngestDelivery({
+      ownerUserId: user.id,
+      credentialId,
+      defaultAccountId: null,
+      defaultCategoryId: null,
+      payload: { text: `${smsFor(shop)} ${randomUUID().slice(0, 6)}` } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+    return (await fixtureSql<{ category: string | null; account: string | null; source: string | null }[]>`
+      select proposed_category_id as category, proposed_account_id as account, category_source as source
+      from ingest_deliveries where id = ${result.deliveryId}`)[0];
+  };
+
+  const trustedCategory = await mkCategory("trusted");
+  const otherCategory = await mkCategory("other");
+  const shopA = `TIENDA M52A ${tag}`;
+  await trustMerchant(shopA, trustedCategory);
+  const merchantBefore = await merchantRow(shopA);
+  const proposalBefore = await deliver(shopA);
+  assert(
+    next("A merchant approved twice is trusted and its next delivery proposes the category (control)"),
+    merchantBefore?.state === "trusted" && merchantBefore.trusted === trustedCategory && proposalBefore?.category === trustedCategory,
+    `row = ${JSON.stringify(merchantBefore)}, proposed ${proposalBefore?.category ?? "null"}`,
+  );
+  let categoryDeleted: boolean | string;
+  try {
+    categoryDeleted = await asUser(user, () => deleteCategory({ categoryId: trustedCategory }));
+  } catch (error) {
+    categoryDeleted = refusal(error);
+  }
+  const merchantAfter = await merchantRow(shopA);
+  assert(
+    next("Deleting the category a merchant trusts succeeds"),
+    categoryDeleted === true,
+    `deleteCategory answered ${String(categoryDeleted)}`,
+  );
+  assert(
+    next("The merchant row survives its category's deletion as learning, streak 0, candidate and trusted null"),
+    merchantAfter?.state === "learning" &&
+      merchantAfter.streak === 0 &&
+      merchantAfter.candidate === null &&
+      merchantAfter.trusted === null,
+    `row = ${JSON.stringify(merchantAfter)}`,
+  );
+  const proposalAfter = await deliver(shopA);
+  assert(
+    next("The next delivery for that merchant proposes no category, no account and no category source, from the rule that was kept"),
+    merchantAfter !== undefined && proposalAfter !== undefined && proposalAfter.category === null && proposalAfter.account === null && proposalAfter.source === null,
+    `proposal = ${JSON.stringify(proposalAfter)}`,
+  );
+
+  // The forgotten rule learns again from zero: one approval is not trust.
+  const relearnCategory = await mkCategory("relearn");
+  await teachMerchant(shopA, relearnCategory);
+  const relearnOnce = await merchantRow(shopA);
+  assert(
+    next("A merchant that lost its category starts over: one approval leaves it learning on streak 1"),
+    relearnOnce?.state === "learning" && relearnOnce.streak === 1 && relearnOnce.candidate === relearnCategory && relearnOnce.trusted === null,
+    `row = ${JSON.stringify(relearnOnce)}`,
+  );
+
+  // Deleting a category the rule does NOT trust leaves a trusted rule alone.
+  const shopB = `TIENDA M52B ${tag}`;
+  await trustMerchant(shopB, otherCategory);
+  const unrelatedCategory = await mkCategory("unrelated");
+  await asUser(user, () => deleteCategory({ categoryId: unrelatedCategory }));
+  const merchantUntouched = await merchantRow(shopB);
+  assert(
+    next("Deleting a category some other rule trusts leaves a trusted merchant trusted on streak 2"),
+    merchantUntouched?.state === "trusted" && merchantUntouched.streak === 2 && merchantUntouched.trusted === otherCategory,
+    `row = ${JSON.stringify(merchantUntouched)}`,
+  );
+
+  // The trusted column moving to ANOTHER value is not forgetting.
+  const movedCategory = await mkCategory("moved");
+  const moved = await code((tx) => tx`update ingest_merchants set trusted_category_id = ${movedCategory} where owner_user_id = ${user.id} and merchant_key = ${merchantKeyOf(shopB)}`);
+  const merchantMoved = await merchantRow(shopB);
+  assert(
+    next("A merchant whose trusted category changes to another category stays trusted on streak 2"),
+    moved === "ok" && merchantMoved?.state === "trusted" && merchantMoved.streak === 2 && merchantMoved.trusted === movedCategory,
+    `update ${moved}, row = ${JSON.stringify(merchantMoved)}`,
+  );
+
+  // A trusted merchant contradicted by a completion is ambiguous, not forgotten: RF-94 keeps that sticky.
+  const shopC = `TIENDA M52C ${tag}`;
+  await trustMerchant(shopC, otherCategory);
+  await teachMerchant(shopC, movedCategory);
+  const merchantAmbiguous = await merchantRow(shopC);
+  assert(
+    next("A trusted merchant contradicted by one approval becomes ambiguous with the new candidate, not learning"),
+    merchantAmbiguous?.state === "ambiguous" && merchantAmbiguous.trusted === null && merchantAmbiguous.candidate === movedCategory,
+    `row = ${JSON.stringify(merchantAmbiguous)}`,
+  );
+
+  // The check that binds state to the trusted column still refuses a forged half.
+  const forgedTrustedState = await code((tx) => tx`update ingest_merchants set state = 'trusted' where owner_user_id = ${user.id} and merchant_key = ${merchantKeyOf(shopA)}`);
+  const forgedTrustedColumn = await code((tx) => tx`update ingest_merchants set trusted_category_id = ${otherCategory} where owner_user_id = ${user.id} and merchant_key = ${merchantKeyOf(shopA)}`);
+  assert(
+    next("A merchant cannot be trusted without a category, nor hold a trusted category while learning (23514)"),
+    forgedTrustedState === "23514" && forgedTrustedColumn === "23514",
+    `state alone ${forgedTrustedState}, column alone ${forgedTrustedColumn}`,
+  );
+
+  // ----- counterparties -----
+  type CounterpartyRow = { state: string; streak: number; candidate: string | null; trusted: string | null };
+  const descriptionOf = (name: string) => `Harness m52 ${name} ${tag} cobro`;
+  const patternOf = (name: string) => counterpartyPatternKey(descriptionOf(name));
+  const counterpartyRow = async (name: string): Promise<CounterpartyRow | undefined> =>
+    (await fixtureSql<CounterpartyRow[]>`
+      select state, streak::int as streak, candidate_account_id as candidate, trusted_account_id as trusted
+      from ingest_counterparties where owner_user_id = ${user.id} and pattern_key = ${patternOf(name)} and side = 'to'`)[0];
+  const teachCounterparty = (name: string, account: string) =>
+    asOwner(user.id, async (tx) => {
+      await tx`select private.remember_counterparty(${patternOf(name)}, ${descriptionOf(name)}, 'to', ${account})`;
+    });
+  const trustCounterparty = async (name: string, account: string) => {
+    await teachCounterparty(name, account);
+    await teachCounterparty(name, account);
+  };
+  const awaiting = async (name: string): Promise<string> => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: origin,
+        toAccountId: null,
+        amountCents: 12_300,
+        occurredAt: today,
+        description: descriptionOf(name),
+        externalRef: `m52-${tag}-${name}`,
+        splits: [{ categoryId: spendCategory, amountCents: 12_300 }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    await asOwner(user.id, async (tx) => {
+      await tx`update transactions set awaiting_counterparty = true where id = ${transactionId}`;
+    });
+    return transactionId;
+  };
+  const { listAwaitingCounterparty } = await import("@/db/queries/transactions");
+  const proposedFor = async (id: string) =>
+    (await asUser(user, () => listAwaitingCounterparty())).find((row) => row.id === id);
+
+  const trustedAccount = await mkAccount("trusted");
+  const otherAccount = await mkAccount("other");
+  const movedAccount = await mkAccount("moved");
+  await trustCounterparty("a", trustedAccount);
+  const waiting = await awaiting("a");
+  const counterpartyBefore = await counterpartyRow("a");
+  const waitingBefore = await proposedFor(waiting);
+  assert(
+    next("A counterparty completed twice is trusted and its awaiting movement proposes the account (control)"),
+    counterpartyBefore?.state === "trusted" && counterpartyBefore.trusted === trustedAccount && waitingBefore?.proposedAccountId === trustedAccount,
+    `row = ${JSON.stringify(counterpartyBefore)}, proposed ${waitingBefore?.proposedAccountId ?? "null"}`,
+  );
+  let accountDeleted: boolean | string;
+  try {
+    accountDeleted = await asUser(user, () => deleteAccount({ accountId: trustedAccount }));
+  } catch (error) {
+    accountDeleted = refusal(error);
+  }
+  const counterpartyAfter = await counterpartyRow("a");
+  assert(
+    next("Deleting the account a counterparty trusts succeeds"),
+    accountDeleted === true,
+    `deleteAccount answered ${String(accountDeleted)}`,
+  );
+  assert(
+    next("The counterparty row survives its account's deletion as learning, streak 0, candidate and trusted null"),
+    counterpartyAfter?.state === "learning" &&
+      counterpartyAfter.streak === 0 &&
+      counterpartyAfter.candidate === null &&
+      counterpartyAfter.trusted === null,
+    `row = ${JSON.stringify(counterpartyAfter)}`,
+  );
+  const waitingAfter = await proposedFor(waiting);
+  assert(
+    next("The movement still awaiting its counterparty proposes no account once the rule, kept, lost it"),
+    counterpartyAfter !== undefined && waitingAfter !== undefined && waitingAfter.proposedAccountId === null && waitingAfter.proposedAccountLabel === null,
+    `proposal = ${JSON.stringify(waitingAfter && { id: waitingAfter.proposedAccountId, label: waitingAfter.proposedAccountLabel })}`,
+  );
+
+  const relearnAccount = await mkAccount("relearn");
+  await teachCounterparty("a", relearnAccount);
+  const relearnCounterparty = await counterpartyRow("a");
+  assert(
+    next("A counterparty that lost its account starts over: one completion leaves it learning on streak 1"),
+    relearnCounterparty?.state === "learning" && relearnCounterparty.streak === 1 && relearnCounterparty.candidate === relearnAccount && relearnCounterparty.trusted === null,
+    `row = ${JSON.stringify(relearnCounterparty)}`,
+  );
+
+  await trustCounterparty("b", otherAccount);
+  const unrelatedAccount = await mkAccount("unrelated");
+  await asUser(user, () => deleteAccount({ accountId: unrelatedAccount }));
+  const counterpartyUntouched = await counterpartyRow("b");
+  assert(
+    next("Deleting an account some other rule trusts leaves a trusted counterparty trusted on streak 2"),
+    counterpartyUntouched?.state === "trusted" && counterpartyUntouched.streak === 2 && counterpartyUntouched.trusted === otherAccount,
+    `row = ${JSON.stringify(counterpartyUntouched)}`,
+  );
+
+  const movedCounterparty = await code((tx) => tx`update ingest_counterparties set trusted_account_id = ${movedAccount} where owner_user_id = ${user.id} and pattern_key = ${patternOf("b")} and side = 'to'`);
+  const counterpartyMoved = await counterpartyRow("b");
+  assert(
+    next("A counterparty whose trusted account changes to another account stays trusted on streak 2"),
+    movedCounterparty === "ok" && counterpartyMoved?.state === "trusted" && counterpartyMoved.streak === 2 && counterpartyMoved.trusted === movedAccount,
+    `update ${movedCounterparty}, row = ${JSON.stringify(counterpartyMoved)}`,
+  );
+
+  await trustCounterparty("c", otherAccount);
+  await teachCounterparty("c", movedAccount);
+  const counterpartyAmbiguous = await counterpartyRow("c");
+  assert(
+    next("A trusted counterparty contradicted by one completion becomes ambiguous with the new candidate, not learning"),
+    counterpartyAmbiguous?.state === "ambiguous" && counterpartyAmbiguous.trusted === null && counterpartyAmbiguous.candidate === movedAccount,
+    `row = ${JSON.stringify(counterpartyAmbiguous)}`,
+  );
+
+  const forgedCounterpartyState = await code((tx) => tx`update ingest_counterparties set state = 'trusted' where owner_user_id = ${user.id} and pattern_key = ${patternOf("a")} and side = 'to'`);
+  const forgedCounterpartyColumn = await code((tx) => tx`update ingest_counterparties set trusted_account_id = ${otherAccount} where owner_user_id = ${user.id} and pattern_key = ${patternOf("a")} and side = 'to'`);
+  assert(
+    next("A counterparty cannot be trusted without an account, nor hold a trusted account while learning (23514)"),
+    forgedCounterpartyState === "23514" && forgedCounterpartyColumn === "23514",
+    `state alone ${forgedCounterpartyState}, column alone ${forgedCounterpartyColumn}`,
+  );
+
+  // ----- the trigger functions -----
+  for (const table of ["ingest_merchants", "ingest_counterparties"] as const) {
+    const functions = await fixtureSql<
+      { name: string; invoker: boolean; pinned: boolean; anon: boolean; authenticated: boolean; service: boolean; public: boolean }[]
+    >`
+      select p.proname as name,
+        not p.prosecdef as invoker,
+        coalesce(p.proconfig, '{}') && array['search_path=""'] as pinned,
+        has_function_privilege('anon', p.oid, 'execute') as anon,
+        has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
+        has_function_privilege('service_role', p.oid, 'execute') as service,
+        exists (
+          select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+          where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public
+      from pg_trigger t
+      join pg_proc p on p.oid = t.tgfoid
+      where t.tgrelid = ${`finances.${table}`}::regclass
+        and not t.tgisinternal
+        and (t.tgtype & 1) = 1 and (t.tgtype & 2) = 2 and (t.tgtype & 16) = 16
+        and t.tgname not like '%set_timestamps'`;
+    assert(
+      next(`${table} has a BEFORE UPDATE row trigger beyond the timestamps, SECURITY INVOKER with an empty search_path`),
+      functions.length === 1 && functions[0].invoker && functions[0].pinned,
+      `functions = ${JSON.stringify(functions)}`,
+    );
+    assert(
+      next(`${table}'s forgetting trigger function is executable by PUBLIC, anon, authenticated and service_role: none`),
+      functions.length === 1 && !functions[0].public && !functions[0].anon && !functions[0].authenticated && !functions[0].service,
+      `functions = ${JSON.stringify(functions)}`,
+    );
+  }
 }
