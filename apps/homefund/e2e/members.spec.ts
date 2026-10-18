@@ -815,3 +815,233 @@ test.describe("the members dialog's refusals and pending state", () => {
     await expect(card.locator(".rt-Text")).toHaveCount(1);
   });
 });
+
+// RF-150, RF-151, RF-152, RF-149 (M4): the two refusals «Añadir miembro» now owes, on the address field,
+// and the invitation that lands after an archive. Addresses are `.invalid` except the one `example.com`
+// case, whose domain must answer DNS as taking no mail (`sign-in.spec.ts`'s precedent).
+test.describe("M4: the create dialog refuses a live member and a dead domain on the address field", () => {
+  const alreadyMember = members.errors.alreadyMember;
+  const undeliverable = errors.domainUndeliverable;
+
+  const emailGroup = (dialog: Locator) =>
+    dialog
+      .getByRole("group")
+      .filter({ has: dialog.page().locator("#member-email") })
+      .filter({ hasNot: dialog.page().locator("#member-name") });
+
+  async function addressOf(userId: string): Promise<string> {
+    const [row] = await fixtureSql<{ email: string }[]>`select email from auth.users where id = ${userId}`;
+    expect(row?.email, "the harness identity has an address").toBeTruthy();
+    return row.email;
+  }
+
+  const rosterCount = async () =>
+    (await fixtureSql<{ n: number }[]>`select count(*)::int as n from group_members where group_id = ${groupId}`)[0].n;
+
+  // Every toast ever mounted, so one that comes and goes between two polls is still counted.
+  async function recordToasts(page: Page) {
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      Object.assign(window, { __toastsSeen: seen });
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (!(node instanceof Element)) continue;
+            const toasts = node.matches("[data-sonner-toast]")
+              ? [node]
+              : [...node.querySelectorAll("[data-sonner-toast]")];
+            for (const toast of toasts) seen.push(toast.textContent ?? "");
+          }
+        }
+      }).observe(document, { childList: true, subtree: true });
+    });
+  }
+  const toastsSeen = (page: Page) =>
+    page.evaluate(() => (window as unknown as { __toastsSeen: string[] }).__toastsSeen);
+  const twoFrames = (page: Page) =>
+    page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    );
+
+  async function submit(page: Page, address: string, name = freshName()) {
+    const dialog = await openCreate(page);
+    await nameField(dialog).fill(name);
+    await emailField(dialog).fill(address);
+    await saveButton(dialog).click();
+    return { dialog, name };
+  }
+
+  async function expectFieldRefusal(dialog: Locator, words: string, address: string, name: string) {
+    await expect(emailGroup(dialog).getByText(words, { exact: true })).toBeVisible();
+    await expect(dialog.locator("#member-email")).toHaveAttribute("aria-invalid", "true");
+    await expect(dialog.locator("#member-name")).not.toHaveAttribute("aria-invalid", "true");
+    await expect(dialog).toHaveAttribute("data-state", "open");
+    await expect(nameField(dialog)).toHaveValue(name);
+    await expect(emailField(dialog)).toHaveValue(address);
+  }
+
+  for (const [who, userOf] of [
+    ["a joined member's", () => scope.memberUserId],
+    ["the leader's own", () => scope.userId],
+  ] as const) {
+    test(`${who} address is refused on the address field with «alreadyMember», the typing kept, nothing written or mailed`, async ({
+      page,
+    }) => {
+      // Kills: sending `members.errors.alreadyMember` to the toast instead of the `email` field.
+      const address = await addressOf(userOf());
+      const before = await rosterCount();
+      const mails = await mailCount(address);
+      const { dialog, name } = await submit(page, address);
+
+      await expectFieldRefusal(dialog, alreadyMember, address, name);
+      expect(await rosterCount()).toBe(before);
+      expect(await mailCount(address)).toBe(mails);
+    });
+  }
+
+  test("an address on a domain that takes no mail reads /login's words on the address field and writes nothing", async ({
+    page,
+  }) => {
+    // Kills: leaving `errors.domainUndeliverable` out of the field list (it falls to the toast).
+    const address = `x-${randomUUID()}@example.com`;
+    const before = await rosterCount();
+    const { dialog, name } = await submit(page, address);
+    try {
+      await expectFieldRefusal(dialog, undeliverable, address, name);
+      expect(await rosterCount()).toBe(before);
+      expect(await rowsWithAddress(address)).toHaveLength(0);
+      expect(await mailCount(address)).toBe(0);
+      expect(await fixtureSql`select 1 from auth.users where email = ${address}`).toHaveLength(0);
+      expect(await listed(address)).toBe(0);
+    } finally {
+      await forget(address, { sent: false });
+    }
+  });
+
+  for (const [title, words, address] of [
+    ["a live member's address", alreadyMember, () => addressOf(scope.memberUserId)],
+    ["an undeliverable domain", undeliverable, async () => `x-${randomUUID()}@example.com`],
+  ] as const) {
+    test(`${title}: the words show once, on the field, and no toast repeats them`, async ({ page }) => {
+      // Kills: dropping the `return` after `setError` (the toast fires as well).
+      await recordToasts(page);
+      const typed = await address();
+      const { dialog } = await submit(page, typed);
+
+      await expect(emailGroup(dialog).getByText(words, { exact: true })).toBeVisible();
+      await twoFrames(page);
+      expect((await toastsSeen(page)).filter((text) => text.includes(words))).toEqual([]);
+      await expect(page.getByText(words, { exact: true })).toHaveCount(1);
+    });
+  }
+
+  test("after a field refusal «Cancelar» closes the dialog, adds no row and sends no further request", async ({
+    page,
+  }) => {
+    // Kills: submitting on close.
+    const posts = actionPosts(page);
+    const address = await addressOf(scope.memberUserId);
+    const before = await rosterCount();
+    const { dialog, name } = await submit(page, address);
+    await expect(emailGroup(dialog).getByText(alreadyMember, { exact: true })).toBeVisible();
+    expect(posts).toHaveLength(1);
+
+    await cancelButton(dialog).click();
+
+    await expect(dialog).toHaveCount(0);
+    await twoFrames(page);
+    expect(posts).toHaveLength(1);
+    expect(await rosterCount()).toBe(before);
+    await expect(band(page).getByText(name)).toHaveCount(0);
+  });
+
+  test("the field refusal wraps inside the dialog and the page does not scroll sideways", async ({ page }) => {
+    // Kills: a refusal line that does not wrap (the longest sentence is /login's).
+    const address = `x-${randomUUID()}@example.com`;
+    const { dialog } = await submit(page, address);
+    try {
+      const message = emailGroup(dialog).getByText(undeliverable, { exact: true });
+      await expect(message).toBeVisible();
+
+      const box = (await message.boundingBox())!;
+      const frame = (await dialog.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(frame.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(frame.x + frame.width + 1);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    } finally {
+      await forget(address, { sent: false });
+    }
+  });
+
+  test("an address of another fund's live member still invites: «Miembro añadido.», pending row, the warning", async ({
+    page,
+  }) => {
+    // Kills: widening the live-member refusal beyond this group.
+    const other = randomUUID();
+    const otherGroup = randomUUID();
+    const address = freshAddress();
+    await fixtureSql`
+      insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at)
+      values ('00000000-0000-0000-0000-000000000000', ${other}, 'authenticated', 'authenticated', ${address}, now(), now())`;
+    await register(address);
+    await fixtureSql`insert into app_users (id, locale) values (${other}, 'es')`;
+    try {
+      await fixtureSql.begin(async (tx) => {
+        await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: other, role: "authenticated", aud: "authenticated" })}, true)`;
+        await tx`insert into groups (id, name, cash_mode) values (${otherGroup}, ${`Otro fondo ${stamp}`}, 'per_member')`;
+        await tx`insert into group_members (group_id, user_id, name, role) values (${otherGroup}, ${other}, ${`Ajeno ${stamp}`}, 'leader')`;
+      });
+      const { dialog, name } = await submit(page, address);
+
+      await expect(page.getByText(members.created, { exact: true })).toBeVisible();
+      await expect(dialog).toHaveCount(0);
+      await expectPendingRow(page, name, address);
+      await expect(warningsOf(page)).toHaveCount(1);
+    } finally {
+      await fixtureSql`delete from groups where id = ${otherGroup}`;
+      await forget(address);
+    }
+  });
+
+  test("an archived invitation's address invites again, and restoring the archived row is then refused by name", async ({
+    page,
+  }) => {
+    // Kills: M1's archived-row exemption dropped (the re-invite is refused); M2's restore refusal dropped (two live rows share the address).
+    const address = freshAddress();
+    const old = `Pendiente ${stamp}`;
+    await seedPending(old, address);
+    try {
+      await page.goto("/es/settings/members");
+      await confirmThroughMenu(page, old, common.archive, common.archive);
+      await expect(page.getByText(members.archived, { exact: true })).toBeVisible();
+
+      const { dialog, name } = await submit(page, address);
+      await expect(page.getByText(members.created, { exact: true })).toBeVisible();
+      await expect(dialog).toHaveCount(0);
+      await expectPendingRow(page, name, address);
+      await register(address);
+
+      await page.goto("/es/settings/members?tab=archived");
+      await expect(await nameRow(page, old)).toBeVisible();
+      await confirmThroughMenu(page, old, common.restore, common.restore);
+
+      await expect(toastsOf(page).filter({ hasText: members.errors.emailTaken })).toHaveCount(1);
+      await expect(page.getByText(members.restored, { exact: true })).toHaveCount(0);
+      await expect(await nameRow(page, old)).toBeVisible();
+      const live = await fixtureSql<{ name: string; archived: boolean }[]>`
+        select name, archived_at is not null as archived from group_members
+        where group_id = ${groupId} and lower(invite_email) = ${address.toLowerCase()} order by name`;
+      expect(live).toEqual(
+        [
+          { name: old, archived: true },
+          { name, archived: false },
+        ].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    } finally {
+      await forget(address);
+    }
+  });
+});

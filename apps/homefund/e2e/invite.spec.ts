@@ -765,3 +765,63 @@ test.describe("the invitation is Auth's own mail, sent from the server (RF-148)"
     for (const body of bodies) expect(body.includes(key)).toBe(false);
   });
 });
+
+// RF-150, RF-151, RF-152 (M4): onboarding reads both new refusals as a toast and adds no card.
+test.describe("M4: the invite step refuses a live member and a dead domain with a toast", () => {
+  async function joinMember(): Promise<string> {
+    const { userId, memberUserId } = readScope();
+    const claims = JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
+    await fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await tx`
+        insert into group_members (group_id, user_id, name, role)
+        values (${groupId}, ${memberUserId}, 'Ya dentro', 'member')`;
+    });
+    const [row] = await fixtureSql<{ email: string }[]>`select email from auth.users where id = ${memberUserId}`;
+    expect(row?.email, "the harness identity has an address").toBeTruthy();
+    return row.email;
+  }
+
+  test("a live member's address reads «alreadyMember» as a toast and adds no card", async ({ page }) => {
+    // Kills: the refusal lost on the way to the toast; a card added for the refused address.
+    const address = await joinMember();
+    const posts = countActionPosts(page);
+    const { input, send } = await openStep(page);
+    const before = await cards(page).count();
+    const rows = (await rosterRows()).length;
+
+    await input.fill(address);
+    await send.click();
+
+    await expect(page.locator("[data-sonner-toast]").filter({ hasText: members.errors.alreadyMember })).toHaveCount(1);
+    expect(posts.count()).toBe(1);
+    await expect(cards(page)).toHaveCount(before);
+    expect((await rosterRows()).length).toBe(rows);
+    expect(await mailCount(address)).toBe(0);
+  });
+
+  test("an address on a domain that takes no mail reads /login's words as a toast and adds no card", async ({
+    page,
+  }) => {
+    // Kills: the domain refusal swallowed or shown as «something went wrong».
+    const address = `x-${randomUUID()}@example.com`;
+    const { input, send } = await openStep(page);
+    const before = await cards(page).count();
+    const rows = (await rosterRows()).length;
+    try {
+      await input.fill(address);
+      await send.click();
+
+      await expect(
+        page.locator("[data-sonner-toast]").filter({ hasText: messages.errors.domainUndeliverable }),
+      ).toHaveCount(1);
+      await expect(page.getByText(messages.errors.unexpected, { exact: true })).toHaveCount(0);
+      await expect(cards(page)).toHaveCount(before);
+      expect((await rosterRows()).length).toBe(rows);
+      expect(await inviteRows(address)).toHaveLength(0);
+      expect(await mailCount(address)).toBe(0);
+    } finally {
+      await forget(address);
+    }
+  });
+});
