@@ -123,7 +123,7 @@ export const updateRecurringRuleAction = authActionClient
   .action(async ({ parsedInput: { amount, frequency, dayOfMonth, description, endsOn, ...rule } }) => {
     const [amountCents] = await Promise.all([toMinor(amount, rule), assertCategoryFits(rule)]);
 
-    let updated: boolean;
+    let updated: Awaited<ReturnType<typeof updateRecurringRule>>;
     try {
       updated = await updateRecurringRule({
         ...rule,
@@ -137,7 +137,8 @@ export const updateRecurringRuleAction = authActionClient
       mapRecurringRuleError(error);
     }
 
-    if (!updated) throw new ActionError("errors.notFound");
+    if (updated === "stale") throw new ActionError("errors.stale");
+    if (updated === "missing") throw new ActionError("errors.notFound");
 
     refresh();
   });

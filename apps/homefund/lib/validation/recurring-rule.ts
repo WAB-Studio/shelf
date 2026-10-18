@@ -164,6 +164,8 @@ export const updateRecurringRuleSchema = z
   .object({
     id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
     ...recurringRuleFields,
+    // The rule's `updated_at::text` as the form loaded it; absent, the edit is unguarded.
+    expectedUpdatedAt: z.string().min(1).optional(),
   })
   .superRefine(requireExactlyOneAccount)
   .superRefine(requireDayOfMonthByFrequency)
