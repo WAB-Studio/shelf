@@ -1958,6 +1958,47 @@ async function checkAiDoor(): Promise<void> {
         `a reused refresh yields ${replay} and keeps = ${kept}; past 30 s yields ${lateReplay}, the connection still resolves = ${await resolves(access3)}`,
       );
 
+      // -- a replay revokes the replayed connection and no other of the same person --
+      const connect = async (): Promise<{ access: Buffer; refresh: Buffer; code: Buffer }> => {
+        const code = await newCode();
+        const access = sha256();
+        const refresh = sha256();
+        await exchange(code, { access, refresh });
+        return { access, refresh, code };
+      };
+      const ageRefresh = (hash: Buffer, seconds: number) =>
+        tx`update goals.oauth_refresh set used_at = now() - ${seconds} * interval '1 second' where refresh_hash = ${hash}`;
+      const ageCode = (hash: Buffer, seconds: number) =>
+        tx`update goals.oauth_codes set used_at = now() - ${seconds} * interval '1 second' where code_hash = ${hash}`;
+
+      const rA = await connect();
+      const rB = await connect();
+      const rotatedA = sha256();
+      await rotate(rA.refresh, rotatedA, sha256());
+      await ageRefresh(rA.refresh, 29);
+      const refresh29 = await rotate(rA.refresh, sha256(), sha256());
+      const spared29 = await resolves(rotatedA);
+      await ageRefresh(rA.refresh, 31);
+      const refresh31 = await rotate(rA.refresh, sha256(), sha256());
+      assert(
+        "P303",
+        refresh29 === null && spared29 && refresh31 === null && !(await resolves(rotatedA)) && (await resolves(rB.access)),
+        `refresh replay: at 29 s yields ${refresh29} and spares = ${spared29}; at 31 s yields ${refresh31}, replayed connection resolves = ${await resolves(rotatedA)}, the person's other connection resolves = ${await resolves(rB.access)}`,
+      );
+
+      const cA = await connect();
+      const cB = await connect();
+      await ageCode(cA.code, 29);
+      const code29 = await exchange(cA.code, { access: sha256() });
+      const codeSpared29 = await resolves(cA.access);
+      await ageCode(cA.code, 31);
+      const code31 = await exchange(cA.code, { access: sha256() });
+      assert(
+        "P304",
+        code29 === null && codeSpared29 && code31 === null && !(await resolves(cA.access)) && (await resolves(cB.access)),
+        `code replay: at 29 s yields ${code29} and spares = ${codeSpared29}; at 31 s yields ${code31}, replayed connection resolves = ${await resolves(cA.access)}, the person's other connection resolves = ${await resolves(cB.access)}`,
+      );
+
       throw forcedRollback;
     })
     .catch((error: unknown) => {

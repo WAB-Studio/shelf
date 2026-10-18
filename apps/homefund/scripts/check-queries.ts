@@ -4215,6 +4215,7 @@ async function main(): Promise<void> {
   await accountPlannedVersionSuite();
   await learnedRuleSuite();
   await recurringPauseSuite();
+  await resendAndMissingSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -9022,4 +9023,156 @@ async function recurringPauseSuite(): Promise<void> {
       detail: `ended inactive = ${!ended.is_active}, booked ${before}, resume = ${JSON.stringify(result)}, is_active = ${after.is_active}`,
     };
   });
+}
+
+// A resent form ref names the same destination and
+// the same source it first booked (RF-158), an income resend has no source to compare yet is the
+// same request, and an unstamped edit of a rule that is not there is refused notFound (RF-31).
+async function resendAndMissingSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: (input: Record<string, unknown>) => Promise<MovementResult>;
+  };
+  const { withdrawCashAction } = (await import("@/app/actions/cash")) as unknown as {
+    withdrawCashAction: (input: Record<string, unknown>) => Promise<{
+      serverError?: string;
+      data?: { transactionId: string };
+    } | undefined>;
+  };
+  const user = await createMembershipFreeUser();
+  const mkAccount = async (name: string): Promise<string> => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const accountA = await mkAccount("Harness m78 A");
+  const accountB = await mkAccount("Harness m78 B");
+  const accountC = await mkAccount("Harness m78 C");
+  const { categoryId: incomeCategory } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m78 ${tag}`, kind: "income", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", incomeCategory);
+  const { categoryId: expenseCategory } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m78 gasto ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", expenseCategory);
+
+  const send = (ref: string, over: Record<string, unknown>) =>
+    asUser(user, () =>
+      actions.createTransactionAction({
+        requestRef: ref,
+        amount: "100",
+        occurredAt: today,
+        description: `m78 ${tag}`,
+        labelIds: [],
+        ...over,
+      }),
+    );
+  type Row = { id: string; to_account_id: string | null; from_account_id: string | null };
+  const rowsOf = async (ref: string) => {
+    const rows = await fixtureSql<Row[]>`
+      select id, to_account_id, from_account_id from transactions
+      where owner_user_id = ${user.id} and external_ref = ${`form:${ref}`}`;
+    rows.forEach((r) => track("transactions", r.id));
+    return rows;
+  };
+  const refused = (r: { serverError?: string; data?: { ok?: boolean; reason?: string } } | undefined) =>
+    r?.serverError === "errors.resendChanged" || (r?.data?.ok === false && r.data.reason === "resendChanged");
+
+  // Q: a transfer resent with another destination
+  const transfer = { fromAccountId: accountA, toAccountId: accountB, splits: [] };
+  const tRef = randomUUID();
+  await send(tRef, transfer);
+  const t2 = await send(tRef, { ...transfer, toAccountId: accountC });
+  const tRows = await rowsOf(tRef);
+  assert(
+    next("A resend of a form ref with the same source and amount but another destination account is refused resendChanged and keeps the first destination"),
+    refused(t2) && tRows.length === 1 && tRows[0].to_account_id === accountB,
+    `result = ${JSON.stringify(t2)}, rows = ${JSON.stringify(tRows)}`,
+  );
+
+  // Q: an income, which has no source account, resent unchanged
+  const income = { fromAccountId: null, toAccountId: accountA, splits: [{ categoryId: incomeCategory, amount: "100" }] };
+  const iRef = randomUUID();
+  const i1 = await send(iRef, income);
+  const i2 = await send(iRef, income);
+  const iRows = await rowsOf(iRef);
+  assert(
+    next("An income sent twice with the same requestRef answers ok with the first movement's id and books one row"),
+    iRows.length === 1 && i1.data?.ok === true && i2.data?.ok === true &&
+      i1.data.transactionId === iRows[0].id && i2.data.transactionId === iRows[0].id,
+    `${iRows.length} row(s), first = ${JSON.stringify(i1)}, second = ${JSON.stringify(i2)}`,
+  );
+
+  // Q: a cash withdrawal resent from another source account
+  const wRef = randomUUID();
+  const withdraw = (source: string) =>
+    asUser(user, () => withdrawCashAction({ sourceAccountId: source, amount: "100", requestRef: wRef }));
+  const w1 = await withdraw(accountA);
+  const w2 = await withdraw(accountB);
+  const wRows = await rowsOf(wRef);
+  const cashRows = await fixtureSql<{ id: string }[]>`select id from accounts where owner_user_id = ${user.id} and subtype = 'cash'`;
+  cashRows.forEach((r) => track("accounts", r.id));
+  assert(
+    next("A resent withdrawal with the same amount but another source account is refused resendChanged and keeps the first source"),
+    w1?.data?.transactionId !== undefined &&
+      JSON.stringify(w2).includes("resendChanged") &&
+      w2?.data?.transactionId === undefined &&
+      wRows.length === 1 &&
+      wRows[0].from_account_id === accountA,
+    `first = ${JSON.stringify(w1)}, second = ${JSON.stringify(w2)}, rows = ${JSON.stringify(wRows)}`,
+  );
+
+  // Q: an unstamped edit of a rule that is gone
+  const { recurringRuleId } = await asUser(user, () =>
+    createRecurringRule({
+      fromAccountId: accountA,
+      toAccountId: null,
+      amountCents: 1_000,
+      categoryId: expenseCategory,
+      description: `m78 ${tag}`,
+      frequency: "weekly",
+      intervalN: 1,
+      dayOfMonth: null,
+      nextRunOn: shiftDate(today, 7),
+      endsOn: null,
+    }),
+  );
+  await fixtureSql`delete from recurring_rules where id = ${recurringRuleId}`;
+  const gone = (await asUser(user, () =>
+    updateRecurringRuleAction({
+      id: recurringRuleId,
+      fromAccountId: accountA,
+      toAccountId: null,
+      amount: "20",
+      categoryId: expenseCategory,
+      description: `m78 ${tag}`,
+      frequency: "weekly",
+      intervalN: 1,
+      dayOfMonth: null,
+      nextRunOn: shiftDate(today, 7),
+      endsOn: null,
+    } as Parameters<typeof updateRecurringRuleAction>[0]),
+  )) as { serverError?: string; data?: { ok?: boolean; reason?: string } } | undefined;
+  assert(
+    next("An edit with no expectedUpdatedAt of a rule that is gone is refused notFound"),
+    gone?.serverError === "errors.notFound" && gone?.data?.ok !== true,
+    `result = ${JSON.stringify(gone)}`,
+  );
 }
