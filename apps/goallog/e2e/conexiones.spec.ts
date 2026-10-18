@@ -125,7 +125,7 @@ test.describe("the connections screen (RP-38)", () => {
       const command = page.locator("pre").nth(1);
       await expect(command).toContainText("/mcp");
       await expect(command).toContainText(key);
-      await expect(command).toContainText("claude mcp add --transport http pulsar ");
+      await expect(command).toContainText("claude mcp add --transport http goallog ");
 
       await page.getByRole("button", { name: messages.created.copyName }).click();
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(key);
