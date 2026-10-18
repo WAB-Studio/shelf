@@ -1,5 +1,5 @@
-// A sync round that names searches to delete (RL-66, RL-70) costs the same two
-// statements as one that does not, answers both new fields on every 200, and
+// A sync round that names searches to delete (RL-66, RL-70) costs the same three
+// statements as one that does not (the gate, the write, the download), answers both new fields on every 200, and
 // hands the named marks and the mark cursor to the statement that owns them.
 // The session is a stand-in whose transaction counts `execute` calls; the real
 // route and the real `lib/sync/upload.ts` run on top of it. Nothing touches Postgres.
@@ -31,9 +31,14 @@ const SINCE_AT = "2026-10-08T12:00:00.123456Z";
 
 const state = { signedIn: true, retired: false, allowed: true, executed: [] as { sql: string; params: unknown[] }[] };
 
-// The first statement answers its row whatever columns the route reads off it;
-// the second finds no peer rows.
-function firstStatementRow(): unknown {
+// The first statement is `reading.sync_gate`: a day past the cap reads as a count
+// no batch fits under. The second answers its row whatever columns the route
+// reads off it; the third finds no peer rows.
+function gateRow(): unknown {
+  return { retired: state.retired, today: state.allowed ? "0" : String(Number.MAX_SAFE_INTEGER) };
+}
+
+function writeRow(): unknown {
   return new Proxy(
     {},
     {
@@ -55,7 +60,7 @@ mock.module(here("../lib/session.ts"), {
         execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
           const { sql, params } = new PgDialect().sqlToQuery(query);
           state.executed.push({ sql, params });
-          return state.executed.length === 1 ? [firstStatementRow()] : [];
+          return state.executed.length === 1 ? [gateRow()] : state.executed.length === 2 ? [writeRow()] : [];
         },
       }),
   },
@@ -75,18 +80,18 @@ const base = { deviceId: DEVICE, readerId: READER, rows: [], since: null };
 const marks = (count: number) => Array.from({ length: count }, (_, index) => ({ deviceId: MARK_DEVICE, localId: index + 1 }));
 const cursorAt = (deviceId: string, localId: number) => `${SINCE_AT}|${deviceId}|${localId}`;
 
-test("a round costs two statements past settle, with tombstones named or not", async () => {
+test("a round costs three statements past settle, with tombstones named or not", async () => {
   await post(base);
-  assert.equal(state.executed.length, 2, "no tombstones");
+  assert.equal(state.executed.length, 3, "no tombstones");
 
   state.executed = [];
   await post({ ...base, tombstones: marks(3), tombstonesSince: cursorAt(PEER, 7) });
-  assert.equal(state.executed.length, 2, "tombstones and a mark cursor");
-  assert.ok(JSON.stringify(state.executed[0].params).includes(MARK_DEVICE), "and the tombstones ride in the first of them");
+  assert.equal(state.executed.length, 3, "tombstones and a mark cursor");
+  assert.ok(JSON.stringify(state.executed[1].params).includes(MARK_DEVICE), "and the tombstones ride in the write, the second of them");
 
   state.executed = [];
   await post({ ...base, tombstones: marks(500), since: cursorAt(PEER, 2) });
-  assert.equal(state.executed.length, 2, "a full list of tombstones and a download cursor");
+  assert.equal(state.executed.length, 3, "a full list of tombstones and a download cursor");
 });
 
 test("a body written before tombstones existed answers 200 with both fields present", async () => {
@@ -118,9 +123,9 @@ test("the cursor of the rows and the cursor of the marks do not stand in for eac
   assert.equal(response.json.tombstoneCursor, null);
 });
 
-test("the named tombstones and the decoded mark cursor reach the first statement", async () => {
+test("the named tombstones and the decoded mark cursor reach the write statement", async () => {
   await post({ ...base, tombstones: marks(2), tombstonesSince: cursorAt(PEER, 7) });
-  const bound = JSON.stringify(state.executed[0].params);
+  const bound = JSON.stringify(state.executed[1].params);
   assert.ok(bound.includes(MARK_DEVICE), "the device named by a tombstone is a parameter");
   assert.ok(bound.includes(PEER), "the device of the mark cursor is a parameter");
   assert.ok(bound.includes(SINCE_AT), "the instant of the mark cursor is a parameter");
@@ -128,7 +133,7 @@ test("the named tombstones and the decoded mark cursor reach the first statement
 
 test("a tombstone list with no entry binds none of the named device", async () => {
   await post({ ...base, tombstones: [] });
-  assert.ok(!JSON.stringify(state.executed[0].params).includes(MARK_DEVICE));
+  assert.ok(!JSON.stringify(state.executed[1].params).includes(MARK_DEVICE));
 });
 
 test("500 tombstones pass and 501 are a bad request that reaches no statement", async () => {
