@@ -8291,4 +8291,20 @@ async function withdrawalResendSuite(): Promise<void> {
       k2?.data?.transactionId === undefined,
     `${kept.length} transfer(s) at ${kept[0]?.amount_cents}, second = ${JSON.stringify(k2)}`,
   );
+
+  // Q: the cash archived between the send and the resend must not be replaced by a new one
+  const lateRef = randomUUID();
+  const l1 = await withdraw({ requestRef: lateRef });
+  const cashBefore = (await cashAccounts()).length;
+  await fixtureSql`update accounts set archived_at = now() where owner_user_id = ${user.id} and subtype = 'cash'`;
+  const l2 = await withdraw({ requestRef: lateRef });
+  const lateRows = (await transfers()).filter((r) => r.external_ref === `form:${lateRef}`);
+  assert(
+    next("A resend after the cash was archived answers the booked transfer and creates no new cash account"),
+    lateRows.length === 1 &&
+      l1?.data?.transactionId === lateRows[0].id &&
+      l2?.data?.transactionId === lateRows[0].id &&
+      (await cashAccounts()).length === cashBefore,
+    `${lateRows.length} transfer(s), ${cashBefore} -> ${(await cashAccounts()).length} cash account(s), second = ${JSON.stringify(l2)}`,
+  );
 }
