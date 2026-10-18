@@ -778,7 +778,7 @@
     "categoryLabel": "Category",
     "categoryNone": "No category",
     "reminder": "Reminder",
-    "reminderHint": "These are reminders: they warn you, and you record the expense when you pay it.",
+    "reminderHint": "These are reminders: they appear here on their date, and you record the expense when you pay it.",
     "noConcept": "No concept",
     "settle": "Record payment",
     "settleTitle": "Record the payment",
@@ -984,6 +984,7 @@
       "replacedEstimate": "Replaces the estimate."
     },
     "errors": {
+      "termsNotSaved": "The debt was created, but its terms were not saved. Save them again.",
       "accountInvalid": "Choose a valid account.",
       "kindInvalid": "Choose a valid debt type.",
       "rateRequired": "Enter the rate.",
@@ -1026,7 +1027,7 @@
     "amountLabel": "Amount",
     "dateLabel": "Date",
     "paymentSave": "Record payment",
-    "paymentPaidLines": "{count, plural, =1 {You paid # installment.} other {You paid # installments.}}",
+    "paymentPaidLines": "{count, plural, =0 {The payment completed no installment.} =1 {You paid # installment.} other {You paid # installments.}}",
     "paymentRemainder": "{amount} left over: not enough for the next installment.",
     "tableSeq": "Installment",
     "tableDueDate": "Due",
@@ -1128,6 +1129,8 @@
     "system": "System"
   },
   "errors": {
+    "linkTimeout": "We could not check the link. Open it again from the email.",
+    "signOutFailed": "We could not sign you out. Please try again.",
     "notFoundTitle": "This page does not exist",
     "notFoundDescription": "The link may be misspelled, or the page may have moved.",
     "unexpected": "Something went wrong. Please try again.",

@@ -778,7 +778,7 @@
     "categoryLabel": "Categoría",
     "categoryNone": "Sin categoría",
     "reminder": "Recordatorio",
-    "reminderHint": "Son recordatorios: te avisan, y tú registras el gasto cuando lo pagas.",
+    "reminderHint": "Son recordatorios: aparecen aquí en su fecha, y tú registras el gasto cuando lo pagas.",
     "noConcept": "Sin concepto",
     "settle": "Registrar pago",
     "settleTitle": "Registrar el pago",
@@ -984,6 +984,7 @@
       "replacedEstimate": "Reemplaza el estimado."
     },
     "errors": {
+      "termsNotSaved": "La deuda quedó creada, pero sus condiciones no. Guárdalas otra vez.",
       "accountInvalid": "Elige una cuenta válida.",
       "kindInvalid": "Elige un tipo de deuda válido.",
       "rateRequired": "Escribe la tasa.",
@@ -1026,7 +1027,7 @@
     "amountLabel": "Monto",
     "dateLabel": "Fecha",
     "paymentSave": "Registrar abono",
-    "paymentPaidLines": "{count, plural, =1 {Pagaste # cuota.} other {Pagaste # cuotas.}}",
+    "paymentPaidLines": "{count, plural, =0 {El pago no completó ninguna cuota.} =1 {Pagaste # cuota.} other {Pagaste # cuotas.}}",
     "paymentRemainder": "Sobran {amount}: no alcanzan la siguiente cuota.",
     "tableSeq": "Cuota",
     "tableDueDate": "Vence",
@@ -1128,6 +1129,8 @@
     "system": "Sistema"
   },
   "errors": {
+    "linkTimeout": "No pudimos comprobar el enlace. Ábrelo otra vez desde el correo.",
+    "signOutFailed": "No pudimos cerrar tu sesión. Inténtalo otra vez.",
     "notFoundTitle": "Esta página no existe",
     "notFoundDescription": "Puede que el enlace esté mal escrito o que la página se haya movido.",
     "unexpected": "Algo salió mal. Vuelve a intentarlo.",
