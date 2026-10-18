@@ -8364,15 +8364,6 @@ async function accountPlannedVersionSuite(): Promise<void> {
     (await fixtureSql<{ c: string }[]>`select initial_balance_cents::text as c from accounts where id = ${accountId}`)[0]?.c;
   const plannedAmount = async () =>
     (await fixtureSql<{ c: string }[]>`select amount_cents::text as c from planned_payments where id = ${plannedPaymentId}`)[0]?.c;
-  // The comparison must be able to fail on a dropped microsecond, so the stamp is touched until it has some.
-  const hasMicros = (t: string) => /\.\d{6}/.test(t) && !t.replace(/[+-]\d+$/, "").endsWith("000");
-  for (let i = 0; i < 10 && !hasMicros(await accountStamp()); i++) {
-    await fixtureSql`update accounts set name = name where id = ${accountId}`;
-  }
-  for (let i = 0; i < 10 && !hasMicros(await plannedStamp()); i++) {
-    await touchPlanned(`m46 ${tag}`);
-  }
-
   // Another person's save: a raw update would lose the session the scope trigger reads.
   const touchPlanned = (description: string) =>
     asUser(user, () =>
@@ -8387,6 +8378,15 @@ async function accountPlannedVersionSuite(): Promise<void> {
         description,
       }),
     );
+  // The comparison must be able to fail on a dropped microsecond, so the stamp is touched until it has some.
+  const hasMicros = (t: string) => /\.\d{6}/.test(t) && !t.replace(/[+-]\d+$/, "").endsWith("000");
+  for (let i = 0; i < 10 && !hasMicros(await accountStamp()); i++) {
+    await fixtureSql`update accounts set name = name where id = ${accountId}`;
+  }
+  for (let i = 0; i < 10 && !hasMicros(await plannedStamp()); i++) {
+    await touchPlanned(`m46 ${tag}`);
+  }
+
   const saveAccount = (amount: string, expectedUpdatedAt?: string) =>
     asUser(user, () =>
       accountActions.updateAccountAction({
