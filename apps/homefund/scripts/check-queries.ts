@@ -138,7 +138,7 @@ import {
   resumeRecurringRuleAction,
   updateRecurringRuleAction,
 } from "@/app/actions/recurring-rules";
-import { recordBilledAmount } from "@/db/queries/debt-statements";
+import { listPendingSettlements, recordBilledAmount } from "@/db/queries/debt-statements";
 import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
   buildEffectiveRefs,
@@ -4230,6 +4230,7 @@ async function main(): Promise<void> {
   await recurringPauseSuite();
   await resendAndMissingSuite();
   await billedBeforeReconciliationSuite();
+  await pendingSettlementsOnAssetSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -9441,5 +9442,68 @@ async function billedBeforeReconciliationSuite(): Promise<void> {
       typeof en.debts.errors.beforeReconciliation === "string",
     "debts.errors.beforeReconciliation",
   );
+  });
+}
+
+// M55: an asset account's still-estimated foreign purchase is listed for confirmation (RF-123).
+async function pendingSettlementsOnAssetSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const user = await createMembershipFreeUser();
+  await asUser(user, async () => {
+    const { categoryId } = await createCategory({
+      scope: { ownerUserId: user.id },
+      name: `Harness m55 ${tag}`,
+      kind: "expense",
+      parentId: null,
+      color: "#0E7490",
+    });
+    track("categories", categoryId);
+    const { accountId } = await createAccount({
+      name: `Harness m55 ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000_000,
+      balanceOn: "2026-08-01",
+    });
+    track("accounts", accountId);
+    const purchase = async (currency: string, estimate: boolean, day: string): Promise<string> => {
+      const created = await createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        currency,
+        counterAmountCents: currency === "USD" ? 40_000_000 : null,
+        counterIsEstimate: estimate,
+        occurredAt: day,
+        description: `m55 ${tag} ${currency} ${estimate} ${day}`,
+        externalRef: null,
+        splits: [{ categoryId: categoryId, amountCents: 10_000 }],
+        labelIds: [],
+      });
+      track("transactions", created.transactionId);
+      return created.transactionId;
+    };
+    const pending = await purchase("USD", true, "2026-09-05");
+    const billed = await purchase("USD", false, "2026-09-06");
+    await purchase("COP", false, "2026-09-07");
+
+    const listed = await listPendingSettlements(accountId);
+    assert(
+      next("An asset account's pending foreign estimate is listed"),
+      listed.some((row) => row.id === pending && row.currency === "USD" && row.amountCents === 10_000 && row.counterAmountCents === 40_000_000),
+      JSON.stringify(listed),
+    );
+    assert(
+      next("Only the estimate is listed: a billed purchase and a peso one are not"),
+      listed.length === 1 && !listed.some((row) => row.id === billed),
+      JSON.stringify(listed),
+    );
   });
 }
