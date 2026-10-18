@@ -1,5 +1,6 @@
 "use server";
 
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
 import { isEmailAllowed } from "@/lib/auth/allowlist";
@@ -27,7 +28,7 @@ async function supabaseClient() {
 
 export type SendSignInLinkResult =
   | { ok: true }
-  | { ok: false; error: "emailInvalid" | "notInvited" | "domainUndeliverable" | "sendFailed" | "rateLimited" };
+  | { ok: false; error: "emailInvalid" | "notInvited" | "domainUndeliverable" | "sendFailed" | "rateLimited" | "capped" };
 
 /**
  * Asks for the sign-in link (RP-18). No `data` on the call: it would land in
@@ -47,6 +48,10 @@ export async function sendSignInLink(email: string, next?: string): Promise<Send
   // quota, both spent whether or not the message can land.
   if (!(await isDomainDeliverable(domain))) return { ok: false, error: "domainUndeliverable" };
 
+  const [{ headers }, { claimSignInLink, releaseSignInLink }] = await Promise.all([import("next/headers"), import("@/lib/auth/sign-in-budget")]);
+  const claim = await claimSignInLink(await headers(), parsed.data);
+  if (claim.status === "capped") return { ok: false, error: "capped" };
+
   const [supabase, { env }] = await Promise.all([supabaseClient(), import("@/lib/env")]);
 
   // A `next` that is not the consent never rides in the link.
@@ -64,6 +69,7 @@ export async function sendSignInLink(email: string, next?: string): Promise<Send
 
   if (error) {
     console.error("sign-in link request failed", error);
+    if (claim.status === "ok" && !isAuthRetryableFetchError(error)) await releaseSignInLink(claim.claimed);
     // 429 (over_email_send_rate_limit) names the wait, not just the
     // failure to send — every other status keeps the generic copy.
     return { ok: false, error: error.status === 429 ? "rateLimited" : "sendFailed" };
