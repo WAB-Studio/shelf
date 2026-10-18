@@ -1141,7 +1141,7 @@
     "linkOtherBrowser": "Abre el enlace en el mismo navegador donde lo pediste, o pide uno nuevo aquí.",
     "notFound": "Eso ya no existe.",
     "referenceGone": "Algo que elegiste ya no existe. Recarga la pantalla y vuelve a elegir.",
-    "categoryInUse": "Esta categoría está en uso y no se puede eliminar.",
+    "categoryInUse": "Esta categoría, o una de sus subcategorías, está en uso y no se puede eliminar.",
     "selfArchive": "No puedes archivarte a ti mismo.",
     "categoryNesting": "Esa categoría principal ya no sirve: elige otra del mismo lugar que no sea subcategoría.",
     "categoryKindMismatch": "La subcategoría debe tener el mismo tipo que su categoría principal.",

@@ -318,3 +318,17 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   («Esa persona ya está en este grupo.», `errors.domainUndeliverable`, «Ese correo ya tiene una invitación en este grupo.»).
   No desktop board: the same dialog opens from the 1280 row menu. A note on C3iCategoriasMiasVaciaMovil: the empty state's
   button opens on «Mías».
+
+## Decisions of 2026-10-18, after the critic of critic-6c, by the user
+
+- «Editar presupuesto» offers only the accounts of the budget's place (Q1 a): a personal category's budget the person's own
+  accounts, a fund category's the fund's; the scope refusal reads on its field inside the dialog, at 360 too. Level 2. Not
+  built yet.
+- A delete blocked by a subcategory in use (Q2 a): `errors.categoryInUse` reads «Esta categoría, o una de sus subcategorías,
+  está en uso y no se puede eliminar.», for the parent and the subcategory alike; no query names the child.
+- Q-A (a), 2026-10-18: the label list of «Nuevo presupuesto» and «Editar presupuesto» is cut by the budget's scope too, as the
+  accounts are.
+- Q-B (b), 2026-10-18: toasts hidden under an open dialog at 360 across HomeFund are fixed in the next train by the toast
+  primitive itself, for every dialog; this train moves only the budget dialog's scope refusal onto its field.
+- Boards: C3k «Editar presupuesto · cuentas de su ámbito» and C3l «Editar presupuesto · rechazo en el campo» (HomeFund
+  canvas, page «T4 · pantallas», 2026-10-18); no desktop face, the dialog is the same.

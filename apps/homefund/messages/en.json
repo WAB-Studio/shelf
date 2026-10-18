@@ -1141,7 +1141,7 @@
     "linkOtherBrowser": "Open the link in the same browser where you asked for it, or ask for a new one here.",
     "notFound": "That no longer exists.",
     "referenceGone": "Something you picked no longer exists. Reload the screen and choose again.",
-    "categoryInUse": "This category is in use and cannot be deleted.",
+    "categoryInUse": "This category, or one of its subcategories, is in use and cannot be deleted.",
     "selfArchive": "You cannot archive yourself.",
     "categoryNesting": "That parent can no longer hold it: pick another from the same place that is not a subcategory.",
     "categoryKindMismatch": "The subcategory must have the same kind as its parent category.",
