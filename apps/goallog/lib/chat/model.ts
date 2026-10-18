@@ -18,6 +18,9 @@ const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
 const MAX_ROUNDS = 5;
 
+// Summed over the rounds of one claim: a forged conversation that loops pays this plus one round.
+export const CHAT_INPUT_TOKENS_MAX = 120_000;
+
 // Unmeasured: reasoning counts against it. The orchestrator's paid run (Unresolved of the chat plan) replaces both.
 const MAX_OUTPUT_TOKENS = 4_000;
 const REASONING_EFFORT = "low";
@@ -120,6 +123,8 @@ async function converse(source: Source, base: Message[]): Promise<ChatAnswer> {
       if (reply === "" && changes.length === 0) return { status: "empty", ...spent() };
       return { status: "ok", reply, changes, usage };
     }
+
+    if (usage.input > CHAT_INPUT_TOKENS_MAX) return { status: "failed", usage };
 
     messages.push({
       role: "assistant",
