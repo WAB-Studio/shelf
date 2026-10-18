@@ -13,10 +13,11 @@ const AMOUNT_PATTERN = /\d[\d.,]*\d|\d/;
 // token makes it part of a word: «3 milanesas», «4 kg», «4 m2».
 const MULTIPLIER_PATTERN =
   /^\s*(millones|mill[oó]n|mil|k|m)(?![\p{L}\p{N}_])/iu;
-// The one letter whose case decides: a lowercase «m» is never a million
-// («25 m», «5 m de cable»), an uppercase «M» glued or as the last word is.
+// The one letter whose case decides: an uppercase «M» glued or as the last word
+// is a million; a lowercase «m» is never read as a figure and always asks.
 const MILLION_LETTER = "M";
 const LOWER_MILLION_LETTER = "m";
+const THOUSAND_ZEROS = 3;
 // «mil» standing as its own word with no digits before it: «pagué mil» is a
 // thousand pesos, never a million.
 const BARE_THOUSAND_PATTERN = /(?<![\p{L}\p{N}_])mil(?![\p{L}\p{N}_])/iu;
@@ -49,10 +50,12 @@ interface InterpretContext {
 }
 
 // A spaced «M» with words after it («3 M arriendo») is not guessed: the person
-// picks the bare number or the number times a million, both in stored cents.
+// picks the bare number or the number times a million. A lowercase «m» is never
+// guessed: the person picks the bare number, thousands or millions. Choices are
+// stored cents, and only whole pesos are offered.
 export interface AmountAsk {
   token: string;
-  choices: [number, number];
+  choices: number[];
 }
 
 interface QuickEntryProposal {
@@ -87,6 +90,26 @@ function multiplyPesos(mantissa: string, zeros: number): string | null {
   return digits.replace(/^0+(?=\d)/, "");
 }
 
+// The bare number, thousands and millions of a lowercase «m», each as stored
+// cents. A choice that is not whole pesos («1,15» bare) is left out: the sheet
+// never offers a figure with cents the person did not write as such.
+function lowerMChoices(amount: string): number[] {
+  const mantissa = MANTISSA_PATTERN.test(amount)
+    ? amount
+    : normalizeAmountInput(amount);
+  const pesos = [
+    normalizeAmountInput(amount),
+    multiplyPesos(mantissa, THOUSAND_ZEROS) ?? `${mantissa}000`,
+    multiplyPesos(mantissa, MILLION_ZEROS) ?? `${mantissa}000000`,
+  ];
+  return pesos
+    .map((value) => parseAmount(value))
+    .filter(
+      (cents): cents is number =>
+        cents !== null && cents > 0 && cents % 100 === 0,
+    );
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -113,15 +136,24 @@ export function interpretQuickEntry(
     amountMatch && bareWord === null ? MULTIPLIER_PATTERN.exec(afterAmount) : null;
   const letter = tokenMatch?.[1];
   const tokenText = tokenMatch?.[0] ?? "";
+  const isLowerAsk = letter === LOWER_MILLION_LETTER;
   const isAsk =
-    letter === MILLION_LETTER &&
-    /^\s/u.test(tokenText) &&
-    afterAmount.slice(tokenText.length).trim().length > 0;
-  const multiplierMatch =
-    letter === LOWER_MILLION_LETTER || isAsk ? null : tokenMatch;
+    isLowerAsk ||
+    (letter === MILLION_LETTER &&
+      /^\s/u.test(tokenText) &&
+      afterAmount.slice(tokenText.length).trim().length > 0);
+  const multiplierMatch = isAsk ? null : tokenMatch;
 
   let ask: AmountAsk | null = null;
-  if (isAsk && amountMatch) {
+  if (isLowerAsk && amountMatch) {
+    const choices = lowerMChoices(amountMatch[0]);
+    if (choices.length > 1) {
+      ask = {
+        token: text.slice(amountMatch.index, amountEnd + tokenText.length),
+        choices,
+      };
+    }
+  } else if (isAsk && amountMatch) {
     const bare = parseAmount(amountMatch[0]);
     const millionPesos = multiplyPesos(amountMatch[0], MILLION_ZEROS);
     const million = millionPesos === null ? null : parseAmount(millionPesos);
@@ -168,7 +200,7 @@ export function interpretQuickEntry(
   // token are removed.
   let description = text;
   if (amountMatch) {
-    // An asked «M» leaves with its number: the description reads «arriendo».
+    // An asked «m» or «M» leaves with its number: the description reads «arriendo».
     const cutEnd =
       amountEnd + ((isAsk ? tokenMatch : multiplierMatch)?.[0].length ?? 0);
     description = `${text.slice(0, amountMatch.index)} ${text.slice(cutEnd)}`;

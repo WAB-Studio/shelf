@@ -165,20 +165,45 @@ test("«M» spaced as the last word is a million", () => {
   assert.equal(stored("gasté 2 M  "), 200_000_000);
 });
 
-test("a lowercase «m» is never a million: the number reads bare, with no question", () => {
-  for (const [text, pesos] of [
-    ["25 m", 2_500],
-    ["5m", 500],
-    ["2 m", 200],
-    ["gasté 2 m", 200],
-    ["5 m de cable", 500],
-    ["5m de cable", 500],
-    ["1,15 m", 115],
-    ["1.500 m", 150_000],
+// M75 (Q27 b, RF-22): a lowercase «m» right after a number is not read as a
+// figure. The parser proposes no amount and asks with three choices in cents.
+
+test("a lowercase «m» after a number asks with three choices and proposes no amount", () => {
+  for (const [text, token, pesos] of [
+    ["25 m", "25 m", 25],
+    ["5m arriendo", "5m", 5],
+    ["2 m", "2 m", 2],
+    ["5 m de cable", "5 m", 5],
+    ["gasté 2 m", "2 m", 2],
+    ["5m", "5m", 5],
   ] as const) {
-    assert.equal(stored(text), pesos, text);
-    assert.equal(askOf(text), null, `${text} must not ask`);
+    assert.equal(interpretQuickEntry(text, ctx).amountPesos, null, `${text} proposes no amount`);
+    assert.deepEqual(
+      askOf(text),
+      { token, choices: [pesos * 100, pesos * 100_000, pesos * 100_000_000] },
+      text,
+    );
   }
+});
+
+test("«1,15 m» asks with whole-peso choices only, never a figure with cents", () => {
+  assert.equal(interpretQuickEntry("1,15 m", ctx).amountPesos, null);
+  assert.deepEqual(askOf("1,15 m"), {
+    token: "1,15 m",
+    choices: [115_000, 115_000_000],
+  });
+});
+
+test("«5m arriendo» asks and keeps «arriendo» as the description", () => {
+  assert.equal(interpretQuickEntry("5m arriendo", ctx).description, "arriendo");
+});
+
+test("«25 mil», «25k» and «3 M» keep their rules next to the new ask", () => {
+  assert.equal(stored("25 mil"), 2_500_000);
+  assert.equal(askOf("25 mil"), null);
+  assert.equal(stored("25k"), 2_500_000);
+  assert.equal(askOf("25k"), null);
+  assert.equal(askOf("3 M arriendo")?.choices.length, 2);
 });
 
 test("a multiplier word that does not touch the amount multiplies nothing", () => {
@@ -267,9 +292,9 @@ test("the second choice is always the first times a million", () => {
   }
 });
 
-test("a lowercase «m» with words after it does not ask", () => {
-  assert.equal(askOf("4 m taxi"), null);
-  assert.equal(stored("4 m taxi"), 400);
+test("a lowercase «m» with words after it asks too", () => {
+  assert.equal(stored("4 m taxi"), null);
+  assert.deepEqual(askOf("4 m taxi")?.choices, [400, 400_000, 400_000_000]);
 });
 
 test("the cases that read cleanly never ask", () => {
@@ -279,9 +304,6 @@ test("the cases that read cleanly never ask", () => {
     "2 M",
     "gasté 2 M",
     "gasté 2 M  ",
-    "5m",
-    "5 m de cable",
-    "25 m",
     "2 millones arriendo",
     "1 millón de pesos",
     "3 millon carro",

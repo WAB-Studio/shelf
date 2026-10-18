@@ -15,6 +15,7 @@ import {
   rowTone,
   type KindLabels,
 } from "@/components/reports/recent-movements";
+import { DueRemindersCard } from "@/components/planning/due-reminders-card";
 import { QuickEntryPill } from "@/components/transactions/quick-entry-pill";
 import {
   Box,
@@ -33,6 +34,7 @@ import {
   Text,
 } from "@/components/ui";
 import { resolveWithdrawalTarget } from "@/db/queries/cash";
+import { listDueReminders } from "@/db/queries/due-reminders";
 import { getUserGroup } from "@/db/queries/groups";
 import { getDashboardData } from "@/db/queries/reports/dashboard";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
@@ -64,6 +66,8 @@ export async function generateMetadata(
 // keep the three it has always shown.
 const RECENT_LIMIT = 8;
 const PHONE_RECENT_LIMIT = 3;
+// «Por pagar» lists this many reminders; the link carries the rest as a count.
+const DUE_LIMIT = 3;
 
 // The three classes an account opens as — a subtype, never the asset/liability
 // kind `lib/validation/account` names — each its own tile in the first-account
@@ -93,7 +97,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
   // movements list fans out (RF-23); the amount is formatted for display only.
-  const [, group, dashboardData, rows, options, withdrawal, t, td, ta, tc] =
+  const [, group, dashboardData, rows, options, withdrawal, due, t, td, ta, tc] =
     await Promise.all([
       requireUser(),
       getUserGroup(),
@@ -101,6 +105,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       listTransactions({}, { limit: RECENT_LIMIT }),
       getTransactionFormOptions(),
       resolveWithdrawalTarget(),
+      listDueReminders(DUE_LIMIT),
       getTranslations("transactions"),
       getTranslations("dashboard"),
       getTranslations("accounts"),
@@ -245,6 +250,12 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
             />
           }
         />
+
+        {due.total > 0 && (
+          <Box px={{ initial: "0", md: "6" }}>
+            <DueRemindersCard rows={due.rows} total={due.total} />
+          </Box>
+        )}
 
         <Box display={{ initial: "block", md: "none" }}>
           <Flex direction="column" gap="4">
