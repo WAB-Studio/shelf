@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { branchEndsAfter, createInsideRefusal, horizonTreeRefusal, moveRefusal, moveTargets, reopenRefusal } from "./placement";
+import { branchEndsAfter, createInsideRefusal, horizonTreeRefusal, moveRefusal, moveTargets } from "./placement";
 import { buildTree } from "./tree";
 import type { TreeRow } from "./tree";
 
@@ -114,20 +114,6 @@ test("a horizon past the goal above is refused naming it", () => {
   // Kills: only checking the goals below.
   assert.deepEqual(horizonTreeRefusal(tree(), "g1", "2027-02-01"), { code: "endPastAbove", above: ref("G") });
   assert.equal(horizonTreeRefusal(tree(), "g1", "2027-01-01"), null);
-});
-
-test("reopening under an archived goal is refused naming it", () => {
-  // Kills: no ancestor check.
-  const archived = "2026-09-01T00:00:00Z";
-  const t = buildTree([row("G", { archivedAt: archived }), row("g1", { parentId: "G", archivedAt: archived })]);
-  assert.deepEqual(reopenRefusal(t, "g1"), { code: "aboveArchived", above: { id: "G", name: "name-G", horizon: "2030-01-01" } });
-  assert.equal(reopenRefusal(t, "G"), null);
-});
-
-test("reopening under an open goal is allowed", () => {
-  // Kills: refusing every archived child.
-  const t = buildTree([row("G"), row("g1", { parentId: "G", archivedAt: "2026-09-01T00:00:00Z" })]);
-  assert.equal(reopenRefusal(t, "g1"), null);
 });
 
 test("moveTargets marks the goal's own branch a cycle, deep goals too deep, and keeps the rest", () => {

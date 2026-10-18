@@ -37,7 +37,6 @@ const CASO1 = "Caso uno";
 const CASO23 = "Casos dos y tres";
 const EMPLEO = "Búsqueda activa";
 const INGLES = "Inglés B1";
-const ORDER = [GENERAL, CASO1, CASO23, EMPLEO, INGLES];
 
 // The sections of the person's text that no part carries, and how many lines each holds. Two of them
 // are tables, one mixes links with loose text: grouping by form would merge or split them.

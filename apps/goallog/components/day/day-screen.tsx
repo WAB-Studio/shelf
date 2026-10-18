@@ -230,7 +230,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       return { goal, rows, met, asks };
     })
     // A past day draws no goal that had no row, no met row and no task owed.
-    .filter(({ rows, met, asks }) => !past || asks || met.length > 0)
+    .filter(({ met, asks }) => !past || asks || met.length > 0)
     .sort((a, b) => Number(!a.asks) - Number(!b.asks));
 
   type SectionItem = (typeof sections)[number];

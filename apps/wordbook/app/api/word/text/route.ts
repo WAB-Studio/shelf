@@ -21,9 +21,7 @@ import {
 import { isThinAnswer } from "@/lib/word/thin";
 
 // RL-41 and RL-42's decoration: no reader session reaches this route, the
-// cache is keyed on the headword alone (`db/schema/word-texts.ts`), and its
-// answer is never a candidate for the full route cache.
-export const dynamic = "force-dynamic";
+// cache is keyed on the headword alone (`db/schema/word-texts.ts`).
 
 // Above the provider's own 20 s timeout, so a slow model answers 204 rather
 // than the platform killing the function mid-claim.

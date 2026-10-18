@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState, useTransition } from "react";
+import { type SyntheticEvent, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { createOneOff } from "@/app/actions/one-offs";
@@ -72,7 +72,7 @@ export function NewOneOff({ goalId: fixedGoalId, daylessCount = 0, goalName: fix
     return t(words.month === null ? `day.newOneOff.${key}` : `day.newOneOff.${key}Far`, parts);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     // Guards a second submit fired while the first is still in flight
     // (a fast double tap on a virtual keyboard's "go") from landing a

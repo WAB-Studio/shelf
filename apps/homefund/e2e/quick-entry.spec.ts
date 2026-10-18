@@ -109,3 +109,137 @@ test("reads the amount and the category out of one line and records the movement
   expect(splits[0].category_id).toBe(scope.categoryId);
   expect(splits[0].amount_cents).toBe(String(AMOUNT_CENTS));
 });
+
+// The sheet fills the amount from what the interpreter proposes (RF-22), so the
+// multiplier has to survive the trip from the text to the field and to the ledger.
+test("«25 mil» proposes 25000 pesos and saving writes 2500000 cents", async ({ page }) => {
+  await page.goto("/es");
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toBeVisible();
+
+  await sheet
+    .getByRole("textbox", { name: transactions.quickTitle, exact: true })
+    .fill(`${scope.categoryName} 25 mil`);
+  await expect(
+    sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true }),
+  ).toHaveValue("25000");
+
+  await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
+  await page.getByRole("option", { name: scope.accountName, exact: true }).click();
+  await sheet.getByRole("button", { name: transactions.quickSave, exact: true }).click();
+  await expect(sheet).toBeHidden();
+
+  const rows = await fixtureSql<{ amount_cents: string }[]>`
+    select amount_cents::text as amount_cents from transactions
+    where owner_user_id = ${scope.userId}`;
+  expect(rows).toEqual([{ amount_cents: "2500000" }]);
+});
+
+test("«1.500 mil» proposes no amount and the sheet refuses to save", async ({ page }) => {
+  await page.goto("/es");
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toBeVisible();
+
+  await sheet
+    .getByRole("textbox", { name: transactions.quickTitle, exact: true })
+    .fill(`${scope.categoryName} 1.500 mil`);
+  await expect(
+    sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true }),
+  ).toHaveValue("");
+
+  await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
+  await page.getByRole("option", { name: scope.accountName, exact: true }).click();
+  await sheet.getByRole("button", { name: transactions.quickSave, exact: true }).click();
+
+  await expect(sheet.getByText(transactions.errors.amountRequired, { exact: true })).toBeVisible();
+  const rows = await fixtureSql<{ id: string }[]>`
+    select id from transactions where owner_user_id = ${scope.userId}`;
+  expect(rows).toEqual([]);
+});
+
+// Typed one key at a time, every prefix is read: «1.500» proposes 1500 and
+// «25 m» a million times 25 on the way. The field follows the latest reading,
+// so neither may survive the text that proposed it.
+test("typing «1.500 mil» key by key takes back the 1500 the prefix proposed", async ({
+  page,
+}) => {
+  await page.goto("/es");
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toBeVisible();
+
+  const quick = sheet.getByRole("textbox", { name: transactions.quickTitle, exact: true });
+  const amount = sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true });
+
+  await quick.pressSequentially(`${scope.categoryName} 1.500`);
+  await expect(amount).toHaveValue("1500");
+  await quick.pressSequentially(" mil");
+  await expect(amount).toHaveValue("");
+
+  await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
+  await page.getByRole("option", { name: scope.accountName, exact: true }).click();
+  await sheet.getByRole("button", { name: transactions.quickSave, exact: true }).click();
+
+  await expect(sheet.getByText(transactions.errors.amountRequired, { exact: true })).toBeVisible();
+  const rows = await fixtureSql<{ id: string }[]>`
+    select id from transactions where owner_user_id = ${scope.userId}`;
+  expect(rows).toEqual([]);
+});
+
+test("typing «25 m» then «il» key by key leaves 25000, not 25000000", async ({ page }) => {
+  await page.goto("/es");
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toBeVisible();
+
+  const quick = sheet.getByRole("textbox", { name: transactions.quickTitle, exact: true });
+  const amount = sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true });
+
+  await quick.pressSequentially(`${scope.categoryName} 25 m`);
+  await expect(amount).toHaveValue("25000000");
+  await quick.pressSequentially("il");
+  await expect(amount).toHaveValue("25000");
+
+  await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
+  await page.getByRole("option", { name: scope.accountName, exact: true }).click();
+  await sheet.getByRole("button", { name: transactions.quickSave, exact: true }).click();
+  await expect(sheet).toBeHidden();
+
+  const rows = await fixtureSql<{ amount_cents: string }[]>`
+    select amount_cents::text as amount_cents from transactions
+    where owner_user_id = ${scope.userId}`;
+  expect(rows).toEqual([{ amount_cents: "2500000" }]);
+});
+
+test("an amount typed by hand survives further text that proposes none", async ({ page }) => {
+  await page.goto("/es");
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toBeVisible();
+
+  const quick = sheet.getByRole("textbox", { name: transactions.quickTitle, exact: true });
+  const amount = sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true });
+
+  // The parser writes 1500, the person replaces it, and the reading that then
+  // proposes nothing takes back only what the parser wrote.
+  await quick.pressSequentially(`${scope.categoryName} 1.500`);
+  await expect(amount).toHaveValue("1500");
+  await amount.fill("9000");
+  // Back in the text, the caret starts at the front; the «m» goes at the end.
+  await quick.press("End");
+  await quick.press("m");
+  await expect(quick).toHaveValue(`${scope.categoryName} 1.500m`);
+  await expect(amount).toHaveValue("9000");
+
+  await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
+  await page.getByRole("option", { name: scope.accountName, exact: true }).click();
+  await sheet.getByRole("button", { name: transactions.quickSave, exact: true }).click();
+  await expect(sheet).toBeHidden();
+
+  const rows = await fixtureSql<{ amount_cents: string }[]>`
+    select amount_cents::text as amount_cents from transactions
+    where owner_user_id = ${scope.userId}`;
+  expect(rows).toEqual([{ amount_cents: "900000" }]);
+});

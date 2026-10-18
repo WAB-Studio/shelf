@@ -1,17 +1,44 @@
-// Runs Stryker once per pure file against only the tests that import it:
+// Runs Stryker once per pure file against only the tests that reach it, directly or through other modules:
 // the tap runner has no per-test coverage, so a whole-suite run per mutant costs ~20 s.
 // Usage: npm run mutate:pure -- lib/day/weeks.ts   (substring match, several allowed)
 //        npm run mutate:pure -- --changed <base>   (lib files changed since <base>)
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { basename, join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { basename, dirname, join, normalize } from "node:path";
 
 const config = JSON.parse(readFileSync("stryker.config.json", "utf8"));
 const walk = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
     e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)],
   );
-const tests = walk("lib").filter((f) => f.endsWith(".test.ts"));
+// The roots `check:unit` globs for tests.
+const tests = ["lib", "components", "scripts"].flatMap(walk).filter((f) => f.endsWith(".test.ts"));
+
+const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"']+)["']/g;
+const resolveSpecifier = (from, spec) => {
+  if (!spec.startsWith("./") && !spec.startsWith("../") && !spec.startsWith("@/")) return null;
+  const base = normalize(spec.startsWith("@/") ? spec.slice(2) : join(dirname(from), spec));
+  const candidates = [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")];
+  return candidates.find((c) => existsSync(c) && statSync(c).isFile()) ?? null;
+};
+const closureCache = new Map();
+const closureOf = (entry) => {
+  if (closureCache.has(entry)) return closureCache.get(entry);
+  const seen = new Set([entry]);
+  const queue = [entry];
+  while (queue.length) {
+    const current = queue.pop();
+    for (const m of readFileSync(current, "utf8").matchAll(SPECIFIER)) {
+      const next = resolveSpecifier(current, m[1]);
+      if (next && !seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  closureCache.set(entry, seen);
+  return seen;
+};
 
 const brace = (p) => {
   const m = p.match(/^(.*)\{(.*)\}(.*)$/);
@@ -32,15 +59,23 @@ if (args[0] === "--changed") {
   files = args.length ? all.filter((f) => args.some((w) => f.includes(w))) : all;
 }
 
-mkdirSync("private/stryker", { recursive: true });
+if (!process.env.MUTATE_PURE_LIST) mkdirSync("private/stryker", { recursive: true });
 let failed = 0;
 for (const file of files) {
+  // The basename match stays as a superset: a test that quotes the name through a mock is still run.
   const name = basename(file, ".ts");
   const covering = tests.filter(
-    (t) => t === file.replace(/\.ts$/, ".test.ts") || new RegExp(`/${name}["']`).test(readFileSync(t, "utf8")),
+    (t) =>
+      t === file.replace(/\.ts$/, ".test.ts") ||
+      closureOf(t).has(file) ||
+      new RegExp(`/${name}["']`).test(readFileSync(t, "utf8")),
   );
+  if (process.env.MUTATE_PURE_LIST) {
+    console.log(`${file} → ${covering.join(" ")}`);
+    continue;
+  }
   if (!covering.length) {
-    console.log(`SKIP ${file}: no test imports it`);
+    console.log(`SKIP ${file}: no test reaches it`);
     continue;
   }
   console.log(`\n== ${file} (${covering.length} test files)`);

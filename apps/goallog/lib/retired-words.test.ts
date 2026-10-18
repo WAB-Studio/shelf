@@ -23,6 +23,8 @@ const retired: { word: RegExp; allowed: string[] }[] = [
   { word: /\bagregar\b/i, allowed: [] },
   { word: /no mide horas/i, allowed: [] },
   { word: /este teléfono/i, allowed: [] },
+  { word: /racha/i, allowed: [] },
+  { word: /felicit|bien hecho|excelente|genial|bravo|elogi/i, allowed: [] },
 ];
 
 function values(node: unknown, path: string, out: [string, string][]) {

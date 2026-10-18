@@ -371,6 +371,8 @@ function SignedOutForm() {
             onChange={(event) => setEmail(event.target.value)}
             placeholder={t("emailLabel")}
             aria-label={t("emailLabel")}
+            aria-describedby={state.kind === "failed" ? SEND_FAILURE_ID : undefined}
+            aria-invalid={state.kind === "failed" ? true : undefined}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
@@ -385,7 +387,7 @@ function SignedOutForm() {
               <Separator size="4" />
               <Flex gap="2" align="center">
                 {state.error === "offline" && <OfflineGlyph />}
-                <Text size="2" weight="bold" role="alert">
+                <Text id={SEND_FAILURE_ID} size="2" weight="bold" role="alert">
                   {t(`errors.${state.error}`)}
                 </Text>
               </Flex>
@@ -409,6 +411,9 @@ function SignedOutForm() {
     </Flex>
   );
 }
+
+// The id the email field points at while a send is refused.
+const SEND_FAILURE_ID = "send-link-failure";
 
 type SyncStatus = { kind: "idle" } | { kind: "syncing" } | { kind: "failed"; cause: SyncFailure };
 

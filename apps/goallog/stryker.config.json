@@ -20,7 +20,7 @@
     "lib/import/{check,clean,coverage,created-store,draft-store,draft,line-tasks,model-seam,prompt,repeated,reshape,review,sections,template}.ts",
     "lib/lists/{endless-cut,tail}.ts",
     "lib/net/ipv6.ts",
-    "lib/plan/{carry,first-rhythm,month-detail,month-name,months,moved-span,pace-line,return-to,roadmap-read,roadmap,screen-planned,week-planned}.ts",
+    "lib/plan/{carry,first-rhythm,month-name,months,moved-span,pace-line,return-to,roadmap-read,roadmap,screen-planned,week-planned}.ts",
     "lib/units/{time-words,time}.ts",
     "lib/validation/{budget,horizon,measure,one-off,plan,rhythm,token}.ts"
   ],

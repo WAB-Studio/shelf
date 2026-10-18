@@ -133,7 +133,6 @@ let youngCommitmentId: string;
 // birth, retired recently enough that a day within `PAST_DAY_LIMIT` can still
 // fall after it.
 let retiredCommitmentId: string;
-let oneOffId: string;
 let fixtureGoalId: string;
 
 // Every statement the app's own pool sends, in order: `db/client.ts` takes `globalThis.sql` when it
@@ -196,7 +195,6 @@ before(async () => {
 
   const oneOff = await createOneOff({ goalId: goal.goalId, name: "RP-06 fixture: suelta", day: today });
   if (!oneOff.ok) throw new Error(`createOneOff: ${oneOff.error}`);
-  oneOffId = oneOff.oneOffId;
 });
 
 after(async () => {

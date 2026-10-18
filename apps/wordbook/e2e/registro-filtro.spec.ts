@@ -429,3 +429,20 @@ test("clearing the field leaves the address at exactly /registro", async ({ page
   await expect(rows(page)).toHaveCount(WORDS);
   expect(await page.evaluate(() => location.pathname + location.search + location.hash)).toBe("/registro");
 });
+
+test("the × button hands focus back to the filter field", async ({ page }) => {
+  await open800(page);
+  await field(page).fill("ling");
+  await page.getByRole("button", { name: CLEAR }).click();
+  await expect(field(page)).toBeFocused();
+  await expect(rows(page)).toHaveCount(WORDS);
+});
+
+test("the × button pressed by key hands focus back to the filter field", async ({ page }) => {
+  await open800(page);
+  await field(page).fill("ling");
+  await page.getByRole("button", { name: CLEAR }).focus();
+  await page.keyboard.press("Enter");
+  await expect(field(page)).toBeFocused();
+  await expect(field(page)).toHaveValue("");
+});

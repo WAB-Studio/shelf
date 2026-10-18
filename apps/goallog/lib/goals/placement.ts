@@ -67,16 +67,6 @@ export function branchEndsAfter(t: Tree, goalId: string, horizon: string | null)
   return out;
 }
 
-export function reopenRefusal(t: Tree, goalId: string): PlacementRefusal | null {
-  const goal = t.byId.get(goalId);
-  if (!goal) return null;
-  for (const id of goal.ancestors) {
-    const a = t.byId.get(id)!;
-    if (a.archivedAt !== null) return { code: "aboveArchived", above: refOf(a) };
-  }
-  return null;
-}
-
 export function moveTargets(t: Tree, goalId: string, today: string): { id: string; refusal: PlacementRefusal | null }[] {
   return t.order.map((n) => ({ id: n.id, refusal: moveRefusal(t, goalId, n.id, today) }));
 }

@@ -257,6 +257,7 @@ export function HistoryList() {
   // Every read this component starts bumps this, so a reply superseded by
   // a newer one — the flush event firing mid-read — never overwrites it.
   const requestIdRef = useRef(0);
+  const filterField = useRef<HTMLInputElement>(null);
   const [target, setTarget] = useState<DeleteTarget | null>(null);
   const localRef = useRef(true);
   const noteRef = useRef(false);
@@ -446,6 +447,7 @@ export function HistoryList() {
     <Flex direction="column" gap="5">
       <Flex direction="column" gap="3">
         <TextField.Root
+          ref={filterField}
           size="3"
           value={query}
           onChange={(event) => change(event.target.value)}
@@ -463,7 +465,10 @@ export function HistoryList() {
                 variant="ghost"
                 color="gray"
                 aria-label={t("study.filterClear")}
-                onClick={() => change("")}
+                onClick={() => {
+                  change("");
+                  filterField.current?.focus();
+                }}
               >
                 <X size={16} />
               </IconButton>

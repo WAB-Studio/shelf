@@ -13,7 +13,6 @@ import { claimDailyCall } from "@/lib/word/spend";
 
 // The word path never reaches this route (RL-09): it exists for the sentence
 // path alone, and only when the device offers no translator of its own.
-export const dynamic = "force-dynamic";
 
 // The model call may wait its full timeout before MyMemory is tried.
 export const maxDuration = 40;
