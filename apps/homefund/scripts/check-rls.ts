@@ -195,6 +195,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "d64") {
+    await checkInvitationAcceptance();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -259,6 +264,7 @@ async function main() {
   await checkAccountSubtypeWords();
   await checkMemberAddress();
   await checkRecurringPauseReason();
+  await checkInvitationAcceptance();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -11572,6 +11578,283 @@ async function checkRecurringPauseReason() {
         detail: `is_active = ${healthyState.is_active}, paused_reason = ${healthyState.paused_reason}`,
       },
     ];
+  });
+}
+
+// Assertions 395-406: an invitation is accepted, never claimed (RF-154, migration 0064). The contract the
+// rows are written from, in the choices the schema left open (each one is the most natural reading):
+//   - `group_members.invite_state` is text, 'pending' | 'accepted' | 'declined', not null.
+//   - A row the leader inserts with an `invite_email`, exactly as the app does today, reads 'pending'.
+//   - A pending row has no `user_id`; an accepted row has one and no `invite_email`; a declined row is archived.
+//   - Accepting and declining are written by the server (the definer functions of M68), never by a caller's
+//     own UPDATE: the rows here write them as the owner, after `reset role`.
+//   - Signing in (`private.claim_group_invite()`, today's claim) joins nobody.
+// The sign-in path is driven in every setup as today's "claimed" contrast; the rows say what it must leave.
+//
+//   D64_MIGRATION_FILE  a path to a SQL file installed instead of db/migrations/0064_*.sql, so a mutation
+//                       can be proved red without touching the shared database. Replayed inside the
+//                       row's transaction only when the live database does not carry the column yet.
+async function d64Install(tx: M1Tx): Promise<void> {
+  const [{ has }] = await tx<{ has: boolean }[]>`
+    select exists (select 1 from information_schema.columns
+      where table_schema = 'finances' and table_name = 'group_members' and column_name = 'invite_state') as has`;
+  if (has) return;
+  const dir = path.join(process.cwd(), "db", "migrations");
+  const found = readdirSync(dir).find((name) => /^0064_.*\.sql$/.test(name));
+  const file = process.env.D64_MIGRATION_FILE ?? (found ? path.join(dir, found) : null);
+  if (!file) return;
+  for (const statement of readFileSync(file, "utf8").split("--> statement-breakpoint")) {
+    if (statement.trim()) await tx.unsafe(statement);
+  }
+}
+
+type D64Fund = {
+  leader: string;
+  invitee: string;
+  groupId: string;
+  rowId: string;
+  email: string;
+  accounts: number;
+  movements: number;
+  categories: number;
+};
+
+// A fund with its leader, and a person with a book of their own (two personal accounts, one movement
+// between them, one category) whom the leader invites by address.
+async function d64Fund(tx: M1Tx): Promise<D64Fund> {
+  await d64Install(tx);
+  const leader = randomUUID();
+  const invitee = randomUUID();
+  const groupId = randomUUID();
+  const email = `d64-${randomUUID()}@example.test`;
+  const today = `(now() at time zone 'America/Bogota')::date`;
+  await tx`insert into auth.users (id) values (${leader}), (${invitee})`;
+  await tx`insert into app_users (id) values (${leader}), (${invitee})`;
+
+  await enterUserContext(tx, invitee, email);
+  const [{ id: a }] = await tx<{ id: string }[]>`
+    insert into accounts (owner_user_id, name, kind, initial_balance_on)
+    values (${invitee}, 'rls d64 own a', 'asset', ${tx.unsafe(today)}) returning id`;
+  const [{ id: b }] = await tx<{ id: string }[]>`
+    insert into accounts (owner_user_id, name, kind, initial_balance_on)
+    values (${invitee}, 'rls d64 own b', 'asset', ${tx.unsafe(today)}) returning id`;
+  await tx`insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at)
+    values (${a}, ${b}, 1500, ${tx.unsafe(today)})`;
+  await tx`insert into categories (owner_user_id, name, kind) values (${invitee}, 'rls d64 own category', 'expense')`;
+  await tx`reset role`;
+
+  await enterUserContext(tx, leader);
+  await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls d64', 'shared')`;
+  await tx`insert into group_members (group_id, user_id, name, role) values (${groupId}, ${leader}, 'rls d64 leader', 'leader')`;
+  // The app's own insert: no state named. The database says what an address-bearing row is.
+  const [{ id: rowId }] = await tx<{ id: string }[]>`
+    insert into group_members (group_id, name, role, invite_email)
+    values (${groupId}, 'rls d64 invited', 'member', ${email}) returning id`;
+  await tx`reset role`;
+  return { leader, invitee, groupId, rowId, email, accounts: 2, movements: 1, categories: 1 };
+}
+
+// What the leader reads of the invitee's personal book.
+async function d64LeaderReads(tx: M1Tx, f: D64Fund): Promise<{ accounts: number; movements: number; categories: number }> {
+  await enterUserContext(tx, f.leader);
+  try {
+    const [{ n: accounts }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from accounts where owner_user_id = ${f.invitee}`;
+    const [{ n: movements }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from transactions where owner_user_id = ${f.invitee}`;
+    const [{ n: categories }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from categories where owner_user_id = ${f.invitee}`;
+    return { accounts, movements, categories };
+  } finally {
+    await tx`reset role`;
+  }
+}
+
+// Today's sign-in: the invitee's session calls the claim. Returns what it answered, or its sqlstate.
+async function d64SignIn(tx: M1Tx, f: D64Fund): Promise<string> {
+  await enterUserContext(tx, f.invitee, f.email);
+  try {
+    return await tx.savepoint(async (sp) => {
+      const [{ id }] = await (sp as unknown as M1Tx)<{ id: string | null }[]>`select private.claim_group_invite() as id`;
+      return id ? "joined" : "nothing";
+    });
+  } catch (error) {
+    return `refused ${pgErrorCode(error) ?? "none"}`;
+  } finally {
+    await tx`reset role`;
+  }
+}
+
+async function d64Row(tx: M1Tx, id: string) {
+  const [row] = await tx<{ user_id: string | null; invite_email: string | null; invite_state: string; archived: boolean }[]>`
+    select user_id, invite_email, invite_state, archived_at is not null as archived from group_members where id = ${id}`;
+  return row;
+}
+
+async function d64Accept(tx: M1Tx, f: D64Fund): Promise<void> {
+  await tx`update group_members set user_id = ${f.invitee}, invite_email = null, invite_state = 'accepted' where id = ${f.rowId}`;
+}
+
+async function d64Decline(tx: M1Tx, f: D64Fund): Promise<void> {
+  await tx`update group_members set invite_state = 'declined', archived_at = now() where id = ${f.rowId}`;
+}
+
+async function checkInvitationAcceptance() {
+  console.log("");
+  const labels = {
+    accounts: "395. a leader who invited an address reads none of that person's personal accounts, even after they sign in",
+    movements: "396. a leader who invited an address reads none of that person's personal movements, even after they sign in",
+    categories: "397. a leader who invited an address reads none of that person's personal categories, even after they sign in",
+    stays: "398. signing in leaves the invitation pending: no user_id, the address kept, the person in no fund",
+    pending: "399. an invitation the leader inserts reads 'pending', and a pending row refuses a user_id (23514)",
+    valid: "400. only pending, accepted and declined are storable; any other state is a 23514",
+    declinedArchived: "401. a declined invitation that is not archived is a 23514, so a decline always frees the address",
+    declined: "402. after a decline the leader still reads none of the person's book, and signing in again joins nobody",
+    reinvite: "403. a declined address can be invited again, in any case; a second live invitation to it is still a 23505; signing in joins nobody",
+    accepted: "404. an accepted invitation (state 'accepted', user_id set) reads what membership reads: the person's whole book",
+    grants: "405. no caller may write invite_state: authenticated, anon and service_role hold no INSERT or UPDATE on it, and a leader's UPDATE is a 42501",
+    liveAfter: "406. an accepted person who was once pending holds no invite_email and keeps the one-group index (a second live row for them is a 23505)",
+  };
+
+  // The three personal books, read after the claim path ran: the only thing the sign-in may not do is open them.
+  await m1Rows([labels.accounts, labels.movements, labels.categories], async (tx) => {
+    const f = await d64Fund(tx);
+    const before = await d64LeaderReads(tx, f);
+    const signIn = await d64SignIn(tx, f);
+    const after = await d64LeaderReads(tx, f);
+    return [
+      { ok: before.accounts === 0 && after.accounts === 0, detail: `accounts before sign-in = ${before.accounts}, after = ${after.accounts} (sign-in ${signIn})` },
+      { ok: before.movements === 0 && after.movements === 0, detail: `movements before sign-in = ${before.movements}, after = ${after.movements} (sign-in ${signIn})` },
+      { ok: before.categories === 0 && after.categories === 0, detail: `categories before sign-in = ${before.categories}, after = ${after.categories} (sign-in ${signIn})` },
+    ];
+  });
+
+  await m1Rows([labels.stays], async (tx) => {
+    const f = await d64Fund(tx);
+    const signIn = await d64SignIn(tx, f);
+    const row = await d64Row(tx, f.rowId);
+    const [{ n }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from group_members where user_id = ${f.invitee} and archived_at is null`;
+    return [{
+      ok: row.user_id === null && row.invite_email === f.email && row.invite_state === "pending" && n === 0,
+      detail: `sign-in ${signIn}; user_id = ${row.user_id ?? "null"}, invite_email = ${row.invite_email}, state = ${row.invite_state}, live memberships of the person = ${n}`,
+    }];
+  });
+
+  await m1Rows([labels.pending], async (tx) => {
+    const f = await d64Fund(tx);
+    const row = await d64Row(tx, f.rowId);
+    const code = await m1Refusal(tx, (sp) => sp`update group_members set user_id = ${f.invitee}, invite_email = null where id = ${f.rowId}`);
+    const other = await m1Refusal(tx, (sp) => sp`update group_members set user_id = ${f.leader} where id = ${f.rowId}`);
+    return [{
+      ok: row.invite_state === "pending" && code === "23514" && other === "23514",
+      detail: `state = ${row.invite_state}; giving a pending row its user = ${code ?? "accepted"}; giving it a user and keeping the address = ${other ?? "accepted"}`,
+    }];
+  });
+
+  await m1Rows([labels.valid], async (tx) => {
+    const f = await d64Fund(tx);
+    const bogus = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'bogus' where id = ${f.rowId}`);
+    const nul = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = null where id = ${f.rowId}`);
+    const empty = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = '' where id = ${f.rowId}`);
+    const pending = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'pending' where id = ${f.rowId}`);
+    const accepted = await m1Refusal(tx, (sp) => sp`update group_members set user_id = ${f.invitee}, invite_email = null, invite_state = 'accepted' where id = ${f.rowId}`);
+    const g = await d64Fund(tx);
+    const declined = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'declined', archived_at = now() where id = ${g.rowId}`);
+    return [{
+      ok: bogus === "23514" && nul !== null && empty === "23514" && pending === null && declined === null && accepted === null,
+      detail: `'bogus' = ${bogus ?? "accepted"}, null = ${nul ?? "accepted"}, '' = ${empty ?? "accepted"}; pending = ${pending ?? "ok"}, declined = ${declined ?? "ok"}, accepted = ${accepted ?? "ok"}`,
+    }];
+  });
+
+  await m1Rows([labels.declinedArchived], async (tx) => {
+    const f = await d64Fund(tx);
+    const live = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'declined' where id = ${f.rowId}`);
+    return [{ ok: live === "23514", detail: `declined and still live = ${live ?? "accepted"}` }];
+  });
+
+  await m1Rows([labels.declined], async (tx) => {
+    const f = await d64Fund(tx);
+    await d64Decline(tx, f);
+    const read = await d64LeaderReads(tx, f);
+    const signIn = await d64SignIn(tx, f);
+    const row = await d64Row(tx, f.rowId);
+    const after = await d64LeaderReads(tx, f);
+    return [{
+      ok: read.accounts + read.movements + read.categories === 0 && after.accounts + after.movements + after.categories === 0 && row.user_id === null && row.invite_state === "declined" && row.archived,
+      detail: `leader reads ${JSON.stringify(read)} then ${JSON.stringify(after)}; sign-in ${signIn}; user_id = ${row.user_id ?? "null"}, state = ${row.invite_state}, archived = ${row.archived}`,
+    }];
+  });
+
+  await m1Rows([labels.reinvite], async (tx) => {
+    const f = await d64Fund(tx);
+    await d64Decline(tx, f);
+    await enterUserContext(tx, f.leader);
+    const again = await m1Refusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+      values (${f.groupId}, 'rls d64 invited again', 'member', ${f.email.toUpperCase()})`);
+    const twice = await m1Refusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+      values (${f.groupId}, 'rls d64 invited thrice', 'member', ${f.email})`);
+    await tx`reset role`;
+    const rows = await tx<{ invite_state: string; archived: boolean; user_id: string | null }[]>`
+      select invite_state, archived_at is not null as archived, user_id from group_members
+      where group_id = ${f.groupId} and lower(invite_email) = lower(${f.email}) or id = ${f.rowId} order by created_at, id`;
+    const signIn = await d64SignIn(tx, f);
+    const read = await d64LeaderReads(tx, f);
+    const [{ n }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from group_members where user_id = ${f.invitee} and archived_at is null`;
+    const live = rows.filter((r) => !r.archived);
+    return [{
+      ok: again === null && twice === "23505" && live.length === 1 && live[0].invite_state === "pending" && live[0].user_id === null && read.accounts === 0 && n === 0,
+      detail: `re-invite = ${again ?? "landed"}, a second live one = ${twice ?? "landed"}; live rows ${JSON.stringify(live)}; sign-in ${signIn}; leader reads ${read.accounts} accounts; person's live memberships = ${n}`,
+    }];
+  });
+
+  await m1Rows([labels.accepted], async (tx) => {
+    const f = await d64Fund(tx);
+    const before = await d64LeaderReads(tx, f);
+    await d64Accept(tx, f);
+    const read = await d64LeaderReads(tx, f);
+    const row = await d64Row(tx, f.rowId);
+    return [{
+      ok: before.accounts === 0 && read.accounts === f.accounts && read.movements === f.movements && read.categories === f.categories && row.user_id === f.invitee && row.invite_email === null && row.invite_state === "accepted",
+      detail: `leader read ${JSON.stringify(before)} before and ${JSON.stringify(read)} after, wanted ${f.accounts}/${f.movements}/${f.categories}; state = ${row.invite_state}, invite_email = ${row.invite_email}`,
+    }];
+  });
+
+  await m1Rows([labels.grants], async (tx) => {
+    const f = await d64Fund(tx);
+    const roles = ["authenticated", "anon", "service_role"];
+    const held: string[] = [];
+    for (const role of roles) {
+      for (const priv of ["INSERT", "UPDATE"]) {
+        const [{ ok }] = await tx<{ ok: boolean | null }[]>`
+          select has_column_privilege(${role}, 'finances.group_members', 'invite_state', ${priv}) as ok`;
+        if (ok !== false) held.push(`${role} ${priv}`);
+      }
+    }
+    await enterUserContext(tx, f.leader);
+    const update = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'accepted' where id = ${f.rowId}`);
+    const insert = await m1Refusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email, invite_state)
+      values (${f.groupId}, 'rls d64 forged', 'member', ${"forged-" + f.email}, 'accepted')`);
+    await tx`reset role`;
+    return [{
+      ok: held.length === 0 && update === "42501" && insert === "42501",
+      detail: `column privileges held: ${held.join(", ") || "none"}; leader UPDATE = ${update ?? "accepted"}, leader INSERT naming the state = ${insert ?? "accepted"}`,
+    }];
+  });
+
+  await m1Rows([labels.liveAfter], async (tx) => {
+    const f = await d64Fund(tx);
+    await d64Accept(tx, f);
+    const other = randomUUID();
+    await tx`insert into groups (id, name, cash_mode) values (${other}, 'rls d64 other', 'shared')`;
+    const second = await m1Refusal(tx, (sp) => sp`insert into group_members (group_id, user_id, name, role, invite_state)
+      values (${other}, ${f.invitee}, 'rls d64 twice', 'member', 'accepted')`);
+    const row = await d64Row(tx, f.rowId);
+    return [{
+      ok: second === "23505" && row.invite_email === null,
+      detail: `a second live row for the accepted person = ${second ?? "landed"}; invite_email = ${row.invite_email}`,
+    }];
   });
 }
 
