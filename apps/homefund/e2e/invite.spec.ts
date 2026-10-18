@@ -416,8 +416,8 @@ test.describe("a refusal reads as the one that happened", () => {
     });
   });
 
-  test("a leader's second invitation to a pending address reads as a failure, never «only the owner»", async ({ page }) => {
-    // Kills: the 42501 test inverted in the invite action (every refusal other than the owner's reads «only the owner»).
+  test("a leader's second invitation to a pending address is refused by name, never «only the owner» nor «something went wrong»", async ({ page }) => {
+    // Kills: the 23505 branch dropped (reads «something went wrong»); the 42501 test inverted (reads «only the owner»).
     const email = invitee();
     const { input, send } = await openStep(page);
     try {
@@ -429,8 +429,9 @@ test.describe("a refusal reads as the one that happened", () => {
       await input.fill(email);
       await send.click();
 
-      await expect(page.getByText(messages.errors.unexpected, { exact: true })).toBeVisible();
+      await expect(page.getByText(members.errors.emailTaken, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.errors.notLeader, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(messages.errors.unexpected, { exact: true })).toHaveCount(0);
       expect(await inviteRows(email)).toHaveLength(1);
     } finally {
       await forget(email);
