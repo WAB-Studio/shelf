@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { BASE_CURRENCY } from "@/lib/currency";
-import { isCivilDate } from "@/lib/dates";
+import { addCivilMonths, isCivilDate, todayInBogota } from "@/lib/dates";
 import {
   accountRefSchema,
   anyCurrencyAmountSchema,
@@ -42,8 +42,9 @@ export function refineRuleAmount(settlement: SettlementCurrencies) {
   };
 }
 
-// The date the next run falls due; a rule runs into the future, so no not-future
-// bound applies (RF-29).
+// The date the next run falls due; a rule runs into the future, so no upper bound
+// applies (RF-29). The lower bound, 12 months before today in the person's zone,
+// keeps the night's run from back-filling years of movements.
 const nextRunOnSchema = z.string().superRefine((value, ctx) => {
   if (value.trim().length === 0) {
     ctx.addIssue("recurringRules.errors.nextRunOnRequired");
@@ -52,6 +53,11 @@ const nextRunOnSchema = z.string().superRefine((value, ctx) => {
 
   if (!isCivilDate(value)) {
     ctx.addIssue("recurringRules.errors.nextRunOnInvalid");
+    return;
+  }
+
+  if (value < addCivilMonths(todayInBogota(), -12)) {
+    ctx.addIssue("recurringRules.errors.nextRunOnTooEarly");
   }
 });
 
