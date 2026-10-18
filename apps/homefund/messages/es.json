@@ -382,6 +382,12 @@
     "expenseTab": "Gastos",
     "incomeTab": "Ingresos",
     "personalSection": "Mis categorías",
+    "placementLabel": "Dónde va",
+    "placementPersonal": "Mías",
+    "placementGroup": "Del fondo",
+    "placementLocked": "El lugar no se puede cambiar después de crear la categoría.",
+    "personalEmptyTitle": "Todavía no tienes categorías propias",
+    "personalEmptyDescription": "Crea una categoría tuya para clasificar los movimientos de tus cuentas personales.",
     "scopedName": "{name} · fondo",
     "leaderOnly": "Pide al propietario del fondo que cree o cambie las categorías del fondo.",
     "subcategoryCount": "{count, plural, one {# subcategoría} other {# subcategorías}}",
@@ -401,7 +407,8 @@
       "nameTooLong": "El nombre no puede pasar de 80 caracteres.",
       "kindInvalid": "Elige un tipo de categoría válido.",
       "parentInvalid": "Elige una categoría principal válida.",
-      "colorRequired": "Elige un color."
+      "colorRequired": "Elige un color.",
+      "placementInvalid": "Elige dónde va la categoría."
     }
   },
   "labels": {
