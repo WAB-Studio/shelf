@@ -7994,15 +7994,18 @@ async function debtPaymentSuite(): Promise<void> {
   // Q: the lock is taken on the card, as the first thing the payment does
   const held = await newCard("lock");
   const lockKey = held.cardId;
+  let settled = false;
   let settledWhileHeld = false;
   let blocked: Promise<Answer | undefined> | undefined;
   await fixtureSql.begin(async (tx) => {
     await tx`select pg_advisory_xact_lock(hashtextextended(${lockKey}::text, 0))`;
     blocked = pay(held.cardId);
     blocked.then(() => {
-      settledWhileHeld = true;
+      settled = true;
     });
     await new Promise((r) => setTimeout(r, 1500));
+    // Read before the commit releases the lock; after it the payment settles by design.
+    settledWhileHeld = settled;
   });
   const afterRelease = await blocked;
   const heldLinks = await links(held.planId);
