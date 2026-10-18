@@ -79,6 +79,12 @@ function emptyTotals(currency: CurrencyCode): DebtCurrencyTotals {
 // settlement pocket carries the interest it is charged; a pocket in another
 // currency carries a magnitude and nothing else, since a rate is written into
 // the terms of the currency the card bills in (RF-79, RF-124).
+// A liability's balance is negative while it owes (RNF-05); a pocket in credit
+// is positive and owes nothing, so it never lowers or lifts a total.
+function owedOf(balanceCents: number): number {
+  return Math.max(0, -balanceCents);
+}
+
 function addOwed(
   sets: Map<CurrencyCode, DebtCurrencyTotals>,
   currency: CurrencyCode,
@@ -163,14 +169,14 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
       accountId: account.id,
       name: account.name,
       currency: account.settlementCurrency,
-      owedCents: Math.abs(
+      owedCents: owedOf(
         balanceByPocket.get(`${account.id}:${account.settlementCurrency}`) ?? 0,
       ),
       otherOwed: account.balances
         .filter((balance) => balance.currency !== account.settlementCurrency)
         .map((balance) => ({
           currency: balance.currency,
-          owedCents: Math.abs(balance.balanceCents),
+          owedCents: owedOf(balance.balanceCents),
         })),
       planPosition: positionById.get(account.id) ?? null,
       canWrite: account.canWrite,
@@ -181,10 +187,22 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
   // contribute interest (RF-79), and only their settlement pocket does: the
   // terms are written against the currency the card bills in.
   const sets = new Map<CurrencyCode, DebtCurrencyTotals>();
+  // The overview hands a magnitude, which hides the sign, so a terms row's
+  // pockets are re-read from the signed balances: a pocket in credit adds 0.
   for (const row of withTerms) {
-    addOwed(sets, row.currency, row.owedCents, row.monthlyInterestCents);
+    addOwed(
+      sets,
+      row.currency,
+      owedOf(balanceByPocket.get(`${row.accountId}:${row.currency}`) ?? 0),
+      row.monthlyInterestCents,
+    );
     for (const pocket of row.otherOwed) {
-      addOwed(sets, pocket.currency, pocket.owedCents, 0);
+      addOwed(
+        sets,
+        pocket.currency,
+        owedOf(balanceByPocket.get(`${row.accountId}:${pocket.currency}`) ?? 0),
+        0,
+      );
     }
   }
   for (const debt of withoutTerms) {
