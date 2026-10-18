@@ -403,3 +403,11 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   corregirlo.» and nothing is saved. Not built yet.
 - **One send never changes scope** (Q26 a): the same send to a personal account and then to a fund account books two rows;
   the form keeps one scope per opening, so no cross-scope check is built.
+- **Quick entry asks on a lowercase «m» too** (Q27 b, later the same day): «25 m» and «5m arriendo» ask «¿Cuánto es «25 m»?»
+  with $25 / $25.000 / $25.000.000 and save nothing until one is picked or an amount is typed; «M» and «millón» keep
+  asking as before. Supersedes «a lowercase «m» is never a million» for what is saved without a question. Not built yet.
+- **«Recordarme el» shows on Inicio** (Q28 a, RF-159): from the reminder date until it is paid or archived, the planned
+  payment shows on Inicio («Matrícula colegio vence el 15 dic»). Board to draw before its module. RF-141's email stays
+  unbuilt.
+- **A sign-out Auth refuses leaves this device signed out** (Q30 a): the session is never restored; the login says
+  «Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.»

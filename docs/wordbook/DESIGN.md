@@ -1854,4 +1854,6 @@ Canvas «Diccionario de lectura», page «Registro», v55. Dark 360. Built in de
   the token tables follow. Not built yet.
 - **«Copia» asks for persistent storage** (Q19 a): the line «El navegador puede borrar tu registro si te falta espacio.»
   and a «Pedirlo» button, while not kept and the API exists, signed in or out. Board to draw before its module.
+- **«Pedirlo» says when the browser refuses** (Q29 a, 2026-10-18): the button stays, and a refusal shows «El navegador no lo
+  permitió; instala WordBook en tu pantalla de inicio para que lo guarde.» Board to draw before its module.
 - **RL-75 opened, RL-74 kept** (the user, 2026-10-18).
