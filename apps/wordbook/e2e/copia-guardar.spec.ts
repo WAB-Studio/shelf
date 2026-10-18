@@ -10,6 +10,7 @@ import { expect, test } from "./fixtures";
 const LINE = "El navegador puede borrar tu registro si te falta espacio.";
 const ASK = "Pedirlo";
 const ASKING = "Pidiéndolo…";
+const REFUSED = "El navegador no lo permitió; instala WordBook en tu pantalla de inicio para que lo guarde.";
 
 type Stub = "no-api" | "not-kept" | "kept";
 
@@ -116,7 +117,32 @@ for (const width of [360, 1280]) {
       await expect(ask).toBeVisible();
       await expect(ask).toBeEnabled();
       await expect(page.getByRole("button", { name: ASKING, exact: true })).toHaveCount(0);
+      const status = page.getByRole("status").filter({ hasText: REFUSED });
+      await expect(status).toBeVisible();
+      const askBox = await ask.boundingBox();
+      expect((await status.boundingBox())!.y).toBeGreaterThan(askBox!.y);
       await noOverflow(page);
+    });
+
+    test("refused, asked again: the status line stays, and a grant then hides the block", async ({ page }) => {
+      await open(page, "not-kept");
+      await page.getByRole("button", { name: ASK, exact: true }).click();
+      await page.evaluate(() => window.__answerPersist(false));
+      await expect(page.getByText(REFUSED)).toBeVisible();
+      await page.getByRole("button", { name: ASK, exact: true }).click();
+      expect(await page.evaluate(() => window.__persistCalls)).toBe(2);
+      await expect(page.getByRole("button", { name: ASKING, exact: true })).toBeDisabled();
+      await page.evaluate(() => window.__answerPersist(false));
+      await expect(page.getByText(REFUSED)).toBeVisible();
+      await page.getByRole("button", { name: ASK, exact: true }).click();
+      await page.evaluate(() => window.__answerPersist(true));
+      await expect(page.getByText(REFUSED)).toHaveCount(0);
+      await expect(page.getByText(LINE)).toHaveCount(0);
+    });
+
+    test("not kept, never asked: no refusal line", async ({ page }) => {
+      await open(page, "not-kept");
+      await expect(page.getByText(REFUSED)).toHaveCount(0);
     });
 
     test("kept: nothing is drawn and nothing is asked", async ({ page }) => {

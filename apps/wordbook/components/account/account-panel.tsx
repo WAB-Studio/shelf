@@ -82,6 +82,8 @@ function OfflineGlyph() {
 function KeepLog() {
   const t = useTranslations("account");
   const [state, setState] = useState<"hidden" | "offer" | "asking">("hidden");
+  // Set once a tap was refused; it stays through the next ask until a grant hides the block.
+  const [refused, setRefused] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +99,7 @@ function KeepLog() {
   async function handleAsk(): Promise<void> {
     setState("asking");
     const kept = await askToKeepStorage();
+    if (kept !== true) setRefused(true);
     setState(kept === true ? "hidden" : "offer");
   }
 
@@ -117,6 +120,11 @@ function KeepLog() {
       >
         {state === "asking" ? t("copy.keepAsking") : t("copy.keepAction")}
       </Button>
+      {refused ? (
+        <Text size="2" role="status">
+          {t("copy.keepRefused")}
+        </Text>
+      ) : null}
     </Flex>
   );
 }
