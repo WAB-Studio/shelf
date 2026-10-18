@@ -346,7 +346,9 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Deleting what an ingest rule learned from keeps the rule** (Q8 a), its target set to null: the next delivery proposes
   no account or category.
 - **Quick entry reads thousands and millions** (Q12): «mil» and «k» are a thousand; «m», «millón» and «millones» are a
-  million. «mil» never means a million («mil pesos» is a thousand).
+  million. «mil» never means a million («mil pesos» is a thousand). Refined the same day (Q12-b, c, d): «m» is a million
+  only right after the number («5m») or as the amount's last word («2 m»), never when text follows («5 m de cable»);
+  «millon» without the accent is a million; «mil» alone proposes 1.000.
 - **Contrast** (Q6 a): every token under WCAG is darkened to the nearest same-hue value that passes, and this file's token
   table follows. Not measured yet.
 - **Shared packages** (Q11 a): `@repo/sign-in` and `@repo/caller` are promoted once GoalLog's call wrapper and WordBook's
