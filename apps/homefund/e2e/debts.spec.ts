@@ -1432,3 +1432,177 @@ test("stores card for a debt made in the debt form", async ({ page }) => {
 
   await dropAccounts([rows[0].id]);
 });
+
+// A debt whose terms fail is never created twice (RF-78, RF-79). The dialog
+// creates the account, then writes its terms; when the second step fails the
+// account already exists, so the dialog must keep its id and retry the terms
+// alone. The two server actions are told apart by what they carry: the terms
+// payload names `debtKind`, the account payload does not.
+test.describe("a debt whose terms fail to save", () => {
+  // A failed run leaves its bare account behind; drop whatever this stamp made.
+  test.afterEach(async () => {
+    const left = await fixtureSql<{ id: string }[]>`
+      select id from accounts
+      where owner_user_id = ${scope.userId} and name like ${`Deuda % ${stamp}%`}`;
+    if (left.length > 0) await dropAccounts(left.map((row) => row.id));
+  });
+
+  const isTermsCall = (body: string | null): boolean =>
+    body !== null && body.includes('"debtKind"');
+  const isCreateCall = (body: string | null): boolean =>
+    body !== null && body.includes('"kind":"liability"') && !isTermsCall(body);
+
+  async function rowsNamed(name: string) {
+    return fixtureSql<{ id: string; annual_rate: string | null }[]>`
+      select a.id, t.annual_rate::text as annual_rate
+      from accounts a
+      left join debt_terms t on t.account_id = a.id
+      where a.owner_user_id = ${scope.userId} and a.name = ${name}`;
+  }
+
+  async function fillAndSave(page: Page, name: string): Promise<Locator> {
+    await page.goto("/es/planning/debts");
+    await page
+      .getByRole("button", { name: debts.add, exact: true })
+      .filter({ visible: true })
+      .first()
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("textbox", { name: debts.nameLabel }).fill(name);
+    await dialog.getByRole("textbox", { name: debts.openingBalanceLabel }).fill("100000");
+    await dialog.getByRole("textbox", { name: debts.annualRateLabel }).fill("24");
+    return dialog;
+  }
+
+  // Two ways the terms step can fail: the request dies (a thrown error), or the
+  // server answers with a refusal (it rejects the payload).
+  const failures = [
+    {
+      label: "the request dies",
+      fail: async (route: import("@playwright/test").Route) => route.abort("failed"),
+    },
+    {
+      label: "the server refuses",
+      fail: async (route: import("@playwright/test").Route) => {
+        const body = route.request().postData() ?? "";
+        await route.continue({
+          postData: body.replace('"debtKind":"revolving"', '"debtKind":"bogus"'),
+        });
+      },
+    },
+  ];
+
+  for (const { label, fail } of failures) {
+    test(`${label}: the dialog says so, and a retry saves the terms on the one account`, async ({
+      page,
+    }) => {
+      const name = `Deuda reintento ${stamp} ${randomUUID().slice(0, 4)}`;
+      let creates = 0;
+      let termsAttempts = 0;
+      let holding = false;
+      let openGate: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        openGate = resolve;
+      });
+      let failing = true;
+
+      await page.route("**/*", async (route) => {
+        const request = route.request();
+        const body = request.method() === "POST" ? request.postData() : null;
+        if (!request.headers()["next-action"]) return route.fallback();
+        if (isCreateCall(body)) creates += 1;
+        if (!isTermsCall(body)) return route.fallback();
+        termsAttempts += 1;
+        if (failing) return fail(route);
+        if (holding) await gate;
+        return route.fallback();
+      });
+
+      const dialog = await fillAndSave(page, name);
+      await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+
+      // Refused: the account exists, so the dialog is now about its terms.
+      await expect.poll(() => termsAttempts).toBe(1);
+      await expect(page.getByText(debts.errors.termsNotSaved)).toBeVisible();
+      await expect(
+        page.getByRole("dialog", { name: debts.completeTermsTitle }),
+      ).toBeVisible();
+      expect((await rowsNamed(name)).length).toBe(1);
+      expect(creates).toBe(1);
+
+      // Retried with the route released, held open to see the pending state.
+      failing = false;
+      holding = true;
+      const submit = page
+        .getByRole("dialog")
+        .getByRole("button", { name: debts.save, exact: true });
+      await submit.click();
+      await expect(submit).toBeDisabled();
+      openGate();
+      await expect(page.getByRole("dialog")).toBeHidden();
+
+      expect(creates).toBe(1);
+      expect(termsAttempts).toBe(2);
+      const rows = await rowsNamed(name);
+      expect(rows).toHaveLength(1);
+      expect(Number(rows[0].annual_rate)).toBeCloseTo(ANNUAL_RATE, 6);
+
+      await dropAccounts(rows.map((row) => row.id));
+    });
+  }
+
+  test("cancelling after the refusal leaves the account, listed without terms", async ({
+    page,
+  }) => {
+    const name = `Deuda cancelada ${stamp} ${randomUUID().slice(0, 4)}`;
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      if (
+        request.headers()["next-action"] &&
+        isTermsCall(request.postData())
+      ) {
+        return route.abort("failed");
+      }
+      return route.fallback();
+    });
+
+    const dialog = await fillAndSave(page, name);
+    await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+    await expect(page.getByText(debts.errors.termsNotSaved)).toBeVisible();
+
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: common.cancel, exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    const rows = await rowsNamed(name);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].annual_rate).toBeNull();
+
+    await page.unroute("**/*");
+    await page.reload();
+    await expect(
+      page.getByText(name, { exact: true }).filter({ visible: true }).first(),
+    ).toBeVisible();
+
+    await dropAccounts(rows.map((row) => row.id));
+  });
+
+  test("the ordinary path creates the account and its terms and closes", async ({
+    page,
+  }) => {
+    const name = `Deuda ordinaria ${stamp} ${randomUUID().slice(0, 4)}`;
+    const dialog = await fillAndSave(page, name);
+    await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByText(debts.errors.termsNotSaved)).toHaveCount(0);
+
+    const rows = await rowsNamed(name);
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].annual_rate)).toBeCloseTo(ANNUAL_RATE, 6);
+
+    await dropAccounts(rows.map((row) => row.id));
+  });
+});
