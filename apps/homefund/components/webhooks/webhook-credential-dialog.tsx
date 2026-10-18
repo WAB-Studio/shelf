@@ -5,7 +5,7 @@ import { TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
-import { Controller, useForm, type Resolver } from "react-hook-form";
+import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
 import { issueWebhookCredentialAction } from "@/app/actions/webhook-credentials";
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui";
 import type { WebhookCredentialOptions } from "@/db/queries/webhook-credentials";
 import { scopedCategoryName } from "@/lib/fund/category-names";
+import { categoriesInScope } from "@/lib/fund/category-scope";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { issueWebhookCredentialSchema } from "@/lib/validation/webhook";
 
@@ -126,6 +127,25 @@ function WebhookCredentialBody({
     },
   });
 
+  // Once an account is picked only its scope's categories are offered; with none,
+  // both, since the delivery's own account decides at ingest time (RF-140).
+  const defaultAccountId = useWatch({ control: form.control, name: "defaultAccountId" });
+  const scopeOf = (accountId: string | null) =>
+    options.accounts.find((one) => one.id === accountId)?.scope ?? null;
+  const offeredCategories = categoriesInScope(options.categories, scopeOf(defaultAccountId));
+
+  // A category of the other scope picked before the account is dropped, never
+  // carried silently into the issue.
+  function pickAccount(accountId: string | null) {
+    form.setValue("defaultAccountId", accountId, { shouldDirty: true });
+    const scope = scopeOf(accountId);
+    const categoryId = form.getValues("defaultCategoryId");
+    const category = options.categories.find((one) => one.id === categoryId);
+    if (scope !== null && category && category.scope !== scope) {
+      form.setValue("defaultCategoryId", null);
+    }
+  }
+
   const onActionError = useActionErrorToast();
 
   const issue = useAction(issueWebhookCredentialAction, {
@@ -214,9 +234,7 @@ function WebhookCredentialBody({
                 </FieldLabel>
                 <Select.Root
                   value={field.value ?? ANY}
-                  onValueChange={(value) =>
-                    field.onChange(value === ANY ? null : value)
-                  }
+                  onValueChange={(value) => pickAccount(value === ANY ? null : value)}
                   disabled={issue.isPending}
                 >
                   <FieldControl>
@@ -255,7 +273,7 @@ function WebhookCredentialBody({
                   </FieldControl>
                   <Select.Content position="popper">
                     <Select.Item value={ANY}>{t("defaultNone")}</Select.Item>
-                    {options.categories.map((category) => (
+                    {offeredCategories.map((category) => (
                       <Select.Item key={category.id} value={category.id}>
                         {/* Two categories may share a name across kinds; the kind
                             is what tells them apart. */}

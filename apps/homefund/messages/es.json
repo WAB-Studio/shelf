@@ -1297,7 +1297,8 @@
       "amountRequired": "Escribe un monto.",
       "amountInvalid": "Escribe un monto válido.",
       "amountTooLarge": "El monto es demasiado alto.",
-      "directionInvalid": "El campo «direction» solo acepta «expense» o «income»."
+      "directionInvalid": "El campo «direction» solo acepta «expense» o «income».",
+      "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya."
     }
   },
   "ingest": {

@@ -1297,7 +1297,8 @@
       "amountRequired": "Enter an amount.",
       "amountInvalid": "Enter a valid amount.",
       "amountTooLarge": "The amount is too large.",
-      "directionInvalid": "The «direction» field only accepts «expense» or «income»."
+      "directionInvalid": "The «direction» field only accepts «expense» or «income».",
+      "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
     }
   },
   "ingest": {
