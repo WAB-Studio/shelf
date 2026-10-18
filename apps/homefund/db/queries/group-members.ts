@@ -193,25 +193,79 @@ export async function transferLeadership({
   });
 }
 
+export type UpdateMemberStatus = "updated" | "notLeader" | "gone" | "hasUser" | "hasInvite";
+
 // RF-100: the leader renames anyone, everyone else their own row — the policy
 // filters the rest out, so a refused rename returns no row rather than raising.
+// RF-153: with an address the row must be a live placeholder, and a refusal is
+// told apart in the same transaction so it can name its reason.
+export async function updateMember(input: {
+  groupId: string;
+  memberId: string;
+  name: string;
+  inviteEmail: string;
+}): Promise<UpdateMemberStatus>;
+export async function updateMember(input: {
+  groupId: string;
+  memberId: string;
+  name: string;
+  inviteEmail?: undefined;
+}): Promise<boolean>;
 export async function updateMember({
   groupId,
   memberId,
   name,
+  inviteEmail,
 }: {
   groupId: string;
   memberId: string;
   name: string;
-}): Promise<boolean> {
+  inviteEmail?: string;
+}): Promise<boolean | UpdateMemberStatus> {
   return withUserDb(async (tx) => {
+    if (inviteEmail === undefined) {
+      const rows = await tx
+        .update(groupMembers)
+        .set({ name })
+        .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.id, memberId)))
+        .returning({ id: groupMembers.id });
+
+      return rows.length > 0;
+    }
+
     const rows = await tx
       .update(groupMembers)
-      .set({ name })
-      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.id, memberId)))
+      .set({ name, inviteEmail })
+      .where(
+        and(
+          eq(groupMembers.groupId, groupId),
+          eq(groupMembers.id, memberId),
+          isNull(groupMembers.userId),
+          isNull(groupMembers.inviteEmail),
+          isNull(groupMembers.archivedAt),
+        ),
+      )
       .returning({ id: groupMembers.id });
+    if (rows.length > 0) return "updated";
 
-    return rows.length > 0;
+    // Leadership comes from the function, not from whether the row is visible.
+    const [state] = await tx.execute<{
+      leader: boolean;
+      found: boolean;
+      user_id: string | null;
+      invite_email: string | null;
+      archived_at: string | null;
+    }>(
+      sql`select private.is_group_leader(${groupId}::uuid) as leader,
+            m.id is not null as found, m.user_id, m.invite_email, m.archived_at
+          from (select 1) as one
+          left join group_members m on m.group_id = ${groupId}::uuid and m.id = ${memberId}::uuid`,
+    );
+    if (!state?.leader) return "notLeader";
+    if (!state.found || state.archived_at) return "gone";
+    if (state.user_id) return "hasUser";
+    if (state.invite_email) return "hasInvite";
+    return "gone";
   });
 }
 

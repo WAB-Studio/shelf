@@ -45,6 +45,7 @@ export function provisionalMemberName(email: string): string {
 export const updateMemberSchema = z.object({
   memberId: z.uuid({ error: "errors.notFound" }),
   name: memberNameSchema,
+  email: inviteEmailSchema,
 });
 
 // Accounts name a user or the group, never a member (RF-61), so archiving one

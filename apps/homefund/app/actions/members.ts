@@ -10,6 +10,7 @@ import {
   restoreMember,
   transferLeadership,
   updateMember,
+  type UpdateMemberStatus,
 } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
 import { deliverabilityExempt, isDomainDeliverable } from "@/lib/auth/deliverability";
@@ -130,14 +131,37 @@ export const inviteMemberByEmailAction = authActionClient
     return { memberId, inviteEmailFailed };
   });
 
+// RF-153: an address given to a placeholder member invites as the create does,
+// with the same guards, and a refusal writes nothing. Without one it renames.
 export const updateMemberAction = authActionClient
   .inputSchema(updateMemberSchema)
-  .action(async ({ parsedInput: { memberId, name } }) => {
-    const groupId = await requireGroupId();
-    const updated = await updateMember({ groupId, memberId, name });
-    if (!updated) notLeader();
+  .action(async ({ parsedInput: { memberId, name, email } }) => {
+    const groupId = await requireInvitableGroupId(email);
+
+    if (email === undefined) {
+      const renamed = await updateMember({ groupId, memberId, name });
+      if (!renamed) notLeader();
+
+      refresh();
+      return { inviteEmailFailed: false };
+    }
+
+    let status: UpdateMemberStatus;
+    try {
+      status = await updateMember({ groupId, memberId, name, inviteEmail: email });
+    } catch (error) {
+      if (pgErrorCode(error) === "23505") throw new ActionError("members.errors.emailTaken");
+      throw error;
+    }
+    if (status === "notLeader") notLeader();
+    if (status === "gone") throw new ActionError("errors.notFound");
+    if (status === "hasUser") throw new ActionError("members.errors.alreadyMember");
+    if (status === "hasInvite") throw new ActionError("members.errors.emailTaken");
+
+    const inviteEmailFailed = !(await sendInviteEmail(email));
 
     refresh();
+    return { inviteEmailFailed };
   });
 
 // RF-61: archiving a member leaves their accounts untouched — the flag is the
