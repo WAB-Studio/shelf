@@ -150,7 +150,7 @@ export async function resolveWebhookCredential(
 
 // What the issue form offers as a credential's fallbacks (RF-86).
 export type WebhookCredentialOptions = {
-  accounts: { id: string; name: string }[];
+  accounts: { id: string; name: string; scope: "personal" | "group" }[];
   categories: {
     id: string;
     name: string;
@@ -201,7 +201,11 @@ export async function getWebhookCredentialOptions(): Promise<WebhookCredentialOp
           account.ownerUserId === user.id ||
           (account.groupId !== null && account.isShared),
       )
-      .map((account) => ({ id: account.id, name: account.name })),
+      .map((account) => ({
+        id: account.id,
+        name: account.name,
+        scope: account.groupId !== null ? ("group" as const) : ("personal" as const),
+      })),
     categories: [
       ...flattenCategories(categories.filter((node) => node.scope === "personal")),
       ...flattenCategories(categories.filter((node) => node.scope === "group")),
