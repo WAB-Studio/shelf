@@ -1062,7 +1062,15 @@ test.describe("«Mis categorías» and «Dónde va» (decidido-17)", () => {
       await saveButton(page).click();
 
       await expect(page.getByText(messages.errors.categoryNesting, { exact: true }).first()).toBeVisible();
-      await expect(dialogOf(page)).toBeVisible();
+      // The dialog's exit animation outlives the click that closes it, so "still open" is a window, not a glance.
+      const closed = await expect(dialogOf(page))
+        .toBeHidden({ timeout: 1500 })
+        .then(
+          () => true,
+          () => false,
+        );
+      expect(closed).toBe(false);
+      await expect(nameField(page)).toHaveValue(target);
       expect(await rowOf(target)).toBeUndefined();
     });
 
