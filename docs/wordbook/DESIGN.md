@@ -1826,3 +1826,17 @@ Canvas «Diccionario de lectura», page «Cuenta», from y=27060. Dark 360, two 
   mañana.», on the address form and on the code step's resend. The button stays ready (a refused tap still spends,
   decided by the user 2026-10-17).
 - Auth's own 429 keeps «Demasiados intentos. Prueba de nuevo en unos minutos.»
+
+## Boards of 2026-10-17: the delete note only where it is true, and the Anki lines (decidido-17)
+
+Canvas «Diccionario de lectura», page «Registro», v55. Dark 360. Not built yet. Built on the planner's picks for Q3 (a)
+and Q4 (a), which wait on the user in the roadmap.
+
+- `RegistroBorrarFilaSinCuenta` redrawn with three cases: no account, a copy never started, or a retired reader asks
+  «Se borran sus N búsquedas y sus formas. No se puede deshacer.» with no note; signed out with its reader kept adds
+  «En este dispositivo. Tu cuenta lo borra cuando vuelvas a entrar.»; signed in with the copy on promises every device.
+- `RegistroExportarAnkiSinTarjeta` redrawn: the left-out line reads «6 palabras no van: no tienen traducción guardada.
+  Si las buscaste hace tiempo, búscalas otra vez y tendrán tarjeta.» (`log.study.ankiSkipped`, one: «# palabra no va:
+  no tiene traducción guardada. Si la buscaste hace tiempo, búscala otra vez y tendrá tarjeta.»); the no-card line
+  «Para Anki: ninguna de tus 4 palabras tiene traducción guardada. Si las buscaste hace tiempo, búscalas otra vez y
+  tendrán tarjeta.» (`log.study.ankiNone`).
