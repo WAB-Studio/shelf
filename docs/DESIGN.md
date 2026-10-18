@@ -407,7 +407,10 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   with $25 / $25.000 / $25.000.000 and save nothing until one is picked or an amount is typed; «M» and «millón» keep
   asking as before. Supersedes «a lowercase «m» is never a million» for what is saved without a question. Not built yet.
 - **«Recordarme el» shows on Inicio** (Q28 a, RF-159): from the reminder date until it is paid or archived, the planned
-  payment shows on Inicio («Matrícula colegio vence el 15 dic»). Board to draw before its module. RF-141's email stays
-  unbuilt.
+  payment shows on Inicio. Boards C5a, C5b (HomeFund canvas, page «T4 · pantallas», 2026-10-18): a card «Por pagar» above
+  «Movimientos», one row per payment: its name, «Vence el 15 dic» (or «Venció el 15 oct» in red once the due date has
+  passed) and its amount; oldest due first; at most three, the link reads «Ver los 5» when there are more, else «Ver
+  pagos». A row leaves when the payment is paid or archived; a payment with no reminder, or whose reminder date has not
+  come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email stays unbuilt.
 - **A sign-out Auth refuses leaves this device signed out** (Q30 a): the session is never restored; the login says
   «Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.»
