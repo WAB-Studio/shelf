@@ -300,3 +300,12 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Orphaned personal subcategories** (critic-6c Q8 b): migration 0061 deletes the ones nothing uses and brings back as
   top-level categories the ones a movement, budget, payment or rule names, before it adds the cascading key.
 - **«Eso ya no existe.» stays** (critic-6c Q9 a) for a write to an account the person cannot use.
+
+## Decisions of 2026-10-18, on the cierre-d17 plan, by the user
+
+- «Editar miembro» with an address opens **RF-153** (Q0 a); RF-149 stays as written.
+- When an edit saves the address but the invitation mail is not sent, the warning is a key of its own,
+  `members.editEmailFailed`: «Guardamos el correo, pero no pudimos enviar la invitación. Avísale que entre con ese correo;
+  si ya está en otro grupo, no se unirá a este.» (Q1 b).
+- Only the phone's empty-state button inside «Mis categorías» opens «Añadir categoría» on «Mías» (Q2 a). A button under a
+  non-empty «Mis categorías» and an empty state at 1280 do not exist and are not planned.
