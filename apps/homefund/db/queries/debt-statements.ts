@@ -161,6 +161,11 @@ export async function listPendingSettlements(
   });
 }
 
+// Thrown inside the transaction so nothing commits; the action reads `reason`.
+export class BilledAmountRefused extends Error {
+  readonly reason = "beforeReconciliation";
+}
+
 export type RecordBilledAmountArgs = {
   transactionId: string;
   accountId: string;
@@ -180,7 +185,10 @@ export type RecordBilledAmountArgs = {
  * liability or an asset: a foreign purchase on a debit account is estimated too), the
  * account must settle in the currency the amount was read in, and the row must
  * still carry an estimate. False when no row answered — refused by
- * `transactions_update_writable`, already billed, or gone.
+ * `transactions_update_writable`, already billed, or gone. An estimate dated on
+ * or before the account's latest reconciliation is refused by
+ * throwing `BilledAmountRefused` and writes nothing: the reconciliation counted it
+ * already (RF-137); the same statement carries that check.
  */
 export async function recordBilledAmount({
   transactionId,
@@ -189,19 +197,41 @@ export async function recordBilledAmount({
   billedCents,
 }: RecordBilledAmountArgs): Promise<boolean> {
   return withUserDb(async (tx) => {
-    const rows = await tx.execute<{ id: string }>(sql`
-      update transactions t
-      set counter_amount_cents = ${billedCents}, counter_is_estimate = false
-      from accounts a
-      where t.id = ${transactionId}
-        and a.id = ${accountId}
-        and (t.from_account_id = a.id or t.to_account_id = a.id)
-        and a.settlement_currency = ${currency}
-        and t.currency <> a.settlement_currency
-        and t.counter_is_estimate
-      returning t.id
+    // `blocked` and the update share the guard's own conditions, so a movement
+    // that is not this card's estimate answers `replaced = 0` and not a refusal.
+    const [row] = await tx.execute<{ replaced: string; blocked: boolean }>(sql`
+      with blocked as (
+        select exists (
+          select 1
+          from transactions t
+          join accounts a on a.id = ${accountId}
+          join account_reconciliations r on r.account_id = a.id
+          where t.id = ${transactionId}
+            and (t.from_account_id = a.id or t.to_account_id = a.id)
+            and a.settlement_currency = ${currency}
+            and t.currency <> a.settlement_currency
+            and t.counter_is_estimate
+            and r.reconciled_on >= t.occurred_at
+        ) as is_blocked
+      ),
+      updated as (
+        update transactions t
+        set counter_amount_cents = ${billedCents}, counter_is_estimate = false
+        from accounts a
+        where t.id = ${transactionId}
+          and a.id = ${accountId}
+          and (t.from_account_id = a.id or t.to_account_id = a.id)
+          and a.settlement_currency = ${currency}
+          and t.currency <> a.settlement_currency
+          and t.counter_is_estimate
+          and not (select is_blocked from blocked)
+        returning t.id
+      )
+      select (select count(*) from updated)::text as replaced,
+             (select is_blocked from blocked) as blocked
     `);
 
-    return rows.length > 0;
+    if (row?.blocked) throw new BilledAmountRefused("beforeReconciliation");
+    return Number(row?.replaced ?? 0) > 0;
   });
 }

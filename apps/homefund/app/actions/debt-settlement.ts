@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 
-import { recordBilledAmount } from "@/db/queries/debt-statements";
+import { recordBilledAmount, BilledAmountRefused } from "@/db/queries/debt-statements";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
@@ -40,6 +40,9 @@ export const recordBilledAmountAction = authActionClient
           billedCents,
         });
       } catch (error) {
+        if (error instanceof BilledAmountRefused) {
+          throw new ActionError("debts.errors.beforeReconciliation");
+        }
         // The UPDATE grant is column-scoped, so a caller outside it takes 42501
         // rather than the empty answer a denied policy gives.
         if (pgErrorCode(error) === "42501") {
