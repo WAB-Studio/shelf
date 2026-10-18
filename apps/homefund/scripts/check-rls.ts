@@ -258,6 +258,7 @@ async function main() {
   await checkAllowedEmailAudit();
   await checkAccountSubtypeWords();
   await checkMemberAddress();
+  await checkRecurringPauseReason();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -5061,6 +5062,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "is_active",
     "owner_user_id",
+    "paused_reason",
     "updated_at",
   ],
   savings_goals: ["archived_at", "created_at", "id", "updated_at"],
@@ -5213,7 +5215,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   ],
   labels: ["created_at", "group_id", "id", "owner_user_id", "updated_at"],
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
-  recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
+  recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "paused_reason", "updated_at"],
   savings_goals: ["created_at", "group_id", "id", "owner_user_id", "updated_at"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: ["label_id", "transaction_id"],
@@ -11478,6 +11480,99 @@ async function checkMemberAddress() {
     state.fn !== null && def.includes("archived_at is null") && def.includes("invite_email is not null") && def.includes("unique"),
     `function = ${state.fn ?? "absent"}, index = ${state.def ?? "absent"}`,
   );
+}
+
+// Assertions 389-394: why a rule is paused (M49). `paused_reason` is the run's to write: the app
+// reads it and its person cannot forge it, on insert or update; the column admits only 'failed'; the
+// run writes it when a rule's generation raises and writes nothing for a rule that merely ended.
+// The run is scoped to the fixture's own user, so no other tenant's due rule is touched.
+async function checkRecurringPauseReason() {
+  console.log("");
+  const labels = {
+    updateBarred: "389. authenticated cannot update paused_reason on its own rule (42501)",
+    insertBarred: "390. authenticated cannot insert a rule carrying a paused_reason (42501)",
+    check: "391. paused_reason admits null and 'failed' and refuses any other value (23514)",
+    written: "392. a rule whose generation raises is paused with paused_reason 'failed'",
+    ended: "393. a rule that ran its course (ends_on) is inactive with no paused_reason",
+    healthy: "394. a rule that books cleanly stays active with no paused_reason",
+  };
+  const today = `(now() at time zone 'America/Bogota')::date`;
+
+  await m1Rows(Object.values(labels), async (tx) => {
+    const userA = randomUUID();
+    const userB = randomUUID();
+    await tx`insert into auth.users (id) values (${userA}), (${userB})`;
+    await tx`insert into app_users (id) values (${userA}), (${userB})`;
+
+    await enterUserContext(tx, userA);
+    const [{ id: accountA }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, initial_balance_on)
+      values (${userA}, 'rls pause reason a cash', 'asset', ${tx.unsafe(today)}) returning id`;
+    const [{ id: catA }] = await tx<{ id: string }[]>`
+      insert into categories (owner_user_id, name, kind)
+      values (${userA}, 'rls pause reason a expense', 'expense') returning id`;
+    const [{ id: healthy }] = await tx<{ id: string }[]>`
+      insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on)
+      values (${accountA}, 1000, ${catA}, 'weekly', 1, ${tx.unsafe(today)}) returning id`;
+    const [{ id: ended }] = await tx<{ id: string }[]>`
+      insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on, ends_on)
+      values (${accountA}, 1000, ${catA}, 'weekly', 1, ${tx.unsafe(today)}, ${tx.unsafe(today)}) returning id`;
+    const updateCode = await m1Refusal(tx, (sp) =>
+      sp`update recurring_rules set paused_reason = 'failed' where id = ${healthy}`);
+    const insertCode = await m1Refusal(tx, (sp) =>
+      sp`insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on, paused_reason)
+         values (${accountA}, 1000, ${catA}, 'weekly', 1, ${tx.unsafe(today)}, 'failed')`);
+
+    await tx`reset role`;
+    const refusedValue = await m1Refusal(tx, (sp) =>
+      sp`update recurring_rules set paused_reason = 'bogus' where id = ${healthy}`);
+    const failedAccepted = await m1Refusal(tx, (sp) =>
+      sp`update recurring_rules set paused_reason = 'failed' where id = ${healthy}`);
+    const nullAccepted = await m1Refusal(tx, (sp) =>
+      sp`update recurring_rules set paused_reason = null where id = ${healthy}`);
+
+    await enterUserContext(tx, userB);
+    const [{ id: accountB }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, initial_balance_on)
+      values (${userB}, 'rls pause reason b cash', 'asset', ${tx.unsafe(today)}) returning id`;
+    // B's rule names A's category: another scope, which the split trigger refuses on generation.
+    const [{ id: bad }] = await tx<{ id: string }[]>`
+      insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on)
+      values (${accountB}, 1000, ${catA}, 'weekly', 1, ${tx.unsafe(today)}) returning id`;
+    await tx`reset role`;
+    await tx`select set_config('request.jwt.claims', '', true)`;
+    await tx`select private.run_due_recurring_rules(${userA}::uuid)`;
+    await tx`select private.run_due_recurring_rules(${userB}::uuid)`;
+    await tx`set constraints all immediate`;
+
+    const state = async (id: string) =>
+      (await tx<{ is_active: boolean; paused_reason: string | null }[]>`
+        select is_active, paused_reason from recurring_rules where id = ${id}`)[0];
+    const badState = await state(bad);
+    const endedState = await state(ended);
+    const healthyState = await state(healthy);
+
+    return [
+      { ok: updateCode === "42501", detail: `update answered ${updateCode}` },
+      { ok: insertCode === "42501", detail: `insert answered ${insertCode}` },
+      {
+        ok: refusedValue === "23514" && failedAccepted === null && nullAccepted === null,
+        detail: `'bogus' -> ${refusedValue}, 'failed' -> ${failedAccepted ?? "accepted"}, null -> ${nullAccepted ?? "accepted"}`,
+      },
+      {
+        ok: badState.is_active === false && badState.paused_reason === "failed",
+        detail: `is_active = ${badState.is_active}, paused_reason = ${badState.paused_reason}`,
+      },
+      {
+        ok: endedState.is_active === false && endedState.paused_reason === null,
+        detail: `is_active = ${endedState.is_active}, paused_reason = ${endedState.paused_reason}`,
+      },
+      {
+        ok: healthyState.is_active === true && healthyState.paused_reason === null,
+        detail: `is_active = ${healthyState.is_active}, paused_reason = ${healthyState.paused_reason}`,
+      },
+    ];
+  });
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

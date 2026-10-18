@@ -132,7 +132,12 @@ import {
   updateTransaction,
 } from "@/db/queries/transactions";
 import { updateAccountAction } from "@/app/actions/accounts";
-import { createRecurringRuleAction, updateRecurringRuleAction } from "@/app/actions/recurring-rules";
+import {
+  createRecurringRuleAction,
+  pauseRecurringRuleAction,
+  resumeRecurringRuleAction,
+  updateRecurringRuleAction,
+} from "@/app/actions/recurring-rules";
 import { recordBilledAmount } from "@/db/queries/debt-statements";
 import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
@@ -4209,6 +4214,7 @@ async function main(): Promise<void> {
   await withdrawalResendSuite();
   await accountPlannedVersionSuite();
   await learnedRuleSuite();
+  await recurringPauseSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -8820,4 +8826,171 @@ async function learnedRuleSuite(): Promise<void> {
       `functions = ${JSON.stringify(functions)}`,
     );
   }
+}
+
+// M49: a rule the night's run pauses says why, and a pause made while the run is mid-flight stays.
+// The run is always scoped to the fixture's own user, so no other tenant's due rule is booked.
+async function recurringPauseSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const open = async (owner: HarnessUser) => {
+    const { accountId } = await asUser(owner, () =>
+      createAccount({
+        name: `Harness m49 ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: owner.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_000,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    const { categoryId } = await asUser(owner, () =>
+      createCategory({ scope: { ownerUserId: owner.id }, name: `Harness m49 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return { accountId, categoryId };
+  };
+  const own = await open(user);
+  const foreign = await open(stranger);
+
+  const makeRule = async (dueIn: number, categoryId = own.categoryId): Promise<string> => {
+    const { recurringRuleId } = await asUser(user, () =>
+      createRecurringRule({
+        fromAccountId: own.accountId,
+        toAccountId: null,
+        amountCents: 1_000,
+        categoryId,
+        description: `m49 ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: shiftDate(today, dueIn),
+        endsOn: null,
+      }),
+    );
+    keep("recurring_rules", recurringRuleId);
+    return recurringRuleId;
+  };
+  type State = { is_active: boolean; paused_reason: string | null; next_run_on: string };
+  const read = async (id: string): Promise<State> =>
+    (
+      await fixtureSql<State[]>`
+        select is_active, paused_reason, next_run_on::text as next_run_on from recurring_rules where id = ${id}`
+    )[0];
+  const booked = async (id: string): Promise<number> => {
+    const rows = await fixtureSql<{ id: string }[]>`select id from transactions where recurring_rule_id = ${id}`;
+    for (const r of rows) keep("transactions", r.id);
+    return rows.length;
+  };
+  const row = async (label: string, body: () => Promise<{ ok: boolean; detail: string }>): Promise<void> => {
+    try {
+      const verdict = await body();
+      assert(next(label), verdict.ok, verdict.detail);
+    } catch (error) {
+      assert(next(label), false, refusal(error));
+    }
+  };
+  const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+
+  await row("A rule whose generated movement fails is paused by the run with paused_reason 'failed'", async () => {
+    const id = await makeRule(-7, foreign.categoryId);
+    await fixtureSql`select private.run_due_recurring_rules(${user.id}::uuid)`;
+    const after = await read(id);
+    return {
+      ok: after.is_active === false && after.paused_reason === "failed" && (await booked(id)) === 0,
+      detail: `is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
+    };
+  });
+
+  // A second connection holds the rule's row, the run starts against the rule it read as active, and the
+  // second connection commits while the run waits. The run must lock the rule and look again.
+  const raceRun = async (change: (tx: typeof fixtureSql) => Promise<void>) => {
+    const writer = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, connection: { search_path: "finances, public" } });
+    const runner = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, connection: { search_path: "finances, public" } });
+    try {
+      const [{ pid }] = await runner<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      let release!: () => void;
+      const gate = new Promise<void>((done) => (release = done));
+      let held!: () => void;
+      const holding = new Promise<void>((done) => (held = done));
+      const hold = writer.begin(async (tx) => {
+        await change(tx as unknown as typeof fixtureSql);
+        held();
+        await gate;
+      });
+      await holding;
+      // A postgres.js query is lazy: `execute` sends it now, so the run is in flight while the writer holds the row.
+      const running = runner`select private.run_due_recurring_rules(${user.id}::uuid)`.execute();
+      const deadline = Date.now() + 5_000;
+      let waiting = false;
+      while (Date.now() < deadline && !waiting) {
+        const [w] = await fixtureSql<{ n: number }[]>`
+          select count(*)::int as n from pg_stat_activity where pid = ${pid} and wait_event_type = 'Lock'`;
+        waiting = w.n > 0;
+        if (!waiting) await pause(25);
+      }
+      release();
+      await hold;
+      await running;
+      return waiting;
+    } finally {
+      await writer.end();
+      await runner.end();
+    }
+  };
+
+  await row("A pause committed by a second connection while the run waits on the rule stays a pause", async () => {
+    const id = await makeRule(-7);
+    const waited = await raceRun(async (tx) => {
+      await tx`update recurring_rules set is_active = false where id = ${id}`;
+    });
+    const after = await read(id);
+    return {
+      ok: waited && after.is_active === false && after.paused_reason === null && (await booked(id)) === 0,
+      detail: `run waited on the lock = ${waited}, is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
+    };
+  });
+
+  await row("A next run moved by a second connection while the run waits is kept, and the run books nothing over it", async () => {
+    const id = await makeRule(-7);
+    const moved = shiftDate(today, 21);
+    const waited = await raceRun(async (tx) => {
+      await tx`update recurring_rules set next_run_on = ${moved} where id = ${id}`;
+    });
+    const after = await read(id);
+    return {
+      ok: waited && after.next_run_on === moved && after.is_active === true && (await booked(id)) === 0,
+      detail: `run waited = ${waited}, next_run_on = ${after.next_run_on} (expected ${moved}), is_active = ${after.is_active}`,
+    };
+  });
+
+  await row("Resuming a rule the run paused clears paused_reason and makes it active", async () => {
+    const id = await makeRule(7);
+    await fixtureSql`update recurring_rules set is_active = false, paused_reason = 'failed' where id = ${id}`;
+    const result = await asUser(user, () => resumeRecurringRuleAction({ id }));
+    const after = await read(id);
+    return {
+      ok: result?.serverError === undefined && after.is_active === true && after.paused_reason === null,
+      detail: `result = ${JSON.stringify(result)}, is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
+    };
+  });
+
+  await row("Pausing a rule by hand leaves paused_reason null", async () => {
+    const id = await makeRule(7);
+    const result = await asUser(user, () => pauseRecurringRuleAction({ id }));
+    const after = await read(id);
+    return {
+      ok: result?.serverError === undefined && after.is_active === false && after.paused_reason === null,
+      detail: `result = ${JSON.stringify(result)}, is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
+    };
+  });
 }
