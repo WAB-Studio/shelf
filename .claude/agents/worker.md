@@ -70,7 +70,7 @@ the next reader knows what they are holding. Squash them into the real commit at
 - Running `git push`.
 - `git add -A`. Stage the paths you wrote.
 - Migrating the database unless the assignment says so.
-- Touching a trigger, a policy, a grant or the schema of the live database. It is remote and shared with four other lanes.
+- Touching a trigger, a policy, a grant or the schema of the live database. The local stack is one database shared by every lane.
 - Working outside your lane: another worktree, another port, another `HARNESS_LANE`.
 
 # Output
