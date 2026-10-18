@@ -4199,6 +4199,7 @@ async function main(): Promise<void> {
   await importCategoryScopeSuite();
   await categoryScopeSuite();
   await survivorsSuite();
+  await idempotencySuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -7515,5 +7516,223 @@ async function survivorsSuite(): Promise<void> {
       siblingName === "Harness primo hermano" &&
       leaderAfter === leaderBefore,
     `target = ${targetName}, sibling = ${siblingName}, leader ${leaderBefore} -> ${leaderAfter}`,
+  );
+}
+
+type MovementResult = {
+  data?: { ok?: boolean; transactionId?: string; reason?: string };
+  serverError?: string;
+  validationErrors?: unknown;
+};
+
+// M42: a create sent twice books once, an edit loaded before another person's save is refused.
+async function idempotencySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: (input: Record<string, unknown>) => Promise<MovementResult>;
+    updateTransactionAction: (input: Record<string, unknown>) => Promise<MovementResult>;
+  };
+
+  const user = await createMembershipFreeUser();
+  const ownerScope = { ownerUserId: user.id };
+  const { accountId } = await asUser(user, () =>
+    createAccount({
+      name: `Harness idem ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  track("accounts", accountId);
+  const mkCategory = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(user, () =>
+      createCategory({ scope: ownerScope, name: `${name} ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const catA = await mkCategory("Harness idem A");
+  const catB = await mkCategory("Harness idem B");
+  const { labelId } = await asUser(user, () =>
+    createLabel({ scope: ownerScope, name: `Harness idem ${tag}`, color: "#7A4CB4" }),
+  );
+  track("labels", labelId);
+
+  const expense = (over: Record<string, unknown> = {}) => ({
+    fromAccountId: accountId,
+    toAccountId: null,
+    amount: "100",
+    occurredAt: today,
+    description: `idem ${tag}`,
+    splits: [{ categoryId: catA, amount: "100" }],
+    labelIds: [labelId],
+    ...over,
+  });
+  const create = (over: Record<string, unknown> = {}) =>
+    asUser(user, () => actions.createTransactionAction(expense(over)));
+  const update = (id: string, over: Record<string, unknown> = {}) =>
+    asUser(user, () => actions.updateTransactionAction({ transactionId: id, ...expense(), ...over }));
+  const trackRows = (ids: string[]) => ids.forEach((id) => track("transactions", id));
+  type MovementRow = { id: string; external_ref: string | null; amount_cents: string; kind: string };
+  const byRef = (refs: string[]) =>
+    fixtureSql<MovementRow[]>`
+      select id, external_ref, amount_cents::text, kind from transactions
+      where owner_user_id = ${user.id} and external_ref in ${fixtureSql(refs)}`;
+  const byDescription = (text: string) =>
+    fixtureSql<MovementRow[]>`
+      select id, external_ref, amount_cents::text, kind from transactions
+      where owner_user_id = ${user.id} and description = ${text}`;
+  const byId = (rowId: string) =>
+    fixtureSql<MovementRow[]>`
+      select id, external_ref, amount_cents::text, kind from transactions where id = ${rowId}`;
+  const isStale = (r: MovementResult) =>
+    r.serverError === "errors.stale" || (r.data?.ok === false && r.data.reason === "stale");
+
+  // Q: the same request sent twice
+  const ref = randomUUID();
+  const first = await create({ requestRef: ref });
+  const second = await create({ requestRef: ref });
+  const booked = await byRef([`form:${ref}`]);
+  trackRows(booked.map((r) => r.id));
+  const splitsBooked = booked[0]
+    ? (await fixtureSql<{ n: number }[]>`select count(*)::int as n from transaction_splits where transaction_id = ${booked[0].id}`)[0].n
+    : -1;
+  assert(
+    next("A create sent twice with the same requestRef books one movement under form:<ref> and both answers name its id"),
+    booked.length === 1 &&
+      booked[0].amount_cents === "10000" &&
+      booked[0].kind === "expense" &&
+      splitsBooked === 1 &&
+      first.data?.ok === true &&
+      second.data?.ok === true &&
+      first.data.transactionId === booked[0].id &&
+      second.data.transactionId === booked[0].id,
+    `${booked.length} row(s), splits ${splitsBooked}, first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
+  );
+
+  // Q: two different requests with the same figures
+  const refA = randomUUID();
+  const refB = randomUUID();
+  const ra = await create({ requestRef: refA });
+  const rb = await create({ requestRef: refB });
+  const pair = await byRef([`form:${refA}`, `form:${refB}`]);
+  trackRows(pair.map((r) => r.id));
+  assert(
+    next("Two different requestRefs with identical figures book two movements, each answered with its own id"),
+    pair.length === 2 &&
+      ra.data?.transactionId !== rb.data?.transactionId &&
+      pair.some((r) => r.id === ra.data?.transactionId) &&
+      pair.some((r) => r.id === rb.data?.transactionId),
+    `${pair.length} row(s), ids ${ra.data?.transactionId} / ${rb.data?.transactionId}`,
+  );
+
+  // Q: no requestRef, nothing deduplicates
+  const bare = `bare ${tag}`;
+  const b1 = await create({ description: bare });
+  const b2 = await create({ description: bare });
+  const bareRows = await byDescription(bare);
+  trackRows(bareRows.map((r) => r.id));
+  assert(
+    next("Two creates with no requestRef book two movements, neither under a form: key"),
+    bareRows.length === 2 && bareRows.every((r) => !r.external_ref?.startsWith("form:")) && b1.data?.transactionId !== b2.data?.transactionId,
+    `${bareRows.length} row(s), refs ${JSON.stringify(bareRows.map((r) => r.external_ref))}`,
+  );
+
+  // The movement two people have open
+  const opened = await create({ requestRef: randomUUID(), description: `open ${tag}` });
+  const id = opened.data?.transactionId ?? randomUUID();
+  track("transactions", id);
+  const stamp = async () =>
+    (await fixtureSql<{ t: string }[]>`select updated_at::text as t from transactions where id = ${id}`)[0]?.t ?? "";
+  const hasMicros = (t: string) => /\.\d{6}/.test(t) && !t.replace(/[+-]\d+$/, "").endsWith("000");
+  // The test needs the microseconds to exist: a stamp that lands on a whole millisecond is touched again.
+  for (let i = 0; i < 10 && !hasMicros(await stamp()); i++) {
+    await fixtureSql`update transactions set description = description where id = ${id}`;
+  }
+  const loaded = await stamp();
+  assert(next("The movement's updated_at::text carries microseconds the test can compare"), hasMicros(loaded), loaded);
+
+  // Q: a fresh edit carrying the row's own stamp
+  const fresh = await update(id, { amount: "500", expectedUpdatedAt: loaded, splits: [{ categoryId: catA, amount: "500" }] });
+  const afterFresh = (await byId(id))[0];
+  const stampAfter = await stamp();
+  assert(
+    next("An edit carrying the row's own updated_at::text, microseconds and all, is accepted and moves the stamp"),
+    fresh.serverError === undefined && !isStale(fresh) && afterFresh?.amount_cents === "50000" && stampAfter !== loaded,
+    `result = ${JSON.stringify(fresh)}, amount = ${afterFresh?.amount_cents}, stamp ${loaded} -> ${stampAfter}`,
+  );
+
+  // Q: the second person's edit, loaded before the first one saved
+  const stale = await update(id, {
+    amount: "7",
+    expectedUpdatedAt: loaded,
+    splits: [{ categoryId: catB, amount: "7" }],
+    labelIds: [],
+  });
+  const afterStale = (await byId(id))[0];
+  assert(
+    next("An edit carrying a stamp older than the row is refused as stale and leaves the amount as the first save set it"),
+    isStale(stale) && afterStale?.amount_cents === "50000",
+    `result = ${JSON.stringify(stale)}, amount = ${afterStale?.amount_cents}`,
+  );
+
+  // Q: the refusal writes nothing else
+  const kept = await fixtureSql<{ category_id: string; amount_cents: string }[]>`
+    select category_id, amount_cents::text from transaction_splits where transaction_id = ${id}`;
+  const keptLabels = await fixtureSql<{ label_id: string }[]>`
+    select label_id from transaction_labels where transaction_id = ${id}`;
+  assert(
+    next("A stale edit leaves the splits and labels the first save wrote"),
+    kept.length === 1 && kept[0].category_id === catA && kept[0].amount_cents === "50000" &&
+      keptLabels.length === 1 && keptLabels[0].label_id === labelId,
+    `splits = ${JSON.stringify(kept)}, labels = ${JSON.stringify(keptLabels)}`,
+  );
+
+  // Q: an edit that names no stamp still lands
+  const blind = await update(id, { amount: "600", splits: [{ categoryId: catA, amount: "600" }] });
+  const afterBlind = (await byId(id))[0];
+  assert(
+    next("An edit that carries no expectedUpdatedAt is not refused"),
+    blind.serverError === undefined && !isStale(blind) && afterBlind?.amount_cents === "60000",
+    `result = ${JSON.stringify(blind)}, amount = ${afterBlind?.amount_cents}`,
+  );
+
+  // Q: the create and its cause are one transaction
+  const cause = await create({ requestRef: randomUUID(), description: `cause ${tag}` });
+  const causeId = cause.data?.transactionId ?? randomUUID();
+  track("transactions", causeId);
+  const victim = `effect ${tag}`;
+  const fn = `harness_m42_drop_cause_${tag.replace(/-/g, "")}`;
+  // Stands in for the other person deleting the cause after the form read it and before the write ends.
+  await fixtureSql.unsafe(`
+    create function finances.${fn}() returns trigger language plpgsql security definer set search_path = finances, public as $f$
+    begin
+      if new.description = '${victim}' then delete from finances.transactions where id = '${causeId}'; end if;
+      return new;
+    end $f$`);
+  await fixtureSql.unsafe(`create trigger ${fn} after insert on finances.transactions for each row execute function finances.${fn}()`);
+  let refused: MovementResult;
+  try {
+    refused = await create({ requestRef: randomUUID(), description: victim, causedByTransactionId: causeId });
+  } finally {
+    await fixtureSql.unsafe(`drop trigger if exists ${fn} on finances.transactions`);
+    await fixtureSql.unsafe(`drop function if exists finances.${fn}()`);
+  }
+  const leftovers = await byDescription(victim);
+  trackRows(leftovers.map((r) => r.id));
+  const causeLeft = await byId(causeId);
+  assert(
+    next("A create whose cause vanished before the write ended rolls back whole: an error, and no movement left behind"),
+    causeLeft.length === 0 && leftovers.length === 0 && (refused.serverError !== undefined || refused.data?.ok === false),
+    `cause rows = ${causeLeft.length}, movement rows = ${leftovers.length}, result = ${JSON.stringify(refused)}`,
   );
 }
