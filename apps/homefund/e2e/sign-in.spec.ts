@@ -617,8 +617,8 @@ test.describe("the code link lands only in the browser that asked", () => {
     }
   });
 
-  test("a pending member who signs in by code lands as that member, not as a new one", async ({ browser, baseURL }) => {
-    // Kills: skipping `claimInviteForUser` on the `code` path.
+  test("a pending invitee who signs in by code lands on the home page and joins nothing", async ({ browser, baseURL }) => {
+    // Kills: claiming the pending invitation on the `code` path (RF-154: only accepting joins).
     const email = newAddress();
     await listAddress(email);
     const { groupId } = await seedGroup();
@@ -635,14 +635,23 @@ test.describe("the code link lands only in the browser that asked", () => {
     try {
       await requestLink(page, email);
       await page.goto((await codeLinkOf(email, baseURL!)).url);
-      await expect(page).toHaveURL(/\/es\/bienvenida$/);
+      await expect(page).toHaveURL(/\/es$/);
 
-      const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null }[]>`
-        select id, name, user_id from group_members where id = ${pendingId}`;
-      expect(member).toEqual({ id: pendingId, name: `Invitado M9 ${stamp}`, user_id: await userIdOf(email) });
+      const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null; invite_state: string; invite_email: string | null }[]>`
+        select id, name, user_id, invite_state, invite_email from group_members where id = ${pendingId}`;
+      expect(member).toEqual({
+        id: pendingId,
+        name: `Invitado M9 ${stamp}`,
+        user_id: null,
+        invite_state: "pending",
+        invite_email: email,
+      });
       const [after] = await fixtureSql<{ n: number }[]>`
         select count(*)::int as n from group_members where group_id = ${groupId}`;
       expect(after.n).toBe(before.n);
+      const [memberships] = await fixtureSql<{ n: number }[]>`
+        select count(*)::int as n from group_members where user_id = ${await userIdOf(email)}`;
+      expect(memberships.n).toBe(0);
     } finally {
       await context.close();
       await clearGroup();

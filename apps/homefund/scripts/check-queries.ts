@@ -68,9 +68,10 @@ import { listDueReminders } from "@/db/queries/due-reminders";
 import type { DebtsScreenData } from "@/db/queries/debts-screen";
 import { readExport } from "@/db/queries/export";
 import {
-  claimInviteForUser,
+  archiveMember,
   createMember,
   listMembers,
+  transferLeadership,
 } from "@/db/queries/group-members";
 import { getUserGroup, updateGroupSettings } from "@/db/queries/groups";
 import { readImportScope } from "@/db/queries/import-preview";
@@ -937,16 +938,15 @@ async function writeSuite(
     },
   );
 
-  // RF-06 from the three sides that decide it, driven by three sessions rather
-  // than three arguments: the claim reads the caller's own identity, so who runs
-  // it IS the input. The middle call is why this assertion exists — the UPDATE it
-  // replaced carried no WHERE, and for a caller already in the group it stamped
-  // her user_id onto every row of it and then reported "claimed".
+  // RF-154: signing in joins nobody. What the landing used to run to claim an invitation
+  // (`private.claim_group_invite`) is asked here as the person who signs in, and the table is read back
+  // as the owner: who runs it IS the input, and what was stored is what counts. Three callers: an
+  // invitee, a member who holds an invitation of her own, and an address whose row is archived.
   const invitee = await createMembershipFreeUser();
   const leaderEmail = process.env.HARNESS_USER_EMAIL ?? "";
 
   await checkWrite(
-    "claimInviteForUser",
+    "Signing in joins nobody: an invitee, an archived invitation and a member holding one are all left as they were",
     async () => {
       const invitedId = randomUUID();
       const archivedId = randomUUID();
@@ -960,7 +960,6 @@ async function writeSuite(
         email: invitee.email,
         archived: false,
       });
-      // Archived and invited: the row the proved escalation wrote onto.
       await seedPendingInvite({
         groupId: scope.groupId,
         memberId: archivedId,
@@ -969,21 +968,6 @@ async function writeSuite(
         email: `harness-${randomUUID()}@example.invalid`,
         archived: true,
       });
-
-      const claimed = await asUser(invitee, () =>
-        claimInviteForUser({ email: invitee.email }),
-      );
-      const [claimedRow] = await fixtureSql<
-        { user_id: string | null; invite_email: string | null }[]
-      >`select user_id, invite_email from group_members where id = ${invitedId}`;
-
-      // The leader is in the group and holds no invitation: nothing may move.
-      const before = await readGroupMembers(scope.groupId);
-      const none = await claimInviteForUser({ email: leaderEmail });
-      const after = await readGroupMembers(scope.groupId);
-
-      // Now she does hold one, and her live leader row already carries her
-      // user_id, so `group_members_user_unique` refuses the claim (RF-55).
       await seedPendingInvite({
         groupId: scope.groupId,
         memberId: leaderInviteId,
@@ -992,34 +976,45 @@ async function writeSuite(
         email: leaderEmail,
         archived: false,
       });
-      const already = await claimInviteForUser({ email: leaderEmail });
+
+      const before = await readGroupMembers(scope.groupId);
+      const signIn = () =>
+        withUserDb((tx) => tx.execute<{ id: string | null }>(sql`select private.claim_group_invite() as id`));
+      const [inviteeJoined] = await asUser(invitee, signIn);
+      const [leaderJoined] = await signIn();
+      const after = await readGroupMembers(scope.groupId);
+      const [invitedRow] = await fixtureSql<
+        { user_id: string | null; invite_email: string | null; invite_state: string }[]
+      >`select user_id, invite_email, invite_state from group_members where id = ${invitedId}`;
+      const [{ live }] = await fixtureSql<{ live: string }[]>`
+        select count(*)::text as live from group_members where user_id = ${invitee.id}`;
 
       return {
-        claimed,
-        claimedRow,
-        before,
+        inviteeJoined: inviteeJoined?.id ?? null,
+        leaderJoined: leaderJoined?.id ?? null,
+        invitedRow,
+        live: Number(live),
         untouched: JSON.stringify(before) === JSON.stringify(after),
-        none,
-        already,
+        rows: before.length,
       };
     },
     (result) => ({
       ok:
-        result.claimed === "claimed" &&
-        result.claimedRow.user_id === invitee.id &&
-        result.claimedRow.invite_email === null &&
-        result.none === "none" &&
-        result.untouched &&
-        result.already === "already-in-group",
-      detail: `invited caller = ${result.claimed}, her row carries her user_id = ${
-        result.claimedRow.user_id === invitee.id
-      } and invite_email = ${result.claimedRow.invite_email}; uninvited member = ${
-        result.none
-      }, ${result.before.length} group rows unchanged = ${
-        result.untouched
-      }; member holding a live membership = ${result.already}`,
+        result.inviteeJoined === null &&
+        result.leaderJoined === null &&
+        result.invitedRow.user_id === null &&
+        result.invitedRow.invite_email === invitee.email &&
+        result.invitedRow.invite_state === "pending" &&
+        result.live === 0 &&
+        result.untouched,
+      detail: `invitee joined = ${result.inviteeJoined}, member holding an invitation joined = ${
+        result.leaderJoined
+      }; her row: ${JSON.stringify(result.invitedRow)}, memberships of the invitee = ${
+        result.live
+      }, ${result.rows} group rows unchanged = ${result.untouched}`,
     }),
   );
+
 
   const label = await checkWrite(
     "createLabel",
@@ -4231,6 +4226,7 @@ async function main(): Promise<void> {
   await resendAndMissingSuite();
   await billedBeforeReconciliationSuite();
   await pendingSettlementsOnAssetSuite();
+  await invitationActsSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -6584,18 +6580,39 @@ async function inviteOnEditSuite(): Promise<void> {
     `${audits.length} UPDATE row(s), invite_email = ${audits[0]?.after_data?.invite_email}`,
   );
 
-  const claimed = await asUser(invitee, () => claimInviteForUser({ email: invitee.email }));
-  const claimedRow = await rowOf(abuela);
+  // RF-153, RF-154: the address makes the placeholder pending, not claimed. It keeps its place in the
+  // roster and its name; signing in joins nobody; accepting is what makes that same row the person's.
+  const api = await invitationApi();
+  const stateOf = async (id: string) =>
+    (
+      await fixtureSql<{ user_id: string | null; invite_email: string | null; invite_state: string; name: string; archived_at: string | null }[]>`
+        select user_id, invite_email, invite_state, name, archived_at::text as archived_at from group_members where id = ${id}`
+    )[0];
+  const pendingBefore = await stateOf(abuela);
+  const roster = await asUser(leader, () => listMembers(groupId, { archived: false }));
+  const [signedIn] = await asUser(invitee, () =>
+    withUserDb((tx) => tx.execute<{ id: string | null }>(sql`select private.claim_group_invite() as id`)),
+  );
+  const afterSignIn = await stateOf(abuela);
+  const accepted = await tap(() => asUser(invitee, () => api.acceptInvitation({ memberId: abuela })));
+  const claimedRow = await stateOf(abuela);
   const rowsForUser = await fixtureSql<{ id: string }[]>`select id from group_members where user_id = ${invitee.id}`;
   assert(
-    next("The person who signs in with that address becomes that member: the same row, their user, no invitation left, the name the group gave"),
-    claimed === "claimed" &&
+    next("A placeholder given an address stays in the roster as pending; signing in joins nobody; accepting makes that same row the person's, under the name the group gave"),
+    pendingBefore.invite_state === "pending" &&
+      roster.some((member) => member.id === abuela && member.name === "Abuela Rosa" && member.userId === null) &&
+      (signedIn?.id ?? null) === null &&
+      afterSignIn.user_id === null &&
+      afterSignIn.invite_state === "pending" &&
+      accepted === "accepted" &&
       claimedRow.user_id === invitee.id &&
+      claimedRow.invite_state === "accepted" &&
       claimedRow.invite_email === null &&
       claimedRow.name === "Abuela Rosa" &&
+      claimedRow.archived_at === null &&
       rowsForUser.length === 1 &&
       rowsForUser[0].id === abuela,
-    `claim = ${claimed}, row = ${JSON.stringify(claimedRow)}, rows for the user = ${rowsForUser.map((r) => r.id).join(",")}`,
+    `state ${pendingBefore.invite_state}, in roster = ${roster.some((member) => member.id === abuela)}, sign-in joined = ${signedIn?.id ?? null}, after sign-in ${JSON.stringify(afterSignIn)}, accept = ${accepted}, row = ${JSON.stringify(claimedRow)}, rows for the user = ${rowsForUser.map((r) => r.id).join(",")}`,
   );
 
   // No address: a rename, and nothing else.
@@ -9506,4 +9523,407 @@ async function pendingSettlementsOnAssetSuite(): Promise<void> {
       JSON.stringify(listed),
     );
   });
+}
+
+// RF-154, the server half of «X te invitó · Aceptar / Rechazar» and «Salir del fondo». The three functions
+// are named here by what the person's tap does, and they are looked up when a row runs, not when the file
+// loads: until they exist every row below fails with the missing name in its detail, and no other row moves.
+// Each acts for the session's own user and answers a word: accept `accepted | gone | otherFund`, decline
+// `declined | gone`, leave `left | leaderStays | notInFund`.
+type InvitationApi = {
+  acceptInvitation: (input: { memberId: string }) => Promise<string>;
+  declineInvitation: (input: { memberId: string }) => Promise<string>;
+  leaveFund: () => Promise<string>;
+};
+
+async function invitationApi(): Promise<InvitationApi> {
+  const loaded = (await import("@/db/queries/group-members")) as unknown as Partial<InvitationApi>;
+  const named = <K extends keyof InvitationApi>(name: K): InvitationApi[K] => {
+    const found = loaded[name];
+    if (typeof found === "function") return found as InvitationApi[K];
+    return (async () => {
+      throw new TypeError(`db/queries/group-members does not export ${name}`);
+    }) as InvitationApi[K];
+  };
+
+  return {
+    acceptInvitation: named("acceptInvitation"),
+    declineInvitation: named("declineInvitation"),
+    leaveFund: named("leaveFund"),
+  };
+}
+
+// A refusal that raised reads as a word of its own, so an assertion on the answer fails with the cause.
+async function tap(run: () => Promise<string>): Promise<string> {
+  try {
+    return await run();
+  } catch (error) {
+    return `threw ${refusal(error)}`;
+  }
+}
+
+async function invitationActsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const api = await invitationApi();
+  const groupIds: string[] = [];
+
+  type InviteRow = {
+    id: string;
+    user_id: string | null;
+    invite_email: string | null;
+    invite_state: string;
+    name: string;
+    role: string;
+    archived_at: string | null;
+  };
+  const rowOf = async (id: string): Promise<InviteRow | undefined> =>
+    (
+      await fixtureSql<InviteRow[]>`
+        select id, user_id, invite_email, invite_state, name, role, archived_at::text as archived_at
+        from group_members where id = ${id}`
+    )[0];
+  const liveRowsOf = (userId: string) =>
+    fixtureSql<{ id: string; group_id: string }[]>`
+      select id, group_id from group_members where user_id = ${userId} and archived_at is null`;
+  const liveCount = async (groupId: string): Promise<number> =>
+    Number(
+      (
+        await fixtureSql<{ n: string }[]>`
+          select count(*)::text as n from group_members where group_id = ${groupId} and user_id is not null and archived_at is null`
+      )[0].n,
+    );
+
+  const openFund = async (label: string): Promise<{ leader: HarnessUser; groupId: string }> => {
+    const leader = await createMembershipFreeUser();
+    const { groupId } = await asUser(leader, () =>
+      createGroup({ name: `Harness fondo ${label} ${tag}`, leaderName: `Harness lider ${label}`, cashMode: "shared", locale: "es" }),
+    );
+    track("groups", groupId);
+    groupIds.push(groupId);
+    return { leader, groupId };
+  };
+  const invite = async (fund: { leader: HarnessUser; groupId: string }, who: HarnessUser, name: string): Promise<string> => {
+    const memberId = randomUUID();
+    await seedPendingInvite({ groupId: fund.groupId, memberId, actorId: fund.leader.id, name, email: who.email, archived: false });
+    return memberId;
+  };
+  const personalMovement = async (owner: HarnessUser): Promise<{ accountId: string; transactionId: string }> =>
+    asUser(owner, async () => {
+      const { accountId } = await createAccount({
+        name: `Harness propia ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: owner.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 1_000_000,
+        balanceOn: shiftDate(today, -10),
+      });
+      track("accounts", accountId);
+      const { categoryId } = await createCategory({
+        scope: { ownerUserId: owner.id },
+        name: `Harness propia gasto ${tag}`,
+        kind: "expense",
+        parentId: null,
+        color: "#0E7490",
+      });
+      track("categories", categoryId);
+      const { transactionId } = await createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        currency: "COP",
+        counterAmountCents: null,
+        counterIsEstimate: false,
+        occurredAt: shiftDate(today, -1),
+        description: `Harness propio ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents: 10_000 }],
+        labelIds: [],
+      });
+      track("transactions", transactionId);
+      return { accountId, transactionId };
+    });
+  const accountIds = (who: HarnessUser) => asUser(who, async () => (await listAccounts({ archived: false })).map((a) => a.id));
+  const sees = (who: HarnessUser, transactionId: string) =>
+    asUser(who, async () => (await getTransactionById(transactionId)) !== null);
+
+  try {
+    // The invitation, accepted, refused and replayed.
+    const fund = await openFund("acepta");
+    const { leader, groupId } = fund;
+    const invitee = await createMembershipFreeUser();
+    const stranger = await createMembershipFreeUser();
+    const inviteId = await invite(fund, invitee, "Harness invitada acepta");
+    const own = await personalMovement(invitee);
+    const rosterBefore = await liveCount(groupId);
+
+    const wrongAccept = await tap(() => asUser(stranger, () => api.acceptInvitation({ memberId: inviteId })));
+    const wrongDecline = await tap(() => asUser(stranger, () => api.declineInvitation({ memberId: inviteId })));
+    const untouched = await rowOf(inviteId);
+    assert(
+      next("A person the invitation is not addressed to cannot accept or decline it: both answer gone, the row stays pending and unclaimed, and they join nothing"),
+      wrongAccept === "gone" &&
+        wrongDecline === "gone" &&
+        untouched?.invite_state === "pending" &&
+        untouched.user_id === null &&
+        untouched.archived_at === null &&
+        (await liveRowsOf(stranger.id)).length === 0,
+      `accept = ${wrongAccept}, decline = ${wrongDecline}, row = ${JSON.stringify(untouched)}`,
+    );
+
+    const leaderSawBefore = (await accountIds(leader)).includes(own.accountId) || (await sees(leader, own.transactionId));
+    const accepted = await tap(() => asUser(invitee, () => api.acceptInvitation({ memberId: inviteId })));
+    const joined = await rowOf(inviteId);
+    const asInvitee = await asUser(invitee, () => listMembers(groupId, { archived: false }));
+    const leaderAccounts = await accountIds(leader);
+    const inviteeAccounts = await accountIds(invitee);
+    const [fundCash] = await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${groupId} and subtype = 'cash'`;
+    assert(
+      next("Accepting joins: the same row turns accepted with the person's user and no address left, the roster gains no row, and the fund now reads what membership reads, both ways"),
+      !leaderSawBefore &&
+        accepted === "accepted" &&
+        joined?.invite_state === "accepted" &&
+        joined.user_id === invitee.id &&
+        joined.invite_email === null &&
+        joined.name === "Harness invitada acepta" &&
+        joined.role === "member" &&
+        joined.archived_at === null &&
+        (await liveCount(groupId)) === rosterBefore + 1 &&
+        asInvitee.some((m) => m.id === inviteId) &&
+        asInvitee.length === 2 &&
+        leaderAccounts.includes(own.accountId) &&
+        (await sees(leader, own.transactionId)) &&
+        inviteeAccounts.includes(fundCash.id),
+      `leader read the invitee's rows before accepting = ${leaderSawBefore}, accept = ${accepted}, row = ${JSON.stringify(joined)}, live members ${rosterBefore} -> ${await liveCount(groupId)}, invitee sees ${asInvitee.length} members, leader lists their account = ${leaderAccounts.includes(own.accountId)}, invitee lists the fund's cash = ${inviteeAccounts.includes(fundCash.id)}`,
+    );
+
+    const again = await tap(() => asUser(invitee, () => api.acceptInvitation({ memberId: inviteId })));
+    const declineAfter = await tap(() => asUser(invitee, () => api.declineInvitation({ memberId: inviteId })));
+    const stillIn = await rowOf(inviteId);
+    assert(
+      next("A second tap changes nothing, and declining after accepting cannot remove a live member: one membership, still accepted"),
+      (again === "accepted" || again === "gone") &&
+        declineAfter === "gone" &&
+        stillIn?.invite_state === "accepted" &&
+        stillIn.user_id === invitee.id &&
+        stillIn.archived_at === null &&
+        (await liveRowsOf(invitee.id)).length === 1,
+      `second accept = ${again}, decline = ${declineAfter}, row = ${JSON.stringify(stillIn)}`,
+    );
+
+    // A withdrawn invitation is no longer one a person can accept.
+    const withdrawnFor = await createMembershipFreeUser();
+    const withdrawnId = await invite(fund, withdrawnFor, "Harness invitada retirada");
+    const archived = await asUser(leader, () => archiveMember({ groupId, memberId: withdrawnId }));
+    const lateAccept = await tap(() => asUser(withdrawnFor, () => api.acceptInvitation({ memberId: withdrawnId })));
+    const withdrawnRow = await rowOf(withdrawnId);
+    assert(
+      next("An invitation the leader withdrew is refused as gone: the row stays archived and unclaimed and the person joins nothing"),
+      archived &&
+        lateAccept === "gone" &&
+        withdrawnRow?.user_id === null &&
+        withdrawnRow.archived_at !== null &&
+        withdrawnRow.invite_state === "pending" &&
+        (await liveRowsOf(withdrawnFor.id)).length === 0,
+      `archived = ${archived}, accept = ${lateAccept}, row = ${JSON.stringify(withdrawnRow)}`,
+    );
+
+    // One fund at a time.
+    const resident = await createMembershipFreeUser();
+    const { groupId: homeGroupId } = await asUser(resident, () =>
+      createGroup({ name: `Harness fondo propio ${tag}`, leaderName: "Harness residente", cashMode: "shared", locale: "es" }),
+    );
+    track("groups", homeGroupId);
+    groupIds.push(homeGroupId);
+    const otherInviteId = await invite(fund, resident, "Harness invitada de otro fondo");
+    const blocked = await tap(() => asUser(resident, () => api.acceptInvitation({ memberId: otherInviteId })));
+    const blockedRow = await rowOf(otherInviteId);
+    const residentRows = await liveRowsOf(resident.id);
+    assert(
+      next("A person already in a fund who accepts another's invitation is refused as otherFund: still in their own fund alone, the invitation stays pending"),
+      blocked === "otherFund" &&
+        blockedRow?.invite_state === "pending" &&
+        blockedRow.user_id === null &&
+        residentRows.length === 1 &&
+        residentRows[0].group_id === homeGroupId,
+      `accept = ${blocked}, invitation = ${JSON.stringify(blockedRow)}, live memberships = ${JSON.stringify(residentRows)}`,
+    );
+
+    // Declining, and being invited again.
+    const decliner = await createMembershipFreeUser();
+    const declinedId = await invite(fund, decliner, "Harness invitada rechaza");
+    const declined = await tap(() => asUser(decliner, () => api.declineInvitation({ memberId: declinedId })));
+    const declinedRow = await rowOf(declinedId);
+    const rosterAfterDecline = await asUser(leader, () => listMembers(groupId, { archived: false }));
+    const revive = await tap(() => asUser(decliner, () => api.acceptInvitation({ memberId: declinedId })));
+    assert(
+      next("Declining archives the invitation: declined, no user, off the leader's roster, no membership, and a declined invitation cannot be accepted afterwards"),
+      declined === "declined" &&
+        declinedRow?.invite_state === "declined" &&
+        declinedRow.archived_at !== null &&
+        declinedRow.user_id === null &&
+        !rosterAfterDecline.some((m) => m.id === declinedId) &&
+        revive === "gone" &&
+        (await liveRowsOf(decliner.id)).length === 0,
+      `decline = ${declined}, row = ${JSON.stringify(declinedRow)}, on the roster = ${rosterAfterDecline.some((m) => m.id === declinedId)}, accept afterwards = ${revive}`,
+    );
+
+    const reinvited = await tap(async () =>
+      asUser(leader, async () => {
+        const { memberId } = await createMember({ groupId, name: "Harness invitada de nuevo", inviteEmail: decliner.email.toUpperCase() });
+        track("group_members", memberId);
+        return memberId;
+      }),
+    );
+    const secondAccept = await tap(() => asUser(decliner, () => api.acceptInvitation({ memberId: reinvited })));
+    const history = await rowOf(declinedId);
+    assert(
+      next("After declining, the same address can be invited again and the person can then accept: they join through the new row and the declined one stays as history"),
+      !reinvited.startsWith("threw") &&
+        reinvited !== declinedId &&
+        secondAccept === "accepted" &&
+        (await rowOf(reinvited))?.user_id === decliner.id &&
+        history?.invite_state === "declined" &&
+        history.user_id === null,
+      `re-invited as ${reinvited}, accept = ${secondAccept}, history row = ${JSON.stringify(history)}`,
+    );
+
+    // Leaving. The invitee writes in the fund, then leaves.
+    const [expenseCategory] = await fixtureSql<{ id: string }[]>`
+      select id from categories where group_id = ${groupId} and kind = 'expense' and parent_id is null order by name limit 1`;
+    const { accountId: bankId } = await asUser(leader, () =>
+      createAccount({
+        name: `Harness banco fondo ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: null,
+        groupId,
+        isShared: true,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 5_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", bankId);
+    // A person who never joined cannot write here; the movement then names a row that does not exist and
+    // the rows below fail on it, rather than the run aborting.
+    const fundMovement = await asUser(invitee, async () => {
+      try {
+        return (await createTransaction({
+            fromAccountId: bankId,
+            toAccountId: null,
+            amountCents: 7_000,
+            currency: "COP",
+            counterAmountCents: null,
+            counterIsEstimate: false,
+            occurredAt: shiftDate(today, -1),
+            description: `Harness del fondo ${tag}`,
+            externalRef: null,
+            splits: [{ categoryId: expenseCategory.id, amountCents: 7_000 }],
+            labelIds: [],
+        })).transactionId;
+      } catch {
+        return randomUUID();
+      }
+    });
+    track("transactions", fundMovement);
+    const bankBalance = () =>
+      asUser(leader, async () => (await listAccounts({ archived: false })).find((a) => a.id === bankId)?.balances[0]?.balanceCents);
+    const balanceBefore = await bankBalance();
+    const liveBefore = await liveCount(groupId);
+
+    const left = await tap(() => asUser(invitee, () => api.leaveFund()));
+    const leaderRoster = await asUser(leader, () => listMembers(groupId, { archived: false }));
+    const leaderAccountsAfter = await accountIds(leader);
+    const inviteeAccountsAfter = await accountIds(invitee);
+    const [ownAccount] = await fixtureSql<{ owner_user_id: string | null; archived_at: string | null }[]>`
+      select owner_user_id, archived_at::text as archived_at from accounts where id = ${own.accountId}`;
+    const [{ n: ownMovements }] = await fixtureSql<{ n: string }[]>`select count(*)::text as n from transactions where id = ${own.transactionId}`;
+    assert(
+      next("Leaving takes the person out of the roster: no live membership, off the leader's roster, one live member fewer, and the fund's accounts are no longer theirs to read"),
+      left === "left" &&
+        (await liveRowsOf(invitee.id)).length === 0 &&
+        !leaderRoster.some((m) => m.id === inviteId || m.userId === invitee.id) &&
+        (await liveCount(groupId)) === liveBefore - 1 &&
+        !inviteeAccountsAfter.includes(bankId) &&
+        !inviteeAccountsAfter.includes(fundCash.id),
+      `leave = ${left}, live members ${liveBefore} -> ${await liveCount(groupId)}, invitee still lists the fund's accounts = ${inviteeAccountsAfter.includes(bankId)}`,
+    );
+    assert(
+      next("What the person wrote in the fund stays with the fund: the leader still reads their movement and the shared account's balance has not moved"),
+      left === "left" &&
+        (await sees(leader, fundMovement)) &&
+        (await bankBalance()) === balanceBefore &&
+        (await fixtureSql`select 1 from transactions where id = ${fundMovement}`).length === 1,
+      `balance ${balanceBefore} -> ${await bankBalance()}, leader reads the movement = ${await sees(leader, fundMovement)}`,
+    );
+    assert(
+      next("Their personal accounts become theirs alone: still theirs and still read by them, no longer listed or readable by the fund"),
+      left === "left" &&
+        ownAccount?.owner_user_id === invitee.id &&
+        ownAccount.archived_at === null &&
+        ownMovements === "1" &&
+        inviteeAccountsAfter.includes(own.accountId) &&
+        (await sees(invitee, own.transactionId)) &&
+        !leaderAccountsAfter.includes(own.accountId) &&
+        !(await sees(leader, own.transactionId)),
+      `owner = ${ownAccount?.owner_user_id}, they list it = ${inviteeAccountsAfter.includes(own.accountId)}, the leader lists it = ${leaderAccountsAfter.includes(own.accountId)}`,
+    );
+
+    // Out, they are free to join another fund; and a leader stays while anyone else does.
+    const second = await openFund("sale");
+    const secondInvite = await invite(second, invitee, "Harness invitada vuelve");
+    const rejoined = await tap(() => asUser(invitee, () => api.acceptInvitation({ memberId: secondInvite })));
+    const leaderStays = await tap(() => asUser(second.leader, () => api.leaveFund()));
+    const leaderRow = await fixtureSql<{ role: string; archived_at: string | null }[]>`
+      select role, archived_at::text as archived_at from group_members where group_id = ${second.groupId} and user_id = ${second.leader.id}`;
+    assert(
+      next("Having left, the person joins another fund by accepting its invitation; and that fund's leader cannot leave while the fund has other members (leaderStays, still its leader)"),
+      rejoined === "accepted" &&
+        leaderStays === "leaderStays" &&
+        leaderRow.length === 1 &&
+        leaderRow[0].role === "leader" &&
+        leaderRow[0].archived_at === null &&
+        (await liveCount(second.groupId)) === 2,
+      `rejoin = ${rejoined}, leader leaves = ${leaderStays}, leader row = ${JSON.stringify(leaderRow)}, live members = ${await liveCount(second.groupId)}`,
+    );
+
+    const secondRow = (await liveRowsOf(invitee.id))[0];
+    const successorId = secondRow?.id ?? randomUUID();
+    const handed = await tap(async () => ((await asUser(second.leader, () => transferLeadership({ memberId: successorId }))) ? "handed" : "refused"));
+    const exLeaves = await tap(() => asUser(second.leader, () => api.leaveFund()));
+    const [newLeader] = await fixtureSql<{ role: string }[]>`select role from group_members where id = ${successorId}`;
+    assert(
+      next("A leader who handed the fund over leaves like any member, and the fund goes on with its new leader"),
+      handed === "handed" &&
+        exLeaves === "left" &&
+        (await liveRowsOf(second.leader.id)).length === 0 &&
+        newLeader?.role === "leader" &&
+        (await liveCount(second.groupId)) === 1,
+      `handed = ${handed}, leave = ${exLeaves}, new leader role = ${newLeader?.role}, live members = ${await liveCount(second.groupId)}`,
+    );
+
+    // Nothing to leave.
+    const rowsBefore = JSON.stringify(await readGroupMembers(groupId));
+    const nowhere = await tap(() => asUser(stranger, () => api.leaveFund()));
+    assert(
+      next("A person in no fund who asks to leave is told notInFund and no member row of any fund moves"),
+      nowhere === "notInFund" && JSON.stringify(await readGroupMembers(groupId)) === rowsBefore,
+      `answer = ${nowhere}`,
+    );
+  } finally {
+    for (const id of groupIds) {
+      for (const row of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", row.id);
+      for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${id}`) track("categories", row.id);
+      for (const row of await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${id}`) track("accounts", row.id);
+    }
+  }
 }
