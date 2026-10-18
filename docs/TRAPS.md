@@ -3400,3 +3400,13 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   until the hung call returned; a good code answered after the 8 s race still landed on `/` with one session.
 - Do: a client timeout only changes the words and frees the controls; it never assumes the call ended. Keep the
   "in flight" flag until the original promise settles, so a late landing clears its pending record.
+
+## A lane's Playwright run without `HARNESS_BASE_URL` drives the main checkout's :3000 (2026-10-18)
+
+- HomeFund's Playwright falls back to `http://localhost:3000` when `HARNESS_BASE_URL` is unset. :3000 is lane 1's
+  server, built from another branch, so the run passes or fails against code the lane never changed.
+- Measured 2026-10-18, trains critic-6c and cierre-d17: three agents in lanes 4 and 6 ran their first e2e on :3000 — two
+  red runs that were valid only by luck (the main checkout held the old code), and one validator run discarded after it
+  failed on stale code.
+- Do: set `HARNESS_BASE_URL=http://localhost:300<n-1>` on every e2e run in lane n, and read the first log line for the
+  base URL before believing a red or a green.
