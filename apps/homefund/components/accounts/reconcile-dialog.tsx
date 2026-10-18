@@ -215,7 +215,13 @@ function ReconcileForm({ account }: { account: AccountRow }) {
         {sheet ? (
           <Flex justify="between" align="center" gap="3">
             <Text size="2">{t("reconcileDerived")}</Text>
-            <Money minor={sheet.account.derivedCents} currency={currency} tone="plain" />
+            {/* In the field's frame: a debt in magnitude, a card's credit below zero. */}
+            <Money
+              minor={isLiability ? -sheet.account.derivedCents : sheet.account.derivedCents}
+              currency={currency}
+              tone="plain"
+              signed
+            />
           </Flex>
         ) : (
           <Flex justify="center">
