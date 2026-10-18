@@ -195,3 +195,35 @@ test("«mil» alone never reads as a million, nor inside a word", () => {
   assert.equal(interpretQuickEntry("milanesa", ctx).amountPesos, null);
   assert.equal(interpretQuickEntry("almuerzo", ctx).amountPesos, null);
 });
+
+// Two accounts that end in the same four digits cannot be told apart by the
+// message, so none is picked: the proposal falls back to the default account.
+test("two accounts sharing the mentioned last four fall back to the default", () => {
+  const accounts = [
+    { id: "a1", name: "Visa", lastFour: "1234" },
+    { id: "a2", name: "Mastercard", lastFour: "1234" },
+    { id: "a3", name: "Ahorros", lastFour: "9999" },
+  ];
+  const proposal = interpretQuickEntry("Compraste $12.500 con tarjeta *1234 en TIENDA", {
+    categories: [],
+    accounts,
+    defaultAccountId: "a3",
+  });
+  assert.equal(proposal.accountId, "a3");
+  assert.equal(
+    interpretQuickEntry("Compraste $12.500 con tarjeta *1234", { categories: [], accounts, defaultAccountId: null }).accountId,
+    null,
+  );
+});
+
+test("one account matching the mentioned last four is picked over the default", () => {
+  const proposal = interpretQuickEntry("Compraste $12.500 con tarjeta *1234", {
+    categories: [],
+    accounts: [
+      { id: "a1", name: "Visa", lastFour: "1234" },
+      { id: "a3", name: "Ahorros", lastFour: "9999" },
+    ],
+    defaultAccountId: "a3",
+  });
+  assert.equal(proposal.accountId, "a1");
+});

@@ -74,3 +74,15 @@ test("the two schemas agree on any padding and case", () => {
     assert.equal(link, raw.trim().toLowerCase());
   }
 });
+
+// RF-146. A six-digit code pasted from the email with a space in its middle
+// («123 456») reads as the six digits; spaces anywhere are not digits.
+test("a code pasted with an inner space reads as its six digits", () => {
+  assert.equal(signInCodeSchema.parse({ email: "a@b.co", code: "123 456" }).code, "123456");
+  assert.equal(signInCodeSchema.parse({ email: "a@b.co", code: " 12 34 56\t" }).code, "123456");
+});
+
+test("a code with a letter or too few digits is still refused", () => {
+  assert.equal(signInCodeSchema.safeParse({ email: "a@b.co", code: "123 45" }).success, false);
+  assert.equal(signInCodeSchema.safeParse({ email: "a@b.co", code: "12a 456" }).success, false);
+});
