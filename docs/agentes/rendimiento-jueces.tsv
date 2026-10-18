@@ -63,3 +63,7 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-17	codigo-6b	critic	8	8	0	158870
 2026-10-17	codigo-6b	ci	1	1	1	
 2026-10-17	6 trenes	review				
+2026-10-17	codigo-6c	validator	1	1	1	64695
+2026-10-17	codigo-6c	mutator	19	19	0	107103
+2026-10-17	codigo-6c	critic	10	10	0	119174
+2026-10-17	codigo-6c	ci	0	0	0	
