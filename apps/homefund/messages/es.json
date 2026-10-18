@@ -453,6 +453,8 @@
     "quickPlaceholder": "Anota un gasto…",
     "quickInterpreted": "Interpretado · todo queda editable antes de guardar",
     "quickUnrecognized": "No reconocí el monto ni la categoría · complétalos",
+    "quickAskQuestion": "¿Cuánto es «{token}»?",
+    "quickAskHint": "Elige cuánto es, o escribe el monto.",
     "quickSave": "Guardar",
     "quickTypeLink": "¿Ingreso o traspaso?",
     "formTitle": "Nuevo movimiento",

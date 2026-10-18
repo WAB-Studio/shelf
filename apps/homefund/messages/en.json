@@ -453,6 +453,8 @@
     "quickPlaceholder": "Jot down an expense…",
     "quickInterpreted": "Interpreted · everything stays editable before saving",
     "quickUnrecognized": "I couldn't read the amount or the category · complete them",
+    "quickAskQuestion": "How much is “{token}”?",
+    "quickAskHint": "Pick how much it is, or type the amount.",
     "quickSave": "Save",
     "quickTypeLink": "Income or transfer?",
     "formTitle": "New movement",

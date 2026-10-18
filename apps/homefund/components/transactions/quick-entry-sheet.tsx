@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SquarePenIcon, XIcon } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
@@ -25,6 +25,7 @@ import {
   Flex,
   IconButton,
   Link,
+  RadioCards,
   Select,
   Spinner,
   TapTarget,
@@ -37,7 +38,11 @@ import type {
 } from "@/db/queries/transaction-form";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
-import { interpretQuickEntry } from "@/lib/transactions/interpret";
+import { amountToInput, formatMoney } from "@/lib/money";
+import {
+  interpretQuickEntry,
+  type AmountAsk,
+} from "@/lib/transactions/interpret";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   createTransactionSchema,
@@ -127,9 +132,14 @@ function QuickEntryForm({
   onOpenFull: () => void;
 }) {
   const t = useTranslations("transactions");
+  const locale = useLocale();
   const onActionError = useActionErrorToast();
 
   const [text, setText] = useState("");
+  // An «M» the interpreter would not guess («3 M arriendo»), and which of its
+  // two readings the person picked; a new token forgets the pick.
+  const [ask, setAsk] = useState<AmountAsk | null>(null);
+  const [pickedChoice, setPickedChoice] = useState<string>("");
 
   // Only accounts the person may write; the last-used one defaults only while on offer.
   const writableAccounts = options.accounts.filter((account) => account.canWrite);
@@ -218,15 +228,22 @@ function QuickEntryForm({
       defaultAccountId: lastUsedAccountId,
     });
 
+    if (proposal.ask?.token !== ask?.token) setPickedChoice("");
+    setAsk(proposal.ask);
+
     if (proposal.amountPesos !== null) {
-      form.setValue("amount", proposal.amountPesos, { shouldValidate: true });
-      proposedAmount.current = proposal.amountPesos;
+      // A reading that repeats the last proposal leaves a figure typed over it
+      // alone: «1.500» then «1.500m» both read 1500.
+      if (proposal.amountPesos !== proposedAmount.current) {
+        form.setValue("amount", proposal.amountPesos, { shouldValidate: true });
+        proposedAmount.current = proposal.amountPesos;
+      }
     } else if (
       proposedAmount.current !== null &&
       form.getValues("amount") === proposedAmount.current
     ) {
-      // «1.500» on its way to «1.500 mil» proposed 1500, and «25 m» on its way
-      // to «25 mil» 25 000 000; neither may outlive the text that proposed it.
+      // «1.500» on its way to «1.500 mil» proposed 1500, and «3 M» on its way
+      // to «3 M arriendo» 3 000 000; neither may outlive the text that proposed it.
       form.setValue("amount", "");
       proposedAmount.current = null;
     }
@@ -286,13 +303,29 @@ function QuickEntryForm({
 
   const remove = useAction(deleteTransactionAction, { onError: onActionError });
 
+  // A picked reading is the person's own figure, not a proposal: further
+  // typing that keeps the same question leaves it alone.
+  function pickChoice(index: string) {
+    if (!ask) return;
+    setPickedChoice(index);
+    proposedAmount.current = null;
+    form.setValue("amount", amountToInput(ask.choices[Number(index)], accountCurrency), {
+      shouldValidate: true,
+    });
+  }
+
+  const hasAmount = amount.trim().length > 0;
+  // Asked and still unanswered: neither a pick nor a typed figure yet.
+  const awaitingPick = ask !== null && !hasAmount;
   // No token read into a figure or a category yet: prompt for both.
-  const recognised = amount.trim().length > 0 || splits.some((split) => split.categoryId);
+  const recognised = hasAmount || splits.some((split) => split.categoryId);
   const hint = text.trim().length === 0
     ? null
-    : recognised
-      ? t("quickInterpreted")
-      : t("quickUnrecognized");
+    : awaitingPick
+      ? t("quickAskHint")
+      : recognised
+        ? t("quickInterpreted")
+        : t("quickUnrecognized");
 
   function onSubmit(values: QuickEntryValues) {
     create.execute(values);
@@ -317,11 +350,33 @@ function QuickEntryForm({
             </TextField.Slot>
           </TextField.Root>
           {hint && (
-            <Text size="2" color={recognised ? "gray" : "amber"}>
+            <Text size="2" color={recognised && !awaitingPick ? "gray" : "amber"}>
               {hint}
             </Text>
           )}
         </Field>
+
+        {ask && (
+          <Field>
+            <FieldLabel id="quick-ask-label">
+              {t("quickAskQuestion", { token: ask.token })}
+            </FieldLabel>
+            <RadioCards.Root
+              aria-labelledby="quick-ask-label"
+              columns="2"
+              size="1"
+              value={pickedChoice}
+              onValueChange={pickChoice}
+              disabled={create.isPending}
+            >
+              {ask.choices.map((cents, index) => (
+                <RadioCards.Item key={index} value={String(index)}>
+                  {formatMoney(cents, accountCurrency, locale)}
+                </RadioCards.Item>
+              ))}
+            </RadioCards.Root>
+          </Field>
+        )}
 
         <Controller
           name="amount"
@@ -450,9 +505,10 @@ function QuickEntryForm({
           </Link>
         </Flex>
 
-        {/* Never dead: while the form is short of something, submitting is what
-            makes it say so. */}
-        <Button type="submit" size="3" disabled={create.isPending}>
+        {/* Never dead while the form is short of something: submitting is what
+            makes it say so. An unanswered question is the one exception, since
+            the hint already says what is missing (RF-22). */}
+        <Button type="submit" size="3" disabled={create.isPending || awaitingPick}>
           {create.isPending && <Spinner />}
           {t("quickSave")}
         </Button>
