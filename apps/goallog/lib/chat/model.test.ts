@@ -279,3 +279,46 @@ test("a stub placeholder the plan cannot resolve fails instead of staying litera
   fakeEnv.PULSAR_CHAT_STUB = `script:${path}`;
   assert.equal((await answer(ask("x"))).status, "failed");
 });
+
+const forever = (inputTokens: number) => () => calling("c", "get_today", {}, { prompt_tokens: inputTokens, completion_tokens: 5 });
+
+test("the input ceiling is 120 000 tokens", async () => {
+  const model = (await import("./model")) as Record<string, unknown>;
+  assert.equal(model.CHAT_INPUT_TOKENS_MAX, 120_000);
+});
+
+test("a looping model stops once the summed input passes the ceiling, and the failure carries what was spent", async () => {
+  script(forever(70_000));
+  const result = await answer();
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.usage, { input: 140_000, output: 10 });
+  assert.equal(sent.length, 2);
+});
+
+test("a sum of exactly the ceiling goes on to a third round", async () => {
+  script(forever(60_000));
+  const result = await answer();
+  assert.equal(sent.length, 3);
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.usage, { input: 180_000, output: 15 });
+});
+
+test("a round that answers with no calls is kept whatever the total", async () => {
+  script(
+    () => calling("c1", "get_today", {}, { prompt_tokens: 50_000, completion_tokens: 5 }),
+    () => saying("Listo.", { prompt_tokens: 130_000, completion_tokens: 7 }),
+  );
+  const result = await answer();
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(result.reply, "Listo.");
+  assert.deepEqual(result.usage, { input: 180_000, output: 12 });
+});
+
+test("cheap rounds that never stop are cut by the five-round cap", async () => {
+  script(forever(10));
+  const result = await answer();
+  assert.equal(sent.length, 5);
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.usage, { input: 50, output: 25 });
+});
