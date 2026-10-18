@@ -148,32 +148,12 @@ async function assertCauseReadable(
   }
 }
 
-// `caused_by_transaction_id` rides its own column grant (migration 0040), so it
-// is written here, once the movement itself already exists, rather than inside
-// the shared insert/update path: a follow-up statement on a row this same call
-// just proved writable, always run to let an edit clear a cause as freely as it
-// sets one.
-async function setCause(
-  transactionId: string,
-  causedByTransactionId: string | null | undefined,
-): Promise<void> {
-  try {
-    await withUserDb((tx) =>
-      tx.execute(sql`
-        update transactions set caused_by_transaction_id = ${causedByTransactionId ?? null}
-        where id = ${transactionId}
-      `),
-    );
-  } catch (error) {
-    mapTransactionError(error);
-  }
-}
-
 /**
  * Records a movement (RF-17, RF-25). Which of the two accounts is null decides
  * the kind, which the DB generates; an income or expense carries splits summing
  * to its amount, a transfer none. The scope follows from the accounts, resolved
- * by the trigger and never sent.
+ * by the trigger and never sent. A resent `requestRef` answers with the movement
+ * the first copy booked, and books nothing.
  */
 export const createTransactionAction = authActionClient
   .inputSchema(createTransactionSchema)
@@ -192,25 +172,24 @@ export const createTransactionAction = authActionClient
         occurredAt: parsedInput.occurredAt,
         description: parsedInput.description,
         externalRef: parsedInput.externalRef ?? null,
+        requestRef: parsedInput.requestRef,
         splits: toSplitMinor(parsedInput.splits),
         labelIds: parsedInput.labelIds,
+        causedByTransactionId: parsedInput.causedByTransactionId,
       }));
     } catch (error) {
       mapTransactionError(error);
     }
 
-    if (parsedInput.causedByTransactionId) {
-      await setCause(transactionId, parsedInput.causedByTransactionId);
-    }
-
     refresh();
-    return { transactionId };
+    return { ok: true as const, transactionId };
   });
 
 /**
  * Rewrites a movement's editable fields and replaces its splits and labels
  * (RF-24). `external_ref` is immutable, so it is absent from the input; a denied
- * edit reports as no row, the same as a movement that was never there.
+ * edit reports as no row, the same as a movement that was never there, and one
+ * whose stamp someone else's save moved reports `errors.stale`.
  */
 export const updateTransactionAction = authActionClient
   .inputSchema(updateTransactionSchema)
@@ -233,6 +212,7 @@ export const updateTransactionAction = authActionClient
         labelIds: parsedInput.labelIds,
         // Wholesale: an edit clearing the cause sends `null`, and absent means none.
         causedByTransactionId: parsedInput.causedByTransactionId ?? null,
+        expectedUpdatedAt: parsedInput.expectedUpdatedAt,
       });
     } catch (error) {
       mapTransactionError(error);
@@ -240,6 +220,7 @@ export const updateTransactionAction = authActionClient
 
     if (updated === "adjustment") throw new ActionError("errors.adjustmentReadOnly");
     if (updated === "missing") throw new ActionError("errors.notFound");
+    if (updated === "stale") throw new ActionError("errors.stale");
 
     refresh();
   });

@@ -7729,10 +7729,11 @@ async function idempotencySuite(): Promise<void> {
   }
   const leftovers = await byDescription(victim);
   trackRows(leftovers.map((r) => r.id));
+  // The stand-in delete rides the create's own transaction, so a whole rollback brings the cause back.
   const causeLeft = await byId(causeId);
   assert(
     next("A create whose cause vanished before the write ended rolls back whole: an error, and no movement left behind"),
-    causeLeft.length === 0 && leftovers.length === 0 && (refused.serverError !== undefined || refused.data?.ok === false),
+    leftovers.length === 0 && (refused.serverError !== undefined || refused.data?.ok === false),
     `cause rows = ${causeLeft.length}, movement rows = ${leftovers.length}, result = ${JSON.stringify(refused)}`,
   );
 }

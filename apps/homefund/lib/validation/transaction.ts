@@ -453,15 +453,33 @@ function refineCauseNotSelf(
 // resolved there too, so the settlement rules ride `refineSettlement` on top of
 // this schema, on both sides.
 export const createTransactionSchema = z
-  .object(transactionFields)
+  .object({
+    ...transactionFields,
+    // Minted by the form when it opens: a submit sent again after a lost answer carries the same
+    // one, and the server answers with the movement the first copy booked.
+    requestRef: z.uuid({ error: "errors.unexpected" }).optional(),
+  })
   .superRefine(requireAnAccount)
   .superRefine(refineEstimate)
   .superRefine(refineSplits);
 
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 
+// `updated_at::text` as Postgres prints it, microseconds and offset included; never a JS `Date`,
+// which keeps milliseconds only and would make the row look newer than itself.
+const POSTGRES_TIMESTAMPTZ_TEXT =
+  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2}){0,2}$/;
+
 export const updateTransactionSchema = z
-  .object({ transactionId: z.uuid({ error: "errors.notFound" }), ...transactionFields })
+  .object({
+    transactionId: z.uuid({ error: "errors.notFound" }),
+    ...transactionFields,
+    // The stamp the form loaded the movement with; a save after someone else's is refused stale.
+    expectedUpdatedAt: z
+      .string()
+      .regex(POSTGRES_TIMESTAMPTZ_TEXT, { error: "errors.unexpected" })
+      .optional(),
+  })
   .superRefine(requireAnAccount)
   .superRefine(refineEstimate)
   .superRefine(refineSplits)
