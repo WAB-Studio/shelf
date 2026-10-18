@@ -5,6 +5,7 @@ import { describeChange } from "@/lib/chat/describe";
 import { REQUEST_BYTES_MAX, chatRequestSchema, type Change } from "@/lib/chat/types";
 import { appCapReached, claimModelCall, settleModelCall } from "@/lib/import/spend";
 import { loadChangeNames } from "@/lib/queries/chat";
+import { refuseCrossSite } from "@/lib/http/same-origin";
 import { getPerson } from "@/lib/session";
 
 // The model's rounds are bounded by its own 60 s request timeout; a route past it would be cut anyway.
@@ -28,12 +29,15 @@ function idsOf(changes: Change[]) {
 }
 
 /**
- * One chat message (RP-91–RP-94, RNP-21) in a fixed order: the session, the
+ * One chat message (RP-91–RP-94, RNP-21) in a fixed order: the origin, the session, the
  * body, the key, then the claim, which must precede the model; the claim is
  * settled whatever the model does. The conversation is read and answered, never
  * stored (RP-94): the only row it leaves is the call's own.
  */
 export async function POST(request: NextRequest) {
+  const refused = refuseCrossSite(request, "json");
+  if (refused) return refused;
+
   const person = await getPerson();
   if (!person) return fail(401, "chat.errors.signedOut");
 
