@@ -190,11 +190,15 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
   // The overview hands a magnitude, which hides the sign, so a terms row's
   // pockets are re-read from the signed balances: a pocket in credit adds 0.
   for (const row of withTerms) {
+    const settlementOwed = owedOf(
+      balanceByPocket.get(`${row.accountId}:${row.currency}`) ?? 0,
+    );
+    // Interest is struck on an owed magnitude; a credit has none to charge.
     addOwed(
       sets,
       row.currency,
-      owedOf(balanceByPocket.get(`${row.accountId}:${row.currency}`) ?? 0),
-      row.monthlyInterestCents,
+      settlementOwed,
+      settlementOwed > 0 ? row.monthlyInterestCents : 0,
     );
     for (const pocket of row.otherOwed) {
       addOwed(

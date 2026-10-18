@@ -2184,12 +2184,25 @@ async function readSuite(
   // a rate struck over the debts that carry terms alone, would not.
   await checkReadValue(
     "getDebtsScreenData states the rate its summed interest was struck at",
-    () => getDebtsScreenData(),
-    (screen) => {
+    async () => ({
+      screen: await getDebtsScreenData(),
+      signedBalances: await getAccountBalances(),
+    }),
+    ({ screen, signedBalances }) => {
       const { owedCents, monthlyInterestCents, monthlyRatePct } = screen.totals;
       const struck = Math.round(owedCents * monthlyRatePct);
+      // The rows' own owed is a magnitude, a credit included; the total clamps a
+      // credit to 0, so the comparison sums the clamped settlement figure.
+      const signed = new Map(
+        signedBalances.map((balance) => [
+          `${balance.accountId}:${balance.currency}`,
+          balance.balanceCents,
+        ]),
+      );
       const withTermsOwed = screen.withTerms.reduce(
-        (sum, row) => sum + row.owedCents,
+        (sum, row) =>
+          sum +
+          Math.max(0, -(signed.get(`${row.accountId}:${row.currency}`) ?? 0)),
         0,
       );
       const highest = screen.withTerms.reduce(
