@@ -227,6 +227,7 @@
     "nameLabel": "Name",
     "emailLabel": "Email (optional)",
     "emailHint": "If you add it, we send them an invitation to HomeFund.",
+    "editEmailFailed": "We saved the address, but could not send the invitation. Tell them to sign in with it; if it is already in another group, they will not join this one.",
     "activeTab": "Active",
     "archivedTab": "Archived",
     "you": "You",
