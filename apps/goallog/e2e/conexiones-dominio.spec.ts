@@ -530,7 +530,7 @@ for (const width of [390, 1440]) {
 
         await page.getByRole("button", { name: "Copiar el comando de Claude Code" }).click();
         const command = await page.evaluate(() => navigator.clipboard.readText());
-        expect(command).toBe(`claude mcp add --transport http pulsar ${address} --header "Authorization: Bearer ${key}"`);
+        expect(command).toBe(`claude mcp add --transport http goallog ${address} --header "Authorization: Bearer ${key}"`);
 
         // Key and command only: no Claude Desktop file, no JSON, no address of its own.
         await expect(page.locator("pre")).toHaveCount(2);

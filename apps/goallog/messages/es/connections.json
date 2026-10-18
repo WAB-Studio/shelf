@@ -65,7 +65,7 @@
     "once": "No la volverás a ver. Si la pierdes, revócala y crea otra.",
     "copyName": "Copiar la llave",
     "terminal": "claude code · pégalo en tu terminal",
-    "claudeCode": "claude mcp add --transport http pulsar {url}/mcp --header \"Authorization: Bearer {key}\"",
+    "claudeCode": "claude mcp add --transport http goallog {url}/mcp --header \"Authorization: Bearer {key}\"",
     "copyCommandName": "Copiar el comando de Claude Code",
     "connected": "Prueba: «lee mis metas y dime qué sigue».",
     "done": "Listo"
