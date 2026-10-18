@@ -190,6 +190,14 @@ function RecurringForm({
 
   const accountId = direction === "income" ? toAccountId : fromAccountId;
 
+  // Only accounts the person may write, plus the one an edit already names.
+  const writableAccounts = options.accounts.filter(
+    (account) =>
+      account.canWrite ||
+      account.id === rule?.fromAccountId ||
+      account.id === rule?.toAccountId,
+  );
+
   // The one account fixes the rule's scope (RF-62): a personal account names its
   // owner's set, a group account the group's.
   const scope = useMemo(() => {
@@ -496,7 +504,7 @@ function RecurringForm({
             </FieldControl>
             <Select.Content position="popper">
               <Select.Item value={NO_CATEGORY}>{t("accountNone")}</Select.Item>
-              {options.accounts.map((account) => (
+              {writableAccounts.map((account) => (
                 <Select.Item key={account.id} value={account.id}>
                   {account.name}
                 </Select.Item>

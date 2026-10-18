@@ -107,6 +107,14 @@ function PaymentForm({
 
   const isEdit = !!payment;
 
+  // Only accounts the person may write, plus the ones an edit already names.
+  const writableAccounts = options.accounts.filter(
+    (account) =>
+      account.canWrite ||
+      account.id === payment?.fromAccountId ||
+      account.id === payment?.toAccountId,
+  );
+
   // The amount is read in the currency the named accounts settle in, and the
   // values under validation name them: the resolver reads the pair off the map
   // the options already carry and refines the mode's own schema with it, so the
@@ -275,7 +283,7 @@ function PaymentForm({
                 </FieldControl>
                 <Select.Content position="popper">
                   <Select.Item value={NO_ACCOUNT}>{t("accountNone")}</Select.Item>
-                  {options.accounts.map((account) => (
+                  {writableAccounts.map((account) => (
                     <Select.Item key={account.id} value={account.id}>
                       {account.name}
                     </Select.Item>
@@ -306,7 +314,7 @@ function PaymentForm({
                 </FieldControl>
                 <Select.Content position="popper">
                   <Select.Item value={NO_ACCOUNT}>{t("accountNone")}</Select.Item>
-                  {options.accounts.map((account) => (
+                  {writableAccounts.map((account) => (
                     <Select.Item key={account.id} value={account.id}>
                       {account.name}
                     </Select.Item>

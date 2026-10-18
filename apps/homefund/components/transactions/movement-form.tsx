@@ -203,8 +203,25 @@ export function MovementForm({
 
   // The currency the empty form opens in: what the account it opens on settles
   // in, so the common movement is already in the right one (RF-121).
+  // Only accounts the person may write, plus the ones the form opened naming.
+  const held = [
+    movement?.fromAccountId,
+    movement?.toAccountId,
+    defaults?.fromAccountId,
+    defaults?.toAccountId,
+  ];
+  const writableAccounts = options.accounts.filter(
+    (account) => account.canWrite || held.includes(account.id),
+  );
+  // The last-used account opens the form only while it is on offer.
+  const lastUsedAccountId = writableAccounts.some(
+    (account) => account.id === options.lastUsedAccountId,
+  )
+    ? options.lastUsedAccountId
+    : null;
+
   const openingAccountId =
-    defaults?.fromAccountId ?? defaults?.toAccountId ?? options.lastUsedAccountId;
+    defaults?.fromAccountId ?? defaults?.toAccountId ?? lastUsedAccountId;
 
   // The settlement rules need what each named account settles in, and the values
   // under validation name the accounts: the resolver reads the pair off them and
@@ -275,7 +292,7 @@ export function MovementForm({
           toAccountId:
             defaults?.toAccountId !== undefined
               ? defaults.toAccountId
-              : options.lastUsedAccountId,
+              : lastUsedAccountId,
           amount: defaults?.amount ?? "",
           currency:
             (openingAccountId && options.accountCurrencies[openingAccountId]) ??
@@ -600,7 +617,7 @@ export function MovementForm({
                   </FieldControl>
                   <Select.Content position="popper">
                     <Select.Item value={NO_ACCOUNT}>{t("accountNone")}</Select.Item>
-                    {options.accounts.map((account) => (
+                    {writableAccounts.map((account) => (
                       <Select.Item key={account.id} value={account.id}>
                         {account.name}
                       </Select.Item>
@@ -631,7 +648,7 @@ export function MovementForm({
                   </FieldControl>
                   <Select.Content position="popper">
                     <Select.Item value={NO_ACCOUNT}>{t("accountNone")}</Select.Item>
-                    {options.accounts.map((account) => (
+                    {writableAccounts.map((account) => (
                       <Select.Item key={account.id} value={account.id}>
                         {account.name}
                       </Select.Item>

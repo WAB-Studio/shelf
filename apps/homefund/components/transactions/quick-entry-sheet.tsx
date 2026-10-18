@@ -131,6 +131,14 @@ function QuickEntryForm({
 
   const [text, setText] = useState("");
 
+  // Only accounts the person may write; the last-used one defaults only while on offer.
+  const writableAccounts = options.accounts.filter((account) => account.canWrite);
+  const lastUsedAccountId = writableAccounts.some(
+    (account) => account.id === options.lastUsedAccountId,
+  )
+    ? options.lastUsedAccountId
+    : null;
+
   const form = useForm<QuickEntryValues>({
     resolver: zodResolver(
       createTransactionSchema,
@@ -138,13 +146,13 @@ function QuickEntryForm({
     mode: "onChange",
     defaultValues: {
       // Fixed to an expense: a source only, the destination always null (RF-18).
-      fromAccountId: options.lastUsedAccountId,
+      fromAccountId: lastUsedAccountId,
       toAccountId: null,
       amount: "",
       // The account's own currency, and no control to change it: the quick
       // sheet records what the account already holds, and a movement in another
       // one carries a second amount the full form asks for (RF-121, RF-122).
-      currency: accountCurrencyOf(options, options.lastUsedAccountId),
+      currency: accountCurrencyOf(options, lastUsedAccountId),
       counterAmount: null,
       counterIsEstimate: false,
       occurredAt: todayInBogota(),
@@ -202,8 +210,8 @@ function QuickEntryForm({
 
     const proposal = interpretQuickEntry(next, {
       categories: expenseCategories,
-      accounts: options.accounts.map((one) => ({ id: one.id, name: one.name })),
-      defaultAccountId: options.lastUsedAccountId,
+      accounts: writableAccounts.map((one) => ({ id: one.id, name: one.name })),
+      defaultAccountId: lastUsedAccountId,
     });
 
     if (proposal.amountPesos !== null) {
@@ -387,7 +395,7 @@ function QuickEntryForm({
                     />
                   </FieldControl>
                   <Select.Content position="popper">
-                    {options.accounts.map((account) => (
+                    {writableAccounts.map((account) => (
                       <Select.Item key={account.id} value={account.id}>
                         {account.name}
                       </Select.Item>

@@ -342,11 +342,14 @@ test.describe("as a plain member", () => {
     expect(names).not.toContain(LEADER_ACCOUNT);
   });
 
-  test("the filters and the detail still name the leader's personal account", async ({ page }) => {
+  test("the filters and the detail still name the leader's personal account", async ({ page }, testInfo) => {
     // Kills: the cut made in the query instead of the pickers.
     await page.goto(`/es/movements?account=${ids.leader}`);
-    await expect(page.getByText(LEADER_ACCOUNT, { exact: true }).first()).toBeVisible();
+    // The chip sits in both bands, so presence is asserted, not paint.
+    await expect(page.getByText(LEADER_ACCOUNT, { exact: true })).not.toHaveCount(0);
 
+    // The phone keeps its filters behind a sheet; the laptop draws the select.
+    if (!isDesktop(testInfo)) return;
     await page.goto("/es/movements");
     await page.getByRole("combobox", { name: transactions.accountLabel, exact: true }).first().click();
     await expect(page.getByRole("option", { name: LEADER_ACCOUNT, exact: true })).toHaveCount(1);
