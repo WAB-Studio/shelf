@@ -25,13 +25,23 @@ import { createMemberSchema, updateMemberSchema } from "@/lib/validation/member"
 
 type FormValues = { memberId?: string; name: string; email?: string };
 
-type Member = { id: string; name: string };
+type Member = { id: string; name: string; invitable: boolean };
 
 const EMAIL_FIELD_REFUSALS: ReadonlySet<string> = new Set([
   "members.errors.emailTaken",
   "members.errors.alreadyMember",
   "errors.domainUndeliverable",
 ]);
+
+// Sends a refusal that belongs to the address to the field; false leaves it to the toast.
+function routeEmailRefusal(
+  serverError: string | undefined,
+  setError: (name: "email", error: { message: string }) => void,
+) {
+  if (!serverError || !EMAIL_FIELD_REFUSALS.has(serverError)) return false;
+  setError("email", { message: serverError });
+  return true;
+}
 
 export function MemberFormDialog({
   open,
@@ -83,7 +93,7 @@ function MemberForm({
   const form = useForm<FormValues>({
     resolver: zodResolver(schema) as Resolver<FormValues>,
     defaultValues: member
-      ? { memberId: member.id, name: member.name }
+      ? { memberId: member.id, name: member.name, email: "" }
       : { name: "", email: "" },
   });
 
@@ -104,24 +114,30 @@ function MemberForm({
     },
     onError(args) {
       // Refusals that belong to the address: keep the dialog and the typing.
-      const key = args.error.serverError;
-      if (key && EMAIL_FIELD_REFUSALS.has(key)) {
-        form.setError("email", { message: key });
-        return;
-      }
+      if (routeEmailRefusal(args.error.serverError, form.setError)) return;
       onActionError(args);
     },
   });
   const update = useAction(updateMemberAction, {
-    onSuccess: onActionSuccess,
-    onError: onActionError,
+    onSuccess({ data }) {
+      onActionSuccess();
+      if (data?.inviteEmailFailed) toast.warning(t("editEmailFailed"));
+    },
+    onError(args) {
+      if (routeEmailRefusal(args.error.serverError, form.setError)) return;
+      onActionError(args);
+    },
   });
 
   const isPending = isEdit ? update.isPending : create.isPending;
 
   function onSubmit(values: FormValues) {
     if (isEdit) {
-      update.execute({ memberId: values.memberId!, name: values.name });
+      update.execute(
+        member!.invitable
+          ? { memberId: values.memberId!, name: values.name, email: values.email }
+          : { memberId: values.memberId!, name: values.name },
+      );
     } else {
       create.execute(withEmail ? { name: values.name, email: values.email } : { name: values.name });
     }
@@ -150,7 +166,7 @@ function MemberForm({
             </Field>
           )}
         />
-        {!isEdit && withEmail && (
+        {(isEdit ? member.invitable : withEmail) && (
           <Controller
             name="email"
             control={form.control}

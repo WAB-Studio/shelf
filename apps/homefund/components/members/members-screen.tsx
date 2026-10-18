@@ -322,7 +322,11 @@ export function MembersScreen({
         member={
           formTarget === null || formTarget === "new"
             ? undefined
-            : { id: formTarget.id, name: formTarget.name }
+            : {
+                id: formTarget.id,
+                name: formTarget.name,
+                invitable: formTarget.userId === null && formTarget.inviteEmail === null,
+              }
         }
       />
 
