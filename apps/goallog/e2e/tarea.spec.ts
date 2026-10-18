@@ -319,7 +319,7 @@ test("a goal with no measure writes a task with no time and no amount fields, an
 });
 
 for (const width of [360, 1280]) {
-  test(`the form holds at ${width}: no overflow, fields 48 px, buttons 52 px, borders in --pulsar-border; Cancelar returns to the month`, async ({
+  test(`the form holds at ${width}: no overflow, fields 48 px, buttons 52 px, field edge in --pulsar-control-edge, Cancelar in --pulsar-border; Cancelar returns to the month`, async ({
     person,
     browser,
     baseURL,
@@ -348,16 +348,19 @@ for (const width of [360, 1280]) {
         expect(box.x + box.width, name).toBeLessThanOrEqual(width);
       }
 
-      // Field and secondary button wear `--pulsar-border`, never `--pulsar-line`.
-      const border = await page.evaluate(() => {
-        const probe = document.createElement("i");
-        probe.style.color = "var(--pulsar-border)";
-        document.body.append(probe);
-        const value = getComputedStyle(probe).color;
-        probe.remove();
-        return value;
-      });
-      expect(await page.getByLabel("horas").evaluate((el) => getComputedStyle(el.closest(".rt-TextFieldRoot")!).boxShadow)).toContain(border);
+      // A field wears the control edge (3:1 for a control); the secondary button keeps `--pulsar-border`.
+      const tokenColor = (token: string) =>
+        page.evaluate((name) => {
+          const probe = document.createElement("i");
+          probe.style.color = `var(${name})`;
+          document.body.append(probe);
+          const value = getComputedStyle(probe).color;
+          probe.remove();
+          return value;
+        }, token);
+      const [edge, border] = await Promise.all([tokenColor("--pulsar-control-edge"), tokenColor("--pulsar-border")]);
+      expect(edge).not.toBe(border);
+      expect(await page.getByLabel("horas").evaluate((el) => getComputedStyle(el.closest(".rt-TextFieldRoot")!).boxShadow)).toContain(edge);
       expect(await page.getByRole("link", { name: "Cancelar" }).evaluate((el) => getComputedStyle(el).boxShadow)).toContain(border);
 
       await page.getByRole("link", { name: "Cancelar" }).click();

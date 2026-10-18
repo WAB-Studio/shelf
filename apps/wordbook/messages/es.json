@@ -192,6 +192,7 @@
       "keepLine": "El navegador puede borrar tu registro si te falta espacio.",
       "keepAction": "Pedirlo",
       "keepAsking": "Pidiéndolo…",
+      "keepRefused": "El navegador no lo permitió; instala WordBook en tu pantalla de inicio para que lo guarde.",
       "neverSynced": "Aún no ha habido una copia.",
       "failedTitle": "La copia no salió",
       "failedAction": "Reintentar",

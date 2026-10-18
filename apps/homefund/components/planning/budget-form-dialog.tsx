@@ -526,7 +526,13 @@ function BudgetForm({
                     <Select.Item value={ANY}>{t("labelAny")}</Select.Item>
                     {scopedLabels.map((label) => (
                       <Select.Item key={label.id} value={label.id}>
-                        {scopedCategoryName(label.name, label.scope, mark)}
+                        {/* One line whatever the name: the cap keeps it inside a
+                            360 px screen and the full name stays the option's own. */}
+                        <Box maxWidth="calc(100vw - 6rem)" asChild>
+                          <Text as="div" truncate>
+                            {scopedCategoryName(label.name, label.scope, mark)}
+                          </Text>
+                        </Box>
                       </Select.Item>
                     ))}
                   </Select.Content>

@@ -271,6 +271,8 @@ type DebtPaymentResult = {
   transactionId: string;
   paidLineIds: string[];
   remainderCents: number;
+  // Whether the debt has any installment plan: without one, no line wording applies.
+  hasPlans: boolean;
 };
 
 /**
@@ -317,14 +319,16 @@ export async function recordDebtPayment({
       const rows = await tx.execute<{
         from_kind: Account["kind"] | null;
         to_kind: Account["kind"] | null;
+        has_plans: boolean;
         line_id: string | null;
         amount_cents: string | null;
       }>(sql`
-        select k.from_kind, k.to_kind, l.id as line_id, l.amount_cents
+        select k.from_kind, k.to_kind, k.has_plans, l.id as line_id, l.amount_cents
         from (
           select
             (select a.kind from accounts a where a.id = ${fromAccountId}) as from_kind,
-            (select a.kind from accounts a where a.id = ${toAccountId}) as to_kind
+            (select a.kind from accounts a where a.id = ${toAccountId}) as to_kind,
+            exists (select 1 from installment_plans p where p.account_id = ${toAccountId}) as has_plans
         ) k
         left join lateral (
           select l.id, l.amount_cents, l.due_date, l.seq
@@ -386,16 +390,17 @@ export async function recordDebtPayment({
       }
 
       // What is left after the last fully-covered line, and it stays unallocated.
-      return { transactionId, paidLineIds, remainderCents: remainder };
+      return { transactionId, paidLineIds, remainderCents: remainder, hasPlans: head.has_plans };
     });
   } catch (error) {
     if (!externalRef || pgErrorCode(error) !== "23505") throw error;
 
     // The debt names the scope the first copy was booked in, so the ref is read there alone.
     const [existing] = await withUserDb((tx) =>
-      tx.execute<{ id: string; remainder_cents: string; paid: string[] }>(sql`
+      tx.execute<{ id: string; remainder_cents: string; paid: string[]; has_plans: boolean }>(sql`
         select
           t.id,
+          exists (select 1 from installment_plans p where p.account_id = ${toAccountId}) as has_plans,
           t.amount_cents - coalesce((
             select sum(l.amount_cents) from installment_lines l
             where l.paid_transaction_id = t.id
@@ -417,6 +422,7 @@ export async function recordDebtPayment({
       transactionId: existing.id,
       paidLineIds: existing.paid,
       remainderCents: Number(existing.remainder_cents),
+      hasPlans: existing.has_plans,
     };
   }
 }

@@ -119,8 +119,11 @@ export const signOutAction = authActionClient.action(async () => {
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.auth.signOut();
-  // Logged, not surfaced: the session is gone from this browser either way.
-  if (error) console.error("sign-out failed", error);
+  // `signOut` drops this device's cookies even when Auth kept the session, so the person is out here: say what is left.
+  if (error) {
+    console.error("sign-out failed", error);
+    redirect({ href: { pathname: "/login", query: { error: "signOutPartial" } }, locale: await getLocale() });
+  }
 
   redirect({ href: "/login", locale: await getLocale() });
 });

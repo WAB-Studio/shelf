@@ -10,7 +10,7 @@ import { expect, type Page } from "@playwright/test";
 
 import messages from "@/messages/es.json";
 
-import { test } from "./global-setup";
+import { STORAGE_STATE, readScope, test } from "./global-setup";
 
 const signedOut = { cookies: [], origins: [] };
 test.use({ storageState: signedOut });
@@ -77,6 +77,44 @@ test.describe("light", () => {
     expect(label).toBe("rgb(255, 255, 255)");
     expect(ratio(bg, label)).toBeGreaterThanOrEqual(4.5);
     expect(ratio(await resolved(page, "var(--accent-10)"), "rgb(255, 255, 255)")).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+// «Cancelar» (gray) and «Eliminar» (red) in the confirm dialog are the controls
+// whose ring Radix takes from their own scale: measured on the real buttons,
+// against the dialog panel they sit on (WCAG 1.4.11).
+test.describe("light, in a confirm dialog", () => {
+  test.use({ storageState: STORAGE_STATE });
+
+  test("the keyboard ring on «Cancelar» and «Eliminar» reaches 3:1 on the panel", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => localStorage.setItem("theme", "light"));
+    await page.goto("/es/settings/accounts");
+    await expect(page.locator("html")).toHaveClass(/light/);
+    await page
+      .getByRole("button", {
+        name: messages.common.actionsFor.replace("{name}", readScope().accountName),
+        exact: true,
+      })
+      .click();
+    await page.getByRole("menuitem", { name: messages.common.delete, exact: true }).click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toBeVisible();
+    const panel = await dialog.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+    for (const name of [messages.common.cancel, messages.common.delete]) {
+      const button = dialog.getByRole("button", { name, exact: true });
+      // The keyboard, so :focus-visible applies: Tab until the button holds focus.
+      for (let i = 0; i < 4 && !(await button.evaluate((el) => el === document.activeElement)); i++) {
+        await page.keyboard.press("Tab");
+      }
+      await expect(button).toBeFocused();
+      const ring = await button.evaluate((el) => getComputedStyle(el).outlineColor);
+      const measured = ratio(ring, panel);
+      console.log(`${name}: ring ${ring} on ${panel} = ${measured.toFixed(2)}:1`);
+      expect(measured, name).toBeGreaterThanOrEqual(3);
+    }
   });
 });
 

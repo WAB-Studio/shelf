@@ -646,6 +646,35 @@ test.describe("the row menus", () => {
     );
   });
 
+  test("a payment on a card with no installment plan says it was saved and names no cuota", async ({
+    page,
+  }) => {
+    // Kills: «El pago no completó ninguna cuota» on a card that has none.
+    await page.goto("/es/planning/debts");
+
+    await rowMenu(page, cardName).click();
+    await page.getByRole("menuitem", { name: debts.rowPay, exact: true }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel(installments.fromLabel).click();
+    await page.getByRole("option", { name: sourceName, exact: true }).click();
+    await dialog
+      .getByRole("textbox", { name: installments.amountLabel })
+      .fill("50000");
+    await dialog
+      .getByRole("button", { name: installments.paymentSave, exact: true })
+      .click();
+
+    await expect(
+      page.getByText(installments.paymentSaved, { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(atCount(installments.paymentPaidLines, 0), { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText(installments.paymentRemainder.split("{")[0].trim()),
+    ).toHaveCount(0);
+  });
+
   test("the source picker offers no liability, and a source that stopped being one is refused", async ({
     page,
   }) => {

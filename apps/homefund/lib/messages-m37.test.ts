@@ -22,7 +22,7 @@ test("reminderHint promises the date, not a notification", () => {
   const hint = Object.values(es).flatMap((v) =>
     typeof v === "object" && v && "reminderHint" in v ? [String((v as Record<string, unknown>).reminderHint)] : [],
   )[0];
-  assert.match(hint, /aparecen aquí/);
+  assert.match(hint, /aparecen en esta lista/);
   assert.doesNotMatch(hint, /avisan/);
 });
 
