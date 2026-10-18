@@ -4,7 +4,7 @@ Un plan escrito así se lee en la app, sin IA y sin tope (RP-37). Cualquier otro
 
 ## Gramática
 
-- La primera línea no vacía es exactamente `pulsar · plantilla 2`. Sin ella, el texto no es una plantilla. `pulsar · plantilla 1` se sigue leyendo como antes: una sola capa de metas, sin `dentro de:` y sin nota de meta, hasta 12 metas.
+- La primera línea no vacía es exactamente `goallog · plantilla 2`. Sin ella, el texto no es una plantilla. `pulsar · plantilla 2` se sigue leyendo igual. `pulsar · plantilla 1` se sigue leyendo como antes: una sola capa de metas, sin `dentro de:` y sin nota de meta, hasta 12 metas.
 - Las líneas en blanco se ignoran. Cada meta empieza en `# <nombre>`; un archivo trae de 1 a 40. Dos metas no llevan el mismo nombre.
 - `horizonte: AAAA-MM-DD` es opcional y va después del nombre. Es el primer día después de la meta. Una meta sin `horizonte:` es una meta sin final (RP-102); una sin final no va dentro de una que lo tiene, y esa línea se dice con su razón.
 - `dentro de: <nombre>` es opcional y va después del nombre. El nombre es exactamente el de una meta que aparece antes en el archivo. Así se arman tres niveles: una meta general, las grandes dentro de ella y las pequeñas dentro de una grande. Una cuarta capa, un nombre que no está antes o un nombre repetido es un error de esa línea.
@@ -26,7 +26,7 @@ Un plan escrito así se lee en la app, sin IA y sin tope (RP-37). Cualquier otro
 ## Ejemplo
 
 ```
-pulsar · plantilla 2
+goallog · plantilla 2
 
 # Carrera en IA
 horizonte: 2028-10-01
@@ -76,7 +76,7 @@ ritmo: 40 páginas
 
 El libro `.xlsx` de la plantilla lleva la misma información en cinco hojas. Cada hoja lleva sus encabezados en la primera fila (en `Metas`, en la segunda, bajo la marca), y cada fila de datos es una línea de la plantilla.
 
-- La marca `pulsar · plantilla 2` va en `Metas!A1`; los encabezados de `Metas` van en la fila 2.
+- La marca `goallog · plantilla 2` va en `Metas!A1`; los encabezados de `Metas` van en la fila 2.
 - `Metas`: `nombre`, `dentro de`, `horizonte`, `medida`, `unidad`, `ritmo`, `nota`. Una celda de `horizonte` vacía es una meta sin final. `dentro de` es el nombre exacto de una meta de una fila anterior; los nombres no se repiten.
 - `Fases`: `meta`, `desde`, `hasta`, `objetivo`.
 - `Meses`: `meta`, `mes`, `monto`.

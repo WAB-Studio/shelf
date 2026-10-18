@@ -5,7 +5,7 @@ import ExcelJS from "exceljs";
 import { isHourUnit, isTimeUnit } from "@/lib/units/time";
 
 import type { ImportDraft, Source, Src } from "./draft";
-import { parseTemplate, TEMPLATE_HEADER, type FormCode } from "./template";
+import { isTemplateHeader, parseTemplate, TEMPLATE_HEADER, type FormCode } from "./template";
 
 export const WORKBOOK_NAME = "plantilla-goallog.xlsx";
 
@@ -204,7 +204,7 @@ export async function readWorkbook(
     return { matched: false };
   }
   const metas = wb.getWorksheet("Metas");
-  if (!metas || plainText(metas.getCell("A1").value).trim() !== TEMPLATE_HEADER) return { matched: false };
+  if (!metas || !isTemplateHeader(plainText(metas.getCell("A1").value).trim())) return { matched: false };
 
   // A broken header or a missing sheet cuts the read: nothing below it is judged.
   for (const name of SHEETS) {
