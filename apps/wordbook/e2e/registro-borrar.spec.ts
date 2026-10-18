@@ -806,3 +806,39 @@ test("RL-70: a delete on one device leaves every device of the reader, and no la
     await sql.end();
   }
 });
+
+// ----------------------------------------------- Deleting holds both controls
+
+test("Deleting: while the delete is held, «Conservar» and «Borrar» are both disabled", async ({ page }) => {
+  await openRegistro(page, { lookups: leaveRows() });
+  await expect(rowLink(page, "leave")).toBeVisible();
+
+  // A readwrite transaction kept alive on `lookups` holds the delete pending.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const w = window as unknown as { __release: boolean };
+        w.__release = false;
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const store = request.result.transaction("lookups", "readwrite").objectStore("lookups");
+          const pump = () => {
+            if (!w.__release) store.get(1).onsuccess = pump;
+          };
+          pump();
+          resolve();
+        };
+      }),
+  );
+
+  await deleteX(page, "leave").click();
+  await action(page, study("deleteConfirm")).click();
+  // While held, «Borrar» reads «Borrando…»: that is the same button.
+  await expect(action(page, study("deleting"))).toBeDisabled();
+  await expect(action(page, study("deleteKeep"))).toBeDisabled();
+  await expect(action(page, study("deleteConfirm")), "«Borrar» is still offered while deleting").toHaveCount(0);
+
+  await page.evaluate(() => ((window as unknown as { __release: boolean }).__release = true));
+  await expect(rowLink(page, "leave")).toHaveCount(0);
+});

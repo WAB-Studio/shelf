@@ -786,3 +786,47 @@ test("RL-72: a sync round that lands a translated row on a no-card record brings
   await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toHaveCount(0);
   expect(loads).toBe(loadsBefore);
 });
+
+test("while the JSON is built, its control reads «Exportando…» and is disabled; the Anki control is untouched", async ({
+  page,
+}) => {
+  await openSeeded(page);
+  // A readwrite transaction on `lookups` kept alive by chained reads: the
+  // export's readonly transaction queues behind it until it is released.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const w = window as unknown as { __hold: boolean };
+        w.__hold = true;
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const tx = request.result.transaction("lookups", "readwrite");
+          const store = tx.objectStore("lookups");
+          let first = true;
+          const step = () => {
+            const get = store.get(1);
+            get.onsuccess = () => {
+              if (first) {
+                first = false;
+                resolve();
+              }
+              if (w.__hold) step();
+            };
+          };
+          step();
+        };
+      }),
+  );
+  const downloadPromise = page.waitForEvent("download");
+  await jsonControl(page).click();
+  const building = page.getByRole("button", { name: messages.log.exporting, exact: true });
+  await expect(building).toBeVisible();
+  await expect(building).toBeDisabled();
+  await expect(jsonControl(page)).toHaveCount(0);
+  await expect(ankiControl(page)).toBeEnabled();
+
+  await page.evaluate(() => ((window as unknown as { __hold: boolean }).__hold = false));
+  await downloadPromise;
+  await expect(jsonControl(page)).toBeEnabled();
+});

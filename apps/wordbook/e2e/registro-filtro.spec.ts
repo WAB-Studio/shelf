@@ -446,3 +446,34 @@ test("the × button pressed by key hands focus back to the filter field", async 
   await expect(field(page)).toBeFocused();
   await expect(field(page)).toHaveValue("");
 });
+
+test("a filter typed on a bare /registro is kept: into a row and back with «← Registro» reads «ling»", async ({
+  page,
+}) => {
+  await open800(page, "/registro");
+  await expect(page).toHaveURL((url) => url.pathname === "/registro" && url.search === "");
+  await field(page).fill("ling");
+  await expect(rows(page)).toHaveCount(2);
+  await rows(page).first().click();
+  await expect(page).toHaveURL(/\/registro\/./);
+  await page.getByRole("link", { name: /← Registro/ }).click();
+  await expect(field(page)).toHaveValue("ling");
+  await expect(rows(page)).toHaveCount(2);
+});
+
+test("a row opened in the same task as the last keystroke still brings the back link to «ling»", async ({ page }) => {
+  await open800(page, "/registro");
+  await expect(field(page)).toBeVisible();
+  // Typing and the tap share one task, so the address has not been read back
+  // into the page yet: only the typing itself can have kept the text.
+  await field(page).evaluate((input: HTMLInputElement) => {
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    set.call(input, "ling");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    (document.querySelector('a[href^="/registro/"]') as HTMLAnchorElement).click();
+  });
+  await expect(page).toHaveURL(/\/registro\/./);
+  await page.getByRole("link", { name: /← Registro/ }).click();
+  await expect(field(page)).toHaveValue("ling");
+  await expect(rows(page)).toHaveCount(2);
+});
