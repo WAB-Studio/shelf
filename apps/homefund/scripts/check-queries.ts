@@ -4372,6 +4372,44 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
     shellTrips === SHELL_TRIPS,
     `${shellTrips} round trips against ${SHELL_TRIPS}`,
   );
+
+  // The home dashboard names its member buckets off the fund's live roster, read
+  // in the same fan-out as the figures: no read waits for another (RF-88).
+  const roster = await listMembers(scope.groupId, { archived: false });
+  const dashboard = await getDashboardData();
+  const namedRight = dashboard.netWorth.every((bucket) =>
+    bucket.bucket === "group"
+      ? bucket.name === fund?.name
+      : bucket.ownerUserId === null ||
+        bucket.isSelf ||
+        bucket.name === (roster.find((m) => m.userId === bucket.ownerUserId)?.name ?? null),
+  );
+  assert(
+    next("The dashboard names each bucket off the live roster"),
+    namedRight && dashboard.netWorth.length > 0,
+    `${dashboard.netWorth.length} buckets: ${JSON.stringify(dashboard.netWorth.map((b) => [b.bucket, b.name, b.isSelf]))}`,
+  );
+  const lonerDashboard = await asUser(loner, () => getDashboardData());
+  assert(
+    next("The dashboard of a caller with no fund falls back to isSelf"),
+    lonerDashboard.netWorth.every((bucket) => bucket.bucket !== "group" && bucket.name === null),
+    `${JSON.stringify(lonerDashboard.netWorth.map((b) => [b.bucket, b.name, b.isSelf]))}`,
+  );
+  const DASH_DELAY = 150;
+  process.env.HARNESS_CLAIMS_DELAY_MS = String(DASH_DELAY);
+  try {
+    await getDashboardData();
+    const started = performance.now();
+    await getDashboardData();
+    const elapsed = performance.now() - started;
+    assert(
+      next("The dashboard reads its roster in the first fan-out: under two claims delays"),
+      elapsed < 2 * DASH_DELAY,
+      `${Math.round(elapsed)} ms against a budget of ${2 * DASH_DELAY} ms`,
+    );
+  } finally {
+    delete process.env.HARNESS_CLAIMS_DELAY_MS;
+  }
 }
 
 // A weekly budget on /planning/budgets spans the same Monday-to-Sunday week /planning
