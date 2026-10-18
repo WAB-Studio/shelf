@@ -4229,6 +4229,7 @@ async function main(): Promise<void> {
   await learnedRuleSuite();
   await recurringPauseSuite();
   await resendAndMissingSuite();
+  await billedBeforeReconciliationSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -9309,4 +9310,136 @@ async function resendAndMissingSuite(): Promise<void> {
     gone?.serverError === "errors.notFound" && gone?.data?.ok !== true,
     `result = ${JSON.stringify(gone)}`,
   );
+}
+
+// M54: an estimate dated on or before the account's latest reconciliation cannot be confirmed (RF-123, RF-137).
+async function billedBeforeReconciliationSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const user = await createMembershipFreeUser();
+  await asUser(user, async () => {
+  const { categoryId } = await createCategory({
+    scope: { ownerUserId: user.id },
+    name: `Harness m54 ${tag}`,
+    kind: "expense",
+    parentId: null,
+    color: "#0E7490",
+  });
+  track("categories", categoryId);
+  const { accountId } = await createAccount({
+    name: `Harness m54 ${tag}`,
+    kind: "asset",
+    subtype: "bank",
+    ownerUserId: user.id,
+    groupId: null,
+    isShared: false,
+    institution: null,
+    lastFour: null,
+    settlementCurrency: "COP",
+    amountMinor: 100_000_000,
+    balanceOn: "2026-08-01",
+  });
+  track("accounts", accountId);
+  const purchaseOn = async (day: string): Promise<string> => {
+    const created = await createTransaction({
+      fromAccountId: accountId,
+      toAccountId: null,
+      amountCents: 10_000,
+      currency: "USD",
+      counterAmountCents: 40_000_000,
+      counterIsEstimate: true,
+      occurredAt: day,
+      description: `m54 ${tag} ${day}`,
+      externalRef: null,
+      splits: [{ categoryId: categoryId, amountCents: 10_000 }],
+      labelIds: [],
+    });
+    track("transactions", created.transactionId);
+    return created.transactionId;
+  };
+  const fifth = await purchaseOn("2026-09-05");
+  const tenth = await purchaseOn("2026-09-10");
+  const eleventh = await purchaseOn("2026-09-11");
+  const sheet = await getReconcileSheet(accountId, "2026-09-10");
+  const counted = await reconcileAccount({
+    accountId,
+    reconciledOn: "2026-09-10",
+    realMagnitudeCents: 50_000_000,
+    expectedDerivedCents: sheet?.account.derivedCents ?? 0,
+  });
+  assert(next("The fixture account is reconciled on the 10th"), counted.ok, JSON.stringify(counted));
+
+  const state = async (id: string) => {
+    const [row] = await fixtureSql<{ counter: string; estimate: boolean }[]>`
+      select counter_amount_cents::text as counter, counter_is_estimate as estimate
+      from transactions where id = ${id}`;
+    return row;
+  };
+  const movements = async () =>
+    (await fixtureSql<{ n: string }[]>`
+      select count(*)::text as n from transactions where from_account_id = ${accountId} or to_account_id = ${accountId}`)[0].n;
+  // The refusal may travel as a throw or as a result; either names its reason.
+  const confirm = async (id: string) => {
+    try {
+      const answer = (await recordBilledAmount({
+        transactionId: id,
+        accountId,
+        currency: "COP",
+        billedCents: 41_500_000,
+      })) as unknown;
+      const reason = (answer as { reason?: string } | null)?.reason;
+      return { answer, reason };
+    } catch (error) {
+      const thrown = error as { reason?: string; result?: { reason?: string }; message?: string };
+      return { answer: "threw", reason: thrown.reason ?? thrown.result?.reason ?? thrown.message };
+    }
+  };
+
+  const countBefore = await movements();
+  const onFifth = await confirm(fifth);
+  const fifthState = await state(fifth);
+  assert(
+    next("An estimate before the reconciliation is refused and writes nothing"),
+    onFifth.reason === "beforeReconciliation" && fifthState.estimate === true &&
+      fifthState.counter === "40000000" && (await movements()) === countBefore,
+    `reason ${onFifth.reason}, estimate ${fifthState.estimate}, counter ${fifthState.counter}`,
+  );
+  const onTenth = await confirm(tenth);
+  const tenthState = await state(tenth);
+  assert(
+    next("An estimate dated the day of the reconciliation is refused"),
+    onTenth.reason === "beforeReconciliation" && tenthState.estimate === true &&
+      tenthState.counter === "40000000",
+    `reason ${onTenth.reason}, estimate ${tenthState.estimate}, counter ${tenthState.counter}`,
+  );
+  const onEleventh = await confirm(eleventh);
+  const eleventhState = await state(eleventh);
+  assert(
+    next("An estimate the day after the reconciliation is confirmed"),
+    onEleventh.reason === undefined && eleventhState.estimate === false &&
+      eleventhState.counter === "41500000",
+    `answer ${JSON.stringify(onEleventh.answer)}, estimate ${eleventhState.estimate}, counter ${eleventhState.counter}`,
+  );
+
+  const actions = (await import("@/app/actions/debt-settlement")) as unknown as {
+    recordBilledAmountAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const viaAction = await actions.recordBilledAmountAction({
+    transactionId: fifth,
+    accountId,
+    currency: "COP",
+    billedAmount: "415000",
+  });
+  assert(
+    next("The action answers a refused estimate with debts.errors.beforeReconciliation"),
+    viaAction?.serverError === "debts.errors.beforeReconciliation" && (await state(fifth)).estimate === true,
+    `serverError = ${viaAction?.serverError ?? "none"}`,
+  );
+  assert(
+    next("The before-reconciliation message exists in both languages"),
+    typeof es.debts.errors.beforeReconciliation === "string" &&
+      typeof en.debts.errors.beforeReconciliation === "string",
+    "debts.errors.beforeReconciliation",
+  );
+  });
 }
