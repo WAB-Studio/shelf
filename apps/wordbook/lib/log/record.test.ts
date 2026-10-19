@@ -246,6 +246,28 @@ test("pendiente: una palabra «untranslated» no es una forma pendiente y no dej
   assert.deepEqual(seen.added, []);
 });
 
+test("la misma palabra buscada dos veces en momentos distintos: dos filas, cada una con su momento", async () => {
+  const seen = await runScenario([
+    { type: { text: "zorp", outcome: "miss", at: 1000 } },
+    { wait: 1000 },
+    { type: { text: "zorp", outcome: "miss", at: 5000 } },
+    { wait: 1000 },
+    { flush: true },
+  ]);
+  assert.deepEqual(seen.added, ["zorp", "zorp"]);
+});
+
+test("la respuesta tardía de la red con el mismo momento y texto reemplaza al miss: una sola fila", async () => {
+  const seen = await runScenario([
+    { type: { text: "zorp", outcome: "miss", at: 1000 } },
+    { wait: 1000 },
+    { type: { text: "zorp", outcome: "unlisted", at: 1000 } },
+    { wait: 1000 },
+    { flush: true },
+  ]);
+  assert.deepEqual(seen.rows.map((row) => [row.normalised, row.outcome]), [["zorp", "unlisted"]]);
+});
+
 test("pendiente: una palabra sin entrada desplaza al prefijo asentado y las dos se graban", async () => {
   const seen = await runScenario([
     { type: { text: "boo", at: 1000 } },

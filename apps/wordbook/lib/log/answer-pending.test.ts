@@ -978,3 +978,122 @@ test("de punta a punta: una palabra sin entrada grabada sin red queda pendiente 
     [["unlisted", NOON - 1000]],
   );
 });
+
+// --- M30: the guards of the drain and of the count, each driven by a row a reader could hold ---
+
+test("fila ya respondida entre tanto: la respuesta de la red no la pisa (la pendiente no existe ya)", async () => {
+  const { drain } = await load();
+  const id = seed(pendingWord("zorp"));
+  // The search screen's own answer lands while the drain's request is in flight.
+  respond = async (call) => {
+    const store = lookupsStore();
+    const record = store.records.find((entry) => entry.key === id)!;
+    record.value = { ...(record.value as LookupRecord), outcome: "unlisted", translation: "answered-by-screen" };
+    return answerEverything(call);
+  };
+  await drain.answerPending({ online: true, now: NOON });
+  assert.equal(asked.length, 1);
+  const rows = stored();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, id, "the answered row keeps its id: nothing deleted and re-added");
+  assert.equal(rows[0].translation, "answered-by-screen");
+});
+
+test("fila ya respondida entre tanto: un 204 tampoco le pone askedOn", async () => {
+  const { drain } = await load();
+  const id = seed(pendingWord("zorp"));
+  respond = async () => {
+    const record = lookupsStore().records.find((entry) => entry.key === id)!;
+    record.value = { ...(record.value as LookupRecord), outcome: "unlisted", translation: "answered-by-screen" };
+    return new Response(null, { status: 204 });
+  };
+  await drain.answerPending({ online: true, now: NOON });
+  const [row] = stored();
+  assert.equal(row.outcome, "unlisted");
+  assert.equal(row.askedOn ?? null, null, "an answered row never carries askedOn");
+});
+
+test("gemela respondida: la pendiente con el mismo momento y texto se descarta sin pedir nada", async () => {
+  const { drain } = await load();
+  const at = NOON - 5000;
+  seed({ ...pendingWord("zorp", at), outcome: "unlisted", translation: "zorpo" });
+  seed(pendingWord("zorp", at));
+  await drain.answerPending({ online: true, now: NOON });
+  assert.equal(asked.length, 0, "a twin already answered is not paid for");
+  const rows = stored();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].outcome, "unlisted");
+});
+
+test("gemela con otro momento: la pendiente se pide y las dos filas quedan", async () => {
+  const { drain } = await load();
+  seed({ ...pendingWord("zorp", NOON - 9000), outcome: "unlisted", translation: "zorpo" });
+  seed(pendingWord("zorp", NOON - 5000));
+  await drain.answerPending({ online: true, now: NOON });
+  assert.equal(asked.length, 1);
+  assert.deepEqual(
+    stored().map((row) => row.outcome),
+    ["unlisted", "unlisted"],
+  );
+});
+
+test("respuesta de otro dispositivo con el mismo momento y texto: no salda la pendiente de este", async () => {
+  const { drain } = await load();
+  const at = NOON - 5000;
+  seed({ ...pendingWord("zorp", at), outcome: "unlisted", translation: "zorpo", device: "other-device", deviceSeq: 3 });
+  seed(pendingWord("zorp", at));
+  await drain.answerPending({ online: true, now: NOON });
+  assert.equal(asked.length, 1, "only this device's own answered row settles its pending row");
+  const own = stored().filter((row) => row.device == null);
+  assert.deepEqual(
+    own.map((row) => row.outcome),
+    ["unlisted"],
+  );
+});
+
+test("respondida: la fila nueva no lleva askedOn aunque la pendiente lo llevara", async () => {
+  const { drain } = await load();
+  seed({ ...pendingWord("zorp"), askedOn: "2026-10-17" });
+  await drain.answerPending({ online: true, now: NOON });
+  assert.equal(asked.length, 1);
+  const [row] = stored();
+  assert.equal(row.outcome, "unlisted");
+  assert.equal("askedOn" in row, false, `answered row carries askedOn ${JSON.stringify(row.askedOn)}`);
+});
+
+test("askedOn es el día local AAAA-MM-DD del momento de la ronda", async () => {
+  const { drain } = await load();
+  seed(pendingWord("zorp"));
+  respond = () => new Response(null, { status: 204 });
+  await drain.answerPending({ online: true, now: NOON });
+  const [row] = stored();
+  assert.equal(row.askedOn, new Date(NOON).toLocaleDateString("en-CA"));
+});
+
+test("frase: una traducción vacía de la red no responde la fila, que sigue pendiente", async () => {
+  const { drain } = await load();
+  seed(pendingPhrase("The cat sat"));
+  respond = () => json({ text: "", origin: "network" });
+  await drain.answerPending({ online: true, now: NOON });
+  assert.equal(asked.length, 1);
+  const [row] = stored();
+  assert.equal(row.outcome, "untranslated");
+  assert.equal(row.translation, null);
+  assert.notEqual(row.askedOn ?? null, null);
+});
+
+test("palabra que el protocolo no admite (más de 64 caracteres): no se envía nada y la ronda se detiene", async () => {
+  const { drain } = await load();
+  seed(pendingWord("z".repeat(65)));
+  await drain.answerPending({ online: true, now: NOON });
+  assert.equal(asked.length, 0, "a request the route would refuse is never sent");
+  const [row] = stored();
+  assert.equal(row.outcome, "miss");
+});
+
+test("subida: countPendingUpload no cuenta la fila pendiente, sí la respondida", async () => {
+  const { record } = await load();
+  seed(answeredWord("cat"));
+  seed(pendingWord("zorp"));
+  assert.equal(await record.countPendingUpload(), 1);
+});
