@@ -13,13 +13,23 @@ const SENTENCE = "I left my house yesterday";
 declare global {
   interface Window {
     __translatorCreates: number;
+    __firstStarted: boolean;
     __emitProgress: (loaded: number) => void;
     __finishDownload: () => void;
   }
 }
 
-async function installTranslator(page: Page, availability: "available" | "downloadable"): Promise<void> {
-  await page.addInitScript((mode) => {
+type Availability = "available" | "downloadable" | "downloading";
+// How the stand-in's `translate` behaves: answers, throws, or (for texts holding "first")
+// waits until the request is aborted and then rejects as the real API does.
+type Behaviour = "answers" | "throws" | "abortable";
+
+async function installTranslator(
+  page: Page,
+  availability: Availability,
+  behaviour: Behaviour = "answers",
+): Promise<void> {
+  await page.addInitScript(([mode, how]) => {
     window.__translatorCreates = 0;
     const monitor = new EventTarget();
     let finish: () => void = () => {};
@@ -35,17 +45,29 @@ async function installTranslator(page: Page, availability: "available" | "downlo
         window.__translatorCreates += 1;
         options.monitor?.(monitor);
         // A translator that still has to be downloaded is held until the test says it landed.
-        if (mode === "downloadable") await new Promise<void>((resolve) => (finish = resolve));
-        return { translate: async (text: string) => `[en el dispositivo] ${text}` };
+        if (mode !== "available") await new Promise<void>((resolve) => (finish = resolve));
+        return {
+          translate: async (text: string, opts?: { signal?: AbortSignal }) => {
+            if (how === "throws") throw new Error("the device translator failed");
+            if (how === "abortable" && text.includes("first")) {
+              window.__firstStarted = true;
+              await new Promise<void>((_, reject) => {
+                opts?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+              });
+            }
+            return `[en el dispositivo] ${text}`;
+          },
+        };
       },
     };
-  }, availability);
+  }, [availability, behaviour] as const);
 }
 
-async function stubNetwork(page: Page): Promise<{ count: () => number }> {
+async function stubNetwork(page: Page, down = false): Promise<{ count: () => number }> {
   let count = 0;
   await page.route("**/api/translate", async (route) => {
     count++;
+    if (down) return route.abort("internetdisconnected");
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -145,4 +167,89 @@ test("RL-10: while the translator downloads the interface says so, shows its pro
 
   await searchBox.fill("We drove to the coast together");
   await expect(page.getByText(messages.phrase.originDevice)).toBeVisible({ timeout: 5000 });
+});
+
+for (const state of ["downloadable", "downloading"] as const) {
+  test(`RL-08/RL-11: a ${state} translator is never created without a gesture; online the network answers`, async ({
+    page,
+  }) => {
+    await installTranslator(page, state);
+    const network = await stubNetwork(page);
+    await openReady(page);
+
+    await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+
+    await expect(page.getByText("Traducción por red")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible();
+    expect(network.count()).toBe(1);
+    expect(await page.evaluate(() => window.__translatorCreates), "create ran with no gesture").toBe(0);
+  });
+
+  test(`RL-08/RL-11: a ${state} translator is never created without a gesture; offline the breakdown answers`, async ({
+    page,
+    context,
+  }) => {
+    await installTranslator(page, state);
+    await stubNetwork(page);
+    await openReady(page);
+    await context.setOffline(true);
+
+    await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+
+    await expect(page.getByRole("heading", { name: "house" })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(messages.phrase.originDevice)).toHaveCount(0);
+    expect(await page.evaluate(() => window.__translatorCreates), "create ran with no gesture").toBe(0);
+  });
+}
+
+test("RL-08: online, a ready translator whose translate throws falls to the network answer", async ({ page }) => {
+  await installTranslator(page, "available", "throws");
+  const network = await stubNetwork(page);
+  await openReady(page);
+  await expect.poll(() => page.evaluate(() => window.__translatorCreates)).toBe(1);
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+
+  await expect(page.getByText("Traducción por red")).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible();
+  await expect(page.getByText(messages.phrase.originDevice)).toHaveCount(0);
+  expect(network.count()).toBe(1);
+});
+
+test("RL-08: offline, a ready translator that throws leaves the breakdown, never an error on screen", async ({
+  page,
+  context,
+}) => {
+  await installTranslator(page, "available", "throws");
+  await stubNetwork(page, true);
+  await openReady(page);
+  await expect.poll(() => page.evaluate(() => window.__translatorCreates)).toBe(1);
+  await context.setOffline(true);
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+
+  await expect(page.getByRole("heading", { name: "house" })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(messages.phrase.originDevice)).toHaveCount(0);
+  await expect(page.getByText(messages.phrase.originNetwork)).toHaveCount(0);
+  await expect(page.getByText(messages.error.title)).toHaveCount(0);
+  await expect(page.getByText(messages.phrase.translating)).toHaveCount(0);
+});
+
+test("RL-08: a second search replaces a sentence the device is still translating; the first never paints", async ({
+  page,
+}) => {
+  await installTranslator(page, "available", "abortable");
+  const network = await stubNetwork(page);
+  await openReady(page);
+  await expect.poll(() => page.evaluate(() => window.__translatorCreates)).toBe(1);
+
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.fill("I left my first house yesterday");
+  await expect.poll(() => page.evaluate(() => window.__firstStarted)).toBe(true);
+  await searchBox.fill("We drove to the coast together");
+
+  await expect(page.getByText("[en el dispositivo] We drove to the coast together")).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText("first house")).toHaveCount(0);
+  await expect(page.getByText("Traducción por red")).toHaveCount(0);
+  expect(network.count(), "an aborted sentence never reaches the network").toBe(0);
 });
