@@ -3980,6 +3980,35 @@ async function checkParentOwner0027(): Promise<void> {
         insert into goals.one_offs (user_id, goal_id, name, parent_id)
         values (${intruder}, ${b.goalId}, 'hija tardia', ${lone.id})`);
 
+      // -- the parent must be a plan task of the same goal with no day, no estimate, no parent of its own --
+      await own("O10.setup", "sub-task with no estimate under own task", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, parent_id)
+        values (${intruder}, ${b.goalId}, 'hija sin estimado', ${task}) returning id`);
+      const [subTask] = await tx<{ id: string }[]>`
+        select id from goals.one_offs where parent_id = ${task} and name = 'hija sin estimado'`;
+      await refused("O10", "sub-task under a sub-task (third level)", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, parent_id)
+        values (${intruder}, ${b.goalId}, 'nieta', ${subTask.id})`);
+
+      const [datedInPlan] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, day, in_plan)
+        values (${intruder}, ${b.goalId}, 'con dia en plan', '2026-10-05', true) returning id`;
+      await refused("O11", "sub-task under a task that has a day, though in plan", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, parent_id)
+        values (${intruder}, ${b.goalId}, 'hija de dia', ${datedInPlan.id})`);
+
+      // A task outside the plan with no day: only its day is cleared after the insert, in_plan has no UPDATE grant.
+      const [outOfPlan] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, day)
+        values (${intruder}, ${b.goalId}, 'fuera del plan', '2026-10-06') returning id`;
+      await tx`update goals.one_offs set day = null where id = ${outOfPlan.id}`;
+      const [outRow] = await tx<{ in_plan: boolean; day: string | null }[]>`
+        select in_plan, day from goals.one_offs where id = ${outOfPlan.id}`;
+      assert("O12.setup", outRow.in_plan === false && outRow.day === null, `task outside the plan with no day, in_plan = ${outRow.in_plan}, day = ${outRow.day}`);
+      await refused("O12", "sub-task under a task outside the plan", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, parent_id)
+        values (${intruder}, ${b.goalId}, 'hija de fuera', ${outOfPlan.id})`);
+
       throw forcedRollback;
     })
     .catch((error: unknown) => {

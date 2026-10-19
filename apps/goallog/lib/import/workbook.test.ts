@@ -601,3 +601,43 @@ test("M63: a workbook marked with another name or version is not matched", async
     assert.deepEqual(await readWorkbook(await book({ Metas: [GOAL] }, mark)), { matched: false }, mark);
   }
 });
+
+test("M14 stored entries: the cap is the byte, not the byte after", async () => {
+  const { zipInflatesWithin } = await guard();
+  const atCap = await withEntries({ "a.bin": Buffer.alloc(ZIP_INFLATED_MAX) }, { compression: "STORE" });
+  assert.equal(zipInflatesWithin(atCap), true);
+  const past = await withEntries({ "a.bin": Buffer.alloc(ZIP_INFLATED_MAX + 1) }, { compression: "STORE" });
+  assert.equal(zipInflatesWithin(past), false);
+});
+
+test("M14 stored entries count together: two of 30 MiB stored are 60 MiB", async () => {
+  const { zipInflatesWithin } = await guard();
+  const two = await withEntries({ "a.bin": Buffer.alloc(30 * MIB), "b.bin": Buffer.alloc(30 * MIB) }, { compression: "STORE" });
+  assert.equal(zipInflatesWithin(two), false);
+});
+
+test("M14 an entry is measured by the bytes its directory span gives it, not by everything after its start", async () => {
+  const { zipInflatesWithin } = await guard();
+  const half = await withEntries({ "a.bin": Buffer.alloc(25 * MIB), "b.bin": Buffer.alloc(25 * MIB) }, { compression: "STORE" });
+  assert.equal(zipInflatesWithin(half), true, "50 MiB in two entries is the cap, not past it");
+});
+
+test("M14 a local header that does not carry the local signature is refused", async () => {
+  const { zipInflatesWithin } = await guard();
+  const stored = Buffer.from(await withEntries({ "a.txt": Buffer.from("hello") }, { compression: "STORE" }));
+  assert.equal(zipInflatesWithin(new Uint8Array(stored)), true);
+  assert.equal(stored.readUInt32LE(0), 0x04034b50, "the first entry sits at 0");
+  stored.writeUInt32LE(0, 0);
+  assert.equal(zipInflatesWithin(new Uint8Array(stored)), false);
+});
+
+test("M14 the end-of-directory record is found behind a long archive comment", async () => {
+  const { zipInflatesWithin } = await guard();
+  const { default: JSZip } = await import("jszip");
+  for (const length of [1000, 60000]) {
+    const zip = new JSZip();
+    zip.file("a.txt", "hello", { compression: "STORE" });
+    const bytes = new Uint8Array(await zip.generateAsync({ type: "uint8array", comment: "c".repeat(length) }));
+    assert.equal(zipInflatesWithin(bytes), true, `comment of ${length} bytes`);
+  }
+});
