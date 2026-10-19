@@ -1910,3 +1910,6 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   refiero al modelo Luna»). OpenAI's list prices read 2026-10-18 for the Lunas: GPT-6 Luna USD 0.10 in / 0.50 out per
   million tokens, GPT-5.6 Luna 0.20 / 1.20 (developers.openai.com/api/docs/pricing). About USD 1.40 for the run at the
   bench's estimate; re-read every price on the day. RP-93 changes only once the user picks from the table.
+- **S1, the models measured** (2026-10-19, the user, option b): the six agreed, `gpt-5-nano`, `gpt-4.1-nano`, `gpt-5-mini`,
+  `gpt-4.1-mini`, `gpt-6-luna`, `gpt-5.6-luna`, about USD 1.28, though OpenAI marks the first four deprecated (read
+  2026-10-19 on developers.openai.com). Not run yet: the main session builds the bench seed, re-reads the prices, then runs it.
