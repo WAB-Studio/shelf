@@ -60,10 +60,14 @@ export async function listDevices(tx: Transaction, userId: string): Promise<Devi
 /**
  * Retires one device (RL-25): its copied searches leave the account and the
  * device is marked retired for good (`retired_at`, RL-24) — the sync route
- * refuses its id from then on, so the next round cannot bring it back. ONE
- * round trip, atomic by construction — the `gone` CTE modifies data, so
- * Postgres runs it whether or not the outer statement's `returning` is read
- * (`docs/TRAPS.md:463-486`).
+ * refuses its id from then on, so the next round cannot bring it back. Atomic
+ * by construction — the `gone` CTE modifies data, so Postgres runs it whether
+ * or not the outer statement's `returning` is read (`docs/TRAPS.md:463-486`).
+ *
+ * The reader's `:sync-quota` lock comes first, in a statement of its own: an
+ * upload in flight holds it to its commit, so the delete's own snapshot,
+ * taken after the grant, sees that batch; and an upload that arrives later
+ * queues behind this one and reads the retirement in `reading.sync_gate`.
  *
  * The upsert marks a device that never sealed too: its id is refused all the
  * same. `coalesce` keeps the first retirement's instant on a second call,
@@ -78,6 +82,7 @@ export async function retireDevice(
   userId: string,
   deviceId: string,
 ): Promise<{ lookups: number }> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}::text || ':sync-quota', 0))`);
   const [row] = await tx.execute<{ lookups: number }>(sql`
     with gone as (
       delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId} returning 1

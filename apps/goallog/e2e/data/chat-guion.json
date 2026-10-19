@@ -8,6 +8,10 @@
     "reply": "Esto cambiaría tu plan:",
     "calls": [{ "name": "fix_task", "arguments": { "one_off_id": "{{task:Maze}}", "month": "2030-03" } }]
   },
+  "cambia la nota de Maze": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [{ "name": "set_task_note", "arguments": { "one_off_id": "{{task:Maze}}", "note": "Revisar las pistas del laberinto antes del viernes" } }]
+  },
   "pon 4 h de inglés": {
     "reply": "Esto cambiaría tu plan:",
     "calls": [{ "name": "set_month_amount", "arguments": { "goal_id": "{{goal:Inglés B1}}", "month": "2030-03", "amount": 240 } }]

@@ -31,6 +31,12 @@
     "endKept": "No se le quita el final a una meta: solo la persona puede hacerlo. Puedes darle uno o moverlo a otro día.",
     "noteEmpty": "La nota no puede ir en blanco. Escribe el texto de la nota; solo la persona puede vaciarla.",
     "unknown": "No se pudo completar. Revisa los datos e inténtalo otra vez.",
-    "unauthorized": "La llave no es válida o ya se revocó. Crea otra en GoalLog, en Conexiones."
+    "unauthorized": "La llave no es válida o ya se revocó. Crea otra en GoalLog, en Conexiones.",
+    "byTool": {
+      "create_task:month.errors.invalid": "Combinación no válida. Usa una de estas: suelta (solo name, y day opcional); del mes (goal_id + planned_month, sin day); en el plan (goal_id + in_plan: true, sin day ni parent_id); sub-tarea (parent_id, sin goal_id ni planned_month ni day).",
+      "*:day.errors.notFound": "No hay una tarea o compromiso con ese id para esta persona. Lee los ids con get_goal, get_today o list_loose_one_offs.",
+      "*:plan.errors.notFound": "No hay nada con ese id para esta persona. Vuelve a leerlo con list_goals o get_goal.",
+      "*:month.errors.invalid": "Algún campo no es válido. Revisa el formato: ids uuid, meses AAAA-MM, días AAAA-MM-DD, montos enteros."
+    }
   }
 }

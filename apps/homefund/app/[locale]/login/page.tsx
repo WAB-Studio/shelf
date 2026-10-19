@@ -38,10 +38,16 @@ export default async function LoginPage(props: PageProps<"/[locale]/login">) {
   const searchParams = await props.searchParams;
   const t = await getTranslations();
 
-  // Set by `/auth/confirm`: the link is expired or spent, or was opened in a browser that did not ask for it.
+  // Set by `/auth/confirm`: the link is expired or spent, was opened in a browser that did not ask for it, or Auth did not answer.
+  // Set by the sign-out action: this device is signed out, Auth kept the person's other sessions.
   const error = firstValue(searchParams.error);
   const linkNotice =
-    error === "linkInvalid" || error === "linkOtherBrowser" ? (`errors.${error}` as const) : null;
+    error === "linkInvalid" ||
+    error === "linkOtherBrowser" ||
+    error === "linkTimeout" ||
+    error === "signOutPartial"
+      ? (`errors.${error}` as const)
+      : null;
 
   return (
     <Flex asChild direction="column" flexGrow="1" p="4">

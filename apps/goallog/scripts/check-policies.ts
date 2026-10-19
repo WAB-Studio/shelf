@@ -1913,12 +1913,16 @@ async function checkAiDoor(): Promise<void> {
       const refresh1 = sha256();
       const once = await exchange(code, { access: access1, refresh: refresh1 });
       assert("P155", once === subject && (await resolves(access1)), `the matching code yields the person, got ${once}`);
+      // Inside 30 s a second redemption is a retry and spares; past it, a replay and revokes (Q22 a).
       const access1b = sha256();
       const twice = await exchange(code, { access: access1b });
+      const spared = (await resolves(access1)) && !(await resolves(access1b));
+      await tx`update goals.oauth_codes set used_at = now() - interval '31 seconds' where code_hash = ${code}`;
+      const late = await exchange(code, { access: sha256() });
       assert(
         "P156",
-        twice === null && !(await resolves(access1)) && !(await resolves(access1b)),
-        `a second redemption yields ${twice}, the connection it produced still resolves = ${await resolves(access1)}`,
+        twice === null && spared && late === null && !(await resolves(access1)),
+        `a second redemption yields ${twice} and spares = ${spared}; past 30 s yields ${late}, the connection still resolves = ${await resolves(access1)}`,
       );
       const stale2 = await newCode(true);
       const expiredToken = sha256();
@@ -1945,7 +1949,55 @@ async function checkAiDoor(): Promise<void> {
         `a refresh rotates once: wrong client ${wrongClient}, rotated ${rotated}, old key still resolves = ${await resolves(access2)}`,
       );
       const replay = await rotate(refreshA, sha256(), sha256());
-      assert("P159", replay === null && !(await resolves(access3)), `a reused refresh yields ${replay}, the connection still resolves = ${await resolves(access3)}`);
+      const kept = await resolves(access3);
+      await tx`update goals.oauth_refresh set used_at = now() - interval '31 seconds' where refresh_hash = ${refreshA}`;
+      const lateReplay = await rotate(refreshA, sha256(), sha256());
+      assert(
+        "P159",
+        replay === null && kept && lateReplay === null && !(await resolves(access3)),
+        `a reused refresh yields ${replay} and keeps = ${kept}; past 30 s yields ${lateReplay}, the connection still resolves = ${await resolves(access3)}`,
+      );
+
+      // -- a replay revokes the replayed connection and no other of the same person --
+      const connect = async (): Promise<{ access: Buffer; refresh: Buffer; code: Buffer }> => {
+        const code = await newCode();
+        const access = sha256();
+        const refresh = sha256();
+        await exchange(code, { access, refresh });
+        return { access, refresh, code };
+      };
+      const ageRefresh = (hash: Buffer, seconds: number) =>
+        tx`update goals.oauth_refresh set used_at = now() - ${seconds} * interval '1 second' where refresh_hash = ${hash}`;
+      const ageCode = (hash: Buffer, seconds: number) =>
+        tx`update goals.oauth_codes set used_at = now() - ${seconds} * interval '1 second' where code_hash = ${hash}`;
+
+      const rA = await connect();
+      const rB = await connect();
+      const rotatedA = sha256();
+      await rotate(rA.refresh, rotatedA, sha256());
+      await ageRefresh(rA.refresh, 29);
+      const refresh29 = await rotate(rA.refresh, sha256(), sha256());
+      const spared29 = await resolves(rotatedA);
+      await ageRefresh(rA.refresh, 31);
+      const refresh31 = await rotate(rA.refresh, sha256(), sha256());
+      assert(
+        "P303",
+        refresh29 === null && spared29 && refresh31 === null && !(await resolves(rotatedA)) && (await resolves(rB.access)),
+        `refresh replay: at 29 s yields ${refresh29} and spares = ${spared29}; at 31 s yields ${refresh31}, replayed connection resolves = ${await resolves(rotatedA)}, the person's other connection resolves = ${await resolves(rB.access)}`,
+      );
+
+      const cA = await connect();
+      const cB = await connect();
+      await ageCode(cA.code, 29);
+      const code29 = await exchange(cA.code, { access: sha256() });
+      const codeSpared29 = await resolves(cA.access);
+      await ageCode(cA.code, 31);
+      const code31 = await exchange(cA.code, { access: sha256() });
+      assert(
+        "P304",
+        code29 === null && codeSpared29 && code31 === null && !(await resolves(cA.access)) && (await resolves(cB.access)),
+        `code replay: at 29 s yields ${code29} and spares = ${codeSpared29}; at 31 s yields ${code31}, replayed connection resolves = ${await resolves(cA.access)}, the person's other connection resolves = ${await resolves(cB.access)}`,
+      );
 
       throw forcedRollback;
     })
@@ -3826,6 +3878,116 @@ async function checkSignInClaims0026(): Promise<void> {
   await sql.end();
 }
 
+// 0027 (RNP-05): a row hangs only off a parent the person can see. Every
+// refusal is the policy's own `42501`, never an FK's `23503`: a uuid that
+// exists nowhere must answer exactly as a uuid that belongs to someone else.
+async function checkParentOwner0027(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const owner = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${owner}), (${intruder})`;
+
+      await enterUserContext(tx, owner);
+      const a = await seedFixtures(tx, owner);
+      const [aTask] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${owner}, ${a.goalId}, 'tarea ajena', true) returning id`;
+
+      await enterUserContext(tx, intruder);
+      const b = await seedFixtures(tx, intruder);
+
+      const refused = async (label: string, what: string, fn: (sp: postgres.TransactionSql) => Promise<unknown>) => {
+        const r = await attempt(tx, fn);
+        assert(label, r.code === "42501", `${what}, sqlstate = ${r.code ?? "none"}`);
+      };
+
+      await refused("O01", "phase on another person's goal", (sp) => sp`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${intruder}, ${a.goalId}, 'ajena', '2026-01-01', '2026-01-02')`);
+      await refused("O02", "month amount on another person's goal", (sp) => sp`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${intruder}, ${a.goalId}, '2026-11-01', 5)`);
+      await refused("O03", "task on another person's goal", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${intruder}, ${a.goalId}, 'ajena', true)`);
+      await refused("O04", "fact on another person's commitment", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day)
+        values (${intruder}, ${a.commitmentId}, '2026-10-01')`);
+      await refused("O05", "fact on another person's task", (sp) => sp`
+        insert into goals.facts (user_id, one_off_id, day)
+        values (${intruder}, ${aTask.id}, '2026-10-01')`);
+      await refused("O06", "fact naming another person's goal under an own commitment", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, goal_id, day)
+        values (${intruder}, ${b.commitmentId}, ${a.goalId}, '2026-10-02')`);
+
+      // A uuid that exists nowhere is no different from a foreign one.
+      const nowhere = randomUUID();
+      await refused("O07.phase", "phase on a goal that exists nowhere", (sp) => sp`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${intruder}, ${nowhere}, 'x', '2026-01-01', '2026-01-02')`);
+      await refused("O07.month", "month amount on a goal that exists nowhere", (sp) => sp`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${intruder}, ${nowhere}, '2026-11-01', 5)`);
+      await refused("O07.task", "task on a goal that exists nowhere", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${intruder}, ${nowhere}, 'x', true)`);
+      await refused("O07.commitment", "fact on a commitment that exists nowhere", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day)
+        values (${intruder}, ${nowhere}, '2026-10-03')`);
+      await refused("O07.oneoff", "fact on a task that exists nowhere", (sp) => sp`
+        insert into goals.facts (user_id, one_off_id, day)
+        values (${intruder}, ${nowhere}, '2026-10-03')`);
+      await refused("O07.goal", "fact naming a goal that exists nowhere", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, goal_id, day)
+        values (${intruder}, ${b.commitmentId}, ${nowhere}, '2026-10-04')`);
+
+      // -- the person's own rows still land --
+      const own = async (label: string, what: string, fn: (sp: postgres.TransactionSql) => Promise<{ id: string }[]>) => {
+        const r = await attemptRows<{ id: string }>(tx, fn);
+        assert(label, r.code === undefined && r.rows.length === 1, `own ${what}, sqlstate = ${r.code ?? "none"}, rows = ${r.rows.length}`);
+        return r.rows[0]?.id;
+      };
+      await own("O08.phase", "phase on own goal", (sp) => sp`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${intruder}, ${b.goalId}, 'propia', '2026-01-01', '2026-01-02') returning id`);
+      await own("O08.month", "month amount on own goal", (sp) => sp`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${intruder}, ${b.goalId}, '2026-11-01', 5) returning id`);
+      const task = await own("O08.task", "task on own goal", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${intruder}, ${b.goalId}, 'propia', true) returning id`);
+      await own("O08.loose", "task on no goal", (sp) => sp`
+        insert into goals.one_offs (user_id, name) values (${intruder}, 'suelta') returning id`);
+      await own("O08.subtask", "sub-task under own task", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, parent_id)
+        values (${intruder}, ${b.goalId}, 'hija', ${task}) returning id`);
+      await own("O08.factCommitment", "fact on own commitment and goal", (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, goal_id, day)
+        values (${intruder}, ${b.commitmentId}, ${b.goalId}, '2026-10-05') returning id`);
+      const [lone] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${intruder}, ${b.goalId}, 'con hecho', true) returning id`;
+      await own("O08.factTask", "fact on own task", (sp) => sp`
+        insert into goals.facts (user_id, one_off_id, goal_id, day)
+        values (${intruder}, ${lone.id}, ${b.goalId}, '2026-10-05') returning id`);
+
+      // -- unchanged: a sub-task under a parent that carries a fact --
+      await refused("O09", "sub-task under a parent that carries a fact", (sp) => sp`
+        insert into goals.one_offs (user_id, goal_id, name, parent_id)
+        values (${intruder}, ${b.goalId}, 'hija tardia', ${lone.id})`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -3864,6 +4026,7 @@ async function main(): Promise<void> {
   await checkDeleteAndEdit0025();
   await checkAllowedEmails0025();
   await checkSignInClaims0026();
+  await checkParentOwner0027();
 
   if (failed) process.exit(1);
 }

@@ -179,7 +179,7 @@ test("«antes» of a task note is the task's real state, not always «sin nota»
   assert.ok("key" in had && "key" in none);
   assert.equal(had.values.before, "con nota");
   assert.equal(none.values.before, "sin nota");
-  assert.equal(had.values.after, "con nota");
+  assert.match(had.values.after, /^nota nueva: «x» \(1 caracteres\), reemplaza la nota entera$/);
 });
 
 test("«antes» of a fixed task is the month it holds, «al plan» when it holds none", () => {
@@ -208,6 +208,31 @@ test("a retired commitment shows its target as «antes» only when it has one", 
   assert.equal(zeroOut.values.before, "0");
 });
 
+test("a long note is cut at 200 characters with «…» and its length said, on both tools", () => {
+  const note = "a".repeat(900);
+  for (const [tool, input] of [
+    ["set_task_note", { one_off_id: T, note }],
+    ["set_goal_note", { goal_id: G, note }],
+  ] as const) {
+    const out = describeChange(change(tool, input), names);
+    assert.ok("key" in out, tool);
+    assert.ok(out.values.after.includes(`nota nueva: «${"a".repeat(200)}…» (900 caracteres)`), tool);
+    assert.ok(!out.values.after.includes("a".repeat(201)), tool);
+    assert.ok(out.values.after.includes("reemplaza la nota entera"), tool);
+  }
+});
+
+test("a short note is shown whole, with no «…»", () => {
+  const out = describeChange(change("set_task_note", { one_off_id: T, note: "doce letras" + "!" }), names);
+  assert.ok("key" in out);
+  assert.ok(out.values.after.includes("nota nueva: «doce letras!» (12 caracteres)"));
+  assert.ok(!out.values.after.includes("…"));
+});
+
+test("a blank note is refused", () => {
+  assert.deepEqual(describeChange(change("set_goal_note", { goal_id: G, note: "  " }), names), REFUSED);
+});
+
 const PLACEHOLDERS: Record<string, string[]> = {
   declare_fact: ["commitment"],
   complete_task: ["task"],
@@ -231,8 +256,9 @@ const PLACEHOLDERS: Record<string, string[]> = {
 
 test("every change phrase opens with an infinitive and keeps its placeholders", () => {
   const phrases = chat.change as Record<string, string>;
-  assert.deepEqual(Object.keys(phrases).sort(), Object.keys(PLACEHOLDERS).sort());
-  for (const [tool, phrase] of Object.entries(phrases)) {
+  const sentences = Object.entries(phrases).filter(([tool]) => !tool.startsWith("note"));
+  assert.deepEqual(sentences.map(([tool]) => tool).sort(), Object.keys(PLACEHOLDERS).sort());
+  for (const [tool, phrase] of sentences) {
     assert.match(phrase.split(" ")[0], /^\p{L}+(ar|er|ir)(le|la|lo|se)?$/u, tool);
     const used = [...phrase.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
     assert.deepEqual(used, PLACEHOLDERS[tool], tool);

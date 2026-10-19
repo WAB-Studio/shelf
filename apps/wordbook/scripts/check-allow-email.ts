@@ -9,7 +9,8 @@
  * The service-role key of the local stack comes from the Supabase CLI, the same
  * way the script under test takes it from its own environment.
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 
@@ -45,14 +46,30 @@ function assert(name: string, ok: boolean, detail: string): void {
 }
 
 type Ran = { code: number | null; out: string };
-function allowEmail(arg: string, key = SERVICE_KEY): Ran {
+function allowEmail(arg: string, key: string | null = SERVICE_KEY): Ran {
+  const env: NodeJS.ProcessEnv = { ...process.env, SUPABASE_SERVICE_ROLE_KEY: key ?? "" };
+  if (key === null) delete env.SUPABASE_SERVICE_ROLE_KEY;
   const run = spawnSync("node", ["--import", "tsx", "scripts/allow-email.ts", arg], {
     cwd: resolve(import.meta.dirname, ".."),
     encoding: "utf8",
-    env: { ...process.env, SUPABASE_SERVICE_ROLE_KEY: key },
+    env,
     timeout: 60_000,
   });
   return { code: run.status, out: `${run.stdout}\n${run.stderr}` };
+}
+
+// Async because the stub Auth server lives in this process: a blocking spawn would never let it answer.
+function allowEmailAgainst(arg: string, url: string): Promise<Ran> {
+  return new Promise((done) => {
+    const child = spawn("node", ["--import", "tsx", "scripts/allow-email.ts", arg], {
+      cwd: resolve(import.meta.dirname, ".."),
+      env: { ...process.env, NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY },
+    });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    child.on("close", (code) => done({ code, out }));
+  });
 }
 
 const authUsers = (email: string) =>
@@ -101,6 +118,13 @@ async function main() {
       "a string that is not an address (the stored column would take it) exits 1 and lists nothing",
       bad.code === 1 && ((await sql`select count(*)::int as n from reading.allowed_emails`)[0].n as number) === before,
       `exit=${bad.code}`,
+    );
+
+    const lone = allowEmail("x");
+    assert(
+      "a lone «x» exits 1 and lists nothing",
+      lone.code === 1 && ((await sql`select count(*)::int as n from reading.allowed_emails`)[0].n as number) === before,
+      `exit=${lone.code}`,
     );
 
     // First run, typed with capitals and spaces: stored in one shape.
@@ -156,11 +180,30 @@ async function main() {
 
     // The list comes first: Auth refusing the key still leaves the address listed.
     const refused = allowEmail(unconfirmedKey, "not-a-key");
+    assert("Auth refusing the key exits 1", refused.code === 1, `exit=${refused.code}`);
     assert(
       "the address is listed before the Auth user is created",
       (await listRows(unconfirmedKey)) === 1 && (await authUsers(unconfirmedKey)).length === 0,
       `exit=${refused.code} rows=${await listRows(unconfirmedKey)} users=${(await authUsers(unconfirmedKey)).length}`,
     );
+
+    // Without the key the script exits 1 (the address stays listed, as the script says).
+    const keyless = allowEmail(unconfirmedKey, null);
+    assert("no service-role key exits 1 and creates no user", keyless.code === 1 && (await authUsers(unconfirmedKey)).length === 0, `exit=${keyless.code}`);
+
+    // Auth answering 500 to createUser: the script reports failure, never success.
+    const stub = createServer((_req, res) => {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ msg: "boom" }));
+    });
+    await new Promise<void>((ok) => stub.listen(0, "127.0.0.1", ok));
+    try {
+      const { port } = stub.address() as { port: number };
+      const broken = await allowEmailAgainst(unconfirmedKey, `http://127.0.0.1:${port}`);
+      assert("Auth failing createUser exits 1 and says no user was made", broken.code === 1 && !/usuario creado/.test(broken.out), `exit=${broken.code} out=${broken.out.trim().slice(0, 120)}`);
+    } finally {
+      stub.close();
+    }
   } finally {
     for (const email of all) await forget(email);
     await closeRun(sql);

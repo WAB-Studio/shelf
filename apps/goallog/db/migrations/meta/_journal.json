@@ -183,6 +183,20 @@
       "when": 1792288002770,
       "tag": "0026_sign_in_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792354198436,
+      "tag": "0027_padre_propio",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792356812509,
+      "tag": "0028_gracia_oauth",
+      "breakpoints": true
     }
   ]
 }

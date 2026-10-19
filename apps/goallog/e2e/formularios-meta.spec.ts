@@ -68,14 +68,14 @@ for (const viewport of [
         expect(await gapBelow(name, page.getByText("Escribe un nombre.", { exact: true }))).toBeLessThanOrEqual(8);
 
         await name.fill("Compromiso formulario");
-        await page.getByRole("button", { name: "días sueltos", exact: true }).click();
+        await page.getByRole("radio", { name: "días sueltos", exact: true }).click();
         await page.getByRole("button", { name: "Añadirlo" }).click();
         const days = page.getByText("Elige al menos un día.");
         await expect(days).toBeVisible();
-        const lastDay = page.getByRole("button", { name: "D", exact: true }).last();
+        const lastDay = page.getByRole("button", { name: "domingo", exact: true }).last();
         expect(await gapBelow(lastDay, days)).toBeLessThanOrEqual(16);
 
-        await page.getByRole("button", { name: "todos los días", exact: true }).click();
+        await page.getByRole("radio", { name: "todos los días", exact: true }).click();
         await page.getByRole("button", { name: "un número", exact: true }).click();
         const quantity = page.getByLabel("cantidad", { exact: true });
         await quantity.fill("999999999999");

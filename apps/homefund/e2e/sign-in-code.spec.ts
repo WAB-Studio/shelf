@@ -398,11 +398,11 @@ test.describe("the code step", () => {
     }
   });
 
-  test("done · an address pending as a member lands on the welcome as that member, not as a new one", async ({
+  test("done · an address pending as a member lands on the home page and joins nothing", async ({
     browser,
     baseURL,
   }) => {
-    // Kills: dropping `claimInviteForUser` from `landSession`.
+    // Kills: `landSession` claiming the pending invitation (RF-154: only accepting joins).
     const email = newAddress();
     await listAddress(email);
     claimedKeys.push(addressKey(email, SALT));
@@ -424,13 +424,21 @@ test.describe("the code step", () => {
 
       await fieldOf(page).pressSequentially(await mailedCode(email));
       await enterOf(page).click();
-      await expect(page).toHaveURL(/\/es\/bienvenida$/);
+      await expect(page).toHaveURL(/\/es$/);
 
-      const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null }[]>`
-        select id, name, user_id from group_members where id = ${pendingId}`;
-      expect(member).toEqual({ id: pendingId, name: `Invitado C6 ${stamp}`, user_id: await userIdOf(email) });
+      const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null; invite_state: string; invite_email: string | null }[]>`
+        select id, name, user_id, invite_state, invite_email from group_members where id = ${pendingId}`;
+      expect(member).toEqual({
+        id: pendingId,
+        name: `Invitado C6 ${stamp}`,
+        user_id: null,
+        invite_state: "pending",
+        invite_email: email,
+      });
       const [after] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from group_members where group_id = ${groupId}`;
       expect(after.n).toBe(before.n);
+      const [memberships] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from group_members where user_id = ${await userIdOf(email)}`;
+      expect(memberships.n).toBe(0);
     } finally {
       await context.close();
       await clearGroup();

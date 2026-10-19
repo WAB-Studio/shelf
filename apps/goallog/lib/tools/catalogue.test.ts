@@ -161,3 +161,98 @@ test("set_rhythm takes no null and no text: the AI never removes a rhythm (RP-11
   }
   assert.equal(spec.input.safeParse({ goal_id: "g1", amount: 40 }).success, true);
 });
+
+// M19 · a tool refuses a key it does not declare, and each write carries the annotations its effect deserves.
+
+const UUID = "7f1c2b3a-4d5e-4f60-8a9b-0c1d2e3f4a5b";
+const VALID: Record<string, Record<string, unknown>> = {
+  list_goals: {},
+  get_goal: { goal_id: UUID },
+  get_month: { goal_id: UUID, month: "2027-01" },
+  get_today: {},
+  get_report: {},
+  list_loose_one_offs: {},
+  declare_fact: {},
+  complete_task: { one_off_id: "t" },
+  create_task: { name: "x" },
+  set_task_note: { one_off_id: "t", note: "n" },
+  schedule_task: { one_off_id: "t", day: "2027-01-02" },
+  set_month_amount: { goal_id: "g", month: "2027-01", amount: 1 },
+  rename_goal: { goal_id: "g", name: "n" },
+  add_phase: { goal_id: "g", aim: "a", starts_on: "2027-01-01", ends_on: "2027-01-31" },
+  add_commitment: { name: "n", cadence_kind: "daily", satisfaction: "tap" },
+  move_horizon: { goal_id: "g", horizon: null },
+  fix_task: { one_off_id: "t", month: "2027-01" },
+  unfix_task: { one_off_id: "t" },
+  create_goal: { name: "n" },
+  move_goal: { goal_id: "g", parent_id: null },
+  set_goal_note: { goal_id: "g", note: "n" },
+  retire_commitment: { commitment_id: "c" },
+  set_rhythm: { goal_id: "g", amount: 1 },
+  set_measure: { goal_id: "g", name: "n", unit: "u" },
+};
+
+test("every tool takes its own valid input and refuses the same input with a key it does not declare", async () => {
+  const { readTools, writeTools } = await catalogue();
+  assert.equal(Object.keys(VALID).length, 24);
+  for (const tool of [...readTools, ...writeTools]) {
+    const base = VALID[tool.name];
+    assert.equal(tool.input.safeParse(base).success, true, `${tool.name} refuses its own valid input`);
+    const extra = tool.input.safeParse({ ...base, goalId: UUID });
+    assert.equal(extra.success, false, `${tool.name} accepted an undeclared key`);
+    const issue = extra.error!.issues[0] as { code: string; keys?: string[] };
+    assert.equal(issue.code, "unrecognized_keys", tool.name);
+    assert.deepEqual(issue.keys, ["goalId"], `${tool.name} does not name the key`);
+  }
+});
+
+test("create_task with goalId in camelCase is refused, not stripped into a loose task", async () => {
+  const { writeTool } = await catalogue();
+  const spec = writeTool("create_task")!;
+  const parsed = spec.input.safeParse({ name: "x", goalId: UUID });
+  assert.equal(parsed.success, false);
+  assert.match(parsed.error!.issues[0].message, /Unrecognized key/);
+  assert.match(parsed.error!.issues[0].message, /goalId/);
+});
+
+test("a read with an extra key (get_goal with include) is refused", async () => {
+  const { readTools } = await catalogue();
+  const spec = readTools.find((tool) => tool.name === "get_goal")!;
+  assert.equal(spec.input.safeParse({ goal_id: UUID, include: [] }).success, false);
+});
+
+test("the JSON Schema each tool offers still says additionalProperties false", async () => {
+  const { readTools, writeTools } = await catalogue();
+  for (const tool of [...readTools, ...writeTools]) {
+    // The conversion the MCP SDK makes for tools/list.
+    const standard = tool.input["~standard"] as unknown as {
+      jsonSchema: { input(options: { target: string }): { additionalProperties?: unknown } };
+    };
+    const schema = standard.jsonSchema.input({ target: "draft-2020-12" });
+    assert.equal(schema.additionalProperties, false, tool.name);
+  }
+});
+
+const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true };
+const IDEMPOTENT = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
+const CREATES = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+
+const ANNOTATIONS: [string[], Record<string, boolean>][] = [
+  [["list_goals", "get_goal", "get_month", "get_today", "get_report", "list_loose_one_offs"], READ_ONLY],
+  [["set_goal_note", "set_task_note", "set_measure", "retire_commitment", "move_horizon", "set_rhythm"], DESTRUCTIVE],
+  [
+    ["rename_goal", "schedule_task", "set_month_amount", "fix_task", "unfix_task", "complete_task", "declare_fact", "move_goal"],
+    IDEMPOTENT,
+  ],
+  [["create_task", "create_goal", "add_phase", "add_commitment"], CREATES],
+];
+
+test("each tool carries the annotations its effect deserves, and the four groups cover all 24", async () => {
+  const { readTools, writeTools } = await catalogue();
+  const byName = new Map([...readTools, ...writeTools].map((tool) => [tool.name as string, tool as { annotations?: unknown }]));
+  assert.equal(ANNOTATIONS.flatMap(([names]) => names).length, 24);
+  for (const [names, expected] of ANNOTATIONS) {
+    for (const name of names) assert.deepEqual(byName.get(name)?.annotations, expected, name);
+  }
+});

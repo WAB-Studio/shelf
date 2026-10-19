@@ -79,3 +79,15 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-18	cierre-d17	mutator	5	5	0	43514
 2026-10-18	cierre-d17	critic	2	2	0	61746
 2026-10-18	cierre-d17	ci	0	0	0	
+2026-10-18	oleada-1	validator	2	2	2	74097
+2026-10-18	oleada-1	mutator	10	10	0	52545
+2026-10-18	respuestas-18	validator	2	1	2	57197
+2026-10-18	respuestas-18+oleada-1	critic	11	11	0	138056
+2026-10-18	6 trenes	review				
+2026-10-18	oleada-2	validator	7	7	5	163681
+2026-10-18	oleada-2	mutator	24	24	0	114149
+2026-10-18	oleada-2	critic	17	17	0	204050
+2026-10-18	oleada-2	mutator	26	26	8	101694
+2026-10-18	oleada-2	mutator	34	34	0	118953
+2026-10-18	oleada-2	ci	4	4	4	
+2026-10-18	oleada-2	validator	0	0	0	79152

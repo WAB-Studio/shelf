@@ -24,3 +24,9 @@
 .quiet.quiet {
   color: var(--rl-muted-quiet);
 }
+
+/* `heavy`: the outline variant's rule at 1.5px in the accent, over Radix's
+   1px inset shadow. Doubled for the same reason as `.tap`. */
+.heavy.heavy {
+  box-shadow: inset 0 0 0 1.5px var(--accent-9);
+}

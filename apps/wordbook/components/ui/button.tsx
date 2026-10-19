@@ -17,10 +17,17 @@ type BlockProp = {
   // one place that asks for it, so it is a prop here rather than a style
   // reached from outside.
   block?: boolean;
+  // Thickens an outline variant's rule to 1.5px; `Pedirlo` under «Copia» asks.
+  heavy?: boolean;
 };
 
 function withTap(className: string | undefined): string {
   return className ? `${styles.tap} ${className}` : styles.tap;
+}
+
+function withHeavy(heavy: boolean | undefined, className: string | undefined): string | undefined {
+  if (!heavy) return className;
+  return className ? `${styles.heavy} ${className}` : styles.heavy;
 }
 
 function withBlock(block: boolean | undefined, className: string | undefined): string | undefined {
@@ -29,8 +36,8 @@ function withBlock(block: boolean | undefined, className: string | undefined): s
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps & BlockProp>(
-  function Button({ block, className, ...props }, ref) {
-    return <ThemesButton ref={ref} {...props} className={withBlock(block, withTap(className))} />;
+  function Button({ block, heavy, className, ...props }, ref) {
+    return <ThemesButton ref={ref} {...props} className={withHeavy(heavy, withBlock(block, withTap(className)))} />;
   },
 );
 

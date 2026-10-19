@@ -66,6 +66,17 @@
     "cashModePerMember": "One cash account per person",
     "save": "Save",
     "saved": "Settings saved.",
+    "leaveTitle": "Leave the fund",
+    "leaveBody": "What you wrote in «{fund}» stays with the fund. Your personal accounts become yours alone again.",
+    "leaveAsk": "Leave «{fund}»?",
+    "leaveStays": "What you wrote in the fund stays with the fund: its accounts, its movements and what you noted in them.",
+    "leaveGoes": "Your personal accounts become yours alone again: the members of «{fund}» stop seeing them.",
+    "leaving": "Leaving…",
+    "leaveRefusedTitle": "You cannot leave yet",
+    "leaveRefusedBody": "You are the leader of «{fund}». Before leaving, hand the leadership to another member from «Members».",
+    "leaveUnderstood": "Got it",
+    "leaveDone": "You left «{fund}».",
+    "leaveDoneBody": "Your accounts stay with you.",
     "errors": {
       "cashModeInvalid": "Choose where cash sits.",
       "currencyInvalid": "Choose a valid currency."
@@ -106,6 +117,12 @@
     }
   },
   "dashboard": {
+    "dueTitle": "To pay",
+    "dueSee": "See payments",
+    "dueSeeAll": "See all {count}",
+    "dueSoon": "Due {date}",
+    "dueLate": "Was due {date}",
+    "dueNoName": "Unnamed payment",
     "emptyTitle": "No movements yet",
     "emptyDescription": "This is where the fund's balances and movements will appear.",
     "createAccount": "Create account",
@@ -220,6 +237,20 @@
     }
   },
   "members": {
+    "invitationEyebrow": "Invitation",
+    "invitationTitle": "{inviter} invited you to their fund “{fund}”",
+    "invitationIfAccept": "If you accept, the members of “{fund}” will see your personal accounts and movements, and you will see theirs and the fund’s.",
+    "invitationIfDecline": "If you decline, you keep your accounts just for you. You can join later if {inviter} invites you again.",
+    "invitationAccept": "Accept",
+    "invitationAccepting": "Accepting…",
+    "invitationDecline": "Decline",
+    "invitationAccepted": "You are now part of “{fund}”.",
+    "invitationDeclined": "You declined {inviter}’s invitation.",
+    "invitationGoneTitle": "This invitation is no longer valid",
+    "invitationGoneBody": "{inviter} withdrew it or it has passed. If you want to join “{fund}”, ask them to invite you again.",
+    "invitationOtherTitle": "You are already in the fund “{other}”",
+    "invitationOtherBody": "You can be in one fund only. To join “{fund}”, leave “{other}” first from “Group”.",
+    "invitationGoAccounts": "Go to my accounts",
     "title": "Members",
     "add": "Add member",
     "addTitle": "Add member",
@@ -453,6 +484,8 @@
     "quickPlaceholder": "Jot down an expense…",
     "quickInterpreted": "Interpreted · everything stays editable before saving",
     "quickUnrecognized": "I couldn't read the amount or the category · complete them",
+    "quickAskQuestion": "How much is “{token}”?",
+    "quickAskHint": "Pick how much it is, or type the amount.",
     "quickSave": "Save",
     "quickTypeLink": "Income or transfer?",
     "formTitle": "New movement",
@@ -776,7 +809,7 @@
     "categoryLabel": "Category",
     "categoryNone": "No category",
     "reminder": "Reminder",
-    "reminderHint": "These are reminders: they warn you, and you record the expense when you pay it.",
+    "reminderHint": "These are reminders: they appear in this list, and you record the expense when you pay it.",
     "noConcept": "No concept",
     "settle": "Record payment",
     "settleTitle": "Record the payment",
@@ -794,7 +827,7 @@
     "created": "Payment created.",
     "updated": "Payment updated.",
     "emptyTitle": "No planned payments yet",
-    "emptyDescription": "Create the first one so it warns you before it falls due.",
+    "emptyDescription": "Create the first one to have it in view before it falls due.",
     "tableDue": "Due",
     "tableConcept": "Concept",
     "tableRemind": "Reminds",
@@ -821,6 +854,7 @@
   },
   "recurringRules": {
     "title": "Recurring",
+    "pausedFailed": "Paused: the transaction could not be generated. Check the rule and resume it.",
     "add": "New rule",
     "addTitle": "New rule",
     "editTitle": "Edit rule",
@@ -885,6 +919,7 @@
     "resumeSwitchLabel": "Resume {name}",
     "rowViewGenerated": "View generated movements",
     "errors": {
+      "nextRunOnTooEarly": "The next run can't be more than 12 months before today.",
       "amountRequired": "Enter an amount.",
       "amountInvalid": "Enter a valid amount.",
       "amountTooLarge": "The amount is too high.",
@@ -902,7 +937,8 @@
       "exactlyOneAccount": "Choose a single account: a source for an expense or a destination for income.",
       "ruleInvalid": "That rule is not valid.",
       "transactionInvalid": "That movement is not valid.",
-      "scopeViolation": "The account or category does not belong to the same scope."
+      "scopeViolation": "The account or category does not belong to the same scope.",
+      "ended": "This rule has already ended. Change its end date to resume it."
     }
   },
   "debts": {
@@ -974,6 +1010,8 @@
       "pending": "Pending billing",
       "spent": "Spent",
       "estimate": "Estimated",
+      "confirm": "Confirm amount",
+      "billedHint": "What the bank charged in pesos.",
       "billedLabel": "Billed amount",
       "rate": "Rate",
       "save": "Save amount",
@@ -982,6 +1020,8 @@
       "replacedEstimate": "Replaces the estimate."
     },
     "errors": {
+      "beforeReconciliation": "You already reconciled this account after that purchase: confirm it from the reconciliation.",
+      "termsNotSaved": "The debt was created, but its terms were not saved. Save them again.",
       "accountInvalid": "Choose a valid account.",
       "kindInvalid": "Choose a valid debt type.",
       "rateRequired": "Enter the rate.",
@@ -1024,7 +1064,7 @@
     "amountLabel": "Amount",
     "dateLabel": "Date",
     "paymentSave": "Record payment",
-    "paymentPaidLines": "{count, plural, =1 {You paid # installment.} other {You paid # installments.}}",
+    "paymentPaidLines": "{count, plural, =0 {The payment completed no installment.} =1 {You paid # installment.} other {You paid # installments.}}",
     "paymentRemainder": "{amount} left over: not enough for the next installment.",
     "tableSeq": "Installment",
     "tableDueDate": "Due",
@@ -1072,6 +1112,7 @@
     "statementFees": "Fees",
     "statementGap": "Gap",
     "statementGapMatches": "Matches",
+    "paymentSaved": "Payment recorded.",
     "errors": {
       "accountInvalid": "Choose a valid account.",
       "amountInvalid": "Enter a valid amount.",
@@ -1126,6 +1167,11 @@
     "system": "System"
   },
   "errors": {
+    "stale": "This changed while you were editing it. Open it again.",
+    "resendChanged": "We already saved this movement with another amount; open it to correct it.",
+    "linkTimeout": "We could not check the link. Open it again from the email.",
+    "signOutFailed": "We could not sign you out. Please try again.",
+    "signOutPartial": "You signed out here, but we couldn't sign you out on your other devices.",
     "notFoundTitle": "This page does not exist",
     "notFoundDescription": "The link may be misspelled, or the page may have moved.",
     "unexpected": "Something went wrong. Please try again.",
@@ -1147,6 +1193,9 @@
     "categoryKindMismatch": "The subcategory must have the same kind as its parent category.",
     "notLeader": "Only the fund's owner can make this change.",
     "memberHasHistory": "This person has movements. Archive them instead.",
+    "invitationGone": "This invitation is no longer valid.",
+    "alreadyInFund": "You are already in another fund. To join this one, leave it first from «Group».",
+    "leaderStays": "You cannot leave yet. Before leaving, hand the leadership to another member from «Members».",
     "accountHasMovements": "This account has movements. Archive it instead.",
     "accountHasHistory": "You cannot hand over an account that has movements. Archive it instead.",
     "accountRefTaken": "The fund already has an account with the same import reference. Archive this one instead.",

@@ -77,11 +77,14 @@ export const oneOffs = goalsSchema.table(
     // A sub-task hangs only off an own top-level one-off in the plan
     // of the same goal, with no day, no estimate and no fact. Policies cannot
     // say row-to-row rules any other way; `p`'s alias keeps `${t.goalId}`
-    // pointing at the new row, not at the parent.
+    // pointing at the new row, not at the parent. The goal, when named, is one
+    // the caller sees under RLS: never someone else's, never one that exists nowhere.
     pgPolicy("one_offs_insert_self", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`${authUid} = ${t.userId} and (${t.parentId} is null or exists (
+      withCheck: sql`${authUid} = ${t.userId} and (${t.goalId} is null or exists (
+        select 1 from "goals"."goals" g where g.id = ${t.goalId}
+      )) and (${t.parentId} is null or exists (
         select 1 from "goals"."one_offs" p
         where p.id = ${t.parentId} and p.parent_id is null and p.in_plan
           and p.day is null and p.estimate is null and p.goal_id = ${t.goalId}

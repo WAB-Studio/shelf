@@ -32,10 +32,14 @@ export const phases = goalsSchema.table(
       to: authenticatedRole,
       using: sql`${authUid} = ${t.userId}`,
     }),
+    // The FK alone would take another person's goal, and answer 23503 for one that exists nowhere; under RLS `g`
+    // sees only the caller's, so both refuse with the policy's 42501.
     pgPolicy("phases_insert_self", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`${authUid} = ${t.userId}`,
+      withCheck: sql`${authUid} = ${t.userId} and exists (
+        select 1 from "goals"."goals" g where g.id = ${t.goalId}
+      )`,
     }),
     // The grant narrows this to `aim` and the span (RP-127); `using` alone would let a caller hand their phase to
     // someone else's id.

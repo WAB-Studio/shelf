@@ -66,7 +66,7 @@ test("a «N veces a la semana» commitment created through CompromisoNuevo lands
   try {
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
-    await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_week, exact: true }).click();
+    await page.getByRole("radio", { name: plan.commitmentForm.cadence.times_per_week, exact: true }).click();
     await page.getByLabel("veces por semana").fill("3");
     await page.getByRole("button", { name: "Añadirlo" }).click();
     await page.waitForURL(`**/metas/${goalId}`);
@@ -102,7 +102,7 @@ test("a «cada N días» commitment created through CompromisoNuevo lands in goa
   try {
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
-    await page.getByRole("button", { name: plan.commitmentForm.cadence.every_n_days, exact: true }).click();
+    await page.getByRole("radio", { name: plan.commitmentForm.cadence.every_n_days, exact: true }).click();
     await page.getByLabel("cada cuántos días").fill("4");
     await page.getByRole("button", { name: "Añadirlo" }).click();
     await page.waitForURL(`**/metas/${goalId}`);
@@ -139,8 +139,8 @@ test("«N al mes» is the fifth chip on CompromisoNuevo, and a commitment stored
     // Scoped to the "cada cuándo" section so a chip elsewhere on the form
     // is never counted by accident.
     const cadenceSection = page.locator("section", { hasText: "cada cuándo" });
-    await expect(cadenceSection.getByRole("button")).toHaveCount(5);
-    await expect(cadenceSection.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true })).toHaveCount(1);
+    await expect(cadenceSection.getByRole("radio")).toHaveCount(5);
+    await expect(cadenceSection.getByRole("radio", { name: plan.commitmentForm.cadence.times_per_month, exact: true })).toHaveCount(1);
 
     // Seeded directly: the read-back is this test's subject, not the form.
     await db`
@@ -170,7 +170,7 @@ test("«8» veces por semana is refused with the message naming 7 and writes no 
   try {
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
-    await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_week, exact: true }).click();
+    await page.getByRole("radio", { name: plan.commitmentForm.cadence.times_per_week, exact: true }).click();
     await page.getByLabel("veces por semana").fill("8");
     await page.getByRole("button", { name: "Añadirlo" }).click();
 

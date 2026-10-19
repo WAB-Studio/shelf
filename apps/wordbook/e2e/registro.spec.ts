@@ -579,11 +579,58 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
       expect(await computedColor(keep, "backgroundColor")).toBe(hexToRgb(palette[scheme].accent));
       expect(await computedColor(localAction)).toBe(hexToRgb(palette[scheme].muted));
       expect(await computedColor(accountAction)).toBe(hexToRgb(palette[scheme].muted));
+
+      // The captions under both options are the quietest role.
+      const quiet = { light: "#787263", dark: "#898271" } as const;
+      expect(await computedColor(page.getByText(messages.log.clear.localBody))).toBe(hexToRgb(quiet[scheme]));
+      expect(await computedColor(page.getByText(messages.log.clear.accountBody))).toBe(hexToRgb(quiet[scheme]));
     }
   } finally {
     await dropReaderIdentity(sql, reader.id);
     await closeRun(sql);
     await sql.end();
+  }
+});
+
+// WCAG 1.4.3 / 1.4.11 on the quietest ink and the search field's edge
+// (docs/wordbook/DESIGN.md "Tokens"): each hex is the nearest same-hue value
+// that clears 4.5:1 (text) or 3:1 (edge) on ground and on raised, in both modes.
+test("the «generated» mark reads at 4.5:1 and the search field's edge at 3:1, while a card's border stays #DED8C8", async ({
+  page,
+  stubWordText,
+}) => {
+  await deleteTranslator(page);
+  await stubWordText({
+    definition: "A round fruit.",
+    example: { en: "She ate an apple.", es: "Ella comió una manzana." },
+  });
+  const palette = {
+    light: { quiet: "#787263", edge: "#A08E60", border: "#DED8C8" },
+    dark: { quiet: "#898271", edge: "#6B6753", border: "#302E25" },
+  } as const;
+
+  const assetResponse = page.waitForResponse(
+    (response) => response.url().includes(manifest.asset.path) && response.ok(),
+  );
+  await page.goto("/");
+  await assetResponse;
+  await dictionaryReady(page);
+
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const searchBox = await searchFor(page, "apple");
+    const mark = page.getByText(messages.word.generatedMark, { exact: true }).first();
+    await expect(mark).toBeVisible();
+    expect(await computedColor(mark)).toBe(hexToRgb(palette[scheme].quiet));
+
+    const root = searchBox.locator("xpath=..");
+    const shadow = await root.evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(shadow).toContain(hexToRgb(palette[scheme].edge));
+
+    const separator = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--rl-border").trim().toUpperCase(),
+    );
+    expect(separator).toBe(palette[scheme].border);
   }
 });
 

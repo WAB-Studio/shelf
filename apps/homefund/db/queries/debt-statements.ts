@@ -1,6 +1,6 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { minimumPaymentSql } from "@/db/queries/debt-minimum";
 import { withUserDb } from "@/db/session";
@@ -106,9 +106,10 @@ export type PendingSettlement = {
 };
 
 /**
- * The card's purchases in another currency the issuer has not billed yet (RF-123):
+ * The purchases in another currency the issuer has not billed yet (RF-123):
  * a movement whose `currency` is not the account's settlement currency and whose
- * second amount is still an estimate. ONE round trip.
+ * second amount is still an estimate. ONE round trip. A liability and an asset
+ * both answer: a foreign purchase on a debit account is estimated too (RF-137).
  *
  * Each row is bounded to the statement period it falls in — the cut-off on or
  * after the purchase, none while the period is still open — and the list leads
@@ -118,9 +119,31 @@ export type PendingSettlement = {
 export async function listPendingSettlements(
   accountId: string,
 ): Promise<PendingSettlement[]> {
+  return readPendingSettlements(sql`a.id = ${accountId}`);
+}
+
+export type AccountPendingSettlement = PendingSettlement & { accountId: string };
+
+/**
+ * Every pending foreign estimate on the caller's live asset accounts, for the
+ * accounts screen: one statement for all of them, so the screen fans it out beside
+ * its roster instead of asking once per account. Scope is the policies', as above.
+ */
+export async function listPendingAssetSettlements(): Promise<
+  AccountPendingSettlement[]
+> {
+  return readPendingSettlements(
+    sql`a.kind = 'asset' and a.archived_at is null`,
+  );
+}
+
+async function readPendingSettlements(
+  accountFilter: SQL,
+): Promise<AccountPendingSettlement[]> {
   return withUserDb(async (tx) => {
     const rows = await tx.execute<{
       id: string;
+      account_id: string;
       occurred_at: string;
       description: string | null;
       currency: string;
@@ -129,6 +152,7 @@ export async function listPendingSettlements(
     }>(sql`
       select
         t.id,
+        a.id as account_id,
         t.occurred_at,
         t.description,
         t.currency,
@@ -142,8 +166,7 @@ export async function listPendingSettlements(
         from account_statements s
         where s.account_id = a.id and s.cut_off_date >= t.occurred_at
       ) p on true
-      where a.id = ${accountId}
-        and a.kind = 'liability'
+      where ${accountFilter}
         and t.currency <> a.settlement_currency
         and t.counter_is_estimate
       order by p.cut_off_date asc nulls last, t.occurred_at desc, t.id
@@ -151,6 +174,7 @@ export async function listPendingSettlements(
 
     return rows.map((row) => ({
       id: row.id,
+      accountId: row.account_id,
       occurredAt: row.occurred_at,
       description: row.description,
       currency: row.currency,
@@ -159,6 +183,11 @@ export async function listPendingSettlements(
       counterAmountCents: Number(row.counter_amount_cents),
     }));
   });
+}
+
+// Thrown inside the transaction so nothing commits; the action reads `reason`.
+export class BilledAmountRefused extends Error {
+  readonly reason = "beforeReconciliation";
 }
 
 export type RecordBilledAmountArgs = {
@@ -180,7 +209,10 @@ export type RecordBilledAmountArgs = {
  * liability or an asset: a foreign purchase on a debit account is estimated too), the
  * account must settle in the currency the amount was read in, and the row must
  * still carry an estimate. False when no row answered — refused by
- * `transactions_update_writable`, already billed, or gone.
+ * `transactions_update_writable`, already billed, or gone. An estimate dated on
+ * or before the account's latest reconciliation is refused by
+ * throwing `BilledAmountRefused` and writes nothing: the reconciliation counted it
+ * already (RF-137); the same statement carries that check.
  */
 export async function recordBilledAmount({
   transactionId,
@@ -189,19 +221,41 @@ export async function recordBilledAmount({
   billedCents,
 }: RecordBilledAmountArgs): Promise<boolean> {
   return withUserDb(async (tx) => {
-    const rows = await tx.execute<{ id: string }>(sql`
-      update transactions t
-      set counter_amount_cents = ${billedCents}, counter_is_estimate = false
-      from accounts a
-      where t.id = ${transactionId}
-        and a.id = ${accountId}
-        and (t.from_account_id = a.id or t.to_account_id = a.id)
-        and a.settlement_currency = ${currency}
-        and t.currency <> a.settlement_currency
-        and t.counter_is_estimate
-      returning t.id
+    // `blocked` and the update share the guard's own conditions, so a movement
+    // that is not this card's estimate answers `replaced = 0` and not a refusal.
+    const [row] = await tx.execute<{ replaced: string; blocked: boolean }>(sql`
+      with blocked as (
+        select exists (
+          select 1
+          from transactions t
+          join accounts a on a.id = ${accountId}
+          join account_reconciliations r on r.account_id = a.id
+          where t.id = ${transactionId}
+            and (t.from_account_id = a.id or t.to_account_id = a.id)
+            and a.settlement_currency = ${currency}
+            and t.currency <> a.settlement_currency
+            and t.counter_is_estimate
+            and r.reconciled_on >= t.occurred_at
+        ) as is_blocked
+      ),
+      updated as (
+        update transactions t
+        set counter_amount_cents = ${billedCents}, counter_is_estimate = false
+        from accounts a
+        where t.id = ${transactionId}
+          and a.id = ${accountId}
+          and (t.from_account_id = a.id or t.to_account_id = a.id)
+          and a.settlement_currency = ${currency}
+          and t.currency <> a.settlement_currency
+          and t.counter_is_estimate
+          and not (select is_blocked from blocked)
+        returning t.id
+      )
+      select (select count(*) from updated)::text as replaced,
+             (select is_blocked from blocked) as blocked
     `);
 
-    return rows.length > 0;
+    if (row?.blocked) throw new BilledAmountRefused("beforeReconciliation");
+    return Number(row?.replaced ?? 0) > 0;
   });
 }

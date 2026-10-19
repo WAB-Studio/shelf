@@ -33,6 +33,7 @@ let events: string[] = [];
 let failure: "status" | "throw" | null = null;
 let applyImpl: () => Promise<number> = async () => appliedCount;
 let mergeImpl: (rows: unknown[]) => Promise<number> = async (rows) => rows.length;
+const LOG_DELETED_EVENT = "test:log-deleted"; // stands in for the constant of `../log/delete`
 let wire = false; // when set, the reply is the raw object, without the optional fields
 
 const fetchStub = async (_url: unknown, init: { body: string }) => {
@@ -73,6 +74,7 @@ async function getDriver(): Promise<Driver> {
   });
   mock.module("../log/delete", {
     namedExports: {
+      LOG_DELETED_EVENT,
       readTombstoneQueue: async (readerId: string) => {
         queueReadsFor.push(readerId);
         return { pending: queue.filter((e) => e.readerId === readerId).map((e) => e.mark), since };
@@ -254,5 +256,35 @@ test("a server that answers without the mark fields still parses and ends cleanl
   responses = [{ accepted: 0, rows: [], cursor: null } as Round];
   const outcome = await (await getDriver()).syncNow();
   assert.deepEqual(outcome, { kind: "done", pushed: 0, pulled: 0 });
+  assert.equal(sent.length, 1);
+});
+
+test("a null mark cursor in the answer keeps the stored one", async () => {
+  since = "t0";
+  responses = [{ tombstoneCursor: null }];
+  await (await getDriver()).syncNow();
+  assert.deepEqual(settled.map((s) => s.cursor), ["t0"]);
+  assert.equal(since, "t0");
+});
+
+// Stands in for React's effect so the component's listener can be driven without a DOM.
+test("a delete after a failed round sends one request, not a second for the mark still queued", async () => {
+  const listeners: Record<string, () => void> = {};
+  Object.assign(globalThis.window, {
+    addEventListener: (type: string, fn: () => void) => void (listeners[type] = fn),
+    removeEventListener: () => undefined,
+  });
+  mock.module("react", {
+    namedExports: { useEffect: (effect: () => void) => void effect() },
+    defaultExport: {},
+  });
+  await getDriver();
+  const { SyncOnDelete } = await import("../../components/sync/sync-on-delete");
+  SyncOnDelete();
+  assert.ok(listeners[LOG_DELETED_EVENT], "the component listens for the delete event");
+  queue = [{ readerId: "R", mark: mark(1) }];
+  failure = "status";
+  listeners[LOG_DELETED_EVENT]();
+  await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(sent.length, 1);
 });

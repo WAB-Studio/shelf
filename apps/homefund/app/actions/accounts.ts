@@ -78,7 +78,7 @@ export const updateAccountAction = authActionClient
     const amountMinor = parseAmount(amount);
     if (amountMinor === null) throw new ActionError("errors.unexpected");
 
-    let updated: boolean;
+    let updated: Awaited<ReturnType<typeof updateAccount>>;
     try {
       updated = await updateAccount({ ...account, amountMinor });
     } catch (error) {
@@ -91,6 +91,7 @@ export const updateAccountAction = authActionClient
         throw new ActionError("accounts.errors.currencyLocked");
       throw error;
     }
+    if (updated === "stale") throw new ActionError("errors.stale");
     if (!updated) throw new ActionError("errors.notFound");
 
     refresh();

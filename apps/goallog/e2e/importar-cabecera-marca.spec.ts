@@ -19,7 +19,7 @@ const HORIZON = `${shift(0).year + 1}-${shift(0).month}-17`;
 
 const CUT_LINE = "Arréglala y vuelve a leer: las líneas de abajo no se pudieron leer.";
 const MEASURE_SENTENCE = "La medida va como «medida: nombre · unidad».";
-const FIRST_LINE_SENTENCE = "La primera línea va como «pulsar · plantilla 2».";
+const FIRST_LINE_SENTENCE = "La primera línea va como «goallog · plantilla 2».";
 
 const MONTH_BAD = `- ${M2} · 8 h`;
 const SERIES_BAD = "- Series · martes · 30 min";

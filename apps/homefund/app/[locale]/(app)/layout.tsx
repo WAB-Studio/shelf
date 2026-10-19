@@ -8,7 +8,6 @@ import { AppTabs } from "@/components/fund/app-tabs";
 import { QuickEntryProvider } from "@/components/transactions/quick-entry-provider";
 import { Box, Flex, Separator, Text } from "@/components/ui";
 import { getShellSummary } from "@/db/queries/app-shell";
-import { getUserGroup } from "@/db/queries/groups";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
@@ -51,14 +50,15 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
   // The proxy already redirected an anonymous visitor; this is what enforces it.
   // Quick-entry options are fetched here so every route opens the sheet or form
   // without a second round trip (RF-22).
-  const [user, group, options, summary, t, requestHeaders] = await Promise.all([
+  const [user, options, summary, t, requestHeaders] = await Promise.all([
     requireUser(),
-    getUserGroup(),
     getTransactionFormOptions(),
     getShellSummary(),
     getTranslations("common"),
     headers(),
   ]);
+
+  const group = summary.group;
 
   // RF-55: a personal-only caller reaches every other screen, and this refusal
   // rides the group already read above rather than a second query. The page keeps

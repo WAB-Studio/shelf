@@ -10,3 +10,10 @@
 .tap44.tap44 :global(.rt-TextFieldInput) {
   min-height: 44px;
 }
+
+/* WCAG 1.4.11: the search field's edge reaches 3:1 on its ground, which the
+   shared `--rl-border` (a hairline for cards) does not. Radix draws the edge
+   as this inset shadow; doubled to outrank its load order. */
+.edge.edge {
+  box-shadow: inset 0 0 0 var(--text-field-border-width, 1px) var(--rl-control-edge);
+}

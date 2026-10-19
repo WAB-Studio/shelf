@@ -124,11 +124,37 @@ export function runId(): string {
   return id;
 }
 
+// The columns GoTrue's own paths read: a null `instance_id`, `aud` or token
+// column makes the user invisible to it or a 500 on send and verify.
+function authUserRow(user: { id: string; email: string }, sql: Sql | postgres.TransactionSql) {
+  return sql`
+    insert into auth.users (
+      id, instance_id, aud, role, email, email_confirmed_at,
+      encrypted_password, confirmation_token, recovery_token,
+      email_change, email_change_token_current, email_change_token_new,
+      email_change_confirm_status, phone_change, phone_change_token,
+      reauthentication_token, raw_app_meta_data, raw_user_meta_data,
+      is_sso_user, is_anonymous, created_at, updated_at)
+    values (
+      ${user.id}, '00000000-0000-0000-0000-000000000000', 'authenticated',
+      'authenticated', ${user.email}, now(),
+      '', '', '',
+      '', '', '',
+      0, '', '',
+      '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+      false, false, now(), now())
+    returning id
+  `;
+}
+
 /**
- * The one statement that creates an identity AND registers it: chained CTEs
- * over `auth.users`, `app_users` and `harness.identities`, so a crash between
- * the auth row and the registry row can never happen — there is no gap for it
- * to land in. One round trip, down from the two `createUser` spends today.
+ * Creates an identity AND registers it in one statement: chained CTEs over
+ * `auth.users`, `app_users` and `harness.identities`, so a crash between the
+ * auth row and the registry row can never happen. The auth row carries the full
+ * column set GoTrue needs, so a magic-link send finds the user.
+ *
+ * A database with no `app_users` (GoalLog's) skips that step: the relation is
+ * looked up first, one cheap round trip, so no caller has to know which app it runs in.
  */
 export async function registerEphemeralIdentity(
   sql: Sql,
@@ -137,10 +163,24 @@ export async function registerEphemeralIdentity(
   assertSuiteDatabase();
   const run = runId();
 
+  const [{ present }] = await sql<{ present: boolean }[]>`
+    select to_regclass('app_users') is not null as present
+  `;
+
+  if (!present) {
+    await sql.begin(async (tx) => {
+      await authUserRow(user, tx);
+      await tx`
+        insert into harness.identities (user_id, run_id, email, disposition)
+        values (${user.id}, ${run}, ${user.email}, 'ephemeral')
+      `;
+    });
+    return;
+  }
+
   await sql`
     with new_auth_user as (
-      insert into auth.users (id, email) values (${user.id}, ${user.email})
-      returning id
+      ${authUserRow(user, sql)}
     ),
     new_app_user as (
       insert into app_users (id)

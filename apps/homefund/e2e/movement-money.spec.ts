@@ -27,6 +27,9 @@ const transactions = messages.transactions;
 const common = messages.common;
 const cash = messages.cash;
 
+// The contract's text (RF-158), written here so a missing message key fails the test, not the compile.
+const RESEND_CHANGED = "Ya guardamos este movimiento con otro monto; ábrelo para corregirlo.";
+
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
 
@@ -154,8 +157,8 @@ function isDesktop(testInfo: TestInfo): boolean {
 
 // The dashboard's two ways into the full form: the laptop draws a button of its
 // own beside the quick-entry row, the phone reaches it through the quick sheet.
-async function openFullForm(page: Page, testInfo: TestInfo): Promise<Locator> {
-  await page.goto("/es");
+async function openFullForm(page: Page, testInfo: TestInfo, reload = true): Promise<Locator> {
+  if (reload) await page.goto("/es");
   if (isDesktop(testInfo)) {
     await page.getByRole("button", { name: transactions.quickTypeLink, exact: true }).click();
   } else {
@@ -561,5 +564,210 @@ test.describe("at 360 px", () => {
     await expect(confirm).toBeVisible();
 
     await expectFits(page, confirm);
+  });
+});
+
+// A save whose answer never reached the browser (RNF-10): the server ran the
+// first POST, the browser saw it fail, and the person presses save again.
+test.describe("a resent save and a stale edit", () => {
+  test.skip(({ viewport }) => viewport?.width === 360, "the database facts are read once, on the laptop");
+
+  test("a save whose answer was lost, saved again, leaves exactly one movement", async ({ page }, testInfo) => {
+    // Kills: a new request ref minted on every click, so the resend writes a second row.
+    let dropped = 0;
+    await page.route(
+      (url) => url.pathname.startsWith("/es"),
+      async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
+          dropped += 1;
+          await route.fetch();
+          await route.abort("failed");
+          return;
+        }
+        await route.continue();
+      },
+    );
+
+    const dialog = await openFullForm(page, testInfo);
+    await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
+    await field(dialog, "movement-amount").fill("4000");
+    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+
+    await saveButton(dialog).click();
+    await expect.poll(() => dropped).toBe(1);
+    // The server ran it; the person never heard.
+    await expect.poll(async () => (await movements()).length).toBe(1);
+    await expect(dialog).toBeVisible();
+    await expect(saveButton(dialog)).toBeEnabled();
+
+    await saveButton(dialog).click();
+    await expect(dialog).toBeHidden();
+
+    const rows = await movements();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amount_cents).toBe("400000");
+    expect(await splitsOf(rows[0].id)).toHaveLength(1);
+  });
+
+  test("a save whose answer was lost, saved again with another amount, shows the refusal and keeps the first amount", async ({ page }, testInfo) => {
+    // Kills: a resend answered ok whatever the amount, so the form closes over a figure never saved.
+    let dropped = 0;
+    await page.route(
+      (url) => url.pathname.startsWith("/es"),
+      async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
+          dropped += 1;
+          await route.fetch();
+          await route.abort("failed");
+          return;
+        }
+        await route.continue();
+      },
+    );
+
+    const dialog = await openFullForm(page, testInfo);
+    await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
+    await field(dialog, "movement-amount").fill("4000");
+    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+
+    await saveButton(dialog).click();
+    await expect.poll(() => dropped).toBe(1);
+    await expect.poll(async () => (await movements()).length).toBe(1);
+    await expect(saveButton(dialog)).toBeEnabled();
+
+    await field(dialog, "movement-amount").fill("9000");
+    await saveButton(dialog).click();
+
+    await expect(dialog.getByText(RESEND_CHANGED, { exact: true })).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await expect(field(dialog, "movement-amount")).toHaveValue("9000");
+    const rows = await movements();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amount_cents).toBe("400000");
+  });
+
+  test("two separate openings, saved once each, leave two movements", async ({ page }, testInfo) => {
+    // Kills: a request ref that outlives its opening, so the second save answers the first movement.
+    // The page is not reloaded between them: a ref held by the module would survive.
+    await page.goto("/es");
+    for (const amount of ["4000", "5000"]) {
+      const dialog = await openFullForm(page, testInfo, false);
+      await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
+      await field(dialog, "movement-amount").fill(amount);
+      await choose(page, splitCategory(dialog, 1), scope.categoryName);
+      await saveButton(dialog).click();
+      await expect(dialog).toBeHidden();
+    }
+
+    const rows = await movements();
+    expect(rows.map((row) => row.amount_cents).sort()).toEqual(["400000", "500000"]);
+  });
+
+  test("a stale edit keeps the form open with what was typed, shows the refusal and writes nothing", async ({
+    page,
+    context,
+  }) => {
+    // Kills: the stale answer ignored, so the form closes over the other tab's change.
+    const id = await seedExpense({ amountCents: 1_500_000, description: `E9 vencido ${stamp}` });
+    const other = await context.newPage();
+
+    const openEdit = async (tab: Page) => {
+      await tab.goto(`/es/movements/${id}`);
+      await tab.getByRole("button", { name: transactions.edit, exact: true }).click();
+      return tab.getByRole("dialog");
+    };
+    const dialogA = await openEdit(page);
+    const dialogB = await openEdit(other);
+
+    await field(dialogA, "movement-amount").fill("27000");
+
+    await field(dialogB, "movement-amount").fill("31000");
+    await saveButton(dialogB).click();
+    await expect(dialogB).toBeHidden();
+    expect((await movements())[0].amount_cents).toBe("3100000");
+
+    await saveButton(dialogA).click();
+
+    await expect(dialogA.getByText(messages.errors.stale, { exact: true })).toBeVisible();
+    await expect(dialogA).toBeVisible();
+    await expect(field(dialogA, "movement-amount")).toHaveValue("27000");
+    await expect(saveButton(dialogA)).toBeEnabled();
+    // The other tab's figure stands.
+    const rows = await movements();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amount_cents).toBe("3100000");
+    await other.close();
+  });
+
+  test("an edit nobody else touched saves, even after the form was open for a while", async ({ page }) => {
+    // Kills: an expected stamp that never matches, so every ordinary edit is refused.
+    const id = await seedExpense({ amountCents: 1_500_000, description: `E9 vigente ${stamp}` });
+    await page.goto(`/es/movements/${id}`);
+    await page.getByRole("button", { name: transactions.edit, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await field(dialog, "movement-amount").fill("18000");
+    await saveButton(dialog).click();
+    await expect(dialog).toBeHidden();
+    expect((await movements())[0].amount_cents).toBe("1800000");
+  });
+});
+
+// A withdrawal whose answer never reached the browser (RNF-10, Q24): the server moved
+// the money, the browser saw the request fail, and the person presses save again.
+test.describe("a cash withdrawal sent again", () => {
+  test.skip(({ viewport }) => viewport?.width === 360, "the panel is the laptop's; the phone's dialog shares the action");
+
+  const save = (page: Page) =>
+    page.getByRole("button", { name: cash.withdrawSave, exact: true }).filter({ visible: true });
+
+  test("a withdrawal whose answer was lost, saved again, moves the money once", async ({ page }) => {
+    // Kills: a new request ref per click, or none sent, so the resend is a second transfer.
+    let dropped = 0;
+    await page.route(
+      (url) => url.pathname.startsWith("/es"),
+      async (route) => {
+        const request = route.request();
+        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
+          dropped += 1;
+          await route.fetch();
+          await route.abort("failed");
+          return;
+        }
+        await route.continue();
+      },
+    );
+    const bankBefore = await balanceOf(ids.source);
+
+    await page.goto("/es");
+    await choose(page, page.locator("#withdraw-panel-source"), SOURCE_NAME);
+    await page.locator("#withdraw-panel-amount").fill("100000");
+    await save(page).click();
+    await expect.poll(() => dropped).toBe(1);
+    await expect.poll(async () => (await movements()).length).toBe(1);
+    await expect(save(page)).toBeEnabled();
+
+    await save(page).click();
+    await expect(page.getByText(cash.withdrawSaved, { exact: true })).toBeVisible();
+
+    const rows = await movements();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amount_cents).toBe("10000000");
+    expect(await balanceOf(ids.source)).toBe(bankBefore - 10_000_000);
+  });
+
+  test("two withdrawals one after the other, without reloading, are two transfers", async ({ page }) => {
+    // Kills: a request ref that outlives its attempt, so the second withdrawal answers the first.
+    await page.goto("/es");
+    await choose(page, page.locator("#withdraw-panel-source"), SOURCE_NAME);
+    for (const amount of ["100000", "50000"]) {
+      await page.locator("#withdraw-panel-amount").fill(amount);
+      await save(page).click();
+      await expect(page.locator("#withdraw-panel-amount")).toHaveValue("");
+    }
+
+    const rows = await movements();
+    expect(rows.map((row) => row.amount_cents).sort()).toEqual(["10000000", "5000000"]);
   });
 });

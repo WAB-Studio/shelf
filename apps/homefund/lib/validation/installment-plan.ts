@@ -137,6 +137,9 @@ export const recordDebtPaymentSchema = z.object({
   toAccountId: z.uuid({ error: "installments.errors.toAccountInvalid" }),
   amount: anyCurrencyAmountSchema(paymentKeys),
   occurredAt: occurredAtSchema,
+  // Minted by the form when it opens: a submit sent again after a lost answer carries the same
+  // one, and the server answers with the payment the first copy booked.
+  requestRef: z.uuid({ error: "errors.unexpected" }).optional(),
 });
 
 export type RecordDebtPaymentInput = z.infer<typeof recordDebtPaymentSchema>;

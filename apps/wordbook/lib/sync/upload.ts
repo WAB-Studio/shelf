@@ -78,11 +78,14 @@ export type Upload =
   | { status: "retired" }
   | { status: "quota" };
 
-// Seals `reading.devices` (RL-25) and inserts the device's own batch in ONE
-// statement, one round trip. `state` reads whether the device is retired and
-// how many rows this reader sent today (UTC, by `lookups_user_id_received_at_idx`),
-// the count under a per-reader lock (`sync_rows_today`, migration 0004) so two
-// uploads at once cannot both pass the cap;
+// Seals `reading.devices` (RL-25) and inserts the device's own batch in one
+// statement, after a statement of its own that asks `reading.sync_gate`
+// (migration 0009): whether the device is retired and how many rows this
+// reader sent today, both read after the per-reader `:sync-quota` lock, which
+// `retireDevice` and «vaciar» take too. Read inside the write's own CTE, the
+// flag would come from the snapshot taken before the lock was granted, so a
+// retirement committed while this upload queued would go unseen. The lock
+// holds to the transaction's end, so two uploads cannot both pass the cap;
 // the seal and the insert are data-modifying CTEs, so Postgres runs both
 // whether or not anything reads them (`docs/TRAPS.md:463-486`) and both sit
 // behind the same guard: a retired device, or a day past the cap, writes and
@@ -99,7 +102,7 @@ export type Upload =
 // would otherwise come back with no mark. Only a row that existed leaves a
 // mark: an identity never uploaded has nothing to refuse. The final select
 // hands down the marks after `tombstonesSince` (RL-70), in the tuple order the
-// cursor compares, so a round stays settle + 2 round trips.
+// cursor compares, so a round stays settle + the gate + 2 round trips.
 //
 // `cap` is a parameter so `scripts/check-sync.ts` drives this statement with a
 // cap of a few rows instead of twenty thousand.
@@ -119,6 +122,12 @@ export async function writeUpload(
     ? sql`and (m.deleted_at, m.device_id, m.local_id) > (${tombstonesSince.receivedAt}::text::timestamptz, ${tombstonesSince.deviceId}::uuid, ${tombstonesSince.localId}::integer)`
     : sql``;
 
+  // `today` is a bigint, which the driver hands back as text.
+  const [fresh] = await tx.execute<{ today: string; retired: boolean }>(
+    sql`select today, retired from reading.sync_gate(${userId}::uuid, ${deviceId}::uuid)`,
+  );
+  const allowed = !fresh.retired && Number(fresh.today) + rows.length <= cap;
+
   const [state] = await tx.execute<{
     retired: boolean;
     allowed: boolean;
@@ -126,16 +135,8 @@ export async function writeUpload(
     buried: number;
     tombstones: DownloadedTombstone[];
   }>(sql`
-    with state as (
-      select
-        exists (
-          select 1 from reading.devices
-          where user_id = ${userId} and device_id = ${deviceId} and retired_at is not null
-        ) as retired,
-        reading.sync_rows_today(${userId}::uuid) as today
-    ),
-    gate as (
-      select retired, (not retired and today + ${rows.length} <= ${cap}) as allowed from state
+    with gate as (
+      select ${fresh.retired}::boolean as retired, ${allowed}::boolean as allowed
     ),
     sealed as (
       insert into reading.devices (user_id, device_id, label)

@@ -123,7 +123,7 @@ export const updateRecurringRuleAction = authActionClient
   .action(async ({ parsedInput: { amount, frequency, dayOfMonth, description, endsOn, ...rule } }) => {
     const [amountCents] = await Promise.all([toMinor(amount, rule), assertCategoryFits(rule)]);
 
-    let updated: boolean;
+    let updated: Awaited<ReturnType<typeof updateRecurringRule>>;
     try {
       updated = await updateRecurringRule({
         ...rule,
@@ -137,7 +137,8 @@ export const updateRecurringRuleAction = authActionClient
       mapRecurringRuleError(error);
     }
 
-    if (!updated) throw new ActionError("errors.notFound");
+    if (updated === "stale") throw new ActionError("errors.stale");
+    if (updated === "missing") throw new ActionError("errors.notFound");
 
     refresh();
   });
@@ -165,7 +166,11 @@ export const pauseRecurringRuleAction = authActionClient
 export const resumeRecurringRuleAction = authActionClient
   .inputSchema(resumeRecurringRuleSchema)
   .action(async ({ parsedInput: { id } }) => {
-    const resumed = await setRecurringRuleActive({ id, isActive: true });
+    // 23514: the check refuses an active rule whose end date has passed.
+    const resumed = await setRecurringRuleActive({ id, isActive: true }).catch((error) => {
+      if (pgErrorCode(error) === "23514") throw new ActionError("recurringRules.errors.ended");
+      throw error;
+    });
     if (!resumed) throw new ActionError("errors.notFound");
 
     refresh();

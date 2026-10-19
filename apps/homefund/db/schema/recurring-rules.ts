@@ -49,6 +49,9 @@ export const recurringRules = finances.table(
     nextRunOn: date({ mode: "string" }).notNull(),
     endsOn: date({ mode: "string" }),
     isActive: boolean().notNull().default(true),
+    // Why a run paused the rule ('failed'); null for a pause by hand or an ended rule. Only the cron
+    // writes it, and a trigger clears it on resume — `authenticated` holds no write grant on it.
+    pausedReason: text({ enum: ["failed"] }),
     // The stable per-scope import key (RF-51): a re-import matches on it to update instead of duplicate.
     // Auto-filled to `id::text` by a trigger when omitted; a webhook or upsert value survives untouched.
     externalRef: text(),
@@ -83,10 +86,15 @@ export const recurringRules = finances.table(
       "recurring_rules_day_of_month_by_frequency",
       sql`case when ${table.frequency} = 'weekly' then ${table.dayOfMonth} is null else ${table.dayOfMonth} is not null end`,
     ),
-    // An end date never falls before the next run.
+    // An active rule's end date never falls before its next run; an ended rule keeps the advanced date,
+    // so resuming it is refused.
     check(
       "recurring_rules_ends_on_after_next_run",
-      sql`${table.endsOn} is null or ${table.endsOn} >= ${table.nextRunOn}`,
+      sql`not ${table.isActive} or ${table.endsOn} is null or ${table.endsOn} >= ${table.nextRunOn}`,
+    ),
+    check(
+      "recurring_rules_paused_reason_valid",
+      sql`${table.pausedReason} is null or ${table.pausedReason} = 'failed'`,
     ),
     check("recurring_rules_description_length", sql`length(${table.description}) <= 200`),
     check("recurring_rules_external_ref_length", sql`length(${table.externalRef}) <= 200`),

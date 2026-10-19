@@ -100,7 +100,7 @@ export const updatePlannedPaymentAction = authActionClient
   .action(async ({ parsedInput: { amount, categoryId, remindOn, description, ...payment } }) => {
     const amountCents = await toMinor(amount, payment);
 
-    let updated: boolean;
+    let updated: Awaited<ReturnType<typeof updatePlannedPayment>>;
     try {
       updated = await updatePlannedPayment({
         ...payment,
@@ -113,6 +113,7 @@ export const updatePlannedPaymentAction = authActionClient
       mapPlannedPaymentError(error);
     }
 
+    if (updated === "stale") throw new ActionError("errors.stale");
     if (!updated) throw new ActionError("errors.notFound");
 
     refresh();

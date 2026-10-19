@@ -9,6 +9,7 @@ import { MODEL_NAME, fileRefused, fileRoute, modelAvailable, readPlan, type Plan
 import { appCapReached, claimFollowUp, claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
 import { parseTemplate, templateSource } from "@/lib/import/template";
 import { readWorkbook } from "@/lib/import/workbook";
+import { refuseCrossSite } from "@/lib/http/same-origin";
 import { getPerson } from "@/lib/session";
 import { todayInZone } from "@/lib/zone";
 
@@ -68,6 +69,9 @@ async function arrange(draft: ImportDraft, source: "paste" | "file"): Promise<Co
  * the stream answers a body, never a 204: an absent key is a 503 a person can read.
  */
 export async function POST(request: NextRequest) {
+  const refused = refuseCrossSite(request, "multipart");
+  if (refused) return refused;
+
   const person = await getPerson();
   if (!person) return fail(401, "import.errors.signedOut");
 

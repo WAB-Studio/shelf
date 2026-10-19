@@ -6,7 +6,7 @@ import type { SQL } from "drizzle-orm";
 import { insertRow } from "@/db/insert-row";
 import type { AccountRow } from "@/db/queries/accounts";
 import { callerCashMode, callerGroupId } from "@/db/queries/groups";
-import { insertTransaction } from "@/db/queries/transactions";
+import { insertTransaction, ResendChangedError } from "@/db/queries/transactions";
 import { accounts } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { requireUser, withUserDb } from "@/db/session";
@@ -74,6 +74,13 @@ function cashScope(userId: string): SQL {
     else ${accounts.ownerUserId} = ${userId} end`;
 }
 
+// The id `cashScope` keys on, as text: the group's under 'shared', the
+// caller's own otherwise. Resolved inside the statement, like the predicate.
+function cashScopeId(userId: string): SQL<string> {
+  return sql`case when ${callerCashMode(userId)} = 'shared'
+    then ${callerGroupId(userId)}::text else ${userId}::text end`;
+}
+
 /**
  * Resolves a withdrawal's cash destination and its possible sources. The target
  * lookup and the source list are independent, so they fan out — with nothing
@@ -123,6 +130,9 @@ export type WithdrawCashArgs = {
   // The name a create-on-demand cash account takes, in the caller's locale (RF-64);
   // read only when none exists yet.
   cashAccountName: string;
+  // The key the form minted when it opened; stored as `form:<requestRef>`, so a copy of the
+  // same submit answers with the transfer the first one booked (RF-158).
+  requestRef?: string;
 };
 
 export type WithdrawCashResult = {
@@ -138,17 +148,53 @@ export type WithdrawCashResult = {
  * has it created here, seeded at zero like the fund's own (RF-56), so the resolve,
  * the create and the transfer commit or roll back together. The movement names
  * both accounts and carries no split and no category — a transfer's type is the
- * DB's to derive (RF-18, RF-19).
+ * DB's to derive (RF-18, RF-19). A resent `requestRef` answers the transfer already
+ * booked, creating nothing; with another source or amount it is refused. Naming a
+ * ref costs one read inside the lock.
  */
 export async function withdrawCash({
   sourceAccountId,
   amountCents,
   cashAccountName,
+  requestRef,
 }: WithdrawCashArgs): Promise<WithdrawCashResult> {
   const user = await requireUser();
   const targetScope = cashScope(user.id);
+  const externalRef = requestRef ? `form:${requestRef}` : null;
 
   return withUserDb(async (tx) => {
+    // Two first withdrawals at once would each find no cash and each create one.
+    // The lock queues them per scope, and it is a statement of its own: under
+    // READ COMMITTED the lookup below then takes its snapshot after the lock is
+    // granted, so it sees the cash the first one committed (docs/TRAPS.md).
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(
+      'cash:' || ${cashScopeId(user.id)}, 0))`);
+
+    // Under the lock, so a first withdrawal resent while the original still runs waits for
+    // it and then finds it, cash account included. The scope of both ends is RLS's.
+    if (externalRef !== null) {
+      const [existing] = await tx.execute<{
+        id: string;
+        toAccountId: string;
+        same: boolean;
+      }>(sql`
+        select id, to_account_id as "toAccountId",
+          from_account_id = ${sourceAccountId}::uuid
+            and amount_cents = ${amountCents}::bigint as same
+        from transactions
+        where external_ref = ${externalRef}
+        limit 1
+      `);
+      if (existing) {
+        if (!existing.same) throw new ResendChangedError();
+        return {
+          transactionId: existing.id,
+          targetCashAccountId: existing.toAccountId,
+          createdCashAccount: false,
+        };
+      }
+    }
+
     let targetCashAccountId = await findCashAccountIdTx(tx, targetScope);
     let createdCashAccount = false;
 
@@ -182,7 +228,7 @@ export async function withdrawCash({
       amountCents,
       occurredAt: todayInBogota(),
       description: null,
-      externalRef: null,
+      externalRef,
       splits: [],
       labelIds: [],
     });

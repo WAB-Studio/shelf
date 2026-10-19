@@ -490,14 +490,25 @@ test("RL-65: a failed read shows «No se pudo preparar el archivo para Anki» an
   await openSeeded(page);
   let downloads = 0;
   page.on("download", () => (downloads += 1));
-  // The next transaction opened fails once, which is the study's read.
+  // The page opens transactions of its own after load (the history list, the
+  // sync pull, the counts); under load one of them reaches the hook before the
+  // click and spends a hook armed up front. The hook arms on the click itself
+  // and fails the first read of `lookups` after it, which is the study's.
   await page.evaluate(() => {
     const w = window as unknown as { __thrown: number; __failNext: boolean };
     w.__thrown = 0;
-    w.__failNext = true;
+    w.__failNext = false;
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (event.target instanceof Element && event.target.closest("button")) w.__failNext = true;
+      },
+      { capture: true, once: true },
+    );
     const original = IDBDatabase.prototype.transaction;
     IDBDatabase.prototype.transaction = function (...args: Parameters<typeof original>) {
-      if (w.__failNext) {
+      const [scope, mode] = args;
+      if (w.__failNext && mode !== "readwrite" && scope === "lookups") {
         w.__failNext = false;
         w.__thrown += 1;
         throw new DOMException("e2e: read refused", "InvalidStateError");
@@ -785,4 +796,48 @@ test("RL-72: a sync round that lands a translated row on a no-card record brings
   await expect(ankiControl(page)).toBeVisible();
   await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toHaveCount(0);
   expect(loads).toBe(loadsBefore);
+});
+
+test("while the JSON is built, its control reads «Exportando…» and is disabled; the Anki control is untouched", async ({
+  page,
+}) => {
+  await openSeeded(page);
+  // A readwrite transaction on `lookups` kept alive by chained reads: the
+  // export's readonly transaction queues behind it until it is released.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const w = window as unknown as { __hold: boolean };
+        w.__hold = true;
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const tx = request.result.transaction("lookups", "readwrite");
+          const store = tx.objectStore("lookups");
+          let first = true;
+          const step = () => {
+            const get = store.get(1);
+            get.onsuccess = () => {
+              if (first) {
+                first = false;
+                resolve();
+              }
+              if (w.__hold) step();
+            };
+          };
+          step();
+        };
+      }),
+  );
+  const downloadPromise = page.waitForEvent("download");
+  await jsonControl(page).click();
+  const building = page.getByRole("button", { name: messages.log.exporting, exact: true });
+  await expect(building).toBeVisible();
+  await expect(building).toBeDisabled();
+  await expect(jsonControl(page)).toHaveCount(0);
+  await expect(ankiControl(page)).toBeEnabled();
+
+  await page.evaluate(() => ((window as unknown as { __hold: boolean }).__hold = false));
+  await downloadPromise;
+  await expect(jsonControl(page)).toBeEnabled();
 });

@@ -47,10 +47,9 @@ export const ingestCounterparties = finances.table(
     // The account the current run of completions is on; the streak counts that run.
     candidateAccountId: uuid().references(() => accounts.id, { onDelete: "set null" }),
     streak: smallint().notNull().default(0),
-    // Cascade, because trust IS the account: nulling this column while `state` stayed 'trusted'
-    // is what `ingest_counterparties_trusted_account_matches_state` refuses, and the account's
-    // deletion was refused with it (RF-63).
-    trustedAccountId: uuid().references(() => accounts.id, { onDelete: "cascade" }),
+    // Set null, and a BEFORE UPDATE trigger takes the row back to `learning` in the same statement,
+    // so the account's deletion (RF-63) keeps the rule and forgets only its target.
+    trustedAccountId: uuid().references(() => accounts.id, { onDelete: "set null" }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },

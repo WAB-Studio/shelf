@@ -66,6 +66,17 @@
     "cashModePerMember": "Un efectivo por persona",
     "save": "Guardar",
     "saved": "Ajustes guardados.",
+    "leaveTitle": "Salir del fondo",
+    "leaveBody": "Lo que escribiste en «{fund}» se queda con el fondo. Tus cuentas personales vuelven a ser solo tuyas.",
+    "leaveAsk": "¿Salir de «{fund}»?",
+    "leaveStays": "Lo que escribiste en el fondo se queda con el fondo: sus cuentas, sus movimientos y lo que anotaste en ellas.",
+    "leaveGoes": "Tus cuentas personales vuelven a ser solo tuyas: los miembros de «{fund}» dejan de verlas.",
+    "leaving": "Saliendo…",
+    "leaveRefusedTitle": "No puedes salir todavía",
+    "leaveRefusedBody": "Eres el líder de «{fund}». Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».",
+    "leaveUnderstood": "Entendido",
+    "leaveDone": "Saliste de «{fund}».",
+    "leaveDoneBody": "Tus cuentas siguen contigo.",
     "errors": {
       "cashModeInvalid": "Elige dónde vive el efectivo.",
       "currencyInvalid": "Elige una moneda válida."
@@ -106,6 +117,12 @@
     }
   },
   "dashboard": {
+    "dueTitle": "Por pagar",
+    "dueSee": "Ver pagos",
+    "dueSeeAll": "Ver los {count}",
+    "dueSoon": "Vence el {date}",
+    "dueLate": "Venció el {date}",
+    "dueNoName": "Pago sin nombre",
     "emptyTitle": "Todavía no hay movimientos",
     "emptyDescription": "Aquí vas a ver los saldos y los movimientos del fondo.",
     "createAccount": "Crear cuenta",
@@ -220,6 +237,20 @@
     }
   },
   "members": {
+    "invitationEyebrow": "Invitación",
+    "invitationTitle": "{inviter} te invitó a su fondo «{fund}»",
+    "invitationIfAccept": "Si aceptas, los miembros de «{fund}» verán tus cuentas y movimientos personales, y tú verás los suyos y los del fondo.",
+    "invitationIfDecline": "Si rechazas, sigues con tus cuentas solo para ti. Puedes unirte más tarde si {inviter} te invita otra vez.",
+    "invitationAccept": "Aceptar",
+    "invitationAccepting": "Aceptando…",
+    "invitationDecline": "Rechazar",
+    "invitationAccepted": "Ya eres parte de «{fund}».",
+    "invitationDeclined": "Rechazaste la invitación de {inviter}.",
+    "invitationGoneTitle": "Esta invitación ya no está vigente",
+    "invitationGoneBody": "{inviter} la retiró o ya pasó. Si quieres unirte a «{fund}», pídele que te invite otra vez.",
+    "invitationOtherTitle": "Ya estás en el fondo «{other}»",
+    "invitationOtherBody": "Se puede estar en un solo fondo. Para unirte a «{fund}», sal primero de «{other}» desde «Grupo».",
+    "invitationGoAccounts": "Ir a mis cuentas",
     "title": "Miembros",
     "add": "Añadir miembro",
     "addTitle": "Añadir miembro",
@@ -453,6 +484,8 @@
     "quickPlaceholder": "Anota un gasto…",
     "quickInterpreted": "Interpretado · todo queda editable antes de guardar",
     "quickUnrecognized": "No reconocí el monto ni la categoría · complétalos",
+    "quickAskQuestion": "¿Cuánto es «{token}»?",
+    "quickAskHint": "Elige cuánto es, o escribe el monto.",
     "quickSave": "Guardar",
     "quickTypeLink": "¿Ingreso o traspaso?",
     "formTitle": "Nuevo movimiento",
@@ -776,7 +809,7 @@
     "categoryLabel": "Categoría",
     "categoryNone": "Sin categoría",
     "reminder": "Recordatorio",
-    "reminderHint": "Son recordatorios: te avisan, y tú registras el gasto cuando lo pagas.",
+    "reminderHint": "Son recordatorios: aparecen en esta lista, y tú registras el gasto cuando lo pagas.",
     "noConcept": "Sin concepto",
     "settle": "Registrar pago",
     "settleTitle": "Registrar el pago",
@@ -794,7 +827,7 @@
     "created": "Pago creado.",
     "updated": "Pago actualizado.",
     "emptyTitle": "Aún no hay pagos planificados",
-    "emptyDescription": "Crea el primero para que te avise antes de que venza.",
+    "emptyDescription": "Crea el primero para tenerlo a la vista antes de que venza.",
     "tableDue": "Vence",
     "tableConcept": "Concepto",
     "tableRemind": "Recuerda",
@@ -821,6 +854,7 @@
   },
   "recurringRules": {
     "title": "Recurrentes",
+    "pausedFailed": "Pausada: no se pudo generar el movimiento. Revisa la regla y reanúdala.",
     "add": "Nueva regla",
     "addTitle": "Nueva regla",
     "editTitle": "Editar regla",
@@ -885,6 +919,7 @@
     "resumeSwitchLabel": "Reanudar {name}",
     "rowViewGenerated": "Ver movimientos generados",
     "errors": {
+      "nextRunOnTooEarly": "La próxima fecha no puede ser más de 12 meses antes de hoy.",
       "amountRequired": "Escribe un monto.",
       "amountInvalid": "Escribe un monto válido.",
       "amountTooLarge": "El monto es demasiado alto.",
@@ -902,7 +937,8 @@
       "exactlyOneAccount": "Elige una sola cuenta: origen para un gasto o destino para un ingreso.",
       "ruleInvalid": "Esa regla no es válida.",
       "transactionInvalid": "Ese movimiento no es válido.",
-      "scopeViolation": "La cuenta o la categoría no pertenecen al mismo ámbito."
+      "scopeViolation": "La cuenta o la categoría no pertenecen al mismo ámbito.",
+      "ended": "Esta regla ya terminó. Cambia su fecha de fin para reanudarla."
     }
   },
   "debts": {
@@ -974,6 +1010,8 @@
       "pending": "Pendientes de facturar",
       "spent": "Gastado",
       "estimate": "Estimado",
+      "confirm": "Confirmar monto",
+      "billedHint": "Lo que el banco cobró en pesos.",
       "billedLabel": "Monto facturado",
       "rate": "Tasa",
       "save": "Guardar monto",
@@ -982,6 +1020,8 @@
       "replacedEstimate": "Reemplaza el estimado."
     },
     "errors": {
+      "beforeReconciliation": "Ya cuadraste esta cuenta después de esa compra: confírmala desde el cuadre.",
+      "termsNotSaved": "La deuda quedó creada, pero sus condiciones no. Guárdalas otra vez.",
       "accountInvalid": "Elige una cuenta válida.",
       "kindInvalid": "Elige un tipo de deuda válido.",
       "rateRequired": "Escribe la tasa.",
@@ -1024,7 +1064,7 @@
     "amountLabel": "Monto",
     "dateLabel": "Fecha",
     "paymentSave": "Registrar abono",
-    "paymentPaidLines": "{count, plural, =1 {Pagaste # cuota.} other {Pagaste # cuotas.}}",
+    "paymentPaidLines": "{count, plural, =0 {El pago no completó ninguna cuota.} =1 {Pagaste # cuota.} other {Pagaste # cuotas.}}",
     "paymentRemainder": "Sobran {amount}: no alcanzan la siguiente cuota.",
     "tableSeq": "Cuota",
     "tableDueDate": "Vence",
@@ -1072,6 +1112,7 @@
     "statementFees": "Comisiones",
     "statementGap": "Diferencia",
     "statementGapMatches": "Cuadra",
+    "paymentSaved": "Pago registrado.",
     "errors": {
       "accountInvalid": "Elige una cuenta válida.",
       "amountInvalid": "Escribe un monto válido.",
@@ -1126,6 +1167,11 @@
     "system": "Sistema"
   },
   "errors": {
+    "stale": "Esto cambió mientras lo editabas. Vuelve a abrirlo.",
+    "resendChanged": "Ya guardamos este movimiento con otro monto; ábrelo para corregirlo.",
+    "linkTimeout": "No pudimos comprobar el enlace. Ábrelo otra vez desde el correo.",
+    "signOutFailed": "No pudimos cerrar tu sesión. Inténtalo otra vez.",
+    "signOutPartial": "Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.",
     "notFoundTitle": "Esta página no existe",
     "notFoundDescription": "Puede que el enlace esté mal escrito o que la página se haya movido.",
     "unexpected": "Algo salió mal. Vuelve a intentarlo.",
@@ -1147,6 +1193,9 @@
     "categoryKindMismatch": "La subcategoría debe tener el mismo tipo que su categoría principal.",
     "notLeader": "Solo el propietario del fondo puede hacer este cambio.",
     "memberHasHistory": "Esta persona tiene movimientos. Archívala en su lugar.",
+    "invitationGone": "Esta invitación ya no está vigente.",
+    "alreadyInFund": "Ya estás en otro fondo. Para unirte a este, sal primero desde «Grupo».",
+    "leaderStays": "No puedes salir todavía. Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».",
     "accountHasMovements": "Esta cuenta tiene movimientos. Archívala en su lugar.",
     "accountHasHistory": "No puedes pasar al fondo una cuenta con movimientos. Archívala en su lugar.",
     "accountRefTaken": "El fondo ya tiene una cuenta con la misma referencia de importación. Archiva esta cuenta en su lugar.",

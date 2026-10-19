@@ -56,6 +56,12 @@ test("create refuses an old word with one subtypeInvalid issue", () => {
   }
 });
 
+test("create refuses a payload with no subtype with one subtypeInvalid issue", () => {
+  assert.deepEqual(issues(createAccountSchema, { ...createBase, subtype: undefined }), [
+    { message: "accounts.errors.subtypeInvalid", path: ["subtype"] },
+  ]);
+});
+
 test("update refuses an old word with one subtypeInvalid issue", () => {
   for (const old of ["bancaria", "efectivo", "tarjeta"]) {
     assert.deepEqual(issues(updateAccountSchema, { ...updateBase, subtype: old }), [

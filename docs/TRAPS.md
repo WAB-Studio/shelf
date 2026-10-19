@@ -3409,3 +3409,62 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   failed on stale code.
 - Do: set `HARNESS_BASE_URL=http://localhost:300<n-1>` on every e2e run in lane n, and read the first log line for the
   base URL before believing a red or a green.
+
+## A unit test that measures growth on a real-size log can eat the machine (2026-10-18)
+
+- A tester measured a quadratic merge in `apps/wordbook/lib/log/delete.ts` by building a 9 512-row log inside
+  `delete.test.ts`. The node process reached 9,5 GB, the machine had 0 GB free, and every lane's suite was at risk.
+- Measured 2026-10-18, wave 2 (M35): killed by hand; the rewrite counts visits over 100, 200 and 400 marks (6 275,
+  25 050, 100 100) and runs in ~1 s at ~110 MB.
+- Do: measure work as a count (visits, calls, comparisons) over small inputs and assert the growth ratio; never a
+  real-size dataset in a unit test. Run such a test with `node --max-old-space-size=512`, so a regression fails instead.
+
+## The plan hook reads a `Depende de:` line only up to its first period (2026-10-18)
+
+- `.claude/hooks/plan-watch.sh` takes the ids before the first `.` of the line. A file name such as `layout.tsx` or
+  `errors.stale` inside the line ends it early, the later ids are dropped, and the hook names a module whose dependency
+  is still in flight. A train name like `respuestas-18` reads as the number 18, which the hook treats as done.
+- Measured 2026-10-18, `private/plan-paralelo.md`: seven lines (M24, M42, M45, M54, M68 and two more) had hidden ids;
+  the hook named M24 and M37 while M22 and M71 were in flight.
+- Do: write the ids first, bare, then a period, then the reasons: `**Depende de:** M2, M22. M2 (…)`. Model an outside
+  gate (a PR to merge) as a module of its own, `## [~] M0 · … merged`, and depend on `M0`.
+
+## Two suites appended to `check-queries.ts` interleave on merge (2026-10-18)
+
+- Two branches that each append a suite at the end of `apps/homefund/scripts/check-queries.ts` merge into one conflict
+  that splices the two functions line by line (oleada-2: M44's `debtPaymentSuite` and M74's `resendChangedSuite`, four
+  hunks). Take one side whole, paste the other suite whole after it with its call last in the runner, then run
+  `check:queries` on the merged tip (361/0 that day). Never resolve hunk by hunk.
+
+## A worktree made by hand cannot reach the local stack (2026-10-18)
+
+- `git worktree add` without `scripts/worktree.sh` leaves out `supabase/signing_keys.json` and `node_modules`:
+  `scripts/supabase-local.sh exec` fails and `node --test` cannot resolve `@/lib`. The oleada-2 critic's lane hit it and
+  borrowed the main checkout's env. Open lanes with `worktree.sh`; for a branch that already exists, cut a new branch from
+  it (`worktree.sh <n> <new> <existing>`).
+
+## A spec that spawns `next start` needs a production build in its job (2026-10-18)
+
+- `apps/homefund/e2e/sign-in.spec.ts` (M40 at ~:885, M41 at ~:1090) start their own `next start` on a free port with a
+  `--require` hook. The CI job served only `next dev`, so each `beforeAll` polled 90 s and the describes failed at 0 ms
+  (run 39175054053). Each orbit e2e shard now builds before its dev server (M79): `next dev` writes `.next/dev`, the build
+  writes `.next`, and the two coexist. A lane running those describes builds first too.
+
+## Orbit's e2e outgrew its job: cancelled at the timeout, never red (2026-10-18)
+
+- 1348 tests on one worker reached about 1070 at 38 min; the job's `timeout-minutes: 40` cancelled three runs in a row
+  (39170958214, 39172544766, 39175054053), which read as «cancelled», not as a failure. Four shards now take 10–12 min
+  each (run 39178288545). A suite job that ends «cancelled» without anyone cancelling it hit its timeout: read the job's
+  duration before rerunning.
+
+## `check:queries` aborts at Q169 when several lanes load the database (2026-10-18)
+
+- With three or four lanes running suites on the one local stack, `check:queries` aborted twice at Q169 with
+  `canceling statement due to statement timeout` (oleada-2, M76 and M52 merges); `pg_stat_activity` showed no long
+  transaction, and the rerun passed both times (376/0, 398/0). Rerun once; a second abort in a row is a real lock.
+
+## A one-shot fault armed at load can be spent by the page itself (2026-10-18)
+
+- WordBook `e2e/export.spec.ts:487` armed its single IndexedDB failure right after load; under CI load a transaction the
+  page opened on its own (history, counts, sync) spent it, the study read succeeded, and the failure line never showed
+  (red in runs 39170958214 and 39179299274, green alone). Arm a one-shot fault on the action that must meet it (M80).

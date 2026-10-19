@@ -48,6 +48,12 @@ Each entry names the rule and the file it lives in now.
   fixed: kept. Mutators found 47 unique survivors, 2 fixed in-train; the rest became codigo-6c's M3, M4 and M6: kept.
   Critics found 35 unique in 4 of 4, 0 fixed in-train, every one turned into a user decision or a codigo-6c module, at
   140k–187k each, the dearest judge: kept, scoped. The full CI on codigo-6b caught what no judge did. Nothing pruned.
+- Fifth pruning review, 2026-10-18, over 6 trains (codigo-6c, decidido-17, critic-6c, cierre-d17, respuestas-18,
+  oleada-1): validators found something unique in 5 of 6, 8 unique of 9, 5 fixed, 555k in all: kept. Mutators found
+  51 survivors in 5 of 5, all unique, 0 fixed in-train, 421k: kept. Critics found 40 unique in 5 of 5, 0 fixed
+  in-train, 762k, the dearest; on the smallest train (cierre-d17) 2 for 62k: kept, scoped. CI caught nothing unique in
+  4 of 4. Nothing pruned. The third review's rule broke: six level-3 survivors (critic-6c b04, b09, b10, m24; oleada-1
+  i23, a08) sat in a handoff's Pendiente instead of a next train's `tester` module.
 
 ## Retired 2026-10-14 by the user
 

@@ -102,6 +102,11 @@ function WithdrawForm({
   const tKey = useTranslations();
   const onActionError = useActionErrorToast();
 
+  // One key per opening: a withdrawal sent again after a lost answer carries the same one, and
+  // the form unmounts on close, so the next opening mints its own.
+  const [requestRef] = useState(() => crypto.randomUUID());
+  const [refusal, setRefusal] = useState(false);
+
   const form = useForm<WithdrawCashInput>({
     resolver: zodResolver(withdrawCashSchema),
     mode: "onChange",
@@ -116,11 +121,15 @@ function WithdrawForm({
       toast.success(t("withdrawSaved"));
       onOpenChange(false);
     },
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.resendChanged") setRefusal(true);
+      else onActionError(result);
+    },
   });
 
   function onSubmit(values: WithdrawCashInput) {
-    withdraw.execute(values);
+    setRefusal(false);
+    withdraw.execute({ ...values, requestRef });
   }
 
   // Nothing to draw from: cash can only come out of an asset account (RF-40), so
@@ -201,6 +210,12 @@ function WithdrawForm({
           <Text size="3">{destinationName}</Text>
           {willCreate && <FieldDescription>{t("willCreateHint")}</FieldDescription>}
         </Field>
+
+        {refusal && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey("errors.resendChanged")}</Callout.Text>
+          </Callout.Root>
+        )}
 
         <Flex gap="3" justify="end">
           <Dialog.Close>

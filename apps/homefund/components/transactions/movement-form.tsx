@@ -197,6 +197,10 @@ export function MovementForm({
   const format = useFormatter();
   const locale = useLocale();
   const onActionError = useActionErrorToast();
+  // One key per opening: a save sent again after a lost answer carries the same one, and the
+  // form unmounts on close, so the next opening mints its own.
+  const [requestRef] = useState(() => crypto.randomUUID());
+  const [refusal, setRefusal] = useState<"errors.stale" | "errors.resendChanged" | null>(null);
 
   const isEdit = mode === "edit";
   const isAccept = !movement && deliveryId !== undefined;
@@ -447,11 +451,17 @@ export function MovementForm({
   // rules of hooks forbid picking which one to call.
   const create = useAction(createTransactionAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.resendChanged") setRefusal("errors.resendChanged");
+      else onActionError(result);
+    },
   });
   const update = useAction(updateTransactionAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.stale") setRefusal("errors.stale");
+      else onActionError(result);
+    },
   });
   const accept = useAction(acceptDeliveryAction, {
     onSuccess: onActionSuccess,
@@ -469,11 +479,15 @@ export function MovementForm({
     // other mode's action refuses: `external_ref` on edit, `transaction_id` on
     // create.
     if (isEdit) {
-      update.execute(values as UpdateTransactionInput);
+      setRefusal(null);
+      update.execute({
+        ...(values as UpdateTransactionInput),
+        expectedUpdatedAt: movement?.updatedAt,
+      });
     } else if (isAccept) {
       accept.execute({ ...values, deliveryId } as AcceptDeliveryInput);
     } else {
-      create.execute(values as CreateTransactionInput);
+      create.execute({ ...(values as CreateTransactionInput), requestRef });
     }
   }
 
@@ -985,6 +999,15 @@ export function MovementForm({
               </Callout.Icon>
               <Callout.Text>{t("kindDerivedHint")}</Callout.Text>
             </Callout.Root>
+
+            {refusal && (
+              <Callout.Root color="red" variant="soft" role="alert">
+                <Callout.Icon>
+                  <InfoIcon size={16} />
+                </Callout.Icon>
+                <Callout.Text>{tKey(refusal)}</Callout.Text>
+              </Callout.Root>
+            )}
 
             {/* Never dead: while the form is short of something, submitting is what
                 makes it say so. */}

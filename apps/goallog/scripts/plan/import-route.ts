@@ -485,7 +485,7 @@ test("a body that is no form: 422 import.errors.blank, no row, no model", async 
     new Request("http://localhost/importar/leer", {
       method: "POST",
       body: "not a form",
-      headers: { "content-type": "text/plain" },
+      headers: { "content-type": "multipart/form-data; boundary=x" },
     }) as unknown as Parameters<typeof route.POST>[0],
   );
   assert.equal(response.status, 422);
@@ -805,4 +805,59 @@ test("RP-126: with the app's day spent a template text still reads, via template
     assert.equal((await answer(response)).via, "template");
   });
   assert.equal((await rows()).length, 0);
+});
+
+// M18: the guard runs before the session, the body and the claim.
+test("M18: a foreign Origin with a pasted plan is refused 403, no claim, no model", async () => {
+  const response = await route.POST(request({ text: "quiero aprender inglés este año" }, { origin: "https://evil.example" }));
+  assert.equal(response.status, 403);
+  assert.equal((await rows()).length, 0);
+  assert.equal(modelCalls.length, 0);
+});
+
+test("M18: a foreign Origin with a file is refused 403 as well, no claim", async () => {
+  const file = new File(["quiero aprender inglés este año"], "plan.txt", { type: "text/plain" });
+  const response = await route.POST(request({ file }, { origin: "https://evil.example" }));
+  assert.equal(response.status, 403);
+  assert.equal((await rows()).length, 0);
+  assert.equal(modelCalls.length, 0);
+});
+
+test("M18: a foreign Origin with a template is refused too: the template path is behind the guard", async () => {
+  const response = await route.POST(request({ text: TEMPLATE }, { origin: "https://evil.example" }));
+  assert.equal(response.status, 403);
+});
+
+test("M18: a JSON body on the import is refused 415, no claim", async () => {
+  const raw = new Request("http://localhost/importar/leer", {
+    method: "POST",
+    body: JSON.stringify({ text: "quiero aprender inglés este año" }),
+    headers: { "content-type": "application/json" },
+  }) as unknown as Parameters<typeof route.POST>[0];
+  const response = await route.POST(raw);
+  assert.equal(response.status, 415);
+  assert.equal((await rows()).length, 0);
+  assert.equal(modelCalls.length, 0);
+});
+
+test("M18: a urlencoded body on the import is refused 415", async () => {
+  const raw = new Request("http://localhost/importar/leer", {
+    method: "POST",
+    body: new URLSearchParams({ text: "quiero aprender inglés este año" }),
+  }) as unknown as Parameters<typeof route.POST>[0];
+  const response = await route.POST(raw);
+  assert.equal(response.status, 415);
+  assert.equal((await rows()).length, 0);
+});
+
+test("M18: the guard answers before the session: foreign Origin with no session is 403, not 401", async () => {
+  standing = [];
+  const response = await route.POST(request({ text: "algo" }, { origin: "https://evil.example" }));
+  assert.equal(response.status, 403);
+});
+
+test("M18: the app's own Origin passes: the model path streams and one row is claimed", async () => {
+  const lines = await ndjson(await route.POST(request({ text: "quiero aprender inglés este año" }, { origin: "http://localhost" })));
+  assert.ok(lastLine(lines).done);
+  assert.equal((await rows()).length, 1);
 });

@@ -113,6 +113,7 @@ export function RecurringScreen({
       },
       account: (accountId && accountNames.get(accountId)) ?? "",
       isActive: rule.isActive,
+      pausedReason: rule.pausedReason,
       amountCents: rule.amountCents,
       currency: rule.currency,
       isIncome: rule.toAccountId !== null,
@@ -320,7 +321,11 @@ function RuleCard({
             aria-label={t("activeToggle")}
           />
           <Text size="2" color="gray">
-            {rule.isActive ? t("stateActive") : t("statePaused")}
+            {rule.isActive
+              ? t("stateActive")
+              : rule.pausedReason === "failed"
+                ? t("pausedFailed")
+                : t("statePaused")}
           </Text>
         </Flex>
         <IconButton

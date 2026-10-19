@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { accounts } from "@/db/schema";
@@ -32,6 +32,10 @@ export type AccountRow = {
   // the database would refuse (RF-58, RF-100).
   canWrite: boolean;
   archivedAt: Date | null;
+  // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
+  // else's is refused stale.
+  // Absent on the rows `cash.ts` builds, which no form edits.
+  updatedAt?: string;
 };
 
 // Every account the caller may read: their personal accounts and their group's
@@ -85,6 +89,7 @@ export async function listAccounts(
         // reference inside a projection fragment renders bare and binds inward.
         canWrite: sql<boolean>`private.can_write_account(accounts.id)`,
         archivedAt: accounts.archivedAt,
+        updatedAt: sql<string>`accounts.updated_at::text`,
       })
       .from(accounts)
       .where(
@@ -186,8 +191,14 @@ export type UpdateAccountArgs = {
   settlementCurrency: CurrencyCode;
   amountMinor: number;
   balanceOn: string;
+  expectedUpdatedAt?: string;
 };
 
+// Without a stamp the answer is only whether a row was written; with one it may be "stale".
+export async function updateAccount(
+  args: UpdateAccountArgs & { expectedUpdatedAt?: undefined },
+): Promise<boolean>;
+export async function updateAccount(args: UpdateAccountArgs): Promise<boolean | "stale">;
 export async function updateAccount({
   accountId,
   name,
@@ -198,7 +209,8 @@ export async function updateAccount({
   settlementCurrency,
   amountMinor,
   balanceOn,
-}: UpdateAccountArgs): Promise<boolean> {
+  expectedUpdatedAt,
+}: UpdateAccountArgs): Promise<boolean | "stale"> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .update(accounts)
@@ -218,10 +230,27 @@ export async function updateAccount({
         initialBalanceCents: sql`case when ${accounts.kind} = 'liability' then -${amountMinor}::bigint else ${amountMinor}::bigint end`,
         initialBalanceOn: balanceOn,
       })
-      .where(eq(accounts.id, accountId))
+      .where(
+        and(
+          eq(accounts.id, accountId),
+          // Compared as text: a JS Date would drop the microseconds (docs/TRAPS.md).
+          expectedUpdatedAt
+            ? sql`${accounts.updatedAt} = ${expectedUpdatedAt}::text::timestamptz`
+            : undefined,
+        ),
+      )
       .returning({ id: accounts.id });
 
-    return rows.length > 0;
+    if (rows.length > 0) return true;
+    if (!expectedUpdatedAt) return false;
+
+    // Only a refused write pays for this: a readable row means the stamp moved.
+    const [row] = await tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+    return row ? "stale" : false;
   });
 }
 

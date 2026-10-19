@@ -15,7 +15,10 @@
  * created it, and its rows are dropped after the file, so the census finds no
  * identity the registry does not know.
  */
+import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
+import { createServer, type AddressInfo } from "node:net";
+import path from "node:path";
 
 import { closeRun, openRun, runId } from "@repo/harness-registry";
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
@@ -200,11 +203,11 @@ test("opening the link signs the person in on the app, with the personal categor
   }
 });
 
-test("an address pending as a member signs in and lands as that member, not as a new one", async ({
+test("an address pending as a member signs in and lands on the home page, joined to nothing", async ({
   browser,
   baseURL,
 }) => {
-  // Kills: the sign-in that never claims the invitation (RF-06), so the person lands in no fund.
+  // Kills: the sign-in that claims the invitation (RF-154: only accepting joins).
   const email = newAddress();
   await listAddress(email);
   const { groupId } = await seedGroup();
@@ -222,12 +225,11 @@ test("an address pending as a member signs in and lands as that member, not as a
     await requestLink(page, email);
     await page.goto(await confirmPath(email));
 
-    await expect(page).toHaveURL(/\/es\/bienvenida$/);
+    await expect(page).toHaveURL(/\/es$/);
 
-    const userId = await userIdOf(email);
     const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null }[]>`
       select id, name, user_id from group_members where id = ${pendingId}`;
-    expect(member).toEqual({ id: pendingId, name: `Invitado E9 ${stamp}`, user_id: userId });
+    expect(member).toEqual({ id: pendingId, name: `Invitado E9 ${stamp}`, user_id: null });
     const [after] = await fixtureSql<{ n: number }[]>`
       select count(*)::int as n from group_members where group_id = ${groupId}`;
     expect(after.n).toBe(before.n);
@@ -614,8 +616,8 @@ test.describe("the code link lands only in the browser that asked", () => {
     }
   });
 
-  test("a pending member who signs in by code lands as that member, not as a new one", async ({ browser, baseURL }) => {
-    // Kills: skipping `claimInviteForUser` on the `code` path.
+  test("a pending invitee who signs in by code lands on the home page and joins nothing", async ({ browser, baseURL }) => {
+    // Kills: claiming the pending invitation on the `code` path (RF-154: only accepting joins).
     const email = newAddress();
     await listAddress(email);
     const { groupId } = await seedGroup();
@@ -632,14 +634,23 @@ test.describe("the code link lands only in the browser that asked", () => {
     try {
       await requestLink(page, email);
       await page.goto((await codeLinkOf(email, baseURL!)).url);
-      await expect(page).toHaveURL(/\/es\/bienvenida$/);
+      await expect(page).toHaveURL(/\/es$/);
 
-      const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null }[]>`
-        select id, name, user_id from group_members where id = ${pendingId}`;
-      expect(member).toEqual({ id: pendingId, name: `Invitado M9 ${stamp}`, user_id: await userIdOf(email) });
+      const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null; invite_state: string; invite_email: string | null }[]>`
+        select id, name, user_id, invite_state, invite_email from group_members where id = ${pendingId}`;
+      expect(member).toEqual({
+        id: pendingId,
+        name: `Invitado M9 ${stamp}`,
+        user_id: null,
+        invite_state: "pending",
+        invite_email: email,
+      });
       const [after] = await fixtureSql<{ n: number }[]>`
         select count(*)::int as n from group_members where group_id = ${groupId}`;
       expect(after.n).toBe(before.n);
+      const [memberships] = await fixtureSql<{ n: number }[]>`
+        select count(*)::int as n from group_members where user_id = ${await userIdOf(email)}`;
+      expect(memberships.n).toBe(0);
     } finally {
       await context.close();
       await clearGroup();
@@ -858,6 +869,274 @@ test.describe("the login's words", () => {
       await expect(page.locator("main").getByRole("alert")).toHaveText(en.errors.linkOtherBrowser);
       await typeAndSend(page, email, en.auth);
       await expect(toastOf(page)).toHaveText(en.errors.notInvited);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+// RF-01, a link that Auth could not judge or that landed on a failure of ours: the person is told to open
+// the link again, never that it is invalid, and never meets a bare 500.
+const LINK_TIMEOUT_LINE = "No pudimos comprobar el enlace. Ábrelo otra vez desde el correo.";
+
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as AddressInfo;
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+test.describe("the link's landing when the answer is a timeout or the landing fails", () => {
+  let stalled: ChildProcess | undefined;
+  let stalledOrigin = "";
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    const port = await freePort();
+    stalledOrigin = `http://127.0.0.1:${port}`;
+    stalled = spawn(
+      process.execPath,
+      [path.resolve(process.cwd(), "../../node_modules/next/dist/bin/next"), "start", "-p", String(port)],
+      {
+        cwd: process.cwd(),
+        env: { ...process.env, NODE_OPTIONS: `--require ${path.resolve(process.cwd(), "e2e/support/stall-auth.cjs")}` },
+        stdio: "ignore",
+      },
+    );
+    await expect
+      .poll(async () => (await fetch(`${stalledOrigin}/es/login`).catch(() => null))?.status ?? 0, { timeout: 90_000 })
+      .toBe(200);
+  });
+
+  test.afterAll(() => {
+    stalled?.kill("SIGTERM");
+  });
+
+  test("the login says to open the link again, in Spanish and in English", async ({ browser, baseURL }) => {
+    // Kills: a login that does not know `linkTimeout`, and a catalogue without its line.
+    expect((messages.errors as Record<string, string>).linkTimeout).toBe(LINK_TIMEOUT_LINE);
+    expect((en.errors as Record<string, string>).linkTimeout?.length ?? 0).toBeGreaterThan(0);
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await page.goto("/es/login?error=linkTimeout");
+      await expect(page.locator("main").getByRole("alert")).toHaveText(LINK_TIMEOUT_LINE);
+      await expect(page.locator("main").getByRole("alert")).not.toHaveText(messages.errors.linkInvalid);
+      await page.goto("/en/login?error=linkTimeout");
+      await expect(page.locator("main").getByRole("alert")).toHaveText((en.errors as Record<string, string>).linkTimeout);
+    } finally {
+      await context.close();
+    }
+  });
+
+  for (const [how, token] of [
+    ["answers 504", "stall-504"],
+    ["is unreachable", "stall-refused"],
+  ] as const) {
+    test(`Auth ${how}: the link lands on the login with linkTimeout and its line, not linkInvalid`, async ({ browser }) => {
+      // Kills: a route that maps every Auth error to linkInvalid.
+      const { context, page } = await fresh(browser, stalledOrigin);
+      try {
+        const answer = await page.request.get(`/auth/confirm?token_hash=${token}-${stamp}&type=magiclink`, { maxRedirects: 0 });
+        expect(answer.status()).toBeGreaterThanOrEqual(300);
+        expect(answer.status()).toBeLessThan(400);
+        expect(new URL(answer.headers().location!).pathname + new URL(answer.headers().location!).search).toBe(
+          "/es/login?error=linkTimeout",
+        );
+
+        await page.goto(`/auth/confirm?token_hash=${token}-${stamp}&type=magiclink`);
+        await expect(page).toHaveURL(/\/es\/login\?error=linkTimeout$/);
+        await expect(page.locator("main").getByRole("alert")).toHaveText(LINK_TIMEOUT_LINE);
+        expect(await context.cookies()).not.toContainEqual(
+          expect.objectContaining({ name: expect.stringMatching(/auth-token/) }),
+        );
+      } finally {
+        await context.close();
+      }
+    });
+  }
+
+  test("a link Auth rejects, on the server that stalls other tokens, still lands on linkInvalid", async ({ browser }) => {
+    // Kills: a route that sends every failure to linkTimeout.
+    const { context, page } = await fresh(browser, stalledOrigin);
+    try {
+      await page.goto(`/auth/confirm?token_hash=${randomBytes(16).toString("hex")}&type=magiclink`);
+      await expect(page).toHaveURL(/\/es\/login\?error=linkInvalid$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveText(messages.errors.linkInvalid);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("an invalid hash lands on the login with linkInvalid and its line", async ({ browser, baseURL }) => {
+    // Kills: a timeout split that sends a rejection Auth completed to linkTimeout.
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await page.goto(`/auth/confirm?token_hash=${randomBytes(16).toString("hex")}&type=magiclink`);
+      await expect(page).toHaveURL(/\/es\/login\?error=linkInvalid$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveText(messages.errors.linkInvalid);
+      expect(await context.cookies()).not.toContainEqual(
+        expect.objectContaining({ name: expect.stringMatching(/auth-token/) }),
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("the landing throws after Auth verified: the answer is the linkTimeout landing, not a 500", async ({ browser, baseURL }) => {
+    // Kills: a route with no try around the landing.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, baseURL!);
+    let constraint = "";
+    try {
+      await requestLink(page, email);
+      const confirm = await confirmPath(email);
+      const userId = await userIdOf(email);
+      // Refuses this one user's `app_users` row and nobody else's: the landing's insert throws.
+      constraint = `m40_refuse_${stamp}_${serial}`;
+      await fixtureSql.unsafe(
+        `alter table finances.app_users add constraint ${constraint} check (id <> '${userId}'::uuid) not valid`,
+      );
+
+      const answer = await page.request.get(confirm, { maxRedirects: 0 });
+      expect(answer.status(), "a bare 500 is the failure").toBeGreaterThanOrEqual(300);
+      expect(answer.status()).toBeLessThan(400);
+      const location = new URL(answer.headers().location!);
+      expect(location.pathname + location.search).toBe("/es/login?error=linkTimeout");
+
+      await page.goto("/es/login?error=linkTimeout");
+      await expect(page.locator("main").getByRole("alert")).toHaveText(LINK_TIMEOUT_LINE);
+    } finally {
+      if (constraint) await fixtureSql.unsafe(`alter table finances.app_users drop constraint if exists ${constraint}`);
+      await context.close();
+    }
+  });
+
+  test("a good link still lands on the home page, signed in, with no notice", async ({ browser, baseURL }) => {
+    // Kills: a try that sends a landing that works to the login.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, baseURL!);
+    try {
+      await requestLink(page, email);
+      await page.goto(await confirmPath(email));
+      await expect(page).toHaveURL(/\/es$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
+      expect(await context.cookies()).toContainEqual(expect.objectContaining({ name: expect.stringMatching(/auth-token/) }));
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+test.describe("sign-out", () => {
+  // Signs a new person in through the mailed link, so ending the session never touches the harness user's.
+  async function signedIn(browser: Browser, baseURL: string) {
+    const email = newAddress();
+    await listAddress(email);
+    const opened = await fresh(browser, baseURL);
+    await requestLink(opened.page, email);
+    await opened.page.goto(await confirmPath(email));
+    await expect(opened.page).toHaveURL(/\/es$/);
+    await opened.page.goto("/es/settings");
+    return opened;
+  }
+
+  test("a sign-out the action refused shows signOutFailed and leaves the person on the page", async ({ browser, baseURL }) => {
+    // Kills: a sign-out button with no onError, whose refusal is silent.
+    const { context, page } = await signedIn(browser, baseURL!);
+    try {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let calls = 0;
+      await page.route("**/es/settings", async (route) => {
+        if (!route.request().headers()["next-action"]) return route.continue();
+        calls += 1;
+        await held;
+        await route.fulfill({
+          status: 200,
+          contentType: "text/x-component",
+          body: '0:{"a":"$@1","f":"","b":"x"}\n1:{"serverError":"errors.signOutFailed"}\n',
+        });
+      });
+
+      const button = page.getByRole("button", { name: auth.signOut, exact: true });
+      await button.click();
+      // While the action runs the button refuses a second press.
+      await expect(button).toBeDisabled();
+      release();
+
+      await expect(page.getByText(messages.errors.signOutFailed)).toBeVisible();
+      await expect(button).toBeEnabled();
+      await expect(page).toHaveURL(/\/es\/settings$/);
+      expect(calls).toBe(1);
+      expect(await context.cookies()).toContainEqual(expect.objectContaining({ name: expect.stringMatching(/auth-token/) }));
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("an ordinary sign-out lands on the login", async ({ browser, baseURL }) => {
+    // Kills: an onError that toasts a sign-out that worked.
+    const { context, page } = await signedIn(browser, baseURL!);
+    try {
+      await page.getByRole("button", { name: auth.signOut, exact: true }).click();
+      await expect(page).toHaveURL(/\/es\/login/);
+      await expect(page.getByText(messages.errors.signOutFailed)).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+test.describe("sign-out when Auth refuses the logout", () => {
+  test.describe.configure({ mode: "serial" });
+  let refusing: ChildProcess | undefined;
+  let refusingOrigin = "";
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    const port = await freePort();
+    refusingOrigin = `http://localhost:${port}`;
+    refusing = spawn(
+      process.execPath,
+      [path.resolve(process.cwd(), "../../node_modules/next/dist/bin/next"), "start", "-p", String(port)],
+      {
+        cwd: process.cwd(),
+        env: { ...process.env, NODE_OPTIONS: `--require ${path.resolve(process.cwd(), "e2e/support/refuse-logout.cjs")}` },
+        stdio: "ignore",
+      },
+    );
+    await expect
+      .poll(async () => (await fetch(`${refusingOrigin}/es/login`).catch(() => null))?.status ?? 0, { timeout: 90_000 })
+      .toBe(200);
+  });
+
+  test.afterAll(() => {
+    refusing?.kill("SIGTERM");
+  });
+
+  test("Auth refusing the logout signs this device out and the login says the rest is still open", async ({ browser }) => {
+    // Kills: an action that restores the session, and one that redirects to the login without saying so.
+    const email = newAddress();
+    await listAddress(email);
+    const { context, page } = await fresh(browser, refusingOrigin);
+    try {
+      await requestLink(page, email);
+      await page.goto(await confirmPath(email));
+      await expect(page).toHaveURL(/\/es$/);
+      await page.goto("/es/settings");
+
+      await page.getByRole("button", { name: auth.signOut, exact: true }).click();
+      await expect(page).toHaveURL(/\/es\/login\?error=signOutPartial$/);
+      await expect(page.locator("main").getByRole("alert")).toHaveText(messages.errors.signOutPartial);
+      expect(en.errors.signOutPartial).toBe("You signed out here, but we couldn't sign you out on your other devices.");
+      await page.goto("/es/movements");
+      await expect(page).toHaveURL(/\/es\/login/);
     } finally {
       await context.close();
     }

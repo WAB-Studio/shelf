@@ -38,6 +38,9 @@ export type PlannedPaymentRow = {
   description: string | null;
   status: PlannedPaymentStatus;
   settledTransactionId: string | null;
+  // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
+  // else's is refused stale.
+  updatedAt: string;
 };
 
 // Every readable planned payment, soonest due first, in ONE round trip (RF-74).
@@ -62,6 +65,8 @@ export async function listPlannedPayments({
         description: plannedPayments.description,
         status: plannedPayments.status,
         settledTransactionId: plannedPayments.settledTransactionId,
+        // Qualified: the joined accounts carry an `updated_at` of their own.
+        updatedAt: sql<string>`planned_payments.updated_at::text`,
       })
       .from(plannedPayments)
       .leftJoin(
@@ -130,8 +135,16 @@ export type UpdatePlannedPaymentArgs = {
   dueDate: string;
   remindOn: string | null;
   description: string | null;
+  expectedUpdatedAt?: string;
 };
 
+// Without a stamp the answer is only whether a row was written; with one it may be "stale".
+export async function updatePlannedPayment(
+  args: UpdatePlannedPaymentArgs & { expectedUpdatedAt?: undefined },
+): Promise<boolean>;
+export async function updatePlannedPayment(
+  args: UpdatePlannedPaymentArgs,
+): Promise<boolean | "stale">;
 export async function updatePlannedPayment({
   plannedPaymentId,
   fromAccountId,
@@ -141,15 +154,33 @@ export async function updatePlannedPayment({
   dueDate,
   remindOn,
   description,
-}: UpdatePlannedPaymentArgs): Promise<boolean> {
+  expectedUpdatedAt,
+}: UpdatePlannedPaymentArgs): Promise<boolean | "stale"> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .update(plannedPayments)
       .set({ fromAccountId, toAccountId, amountCents, categoryId, dueDate, remindOn, description })
-      .where(eq(plannedPayments.id, plannedPaymentId))
+      .where(
+        and(
+          eq(plannedPayments.id, plannedPaymentId),
+          // Compared as text: a JS Date would drop the microseconds (docs/TRAPS.md).
+          expectedUpdatedAt
+            ? sql`${plannedPayments.updatedAt} = ${expectedUpdatedAt}::text::timestamptz`
+            : undefined,
+        ),
+      )
       .returning({ id: plannedPayments.id });
 
-    return rows.length > 0;
+    if (rows.length > 0) return true;
+    if (!expectedUpdatedAt) return false;
+
+    // Only a refused write pays for this: a readable row means the stamp moved.
+    const [row] = await tx
+      .select({ id: plannedPayments.id })
+      .from(plannedPayments)
+      .where(eq(plannedPayments.id, plannedPaymentId))
+      .limit(1);
+    return row ? "stale" : false;
   });
 }
 

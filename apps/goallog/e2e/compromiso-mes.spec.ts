@@ -31,7 +31,7 @@ test("«N al mes» swaps the row for «veces al mes», stores times_per_month an
     await expect(page.locator("main")).toHaveCount(1);
 
     await page.getByLabel("qué es").fill(commitmentName);
-    await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true }).click();
+    await page.getByRole("radio", { name: plan.commitmentForm.cadence.times_per_month, exact: true }).click();
     await expect(page.getByLabel("veces por semana")).toHaveCount(0);
     await expect(page.getByText("Cualquier día del mes cuenta.")).toBeVisible();
     await page.getByLabel("veces al mes").fill("2");
@@ -67,7 +67,7 @@ test("«N al mes» with 32 is refused on screen and writes no row (RP-12)", asyn
     await expect(page.getByLabel("qué es")).toBeVisible();
     await expect(page.locator("main")).toHaveCount(1);
     await page.getByLabel("qué es").fill(`Demasiado ${stamp}`);
-    await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true }).click();
+    await page.getByRole("radio", { name: plan.commitmentForm.cadence.times_per_month, exact: true }).click();
     await page.getByLabel("veces al mes").fill("32");
     await page.getByRole("button", { name: "Añadirlo" }).click();
     await expect(page.getByText("entre 1 y 31")).toBeVisible();

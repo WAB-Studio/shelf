@@ -19,7 +19,7 @@ const HORIZON = `${shift(0).year + 1}-${shift(0).month}-17`;
 
 const FILE_NOTE = "Leído de plan.md. Corrige aquí y vuelve a leer.";
 const NOT_TEMPLATE =
-  "Ya no es la plantilla: la primera línea no empieza por «pulsar ·». «Leer el plan» lo mandará a la IA.";
+  "Ya no es la plantilla: la primera línea no empieza por «goallog ·». «Leer el plan» lo mandará a la IA.";
 const AI_SHUT = "La lectura con IA no está disponible ahora.";
 const FIRST = "pulsar · plantilla 1";
 

@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { openRun } from "@repo/harness-registry";
+import postgres from "postgres";
 import type { z } from "zod";
 
 // FIRST, and it has to stay first: it plants the counted pool `@/db/client` picks
@@ -46,6 +47,7 @@ import {
   archiveBudget,
   createBudget,
   listBudgetsWithStatus,
+  resolveBudgetPlace,
   updateBudget,
 } from "@/db/queries/budgets";
 import { resolveWithdrawalTarget, withdrawCash } from "@/db/queries/cash";
@@ -62,12 +64,14 @@ import { getDebtOverview } from "@/db/queries/debt-overview";
 import { getCurrentStatement } from "@/db/queries/debt-statements";
 import { getDebtTerms, upsertDebtTerms } from "@/db/queries/debt-terms";
 import { getDebtsScreenData } from "@/db/queries/debts-screen";
+import { listDueReminders } from "@/db/queries/due-reminders";
 import type { DebtsScreenData } from "@/db/queries/debts-screen";
 import { readExport } from "@/db/queries/export";
 import {
-  claimInviteForUser,
+  archiveMember,
   createMember,
   listMembers,
+  transferLeadership,
 } from "@/db/queries/group-members";
 import { getUserGroup, updateGroupSettings } from "@/db/queries/groups";
 import { readImportScope } from "@/db/queries/import-preview";
@@ -96,6 +100,7 @@ import {
   createPlannedPayment,
   listPlannedPayments,
   settlePlannedPayment,
+  updatePlannedPayment,
 } from "@/db/queries/planned-payments";
 import {
   categoryFitsRuleAccount,
@@ -128,8 +133,17 @@ import {
   updateTransaction,
 } from "@/db/queries/transactions";
 import { updateAccountAction } from "@/app/actions/accounts";
-import { createRecurringRuleAction, updateRecurringRuleAction } from "@/app/actions/recurring-rules";
-import { recordBilledAmount } from "@/db/queries/debt-statements";
+import {
+  createRecurringRuleAction,
+  pauseRecurringRuleAction,
+  resumeRecurringRuleAction,
+  updateRecurringRuleAction,
+} from "@/app/actions/recurring-rules";
+import {
+  listPendingAssetSettlements,
+  listPendingSettlements,
+  recordBilledAmount,
+} from "@/db/queries/debt-statements";
 import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
   buildEffectiveRefs,
@@ -448,6 +462,9 @@ async function readGroupMembers(groupId: string): Promise<MemberSnapshot[]> {
 
 // The limit the write suite's card is given, and the only limit in the run: the
 // consolidated credit totals are asserted against it.
+// Round trips of getShellSummary, measured before the fund joined it: BEGIN, settle, the statement, COMMIT.
+const SHELL_TRIPS = 4;
+
 const CREDIT_LIMIT_CENTS = 500000000;
 
 // The write suite's own plan: three lines of this, one closed by its payment.
@@ -925,16 +942,15 @@ async function writeSuite(
     },
   );
 
-  // RF-06 from the three sides that decide it, driven by three sessions rather
-  // than three arguments: the claim reads the caller's own identity, so who runs
-  // it IS the input. The middle call is why this assertion exists — the UPDATE it
-  // replaced carried no WHERE, and for a caller already in the group it stamped
-  // her user_id onto every row of it and then reported "claimed".
+  // RF-154: signing in joins nobody. What the landing used to run to claim an invitation
+  // (`private.claim_group_invite`) is asked here as the person who signs in, and the table is read back
+  // as the owner: who runs it IS the input, and what was stored is what counts. Three callers: an
+  // invitee, a member who holds an invitation of her own, and an address whose row is archived.
   const invitee = await createMembershipFreeUser();
   const leaderEmail = process.env.HARNESS_USER_EMAIL ?? "";
 
   await checkWrite(
-    "claimInviteForUser",
+    "Signing in joins nobody: an invitee, an archived invitation and a member holding one are all left as they were",
     async () => {
       const invitedId = randomUUID();
       const archivedId = randomUUID();
@@ -948,7 +964,6 @@ async function writeSuite(
         email: invitee.email,
         archived: false,
       });
-      // Archived and invited: the row the proved escalation wrote onto.
       await seedPendingInvite({
         groupId: scope.groupId,
         memberId: archivedId,
@@ -957,21 +972,6 @@ async function writeSuite(
         email: `harness-${randomUUID()}@example.invalid`,
         archived: true,
       });
-
-      const claimed = await asUser(invitee, () =>
-        claimInviteForUser({ email: invitee.email }),
-      );
-      const [claimedRow] = await fixtureSql<
-        { user_id: string | null; invite_email: string | null }[]
-      >`select user_id, invite_email from group_members where id = ${invitedId}`;
-
-      // The leader is in the group and holds no invitation: nothing may move.
-      const before = await readGroupMembers(scope.groupId);
-      const none = await claimInviteForUser({ email: leaderEmail });
-      const after = await readGroupMembers(scope.groupId);
-
-      // Now she does hold one, and her live leader row already carries her
-      // user_id, so `group_members_user_unique` refuses the claim (RF-55).
       await seedPendingInvite({
         groupId: scope.groupId,
         memberId: leaderInviteId,
@@ -980,34 +980,45 @@ async function writeSuite(
         email: leaderEmail,
         archived: false,
       });
-      const already = await claimInviteForUser({ email: leaderEmail });
+
+      const before = await readGroupMembers(scope.groupId);
+      const signIn = () =>
+        withUserDb((tx) => tx.execute<{ id: string | null }>(sql`select private.claim_group_invite() as id`));
+      const [inviteeJoined] = await asUser(invitee, signIn);
+      const [leaderJoined] = await signIn();
+      const after = await readGroupMembers(scope.groupId);
+      const [invitedRow] = await fixtureSql<
+        { user_id: string | null; invite_email: string | null; invite_state: string }[]
+      >`select user_id, invite_email, invite_state from group_members where id = ${invitedId}`;
+      const [{ live }] = await fixtureSql<{ live: string }[]>`
+        select count(*)::text as live from group_members where user_id = ${invitee.id}`;
 
       return {
-        claimed,
-        claimedRow,
-        before,
+        inviteeJoined: inviteeJoined?.id ?? null,
+        leaderJoined: leaderJoined?.id ?? null,
+        invitedRow,
+        live: Number(live),
         untouched: JSON.stringify(before) === JSON.stringify(after),
-        none,
-        already,
+        rows: before.length,
       };
     },
     (result) => ({
       ok:
-        result.claimed === "claimed" &&
-        result.claimedRow.user_id === invitee.id &&
-        result.claimedRow.invite_email === null &&
-        result.none === "none" &&
-        result.untouched &&
-        result.already === "already-in-group",
-      detail: `invited caller = ${result.claimed}, her row carries her user_id = ${
-        result.claimedRow.user_id === invitee.id
-      } and invite_email = ${result.claimedRow.invite_email}; uninvited member = ${
-        result.none
-      }, ${result.before.length} group rows unchanged = ${
-        result.untouched
-      }; member holding a live membership = ${result.already}`,
+        result.inviteeJoined === null &&
+        result.leaderJoined === null &&
+        result.invitedRow.user_id === null &&
+        result.invitedRow.invite_email === invitee.email &&
+        result.invitedRow.invite_state === "pending" &&
+        result.live === 0 &&
+        result.untouched,
+      detail: `invitee joined = ${result.inviteeJoined}, member holding an invitation joined = ${
+        result.leaderJoined
+      }; her row: ${JSON.stringify(result.invitedRow)}, memberships of the invitee = ${
+        result.live
+      }, ${result.rows} group rows unchanged = ${result.untouched}`,
     }),
   );
+
 
   const label = await checkWrite(
     "createLabel",
@@ -1960,6 +1971,7 @@ async function readSuite(
   await checkRead("listBudgetsWithStatus", () => listBudgetsWithStatus());
   await checkRead("listGoalsWithProgress", () => listGoalsWithProgress());
   await checkRead("listPlannedPayments", () => listPlannedPayments());
+  await checkRead("listDueReminders", () => listDueReminders(3));
   await checkRead("listRecurringRules", () => listRecurringRules());
   await checkRead("countUnreviewedGenerated", () => countUnreviewedGenerated());
   await checkRead("getDebtsScreenData", () => getDebtsScreenData());
@@ -2171,12 +2183,25 @@ async function readSuite(
   // a rate struck over the debts that carry terms alone, would not.
   await checkReadValue(
     "getDebtsScreenData states the rate its summed interest was struck at",
-    () => getDebtsScreenData(),
-    (screen) => {
+    async () => ({
+      screen: await getDebtsScreenData(),
+      signedBalances: await getAccountBalances(),
+    }),
+    ({ screen, signedBalances }) => {
       const { owedCents, monthlyInterestCents, monthlyRatePct } = screen.totals;
       const struck = Math.round(owedCents * monthlyRatePct);
+      // The rows' own owed is a magnitude, a credit included; the total clamps a
+      // credit to 0, so the comparison sums the clamped settlement figure.
+      const signed = new Map(
+        signedBalances.map((balance) => [
+          `${balance.accountId}:${balance.currency}`,
+          balance.balanceCents,
+        ]),
+      );
       const withTermsOwed = screen.withTerms.reduce(
-        (sum, row) => sum + row.owedCents,
+        (sum, row) =>
+          sum +
+          Math.max(0, -(signed.get(`${row.accountId}:${row.currency}`) ?? 0)),
         0,
       );
       const highest = screen.withTerms.reduce(
@@ -3904,6 +3929,211 @@ async function cashSuite(): Promise<void> {
       createdRows[0].group_id === null,
     `before ${before.targetCashAccountId}/${before.reason}, first ${first.createdCashAccount}, second ${second.createdCashAccount}, stored [${found_(createdRows)}]`,
   );
+
+  // M22. The lock is taken from outside the app on the exact key the contract names
+  // (`cash:` + the scope id), so a withdrawal that takes the same lock must queue behind it
+  // and one that takes none, or another key, runs straight through. Polling `pg_locks` says
+  // when the app is waiting; nothing here sleeps for a fixed time.
+  const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+  // Its own connection: `fixtureSql` holds one, and the polling below has to keep using it.
+  const holderSql = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1 });
+  const holdScopeLock = async (scopeId: string) => {
+    let open_!: () => void;
+    const gate = new Promise<void>((done) => (open_ = done));
+    let taken!: () => void;
+    const acquired = new Promise<void>((done) => (taken = done));
+    const tx = holderSql.begin(async (sql) => {
+      await sql`select pg_advisory_xact_lock(hashtextextended(${`cash:${scopeId}`}, 0))`;
+      taken();
+      await gate;
+    });
+    await acquired;
+    return async () => {
+      open_();
+      await tx;
+    };
+  };
+  const waitingOn = async (scopeId: string) => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from pg_locks
+      where locktype = 'advisory' and not granted
+        and ((classid::bigint << 32) | objid::bigint) = hashtextextended(${`cash:${scopeId}`}, 0)`;
+    return row.n;
+  };
+  const waitUntilWaiting = async (scopeId: string, count: number) => {
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline) {
+      if ((await waitingOn(scopeId)) >= count) return true;
+      await pause(25);
+    }
+    return false;
+  };
+  const cashRows = (userId: string) =>
+    fixtureSql<{ id: string; archived: boolean; created_at: Date }[]>`
+      select id, archived_at is not null as archived, created_at from accounts
+      where owner_user_id = ${userId} and subtype = 'cash' order by created_at`;
+
+  // Two first withdrawals at once: one new cash, both movements in it.
+  const racer = await createMembershipFreeUser();
+  const racerBank = await open(racer, "Harness banco carrera", "bank", null);
+  const releaseRace = await holdScopeLock(racer.id);
+  const raceRun = asUser(racer, () =>
+    Promise.all([
+      withdrawCash({ sourceAccountId: racerBank, amountCents: 100_000, cashAccountName: "Efectivo" }),
+      withdrawCash({ sourceAccountId: racerBank, amountCents: 100_000, cashAccountName: "Efectivo" }),
+    ]),
+  );
+  const bothQueued = await waitUntilWaiting(racer.id, 2);
+  await releaseRace();
+  const raced = await raceRun;
+  for (const r of raced) track("transactions", r.transactionId);
+  const racerCash = await cashRows(racer.id);
+  for (const row of racerCash) track("accounts", row.id);
+  const racerMoves = await fixtureSql<{ id: string }[]>`
+    select id from transactions where owner_user_id = ${racer.id}`;
+  assert(
+    next("Two first withdrawals at once queue on the caller's scope lock and land in one new cash"),
+    bothQueued &&
+      racerCash.length === 1 &&
+      raced.filter((r) => r.createdCashAccount).length === 1 &&
+      raced.every((r) => r.targetCashAccountId === racerCash[0]?.id) &&
+      racerMoves.length === 2,
+    `both waited on cash:${racer.id} = ${bothQueued}, ${racerCash.length} cash accounts, created [${raced.map((r) => r.createdCashAccount)}], ${racerMoves.length} movements`,
+  );
+  const personalMoves = await fixtureSql<
+    { from_account_id: string; to_account_id: string; kind: string; splits: number }[]
+  >`
+    select t.from_account_id, t.to_account_id, t.kind,
+      (select count(*)::int from transaction_splits s where s.transaction_id = t.id) as splits
+    from transactions t where t.owner_user_id = ${personal.id}`;
+  const personalBalance = await readColumn<string>("account_balances", "id", first.targetCashAccountId, "balance_cents");
+  assert(
+    next("A withdrawal is a plain transfer source to cash with no split, and the cash balance is the sum of what came in"),
+    personalMoves.length === 2 &&
+      personalMoves.every(
+        (m) =>
+          m.kind === "transfer" &&
+          m.from_account_id === personalBank &&
+          m.to_account_id === first.targetCashAccountId &&
+          m.splits === 0,
+      ) &&
+      Number(personalBalance) === 200_000,
+    `moves [${personalMoves.map((m) => `${m.kind}/${m.splits}`)}], cash balance ${personalBalance}`,
+  );
+
+  // The cash is archived: it is no target, and the next withdrawal opens a new one.
+  const archiver = await createMembershipFreeUser();
+  const archiverBank = await open(archiver, "Harness banco archivada", "bank", null);
+  const archivedCash = await open(archiver, "Harness caja archivada", "cash", null);
+  await asUser(archiver, () => archiveAccount({ accountId: archivedCash }));
+  const archivedTarget = await asUser(archiver, () => resolveWithdrawalTarget());
+  const reopened = await asUser(archiver, () =>
+    withdrawCash({ sourceAccountId: archiverBank, amountCents: 50_000, cashAccountName: "Efectivo" }),
+  );
+  track("transactions", reopened.transactionId);
+  const archiverCash = await cashRows(archiver.id);
+  for (const row of archiverCash) track("accounts", row.id);
+  assert(
+    next("An archived cash is no withdrawal target, and withdrawing opens a new cash"),
+    archivedTarget.targetCashAccountId === null &&
+      archivedTarget.reason === "no-cash-account" &&
+      reopened.createdCashAccount === true &&
+      reopened.targetCashAccountId !== archivedCash &&
+      archiverCash.length === 2 &&
+      archiverCash.filter((r) => !r.archived).length === 1 &&
+      archiverCash.find((r) => !r.archived)?.id === reopened.targetCashAccountId,
+    `target ${archivedTarget.targetCashAccountId}/${archivedTarget.reason}, reopened ${reopened.targetCashAccountId} (created ${reopened.createdCashAccount}), ${archiverCash.length} cash rows`,
+  );
+
+  // The group's cash is archived, then the fund goes shared: a live group cash appears.
+  const archivedGroupCash = await asUser(perMemberLeader, () => archiveAccount({ accountId: groupCash }));
+  await asUser(perMemberLeader, () =>
+    updateGroupSettings({ groupId: perMemberGroup, name: "Harness fondo por miembro", cashMode: "shared", locale: "es" }),
+  );
+  const groupCashRows = await fixtureSql<{ id: string; archived: boolean }[]>`
+    select id, archived_at is not null as archived from accounts
+    where group_id = ${perMemberGroup} and subtype = 'cash' order by created_at`;
+  for (const row of groupCashRows) track("accounts", row.id);
+  const liveGroupCash = groupCashRows.filter((r) => !r.archived);
+  const groupTarget = await asUser(perMemberLeader, () => resolveWithdrawalTarget());
+  assert(
+    next("Going shared with the group's only cash archived creates a second, live group cash"),
+    archivedGroupCash &&
+      groupCashRows.length === 2 &&
+      liveGroupCash.length === 1 &&
+      liveGroupCash[0].id !== groupCash &&
+      groupTarget.targetCashAccountId === liveGroupCash[0]?.id,
+    `${groupCashRows.length} group cash rows, ${liveGroupCash.length} live, target ${groupTarget.targetCashAccountId}`,
+  );
+
+  // Two live cash accounts: the older one is the target, for the read and for the write.
+  const twin = await createMembershipFreeUser();
+  const twinBank = await open(twin, "Harness banco gemelas", "bank", null);
+  const olderCash = await open(twin, "Harness caja mayor", "cash", null);
+  await pause(20);
+  await open(twin, "Harness caja menor", "cash", null);
+  const twinRows = await cashRows(twin.id);
+  const twinTarget = await asUser(twin, () => resolveWithdrawalTarget());
+  const twinMove = await asUser(twin, () =>
+    withdrawCash({ sourceAccountId: twinBank, amountCents: 10_000, cashAccountName: "Efectivo" }),
+  );
+  track("transactions", twinMove.transactionId);
+  assert(
+    next("With two live cash accounts the oldest is the withdrawal target"),
+    twinRows.length === 2 &&
+      twinRows[0].id === olderCash &&
+      twinTarget.targetCashAccountId === olderCash &&
+      twinMove.targetCashAccountId === olderCash &&
+      twinMove.createdCashAccount === false,
+    `oldest ${olderCash}, read target ${twinTarget.targetCashAccountId}, write target ${twinMove.targetCashAccountId}`,
+  );
+
+  // Another scope's lock never makes this caller wait: A is held, B runs straight through.
+  const slowOne = await createMembershipFreeUser();
+  const slowBank = await open(slowOne, "Harness banco lenta", "bank", null);
+  const quickOne = await createMembershipFreeUser();
+  const quickBank = await open(quickOne, "Harness banco rapida", "bank", null);
+  const releaseSlow = await holdScopeLock(slowOne.id);
+  let slowSettled = false;
+  const slowRun = asUser(slowOne, () =>
+    withdrawCash({ sourceAccountId: slowBank, amountCents: 10_000, cashAccountName: "Efectivo" }),
+  ).finally(() => {
+    slowSettled = true;
+  });
+  const slowQueued = await waitUntilWaiting(slowOne.id, 1);
+  const quickStarted = Date.now();
+  const quick = await asUser(quickOne, () =>
+    withdrawCash({ sourceAccountId: quickBank, amountCents: 10_000, cashAccountName: "Efectivo" }),
+  );
+  const quickMs = Date.now() - quickStarted;
+  const slowStillWaiting = !slowSettled;
+  await releaseSlow();
+  const slow = await slowRun;
+  track("transactions", quick.transactionId);
+  track("transactions", slow.transactionId);
+  for (const u of [slowOne, quickOne]) for (const row of await cashRows(u.id)) track("accounts", row.id);
+  assert(
+    next("A withdrawal waits only on its own scope: another caller's finishes while the first is still queued"),
+    slowQueued && slowStillWaiting && quickMs < 2_000 && quick.createdCashAccount && slow.createdCashAccount,
+    `first queued ${slowQueued}, still waiting when the second finished ${slowStillWaiting}, second took ${quickMs} ms`,
+  );
+
+  // Under 'shared' the scope id is the group's, not the caller's.
+  const sharedBank = await open(sharedLeader, "Harness banco del lider compartido", "bank", null);
+  const releaseGroup = await holdScopeLock(sharedGroup);
+  const groupRun = asUser(sharedLeader, () =>
+    withdrawCash({ sourceAccountId: sharedBank, amountCents: 10_000, cashAccountName: "Efectivo" }),
+  );
+  const groupQueued = await waitUntilWaiting(sharedGroup, 1);
+  await releaseGroup();
+  const groupMove = await groupRun;
+  track("transactions", groupMove.transactionId);
+  assert(
+    next("Under shared the withdrawal queues on the group's lock and lands in the group's cash"),
+    groupQueued && groupMove.targetCashAccountId === sharedSeeded[0]?.id && groupMove.createdCashAccount === false,
+    `queued on cash:${sharedGroup} = ${groupQueued}, target ${groupMove.targetCashAccountId}`,
+  );
+  await holderSql.end();
 }
 
 async function main(): Promise<void> {
@@ -3988,6 +4218,69 @@ async function main(): Promise<void> {
   await negativeCountSuite(userId);
   await importCategoryScopeSuite();
   await categoryScopeSuite();
+  await survivorsSuite();
+  await idempotencySuite();
+  await recurringVersionSuite();
+  await debtPaymentSuite();
+  await resendChangedSuite();
+  await withdrawalResendSuite();
+  await accountPlannedVersionSuite();
+  await learnedRuleSuite();
+  await recurringPauseSuite();
+  await resendAndMissingSuite();
+  await billedBeforeReconciliationSuite();
+  await pendingSettlementsOnAssetSuite();
+  await invitationActsSuite();
+  await loneLeaderAcceptsSuite();
+  await loginLessCompanySuite();
+  await recurringEndsOnSuite();
+  await leaderWhoseMemberLeftSuite();
+  await pendingAssetSettlementsScopeSuite();
+}
+
+// A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
+// accept answers otherFund, archives nothing and leaves the fund's member where they are.
+async function loginLessCompanySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const api = await invitationApi();
+  const groupIds: string[] = [];
+  const openFund = async (label: string) => {
+    const leader = await createMembershipFreeUser();
+    const { groupId } = await asUser(leader, () =>
+      createGroup({ name: `Harness fondo ${label} ${tag}`, leaderName: `Harness lider ${label}`, cashMode: "shared", locale: "es" }),
+    );
+    track("groups", groupId);
+    groupIds.push(groupId);
+    return { leader, groupId };
+  };
+
+  try {
+    const home = await openFund("con sin cuenta");
+    const [placeholder] = await fixtureSql<{ id: string }[]>`
+      insert into group_members (group_id, name, role) values (${home.groupId}, ${`Harness sin cuenta ${tag}`}, 'member') returning id`;
+    const target = await openFund("destino sin cuenta");
+    const inviteId = randomUUID();
+    await seedPendingInvite({ groupId: target.groupId, memberId: inviteId, actorId: target.leader.id, name: "Harness lider con sin cuenta", email: home.leader.email, archived: false });
+
+    const answer = await tap(() => asUser(home.leader, () => api.acceptInvitation({ memberId: inviteId })));
+    const rows = await fixtureSql<{ id: string; role: string; archived_at: string | null; group_id: string }[]>`
+      select id, role, archived_at::text as archived_at, group_id from group_members where group_id = ${home.groupId}`;
+    const invitation = (await fixtureSql<{ user_id: string | null }[]>`select user_id from group_members where id = ${inviteId}`)[0];
+    assert(
+      next("A leader whose fund holds a member without a login is not alone: otherFund, nothing archived, the member keeps their fund, the invitation stays pending"),
+      answer === "otherFund" &&
+        rows.length === 2 &&
+        rows.every((row) => row.archived_at === null) &&
+        rows.some((row) => row.id === placeholder.id && row.group_id === home.groupId) &&
+        invitation?.user_id === null,
+      `answer = ${answer}, fund rows = ${JSON.stringify(rows)}`,
+    );
+  } finally {
+    for (const id of groupIds) {
+      for (const row of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", row.id);
+    }
+  }
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -4130,6 +4423,87 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
       truth.count === SEEDED,
     `${drawn.length} rows drawn, count ${totals.count} against ${sql_.count}, net ${netTotal} against ${sql_.net}`,
   );
+
+  // The shell carries the caller's fund in its one statement (RF-55), so the layout
+  // does not pay `getUserGroup` another trip.
+  const shell = await getShellSummary();
+  const fund = await getUserGroup();
+  assert(
+    next("The shell summary names the leader's fund as getUserGroup does"),
+    fund !== null && shell.group?.id === fund.id && shell.group?.name === fund.name,
+    `shell ${JSON.stringify(shell.group)} against ${JSON.stringify(fund && { id: fund.id, name: fund.name })}`,
+  );
+  const loner = await createMembershipFreeUser();
+  const lonerShell = await asUser(loner, () => getShellSummary());
+  assert(
+    next("The shell summary of a caller with no fund has no group"),
+    lonerShell.group === null,
+    `group ${JSON.stringify(lonerShell.group)}`,
+  );
+  const archivedMember = await seedFellowMember(userId, scope.groupId);
+  await fixtureSql`update group_members set archived_at = now() where user_id = ${archivedMember.id}`;
+  const archivedShell = await asUser(archivedMember, () => getShellSummary());
+  const archivedGroup = await asUser(archivedMember, () => getUserGroup());
+  assert(
+    next("The shell summary of an archived member has no group, as getUserGroup"),
+    archivedShell.group === null && archivedGroup === null,
+    `shell ${JSON.stringify(archivedShell.group)}, getUserGroup ${JSON.stringify(archivedGroup)}`,
+  );
+  await getShellSummary();
+  const shellTrips = await trips(() => getShellSummary());
+  assert(
+    next("The shell summary stays one statement"),
+    shellTrips === SHELL_TRIPS,
+    `${shellTrips} round trips against ${SHELL_TRIPS}`,
+  );
+
+  // The home dashboard names its member buckets off the fund's live roster, read
+  // in the same fan-out as the figures: no read waits for another (RF-88).
+  const roster = await listMembers(scope.groupId, { archived: false });
+  const dashboard = await getDashboardData();
+  const namedRight = dashboard.netWorth.every((bucket) =>
+    bucket.bucket === "group"
+      ? bucket.name === fund?.name
+      : bucket.ownerUserId === null ||
+        bucket.isSelf ||
+        bucket.name === (roster.find((m) => m.userId === bucket.ownerUserId)?.name ?? null),
+  );
+  assert(
+    next("The dashboard names each bucket off the live roster"),
+    namedRight && dashboard.netWorth.length > 0,
+    `${dashboard.netWorth.length} buckets: ${JSON.stringify(dashboard.netWorth.map((b) => [b.bucket, b.name, b.isSelf]))}`,
+  );
+  // A personal account gives the groupless caller a bucket to label; without one
+  // the dashboard is empty and the fallback never runs.
+  const lonerAccountId = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${lonerAccountId}, ${loner.id}, 'Harness solitario', 'asset', 'bank', 1000, current_date)`;
+  track("accounts", lonerAccountId);
+  const lonerDashboard = await asUser(loner, () => getDashboardData());
+  assert(
+    next("The dashboard of a caller with no fund falls back to isSelf"),
+    lonerDashboard.netWorth.length > 0 &&
+      lonerDashboard.netWorth.every(
+        (bucket) => bucket.bucket !== "group" && bucket.name === null && bucket.isSelf,
+      ),
+    `${JSON.stringify(lonerDashboard.netWorth.map((b) => [b.bucket, b.name, b.isSelf]))}`,
+  );
+  const DASH_DELAY = 150;
+  process.env.HARNESS_CLAIMS_DELAY_MS = String(DASH_DELAY);
+  try {
+    await getDashboardData();
+    const started = performance.now();
+    await getDashboardData();
+    const elapsed = performance.now() - started;
+    assert(
+      next("The dashboard reads its roster in the first fan-out: under two claims delays"),
+      elapsed < 2 * DASH_DELAY,
+      `${Math.round(elapsed)} ms against a budget of ${2 * DASH_DELAY} ms`,
+    );
+  } finally {
+    delete process.env.HARNESS_CLAIMS_DELAY_MS;
+  }
 }
 
 // A weekly budget on /planning/budgets spans the same Monday-to-Sunday week /planning
@@ -6260,18 +6634,39 @@ async function inviteOnEditSuite(): Promise<void> {
     `${audits.length} UPDATE row(s), invite_email = ${audits[0]?.after_data?.invite_email}`,
   );
 
-  const claimed = await asUser(invitee, () => claimInviteForUser({ email: invitee.email }));
-  const claimedRow = await rowOf(abuela);
+  // RF-153, RF-154: the address makes the placeholder pending, not claimed. It keeps its place in the
+  // roster and its name; signing in joins nobody; accepting is what makes that same row the person's.
+  const api = await invitationApi();
+  const stateOf = async (id: string) =>
+    (
+      await fixtureSql<{ user_id: string | null; invite_email: string | null; invite_state: string; name: string; archived_at: string | null }[]>`
+        select user_id, invite_email, invite_state, name, archived_at::text as archived_at from group_members where id = ${id}`
+    )[0];
+  const pendingBefore = await stateOf(abuela);
+  const roster = await asUser(leader, () => listMembers(groupId, { archived: false }));
+  const [signedIn] = await asUser(invitee, () =>
+    withUserDb((tx) => tx.execute<{ id: string | null }>(sql`select private.claim_group_invite() as id`)),
+  );
+  const afterSignIn = await stateOf(abuela);
+  const accepted = await tap(() => asUser(invitee, () => api.acceptInvitation({ memberId: abuela })));
+  const claimedRow = await stateOf(abuela);
   const rowsForUser = await fixtureSql<{ id: string }[]>`select id from group_members where user_id = ${invitee.id}`;
   assert(
-    next("The person who signs in with that address becomes that member: the same row, their user, no invitation left, the name the group gave"),
-    claimed === "claimed" &&
+    next("A placeholder given an address stays in the roster as pending; signing in joins nobody; accepting makes that same row the person's, under the name the group gave"),
+    pendingBefore.invite_state === "pending" &&
+      roster.some((member) => member.id === abuela && member.name === "Abuela Rosa" && member.userId === null) &&
+      (signedIn?.id ?? null) === null &&
+      afterSignIn.user_id === null &&
+      afterSignIn.invite_state === "pending" &&
+      accepted === "accepted" &&
       claimedRow.user_id === invitee.id &&
+      claimedRow.invite_state === "accepted" &&
       claimedRow.invite_email === null &&
       claimedRow.name === "Abuela Rosa" &&
+      claimedRow.archived_at === null &&
       rowsForUser.length === 1 &&
       rowsForUser[0].id === abuela,
-    `claim = ${claimed}, row = ${JSON.stringify(claimedRow)}, rows for the user = ${rowsForUser.map((r) => r.id).join(",")}`,
+    `state ${pendingBefore.invite_state}, in roster = ${roster.some((member) => member.id === abuela)}, sign-in joined = ${signedIn?.id ?? null}, after sign-in ${JSON.stringify(afterSignIn)}, accept = ${accepted}, row = ${JSON.stringify(claimedRow)}, rows for the user = ${rowsForUser.map((r) => r.id).join(",")}`,
   );
 
   // No address: a rename, and nothing else.
@@ -7068,4 +7463,2994 @@ async function categoryScopeSuite(): Promise<void> {
 
   // A fund-account movement has no owning user, so the identity purge would leave it pinned to the fund's category.
   await fixtureSql`delete from transactions where id in ${fixtureSql(spent)}`;
+}
+
+// Survivors of mutation testing: the budget's place and currency (RF-71, RF-140, RF-121) and a
+// rename that touches one row. Appended last so the numbering of the checks above does not move.
+async function survivorsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { budgetAction, updateMember: renameMember } = {
+    budgetAction: ((await import("@/app/actions/budgets")) as unknown as {
+      createBudgetAction: (input: {
+        categoryId: string;
+        accountId?: string | null;
+        period: string;
+        limit: string;
+        thresholdPct: number;
+      }) => Promise<{ data?: { budgetId: string }; serverError?: string }>;
+    }).createBudgetAction,
+    updateMember: (await import("@/db/queries/group-members")).updateMember,
+  };
+
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo sobrevivientes ${tag}`, leaderName: "Harness lider sobrevivientes", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const [seeded] = await fixtureSql<{ member_id: string; account_id: string }[]>`
+    select
+      (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
+      (select id from accounts where group_id = ${groupId} and subtype = 'cash') as account_id`;
+  track("group_members", seeded.member_id);
+  track("accounts", seeded.account_id);
+  for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${groupId}`) {
+    track("categories", row.id);
+  }
+  // A personal currency that is neither the fund's nor the account's: any fallback to it shows.
+  await fixtureSql`update app_users set settlement_currency = 'EUR' where id = ${leader.id}`;
+
+  const { accountId: usdAccount } = await asUser(leader, () =>
+    createAccount({
+      name: `Harness dolares ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: null,
+      groupId,
+      isShared: true,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "USD",
+      amountMinor: 100_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  keep("accounts", usdAccount);
+  const groupCategory = (
+    await asUser(leader, () =>
+      createCategory({ scope: { groupId }, name: `Harness sobrev fondo ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    )
+  ).categoryId;
+  track("categories", groupCategory);
+  const ownCategory = (
+    await asUser(leader, () =>
+      createCategory({ scope: { ownerUserId: leader.id }, name: `Harness sobrev propia ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    )
+  ).categoryId;
+  track("categories", ownCategory);
+
+  const onUsd = await asUser(leader, () => resolveBudgetPlace({ categoryId: groupCategory, accountId: usdAccount }));
+  assert(
+    next("A budget placed on a dollar account inside a peso fund takes the account's currency, in the fund's place"),
+    onUsd?.currency === "USD" && onUsd.groupId === groupId && onUsd.ownerUserId === null,
+    JSON.stringify(onUsd),
+  );
+  const onFund = await asUser(leader, () => resolveBudgetPlace({ categoryId: groupCategory }));
+  assert(
+    next("A fund budget with no account takes the fund's currency, not the caller's personal one"),
+    onFund?.currency === "COP" && onFund.groupId === groupId,
+    JSON.stringify(onFund),
+  );
+  const onOwn = await asUser(leader, () => resolveBudgetPlace({ categoryId: ownCategory }));
+  assert(
+    next("A personal budget with no account takes the caller's own settlement currency"),
+    onOwn?.currency === "EUR" && onOwn.ownerUserId === leader.id && onOwn.groupId === null,
+    JSON.stringify(onOwn),
+  );
+
+  const created = await asUser(leader, () =>
+    budgetAction({ categoryId: groupCategory, accountId: usdAccount, period: "monthly", limit: "12.34", thresholdPct: 80 }),
+  );
+  const [stored] = created?.data
+    ? await fixtureSql<{ limit_cents: string; account_id: string | null; group_id: string | null }[]>`
+        select limit_cents::text, account_id, group_id from budgets where id = ${created.data.budgetId}`
+    : [];
+  if (created?.data) keep("budgets", created.data.budgetId);
+  assert(
+    next("createBudgetAction on a dollar account in a peso fund stores the limit in dollar cents against that account"),
+    created?.serverError === undefined && stored?.limit_cents === "1234" && stored.account_id === usdAccount && stored.group_id === groupId,
+    `serverError = ${created?.serverError ?? "none"}, row = ${JSON.stringify(stored)}`,
+  );
+
+  // The account the action is handed is the account the place is resolved from: one the caller cannot
+  // read refuses as not found, before anything is inserted.
+  const stranger = await createMembershipFreeUser();
+  const { accountId: strangerAccount } = await asUser(stranger, () =>
+    createAccount({
+      name: `Harness ajena ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: stranger.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "USD",
+      amountMinor: 100_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  keep("accounts", strangerAccount);
+  const budgetsBefore = (await fixtureSql<{ n: number }[]>`select count(*)::int as n from budgets where category_id = ${groupCategory}`)[0].n;
+  const refusals = [
+    await asUser(leader, () => budgetAction({ categoryId: groupCategory, accountId: strangerAccount, period: "monthly", limit: "5", thresholdPct: 80 })),
+    await asUser(leader, () => budgetAction({ categoryId: groupCategory, accountId: randomUUID(), period: "monthly", limit: "5", thresholdPct: 80 })),
+  ];
+  const budgetsAfter = (await fixtureSql<{ n: number }[]>`select count(*)::int as n from budgets where category_id = ${groupCategory}`)[0].n;
+  assert(
+    next("createBudgetAction on an account the caller cannot read, or that does not exist, refuses as not found and files nothing"),
+    refusals.every((r) => r?.serverError === "errors.notFound" && r.data === undefined) && budgetsAfter === budgetsBefore,
+    `refusals = ${refusals.map((r) => r?.serverError ?? "ok").join(", ")}, budgets ${budgetsBefore} -> ${budgetsAfter}`,
+  );
+
+  // A rename changes the row it names and no sibling.
+  const seedPlaceholder = async (name: string): Promise<string> => {
+    const id = randomUUID();
+    await fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: leader.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      await tx`insert into group_members (id, group_id, name, role) values (${id}, ${groupId}, ${name}, 'member')`;
+    });
+    track("group_members", id);
+    return id;
+  };
+  const target = await seedPlaceholder("Harness primo objetivo");
+  const sibling = await seedPlaceholder("Harness primo hermano");
+  const nameOf = async (id: string) =>
+    (await fixtureSql<{ name: string }[]>`select name from group_members where id = ${id}`)[0]?.name;
+  const leaderBefore = await nameOf(seeded.member_id);
+  const done = await asUser(leader, () => renameMember({ groupId, memberId: target, name: "Harness primo renombrado" }));
+  const [targetName, siblingName, leaderAfter] = [await nameOf(target), await nameOf(sibling), await nameOf(seeded.member_id)];
+  assert(
+    next("Renaming a member without an address changes that row alone: a sibling and the leader keep their names"),
+    done === true &&
+      targetName === "Harness primo renombrado" &&
+      siblingName === "Harness primo hermano" &&
+      leaderAfter === leaderBefore,
+    `target = ${targetName}, sibling = ${siblingName}, leader ${leaderBefore} -> ${leaderAfter}`,
+  );
+}
+
+type MovementResult = {
+  data?: { ok?: boolean; transactionId?: string; reason?: string };
+  serverError?: string;
+  validationErrors?: unknown;
+};
+
+// M42: a create sent twice books once, an edit loaded before another person's save is refused.
+async function idempotencySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: (input: Record<string, unknown>) => Promise<MovementResult>;
+    updateTransactionAction: (input: Record<string, unknown>) => Promise<MovementResult>;
+  };
+
+  const user = await createMembershipFreeUser();
+  const ownerScope = { ownerUserId: user.id };
+  const { accountId } = await asUser(user, () =>
+    createAccount({
+      name: `Harness idem ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  track("accounts", accountId);
+  const mkCategory = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(user, () =>
+      createCategory({ scope: ownerScope, name: `${name} ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const catA = await mkCategory("Harness idem A");
+  const catB = await mkCategory("Harness idem B");
+  const { labelId } = await asUser(user, () =>
+    createLabel({ scope: ownerScope, name: `Harness idem ${tag}`, color: "#7A4CB4" }),
+  );
+  track("labels", labelId);
+
+  const expense = (over: Record<string, unknown> = {}) => ({
+    fromAccountId: accountId,
+    toAccountId: null,
+    amount: "100",
+    occurredAt: today,
+    description: `idem ${tag}`,
+    splits: [{ categoryId: catA, amount: "100" }],
+    labelIds: [labelId],
+    ...over,
+  });
+  const create = (over: Record<string, unknown> = {}) =>
+    asUser(user, () => actions.createTransactionAction(expense(over)));
+  const update = (id: string, over: Record<string, unknown> = {}) =>
+    asUser(user, () => actions.updateTransactionAction({ transactionId: id, ...expense(), ...over }));
+  const trackRows = (ids: string[]) => ids.forEach((id) => track("transactions", id));
+  type MovementRow = { id: string; external_ref: string | null; amount_cents: string; kind: string };
+  const byRef = (refs: string[]) =>
+    fixtureSql<MovementRow[]>`
+      select id, external_ref, amount_cents::text, kind from transactions
+      where owner_user_id = ${user.id} and external_ref in ${fixtureSql(refs)}`;
+  const byDescription = (text: string) =>
+    fixtureSql<MovementRow[]>`
+      select id, external_ref, amount_cents::text, kind from transactions
+      where owner_user_id = ${user.id} and description = ${text}`;
+  const byId = (rowId: string) =>
+    fixtureSql<MovementRow[]>`
+      select id, external_ref, amount_cents::text, kind from transactions where id = ${rowId}`;
+  const isStale = (r: MovementResult) =>
+    r.serverError === "errors.stale" || (r.data?.ok === false && r.data.reason === "stale");
+
+  // Q: the same request sent twice
+  const ref = randomUUID();
+  const first = await create({ requestRef: ref });
+  const second = await create({ requestRef: ref });
+  const booked = await byRef([`form:${ref}`]);
+  trackRows(booked.map((r) => r.id));
+  const splitsBooked = booked[0]
+    ? (await fixtureSql<{ n: number }[]>`select count(*)::int as n from transaction_splits where transaction_id = ${booked[0].id}`)[0].n
+    : -1;
+  assert(
+    next("A create sent twice with the same requestRef books one movement under form:<ref> and both answers name its id"),
+    booked.length === 1 &&
+      booked[0].amount_cents === "10000" &&
+      booked[0].kind === "expense" &&
+      splitsBooked === 1 &&
+      first.data?.ok === true &&
+      second.data?.ok === true &&
+      first.data.transactionId === booked[0].id &&
+      second.data.transactionId === booked[0].id,
+    `${booked.length} row(s), splits ${splitsBooked}, first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
+  );
+
+  // Q: two different requests with the same figures
+  const refA = randomUUID();
+  const refB = randomUUID();
+  const ra = await create({ requestRef: refA });
+  const rb = await create({ requestRef: refB });
+  const pair = await byRef([`form:${refA}`, `form:${refB}`]);
+  trackRows(pair.map((r) => r.id));
+  assert(
+    next("Two different requestRefs with identical figures book two movements, each answered with its own id"),
+    pair.length === 2 &&
+      ra.data?.transactionId !== rb.data?.transactionId &&
+      pair.some((r) => r.id === ra.data?.transactionId) &&
+      pair.some((r) => r.id === rb.data?.transactionId),
+    `${pair.length} row(s), ids ${ra.data?.transactionId} / ${rb.data?.transactionId}`,
+  );
+
+  // Q: no requestRef, nothing deduplicates
+  const bare = `bare ${tag}`;
+  const b1 = await create({ description: bare });
+  const b2 = await create({ description: bare });
+  const bareRows = await byDescription(bare);
+  trackRows(bareRows.map((r) => r.id));
+  assert(
+    next("Two creates with no requestRef book two movements, neither under a form: key"),
+    bareRows.length === 2 && bareRows.every((r) => !r.external_ref?.startsWith("form:")) && b1.data?.transactionId !== b2.data?.transactionId,
+    `${bareRows.length} row(s), refs ${JSON.stringify(bareRows.map((r) => r.external_ref))}`,
+  );
+
+  // The movement two people have open
+  const opened = await create({ requestRef: randomUUID(), description: `open ${tag}` });
+  const id = opened.data?.transactionId ?? randomUUID();
+  track("transactions", id);
+  const stamp = async () =>
+    (await fixtureSql<{ t: string }[]>`select updated_at::text as t from transactions where id = ${id}`)[0]?.t ?? "";
+  const hasMicros = (t: string) => /\.\d{6}/.test(t) && !t.replace(/[+-]\d+$/, "").endsWith("000");
+  // The test needs the microseconds to exist: a stamp that lands on a whole millisecond is touched again.
+  for (let i = 0; i < 10 && !hasMicros(await stamp()); i++) {
+    await fixtureSql`update transactions set description = description where id = ${id}`;
+  }
+  const loaded = await stamp();
+  assert(next("The movement's updated_at::text carries microseconds the test can compare"), hasMicros(loaded), loaded);
+
+  // Q: a fresh edit carrying the row's own stamp
+  const fresh = await update(id, { amount: "500", expectedUpdatedAt: loaded, splits: [{ categoryId: catA, amount: "500" }] });
+  const afterFresh = (await byId(id))[0];
+  const stampAfter = await stamp();
+  assert(
+    next("An edit carrying the row's own updated_at::text, microseconds and all, is accepted and moves the stamp"),
+    fresh.serverError === undefined && !isStale(fresh) && afterFresh?.amount_cents === "50000" && stampAfter !== loaded,
+    `result = ${JSON.stringify(fresh)}, amount = ${afterFresh?.amount_cents}, stamp ${loaded} -> ${stampAfter}`,
+  );
+
+  // Q: the second person's edit, loaded before the first one saved
+  const stale = await update(id, {
+    amount: "7",
+    expectedUpdatedAt: loaded,
+    splits: [{ categoryId: catB, amount: "7" }],
+    labelIds: [],
+  });
+  const afterStale = (await byId(id))[0];
+  assert(
+    next("An edit carrying a stamp older than the row is refused as stale and leaves the amount as the first save set it"),
+    isStale(stale) && afterStale?.amount_cents === "50000",
+    `result = ${JSON.stringify(stale)}, amount = ${afterStale?.amount_cents}`,
+  );
+
+  // Q: the refusal writes nothing else
+  const kept = await fixtureSql<{ category_id: string; amount_cents: string }[]>`
+    select category_id, amount_cents::text from transaction_splits where transaction_id = ${id}`;
+  const keptLabels = await fixtureSql<{ label_id: string }[]>`
+    select label_id from transaction_labels where transaction_id = ${id}`;
+  assert(
+    next("A stale edit leaves the splits and labels the first save wrote"),
+    kept.length === 1 && kept[0].category_id === catA && kept[0].amount_cents === "50000" &&
+      keptLabels.length === 1 && keptLabels[0].label_id === labelId,
+    `splits = ${JSON.stringify(kept)}, labels = ${JSON.stringify(keptLabels)}`,
+  );
+
+  // Q: an edit that names no stamp still lands
+  const blind = await update(id, { amount: "600", splits: [{ categoryId: catA, amount: "600" }] });
+  const afterBlind = (await byId(id))[0];
+  assert(
+    next("An edit that carries no expectedUpdatedAt is not refused"),
+    blind.serverError === undefined && !isStale(blind) && afterBlind?.amount_cents === "60000",
+    `result = ${JSON.stringify(blind)}, amount = ${afterBlind?.amount_cents}`,
+  );
+
+  // Q: the create and its cause are one transaction
+  const cause = await create({ requestRef: randomUUID(), description: `cause ${tag}` });
+  const causeId = cause.data?.transactionId ?? randomUUID();
+  track("transactions", causeId);
+  const victim = `effect ${tag}`;
+  const fn = `harness_m42_drop_cause_${tag.replace(/-/g, "")}`;
+  // Stands in for the other person deleting the cause after the form read it and before the write ends.
+  await fixtureSql.unsafe(`
+    create function finances.${fn}() returns trigger language plpgsql security definer set search_path = finances, public as $f$
+    begin
+      if new.description = '${victim}' then delete from finances.transactions where id = '${causeId}'; end if;
+      return new;
+    end $f$`);
+  await fixtureSql.unsafe(`create trigger ${fn} after insert on finances.transactions for each row execute function finances.${fn}()`);
+  let refused: MovementResult;
+  try {
+    refused = await create({ requestRef: randomUUID(), description: victim, causedByTransactionId: causeId });
+  } finally {
+    await fixtureSql.unsafe(`drop trigger if exists ${fn} on finances.transactions`);
+    await fixtureSql.unsafe(`drop function if exists finances.${fn}()`);
+  }
+  const leftovers = await byDescription(victim);
+  trackRows(leftovers.map((r) => r.id));
+  // The stand-in delete rides the create's own transaction, so a whole rollback brings the cause back.
+  const causeLeft = await byId(causeId);
+  assert(
+    next("A create whose cause vanished before the write ended rolls back whole: an error, and no movement left behind"),
+    leftovers.length === 0 && (refused.serverError !== undefined || refused.data?.ok === false),
+    `cause rows = ${causeLeft.length}, movement rows = ${leftovers.length}, result = ${JSON.stringify(refused)}`,
+  );
+}
+
+// M43: a rule's edit form opened before the 00:15 run is refused after it, so the cursor never rewinds (RF-31).
+async function recurringVersionSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const { accountId } = await asUser(user, () =>
+    createAccount({
+      name: `Harness m43 ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000_000,
+      balanceOn: shiftDate(today, -30),
+    }),
+  );
+  track("accounts", accountId);
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m43 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", categoryId);
+
+  type RuleState = { updated_at: string; next_run_on: string; amount_cents: string };
+  const makeRule = async (dueIn: number): Promise<string> => {
+    const { recurringRuleId } = await asUser(user, () =>
+      createRecurringRule({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 1_000,
+        categoryId,
+        description: `m43 ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: shiftDate(today, dueIn),
+        endsOn: null,
+      }),
+    );
+    keep("recurring_rules", recurringRuleId);
+    return recurringRuleId;
+  };
+  const read = async (ruleId: string): Promise<RuleState> =>
+    (
+      await fixtureSql<RuleState[]>`
+        select updated_at::text as updated_at, next_run_on::text as next_run_on, amount_cents::text as amount_cents
+        from recurring_rules where id = ${ruleId}`
+    )[0];
+  const run = () => fixtureSql`select private.run_due_recurring_rules(${user.id}::uuid)`;
+  const booked = async (ruleId: string): Promise<number> => {
+    const rows = await fixtureSql<{ id: string }[]>`select id from transactions where recurring_rule_id = ${ruleId}`;
+    for (const r of rows) keep("transactions", r.id);
+    return rows.length;
+  };
+  // The form seeds every field from the rule it loaded, the next run included.
+  const save = (ruleId: string, loaded: RuleState, over: Record<string, unknown> = {}) =>
+    asUser(user, () =>
+      updateRecurringRuleAction({
+        id: ruleId,
+        fromAccountId: accountId,
+        toAccountId: null,
+        amount: "20",
+        categoryId,
+        description: `m43 ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: loaded.next_run_on,
+        endsOn: null,
+        expectedUpdatedAt: loaded.updated_at,
+        ...over,
+      } as Parameters<typeof updateRecurringRuleAction>[0]),
+    ) as Promise<{ serverError?: string; data?: { ok?: boolean; reason?: string } } | undefined>;
+  const isStale = (r: Awaited<ReturnType<typeof save>>) =>
+    r?.serverError === "errors.stale" || (r?.data?.ok === false && r.data.reason === "stale");
+
+  // Q: the form is open, the run lands, the person saves
+  const runRule = await makeRule(-7);
+  const loaded = await read(runRule);
+  await run();
+  const afterRun = await read(runRule);
+  const bookedByRun = await booked(runRule);
+  const refused = await save(runRule, loaded);
+  const afterRefused = await read(runRule);
+  assert(
+    next("A save carrying the updated_at loaded before the run is refused stale and leaves the run's next_run_on and amount"),
+    afterRun.updated_at !== loaded.updated_at &&
+      isStale(refused) &&
+      afterRefused.next_run_on === afterRun.next_run_on &&
+      afterRefused.next_run_on !== loaded.next_run_on &&
+      afterRefused.amount_cents === "1000",
+    `loaded ${loaded.updated_at}, run ${afterRun.updated_at}, result = ${JSON.stringify(refused)}, next_run_on ${loaded.next_run_on} -> ${afterRefused.next_run_on}, amount ${afterRefused.amount_cents}`,
+  );
+
+  // Q: the same stale form, but its date sits ahead of the run's, so no booked-period guard can catch it
+  const skipForm = await save(runRule, loaded, { nextRunOn: shiftDate(today, 21) });
+  const afterSkip = await read(runRule);
+  assert(
+    next("A stale save is refused by its version even when the date it carries is ahead of the run's"),
+    isStale(skipForm) && afterSkip.next_run_on === afterRun.next_run_on && afterSkip.amount_cents === "1000",
+    `result = ${JSON.stringify(skipForm)}, next_run_on ${afterRun.next_run_on} -> ${afterSkip.next_run_on}`,
+  );
+
+  // Q: the refusal opens no second booking
+  await run();
+  const bookedAgain = await booked(runRule);
+  assert(
+    next("After the refused save the next run books nothing for the same period"),
+    bookedByRun >= 1 && bookedAgain === bookedByRun,
+    `${bookedByRun} booked by the first run, ${bookedAgain} after the second`,
+  );
+
+  // Q: no run in between
+  const quietRule = await makeRule(7);
+  const quietLoaded = await read(quietRule);
+  const saved = await save(quietRule, quietLoaded);
+  const afterSaved = await read(quietRule);
+  assert(
+    next("A save carrying the rule's own updated_at::text is accepted, changes the amount and moves the stamp"),
+    saved?.serverError === undefined &&
+      !isStale(saved) &&
+      afterSaved.amount_cents === "2000" &&
+      afterSaved.updated_at !== quietLoaded.updated_at,
+    `result = ${JSON.stringify(saved)}, amount = ${afterSaved.amount_cents}, stamp ${quietLoaded.updated_at} -> ${afterSaved.updated_at}`,
+  );
+}
+
+// M44: two payments of one card never share an installment line, and a resent payment books once.
+async function debtPaymentSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const LINE = 100_000;
+  const user = await createMembershipFreeUser();
+  const open = async (kind: "asset" | "liability", name: string) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness m44 ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: kind === "asset" ? 1_000_000_000 : 1_000_000,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await open("asset", "bank");
+
+  // A card owing two lines of one payment each, the older line due first.
+  const newCard = async (name: string): Promise<{ cardId: string; l1: string; l2: string; planId: string }> => {
+    const cardId = await open("liability", name);
+    const { planId } = await asUser(user, () =>
+      createInstallmentPlan({
+        accountId: cardId,
+        description: `m44 ${name} ${tag}`,
+        principalCents: LINE * 2,
+        nInstallments: 2,
+        frequency: "monthly",
+        interestRate: null,
+        downPaymentCents: null,
+        avalCents: null,
+        startDate: shiftDate(today, -30),
+        merchant: null,
+        lines: [
+          { seq: 1, dueDate: shiftDate(today, -30), amountCents: LINE },
+          { seq: 2, dueDate: shiftDate(today, -1), amountCents: LINE },
+        ],
+      }),
+    );
+    keep("installment_plans", planId);
+    const lines = await fixtureSql<{ id: string }[]>`
+      select id from installment_lines where plan_id = ${planId} order by seq`;
+    return { cardId, planId, l1: lines[0].id, l2: lines[1].id };
+  };
+  type Answer = {
+    serverError?: string;
+    data?: { transactionId: string; paidLineIds: string[]; remainderCents: number };
+  };
+  const pay = (cardId: string, over: Record<string, unknown> = {}) =>
+    asUser(user, () =>
+      recordDebtPaymentAction({
+        fromAccountId: bank,
+        toAccountId: cardId,
+        amount: "1000",
+        occurredAt: today,
+        ...over,
+      } as Parameters<typeof recordDebtPaymentAction>[0]),
+    ) as Promise<Answer | undefined>;
+  const links = (planId: string) =>
+    fixtureSql<{ id: string; paid: string | null }[]>`
+      select id, paid_transaction_id as paid from installment_lines where plan_id = ${planId} order by seq`;
+  const movements = async (cardId: string) => {
+    const rows = await fixtureSql<{ id: string; external_ref: string | null; amount_cents: string }[]>`
+      select id, external_ref, amount_cents::text from transactions where to_account_id = ${cardId}`;
+    for (const r of rows) track("transactions", r.id);
+    return rows;
+  };
+
+  // Q: two payments at once, repeated so a lucky ordering cannot hide the overlap
+  let worst = "";
+  let allRight = true;
+  let answersTrue = true;
+  let answerDetail = "";
+  for (let round = 0; round < 5; round++) {
+    const card = await newCard(`race${round}`);
+    const [a, b] = await Promise.all([pay(card.cardId), pay(card.cardId)]);
+    const rows = await movements(card.cardId);
+    const stored = await links(card.planId);
+    const linked = stored.map((l) => l.paid);
+    const ids = rows.map((r) => r.id);
+    const right =
+      rows.length === 2 &&
+      linked.every((p) => p !== null && ids.includes(p)) &&
+      new Set(linked).size === 2;
+    if (!right) {
+      allRight = false;
+      worst ||= `round ${round}: ${rows.length} movement(s), links ${JSON.stringify(linked)}, ids ${JSON.stringify(ids)}`;
+    }
+    for (const answer of [a, b]) {
+      const mine = stored.filter((l) => l.paid === answer?.data?.transactionId).map((l) => l.id).sort();
+      const said = [...(answer?.data?.paidLineIds ?? [])].sort();
+      if (answer?.data === undefined || JSON.stringify(mine) !== JSON.stringify(said)) {
+        answersTrue = false;
+        answerDetail ||= `round ${round}: said ${JSON.stringify(said)}, stored ${JSON.stringify(mine)}, answer ${JSON.stringify(answer)}`;
+      }
+    }
+  }
+  assert(
+    next("Two payments of one card at once book two movements, and lines L1 and L2 each link to a different one"),
+    allRight,
+    worst || "5 rounds clean",
+  );
+
+  // Q: the answer matches the stored links
+  assert(
+    next("Each concurrent payment's paidLineIds names exactly the lines stored against its own movement"),
+    answersTrue,
+    answerDetail || "5 rounds clean",
+  );
+
+  // Q: the lock is taken on the card, as the first thing the payment does
+  const held = await newCard("lock");
+  const lockKey = held.cardId;
+  let settled = false;
+  let settledWhileHeld = false;
+  let blocked: Promise<Answer | undefined> | undefined;
+  await fixtureSql.begin(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtextextended(${lockKey}::text, 0))`;
+    blocked = pay(held.cardId);
+    blocked.then(() => {
+      settled = true;
+    });
+    await new Promise((r) => setTimeout(r, 1500));
+    // Read before the commit releases the lock; after it the payment settles by design.
+    settledWhileHeld = settled;
+  });
+  const afterRelease = await blocked;
+  const heldLinks = await links(held.planId);
+  await movements(held.cardId);
+  assert(
+    next("A payment of a card waits on the advisory lock keyed by the card id, then books once it is released"),
+    !settledWhileHeld &&
+      afterRelease?.data?.paidLineIds.length === 1 &&
+      heldLinks[0].paid === afterRelease.data.transactionId,
+    `settled while held = ${settledWhileHeld}, answer = ${JSON.stringify(afterRelease)}`,
+  );
+
+  // Q: one request sent twice
+  const resend = await newCard("resend");
+  const ref = randomUUID();
+  const first = await pay(resend.cardId, { requestRef: ref });
+  const second = await pay(resend.cardId, { requestRef: ref });
+  const sent = await movements(resend.cardId);
+  const sentLinks = await links(resend.planId);
+  assert(
+    next("A payment sent twice with the same requestRef books one movement under form:<ref>, and both answers name it"),
+    sent.length === 1 &&
+      sent[0].external_ref === `form:${ref}` &&
+      first?.data?.transactionId === sent[0].id &&
+      second?.data?.transactionId === sent[0].id &&
+      sentLinks[0].paid === sent[0].id &&
+      sentLinks[1].paid === null,
+    `${sent.length} movement(s), refs ${JSON.stringify(sent.map((r) => r.external_ref))}, links ${JSON.stringify(sentLinks.map((l) => l.paid))}, first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
+  );
+
+  // Q: two requests, two payments
+  const apart = await newCard("apart");
+  const x = await pay(apart.cardId, { requestRef: randomUUID() });
+  const y = await pay(apart.cardId, { requestRef: randomUUID() });
+  const both = await movements(apart.cardId);
+  const apartLinks = await links(apart.planId);
+  assert(
+    next("Two payments with different requestRefs book two movements, each closing its own line"),
+    both.length === 2 &&
+      x?.data?.transactionId !== y?.data?.transactionId &&
+      apartLinks[0].paid === x?.data?.transactionId &&
+      apartLinks[1].paid === y?.data?.transactionId,
+    `${both.length} movement(s), links ${JSON.stringify(apartLinks.map((l) => l.paid))}, x = ${JSON.stringify(x)}, y = ${JSON.stringify(y)}`,
+  );
+
+  // Q: the sequential allocation stays oldest first and its answer is true
+  const seq = await newCard("seq");
+  const both2 = await pay(seq.cardId, { amount: "2000" });
+  const seqLinks = await links(seq.planId);
+  await movements(seq.cardId);
+  assert(
+    next("One payment covering two lines links both to its movement and reports both"),
+    both2?.data !== undefined &&
+      seqLinks.every((l) => l.paid === both2.data?.transactionId) &&
+      [...both2.data.paidLineIds].sort().join() === [seq.l1, seq.l2].sort().join(),
+    `answer = ${JSON.stringify(both2)}, links ${JSON.stringify(seqLinks.map((l) => l.paid))}`,
+  );
+
+  // M53: a card in credit owes nothing; it never adds to what the screen says is owed.
+  const holder = await createMembershipFreeUser();
+  const OWED = 50_000;
+  const OVERPAID = 50_000;
+  const USD_CREDIT = 3_000;
+  const openFor = async (
+    kind: "asset" | "liability",
+    name: string,
+    currency: "COP" | "USD",
+    amountMinor: number,
+  ) => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness m53 ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: currency,
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const transfer = async (fromAccountId: string, toAccountId: string, amountCents: number) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId,
+        toAccountId,
+        amountCents,
+        occurredAt: today,
+        description: `m53 ${tag}`,
+        externalRef: null,
+        splits: [],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  // A refund in dollars on a card that bills in pesos lands in the card's dollar pocket,
+  // as an estimate until the statement says what it settled for.
+  const refundInDollars = async (toAccountId: string, amountCents: number) => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({
+        scope: { ownerUserId: holder.id },
+        name: `Harness m53 refund ${tag}`,
+        kind: "income",
+        parentId: null,
+        color: "#B4542F",
+      }),
+    );
+    keep("categories", categoryId);
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: null,
+        toAccountId,
+        amountCents,
+        currency: "USD",
+        counterAmountCents: amountCents * 4_000,
+        counterIsEstimate: true,
+        occurredAt: today,
+        description: `m53 refund ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const screenOf = () => asUser(holder, () => getDebtsScreenData());
+  const owedOf = (screen: DebtsScreenData, accountId: string) =>
+    screen.withoutTerms.find((debt) => debt.accountId === accountId);
+  const setOf = (screen: DebtsScreenData, currency: string) =>
+    screen.totals.byCurrency.find((set) => set.currency === currency);
+
+  const copBank = await openFor("asset", "bank", "COP", 1_000_000_000);
+  const owing = await openFor("liability", "owing", "COP", OWED);
+  const credit = await openFor("liability", "credit", "COP", 0);
+  const mixed = await openFor("liability", "mixed", "COP", 0);
+
+  const beforeCredit = await screenOf();
+  await transfer(copBank, credit, OVERPAID);
+  await refundInDollars(mixed, USD_CREDIT);
+  const afterCredit = await screenOf();
+
+  assert(
+    next("A card overpaid by 50000 owes 0, and the peso total is what it was before the overpayment"),
+    owedOf(afterCredit, credit)?.owedCents === 0 &&
+      setOf(afterCredit, "COP")?.owedCents === setOf(beforeCredit, "COP")?.owedCents &&
+      setOf(afterCredit, "COP")?.owedCents === OWED &&
+      afterCredit.totals.owedCents === OWED,
+    `credit card owes ${owedOf(afterCredit, credit)?.owedCents}, peso set ${setOf(beforeCredit, "COP")?.owedCents} before and ${setOf(afterCredit, "COP")?.owedCents} after, flat ${afterCredit.totals.owedCents}, expected ${OWED}`,
+  );
+
+  assert(
+    next("A card owing 50000 owes 50000 beside a card in credit"),
+    owedOf(afterCredit, owing)?.owedCents === OWED,
+    `owing card owes ${owedOf(afterCredit, owing)?.owedCents}, expected ${OWED}`,
+  );
+
+  const usdPocket = owedOf(afterCredit, mixed)?.otherOwed.find((pocket) => pocket.currency === "USD");
+  assert(
+    next("A dollar pocket in credit on a peso card owes 0 and adds nothing to the dollar total"),
+    usdPocket?.owedCents === 0 && (setOf(afterCredit, "USD")?.owedCents ?? 0) === 0,
+    `dollar pocket owes ${usdPocket?.owedCents ?? "no pocket"}, dollar set owes ${setOf(afterCredit, "USD")?.owedCents ?? "no set"}`,
+  );
+
+  // The same relation from the other side: a debt in dollars is still counted in full.
+  const usdCard = await openFor("liability", "usd card", "USD", 4_000);
+  const withUsdDebt = await screenOf();
+  assert(
+    next("A dollar card owing 4000 adds 4000 to the dollar total while the pocket in credit adds 0"),
+    owedOf(withUsdDebt, usdCard)?.owedCents === 4_000 && setOf(withUsdDebt, "USD")?.owedCents === 4_000,
+    `dollar card owes ${owedOf(withUsdDebt, usdCard)?.owedCents}, dollar set owes ${setOf(withUsdDebt, "USD")?.owedCents}, expected 4000`,
+  );
+}
+
+// M74: a form ref resent with other figures is refused, never answered ok (RF-158).
+async function resendChangedSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: (input: Record<string, unknown>) => Promise<MovementResult>;
+  };
+  const user = await createMembershipFreeUser();
+  const mkAccount = async (name: string): Promise<string> => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const accountA = await mkAccount("Harness m74 A");
+  const accountB = await mkAccount("Harness m74 B");
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m74 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", categoryId);
+
+  const send = (ref: string, over: Record<string, unknown> = {}) =>
+    asUser(user, () =>
+      actions.createTransactionAction({
+        requestRef: ref,
+        fromAccountId: accountA,
+        toAccountId: null,
+        amount: "100",
+        occurredAt: today,
+        description: `m74 ${tag}`,
+        splits: [{ categoryId, amount: String(over.amount ?? "100") }],
+        labelIds: [],
+        ...over,
+      }),
+    );
+  type Row = { id: string; amount_cents: string; from_account_id: string | null; occurred_at: string };
+  const rowsOf = async (ref: string) => {
+    const rows = await fixtureSql<Row[]>`
+      select id, amount_cents::text, from_account_id, occurred_at::text from transactions
+      where owner_user_id = ${user.id} and external_ref = ${`form:${ref}`}`;
+    rows.forEach((r) => track("transactions", r.id));
+    return rows;
+  };
+  const refused = (r: MovementResult) =>
+    r.serverError === "errors.resendChanged" || (r.data?.ok === false && r.data.reason === "resendChanged");
+
+  // Q: the same figures
+  const same = randomUUID();
+  const s1 = await send(same);
+  const s2 = await send(same);
+  const sameRows = await rowsOf(same);
+  assert(
+    next("A resend of a form ref with the same amount, account and date answers ok with the existing id and books one row"),
+    sameRows.length === 1 && s1.data?.ok === true && s2.data?.ok === true &&
+      s2.data.transactionId === sameRows[0].id && s1.data.transactionId === sameRows[0].id,
+    `${sameRows.length} row(s), first = ${JSON.stringify(s1)}, second = ${JSON.stringify(s2)}`,
+  );
+
+  // Q: another amount
+  const amt = randomUUID();
+  await send(amt);
+  const a2 = await send(amt, { amount: "250" });
+  const amtRows = await rowsOf(amt);
+  assert(
+    next("A resend of a form ref with another amount is refused resendChanged, books nothing and keeps the first amount"),
+    refused(a2) && amtRows.length === 1 && amtRows[0].amount_cents === "10000" && a2.data?.ok !== true,
+    `result = ${JSON.stringify(a2)}, rows = ${JSON.stringify(amtRows)}`,
+  );
+
+  // Q: another account
+  const acc = randomUUID();
+  await send(acc);
+  const c2 = await send(acc, { fromAccountId: accountB });
+  const accRows = await rowsOf(acc);
+  assert(
+    next("A resend of a form ref with the same amount but another account is refused resendChanged and keeps the first account"),
+    refused(c2) && accRows.length === 1 && accRows[0].from_account_id === accountA,
+    `result = ${JSON.stringify(c2)}, rows = ${JSON.stringify(accRows)}`,
+  );
+
+  // Q: another date
+  const day = randomUUID();
+  await send(day);
+  const d2 = await send(day, { occurredAt: shiftDate(today, -1) });
+  const dayRows = await rowsOf(day);
+  assert(
+    next("A resend of a form ref with the same amount but another date is refused resendChanged and keeps the first date"),
+    refused(d2) && dayRows.length === 1 && dayRows[0].occurred_at.startsWith(today),
+    `result = ${JSON.stringify(d2)}, rows = ${JSON.stringify(dayRows)}`,
+  );
+}
+
+// M45: a withdrawal sent twice books once, and the cash it created is created once (RF-68, RF-158).
+async function withdrawalResendSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { withdrawCashAction } = (await import("@/app/actions/cash")) as unknown as {
+    withdrawCashAction: (input: Record<string, unknown>) => Promise<{
+      serverError?: string;
+      validationErrors?: unknown;
+      data?: { transactionId: string; targetCashAccountId: string; createdCashAccount: boolean };
+    } | undefined>;
+  };
+  const user = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(user, () =>
+    createAccount({
+      name: `Harness m45 bank ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 1_000_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  track("accounts", bank);
+  const withdraw = (over: Record<string, unknown> = {}) =>
+    asUser(user, () => withdrawCashAction({ sourceAccountId: bank, amount: "100", ...over }));
+  const transfers = async () => {
+    const rows = await fixtureSql<{ id: string; external_ref: string | null; amount_cents: string; to_account_id: string }[]>`
+      select id, external_ref, amount_cents::text, to_account_id from transactions where from_account_id = ${bank}`;
+    for (const r of rows) track("transactions", r.id);
+    return rows;
+  };
+  const cashAccounts = async () => {
+    const rows = await fixtureSql<{ id: string }[]>`
+      select id from accounts where owner_user_id = ${user.id} and subtype = 'cash'`;
+    for (const r of rows) track("accounts", r.id);
+    return rows;
+  };
+
+  // Q: the very first withdrawal, which creates the cash, sent twice
+  const firstRef = randomUUID();
+  const c1 = await withdraw({ requestRef: firstRef });
+  const c2 = await withdraw({ requestRef: firstRef });
+  const cashAfter = await cashAccounts();
+  const movedAfter = await transfers();
+  assert(
+    next("A first withdrawal sent twice with one requestRef creates one cash account and books one transfer, both answers naming it"),
+    cashAfter.length === 1 &&
+      movedAfter.length === 1 &&
+      movedAfter[0].external_ref === `form:${firstRef}` &&
+      movedAfter[0].to_account_id === cashAfter[0].id &&
+      c1?.data?.transactionId === movedAfter[0].id &&
+      c2?.data?.transactionId === movedAfter[0].id &&
+      c2?.data?.targetCashAccountId === cashAfter[0].id,
+    `${cashAfter.length} cash account(s), ${movedAfter.length} transfer(s), first = ${JSON.stringify(c1)}, second = ${JSON.stringify(c2)}`,
+  );
+
+  // Q: the cash exists now; the same request sent twice
+  const ref = randomUUID();
+  const r1 = await withdraw({ requestRef: ref });
+  const r2 = await withdraw({ requestRef: ref });
+  const sent = (await transfers()).filter((r) => r.external_ref === `form:${ref}`);
+  assert(
+    next("A withdrawal sent twice with the same requestRef books one transfer under form:<ref> and both answers name it"),
+    sent.length === 1 &&
+      sent[0].amount_cents === "10000" &&
+      r1?.data?.transactionId === sent[0].id &&
+      r2?.data?.transactionId === sent[0].id &&
+      (await cashAccounts()).length === 1,
+    `${sent.length} transfer(s), first = ${JSON.stringify(r1)}, second = ${JSON.stringify(r2)}`,
+  );
+
+  // Q: two requests with the same figures
+  const refA = randomUUID();
+  const refB = randomUUID();
+  const a = await withdraw({ requestRef: refA });
+  const b = await withdraw({ requestRef: refB });
+  const apart = (await transfers()).filter((r) => r.external_ref === `form:${refA}` || r.external_ref === `form:${refB}`);
+  assert(
+    next("Two withdrawals with different requestRefs and the same amount book two transfers, each answered with its own id"),
+    apart.length === 2 &&
+      a?.data?.transactionId !== b?.data?.transactionId &&
+      apart.some((r) => r.id === a?.data?.transactionId) &&
+      apart.some((r) => r.id === b?.data?.transactionId),
+    `${apart.length} transfer(s), a = ${JSON.stringify(a)}, b = ${JSON.stringify(b)}`,
+  );
+
+  // Q: no requestRef, nothing deduplicates
+  const priorIds = new Set((await transfers()).map((r) => r.id));
+  const before = priorIds.size;
+  await withdraw();
+  await withdraw();
+  const bare = await transfers();
+  assert(
+    next("Two withdrawals with no requestRef book two transfers, neither under a form: key"),
+    bare.length === before + 2 && bare.filter((r) => !priorIds.has(r.id)).every((r) => !r.external_ref?.startsWith("form:")),
+    `${before} -> ${bare.length} transfer(s), refs ${JSON.stringify(bare.map((r) => r.external_ref))}`,
+  );
+
+  // Q: the same request resent with another amount
+  const changedRef = randomUUID();
+  const k1 = await withdraw({ requestRef: changedRef, amount: "100" });
+  const k2 = await withdraw({ requestRef: changedRef, amount: "250" });
+  const kept = (await transfers()).filter((r) => r.external_ref === `form:${changedRef}`);
+  assert(
+    next("A resent requestRef with another amount answers resendChanged and leaves the one transfer at the first amount"),
+    k1?.data?.transactionId !== undefined &&
+      kept.length === 1 &&
+      kept[0].amount_cents === "10000" &&
+      JSON.stringify(k2).includes("resendChanged") &&
+      k2?.data?.transactionId === undefined,
+    `${kept.length} transfer(s) at ${kept[0]?.amount_cents}, second = ${JSON.stringify(k2)}`,
+  );
+
+  // Q: the cash archived between the send and the resend must not be replaced by a new one
+  const lateRef = randomUUID();
+  const l1 = await withdraw({ requestRef: lateRef });
+  const cashBefore = (await cashAccounts()).length;
+  await fixtureSql`update accounts set archived_at = now() where owner_user_id = ${user.id} and subtype = 'cash'`;
+  const l2 = await withdraw({ requestRef: lateRef });
+  const lateRows = (await transfers()).filter((r) => r.external_ref === `form:${lateRef}`);
+  assert(
+    next("A resend after the cash was archived answers the booked transfer and creates no new cash account"),
+    lateRows.length === 1 &&
+      l1?.data?.transactionId === lateRows[0].id &&
+      l2?.data?.transactionId === lateRows[0].id &&
+      (await cashAccounts()).length === cashBefore,
+    `${lateRows.length} transfer(s), ${cashBefore} -> ${(await cashAccounts()).length} cash account(s), second = ${JSON.stringify(l2)}`,
+  );
+}
+
+type StaleAnswer = { serverError?: string; validationErrors?: unknown; data?: { ok?: boolean; reason?: string } } | undefined;
+
+// M46: an account or a planned payment opened before another save is refused on save, and nothing moves (RF-156).
+async function accountPlannedVersionSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const accountActions = (await import("@/app/actions/accounts")) as unknown as {
+    updateAccountAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const plannedActions = (await import("@/app/actions/planned-payments")) as unknown as {
+    updatePlannedPaymentAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const user = await createMembershipFreeUser();
+  const { accountId } = await asUser(user, () =>
+    createAccount({
+      name: `Harness m46 ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  track("accounts", accountId);
+  const { plannedPaymentId } = await asUser(user, () =>
+    createPlannedPayment({
+      fromAccountId: accountId,
+      toAccountId: null,
+      amountCents: 10_000,
+      categoryId: null,
+      dueDate: shiftDate(today, 5),
+      remindOn: null,
+      description: `m46 ${tag}`,
+    }),
+  );
+  track("planned_payments", plannedPaymentId);
+
+  const isStale = (r: StaleAnswer) =>
+    r?.serverError === "errors.stale" || (r?.data?.ok === false && r.data.reason === "stale");
+  const accountStamp = async () =>
+    (await fixtureSql<{ t: string }[]>`select updated_at::text as t from accounts where id = ${accountId}`)[0]?.t ?? "";
+  const plannedStamp = async () =>
+    (await fixtureSql<{ t: string }[]>`select updated_at::text as t from planned_payments where id = ${plannedPaymentId}`)[0]?.t ?? "";
+  const opening = async () =>
+    (await fixtureSql<{ c: string }[]>`select initial_balance_cents::text as c from accounts where id = ${accountId}`)[0]?.c;
+  const plannedAmount = async () =>
+    (await fixtureSql<{ c: string }[]>`select amount_cents::text as c from planned_payments where id = ${plannedPaymentId}`)[0]?.c;
+  // Another person's save: a raw update would lose the session the scope trigger reads.
+  const touchPlanned = (description: string) =>
+    asUser(user, () =>
+      updatePlannedPayment({
+        plannedPaymentId,
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        categoryId: null,
+        dueDate: shiftDate(today, 5),
+        remindOn: null,
+        description,
+      }),
+    );
+  // The comparison must be able to fail on a dropped microsecond, so the stamp is touched until it has some.
+  const hasMicros = (t: string) => /\.\d{6}/.test(t) && !t.replace(/[+-]\d+$/, "").endsWith("000");
+  for (let i = 0; i < 10 && !hasMicros(await accountStamp()); i++) {
+    await fixtureSql`update accounts set name = name where id = ${accountId}`;
+  }
+  for (let i = 0; i < 10 && !hasMicros(await plannedStamp()); i++) {
+    await touchPlanned(`m46 ${tag}`);
+  }
+
+  const saveAccount = (amount: string, expectedUpdatedAt?: string) =>
+    asUser(user, () =>
+      accountActions.updateAccountAction({
+        accountId,
+        name: `Harness m46 ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        isShared: false,
+        institution: "",
+        lastFour: "",
+        settlementCurrency: "COP",
+        amount,
+        balanceOn: shiftDate(today, -10),
+        ...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt }),
+      }),
+    );
+  const savePlanned = (amount: string, expectedUpdatedAt?: string) =>
+    asUser(user, () =>
+      plannedActions.updatePlannedPaymentAction({
+        plannedPaymentId,
+        fromAccountId: accountId,
+        toAccountId: null,
+        amount,
+        categoryId: null,
+        dueDate: shiftDate(today, 5),
+        remindOn: null,
+        description: `m46 ${tag}`,
+        ...(expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt }),
+      }),
+    );
+
+  // Q: the account form is open, someone else saves, the opening balance is saved
+  const openedAccount = await accountStamp();
+  assert(next("The account's updated_at::text carries microseconds the test can compare"), hasMicros(openedAccount), openedAccount);
+  const before = await opening();
+  await fixtureSql`update accounts set name = ${`Harness m46 ${tag} elsewhere`} where id = ${accountId}`;
+  const movedAccount = await accountStamp();
+  const staleAccount = await saveAccount("777", openedAccount);
+  assert(
+    next("An account saved with a stamp older than the row is refused as stale and leaves the opening balance as it was"),
+    movedAccount !== openedAccount && isStale(staleAccount) && (await opening()) === before,
+    `result = ${JSON.stringify(staleAccount)}, opening ${before} -> ${await opening()}, stamp ${openedAccount} -> ${movedAccount}`,
+  );
+
+  // Q: the account form carrying the row's own stamp
+  const freshAccount = await saveAccount("123", await accountStamp());
+  assert(
+    next("An account saved with the row's own updated_at::text, microseconds and all, is updated"),
+    freshAccount?.serverError === undefined && !isStale(freshAccount) && (await opening()) === "12300",
+    `result = ${JSON.stringify(freshAccount)}, opening = ${await opening()}`,
+  );
+
+  // Q: an account save naming no stamp still lands
+  const blindAccount = await saveAccount("456");
+  assert(
+    next("An account saved with no expectedUpdatedAt is not refused"),
+    blindAccount?.serverError === undefined && !isStale(blindAccount) && (await opening()) === "45600",
+    `result = ${JSON.stringify(blindAccount)}, opening = ${await opening()}`,
+  );
+
+  // Q: the planned payment form is open, someone else saves, the amount is saved
+  for (let i = 0; i < 10 && !hasMicros(await plannedStamp()); i++) {
+    await touchPlanned(`m46 ${tag}`);
+  }
+  const openedPlanned = await plannedStamp();
+  assert(next("The planned payment's updated_at::text carries microseconds the test can compare"), hasMicros(openedPlanned), openedPlanned);
+  const plannedBefore = await plannedAmount();
+  await touchPlanned(`m46 ${tag} elsewhere`);
+  const movedPlanned = await plannedStamp();
+  const stalePlanned = await savePlanned("77", openedPlanned);
+  assert(
+    next("A planned payment saved with a stamp older than the row is refused as stale and leaves the amount as it was"),
+    movedPlanned !== openedPlanned && isStale(stalePlanned) && (await plannedAmount()) === plannedBefore,
+    `result = ${JSON.stringify(stalePlanned)}, amount ${plannedBefore} -> ${await plannedAmount()}, stamp ${openedPlanned} -> ${movedPlanned}`,
+  );
+
+  // Q: the planned payment form carrying the row's own stamp
+  for (let i = 0; i < 10 && !hasMicros(await plannedStamp()); i++) {
+    await touchPlanned(`m46 ${tag}`);
+  }
+  const freshStamp = await plannedStamp();
+  const freshPlanned = await savePlanned("55", freshStamp);
+  assert(
+    next("A planned payment saved with the row's own updated_at::text, microseconds and all, is updated"),
+    hasMicros(freshStamp) && freshPlanned?.serverError === undefined && !isStale(freshPlanned) && (await plannedAmount()) === "5500",
+    `result = ${JSON.stringify(freshPlanned)}, amount = ${await plannedAmount()}, stamp ${freshStamp}`,
+  );
+
+  // Q: a planned payment save naming no stamp still lands
+  const blindPlanned = await savePlanned("66");
+  assert(
+    next("A planned payment saved with no expectedUpdatedAt is not refused"),
+    blindPlanned?.serverError === undefined && !isStale(blindPlanned) && (await plannedAmount()) === "6600",
+    `result = ${JSON.stringify(blindPlanned)}, amount = ${await plannedAmount()}`,
+  );
+}
+
+// M52: deleting the account or category a learned rule trusts keeps the rule and forgets the target (Q8 a).
+async function learnedRuleSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { deleteAccount } = await import("@/db/queries/accounts");
+  const { deleteCategory } = await import("@/db/queries/categories");
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const { fingerprintMessage } = await import("@/lib/ingest/fingerprint");
+  const { counterpartyPatternKey } = await import("@/lib/ingest/counterparty-pattern");
+  const user = await createMembershipFreeUser();
+
+  const mkAccount = async (name: string): Promise<string> => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness m52 ${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const mkCategory = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(user, () =>
+      createCategory({ scope: { ownerUserId: user.id }, name: `Harness m52 ${name} ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const origin = await mkAccount("origin");
+  const spendCategory = await mkCategory("spend");
+
+  const code = async (fn: (tx: Parameters<Parameters<typeof asOwner>[1]>[0]) => Promise<unknown>): Promise<string> => {
+    try {
+      await asOwner(user.id, async (tx) => {
+        await fn(tx);
+      });
+      return "ok";
+    } catch (error) {
+      return pgErrorCode(error) ?? rootMessage(error);
+    }
+  };
+
+  // ----- merchants -----
+  const credentialId = randomUUID();
+  await asOwner(user.id, async (tx) => {
+    await tx`
+      insert into webhook_credentials (id, owner_user_id, name, token_hash)
+      values (${credentialId}, ${user.id}, 'Harness m52', ${createHash("sha256").update(`m52-${tag}`).digest("hex")})`;
+  });
+  track("webhook_credentials", credentialId);
+
+  const smsFor = (shop: string) =>
+    `Bancolombia: Compraste COP11.000,00 en ${shop} con tu T.Cred *4872, el 25/08/2026 a las 20:07.`;
+  const merchantKeyOf = (shop: string) => fingerprintMessage(smsFor(shop)).merchant?.key ?? "";
+  type MerchantRow = { state: string; streak: number; candidate: string | null; trusted: string | null };
+  const merchantRow = async (shop: string): Promise<MerchantRow | undefined> =>
+    (await fixtureSql<MerchantRow[]>`
+      select state, streak::int as streak, candidate_category_id as candidate, trusted_category_id as trusted
+      from ingest_merchants where owner_user_id = ${user.id} and merchant_key = ${merchantKeyOf(shop)}`)[0];
+  const teachMerchant = (shop: string, category: string) =>
+    asOwner(user.id, async (tx) => {
+      await tx`select private.remember_ingest_merchant(${merchantKeyOf(shop)}, ${shop}, ${category})`;
+    });
+  const trustMerchant = async (shop: string, category: string) => {
+    await teachMerchant(shop, category);
+    await teachMerchant(shop, category);
+  };
+  const deliver = async (shop: string) => {
+    const result = await recordIngestDelivery({
+      ownerUserId: user.id,
+      credentialId,
+      defaultAccountId: null,
+      defaultCategoryId: null,
+      payload: { text: `${smsFor(shop)} ${randomUUID().slice(0, 6)}` } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+    return (await fixtureSql<{ category: string | null; account: string | null; source: string | null }[]>`
+      select proposed_category_id as category, proposed_account_id as account, category_source as source
+      from ingest_deliveries where id = ${result.deliveryId}`)[0];
+  };
+
+  const trustedCategory = await mkCategory("trusted");
+  const otherCategory = await mkCategory("other");
+  const shopA = `TIENDA M52A ${tag}`;
+  await trustMerchant(shopA, trustedCategory);
+  const merchantBefore = await merchantRow(shopA);
+  const proposalBefore = await deliver(shopA);
+  assert(
+    next("A merchant approved twice is trusted and its next delivery proposes the category (control)"),
+    merchantBefore?.state === "trusted" && merchantBefore.trusted === trustedCategory && proposalBefore?.category === trustedCategory,
+    `row = ${JSON.stringify(merchantBefore)}, proposed ${proposalBefore?.category ?? "null"}`,
+  );
+  let categoryDeleted: boolean | string;
+  try {
+    categoryDeleted = await asUser(user, () => deleteCategory({ categoryId: trustedCategory }));
+  } catch (error) {
+    categoryDeleted = refusal(error);
+  }
+  const merchantAfter = await merchantRow(shopA);
+  assert(
+    next("Deleting the category a merchant trusts succeeds"),
+    categoryDeleted === true,
+    `deleteCategory answered ${String(categoryDeleted)}`,
+  );
+  assert(
+    next("The merchant row survives its category's deletion as learning, streak 0, candidate and trusted null"),
+    merchantAfter?.state === "learning" &&
+      merchantAfter.streak === 0 &&
+      merchantAfter.candidate === null &&
+      merchantAfter.trusted === null,
+    `row = ${JSON.stringify(merchantAfter)}`,
+  );
+  const proposalAfter = await deliver(shopA);
+  assert(
+    next("The next delivery for that merchant proposes no category, no account and no category source, from the rule that was kept"),
+    merchantAfter !== undefined && proposalAfter !== undefined && proposalAfter.category === null && proposalAfter.account === null && proposalAfter.source === null,
+    `proposal = ${JSON.stringify(proposalAfter)}`,
+  );
+
+  // The forgotten rule learns again from zero: one approval is not trust.
+  const relearnCategory = await mkCategory("relearn");
+  await teachMerchant(shopA, relearnCategory);
+  const relearnOnce = await merchantRow(shopA);
+  assert(
+    next("A merchant that lost its category starts over: one approval leaves it learning on streak 1"),
+    relearnOnce?.state === "learning" && relearnOnce.streak === 1 && relearnOnce.candidate === relearnCategory && relearnOnce.trusted === null,
+    `row = ${JSON.stringify(relearnOnce)}`,
+  );
+
+  // Deleting a category the rule does NOT trust leaves a trusted rule alone.
+  const shopB = `TIENDA M52B ${tag}`;
+  await trustMerchant(shopB, otherCategory);
+  const unrelatedCategory = await mkCategory("unrelated");
+  await asUser(user, () => deleteCategory({ categoryId: unrelatedCategory }));
+  const merchantUntouched = await merchantRow(shopB);
+  assert(
+    next("Deleting a category some other rule trusts leaves a trusted merchant trusted on streak 2"),
+    merchantUntouched?.state === "trusted" && merchantUntouched.streak === 2 && merchantUntouched.trusted === otherCategory,
+    `row = ${JSON.stringify(merchantUntouched)}`,
+  );
+
+  // The trusted column moving to ANOTHER value is not forgetting.
+  const movedCategory = await mkCategory("moved");
+  const moved = await code((tx) => tx`update ingest_merchants set trusted_category_id = ${movedCategory} where owner_user_id = ${user.id} and merchant_key = ${merchantKeyOf(shopB)}`);
+  const merchantMoved = await merchantRow(shopB);
+  assert(
+    next("A merchant whose trusted category changes to another category stays trusted on streak 2"),
+    moved === "ok" && merchantMoved?.state === "trusted" && merchantMoved.streak === 2 && merchantMoved.trusted === movedCategory,
+    `update ${moved}, row = ${JSON.stringify(merchantMoved)}`,
+  );
+
+  // A trusted merchant contradicted by a completion is ambiguous, not forgotten: RF-94 keeps that sticky.
+  const shopC = `TIENDA M52C ${tag}`;
+  await trustMerchant(shopC, otherCategory);
+  await teachMerchant(shopC, movedCategory);
+  const merchantAmbiguous = await merchantRow(shopC);
+  assert(
+    next("A trusted merchant contradicted by one approval becomes ambiguous with the new candidate, not learning"),
+    merchantAmbiguous?.state === "ambiguous" && merchantAmbiguous.trusted === null && merchantAmbiguous.candidate === movedCategory,
+    `row = ${JSON.stringify(merchantAmbiguous)}`,
+  );
+
+  // The check that binds state to the trusted column still refuses a forged half.
+  const forgedTrustedState = await code((tx) => tx`update ingest_merchants set state = 'trusted' where owner_user_id = ${user.id} and merchant_key = ${merchantKeyOf(shopA)}`);
+  const forgedTrustedColumn = await code((tx) => tx`update ingest_merchants set trusted_category_id = ${otherCategory} where owner_user_id = ${user.id} and merchant_key = ${merchantKeyOf(shopA)}`);
+  assert(
+    next("A merchant cannot be trusted without a category, nor hold a trusted category while learning (23514)"),
+    forgedTrustedState === "23514" && forgedTrustedColumn === "23514",
+    `state alone ${forgedTrustedState}, column alone ${forgedTrustedColumn}`,
+  );
+
+  // ----- counterparties -----
+  type CounterpartyRow = { state: string; streak: number; candidate: string | null; trusted: string | null };
+  const descriptionOf = (name: string) => `Harness m52 ${name} ${tag} cobro`;
+  const patternOf = (name: string) => counterpartyPatternKey(descriptionOf(name));
+  const counterpartyRow = async (name: string): Promise<CounterpartyRow | undefined> =>
+    (await fixtureSql<CounterpartyRow[]>`
+      select state, streak::int as streak, candidate_account_id as candidate, trusted_account_id as trusted
+      from ingest_counterparties where owner_user_id = ${user.id} and pattern_key = ${patternOf(name)} and side = 'to'`)[0];
+  const teachCounterparty = (name: string, account: string) =>
+    asOwner(user.id, async (tx) => {
+      await tx`select private.remember_counterparty(${patternOf(name)}, ${descriptionOf(name)}, 'to', ${account})`;
+    });
+  const trustCounterparty = async (name: string, account: string) => {
+    await teachCounterparty(name, account);
+    await teachCounterparty(name, account);
+  };
+  const awaiting = async (name: string): Promise<string> => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: origin,
+        toAccountId: null,
+        amountCents: 12_300,
+        occurredAt: today,
+        description: descriptionOf(name),
+        externalRef: `m52-${tag}-${name}`,
+        splits: [{ categoryId: spendCategory, amountCents: 12_300 }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    await asOwner(user.id, async (tx) => {
+      await tx`update transactions set awaiting_counterparty = true where id = ${transactionId}`;
+    });
+    return transactionId;
+  };
+  const { listAwaitingCounterparty } = await import("@/db/queries/transactions");
+  const proposedFor = async (id: string) =>
+    (await asUser(user, () => listAwaitingCounterparty())).find((row) => row.id === id);
+
+  const trustedAccount = await mkAccount("trusted");
+  const otherAccount = await mkAccount("other");
+  const movedAccount = await mkAccount("moved");
+  await trustCounterparty("a", trustedAccount);
+  const waiting = await awaiting("a");
+  const counterpartyBefore = await counterpartyRow("a");
+  const waitingBefore = await proposedFor(waiting);
+  assert(
+    next("A counterparty completed twice is trusted and its awaiting movement proposes the account (control)"),
+    counterpartyBefore?.state === "trusted" && counterpartyBefore.trusted === trustedAccount && waitingBefore?.proposedAccountId === trustedAccount,
+    `row = ${JSON.stringify(counterpartyBefore)}, proposed ${waitingBefore?.proposedAccountId ?? "null"}`,
+  );
+  let accountDeleted: boolean | string;
+  try {
+    accountDeleted = await asUser(user, () => deleteAccount({ accountId: trustedAccount }));
+  } catch (error) {
+    accountDeleted = refusal(error);
+  }
+  const counterpartyAfter = await counterpartyRow("a");
+  assert(
+    next("Deleting the account a counterparty trusts succeeds"),
+    accountDeleted === true,
+    `deleteAccount answered ${String(accountDeleted)}`,
+  );
+  assert(
+    next("The counterparty row survives its account's deletion as learning, streak 0, candidate and trusted null"),
+    counterpartyAfter?.state === "learning" &&
+      counterpartyAfter.streak === 0 &&
+      counterpartyAfter.candidate === null &&
+      counterpartyAfter.trusted === null,
+    `row = ${JSON.stringify(counterpartyAfter)}`,
+  );
+  const waitingAfter = await proposedFor(waiting);
+  assert(
+    next("The movement still awaiting its counterparty proposes no account once the rule, kept, lost it"),
+    counterpartyAfter !== undefined && waitingAfter !== undefined && waitingAfter.proposedAccountId === null && waitingAfter.proposedAccountLabel === null,
+    `proposal = ${JSON.stringify(waitingAfter && { id: waitingAfter.proposedAccountId, label: waitingAfter.proposedAccountLabel })}`,
+  );
+
+  const relearnAccount = await mkAccount("relearn");
+  await teachCounterparty("a", relearnAccount);
+  const relearnCounterparty = await counterpartyRow("a");
+  assert(
+    next("A counterparty that lost its account starts over: one completion leaves it learning on streak 1"),
+    relearnCounterparty?.state === "learning" && relearnCounterparty.streak === 1 && relearnCounterparty.candidate === relearnAccount && relearnCounterparty.trusted === null,
+    `row = ${JSON.stringify(relearnCounterparty)}`,
+  );
+
+  await trustCounterparty("b", otherAccount);
+  const unrelatedAccount = await mkAccount("unrelated");
+  await asUser(user, () => deleteAccount({ accountId: unrelatedAccount }));
+  const counterpartyUntouched = await counterpartyRow("b");
+  assert(
+    next("Deleting an account some other rule trusts leaves a trusted counterparty trusted on streak 2"),
+    counterpartyUntouched?.state === "trusted" && counterpartyUntouched.streak === 2 && counterpartyUntouched.trusted === otherAccount,
+    `row = ${JSON.stringify(counterpartyUntouched)}`,
+  );
+
+  const movedCounterparty = await code((tx) => tx`update ingest_counterparties set trusted_account_id = ${movedAccount} where owner_user_id = ${user.id} and pattern_key = ${patternOf("b")} and side = 'to'`);
+  const counterpartyMoved = await counterpartyRow("b");
+  assert(
+    next("A counterparty whose trusted account changes to another account stays trusted on streak 2"),
+    movedCounterparty === "ok" && counterpartyMoved?.state === "trusted" && counterpartyMoved.streak === 2 && counterpartyMoved.trusted === movedAccount,
+    `update ${movedCounterparty}, row = ${JSON.stringify(counterpartyMoved)}`,
+  );
+
+  await trustCounterparty("c", otherAccount);
+  await teachCounterparty("c", movedAccount);
+  const counterpartyAmbiguous = await counterpartyRow("c");
+  assert(
+    next("A trusted counterparty contradicted by one completion becomes ambiguous with the new candidate, not learning"),
+    counterpartyAmbiguous?.state === "ambiguous" && counterpartyAmbiguous.trusted === null && counterpartyAmbiguous.candidate === movedAccount,
+    `row = ${JSON.stringify(counterpartyAmbiguous)}`,
+  );
+
+  const forgedCounterpartyState = await code((tx) => tx`update ingest_counterparties set state = 'trusted' where owner_user_id = ${user.id} and pattern_key = ${patternOf("a")} and side = 'to'`);
+  const forgedCounterpartyColumn = await code((tx) => tx`update ingest_counterparties set trusted_account_id = ${otherAccount} where owner_user_id = ${user.id} and pattern_key = ${patternOf("a")} and side = 'to'`);
+  assert(
+    next("A counterparty cannot be trusted without an account, nor hold a trusted account while learning (23514)"),
+    forgedCounterpartyState === "23514" && forgedCounterpartyColumn === "23514",
+    `state alone ${forgedCounterpartyState}, column alone ${forgedCounterpartyColumn}`,
+  );
+
+  // ----- the trigger functions -----
+  for (const table of ["ingest_merchants", "ingest_counterparties"] as const) {
+    const functions = await fixtureSql<
+      { name: string; invoker: boolean; pinned: boolean; anon: boolean; authenticated: boolean; service: boolean; public: boolean }[]
+    >`
+      select p.proname as name,
+        not p.prosecdef as invoker,
+        coalesce(p.proconfig, '{}') && array['search_path=""'] as pinned,
+        has_function_privilege('anon', p.oid, 'execute') as anon,
+        has_function_privilege('authenticated', p.oid, 'execute') as authenticated,
+        has_function_privilege('service_role', p.oid, 'execute') as service,
+        exists (
+          select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+          where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public
+      from pg_trigger t
+      join pg_proc p on p.oid = t.tgfoid
+      where t.tgrelid = ${`finances.${table}`}::regclass
+        and not t.tgisinternal
+        and (t.tgtype & 1) = 1 and (t.tgtype & 2) = 2 and (t.tgtype & 16) = 16
+        and t.tgname not like '%set_timestamps'`;
+    assert(
+      next(`${table} has a BEFORE UPDATE row trigger beyond the timestamps, SECURITY INVOKER with an empty search_path`),
+      functions.length === 1 && functions[0].invoker && functions[0].pinned,
+      `functions = ${JSON.stringify(functions)}`,
+    );
+    assert(
+      next(`${table}'s forgetting trigger function is executable by PUBLIC, anon, authenticated and service_role: none`),
+      functions.length === 1 && !functions[0].public && !functions[0].anon && !functions[0].authenticated && !functions[0].service,
+      `functions = ${JSON.stringify(functions)}`,
+    );
+  }
+}
+
+// M49: a rule the night's run pauses says why, and a pause made while the run is mid-flight stays.
+// The run is always scoped to the fixture's own user, so no other tenant's due rule is booked.
+async function recurringPauseSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const open = async (owner: HarnessUser) => {
+    const { accountId } = await asUser(owner, () =>
+      createAccount({
+        name: `Harness m49 ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: owner.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_000,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    const { categoryId } = await asUser(owner, () =>
+      createCategory({ scope: { ownerUserId: owner.id }, name: `Harness m49 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return { accountId, categoryId };
+  };
+  const own = await open(user);
+  const foreign = await open(stranger);
+
+  const makeRule = async (dueIn: number, categoryId = own.categoryId): Promise<string> => {
+    const { recurringRuleId } = await asUser(user, () =>
+      createRecurringRule({
+        fromAccountId: own.accountId,
+        toAccountId: null,
+        amountCents: 1_000,
+        categoryId,
+        description: `m49 ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: shiftDate(today, dueIn),
+        endsOn: null,
+      }),
+    );
+    keep("recurring_rules", recurringRuleId);
+    return recurringRuleId;
+  };
+  type State = { is_active: boolean; paused_reason: string | null; next_run_on: string };
+  const read = async (id: string): Promise<State> =>
+    (
+      await fixtureSql<State[]>`
+        select is_active, paused_reason, next_run_on::text as next_run_on from recurring_rules where id = ${id}`
+    )[0];
+  const booked = async (id: string): Promise<number> => {
+    const rows = await fixtureSql<{ id: string }[]>`select id from transactions where recurring_rule_id = ${id}`;
+    for (const r of rows) keep("transactions", r.id);
+    return rows.length;
+  };
+  const row = async (label: string, body: () => Promise<{ ok: boolean; detail: string }>): Promise<void> => {
+    try {
+      const verdict = await body();
+      assert(next(label), verdict.ok, verdict.detail);
+    } catch (error) {
+      assert(next(label), false, refusal(error));
+    }
+  };
+  const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+
+  await row("A rule whose generated movement fails is paused by the run with paused_reason 'failed'", async () => {
+    const id = await makeRule(-7, foreign.categoryId);
+    await fixtureSql`select private.run_due_recurring_rules(${user.id}::uuid)`;
+    const after = await read(id);
+    return {
+      ok: after.is_active === false && after.paused_reason === "failed" && (await booked(id)) === 0,
+      detail: `is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
+    };
+  });
+
+  // A second connection holds the rule's row, the run starts against the rule it read as active, and the
+  // second connection commits while the run waits. The run must lock the rule and look again.
+  const raceRun = async (change: (tx: typeof fixtureSql) => Promise<void>) => {
+    const writer = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, connection: { search_path: "finances, public" } });
+    const runner = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, connection: { search_path: "finances, public" } });
+    try {
+      const [{ pid }] = await runner<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      let release!: () => void;
+      const gate = new Promise<void>((done) => (release = done));
+      let held!: () => void;
+      const holding = new Promise<void>((done) => (held = done));
+      const hold = writer.begin(async (tx) => {
+        await change(tx as unknown as typeof fixtureSql);
+        held();
+        await gate;
+      });
+      await holding;
+      // A postgres.js query is lazy: `execute` sends it now, so the run is in flight while the writer holds the row.
+      const running = runner`select private.run_due_recurring_rules(${user.id}::uuid)`.execute();
+      const deadline = Date.now() + 5_000;
+      let waiting = false;
+      while (Date.now() < deadline && !waiting) {
+        const [w] = await fixtureSql<{ n: number }[]>`
+          select count(*)::int as n from pg_stat_activity where pid = ${pid} and wait_event_type = 'Lock'`;
+        waiting = w.n > 0;
+        if (!waiting) await pause(25);
+      }
+      release();
+      await hold;
+      await running;
+      return waiting;
+    } finally {
+      await writer.end();
+      await runner.end();
+    }
+  };
+
+  await row("A pause committed by a second connection while the run waits on the rule stays a pause", async () => {
+    const id = await makeRule(-7);
+    const waited = await raceRun(async (tx) => {
+      await tx`update recurring_rules set is_active = false where id = ${id}`;
+    });
+    const after = await read(id);
+    return {
+      ok: waited && after.is_active === false && after.paused_reason === null && (await booked(id)) === 0,
+      detail: `run waited on the lock = ${waited}, is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
+    };
+  });
+
+  await row("A next run moved by a second connection while the run waits is kept, and the run books nothing over it", async () => {
+    const id = await makeRule(-7);
+    const moved = shiftDate(today, 21);
+    const waited = await raceRun(async (tx) => {
+      await tx`update recurring_rules set next_run_on = ${moved} where id = ${id}`;
+    });
+    const after = await read(id);
+    return {
+      ok: waited && after.next_run_on === moved && after.is_active === true && (await booked(id)) === 0,
+      detail: `run waited = ${waited}, next_run_on = ${after.next_run_on} (expected ${moved}), is_active = ${after.is_active}`,
+    };
+  });
+
+  await row("Resuming a rule the run paused clears paused_reason and makes it active", async () => {
+    const id = await makeRule(7);
+    await fixtureSql`update recurring_rules set is_active = false, paused_reason = 'failed' where id = ${id}`;
+    const result = await asUser(user, () => resumeRecurringRuleAction({ id }));
+    const after = await read(id);
+    return {
+      ok: result?.serverError === undefined && after.is_active === true && after.paused_reason === null,
+      detail: `result = ${JSON.stringify(result)}, is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
+    };
+  });
+
+  await row("Pausing a rule by hand leaves paused_reason null", async () => {
+    const id = await makeRule(7);
+    const result = await asUser(user, () => pauseRecurringRuleAction({ id }));
+    const after = await read(id);
+    return {
+      ok: result?.serverError === undefined && after.is_active === false && after.paused_reason === null,
+      detail: `result = ${JSON.stringify(result)}, is_active = ${after.is_active}, paused_reason = ${after.paused_reason}`,
+    };
+  });
+
+  await row("Resuming a rule that ran to its end is refused by the database, books nothing and leaves it inactive", async () => {
+    const { recurringRuleId: id } = await asUser(user, () =>
+      createRecurringRule({
+        fromAccountId: own.accountId,
+        toAccountId: null,
+        amountCents: 1_000,
+        categoryId: own.categoryId,
+        description: `m49 end ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: shiftDate(today, -7),
+        endsOn: shiftDate(today, -1),
+      }),
+    );
+    keep("recurring_rules", id);
+    await fixtureSql`select private.run_due_recurring_rules(${user.id}::uuid)`;
+    const ended = await read(id);
+    const before = await booked(id);
+    const result = await asUser(user, () => resumeRecurringRuleAction({ id }));
+    const after = await read(id);
+    return {
+      ok:
+        ended.is_active === false && before === 1 && result?.serverError !== undefined &&
+        after.is_active === false && (await booked(id)) === before,
+      detail: `ended inactive = ${!ended.is_active}, booked ${before}, resume = ${JSON.stringify(result)}, is_active = ${after.is_active}`,
+    };
+  });
+}
+
+// A resent form ref names the same destination and
+// the same source it first booked (RF-158), an income resend has no source to compare yet is the
+// same request, and an unstamped edit of a rule that is not there is refused notFound (RF-31).
+async function resendAndMissingSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: (input: Record<string, unknown>) => Promise<MovementResult>;
+  };
+  const { withdrawCashAction } = (await import("@/app/actions/cash")) as unknown as {
+    withdrawCashAction: (input: Record<string, unknown>) => Promise<{
+      serverError?: string;
+      data?: { transactionId: string };
+    } | undefined>;
+  };
+  const user = await createMembershipFreeUser();
+  const mkAccount = async (name: string): Promise<string> => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const accountA = await mkAccount("Harness m78 A");
+  const accountB = await mkAccount("Harness m78 B");
+  const accountC = await mkAccount("Harness m78 C");
+  const { categoryId: incomeCategory } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m78 ${tag}`, kind: "income", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", incomeCategory);
+  const { categoryId: expenseCategory } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m78 gasto ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", expenseCategory);
+
+  const send = (ref: string, over: Record<string, unknown>) =>
+    asUser(user, () =>
+      actions.createTransactionAction({
+        requestRef: ref,
+        amount: "100",
+        occurredAt: today,
+        description: `m78 ${tag}`,
+        labelIds: [],
+        ...over,
+      }),
+    );
+  type Row = { id: string; to_account_id: string | null; from_account_id: string | null };
+  const rowsOf = async (ref: string) => {
+    const rows = await fixtureSql<Row[]>`
+      select id, to_account_id, from_account_id from transactions
+      where owner_user_id = ${user.id} and external_ref = ${`form:${ref}`}`;
+    rows.forEach((r) => track("transactions", r.id));
+    return rows;
+  };
+  const refused = (r: { serverError?: string; data?: { ok?: boolean; reason?: string } } | undefined) =>
+    r?.serverError === "errors.resendChanged" || (r?.data?.ok === false && r.data.reason === "resendChanged");
+
+  // Q: a transfer resent with another destination
+  const transfer = { fromAccountId: accountA, toAccountId: accountB, splits: [] };
+  const tRef = randomUUID();
+  await send(tRef, transfer);
+  const t2 = await send(tRef, { ...transfer, toAccountId: accountC });
+  const tRows = await rowsOf(tRef);
+  assert(
+    next("A resend of a form ref with the same source and amount but another destination account is refused resendChanged and keeps the first destination"),
+    refused(t2) && tRows.length === 1 && tRows[0].to_account_id === accountB,
+    `result = ${JSON.stringify(t2)}, rows = ${JSON.stringify(tRows)}`,
+  );
+
+  // Q: an income, which has no source account, resent unchanged
+  const income = { fromAccountId: null, toAccountId: accountA, splits: [{ categoryId: incomeCategory, amount: "100" }] };
+  const iRef = randomUUID();
+  const i1 = await send(iRef, income);
+  const i2 = await send(iRef, income);
+  const iRows = await rowsOf(iRef);
+  assert(
+    next("An income sent twice with the same requestRef answers ok with the first movement's id and books one row"),
+    iRows.length === 1 && i1.data?.ok === true && i2.data?.ok === true &&
+      i1.data.transactionId === iRows[0].id && i2.data.transactionId === iRows[0].id,
+    `${iRows.length} row(s), first = ${JSON.stringify(i1)}, second = ${JSON.stringify(i2)}`,
+  );
+
+  // Q: a cash withdrawal resent from another source account
+  const wRef = randomUUID();
+  const withdraw = (source: string) =>
+    asUser(user, () => withdrawCashAction({ sourceAccountId: source, amount: "100", requestRef: wRef }));
+  const w1 = await withdraw(accountA);
+  const w2 = await withdraw(accountB);
+  const wRows = await rowsOf(wRef);
+  const cashRows = await fixtureSql<{ id: string }[]>`select id from accounts where owner_user_id = ${user.id} and subtype = 'cash'`;
+  cashRows.forEach((r) => track("accounts", r.id));
+  assert(
+    next("A resent withdrawal with the same amount but another source account is refused resendChanged and keeps the first source"),
+    w1?.data?.transactionId !== undefined &&
+      JSON.stringify(w2).includes("resendChanged") &&
+      w2?.data?.transactionId === undefined &&
+      wRows.length === 1 &&
+      wRows[0].from_account_id === accountA,
+    `first = ${JSON.stringify(w1)}, second = ${JSON.stringify(w2)}, rows = ${JSON.stringify(wRows)}`,
+  );
+
+  // Q: an unstamped edit of a rule that is gone
+  const { recurringRuleId } = await asUser(user, () =>
+    createRecurringRule({
+      fromAccountId: accountA,
+      toAccountId: null,
+      amountCents: 1_000,
+      categoryId: expenseCategory,
+      description: `m78 ${tag}`,
+      frequency: "weekly",
+      intervalN: 1,
+      dayOfMonth: null,
+      nextRunOn: shiftDate(today, 7),
+      endsOn: null,
+    }),
+  );
+  await fixtureSql`delete from recurring_rules where id = ${recurringRuleId}`;
+  const gone = (await asUser(user, () =>
+    updateRecurringRuleAction({
+      id: recurringRuleId,
+      fromAccountId: accountA,
+      toAccountId: null,
+      amount: "20",
+      categoryId: expenseCategory,
+      description: `m78 ${tag}`,
+      frequency: "weekly",
+      intervalN: 1,
+      dayOfMonth: null,
+      nextRunOn: shiftDate(today, 7),
+      endsOn: null,
+    } as Parameters<typeof updateRecurringRuleAction>[0]),
+  )) as { serverError?: string; data?: { ok?: boolean; reason?: string } } | undefined;
+  assert(
+    next("An edit with no expectedUpdatedAt of a rule that is gone is refused notFound"),
+    gone?.serverError === "errors.notFound" && gone?.data?.ok !== true,
+    `result = ${JSON.stringify(gone)}`,
+  );
+}
+
+// M54: an estimate dated on or before the account's latest reconciliation cannot be confirmed (RF-123, RF-137).
+async function billedBeforeReconciliationSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const user = await createMembershipFreeUser();
+  await asUser(user, async () => {
+  const { categoryId } = await createCategory({
+    scope: { ownerUserId: user.id },
+    name: `Harness m54 ${tag}`,
+    kind: "expense",
+    parentId: null,
+    color: "#0E7490",
+  });
+  track("categories", categoryId);
+  const { accountId } = await createAccount({
+    name: `Harness m54 ${tag}`,
+    kind: "asset",
+    subtype: "bank",
+    ownerUserId: user.id,
+    groupId: null,
+    isShared: false,
+    institution: null,
+    lastFour: null,
+    settlementCurrency: "COP",
+    amountMinor: 100_000_000,
+    balanceOn: "2026-08-01",
+  });
+  track("accounts", accountId);
+  const purchaseOn = async (day: string): Promise<string> => {
+    const created = await createTransaction({
+      fromAccountId: accountId,
+      toAccountId: null,
+      amountCents: 10_000,
+      currency: "USD",
+      counterAmountCents: 40_000_000,
+      counterIsEstimate: true,
+      occurredAt: day,
+      description: `m54 ${tag} ${day}`,
+      externalRef: null,
+      splits: [{ categoryId: categoryId, amountCents: 10_000 }],
+      labelIds: [],
+    });
+    track("transactions", created.transactionId);
+    return created.transactionId;
+  };
+  const fifth = await purchaseOn("2026-09-05");
+  const tenth = await purchaseOn("2026-09-10");
+  const eleventh = await purchaseOn("2026-09-11");
+  const sheet = await getReconcileSheet(accountId, "2026-09-10");
+  const counted = await reconcileAccount({
+    accountId,
+    reconciledOn: "2026-09-10",
+    realMagnitudeCents: 50_000_000,
+    expectedDerivedCents: sheet?.account.derivedCents ?? 0,
+  });
+  assert(next("The fixture account is reconciled on the 10th"), counted.ok, JSON.stringify(counted));
+
+  const state = async (id: string) => {
+    const [row] = await fixtureSql<{ counter: string; estimate: boolean }[]>`
+      select counter_amount_cents::text as counter, counter_is_estimate as estimate
+      from transactions where id = ${id}`;
+    return row;
+  };
+  const movements = async () =>
+    (await fixtureSql<{ n: string }[]>`
+      select count(*)::text as n from transactions where from_account_id = ${accountId} or to_account_id = ${accountId}`)[0].n;
+  // The refusal may travel as a throw or as a result; either names its reason.
+  const confirm = async (id: string) => {
+    try {
+      const answer = (await recordBilledAmount({
+        transactionId: id,
+        accountId,
+        currency: "COP",
+        billedCents: 41_500_000,
+      })) as unknown;
+      const reason = (answer as { reason?: string } | null)?.reason;
+      return { answer, reason };
+    } catch (error) {
+      const thrown = error as { reason?: string; result?: { reason?: string }; message?: string };
+      return { answer: "threw", reason: thrown.reason ?? thrown.result?.reason ?? thrown.message };
+    }
+  };
+
+  const countBefore = await movements();
+  const onFifth = await confirm(fifth);
+  const fifthState = await state(fifth);
+  assert(
+    next("An estimate before the reconciliation is refused and writes nothing"),
+    onFifth.reason === "beforeReconciliation" && fifthState.estimate === true &&
+      fifthState.counter === "40000000" && (await movements()) === countBefore,
+    `reason ${onFifth.reason}, estimate ${fifthState.estimate}, counter ${fifthState.counter}`,
+  );
+  const onTenth = await confirm(tenth);
+  const tenthState = await state(tenth);
+  assert(
+    next("An estimate dated the day of the reconciliation is refused"),
+    onTenth.reason === "beforeReconciliation" && tenthState.estimate === true &&
+      tenthState.counter === "40000000",
+    `reason ${onTenth.reason}, estimate ${tenthState.estimate}, counter ${tenthState.counter}`,
+  );
+  const onEleventh = await confirm(eleventh);
+  const eleventhState = await state(eleventh);
+  assert(
+    next("An estimate the day after the reconciliation is confirmed"),
+    onEleventh.reason === undefined && eleventhState.estimate === false &&
+      eleventhState.counter === "41500000",
+    `answer ${JSON.stringify(onEleventh.answer)}, estimate ${eleventhState.estimate}, counter ${eleventhState.counter}`,
+  );
+
+  const actions = (await import("@/app/actions/debt-settlement")) as unknown as {
+    recordBilledAmountAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const viaAction = await actions.recordBilledAmountAction({
+    transactionId: fifth,
+    accountId,
+    currency: "COP",
+    billedAmount: "415000",
+  });
+  assert(
+    next("The action answers a refused estimate with debts.errors.beforeReconciliation"),
+    viaAction?.serverError === "debts.errors.beforeReconciliation" && (await state(fifth)).estimate === true,
+    `serverError = ${viaAction?.serverError ?? "none"}`,
+  );
+  assert(
+    next("The before-reconciliation message exists in both languages"),
+    typeof es.debts.errors.beforeReconciliation === "string" &&
+      typeof en.debts.errors.beforeReconciliation === "string",
+    "debts.errors.beforeReconciliation",
+  );
+  });
+}
+
+// M55: an asset account's still-estimated foreign purchase is listed for confirmation (RF-123).
+async function pendingSettlementsOnAssetSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const user = await createMembershipFreeUser();
+  await asUser(user, async () => {
+    const { categoryId } = await createCategory({
+      scope: { ownerUserId: user.id },
+      name: `Harness m55 ${tag}`,
+      kind: "expense",
+      parentId: null,
+      color: "#0E7490",
+    });
+    track("categories", categoryId);
+    const { accountId } = await createAccount({
+      name: `Harness m55 ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000_000,
+      balanceOn: "2026-08-01",
+    });
+    track("accounts", accountId);
+    const purchase = async (currency: string, estimate: boolean, day: string): Promise<string> => {
+      const created = await createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        currency,
+        counterAmountCents: currency === "USD" ? 40_000_000 : null,
+        counterIsEstimate: estimate,
+        occurredAt: day,
+        description: `m55 ${tag} ${currency} ${estimate} ${day}`,
+        externalRef: null,
+        splits: [{ categoryId: categoryId, amountCents: 10_000 }],
+        labelIds: [],
+      });
+      track("transactions", created.transactionId);
+      return created.transactionId;
+    };
+    const pending = await purchase("USD", true, "2026-09-05");
+    const billed = await purchase("USD", false, "2026-09-06");
+    await purchase("COP", false, "2026-09-07");
+
+    const listed = await listPendingSettlements(accountId);
+    assert(
+      next("An asset account's pending foreign estimate is listed"),
+      listed.some((row) => row.id === pending && row.currency === "USD" && row.amountCents === 10_000 && row.counterAmountCents === 40_000_000),
+      JSON.stringify(listed),
+    );
+    assert(
+      next("Only the estimate is listed: a billed purchase and a peso one are not"),
+      listed.length === 1 && !listed.some((row) => row.id === billed),
+      JSON.stringify(listed),
+    );
+  });
+}
+
+// RF-154, the server half of «X te invitó · Aceptar / Rechazar» and «Salir del fondo». The three functions
+// are named here by what the person's tap does, and they are looked up when a row runs, not when the file
+// loads: until they exist every row below fails with the missing name in its detail, and no other row moves.
+// Each acts for the session's own user and answers a word: accept `accepted | gone | otherFund`, decline
+// `declined | gone`, leave `left | leaderStays | notInFund`.
+type InvitationApi = {
+  acceptInvitation: (input: { memberId: string }) => Promise<string>;
+  declineInvitation: (input: { memberId: string }) => Promise<string>;
+  leaveFund: () => Promise<string>;
+};
+
+async function invitationApi(): Promise<InvitationApi> {
+  const loaded = (await import("@/db/queries/group-members")) as unknown as Partial<InvitationApi>;
+  const named = <K extends keyof InvitationApi>(name: K): InvitationApi[K] => {
+    const found = loaded[name];
+    if (typeof found === "function") return found as InvitationApi[K];
+    return (async () => {
+      throw new TypeError(`db/queries/group-members does not export ${name}`);
+    }) as InvitationApi[K];
+  };
+
+  return {
+    acceptInvitation: named("acceptInvitation"),
+    declineInvitation: named("declineInvitation"),
+    leaveFund: named("leaveFund"),
+  };
+}
+
+// A refusal that raised reads as a word of its own, so an assertion on the answer fails with the cause.
+async function tap(run: () => Promise<string>): Promise<string> {
+  try {
+    return await run();
+  } catch (error) {
+    return `threw ${refusal(error)}`;
+  }
+}
+
+async function invitationActsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const api = await invitationApi();
+  const groupIds: string[] = [];
+
+  type InviteRow = {
+    id: string;
+    user_id: string | null;
+    invite_email: string | null;
+    invite_state: string;
+    name: string;
+    role: string;
+    archived_at: string | null;
+  };
+  const rowOf = async (id: string): Promise<InviteRow | undefined> =>
+    (
+      await fixtureSql<InviteRow[]>`
+        select id, user_id, invite_email, invite_state, name, role, archived_at::text as archived_at
+        from group_members where id = ${id}`
+    )[0];
+  const liveRowsOf = (userId: string) =>
+    fixtureSql<{ id: string; group_id: string }[]>`
+      select id, group_id from group_members where user_id = ${userId} and archived_at is null`;
+  const liveCount = async (groupId: string): Promise<number> =>
+    Number(
+      (
+        await fixtureSql<{ n: string }[]>`
+          select count(*)::text as n from group_members where group_id = ${groupId} and user_id is not null and archived_at is null`
+      )[0].n,
+    );
+
+  const openFund = async (label: string): Promise<{ leader: HarnessUser; groupId: string }> => {
+    const leader = await createMembershipFreeUser();
+    const { groupId } = await asUser(leader, () =>
+      createGroup({ name: `Harness fondo ${label} ${tag}`, leaderName: `Harness lider ${label}`, cashMode: "shared", locale: "es" }),
+    );
+    track("groups", groupId);
+    groupIds.push(groupId);
+    return { leader, groupId };
+  };
+  const invite = async (fund: { leader: HarnessUser; groupId: string }, who: HarnessUser, name: string): Promise<string> => {
+    const memberId = randomUUID();
+    await seedPendingInvite({ groupId: fund.groupId, memberId, actorId: fund.leader.id, name, email: who.email, archived: false });
+    return memberId;
+  };
+  const personalMovement = async (owner: HarnessUser): Promise<{ accountId: string; transactionId: string }> =>
+    asUser(owner, async () => {
+      const { accountId } = await createAccount({
+        name: `Harness propia ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: owner.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 1_000_000,
+        balanceOn: shiftDate(today, -10),
+      });
+      track("accounts", accountId);
+      const { categoryId } = await createCategory({
+        scope: { ownerUserId: owner.id },
+        name: `Harness propia gasto ${tag}`,
+        kind: "expense",
+        parentId: null,
+        color: "#0E7490",
+      });
+      track("categories", categoryId);
+      const { transactionId } = await createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        currency: "COP",
+        counterAmountCents: null,
+        counterIsEstimate: false,
+        occurredAt: shiftDate(today, -1),
+        description: `Harness propio ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents: 10_000 }],
+        labelIds: [],
+      });
+      track("transactions", transactionId);
+      return { accountId, transactionId };
+    });
+  const accountIds = (who: HarnessUser) => asUser(who, async () => (await listAccounts({ archived: false })).map((a) => a.id));
+  const sees = (who: HarnessUser, transactionId: string) =>
+    asUser(who, async () => (await getTransactionById(transactionId)) !== null);
+
+  try {
+    // The invitation, accepted, refused and replayed.
+    const fund = await openFund("acepta");
+    const { leader, groupId } = fund;
+    const invitee = await createMembershipFreeUser();
+    const stranger = await createMembershipFreeUser();
+    const inviteId = await invite(fund, invitee, "Harness invitada acepta");
+    const own = await personalMovement(invitee);
+    const rosterBefore = await liveCount(groupId);
+
+    const wrongAccept = await tap(() => asUser(stranger, () => api.acceptInvitation({ memberId: inviteId })));
+    const wrongDecline = await tap(() => asUser(stranger, () => api.declineInvitation({ memberId: inviteId })));
+    const untouched = await rowOf(inviteId);
+    assert(
+      next("A person the invitation is not addressed to cannot accept or decline it: both answer gone, the row stays pending and unclaimed, and they join nothing"),
+      wrongAccept === "gone" &&
+        wrongDecline === "gone" &&
+        untouched?.invite_state === "pending" &&
+        untouched.user_id === null &&
+        untouched.archived_at === null &&
+        (await liveRowsOf(stranger.id)).length === 0,
+      `accept = ${wrongAccept}, decline = ${wrongDecline}, row = ${JSON.stringify(untouched)}`,
+    );
+
+    const leaderSawBefore = (await accountIds(leader)).includes(own.accountId) || (await sees(leader, own.transactionId));
+    const accepted = await tap(() => asUser(invitee, () => api.acceptInvitation({ memberId: inviteId })));
+    const joined = await rowOf(inviteId);
+    const asInvitee = await asUser(invitee, () => listMembers(groupId, { archived: false }));
+    const leaderAccounts = await accountIds(leader);
+    const inviteeAccounts = await accountIds(invitee);
+    const [fundCash] = await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${groupId} and subtype = 'cash'`;
+    assert(
+      next("Accepting joins: the same row turns accepted with the person's user and no address left, the roster gains no row, and the fund now reads what membership reads, both ways"),
+      !leaderSawBefore &&
+        accepted === "accepted" &&
+        joined?.invite_state === "accepted" &&
+        joined.user_id === invitee.id &&
+        joined.invite_email === null &&
+        joined.name === "Harness invitada acepta" &&
+        joined.role === "member" &&
+        joined.archived_at === null &&
+        (await liveCount(groupId)) === rosterBefore + 1 &&
+        asInvitee.some((m) => m.id === inviteId) &&
+        asInvitee.length === 2 &&
+        leaderAccounts.includes(own.accountId) &&
+        (await sees(leader, own.transactionId)) &&
+        inviteeAccounts.includes(fundCash.id),
+      `leader read the invitee's rows before accepting = ${leaderSawBefore}, accept = ${accepted}, row = ${JSON.stringify(joined)}, live members ${rosterBefore} -> ${await liveCount(groupId)}, invitee sees ${asInvitee.length} members, leader lists their account = ${leaderAccounts.includes(own.accountId)}, invitee lists the fund's cash = ${inviteeAccounts.includes(fundCash.id)}`,
+    );
+
+    const again = await tap(() => asUser(invitee, () => api.acceptInvitation({ memberId: inviteId })));
+    const declineAfter = await tap(() => asUser(invitee, () => api.declineInvitation({ memberId: inviteId })));
+    const stillIn = await rowOf(inviteId);
+    assert(
+      next("A second tap changes nothing, and declining after accepting cannot remove a live member: one membership, still accepted"),
+      (again === "accepted" || again === "gone") &&
+        declineAfter === "gone" &&
+        stillIn?.invite_state === "accepted" &&
+        stillIn.user_id === invitee.id &&
+        stillIn.archived_at === null &&
+        (await liveRowsOf(invitee.id)).length === 1,
+      `second accept = ${again}, decline = ${declineAfter}, row = ${JSON.stringify(stillIn)}`,
+    );
+
+    // A withdrawn invitation is no longer one a person can accept.
+    const withdrawnFor = await createMembershipFreeUser();
+    const withdrawnId = await invite(fund, withdrawnFor, "Harness invitada retirada");
+    const archived = await asUser(leader, () => archiveMember({ groupId, memberId: withdrawnId }));
+    const lateAccept = await tap(() => asUser(withdrawnFor, () => api.acceptInvitation({ memberId: withdrawnId })));
+    const withdrawnRow = await rowOf(withdrawnId);
+    assert(
+      next("An invitation the leader withdrew is refused as gone: the row stays archived and unclaimed and the person joins nothing"),
+      archived &&
+        lateAccept === "gone" &&
+        withdrawnRow?.user_id === null &&
+        withdrawnRow.archived_at !== null &&
+        withdrawnRow.invite_state === "pending" &&
+        (await liveRowsOf(withdrawnFor.id)).length === 0,
+      `archived = ${archived}, accept = ${lateAccept}, row = ${JSON.stringify(withdrawnRow)}`,
+    );
+
+    // One fund at a time.
+    const resident = await createMembershipFreeUser();
+    const { groupId: homeGroupId } = await asUser(resident, () =>
+      createGroup({ name: `Harness fondo propio ${tag}`, leaderName: "Harness residente", cashMode: "shared", locale: "es" }),
+    );
+    track("groups", homeGroupId);
+    groupIds.push(homeGroupId);
+    // Not alone: someone else lives in the resident's fund, so it is not one they may leave behind (Q32 a).
+    await seedFellowMember(resident.id, homeGroupId);
+    const otherInviteId = await invite(fund, resident, "Harness invitada de otro fondo");
+    const blocked = await tap(() => asUser(resident, () => api.acceptInvitation({ memberId: otherInviteId })));
+    const blockedRow = await rowOf(otherInviteId);
+    const residentRows = await liveRowsOf(resident.id);
+    assert(
+      next("A person already in a fund with others who accepts another's invitation is refused as otherFund: still in their own fund, the invitation stays pending"),
+      blocked === "otherFund" &&
+        blockedRow?.invite_state === "pending" &&
+        blockedRow.user_id === null &&
+        residentRows.length === 1 &&
+        residentRows[0].group_id === homeGroupId,
+      `accept = ${blocked}, invitation = ${JSON.stringify(blockedRow)}, live memberships = ${JSON.stringify(residentRows)}`,
+    );
+
+    // Declining, and being invited again.
+    const decliner = await createMembershipFreeUser();
+    const declinedId = await invite(fund, decliner, "Harness invitada rechaza");
+    const declined = await tap(() => asUser(decliner, () => api.declineInvitation({ memberId: declinedId })));
+    const declinedRow = await rowOf(declinedId);
+    const rosterAfterDecline = await asUser(leader, () => listMembers(groupId, { archived: false }));
+    const revive = await tap(() => asUser(decliner, () => api.acceptInvitation({ memberId: declinedId })));
+    assert(
+      next("Declining archives the invitation: declined, no user, off the leader's roster, no membership, and a declined invitation cannot be accepted afterwards"),
+      declined === "declined" &&
+        declinedRow?.invite_state === "declined" &&
+        declinedRow.archived_at !== null &&
+        declinedRow.user_id === null &&
+        !rosterAfterDecline.some((m) => m.id === declinedId) &&
+        revive === "gone" &&
+        (await liveRowsOf(decliner.id)).length === 0,
+      `decline = ${declined}, row = ${JSON.stringify(declinedRow)}, on the roster = ${rosterAfterDecline.some((m) => m.id === declinedId)}, accept afterwards = ${revive}`,
+    );
+
+    const reinvited = await tap(async () =>
+      asUser(leader, async () => {
+        const { memberId } = await createMember({ groupId, name: "Harness invitada de nuevo", inviteEmail: decliner.email.toUpperCase() });
+        track("group_members", memberId);
+        return memberId;
+      }),
+    );
+    const secondAccept = await tap(() => asUser(decliner, () => api.acceptInvitation({ memberId: reinvited })));
+    const history = await rowOf(declinedId);
+    assert(
+      next("After declining, the same address can be invited again and the person can then accept: they join through the new row and the declined one stays as history"),
+      !reinvited.startsWith("threw") &&
+        reinvited !== declinedId &&
+        secondAccept === "accepted" &&
+        (await rowOf(reinvited))?.user_id === decliner.id &&
+        history?.invite_state === "declined" &&
+        history.user_id === null,
+      `re-invited as ${reinvited}, accept = ${secondAccept}, history row = ${JSON.stringify(history)}`,
+    );
+
+    // Leaving. The invitee writes in the fund, then leaves.
+    const [expenseCategory] = await fixtureSql<{ id: string }[]>`
+      select id from categories where group_id = ${groupId} and kind = 'expense' and parent_id is null order by name limit 1`;
+    const { accountId: bankId } = await asUser(leader, () =>
+      createAccount({
+        name: `Harness banco fondo ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: null,
+        groupId,
+        isShared: true,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 5_000_000,
+        balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", bankId);
+    // A person who never joined cannot write here; the movement then names a row that does not exist and
+    // the rows below fail on it, rather than the run aborting.
+    const fundMovement = await asUser(invitee, async () => {
+      try {
+        return (await createTransaction({
+            fromAccountId: bankId,
+            toAccountId: null,
+            amountCents: 7_000,
+            currency: "COP",
+            counterAmountCents: null,
+            counterIsEstimate: false,
+            occurredAt: shiftDate(today, -1),
+            description: `Harness del fondo ${tag}`,
+            externalRef: null,
+            splits: [{ categoryId: expenseCategory.id, amountCents: 7_000 }],
+            labelIds: [],
+        })).transactionId;
+      } catch {
+        return randomUUID();
+      }
+    });
+    track("transactions", fundMovement);
+    const bankBalance = () =>
+      asUser(leader, async () => (await listAccounts({ archived: false })).find((a) => a.id === bankId)?.balances[0]?.balanceCents);
+    const balanceBefore = await bankBalance();
+    const liveBefore = await liveCount(groupId);
+
+    const left = await tap(() => asUser(invitee, () => api.leaveFund()));
+    const leaderRoster = await asUser(leader, () => listMembers(groupId, { archived: false }));
+    const leaderAccountsAfter = await accountIds(leader);
+    const inviteeAccountsAfter = await accountIds(invitee);
+    const [ownAccount] = await fixtureSql<{ owner_user_id: string | null; archived_at: string | null }[]>`
+      select owner_user_id, archived_at::text as archived_at from accounts where id = ${own.accountId}`;
+    const [{ n: ownMovements }] = await fixtureSql<{ n: string }[]>`select count(*)::text as n from transactions where id = ${own.transactionId}`;
+    assert(
+      next("Leaving takes the person out of the roster: no live membership, off the leader's roster, one live member fewer, and the fund's accounts are no longer theirs to read"),
+      left === "left" &&
+        (await liveRowsOf(invitee.id)).length === 0 &&
+        !leaderRoster.some((m) => m.id === inviteId || m.userId === invitee.id) &&
+        (await liveCount(groupId)) === liveBefore - 1 &&
+        !inviteeAccountsAfter.includes(bankId) &&
+        !inviteeAccountsAfter.includes(fundCash.id),
+      `leave = ${left}, live members ${liveBefore} -> ${await liveCount(groupId)}, invitee still lists the fund's accounts = ${inviteeAccountsAfter.includes(bankId)}`,
+    );
+    assert(
+      next("What the person wrote in the fund stays with the fund: the leader still reads their movement and the shared account's balance has not moved"),
+      left === "left" &&
+        (await sees(leader, fundMovement)) &&
+        (await bankBalance()) === balanceBefore &&
+        (await fixtureSql`select 1 from transactions where id = ${fundMovement}`).length === 1,
+      `balance ${balanceBefore} -> ${await bankBalance()}, leader reads the movement = ${await sees(leader, fundMovement)}`,
+    );
+    assert(
+      next("Their personal accounts become theirs alone: still theirs and still read by them, no longer listed or readable by the fund"),
+      left === "left" &&
+        ownAccount?.owner_user_id === invitee.id &&
+        ownAccount.archived_at === null &&
+        ownMovements === "1" &&
+        inviteeAccountsAfter.includes(own.accountId) &&
+        (await sees(invitee, own.transactionId)) &&
+        !leaderAccountsAfter.includes(own.accountId) &&
+        !(await sees(leader, own.transactionId)),
+      `owner = ${ownAccount?.owner_user_id}, they list it = ${inviteeAccountsAfter.includes(own.accountId)}, the leader lists it = ${leaderAccountsAfter.includes(own.accountId)}`,
+    );
+
+    // Out, they are free to join another fund; and a leader stays while anyone else does.
+    const second = await openFund("sale");
+    const secondInvite = await invite(second, invitee, "Harness invitada vuelve");
+    const rejoined = await tap(() => asUser(invitee, () => api.acceptInvitation({ memberId: secondInvite })));
+    const leaderStays = await tap(() => asUser(second.leader, () => api.leaveFund()));
+    const leaderRow = await fixtureSql<{ role: string; archived_at: string | null }[]>`
+      select role, archived_at::text as archived_at from group_members where group_id = ${second.groupId} and user_id = ${second.leader.id}`;
+    assert(
+      next("Having left, the person joins another fund by accepting its invitation; and that fund's leader cannot leave while the fund has other members (leaderStays, still its leader)"),
+      rejoined === "accepted" &&
+        leaderStays === "leaderStays" &&
+        leaderRow.length === 1 &&
+        leaderRow[0].role === "leader" &&
+        leaderRow[0].archived_at === null &&
+        (await liveCount(second.groupId)) === 2,
+      `rejoin = ${rejoined}, leader leaves = ${leaderStays}, leader row = ${JSON.stringify(leaderRow)}, live members = ${await liveCount(second.groupId)}`,
+    );
+
+    const secondRow = (await liveRowsOf(invitee.id))[0];
+    const successorId = secondRow?.id ?? randomUUID();
+    const handed = await tap(async () => ((await asUser(second.leader, () => transferLeadership({ memberId: successorId }))) ? "handed" : "refused"));
+    const exLeaves = await tap(() => asUser(second.leader, () => api.leaveFund()));
+    const [newLeader] = await fixtureSql<{ role: string }[]>`select role from group_members where id = ${successorId}`;
+    assert(
+      next("A leader who handed the fund over leaves like any member, and the fund goes on with its new leader"),
+      handed === "handed" &&
+        exLeaves === "left" &&
+        (await liveRowsOf(second.leader.id)).length === 0 &&
+        newLeader?.role === "leader" &&
+        (await liveCount(second.groupId)) === 1,
+      `handed = ${handed}, leave = ${exLeaves}, new leader role = ${newLeader?.role}, live members = ${await liveCount(second.groupId)}`,
+    );
+
+    // Nothing to leave.
+    const rowsBefore = JSON.stringify(await readGroupMembers(groupId));
+    const nowhere = await tap(() => asUser(stranger, () => api.leaveFund()));
+    assert(
+      next("A person in no fund who asks to leave is told notInFund and no member row of any fund moves"),
+      nowhere === "notInFund" && JSON.stringify(await readGroupMembers(groupId)) === rowsBefore,
+      `answer = ${nowhere}`,
+    );
+  } finally {
+    for (const id of groupIds) {
+      for (const row of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", row.id);
+      for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${id}`) track("categories", row.id);
+      for (const row of await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${id}`) track("accounts", row.id);
+    }
+  }
+}
+
+// Q32 (a): a leader alone in their own fund accepts an invitation to another. Their fund is archived (their
+// leader row, since a group has no archive column, so it keeps no live member) and their personal accounts
+// come with them. Anyone else in the fund, live or invited, keeps the answer otherFund and moves nothing.
+async function loneLeaderAcceptsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const api = await invitationApi();
+  const groupIds: string[] = [];
+  let failureFunction: string | null = null;
+
+  type Row = { id: string; user_id: string | null; invite_state: string; role: string; archived_at: string | null; group_id: string };
+  const rowOf = async (id: string): Promise<Row | undefined> =>
+    (
+      await fixtureSql<Row[]>`
+        select id, user_id, invite_state, role, archived_at::text as archived_at, group_id from group_members where id = ${id}`
+    )[0];
+  const leaderRowOf = async (groupId: string): Promise<Row | undefined> =>
+    (
+      await fixtureSql<Row[]>`
+        select id, user_id, invite_state, role, archived_at::text as archived_at, group_id
+        from group_members where group_id = ${groupId} and role = 'leader'`
+    )[0];
+  const liveRowsOf = (userId: string) =>
+    fixtureSql<{ id: string; group_id: string }[]>`
+      select id, group_id from group_members where user_id = ${userId} and archived_at is null`;
+  const liveCount = async (groupId: string): Promise<number> =>
+    Number(
+      (
+        await fixtureSql<{ n: string }[]>`
+          select count(*)::text as n from group_members where group_id = ${groupId} and user_id is not null and archived_at is null`
+      )[0].n,
+    );
+  const openFund = async (label: string) => {
+    const leader = await createMembershipFreeUser();
+    const { groupId } = await asUser(leader, () =>
+      createGroup({ name: `Harness fondo ${label} ${tag}`, leaderName: `Harness lider ${label}`, cashMode: "shared", locale: "es" }),
+    );
+    track("groups", groupId);
+    groupIds.push(groupId);
+    return { leader, groupId };
+  };
+  const invite = async (fund: { leader: HarnessUser; groupId: string }, who: HarnessUser, name: string): Promise<string> => {
+    const memberId = randomUUID();
+    await seedPendingInvite({ groupId: fund.groupId, memberId, actorId: fund.leader.id, name, email: who.email, archived: false });
+    return memberId;
+  };
+  const personalMovement = async (owner: HarnessUser): Promise<{ accountId: string; transactionId: string }> =>
+    asUser(owner, async () => {
+      const { accountId } = await createAccount({
+        name: `Harness propia lider ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: owner.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 1_000_000,
+        balanceOn: shiftDate(today, -10),
+      });
+      track("accounts", accountId);
+      const { categoryId } = await createCategory({
+        scope: { ownerUserId: owner.id },
+        name: `Harness propia lider gasto ${tag}`,
+        kind: "expense",
+        parentId: null,
+        color: "#0E7490",
+      });
+      track("categories", categoryId);
+      const { transactionId } = await createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        currency: "COP",
+        counterAmountCents: null,
+        counterIsEstimate: false,
+        occurredAt: shiftDate(today, -1),
+        description: `Harness propio lider ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents: 10_000 }],
+        labelIds: [],
+      });
+      track("transactions", transactionId);
+      return { accountId, transactionId };
+    });
+  const accountIds = (who: HarnessUser) => asUser(who, async () => (await listAccounts({ archived: false })).map((a) => a.id));
+  const sees = (who: HarnessUser, transactionId: string) =>
+    asUser(who, async () => (await getTransactionById(transactionId)) !== null);
+
+  try {
+    // Alone, the leader accepts.
+    const target = await openFund("destino");
+    const alone = await openFund("sola");
+    const aloneOldRow = await leaderRowOf(alone.groupId);
+    const own = await personalMovement(alone.leader);
+    const inviteId = await invite(target, alone.leader, "Harness lider sola invitada");
+    const targetSawBefore = (await accountIds(target.leader)).includes(own.accountId);
+    const accepted = await tap(() => asUser(alone.leader, () => api.acceptInvitation({ memberId: inviteId })));
+    const oldRow = await rowOf(aloneOldRow?.id ?? randomUUID());
+    const joined = await rowOf(inviteId);
+    const live = await liveRowsOf(alone.leader.id);
+    assert(
+      next("A leader alone in their own fund who accepts an invitation to another is answered accepted"),
+      aloneOldRow?.role === "leader" && aloneOldRow.archived_at === null && accepted === "accepted",
+      `answer = ${accepted}`,
+    );
+    assert(
+      next("Their old leader row is archived, not deleted: the same row, still theirs, with an archive stamp"),
+      accepted === "accepted" && oldRow?.archived_at !== null && oldRow?.user_id === alone.leader.id && oldRow.role === "leader",
+      `answer = ${accepted}, old row = ${JSON.stringify(oldRow)}`,
+    );
+    assert(
+      next("They are a live member of the new fund through the invitation row, and of no other: one live membership"),
+      accepted === "accepted" &&
+        joined?.invite_state === "accepted" &&
+        joined.user_id === alone.leader.id &&
+        joined.archived_at === null &&
+        joined.role === "member" &&
+        live.length === 1 &&
+        live[0].group_id === target.groupId,
+      `answer = ${accepted}, joined = ${JSON.stringify(joined)}, live = ${JSON.stringify(live)}`,
+    );
+    const targetAccounts = await accountIds(target.leader);
+    assert(
+      next("Their personal accounts come with them: the new fund's leader, who could not read them before, now lists the account and reads its movement"),
+      !targetSawBefore &&
+        accepted === "accepted" &&
+        targetAccounts.includes(own.accountId) &&
+        (await sees(target.leader, own.transactionId)) &&
+        (await accountIds(alone.leader)).includes(own.accountId),
+      `before = ${targetSawBefore}, answer = ${accepted}, leader lists it = ${targetAccounts.includes(own.accountId)}`,
+    );
+    assert(
+      next("The old fund is left with no live member, and the new fund counts the newcomer"),
+      accepted === "accepted" && (await liveCount(alone.groupId)) === 0 && (await liveCount(target.groupId)) === 2,
+      `answer = ${accepted}, old fund live = ${await liveCount(alone.groupId)}, new fund live = ${await liveCount(target.groupId)}`,
+    );
+
+    // Atomic: a join that fails takes the archive with it.
+    const failing = await openFund("falla");
+    const failTarget = await openFund("destino falla");
+    const failInvite = await invite(failTarget, failing.leader, "Harness lider falla");
+    const failingLeaderRow = await leaderRowOf(failing.groupId);
+    failureFunction = `harness_m81_fail_${tag.replace(/-/g, "")}`;
+    await fixtureSql.unsafe(
+      `create function finances.${failureFunction}() returns trigger language plpgsql as $f$ begin raise exception 'm81 injected join failure'; end $f$`,
+    );
+    await fixtureSql.unsafe(
+      `create trigger ${failureFunction} before update on finances.group_members for each row when (new.id = '${failInvite}' and new.user_id is not null) execute function finances.${failureFunction}()`,
+    );
+    const failed = await tap(() => asUser(failing.leader, () => api.acceptInvitation({ memberId: failInvite })));
+    const failedOld = await rowOf(failingLeaderRow?.id ?? randomUUID());
+    const failedInvite = await rowOf(failInvite);
+    const failedLive = await liveRowsOf(failing.leader.id);
+    assert(
+      next("When joining the new fund fails the old leader row is not archived (a lone leader is never told otherFund): still live in their own fund, the invitation still pending"),
+      failed !== "accepted" &&
+        failed !== "otherFund" &&
+        failedOld?.archived_at === null &&
+        failedInvite?.user_id === null &&
+        failedInvite.invite_state === "pending" &&
+        failedLive.length === 1 &&
+        failedLive[0].group_id === failing.groupId,
+      `answer = ${failed}, old row = ${JSON.stringify(failedOld)}, invitation = ${JSON.stringify(failedInvite)}, live = ${JSON.stringify(failedLive)}`,
+    );
+    await fixtureSql.unsafe(`drop trigger if exists ${failureFunction} on finances.group_members`);
+    await fixtureSql.unsafe(`drop function if exists finances.${failureFunction}()`);
+    failureFunction = null;
+
+    // Not alone: another live member.
+    const crowded = await openFund("con miembro");
+    await seedFellowMember(crowded.leader.id, crowded.groupId);
+    const crowdedTarget = await openFund("destino 2");
+    const crowdedInvite = await invite(crowdedTarget, crowded.leader, "Harness lider acompanada");
+    const crowdedRow = await leaderRowOf(crowded.groupId);
+    const crowdedLiveBefore = await liveCount(crowded.groupId);
+    const crowdedAnswer = await tap(() => asUser(crowded.leader, () => api.acceptInvitation({ memberId: crowdedInvite })));
+    const crowdedAfter = await leaderRowOf(crowded.groupId);
+    assert(
+      next("A leader whose fund has another live member is still refused as otherFund and nothing is archived"),
+      crowdedAnswer === "otherFund" &&
+        crowdedAfter?.archived_at === null &&
+        crowdedRow?.archived_at === null &&
+        (await liveCount(crowded.groupId)) === crowdedLiveBefore &&
+        (await rowOf(crowdedInvite))?.user_id === null,
+      `answer = ${crowdedAnswer}, leader row = ${JSON.stringify(crowdedAfter)}, live ${crowdedLiveBefore} -> ${await liveCount(crowded.groupId)}`,
+    );
+
+    // Not alone: someone is invited.
+    const waiting = await openFund("con invitada");
+    const someoneElse = await createMembershipFreeUser();
+    await invite(waiting, someoneElse, "Harness invitada espera");
+    const waitingTarget = await openFund("destino 3");
+    const waitingInvite = await invite(waitingTarget, waiting.leader, "Harness lider con invitada");
+    const waitingAnswer = await tap(() => asUser(waiting.leader, () => api.acceptInvitation({ memberId: waitingInvite })));
+    const waitingRow = await leaderRowOf(waiting.groupId);
+    assert(
+      next("A leader whose fund has a pending invitation is not alone: otherFund, the leader row stays live, the invitation to the other fund stays pending"),
+      waitingAnswer === "otherFund" &&
+        waitingRow?.archived_at === null &&
+        (await rowOf(waitingInvite))?.user_id === null &&
+        (await liveRowsOf(waiting.leader.id)).length === 1,
+      `answer = ${waitingAnswer}, leader row = ${JSON.stringify(waitingRow)}`,
+    );
+
+    // A plain member of a fund with others.
+    const home = await openFund("miembros");
+    const member = await seedFellowMember(home.leader.id, home.groupId);
+    const memberTarget = await openFund("destino 4");
+    const memberInvite = await invite(memberTarget, member, "Harness miembra invitada");
+    const memberAnswer = await tap(() => asUser(member, () => api.acceptInvitation({ memberId: memberInvite })));
+    const memberLive = await liveRowsOf(member.id);
+    assert(
+      next("A plain member of a fund with others is refused as otherFund: still a live member of their fund, the invitation stays pending"),
+      memberAnswer === "otherFund" &&
+        memberLive.length === 1 &&
+        memberLive[0].group_id === home.groupId &&
+        (await rowOf(memberInvite))?.user_id === null &&
+        (await liveCount(home.groupId)) === 2,
+      `answer = ${memberAnswer}, live = ${JSON.stringify(memberLive)}`,
+    );
+  } finally {
+    if (failureFunction) {
+      await fixtureSql.unsafe(`drop trigger if exists ${failureFunction} on finances.group_members`);
+      await fixtureSql.unsafe(`drop function if exists finances.${failureFunction}()`);
+    }
+    for (const id of groupIds) {
+      for (const row of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", row.id);
+      for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${id}`) track("categories", row.id);
+      for (const row of await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${id}`) track("accounts", row.id);
+    }
+  }
+}
+
+// M49 (RF-31): the occurrence that falls on `ends_on` is the rule's last and books; and a rule the run
+// skipped after the lock (its date moved past today by someone else) is not written at all.
+async function recurringEndsOnSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const { accountId } = await asUser(user, () =>
+    createAccount({
+      name: `Harness m82 ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000_000,
+      balanceOn: shiftDate(today, -40),
+    }),
+  );
+  track("accounts", accountId);
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m82 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", categoryId);
+  const makeRule = async (dueIn: number, endsIn: number | null): Promise<string> => {
+    const { recurringRuleId } = await asUser(user, () =>
+      createRecurringRule({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 1_000,
+        categoryId,
+        description: `m82 ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: shiftDate(today, dueIn),
+        endsOn: endsIn === null ? null : shiftDate(today, endsIn),
+      }),
+    );
+    keep("recurring_rules", recurringRuleId);
+    return recurringRuleId;
+  };
+  const bookedDays = async (id: string): Promise<string[]> => {
+    const rows = await fixtureSql<{ id: string; day: string }[]>`
+      select id, occurred_at::text as day from transactions where recurring_rule_id = ${id} order by occurred_at`;
+    for (const r of rows) keep("transactions", r.id);
+    return rows.map((r) => r.day);
+  };
+  const row = async (label: string, body: () => Promise<{ ok: boolean; detail: string }>): Promise<void> => {
+    try {
+      const verdict = await body();
+      assert(next(label), verdict.ok, verdict.detail);
+    } catch (error) {
+      assert(next(label), false, refusal(error));
+    }
+  };
+
+  await row("A weekly rule whose last occurrence falls exactly on ends_on books it, then ends: nothing after ends_on is booked", async () => {
+    const id = await makeRule(-14, -7);
+    await fixtureSql`select private.run_due_recurring_rules(${user.id}::uuid)`;
+    const days = await bookedDays(id);
+    const [after] = await fixtureSql<{ is_active: boolean }[]>`select is_active from recurring_rules where id = ${id}`;
+    const expected = [shiftDate(today, -14), shiftDate(today, -7)];
+    return {
+      ok: JSON.stringify(days) === JSON.stringify(expected) && after.is_active === false,
+      detail: `booked ${JSON.stringify(days)}, expected ${JSON.stringify(expected)}, is_active = ${after.is_active}`,
+    };
+  });
+
+  await row("A rule the run reads as due, whose date a second connection pushes past today before the run locks it, is left untouched: no second update, no audit row", async () => {
+    const id = await makeRule(-7, null);
+    const moved = shiftDate(today, 21);
+    const writer = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, connection: { search_path: "finances, public" } });
+    const runner = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, connection: { search_path: "finances, public" } });
+    let waited = false;
+    try {
+      const [{ pid }] = await runner<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      let release!: () => void;
+      const gate = new Promise<void>((done) => (release = done));
+      let held!: () => void;
+      const holding = new Promise<void>((done) => (held = done));
+      const hold = writer.begin(async (tx) => {
+        await tx`update recurring_rules set next_run_on = ${moved} where id = ${id}`;
+        held();
+        await gate;
+      });
+      await holding;
+      const running = runner`select private.run_due_recurring_rules(${user.id}::uuid)`.execute();
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline && !waited) {
+        const [w] = await fixtureSql<{ n: number }[]>`
+          select count(*)::int as n from pg_stat_activity where pid = ${pid} and wait_event_type = 'Lock'`;
+        waited = w.n > 0;
+        if (!waited) await new Promise<void>((done) => setTimeout(done, 25));
+      }
+      release();
+      await hold;
+      await running;
+    } finally {
+      await writer.end();
+      await runner.end();
+    }
+    const [after] = await fixtureSql<{ next_run_on: string }[]>`select next_run_on::text as next_run_on from recurring_rules where id = ${id}`;
+    const [{ n }] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from audit_log where record_id = ${id} and action = 'UPDATE'`;
+    return {
+      ok: waited && after.next_run_on === moved && n === 1 && (await bookedDays(id)).length === 0,
+      detail: `run waited = ${waited}, next_run_on = ${after.next_run_on} (expected ${moved}), UPDATE audit rows = ${n} (expected 1: the second connection's)`,
+    };
+  });
+}
+
+// M68 (RF-154): a leader whose only fellow member has left is alone, so she accepts an invitation to another
+// fund. The member's archived row is not company.
+async function leaderWhoseMemberLeftSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const api = await invitationApi();
+  const leader = await createMembershipFreeUser();
+  const target = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo quedo ${tag}`, leaderName: "Harness lider quedo", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const targetFund = await asUser(target, () =>
+    createGroup({ name: `Harness fondo destino quedo ${tag}`, leaderName: "Harness destino quedo", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", targetFund.groupId);
+  const left = await seedFellowMember(leader.id, groupId);
+  await fixtureSql`update group_members set archived_at = now() where group_id = ${groupId} and user_id = ${left.id}`;
+  const memberId = randomUUID();
+  await seedPendingInvite({
+    groupId: targetFund.groupId,
+    memberId,
+    actorId: target.id,
+    name: "Harness lider quedo invitada",
+    email: leader.email,
+    archived: false,
+  });
+  const answer = await tap(() => asUser(leader, () => api.acceptInvitation({ memberId })));
+  const [joined] = await fixtureSql<{ user_id: string | null; invite_state: string }[]>`
+    select user_id, invite_state from group_members where id = ${memberId}`;
+  const [oldLeader] = await fixtureSql<{ archived_at: string | null }[]>`
+    select archived_at::text as archived_at from group_members where group_id = ${groupId} and role = 'leader'`;
+  for (const id of [groupId, targetFund.groupId]) {
+    for (const r of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", r.id);
+    for (const r of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${id}`) track("categories", r.id);
+    for (const r of await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${id}`) track("accounts", r.id);
+  }
+  assert(
+    next("A leader whose only fellow member left (archived row) is alone: she accepts an invitation to another fund, joins it and archives her leader row"),
+    answer === "accepted" && joined?.user_id === leader.id && joined.invite_state === "accepted" && oldLeader?.archived_at !== null,
+    `answer = ${answer}, joined = ${JSON.stringify(joined)}, old leader row = ${JSON.stringify(oldLeader)}`,
+  );
+}
+
+// RF-123 on the accounts screen: the pending foreign estimates listed are the live asset accounts' alone.
+async function pendingAssetSettlementsScopeSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  await asUser(user, async () => {
+    const { categoryId } = await createCategory({
+      scope: { ownerUserId: user.id },
+      name: `Harness m82 estimado ${tag}`,
+      kind: "expense",
+      parentId: null,
+      color: "#0E7490",
+    });
+    track("categories", categoryId);
+    const open = async (kind: "asset" | "liability", label: string): Promise<string> => {
+      const { accountId } = await createAccount({
+        name: `Harness m82 ${label} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: kind === "asset" ? 100_000_000 : 1_000_000,
+        balanceOn: shiftDate(today, -40),
+      });
+      track("accounts", accountId);
+      return accountId;
+    };
+    const estimate = async (accountId: string, label: string): Promise<string> => {
+      const created = await createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        currency: "USD",
+        counterAmountCents: 40_000_000,
+        counterIsEstimate: true,
+        occurredAt: shiftDate(today, -2),
+        description: `m82 ${tag} ${label}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents: 10_000 }],
+        labelIds: [],
+      });
+      track("transactions", created.transactionId);
+      return created.transactionId;
+    };
+    const live = await open("asset", "viva");
+    const card = await open("liability", "tarjeta");
+    const closed = await open("asset", "cerrada");
+    const liveEstimate = await estimate(live, "viva");
+    const cardEstimate = await estimate(card, "tarjeta");
+    const closedEstimate = await estimate(closed, "cerrada");
+    await archiveAccount({ accountId: closed });
+
+    const listed = (await listPendingAssetSettlements()).filter((row) => [live, card, closed].includes(row.accountId));
+    assert(
+      next("The accounts screen's pending estimates include a live asset account's estimate"),
+      listed.some((row) => row.id === liveEstimate && row.accountId === live),
+      JSON.stringify(listed),
+    );
+    assert(
+      next("They leave out a liability's estimate: a card's estimate belongs to the debt screen"),
+      !listed.some((row) => row.id === cardEstimate || row.accountId === card),
+      JSON.stringify(listed),
+    );
+    assert(
+      next("They leave out an archived asset account's estimate"),
+      !listed.some((row) => row.id === closedEstimate || row.accountId === closed) && listed.length === 1,
+      JSON.stringify(listed),
+    );
+  });
 }

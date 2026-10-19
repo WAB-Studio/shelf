@@ -186,6 +186,29 @@ test.describe("the chat against a stubbed model (RP-91–RP-94)", () => {
     }
   });
 
+  test("a note proposal reads the note it will write before «Hacer», and «Hacer» makes it", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const world = await seed(db, person.id);
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await send(page, "cambia la nota de Maze");
+      const words = chat.change.noteText
+        .replace("{text}", "Revisar las pistas del laberinto antes del viernes")
+        .replace("{count}", "50");
+      await expect(page.getByText(`${words}, ${chat.change.noteReplaces}`)).toBeVisible();
+      await expect(hacer(page)).toHaveCount(1);
+      await hacer(page).click();
+      await expect(hechos(page)).toHaveCount(1);
+    } finally {
+      await context.close();
+      await drop(db, world);
+    }
+  });
+
   test("a month amount reads «sin monto → 4 h»", async ({ person, browser, baseURL, db }) => {
     const world = await seed(db, person.id);
     const { context, page } = await open(browser, baseURL!, person);

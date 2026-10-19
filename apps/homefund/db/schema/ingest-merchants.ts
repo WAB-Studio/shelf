@@ -39,10 +39,9 @@ export const ingestMerchants = finances.table(
     // The category the current run of approvals is on; the streak counts that run.
     candidateCategoryId: uuid().references(() => categories.id, { onDelete: "set null" }),
     streak: smallint().notNull().default(0),
-    // Cascade, because trust IS the category: nulling this column while `state` stayed 'trusted'
-    // is what `ingest_merchants_trusted_category_matches_state` refuses, and the category's
-    // deletion was refused with it (RF-63).
-    trustedCategoryId: uuid().references(() => categories.id, { onDelete: "cascade" }),
+    // Set null, and a BEFORE UPDATE trigger takes the row back to `learning` in the same statement,
+    // so the category's deletion (RF-63) keeps the rule and forgets only its target.
+    trustedCategoryId: uuid().references(() => categories.id, { onDelete: "set null" }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },

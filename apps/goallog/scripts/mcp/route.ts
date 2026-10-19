@@ -141,7 +141,7 @@ test("initialize names the server and carries the instructions", async () => {
     capabilities: {},
     clientInfo: { name: "check", version: "0" },
   });
-  assert.equal(reply.result!.serverInfo.name, "pulsar");
+  assert.equal(reply.result!.serverInfo.name, "goallog");
   assert.equal(reply.result!.instructions, mcp.instructions);
 });
 
@@ -303,7 +303,7 @@ test("the metadata document answers at both well-known paths with the contract's
     assert.equal(document.resource, `${siteUrl}/mcp`);
     assert.deepEqual(document.authorization_servers, [siteUrl]);
     assert.deepEqual(document.bearer_methods_supported, ["header"]);
-    assert.equal(document.resource_name, "pulsar");
+    assert.equal(document.resource_name, "goallog");
   }
   const preflight = await fetch(`${base}/.well-known/oauth-protected-resource/mcp`, { method: "OPTIONS" });
   assert.ok(preflight.status < 300);

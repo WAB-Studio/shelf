@@ -33,8 +33,8 @@ for (const width of [360]) {
     try {
       await page.goto(`/metas/${goal}/compromisos/nuevo`);
       await settled(page);
-      await page.getByRole("button", { name: "días sueltos", exact: true }).click();
-      const chips = page.getByRole("main").getByRole("button", { name: /^[LMXJVSD]$/ });
+      await page.getByRole("radio", { name: "días sueltos", exact: true }).click();
+      const chips = page.getByRole("main").getByRole("button", { name: /^(lunes|martes|miércoles|jueves|viernes|sábado|domingo)$/ });
       await expect(chips).toHaveCount(7);
       const boxes = await chips.evaluateAll((els) =>
         els.map((el) => {

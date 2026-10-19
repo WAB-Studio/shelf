@@ -85,20 +85,32 @@ export async function appCapReached(): Promise<boolean> {
 }
 
 /**
- * Claims the second pass of an import (903c) with no cap: it follows a read that already took its claim,
- * so it is one for one with the reads the cap counts. Settled by `settleModelCall` like the read.
+ * Claims the second pass of an import (903c) outside the read cap, but never ahead of a read: the row
+ * lands only while the person's follow-ups today are fewer than their import reads today, counted under
+ * the import lock the reads take, so a pass is one for one with a read that took its own claim.
+ * Settled by `settleModelCall` like the read.
  */
 export async function claimFollowUp(model: string, source: "paste" | "file"): Promise<{ id: string } | null> {
   const person = await getPerson();
   if (!person) throw new Error("claimFollowUp called without a verified session");
 
-  const rows = await withGoalsDb((tx) =>
-    tx.execute<{ id: string }>(sql`
+  const rows = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${person.id}:import`}, 0))`);
+    return tx.execute<{ id: string }>(sql`
       insert into goals.model_calls (user_id, model, source)
-      values (${person.id}::uuid, ${`${model}${FOLLOW_UP_SUFFIX}`}, ${source})
+      select ${person.id}::uuid, ${`${model}${FOLLOW_UP_SUFFIX}`}, ${source}
+      where (
+        select count(*) from goals.model_calls
+        where user_id = ${person.id}::uuid and day = (now() at time zone ${TIME_ZONE})::date
+          and source in ('paste', 'file') and model like ${`%${FOLLOW_UP_SUFFIX}`}
+      ) < (
+        select count(*) from goals.model_calls
+        where user_id = ${person.id}::uuid and day = (now() at time zone ${TIME_ZONE})::date
+          and source in ('paste', 'file') and model not like ${`%${FOLLOW_UP_SUFFIX}`}
+      )
       returning id
-    `),
-  );
+    `);
+  });
 
   return rows[0] ? { id: rows[0].id } : null;
 }

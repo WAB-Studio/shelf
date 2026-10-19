@@ -116,3 +116,86 @@ test("each scope keys the same caller to its own row", () => {
 test("no key stays no key whatever the scope", () => {
   assert.equal(scopeClientKey("text", null), null);
 });
+
+// M28: the key is the caller's network, not one address inside it.
+const SALT = "a-real-salt-value";
+const keyOf = (address: string) => clientKeyFromHeaders(new Headers({ "x-forwarded-for": address }), SALT);
+
+test("two addresses inside one IPv6 /64 spend one key", () => {
+  assert.ok(keyOf("2001:db8:1:2::a"));
+  assert.equal(keyOf("2001:db8:1:2::a"), keyOf("2001:db8:1:2:ffff::b"));
+  assert.equal(keyOf("2001:db8:1:2:1:2:3:4"), keyOf("2001:db8:1:2:ffff:ffff:ffff:ffff"));
+});
+
+test("a neighbouring /64 is another caller", () => {
+  assert.notEqual(keyOf("2001:db8:1:3::a"), keyOf("2001:db8:1:2::a"));
+  assert.notEqual(keyOf("2001:db8:1:2::a"), keyOf("2001:db8:2:2::a"));
+});
+
+test("an IPv6 key is the hash of its expanded /64 form", () => {
+  const expected = clientKeyFromAddress("2001:0db8:0000:0000::/64", SALT);
+  assert.equal(keyOf("2001:db8::1"), expected);
+  assert.equal(keyOf("2001:DB8:0:0:0:0:0:1"), expected);
+  assert.equal(keyOf("2001:db8:0:0::9"), expected);
+});
+
+test("a zone id does not change the IPv6 key", () => {
+  assert.equal(keyOf("fe80::1%eth0"), keyOf("fe80::1"));
+  assert.equal(keyOf("fe80::1%eth0"), clientKeyFromAddress("fe80:0000:0000:0000::/64", SALT));
+});
+
+test("an IPv4-mapped IPv6 address is the IPv4 caller", () => {
+  assert.equal(keyOf("::ffff:203.0.113.5"), clientKeyFromAddress("203.0.113.5", SALT));
+  assert.equal(keyOf("::FFFF:203.0.113.5"), keyOf("203.0.113.5"));
+});
+
+test("an unparseable value is hashed as it is", () => {
+  assert.equal(keyOf("not-an-address"), clientKeyFromAddress("not-an-address", SALT));
+  assert.equal(keyOf("2001:db8:::1"), clientKeyFromAddress("2001:db8:::1", SALT));
+});
+
+test("x-vercel-forwarded-for wins over x-forwarded-for and x-real-ip", () => {
+  const key = clientKeyFromHeaders(
+    new Headers({
+      "x-vercel-forwarded-for": "203.0.113.9",
+      "x-forwarded-for": "198.51.100.1",
+      "x-real-ip": "198.51.100.2",
+    }),
+    SALT,
+  );
+  assert.equal(key, clientKeyFromAddress("203.0.113.9", SALT));
+});
+
+test("x-vercel-forwarded-for takes its first entry, trimmed", () => {
+  const key = clientKeyFromHeaders(
+    new Headers({ "x-vercel-forwarded-for": "  203.0.113.9 , 10.0.0.1", "x-forwarded-for": "198.51.100.1" }),
+    SALT,
+  );
+  assert.equal(key, clientKeyFromAddress("203.0.113.9", SALT));
+});
+
+test("a vercel IPv6 caller is cut to its /64 too", () => {
+  const a = clientKeyFromHeaders(new Headers({ "x-vercel-forwarded-for": "2001:db8:1:2::a" }), SALT);
+  const b = clientKeyFromHeaders(new Headers({ "x-vercel-forwarded-for": "2001:db8:1:2::b" }), SALT);
+  assert.ok(a);
+  assert.equal(a, b);
+  assert.equal(a, clientKeyFromAddress("2001:0db8:0001:0002::/64", SALT));
+});
+
+test("an empty x-vercel-forwarded-for falls through to the next header", () => {
+  const key = clientKeyFromHeaders(
+    new Headers({ "x-vercel-forwarded-for": " ", "x-forwarded-for": "198.51.100.1" }),
+    SALT,
+  );
+  assert.equal(key, clientKeyFromAddress("198.51.100.1", SALT));
+});
+
+test("an IPv4 caller is keyed exactly as before", () => {
+  for (const address of ["198.51.100.1", "203.0.113.9", "10.0.0.1", "0.0.0.0"]) {
+    assert.equal(keyOf(address), clientKeyFromAddress(address, SALT));
+  }
+  assert.equal(
+    clientKeyFromHeaders(new Headers({ "x-real-ip": "198.51.100.1" }), SALT),
+    clientKeyFromAddress("198.51.100.1", SALT),
+  );
+});

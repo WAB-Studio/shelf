@@ -79,14 +79,14 @@
   margin-block-start: 3px;
   font-size: var(--pulsar-text-unit-size);
   white-space: nowrap;
-  color: var(--pulsar-quiet);
+  color: var(--pulsar-muted);
 }
 
 .detailWide {
   display: block;
   margin-block-start: 3px;
   font-size: var(--pulsar-text-meta-size);
-  color: var(--pulsar-quiet);
+  color: var(--pulsar-muted);
 }
 
 .wideMark {

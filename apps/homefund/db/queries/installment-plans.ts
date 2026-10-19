@@ -1,11 +1,12 @@
 import "server-only";
 
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { installmentLines, installmentPlans, transactions } from "@/db/schema";
 import type { Account, InstallmentPlan } from "@/db/schema";
 import { withUserDb } from "@/db/session";
+import { pgErrorCode } from "@/lib/db-error";
 
 // The caller computes the dated schedule (RF-81); this only writes the plan and
 // its lines. The interest rate is a fraction, so it travels as a decimal string
@@ -258,97 +259,172 @@ class DebtPaymentRefusal extends Error {
 }
 
 /**
+ * Thrown inside the transaction so it rolls back when a line the walk chose was
+ * linked by someone else first. It carries serialization_failure's sqlstate, the
+ * code the action layer reads as "stale".
+ */
+class DebtPaymentStale extends Error {
+  readonly code = "40001";
+}
+
+type DebtPaymentResult = {
+  transactionId: string;
+  paidLineIds: string[];
+  remainderCents: number;
+  // Whether the debt has any installment plan: without one, no line wording applies.
+  hasPlans: boolean;
+};
+
+/**
  * A payment against a liability and its auto-FIFO allocation in ONE `withUserDb`
- * (RF-16, RF-82): (1) the kinds guard and the debt's unpaid lines, read in the
- * same statement so the refusal costs no round trip and lands BEFORE anything is
- * written; (2) the oldest-first walk over those lines, ordered by due date then
- * seq, linking each line the running remainder covers IN FULL and stopping at the
- * first it cannot; (3) the transfer that credits the liability, in the ledger's
- * own transfer shape — both accounts, no split, no label (scope, kind and
- * created_by fall to triggers). What the walk did not spend is returned
- * unallocated; unlinking happens on its own when the paying movement is deleted.
+ * (RF-16, RF-82), four round trips: (1) the advisory lock keyed by the debt, its
+ * own statement so the read after it takes a snapshot that already holds every
+ * payment the lock waited on; (2) the kinds guard and the debt's unpaid lines,
+ * read in the same statement so the refusal lands BEFORE anything is written;
+ * (3) the transfer that credits the liability, in the ledger's own transfer
+ * shape (scope, kind and created_by fall to triggers); (4) the link of each line
+ * the oldest-first walk covered IN FULL, only where it is still unpaid. A link
+ * count short of the walk rolls everything back, refused as stale. What the walk did
+ * not spend is returned unallocated; deleting the movement unlinks on its own.
+ *
+ * A resent `requestRef` raises 23505 on the insert, as `createTransaction` does,
+ * and costs one more transaction: the movement the first copy booked and the
+ * lines stored against it, so the resend answers what is actually linked.
  */
 export async function recordDebtPayment({
   fromAccountId,
   toAccountId,
   amountCents,
   occurredAt,
+  requestRef,
 }: {
   fromAccountId: string;
   toAccountId: string;
   amountCents: number;
   occurredAt: string;
-}): Promise<{
-  transactionId: string;
-  paidLineIds: string[];
-  remainderCents: number;
-}> {
-  return withUserDb(async (tx) => {
-    // The two kinds ride the read of the unpaid lines: one statement, and the
-    // single-row `k` keeps them coming back even when the debt has no lines.
-    const rows = await tx.execute<{
-      from_kind: Account["kind"] | null;
-      to_kind: Account["kind"] | null;
-      line_id: string | null;
-      amount_cents: string | null;
-    }>(sql`
-      select k.from_kind, k.to_kind, l.id as line_id, l.amount_cents
-      from (
+  requestRef?: string;
+}): Promise<DebtPaymentResult> {
+  const externalRef = requestRef ? `form:${requestRef}` : null;
+
+  try {
+    return await withUserDb(async (tx) => {
+      // Two payments of one debt queue here, so the second walks only what the
+      // first left unpaid.
+      await tx.execute(sql`
+        select pg_advisory_xact_lock(hashtextextended(${toAccountId}::text, 0))
+      `);
+
+      // The two kinds ride the read of the unpaid lines: one statement, and the
+      // single-row `k` keeps them coming back even when the debt has no lines.
+      const rows = await tx.execute<{
+        from_kind: Account["kind"] | null;
+        to_kind: Account["kind"] | null;
+        has_plans: boolean;
+        line_id: string | null;
+        amount_cents: string | null;
+      }>(sql`
+        select k.from_kind, k.to_kind, k.has_plans, l.id as line_id, l.amount_cents
+        from (
+          select
+            (select a.kind from accounts a where a.id = ${fromAccountId}) as from_kind,
+            (select a.kind from accounts a where a.id = ${toAccountId}) as to_kind,
+            exists (select 1 from installment_plans p where p.account_id = ${toAccountId}) as has_plans
+        ) k
+        left join lateral (
+          select l.id, l.amount_cents, l.due_date, l.seq
+          from installment_lines l
+          join installment_plans p on p.id = l.plan_id
+          where p.account_id = ${toAccountId} and l.paid_transaction_id is null
+        ) l on true
+        order by l.due_date, l.seq
+      `);
+
+      const [head] = rows;
+      // A kind that came back null is an account the policies did not show: the
+      // insert below answers that with 42501, the refusal the caller already reads.
+      if (head.from_kind !== null && head.from_kind !== "asset") {
+        throw new DebtPaymentRefusal("a debt payment comes from an asset account");
+      }
+      if (head.to_kind !== null && head.to_kind !== "liability") {
+        throw new DebtPaymentRefusal("a debt payment credits a liability account");
+      }
+
+      const chosen: string[] = [];
+      let remainder = amountCents;
+      for (const row of rows) {
+        if (row.line_id === null) break;
+        const owed = Number(row.amount_cents);
+        // Fully-covered lines only: the first line the remainder falls short of ends the walk.
+        if (remainder < owed) break;
+        remainder -= owed;
+        chosen.push(row.line_id);
+      }
+
+      // `created_by`, the scope and `kind` are set by triggers/generation and
+      // absent from the INSERT grant.
+      const [txn] = await insertRow(
+        tx,
+        transactions,
+        { fromAccountId, toAccountId, amountCents, occurredAt, externalRef },
+        { returning: { id: transactions.id } },
+      );
+
+      const transactionId = txn.id;
+
+      let paidLineIds: string[] = [];
+      if (chosen.length > 0) {
+        const linked = await tx
+          .update(installmentLines)
+          .set({ paidTransactionId: transactionId })
+          .where(
+            and(
+              inArray(installmentLines.id, chosen),
+              isNull(installmentLines.paidTransactionId),
+            ),
+          )
+          .returning({ id: installmentLines.id });
+        if (linked.length !== chosen.length) {
+          throw new DebtPaymentStale("a line this payment chose was paid first");
+        }
+        paidLineIds = linked.map((line) => line.id);
+      }
+
+      // What is left after the last fully-covered line, and it stays unallocated.
+      return { transactionId, paidLineIds, remainderCents: remainder, hasPlans: head.has_plans };
+    });
+  } catch (error) {
+    if (!externalRef || pgErrorCode(error) !== "23505") throw error;
+
+    // The debt names the scope the first copy was booked in, so the ref is read there alone.
+    const [existing] = await withUserDb((tx) =>
+      tx.execute<{ id: string; remainder_cents: string; paid: string[]; has_plans: boolean }>(sql`
         select
-          (select a.kind from accounts a where a.id = ${fromAccountId}) as from_kind,
-          (select a.kind from accounts a where a.id = ${toAccountId}) as to_kind
-      ) k
-      left join lateral (
-        select l.id, l.amount_cents, l.due_date, l.seq
-        from installment_lines l
-        join installment_plans p on p.id = l.plan_id
-        where p.account_id = ${toAccountId} and l.paid_transaction_id is null
-      ) l on true
-      order by l.due_date, l.seq
-    `);
-
-    const [head] = rows;
-    // A kind that came back null is an account the policies did not show: the
-    // insert below answers that with 42501, the refusal the caller already reads.
-    if (head.from_kind !== null && head.from_kind !== "asset") {
-      throw new DebtPaymentRefusal("a debt payment comes from an asset account");
-    }
-    if (head.to_kind !== null && head.to_kind !== "liability") {
-      throw new DebtPaymentRefusal("a debt payment credits a liability account");
-    }
-
-    const paidLineIds: string[] = [];
-    let remainder = amountCents;
-    for (const row of rows) {
-      if (row.line_id === null) break;
-      const owed = Number(row.amount_cents);
-      // Fully-covered lines only: the first line the remainder falls short of ends the walk.
-      if (remainder < owed) break;
-      remainder -= owed;
-      paidLineIds.push(row.line_id);
-    }
-
-    // `created_by`, the scope and `kind` are set by triggers/generation and
-    // absent from the INSERT grant.
-    const [txn] = await insertRow(
-      tx,
-      transactions,
-      { fromAccountId, toAccountId, amountCents, occurredAt },
-      { returning: { id: transactions.id } },
+          t.id,
+          exists (select 1 from installment_plans p where p.account_id = ${toAccountId}) as has_plans,
+          t.amount_cents - coalesce((
+            select sum(l.amount_cents) from installment_lines l
+            where l.paid_transaction_id = t.id
+          ), 0) as remainder_cents,
+          array(
+            select l.id from installment_lines l
+            where l.paid_transaction_id = t.id
+            order by l.due_date, l.seq
+          ) as paid
+        from transactions t
+        where t.external_ref = ${externalRef} and t.to_account_id = ${toAccountId}
+        limit 1
+      `),
     );
+    if (!existing) throw error;
 
-    const transactionId = txn.id;
-
-    if (paidLineIds.length > 0) {
-      await tx
-        .update(installmentLines)
-        .set({ paidTransactionId: transactionId })
-        .where(inArray(installmentLines.id, paidLineIds));
-    }
-
-    // What is left after the last fully-covered line, and it stays unallocated.
-    return { transactionId, paidLineIds, remainderCents: remainder };
-  });
+    // A bigint difference arrives from the driver as a string; cents stay a number.
+    return {
+      transactionId: existing.id,
+      paidLineIds: existing.paid,
+      remainderCents: Number(existing.remainder_cents),
+      hasPlans: existing.has_plans,
+    };
+  }
 }
 
 // The cascade removes the plan's lines; the boolean reports whether the policy

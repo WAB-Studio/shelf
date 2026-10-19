@@ -26,7 +26,7 @@ test.describe("the entry hands over the template, the workbook and the text for 
       await page.getByRole("button", { name: messages.template.copy }).click();
       await expect(page.getByRole("button", { name: messages.template.copied })).toBeVisible();
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(messages.template.example);
-      expect(messages.template.example.startsWith("pulsar · plantilla 2")).toBe(true);
+      expect(messages.template.example.startsWith("goallog · plantilla 2")).toBe(true);
 
       await expect(page.getByRole("button", { name: messages.entry.copyInstruction })).toBeVisible();
       await page.getByRole("button", { name: messages.entry.copyInstruction }).click();
@@ -51,7 +51,7 @@ test.describe("the entry hands over the template, the workbook and the text for 
       const [line, button] = [await privacy.boundingBox(), await page.getByRole("button", { name: messages.read }).boundingBox()];
       expect(line!.y + line!.height).toBeLessThanOrEqual(button!.y + 1);
       // Both code blocks are on the page: the template and the instruction that carries it.
-      await expect(page.getByText("pulsar · plantilla 2").first()).toBeVisible();
+      await expect(page.getByText("goallog · plantilla 2").first()).toBeVisible();
       await expect(page.getByText("[pega aquí tu plan]")).toBeVisible();
     });
   });

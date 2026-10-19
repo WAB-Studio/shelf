@@ -195,6 +195,21 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "d64") {
+    await checkInvitationAcceptance();
+    return;
+  }
+
+  if (process.env.RLS_ONLY === "d67") {
+    await checkPendingInvitationRead();
+    return;
+  }
+
+  if (process.env.RLS_ONLY === "m82") {
+    await checkLeaderGuardAndInvitationPredicates();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -258,6 +273,10 @@ async function main() {
   await checkAllowedEmailAudit();
   await checkAccountSubtypeWords();
   await checkMemberAddress();
+  await checkRecurringPauseReason();
+  await checkInvitationAcceptance();
+  await checkPendingInvitationRead();
+  await checkLeaderGuardAndInvitationPredicates();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -2597,9 +2616,9 @@ async function checkInviteClaimPolicies() {
   const busyGroupId = randomUUID();
 
   const labels = [
-    "98. the invited caller claims their pending row, setting user_id and clearing the invite",
+    "98. the invited caller's sign-in claims nothing: the pending row stays pending, unseen and unclaimed (RF-154)",
     "99. a caller whose email does not match the invite claims nothing",
-    "100. a caller who already holds a live membership is refused a second by the one-group index",
+    "100. accepting an invitation puts a caller who already holds a live membership in a second: the one-group index refuses it",
     "101. row security stays enabled and forced on group_members",
   ];
   const tailLabel = "102. the rolled-back invite transaction leaves no trace";
@@ -2655,11 +2674,9 @@ async function checkInviteClaimPolicies() {
       assert(
         labels[0],
         preClaimVisible === "0" &&
-          claimedId === pendingInvited &&
-          claimed.user_id === invitedUser &&
-          claimed.invite_email === null &&
-          claimed.role === "member",
-        `pre-claim visible = ${preClaimVisible}, claimed = ${claimedId === pendingInvited ? "the pending row" : claimedId}, user_id = ${claimed?.user_id === invitedUser ? "self" : claimed?.user_id}, invite_email = ${claimed?.invite_email}, role = ${claimed?.role}`,
+          claimedId === null &&
+          claimed === undefined,
+        `pre-claim visible = ${preClaimVisible}, claim returned ${claimedId ?? "null"}, row visible to the caller = ${claimed ? "yes" : "no"}`,
       );
 
       // 99: a caller whose email matches no invite claims nothing — the function matches on auth.email()
@@ -2674,10 +2691,10 @@ async function checkInviteClaimPolicies() {
       // 100: the busy caller's email matches the invite, so the function picks the pending row; the
       // one-group-per-user index then refuses it, since the caller already holds a live membership.
       await tx`reset role`;
-      await enterUserContext(tx, busyUser, busyEmail);
       await tx
         .savepoint(async (sp) => {
-          await sp`select private.claim_group_invite()`;
+          await sp`update group_members set user_id = ${busyUser}, invite_email = null, invite_state = 'accepted'
+            where group_id = ${groupId} and lower(invite_email) = lower(${busyEmail})`;
           assert(labels[2], false, "a second live membership landed, which it must not");
         })
         .catch((error: unknown) => {
@@ -5001,7 +5018,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   categories: ["created_at", "id", "updated_at"],
   debt_terms: ["created_at", "updated_at"],
   goal_contributions: ["created_at", "id"],
-  group_members: ["archived_at", "created_at", "id", "updated_at"],
+  group_members: ["archived_at", "created_at", "id", "invite_state", "updated_at"],
   groups: ["created_at", "updated_at"],
   // Every column, both here and in the UPDATE map: `private.remember_counterparty` is the
   // sole writer, so a client cannot forge a state transition. Forgetting one is the DELETE.
@@ -5061,6 +5078,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "is_active",
     "owner_user_id",
+    "paused_reason",
     "updated_at",
   ],
   savings_goals: ["archived_at", "created_at", "id", "updated_at"],
@@ -5147,6 +5165,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "external_ref",
     "group_id",
     "id",
+    "invite_state",
     "role",
     "updated_at",
     "user_id",
@@ -5213,7 +5232,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   ],
   labels: ["created_at", "group_id", "id", "owner_user_id", "updated_at"],
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
-  recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
+  recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "paused_reason", "updated_at"],
   savings_goals: ["created_at", "group_id", "id", "owner_user_id", "updated_at"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: ["label_id", "transaction_id"],
@@ -5619,7 +5638,7 @@ async function checkGroupMemberUserIdLock() {
   const forcedRollback = Symbol("forced rollback");
 
   const labels = [
-    "179. the invited caller's claim lands on their own pending row and clears the invite",
+    "179. the invited caller's claim joins nobody and leaves the pending row alone (RF-154)",
     "180. a second claim by the same caller returns null",
     "181. a plain member cannot repoint the leader's user_id at an account of his own",
     "182. a plain member still renames their own row",
@@ -5682,12 +5701,17 @@ async function checkGroupMemberUserIdLock() {
       }>(dsql`select user_id, invite_email, role from group_members where id = ${pending.id}`);
       assert(
         labels[0],
-        claimedId === pending.id &&
-          claimedRow.user_id === memberUser &&
-          claimedRow.invite_email === null &&
-          claimedRow.role === "member",
-        `claimed = ${claimedId === pending.id ? "the pending row" : claimedId}, user_id = ${claimedRow?.user_id === memberUser ? "self" : claimedRow?.user_id}, invite_email = ${claimedRow?.invite_email}, role = ${claimedRow?.role}`,
+        claimedId === null && claimedRow === undefined,
+        `claim returned ${claimedId ?? "null"}, row visible to the caller = ${claimedRow ? "yes" : "no"}`,
       );
+
+      // The acceptance M68 writes, run as the owner so 181 and 182 keep a member to attack with.
+      await tx.execute(dsql`reset role`);
+      await tx.execute(
+        dsql`update group_members set user_id = ${memberUser}, invite_email = null, invite_state = 'accepted'
+          where id = ${pending.id}`,
+      );
+      await enter(tx, memberUser, memberEmail);
 
       // 180: nothing pends on that email any more, so the same call claims nothing.
       const [{ claim_group_invite: repeatId }] = await tx.execute<{
@@ -11278,7 +11302,7 @@ async function checkMemberAddress() {
     archivedFree: "376. an archived pending invitation no longer holds its address; a new one lands and the archived row is untouched",
     twoLive: "377. a second live pending invitation to the same address is still refused, in any case, and another fund may hold it",
     restore: "378. restoring the archived invitation while a live one holds the address is a 23505 on group_members_group_invite_email_unique",
-    claim: "379. signing in with an archived and a live invitation to the address claims the live one",
+    claim: "379. signing in with an archived and a live invitation to the address claims neither (RF-154)",
     live: "380. the live database carries the function and the narrowed index",
   };
 
@@ -11460,10 +11484,11 @@ async function checkMemberAddress() {
     const rows = await tx<{ id: string; user_id: string | null }[]>`select id, user_id from group_members where id in (${dead.id}, ${live.id})`;
     const claimedLive = rows.find((r) => r.id === live.id)?.user_id === claimer;
     const deadUntouched = rows.find((r) => r.id === dead.id)?.user_id === null;
+    const liveUntouched = rows.find((r) => r.id === live.id)?.user_id === null;
     return [
       {
-        ok: id === live.id && claimedLive && deadUntouched,
-        detail: `claimed = ${id === live.id ? "the live row" : id}, live row holds the user = ${claimedLive}, archived row untouched = ${deadUntouched}`,
+        ok: id === null && !claimedLive && liveUntouched && deadUntouched,
+        detail: `claim returned ${id ?? "null"}, live row holds the user = ${claimedLive}, live row untouched = ${liveUntouched}, archived row untouched = ${deadUntouched}`,
       },
     ];
   });
@@ -11478,6 +11503,637 @@ async function checkMemberAddress() {
     state.fn !== null && def.includes("archived_at is null") && def.includes("invite_email is not null") && def.includes("unique"),
     `function = ${state.fn ?? "absent"}, index = ${state.def ?? "absent"}`,
   );
+}
+
+// Assertions 389-394: why a rule is paused (M49). `paused_reason` is the run's to write: the app
+// reads it and its person cannot forge it, on insert or update; the column admits only 'failed'; the
+// run writes it when a rule's generation raises and writes nothing for a rule that merely ended.
+// The run is scoped to the fixture's own user, so no other tenant's due rule is touched.
+async function checkRecurringPauseReason() {
+  console.log("");
+  const labels = {
+    updateBarred: "389. authenticated cannot update paused_reason on its own rule (42501)",
+    insertBarred: "390. authenticated cannot insert a rule carrying a paused_reason (42501)",
+    check: "391. paused_reason admits null and 'failed' and refuses any other value (23514)",
+    written: "392. a rule whose generation raises is paused with paused_reason 'failed'",
+    ended: "393. a rule that ran its course (ends_on) is inactive with no paused_reason",
+    healthy: "394. a rule that books cleanly stays active with no paused_reason",
+  };
+  const today = `(now() at time zone 'America/Bogota')::date`;
+
+  await m1Rows(Object.values(labels), async (tx) => {
+    const userA = randomUUID();
+    const userB = randomUUID();
+    await tx`insert into auth.users (id) values (${userA}), (${userB})`;
+    await tx`insert into app_users (id) values (${userA}), (${userB})`;
+
+    await enterUserContext(tx, userA);
+    const [{ id: accountA }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, initial_balance_on)
+      values (${userA}, 'rls pause reason a cash', 'asset', ${tx.unsafe(today)}) returning id`;
+    const [{ id: catA }] = await tx<{ id: string }[]>`
+      insert into categories (owner_user_id, name, kind)
+      values (${userA}, 'rls pause reason a expense', 'expense') returning id`;
+    const [{ id: healthy }] = await tx<{ id: string }[]>`
+      insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on)
+      values (${accountA}, 1000, ${catA}, 'weekly', 1, ${tx.unsafe(today)}) returning id`;
+    const [{ id: ended }] = await tx<{ id: string }[]>`
+      insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on, ends_on)
+      values (${accountA}, 1000, ${catA}, 'weekly', 1, ${tx.unsafe(today)}, ${tx.unsafe(today)}) returning id`;
+    const updateCode = await m1Refusal(tx, (sp) =>
+      sp`update recurring_rules set paused_reason = 'failed' where id = ${healthy}`);
+    const insertCode = await m1Refusal(tx, (sp) =>
+      sp`insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on, paused_reason)
+         values (${accountA}, 1000, ${catA}, 'weekly', 1, ${tx.unsafe(today)}, 'failed')`);
+
+    await tx`reset role`;
+    const refusedValue = await m1Refusal(tx, (sp) =>
+      sp`update recurring_rules set paused_reason = 'bogus' where id = ${healthy}`);
+    const failedAccepted = await m1Refusal(tx, (sp) =>
+      sp`update recurring_rules set paused_reason = 'failed' where id = ${healthy}`);
+    const nullAccepted = await m1Refusal(tx, (sp) =>
+      sp`update recurring_rules set paused_reason = null where id = ${healthy}`);
+
+    await enterUserContext(tx, userB);
+    const [{ id: accountB }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, initial_balance_on)
+      values (${userB}, 'rls pause reason b cash', 'asset', ${tx.unsafe(today)}) returning id`;
+    // B's rule names A's category: another scope, which the split trigger refuses on generation.
+    const [{ id: bad }] = await tx<{ id: string }[]>`
+      insert into recurring_rules (from_account_id, amount_cents, category_id, frequency, interval_n, next_run_on)
+      values (${accountB}, 1000, ${catA}, 'weekly', 1, ${tx.unsafe(today)}) returning id`;
+    await tx`reset role`;
+    await tx`select set_config('request.jwt.claims', '', true)`;
+    await tx`select private.run_due_recurring_rules(${userA}::uuid)`;
+    await tx`select private.run_due_recurring_rules(${userB}::uuid)`;
+    await tx`set constraints all immediate`;
+
+    const state = async (id: string) =>
+      (await tx<{ is_active: boolean; paused_reason: string | null }[]>`
+        select is_active, paused_reason from recurring_rules where id = ${id}`)[0];
+    const badState = await state(bad);
+    const endedState = await state(ended);
+    const healthyState = await state(healthy);
+
+    return [
+      { ok: updateCode === "42501", detail: `update answered ${updateCode}` },
+      { ok: insertCode === "42501", detail: `insert answered ${insertCode}` },
+      {
+        ok: refusedValue === "23514" && failedAccepted === null && nullAccepted === null,
+        detail: `'bogus' -> ${refusedValue}, 'failed' -> ${failedAccepted ?? "accepted"}, null -> ${nullAccepted ?? "accepted"}`,
+      },
+      {
+        ok: badState.is_active === false && badState.paused_reason === "failed",
+        detail: `is_active = ${badState.is_active}, paused_reason = ${badState.paused_reason}`,
+      },
+      {
+        ok: endedState.is_active === false && endedState.paused_reason === null,
+        detail: `is_active = ${endedState.is_active}, paused_reason = ${endedState.paused_reason}`,
+      },
+      {
+        ok: healthyState.is_active === true && healthyState.paused_reason === null,
+        detail: `is_active = ${healthyState.is_active}, paused_reason = ${healthyState.paused_reason}`,
+      },
+    ];
+  });
+}
+
+// Assertions 395-406: an invitation is accepted, never claimed (RF-154, migration 0064). The contract the
+// rows are written from, in the choices the schema left open (each one is the most natural reading):
+//   - `group_members.invite_state` is text, 'pending' | 'accepted' | 'declined', not null.
+//   - A row the leader inserts with an `invite_email`, exactly as the app does today, reads 'pending'.
+//   - A pending row has no `user_id`; an accepted row has one and no `invite_email`; a declined row is archived.
+//   - Accepting and declining are written by the server (the definer functions of M68), never by a caller's
+//     own UPDATE: the rows here write them as the owner, after `reset role`.
+//   - Signing in (`private.claim_group_invite()`, today's claim) joins nobody.
+// The sign-in path is driven in every setup as today's "claimed" contrast; the rows say what it must leave.
+//
+//   D64_MIGRATION_FILE  a path to a SQL file installed instead of db/migrations/0064_*.sql, so a mutation
+//                       can be proved red without touching the shared database. Replayed inside the
+//                       row's transaction only when the live database does not carry the column yet.
+async function d64Install(tx: M1Tx): Promise<void> {
+  const [{ has }] = await tx<{ has: boolean }[]>`
+    select exists (select 1 from information_schema.columns
+      where table_schema = 'finances' and table_name = 'group_members' and column_name = 'invite_state') as has`;
+  if (has) return;
+  const dir = path.join(process.cwd(), "db", "migrations");
+  const found = readdirSync(dir).find((name) => /^0064_.*\.sql$/.test(name));
+  const file = process.env.D64_MIGRATION_FILE ?? (found ? path.join(dir, found) : null);
+  if (!file) return;
+  for (const statement of readFileSync(file, "utf8").split("--> statement-breakpoint")) {
+    if (statement.trim()) await tx.unsafe(statement);
+  }
+}
+
+type D64Fund = {
+  leader: string;
+  invitee: string;
+  groupId: string;
+  rowId: string;
+  email: string;
+  accounts: number;
+  movements: number;
+  categories: number;
+};
+
+// A fund with its leader, and a person with a book of their own (two personal accounts, one movement
+// between them, one category) whom the leader invites by address.
+async function d64Fund(tx: M1Tx): Promise<D64Fund> {
+  await d64Install(tx);
+  const leader = randomUUID();
+  const invitee = randomUUID();
+  const groupId = randomUUID();
+  const email = `d64-${randomUUID()}@example.test`;
+  const today = `(now() at time zone 'America/Bogota')::date`;
+  await tx`insert into auth.users (id) values (${leader}), (${invitee})`;
+  await tx`insert into app_users (id) values (${leader}), (${invitee})`;
+
+  await enterUserContext(tx, invitee, email);
+  const [{ id: a }] = await tx<{ id: string }[]>`
+    insert into accounts (owner_user_id, name, kind, initial_balance_on)
+    values (${invitee}, 'rls d64 own a', 'asset', ${tx.unsafe(today)}) returning id`;
+  const [{ id: b }] = await tx<{ id: string }[]>`
+    insert into accounts (owner_user_id, name, kind, initial_balance_on)
+    values (${invitee}, 'rls d64 own b', 'asset', ${tx.unsafe(today)}) returning id`;
+  await tx`insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at)
+    values (${a}, ${b}, 1500, ${tx.unsafe(today)})`;
+  await tx`insert into categories (owner_user_id, name, kind) values (${invitee}, 'rls d64 own category', 'expense')`;
+  await tx`reset role`;
+
+  await enterUserContext(tx, leader);
+  await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls d64', 'shared')`;
+  await tx`insert into group_members (group_id, user_id, name, role) values (${groupId}, ${leader}, 'rls d64 leader', 'leader')`;
+  // The app's own insert: no state named. The database says what an address-bearing row is.
+  const [{ id: rowId }] = await tx<{ id: string }[]>`
+    insert into group_members (group_id, name, role, invite_email)
+    values (${groupId}, 'rls d64 invited', 'member', ${email}) returning id`;
+  await tx`reset role`;
+  return { leader, invitee, groupId, rowId, email, accounts: 2, movements: 1, categories: 1 };
+}
+
+// What the leader reads of the invitee's personal book.
+async function d64LeaderReads(tx: M1Tx, f: D64Fund): Promise<{ accounts: number; movements: number; categories: number }> {
+  await enterUserContext(tx, f.leader);
+  try {
+    const [{ n: accounts }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from accounts where owner_user_id = ${f.invitee}`;
+    const [{ n: movements }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from transactions where owner_user_id = ${f.invitee}`;
+    const [{ n: categories }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from categories where owner_user_id = ${f.invitee}`;
+    return { accounts, movements, categories };
+  } finally {
+    await tx`reset role`;
+  }
+}
+
+// Today's sign-in: the invitee's session calls the claim. Returns what it answered, or its sqlstate.
+async function d64SignIn(tx: M1Tx, f: D64Fund): Promise<string> {
+  await enterUserContext(tx, f.invitee, f.email);
+  try {
+    return await tx.savepoint(async (sp) => {
+      const [{ id }] = await (sp as unknown as M1Tx)<{ id: string | null }[]>`select private.claim_group_invite() as id`;
+      return id ? "joined" : "nothing";
+    });
+  } catch (error) {
+    return `refused ${pgErrorCode(error) ?? "none"}`;
+  } finally {
+    await tx`reset role`;
+  }
+}
+
+async function d64Row(tx: M1Tx, id: string) {
+  const [row] = await tx<{ user_id: string | null; invite_email: string | null; invite_state: string; archived: boolean }[]>`
+    select user_id, invite_email, invite_state, archived_at is not null as archived from group_members where id = ${id}`;
+  return row;
+}
+
+async function d64Accept(tx: M1Tx, f: D64Fund): Promise<void> {
+  await tx`update group_members set user_id = ${f.invitee}, invite_email = null, invite_state = 'accepted' where id = ${f.rowId}`;
+}
+
+async function d64Decline(tx: M1Tx, f: D64Fund): Promise<void> {
+  await tx`update group_members set invite_state = 'declined', archived_at = now() where id = ${f.rowId}`;
+}
+
+async function checkInvitationAcceptance() {
+  console.log("");
+  const labels = {
+    accounts: "395. a leader who invited an address reads none of that person's personal accounts, even after they sign in",
+    movements: "396. a leader who invited an address reads none of that person's personal movements, even after they sign in",
+    categories: "397. a leader who invited an address reads none of that person's personal categories, even after they sign in",
+    stays: "398. signing in leaves the invitation pending: no user_id, the address kept, the person in no fund",
+    pending: "399. an invitation the leader inserts reads 'pending', and a pending row refuses a user_id (23514)",
+    valid: "400. only pending, accepted and declined are storable; any other state is a 23514",
+    declinedArchived: "401. a declined invitation that is not archived is a 23514, so a decline always frees the address",
+    declined: "402. after a decline the leader still reads none of the person's book, and signing in again joins nobody",
+    reinvite: "403. a declined address can be invited again, in any case; a second live invitation to it is still a 23505; signing in joins nobody",
+    accepted: "404. an accepted invitation (state 'accepted', user_id set) reads what membership reads: the person's whole book",
+    grants: "405. no caller may write invite_state: authenticated, anon and service_role hold no INSERT or UPDATE on it, and a leader's UPDATE is a 42501",
+    liveAfter: "406. an accepted person who was once pending holds no invite_email and keeps the one-group index (a second live row for them is a 23505)",
+  };
+
+  // The three personal books, read after the claim path ran: the only thing the sign-in may not do is open them.
+  await m1Rows([labels.accounts, labels.movements, labels.categories], async (tx) => {
+    const f = await d64Fund(tx);
+    const before = await d64LeaderReads(tx, f);
+    const signIn = await d64SignIn(tx, f);
+    const after = await d64LeaderReads(tx, f);
+    return [
+      { ok: before.accounts === 0 && after.accounts === 0, detail: `accounts before sign-in = ${before.accounts}, after = ${after.accounts} (sign-in ${signIn})` },
+      { ok: before.movements === 0 && after.movements === 0, detail: `movements before sign-in = ${before.movements}, after = ${after.movements} (sign-in ${signIn})` },
+      { ok: before.categories === 0 && after.categories === 0, detail: `categories before sign-in = ${before.categories}, after = ${after.categories} (sign-in ${signIn})` },
+    ];
+  });
+
+  await m1Rows([labels.stays], async (tx) => {
+    const f = await d64Fund(tx);
+    const signIn = await d64SignIn(tx, f);
+    const row = await d64Row(tx, f.rowId);
+    const [{ n }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from group_members where user_id = ${f.invitee} and archived_at is null`;
+    return [{
+      ok: row.user_id === null && row.invite_email === f.email && row.invite_state === "pending" && n === 0,
+      detail: `sign-in ${signIn}; user_id = ${row.user_id ?? "null"}, invite_email = ${row.invite_email}, state = ${row.invite_state}, live memberships of the person = ${n}`,
+    }];
+  });
+
+  await m1Rows([labels.pending], async (tx) => {
+    const f = await d64Fund(tx);
+    const row = await d64Row(tx, f.rowId);
+    const code = await m1Refusal(tx, (sp) => sp`update group_members set user_id = ${f.invitee}, invite_email = null where id = ${f.rowId}`);
+    const other = await m1Refusal(tx, (sp) => sp`update group_members set user_id = ${f.leader} where id = ${f.rowId}`);
+    return [{
+      ok: row.invite_state === "pending" && code === "23514" && other === "23514",
+      detail: `state = ${row.invite_state}; giving a pending row its user = ${code ?? "accepted"}; giving it a user and keeping the address = ${other ?? "accepted"}`,
+    }];
+  });
+
+  await m1Rows([labels.valid], async (tx) => {
+    const f = await d64Fund(tx);
+    const bogus = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'bogus' where id = ${f.rowId}`);
+    const nul = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = null where id = ${f.rowId}`);
+    const empty = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = '' where id = ${f.rowId}`);
+    const pending = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'pending' where id = ${f.rowId}`);
+    const accepted = await m1Refusal(tx, (sp) => sp`update group_members set user_id = ${f.invitee}, invite_email = null, invite_state = 'accepted' where id = ${f.rowId}`);
+    const g = await d64Fund(tx);
+    const declined = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'declined', archived_at = now() where id = ${g.rowId}`);
+    return [{
+      ok: bogus === "23514" && nul !== null && empty === "23514" && pending === null && declined === null && accepted === null,
+      detail: `'bogus' = ${bogus ?? "accepted"}, null = ${nul ?? "accepted"}, '' = ${empty ?? "accepted"}; pending = ${pending ?? "ok"}, declined = ${declined ?? "ok"}, accepted = ${accepted ?? "ok"}`,
+    }];
+  });
+
+  await m1Rows([labels.declinedArchived], async (tx) => {
+    const f = await d64Fund(tx);
+    const live = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'declined' where id = ${f.rowId}`);
+    return [{ ok: live === "23514", detail: `declined and still live = ${live ?? "accepted"}` }];
+  });
+
+  await m1Rows([labels.declined], async (tx) => {
+    const f = await d64Fund(tx);
+    await d64Decline(tx, f);
+    const read = await d64LeaderReads(tx, f);
+    const signIn = await d64SignIn(tx, f);
+    const row = await d64Row(tx, f.rowId);
+    const after = await d64LeaderReads(tx, f);
+    return [{
+      ok: read.accounts + read.movements + read.categories === 0 && after.accounts + after.movements + after.categories === 0 && row.user_id === null && row.invite_state === "declined" && row.archived,
+      detail: `leader reads ${JSON.stringify(read)} then ${JSON.stringify(after)}; sign-in ${signIn}; user_id = ${row.user_id ?? "null"}, state = ${row.invite_state}, archived = ${row.archived}`,
+    }];
+  });
+
+  await m1Rows([labels.reinvite], async (tx) => {
+    const f = await d64Fund(tx);
+    await d64Decline(tx, f);
+    await enterUserContext(tx, f.leader);
+    const again = await m1Refusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+      values (${f.groupId}, 'rls d64 invited again', 'member', ${f.email.toUpperCase()})`);
+    const twice = await m1Refusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email)
+      values (${f.groupId}, 'rls d64 invited thrice', 'member', ${f.email})`);
+    await tx`reset role`;
+    const rows = await tx<{ invite_state: string; archived: boolean; user_id: string | null }[]>`
+      select invite_state, archived_at is not null as archived, user_id from group_members
+      where group_id = ${f.groupId} and lower(invite_email) = lower(${f.email}) or id = ${f.rowId} order by created_at, id`;
+    const signIn = await d64SignIn(tx, f);
+    const read = await d64LeaderReads(tx, f);
+    const [{ n }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from group_members where user_id = ${f.invitee} and archived_at is null`;
+    const live = rows.filter((r) => !r.archived);
+    return [{
+      ok: again === null && twice === "23505" && live.length === 1 && live[0].invite_state === "pending" && live[0].user_id === null && read.accounts === 0 && n === 0,
+      detail: `re-invite = ${again ?? "landed"}, a second live one = ${twice ?? "landed"}; live rows ${JSON.stringify(live)}; sign-in ${signIn}; leader reads ${read.accounts} accounts; person's live memberships = ${n}`,
+    }];
+  });
+
+  await m1Rows([labels.accepted], async (tx) => {
+    const f = await d64Fund(tx);
+    const before = await d64LeaderReads(tx, f);
+    await d64Accept(tx, f);
+    const read = await d64LeaderReads(tx, f);
+    const row = await d64Row(tx, f.rowId);
+    return [{
+      ok: before.accounts === 0 && read.accounts === f.accounts && read.movements === f.movements && read.categories === f.categories && row.user_id === f.invitee && row.invite_email === null && row.invite_state === "accepted",
+      detail: `leader read ${JSON.stringify(before)} before and ${JSON.stringify(read)} after, wanted ${f.accounts}/${f.movements}/${f.categories}; state = ${row.invite_state}, invite_email = ${row.invite_email}`,
+    }];
+  });
+
+  await m1Rows([labels.grants], async (tx) => {
+    const f = await d64Fund(tx);
+    const roles = ["authenticated", "anon", "service_role"];
+    const held: string[] = [];
+    for (const role of roles) {
+      for (const priv of ["INSERT", "UPDATE"]) {
+        const [{ ok }] = await tx<{ ok: boolean | null }[]>`
+          select has_column_privilege(${role}, 'finances.group_members', 'invite_state', ${priv}) as ok`;
+        if (ok !== false) held.push(`${role} ${priv}`);
+      }
+    }
+    await enterUserContext(tx, f.leader);
+    const update = await m1Refusal(tx, (sp) => sp`update group_members set invite_state = 'accepted' where id = ${f.rowId}`);
+    const insert = await m1Refusal(tx, (sp) => sp`insert into group_members (group_id, name, role, invite_email, invite_state)
+      values (${f.groupId}, 'rls d64 forged', 'member', ${"forged-" + f.email}, 'accepted')`);
+    await tx`reset role`;
+    return [{
+      ok: held.length === 0 && update === "42501" && insert === "42501",
+      detail: `column privileges held: ${held.join(", ") || "none"}; leader UPDATE = ${update ?? "accepted"}, leader INSERT naming the state = ${insert ?? "accepted"}`,
+    }];
+  });
+
+  await m1Rows([labels.liveAfter], async (tx) => {
+    const f = await d64Fund(tx);
+    await d64Accept(tx, f);
+    const other = randomUUID();
+    await tx`insert into groups (id, name, cash_mode) values (${other}, 'rls d64 other', 'shared')`;
+    const second = await m1Refusal(tx, (sp) => sp`insert into group_members (group_id, user_id, name, role, invite_state)
+      values (${other}, ${f.invitee}, 'rls d64 twice', 'member', 'accepted')`);
+    const row = await d64Row(tx, f.rowId);
+    return [{
+      ok: second === "23505" && row.invite_email === null,
+      detail: `a second live row for the accepted person = ${second ?? "landed"}; invite_email = ${row.invite_email}`,
+    }];
+  });
+}
+
+// Assertions 407-409: migration 0067 (RF-154). The invited person reads the invitation addressed to
+// them through `private.pending_invitation()`; nobody else reads it, and anon cannot call it.
+//
+//   D67_MIGRATION_FILE  a path to a SQL file installed instead of db/migrations/0067_*.sql, so a mutation
+//                       can be proved red without touching the shared database.
+async function d67Install(tx: M1Tx): Promise<void> {
+  const dir = path.join(process.cwd(), "db", "migrations");
+  const found = readdirSync(dir).find((name) => /^0067_.*\.sql$/.test(name));
+  const file = process.env.D67_MIGRATION_FILE ?? (found ? path.join(dir, found) : null);
+  if (!file) throw new Error("db/migrations/0067_*.sql does not exist");
+  await tx.unsafe(`drop function if exists private.pending_invitation()`);
+  for (const statement of readFileSync(file, "utf8").split("--> statement-breakpoint")) {
+    if (statement.trim()) await tx.unsafe(statement);
+  }
+}
+
+async function d67Read(tx: M1Tx, subject: string, email: string | undefined) {
+  await enterUserContext(tx, subject, email);
+  try {
+    return await tx<{ member_id: string; inviter_name: string; fund_name: string; current_fund_name: string | null; current_fund_has_company: boolean }[]>`
+      select * from private.pending_invitation()`;
+  } finally {
+    await tx`reset role`;
+  }
+}
+
+async function checkPendingInvitationRead() {
+  console.log("");
+  const labels = {
+    reads: "407. the invited person reads their pending invitation (the row id, the leader's name, the fund name), whatever the case of the address; a person whose own fund has company is told so, a lone one is not",
+    nobody: "408. a signed-in person with another address, a declined or withdrawn invitation, or no address reads nothing",
+    grants: "409. the function is a stable definer with a fixed search path; authenticated may execute it, anon, service_role and PUBLIC may not",
+  };
+
+  await m1Rows([labels.reads], async (tx) => {
+    await d67Install(tx);
+    const leader = randomUUID();
+    const invitee = randomUUID();
+    const lone = randomUUID();
+    const groupId = randomUUID();
+    const ownId = randomUUID();
+    const tag = randomUUID().slice(0, 8);
+    const email = `d67-${tag}@example.test`;
+    await tx`insert into auth.users (id) values (${leader}), (${invitee}), (${lone})`;
+    await tx`insert into app_users (id) values (${leader}), (${invitee}), (${lone})`;
+    await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls d67 fund', 'shared'), (${ownId}, 'rls d67 own', 'shared')`;
+    await tx`insert into group_members (group_id, user_id, name, role) values (${groupId}, ${leader}, 'rls d67 leader', 'leader')`;
+    const [{ id: rowId }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role, invite_email)
+      values (${groupId}, 'rls d67 invited', 'member', ${email.toUpperCase()}) returning id`;
+    const alone = await d67Read(tx, invitee, email);
+    await tx`insert into group_members (group_id, user_id, name, role) values (${ownId}, ${invitee}, 'rls d67 own', 'leader')`;
+    const soloLeader = await d67Read(tx, invitee, email);
+    await tx`insert into group_members (group_id, name, role) values (${ownId}, 'rls d67 company', 'member')`;
+    const withCompany = await d67Read(tx, invitee, email);
+    void lone;
+    const a = alone[0];
+    const b = soloLeader[0];
+    const c = withCompany[0];
+    return [{
+      ok: alone.length === 1 && a.member_id === rowId && a.inviter_name === "rls d67 leader" && a.fund_name === "rls d67 fund" && a.current_fund_name === null && a.current_fund_has_company === false
+        && soloLeader.length === 1 && b.current_fund_name === "rls d67 own" && b.current_fund_has_company === false
+        && withCompany.length === 1 && c.current_fund_name === "rls d67 own" && c.current_fund_has_company === true,
+      detail: `no fund = ${JSON.stringify(alone)}, lone leader = ${JSON.stringify(soloLeader)}, with company = ${JSON.stringify(withCompany)}`,
+    }];
+  });
+
+  await m1Rows([labels.nobody], async (tx) => {
+    await d67Install(tx);
+    const leader = randomUUID();
+    const invitee = randomUUID();
+    const other = randomUUID();
+    const groupId = randomUUID();
+    const email = `d67-${randomUUID().slice(0, 8)}@example.test`;
+    await tx`insert into auth.users (id) values (${leader}), (${invitee}), (${other})`;
+    await tx`insert into app_users (id) values (${leader}), (${invitee}), (${other})`;
+    await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls d67 fund', 'shared')`;
+    await tx`insert into group_members (group_id, user_id, name, role) values (${groupId}, ${leader}, 'rls d67 leader', 'leader')`;
+    const [{ id: rowId }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role, invite_email) values (${groupId}, 'rls d67 invited', 'member', ${email}) returning id`;
+    const stranger = await d67Read(tx, other, `d67-other-${randomUUID().slice(0, 8)}@example.test`);
+    const noAddress = await d67Read(tx, invitee, undefined);
+    const leaderReads = await d67Read(tx, leader, `lead-${email}`);
+    await tx`update group_members set invite_state = 'declined', archived_at = now() where id = ${rowId}`;
+    const declined = await d67Read(tx, invitee, email);
+    return [{
+      ok: stranger.length === 0 && noAddress.length === 0 && leaderReads.length === 0 && declined.length === 0,
+      detail: `other address = ${stranger.length}, no address = ${noAddress.length}, leader = ${leaderReads.length}, after a decline = ${declined.length}`,
+    }];
+  });
+
+  await m1Rows([labels.grants], async (tx) => {
+    await d67Install(tx);
+    const [fn] = await tx<{ definer: boolean; stable: boolean; fixed_path: boolean }[]>`
+      select p.prosecdef as definer, p.provolatile = 's' as stable,
+        coalesce('search_path=""' = any (p.proconfig), false) as fixed_path
+      from pg_proc p where p.oid = 'private.pending_invitation()'::regprocedure`;
+    const [acl] = await tx<{ authenticated: boolean; anon: boolean; service: boolean; pub: boolean }[]>`
+      select has_function_privilege('authenticated', 'private.pending_invitation()', 'execute') as authenticated,
+        has_function_privilege('anon', 'private.pending_invitation()', 'execute') as anon,
+        has_function_privilege('service_role', 'private.pending_invitation()', 'execute') as service,
+        has_function_privilege(0, 'private.pending_invitation()', 'execute') as pub`;
+    const subject = randomUUID();
+    const verdict: string[] = [];
+    let closed = true;
+    for (const role of ["anon", "service_role"] as const) {
+      await m1Become(tx, role, subject);
+      const code = await m1Refusal(tx, (sp) => sp`select * from private.pending_invitation()`);
+      await tx`reset role`;
+      verdict.push(`${role} = ${code ?? "accepted"}`);
+      if (code !== "42501") closed = false;
+    }
+    return [{
+      ok: fn.definer && fn.stable && fn.fixed_path && acl.authenticated && !acl.anon && !acl.service && !acl.pub && closed,
+      detail: `definer = ${fn.definer}, stable = ${fn.stable}, search_path fixed = ${fn.fixed_path}; execute authenticated = ${acl.authenticated}, anon = ${acl.anon}, service_role = ${acl.service}, PUBLIC = ${acl.pub}; calls: ${verdict.join(", ")}`,
+    }];
+  });
+}
+
+// Assertions 410-414: the two predicates the fund's people hang on (RF-59, RF-154) that rows 407-409 and
+// 184-190 left open. 410-411: the leader guard refuses a fund with a live member and no live leader (the
+// leader archived or demoted, a plain member standing in) and still lets a handover and an abandoned fund
+// through. 412-414: `private.pending_invitation()` never shows a withdrawn invitation, returns at most one
+// row and it is the oldest, names the fund's live leader and not its oldest member, and does not count an
+// archived row as company.
+async function checkLeaderGuardAndInvitationPredicates() {
+  console.log("");
+  const labels = {
+    leaderless: "410. a fund with a live member and no live leader is refused at commit: the leader archived, or demoted, while a plain member stays",
+    handover: "411. the guard still lets a leadership handover and an abandoned fund (nobody live left) stand",
+    withdrawn: "412. an invitation the leader withdrew (pending, archived) is read by nobody, its addressee included",
+    oldest: "413. two live invitations to one address read as exactly one row, the oldest",
+    company: "414. the invitation names the fund's live leader though an older member exists, and an archived row in the reader's own fund is not company",
+  };
+
+  type Fund = { groupId: string; leaderRowId: string };
+  const fund = async (tx: M1Tx, name: string, leaderCreatedAt = "2024-01-02"): Promise<Fund & { leader: string }> => {
+    const leader = randomUUID();
+    const groupId = randomUUID();
+    await tx`insert into auth.users (id) values (${leader})`;
+    await tx`insert into app_users (id) values (${leader})`;
+    await tx`insert into groups (id, name, cash_mode) values (${groupId}, ${name}, 'shared')`;
+    const [{ id: leaderRowId }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, user_id, name, role)
+      values (${groupId}, ${leader}, ${`${name} leader`}, 'leader') returning id`;
+    await backdate(tx, leaderRowId, leaderCreatedAt);
+    // The group's own creation-time guard is deferred too; spend it here so only the later writes reach the guard under test.
+    await tx`set constraints all immediate`;
+    await tx`set constraints all deferred`;
+    return { groupId, leaderRowId, leader };
+  };
+  // A trigger stamps created_at on insert and keeps it on update; the replica role skips every trigger for one write.
+  const backdate = async (tx: M1Tx, rowId: string, createdAt: string) => {
+    await tx`set local session_replication_role = replica`;
+    await tx`update group_members set created_at = ${createdAt}::timestamptz where id = ${rowId}`;
+    await tx`set local session_replication_role = origin`;
+  };
+  const refused = (tx: M1Tx, run: (sp: M1Tx) => Promise<unknown>) =>
+    m1Refusal(tx, async (sp) => {
+      await run(sp);
+      await sp`set constraints all immediate`;
+      await sp`set constraints all deferred`;
+    });
+
+  await m1Rows([labels.leaderless], async (tx) => {
+    const archived = await fund(tx, "rls m82 archived");
+    await tx`insert into group_members (group_id, name, role) values (${archived.groupId}, 'rls m82 stays', 'member')`;
+    const archive = await refused(tx, (sp) => sp`update group_members set archived_at = now() where id = ${archived.leaderRowId}`);
+    const demoted = await fund(tx, "rls m82 demoted");
+    await tx`insert into group_members (group_id, name, role) values (${demoted.groupId}, 'rls m82 stays', 'member')`;
+    const demote = await refused(tx, (sp) => sp`update group_members set role = 'member' where id = ${demoted.leaderRowId}`);
+    return [{
+      ok: archive === "23514" && demote === "23514",
+      detail: `leader archived = ${archive ?? "accepted"}, leader demoted = ${demote ?? "accepted"}`,
+    }];
+  });
+
+  await m1Rows([labels.handover], async (tx) => {
+    const handed = await fund(tx, "rls m82 handover");
+    const heir = randomUUID();
+    await tx`insert into auth.users (id) values (${heir})`;
+    await tx`insert into app_users (id) values (${heir})`;
+    const [{ id: heirId }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, user_id, name, role) values (${handed.groupId}, ${heir}, 'rls m82 heir', 'member') returning id`;
+    const handover = await refused(tx, async (sp) => {
+      await sp`update group_members set role = 'member' where id = ${handed.leaderRowId}`;
+      await sp`update group_members set role = 'leader' where id = ${heirId}`;
+    });
+    const abandoned = await fund(tx, "rls m82 abandoned");
+    const abandon = await refused(tx, (sp) => sp`update group_members set archived_at = now() where id = ${abandoned.leaderRowId}`);
+    return [{
+      ok: handover === null && abandon === null,
+      detail: `handover = ${handover ?? "accepted"}, abandoned fund = ${abandon ?? "accepted"}`,
+    }];
+  });
+
+  const invitation = async (tx: M1Tx, groupId: string, email: string, createdAt: string, name: string) => {
+    const [{ id }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role, invite_email)
+      values (${groupId}, ${name}, 'member', ${email}) returning id`;
+    await backdate(tx, id, createdAt);
+    return id;
+  };
+  const invitee = async (tx: M1Tx) => {
+    const id = randomUUID();
+    await tx`insert into auth.users (id) values (${id})`;
+    await tx`insert into app_users (id) values (${id})`;
+    return id;
+  };
+
+  await m1Rows([labels.withdrawn], async (tx) => {
+    await d67Install(tx);
+    const f = await fund(tx, "rls m82 withdrawn");
+    const who = await invitee(tx);
+    const email = `m82-${randomUUID().slice(0, 8)}@example.test`;
+    const rowId = await invitation(tx, f.groupId, email, "2024-02-01", "rls m82 withdrawn invitee");
+    const before = await d67Read(tx, who, email);
+    await tx`update group_members set archived_at = now() where id = ${rowId}`;
+    const after = await d67Read(tx, who, email);
+    return [{
+      ok: before.length === 1 && after.length === 0,
+      detail: `before the withdrawal = ${before.length}, after = ${after.length}`,
+    }];
+  });
+
+  await m1Rows([labels.oldest], async (tx) => {
+    await d67Install(tx);
+    const first = await fund(tx, "rls m82 first fund");
+    const second = await fund(tx, "rls m82 second fund");
+    const who = await invitee(tx);
+    const email = `m82-${randomUUID().slice(0, 8)}@example.test`;
+    const newer = await invitation(tx, second.groupId, email, "2024-05-01", "rls m82 newer");
+    const older = await invitation(tx, first.groupId, email, "2024-03-01", "rls m82 older");
+    const rows = await d67Read(tx, who, email);
+    return [{
+      ok: rows.length === 1 && rows[0].member_id === older && rows[0].member_id !== newer,
+      detail: `rows = ${rows.length}, read ${rows[0]?.member_id}, older = ${older}, newer = ${newer}`,
+    }];
+  });
+
+  await m1Rows([labels.company], async (tx) => {
+    await d67Install(tx);
+    const f = await fund(tx, "rls m82 inviter fund", "2024-06-01");
+    const [{ id: oldest }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role) values (${f.groupId}, 'rls m82 oldest member', 'member') returning id`;
+    await backdate(tx, oldest, "2023-01-01");
+    const who = await invitee(tx);
+    const own = await fund(tx, "rls m82 reader fund");
+    await tx`update group_members set user_id = ${who} where id = ${own.leaderRowId}`;
+    await tx`insert into group_members (group_id, name, role, archived_at)
+      values (${own.groupId}, 'rls m82 left', 'member', now())`;
+    const email = `m82-${randomUUID().slice(0, 8)}@example.test`;
+    await invitation(tx, f.groupId, email, "2024-07-01", "rls m82 reader");
+    const rows = await d67Read(tx, who, email);
+    return [{
+      ok: rows.length === 1 && rows[0].inviter_name === "rls m82 inviter fund leader" && rows[0].current_fund_has_company === false,
+      detail: `rows = ${JSON.stringify(rows)}`,
+    }];
+  });
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

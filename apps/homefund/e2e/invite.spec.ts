@@ -646,12 +646,12 @@ test.describe("the invitation is Auth's own mail, sent from the server (RF-148)"
     }
   });
 
-  test("the invitee types the address, gets a code, signs in and is the member the leader added", async ({
+  test("the invitee types the address, gets a code, signs in and is still only invited", async ({
     page,
     browser,
     baseURL,
   }) => {
-    // Kills: skipping `claimInviteForUser` (the user lands but the member's user_id stays null),
+    // Kills: claiming the invitation on sign-in (RF-154: the member stays pending until the person accepts),
     // and an invitation that leaves the invitee unable to sign in by code.
     const email = invitee();
     const salt = process.env.CLIENT_KEY_SALT ?? "";
@@ -667,7 +667,6 @@ test.describe("the invitation is Auth's own mail, sent from the server (RF-148)"
       await inviteThroughStep(page, email);
       await register(email);
       await expect.poll(() => mailCount(email)).toBe(1);
-      // The claim clears `invite_email`, so the member is found by its id from here on.
       const [{ id: memberId }] = await fixtureSql<{ id: string }[]>`
         select id from group_members where group_id = ${groupId} and lower(invite_email) = ${email}`;
 
@@ -691,12 +690,14 @@ test.describe("the invitation is Auth's own mail, sent from the server (RF-148)"
 
       await visitor.getByLabel("Código del correo", { exact: true }).fill(code);
       await visitor.getByRole("button", { name: "Entrar", exact: true }).click();
-      await expect(visitor).toHaveURL(/\/es\/bienvenida$/);
+      await expect(visitor).toHaveURL(/\/es$/);
 
-      const [member] = await fixtureSql<{ user_id: string | null }[]>`
-        select user_id from group_members where id = ${memberId}`;
+      const [member] = await fixtureSql<{ user_id: string | null; invite_state: string; invite_email: string | null }[]>`
+        select user_id, invite_state, invite_email from group_members where id = ${memberId}`;
       const [user] = await fixtureSql<{ id: string }[]>`select id from auth.users where email = ${email}`;
-      expect(member.user_id).toBe(user.id);
+      expect(member).toEqual({ user_id: null, invite_state: "pending", invite_email: email });
+      const memberships = await fixtureSql<{ id: string }[]>`select id from group_members where user_id = ${user.id}`;
+      expect(memberships).toEqual([]);
     } finally {
       await context.close();
       const [user] = await fixtureSql<{ id: string }[]>`select id from auth.users where email = ${email}`;

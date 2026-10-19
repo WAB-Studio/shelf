@@ -40,6 +40,8 @@ const UNSHARED_ACCOUNT = `Reservada ${stamp}`;
 const LEADER_LABEL = `Etiqueta mia ${stamp}`;
 const MEMBER_LABEL = `Etiqueta miembro ${stamp}`;
 const FUND_LABEL = `Etiqueta fondo ${stamp}`;
+const FUND_MARK = " · fondo";
+const LONG_LABEL = `${"Etiqueta larguisima ".repeat(3).slice(0, 52)}${stamp}`;
 const LEADER_CATEGORY = `Cat lider ${stamp}`;
 const MEMBER_CATEGORY = `Cat miembro ${stamp}`;
 const FUND_CATEGORY = `Cat fondo ${stamp}`;
@@ -59,6 +61,7 @@ const ids = {
   leaderLabel: randomUUID(),
   memberLabel: randomUUID(),
   fundLabel: randomUUID(),
+  longLabel: randomUUID(),
   leaderCategory: randomUUID(),
   memberCategory: randomUUID(),
   fundCategory: randomUUID(),
@@ -108,6 +111,7 @@ test.beforeAll(async () => {
       values (${ids.fundCategory}, ${groupId}, ${FUND_CATEGORY}, 'expense', '#8C4A4A')`;
     await tx`insert into labels (id, owner_user_id, name) values (${ids.leaderLabel}, ${scope.userId}, ${LEADER_LABEL})`;
     await tx`insert into labels (id, group_id, name) values (${ids.fundLabel}, ${groupId}, ${FUND_LABEL})`;
+    await tx`insert into labels (id, group_id, name) values (${ids.longLabel}, ${groupId}, ${LONG_LABEL})`;
   });
   await insertFundAccounts();
   await as(scope.memberUserId, async (tx) => {
@@ -147,7 +151,7 @@ async function dropBudgets() {
 
 test.afterAll(async () => {
   await dropBudgets();
-  await fixtureSql`delete from labels where id in ${fixtureSql([ids.leaderLabel, ids.memberLabel, ids.fundLabel])}`;
+  await fixtureSql`delete from labels where id in ${fixtureSql([ids.leaderLabel, ids.memberLabel, ids.fundLabel, ids.longLabel])}`;
   await fixtureSql`delete from categories where id in ${fixtureSql([ids.leaderCategory, ids.memberCategory, ids.fundCategory])}`;
   await fixtureSql`delete from accounts where id in ${fixtureSql([
     ids.leaderAccount,
@@ -330,7 +334,7 @@ test.describe("the leader edits", () => {
 
     const names = await offered(page, dialog.locator("#budget-label"));
 
-    expectOnly(names, [budgets.labelAny, LEADER_LABEL], [FUND_LABEL]);
+    expectOnly(names, [budgets.labelAny, LEADER_LABEL], [FUND_LABEL, FUND_LABEL + FUND_MARK]);
   });
 
   test("the labels of a fund budget are the fund's, never the person's", async ({ page }) => {
@@ -339,7 +343,7 @@ test.describe("the leader edits", () => {
 
     const names = await offered(page, dialog.locator("#budget-label"));
 
-    expectOnly(names, [budgets.labelAny, FUND_LABEL], [LEADER_LABEL]);
+    expectOnly(names, [budgets.labelAny, FUND_LABEL + FUND_MARK], [FUND_LABEL, LEADER_LABEL, LEADER_LABEL + FUND_MARK]);
   });
 });
 
@@ -509,8 +513,8 @@ test.describe("the create list is cut like the accounts", () => {
 
     const cut = await offered(page, dialog.locator("#budget-label"));
 
-    expectOnly(all, [LEADER_LABEL, FUND_LABEL], []);
-    expectOnly(cut, [budgets.labelAny, LEADER_LABEL], [FUND_LABEL]);
+    expectOnly(all, [LEADER_LABEL, FUND_LABEL + FUND_MARK], [FUND_LABEL, LEADER_LABEL + FUND_MARK]);
+    expectOnly(cut, [budgets.labelAny, LEADER_LABEL], [FUND_LABEL, FUND_LABEL + FUND_MARK]);
   });
 
   test("a fund account offers only the fund's labels", async ({ page }) => {
@@ -520,7 +524,7 @@ test.describe("the create list is cut like the accounts", () => {
 
     const names = await offered(page, dialog.locator("#budget-label"));
 
-    expectOnly(names, [budgets.labelAny, FUND_LABEL], [LEADER_LABEL]);
+    expectOnly(names, [budgets.labelAny, FUND_LABEL + FUND_MARK], [FUND_LABEL, LEADER_LABEL, LEADER_LABEL + FUND_MARK]);
   });
 });
 
@@ -559,6 +563,105 @@ test.describe("the dialog while it works and when it closes", () => {
     await expect(dialog).toBeHidden();
     expect(posts).toHaveLength(0);
     expect(await rowOf(ids.personalBudget)).toEqual(before);
+  });
+});
+
+test.describe("a fund label reads «· fondo»", () => {
+  test("on create, every fund label carries the mark and the person's own none", async ({ page }) => {
+    // Kills: a fund label offered under its bare name.
+    const dialog = await openCreate(page);
+
+    const names = await offered(page, dialog.locator("#budget-label"));
+
+    expectOnly(
+      names,
+      [LEADER_LABEL, FUND_LABEL + FUND_MARK, LONG_LABEL + FUND_MARK],
+      [FUND_LABEL, LONG_LABEL, LEADER_LABEL + FUND_MARK],
+    );
+  });
+
+  test("on edit, a fund budget's labels carry the mark", async ({ page }) => {
+    // Kills: the mark on categories alone.
+    const dialog = await openEdit(page, FUND_BUDGET);
+    await pick(page, dialog.locator("#budget-label"), FUND_LABEL + FUND_MARK);
+
+    await expect(dialog.locator("#budget-label")).toHaveText(FUND_LABEL + FUND_MARK);
+  });
+
+  test("changing the category that clears the picked label stays silent", async ({ page }) => {
+    // Kills: a toast or a message when the scope change drops the label.
+    const dialog = await openCreate(page);
+    await pick(page, dialog.locator("#budget-label"), FUND_LABEL + FUND_MARK);
+    await pick(page, dialog.locator("#budget-account"), LEADER_ACCOUNT);
+
+    await expect(dialog.locator("#budget-label")).toHaveText(budgets.labelAny);
+    await expect(dialog.getByRole("alert")).toHaveCount(0);
+    await expect(toasts(page).locator("li")).toHaveCount(0);
+  });
+
+  test("at 360 px a 60-character label overflows nothing", async ({ page }) => {
+    // Kills: a long marked label widening the dialog or the page.
+    expect(LONG_LABEL).toHaveLength(60);
+    await page.setViewportSize({ width: 360, height: 740 });
+    const dialog = await openCreate(page);
+    await pick(page, dialog.locator("#budget-label"), LONG_LABEL + FUND_MARK);
+
+    const trigger = dialog.locator("#budget-label");
+    await trigger.scrollIntoViewIfNeeded();
+    const page_ = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    const inner = await dialog.evaluate((el) => el.scrollWidth - el.clientWidth);
+    const box = await trigger.boundingBox();
+    expect(page_).toBeLessThanOrEqual(0);
+    expect(inner).toBeLessThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+
+    await trigger.click();
+    const option = page.getByRole("option", { name: LONG_LABEL + FUND_MARK, exact: true });
+    await expect(option).toBeVisible();
+    const optionBox = await option.boundingBox();
+    expect(optionBox!.x + optionBox!.width).toBeLessThanOrEqual(360);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+    ).toBeLessThanOrEqual(0);
+  });
+});
+
+test.describe("the Etiqueta list at 360 px", () => {
+  test("every option is one line, none prints over the next, and the full name is its name", async ({
+    page,
+  }) => {
+    // Kills: a long fund label wrapping to three lines over «Colegio · fondo».
+    await page.setViewportSize({ width: 360, height: 740 });
+    const dialog = await openCreate(page);
+    await dialog.locator("#budget-label").click();
+
+    const options = page.getByRole("option");
+    await expect(page.getByRole("option", { name: LONG_LABEL + FUND_MARK, exact: true })).toBeVisible();
+    const boxes = await options.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, height: r.height, right: r.right };
+      }),
+    );
+    expect(boxes.length).toBeGreaterThanOrEqual(3);
+    const line = Math.min(...boxes.map((b) => b.height));
+    for (const [i, box] of boxes.entries()) {
+      expect(box.height, `option ${i} is one line`).toBeLessThanOrEqual(line * 1.2);
+      expect(box.right).toBeLessThanOrEqual(360);
+      if (i > 0) expect(box.top, `option ${i} starts below option ${i - 1}`).toBeGreaterThanOrEqual(boxes[i - 1].bottom - 1);
+    }
+    // Truncated by the stylesheet, so the DOM still carries the whole name.
+    const clipped = await page
+      .getByRole("option", { name: LONG_LABEL + FUND_MARK, exact: true })
+      .evaluate((el) => {
+        return [...el.querySelectorAll<HTMLElement>("*")].some(
+          (node) =>
+            getComputedStyle(node).textOverflow === "ellipsis" && node.scrollWidth > node.clientWidth,
+        );
+      });
+    expect(clipped).toBe(true);
   });
 });
 

@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { readWordStudy } from "@/lib/log/summary";
 import { clearLocalLookups, countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
 import { LOG_DELETED_EVENT } from "@/lib/log/delete";
-import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
+import { SYNC_LANDED_EVENT, SYNC_LOCK } from "@/lib/sync/driver";
 import { clearAccountLookups } from "@/lib/sync/clear";
 import { Button, Flex, Link, Separator, TapTarget, Text } from "@/components/ui";
 
@@ -17,6 +17,13 @@ type Stage =
   | { kind: "confirming" }
   | { kind: "wiping"; scope: "local" | "account" }
   | { kind: "failed"; scope: "local" | "account" };
+
+// Under the sync's lock a round in flight finishes merging before the wipe, so
+// none of its rows land after it. Without Web Locks the wipe runs directly.
+function clearLocalUnderLock(): Promise<void> {
+  if (typeof navigator === "undefined" || !navigator.locks) return clearLocalLookups();
+  return navigator.locks.request(SYNC_LOCK, clearLocalLookups).then(() => undefined);
+}
 
 /**
  * «Vaciar el registro» (`RegistroVaciar`/`RegistroVaciarConfirmar`, approved
@@ -104,7 +111,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
   async function wipeLocal(): Promise<void> {
     setStage({ kind: "wiping", scope: "local" });
     try {
-      await clearLocalLookups();
+      await clearLocalUnderLock();
       setCount({ kind: "ready", words: 0, lookups: 0 });
       setStage({ kind: "idle" });
     } catch {
@@ -124,7 +131,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
       return;
     }
     try {
-      await clearLocalLookups();
+      await clearLocalUnderLock();
       setCount({ kind: "ready", words: 0, lookups: 0 });
       setStage({ kind: "idle" });
     } catch {

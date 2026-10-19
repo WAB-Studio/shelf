@@ -3,12 +3,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
+import { useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
 import { createAccountAction, updateAccountAction } from "@/app/actions/accounts";
 import {
   Button,
+  Callout,
   Dialog,
   Field,
   FieldControl,
@@ -123,6 +125,8 @@ function AccountForm({
   const tKey = useTranslations();
 
   const isEdit = !!account;
+  // A save over someone else's change is refused here, in the dialog, with what was typed kept.
+  const [stale, setStale] = useState(false);
 
   const form = useForm<AccountFormValues>({
     resolver: (isEdit
@@ -191,7 +195,10 @@ function AccountForm({
   });
   const update = useAction(updateAccountAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.stale") setStale(true);
+      else onActionError(result);
+    },
   });
 
   const isPending = isEdit ? update.isPending : create.isPending;
@@ -200,7 +207,11 @@ function AccountForm({
     // The resolver already parsed `values` against the schema for this mode,
     // stripping the field the other mode's action does not accept.
     if (isEdit) {
-      update.execute(values as UpdateAccountInput);
+      setStale(false);
+      update.execute({
+        ...(values as UpdateAccountInput),
+        expectedUpdatedAt: account?.updatedAt,
+      });
     } else {
       create.execute(values as CreateAccountInput);
     }
@@ -459,6 +470,13 @@ function AccountForm({
             </Field>
           )}
         />
+
+        {stale && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+          </Callout.Root>
+        )}
+
         <Field>
           <Flex gap="3" justify="end">
             <Dialog.Close>

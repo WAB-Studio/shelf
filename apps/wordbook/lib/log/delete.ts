@@ -19,6 +19,8 @@ type QueueRow = { key: typeof QUEUE_KEY; readerId: string; pending: Tombstone[];
 
 const sameMark = (a: Tombstone, b: Tombstone) => a.deviceId === b.deviceId && a.localId === b.localId;
 
+const markKey = (mark: Tombstone) => JSON.stringify([mark.deviceId, mark.localId]);
+
 function asPromise<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -89,7 +91,14 @@ export async function deleteStudyGroup(key: string): Promise<{ deleted: number }
   for (const id of plan.ids) lookups.delete(id);
   if (state?.readerId && plan.tombstones.length > 0) {
     const current = queueFor(queue, state.readerId);
-    const fresh = plan.tombstones.filter((mark) => !current.pending.some((queued) => sameMark(queued, mark)));
+    // A set keyed on the pair, so the merge costs one visit per mark.
+    const seen = new Set(current.pending.map(markKey));
+    const fresh = plan.tombstones.filter((mark) => {
+      const markId = markKey(mark);
+      if (seen.has(markId)) return false;
+      seen.add(markId);
+      return true;
+    });
     sync.put({ ...current, pending: [...current.pending, ...fresh] } satisfies QueueRow);
   }
   await done;

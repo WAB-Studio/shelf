@@ -33,10 +33,13 @@ export const monthBudgets = goalsSchema.table(
       to: authenticatedRole,
       using: sql`${authUid} = ${t.userId}`,
     }),
+    // Under RLS `g` sees only the caller's goals, as in `phases_insert_self`.
     pgPolicy("month_budgets_insert_self", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`${authUid} = ${t.userId}`,
+      withCheck: sql`${authUid} = ${t.userId} and exists (
+        select 1 from "goals"."goals" g where g.id = ${t.goalId}
+      )`,
     }),
     // The grant narrows this to `amount`; a month moves by delete and insert.
     pgPolicy("month_budgets_update_self", {

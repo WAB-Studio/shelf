@@ -168,3 +168,19 @@ test("a response carries the marks and the cursor of the last one", () => {
   assert.equal(syncResponseSchema.safeParse({ accepted: 0, rows: [], cursor: null, tombstones: [], tombstoneCursor: "" }).success, false);
   assert.equal(syncResponseSchema.safeParse({ accepted: 0, rows: [], cursor: null, tombstones: [{ deviceId: "x", localId: 1 }] }).success, false);
 });
+
+test("a row with localId 0 or a negative senses count is refused, the floors pass", () => {
+  const one = randomUUID();
+  assert.equal(syncRowSchema.safeParse(row(one, 0)).success, false);
+  assert.equal(syncRowSchema.safeParse({ ...row(one, 1), senses: -1 }).success, false);
+  assert.equal(syncRowSchema.safeParse({ ...row(one, 1), senses: 0 }).success, true);
+  const bad = { deviceId: one, readerId: "reader-1", rows: [row(one, 0)], since: null };
+  assert.equal(syncRequestSchema.safeParse(bad).success, false);
+});
+
+test("a cursor whose local id passes int4 is no cursor, before any SQL", () => {
+  const one = randomUUID();
+  const at = "2026-10-16T01:02:03.123456Z";
+  assert.deepEqual(decodeCursor(`${at}|${one}|2147483647`), { receivedAt: at, deviceId: one, localId: 2_147_483_647 });
+  assert.equal(decodeCursor(`${at}|${one}|2147483648`), null);
+});

@@ -34,6 +34,11 @@ export type RecurringRuleRow = {
   nextRunOn: string;
   endsOn: string | null;
   isActive: boolean;
+  // Why a paused rule is paused: the run set it when it could not generate (RF-157); null when a person paused it.
+  pausedReason: RecurringRule["pausedReason"];
+  // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
+  // else's is refused stale.
+  updatedAt: string;
 };
 
 // Every readable rule, soonest next run first, in ONE round trip (RF-29); scope is
@@ -56,6 +61,9 @@ export async function listRecurringRules(): Promise<RecurringRuleRow[]> {
         nextRunOn: recurringRules.nextRunOn,
         endsOn: recurringRules.endsOn,
         isActive: recurringRules.isActive,
+        pausedReason: recurringRules.pausedReason,
+        // Qualified: the joined accounts carry an `updated_at` of their own.
+        updatedAt: sql<string>`recurring_rules.updated_at::text`,
       })
       .from(recurringRules)
       .leftJoin(
@@ -189,7 +197,12 @@ export type UpdateRecurringRuleArgs = {
   dayOfMonth: number | null;
   nextRunOn: string;
   endsOn: string | null;
+  // The rule's `updated_at::text` the form loaded; the night's run stamps it.
+  expectedUpdatedAt?: string;
 };
+
+// `stale` is an edit whose form loaded the rule before the run or another save moved it.
+export type RecurringRuleWriteOutcome = "done" | "missing" | "stale";
 
 export async function updateRecurringRule({
   id,
@@ -203,7 +216,8 @@ export async function updateRecurringRule({
   dayOfMonth,
   nextRunOn,
   endsOn,
-}: UpdateRecurringRuleArgs): Promise<boolean> {
+  expectedUpdatedAt,
+}: UpdateRecurringRuleArgs): Promise<RecurringRuleWriteOutcome> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .update(recurringRules)
@@ -219,10 +233,29 @@ export async function updateRecurringRule({
         nextRunOn,
         endsOn,
       })
-      .where(eq(recurringRules.id, id))
+      // Parsed from text inside the SQL: a `timestamptz` parameter travels through a JS
+      // `Date` and loses its microseconds (docs/TRAPS.md). In the `where`, a stale row is
+      // never touched, so the booked-period trigger cannot answer before the version.
+      .where(
+        and(
+          eq(recurringRules.id, id),
+          expectedUpdatedAt
+            ? sql`${recurringRules.updatedAt} = ${expectedUpdatedAt}::text::timestamptz`
+            : undefined,
+        ),
+      )
       .returning({ id: recurringRules.id });
 
-    return rows.length > 0;
+    if (rows.length > 0) return "done";
+    if (!expectedUpdatedAt) return "missing";
+
+    // Only on a refusal: a rule the policy hides stays missing, a visible one is stale.
+    const [seen] = await tx
+      .select({ id: recurringRules.id })
+      .from(recurringRules)
+      .where(eq(recurringRules.id, id))
+      .limit(1);
+    return seen ? "stale" : "missing";
   });
 }
 

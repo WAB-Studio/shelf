@@ -25,6 +25,7 @@ import {
 import type { Transaction } from "@/db/session";
 import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
+import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
 import type { SettlementCurrencies } from "@/lib/validation/transaction";
 
@@ -67,6 +68,8 @@ export type UpdateTransactionArgs = {
   labelIds: string[];
   // `undefined` leaves the cause alone; `null` clears it.
   causedByTransactionId?: string | null;
+  // The movement's `updated_at::text` as the form loaded it; absent edits blind, as before.
+  expectedUpdatedAt?: string;
 };
 
 export type TransactionListFilters = {
@@ -120,18 +123,83 @@ export type TransactionListRow = {
   // The reconciliation that booked this movement as its adjustment (RF-138); null for every
   // movement a person made.
   reconciliationId: string | null;
+  // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
+  // else's is refused. Never a Date: its milliseconds make the row look newer than itself.
+  updatedAt: string;
+};
+
+// Where a resent create lands: the scope-keyed index it hit says which scope the first copy
+// was booked in, so the lookup reads that scope's row and never the other's.
+const FORM_REF_INDEXES = {
+  transactions_owner_external_ref_unique: sql`owner_user_id is not null`,
+  transactions_group_external_ref_unique: sql`group_id is not null`,
+} as const;
+
+// A resent form ref whose figures differ from the first copy's: nothing is saved.
+export class ResendChangedError extends Error {
+  constructor() {
+    super("resendChanged");
+  }
+}
+
+export type CreateMovementArgs = CreateTransactionArgs & {
+  // The key a form mints when it opens; it is stored as `form:<requestRef>` and wins over
+  // `externalRef`, so a copy of the same submit answers with the movement the first one booked.
+  requestRef?: string;
+  // Its own column grant (migration 0040); written in the same transaction as the movement, so a
+  // cause that vanished mid-write takes the movement down with it.
+  causedByTransactionId?: string | null;
 };
 
 /**
  * One transaction, three dependent round trips: insert the movement and read its
- * id, then one multi-row insert of the splits, then one of the label joins. The
- * sum and match triggers are DEFERRED, so the split set need not balance until
- * commit. A transfer carries no split, so the child inserts skip an empty set.
+ * id, then one multi-row insert of the splits, then one of the label joins, plus
+ * the cause's update when one is named. The sum and match triggers are DEFERRED,
+ * so the split set need not balance until commit. A transfer carries no split, so
+ * the child inserts skip an empty set. A resent `requestRef` raises 23505 on the
+ * insert and costs one more transaction, the read of the id the first copy booked.
  */
-export async function createTransaction(
-  args: CreateTransactionArgs,
-): Promise<{ transactionId: string }> {
-  return withUserDb((tx) => insertTransaction(tx, args));
+export async function createTransaction({
+  requestRef,
+  causedByTransactionId,
+  ...args
+}: CreateMovementArgs): Promise<{ transactionId: string }> {
+  const externalRef = requestRef ? `form:${requestRef}` : args.externalRef;
+
+  try {
+    return await withUserDb(async (tx) => {
+      const created = await insertTransaction(tx, { ...args, externalRef });
+      if (causedByTransactionId) {
+        await tx.execute(sql`
+          update transactions set caused_by_transaction_id = ${causedByTransactionId}
+          where id = ${created.transactionId}
+        `);
+      }
+      return created;
+    });
+  } catch (error) {
+    const index = pgConstraintName(error) ?? "";
+    const scope = Object.hasOwn(FORM_REF_INDEXES, index)
+      ? FORM_REF_INDEXES[index as keyof typeof FORM_REF_INDEXES]
+      : null;
+    if (!requestRef || pgErrorCode(error) !== "23505" || scope === null) throw error;
+
+    const [existing] = await withUserDb((tx) =>
+      tx.execute<{ id: string; same: boolean }>(sql`
+        select id,
+          from_account_id is not distinct from ${args.fromAccountId}::uuid
+            and to_account_id is not distinct from ${args.toAccountId}::uuid
+            and amount_cents = ${args.amountCents}::bigint
+            and occurred_at = ${args.occurredAt}::date as same
+        from transactions
+        where external_ref = ${externalRef} and ${scope}
+        limit 1
+      `),
+    );
+    if (!existing) throw error;
+    if (!existing.same) throw new ResendChangedError();
+    return { transactionId: existing.id };
+  }
 }
 
 // The insert body of `createTransaction`, against a caller-supplied transaction:
@@ -205,27 +273,41 @@ export async function insertTransaction(
 
 // `adjustment` is a movement a reconciliation booked: the policy admits no edit or delete of it,
 // and the row stays readable, so a screen can say why instead of reporting it gone (RF-138).
-export type TransactionWriteOutcome = "done" | "missing" | "adjustment";
+// `stale` is an edit whose form loaded the movement before someone else saved it: nothing written.
+export type TransactionWriteOutcome = "done" | "missing" | "adjustment" | "stale";
+
+// A form's copy of `updated_at::text`, parsed from text inside the SQL: a parameter bound as
+// `timestamptz` travels through a JS `Date` and loses its microseconds (docs/TRAPS.md).
+function stampMatches(expectedUpdatedAt: string) {
+  return sql<boolean>`${transactions.updatedAt} = ${expectedUpdatedAt}::text::timestamptz`;
+}
 
 // Only on a refused write, so the common path pays nothing for it.
 async function refusedWrite(
   tx: Transaction,
   transactionId: string,
+  expectedUpdatedAt?: string,
 ): Promise<TransactionWriteOutcome> {
   const [row] = await tx
-    .select({ reconciliationId: transactions.reconciliationId })
+    .select({
+      reconciliationId: transactions.reconciliationId,
+      fresh: expectedUpdatedAt ? stampMatches(expectedUpdatedAt) : sql<boolean>`true`,
+    })
     .from(transactions)
     .where(eq(transactions.id, transactionId))
     .limit(1);
 
-  return row?.reconciliationId ? "adjustment" : "missing";
+  if (!row) return "missing";
+  if (row.reconciliationId) return "adjustment";
+  return row.fresh ? "missing" : "stale";
 }
 
 /**
  * Edit the movement's fields, then replace its splits and label joins wholesale
  * (delete + one multi-row insert each). The transaction update's affected-row
- * count reports whether the policy admitted the edit (RF-24); a denied edit
- * leaves the children untouched.
+ * count reports whether the policy admitted the edit (RF-24) and, when the form
+ * sent the stamp it loaded, whether nobody saved in between; a denied or stale
+ * edit leaves the children untouched.
  */
 export async function updateTransaction({
   transactionId,
@@ -240,6 +322,7 @@ export async function updateTransaction({
   splits,
   labelIds,
   causedByTransactionId,
+  expectedUpdatedAt,
 }: UpdateTransactionArgs): Promise<TransactionWriteOutcome> {
   return withUserDb(async (tx) => {
     const updated = await tx
@@ -260,10 +343,15 @@ export async function updateTransaction({
         description,
         reviewedAt: sql`case when ${transactions.recurringRuleId} is not null and ${transactions.reviewedAt} is null then now() else ${transactions.reviewedAt} end`,
       })
-      .where(eq(transactions.id, transactionId))
+      .where(
+        and(
+          eq(transactions.id, transactionId),
+          expectedUpdatedAt ? stampMatches(expectedUpdatedAt) : undefined,
+        ),
+      )
       .returning({ id: transactions.id });
 
-    if (updated.length === 0) return refusedWrite(tx, transactionId);
+    if (updated.length === 0) return refusedWrite(tx, transactionId, expectedUpdatedAt);
 
     await tx
       .delete(transactionSplits)
@@ -469,6 +557,8 @@ export async function listTransactions(
         reviewedAt: transactions.reviewedAt,
         causedByTransactionId: transactions.causedByTransactionId,
         reconciliationId: transactions.reconciliationId,
+        // Qualified: the joined accounts carry an `updated_at` of their own.
+        updatedAt: sql<string>`transactions.updated_at::text`,
         // Written with the joined alias, never a Drizzle column reference: a
         // reference inside a projection fragment renders bare and binds inward.
         fromSettlementCurrency: sql<

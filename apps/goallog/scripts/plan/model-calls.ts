@@ -252,6 +252,7 @@ test("903c: follow-ups never take a read from the cap: nine reads and any number
 });
 
 test("903c: a follow-up settles its tokens and outcome like a read, and only for its owner", async () => {
+  await claim(first);
   const call = await followUp(first);
   assert.ok(call);
   assert.equal(await settleModelCall(call.id, { inputTokens: 900, outputTokens: 120, outcome: "ok" }), true);
@@ -264,8 +265,85 @@ test("903c: a follow-up settles its tokens and outcome like a read, and only for
 
 test("903c: the chat cap does not count a follow-up either", async () => {
   await plantToday(first, "chat", 49);
-  await followUp(first);
+  await claim(first);
+  assert.ok(await followUp(first), "the read's own follow-up lands");
   assert.ok(await claim(first, "chat"), "the fiftieth chat claim lands");
+});
+
+// M16: a follow-up is one for one with the person's reads of today, counted under the import lock.
+async function rowsOfToday(who: Person): Promise<number> {
+  const [{ count }] = await sql<{ count: string }[]>`
+    select count(*) from goals.model_calls where user_id = ${who.id} and day = ${today} and model like 'RNP-13 fixture%'`;
+  return Number(count);
+}
+
+test("M16 no read, no follow-up: a person with no read today claims nothing and leaves no row", async () => {
+  assert.equal(await followUp(first), null);
+  assert.equal(await followUp(first, "file"), null);
+  assert.equal(await rowsOfToday(first), 0);
+});
+
+test("M16 one for one: two reads license two follow-ups and the third answers null", async () => {
+  await claim(first);
+  await claim(first, "file");
+  assert.ok(await followUp(first));
+  assert.ok(await followUp(first, "file"));
+  assert.equal(await followUp(first), null);
+  assert.equal(await rowsOfToday(first), 4);
+});
+
+test("M16 a follow-up is licensed by a read, not by another follow-up: one read, one pass, then none", async () => {
+  await claim(first);
+  assert.ok(await followUp(first));
+  assert.equal(await followUp(first), null);
+});
+
+test("M16 only the person's own reads count: another person's read, a chat row or yesterday's read license nothing", async () => {
+  await claim(second);
+  await plantToday(first, "chat", 5);
+  const yesterday = new Date(`${today}T12:00:00Z`);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const planted = await sql<{ id: string }[]>`
+    insert into goals.model_calls (user_id, model, source, day)
+    select ${first.id}, 'RNP-13 fixture', 'paste', ${yesterday.toISOString().slice(0, 10)}::date from generate_series(1, 3)
+    returning id`;
+  claimed.push(...planted.map((row) => row.id));
+  assert.equal(await followUp(first), null);
+  assert.ok(await followUp(second), "the person who did read keeps their pass");
+});
+
+test("M16 spent cap still follows: ten reads reach the cap and the read's follow-up still lands", async () => {
+  for (let i = 0; i < 10; i++) await claim(first);
+  assert.equal(await claim(first), null);
+  assert.ok(await followUp(first));
+});
+
+test("M16 the spent app cap does not refuse a follow-up its read paid for", async () => {
+  await claim(first);
+  await withAppCap(0, async () => {
+    assert.equal(await claim(second), null, "the app's day is spent");
+    assert.ok(await followUp(first));
+  });
+});
+
+test("M16 reads stay free of follow-ups: nine reads, five follow-ups, the tenth read lands and the eleventh does not", async () => {
+  for (let i = 0; i < 9; i++) await claim(first);
+  for (let i = 0; i < 5; i++) assert.ok(await followUp(first));
+  assert.ok(await claim(first), "the tenth read lands");
+  assert.equal(await claim(first), null);
+});
+
+// A race is a matter of timing: several rounds, each with a new read and a burst, so a missing lock shows within one run.
+test("M16 concurrent: a burst of follow-ups for each new read lands exactly one per read", async () => {
+  current = first;
+  for (let round = 1; round <= 6; round++) {
+    await claim(first);
+    current = first;
+    const results = await Promise.all(Array.from({ length: 12 }, () => claimFollowUp("RNP-13 fixture", "paste")));
+    for (const call of results) if (call) claimed.push(call.id);
+    assert.equal(results.filter(Boolean).length, 1, `round ${round}`);
+  }
+  assert.equal(await rowsOfToday(first), 12);
 });
 
 // Concurrent claims of one person and kind: the cap holds for a script, not only a double tap.

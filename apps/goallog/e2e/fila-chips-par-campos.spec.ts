@@ -31,13 +31,13 @@ for (const viewport of [
 
       const gap = async (a: string, b: string) => {
         const [x, y] = await Promise.all([
-          page.getByRole("button", { name: a, exact: true }).boundingBox(),
-          page.getByRole("button", { name: b, exact: true }).boundingBox(),
+          page.getByRole("radio", { name: a, exact: true }).boundingBox(),
+          page.getByRole("radio", { name: b, exact: true }).boundingBox(),
         ]);
         return y!.x - (x!.x + x!.width);
       };
 
-      await page.getByRole("button", { name: "días sueltos", exact: true }).click();
+      await page.getByRole("radio", { name: "días sueltos", exact: true }).click();
       const days = page.getByRole("button", { pressed: false }).filter({ hasText: /^[LMXJVSD]$/ });
       const [d1, d2] = await Promise.all([days.nth(0).boundingBox(), days.nth(1).boundingBox()]);
       expect(Math.round(d2!.x - (d1!.x + d1!.width))).toBe(4);
@@ -79,8 +79,8 @@ for (const viewport of [
     test("the cadence chips wrap inside the page at 360 and none leaves it", async ({ page }) => {
       const goalId = await createGoal(page, `Meta chips ${Date.now()}`);
       await visit(page, `/metas/${goalId}/compromisos/nuevo`);
-      const first = (await boxOf(page.getByRole("button", { name: "todos los días", exact: true })));
-      const last = (await boxOf(page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true })));
+      const first = (await boxOf(page.getByRole("radio", { name: "todos los días", exact: true })));
+      const last = (await boxOf(page.getByRole("radio", { name: plan.commitmentForm.cadence.times_per_month, exact: true })));
       const view = page.viewportSize()!.width;
       expect(last.x + last.width).toBeLessThanOrEqual(view);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(view);

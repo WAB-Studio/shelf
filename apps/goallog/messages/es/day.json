@@ -115,6 +115,7 @@
   },
   "cadence": {
     "weekdayShort": ["L", "M", "X", "J", "V", "S", "D"],
+    "weekdayFull": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
     "weekdayName": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
     "everyDay": "todos los días",
     "daysJoin": "{list} y {last}",

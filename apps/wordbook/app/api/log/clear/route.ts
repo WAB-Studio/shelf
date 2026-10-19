@@ -18,7 +18,11 @@ import { getReader, withReaderDb } from "@/lib/session";
  * No body, no Zod schema: the only input this route reads is the session
  * itself, so there is nothing a form could get wrong for a schema to catch.
  *
- * ONE round trip past the session's own settle statement. The `where`
+ * Two round trips past the session's own settle statement: the reader's
+ * `:sync-quota` lock in a statement of its own, then the delete, whose
+ * snapshot is taken after the grant, so an upload in flight lands first and
+ * is emptied with the rest, and one that arrives later queues behind this
+ * transaction and lands after the emptying, not inside it. The `where`
  * narrows the index; the policy — `lookups_delete_self` — is what actually
  * keeps this off another reader's rows (RNL-10), proven driving it with two
  * identities in `e2e/registro.spec.ts`, never asserted from the migration.
@@ -27,7 +31,10 @@ export async function DELETE(): Promise<Response> {
   const reader = await getReader();
   if (!reader) return json({ error: "unauthorized" }, 401);
 
-  await withReaderDb((tx) => tx.execute(sql`delete from reading.lookups where user_id = ${reader.id}`));
+  await withReaderDb(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${reader.id}::text || ':sync-quota', 0))`);
+    await tx.execute(sql`delete from reading.lookups where user_id = ${reader.id}`);
+  });
 
   return json({}, 200);
 }

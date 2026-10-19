@@ -21,10 +21,11 @@ Dark, the primary:
 | raised (the box, a chip) | `#1C1B16` |
 | line | `#2A2820` |
 | border | `#302E25` |
+| control edge (the search field only) | `#6B6753` |
 | ink | `#F0EBDD` |
 | ink, secondary | `#E6E0D0` |
 | muted | `#9A9484` |
-| muted, quietest | `#6C6759` |
+| muted, quietest | `#898271` |
 | accent | `#D9805F` |
 
 Light, the same design inverted:
@@ -35,9 +36,10 @@ Light, the same design inverted:
 | raised | `#FFFFFF` |
 | line | `#E4DFD2` |
 | border | `#DED8C8` |
+| control edge (the search field only) | `#A08E60` |
 | ink | `#17160F` |
 | muted | `#6B675A` |
-| muted, quietest | `#A5A093` |
+| muted, quietest | `#787263` |
 | accent | `#9A3B24` |
 
 - The accent is a different hex per mode, not one colour at two opacities. `#9A3B24` has too little
@@ -1852,4 +1854,6 @@ Canvas «Diccionario de lectura», page «Registro», v55. Dark 360. Built in de
   the token tables follow. Not built yet.
 - **«Copia» asks for persistent storage** (Q19 a): the line «El navegador puede borrar tu registro si te falta espacio.»
   and a «Pedirlo» button, while not kept and the API exists, signed in or out. Board to draw before its module.
+- **«Pedirlo» says when the browser refuses** (Q29 a, 2026-10-18): the button stays, and a refusal shows «El navegador no lo
+  permitió; instala WordBook en tu pantalla de inicio para que lo guarde.» Board to draw before its module.
 - **RL-75 opened, RL-74 kept** (the user, 2026-10-18).

@@ -9,11 +9,12 @@ import { logDark } from "@/lib/word/dark";
 import { clientKeyFromAddress, scopeClientKey } from "@/lib/word/client-key";
 
 /**
- * RL-22's two daily ceilings on sign-in links, both in `reading.client_spend`
- * under the salt every client cap shares: the caller's address first, then
- * the address the link goes to, case-folded. The second is claimed only once
- * the first passed, so a caller refused at their own cap never spends an
- * address's. `noKey` (no salt, or no caller address) keeps the action open:
+ * RL-22 and RL-75's three daily ceilings on sign-in links, all in
+ * `reading.client_spend` under the salt every client cap shares: the
+ * caller's address, then the address paired with that caller (case-folded),
+ * then the address alone at a higher ceiling. Each is claimed only once the
+ * one before passed, so a stranger exhausts their own pair and never the
+ * owner's, and a caller refused earlier never spends a later one. `noKey` (no salt, or no caller address) keeps the action open:
  * an unset variable must not lock every reader out. `keys` lists what an
  * accepted claim spent, for `releaseSignInLink`.
  */
@@ -30,15 +31,18 @@ export async function claimSignInLink(
 
   if (!(await claimClientCall(caller, env.SIGN_IN_LINK_DAILY_CLIENT_CAP))) return { status: "rateLimited" };
 
-  const recipient = scopeClientKey("signin-to", clientKeyFromAddress(address.toLowerCase(), salt))!;
-  if (!(await claimClientCall(recipient, env.SIGN_IN_LINK_DAILY_ADDRESS_CAP))) return { status: "rateLimited" };
+  const pair = scopeClientKey("signin-pair", clientKeyFromAddress(`${address.toLowerCase()}|${caller}`, salt))!;
+  if (!(await claimClientCall(pair, env.SIGN_IN_LINK_DAILY_ADDRESS_CAP))) return { status: "rateLimited" };
 
-  return { status: "ok", keys: [caller, recipient] };
+  const recipient = scopeClientKey("signin-to", clientKeyFromAddress(address.toLowerCase(), salt))!;
+  if (!(await claimClientCall(recipient, env.SIGN_IN_LINK_DAILY_ADDRESS_CEILING))) return { status: "rateLimited" };
+
+  return { status: "ok", keys: [caller, pair, recipient] };
 }
 
 /**
  * Gives back what `claimSignInLink` spent when Auth refused the send, so a
- * refused send leaves both ceilings where they were. Floors at zero.
+ * refused send leaves all three ceilings where they were. Floors at zero.
  */
 export async function releaseSignInLink(keys: string[]): Promise<void> {
   if (keys.length === 0) return;

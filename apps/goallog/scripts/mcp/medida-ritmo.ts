@@ -170,12 +170,12 @@ after(async () => {
   }
 });
 
-test("tools/list carries set_rhythm and set_measure as writes that never destroy, eighteen writes in all", () => {
+test("tools/list carries set_rhythm and set_measure as writes that ask before they replace, eighteen writes in all", () => {
   const writes = [...registered.entries()].filter(([, config]) => config.annotations?.readOnlyHint === false);
   assert.equal(writes.length, 18);
   assert.equal(registered.size, 24);
   for (const name of ["set_rhythm", "set_measure"]) {
-    assert.deepEqual(registered.get(name)?.annotations, { readOnlyHint: false, destructiveHint: false, idempotentHint: false }, name);
+    assert.deepEqual(registered.get(name)?.annotations, { readOnlyHint: false, destructiveHint: true, idempotentHint: true }, name);
   }
 });
 
@@ -295,6 +295,6 @@ test("set_measure refuses with the act's key and sentence, and writes nothing", 
   assert.equal((await goalRow(closed)).measure_name, null);
 
   const before = await goalRow(foreignGoal);
-  await refused("set_measure", { goal_id: foreignGoal, name: "Algo", unit: "cosas" }, "plan.errors.notFound", plan.errors.notFound);
+  await refused("set_measure", { goal_id: foreignGoal, name: "Algo", unit: "cosas" }, "plan.errors.notFound", "No hay nada con ese id para esta persona. Vuelve a leerlo con list_goals o get_goal.");
   assert.deepEqual(await goalRow(foreignGoal), before);
 });

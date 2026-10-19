@@ -435,6 +435,55 @@
       "when": 1792210000000,
       "tag": "0061_a_subcategory_goes_with_its_parent",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792220000000,
+      "tag": "0062_a_deleted_target_keeps_the_learned_rule",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792230000000,
+      "tag": "0063_a_pause_says_why",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792240000000,
+      "tag": "0064_a_pending_invitation_is_accepted_never_claimed",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792250000000,
+      "tag": "0065_the_invited_person_accepts_declines_and_leaves",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792260000000,
+      "tag": "0066_a_leader_alone_accepts_another_fund",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792370000000,
+      "tag": "0067_the_invited_person_reads_their_invitation",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792380000000,
+      "tag": "0068_a_login_less_member_is_company",
+      "breakpoints": true
     }
   ]
 }

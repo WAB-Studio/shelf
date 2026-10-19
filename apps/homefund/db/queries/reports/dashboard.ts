@@ -1,16 +1,17 @@
 import "server-only";
 
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
+
 import { getAccountBalances } from "@/db/queries/account-balances";
 import { listAccounts } from "@/db/queries/accounts";
-import { listMembers } from "@/db/queries/group-members";
-import { getUserGroup } from "@/db/queries/groups";
 import { countPendingDeliveries } from "@/db/queries/ingest-review";
 import { getMonthlyFlow } from "@/db/queries/reports/monthly-flow";
 import type { MonthlyFlow } from "@/db/queries/reports/monthly-flow";
 import { netWorthByOwner } from "@/db/queries/reports/net-worth";
 import type { OwnerNetWorth } from "@/db/queries/reports/net-worth";
 import { countUnreviewedGenerated } from "@/db/queries/recurring-rules";
-import { getSessionUser } from "@/db/session";
+import { groupMembers, groups } from "@/db/schema";
+import { getSessionUser, withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 
@@ -39,19 +40,49 @@ export type DashboardData = {
   pendingDeliveryCount: number;
 };
 
+// The caller's fund name and live roster in one statement: the group resolves in SQL
+// off `auth.uid()`, so the read needs neither the session nor the group id first.
+async function readFundRoster(): Promise<{
+  groupName: string | null;
+  members: { userId: string | null; name: string }[];
+}> {
+  const rows = await withUserDb((tx) =>
+    tx
+      .select({
+        userId: groupMembers.userId,
+        name: groupMembers.name,
+        groupName: groups.name,
+      })
+      .from(groupMembers)
+      .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+      .where(
+        and(
+          isNull(groupMembers.archivedAt),
+          eq(
+            groupMembers.groupId,
+            sql`(select gm.group_id from group_members gm
+              where gm.user_id = auth.uid() and gm.archived_at is null limit 1)`,
+          ),
+        ),
+      )
+      .orderBy(asc(groupMembers.name)),
+  );
+
+  return { groupName: rows[0]?.groupName ?? null, members: rows };
+}
+
 /**
  * The home dashboard's read-model: net worth per owner and this month's flow
  * (RF-88). Scope is never a parameter — every underlying query runs inside
  * `withUserDb`, so RLS restricts the rows to the caller and their one group.
- * The seven independent reads fan out in one `Promise.all`; the roster is a
- * conditional second trip, taken only once a group is known.
+ * Every read, the fund's live roster included, fans out in one `Promise.all`.
  */
 export async function getDashboardData(): Promise<DashboardData> {
   const [
     accounts,
     balances,
     monthFlow,
-    group,
+    roster,
     sessionUser,
     unreviewedCount,
     pendingDeliveryCount,
@@ -59,15 +90,14 @@ export async function getDashboardData(): Promise<DashboardData> {
     listAccounts({ archived: false }),
     getAccountBalances(),
     getMonthlyFlow(currentMonthRange()),
-    getUserGroup(),
+    readFundRoster(),
     getSessionUser(),
     countUnreviewedGenerated(),
     countPendingDeliveries(),
   ]);
 
-  // Only a grouped caller has a roster to name member buckets against; a
-  // personal-only caller falls back to the `isSelf` label with no round trip.
-  const members = group ? await listMembers(group.id, { archived: false }) : [];
+  // A personal-only caller has an empty roster and falls back to the `isSelf` label.
+  const { groupName, members } = roster;
   const nameByUserId = new Map(
     members
       .filter((member) => member.userId !== null)
@@ -81,7 +111,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const netWorth: OwnerNetWorthNamed[] = buckets.map((bucket) => {
     if (bucket.bucket === "group") {
-      return { ...bucket, name: group?.name ?? null, isSelf: false };
+      return { ...bucket, name: groupName, isSelf: false };
     }
 
     const isSelf = bucket.ownerUserId !== null && bucket.ownerUserId === sessionUser?.id;

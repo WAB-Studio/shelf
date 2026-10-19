@@ -21,6 +21,16 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - Hold the floor at 44 px (decided by the user 2026-10-15, raised from 32 px). Enforce it in the `components/ui` primitives, never in a screen.
 - `TapTarget` in `components/ui` owns that floor for a link's content.
 
+## Tokens
+
+| Token | Light | Dark | Ratio |
+|---|---|---|---|
+| `--focus-8` (ring) | `--jade-11` `#208368` | Radix's `--accent-8`, unchanged | 4.20:1 on `#f5f3ef` |
+| `--accent-9` (primary button) | `#1f7a62` | `#1f7a62` (Radix `#29a383` was 3.15:1) | 5.23:1 with white |
+| `--accent-10` (primary hover) | `#1b6e57` | `#1b6e57` (Radix `#27b08b` was 2.74:1) | 6.15:1 with white |
+| `--red-9` (danger button) | `#d13a3f` (Radix `#e5484d` was 3.91:1) | `#d13a3f` | 4.79:1 with white |
+| `--red-10` (danger hover) | `#c42a2f` (Radix `#dc3e42` was 4.37:1) | `#c42a2f` (Radix `#ec5d5e`) | 5.65:1 with white |
+
 ## Navigation
 
 - Carry the mobile navigation on a fixed bottom tab bar. It is the primary pattern.
@@ -337,8 +347,25 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 
 - **A stale edit is refused** (Q1 a): when a money form was opened before the row changed (another form, or the 00:15
   cron), saving reads «Esto cambió mientras lo editabas. Vuelve a abrirlo.» and nothing is saved.
-- **An invitation is accepted** (Q2 a): RF-154 opened. Boards «X te invitó · Aceptar / Rechazar» and «Salir del fondo»
-  are drawn before any worker. Not built yet.
+- **An invitation is accepted** (Q2 a): RF-154 opened. Not built yet. Boards on the HomeFund canvas, page «Miembros»,
+  2026-10-18:
+  - «Invitación» (six boards): on signing in, before Inicio, a card «Invitación» · «Carlos te invitó a su fondo «Casa»» ·
+    «Si aceptas, los miembros de «Casa» verán tus cuentas y movimientos personales, y tú verás los suyos y los del
+    fondo.» (RF-58 reads a member's personal accounts) · «Si rechazas, sigues con tus cuentas solo para ti. Puedes unirte
+    más tarde si Carlos te invita otra vez.» · «Aceptar» (primary, full width) over «Rechazar» (ghost). While accepting
+    both wait («Aceptando…»). Accepted: Inicio with «Ya eres parte de «Casa».». Declined: Inicio with «Rechazaste la
+    invitación de Carlos.». Gone: «Esta invitación ya no está vigente» · «Carlos la retiró o ya pasó. Si quieres unirte a
+    «Casa», pídele que te invite otra vez.» · «Ir a mis cuentas». Already in another fund (RF-55): «Ya estás en el fondo
+    «Familia Ruiz»» · «Se puede estar en un solo fondo. Para unirte a «Casa», sal primero de «Familia Ruiz» desde
+    «Grupo».» · «Ir a mis cuentas». No invitation: the screen does not exist.
+  - «Salir del fondo» (five boards): a last card in «Grupo», «Salir del fondo» · «Lo que escribiste en «Casa» se queda con
+    el fondo. Tus cuentas personales vuelven a ser solo tuyas.» · a soft «Salir del fondo» button. It opens «¿Salir de
+    «Casa»?» · «Lo que escribiste en el fondo se queda con el fondo: sus cuentas, sus movimientos y lo que anotaste en
+    ellas.» · «Tus cuentas personales vuelven a ser solo tuyas: los miembros de «Casa» dejan de verlas.» · «Cancelar» and
+    the red «Salir del fondo»; while leaving «Saliendo…». Done: Inicio with «Saliste de «Casa». Tus cuentas siguen
+    contigo.» and the fund leaves the shell. The leader with other members: «No puedes salir todavía» · «Eres el líder de
+    «Casa». Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».» · «Entendido» (RF-59). A leader alone in
+    the fund leaves like anyone. No desktop face for either.
 - **Planned payments promise no notice** (Q4 a): «Son recordatorios: aparecen aquí en su fecha, y tú registras el gasto
   cuando lo pagas.» «te avisan» comes back with RF-141.
 - **The five open debt cases** of the 2026-10-15 audit (Q7 a) are settled one by one in a question session before their
@@ -363,6 +390,27 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Fund labels read «· fondo»** in the budget forms (critic C1 a), as categories do.
 - **RF-156 and RF-157 opened** (Q24 a): the stale-edit refusal, and the paused rule's reason with the 12-month limit on a
   rule's next run (Q16 a, Q17 a).
-- **A foreign purchase estimated on a debit account is confirmed on the account in «Cuentas»** (Q18 a), with the debt
-  screen's «Confirmar monto» row. Board to draw before its module.
+- **A foreign purchase estimated on a debit account is confirmed on the account in «Cuentas»** (Q18 a). Boards C4a–C4d
+  (HomeFund canvas, page «T4 · pantallas», 2026-10-18): the account card gains a section «Compras en otra moneda», one
+  line per pending purchase («Netflix · 12 oct», what was spent in its currency, «Estimado ≈ $ …») and a «Confirmar
+  monto» button for whoever can write the account. The button opens «Confirmar monto» with the debt screen's body:
+  «Gastado», «Estimado», the field «Monto facturado» (hint «Lo que el banco cobró en pesos.») and «Tasa»; «Cancelar» and
+  «Guardar monto». M54's refusal («Ya cuadraste esta cuenta después de esa compra: confírmala desde el cuadre.») shows
+  under the field and the dialog stays open. Saved: «Monto facturado guardado. Reemplaza el estimado.» and the line
+  leaves the card. No pending purchase: the card is as today (no board). No desktop face.
 - **A second «efectivo» stays allowed** (Q23 a); the first withdrawal's race is closed by a lock, with nothing visible.
+- **A resend with another amount is refused** (Q25 b, RF-158): «Ya guardamos este movimiento con otro monto; ábrelo para
+  corregirlo.» and nothing is saved. Not built yet.
+- **One send never changes scope** (Q26 a): the same send to a personal account and then to a fund account books two rows;
+  the form keeps one scope per opening, so no cross-scope check is built.
+- **Quick entry asks on a lowercase «m» too** (Q27 b, later the same day): «25 m» and «5m arriendo» ask «¿Cuánto es «25 m»?»
+  with $25 / $25.000 / $25.000.000 and save nothing until one is picked or an amount is typed; «M» and «millón» keep
+  asking as before. Supersedes «a lowercase «m» is never a million» for what is saved without a question. Not built yet.
+- **«Recordarme el» shows on Inicio** (Q28 a, RF-159): from the reminder date until it is paid or archived, the planned
+  payment shows on Inicio. Boards C5a, C5b (HomeFund canvas, page «T4 · pantallas», 2026-10-18): a card «Por pagar» above
+  «Movimientos», one row per payment: its name, «Vence el 15 dic» (or «Venció el 15 oct» in red once the due date has
+  passed) and its amount; oldest due first; at most three, the link reads «Ver los 5» when there are more, else «Ver
+  pagos». A row leaves when the payment is paid or archived; a payment with no reminder, or whose reminder date has not
+  come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email stays unbuilt.
+- **A sign-out Auth refuses leaves this device signed out** (Q30 a): the session is never restored; the login says
+  «Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.»

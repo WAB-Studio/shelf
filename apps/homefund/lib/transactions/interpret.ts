@@ -1,5 +1,5 @@
 import { isCivilDate } from "@/lib/dates";
-import { normalizeAmountInput } from "@/lib/money";
+import { normalizeAmountInput, parseAmount } from "@/lib/money";
 
 // Quick entry reads one text field and proposes an editable movement (RF-22).
 // Everything it returns is a proposal the form may overwrite; a field is null
@@ -9,17 +9,24 @@ import { normalizeAmountInput } from "@/lib/money";
 // person types by hand; `normalizeAmountInput` strips those to a peso string.
 const AMOUNT_PATTERN = /\d[\d.,]*\d|\d/;
 // A spoken multiplier right after the amount (RF-22): «mil» and «k» are a
-// thousand, «m», «millón» and «millones» a million. A letter or digit after the
+// thousand, «M», «millón» and «millones» a million. A letter or digit after the
 // token makes it part of a word: «3 milanesas», «4 kg», «4 m2».
 const MULTIPLIER_PATTERN =
   /^\s*(millones|mill[oó]n|mil|k|m)(?![\p{L}\p{N}_])/iu;
-// A spaced «m» is a million only as the last word: «2 m», but «5 m de cable» is
-// five metres. Glued, «5m» is a million wherever it stands.
-const SPACED_M_PATTERN = /^\s+m$/iu;
+// The one letter whose case decides: an uppercase «M» glued or as the last word
+// is a million; a lowercase «m» is never read as a figure and always asks.
+const MILLION_LETTER = "M";
+const LOWER_MILLION_LETTER = "m";
+const THOUSAND_ZEROS = 3;
 // «mil» standing as its own word with no digits before it: «pagué mil» is a
 // thousand pesos, never a million.
 const BARE_THOUSAND_PATTERN = /(?<![\p{L}\p{N}_])mil(?![\p{L}\p{N}_])/iu;
 const BARE_THOUSAND_PESOS = "1000";
+// «millón» or «un millón» with no digits before it: a million pesos, as «mil»
+// alone is a thousand. «millonario» is a word of its own.
+const BARE_MILLION_PATTERN =
+  /(?<![\p{L}\p{N}_])(?:un\s+)?mill[oó]n(?![\p{L}\p{N}_])/iu;
+const BARE_MILLION_PESOS = "1000000";
 const MULTIPLIER_ZEROS: Record<string, number> = { mil: 3, k: 3 };
 const MILLION_ZEROS = 6;
 // What may stand before a multiplier: whole digits, or up to two decimals.
@@ -42,8 +49,18 @@ interface InterpretContext {
   defaultAccountId: string | null;
 }
 
+// A spaced «M» with words after it («3 M arriendo») is not guessed: the person
+// picks the bare number or the number times a million. A lowercase «m» is never
+// guessed: the person picks the bare number, thousands or millions. Choices are
+// stored cents, and only whole pesos are offered.
+export interface AmountAsk {
+  token: string;
+  choices: number[];
+}
+
 interface QuickEntryProposal {
   amountPesos: string | null;
+  ask: AmountAsk | null;
   categoryId: string | null;
   description: string;
   accountId: string | null;
@@ -73,6 +90,26 @@ function multiplyPesos(mantissa: string, zeros: number): string | null {
   return digits.replace(/^0+(?=\d)/, "");
 }
 
+// The bare number, thousands and millions of a lowercase «m», each as stored
+// cents. A choice that is not whole pesos («1,15» bare) is left out: the sheet
+// never offers a figure with cents the person did not write as such.
+function lowerMChoices(amount: string): number[] {
+  const mantissa = MANTISSA_PATTERN.test(amount)
+    ? amount
+    : normalizeAmountInput(amount);
+  const pesos = [
+    normalizeAmountInput(amount),
+    multiplyPesos(mantissa, THOUSAND_ZEROS) ?? `${mantissa}000`,
+    multiplyPesos(mantissa, MILLION_ZEROS) ?? `${mantissa}000000`,
+  ];
+  return pesos
+    .map((value) => parseAmount(value))
+    .filter(
+      (cents): cents is number =>
+        cents !== null && cents > 0 && cents % 100 === 0,
+    );
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -83,28 +120,57 @@ export function interpretQuickEntry(
 ): QuickEntryProposal {
   const lower = text.toLowerCase();
 
-  const digitsMatch = AMOUNT_PATTERN.exec(text);
-  const bareThousand = BARE_THOUSAND_PATTERN.exec(text);
+  // The earliest of a digit run, a bare «mil» and a bare «millón» is the amount.
   const amountMatch =
-    bareThousand && (!digitsMatch || bareThousand.index < digitsMatch.index)
-      ? bareThousand
-      : digitsMatch;
-  const isBareThousand = amountMatch !== null && amountMatch === bareThousand;
+    [
+      AMOUNT_PATTERN.exec(text),
+      BARE_THOUSAND_PATTERN.exec(text),
+      BARE_MILLION_PATTERN.exec(text),
+    ]
+      .filter((match) => match !== null)
+      .sort((a, b) => a.index - b.index)[0] ?? null;
+  const bareWord = amountMatch && !/\d/u.test(amountMatch[0]) ? amountMatch[0] : null;
   const amountEnd = amountMatch ? amountMatch.index + amountMatch[0].length : 0;
   const afterAmount = text.slice(amountEnd);
   const tokenMatch =
-    amountMatch && !isBareThousand ? MULTIPLIER_PATTERN.exec(afterAmount) : null;
-  const multiplierMatch =
-    tokenMatch &&
-    tokenMatch[1].toLowerCase() === "m" &&
-    /^\s/u.test(tokenMatch[0]) &&
-    !SPACED_M_PATTERN.test(afterAmount.trimEnd())
-      ? null
-      : tokenMatch;
-  const amountPesos = !amountMatch
+    amountMatch && bareWord === null ? MULTIPLIER_PATTERN.exec(afterAmount) : null;
+  const letter = tokenMatch?.[1];
+  const tokenText = tokenMatch?.[0] ?? "";
+  const isLowerAsk = letter === LOWER_MILLION_LETTER;
+  const isAsk =
+    isLowerAsk ||
+    (letter === MILLION_LETTER &&
+      /^\s/u.test(tokenText) &&
+      afterAmount.slice(tokenText.length).trim().length > 0);
+  const multiplierMatch = isAsk ? null : tokenMatch;
+
+  let ask: AmountAsk | null = null;
+  if (isLowerAsk && amountMatch) {
+    const choices = lowerMChoices(amountMatch[0]);
+    if (choices.length > 1) {
+      ask = {
+        token: text.slice(amountMatch.index, amountEnd + tokenText.length),
+        choices,
+      };
+    }
+  } else if (isAsk && amountMatch) {
+    const bare = parseAmount(amountMatch[0]);
+    const millionPesos = multiplyPesos(amountMatch[0], MILLION_ZEROS);
+    const million = millionPesos === null ? null : parseAmount(millionPesos);
+    if (bare !== null && million !== null) {
+      ask = {
+        token: text.slice(amountMatch.index, amountEnd + tokenText.length),
+        choices: [bare, million],
+      };
+    }
+  }
+
+  const amountPesos = !amountMatch || isAsk
     ? null
-    : isBareThousand
-      ? BARE_THOUSAND_PESOS
+    : bareWord !== null
+      ? BARE_MILLION_PATTERN.test(bareWord)
+        ? BARE_MILLION_PESOS
+        : BARE_THOUSAND_PESOS
       : multiplierMatch
         ? multiplyPesos(
             amountMatch[0],
@@ -134,7 +200,9 @@ export function interpretQuickEntry(
   // token are removed.
   let description = text;
   if (amountMatch) {
-    const cutEnd = amountEnd + (multiplierMatch?.[0].length ?? 0);
+    // An asked «m» or «M» leaves with its number: the description reads «arriendo».
+    const cutEnd =
+      amountEnd + ((isAsk ? tokenMatch : multiplierMatch)?.[0].length ?? 0);
     description = `${text.slice(0, amountMatch.index)} ${text.slice(cutEnd)}`;
   }
   if (matchedCategory) {
@@ -145,6 +213,7 @@ export function interpretQuickEntry(
 
   return {
     amountPesos,
+    ask,
     categoryId: matchedCategory?.id ?? null,
     description,
     // A uniquely named bank tail outranks the last-used fallback (RF-97, RF-22).

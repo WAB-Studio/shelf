@@ -4,6 +4,7 @@ import type { Browser, Page } from "@playwright/test";
 import { registerOAuthClient } from "@repo/harness-registry";
 import postgres from "postgres";
 
+import { invite } from "./entrar-invitado";
 import { test, expect, settled, visit } from "./fixtures";
 import { boxOf } from "./box";
 
@@ -45,20 +46,6 @@ function invitee(): string {
 // Short enough to fit a 360 column, so an overflow is the layout's, not the address's.
 function shortInvitee(): string {
   return `harness-inv-${randomUUID().slice(0, 6)}@gmail.com`;
-}
-
-async function listAddress(db: postgres.Sql, email: string) {
-  await db`insert into goals.allowed_emails (email) values (${email}) on conflict do nothing`;
-}
-
-// The send creates the `auth.users` row: registered under the suite's run so a crash leaves it to
-// the teardown, and dropped by exact address here.
-async function register(db: postgres.Sql, email: string) {
-  const runId = process.env.HARNESS_RUN_ID!;
-  await db`
-    insert into harness.identities (user_id, run_id, email, disposition)
-    select id, ${runId}, email, 'ephemeral' from auth.users where email = ${email}
-    on conflict do nothing`;
 }
 
 async function forget(db: postgres.Sql, email: string) {
@@ -126,7 +113,6 @@ async function askForCode(page: Page, db: postgres.Sql, email: string, path = "/
   await page.getByLabel(W.emailLabel).fill(email);
   await page.getByRole("button", { name: button, exact: true }).click();
   await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
-  await register(db, email);
 }
 
 // Kills: a landed code that leaves the pending address on the device, so a later sign-out reopens the code step.
@@ -190,7 +176,7 @@ test("Sent: the code step names the address and asks for the code, with the esca
   // Kills: the old sent header kept («Te mandamos el enlace a»), the field missing its numeric /
   // one-time-code / six-character attributes, a control under 44 px, a column that scrolls sideways.
   const email = shortInvitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -225,7 +211,7 @@ test("Incomplete: five digits read the hint on the field, mark it invalid, and n
 }) => {
   // Kills: the client parse skipped (the five digits reach Auth), or the hint without aria-invalid.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   const posts: string[] = [];
   try {
@@ -248,7 +234,7 @@ test("Incomplete: five digits read the hint on the field, mark it invalid, and n
 test("Pending: while the code is checked the button reads «Comprobando…» and is disabled", async ({ browser, baseURL, db }) => {
   // Kills: the pending label dropped, or the button left enabled while the action runs.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   let release!: () => void;
   const gate = new Promise<void>((resolveGate) => (release = resolveGate));
@@ -295,7 +281,7 @@ test("Refused: a wrong code reads «Ese código no vale o ya venció.» on the f
   // Kills: the field cleared after a refusal, the refusal drawn elsewhere than the field's hint,
   // or the action not asking Auth (a session appears or the real answer is lost).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -324,7 +310,7 @@ for (const [name, error, words, other] of [
   }) => {
     // Kills: ${error} mapped to codeInvalid (or any one message for every refusal).
     const email = invitee();
-    await listAddress(db, email);
+    await invite(db, email);
     const { context, page } = await open(browser, baseURL!);
     try {
       await askForCode(page, db, email);
@@ -351,7 +337,7 @@ test("Done · /entrar: the mailed code, typed, lands on / with a session; the ma
 }) => {
   // Kills: the action not called, called with another code or address, or a landing other than /.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -375,7 +361,7 @@ test("Done · consent: a code typed on the signed-out consent lands back on that
 }) => {
   // Kills: `next` dropped from the verify call (the person lands on / instead of the consent).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email, consentPath, W.send);
@@ -399,7 +385,7 @@ test("Cancelled: «Usar otro correo» returns to the form, and a reload does not
 }) => {
   // Kills: the pending address left on the device after the person chose another address.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -423,7 +409,7 @@ test("Relaunch: a reload within the code's hour reopens the code step for the sa
   // Kills: no pending record kept (the reload shows the form at minute 5), or no expiry check
   // (the code step still stands at minute 61).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   // Shifts the page's clock by whatever the session says, surviving reloads.
   await context.addInitScript(() => {
@@ -518,7 +504,7 @@ test("Countdown: the button waits 60 s from the send, is ready at +60 s, and a r
   // Kills: the countdown counted from mount (the reload would read 60 again), a wait other than 60 s,
   // or a button enabled before the wait is up.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -550,7 +536,7 @@ test("Layout: the resend button sits between the link sentence and «Usar otro c
 }) => {
   // Kills: the button drawn above the sentence or below the escape, or a target under 44 px.
   const email = shortInvitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -576,7 +562,7 @@ test("Pending: a tap sends once to the stored address; the button reads «Envian
   // Kills: the button left enabled while the send runs (a second tap posts again), a send to another
   // address, or the other controls left live.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   let release!: () => void;
   const gate = new Promise<void>((resolveGate) => (release = resolveGate));
@@ -617,7 +603,7 @@ test("Done · /entrar: «Te mandamos otro código…», the field emptied and fo
   // Kills: the old code kept in the field, focus lost, no confirmation line, the wait not restarted,
   // or a resend that did not mail a new code.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -649,7 +635,7 @@ test("Done · consent: a resend from the signed-out consent keeps `next`; the ne
 }) => {
   // Kills: `next` dropped from the resend (the newest mail's link or the landing leaves the consent).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email, consentPath, W.send);
@@ -680,7 +666,7 @@ test("Refused: a resend Auth refuses reads «Demasiados intentos…» as an aler
   // or the confirmation line shown for a send that did not happen. The refusal is answered by hand:
   // Auth's own window is not the suite's to wait for.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -764,7 +750,7 @@ test("Resend offline: the tap ends in an alert under the button, every control e
 }) => {
   // Kills: no catch in handleResend (the button sticks on «Enviando…» with the controls disabled).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -785,7 +771,7 @@ test("Resend offline: the tap ends in an alert under the button, every control e
 test("Resend recovers: back online the same button sends, confirms and mails a new code", async ({ browser, baseURL, db }) => {
   // Kills: the failure leaving the resend stuck at sending, so the second tap does nothing.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -812,7 +798,7 @@ test("Resend failure keeps the wait clock: the pending record and the countdown 
 }) => {
   // Kills: savePending (or a new `at`) in the failure path, which restarts the 60 s wait for a send that did not happen.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -834,7 +820,7 @@ test("Resend failure keeps the wait clock: the pending record and the countdown 
 test("Resend offline keeps the typed code", async ({ browser, baseURL, db }) => {
   // Kills: the failure path emptying the field as a done resend does.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -879,7 +865,7 @@ test("Verify offline: «Entrar» ends in the field's hint, the code kept, every 
 }) => {
   // Kills: checking left true after the rejection («Comprobando…» for good), or the code cleared.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -900,7 +886,7 @@ test("Verify offline: «Entrar» ends in the field's hint, the code kept, every 
 test("Verify offline then online: the same code, sent again, lands on /", async ({ browser, baseURL, db }) => {
   // Kills: the catch swallowing or mis-flagging the landing, or clearing the pending address on a rejection.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -927,7 +913,7 @@ test("Consent too: a resend offline on the signed-out consent ends in the alert,
 }) => {
   // Kills: `next` dropped from the retry after a failure.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email, consentPath, W.send);
@@ -961,7 +947,7 @@ test("Refused then retried: «Entrar» is enabled again, «Comprobando…» is g
 }) => {
   // Kills: a refusal that leaves checking true («Comprobando…» for good, the person locked out of the right code).
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -988,7 +974,7 @@ test("Verify offline survives an unmount: leaving /entrar client-side and coming
 }) => {
   // Kills: the offline catch leaving the "a code is landing" flag set, so the unmount clears the pending address.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -1020,7 +1006,7 @@ test("Resend clock survives a reload: after a resend at +61 s the button reads t
 }) => {
   // Kills: the resend not saving its moment, so a reload counts from the first send and offers another code at once.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await openWithClock(browser, baseURL!);
   try {
     await askForCode(page, db, email);
@@ -1046,7 +1032,7 @@ test("Resend clock survives a reload: after a resend at +61 s the button reads t
 test("First send from the signed-out consent carries the consent's state in its POST", async ({ browser, baseURL, db }) => {
   // Kills: the first send called without `next`, so the code lands on / instead of the consent.
   const email = invitee();
-  await listAddress(db, email);
+  await invite(db, email);
   const { context, page } = await open(browser, baseURL!);
   try {
     const posts = sendPosts(page);
@@ -1054,7 +1040,6 @@ test("First send from the signed-out consent carries the consent's state in its 
     await page.getByLabel(W.emailLabel).fill(email);
     await page.getByRole("button", { name: W.send, exact: true }).click();
     await expect(page.getByRole("heading", { name: W.sentTitle, exact: true })).toBeVisible();
-    await register(db, email);
     expect(posts).toHaveLength(1);
     expect(posts[0].body).toContain(email);
     expect(posts[0].body).toContain("estado-m7");

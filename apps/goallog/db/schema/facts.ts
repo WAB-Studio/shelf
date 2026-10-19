@@ -70,11 +70,19 @@ export const facts = goalsSchema.table(
       using: sql`${authUid} = ${t.userId}`,
     }),
     // A one-off holding sub-tasks is done by them, never by a fact of its own.
+    // Each parent it names is one the caller sees under RLS; the aliases keep
+    // the outer columns pointing at the new row.
     pgPolicy("facts_insert_self", {
       for: "insert",
       to: authenticatedRole,
       withCheck: sql`${authUid} = ${t.userId} and (${t.oneOffId} is null or not exists (
         select 1 from "goals"."one_offs" c where c.parent_id = ${t.oneOffId}
+      )) and (${t.commitmentId} is null or exists (
+        select 1 from "goals"."commitments" cm where cm.id = ${t.commitmentId}
+      )) and (${t.oneOffId} is null or exists (
+        select 1 from "goals"."one_offs" o where o.id = ${t.oneOffId}
+      )) and (${t.goalId} is null or exists (
+        select 1 from "goals"."goals" g where g.id = ${t.goalId}
       ))`,
     }),
     // Undoing a tap is a delete of the whole row: the only way a fact leaves.
