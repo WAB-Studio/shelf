@@ -26,6 +26,7 @@ mock.module("@/app/actions/one-offs", {
   namedExports: {
     completeOneOff: act("completeOneOff"),
     createOneOff: act("createOneOff"),
+    editTask: act("editTask"),
     fixTask: act("fixTask"),
     scheduleOneOff: act("scheduleOneOff"),
     setOneOffNote: act("setOneOffNote"),
@@ -44,6 +45,7 @@ mock.module("@/app/actions/plan", {
     setGoalNote: act("setGoalNote"),
   },
 });
+mock.module("@/app/actions/plan-edit", { namedExports: { editPhase: act("editPhase") } });
 mock.module("@/app/actions/roadmap", { namedExports: { setRhythm: act("setRhythm") } });
 mock.module("@/lib/queries/day", { namedExports: { loadDay: async () => ({}) } });
 mock.module("@/lib/queries/goal", {
@@ -61,16 +63,18 @@ beforeEach(() => {
   calls.length = 0;
 });
 
-test("the catalogue holds the 24 names of mcp.json and no more", async () => {
+test("the catalogue holds the 26 names of mcp.json and no more", async () => {
   const { readTools, writeTools } = await catalogue();
   const names = [...readTools, ...writeTools].map((tool) => tool.name).sort();
   assert.deepEqual(names, Object.keys(mcp.tools).sort());
+  assert.equal(names.length, 26);
+  assert.ok(names.includes("set_task_estimate") && names.includes("edit_phase"));
 });
 
-test("the 6 reads are reads and the 18 writes are writes", async () => {
+test("the 6 reads are reads and the 20 writes are writes", async () => {
   const { readTools, writeTools } = await catalogue();
   assert.equal(readTools.length, 6);
-  assert.equal(writeTools.length, 18);
+  assert.equal(writeTools.length, 20);
   assert.ok(readTools.every((tool) => tool.kind === "read"));
   assert.ok(writeTools.every((tool) => tool.kind === "write"));
   assert.ok(!readTools.some((tool) => tool.name === "declare_fact"));
@@ -329,4 +333,53 @@ test("declare_fact's alreadyNoted answers the kept quantity in words, never {qua
   } finally {
     declareFactAnswer = null;
   }
+});
+
+// RP-139: the chat and the connected AI change a task's estimate and a phase's aim and dates.
+const PHASE = "5c1b7a2e-9d34-4e6f-8b10-2a3c4d5e6f70";
+const TASK = "6d2c8b3f-0e45-4f70-9c21-3b4d5e6f7a81";
+
+test("RP-139: both new writes are in the catalogue as writes that do not destroy and may be resent", async () => {
+  const { writeTool } = await catalogue();
+  for (const name of ["set_task_estimate", "edit_phase"]) {
+    const spec = writeTool(name);
+    assert.ok(spec, `${name} is not a write tool`);
+    assert.equal(spec.kind, "write");
+    assert.deepEqual(spec.annotations, { readOnlyHint: false, destructiveHint: false, idempotentHint: true });
+  }
+});
+
+test("RP-139: set_task_estimate takes a whole estimate or null, and refuses any other key", async () => {
+  const { writeTool } = await catalogue();
+  const spec = writeTool("set_task_estimate")!;
+  assert.equal(spec.input.safeParse({ one_off_id: TASK, estimate: 180 }).success, true);
+  assert.equal(spec.input.safeParse({ one_off_id: TASK, estimate: null }).success, true);
+  assert.equal(spec.input.safeParse({ one_off_id: TASK, estimate: 180, name: "otro" }).success, false);
+  assert.equal(spec.input.safeParse({ one_off_id: TASK, estimate: 180, month: "2026-11" }).success, false);
+  assert.equal(spec.input.safeParse({ estimate: 180 }).success, false);
+  assert.equal(spec.input.safeParse({ one_off_id: TASK }).success, false);
+});
+
+test("RP-139: edit_phase takes the phase, its aim and both days, and refuses any other key", async () => {
+  const { writeTool } = await catalogue();
+  const spec = writeTool("edit_phase")!;
+  const whole = { phase_id: PHASE, aim: "Medir", starts_on: "2026-11-02", ends_on: "2026-11-30" };
+  assert.equal(spec.input.safeParse(whole).success, true);
+  assert.equal(spec.input.safeParse({ ...whole, goal_id: ABOVE }).success, false);
+  for (const key of Object.keys(whole)) {
+    const { [key]: _gone, ...rest } = whole as Record<string, string>;
+    assert.equal(spec.input.safeParse(rest).success, false, `${key} is required`);
+  }
+});
+
+test("RP-139: edit_phase runs editPhase with the four values and nothing else", async () => {
+  const { writeTool } = await catalogue();
+  const spec = writeTool("edit_phase")!;
+  const outcome = await spec.run(
+    spec.input.parse({ phase_id: PHASE, aim: "Medir", starts_on: "2026-11-02", ends_on: "2026-11-30" }),
+  );
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(calls, [
+    { act: "editPhase", input: { phaseId: PHASE, aim: "Medir", startsOn: "2026-11-02", endsOn: "2026-11-30" } },
+  ]);
 });
