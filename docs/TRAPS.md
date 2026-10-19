@@ -3278,3 +3278,13 @@ statement cannot ride the first by dropping an `await`: a one-statement form loa
 - Count round trips on the wire, never from the number of `await`s.
 - A statement sent with no parameters (`.inlineParams()`, literals in the text) skips the Describe. It puts the values in
   the SQL text: escape them, and make the validator read it.
+
+## A long `idle_timeout` keeps every test process alive
+
+Measured 2026-10-19 on GoalLog (`check:plan`). `apps/goallog/db/client.ts` sets `idle_timeout: 240` (RNP-02). A test file
+that reaches the app's code opens that pool and ends only its own `sql`, so `node --test` waits ~240 s for the idle
+sockets per file: pass 2 took 1927 s for 31 s of tests.
+
+- Preload `scripts/harness/end-app-pool.ts` with `--import`; it ends `globalThis.sql` in a root `after()`.
+- Never lower the timeout for tests: `settle-pipeline.ts` asserts 240.
+- Never use `--test-force-exit`: under `--experimental-test-module-mocks` it drops tests (561 to 533).
