@@ -1288,7 +1288,8 @@
         "categoryOutOfScope": "Esta categoría es de otro alcance que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya.",
         "adjustmentOneAccount": "Un descuadre lleva una sola cuenta, de origen o de destino.",
         "adjustmentRefused": "El descuadre no se pudo registrar: su fecha es anterior a la apertura o al último cuadre de la cuenta, o la cuenta está archivada.",
-        "hasErrors": "El archivo todavía tiene errores. Corrígelos e impórtalo de nuevo."
+        "hasErrors": "El archivo todavía tiene errores. Corrígelos e impórtalo de nuevo.",
+        "alreadyCommitting": "Este archivo ya se estaba importando en otra pestaña. Revisa los movimientos antes de importarlo otra vez."
       }
     }
   },
