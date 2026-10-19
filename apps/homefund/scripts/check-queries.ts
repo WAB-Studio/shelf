@@ -4227,6 +4227,7 @@ async function main(): Promise<void> {
   await billedBeforeReconciliationSuite();
   await pendingSettlementsOnAssetSuite();
   await invitationActsSuite();
+  await loneLeaderAcceptsSuite();
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form
@@ -9741,12 +9742,14 @@ async function invitationActsSuite(): Promise<void> {
     );
     track("groups", homeGroupId);
     groupIds.push(homeGroupId);
+    // Not alone: someone else lives in the resident's fund, so it is not one they may leave behind (Q32 a).
+    await seedFellowMember(resident.id, homeGroupId);
     const otherInviteId = await invite(fund, resident, "Harness invitada de otro fondo");
     const blocked = await tap(() => asUser(resident, () => api.acceptInvitation({ memberId: otherInviteId })));
     const blockedRow = await rowOf(otherInviteId);
     const residentRows = await liveRowsOf(resident.id);
     assert(
-      next("A person already in a fund who accepts another's invitation is refused as otherFund: still in their own fund alone, the invitation stays pending"),
+      next("A person already in a fund with others who accepts another's invitation is refused as otherFund: still in their own fund, the invitation stays pending"),
       blocked === "otherFund" &&
         blockedRow?.invite_state === "pending" &&
         blockedRow.user_id === null &&
@@ -9920,6 +9923,242 @@ async function invitationActsSuite(): Promise<void> {
       `answer = ${nowhere}`,
     );
   } finally {
+    for (const id of groupIds) {
+      for (const row of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", row.id);
+      for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${id}`) track("categories", row.id);
+      for (const row of await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${id}`) track("accounts", row.id);
+    }
+  }
+}
+
+// Q32 (a): a leader alone in their own fund accepts an invitation to another. Their fund is archived (their
+// leader row, since a group has no archive column, so it keeps no live member) and their personal accounts
+// come with them. Anyone else in the fund, live or invited, keeps the answer otherFund and moves nothing.
+async function loneLeaderAcceptsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const api = await invitationApi();
+  const groupIds: string[] = [];
+  let failureFunction: string | null = null;
+
+  type Row = { id: string; user_id: string | null; invite_state: string; role: string; archived_at: string | null; group_id: string };
+  const rowOf = async (id: string): Promise<Row | undefined> =>
+    (
+      await fixtureSql<Row[]>`
+        select id, user_id, invite_state, role, archived_at::text as archived_at, group_id from group_members where id = ${id}`
+    )[0];
+  const leaderRowOf = async (groupId: string): Promise<Row | undefined> =>
+    (
+      await fixtureSql<Row[]>`
+        select id, user_id, invite_state, role, archived_at::text as archived_at, group_id
+        from group_members where group_id = ${groupId} and role = 'leader'`
+    )[0];
+  const liveRowsOf = (userId: string) =>
+    fixtureSql<{ id: string; group_id: string }[]>`
+      select id, group_id from group_members where user_id = ${userId} and archived_at is null`;
+  const liveCount = async (groupId: string): Promise<number> =>
+    Number(
+      (
+        await fixtureSql<{ n: string }[]>`
+          select count(*)::text as n from group_members where group_id = ${groupId} and user_id is not null and archived_at is null`
+      )[0].n,
+    );
+  const openFund = async (label: string) => {
+    const leader = await createMembershipFreeUser();
+    const { groupId } = await asUser(leader, () =>
+      createGroup({ name: `Harness fondo ${label} ${tag}`, leaderName: `Harness lider ${label}`, cashMode: "shared", locale: "es" }),
+    );
+    track("groups", groupId);
+    groupIds.push(groupId);
+    return { leader, groupId };
+  };
+  const invite = async (fund: { leader: HarnessUser; groupId: string }, who: HarnessUser, name: string): Promise<string> => {
+    const memberId = randomUUID();
+    await seedPendingInvite({ groupId: fund.groupId, memberId, actorId: fund.leader.id, name, email: who.email, archived: false });
+    return memberId;
+  };
+  const personalMovement = async (owner: HarnessUser): Promise<{ accountId: string; transactionId: string }> =>
+    asUser(owner, async () => {
+      const { accountId } = await createAccount({
+        name: `Harness propia lider ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: owner.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 1_000_000,
+        balanceOn: shiftDate(today, -10),
+      });
+      track("accounts", accountId);
+      const { categoryId } = await createCategory({
+        scope: { ownerUserId: owner.id },
+        name: `Harness propia lider gasto ${tag}`,
+        kind: "expense",
+        parentId: null,
+        color: "#0E7490",
+      });
+      track("categories", categoryId);
+      const { transactionId } = await createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        currency: "COP",
+        counterAmountCents: null,
+        counterIsEstimate: false,
+        occurredAt: shiftDate(today, -1),
+        description: `Harness propio lider ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents: 10_000 }],
+        labelIds: [],
+      });
+      track("transactions", transactionId);
+      return { accountId, transactionId };
+    });
+  const accountIds = (who: HarnessUser) => asUser(who, async () => (await listAccounts({ archived: false })).map((a) => a.id));
+  const sees = (who: HarnessUser, transactionId: string) =>
+    asUser(who, async () => (await getTransactionById(transactionId)) !== null);
+
+  try {
+    // Alone, the leader accepts.
+    const target = await openFund("destino");
+    const alone = await openFund("sola");
+    const aloneOldRow = await leaderRowOf(alone.groupId);
+    const own = await personalMovement(alone.leader);
+    const inviteId = await invite(target, alone.leader, "Harness lider sola invitada");
+    const targetSawBefore = (await accountIds(target.leader)).includes(own.accountId);
+    const accepted = await tap(() => asUser(alone.leader, () => api.acceptInvitation({ memberId: inviteId })));
+    const oldRow = await rowOf(aloneOldRow?.id ?? randomUUID());
+    const joined = await rowOf(inviteId);
+    const live = await liveRowsOf(alone.leader.id);
+    assert(
+      next("A leader alone in their own fund who accepts an invitation to another is answered accepted"),
+      aloneOldRow?.role === "leader" && aloneOldRow.archived_at === null && accepted === "accepted",
+      `answer = ${accepted}`,
+    );
+    assert(
+      next("Their old leader row is archived, not deleted: the same row, still theirs, with an archive stamp"),
+      accepted === "accepted" && oldRow?.archived_at !== null && oldRow?.user_id === alone.leader.id && oldRow.role === "leader",
+      `answer = ${accepted}, old row = ${JSON.stringify(oldRow)}`,
+    );
+    assert(
+      next("They are a live member of the new fund through the invitation row, and of no other: one live membership"),
+      accepted === "accepted" &&
+        joined?.invite_state === "accepted" &&
+        joined.user_id === alone.leader.id &&
+        joined.archived_at === null &&
+        joined.role === "member" &&
+        live.length === 1 &&
+        live[0].group_id === target.groupId,
+      `answer = ${accepted}, joined = ${JSON.stringify(joined)}, live = ${JSON.stringify(live)}`,
+    );
+    const targetAccounts = await accountIds(target.leader);
+    assert(
+      next("Their personal accounts come with them: the new fund's leader, who could not read them before, now lists the account and reads its movement"),
+      !targetSawBefore &&
+        accepted === "accepted" &&
+        targetAccounts.includes(own.accountId) &&
+        (await sees(target.leader, own.transactionId)) &&
+        (await accountIds(alone.leader)).includes(own.accountId),
+      `before = ${targetSawBefore}, answer = ${accepted}, leader lists it = ${targetAccounts.includes(own.accountId)}`,
+    );
+    assert(
+      next("The old fund is left with no live member, and the new fund counts the newcomer"),
+      accepted === "accepted" && (await liveCount(alone.groupId)) === 0 && (await liveCount(target.groupId)) === 2,
+      `answer = ${accepted}, old fund live = ${await liveCount(alone.groupId)}, new fund live = ${await liveCount(target.groupId)}`,
+    );
+
+    // Atomic: a join that fails takes the archive with it.
+    const failing = await openFund("falla");
+    const failTarget = await openFund("destino falla");
+    const failInvite = await invite(failTarget, failing.leader, "Harness lider falla");
+    const failingLeaderRow = await leaderRowOf(failing.groupId);
+    failureFunction = `harness_m81_fail_${tag.replace(/-/g, "")}`;
+    await fixtureSql.unsafe(
+      `create function finances.${failureFunction}() returns trigger language plpgsql as $f$ begin raise exception 'm81 injected join failure'; end $f$`,
+    );
+    await fixtureSql.unsafe(
+      `create trigger ${failureFunction} before update on finances.group_members for each row when (new.id = '${failInvite}' and new.user_id is not null) execute function finances.${failureFunction}()`,
+    );
+    const failed = await tap(() => asUser(failing.leader, () => api.acceptInvitation({ memberId: failInvite })));
+    const failedOld = await rowOf(failingLeaderRow?.id ?? randomUUID());
+    const failedInvite = await rowOf(failInvite);
+    const failedLive = await liveRowsOf(failing.leader.id);
+    assert(
+      next("When joining the new fund fails the old leader row is not archived (a lone leader is never told otherFund): still live in their own fund, the invitation still pending"),
+      failed !== "accepted" &&
+        failed !== "otherFund" &&
+        failedOld?.archived_at === null &&
+        failedInvite?.user_id === null &&
+        failedInvite.invite_state === "pending" &&
+        failedLive.length === 1 &&
+        failedLive[0].group_id === failing.groupId,
+      `answer = ${failed}, old row = ${JSON.stringify(failedOld)}, invitation = ${JSON.stringify(failedInvite)}, live = ${JSON.stringify(failedLive)}`,
+    );
+    await fixtureSql.unsafe(`drop trigger if exists ${failureFunction} on finances.group_members`);
+    await fixtureSql.unsafe(`drop function if exists finances.${failureFunction}()`);
+    failureFunction = null;
+
+    // Not alone: another live member.
+    const crowded = await openFund("con miembro");
+    await seedFellowMember(crowded.leader.id, crowded.groupId);
+    const crowdedTarget = await openFund("destino 2");
+    const crowdedInvite = await invite(crowdedTarget, crowded.leader, "Harness lider acompanada");
+    const crowdedRow = await leaderRowOf(crowded.groupId);
+    const crowdedLiveBefore = await liveCount(crowded.groupId);
+    const crowdedAnswer = await tap(() => asUser(crowded.leader, () => api.acceptInvitation({ memberId: crowdedInvite })));
+    const crowdedAfter = await leaderRowOf(crowded.groupId);
+    assert(
+      next("A leader whose fund has another live member is still refused as otherFund and nothing is archived"),
+      crowdedAnswer === "otherFund" &&
+        crowdedAfter?.archived_at === null &&
+        crowdedRow?.archived_at === null &&
+        (await liveCount(crowded.groupId)) === crowdedLiveBefore &&
+        (await rowOf(crowdedInvite))?.user_id === null,
+      `answer = ${crowdedAnswer}, leader row = ${JSON.stringify(crowdedAfter)}, live ${crowdedLiveBefore} -> ${await liveCount(crowded.groupId)}`,
+    );
+
+    // Not alone: someone is invited.
+    const waiting = await openFund("con invitada");
+    const someoneElse = await createMembershipFreeUser();
+    await invite(waiting, someoneElse, "Harness invitada espera");
+    const waitingTarget = await openFund("destino 3");
+    const waitingInvite = await invite(waitingTarget, waiting.leader, "Harness lider con invitada");
+    const waitingAnswer = await tap(() => asUser(waiting.leader, () => api.acceptInvitation({ memberId: waitingInvite })));
+    const waitingRow = await leaderRowOf(waiting.groupId);
+    assert(
+      next("A leader whose fund has a pending invitation is not alone: otherFund, the leader row stays live, the invitation to the other fund stays pending"),
+      waitingAnswer === "otherFund" &&
+        waitingRow?.archived_at === null &&
+        (await rowOf(waitingInvite))?.user_id === null &&
+        (await liveRowsOf(waiting.leader.id)).length === 1,
+      `answer = ${waitingAnswer}, leader row = ${JSON.stringify(waitingRow)}`,
+    );
+
+    // A plain member of a fund with others.
+    const home = await openFund("miembros");
+    const member = await seedFellowMember(home.leader.id, home.groupId);
+    const memberTarget = await openFund("destino 4");
+    const memberInvite = await invite(memberTarget, member, "Harness miembra invitada");
+    const memberAnswer = await tap(() => asUser(member, () => api.acceptInvitation({ memberId: memberInvite })));
+    const memberLive = await liveRowsOf(member.id);
+    assert(
+      next("A plain member of a fund with others is refused as otherFund: still a live member of their fund, the invitation stays pending"),
+      memberAnswer === "otherFund" &&
+        memberLive.length === 1 &&
+        memberLive[0].group_id === home.groupId &&
+        (await rowOf(memberInvite))?.user_id === null &&
+        (await liveCount(home.groupId)) === 2,
+      `answer = ${memberAnswer}, live = ${JSON.stringify(memberLive)}`,
+    );
+  } finally {
+    if (failureFunction) {
+      await fixtureSql.unsafe(`drop trigger if exists ${failureFunction} on finances.group_members`);
+      await fixtureSql.unsafe(`drop function if exists finances.${failureFunction}()`);
+    }
     for (const id of groupIds) {
       for (const row of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", row.id);
       for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${id}`) track("categories", row.id);
