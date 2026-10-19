@@ -139,7 +139,11 @@ import {
   resumeRecurringRuleAction,
   updateRecurringRuleAction,
 } from "@/app/actions/recurring-rules";
-import { listPendingSettlements, recordBilledAmount } from "@/db/queries/debt-statements";
+import {
+  listPendingAssetSettlements,
+  listPendingSettlements,
+  recordBilledAmount,
+} from "@/db/queries/debt-statements";
 import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
   buildEffectiveRefs,
@@ -4229,6 +4233,9 @@ async function main(): Promise<void> {
   await invitationActsSuite();
   await loneLeaderAcceptsSuite();
   await loginLessCompanySuite();
+  await recurringEndsOnSuite();
+  await leaderWhoseMemberLeftSuite();
+  await pendingAssetSettlementsScopeSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -10211,4 +10218,239 @@ async function loneLeaderAcceptsSuite(): Promise<void> {
       for (const row of await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${id}`) track("accounts", row.id);
     }
   }
+}
+
+// M49 (RF-31): the occurrence that falls on `ends_on` is the rule's last and books; and a rule the run
+// skipped after the lock (its date moved past today by someone else) is not written at all.
+async function recurringEndsOnSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const { accountId } = await asUser(user, () =>
+    createAccount({
+      name: `Harness m82 ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000_000,
+      balanceOn: shiftDate(today, -40),
+    }),
+  );
+  track("accounts", accountId);
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness m82 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", categoryId);
+  const makeRule = async (dueIn: number, endsIn: number | null): Promise<string> => {
+    const { recurringRuleId } = await asUser(user, () =>
+      createRecurringRule({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 1_000,
+        categoryId,
+        description: `m82 ${tag}`,
+        frequency: "weekly",
+        intervalN: 1,
+        dayOfMonth: null,
+        nextRunOn: shiftDate(today, dueIn),
+        endsOn: endsIn === null ? null : shiftDate(today, endsIn),
+      }),
+    );
+    keep("recurring_rules", recurringRuleId);
+    return recurringRuleId;
+  };
+  const bookedDays = async (id: string): Promise<string[]> => {
+    const rows = await fixtureSql<{ id: string; day: string }[]>`
+      select id, occurred_at::text as day from transactions where recurring_rule_id = ${id} order by occurred_at`;
+    for (const r of rows) keep("transactions", r.id);
+    return rows.map((r) => r.day);
+  };
+  const row = async (label: string, body: () => Promise<{ ok: boolean; detail: string }>): Promise<void> => {
+    try {
+      const verdict = await body();
+      assert(next(label), verdict.ok, verdict.detail);
+    } catch (error) {
+      assert(next(label), false, refusal(error));
+    }
+  };
+
+  await row("A weekly rule whose last occurrence falls exactly on ends_on books it, then ends: nothing after ends_on is booked", async () => {
+    const id = await makeRule(-14, -7);
+    await fixtureSql`select private.run_due_recurring_rules(${user.id}::uuid)`;
+    const days = await bookedDays(id);
+    const [after] = await fixtureSql<{ is_active: boolean }[]>`select is_active from recurring_rules where id = ${id}`;
+    const expected = [shiftDate(today, -14), shiftDate(today, -7)];
+    return {
+      ok: JSON.stringify(days) === JSON.stringify(expected) && after.is_active === false,
+      detail: `booked ${JSON.stringify(days)}, expected ${JSON.stringify(expected)}, is_active = ${after.is_active}`,
+    };
+  });
+
+  await row("A rule the run reads as due, whose date a second connection pushes past today before the run locks it, is left untouched: no second update, no audit row", async () => {
+    const id = await makeRule(-7, null);
+    const moved = shiftDate(today, 21);
+    const writer = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, connection: { search_path: "finances, public" } });
+    const runner = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, connection: { search_path: "finances, public" } });
+    let waited = false;
+    try {
+      const [{ pid }] = await runner<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      let release!: () => void;
+      const gate = new Promise<void>((done) => (release = done));
+      let held!: () => void;
+      const holding = new Promise<void>((done) => (held = done));
+      const hold = writer.begin(async (tx) => {
+        await tx`update recurring_rules set next_run_on = ${moved} where id = ${id}`;
+        held();
+        await gate;
+      });
+      await holding;
+      const running = runner`select private.run_due_recurring_rules(${user.id}::uuid)`.execute();
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline && !waited) {
+        const [w] = await fixtureSql<{ n: number }[]>`
+          select count(*)::int as n from pg_stat_activity where pid = ${pid} and wait_event_type = 'Lock'`;
+        waited = w.n > 0;
+        if (!waited) await new Promise<void>((done) => setTimeout(done, 25));
+      }
+      release();
+      await hold;
+      await running;
+    } finally {
+      await writer.end();
+      await runner.end();
+    }
+    const [after] = await fixtureSql<{ next_run_on: string }[]>`select next_run_on::text as next_run_on from recurring_rules where id = ${id}`;
+    const [{ n }] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from audit_log where record_id = ${id} and action = 'UPDATE'`;
+    return {
+      ok: waited && after.next_run_on === moved && n === 1 && (await bookedDays(id)).length === 0,
+      detail: `run waited = ${waited}, next_run_on = ${after.next_run_on} (expected ${moved}), UPDATE audit rows = ${n} (expected 1: the second connection's)`,
+    };
+  });
+}
+
+// M68 (RF-154): a leader whose only fellow member has left is alone, so she accepts an invitation to another
+// fund. The member's archived row is not company.
+async function leaderWhoseMemberLeftSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const api = await invitationApi();
+  const leader = await createMembershipFreeUser();
+  const target = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo quedo ${tag}`, leaderName: "Harness lider quedo", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const targetFund = await asUser(target, () =>
+    createGroup({ name: `Harness fondo destino quedo ${tag}`, leaderName: "Harness destino quedo", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", targetFund.groupId);
+  const left = await seedFellowMember(leader.id, groupId);
+  await fixtureSql`update group_members set archived_at = now() where group_id = ${groupId} and user_id = ${left.id}`;
+  const memberId = randomUUID();
+  await seedPendingInvite({
+    groupId: targetFund.groupId,
+    memberId,
+    actorId: target.id,
+    name: "Harness lider quedo invitada",
+    email: leader.email,
+    archived: false,
+  });
+  const answer = await tap(() => asUser(leader, () => api.acceptInvitation({ memberId })));
+  const [joined] = await fixtureSql<{ user_id: string | null; invite_state: string }[]>`
+    select user_id, invite_state from group_members where id = ${memberId}`;
+  const [oldLeader] = await fixtureSql<{ archived_at: string | null }[]>`
+    select archived_at::text as archived_at from group_members where group_id = ${groupId} and role = 'leader'`;
+  for (const id of [groupId, targetFund.groupId]) {
+    for (const r of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", r.id);
+    for (const r of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${id}`) track("categories", r.id);
+    for (const r of await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${id}`) track("accounts", r.id);
+  }
+  assert(
+    next("A leader whose only fellow member left (archived row) is alone: she accepts an invitation to another fund, joins it and archives her leader row"),
+    answer === "accepted" && joined?.user_id === leader.id && joined.invite_state === "accepted" && oldLeader?.archived_at !== null,
+    `answer = ${answer}, joined = ${JSON.stringify(joined)}, old leader row = ${JSON.stringify(oldLeader)}`,
+  );
+}
+
+// RF-123 on the accounts screen: the pending foreign estimates listed are the live asset accounts' alone.
+async function pendingAssetSettlementsScopeSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  await asUser(user, async () => {
+    const { categoryId } = await createCategory({
+      scope: { ownerUserId: user.id },
+      name: `Harness m82 estimado ${tag}`,
+      kind: "expense",
+      parentId: null,
+      color: "#0E7490",
+    });
+    track("categories", categoryId);
+    const open = async (kind: "asset" | "liability", label: string): Promise<string> => {
+      const { accountId } = await createAccount({
+        name: `Harness m82 ${label} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: kind === "asset" ? 100_000_000 : 1_000_000,
+        balanceOn: shiftDate(today, -40),
+      });
+      track("accounts", accountId);
+      return accountId;
+    };
+    const estimate = async (accountId: string, label: string): Promise<string> => {
+      const created = await createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 10_000,
+        currency: "USD",
+        counterAmountCents: 40_000_000,
+        counterIsEstimate: true,
+        occurredAt: shiftDate(today, -2),
+        description: `m82 ${tag} ${label}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents: 10_000 }],
+        labelIds: [],
+      });
+      track("transactions", created.transactionId);
+      return created.transactionId;
+    };
+    const live = await open("asset", "viva");
+    const card = await open("liability", "tarjeta");
+    const closed = await open("asset", "cerrada");
+    const liveEstimate = await estimate(live, "viva");
+    const cardEstimate = await estimate(card, "tarjeta");
+    const closedEstimate = await estimate(closed, "cerrada");
+    await archiveAccount({ accountId: closed });
+
+    const listed = (await listPendingAssetSettlements()).filter((row) => [live, card, closed].includes(row.accountId));
+    assert(
+      next("The accounts screen's pending estimates include a live asset account's estimate"),
+      listed.some((row) => row.id === liveEstimate && row.accountId === live),
+      JSON.stringify(listed),
+    );
+    assert(
+      next("They leave out a liability's estimate: a card's estimate belongs to the debt screen"),
+      !listed.some((row) => row.id === cardEstimate || row.accountId === card),
+      JSON.stringify(listed),
+    );
+    assert(
+      next("They leave out an archived asset account's estimate"),
+      !listed.some((row) => row.id === closedEstimate || row.accountId === closed) && listed.length === 1,
+      JSON.stringify(listed),
+    );
+  });
 }

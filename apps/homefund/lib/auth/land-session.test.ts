@@ -98,3 +98,13 @@ test("the page asked for before signing in is where the person lands, and the co
   assert.deepEqual(deleted, ["post_login_redirect"]);
   assert.deepEqual(membershipCalls, []);
 });
+
+test("a post-login address that leaves the app is never followed: the person lands on the home page and the cookie is spent", async () => {
+  for (const external of ["https://other.example/x", "//other.example", "/\\other.example", "javascript:alert(1)", "other.example"]) {
+    postLogin = external;
+    deleted.length = 0;
+    const result = await land();
+    assert.equal(result.target, "/es", `followed ${external}`);
+    assert.deepEqual(deleted, ["post_login_redirect"]);
+  }
+});

@@ -205,6 +205,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "m82") {
+    await checkLeaderGuardAndInvitationPredicates();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -271,6 +276,7 @@ async function main() {
   await checkRecurringPauseReason();
   await checkInvitationAcceptance();
   await checkPendingInvitationRead();
+  await checkLeaderGuardAndInvitationPredicates();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -11984,6 +11990,148 @@ async function checkPendingInvitationRead() {
     return [{
       ok: fn.definer && fn.stable && fn.fixed_path && acl.authenticated && !acl.anon && !acl.service && !acl.pub && closed,
       detail: `definer = ${fn.definer}, stable = ${fn.stable}, search_path fixed = ${fn.fixed_path}; execute authenticated = ${acl.authenticated}, anon = ${acl.anon}, service_role = ${acl.service}, PUBLIC = ${acl.pub}; calls: ${verdict.join(", ")}`,
+    }];
+  });
+}
+
+// Assertions 410-414: the two predicates the fund's people hang on (RF-59, RF-154) that rows 407-409 and
+// 184-190 left open. 410-411: the leader guard refuses a fund with a live member and no live leader (the
+// leader archived or demoted, a plain member standing in) and still lets a handover and an abandoned fund
+// through. 412-414: `private.pending_invitation()` never shows a withdrawn invitation, returns at most one
+// row and it is the oldest, names the fund's live leader and not its oldest member, and does not count an
+// archived row as company.
+async function checkLeaderGuardAndInvitationPredicates() {
+  console.log("");
+  const labels = {
+    leaderless: "410. a fund with a live member and no live leader is refused at commit: the leader archived, or demoted, while a plain member stays",
+    handover: "411. the guard still lets a leadership handover and an abandoned fund (nobody live left) stand",
+    withdrawn: "412. an invitation the leader withdrew (pending, archived) is read by nobody, its addressee included",
+    oldest: "413. two live invitations to one address read as exactly one row, the oldest",
+    company: "414. the invitation names the fund's live leader though an older member exists, and an archived row in the reader's own fund is not company",
+  };
+
+  type Fund = { groupId: string; leaderRowId: string };
+  const fund = async (tx: M1Tx, name: string, leaderCreatedAt = "2024-01-02"): Promise<Fund & { leader: string }> => {
+    const leader = randomUUID();
+    const groupId = randomUUID();
+    await tx`insert into auth.users (id) values (${leader})`;
+    await tx`insert into app_users (id) values (${leader})`;
+    await tx`insert into groups (id, name, cash_mode) values (${groupId}, ${name}, 'shared')`;
+    const [{ id: leaderRowId }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, user_id, name, role)
+      values (${groupId}, ${leader}, ${`${name} leader`}, 'leader') returning id`;
+    await backdate(tx, leaderRowId, leaderCreatedAt);
+    // The group's own creation-time guard is deferred too; spend it here so only the later writes reach the guard under test.
+    await tx`set constraints all immediate`;
+    await tx`set constraints all deferred`;
+    return { groupId, leaderRowId, leader };
+  };
+  // A trigger stamps created_at on insert and keeps it on update; the replica role skips every trigger for one write.
+  const backdate = async (tx: M1Tx, rowId: string, createdAt: string) => {
+    await tx`set local session_replication_role = replica`;
+    await tx`update group_members set created_at = ${createdAt}::timestamptz where id = ${rowId}`;
+    await tx`set local session_replication_role = origin`;
+  };
+  const refused = (tx: M1Tx, run: (sp: M1Tx) => Promise<unknown>) =>
+    m1Refusal(tx, async (sp) => {
+      await run(sp);
+      await sp`set constraints all immediate`;
+      await sp`set constraints all deferred`;
+    });
+
+  await m1Rows([labels.leaderless], async (tx) => {
+    const archived = await fund(tx, "rls m82 archived");
+    await tx`insert into group_members (group_id, name, role) values (${archived.groupId}, 'rls m82 stays', 'member')`;
+    const archive = await refused(tx, (sp) => sp`update group_members set archived_at = now() where id = ${archived.leaderRowId}`);
+    const demoted = await fund(tx, "rls m82 demoted");
+    await tx`insert into group_members (group_id, name, role) values (${demoted.groupId}, 'rls m82 stays', 'member')`;
+    const demote = await refused(tx, (sp) => sp`update group_members set role = 'member' where id = ${demoted.leaderRowId}`);
+    return [{
+      ok: archive === "23514" && demote === "23514",
+      detail: `leader archived = ${archive ?? "accepted"}, leader demoted = ${demote ?? "accepted"}`,
+    }];
+  });
+
+  await m1Rows([labels.handover], async (tx) => {
+    const handed = await fund(tx, "rls m82 handover");
+    const heir = randomUUID();
+    await tx`insert into auth.users (id) values (${heir})`;
+    await tx`insert into app_users (id) values (${heir})`;
+    const [{ id: heirId }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, user_id, name, role) values (${handed.groupId}, ${heir}, 'rls m82 heir', 'member') returning id`;
+    const handover = await refused(tx, async (sp) => {
+      await sp`update group_members set role = 'member' where id = ${handed.leaderRowId}`;
+      await sp`update group_members set role = 'leader' where id = ${heirId}`;
+    });
+    const abandoned = await fund(tx, "rls m82 abandoned");
+    const abandon = await refused(tx, (sp) => sp`update group_members set archived_at = now() where id = ${abandoned.leaderRowId}`);
+    return [{
+      ok: handover === null && abandon === null,
+      detail: `handover = ${handover ?? "accepted"}, abandoned fund = ${abandon ?? "accepted"}`,
+    }];
+  });
+
+  const invitation = async (tx: M1Tx, groupId: string, email: string, createdAt: string, name: string) => {
+    const [{ id }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role, invite_email)
+      values (${groupId}, ${name}, 'member', ${email}) returning id`;
+    await backdate(tx, id, createdAt);
+    return id;
+  };
+  const invitee = async (tx: M1Tx) => {
+    const id = randomUUID();
+    await tx`insert into auth.users (id) values (${id})`;
+    await tx`insert into app_users (id) values (${id})`;
+    return id;
+  };
+
+  await m1Rows([labels.withdrawn], async (tx) => {
+    await d67Install(tx);
+    const f = await fund(tx, "rls m82 withdrawn");
+    const who = await invitee(tx);
+    const email = `m82-${randomUUID().slice(0, 8)}@example.test`;
+    const rowId = await invitation(tx, f.groupId, email, "2024-02-01", "rls m82 withdrawn invitee");
+    const before = await d67Read(tx, who, email);
+    await tx`update group_members set archived_at = now() where id = ${rowId}`;
+    const after = await d67Read(tx, who, email);
+    return [{
+      ok: before.length === 1 && after.length === 0,
+      detail: `before the withdrawal = ${before.length}, after = ${after.length}`,
+    }];
+  });
+
+  await m1Rows([labels.oldest], async (tx) => {
+    await d67Install(tx);
+    const first = await fund(tx, "rls m82 first fund");
+    const second = await fund(tx, "rls m82 second fund");
+    const who = await invitee(tx);
+    const email = `m82-${randomUUID().slice(0, 8)}@example.test`;
+    const newer = await invitation(tx, second.groupId, email, "2024-05-01", "rls m82 newer");
+    const older = await invitation(tx, first.groupId, email, "2024-03-01", "rls m82 older");
+    const rows = await d67Read(tx, who, email);
+    return [{
+      ok: rows.length === 1 && rows[0].member_id === older && rows[0].member_id !== newer,
+      detail: `rows = ${rows.length}, read ${rows[0]?.member_id}, older = ${older}, newer = ${newer}`,
+    }];
+  });
+
+  await m1Rows([labels.company], async (tx) => {
+    await d67Install(tx);
+    const f = await fund(tx, "rls m82 inviter fund", "2024-06-01");
+    const [{ id: oldest }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role) values (${f.groupId}, 'rls m82 oldest member', 'member') returning id`;
+    await backdate(tx, oldest, "2023-01-01");
+    const who = await invitee(tx);
+    const own = await fund(tx, "rls m82 reader fund");
+    await tx`update group_members set user_id = ${who} where id = ${own.leaderRowId}`;
+    await tx`insert into group_members (group_id, name, role, archived_at)
+      values (${own.groupId}, 'rls m82 left', 'member', now())`;
+    const email = `m82-${randomUUID().slice(0, 8)}@example.test`;
+    await invitation(tx, f.groupId, email, "2024-07-01", "rls m82 reader");
+    const rows = await d67Read(tx, who, email);
+    return [{
+      ok: rows.length === 1 && rows[0].inviter_name === "rls m82 inviter fund leader" && rows[0].current_fund_has_company === false,
+      detail: `rows = ${JSON.stringify(rows)}`,
     }];
   });
 }
