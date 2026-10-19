@@ -54,6 +54,25 @@ test("a navigation to /auth/ never reaches the cache, offline it fails as the ne
   await expect(page.goto(target)).rejects.toThrow(/ERR_INTERNET_DISCONNECTED/);
 });
 
+test("a navigation to /auth/ with the worker active reaches the server, never the worker", async ({
+  page,
+  context,
+}) => {
+  await controlled(page);
+  // `context.route` also sees the worker's own fetches (docs/TRAPS.md): a
+  // worker that answered the link would have asked the network itself.
+  const seen: Array<{ path: string; fromWorker: boolean }> = [];
+  await context.route("**/auth/**", (route) => {
+    seen.push({ path: new URL(route.request().url()).pathname, fromWorker: route.request().serviceWorker() !== null });
+    return route.continue();
+  });
+  await page.goto("/auth/confirm?token_hash=x&type=magiclink").catch(() => {});
+
+  expect(seen.some((request) => request.path === "/auth/confirm"), "the request reached the network").toBe(true);
+  expect(seen.filter((request) => request.fromWorker), "the worker fetched the sign-in link").toEqual([]);
+  expect(await cached(page, "/auth/confirm?token_hash=x&type=magiclink")).toBe(false);
+});
+
 test("a navigation to /dictionary/ is left to the browser, the worker stores nothing for it", async ({ page }) => {
   await controlled(page);
   const dictionary = "/dictionary/manifest.json";
@@ -66,6 +85,15 @@ test("a navigation to /dictionary/ is left to the browser, the worker stores not
   await expect.poll(() => cached(page, sentinel)).toBe(true);
 
   expect(await cached(page, dictionary)).toBe(false);
+  // Whatever cache it would have chosen: none holds a dictionary entry.
+  const stored = await page.evaluate(async () => {
+    const urls: string[] = [];
+    for (const name of await caches.keys()) {
+      for (const request of await (await caches.open(name)).keys()) urls.push(new URL(request.url).pathname);
+    }
+    return urls;
+  });
+  expect(stored.filter((path) => path.startsWith("/dictionary/"))).toEqual([]);
 });
 
 test("a navigation the network holds is answered from the cached shell, not waited for", async ({
@@ -94,4 +122,25 @@ test("a navigation the network holds is answered from the cached shell, not wait
   // The shell drew while the network request is still open.
   await expect(page.getByRole("textbox")).toBeVisible();
   await Promise.all(open.map((release) => release()));
+});
+
+test("a navigation that stalls is answered from the cached shell before 4 s", async ({ page, context }) => {
+  await controlled(page);
+  // The shell the worker falls back to is the one the install stored.
+  expect(await cached(page, "/")).toBe(true);
+
+  // Held, not refused: the connection is up and the server says nothing. The
+  // worker's 3 s budget is what ends the wait; the fulfil comes long after.
+  await context.route(
+    (url) => url.pathname === "/" && url.search === "",
+    async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 12_000));
+      await route.abort().catch(() => {});
+    },
+  );
+
+  const started = Date.now();
+  await page.goto("/", { timeout: 8_000, waitUntil: "commit" });
+  await expect(page.getByRole("textbox")).toBeVisible({ timeout: 4_000 });
+  expect(Date.now() - started, "the cached shell drew within 4 s").toBeLessThan(4_000);
 });

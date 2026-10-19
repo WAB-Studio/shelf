@@ -274,11 +274,12 @@ async function breakIndexedDB(page: Page): Promise<void> {
   });
 }
 
-// Every state short of «ready» draws «Instalando el diccionario…» or the
-// failure (`install-status.tsx`); `ready` draws nothing. The server render
-// is already `booting`, so this holds until the client has hydrated, booted
-// the worker and finished installing.
+// The status region (`install-status.tsx`) is `aria-busy="true"` in every
+// state short of «ready». The server render is already `booting`, so it
+// turns false only once the client has hydrated, booted the worker and
+// finished installing.
 async function dictionaryReady(page: Page): Promise<void> {
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
   await expect(page.getByText(messages.install.unknownSize)).toHaveCount(0);
   await expect(page.getByText(messages.install.failed)).toHaveCount(0);
 }

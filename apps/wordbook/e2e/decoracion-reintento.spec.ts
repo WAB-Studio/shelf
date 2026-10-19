@@ -19,7 +19,7 @@ async function openReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  await expect(page.getByText(/Instalando el diccionario/)).toHaveCount(0);
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 // Margin after one debounce window for a request to reach `page.on("request")`.

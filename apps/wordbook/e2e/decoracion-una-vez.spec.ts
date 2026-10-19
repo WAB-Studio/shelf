@@ -32,7 +32,7 @@ test("typing a word letter by letter asks the paid text route exactly once", asy
   );
   await page.goto("/");
   await assetResponse;
-  await expect(page.getByText(/Instalando el diccionario/)).toHaveCount(0);
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const box = page.getByRole("textbox", { name: messages.search.label });
   await box.click();

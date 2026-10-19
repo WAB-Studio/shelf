@@ -20,10 +20,9 @@ async function openReady(page: Page): Promise<void> {
   await page.goto("/");
   await assetResponse;
   // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. The install line is server-rendered in
-  // the booting state and every state but ready keeps one, so its absence is
-  // the worker's own "ready".
-  await expect(page.getByText(/Instalando el diccionario/)).toHaveCount(0);
+  // has to run over 64,258 entries. The status region is `aria-busy` from
+  // the server render until the worker's own "ready".
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 // `use-network-answer.ts` waits `PHRASE_DEBOUNCE_MS` (600ms) after the box

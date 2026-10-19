@@ -39,7 +39,7 @@ async function openReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  await expect(page.getByText(/Instalando el diccionario/)).toHaveCount(0);
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 function trackNotes(page: Page): string[] {

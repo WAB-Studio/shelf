@@ -72,3 +72,79 @@ test("an interrupted install leaves nothing behind, and a whole one is never fet
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 20_000 });
   expect(assetRequests, "a second open reads the store, not the network").toBe(0);
 });
+
+// ---------------------------------------------------------------------------
+// The install line (docs/wordbook/DESIGN.md «Boards of 2026-10-18»): drawn
+// only once installing starts. Booting says nothing, and `aria-busy` on the
+// status region is the signal a reader — and a spec — waits for.
+// ---------------------------------------------------------------------------
+
+const INSTALL_LINE = /Instalando el diccionario/;
+
+// The markup the server drew, without the scripts that carry every message
+// as data.
+async function drawnBy(request: import("@playwright/test").APIRequestContext, url: string): Promise<string> {
+  return (await (await request.get(url)).text()).replace(/<script[\s\S]*?<\/script>/g, "");
+}
+
+test("booting draws no install line, and aria-busy is true until the dictionary is ready", async ({
+  page,
+  request,
+}) => {
+  // The server render is `booting`: the raw HTML is the state, undisturbed.
+  const html = await drawnBy(request, "/");
+  expect(html).not.toMatch(INSTALL_LINE);
+  expect(html).toContain('aria-busy="true"');
+
+  await deleteTranslator(page);
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  // First open installs the dictionary, so the next one finds it on the device.
+  await page.goto("/");
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached({ timeout: 30_000 });
+  await searchBox.fill("throughout");
+  await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible();
+
+  // Every mutation from the first byte on: the line is never drawn once.
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { __installLines: string[] }).__installLines = seen;
+    const look = () => {
+      // innerText leaves the scripts out, which carry every message as data.
+      if (/Instalando el diccionario/.test(document.body?.innerText ?? "")) seen.push("line");
+    };
+    new MutationObserver(look).observe(document, { childList: true, subtree: true, characterData: true });
+    document.addEventListener("DOMContentLoaded", look);
+  });
+  await page.goto("/");
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached({ timeout: 30_000 });
+  const lines = await page.evaluate(() => (window as unknown as { __installLines: string[] }).__installLines);
+  expect(lines, "the install line was drawn on an open that installs nothing").toEqual([]);
+});
+
+test("a fresh profile shows the progress line while installing, and aria-busy stays true", async ({ page }) => {
+  await deleteTranslator(page);
+  const assetPath = manifest.asset.path;
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**${assetPath}`, async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.goto("/");
+
+  await expect(page.getByText(INSTALL_LINE).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('[aria-busy="true"]').first()).toBeAttached();
+  await expect(page.locator('[aria-busy="false"]')).toHaveCount(0);
+
+  release();
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached({ timeout: 30_000 });
+  await expect(page.getByText(INSTALL_LINE)).toHaveCount(0);
+});
+
+test("booting with a typed query still says the search will be answered once installed", async ({ request }) => {
+  const html = await drawnBy(request, "/?q=book");
+  expect(html).toContain(messages.install.pending.replace("{query}", "book"));
+  expect(html).not.toMatch(INSTALL_LINE);
+});
