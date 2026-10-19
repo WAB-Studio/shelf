@@ -330,7 +330,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   added underneath what the dictionary said and marked as coming from the network; it never replaces
   it. What counts as thin is measured over the shipped index, not asserted.
 - [x] **RL-46** — A sentence answered by translation also names the terms in it that are not obvious
-  and says what they are. The app picks which terms earn a note; a note on every word is RL-31's
+  and says what they are. The app picks which terms earn a note; a note on every word is RL-54's
   answer, not this one.
 - [x] **RL-56** *(successor of RL-32)* — The reader reads their record grouped by the headword each search
   reached: one row per headword — the lemma when an inflected form was typed, the typed string when no headword was
@@ -755,17 +755,23 @@ Principles, not recipes:
 |---|---|---|
 | Framework | **Next 16.4.1** | Routing (bumped from 16.3.3 on 2026-10-15: CVE set in 16.0.0–16.3.7), the static export of the payload, and the one route handler the sentence path needs. |
 | UI | **React 19.2.8** | The version Next 16.4.1 pairs with. |
-| Language | **next-intl 4** | The Spanish catalogue RNL-02 requires, with date and number formatting. |
-| Validation | **Zod 4** | One schema serves the translate route's input and its types. |
-| Components | **Radix Themes 3** | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |
-| Icons | **lucide-react** | An icon set, chosen independently of the component library. |
+| Language | **next-intl 4** (`^4.13.7`) | The Spanish catalogue RNL-02 requires, with date and number formatting. |
+| Validation | **Zod 4** (`^4.4.3`) | One schema serves the translate route's input and its types. |
+| Components | **Radix Themes 3** (`@radix-ui/themes ^3.3.0`) | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |
+| Icons | **lucide-react** (`^1.34.0`) | An icon set, chosen independently of the component library. |
 | Types | **TypeScript**, with **@typescript/native-preview** | `tsgo` checks the project in seconds. |
 | Lint | **eslint**, with **eslint-config-next** | The rules the framework's own conventions need. |
-| Browser verification | **Playwright** | Drives a real browser for the facts no server-side check reaches: the offline open, the install progress, the 360 px viewport and the tap targets. |
-| Postgres | **postgres 3 + drizzle-orm 0.45** | The copy of the record over the Supabase orbit already has, with the same client and the same ORM. |
-| Migrations | **drizzle-kit 0.31** (dev) | The `reading` schema versioned in the repository, with a migration journal of its own. |
-| Auth | **@supabase/ssr 0.12** | The cookie session and the magic link, with the same claim verification orbit uses. |
-| TEI parse | **fast-xml-parser** | Streams the source TEI into the payload; the build script's only dependency. |
+| Browser verification | **Playwright** (`@playwright/test ^1.62.1`, dev) | Drives a real browser for the facts no server-side check reaches: the offline open, the install progress, the 360 px viewport and the tap targets. |
+| Postgres | **postgres 3 + drizzle-orm 0.45** (`^3.4.9`, `^0.45.2`) | The copy of the record over the Supabase orbit already has, with the same client and the same ORM. |
+| Migrations | **drizzle-kit 0.31** (`^0.31.10`, dev) | The `reading` schema versioned in the repository, with a migration journal of its own. |
+| Auth | **@supabase/ssr 0.12** (`^0.12.5`) | The cookie session and the magic link, with the same claim verification orbit uses. |
+| Environment | **@t3-oss/env-nextjs** (`^0.13.11`) | Fails at build time on a missing variable, not in production. |
+| Supabase client | **@supabase/supabase-js** (`^2.112.4`) | The retryable-error test the sign-in code check uses; the sessions themselves ride on `@supabase/ssr`. |
+| Shared auth | **@repo/supabase-auth** (workspace `*`) | The cookie session and claim verification the apps share, already written and proved. |
+| Harness registry | **@repo/harness-registry** (workspace `*`, dev) | Records every identity and run a suite creates, so a purge names only its own rows. |
+| Script runner | **tsx** (`^4.23.12`, dev) | Runs the dictionary build, the checks and the harness scripts under `node --import tsx`. |
+| Type packages | **@types/node** (`^22`), **@types/react**, **@types/react-dom** (`^19`, dev) | The types `tsgo` and `eslint` read. |
+| TEI parse | **fast-xml-parser** (`^5.11.1`, dev) | Streams the source TEI into the payload; the build script's only dependency. |
 
 Playwright and `fast-xml-parser` are development dependencies. `fast-xml-parser`
 is build-time only: it runs in the script RNL-04 names and never reaches the

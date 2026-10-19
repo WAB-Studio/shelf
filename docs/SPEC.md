@@ -821,21 +821,30 @@ Principles, not recipes:
 
 | Need | Choice | What it saves |
 |---|---|---|
-| ORM and migrations | **Drizzle** | Schema, access policies and types declared once in TypeScript. |
+| ORM and migrations | **Drizzle** (`drizzle-orm ^0.45.2`) | Schema, access policies and types declared once in TypeScript. |
 | Auth | **Supabase Auth** | Passwordless login, email delivery, sessions, and the identity the access policies read. |
-| Components | **Radix Themes** | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |
-| Validation | **Zod** | One schema serves the form, the server and the types. |
-| Server actions | **next-safe-action** | Validation, typed errors and loading state on every mutation. |
-| Forms | **React Hook Form**, with **@hookform/resolvers** | State, errors and submission wired to the validation schema; the resolver binds Zod to React Hook Form. |
-| Table | **TanStack Table** | Sorting, filtering, pagination and selection for the transaction list. |
-| Charts | **Recharts** | Declarative React charts with full React 19 and App Router SSR support. |
+| Components | **Radix Themes** (`@radix-ui/themes ^3.3.0`) | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |
+| Validation | **Zod** (`^4.4.3`) | One schema serves the form, the server and the types. |
+| Server actions | **next-safe-action** (`^8.6.1`) | Validation, typed errors and loading state on every mutation. |
+| Forms | **React Hook Form** (`^7.86.0`), with **@hookform/resolvers** (`^5.9.1`) | State, errors and submission wired to the validation schema; the resolver binds Zod to React Hook Form. |
+| Table | **TanStack Table** (`@tanstack/react-table ^9.2.4`) | Sorting, filtering, pagination and selection for the transaction list. |
+| Charts | **Recharts** (`~3.10.0`) | Declarative React charts with full React 19 and App Router SSR support. |
 | Dates | **date-fns** | Date arithmetic and time zones, tree-shakeable. |
-| Toasts | **sonner** | Notifications; Radix Themes ships no toast. |
-| Icons | **lucide-react** | An icon set, chosen independently of the component library. |
-| Environment | **@t3-oss/env-nextjs** | Fails at build time on a missing variable, not in production. |
-| Language | **next-intl** | Locale routing, server-side translations, date and number formatting. |
-| Spreadsheets (phase 2) | **ExcelJS** | Reading and writing `.xlsx` with valid options in the template. |
-| Browser verification | **Playwright** | Drives a real browser for the interface facts no server-side check reaches: clicks, dialogs, the mobile sheet, tap-target size and the narrow viewport. |
+| Toasts | **sonner** (`^2.0.8`) | Notifications; Radix Themes ships no toast. |
+| Icons | **lucide-react** (`^1.34.0`) | An icon set, chosen independently of the component library. |
+| Environment | **@t3-oss/env-nextjs** (`^0.13.11`) | Fails at build time on a missing variable, not in production. |
+| Language | **next-intl** (`^4.13.7`) | Locale routing, server-side translations, date and number formatting. |
+| Spreadsheets (phase 2) | **ExcelJS** (`exceljs ^4.4.0`) | Reading and writing `.xlsx` with valid options in the template. |
+| Framework | **Next 16.4.1** and **React 19.2.8** (`next`, `react`, `react-dom`, pinned) | Routing, server actions and rendering; the versions the three apps share. |
+| Postgres client | **postgres** (`^3.4.9`) | The driver Drizzle runs on, over the Supabase pooler. |
+| Supabase clients | **@supabase/supabase-js** (`^2.112.4`) and **@supabase/ssr** (`^0.12.5`) | The cookie session and the one-time-code check against Auth; `supabase-js` also gives the retryable-error test sign-in uses. |
+| Shared auth | **@repo/supabase-auth** (workspace `*`) | The cookie session and claim verification the apps share, already written and proved. |
+| Spreadsheet guard | **@repo/zip-guard** (workspace `*`) | Refuses a zip bomb before ExcelJS inflates an import. |
+| Harness registry | **@repo/harness-registry** (workspace `*`, dev) | Records every identity and run a suite creates, so a purge names only its own rows. |
+| Types and lint | **TypeScript** (`^5`), **@typescript/native-preview** (`^7.0.0-dev.20260707.2`), **eslint** (`^9`), **eslint-config-next** (`16.4.1`), **@types/node**, **@types/react**, **@types/react-dom** (dev) | `tsgo` checks the project in seconds; the lint rules are the framework's own. |
+| Migrations | **drizzle-kit** (`^0.31.10`, dev) | The schema versioned in the repository, with a journal of its own. |
+| Script runner | **tsx** (`^4.23.12`, dev) | Runs the TypeScript checks and harness scripts under `node --import tsx`. |
+| Browser verification | **Playwright** (`@playwright/test ^1.62.1`, dev) | Drives a real browser for the interface facts no server-side check reaches: clicks, dialogs, the mobile sheet, tap-target size and the narrow viewport. |
 | Local database and Auth for the suites | **Supabase CLI `2.119.0`** | The same Postgres image and GoTrue the project runs, on each machine and each CI runner, so no suite shares the remote. |
 
 Playwright is a development dependency: it never reaches the bundle, ships in no deployment and costs nothing to run, so RNF-01 and RNF-02 hold.

@@ -35,6 +35,7 @@ This file is the core every agent loads. Read the file the index names before th
 - `docs/agentes/wordbook.md`: WordBook's `/cuenta`, auth, keys and census.
 - `docs/agentes/historia.md`: the measurements and decisions behind these rules.
 - `docs/TRAPS.md`: read it before writing a query, a migration or a spec.
+- `docs/TRAPS-archivo.md`: traps whose cause is gone. Read it only to learn why a rule exists.
 - `apps/<app>/AGENTS.md`: what holds inside one app. Loaded when you work there.
 - «iniciemos» and «cerremos handoff»: the `handoff` skill. To develop: the `orchestrator` skill.
 
