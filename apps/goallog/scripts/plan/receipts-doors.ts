@@ -61,7 +61,7 @@ async function oneOffsNamed(name: string): Promise<number> {
 }
 
 // A version 2 draft of one goal that carries a task, so a replay that writes twice shows in two tables.
-function draftOf(name: string) {
+function draftOf(name: string, task: Record<string, unknown> = {}) {
   return {
     version: 2 as const,
     goals: [
@@ -90,6 +90,7 @@ function draftOf(name: string) {
             week: null,
             rule: null,
             children: [],
+            ...task,
           },
         ],
       },
@@ -97,9 +98,9 @@ function draftOf(name: string) {
   };
 }
 
-const confirm = (name: string, requestId?: string) =>
+const confirm = (name: string, requestId?: string, task: Record<string, unknown> = {}) =>
   as(() =>
-    importActions.confirmImport({ draft: draftOf(name), updates: [], ...(requestId !== undefined && { requestId }) }),
+    importActions.confirmImport({ draft: draftOf(name, task), updates: [], ...(requestId !== undefined && { requestId }) }),
   );
 
 before(async () => {
@@ -202,4 +203,55 @@ test("the chat's «Hacer» without a requestId still makes the change", async ()
   const outcome = await as(() => chat.makeChatChange({ tool: "create_task", input: { name, day: today } }));
   assert.deepEqual(outcome, { ok: true });
   assert.equal(await oneOffsNamed(name), 1);
+});
+
+// M24. The receipt's primary key is a backstop, not the guard: a second send that races the first must wait for it
+// and answer its receipt, not write its rows and fail on the key. A send that wrote and failed leaves one
+// transaction more on the door and, for `createOneOff`, throws.
+
+test("M24: an import resent while the first commits is answered from the receipt in one transaction, not by a failed write and a rewrite", async () => {
+  const name = `M24 importado una sola vez ${RUN}`;
+  const requestId = randomUUID();
+  door.resetBegins();
+  const raced = await interleave(door, admin, () => confirm(name, requestId), () => confirm(name, requestId));
+  assert.equal(raced.first.error, undefined, String(raced.first.error));
+  assert.equal(raced.second.error, undefined, String(raced.second.error));
+  assert.deepEqual(raced.second.value, raced.first.value);
+  assert.equal(await goalsNamed(name), 1);
+  assert.equal(door.begins(), 2, "one transaction per send: the second did not write, fail on the receipt key and retry");
+});
+
+test("M24: a replayed import answers the parts the first left out, not an empty list", async () => {
+  const name = `M24 con parte rota ${RUN}`;
+  const requestId = randomUUID();
+  // A note of blanks passes the review and meets `one_offs_note_shape` at the insert.
+  const first = await confirm(name, requestId, { note: "   " });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  assert.ok(first.ok && first.failed.length === 1, `the first left a part out: ${JSON.stringify(first)}`);
+  const second = await confirm(name, requestId, { note: "   " });
+  assert.deepEqual(second, first);
+  assert.equal(await goalsNamed(name), 1);
+});
+
+test("M24: createOneOff sent twice at once under one requestId writes one task and both answer the same", async () => {
+  const name = `M24 tarea a la vez ${RUN}`;
+  const requestId = randomUUID();
+  const send = () => as(() => oneOffs.createOneOff({ name, day: today, requestId } as never));
+  const raced = await interleave(door, admin, send, send);
+  assert.equal(raced.first.error, undefined, String(raced.first.error));
+  assert.equal(raced.second.error, undefined, `the second threw instead of replaying: ${String(raced.second.error)}`);
+  assert.equal(raced.first.value?.ok, true, JSON.stringify(raced.first.value));
+  assert.deepEqual(raced.second.value, raced.first.value);
+  assert.equal(await oneOffsNamed(name), 1);
+});
+
+test("M24: completing a task that has sub-tasks is refused by name, not by the policy", async () => {
+  const name = `M24 madre ${RUN}`;
+  const child = { name: `${name} hija`, estimate: null, note: null, noteSrc: [], src: [], rule: null };
+  const made = await confirm(name, undefined, { children: [child] });
+  assert.equal(made.ok, true, JSON.stringify(made));
+  const [parent] = await admin<{ id: string }[]>`
+    select id from goals.one_offs where user_id = ${owner.id} and name = ${`${name} tarea`}`;
+  const done = await as(() => oneOffs.completeOneOff({ oneOffId: parent.id, day: today } as never));
+  assert.deepEqual(done, { ok: false, error: "month.errors.parentIsDoneByChildren" });
 });
