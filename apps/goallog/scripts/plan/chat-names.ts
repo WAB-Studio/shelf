@@ -35,7 +35,7 @@ let session: typeof import("@/lib/session");
 let chat: typeof import("@/lib/queries/chat");
 let subject: Person;
 let other: Person;
-const ids = { month: "", goal: "", task: "", commitment: "", foreignGoal: "", foreignTask: "", foreignCommitment: "" };
+const ids = { month: "", goal: "", task: "", commitment: "", foreignGoal: "", foreignTask: "", foreignCommitment: "", phaseA: "", phaseB: "", foreignPhase: "" };
 
 const asResolved = (person: Person): ResolvedPerson => ({ id: person.id, email: person.email }) as ResolvedPerson;
 
@@ -52,7 +52,14 @@ async function seed(owner: Person, label: string) {
   const [commitment] = await admin<{ id: string }[]>`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
     values (${owner.id}, ${goal.id}, ${`${label} compromiso`}, 'daily', 'quantity', 10, 'min') returning id`;
-  return { goal: goal.id, task: task.id, commitment: commitment.id };
+  // Two phases per goal, every field distinct, so a swapped column or a wrong row cannot read the same.
+  const [phaseA] = await admin<{ id: string }[]>`
+    insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+    values (${owner.id}, ${goal.id}, ${`${label} base`}, '2026-10-05', '2026-10-25') returning id`;
+  const [phaseB] = await admin<{ id: string }[]>`
+    insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+    values (${owner.id}, ${goal.id}, ${`${label} avance`}, '2026-11-02', '2026-12-18') returning id`;
+  return { goal: goal.id, task: task.id, commitment: commitment.id, phaseA: phaseA.id, phaseB: phaseB.id };
 }
 
 before(async () => {
@@ -72,6 +79,9 @@ before(async () => {
     foreignGoal: theirs.goal,
     foreignTask: theirs.task,
     foreignCommitment: theirs.commitment,
+    phaseA: mine.phaseA,
+    phaseB: mine.phaseB,
+    foreignPhase: theirs.phaseA,
   });
 });
 
@@ -131,4 +141,34 @@ test("loadChangeNames: empty input pays no round trip", async () => {
   const names = await run(() => chat.loadChangeNames({ goals: [], tasks: [], commitments: [] }));
   assert.equal(wire.length, 0);
   assert.equal(names.goals.size + names.tasks.size + names.commitments.size, 0);
+});
+
+test("loadChangeNames: a phase id alone is read (the early return counts phases), with its own aim, start, end and goal", async () => {
+  const names = await run(() => chat.loadChangeNames({ goals: [], tasks: [], commitments: [], phases: [ids.phaseA] }));
+  assert.deepEqual(names.phases.get(ids.phaseA), {
+    aim: "chat-names mía base",
+    startsOn: "2026-10-05",
+    endsOn: "2026-10-25",
+    goalId: ids.goal,
+  });
+  assert.equal(names.phases.size, 1);
+});
+
+test("loadChangeNames: asking for one of two phases of a goal returns that one and not its sibling", async () => {
+  const names = await run(() => chat.loadChangeNames({ goals: [], tasks: [], commitments: [], phases: [ids.phaseB] }));
+  assert.deepEqual([...names.phases.keys()], [ids.phaseB]);
+  assert.deepEqual(names.phases.get(ids.phaseB), {
+    aim: "chat-names mía avance",
+    startsOn: "2026-11-02",
+    endsOn: "2026-12-18",
+    goalId: ids.goal,
+  });
+});
+
+test("loadChangeNames: another person's phase is absent, and the other kinds still ride along", async () => {
+  const names = await run(() =>
+    chat.loadChangeNames({ goals: [ids.goal], tasks: [], commitments: [], phases: [ids.phaseA, ids.foreignPhase] }),
+  );
+  assert.deepEqual([...names.phases.keys()], [ids.phaseA]);
+  assert.equal(names.goals.size, 1);
 });

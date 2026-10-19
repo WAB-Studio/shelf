@@ -71,7 +71,7 @@ let envHandle: { OPENAI_API_KEY?: string; PULSAR_CHAT_STUB?: string };
 let userId: string;
 let cookies: StoredCookie[];
 let foreign: Person;
-const seeded = { goal: "", task: "", foreignTask: "", foreignGoal: "" };
+const seeded = { goal: "", task: "", foreignTask: "", foreignGoal: "", phase: "", sibling: "" };
 
 const STUB_FILE = resolve(process.cwd(), `private/chat-route-stub-${laneNumber()}.json`);
 
@@ -157,6 +157,14 @@ before(async () => {
     insert into goals.one_offs (user_id, goal_id, name, in_plan) values (${userId}, ${goal.id}, 'chat-route Maze', true) returning id`;
   seeded.goal = goal.id;
   seeded.task = task.id;
+  const [phase] = await sql<{ id: string }[]>`
+    insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+    values (${userId}, ${goal.id}, 'chat-route Fundamentos', '2026-10-05', '2026-10-25') returning id`;
+  const [sibling] = await sql<{ id: string }[]>`
+    insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+    values (${userId}, ${goal.id}, 'chat-route Remate', '2026-11-02', '2026-12-18') returning id`;
+  seeded.phase = phase.id;
+  seeded.sibling = sibling.id;
 
   const runId = await openCheckRun(admin);
   [foreign] = await createPeople(admin, runId, door, 1);
@@ -190,6 +198,15 @@ beforeEach(async () => {
     [`Fija Maze ${MARKER}`]: {
       reply: `Esto cambiaría tu plan ${MARKER}`,
       calls: [{ name: "fix_task", arguments: { one_off_id: seeded.task, month: "2099-01" } }],
+    },
+    "Mueve la fase": {
+      reply: "Esto cambiaría tu plan:",
+      calls: [
+        {
+          name: "edit_phase",
+          arguments: { phase_id: seeded.phase, aim: "Medir", starts_on: "2027-01-04", ends_on: "2027-01-29" },
+        },
+      ],
     },
     "Fija la ajena": {
       reply: "Esto cambiaría tu plan:",
@@ -320,6 +337,20 @@ test("a change comes back in the person's words: the key and the task's own name
   assert.equal(changes[0].words.values.task, "chat-route Maze");
   assert.equal(changes[0].refused, undefined);
   assert.equal(typeof changes[0].id, "string");
+});
+
+test("an edit_phase proposal names the phase it changes and the days it had, read off the phase's own row", async () => {
+  const response = await route.POST(request(say("Mueve la fase")));
+  assert.equal(response.status, 200);
+  const { changes } = await body(response);
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].refused, undefined);
+  assert.equal(changes[0].words.key, "chat.change.edit_phase");
+  assert.equal(changes[0].words.values.phase, "chat-route Fundamentos");
+  const { civilDayMonthShort } = await import("@/lib/zone");
+  assert.equal(changes[0].words.values.before, `${civilDayMonthShort("2026-10-05")} – ${civilDayMonthShort("2026-10-25")}`);
+  assert.equal(changes[0].words.values.after, `${civilDayMonthShort("2027-01-04")} – ${civilDayMonthShort("2027-01-29")}`);
+  assert.equal(JSON.stringify(changes).includes("chat-route Remate"), false);
 });
 
 test("a month amount on a month with none reads «sin monto → 4 h»", async () => {

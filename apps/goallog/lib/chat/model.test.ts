@@ -525,7 +525,7 @@ test("reasoning_effort per family: omitted for gpt-4.1 and gpt-4o, none for gpt-
   const { reasoningEffortFor } = await import("./model");
   for (const model of ["gpt-5-mini", "gpt-5-nano", "o3", "o4-mini"]) assert.equal(reasoningEffortFor(model), "low", model);
   for (const model of ["gpt-6-luna", "gpt-6", "gpt-5.6-luna"]) assert.equal(reasoningEffortFor(model), "none", model);
-  for (const model of ["gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"]) assert.equal(reasoningEffortFor(model), undefined, model);
+  for (const model of ["gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]) assert.equal(reasoningEffortFor(model), undefined, model);
 });
 
 test("the request body carries reasoning_effort none for gpt-5.6-luna, low for gpt-5-mini and none of it for gpt-4.1-nano; chatModel follows the seam", async () => {
