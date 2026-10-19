@@ -143,6 +143,40 @@ export async function inviteEmailIsMember(email: string): Promise<boolean> {
   });
 }
 
+export type PendingInvitation = {
+  memberId: string;
+  inviterName: string;
+  fundName: string;
+  // The fund the caller already lives in, and whether someone else lives or waits there:
+  // a person alone in their own fund may still accept (Q32).
+  currentFundName: string | null;
+  currentFundHasCompany: boolean;
+};
+
+// RF-154: the signed-in person's pending invitation, matched by the verified address inside the
+// function (no id or address crosses the boundary). One round trip; null when nothing waits.
+export async function getPendingInvitation(): Promise<PendingInvitation | null> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{
+      member_id: string;
+      inviter_name: string;
+      fund_name: string;
+      current_fund_name: string | null;
+      current_fund_has_company: boolean;
+    }>(sql`select member_id, inviter_name, fund_name, current_fund_name, current_fund_has_company from private.pending_invitation()`);
+    const row = rows[0];
+    if (!row) return null;
+
+    return {
+      memberId: row.member_id,
+      inviterName: row.inviter_name,
+      fundName: row.fund_name,
+      currentFundName: row.current_fund_name,
+      currentFundHasCompany: row.current_fund_has_company,
+    };
+  });
+}
+
 // RF-154: the invited person's own tap. No user id and no address cross the boundary:
 // the functions read auth.uid() and auth.email() from the verified session, so a call
 // cannot be aimed at a row addressed to someone else — that row answers "gone", as a
