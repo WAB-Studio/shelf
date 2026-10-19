@@ -56,7 +56,9 @@ async function arrange(draft: ImportDraft, source: "paste" | "file"): Promise<Co
     await settleModelCall(claim.id, { inputTokens: reading.status === "none" ? 0 : (reading.usage?.input ?? 0), outputTokens: reading.status === "none" ? 0 : (reading.usage?.output ?? 0), outcome });
     return reading.status === "ok" ? moveCorrections(draft, reading.moves) : [];
   } catch {
-    if (claim) await settleModelCall(claim.id, { inputTokens: 0, outputTokens: 0, outcome: "failed" }).catch(() => {});
+    const held = claim;
+    // The person's reply is unchanged; a claim left open is someone else's to find.
+    if (held) await settleModelCall(held.id, { inputTokens: 0, outputTokens: 0, outcome: "failed" }).catch((error: Error) => console.error("import settle failed", held.id, error.name));
     return [];
   }
 }
@@ -171,7 +173,7 @@ export async function POST(request: NextRequest) {
           },
         });
       } catch {
-        if (!settled) await settle("failed").catch(() => {});
+        if (!settled) await settle("failed").catch((error: Error) => console.error("import settle failed", claim.id, error.name));
         send({ error: "import.errors.modelFailed" });
       } finally {
         try {

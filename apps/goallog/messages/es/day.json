@@ -156,6 +156,7 @@
     "monthOver": "cumplida este mes · {done} veces"
   },
   "errors": {
+    "alreadyNoted": "Ya anotaste {quantity} hoy en otro lado. Ábrelo para cambiarlo.",
     "notFound": "Eso ya no existe. Recarga la página.",
     "dayBeforeGoal": "Ese día es anterior a cuando abriste esta meta.",
     "evidenceOnly": "Eso se marca solo con lo que anota otra app.",

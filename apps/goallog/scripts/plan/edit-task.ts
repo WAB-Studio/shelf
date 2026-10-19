@@ -174,8 +174,10 @@ test("editTask: name, estimate and month land in one UPDATE; null estimate clear
   wire = null;
   assert.deepEqual(result, { ok: true });
   const statements = calls.filter((q) => q !== "begin" && q !== "commit" && !q.includes("pg_catalog.pg_type") && !q.includes("set_config("));
-  assert.equal(statements.length, 1, statements.join(" | "));
-  assert.ok(statements[0].startsWith("with"), statements[0]);
+  // The task's lock, then the one statement that judges and writes.
+  assert.equal(statements.length, 2, statements.join(" | "));
+  assert.ok(statements[0].includes("pg_advisory_xact_lock"), statements[0]);
+  assert.ok(statements[1].startsWith("with"), statements[1]);
   assert.deepEqual(await rowOf(taskId), { name: "RP-55 editada", estimate: 90, planned_month: `${nextMonth}-01` });
 
   // Absent leaves estimate and month alone.

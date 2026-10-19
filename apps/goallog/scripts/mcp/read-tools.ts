@@ -332,15 +332,13 @@ test("the registry holds twenty-four tools: six read and eighteen write, each wi
   const reads = new Set(handlers.keys());
   assert.equal(reads.size, 6);
   const destructive = new Set(["set_goal_note", "set_task_note", "set_measure", "retire_commitment", "move_horizon", "set_rhythm"]);
-  const creates = new Set(["create_task", "create_goal", "add_phase", "add_commitment"]);
+  // The four creating tools answer a resent request_id once, so they fall with the rest (RP-56).
   for (const [name, config] of seen) {
     const expected = reads.has(name)
       ? { readOnlyHint: true, destructiveHint: false, idempotentHint: true }
       : destructive.has(name)
         ? { readOnlyHint: false, destructiveHint: true, idempotentHint: true }
-        : creates.has(name)
-          ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false }
-          : { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
+        : { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
     assert.deepEqual(config.annotations, expected, name);
   }
   assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 18);

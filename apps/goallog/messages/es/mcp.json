@@ -26,6 +26,9 @@
     "set_rhythm": "Pone o cambia el ritmo de una meta que mide algo: amount es un entero en la unidad de la meta, y en minutos si mide tiempo (de 1 a 44 640). Una meta con metas dentro no tiene ritmo propio. El primer ritmo de una meta en tiempo devuelve al plan sus tareas fijas sin hacer; cambiarlo no toca los meses ya cerrados. Nunca lo quita: eso lo hace solo la persona. Nunca borra.",
     "set_measure": "Le da su medida a una meta que todavía no mide: name es lo que cuenta (hasta 120 caracteres) y unit su unidad (hasta 40); «horas» se guarda en minutos. Una meta que ya mide nunca cambia su medida, y una con metas dentro no tiene medida propia. Nunca borra."
   },
+  "fields": {
+    "request_id": "Un uuid tuyo: si repites la llamada con el mismo, no se crea dos veces."
+  },
   "errors": {
     "goalNotFound": "Esa meta no existe o no es de esta persona.",
     "endKept": "No se le quita el final a una meta: solo la persona puede hacerlo. Puedes darle uno o moverlo a otro día.",

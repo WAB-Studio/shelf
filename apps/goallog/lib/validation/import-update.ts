@@ -20,7 +20,12 @@ const update = z.strictObject(
  */
 export const importUpdateSchema = z.preprocess(
   (input) => (typeof input === "object" && input !== null && "draft" in input ? input : { draft: input, updates: [] }),
-  z.strictObject({ draft: draftV2Schema, updates: z.array(update, invalid).default([]) }),
+  z.strictObject({
+    draft: draftV2Schema,
+    updates: z.array(update, invalid).default([]),
+    // A confirm resent after its answer was lost answers the first answer (RP-56).
+    requestId: z.uuid(invalid).optional(),
+  }),
 );
 
 export type ImportUpdate = z.infer<typeof update>;

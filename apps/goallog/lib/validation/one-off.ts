@@ -45,6 +45,8 @@ export const createOneOffSchema = z.object({
   note: noteSchema.nullish(),
   // A task of the goal's plan with no month of its own: the plan places it (RP-50).
   inPlan: z.boolean({ error: "month.errors.invalid" }).optional(),
+  // A resend of the same create answers the first answer and writes nothing (RP-56).
+  requestId: z.uuid({ error: "month.errors.invalid" }).optional(),
 })
   .refine((input) => !input.inPlan || (input.goalId != null && input.day == null && input.parentId == null), {
     error: "month.errors.invalid",
