@@ -8,7 +8,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { confirmImport } from "@/app/actions/import";
 import { srcLines, strayEstimates } from "@/lib/import/draft";
 import { clearCreated, describePart, readCreated, saveCreated, type CreatedResult } from "@/lib/import/created-store";
-import { clearDraft, readDraft, saveReview, storedText, type StoredDraft } from "@/lib/import/draft-store";
+import { clearDraft, readDraft, saveReview, storedText, type ReadDraft } from "@/lib/import/draft-store";
 import { edit, editedCorrections, goalHorizonRefusal, remapUnmarked, reviewTree, weekdaysIn, type ReviewNode } from "@/lib/import/review";
 import type { GoalSnapshot } from "@/lib/import/differences";
 import { monthsOfSpan } from "@/lib/plan/months";
@@ -39,7 +39,7 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
   const router = useRouter();
   // The original text stands beside the tree only from 1024px; below, the page holds none of it.
   const wide = useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => false);
-  const [stored, setStored] = useState<StoredDraft | null>(null);
+  const [stored, setStored] = useState<ReadDraft | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
   if (created) return <CreatedScreen result={created} />;
   if (!stored || !review) return <Page width="full" />;
 
-  function keep(next: StoredDraft, unmarked: ReadonlySet<string>) {
+  function keep(next: ReadDraft, unmarked: ReadonlySet<string>) {
     setStored({ ...next, unmarked: [...unmarked] });
     saveReview(next.draft, [...unmarked], next.declined, next.corrections, next.accepted);
   }
@@ -222,7 +222,7 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
     setFailure(null);
     setStale(null);
     try {
-      const result = await confirmImport({ draft: review!.toSend, updates: review!.updates });
+      const result = await confirmImport({ draft: review!.toSend, updates: review!.updates, requestId: stored!.requestId });
       if (result.ok) {
         confirmed.current = true;
         clearDraft();

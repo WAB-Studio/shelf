@@ -52,7 +52,7 @@ export default defineConfig({
     {
       name: "mobile",
       use: phone,
-      testIgnore: /(caida|fuente-caida|importar-modelo|chat-modelo|tope-app)\.spec\.ts/,
+      testIgnore: /(caida|fuente-caida|importar-modelo|chat-modelo|chat-hacer-reenvio|tope-app)\.spec\.ts/,
     },
     ...(downBaseURL
       ? [
@@ -68,7 +68,7 @@ export default defineConfig({
       ? [
           {
             name: "fuente",
-            testMatch: /(fuente-caida|importar-modelo|chat-modelo)\.spec\.ts/,
+            testMatch: /(fuente-caida|importar-modelo|chat-modelo|chat-hacer-reenvio)\.spec\.ts/,
             use: { ...phone, baseURL: faultBaseURL },
           },
         ]

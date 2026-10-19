@@ -4,6 +4,17 @@
   "¿Cómo voy este mes?": { "reply": "Octubre va en 12 h 30 min de 37 h, el 34 %. Van 12 días de 31." },
   "palabra larga": { "reply": "supercalifragilisticoespialidosoextraordinariamentelargosinningunespacioquerompaelrenglonenunatarjetadetrescientossesentapixeles y fin." },
   "falla": { "fail": true },
+  "crea la meta Ahorro": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [{ "name": "create_goal", "arguments": { "name": "Ahorro reenvío" } }]
+  },
+  "crea dos metas": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [
+      { "name": "create_goal", "arguments": { "name": "Reenvío uno" } },
+      { "name": "create_goal", "arguments": { "name": "Reenvío dos" } }
+    ]
+  },
   "pasa Maze a marzo de 2030": {
     "reply": "Esto cambiaría tu plan:",
     "calls": [{ "name": "fix_task", "arguments": { "one_off_id": "{{task:Maze}}", "month": "2030-03" } }]
