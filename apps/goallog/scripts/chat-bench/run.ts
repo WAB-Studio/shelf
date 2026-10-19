@@ -1,0 +1,174 @@
+// Measures one model on the 25 chat tasks through a lane's own `POST /chat/enviar` (docs/goallog/CHAT.md).
+// It spends real money and nothing imports it: no package.json entry, no check, no CI job. The main
+// session runs it with the user's yes, from apps/goallog:
+//   OPENAI_API_KEY=… PULSAR_CHAT_BENCH_MODEL=<model> npx tsx scripts/chat-bench/run.ts --i-pay \
+//     --target http://localhost:3208 --model <model> --price-in 0.25 --price-out 2 \
+//     --sessions private/session-8.json,private/session-9.json --seed private/chat-bench-seed.json
+// The lane's server must run with the same OPENAI_API_KEY and PULSAR_CHAT_BENCH_MODEL (lib/chat/model.ts).
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+import { percentile, resolveExpected, scoreAnswer, type Answer } from "./score";
+import { TASKS } from "./tasks";
+
+// Prices are USD per million tokens, kept as micro-USD per million (0.25 -> 250000) so no cost is a float.
+export type Prices = { inMicro: number; outMicro: number };
+
+// A cost is tokens x micro-USD per million: units of 1e-12 USD.
+const UNITS_PER_USD = 1e12;
+export const CEILING_USD = 10;
+export const MESSAGES_PER_PERSON = 40;
+
+// The estimate of docs/goallog/CHAT.md: a message's rounds, tools and reads included.
+export const EST_INPUT_TOKENS = 15_000;
+export const EST_OUTPUT_TOKENS = 1_500;
+
+export type BenchConfig = {
+  target: string;
+  model: string;
+  prices: Prices;
+  sessions: string[];
+  seed: string;
+};
+
+export function parsePrice(raw: string | undefined, flag: string): number {
+  const match = /^([0-9]+)(?:\.([0-9]{1,6}))?$/.exec(raw ?? "");
+  if (!match) throw new Error(`${flag} is USD per million tokens, like 0.25`);
+  return Number(match[1]) * 1_000_000 + Number((match[2] ?? "").padEnd(6, "0"));
+}
+
+export function costUnits(tokensIn: number, tokensOut: number, prices: Prices): number {
+  return tokensIn * prices.inMicro + tokensOut * prices.outMicro;
+}
+
+// At the ceiling is over it: the run stops when the count reaches USD 10, not when it passes it.
+export function ceilingReached(tokensIn: number, tokensOut: number, prices: Prices, ceilingUsd = CEILING_USD): boolean {
+  return costUnits(tokensIn, tokensOut, prices) >= ceilingUsd * UNITS_PER_USD;
+}
+
+export function formatUsd(units: number): string {
+  const micro = Math.round(units / 1e6);
+  return `${Math.floor(micro / 1e6)}.${String(micro % 1e6).padStart(6, "0")}`;
+}
+
+function flagValue(argv: string[], flag: string): string | undefined {
+  const at = argv.indexOf(flag);
+  return at === -1 ? undefined : argv[at + 1];
+}
+
+// Every refusal happens here, before the first fetch.
+export function parseBenchArgs(argv: string[], env: Record<string, string | undefined>): BenchConfig {
+  if (!argv.includes("--i-pay")) throw new Error("this run spends money on OpenAI: pass --i-pay");
+  if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set");
+
+  const raw = flagValue(argv, "--target");
+  let url: URL | null = null;
+  try {
+    url = raw ? new URL(raw) : null;
+  } catch {
+    url = null;
+  }
+  if (!url || url.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(url.hostname) || url.port === "") {
+    throw new Error("--target must be a lane's http://localhost:<port>");
+  }
+
+  const model = flagValue(argv, "--model");
+  if (!model) throw new Error("--model names the model the server runs");
+  if (env.PULSAR_CHAT_BENCH_MODEL !== model) {
+    throw new Error("PULSAR_CHAT_BENCH_MODEL must be set to the same model as --model, on this command and on the server");
+  }
+
+  const prices = {
+    inMicro: parsePrice(flagValue(argv, "--price-in"), "--price-in"),
+    outMicro: parsePrice(flagValue(argv, "--price-out"), "--price-out"),
+  };
+  const sessions = (flagValue(argv, "--sessions") ?? "").split(",").filter(Boolean);
+  if (sessions.length * MESSAGES_PER_PERSON < TASKS.length) {
+    throw new Error(`--sessions needs ${Math.ceil(TASKS.length / MESSAGES_PER_PERSON)} harness sessions at least`);
+  }
+  const seed = flagValue(argv, "--seed");
+  if (!seed) throw new Error("--seed names the file of ids each session holds");
+
+  const estimate = costUnits(TASKS.length * EST_INPUT_TOKENS, TASKS.length * EST_OUTPUT_TOKENS, prices);
+  if (estimate >= CEILING_USD * UNITS_PER_USD) {
+    throw new Error(`the estimate, USD ${formatUsd(estimate)}, reaches the USD ${CEILING_USD} ceiling`);
+  }
+  return { target: url.origin, model, prices, sessions, seed };
+}
+
+function cookieHeader(file: string): string {
+  const state = JSON.parse(readFileSync(resolve(file), "utf8")) as { cookies: { name: string; value: string }[] };
+  return state.cookies.map(({ name, value }) => `${name}=${value}`).join("; ");
+}
+
+async function main(): Promise<void> {
+  const config = parseBenchArgs(process.argv.slice(2), process.env);
+  const estimate = costUnits(TASKS.length * EST_INPUT_TOKENS, TASKS.length * EST_OUTPUT_TOKENS, config.prices);
+  console.log(`${TASKS.length} messages to ${config.model}: estimate USD ${formatUsd(estimate)}, ceiling USD ${CEILING_USD}`);
+
+  const seeds = JSON.parse(readFileSync(resolve(config.seed), "utf8")) as Record<string, Record<string, string>>;
+  const { default: postgres } = await import("postgres");
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let passed = 0;
+  const latencies: number[] = [];
+  const lines: string[] = [];
+  try {
+    for (const [index, task] of TASKS.entries()) {
+      if (ceilingReached(tokensIn + EST_INPUT_TOKENS, tokensOut + EST_OUTPUT_TOKENS, config.prices)) {
+        lines.push(`stopped before ${task.id}: the ceiling`);
+        break;
+      }
+      const session = config.sessions[index % config.sessions.length]!;
+      const ids = seeds[session];
+      if (!ids) throw new Error(`--seed holds no ids for ${session}`);
+
+      const started = new Date();
+      const t0 = performance.now();
+      const response = await fetch(`${config.target}/chat/enviar`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: config.target, cookie: cookieHeader(session) },
+        body: JSON.stringify({ turns: [{ role: "person", text: task.message }] }),
+      });
+      latencies.push(Math.round(performance.now() - t0));
+      if (response.status === 429) throw new Error(`${session} reached its daily cap at ${task.id}`);
+
+      // The route answers no usage; the call's own row holds it. Runs are sequential, so the newest row is this one's.
+      const [row] = await sql<{ input_tokens: number | null; output_tokens: number | null }[]>`
+        select input_tokens, output_tokens from goals.model_calls
+        where source = 'chat' and called_at >= ${started} order by called_at desc limit 1`;
+      tokensIn += row?.input_tokens ?? 0;
+      tokensOut += row?.output_tokens ?? 0;
+
+      const body = response.ok ? ((await response.json()) as Answer) : null;
+      const verdict = body
+        ? scoreAnswer(resolveExpected(task.expected, ids), body)
+        : { pass: false, why: `HTTP ${response.status}` };
+      if (verdict.pass) passed += 1;
+      lines.push(`${verdict.pass ? "pass" : "FAIL"} ${task.id}${verdict.why ? `: ${verdict.why}` : ""}`);
+    }
+  } finally {
+    await sql.end();
+  }
+
+  const asked = latencies.length;
+  const table = [
+    "| model | task pass rate | mean input tokens | mean output tokens | cost (USD) | p50 ms | p95 ms |",
+    "|---|---|---|---|---|---|---|",
+    `| ${config.model} | ${passed}/${asked} | ${Math.round(tokensIn / Math.max(asked, 1))} | ${Math.round(tokensOut / Math.max(asked, 1))} | ${formatUsd(costUnits(tokensIn, tokensOut, config.prices))} | ${percentile(latencies, 50)} | ${percentile(latencies, 95)} |`,
+  ].join("\n");
+  const dir = resolve(process.cwd(), "private/chat-bench");
+  mkdirSync(dir, { recursive: true });
+  const file = resolve(dir, `${config.model}-${Date.now()}.md`);
+  writeFileSync(file, `${table}\n\n${lines.join("\n")}\n`, "utf8");
+  console.log(`${table}\n${lines.join("\n")}\nwritten to ${file}`);
+}
+
+if (require.main === module) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
