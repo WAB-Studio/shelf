@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 
 import { GroupSettingsScreen } from "@/components/fund/group-settings-screen";
 import { Page } from "@/components/ui";
+import { callerFundHasCompany } from "@/db/queries/group-members";
 import { getUserGroup, getUserGroupRole } from "@/db/queries/groups";
 import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
@@ -28,10 +29,11 @@ export default async function GroupSettingsPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const [, group, role] = await Promise.all([
+  const [, group, role, hasCompany] = await Promise.all([
     requireUser(),
     getUserGroup(),
     getUserGroupRole(),
+    callerFundHasCompany(),
   ]);
   // There is nothing to configure without a group (RF-55); the shell layout
   // already refused this route, and this is what refuses it without the header.
@@ -46,6 +48,7 @@ export default async function GroupSettingsPage(
         // and only ever writes one of the offered codes.
         currency={group.currency as UpdateGroupInput["currency"]}
         isLeader={role === "leader"}
+        hasCompany={hasCompany}
       />
     </Page>
   );

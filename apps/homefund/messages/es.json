@@ -66,6 +66,17 @@
     "cashModePerMember": "Un efectivo por persona",
     "save": "Guardar",
     "saved": "Ajustes guardados.",
+    "leaveTitle": "Salir del fondo",
+    "leaveBody": "Lo que escribiste en «{fund}» se queda con el fondo. Tus cuentas personales vuelven a ser solo tuyas.",
+    "leaveAsk": "¿Salir de «{fund}»?",
+    "leaveStays": "Lo que escribiste en el fondo se queda con el fondo: sus cuentas, sus movimientos y lo que anotaste en ellas.",
+    "leaveGoes": "Tus cuentas personales vuelven a ser solo tuyas: los miembros de «{fund}» dejan de verlas.",
+    "leaving": "Saliendo…",
+    "leaveRefusedTitle": "No puedes salir todavía",
+    "leaveRefusedBody": "Eres el líder de «{fund}». Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».",
+    "leaveUnderstood": "Entendido",
+    "leaveDone": "Saliste de «{fund}».",
+    "leaveDoneBody": "Tus cuentas siguen contigo.",
     "errors": {
       "cashModeInvalid": "Elige dónde vive el efectivo.",
       "currencyInvalid": "Elige una moneda válida."

@@ -123,18 +123,24 @@ async function openConfirm(page: Page): Promise<Locator> {
   return dialog;
 }
 
+// An account she owns is history for the roster trigger: the alone test could not delete her row
+// while the personal account of an earlier test stood.
+async function dropPersonalAccounts() {
+  for (const id of personalIds.splice(0)) {
+    await as(scope.memberUserId, async (tx) => {
+      await tx`delete from accounts where id = ${id}`;
+    });
+  }
+}
+
 test.beforeEach(async () => {
   ({ groupId } = await seedGroup());
+  await dropPersonalAccounts();
 });
 
 test.afterAll(async () => {
   await clearGroup();
-  const claimsFor = scope.memberUserId;
-  for (const id of personalIds) {
-    await as(claimsFor, async (tx) => {
-      await tx`delete from accounts where id = ${id}`;
-    });
-  }
+  await dropPersonalAccounts();
 });
 
 test.describe("a plain member", () => {

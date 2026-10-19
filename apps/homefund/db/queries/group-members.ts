@@ -1,13 +1,13 @@
 import "server-only";
 
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { callerGroupId, callerGroupInfo } from "@/db/queries/groups";
 import { groupMembers } from "@/db/schema";
 import type { GroupMember } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
+import { getSessionUser, requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
 
 type GroupMemberRole = GroupMember["role"];
 
@@ -80,6 +80,24 @@ export async function listCallerMembers(
       .where(and(eq(groupMembers.groupId, callerGroupId(userId)), archivedFilter))
       .orderBy(asc(groupMembers.name)),
   );
+}
+
+// RF-154: whether another live row (a member, with a login or not) shares the caller's fund.
+// A leader with company is told to hand the fund over; a leader alone is not offered leaving.
+export async function callerFundHasCompany(): Promise<boolean> {
+  const user = await getSessionUser();
+  if (!user) return false;
+
+  return withUserDb(async (tx) => {
+    const [row] = await tx
+      .select({ n: count() })
+      .from(groupMembers)
+      .where(
+        and(eq(groupMembers.groupId, callerGroupId(user.id)), isNull(groupMembers.archivedAt)),
+      );
+
+    return (row?.n ?? 0) > 1;
+  });
 }
 
 /**

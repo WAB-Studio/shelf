@@ -66,6 +66,17 @@
     "cashModePerMember": "One cash account per person",
     "save": "Save",
     "saved": "Settings saved.",
+    "leaveTitle": "Leave the fund",
+    "leaveBody": "What you wrote in «{fund}» stays with the fund. Your personal accounts become yours alone again.",
+    "leaveAsk": "Leave «{fund}»?",
+    "leaveStays": "What you wrote in the fund stays with the fund: its accounts, its movements and what you noted in them.",
+    "leaveGoes": "Your personal accounts become yours alone again: the members of «{fund}» stop seeing them.",
+    "leaving": "Leaving…",
+    "leaveRefusedTitle": "You cannot leave yet",
+    "leaveRefusedBody": "You are the leader of «{fund}». Before leaving, hand the leadership to another member from «Members».",
+    "leaveUnderstood": "Got it",
+    "leaveDone": "You left «{fund}».",
+    "leaveDoneBody": "Your accounts stay with you.",
     "errors": {
       "cashModeInvalid": "Choose where cash sits.",
       "currencyInvalid": "Choose a valid currency."
