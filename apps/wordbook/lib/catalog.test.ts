@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { createTranslator } from "next-intl";
+
 import messages from "../messages/es.json";
 
 function strings(node: unknown, path = ""): Array<[string, string]> {
@@ -49,4 +51,63 @@ test("the signed-in link-refused body exists, quotes «» only and points at no 
     "Por seguridad el enlace solo entra en el navegador que lo pidió. Aquí ya tienes la sesión abierta; si querías entrar en otro navegador, abre el enlace allí.",
   );
   assert.doesNotMatch(body, /aquí abajo/);
+});
+
+// The words of the boards RegistroPendiente, PalabraPendiente and CopiaAnkiPendiente
+// (docs/wordbook/DESIGN.md, boards of 2026-10-18), character for character. The key
+// names are the worker's; the catalog must hold each sentence under some key.
+const PENDING_STRINGS = [
+  "Sin respuesta todavía",
+  "Se responde sola cuando vuelva la conexión.",
+  "Se traduce sola cuando vuelva la conexión.",
+  "Esta búsqueda espera respuesta",
+  "No había conexión cuando la buscaste. Se responde sola cuando vuelva, y su traducción aparece aquí.",
+  "Búsquedas",
+];
+
+for (const sentence of PENDING_STRINGS) {
+  test(`the catalog holds the pending board's line «${sentence}»`, () => {
+    assert.ok(
+      strings(messages).some(([, text]) => text === sentence),
+      `no string equals ${sentence}`,
+    );
+  });
+}
+
+test("the pending lines sit under the log screens, not under search or account", () => {
+  const where = (sentence: string) =>
+    strings(messages)
+      .filter(([, text]) => text === sentence)
+      .map(([path]) => path);
+  for (const sentence of PENDING_STRINGS.slice(0, 5)) {
+    assert.ok(
+      where(sentence).length > 0 && where(sentence).every((path) => path.startsWith("log.")),
+      `${sentence} lives at ${where(sentence).join(", ")}`,
+    );
+  }
+});
+
+test("the Anki pending line pluralises as the board writes it: one waits, three wait", () => {
+  const entry = strings(messages).find(
+    ([, text]) => text.includes("espera respuesta: entra en Anki cuando la tenga") && text.includes("plural"),
+  );
+  assert.ok(entry, "no plural string carries the board's Anki pending line");
+  const [path] = entry;
+  const t = createTranslator({ locale: "es", messages });
+  // The argument's name is the worker's: every plausible one is passed.
+  const say = (n: number) => {
+    const values = { count: n, pending: n, words: n, waiting: n, cards: n, number: n };
+    return (t as unknown as (key: string, values: Record<string, number>) => string)(path, values);
+  };
+  assert.equal(say(1), "1 palabra espera respuesta: entra en Anki cuando la tenga.");
+  assert.equal(say(3), "3 palabras esperan respuesta: entran en Anki cuando la tengan.");
+  assert.notEqual(path, "log.study.ankiSkipped");
+});
+
+test("the left-out line stays as it was, apart from the pending line", () => {
+  assert.equal(
+    messages.log.study.ankiSkipped,
+    "{count, plural, one {# palabra no va: no tiene traducción guardada. Si la buscaste hace tiempo, búscala otra vez y tendrá tarjeta.} other {# palabras no van: no tienen traducción guardada. Si las buscaste hace tiempo, búscalas otra vez y tendrán tarjeta.}}",
+  );
+  assert.doesNotMatch(messages.log.study.ankiSkipped, /espera/);
 });

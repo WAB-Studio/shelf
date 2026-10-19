@@ -28,10 +28,6 @@ async function deleteTranslator(page: Page): Promise<void> {
   });
 }
 
-// `useDecoration`'s own debounce (`PHRASE_DEBOUNCE_MS`) plus margin: long
-// enough that its pair of requests has fired by the time this elapses.
-const DECORATION_SETTLE_MARGIN_MS = 900;
-
 // Exposes every `Worker` construction as `window.__workersBuilt`, so a test
 // can prove `/registro` mounts none (RNL-08) without importing the hook that
 // would create one.
@@ -171,7 +167,7 @@ test("10,003 rows export whole, and the file round-trips through JSON exactly", 
   // The envelope stays at 1 and the row schema moves with the store: a reader
   // that only knows version 1 still parses the file (plan, decision 10).
   expect(exported.exportSchema).toBe(1);
-  expect(exported.recordSchema).toBe(3);
+  expect(exported.recordSchema).toBe(4);
   expect(typeof exported.exportedAt).toBe("number");
   expect(exported.rows).toHaveLength(10_003);
   expect(exported.rows).toEqual(rawRows);
@@ -185,8 +181,9 @@ test("the nav reaches /registro, which counts what was searched and exports it",
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
 
+  // A lookup typed before the worker is up waits in its queue and answers
+  // when it is: the heading below is the wait.
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("apple");
   // A lookup is recorded only once its answer has settled: clearing the box
@@ -194,7 +191,6 @@ test("the nav reaches /registro, which counts what was searched and exports it",
   // Under load the answer lands tens of milliseconds after the next fill.
   await expect(page.getByRole("heading", { name: "apple" })).toBeVisible();
   await searchBox.fill("");
-  await page.waitForTimeout(300);
 
   // Reached through the nav bar, which is the only way in since module 6
   // dropped the search screen's link to `/fuente` and module 10 moved the
@@ -218,13 +214,14 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
   await countWorkerConstructions(page);
 
   // Reached cold, the way a reader who never opened the box would reach it.
-  await page.goto("/registro");
-  await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
-  await page.waitForTimeout(300);
-
+  // The listener is armed before the first request, and the empty state is
+  // the proof the screen finished reading the record.
   const requestsOnRegistro: string[] = [];
   page.on("request", (request) => requestsOnRegistro.push(request.url()));
-  await page.waitForTimeout(500);
+  await page.goto("/registro");
+  await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
+  await expect(page.getByText(messages.log.study.emptyTitle)).toBeVisible();
+  await page.waitForLoadState("networkidle");
   expect(requestsOnRegistro.some((url) => url.includes(manifest.asset.path))).toBe(false);
 
   const workersOnRegistro = await page.evaluate(
@@ -239,7 +236,6 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   const tenKeystrokes = "throughout";
@@ -253,10 +249,18 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
   await searchBox.pressSequentially(tenKeystrokes, { delay: 40 });
   await expect(page.getByRole("heading", { name: tenKeystrokes })).toBeVisible();
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await expect(page.getByRole("heading", { name: tenKeystrokes })).toHaveCount(0);
 
   const requestsWhileTyping: string[] = [];
-  page.on("request", (request) => requestsWhileTyping.push(request.url()));
+  // A web font is fetched the first time a state paints its face, however the
+  // warm-up went; it is not a request the word path owns, so it is not counted.
+  page.on("request", (request) => {
+    if (!request.url().endsWith(".woff2")) requestsWhileTyping.push(request.url());
+  });
+  // Armed before the typing, so the request decoration makes once its debounce
+  // fires cannot slip between the paint check and the wait.
+  const decorationAsked = page.waitForRequest((request) => request.url().includes("/api/word/"));
+  decorationAsked.catch(() => {});
 
   await searchBox.pressSequentially(tenKeystrokes, { delay: 40 });
   await expect(page.getByRole("heading", { name: tenKeystrokes })).toBeVisible();
@@ -269,7 +273,7 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
     `requests at paint, ten keystrokes issued: ${JSON.stringify(requestsWhileTyping)}`,
   ).toHaveLength(0);
 
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
+  await decorationAsked;
 
   const stray = requestsWhileTyping.filter((url) => !url.includes("/api/word/"));
   expect(stray, `requests foreign to decoration: ${JSON.stringify(stray)}`).toEqual([]);
@@ -840,4 +844,82 @@ test("while the JSON is built, its control reads «Exportando…» and is disabl
   await page.evaluate(() => ((window as unknown as { __hold: boolean }).__hold = false));
   await downloadPromise;
   await expect(jsonControl(page)).toBeEnabled();
+});
+
+// ---------------------------------------------------------------------------
+// RL-76, RL-72: a pending row gives no card and is named apart from the words
+// with no translation (board CopiaAnkiPendiente). The sentences are the
+// board's, character for character.
+// ---------------------------------------------------------------------------
+
+const PENDING_ONE = "1 palabra espera respuesta: entra en Anki cuando la tenga.";
+const PENDING_THREE = "3 palabras esperan respuesta: entran en Anki cuando la tengan.";
+
+// The payload M19's `record.ts` stores for a word waiting on the network.
+function pendingRow(word: string, at: number): SeedLookup {
+  return studyRow(word, null, at, { schema: 4, origin: null });
+}
+
+test("RL-76: 2 cards, 3 waiting, 1 left out: the file holds the cards only and each count has its own line", async ({
+  page,
+}) => {
+  await openRows(page, [
+    studyRow("alpha", "alfa", NOW - 60),
+    studyRow("zebra", "cebra", NOW - 50),
+    unlistedRow("blorp", null, NOW - 40),
+    pendingRow("zzorble", NOW - 30),
+    pendingRow("quux", NOW - 20),
+    pendingRow("wibble", NOW - 10),
+  ]);
+  const file = await downloadAnki(page);
+  const cards = file.text.split("\n").slice(2).filter((line) => line !== "");
+  expect(cards).toHaveLength(2);
+  expect(file.text).not.toMatch(/zzorble|quux|wibble/);
+
+  const done = page.getByText(t("log.study.ankiDone", { cards: 2 }), { exact: true });
+  const waiting = page.getByText(PENDING_THREE, { exact: true });
+  const skipped = page.getByText(t("log.study.ankiSkipped", { count: 1 }), { exact: true });
+  await expect(done).toBeVisible();
+  await expect(waiting).toBeVisible();
+  // Never summed: the left-out line counts the one with no translation alone.
+  await expect(skipped).toBeVisible();
+  const [doneY, waitingY, skippedY] = [
+    (await done.boundingBox())!.y,
+    (await waiting.boundingBox())!.y,
+    (await skipped.boundingBox())!.y,
+  ];
+  expect(waitingY).toBeGreaterThan(doneY);
+  expect(skippedY).toBeGreaterThan(waitingY);
+});
+
+test("RL-76: one waiting word reads in the singular", async ({ page }) => {
+  await openRows(page, [studyRow("alpha", "alfa", NOW - 20), pendingRow("zzorble", NOW - 10)]);
+  await downloadAnki(page);
+  await expect(page.getByText(PENDING_ONE, { exact: true })).toBeVisible();
+  await expect(page.getByText(t("log.study.ankiDone", { cards: 1 }), { exact: true })).toBeVisible();
+  // Nothing was left out for want of a translation: that line stays away.
+  await expect(page.getByText(/no va:|no van:/)).toHaveCount(0);
+});
+
+test("RL-76: with no pending row, no waiting line shows", async ({ page }) => {
+  await openSeeded(page);
+  await downloadAnki(page);
+  await expect(page.getByText(t("log.study.ankiDone", { cards: 3 }), { exact: true })).toBeVisible();
+  await expect(page.getByText(/espera(n)? respuesta/)).toHaveCount(0);
+});
+
+test("RL-76: only waiting words offer no Anki file and the line says they wait", async ({ page }) => {
+  await openRows(page, [pendingRow("zzorble", NOW - 10)]);
+  await expect(page.getByText(PENDING_ONE, { exact: true })).toBeVisible();
+  await expect(ankiControl(page)).toHaveCount(0);
+  await expect(jsonControl(page)).toBeVisible();
+  // They are not «sin traducción guardada»: the no-card line would say so wrongly.
+  await expect(page.getByText(t("log.study.ankiNone", { words: 1 }), { exact: true })).toHaveCount(0);
+});
+
+test("RL-76: a legacy miss (schema 3) is left out as before, never counted as waiting", async ({ page }) => {
+  await openRows(page, [studyRow("alpha", "alfa", NOW - 20), studyRow("quiet", null, NOW - 10)]);
+  await downloadAnki(page);
+  await expect(page.getByText(t("log.study.ankiSkipped", { count: 1 }), { exact: true })).toBeVisible();
+  await expect(page.getByText(/espera(n)? respuesta/)).toHaveCount(0);
 });

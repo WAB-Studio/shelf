@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { readLemmaHistory, readLemmaKey, type WordHistoryRow } from "@/lib/log/summary";
+import { readLemmaHistory, readLemmaKey, readWordStudy, type WordHistoryRow } from "@/lib/log/summary";
 import { recalledFilter } from "@/lib/log/study-filter";
 import type { LookupOutcome } from "@/lib/log/types";
 import { decodeWordSegment } from "@/lib/word/segment";
@@ -37,7 +37,7 @@ import {
 type ViewState =
   | { kind: "loading" }
   | { kind: "empty"; key: string }
-  | { kind: "ready"; key: string; rows: WordHistoryRow[]; total: number }
+  | { kind: "ready"; key: string; rows: WordHistoryRow[]; total: number; waiting: boolean }
   | { kind: "failed" };
 
 type OutcomeKey = "exact" | "inflected" | "translated" | "miss" | "unlisted";
@@ -111,9 +111,11 @@ export function WordHistory() {
     // never off a lookup.
     readLemmaKey(normalised)
       .then(async (key) => {
-        const { rows, total } = await readLemmaHistory(key);
+        // Whether every row waits is the study's fold (RL-76), not a rule to repeat here.
+        const [{ rows, total }, study] = await Promise.all([readLemmaHistory(key), readWordStudy()]);
         if (cancelled) return;
-        setState(rows.length === 0 ? { kind: "empty", key } : { kind: "ready", key, rows, total });
+        const waiting = study.rows.some((row) => row.key === key && row.pending === true);
+        setState(rows.length === 0 ? { kind: "empty", key } : { kind: "ready", key, rows, total, waiting });
       })
       .catch(() => {
         if (!cancelled) setState({ kind: "failed" });
@@ -123,7 +125,8 @@ export function WordHistory() {
     };
   }, [normalised, attempt]);
 
-  const lookupKey = state.kind === "ready" ? state.key : null;
+  // A word whose only rows wait has nothing to look up (`PalabraPendiente`).
+  const lookupKey = state.kind === "ready" && !state.waiting ? state.key : null;
 
   useEffect(() => {
     if (lookupKey === null) return;
@@ -258,6 +261,17 @@ export function WordHistory() {
 
       <Separator size="4" />
 
+      {state.waiting ? (
+        <Flex direction="column" gap="1">
+          <Text size="2" weight="bold">
+            {t("word.pendingTitle")}
+          </Text>
+          <Text size="2" muted>
+            {t("word.pendingBody")}
+          </Text>
+        </Flex>
+      ) : null}
+
       {/* RL-34: a sentence's own answer is the translation already stored
           on its rows, never a dictionary lookup — `he holds a grudge
           against me` is never a headword and asking the Worker for one
@@ -265,7 +279,7 @@ export function WordHistory() {
           had. The reason the reader opened this screen on a word stays the
           same answer the box gave them, `showExactHeadword` off since the
           heading above already names this word. */}
-      {isPhrase ? (
+      {state.waiting ? null : isPhrase ? (
         phraseTranslation !== null ? (
           <Text variant="translation">{phraseTranslation}</Text>
         ) : (
@@ -306,6 +320,12 @@ export function WordHistory() {
 
       <Separator size="4" />
 
+      {state.waiting && (
+        <Text variant="definitionLabel" muted>
+          {t("word.searches")}
+        </Text>
+      )}
+
       {/* Every past search, kept below the answer rather than above it or
           folded away: the answer is why the reader tapped this word, the
           count and dates in the line above already answer "how many, since
@@ -325,7 +345,7 @@ export function WordHistory() {
                   {rowTime(row.at)}
                 </Text>
               </Flex>
-              <MetaLabel>{t(`outcome.${outcomeKey(row.outcome)}`)}</MetaLabel>
+              {!state.waiting && <MetaLabel>{t(`outcome.${outcomeKey(row.outcome)}`)}</MetaLabel>}
             </Grid>
           </Flex>
         ))}
