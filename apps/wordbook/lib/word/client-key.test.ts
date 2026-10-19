@@ -199,3 +199,33 @@ test("an IPv4 caller is keyed exactly as before", () => {
     clientKeyFromAddress("198.51.100.1", SALT),
   );
 });
+
+// M28 edges of the /64 key: what parses, what does not, what is a mapped IPv4.
+test("an IPv6 form with eight explicit groups is accepted, nine are not", () => {
+  assert.equal(keyOf("2001:db8:1:2:3:4:5:6"), clientKeyFromAddress("2001:0db8:0001:0002::/64", SALT));
+  assert.equal(keyOf("2001:db8:1:2:3:4:5:6:7"), clientKeyFromAddress("2001:db8:1:2:3:4:5:6:7", SALT));
+});
+
+test("a `::` that stands for no group at all is not an address", () => {
+  const eight = "1:2:3:4:5:6:7::8";
+  assert.equal(keyOf(eight), clientKeyFromAddress(eight, SALT));
+  const seven = "1:2:3:4:5:6:7::";
+  assert.equal(keyOf(seven), clientKeyFromAddress("0001:0002:0003:0004::/64", SALT));
+});
+
+test("two `::` make the text unparseable, kept as written", () => {
+  const text = "2001::db8::1";
+  assert.equal(keyOf(text), clientKeyFromAddress(text, SALT));
+});
+
+test("a dotted tail with an octet over 255 is unparseable; 255 is fine", () => {
+  const bad = "::ffff:1.2.3.256";
+  assert.equal(keyOf(bad), clientKeyFromAddress(bad, SALT));
+  assert.equal(keyOf("::ffff:255.255.255.255"), clientKeyFromAddress("255.255.255.255", SALT));
+});
+
+test("only ::ffff:a.b.c.d maps to IPv4: a non-zero lead hextet or a different prefix stays an IPv6 /64", () => {
+  assert.equal(keyOf("0:0:0:1:0:ffff:203.0.113.5"), clientKeyFromAddress("0000:0000:0000:0001::/64", SALT));
+  assert.equal(keyOf("0:0:0:0:1:ffff:203.0.113.5"), clientKeyFromAddress("0000:0000:0000:0000::/64", SALT));
+  assert.notEqual(keyOf("::fffe:203.0.113.5"), clientKeyFromAddress("203.0.113.5", SALT));
+});

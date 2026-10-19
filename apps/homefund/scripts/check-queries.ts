@@ -4236,6 +4236,7 @@ async function main(): Promise<void> {
   await recurringEndsOnSuite();
   await leaderWhoseMemberLeftSuite();
   await pendingAssetSettlementsScopeSuite();
+  await dashboardRosterNamesSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -10453,4 +10454,48 @@ async function pendingAssetSettlementsScopeSuite(): Promise<void> {
       JSON.stringify(listed),
     );
   });
+}
+
+// RF-88 / RF-67: the dashboard names each member bucket off the fund's LIVE roster, whole: every live member,
+// not the first one, and never someone who left.
+async function dashboardRosterNamesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo nombres ${tag}`, leaderName: `Harness Alfa ${tag}`, cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const fellow = await seedFellowMember(leader.id, groupId);
+  const gone = await seedFellowMember(leader.id, groupId);
+  await fixtureSql`update group_members set name = ${`Harness Zeta ${tag}`} where group_id = ${groupId} and user_id = ${fellow.id}`;
+  await fixtureSql`update group_members set name = ${`Harness Beta fuera ${tag}`} where group_id = ${groupId} and user_id = ${gone.id}`;
+  for (const person of [leader, fellow, gone]) {
+    const accountId = randomUUID();
+    await fixtureSql`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${accountId}, ${person.id}, ${`Harness cuenta nombres ${tag}`}, 'asset', 'bank', 1000, current_date)`;
+    track("accounts", accountId);
+  }
+  await fixtureSql`update group_members set archived_at = now() where group_id = ${groupId} and user_id = ${gone.id}`;
+  // The fellow left once under another name and came back: the old row stays, archived, and sorts after the live one.
+  await fixtureSql`
+    insert into group_members (group_id, user_id, name, role, archived_at)
+    values (${groupId}, ${fellow.id}, ${`Harness Zz antiguo ${tag}`}, 'member', now())`;
+  for (const r of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${groupId}`) track("group_members", r.id);
+  for (const r of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${groupId}`) track("categories", r.id);
+
+  const data = await asUser(leader, () => getDashboardData());
+  const nameOf = (userId: string) => data.netWorth.find((b) => b.ownerUserId === userId);
+  const shown = JSON.stringify(data.netWorth.map((b) => [b.bucket, b.name, b.isSelf]));
+  assert(
+    next("The dashboard names a live member other than the first by name, and the caller's own bucket by theirs"),
+    nameOf(fellow.id)?.name === `Harness Zeta ${tag}` && nameOf(leader.id)?.name === `Harness Alfa ${tag}`,
+    shown,
+  );
+  assert(
+    next("The dashboard names no member who left the fund"),
+    nameOf(gone.id) === undefined || nameOf(gone.id)?.name === null,
+    shown,
+  );
 }

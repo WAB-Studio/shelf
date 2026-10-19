@@ -675,3 +675,36 @@ test("the merge's work grows linearly with the marks: 400 marks cost at most 4x 
   assert.ok(large <= 4 * small + 400, `visits for 100/200/400 marks: ${small}/${mid}/${large}: not linear`);
   assert.ok(mid <= 2 * small + 200, `visits for 100/200 marks: ${small}/${mid}: not linear`);
 });
+
+// ---- the queue never names a mark twice, and never merges two marks into one ----
+
+test("two rows that name one mark queue it once", async () => {
+  put("lookups", lookup({ normalised: "dup", headword: "dup" })); // id 1, own: (OWN, 1)
+  put("lookups", lookup({ normalised: "dup", headword: "dup", device: OWN, deviceSeq: 1 })); // also (OWN, 1)
+  put("sync", syncState());
+  const { deleteStudyGroup, readTombstoneQueue } = await load();
+  assert.deepEqual(await deleteStudyGroup("dup"), { deleted: 2 });
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, [{ deviceId: OWN, localId: 1 }]);
+});
+
+test("a mark already queued is not queued again", async () => {
+  put("lookups", lookup({ normalised: "dup", headword: "dup" })); // (OWN, 1)
+  put("sync", syncState());
+  put("sync", { key: "tombstones", readerId: "reader-1", pending: [{ deviceId: OWN, localId: 1 }], since: null });
+  const { deleteStudyGroup, readTombstoneQueue } = await load();
+  await deleteStudyGroup("dup");
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, [{ deviceId: OWN, localId: 1 }]);
+});
+
+test("two different marks whose parts concatenate alike are both queued", async () => {
+  put("lookups", lookup({ normalised: "col", headword: "col", device: "d12", deviceSeq: 3 }));
+  put("sync", syncState());
+  put("sync", { key: "tombstones", readerId: "reader-1", pending: [{ deviceId: "d1", localId: 23 }], since: null });
+  const { deleteStudyGroup, readTombstoneQueue } = await load();
+  await deleteStudyGroup("col");
+  const named = (await readTombstoneQueue("reader-1")).pending;
+  assert.deepEqual(
+    [...named].sort((a, b) => a.deviceId.localeCompare(b.deviceId)),
+    [{ deviceId: "d1", localId: 23 }, { deviceId: "d12", localId: 3 }],
+  );
+});
