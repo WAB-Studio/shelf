@@ -13,6 +13,7 @@ import {
   updatePlannedPaymentAction,
 } from "@/app/actions/planned-payments";
 import {
+  Box,
   Button,
   Callout,
   Dialog,
@@ -416,9 +417,15 @@ function PaymentForm({
                   </Select.Item>
                   {categories.map((category) => (
                     <Select.Item key={category.id} value={category.id}>
-                      {scopedCategoryName(category.name, category.scope, (name) =>
-                        tKey("categories.scopedName", { name }),
-                      )}
+                      {/* One line whatever the name: the cap keeps it inside a
+                          360 px screen and the full name stays the option's own. */}
+                      <Box maxWidth="calc(100vw - 6rem)" asChild>
+                        <Text as="div" truncate>
+                          {scopedCategoryName(category.name, category.scope, (name) =>
+                            tKey("categories.scopedName", { name }),
+                          )}
+                        </Text>
+                      </Box>
                     </Select.Item>
                   ))}
                 </Select.Content>

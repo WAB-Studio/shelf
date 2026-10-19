@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { issueWebhookCredentialAction } from "@/app/actions/webhook-credentials";
 import {
   Button,
+  Box,
   Callout,
   CopyField,
   Dialog,
@@ -278,11 +279,17 @@ function WebhookCredentialBody({
                         {/* Two categories may share a name across kinds; the kind
                             is what tells them apart. */}
                         <Flex as="span" align="center" gap="2">
-                          {scopedCategoryName(
-                            category.name,
-                            category.scope,
-                            (name) => tKey("categories.scopedName", { name }),
-                          )}
+                          {/* The cap leaves room for the kind beside it inside a
+                              360 px screen; the full name stays the option's own. */}
+                          <Box maxWidth="calc(100vw - 10rem)" asChild>
+                            <Text as="div" truncate>
+                              {scopedCategoryName(
+                                category.name,
+                                category.scope,
+                                (name) => tKey("categories.scopedName", { name }),
+                              )}
+                            </Text>
+                          </Box>
                           <Text size="1" color="gray">
                             {tKey(
                               category.kind === "income"
