@@ -46,6 +46,8 @@ mock.module("@/lib/session", {
   },
 });
 mock.module("next/cache", { namedExports: { revalidatePath: () => {} } });
+// `@/lib/receipts` opens with `server-only`, which throws outside Next; no receipt is reached here.
+mock.module("@/lib/receipts", { namedExports: { readReceipt: async () => null, writeReceipt: async () => {} } });
 
 const addCommitmentInput = {
   goalId: "11111111-1111-4111-8111-111111111111",

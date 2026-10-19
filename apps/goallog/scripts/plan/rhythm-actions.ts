@@ -416,7 +416,8 @@ test("each act is one statement beside its settle", async () => {
   const goalId = await goal(owner, "viajes", true);
   goalIds.push(goalId);
   await as(owner, () => roadmap.setRhythm({ goalId, amount: 60 }));
-  assert.equal(await statementsOf(() => as(owner, () => roadmap.setRhythm({ goalId, amount: 90 }))), 2);
+  // setRhythm's third is the person's lock, its own statement before the CTE (RP-80).
+  assert.equal(await statementsOf(() => as(owner, () => roadmap.setRhythm({ goalId, amount: 90 }))), 3);
   assert.equal(
     await statementsOf(() => as(owner, () => roadmap.dismissPlanNotice({ goalId, month: monthFrom(today, -1) }))),
     2,
