@@ -200,6 +200,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "d67") {
+    await checkPendingInvitationRead();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -265,6 +270,7 @@ async function main() {
   await checkMemberAddress();
   await checkRecurringPauseReason();
   await checkInvitationAcceptance();
+  await checkPendingInvitationRead();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -11859,6 +11865,125 @@ async function checkInvitationAcceptance() {
     return [{
       ok: second === "23505" && row.invite_email === null,
       detail: `a second live row for the accepted person = ${second ?? "landed"}; invite_email = ${row.invite_email}`,
+    }];
+  });
+}
+
+// Assertions 407-409: migration 0067 (RF-154). The invited person reads the invitation addressed to
+// them through `private.pending_invitation()`; nobody else reads it, and anon cannot call it.
+//
+//   D67_MIGRATION_FILE  a path to a SQL file installed instead of db/migrations/0067_*.sql, so a mutation
+//                       can be proved red without touching the shared database.
+async function d67Install(tx: M1Tx): Promise<void> {
+  const dir = path.join(process.cwd(), "db", "migrations");
+  const found = readdirSync(dir).find((name) => /^0067_.*\.sql$/.test(name));
+  const file = process.env.D67_MIGRATION_FILE ?? (found ? path.join(dir, found) : null);
+  if (!file) throw new Error("db/migrations/0067_*.sql does not exist");
+  await tx.unsafe(`drop function if exists private.pending_invitation()`);
+  for (const statement of readFileSync(file, "utf8").split("--> statement-breakpoint")) {
+    if (statement.trim()) await tx.unsafe(statement);
+  }
+}
+
+async function d67Read(tx: M1Tx, subject: string, email: string | undefined) {
+  await enterUserContext(tx, subject, email);
+  try {
+    return await tx<{ member_id: string; inviter_name: string; fund_name: string; current_fund_name: string | null; current_fund_has_company: boolean }[]>`
+      select * from private.pending_invitation()`;
+  } finally {
+    await tx`reset role`;
+  }
+}
+
+async function checkPendingInvitationRead() {
+  console.log("");
+  const labels = {
+    reads: "407. the invited person reads their pending invitation (the row id, the leader's name, the fund name), whatever the case of the address; a person whose own fund has company is told so, a lone one is not",
+    nobody: "408. a signed-in person with another address, a declined or withdrawn invitation, or no address reads nothing",
+    grants: "409. the function is a stable definer with a fixed search path; authenticated may execute it, anon, service_role and PUBLIC may not",
+  };
+
+  await m1Rows([labels.reads], async (tx) => {
+    await d67Install(tx);
+    const leader = randomUUID();
+    const invitee = randomUUID();
+    const lone = randomUUID();
+    const groupId = randomUUID();
+    const ownId = randomUUID();
+    const tag = randomUUID().slice(0, 8);
+    const email = `d67-${tag}@example.test`;
+    await tx`insert into auth.users (id) values (${leader}), (${invitee}), (${lone})`;
+    await tx`insert into app_users (id) values (${leader}), (${invitee}), (${lone})`;
+    await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls d67 fund', 'shared'), (${ownId}, 'rls d67 own', 'shared')`;
+    await tx`insert into group_members (group_id, user_id, name, role) values (${groupId}, ${leader}, 'rls d67 leader', 'leader')`;
+    const [{ id: rowId }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role, invite_email)
+      values (${groupId}, 'rls d67 invited', 'member', ${email.toUpperCase()}) returning id`;
+    const alone = await d67Read(tx, invitee, email);
+    await tx`insert into group_members (group_id, user_id, name, role) values (${ownId}, ${invitee}, 'rls d67 own', 'leader')`;
+    const soloLeader = await d67Read(tx, invitee, email);
+    await tx`insert into group_members (group_id, name, role) values (${ownId}, 'rls d67 company', 'member')`;
+    const withCompany = await d67Read(tx, invitee, email);
+    void lone;
+    const a = alone[0];
+    const b = soloLeader[0];
+    const c = withCompany[0];
+    return [{
+      ok: alone.length === 1 && a.member_id === rowId && a.inviter_name === "rls d67 leader" && a.fund_name === "rls d67 fund" && a.current_fund_name === null && a.current_fund_has_company === false
+        && soloLeader.length === 1 && b.current_fund_name === "rls d67 own" && b.current_fund_has_company === false
+        && withCompany.length === 1 && c.current_fund_name === "rls d67 own" && c.current_fund_has_company === true,
+      detail: `no fund = ${JSON.stringify(alone)}, lone leader = ${JSON.stringify(soloLeader)}, with company = ${JSON.stringify(withCompany)}`,
+    }];
+  });
+
+  await m1Rows([labels.nobody], async (tx) => {
+    await d67Install(tx);
+    const leader = randomUUID();
+    const invitee = randomUUID();
+    const other = randomUUID();
+    const groupId = randomUUID();
+    const email = `d67-${randomUUID().slice(0, 8)}@example.test`;
+    await tx`insert into auth.users (id) values (${leader}), (${invitee}), (${other})`;
+    await tx`insert into app_users (id) values (${leader}), (${invitee}), (${other})`;
+    await tx`insert into groups (id, name, cash_mode) values (${groupId}, 'rls d67 fund', 'shared')`;
+    await tx`insert into group_members (group_id, user_id, name, role) values (${groupId}, ${leader}, 'rls d67 leader', 'leader')`;
+    const [{ id: rowId }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name, role, invite_email) values (${groupId}, 'rls d67 invited', 'member', ${email}) returning id`;
+    const stranger = await d67Read(tx, other, `d67-other-${randomUUID().slice(0, 8)}@example.test`);
+    const noAddress = await d67Read(tx, invitee, undefined);
+    const leaderReads = await d67Read(tx, leader, `lead-${email}`);
+    await tx`update group_members set invite_state = 'declined', archived_at = now() where id = ${rowId}`;
+    const declined = await d67Read(tx, invitee, email);
+    return [{
+      ok: stranger.length === 0 && noAddress.length === 0 && leaderReads.length === 0 && declined.length === 0,
+      detail: `other address = ${stranger.length}, no address = ${noAddress.length}, leader = ${leaderReads.length}, after a decline = ${declined.length}`,
+    }];
+  });
+
+  await m1Rows([labels.grants], async (tx) => {
+    await d67Install(tx);
+    const [fn] = await tx<{ definer: boolean; stable: boolean; fixed_path: boolean }[]>`
+      select p.prosecdef as definer, p.provolatile = 's' as stable,
+        coalesce('search_path=""' = any (p.proconfig), false) as fixed_path
+      from pg_proc p where p.oid = 'private.pending_invitation()'::regprocedure`;
+    const [acl] = await tx<{ authenticated: boolean; anon: boolean; service: boolean; pub: boolean }[]>`
+      select has_function_privilege('authenticated', 'private.pending_invitation()', 'execute') as authenticated,
+        has_function_privilege('anon', 'private.pending_invitation()', 'execute') as anon,
+        has_function_privilege('service_role', 'private.pending_invitation()', 'execute') as service,
+        has_function_privilege(0, 'private.pending_invitation()', 'execute') as pub`;
+    const subject = randomUUID();
+    const verdict: string[] = [];
+    let closed = true;
+    for (const role of ["anon", "service_role"] as const) {
+      await m1Become(tx, role, subject);
+      const code = await m1Refusal(tx, (sp) => sp`select * from private.pending_invitation()`);
+      await tx`reset role`;
+      verdict.push(`${role} = ${code ?? "accepted"}`);
+      if (code !== "42501") closed = false;
+    }
+    return [{
+      ok: fn.definer && fn.stable && fn.fixed_path && acl.authenticated && !acl.anon && !acl.service && !acl.pub && closed,
+      detail: `definer = ${fn.definer}, stable = ${fn.stable}, search_path fixed = ${fn.fixed_path}; execute authenticated = ${acl.authenticated}, anon = ${acl.anon}, service_role = ${acl.service}, PUBLIC = ${acl.pub}; calls: ${verdict.join(", ")}`,
     }];
   });
 }

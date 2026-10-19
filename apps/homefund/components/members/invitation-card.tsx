@@ -34,16 +34,23 @@ export function InvitationCard({
   const t = useTranslations("members");
   const router = useRouter();
   const onActionError = useActionErrorToast();
-  // A lone leader's accept answers otherFund until the engine lets them join; the card shows it too.
-  const [refusal, setRefusal] = useState<Refusal | null>(
-    currentFundName && currentFundHasCompany ? "otherFund" : null,
-  );
+  const [gone, setGone] = useState(false);
+  const [refusedByServer, setRefusedByServer] = useState(false);
+  // The fund's name arrives with the page's own read: an accept refused after the card was drawn
+  // (the person joined another fund meanwhile) asks the page to read again for it.
+  const refusal: Refusal | null = gone
+    ? "gone"
+    : currentFundName && (currentFundHasCompany || refusedByServer)
+      ? "otherFund"
+      : null;
 
   function onError(result: { error: { serverError?: string } }) {
     const key = result.error.serverError;
-    if (key === "errors.invitationGone") setRefusal("gone");
-    else if (key === "errors.alreadyInFund") setRefusal("otherFund");
-    else onActionError(result);
+    if (key === "errors.invitationGone") setGone(true);
+    else if (key === "errors.alreadyInFund") {
+      setRefusedByServer(true);
+      router.refresh();
+    } else onActionError(result);
   }
 
   const accept = useAction(acceptInvitationAction, {

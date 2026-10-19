@@ -470,6 +470,13 @@
       "when": 1792260000000,
       "tag": "0066_a_leader_alone_accepts_another_fund",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792370000000,
+      "tag": "0067_the_invited_person_reads_their_invitation",
+      "breakpoints": true
     }
   ]
 }

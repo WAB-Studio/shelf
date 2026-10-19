@@ -15,6 +15,7 @@ import {
   rowTone,
   type KindLabels,
 } from "@/components/reports/recent-movements";
+import { InvitationCard } from "@/components/members/invitation-card";
 import { DueRemindersCard } from "@/components/planning/due-reminders-card";
 import { QuickEntryPill } from "@/components/transactions/quick-entry-pill";
 import {
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui";
 import { resolveWithdrawalTarget } from "@/db/queries/cash";
 import { listDueReminders } from "@/db/queries/due-reminders";
+import { getPendingInvitation } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
 import { getDashboardData } from "@/db/queries/reports/dashboard";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
@@ -97,10 +99,11 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
   // movements list fans out (RF-23); the amount is formatted for display only.
-  const [, group, dashboardData, rows, options, withdrawal, due, t, td, ta, tc] =
+  const [, group, invitation, dashboardData, rows, options, withdrawal, due, t, td, ta, tc] =
     await Promise.all([
       requireUser(),
       getUserGroup(),
+      getPendingInvitation(),
       getDashboardData(),
       listTransactions({}, { limit: RECENT_LIMIT }),
       getTransactionFormOptions(),
@@ -111,6 +114,21 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       getTranslations("accounts"),
       getTranslations("categories"),
     ]);
+
+  // RF-154: an invitation waiting for this address is answered before anything else on Inicio.
+  if (invitation) {
+    return (
+      <Page gutter="flush-md">
+        <InvitationCard
+          memberId={invitation.memberId}
+          inviterName={invitation.inviterName}
+          fundName={invitation.fundName}
+          currentFundName={invitation.currentFundName}
+          currentFundHasCompany={invitation.currentFundHasCompany}
+        />
+      </Page>
+    );
+  }
 
   if (dashboardData.hasAccounts === false) {
     return (
