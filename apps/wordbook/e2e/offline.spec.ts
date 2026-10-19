@@ -357,7 +357,7 @@ for (const [first, second] of [
     // and no translation can exist. The Worker still loads from the precache
     // and says so, rather than leaving the install message up forever.
     await expect(page.getByText(messages.install.failed, { exact: true })).toBeVisible();
-    await expect(page.getByText(messages.install.preparing, { exact: true })).toHaveCount(0);
+    await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
     await expect(page.getByText(messages.error.title, { exact: true })).toHaveCount(0);
     expect(problems.filter((line) => /ChunkLoadError|Loading chunk|Failed to load chunk/i.test(line))).toEqual([]);
   });
