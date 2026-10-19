@@ -1905,5 +1905,8 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   opened. Two tools and their approval-card lines. Not built yet.
 - **Moving a task to another goal** (Q4 a): a new act on the task sheet and a tool, with its RP code and its board, as a
   slice of its own after oleada-4. Not planned yet.
-- **The paid chat measurement** (Q9): without gpt-5. The user asked why other model families are not in it; the bench
-  speaks only to OpenAI today (`docs/goallog/SPEC.md` §4). Open until the user names them.
+- **The paid chat measurement** (Q9, Q9 bis): OpenAI only, without gpt-5 and without the GPT-5.6 Sol tier («cosas caras»).
+  Models: `gpt-5-nano`, `gpt-4.1-nano`, `gpt-5-mini` (today's), `gpt-4.1-mini`, `gpt-6-luna` and `gpt-5.6-luna` («Luna, me
+  refiero al modelo Luna»). OpenAI's list prices read 2026-10-18 for the Lunas: GPT-6 Luna USD 0.10 in / 0.50 out per
+  million tokens, GPT-5.6 Luna 0.20 / 1.20 (developers.openai.com/api/docs/pricing). About USD 1.40 for the run at the
+  bench's estimate; re-read every price on the day. RP-93 changes only once the user picks from the table.
