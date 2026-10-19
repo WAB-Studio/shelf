@@ -94,7 +94,8 @@ export async function listBudgetsWithStatus(
           select sum(s.amount_cents)
           from transaction_splits s
           join transactions t on t.id = s.transaction_id
-          where s.category_id = b.category_id
+          join categories sc on sc.id = s.category_id
+          where (sc.id = b.category_id or sc.parent_id = b.category_id)
             and t.kind = 'expense'
             and t.occurred_at >= (case b.period
               when 'weekly' then ${weekly.start}
