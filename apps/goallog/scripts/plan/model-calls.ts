@@ -215,12 +215,12 @@ test("claimModelCall chat: a chat row dated yesterday does not count", async () 
 
 test("claimModelCall chat: the row keeps its model and source, no outcome until settled", async () => {
   current = first;
-  const call = await claimModelCall("gpt-5-mini", "chat");
+  const call = await claimModelCall("gpt-5.6-luna", "chat");
   assert.ok(call);
   try {
     const [row] = await sql<{ model: string; source: string; outcome: string | null }[]>`
       select model, source, outcome from goals.model_calls where id = ${call.id}`;
-    assert.deepEqual(row, { model: "gpt-5-mini", source: "chat", outcome: null });
+    assert.deepEqual(row, { model: "gpt-5.6-luna", source: "chat", outcome: null });
   } finally {
     await sql`delete from goals.model_calls where id = ${call.id}`;
   }

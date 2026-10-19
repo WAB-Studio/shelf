@@ -12,7 +12,7 @@ import { todayInZone } from "@/lib/zone";
 import { chatStub, type ChatStub } from "./seam";
 import { CHAT_TURNS_SENT, type Change, type ChatTurn } from "./types";
 
-export const CHAT_MODEL = "gpt-5-mini";
+export const CHAT_MODEL = "gpt-5.6-luna";
 
 const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
@@ -47,7 +47,7 @@ function stubNow(): ChatStub | null {
   return chatStub(env.PULSAR_CHAT_STUB, process.env.VERCEL);
 }
 
-// The bench model replaces the product's only off Vercel, the guard the stub seam uses (RP-93).
+// The bench model replaces the product's only off Vercel, the guard the stub seam uses (RP-140).
 export function chatModel(): string {
   return process.env.VERCEL ? CHAT_MODEL : (env.PULSAR_CHAT_BENCH_MODEL ?? CHAT_MODEL);
 }

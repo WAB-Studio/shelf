@@ -191,7 +191,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 - [x] **RP-91** — The app has a chat, on a screen of its own reached from every screen. The person writes in Spanish what they want changed («pasa la tarea de Maze a noviembre», «agrega 2 h de inglés el martes») and the chat answers through the same tools a connected AI uses (RP-39, RP-139, RP-85), with the same refusals and the same reasons. Decided by the user 2026-10-12.
 - [x] **RP-92** — The chat never writes on its own: each change is shown as a proposal, with what it changes, and is made when the person taps «Hacer». The changes of one message are accepted together or one by one. What RP-139 forbids an AI — deleting, archiving, undoing a mark — the chat never does. Decided by the user 2026-10-12.
-- [x] **RP-93** — The chat answers with **gpt-5-mini**, and each message is a paid call under RNP-21. Past the day's cap the chat says so and calls no model. Decided by the user 2026-10-12.
+- [x] **RP-140** *(successor of RP-93)* — The chat answers with **gpt-5.6-luna**, and each message is a paid call under RNP-21. Past the day's cap the chat says so and calls no model. Decided by the user 2026-10-12 and 2026-10-19, succeeding RP-93.
 - [x] **RP-94** — The conversation lives in the tab that holds it and is not stored on the server; closing the tab ends it. What the chat changed stays in the plan like any other change. Decided by the user 2026-10-12.
 
 #### The week and the review
@@ -245,7 +245,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RNP-20** — A key or an authorization that goes ninety days without use opens nothing, as if revoked, and the
   connections screen says so; one in use never lapses. Use is a call through the key, or a refresh of the authorization.
   Decided by the user 2026-10-08.
-- [x] **RNP-21** — A chat message (RP-93) is a paid call claimed like an import's (RNP-13), under a cap of its own: fifty a day per person, apart from the import's ten. The record keeps the day, the model and, once answered, the tokens and the outcome. No automated check reaches the paid model. Decided by the user 2026-10-12.
+- [x] **RNP-21** — A chat message (RP-140) is a paid call claimed like an import's (RNP-13), under a cap of its own: fifty a day per person, apart from the import's ten. The record keeps the day, the model and, once answered, the tokens and the outcome. No automated check reaches the paid model. Decided by the user 2026-10-12.
 - [x] **RP-64** — The connections screen names, for each authorization, the host it returns to, as the consent does (RP-60), and folds every key and authorization that has stopped opening for more than thirty days under one line that counts them; the thirty days count from when it stopped entering (lapsed or revoked). Nothing is deleted (RP-38). A lapsed key offers to create another. Decided by the user 2026-10-08.
 
 ---
@@ -345,6 +345,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
   - Retired 2026-10-09 by the user: on paper a month not yet begun with no planned amount does not print; on screen and for the AI every month stays. Successor: **RP-70**.
 - [x] **RP-70** *(successor of RP-49)* — A person exports how every goal is going **as a PDF**: a read-only page of the report, and «Descargar PDF», which hands that page to the browser's own print-to-PDF — on a phone, the share or print menu. It says how many goals it holds and how many of them have ended. For each goal not archived: its measure against this month's planned amount and against the planned amount to date, its phases, **this month's tasks** — those carried in first, with the month they came from and what they owe, then the month's own — **done and not**, each with its estimate and its sub-tasks, and its months (RP-32): on paper, a month not yet begun with no planned amount does not print; on screen and to a connected AI every month stays; **on screen each month holds its weeks, folded under it; on paper only the months print** (RP-17). Every date it prints carries its year. The export writes nothing, installs nothing and generates nothing on the server; a source that cannot be read is said so in it (RNP-04). Decided by the user 2026-10-09, succeeding RP-49.
   - Retired 2026-10-10 by the user: on paper the goal's measure names its name and unit, a line names the months left out, and the month count counts the printed ones. Successor: **RP-71**.
+- [x] **RP-93** — The chat answers with **gpt-5-mini**, and each message is a paid call under RNP-21. Past the day's cap the chat says so and calls no model. Decided by the user 2026-10-12.
+  - Retired 2026-10-19 by the user: the chat answers with gpt-5.6-luna, measured against five other models (S1); gpt-5-mini shuts down 2026-12-11. Successor: **RP-140**.
 
 ## 2. Model and invariants
 
@@ -436,7 +438,7 @@ Principles, not recipes:
 | Script runner | **tsx** (`^4.23.12`, dev) | Runs the checks and harness scripts under `node --import tsx`. |
 | Mutation testing | **@stryker-mutator/core** and **@stryker-mutator/tap-runner** (`^10.0.0`, dev) | Mutates the pure `lib/` files a train changed through the `tap` runner, because the repo tests with `node --test`. Decided by the user 2026-10-14. |
 | Type packages | **@types/node** (`^22`), **@types/react**, **@types/react-dom** (`^19`, dev) | The types `tsgo` and `eslint` read. |
-| Plan import | **OpenAI over fetch**, no SDK — the way apps/wordbook/lib/word/model.ts calls it, with the answer validated by Zod | Reading a plan in any shape, PDF included, without a parser or a PDF library. The import calls gpt-5.5 and the chat gpt-5-mini (RP-130, RP-93). |
+| Plan import | **OpenAI over fetch**, no SDK — the way apps/wordbook/lib/word/model.ts calls it, with the answer validated by Zod | Reading a plan in any shape, PDF included, without a parser or a PDF library. The import calls gpt-5.5 and the chat gpt-5.6-luna (RP-130, RP-140). |
 
 ### Do not install
 

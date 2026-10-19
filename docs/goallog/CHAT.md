@@ -98,7 +98,7 @@ not verified here.** Cost of one message = 15,000 × input + 1,500 × output; a 
 |---|---|---|---|---|---|
 | gpt-5-nano | 0.05 | 0.40 | USD 0.0014 | USD 0.034 | USD 0.07 |
 | gpt-4.1-nano | 0.10 | 0.40 | USD 0.0021 | USD 0.052 | USD 0.10 |
-| gpt-5-mini (RP-93, today) | 0.25 | 2.00 | USD 0.0068 | USD 0.17 | USD 0.34 |
+| gpt-5-mini (RP-93, until 2026-10-19) | 0.25 | 2.00 | USD 0.0068 | USD 0.17 | USD 0.34 |
 | gpt-4.1-mini | 0.40 | 1.60 | USD 0.0084 | USD 0.21 | USD 0.42 |
 | gpt-5 | 1.25 | 10.00 | USD 0.034 | USD 0.84 | USD 1.69 |
 | gpt-5.5 (the import's) | not known | not known | re-read | re-read | re-read |
@@ -123,7 +123,7 @@ the network.
 - Writes `private/chat-bench/<model>-<time>.md`: model, task pass rate, mean input and output tokens, cost, p50 and p95 latency,
   and a line per task.
 - Reads tokens from `goals.model_calls` (the route answers none). That table records the model that ran (`chatModel()`: the bench model off Vercel,
-  `gpt-5-mini` on it); the bench filters by source and time, never by model.
+  `gpt-5.6-luna` on it (RP-140)); the bench filters by source and time, never by model.
 - Reads nothing the OpenAI CSV holds: it does not say what the app spent (`docs/TRAPS.md`, «El CSV de OpenAI no dice lo que gastó la app»).
 
-The bench decides nothing (RP-93 stands): it hands the user a table; the user picks the model.
+The bench decided nothing: it handed the user a table, and on 2026-10-19 the user picked gpt-5.6-luna (RP-140, succeeding RP-93).

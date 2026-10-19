@@ -278,7 +278,7 @@ test("claim then settle: one chat row, the model's name, outcome ok, tokens writ
   const rows = await chatRows();
   assert.equal(rows.length, 1);
   assert.equal(rows[0].source, "chat");
-  assert.equal(rows[0].model, "gpt-5-mini");
+  assert.equal(rows[0].model, "gpt-5.6-luna");
   assert.equal(rows[0].outcome, "ok");
   assert.notEqual(rows[0].input_tokens, null);
   assert.notEqual(rows[0].output_tokens, null);

@@ -132,7 +132,7 @@ afterEach(() => {
   else process.env.VERCEL = realVercel;
 });
 
-test("a two-round conversation: a read runs, a write becomes one change and never runs, the model is gpt-5-mini", async () => {
+test("a two-round conversation: a read runs, a write becomes one change and never runs, the model is gpt-5.6-luna", async () => {
   script(
     () => calling("c1", "get_today", {}, { prompt_tokens: 100, completion_tokens: 20 }),
     () => calling("c2", "fix_task", { one_off_id: "task-1", month: "2026-11" }, { prompt_tokens: 50, completion_tokens: 10 }),
@@ -149,7 +149,7 @@ test("a two-round conversation: a read runs, a write becomes one change and neve
   assert.deepEqual(result.usage, { input: 150, output: 30 });
   assert.deepEqual(reads, ["loadDay"]);
   assert.deepEqual(acts, []);
-  assert.ok(sent.every((request) => request.body.model === "gpt-5-mini"));
+  assert.ok(sent.every((request) => request.body.model === "gpt-5.6-luna"));
   assert.ok(sent.every((request) => request.url === "https://api.openai.com/v1/chat/completions"));
 });
 
@@ -481,15 +481,15 @@ test("M4 timeout: a quick model keeps a timeout well under the route's 60 s", as
   assert.deepEqual(timeouts.map((ms) => ms <= 50_000), [true]);
 });
 
-test("M4 bench seam off in Vercel: VERCEL set and a bench model set, the request still carries gpt-5-mini", async () => {
+test("M4 bench seam off in Vercel: VERCEL set and a bench model set, the request still carries gpt-5.6-luna", async () => {
   process.env.VERCEL = "1";
   fakeEnv.PULSAR_CHAT_BENCH_MODEL = "gpt-bench-x";
   script(() => saying("hola"));
   await answer();
-  assert.equal(sent[0].body.model, "gpt-5-mini");
+  assert.equal(sent[0].body.model, "gpt-5.6-luna");
 });
 
-test("M4 bench seam on locally: VERCEL unset and the seam set, the request carries the bench model; unset, gpt-5-mini", async () => {
+test("M4 bench seam on locally: VERCEL unset and the seam set, the request carries the bench model; unset, gpt-5.6-luna", async () => {
   fakeEnv.PULSAR_CHAT_BENCH_MODEL = "gpt-bench-x";
   script(() => saying("hola"));
   await answer();
@@ -497,7 +497,7 @@ test("M4 bench seam on locally: VERCEL unset and the seam set, the request carri
   delete fakeEnv.PULSAR_CHAT_BENCH_MODEL;
   script(() => saying("hola"));
   await answer();
-  assert.equal(sent[0].body.model, "gpt-5-mini");
+  assert.equal(sent[0].body.model, "gpt-5.6-luna");
 });
 
 test("M4 20 turns sent: 25 turns reach the model as the system prompt and the last 20", async () => {
@@ -519,9 +519,13 @@ test("reasoning_effort per family: omitted for gpt-4.1 and gpt-4o, none for gpt-
   for (const model of ["gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"]) assert.equal(reasoningEffortFor(model), undefined, model);
 });
 
-test("the request body carries reasoning_effort for gpt-5-mini and none for gpt-4.1-nano; chatModel follows the seam", async () => {
+test("the request body carries reasoning_effort none for gpt-5.6-luna, low for gpt-5-mini and none of it for gpt-4.1-nano; chatModel follows the seam", async () => {
   const { chatModel } = await import("./model");
-  assert.equal(chatModel(), "gpt-5-mini");
+  assert.equal(chatModel(), "gpt-5.6-luna");
+  script(() => saying("hola"));
+  await answer();
+  assert.equal((sent[0].body as Record<string, unknown>).reasoning_effort, "none");
+  fakeEnv.PULSAR_CHAT_BENCH_MODEL = "gpt-5-mini";
   script(() => saying("hola"));
   await answer();
   assert.equal((sent[0].body as Record<string, unknown>).reasoning_effort, "low");
@@ -537,5 +541,5 @@ test("the request body carries reasoning_effort for gpt-5-mini and none for gpt-
   await answer();
   assert.equal((sent[0].body as Record<string, unknown>).reasoning_effort, "none");
   process.env.VERCEL = "1";
-  assert.equal(chatModel(), "gpt-5-mini");
+  assert.equal(chatModel(), "gpt-5.6-luna");
 });

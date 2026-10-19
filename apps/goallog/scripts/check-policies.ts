@@ -3004,7 +3004,7 @@ async function checkModelCallsChat0020(): Promise<void> {
       const own = await attemptRows<{ id: string; source: string }>(
         tx,
         (sp) => sp`insert into goals.model_calls (user_id, model, source)
-          values (${subject}, 'gpt-5-mini', 'chat') returning id, source`,
+          values (${subject}, 'gpt-5.6-luna', 'chat') returning id, source`,
       );
       assert(
         "P251",
@@ -3015,13 +3015,13 @@ async function checkModelCallsChat0020(): Promise<void> {
       const foreign = await attempt(
         tx,
         (sp) => sp`insert into goals.model_calls (user_id, model, source)
-          values (${intruder}, 'gpt-5-mini', 'chat')`,
+          values (${intruder}, 'gpt-5.6-luna', 'chat')`,
       );
       assert("P252", foreign.code === "42501", `insert 'chat' for another person, sqlstate = ${foreign.code ?? "none"}`);
 
       const unknown = await attempt(
         tx,
-        (sp) => sp`insert into goals.model_calls (user_id, model, source) values (${subject}, 'gpt-5-mini', 'x')`,
+        (sp) => sp`insert into goals.model_calls (user_id, model, source) values (${subject}, 'gpt-5.6-luna', 'x')`,
       );
       assert("P253", unknown.code === "23514", `insert source 'x' after 0020, sqlstate = ${unknown.code ?? "none"}`);
 
