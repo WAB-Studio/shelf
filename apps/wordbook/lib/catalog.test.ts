@@ -36,5 +36,17 @@ test("the quota line names the hour and the words stay; no «Mañana»", () => {
 test("the first-copy line is the board's and nothing promises a closed tab", () => {
   const all = strings(messages);
   assert.ok(all.some(([, text]) => text === "Aún no ha habido una copia."));
-  assert.deepEqual(all.filter(([, text]) => /cierres esta pestaña/.test(text)), []);
+  assert.deepEqual(
+    all.filter(([, text]) => /cierres esta pestaña/.test(text)),
+    [],
+  );
+});
+
+test("the signed-in link-refused body exists, quotes «» only and points at no form below", () => {
+  const body = messages.account.errors.linkOtherBrowserSignedInBody;
+  assert.equal(
+    body,
+    "Por seguridad el enlace solo entra en el navegador que lo pidió. Aquí ya tienes la sesión abierta; si querías entrar en otro navegador, abre el enlace allí.",
+  );
+  assert.doesNotMatch(body, /aquí abajo/);
 });

@@ -182,6 +182,7 @@
       "notInvited": "Este correo no tiene invitación a WordBook.",
       "linkOtherBrowserTitle": "Abre el enlace en el navegador donde lo pediste",
       "linkOtherBrowserBody": "Por seguridad el enlace solo entra en el navegador que lo pidió. Pide uno nuevo aquí abajo si cambiaste.",
+      "linkOtherBrowserSignedInBody": "Por seguridad el enlace solo entra en el navegador que lo pidió. Aquí ya tienes la sesión abierta; si querías entrar en otro navegador, abre el enlace allí.",
       "linkTimeoutTitle": "No se pudo comprobar el enlace",
       "linkTimeoutBody": "Falló de nuestro lado, no del enlace. Ábrelo otra vez desde el correo; si tampoco entra, pide uno nuevo aquí.",
       "linkInvalidTitle": "El enlace no vale o ya venció",
