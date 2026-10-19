@@ -512,10 +512,10 @@ test("M4 20 turns sent: 25 turns reach the model as the system prompt and the la
   assert.equal(messages[20].content, "t24");
 });
 
-test("reasoning_effort per family: omitted for gpt-4.1 and gpt-4o, none for gpt-6, low for the rest", async () => {
+test("reasoning_effort per family: omitted for gpt-4.1 and gpt-4o, none for gpt-6 and gpt-5.6, low for the rest", async () => {
   const { reasoningEffortFor } = await import("./model");
-  for (const model of ["gpt-5-mini", "gpt-5-nano", "gpt-5.6-luna", "o3", "o4-mini"]) assert.equal(reasoningEffortFor(model), "low", model);
-  for (const model of ["gpt-6-luna", "gpt-6"]) assert.equal(reasoningEffortFor(model), "none", model);
+  for (const model of ["gpt-5-mini", "gpt-5-nano", "o3", "o4-mini"]) assert.equal(reasoningEffortFor(model), "low", model);
+  for (const model of ["gpt-6-luna", "gpt-6", "gpt-5.6-luna"]) assert.equal(reasoningEffortFor(model), "none", model);
   for (const model of ["gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"]) assert.equal(reasoningEffortFor(model), undefined, model);
 });
 

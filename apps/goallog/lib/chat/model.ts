@@ -52,10 +52,10 @@ export function chatModel(): string {
   return process.env.VERCEL ? CHAT_MODEL : (env.PULSAR_CHAT_BENCH_MODEL ?? CHAT_MODEL);
 }
 
-// gpt-4.1 and gpt-4o are not reasoning models and answer the field with a 400; gpt-6 calls tools only with effort "none" (OpenAI's model page).
+// gpt-4.1 and gpt-4o are not reasoning models and answer the field with a 400; gpt-6 and gpt-5.6 call tools on Chat Completions only with effort "none" (OpenAI's 400 says so).
 export function reasoningEffortFor(model: string): "none" | "low" | undefined {
   if (/^gpt-4(\.|o|-)/.test(model) || /^gpt-3/.test(model)) return undefined;
-  return /^gpt-6/.test(model) ? "none" : REASONING_EFFORT;
+  return /^gpt-(6|5\.6)/.test(model) ? "none" : REASONING_EFFORT;
 }
 
 export function chatAvailable(): boolean {
