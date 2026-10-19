@@ -85,8 +85,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
     2026-09-22, when module 8 found the engine asking for an anchor the table does not hold. The
     anchor is `commitments.created_at`, read as a civil day: no column, no field on any screen, and
     nothing for a person to get wrong. The price they took knowingly — a commitment typed on a
-    Tuesday night is anchored to that Tuesday for good, and `commitments` accepts UPDATE on
-    `retired_at` alone, so the only correction is to retire it and open another.
+    Tuesday night is anchored to that Tuesday for good: `created_at` takes no UPDATE, so the only
+    way to move the anchor is to retire it and open another.
 - [x] **RP-127** *(successor of RP-13)* — A commitment that explains facts is retired, never deleted: the facts stay explained and the weeks it governed keep reading as they did. What no fact depends on can be edited and deleted: a phase, a cadence, a goal's measure, its rhythm, and a goal with no facts. Decided by the user 2026-10-15.
 - [x] **RP-14** — A goal names **one** measure that predicts its progress — minutes spoken, pages read — and every fact that carries a quantity **in that measure's unit** feeds it. A quantity in any other unit satisfies its commitment and is not summed: a goal measured in minutes is not advanced by forty searches.
   - Settled 2026-09-22, when the engine asked whether evidence feeds the measure. It does, when it shares the unit, and by the same rule as any other quantity — the measure never knows which app a quantity came from. Written before any screen read it, so no tick is invalidated.
