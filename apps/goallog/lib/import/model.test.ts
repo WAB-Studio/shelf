@@ -147,16 +147,22 @@ test("the schema names each limit: 120 on a task name, 7 on times per week, 40 g
   assert.ok(/three|tres|3/i.test(JSON.stringify(goals.items.properties.parent)));
 });
 
-test("the schema asks context before goals and stays strict", async () => {
+test("the schema carries goals alone, with no free context text, and stays strict", async () => {
   fakeEnv.OPENAI_API_KEY = "sk-test";
   replyWith(() => whole(answer));
   await readText();
   const schema = bodyOf(calls[0]).response_format.json_schema.schema;
 
-  assert.deepEqual(Object.keys(schema.properties), ["context", "goals"]);
-  assert.deepEqual(schema.required, ["context", "goals"]);
+  assert.deepEqual(Object.keys(schema.properties), ["goals"]);
+  assert.deepEqual(schema.required, ["goals"]);
   assert.equal(schema.additionalProperties, false);
   assert.equal("$schema" in schema, false);
+  assert.equal(JSON.stringify(schema).includes('"context"'), false);
+});
+
+test("the prompt does not ask for a context the schema no longer has", async () => {
+  const { SYSTEM_PROMPT } = await import("./prompt");
+  assert.equal(SYSTEM_PROMPT.includes('"context"'), false);
 });
 
 test("the step is find on sending and arrange exactly when goals opens", async () => {
