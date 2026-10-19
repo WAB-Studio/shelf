@@ -88,6 +88,35 @@ test("replay, concurrent: the same requestId from two connections at once leaves
   assert.equal((await goalsNamed(owner.id, "recibo a la vez")).length, 1, show(run));
 });
 
+// ------------------------------------------------------------ Replay, goal inside a goal
+
+const createUnder = (parentId: string, name: string, requestId: string) => () =>
+  as(() => acts.plan.createGoal({ name, horizon: `${year}-06-30`, parentId, requestId } as never));
+
+async function childrenOf(parentId: string): Promise<number> {
+  const [{ n }] = await admin<{ n: number }[]>`select count(*)::int as n from goals.goals where parent_id = ${parentId}`;
+  return n;
+}
+
+test("replay, child goal: createGoal under a goal with one requestId twice answers the same goalId and leaves one child", async () => {
+  const parent = await freshGoal("recibo madre");
+  const requestId = randomUUID();
+  const first = await createUnder(parent, "recibo hija", requestId)();
+  const second = await createUnder(parent, "recibo hija", requestId)();
+  assert.equal(first.ok, true, show(first));
+  assert.deepEqual(second, first);
+  assert.equal(await childrenOf(parent), 1);
+});
+
+test("replay, child goal, concurrent: the same requestId at once under a goal leaves one child and both answers equal", async () => {
+  const parent = await freshGoal("recibo madre a la vez");
+  const requestId = randomUUID();
+  const run = await interleave(createUnder(parent, "recibo hija a la vez", requestId), createUnder(parent, "recibo hija a la vez", requestId));
+  assert.equal(run.first.ok, true, show(run));
+  assert.deepEqual(run.second, run.first, show(run));
+  assert.equal(await childrenOf(parent), 1, show(run));
+});
+
 // ------------------------------------------------------------ Replay, phase and habit
 
 test("replay, phase: addPhase with one requestId twice answers the same phaseId and leaves one phase", async () => {

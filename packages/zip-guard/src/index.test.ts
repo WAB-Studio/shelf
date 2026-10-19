@@ -6,7 +6,7 @@ import zlib from "node:zlib";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 
-import { zipWithin } from "./index";
+import { zipInflatesWithin, zipWithin } from "./index";
 
 // M2: `zipWithin` answers whether an archive inflates to no more than `inflatedMax` bytes in
 // at most `entriesMax` entries, judged by inflating, never by the directory's own claim.
@@ -137,4 +137,19 @@ test("memory stays bounded: an entry inflating past the cap throws ERR_BUFFER_TO
   assert.ok(spy.mock.callCount() >= 1, "the guard inflated the entry");
   assert.deepEqual(thrown, ["ERR_BUFFER_TOO_LARGE"]);
   for (const length of returned) assert.ok(length <= CAPS.inflatedMax, `an inflate returned ${length} bytes`);
+});
+
+// M24: the directory can lie about every entry; the budget the inflating spends is one for the whole archive.
+test("forged directories: deflated entries each under the cap but together over it are refused, by inflating", async () => {
+  let two = await zipOf({ "a.bin": Buffer.alloc(40 * MIB), "b.bin": Buffer.alloc(40 * MIB) }, "DEFLATE");
+  two = forge(forge(two, "a.bin", { size: 1 }), "b.bin", { size: 1 });
+  assert.equal(zipWithin(two, CAPS), false);
+  assert.equal(zipInflatesWithin(two, CAPS), false);
+});
+
+test("forged directories: the inflated budget is cumulative to the byte across deflated entries", async () => {
+  let small = await zipOf({ "a.bin": Buffer.alloc(MIB), "b.bin": Buffer.alloc(MIB) }, "DEFLATE");
+  small = forge(forge(small, "a.bin", { size: 1 }), "b.bin", { size: 1 });
+  assert.equal(zipInflatesWithin(small, { inflatedMax: 2 * MIB, entriesMax: 10 }), true);
+  assert.equal(zipInflatesWithin(small, { inflatedMax: 2 * MIB - 1, entriesMax: 10 }), false);
 });

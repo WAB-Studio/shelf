@@ -4243,6 +4243,7 @@ async function main(): Promise<void> {
   await dashboardRosterNamesSuite();
   await importCommitSetSuite();
   await parentCategorySuite();
+  await importCommitScopesSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -11580,5 +11581,352 @@ async function parentCategorySuite(): Promise<void> {
       report.length === seededRows.length &&
       reportRepeats.length === 0,
     `picker repeats [${pickerRepeats.join(", ")}] of ${pickerDrawn.length}; report repeats [${reportRepeats.join(", ")}] of ${report.length}/${seededRows.length}`,
+  );
+}
+
+// M24: what a re-import may touch and in what order it writes (RF-51, RF-52, RF-31, RNF-15). Each row is a survivor of the
+// oleada-4 mutator: a key shared by two of the caller's scopes, a file longer than one chunk, the labels and review stamp
+// of an updated movement, the typed refusal on a fund's movement key, and the order of a backup's adjustments.
+async function importCommitScopesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const pesos = (cents: number) => `${Math.trunc(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+  const empty = (): CommitInput => ({
+    members: [],
+    categories: [],
+    accounts: [],
+    recurringRules: [],
+    transactions: [],
+    adjustments: [],
+  });
+  type Outcome = { ok: true } | { ok: false; error: unknown };
+  const commit = async (user: HarnessUser, input: CommitInput, groupId: string | null): Promise<Outcome> => {
+    try {
+      await asUser(user, () => withUserDb((tx) => commitImport(tx, input, { userId: user.id, groupId })));
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  };
+  const said = (outcome: Outcome) => (outcome.ok ? "ok" : `threw ${refusal(outcome.error)}`);
+  const openAccount = async (user: HarnessUser, name: string, cents: number, balanceOn: string) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness m24 ${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: cents,
+        balanceOn,
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bookExpense = async (
+    user: HarnessUser,
+    accountId: string,
+    categoryId: string,
+    ref: string,
+    cents: number,
+    description: string,
+    labelIds: string[] = [],
+    occurredAt = shiftDate(today, -3),
+  ) => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: cents,
+        occurredAt,
+        description,
+        externalRef: ref,
+        splits: [{ categoryId, amountCents: cents }],
+        labelIds,
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const updateRow = (
+    ref: string,
+    accountId: string,
+    categoryId: string,
+    cents: number,
+    description: string,
+    i = 0,
+  ): CommitInput["transactions"][number] => ({
+    status: "update",
+    index: i,
+    sheetRow: i + 2,
+    externalRef: ref,
+    placeholderId: null,
+    object: {
+      fromAccountId: accountId,
+      toAccountId: null,
+      amount: pesos(cents),
+      occurredAt: shiftDate(today, -3),
+      description,
+      externalRef: ref,
+      splits: [{ categoryId, amount: pesos(cents) }],
+      labelIds: [],
+    },
+  });
+  const categoryRow = (
+    ref: string,
+    status: "new" | "update",
+    name: string,
+    i = 0,
+  ): CommitInput["categories"][number] => ({
+    status,
+    index: i,
+    sheetRow: i + 2,
+    externalRef: ref,
+    placeholderId: status === "new" ? randomUUID() : null,
+    object: { name, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] },
+  });
+  const descriptionOf = async (id: string) =>
+    (await fixtureSql<{ description: string | null }[]>`select description from transactions where id = ${id}`)[0]?.description;
+  const trackKeyed = async (table: "categories", ref: string) => {
+    for (const r of await fixtureSql<{ id: string }[]>`select id from ${fixtureSql(table)} where external_ref = ${ref}`) track(table, r.id);
+  };
+
+  // ---- A file longer than one chunk loses no updated row (RNF-15).
+  const bulk = await createMembershipFreeUser();
+  const BULK = 501;
+  const bulkRef = (i: number) => `m24-${tag}-b${i}`;
+  const indexes = Array.from({ length: BULK }, (_, i) => i);
+  const seeded = await commit(bulk, { ...empty(), categories: indexes.map((i) => categoryRow(bulkRef(i), "new", `Harness m24 masa ${i} ${tag}`, i)) }, null);
+  const bulkRows = await fixtureSql<{ id: string; external_ref: string }[]>`
+    select id, external_ref from categories where owner_user_id = ${bulk.id} and external_ref like ${`m24-${tag}-b%`}`;
+  for (const r of bulkRows) track("categories", r.id);
+  const renamed = await commit(bulk, { ...empty(), categories: indexes.map((i) => categoryRow(bulkRef(i), "update", `Harness m24 masa nueva ${i} ${tag}`, i)) }, null);
+  const names = new Map(
+    (await fixtureSql<{ external_ref: string; name: string }[]>`
+      select external_ref, name from categories where owner_user_id = ${bulk.id} and external_ref like ${`m24-${tag}-b%`}`).map((r) => [r.external_ref, r.name]),
+  );
+  const notRenamed = indexes.filter((i) => names.get(bulkRef(i)) !== `Harness m24 masa nueva ${i} ${tag}`);
+  assert(
+    next("A re-import of 501 updated rows renames every one, the 500th of the first chunk included (RNF-15)"),
+    seeded.ok && renamed.ok && bulkRows.length === BULK && notRenamed.length === 0,
+    `seed ${said(seeded)}; update ${said(renamed)}; ${bulkRows.length} seeded; not renamed: [${notRenamed.slice(0, 5)}] of ${notRenamed.length}`,
+  );
+
+  // ---- An updated movement: its old labels go with its old splits, and a generated one is confirmed (RF-31).
+  const solo = await createMembershipFreeUser();
+  const soloBank = await openAccount(solo, "banco", 50_000_000, shiftDate(today, -60));
+  const soloCategory = (await asUser(solo, () =>
+    createCategory({ scope: { ownerUserId: solo.id }, name: `Harness m24 categoria ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),
+  )).categoryId;
+  track("categories", soloCategory);
+  const label = (await asUser(solo, () => createLabel({ scope: { ownerUserId: solo.id }, name: `Harness m24 etiqueta ${tag}`, color: "#047857" }))).labelId;
+  track("labels", label);
+  const tagged = await bookExpense(solo, soloBank, soloCategory, `m24-${tag}-etiquetado`, 12_000, `m24 ${tag} etiquetado antes`, [label]);
+  const labelsBefore = (await fixtureSql<{ n: number }[]>`select count(*)::int as n from transaction_labels where transaction_id = ${tagged}`)[0].n;
+  const relabelled = await commit(solo, { ...empty(), transactions: [updateRow(`m24-${tag}-etiquetado`, soloBank, soloCategory, 13_000, `m24 ${tag} etiquetado despues`)] }, null);
+  const labelsAfter = (await fixtureSql<{ n: number }[]>`select count(*)::int as n from transaction_labels where transaction_id = ${tagged}`)[0].n;
+  assert(
+    next("An updated movement whose row carries no label leaves the movement with none (RF-52)"),
+    labelsBefore === 1 && relabelled.ok && labelsAfter === 0 && (await descriptionOf(tagged)) === `m24 ${tag} etiquetado despues`,
+    `labels before ${labelsBefore}, after ${labelsAfter}; ${said(relabelled)}`,
+  );
+
+  const { recurringRuleId } = await asUser(solo, () =>
+    createRecurringRule({
+      fromAccountId: soloBank,
+      toAccountId: null,
+      amountCents: 30_000,
+      categoryId: soloCategory,
+      description: `Harness m24 regla ${tag}`,
+      frequency: "monthly",
+      intervalN: 1,
+      dayOfMonth: 5,
+      nextRunOn: shiftDate(today, 20),
+      endsOn: null,
+    }),
+  );
+  track("recurring_rules", recurringRuleId);
+  const generated = await bookExpense(solo, soloBank, soloCategory, `m24-${tag}-generado`, 14_000, `m24 ${tag} generado antes`);
+  const manual = await bookExpense(solo, soloBank, soloCategory, `m24-${tag}-manual`, 15_000, `m24 ${tag} manual antes`);
+  const confirmed = await bookExpense(solo, soloBank, soloCategory, `m24-${tag}-confirmado`, 16_000, `m24 ${tag} confirmado antes`);
+  await asOwner(solo.id, async (tx) => {
+    await tx`update transactions set recurring_rule_id = ${recurringRuleId} where id in ${tx([generated, confirmed])}`;
+    await tx`update transactions set reviewed_at = '2026-01-02T03:04:05Z' where id = ${confirmed}`;
+  });
+  const stamps = async () =>
+    new Map(
+      (await fixtureSql<{ id: string; reviewed_at: string | null }[]>`
+        select id, reviewed_at::text as reviewed_at from transactions where id in ${fixtureSql([generated, manual, confirmed])}`).map((r) => [r.id, r.reviewed_at]),
+    );
+  const stampsBefore = await stamps();
+  const corrected = await commit(solo, {
+    ...empty(),
+    transactions: [
+      updateRow(`m24-${tag}-generado`, soloBank, soloCategory, 14_500, `m24 ${tag} generado despues`, 0),
+      updateRow(`m24-${tag}-manual`, soloBank, soloCategory, 15_500, `m24 ${tag} manual despues`, 1),
+      updateRow(`m24-${tag}-confirmado`, soloBank, soloCategory, 16_500, `m24 ${tag} confirmado despues`, 2),
+    ],
+  }, null);
+  const stampsAfter = await stamps();
+  assert(
+    next("Correcting an unreviewed generated movement by import confirms it; a manual one stays unreviewed and a reviewed one keeps its stamp (RF-31)"),
+    corrected.ok &&
+      stampsBefore.get(generated) === null &&
+      stampsAfter.get(generated) !== null &&
+      stampsAfter.get(manual) === null &&
+      stampsAfter.get(confirmed) === stampsBefore.get(confirmed),
+    `${said(corrected)}; before ${JSON.stringify([...stampsBefore])}; after ${JSON.stringify([...stampsAfter])}`,
+  );
+
+  // ---- A backup's adjustment counts the balance of its day after the file's movements landed (RF-137, RF-138).
+  const adjustDay = shiftDate(today, -5);
+  const OPEN = 50_000_000;
+  const adjustBank = await openAccount(solo, "ajuste", OPEN, shiftDate(today, -60));
+  const adjusted = await commit(solo, {
+    ...empty(),
+    transactions: [
+      {
+        status: "new",
+        index: 0,
+        sheetRow: 2,
+        externalRef: `m24-${tag}-gasto-ajuste`,
+        placeholderId: null,
+        object: {
+          fromAccountId: adjustBank,
+          toAccountId: null,
+          amount: pesos(10_000),
+          occurredAt: shiftDate(today, -7),
+          description: `m24 ${tag} gasto del extracto`,
+          externalRef: `m24-${tag}-gasto-ajuste`,
+          splits: [{ categoryId: soloCategory, amount: pesos(10_000) }],
+          labelIds: [],
+        },
+      },
+    ],
+    adjustments: [
+      {
+        status: "new",
+        index: 1,
+        sheetRow: 3,
+        externalRef: `m24-${tag}-ajuste`,
+        placeholderId: null,
+        object: { adjustment: true, accountId: adjustBank, direction: "up", amount: pesos(50_000), occurredAt: adjustDay },
+      },
+    ],
+  }, null);
+  const [counted] = await fixtureSql<{ counted: number }[]>`
+    select counted_balance_cents::int as counted from account_reconciliations where account_id = ${adjustBank}`;
+  const [balance] = await fixtureSql<{ balance: number }[]>`
+    select private.account_settlement_balance_on(${adjustBank}::uuid, ${adjustDay}::date)::int as balance`;
+  assert(
+    next("A backup adjustment counts the account's balance of its day with the file's earlier movements in it: opening, less the expense, plus the gap"),
+    adjusted.ok && counted?.counted === OPEN - 10_000 + 50_000 && balance.balance === counted.counted,
+    `${said(adjusted)}; counted ${counted?.counted}, balance that day ${balance.balance}, wanted ${OPEN - 10_000 + 50_000}`,
+  );
+
+  // ---- A fund: a key shared by the caller's own scope and the fund's.
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo m24 ${tag}`, leaderName: `Harness m24 lider ${tag}`, cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const [{ id: fundCash }] = await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${groupId} and subtype = 'cash'`;
+  track("accounts", fundCash);
+  const ownBank = await openAccount(leader, "propia", 50_000_000, shiftDate(today, -60));
+  const ownCategory = (await asUser(leader, () =>
+    createCategory({ scope: { ownerUserId: leader.id }, name: `Harness m24 propia ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),
+  )).categoryId;
+  const fundCategory = (await asUser(leader, () =>
+    createCategory({ scope: { groupId }, name: `Harness m24 fondo ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[1] }),
+  )).categoryId;
+  track("categories", ownCategory);
+  track("categories", fundCategory);
+  for (const r of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${groupId}`) track("group_members", r.id);
+
+  const sharedRef = `m24-${tag}-compartida`;
+  const ownMove = await bookExpense(leader, ownBank, ownCategory, sharedRef, 20_000, `m24 ${tag} propia antes`);
+  const fundMove = await bookExpense(leader, fundCash, fundCategory, sharedRef, 21_000, `m24 ${tag} fondo antes`);
+
+  const personalOnly = await commit(leader, { ...empty(), transactions: [updateRow(sharedRef, ownBank, ownCategory, 22_000, `m24 ${tag} propia despues`)] }, null);
+  assert(
+    next("A personal-scope re-import of a key both the caller's own scope and the fund hold updates the own movement and leaves the fund's"),
+    personalOnly.ok &&
+      (await descriptionOf(ownMove)) === `m24 ${tag} propia despues` &&
+      (await descriptionOf(fundMove)) === `m24 ${tag} fondo antes`,
+    `${said(personalOnly)}; own "${await descriptionOf(ownMove)}", fund "${await descriptionOf(fundMove)}"`,
+  );
+
+  const otherOwn = await bookExpense(leader, ownBank, ownCategory, `m24-${tag}-otra-propia`, 23_000, `m24 ${tag} otra propia antes`);
+  const otherFund = await bookExpense(leader, fundCash, fundCategory, `m24-${tag}-otra-fondo`, 24_000, `m24 ${tag} otra fondo antes`);
+  const both = await commit(leader, {
+    ...empty(),
+    transactions: [
+      updateRow(`m24-${tag}-otra-propia`, ownBank, ownCategory, 23_500, `m24 ${tag} otra propia despues`, 0),
+      updateRow(`m24-${tag}-otra-fondo`, fundCash, fundCategory, 24_500, `m24 ${tag} otra fondo despues`, 1),
+    ],
+  }, groupId);
+  assert(
+    next("A fund-scope re-import updates both the fund's movement and the caller's own movement, each by its key"),
+    both.ok &&
+      (await descriptionOf(otherOwn)) === `m24 ${tag} otra propia despues` &&
+      (await descriptionOf(otherFund)) === `m24 ${tag} otra fondo despues`,
+    `${said(both)}; own "${await descriptionOf(otherOwn)}", fund "${await descriptionOf(otherFund)}"`,
+  );
+
+  const categoryRef = `m24-${tag}-categoria`;
+  const madeOwn = await commit(leader, { ...empty(), categories: [categoryRow(categoryRef, "new", `Harness m24 cat propia ${tag}`)] }, null);
+  const madeFund = await commit(leader, { ...empty(), categories: [categoryRow(categoryRef, "new", `Harness m24 cat fondo ${tag}`)] }, groupId);
+  await trackKeyed("categories", categoryRef);
+  const renamedFund = await commit(leader, { ...empty(), categories: [categoryRow(categoryRef, "update", `Harness m24 cat fondo nueva ${tag}`)] }, groupId);
+  const categoryNames = await fixtureSql<{ owner: string | null; name: string }[]>`
+    select owner_user_id as owner, name from categories where external_ref = ${categoryRef} order by owner_user_id nulls last`;
+  assert(
+    next("A fund-scope re-import of a category key the caller's own scope also holds renames the fund's category and leaves the own"),
+    madeOwn.ok && madeFund.ok && renamedFund.ok &&
+      categoryNames.length === 2 &&
+      categoryNames.some((r) => r.owner === leader.id && r.name === `Harness m24 cat propia ${tag}`) &&
+      categoryNames.some((r) => r.owner === null && r.name === `Harness m24 cat fondo nueva ${tag}`),
+    `${said(madeOwn)} / ${said(madeFund)} / ${said(renamedFund)}; ${JSON.stringify(categoryNames)}`,
+  );
+
+  // A member's key is the group's: a commit whose scope names another group renames nothing here.
+  const memberRef = `m24-${tag}-miembro`;
+  const addedMember = await commit(leader, {
+    ...empty(),
+    members: [{ status: "new", index: 0, sheetRow: 2, externalRef: memberRef, placeholderId: null, object: { name: `Harness m24 miembro ${tag}`, email: undefined } }],
+  }, groupId);
+  for (const r of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${groupId}`) track("group_members", r.id);
+  const elsewhere = await commit(leader, {
+    ...empty(),
+    members: [{ status: "update", index: 0, sheetRow: 2, externalRef: memberRef, placeholderId: null, object: { name: `Harness m24 miembro ajeno ${tag}`, email: undefined } }],
+  }, randomUUID());
+  const memberName = (await fixtureSql<{ name: string }[]>`select name from group_members where group_id = ${groupId} and external_ref = ${memberRef}`)[0]?.name;
+  assert(
+    next("A member update under the scope of another group leaves the leader's own group's member as it was"),
+    addedMember.ok && memberName === `Harness m24 miembro ${tag}`,
+    `${said(addedMember)} / ${said(elsewhere)}; member reads "${memberName}"`,
+  );
+
+  // ---- A key the fund already holds is the typed refusal, for a fund's movements too (RF-52).
+  const clash = await commit(leader, {
+    ...empty(),
+    transactions: [
+      {
+        ...updateRow(`m24-${tag}-otra-fondo`, fundCash, fundCategory, 25_000, `m24 ${tag} repetida`),
+        status: "new",
+      },
+    ],
+  }, groupId);
+  const typedClass = importCommitModule.ImportAlreadyCommitting;
+  assert(
+    next("A new movement whose key the fund's movement already holds throws ImportAlreadyCommitting, as a second tab does"),
+    !clash.ok && clash.error instanceof typedClass,
+    `${said(clash)}`,
   );
 }
