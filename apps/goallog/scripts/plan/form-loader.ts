@@ -75,7 +75,7 @@ type GoalForm = {
   month?: { month: string; past: boolean } | null;
   tasks?: FormTask[];
 };
-type LoadGoalForm = (goalId: string, month?: string) => Promise<GoalForm | null>;
+type LoadGoalForm = (goalId: string, month?: string, today?: string) => Promise<GoalForm | null>;
 
 let session: typeof import("@/lib/session");
 let goalQueries: GoalQueries;
@@ -84,6 +84,7 @@ let me: Person;
 let other: Person;
 let myGoal: string;
 let otherGoal: string;
+let siblingGoal: string; // a second goal of the same person, with its own phase, commitment and tasks
 let month: string; // YYYY-MM, next month: inside the span and not past
 const ids: Record<string, string> = {};
 
@@ -100,6 +101,20 @@ async function plantGoal(owner: string, name: string): Promise<string> {
   const [row] = await admin<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, position)
     values (${owner}, ${name}, ${horizon}, 'Medida', 'min', 980) returning id`;
+  return row.id;
+}
+
+type GoalOptions = { parentId?: string; createdDaysAgo?: number; horizonDays?: number; unit?: string | null; archived?: boolean };
+
+async function plantGoalWith(owner: string, name: string, options: GoalOptions): Promise<string> {
+  const horizon = new Date(Date.now() + (options.horizonDays ?? 150) * 86_400_000).toISOString().slice(0, 10);
+  const unit = options.unit === undefined ? "min" : options.unit;
+  const [row] = await admin<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, position, parent_id, created_at, archived_at)
+    values (${owner}, ${name}, ${horizon}, ${unit === null ? null : "Medida"}, ${unit}, 970,
+            ${options.parentId ?? null}, now() - ${`${options.createdDaysAgo ?? 0} days`}::interval,
+            ${options.archived ? new Date() : null})
+    returning id`;
   return row.id;
 }
 
@@ -167,6 +182,13 @@ before(async () => {
   ids.laterParent = await plantTask(me.id, myGoal, "Padre del otro mes", { plannedMonth: later });
   ids.laterChild = await plantTask(me.id, myGoal, "Hija del otro mes", { parentId: ids.laterParent }, 15);
   ids.theirs = await plantTask(other.id, otherGoal, "Ajena del mes", { plannedMonth: month }, 10);
+
+  siblingGoal = await plantGoal(me.id, `form-loader sibling ${randomUUID()}`);
+  await plantPhase(me.id, siblingGoal, "Hermana", `${month}-01`, `${month}-20`);
+  ids.siblingCommitment = await plantCommitment(me.id, siblingGoal, "De la hermana", false);
+  ids.siblingParent = await plantTask(me.id, siblingGoal, "Padre de la hermana", { plannedMonth: month });
+  ids.siblingChild = await plantTask(me.id, siblingGoal, "Hija de la hermana", { parentId: ids.siblingParent }, 5);
+  ids.siblingSingle = await plantTask(me.id, siblingGoal, "Suelta de la hermana", { plannedMonth: month }, 7);
 });
 
 after(async () => {
@@ -281,4 +303,123 @@ test("foreign goal: another person's goal reads null, and an unknown one too", a
   assert.equal(await as(me, () => loadGoalForm(otherGoal, month)), null);
   assert.equal(await as(me, () => loadGoalForm(otherGoal)), null);
   assert.equal(await as(me, () => loadGoalForm(randomUUID(), month)), null);
+});
+
+const idsOf = (rows: unknown[]): string[] => rows.map((row) => (row as { id: string }).id).sort();
+
+test("scoping: a goal's form holds its own phases, commitments and tasks, not its sibling's of the same person", async () => {
+  const [mine, sibling] = await as(me, () => Promise.all([loadGoalForm(myGoal, month), loadGoalForm(siblingGoal, month)]));
+  assert.ok(mine && sibling);
+  assert.deepEqual(
+    (mine.phases as { name: string }[]).map((phase) => phase.name).sort(),
+    ["Base", "Cierre"],
+  );
+  assert.deepEqual(idsOf(mine.commitments), [ids.live, ids.retired].sort());
+  assert.deepEqual(idsOf(mine.tasks ?? []), [ids.parent, ids.childA, ids.childB, ids.single].sort());
+
+  assert.deepEqual((sibling.phases as { name: string }[]).map((phase) => phase.name), ["Hermana"]);
+  assert.deepEqual(idsOf(sibling.commitments), [ids.siblingCommitment]);
+  assert.deepEqual(idsOf(sibling.tasks ?? []), [ids.siblingParent, ids.siblingChild, ids.siblingSingle].sort());
+});
+
+test("the database owes loadGoalForm that a task planned in a month is never a child", async () => {
+  await assert.rejects(
+    admin`insert into goals.one_offs (user_id, goal_id, name, parent_id, planned_month)
+          values (${me.id}, ${myGoal}, 'Hija con mes', ${ids.laterParent}, ${`${month}-01`}::date)`,
+    /one_offs_child_has_no_month/,
+  );
+});
+
+test("month shape: an impossible month answers as no month, never a database error", async () => {
+  for (const bad of ["2026-13", "2026-00", "2026-1", "26-05", "2026-05-01", "junk"]) {
+    const form = await as(me, () => loadGoalForm(myGoal, bad));
+    assert.ok(form, bad);
+    assert.equal(form.month, null, bad);
+    assert.deepEqual(form.tasks ?? [], [], bad);
+  }
+});
+
+test("id shape: an id that is no uuid reads null, never a database error", async () => {
+  assert.equal(await as(me, () => loadGoalForm("not-a-uuid", month)), null);
+  assert.equal(await as(me, () => loadGoalForm("", month)), null);
+});
+
+test("span: a month before the goal opened or after its end draws no month entry", async () => {
+  const before = await as(me, () => loadGoalForm(myGoal, monthAfter(month, -24)));
+  const after = await as(me, () => loadGoalForm(myGoal, monthAfter(month, 12)));
+  assert.ok(before && after);
+  assert.equal(before.month, null);
+  assert.equal(after.month, null);
+  const inside = await as(me, () => loadGoalForm(myGoal, month));
+  assert.equal(inside?.month?.month, `${month}-01`);
+});
+
+test("past: the month holding today is not past, the one before it is", async () => {
+  const { todayInZone } = await import("@/lib/zone");
+  const current = todayInZone().slice(0, 7);
+  const midNext = `${month}-10`;
+  const asNext = await as(me, () => loadGoalForm(myGoal, month, midNext));
+  const asCurrent = await as(me, () => loadGoalForm(myGoal, current, midNext));
+  assert.deepEqual(asNext?.month, { month: `${month}-01`, past: false });
+  assert.deepEqual(asCurrent?.month, { month: `${current}-01`, past: true });
+});
+
+test("endedOn: null the day before the horizon, the day before the horizon from the horizon on", async () => {
+  const first = await as(me, () => loadGoalForm(myGoal));
+  assert.ok(first?.horizon);
+  const shift = (day: string, days: number): string =>
+    new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+  const horizon = first.horizon;
+  const eve = shift(horizon, -1);
+  assert.equal((await as(me, () => loadGoalForm(myGoal, undefined, eve)))?.endedOn, null);
+  assert.equal((await as(me, () => loadGoalForm(myGoal, undefined, horizon)))?.endedOn, eve);
+  assert.equal((await as(me, () => loadGoalForm(myGoal, undefined, shift(horizon, 3))))?.endedOn, eve);
+});
+
+test("a goal holding open goals takes its unit and the start of its span from them", async () => {
+  const holder = await plantGoalWith(me.id, `form-loader holder ${randomUUID()}`, { unit: null });
+  await plantGoalWith(me.id, `form-loader held ${randomUUID()}`, {
+    parentId: holder,
+    unit: "km",
+    createdDaysAgo: 70,
+    horizonDays: 100,
+  });
+  const { todayInZone } = await import("@/lib/zone");
+  const heldOpened = new Date(Date.now() - 70 * 86_400_000).toISOString().slice(0, 7);
+  assert.notEqual(heldOpened, todayInZone().slice(0, 7), "the fixture must open the child in an earlier month");
+  const form = await as(me, () => loadGoalForm(holder, heldOpened));
+  assert.ok(form);
+  assert.equal(form.measureUnit, "km");
+  assert.equal(form.month?.month, `${heldOpened}-01`);
+});
+
+test("a goal holding only archived goals keeps its own unit and its own span", async () => {
+  const holder = await plantGoalWith(me.id, `form-loader archived-holder ${randomUUID()}`, { unit: null });
+  await plantGoalWith(me.id, `form-loader archived-held ${randomUUID()}`, {
+    parentId: holder,
+    unit: "km",
+    createdDaysAgo: 70,
+    horizonDays: 100,
+    archived: true,
+  });
+  const heldOpened = new Date(Date.now() - 70 * 86_400_000).toISOString().slice(0, 7);
+  const form = await as(me, () => loadGoalForm(holder, heldOpened));
+  assert.ok(form);
+  assert.equal(form.measureUnit, null);
+  assert.equal(form.month, null);
+});
+
+test("the database owes loadGoalForm one fact a day per commitment and one per task", async () => {
+  await assert.rejects(
+    admin`insert into goals.facts (user_id, commitment_id, goal_id, day)
+          values (${me.id}, ${ids.live}, ${myGoal}, '2026-01-05'::date)`,
+    /facts_commitment_day_unique/,
+  );
+  await admin`insert into goals.facts (user_id, one_off_id, goal_id, day) values (${me.id}, ${ids.single}, ${myGoal}, '2026-02-01'::date)`;
+  await assert.rejects(
+    admin`insert into goals.facts (user_id, one_off_id, goal_id, day)
+          values (${me.id}, ${ids.single}, ${myGoal}, '2026-02-02'::date)`,
+    /facts_one_off_unique/,
+  );
+  await admin`delete from goals.facts where one_off_id = ${ids.single}`;
 });
