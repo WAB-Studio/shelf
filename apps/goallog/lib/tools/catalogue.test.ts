@@ -236,23 +236,70 @@ test("the JSON Schema each tool offers still says additionalProperties false", a
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
 const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true };
 const IDEMPOTENT = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
-const CREATES = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+// M8: a create answers a replay of its request_id once, so the four creating tools are idempotent too.
+const CREATING = ["create_task", "create_goal", "add_phase", "add_commitment"];
 
 const ANNOTATIONS: [string[], Record<string, boolean>][] = [
   [["list_goals", "get_goal", "get_month", "get_today", "get_report", "list_loose_one_offs"], READ_ONLY],
   [["set_goal_note", "set_task_note", "set_measure", "retire_commitment", "move_horizon", "set_rhythm"], DESTRUCTIVE],
   [
-    ["rename_goal", "schedule_task", "set_month_amount", "fix_task", "unfix_task", "complete_task", "declare_fact", "move_goal"],
+    [
+      "rename_goal",
+      "schedule_task",
+      "set_month_amount",
+      "fix_task",
+      "unfix_task",
+      "complete_task",
+      "declare_fact",
+      "move_goal",
+      ...CREATING,
+    ],
     IDEMPOTENT,
   ],
-  [["create_task", "create_goal", "add_phase", "add_commitment"], CREATES],
 ];
 
-test("each tool carries the annotations its effect deserves, and the four groups cover all 24", async () => {
+test("each tool carries the annotations its effect deserves, and the three groups cover all 24", async () => {
   const { readTools, writeTools } = await catalogue();
   const byName = new Map([...readTools, ...writeTools].map((tool) => [tool.name as string, tool as { annotations?: unknown }]));
   assert.equal(ANNOTATIONS.flatMap(([names]) => names).length, 24);
   for (const [names, expected] of ANNOTATIONS) {
     for (const name of names) assert.deepEqual(byName.get(name)?.annotations, expected, name);
+  }
+});
+
+test("the four creating tools are idempotent, neither read-only nor destructive (M8)", async () => {
+  const { writeTool } = await catalogue();
+  for (const name of CREATING) assert.deepEqual(writeTool(name)?.annotations, IDEMPOTENT, name);
+});
+
+const REQUEST_ID_SAYS = "Un uuid tuyo: si repites la llamada con el mismo, no se crea dos veces.";
+const REQUEST = "0b6f3c1e-2a4d-4e8f-9c7b-5d1a2e3f4b6c";
+const ACT_OF: Record<string, string> = {
+  create_task: "createOneOff",
+  create_goal: "createGoal",
+  add_phase: "addPhase",
+  add_commitment: "addCommitment",
+};
+
+test("the four creating tools take an optional request_id uuid, refuse one that is not, and say what it is for (M8)", async () => {
+  const { writeTool } = await catalogue();
+  for (const name of CREATING) {
+    const spec = writeTool(name)!;
+    const base = VALID[name];
+    assert.equal(spec.input.safeParse(base).success, true, `${name} without request_id`);
+    assert.equal(spec.input.safeParse({ ...base, request_id: REQUEST }).success, true, `${name} with a uuid request_id`);
+    assert.equal(spec.input.safeParse({ ...base, request_id: "otra-vez" }).success, false, `${name} with a request_id no uuid`);
+    const field = (spec.input.shape as Record<string, { description?: string }>).request_id;
+    assert.equal(field?.description, REQUEST_ID_SAYS, `${name}'s request_id description`);
+  }
+});
+
+test("a creating tool hands its request_id to the act as requestId (M8)", async () => {
+  for (const name of CREATING) {
+    calls.length = 0;
+    await call(name, { ...VALID[name], request_id: REQUEST });
+    assert.equal(calls.length, 1, name);
+    assert.equal(calls[0].act, ACT_OF[name]);
+    assert.equal((calls[0].input as Record<string, unknown>).requestId, REQUEST, `${name} lost the request id`);
   }
 });
