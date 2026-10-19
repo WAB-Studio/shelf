@@ -23,6 +23,7 @@ export const correctionKeys = {
   monthOverRhythm: sentence("monthOverRhythm"),
   lineToTask: sentence("lineToTask"),
   taskMoved: sentence("taskMoved"),
+  taskWithoutMonth: sentence("taskWithoutMonth"),
 } satisfies Record<CorrectionCode, { said: MessageKey; proposed: MessageKey; why: MessageKey }>;
 
 function sentence<C extends CorrectionCode>(code: C) {

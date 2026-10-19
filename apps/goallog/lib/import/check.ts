@@ -1,3 +1,5 @@
+import { todayInZone } from "@/lib/zone";
+
 import type { Correction, DraftGoal, DraftTask, ImportDraft, Notice } from "./draft";
 
 // What a task asks of its month: its own estimate, or its sub-tasks'.
@@ -25,6 +27,17 @@ function monthChecks(goal: DraftGoal, at: string, corrections: Correction[]): vo
       corrections.push({ id: `${path}:monthOverRhythm`, at: path, code: "monthOverRhythm", said: String(goal.rhythm), proposed: String(sum), values: { month }, declined: "keepsPlan" });
     }
   }
+}
+
+// A task the plan gave no month, in a goal no rhythm places it: the current month is proposed (Q2 a).
+function monthlessChecks(goal: DraftGoal, at: string, corrections: Correction[]): void {
+  if (goal.rhythm !== null) return;
+  const proposed = todayInZone().slice(0, 7);
+  goal.tasks.forEach((task, t) => {
+    if (task.month !== "") return;
+    const path = `${at}.tasks.${t}`;
+    corrections.push({ id: `${path}:taskWithoutMonth`, at: path, code: "taskWithoutMonth", said: "", proposed, values: { name: task.name }, declined: "leavesOut" });
+  });
 }
 
 function ruleChecks(goal: DraftGoal, at: string, notices: Notice[]): void {
@@ -60,6 +73,7 @@ export function check(draft: ImportDraft): { corrections: Correction[]; notices:
   const notices: Notice[] = [];
   const holders = new Set(draft.goals.flatMap((goal) => (goal.parent === null ? [] : [goal.parent])));
   draft.goals.forEach((goal, g) => {
+    monthlessChecks(goal, `goals.${g}`, corrections);
     if (holders.has(goal.key)) return;
     rhythmChecks(draft, goal, `goals.${g}`, notices);
     monthChecks(goal, `goals.${g}`, corrections);

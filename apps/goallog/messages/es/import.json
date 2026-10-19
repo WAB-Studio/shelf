@@ -268,6 +268,11 @@
         "proposed": "Tarea: «{proposed}»",
         "why": "Una línea con casilla o con duración al frente es una tarea, no una nota."
       },
+      "taskWithoutMonth": {
+        "said": "Sin mes",
+        "proposed": "Mes: {proposed}",
+        "why": "El plan no le da mes a «{name}»: se pone en el mes actual."
+      },
       "taskMoved": {
         "said": "En «{said}»",
         "proposed": "En «{proposed}»",
@@ -302,6 +307,7 @@
     "estimateDroppedNotTime": "se crea sin cifra: esta meta no mide tiempo"
   },
   "errors": {
+    "monthMissing": "El plan no le da mes a esta tarea. Ponle uno o déjala fuera.",
     "reviewStale": "Tu meta cambió mientras revisabas. Vuelve a revisar el plan.",
     "doneInFuture": "Una tarea hecha no puede tener un día por venir. Pon hoy o un día anterior.",
     "doneWithSubtasks": "Una tarea con sub-tareas se da por hecha con ellas. Quita el día.",

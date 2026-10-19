@@ -9,6 +9,8 @@ import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema, noteSchema } from "@/lib/validation/one-off";
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
+import { todayInZone } from "@/lib/zone";
+
 import { cleanLine, shortenName as shorten } from "./clean";
 import { reshapeTasks } from "./reshape";
 
@@ -396,7 +398,8 @@ const rawChild = z.strictObject({
 });
 const rawTask = z.strictObject({
   name: z.string(),
-  month: z.string(),
+  // null when the plan gives the task no month: the rhythm places it, or the check proposes one.
+  month: z.string().nullable(),
   estimate: z.number().int().nullable(),
   week: z.string().nullable(),
   rule: z.string().nullable(),
@@ -447,7 +450,8 @@ export type CorrectionCode =
   | "monthSumDiffers"
   | "monthOverRhythm"
   | "lineToTask"
-  | "taskMoved";
+  | "taskMoved"
+  | "taskWithoutMonth";
 export type NoticeCode = "weekRuleBroken" | "rhythmWithoutTasks";
 
 // `id` is `at:code`. `declined` says what rejecting it does: keep what the plan said, or leave the part out.
@@ -632,7 +636,8 @@ export function normalize(raw: RawDraft, source: Source): { draft: ImportDraft; 
       }
       return {
         name: taskName,
-        month: t.month,
+        // With a rhythm the month only orders the task; without one an empty month waits for the check's proposal.
+        month: t.month ?? (rhythm !== null && !holders.has(rg.key) ? todayInZone().slice(0, 7) : ""),
         estimate,
         note: buildNote(source, t.noteSrc, t.noteText, TASK_NOTE_MAX, taskName !== taskFull ? taskFull : null),
         noteSrc: t.noteSrc,
@@ -763,6 +768,9 @@ export function decideWithPaths(
         break;
       case "endWithinAbove":
         if (refused) goal.horizon = c.values?.was ?? goal.horizon;
+        break;
+      case "taskWithoutMonth":
+        if (!refused && task) task.month = c.proposed;
         break;
       case "measureInHours":
       case "lineToTask":
@@ -938,6 +946,7 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
       const path = `.tasks.${t}`;
       const issue =
         firstIssue(createOneOffSchema.shape.name, task.name) ??
+        (task.month === "" ? "import.errors.monthMissing" : null) ??
         firstIssue(setMonthBudgetSchema.shape.month, task.month) ??
         firstIssue(estimate.nullable(), task.estimate);
       if (issue) refuse(path, issue);
