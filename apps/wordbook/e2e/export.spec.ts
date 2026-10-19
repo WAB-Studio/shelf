@@ -490,14 +490,25 @@ test("RL-65: a failed read shows «No se pudo preparar el archivo para Anki» an
   await openSeeded(page);
   let downloads = 0;
   page.on("download", () => (downloads += 1));
-  // The next transaction opened fails once, which is the study's read.
+  // The page opens transactions of its own after load (the history list, the
+  // sync pull, the counts); under load one of them reaches the hook before the
+  // click and spends a hook armed up front. The hook arms on the click itself
+  // and fails the first read of `lookups` after it, which is the study's.
   await page.evaluate(() => {
     const w = window as unknown as { __thrown: number; __failNext: boolean };
     w.__thrown = 0;
-    w.__failNext = true;
+    w.__failNext = false;
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (event.target instanceof Element && event.target.closest("button")) w.__failNext = true;
+      },
+      { capture: true, once: true },
+    );
     const original = IDBDatabase.prototype.transaction;
     IDBDatabase.prototype.transaction = function (...args: Parameters<typeof original>) {
-      if (w.__failNext) {
+      const [scope, mode] = args;
+      if (w.__failNext && mode !== "readwrite" && scope === "lookups") {
         w.__failNext = false;
         w.__thrown += 1;
         throw new DOMException("e2e: read refused", "InvalidStateError");
