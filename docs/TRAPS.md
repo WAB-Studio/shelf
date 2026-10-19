@@ -3267,3 +3267,14 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - WordBook `e2e/export.spec.ts:487` armed its single IndexedDB failure right after load; under CI load a transaction the
   page opened on its own (history, counts, sync) spent it, the study read succeeded, and the failure line never showed
   (red in runs 39170958214 and 39179299274, green alone). Arm a one-shot fault on the action that must meet it (M80).
+
+## postgres.js with `prepare: false` describes every statement with parameters first
+
+Measured 2026-10-19 on GoalLog (M16's tester, `apps/goallog/scripts/plan/settle-pipeline.ts`). Under `prepare: false`,
+postgres.js sends a Describe for any statement with bind parameters and writes nothing else on the connection until it
+answers (`node_modules/postgres/src/connection.js:238`). Each such statement costs two round trips, and a second
+statement cannot ride the first by dropping an `await`: a one-statement form loader measured 5 round trips, not 4.
+
+- Count round trips on the wire, never from the number of `await`s.
+- A statement sent with no parameters (`.inlineParams()`, literals in the text) skips the Describe. It puts the values in
+  the SQL text: escape them, and make the validator read it.
