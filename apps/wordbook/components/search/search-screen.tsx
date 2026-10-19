@@ -358,12 +358,11 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       return;
     }
 
-    // Offline-first: the translator is a network call by
-    // definition, so with none to make the request would only wait to fail.
-    // `failed` is the state the JSX below already reads to hand a phrase to
-    // `NoEntryAnswer` instead of `PhraseAnswer` (RL-59) — offline reaches
-    // the same breakdown through the same door, just without the wait.
-    if (!navigator.onLine) {
+    // Offline, only a ready device translator can answer (RL-08). Without
+    // one the request would only wait to fail, so the sentence goes to the
+    // per-word breakdown through the `failed` state the JSX below already
+    // reads to hand a phrase to `NoEntryAnswer` (RL-59), minus the wait.
+    if (!navigator.onLine && !deviceReadyRef.current) {
       setPhraseState({ kind: "failed" });
       scheduleNoEntry(phraseText, tokens, dictionaryReady, "untranslated");
       return;

@@ -82,16 +82,10 @@ test("RL-08: a translator the browser reports available translates the sentence 
   expect(network.count(), "the sentence never reached the network").toBe(0);
 });
 
-// Expected to fail today: `search-screen.tsx` (schedulePhrase) sends a sentence
-// to the per-word breakdown whenever `navigator.onLine` is false, before it
-// looks at the device translator, so a ready on-device translator is unused
-// offline. Playwright turns this red the day that is fixed; drop `test.fail`
-// then.
 test("RL-08: with the network off, the ready on-device translator still answers the sentence", async ({
   page,
   context,
 }) => {
-  test.fail();
   await installTranslator(page, "available");
   const network = await stubNetwork(page);
   await openReady(page);
@@ -102,6 +96,24 @@ test("RL-08: with the network off, the ready on-device translator still answers 
 
   await expect(page.getByText(`[en el dispositivo] ${SENTENCE}`)).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(messages.phrase.originDevice)).toBeVisible();
+  expect(network.count(), "the sentence never reached the network").toBe(0);
+});
+
+test("RL-08: with the network off and a translator not ready, no translation shows and the breakdown answers", async ({
+  page,
+  context,
+}) => {
+  await installTranslator(page, "downloadable");
+  const network = await stubNetwork(page);
+  await openReady(page);
+  await context.setOffline(true);
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill(SENTENCE);
+
+  await expect(page.getByText(`[en el dispositivo] ${SENTENCE}`)).toHaveCount(0);
+  await expect(page.getByText(messages.phrase.originDevice)).toHaveCount(0);
+  await expect(page.getByText(messages.phrase.originNetwork)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "house" })).toBeVisible({ timeout: 5000 });
   expect(network.count(), "the sentence never reached the network").toBe(0);
 });
 
