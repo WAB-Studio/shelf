@@ -1280,6 +1280,7 @@
         "fileRequired": "Choose a file to import.",
         "fileType": "The file must be an .xlsx spreadsheet.",
         "tooManyRows": "The file has too many rows. Split it and import in parts.",
+        "notWorkbook": "The file is not a spreadsheet this app can read. Download the template and fill it in.",
         "invalidCell": "This cell has an invalid value.",
         "unknownReference": "No account or category in your fund matches this name.",
         "ambiguousReference": "More than one account or category shares this name. Rename one so it is unique.",
