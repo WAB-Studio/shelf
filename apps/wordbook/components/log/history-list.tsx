@@ -67,7 +67,8 @@ const StudyRowItem = memo(function StudyRowItem({
   const t = useTranslations("log");
   const lead = row.forms[0];
   // A phrase or a miss reached no lemma: it keeps the text as typed.
-  const lemmaless = row.lastOutcome === "translated" || row.lastOutcome === "unlisted";
+  const waiting = row.pending === true;
+  const lemmaless = waiting || row.lastOutcome === "translated" || row.lastOutcome === "unlisted";
   const word = lemmaless ? row.display : row.key;
   const deleting = phase === "deleting";
   // A lone form that is the key says nothing the title does not.
@@ -120,7 +121,16 @@ const StudyRowItem = memo(function StudyRowItem({
                 overflow="hidden"
                 direction="column"
               >
-                {row.lastTranslation !== null ? (
+                {waiting ? (
+                  <>
+                    <Text size="2" muted="quietest" truncate>
+                      {t("study.pendingWaiting")}
+                    </Text>
+                    <Text size="2" muted="quietest">
+                      {t(row.lastOutcome === "untranslated" ? "study.pendingPhrase" : "study.pendingWord")}
+                    </Text>
+                  </>
+                ) : row.lastTranslation !== null ? (
                   <Text variant="translation" muted truncate>
                     {row.lastTranslation}
                   </Text>
@@ -129,7 +139,7 @@ const StudyRowItem = memo(function StudyRowItem({
                     {t("study.noResult")}
                   </Text>
                 ) : null}
-                {formsLine !== null && (
+                {formsLine !== null && !waiting && (
                   <Text size="2" muted truncate>
                     {formsLine}
                   </Text>
