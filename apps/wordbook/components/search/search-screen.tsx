@@ -325,7 +325,13 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // still log the call, as a "miss": `commit` in record.ts is what drops it,
   // so an abandoned phrase can't leave an earlier, answered prefix behind
   // (the same reasoning as RL-55's word path).
-  function scheduleNoEntry(phraseText: string, tokens: number, dictionaryReady: boolean): void {
+  // Offline, a sentence in range passes "untranslated": the translator would have taken it, so it waits (RL-76).
+  function scheduleNoEntry(
+    phraseText: string,
+    tokens: number,
+    dictionaryReady: boolean,
+    outcome: LookupOutcome = "miss",
+  ): void {
     if (tokens > PHRASE_MAX_TOKENS) {
       setNoEntryState({ kind: "tooLong", query: phraseText, tokens });
       setLogPayload(phraseLogPayload(phraseText, dictionaryReady, "miss", null, null));
@@ -333,7 +339,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     }
 
     resolveWordBreakdown(phraseText, "noEntry", () => {
-      setLogPayload(phraseLogPayload(phraseText, dictionaryReady, "miss", null, null));
+      setLogPayload(phraseLogPayload(phraseText, dictionaryReady, outcome, null, null));
     });
   }
 
@@ -359,7 +365,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     // the same breakdown through the same door, just without the wait.
     if (!navigator.onLine) {
       setPhraseState({ kind: "failed" });
-      scheduleNoEntry(phraseText, tokens, dictionaryReady);
+      scheduleNoEntry(phraseText, tokens, dictionaryReady, "untranslated");
       return;
     }
 
@@ -535,7 +541,15 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       exampleEs: unlistedAnswer.example.es,
     };
   }, [logPayload, networkWord, unlistedTranslation, unlistedAnswer]);
-  const recordable = unlistedPayload ?? logPayload;
+  // RL-76: a prefix with suggestions is mid-word, not a word the network failed
+  // to answer. The call still reaches `commit`, as an outcome it drops.
+  const recordable = useMemo<LogPayload | null>(() => {
+    if (unlistedPayload) return unlistedPayload;
+    if (suppressNotFound && logPayload?.kind === "word" && logPayload.outcome === "miss") {
+      return { ...logPayload, outcome: "untranslated" };
+    }
+    return logPayload;
+  }, [unlistedPayload, suppressNotFound, logPayload]);
   // The same payload object re-running the effect must not record the lookup twice.
   const recordedRef = useRef<LogPayload | null>(null);
 

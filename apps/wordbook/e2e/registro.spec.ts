@@ -394,7 +394,7 @@ test("with no rows, /registro draws the study's empty state and its action retur
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("a reader who only ever missed leaves no row, and /registro still shows the empty state, not a dead screen", async ({
+test("a reader who only ever missed leaves one pending row per word the network was asked about, and nothing else", async ({
   page,
 }) => {
   await deleteTranslator(page);
@@ -407,10 +407,10 @@ test("a reader who only ever missed leaves no row, and /registro still shows the
   await assetResponse;
   await dictionaryReady(page);
 
-  // RL-39: a word the dictionary carries nothing for leaves no row. A
-  // multi-character nonsense string, not a single letter, so it stays a
-  // miss regardless of the other lane's own change to one-character
-  // queries.
+  // RL-76: a word the dictionary carries nothing for waits as a pending row
+  // (the stubbed route answers 204, so no answer arrives). A multi-character
+  // nonsense string, not a single letter, so it stays a miss regardless of
+  // the other lane's own change to one-character queries.
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("xyzzy");
   await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
@@ -418,15 +418,11 @@ test("a reader who only ever missed leaves no row, and /registro still shows the
 
   // Read here, on this same document, before anything navigates again:
   // `deleteLogDatabase`'s `addInitScript` reinjects on the `goto` below too
-  // and would wipe whatever RL-39's guard left behind before the assertion
+  // and would wipe whatever the lookup left behind before the assertion
   // ever got to see it.
+  await expect.poll(async () => (await readLogRows(page)).length).toBe(1);
   const rows = await readLogRows(page);
-  expect(rows).toHaveLength(0);
-
-  await page.goto("/registro");
-  await expect(page.getByText(messages.log.study.emptyTitle)).toBeVisible();
-  await expect(page.getByText(messages.log.study.emptyBody)).toBeVisible();
-  await expect(page.getByText(t("log.study.header", { lookups: 0, words: 0 }))).toHaveCount(0);
+  expect(rows[0]).toMatchObject({ normalised: "xyzzy", schema: 4, kind: "word", outcome: "miss" });
 });
 
 test("with the store broken, /registro draws the failure, with no system red and a retry", async ({ page }) => {

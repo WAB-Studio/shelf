@@ -8,6 +8,7 @@ import { getTranslations } from "next-intl/server";
 import { ForgetPhotoCredits } from "@/components/forget-photo-credits";
 import { RegisterServiceWorker } from "@/components/register-service-worker";
 import { SyncOnHide } from "@/components/sync/sync-on-hide";
+import { AnswerPending } from "@/components/sync/answer-pending";
 import { AppTheme, Flex } from "@/components/ui";
 import "@radix-ui/themes/styles.css";
 import "./theme.css";
@@ -83,6 +84,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <RegisterServiceWorker />
           <ForgetPhotoCredits />
           <SyncOnHide />
+          <AnswerPending />
         </NextIntlClientProvider>
       </body>
     </html>

@@ -8,8 +8,9 @@ import { DATABASE_VERSION } from "../lib/log/record";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import manifest from "../public/dictionary/manifest.json";
 
-// RL-55: a word the dictionary has no entry for is recorded when, and only
-// when, the network's answer (RL-44) arrived for that same text.
+// RL-76: a word the dictionary has no entry for is recorded answered when the
+// network's answer (RL-44) arrived for that same text, and pending (a schema-4
+// `miss`) when the network was asked and gave nothing, or the reader moved on first.
 
 async function deleteTranslator(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -23,10 +24,20 @@ async function openReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
+}
+
+// The install has finished drawing; a lookup typed now queues behind the
+// worker's index build either way.
+async function dictionaryReady(page: Page): Promise<void> {
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
+  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
 }
 
 type Row = {
+  schema: number;
+  askedOn?: string | null;
+  at: number;
   text: string;
   normalised: string;
   kind: string;
@@ -91,9 +102,45 @@ const BODY = {
 };
 
 // Settling is the reader moving on: the box is cleared, as log.spec.ts does.
-async function settle(page: Page, box: ReturnType<Page["getByRole"]>): Promise<void> {
+// The write is asynchronous: a caller that expects a row polls for it with `rowsFor`.
+async function settle(_page: Page, box: ReturnType<Page["getByRole"]>): Promise<void> {
   await box.fill("");
-  await page.waitForTimeout(400);
+}
+
+async function rowsFor(page: Page, normalised: string, count: number): Promise<Row[]> {
+  await expect
+    .poll(async () => (await readLogRows(page)).filter((row) => row.normalised === normalised).length, {
+      message: `rows for "${normalised}"`,
+    })
+    .toBe(count);
+  return (await readLogRows(page)).filter((row) => row.normalised === normalised);
+}
+
+// A row written later than an earlier lookup's cannot land before it, so once
+// this hit has been recorded every earlier settle has already written or
+// declined its row: the only way to prove an absence without sleeping.
+async function afterSentinel(page: Page, box: ReturnType<Page["getByRole"]>): Promise<void> {
+  await box.fill("apple");
+  await expect(page.getByRole("heading", { name: "apple" })).toBeVisible();
+  await box.fill("");
+  await rowsFor(page, "apple", 1);
+}
+
+// Each word is answered with a translation of its own, so a test can tell the
+// answer to the word on screen from the previous word's still being drawn.
+async function answerEachWord(page: Page): Promise<void> {
+  await page.route(
+    (url) => isUnlistedPost(url.toString()),
+    async (route) => {
+      const { word } = route.request().postDataJSON() as { word: string };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { [STUB_HEADER]: "1" },
+        body: JSON.stringify({ ...BODY, translations: [`traducción de ${word}`] }),
+      });
+    },
+  );
 }
 
 function isUnlistedPost(url: string): boolean {
@@ -113,8 +160,7 @@ test("respondida: whereat with a 200 answer leaves one unlisted row carrying the
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 2000 });
   await settle(page, box);
 
-  const rows = (await readLogRows(page)).filter((row) => row.normalised === "whereat");
-  expect(rows).toHaveLength(1);
+  const rows = await rowsFor(page, "whereat", 1);
   expect(rows[0]).toMatchObject({
     kind: "word",
     outcome: "unlisted",
@@ -125,7 +171,7 @@ test("respondida: whereat with a 200 answer leaves one unlisted row carrying the
   });
 });
 
-test("fallida: whereat answered 204 leaves no row", async ({ page }) => {
+test("RL-76: whereat answered 204 leaves one pending row, a schema-4 miss of the word", async ({ page }) => {
   await deleteTranslator(page);
   await openReady(page);
 
@@ -133,13 +179,20 @@ test("fallida: whereat answered 204 leaves no row", async ({ page }) => {
   const answered = page.waitForResponse((r) => isUnlistedPost(r.url()));
   await box.fill("whereat");
   expect((await answered).status()).toBe(204);
-  await page.waitForTimeout(300);
   await settle(page, box);
 
-  expect((await readLogRows(page)).filter((row) => row.normalised === "whereat")).toHaveLength(0);
+  const rows = await rowsFor(page, "whereat", 1);
+  expect(rows[0]).toMatchObject({
+    schema: 4,
+    kind: "word",
+    outcome: "miss",
+    text: "whereat",
+    senses: 0,
+    translation: null,
+  });
 });
 
-test("pendiente: an answer held while the reader clears the box leaves no row, even once it arrives", async ({
+test("RL-76: an answer held while the reader clears the box leaves a pending row, and the answer arriving later does not answer it", async ({
   page,
   stubUnlisted,
 }) => {
@@ -163,11 +216,14 @@ test("pendiente: an answer held while the reader clears the box leaves no row, e
   await box.fill("whereat");
   await expect.poll(() => requested, { timeout: 3000 }).toBe(true);
   await settle(page, box);
-  expect((await readLogRows(page)).filter((row) => row.normalised === "whereat")).toHaveLength(0);
+  // Q7 (a): the network was asked, so leaving early waits for an answer.
+  const waiting = await rowsFor(page, "whereat", 1);
+  expect(waiting[0]).toMatchObject({ schema: 4, kind: "word", outcome: "miss", translation: null });
 
   release();
-  await page.waitForTimeout(1500);
-  expect((await readLogRows(page)).filter((row) => row.normalised === "whereat")).toHaveLength(0);
+  await afterSentinel(page, box);
+  const still = await rowsFor(page, "whereat", 1);
+  expect(still[0]).toMatchObject({ outcome: "miss", at: waiting[0].at });
 });
 
 test("forma con lema: ran, even with a network lemma, stays inflected and writes no unlisted row", async ({
@@ -180,30 +236,37 @@ test("forma con lema: ran, even with a network lemma, stays inflected and writes
 
   const box = page.getByRole("textbox", { name: messages.search.label });
   await box.fill("ran");
-  await page.waitForTimeout(1500);
+  await expect(page.getByRole("heading", { name: "ran", exact: true })).toBeVisible();
   await settle(page, box);
 
-  const rows = (await readLogRows(page)).filter((row) => row.normalised === "ran");
-  expect(rows).toHaveLength(1);
+  const rows = await rowsFor(page, "ran", 1);
   expect(rows[0].outcome).toBe("inflected");
   expect(rows[0].headword).toBe("run");
 });
 
 test("caché de la pestaña: a second visit to whereat after another word leaves a second row", async ({
   page,
-  stubUnlisted,
 }) => {
   await deleteTranslator(page);
-  await stubUnlisted(BODY);
+  await answerEachWord(page);
   await openReady(page);
 
   const box = page.getByRole("textbox", { name: messages.search.label });
+  const visits = new Map<string, number>();
   for (const word of ["whereat", "coccidiosis", "whereat"]) {
     await box.fill(word);
-    await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 2000 });
+    // The previous word's answer stays drawn until this one replaces it: the
+    // word's own translation is the proof the box has settled on it.
+    await expect(page.getByText(`traducción de ${word}`, { exact: true })).toBeVisible({ timeout: 2000 });
     await settle(page, box);
+    visits.set(word, (visits.get(word) ?? 0) + 1);
+    // The next word is typed only once this visit's row is on disk.
+    await rowsFor(page, word, visits.get(word)!);
   }
 
+  await expect
+    .poll(async () => (await readLogRows(page)).filter((row) => row.outcome === "unlisted").length)
+    .toBe(3).catch(async (e) => { console.log("DBG", JSON.stringify((await readLogRows(page)).map((r) => [r.normalised, r.outcome, r.schema]))); throw e; });
   const rows = await readLogRows(page);
   expect(rows.filter((row) => row.normalised === "whereat" && row.outcome === "unlisted")).toHaveLength(2);
   expect(rows.filter((row) => row.normalised === "coccidiosis" && row.outcome === "unlisted")).toHaveLength(1);
@@ -225,8 +288,7 @@ test("corte: translations joined past 120 characters are stored cut, never longe
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 2000 });
   await settle(page, box);
 
-  const rows = (await readLogRows(page)).filter((row) => row.normalised === "whereat");
-  expect(rows).toHaveLength(1);
+  const rows = await rowsFor(page, "whereat", 1);
   const stored = rows[0].translation as string;
   expect(stored.length).toBeLessThanOrEqual(120);
   expect(stored.length).toBeGreaterThan(100);
@@ -265,14 +327,19 @@ test("bajo su búsqueda: an answer for coccidiosis that arrives after the box mo
   await expect.poll(() => calls, { timeout: 10000 }).toBe(1);
   await box.fill("whereat");
   await expect.poll(() => calls, { timeout: 10000 }).toBe(2);
-  await page.waitForTimeout(400);
 
   release();
-  await page.waitForTimeout(1500);
   await settle(page, box);
+  await afterSentinel(page, box);
 
   const rows = await readLogRows(page);
   expect(rows.filter((row) => row.outcome === "unlisted")).toHaveLength(0);
+  // Both words were asked and neither was answered on screen: each waits.
+  for (const word of ["coccidiosis", "whereat"]) {
+    const waiting = rows.filter((row) => row.normalised === word);
+    expect(waiting).toHaveLength(1);
+    expect(waiting[0]).toMatchObject({ schema: 4, kind: "word", outcome: "miss" });
+  }
 });
 
 test("una vez: a focus change and a colour-scheme change after the answer was recorded leave one row", async ({
@@ -291,29 +358,41 @@ test("una vez: a focus change and a colour-scheme change after the answer was re
   await box.focus();
   await page.emulateMedia({ colorScheme: "dark" });
   await page.emulateMedia({ colorScheme: "light" });
-  await page.waitForTimeout(500);
   await settle(page, box);
 
-  const rows = (await readLogRows(page)).filter((row) => row.normalised === "whereat");
-  expect(rows).toHaveLength(1);
-  expect(rows[0].outcome).toBe("unlisted");
+  await expect
+    .poll(async () =>
+      (await readLogRows(page)).filter((row) => row.normalised === "whereat").map((row) => row.outcome),
+    )
+    .toEqual(["unlisted"]);
+  await afterSentinel(page, box);
+  // The churn after the answer neither re-recorded it nor left a waiting twin.
+  expect((await rowsFor(page, "whereat", 1))[0].outcome).toBe("unlisted");
 });
 
 test("bajo su búsqueda: returning to a word whose answer the tab holds records each row under the text it was typed, headword included", async ({
   page,
-  stubUnlisted,
 }) => {
   await deleteTranslator(page);
-  await stubUnlisted(BODY);
+  await answerEachWord(page);
   await openReady(page);
 
   const box = page.getByRole("textbox", { name: messages.search.label });
+  const visits = new Map<string, number>();
   for (const word of ["whereat", "coccidiosis", "whereat"]) {
     await box.fill(word);
-    await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 10000 });
+    // The previous word's answer stays drawn until this one replaces it: the
+    // word's own translation is the proof the box has settled on it.
+    await expect(page.getByText(`traducción de ${word}`, { exact: true })).toBeVisible({ timeout: 2000 });
     await settle(page, box);
+    visits.set(word, (visits.get(word) ?? 0) + 1);
+    // The next word is typed only once this visit's row is on disk.
+    await rowsFor(page, word, visits.get(word)!);
   }
 
+  await expect
+    .poll(async () => (await readLogRows(page)).filter((row) => row.outcome === "unlisted").length)
+    .toBe(3);
   const unlisted = (await readLogRows(page)).filter((row) => row.outcome === "unlisted");
   expect(unlisted.map((row) => row.text)).toEqual(["whereat", "coccidiosis", "whereat"]);
   for (const row of unlisted) expect(row.headword).toBe(row.normalised);
@@ -378,7 +457,7 @@ async function seedFromHome(
     await openReady(page);
   } else {
     await page.goto("/");
-    await page.waitForTimeout(1000);
+    await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
   }
   await page.evaluate(
     ({ version, sync, lookups }) =>
@@ -448,8 +527,7 @@ test("700 hecho, con red: searching doomscrolling leaves a row carrying translat
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 3000 });
   await settle(page, box);
 
-  const rows = (await readLogRows(page)).filter((row) => row.normalised === "doomscrolling");
-  expect(rows).toHaveLength(1);
+  const rows = await rowsFor(page, "doomscrolling", 1);
   expect(rows[0]).toMatchObject({
     outcome: "unlisted",
     translation: DOOM.translation,
@@ -498,10 +576,11 @@ test("700 sin conexión pedida: opening the page paints the answer and sends no 
   page.on("request", (request) => {
     if (new URL(request.url()).pathname.startsWith("/api/word/")) wordRequests.push(request.url());
   });
+  // A controlled clock lets the debounce of use-network-answer run out without a sleep.
+  await page.clock.install();
   await page.goto("/registro/doomscrolling");
   await expectWholeAnswer(page);
-  // Past use-network-answer's own debounce, so a late ask would be in by now.
-  await page.waitForTimeout(1500);
+  await page.clock.runFor(1500);
 
   expect(wordRequests).toEqual([]);
 });
