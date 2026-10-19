@@ -282,7 +282,8 @@ test("archiveGoal archives the whole branch in one write with one instant", asyn
   const { G, g1, p, g2 } = await tree("archivar");
   const { result, calls } = await counted(() => plan.archiveGoal({ goalId: G }));
   assert.deepEqual(result, { ok: true, archived: 4 });
-  assert.equal(calls.length, 2, calls.join(" | "));
+  // The settle, the person's lock in its own statement, the write.
+  assert.equal(calls.length, 3, calls.join(" | "));
   const rows = await sql<{ n: number }[]>`
     select count(distinct archived_at)::int as n from goals.goals where id in ${sql([G, g1, p, g2])} and archived_at is not null`;
   assert.equal(rows[0].n, 1);
@@ -296,7 +297,8 @@ test("reopenGoal reopens the branch archived with it and leaves one archived bef
   assert.deepEqual(await plan.archiveGoal({ goalId: G }), { ok: true, archived: 3 });
   const { result, calls } = await counted(() => plan.reopenGoal({ goalId: G }));
   assert.deepEqual(result, { ok: true, reopened: 3 });
-  assert.equal(calls.length, 2, calls.join(" | "));
+  // The settle, the person's lock in its own statement, the write.
+  assert.equal(calls.length, 3, calls.join(" | "));
   for (const id of [G, g1, p]) assert.equal((await rowOf(id)).archived_at, null);
   assert.notEqual((await rowOf(g2)).archived_at, null);
 });
