@@ -4228,6 +4228,52 @@ async function main(): Promise<void> {
   await pendingSettlementsOnAssetSuite();
   await invitationActsSuite();
   await loneLeaderAcceptsSuite();
+  await loginLessCompanySuite();
+}
+
+// A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
+// accept answers otherFund, archives nothing and leaves the fund's member where they are.
+async function loginLessCompanySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const api = await invitationApi();
+  const groupIds: string[] = [];
+  const openFund = async (label: string) => {
+    const leader = await createMembershipFreeUser();
+    const { groupId } = await asUser(leader, () =>
+      createGroup({ name: `Harness fondo ${label} ${tag}`, leaderName: `Harness lider ${label}`, cashMode: "shared", locale: "es" }),
+    );
+    track("groups", groupId);
+    groupIds.push(groupId);
+    return { leader, groupId };
+  };
+
+  try {
+    const home = await openFund("con sin cuenta");
+    const [placeholder] = await fixtureSql<{ id: string }[]>`
+      insert into group_members (group_id, name, role) values (${home.groupId}, ${`Harness sin cuenta ${tag}`}, 'member') returning id`;
+    const target = await openFund("destino sin cuenta");
+    const inviteId = randomUUID();
+    await seedPendingInvite({ groupId: target.groupId, memberId: inviteId, actorId: target.leader.id, name: "Harness lider con sin cuenta", email: home.leader.email, archived: false });
+
+    const answer = await tap(() => asUser(home.leader, () => api.acceptInvitation({ memberId: inviteId })));
+    const rows = await fixtureSql<{ id: string; role: string; archived_at: string | null; group_id: string }[]>`
+      select id, role, archived_at::text as archived_at, group_id from group_members where group_id = ${home.groupId}`;
+    const invitation = (await fixtureSql<{ user_id: string | null }[]>`select user_id from group_members where id = ${inviteId}`)[0];
+    assert(
+      next("A leader whose fund holds a member without a login is not alone: otherFund, nothing archived, the member keeps their fund, the invitation stays pending"),
+      answer === "otherFund" &&
+        rows.length === 2 &&
+        rows.every((row) => row.archived_at === null) &&
+        rows.some((row) => row.id === placeholder.id && row.group_id === home.groupId) &&
+        invitation?.user_id === null,
+      `answer = ${answer}, fund rows = ${JSON.stringify(rows)}`,
+    );
+  } finally {
+    for (const id of groupIds) {
+      for (const row of await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${id}`) track("group_members", row.id);
+    }
+  }
 }
 
 // The screens' round-trip budgets after the performance pass: the shared form

@@ -477,6 +477,13 @@
       "when": 1792370000000,
       "tag": "0067_the_invited_person_reads_their_invitation",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792380000000,
+      "tag": "0068_a_login_less_member_is_company",
+      "breakpoints": true
     }
   ]
 }
