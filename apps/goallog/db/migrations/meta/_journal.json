@@ -197,6 +197,13 @@
       "when": 1792356812509,
       "tag": "0028_gracia_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792379657966,
+      "tag": "0029_recibos_de_escritura",
+      "breakpoints": true
     }
   ]
 }
