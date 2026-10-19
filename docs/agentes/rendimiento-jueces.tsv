@@ -91,3 +91,5 @@ date	train	judge	findings	findings_no_other_judge_found	fixed	tokens
 2026-10-18	oleada-2	mutator	34	34	0	118953
 2026-10-18	oleada-2	ci	4	4	4	
 2026-10-18	oleada-2	validator	0	0	0	79152
+2026-10-19	oleada-4a	validator	0	0	0	120193
+2026-10-19	oleada-4a	mutator	25	25	0	111825
