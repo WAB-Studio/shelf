@@ -12,12 +12,13 @@ export type TaskGroup = "question" | "single" | "two-step" | "refusal" | "missin
 
 export type BenchTask = { id: string; group: TaskGroup; message: string; expected: Expected };
 
+// Time amounts are minutes (mcp.json): 2 h is 120, 25 h is 1500, 10 h is 600, 3 h is 180.
 // What each benched person must hold. The main session seeds it (seed-goal.ts) and hands run.ts the ids.
 // Run on a day of 2026-10: the messages name 2026 months without a year.
 export const SEED = {
   "goal.english": "goal «Inglés», rhythm 20 h a month, measure hours, with the commitment com.class",
   "goal.fitness": "goal «Fitness», no measure, no horizon",
-  "goal.house": "goal «Casa», no rhythm",
+  "goal.house": "goal «Casa», measure hours (stored in minutes), no rhythm, no horizon",
   "com.class": "commitment «Clase de inglés», weekdays, tap, of goal.english",
   "task.maze": "one-off «Maze» in goal.english, planned in the plan for 2026-10, not fixed",
   "task.report": "one-off «Informe» with no day, no goal",
@@ -64,7 +65,7 @@ export const TASKS: readonly BenchTask[] = [
     id: "s-create-task",
     group: "single",
     message: "Agrega la tarea «Pasaporte» a Casa, de 2 horas",
-    expected: expectChanges({ tool: "create_task", args: { name: { includes: "Pasaporte" }, goal_id: "$goal.house", estimate: 2 } }),
+    expected: expectChanges({ tool: "create_task", args: { name: { includes: "Pasaporte" }, goal_id: "$goal.house", estimate: 120 } }),
   },
   {
     id: "s-declare",
@@ -94,13 +95,13 @@ export const TASKS: readonly BenchTask[] = [
     id: "s-month-amount",
     group: "single",
     message: "Ponle 25 horas a Inglés en noviembre",
-    expected: expectChanges({ tool: "set_month_amount", args: { goal_id: "$goal.english", month: "2026-11", amount: 25 } }),
+    expected: expectChanges({ tool: "set_month_amount", args: { goal_id: "$goal.english", month: "2026-11", amount: 1500 } }),
   },
   {
     id: "s-rhythm",
     group: "single",
     message: "El ritmo de Casa es de 10 horas al mes",
-    expected: expectChanges({ tool: "set_rhythm", args: { goal_id: "$goal.house", amount: 10 } }),
+    expected: expectChanges({ tool: "set_rhythm", args: { goal_id: "$goal.house", amount: 600 } }),
   },
   {
     id: "s-note",
@@ -142,7 +143,7 @@ export const TASKS: readonly BenchTask[] = [
     id: "m-estimate",
     group: "single",
     message: "Ponle 3 horas de estimación a Maze",
-    expected: expectChanges({ tool: "set_task_estimate", args: { one_off_id: "$task.maze", estimate: 3 } }),
+    expected: expectChanges({ tool: "set_task_estimate", args: { one_off_id: "$task.maze", estimate: 180 } }),
   },
   {
     id: "m-phase",

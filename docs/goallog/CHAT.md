@@ -24,23 +24,23 @@ tanto necesitamos».
 |---|---|
 | «Hice la clase de inglés hoy» | `declare_fact` |
 | «Ya terminé el Informe» | `complete_task` |
-| «Agrega la tarea Pasaporte a Casa, de 2 horas» | `create_task` |
+| «Agrega la tarea Pasaporte a Casa, de 2 horas» | `create_task` (`estimate` 120: time is minutes) |
 | «Anota en el Informe: …» | `set_task_note` |
 | «Pon el Informe para el 27» | `schedule_task` |
-| «Ponle 25 horas a Inglés en noviembre» | `set_month_amount` |
+| «Ponle 25 horas a Inglés en noviembre» | `set_month_amount` (`amount` 1500) |
 | «Renombra Fitness a Salud» | `rename_goal` |
 | «Agrega una fase a Inglés de noviembre a diciembre» | `add_phase` |
 | «Agrega la clase de inglés los lunes y miércoles» | `add_commitment` |
 | «Mueve el final de Casa a marzo» | `move_horizon` |
 | «Pasa Maze a noviembre» | `fix_task` |
 | «Devuelve Documento al plan» | `unfix_task` |
-| «Estima Maze en 3 horas» | `set_task_estimate` (through `editTask`; null clears it) |
+| «Estima Maze en 3 horas» | `set_task_estimate` (`estimate` 180; through `editTask`; null clears it) |
 | «La fase 2 termina el 30» | `edit_phase` (through `editPhase`) |
 | «Crea la meta Viaje» | `create_goal` |
 | «Pon Fitness dentro de Salud» | `move_goal` |
 | «Anota en Casa: …» | `set_goal_note` |
 | «Cambia la clase de inglés por otra» | `retire_commitment` (then `add_commitment`, two steps) |
-| «El ritmo de Casa es de 10 horas al mes» | `set_rhythm` |
+| «El ritmo de Casa es de 10 horas al mes» | `set_rhythm` (`amount` 600) |
 | «Inglés se mide en horas» | `set_measure` |
 
 ### Two-step changes
@@ -108,6 +108,8 @@ The app-wide cap (`APP_MODEL_CALLS_DAILY_CAP`, 600 calls) bounds the day: at gpt
 A bench run is 25 calls of the bench person's fifty and counts in the app's cap.
 
 ## The bench
+
+Time amounts are minutes, as the tool descriptions say (`messages/es/mcp.json`): the bench measures the conversion from hours too. Casa measures hours, with no rhythm and no horizon.
 
 `apps/goallog/scripts/chat-bench/`: `tasks.ts` (25 tasks mirroring this document), `score.ts` (pure scorer), `run.ts`, `seed.ts` (builds the plan `SEED` names for each session and writes the `--seed` file; rerunnable). No
 `package.json` entry, no check, no CI job: only a person runs it, with the user's yes. The tests (`score.test.ts`) never reach

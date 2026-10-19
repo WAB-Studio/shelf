@@ -93,6 +93,10 @@ async function seedSession(): Promise<Record<keyof typeof SEED, string>> {
   const english = await goalNamed("Inglés", ENGLISH_HORIZON);
   const fitness = await goalNamed("Fitness");
   const house = await goalNamed("Casa");
+  // A measure set never changes, so a Casa seeded before it had one gets it now and one that has it is left alone.
+  if ((await goalView(house)).measure === null) {
+    must("setGoalMeasure(Casa)", await setGoalMeasure({ goalId: house, name: "Horas", unit: "horas" }));
+  }
 
   let view = await goalView(english);
   if (view.measure === null) {
