@@ -20,7 +20,16 @@ type Hold = { reached: (pid: number) => void; gate: Promise<void> };
 
 let armed: Hold | null = null;
 
-export const admin = adminSql();
+// The admin's rows come back as a plain array: postgres.js answers a `Result`, an Array subclass,
+// and `assert.deepEqual(rows, [])` under `assert/strict` compares prototypes, so an empty read
+// would never equal `[]`.
+// `owner` stays raw for the setup and the cleanup, whose helpers nest fragments and call `sql(value)`.
+const owner = adminSql();
+export const admin = new Proxy(owner, {
+  apply(target, self, args) {
+    return Promise.resolve(Reflect.apply(target, self, args) as Promise<unknown[]>).then((rows) => Array.from(rows));
+  },
+}) as postgres.Sql;
 const door = postgres(process.env.DATABASE_URL!, { prepare: false, max: 6 });
 
 const gated = new Proxy(door, {
@@ -80,22 +89,22 @@ export async function open(count: number): Promise<{ acts: Acts; people: Person[
     roadmap: await import("@/app/actions/roadmap"),
     session: await import("@/lib/session"),
   };
-  const runId = await openCheckRun(admin);
-  const people = await createPeople(admin, runId, door, count);
+  const runId = await openCheckRun(owner);
+  const people = await createPeople(owner, runId, door, count);
   return { acts, people };
 }
 
 export async function close(people: Person[]): Promise<void> {
   try {
     for (const person of people) {
-      await admin`delete from goals.write_receipts where user_id = ${person.id}`;
-      await admin`update goals.goals set parent_id = null where user_id = ${person.id}`;
-      await admin`delete from goals.goals where user_id = ${person.id}`;
+      await owner`delete from goals.write_receipts where user_id = ${person.id}`;
+      await owner`update goals.goals set parent_id = null where user_id = ${person.id}`;
+      await owner`delete from goals.goals where user_id = ${person.id}`;
     }
-    await dropPeople(admin);
+    await dropPeople(owner);
   } finally {
     await door.end();
-    await admin.end();
+    await owner.end();
   }
 }
 

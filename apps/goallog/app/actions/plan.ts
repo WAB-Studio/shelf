@@ -49,6 +49,7 @@ import {
 import { setGoalMeasureSchema } from "@/lib/validation/measure";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
+import { readReceipt, writeReceipt } from "@/lib/receipts";
 
 // A refusal of the goal tree names the goal that causes it (`values.name`), and the last day of
 // that goal where the words speak of a day.
@@ -276,6 +277,10 @@ const personLock = (personId: string) =>
  * column"): `.insert(goals).values()` would name every column of the table
  * and fill `measure_name`/`measure_unit` with the bare word `default`, which
  * the grant refuses just as surely as a real value.
+ *
+ * With a `requestId` the person's lock comes first and the receipt is read after it, so a resend
+ * racing its own first try waits for it and answers what it answered (RP-56). A refusal leaves no
+ * receipt: the same id may still write.
  */
 export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResult> {
   const parsed = createGoalSchema.safeParse(input);
@@ -284,28 +289,40 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
-  const { name, horizon, parentId } = parsed.data;
+  const { name, horizon, parentId, requestId } = parsed.data;
 
   if (parentId === undefined) {
-    const goalId = await withGoalsDb(async (tx) => {
+    const answer = await withGoalsDb(async (tx): Promise<CreateGoalResult> => {
+      if (requestId !== undefined) {
+        await tx.execute(personLock(person.id));
+        const stored = await readReceipt(tx, person.id, requestId);
+        if (stored !== null) return stored as CreateGoalResult;
+      }
+
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${goals} (user_id, name, horizon)
         values (${person.id}, ${name}, ${horizon})
         returning id
       `);
 
-      return inserted.id;
+      const created = { ok: true as const, goalId: inserted.id };
+      if (requestId !== undefined) await writeReceipt(tx, person.id, requestId, "createGoal", created);
+      return created;
     });
 
     revalidatePath("/");
-    return { ok: true, goalId };
+    return answer;
   }
 
   // Inside another goal: the lock is taken before the tree is read, in its own statement, so the
   // read sees what the previous holder committed (docs/TRAPS.md, advisory lock and snapshot).
   try {
-    const outcome = await withGoalsDb(async (tx): Promise<TreeRefusal | { goalId: string }> => {
+    const outcome = await withGoalsDb(async (tx): Promise<CreateGoalResult | { goalId: string }> => {
       await tx.execute(personLock(person.id));
+      if (requestId !== undefined) {
+        const stored = await readReceipt(tx, person.id, requestId);
+        if (stored !== null) return stored as CreateGoalResult;
+      }
       const { tree, measureNames } = await readTree(tx);
       const above = tree.byId.get(parentId);
       if (!above) return { ok: false, error: "tree.errors.notFound" };
@@ -327,6 +344,9 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
         `);
       }
       if (holder) await fixHolderTasks(tx, parentId);
+      if (requestId !== undefined) {
+        await writeReceipt(tx, person.id, requestId, "createGoal", { ok: true, goalId: inserted.id });
+      }
       return { goalId: inserted.id };
     });
 
@@ -348,15 +368,14 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
  * inside the same settled transaction, so `goals_select_self` — not a `where`
  * this function writes — is what actually hides someone else's goal.
  *
- * The very first statement of the transaction is a `pg_advisory_xact_lock`
- * keyed on this goal's own id (never a migration, an extension or a grant —
- * both functions are built in and callable by any role). Without it, two
- * concurrent `addPhase` calls on the same goal each read "no overlap yet"
- * under `READ COMMITTED` and both insert — driven live, two overlapping spans
- * both landed. The lock serialises every call for one goal: the second one
- * blocks until the first commits or rolls back, then re-reads the phases the
- * first one just wrote and is refused if it overlaps. Released automatically
- * at commit or rollback, never held past this function's own return.
+ * The person's lock comes first, so a horizon moving at the same instant is
+ * read as it lands, then a `pg_advisory_xact_lock` keyed on this goal's own
+ * id, the one `editPhase` takes too. Without them, two concurrent `addPhase`
+ * calls on the same goal each read "no overlap yet" under `READ COMMITTED`
+ * and both insert — driven live, two overlapping spans both landed. The
+ * second call blocks until the first commits or rolls back, then re-reads the
+ * phases the first one just wrote and is refused if it overlaps. A
+ * `requestId` is looked up after both locks, as `createGoal` does (RP-56).
  */
 export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
   const parsed = addPhaseSchema.safeParse(input);
@@ -365,11 +384,16 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
-  const { goalId, aim, startsOn, endsOn } = parsed.data;
+  const { goalId, aim, startsOn, endsOn, requestId } = parsed.data;
 
   try {
-    const phaseId = await withGoalsDb(async (tx) => {
+    const answer = await withGoalsDb(async (tx): Promise<AddPhaseResult> => {
+      await tx.execute(personLock(person.id));
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${goalId}::text, 0))`);
+      if (requestId !== undefined) {
+        const stored = await readReceipt(tx, person.id, requestId);
+        if (stored !== null) return stored as AddPhaseResult;
+      }
 
       const [goal] = await tx
         .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
@@ -399,11 +423,13 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
         returning id
       `);
 
-      return inserted.id;
+      const added = { ok: true as const, phaseId: inserted.id };
+      if (requestId !== undefined) await writeReceipt(tx, person.id, requestId, "addPhase", added);
+      return added;
     });
 
     revalidatePath("/");
-    return { ok: true, phaseId };
+    return answer;
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
@@ -420,7 +446,11 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
  * names the goal's measure after it: `goals`' grant permits
  * `UPDATE (measure_name, measure_unit)` alone, and the `WHERE measure_name IS
  * NULL` is what leaves a later quantity commitment's measure untouched — the
- * row is simply not matched a second time (RP-14).
+ * row is simply not matched a second time (RP-14). The goal is read `for update`:
+ * a second habit racing the first waits for its unit and converts to it.
+ *
+ * With a `requestId` the person's lock and the receipt come before any read,
+ * so a habit with no goal replays too (RP-56).
  */
 export async function addCommitment(input: AddCommitmentInput): Promise<AddCommitmentResult> {
   const parsed = addCommitmentSchema.safeParse(input);
@@ -432,7 +462,13 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
   const data = parsed.data;
 
   try {
-    const commitmentId = await withGoalsDb(async (tx) => {
+    const answer = await withGoalsDb(async (tx): Promise<AddCommitmentResult> => {
+      if (data.requestId !== undefined) {
+        await tx.execute(personLock(person.id));
+        const stored = await readReceipt(tx, person.id, data.requestId);
+        if (stored !== null) return stored as AddCommitmentResult;
+      }
+
       // A habit with no goal reads and touches no goal (RP-100).
       const goalId = data.goalId;
       let goalUnit: string | null = null;
@@ -445,7 +481,8 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
             measureUnit: goals.measureUnit,
           })
           .from(goals)
-          .where(eq(goals.id, goalId));
+          .where(eq(goals.id, goalId))
+          .for("update");
         // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
         if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
         goalUnit = goal.measureUnit;
@@ -496,11 +533,13 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
           .where(and(eq(goals.id, goalId), isNull(goals.measureName)));
       }
 
-      return inserted.id;
+      const added = { ok: true as const, commitmentId: inserted.id };
+      if (data.requestId !== undefined) await writeReceipt(tx, person.id, data.requestId, "addCommitment", added);
+      return added;
     });
 
     revalidatePath("/");
-    return { ok: true, commitmentId };
+    return answer;
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     // `addCommitmentSchema`'s own `.max()`s refuse an oversized cadenceN,
@@ -567,6 +606,8 @@ export async function editHabit(input: EditHabitInput): Promise<EditHabitResult>
  * only one no fact names). Scoped by `(id, userId)` in the query itself, the way
  * `undoFact` scopes its delete: a commitment belonging to someone else
  * retires nothing and is reported exactly the way a missing one would be.
+ * One already retired keeps its first day and answers ok (RP-12); a sibling CTE
+ * tells it from a missing one in the same statement.
  */
 export async function retireCommitment(
   input: RetireCommitmentInput,
@@ -578,19 +619,25 @@ export async function retireCommitment(
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
   // A pinned clock stamps noon of its day in Bogotá (the same civil day in the zone and in UTC); unpinned, the database's own now().
-  const retiredAt = clockOverride(process.env) ? new Date(`${todayInZone()}T17:00:00Z`) : sql`now()`;
+  const retiredAt = clockOverride(process.env) ? sql`${`${todayInZone()}T17:00:00Z`}::timestamptz` : sql`now()`;
+  const { commitmentId } = parsed.data;
 
-  const retired = await withGoalsDb((tx) =>
-    tx
-      .update(commitments)
-      .set({ retiredAt })
-      .where(
-        and(eq(commitments.id, parsed.data.commitmentId), eq(commitments.userId, person.id)),
+  const [outcome] = await withGoalsDb((tx) =>
+    tx.execute<{ found: boolean; retired: number }>(sql`
+      with found as (
+        select id from ${commitments} where id = ${commitmentId} and user_id = ${person.id}
+      ),
+      retired as (
+        update ${commitments} set retired_at = ${retiredAt}
+        where id = ${commitmentId} and user_id = ${person.id} and retired_at is null
+        returning id
       )
-      .returning({ id: commitments.id }),
+      select exists (select 1 from found) as found, (select count(*) from retired)::int as retired
+    `),
   );
 
-  if (retired.length === 0) return { ok: false, error: "plan.errors.notFound" };
+  if (!outcome.found) return { ok: false, error: "plan.errors.notFound" };
+  if (outcome.retired === 0) return { ok: true };
 
   revalidatePath("/");
   return { ok: true };
@@ -655,8 +702,10 @@ export async function archiveGoal(input: ArchiveGoalInput): Promise<ArchiveGoalR
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
   const { goalId } = parsed.data;
-  const [row] = await withGoalsDb((tx) =>
-    tx.execute<{ found: boolean; ids: string[] | null }>(sql`
+  const [row] = await withGoalsDb(async (tx) => {
+    // Its own statement, so the branch is walked after a goal created under it has landed.
+    await tx.execute(personLock(person.id));
+    return tx.execute<{ found: boolean; ids: string[] | null }>(sql`
       with recursive ${branchCte(goalId, person.id)},
       upd as (
         update ${goals} set archived_at = now()
@@ -664,8 +713,8 @@ export async function archiveGoal(input: ArchiveGoalInput): Promise<ArchiveGoalR
         returning id
       )
       select exists (select 1 from branch) as found, (select array_agg(id) from upd) as ids
-    `),
-  );
+    `);
+  });
 
   if (!row.found) return { ok: false, error: "plan.errors.notFound" };
 
@@ -687,8 +736,9 @@ export async function reopenGoal(input: ReopenGoalInput): Promise<ReopenGoalResu
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
 
   const { goalId } = parsed.data;
-  const [row] = await withGoalsDb((tx) =>
-    tx.execute<{ found: boolean; ids: string[] | null; blocker: string | null }>(sql`
+  const [row] = await withGoalsDb(async (tx) => {
+    await tx.execute(personLock(person.id));
+    return tx.execute<{ found: boolean; ids: string[] | null; blocker: string | null }>(sql`
       with recursive ${branchCte(goalId, person.id)},
       up as (
         select g.id, g.parent_id, g.name, g.archived_at, 1 as n
@@ -711,8 +761,8 @@ export async function reopenGoal(input: ReopenGoalInput): Promise<ReopenGoalResu
       select exists (select 1 from branch) as found,
              (select array_agg(id) from upd) as ids,
              (select name from blocker) as blocker
-    `),
-  );
+    `);
+  });
 
   if (!row.found) return { ok: false, error: "plan.errors.notFound" };
   if (row.blocker !== null) return { ok: false, error: refusalKey("aboveArchived"), values: { name: row.blocker } };
@@ -805,6 +855,8 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
   let touched: string[] = [];
   try {
     const refusal = await withGoalsDb(async (tx): Promise<TreeRefusal | null> => {
+      // The tree and the phases are read after the lock, so a child or a phase written beside this move is judged.
+      await tx.execute(personLock(person.id));
       const { tree } = await readTree(tx);
       const goal = tree.byId.get(goalId);
       if (!goal) throw new NamedError("plan.errors.notFound");
@@ -902,8 +954,10 @@ export async function setGoalMeasure(input: unknown): Promise<SetGoalMeasureResu
   const { unit } = storedMeasure(parsed.data.unit, null);
   const today = todayInZone();
 
-  const rows = await withGoalsDb((tx) =>
-    tx.execute<{ measured: string | null; open: boolean; holder: boolean }>(sql`
+  const rows = await withGoalsDb(async (tx) => {
+    // A goal opened under this one at the same instant makes it a holder: judged after the lock.
+    await tx.execute(personLock(person.id));
+    return tx.execute<{ measured: string | null; open: boolean; holder: boolean }>(sql`
       with g as (
         select id, measure_name, measure_unit, archived_at, horizon,
                exists (select 1 from ${goals} c where c.parent_id = ${goals}.id and c.archived_at is null) as holder
@@ -921,8 +975,8 @@ export async function setGoalMeasure(input: unknown): Promise<SetGoalMeasureResu
              archived_at is null and (horizon is null or horizon > ${today}::date) as open,
              holder
       from g
-    `),
-  );
+    `);
+  });
 
   const goal = rows[0];
   if (!goal) return { ok: false, error: "plan.errors.notFound" };
