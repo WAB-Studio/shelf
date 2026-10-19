@@ -8,7 +8,6 @@ import { groupMembers } from "@/db/schema";
 import type { GroupMember } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
-import { pgErrorCode } from "@/lib/db-error";
 
 type GroupMemberRole = GroupMember["role"];
 
@@ -144,34 +143,49 @@ export async function inviteEmailIsMember(email: string): Promise<boolean> {
   });
 }
 
-// RF-06: the invited person claims their pending row on first sign-in. No row id
-// and no user id cross the boundary — `private.claim_group_invite` reads
-// auth.uid() and auth.email() from the caller's own verified session and picks
-// the one unclaimed row that matches, so a claim cannot be aimed at another row.
-// `email` only spares the round trip for a session that carries no address; the
-// claim keys on what the database reads, not on what is passed here.
-export async function claimInviteForUser({
-  email,
+// RF-154: the invited person's own tap. No user id and no address cross the boundary:
+// the functions read auth.uid() and auth.email() from the verified session, so a call
+// cannot be aimed at a row addressed to someone else — that row answers "gone", as a
+// withdrawn one does. The answers are text the function returns, never an error to catch.
+export async function acceptInvitation({
+  memberId,
 }: {
-  email: string;
-}): Promise<"claimed" | "none" | "already-in-group"> {
-  if (!email) return "none";
+  memberId: string;
+}): Promise<"accepted" | "gone" | "otherFund"> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ result: string }>(
+      sql`select private.accept_group_invitation(${memberId}::uuid) as result`,
+    );
+    const result = rows[0]?.result;
 
-  // The catch sits OUTSIDE the transaction: postgres.js keeps the first query
-  // error of a transaction and rethrows it at commit, so catching inside the
-  // callback would let the refusal past this branch and out to the caller.
-  try {
-    const rows = await withUserDb((tx) =>
-      tx.execute<{ id: string | null }>(sql`select private.claim_group_invite() as id`),
+    return result === "accepted" || result === "otherFund" ? result : "gone";
+  });
+}
+
+export async function declineInvitation({
+  memberId,
+}: {
+  memberId: string;
+}): Promise<"declined" | "gone"> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ result: string }>(
+      sql`select private.decline_group_invitation(${memberId}::uuid) as result`,
     );
 
-    return rows[0]?.id ? "claimed" : "none";
-  } catch (error) {
-    // `group_members_user_unique` rejects a caller who already holds a live
-    // membership: they cannot be claimed into a second group (RF-55).
-    if (pgErrorCode(error) === "23505") return "already-in-group";
-    throw error;
-  }
+    return rows[0]?.result === "declined" ? "declined" : "gone";
+  });
+}
+
+// The caller's membership is archived, never deleted; a leader stays (alone or not).
+export async function leaveFund(): Promise<"left" | "leaderStays" | "notInFund"> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ result: string }>(
+      sql`select private.leave_group() as result`,
+    );
+    const result = rows[0]?.result;
+
+    return result === "left" || result === "leaderStays" ? result : "notInFund";
+  });
 }
 
 // RF-59: the role moves in one statement. No group id and no source member cross

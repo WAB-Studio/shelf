@@ -3,10 +3,13 @@
 import { refresh } from "next/cache";
 
 import {
+  acceptInvitation,
   archiveMember,
   createMember,
+  declineInvitation,
   deleteMember,
   inviteEmailIsMember,
+  leaveFund,
   restoreMember,
   transferLeadership,
   updateMember,
@@ -24,6 +27,8 @@ import {
   createMemberSchema,
   deleteMemberSchema,
   inviteByEmailSchema,
+  invitationActSchema,
+  leaveFundSchema,
   provisionalMemberName,
   restoreMemberSchema,
   transferLeadershipSchema,
@@ -240,6 +245,38 @@ export const transferLeadershipAction = authActionClient
       if (pgErrorCode(error) === "23514") notLeader();
       throw error;
     }
+
+    refresh();
+  });
+
+// RF-154: joining is the invited person's tap. A row that is withdrawn, declined, taken
+// or addressed to someone else all read "gone": the screen learns no more than that.
+export const acceptInvitationAction = authActionClient
+  .inputSchema(invitationActSchema)
+  .action(async ({ parsedInput: { memberId } }) => {
+    const result = await acceptInvitation({ memberId });
+    if (result === "gone") throw new ActionError("errors.invitationGone");
+    if (result === "otherFund") throw new ActionError("errors.alreadyInFund");
+
+    refresh();
+  });
+
+export const declineInvitationAction = authActionClient
+  .inputSchema(invitationActSchema)
+  .action(async ({ parsedInput: { memberId } }) => {
+    const result = await declineInvitation({ memberId });
+    if (result === "gone") throw new ActionError("errors.invitationGone");
+
+    refresh();
+  });
+
+// RF-154: a member leaves; a leader stays, alone or not, until she hands the fund over.
+export const leaveFundAction = authActionClient
+  .inputSchema(leaveFundSchema)
+  .action(async () => {
+    const result = await leaveFund();
+    if (result === "leaderStays") throw new ActionError("errors.leaderStays");
+    if (result === "notInFund") throw new ActionError("errors.notFound");
 
     refresh();
   });

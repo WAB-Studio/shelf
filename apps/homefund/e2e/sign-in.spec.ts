@@ -203,11 +203,11 @@ test("opening the link signs the person in on the app, with the personal categor
   }
 });
 
-test("an address pending as a member signs in and lands as that member, not as a new one", async ({
+test("an address pending as a member signs in and lands on the home page, joined to nothing", async ({
   browser,
   baseURL,
 }) => {
-  // Kills: the sign-in that never claims the invitation (RF-06), so the person lands in no fund.
+  // Kills: the sign-in that claims the invitation (RF-154: only accepting joins).
   const email = newAddress();
   await listAddress(email);
   const { groupId } = await seedGroup();
@@ -225,12 +225,11 @@ test("an address pending as a member signs in and lands as that member, not as a
     await requestLink(page, email);
     await page.goto(await confirmPath(email));
 
-    await expect(page).toHaveURL(/\/es\/bienvenida$/);
+    await expect(page).toHaveURL(/\/es$/);
 
-    const userId = await userIdOf(email);
     const [member] = await fixtureSql<{ id: string; name: string; user_id: string | null }[]>`
       select id, name, user_id from group_members where id = ${pendingId}`;
-    expect(member).toEqual({ id: pendingId, name: `Invitado E9 ${stamp}`, user_id: userId });
+    expect(member).toEqual({ id: pendingId, name: `Invitado E9 ${stamp}`, user_id: null });
     const [after] = await fixtureSql<{ n: number }[]>`
       select count(*)::int as n from group_members where group_id = ${groupId}`;
     expect(after.n).toBe(before.n);

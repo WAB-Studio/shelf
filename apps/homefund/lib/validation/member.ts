@@ -68,3 +68,12 @@ export const transferLeadershipSchema = z.object({
   memberId: z.uuid({ error: "errors.notFound" }),
 });
 
+
+// RF-154: the invited person acts on one row, named by id. Who they are comes from
+// the session; the function matches the row's address against the verified email.
+export const invitationActSchema = z.object({
+  memberId: z.uuid({ error: "errors.invitationGone" }),
+});
+
+// Leaving takes no input: the membership is the caller's own, read from the session.
+export const leaveFundSchema = z.object({});
