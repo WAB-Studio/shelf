@@ -1,7 +1,8 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, runClock, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
+import { PHRASE_DEBOUNCE_MS } from "../lib/query/settle";
 import manifest from "../public/dictionary/manifest.json";
 
 // Chromium's built-in `Translator` hangs `availability()` forever
@@ -33,9 +34,8 @@ async function gotoReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. Give it room before the box is used.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 // `main`'s own headings, in document order — scoped past `BottomNav`'s own
@@ -207,6 +207,7 @@ test('variant="compact" draws neither branch\'s network block', async ({ page, c
 test("no real request to /api/word/* is left behind", async ({ page }) => {
   await deleteTranslator(page);
   await gotoReady(page);
+  await freezeTimers(page);
 
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
@@ -217,7 +218,7 @@ test("no real request to /api/word/* is left behind", async ({ page }) => {
   await searchBox.fill("");
   await searchBox.fill("snuffed");
   await expect(page.getByRole("heading", { name: "snuff", exact: true })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(900);
+  await runClock(page, PHRASE_DEBOUNCE_MS);
 
   const wordRoute = requestUrls.filter((url) => url.includes("/api/word/"));
   const unexpected = wordRoute.filter((url) => !new URL(url).pathname.startsWith("/api/word/unlisted"));

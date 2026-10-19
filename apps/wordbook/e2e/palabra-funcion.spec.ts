@@ -55,7 +55,10 @@ for (const width of [360, 1280]) {
   test.describe(`at ${width}px`, () => {
     test.use({ viewport: { width, height: width === 360 ? 740 : 800 } });
 
-    for (const word of Object.keys(DICTIONARY_LEAD)) {
+    // The words say the same at every width; the wide viewport re-proves only
+    // what a width can change (the 44px control and the order), on one word.
+    const words = width === 360 ? Object.keys(DICTIONARY_LEAD) : Object.keys(DICTIONARY_LEAD).slice(0, 1);
+    for (const word of words) {
       test(`«${word}» typed alone leads with the table; the dictionary is folded behind one 44px control and opens on tap`, async ({
         page,
       }) => {
@@ -91,7 +94,8 @@ for (const width of [360, 1280]) {
       });
     }
 
-    test("a word not in the table answers as before: its dictionary lines, unfolded, no control", async ({ page }) => {
+    const contentTest = width === 360 ? test : test.skip;
+    contentTest("a word not in the table answers as before: its dictionary lines, unfolded, no control", async ({ page }) => {
       expect(functionWordTranslation("apple")).toBeNull();
       await deleteTranslator(page);
       await openReady(page);

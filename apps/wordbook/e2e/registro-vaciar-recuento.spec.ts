@@ -8,7 +8,7 @@ import messages from "../messages/es.json";
 import { DATABASE_VERSION, LOG_FLUSHED_EVENT } from "../lib/log/record";
 import { LOG_DELETED_EVENT } from "../lib/log/delete";
 import type { LookupRecord, SyncState } from "../lib/log/types";
-import { expect, test } from "./fixtures";
+import { expect, pageTasks, test } from "./fixtures";
 
 // RL-55 («empty it whole»): «Vaciar el registro» states the record as it is
 // now, after every delete, flush or pull, without a reload. Written from the
@@ -338,10 +338,23 @@ test("Stale reply: with the first read held and two events fired, the body shows
       }),
   );
 
+  // The panel rereads with `count()`: counting the calls says when a read has been asked for.
+  await page.evaluate(() => {
+    const w = window as unknown as { __counts: number };
+    w.__counts = 0;
+    const count = IDBObjectStore.prototype.count;
+    IDBObjectStore.prototype.count = function (...args) {
+      w.__counts += 1;
+      return count.apply(this, args);
+    };
+  });
+  const reads = () => page.evaluate(() => (window as unknown as { __counts: number }).__counts);
   const fire = () =>
     page.evaluate((event) => window.dispatchEvent(new Event(event)), LOG_FLUSHED_EVENT);
   await fire();
-  await page.waitForTimeout(200);
+  await expect.poll(reads).toBeGreaterThan(0);
+  await pageTasks(page);
+  const firstReads = await reads();
   // The write queues behind the hold, after the first read's transaction.
   await page.evaluate(
     ({ row }) => {
@@ -351,6 +364,7 @@ test("Stale reply: with the first read held and two events fired, the body shows
         request.onsuccess = () => {
           const tx = request.result.transaction("lookups", "readwrite");
           tx.objectStore("lookups").add(row);
+          (window as unknown as { __addQueued: boolean }).__addQueued = true;
           tx.oncomplete = () => resolve();
           tx.onerror = () => reject(tx.error);
         };
@@ -358,9 +372,9 @@ test("Stale reply: with the first read held and two events fired, the body shows
     },
     { row: lookup("river") },
   );
-  await page.waitForTimeout(200);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __addQueued?: boolean }).__addQueued)).toBe(true);
   await fire();
-  await page.waitForTimeout(200);
+  await expect.poll(reads).toBeGreaterThan(firstReads);
   await expect(body(page, 3, 4), "nothing paints while the first read is held").toBeVisible();
 
   await page.evaluate(() => {

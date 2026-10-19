@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, runClock, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -36,8 +36,6 @@ function unlistedAnswered(page: Page): Promise<unknown> {
   return page.waitForResponse((response) => response.url().includes("/api/word/unlisted"));
 }
 
-// Margin after one debounce window for a request to reach `page.on("request")`.
-const REQUEST_DELIVERY_MS = 300;
 
 const UNLISTED_ANSWER = {
   translations: ["coccidiosis"],
@@ -94,6 +92,7 @@ test("whereat: the correction offer and the network block draw together", async 
 test("ru: the suggestion list holds, and no request reaches /api/word/unlisted", async ({ page }) => {
   await deleteTranslator(page);
   await openReady(page);
+  await freezeTimers(page);
 
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
@@ -101,11 +100,10 @@ test("ru: the suggestion list holds, and no request reaches /api/word/unlisted",
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("ru");
 
-  // The list drawing is the proof the keystroke committed; the debounce timer
-  // started at or before that commit, so one window from here has elapsed
-  // however slow the machine, and a request, had one been due, has left.
+  // The list drawing is the proof the keystroke committed; the clock is
+  // frozen, so one debounce window run by hand is exactly one that elapsed.
   await expect(page.getByText(messages.word.suggestions)).toBeVisible();
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + REQUEST_DELIVERY_MS);
+  await runClock(page, PHRASE_DEBOUNCE_MS);
   await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
   const unlistedRequests = requestUrls.filter((url) => url.includes("/api/word/unlisted"));
   expect(unlistedRequests, `unexpected /api/word/unlisted requests: ${JSON.stringify(unlistedRequests)}`).toEqual(

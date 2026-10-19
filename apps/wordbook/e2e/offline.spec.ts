@@ -232,7 +232,8 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     );
     await page.goto("/");
     await assetResponse;
-    await page.waitForTimeout(1000);
+    // aria-busy turns false once the worker has built its index and the install is done.
+    await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
 
@@ -243,7 +244,22 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     // The row is recorded once the answer paints; clearing first records nothing.
     await expect(page.getByRole("heading", { name: "apple", exact: true })).toBeVisible();
     await searchBox.fill("");
-    await page.waitForTimeout(300);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            new Promise<number>((resolve, reject) => {
+              const open = indexedDB.open("reading-log");
+              open.onerror = () => reject(open.error);
+              open.onsuccess = () => {
+                const count = open.result.transaction("lookups", "readonly").objectStore("lookups").count();
+                count.onsuccess = () => resolve(count.result);
+                count.onerror = () => reject(count.error);
+              };
+            }),
+        ),
+      )
+      .toBeGreaterThan(0);
 
     await signInAs(page, reader.hash);
 

@@ -5,7 +5,7 @@ import type { Page, Route } from "@playwright/test";
 import messages from "../messages/es.json";
 import { DATABASE_VERSION } from "../lib/log/record";
 import type { LookupRecord, SyncState } from "../lib/log/types";
-import { expect, test } from "./fixtures";
+import { afterFrames, expect, freezeTimers, runClock, test } from "./fixtures";
 
 // Module 549, RNL-09, RL-22, RL-32: with the copy on, opening /registro sends
 // one round to /api/log/sync and, if something came down, the list re-reads
@@ -172,7 +172,7 @@ test("RNL-09: with the copy on, opening /registro sends exactly one POST", async
   await page.goto("/registro");
   await first;
   await expect(rowLink(page, "alpha")).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count(), "POSTs for one open of /registro").toBe(1);
 });
 
@@ -225,7 +225,7 @@ test("RNL-09: a round that brings nothing leaves the list untouched, never the s
   const answered = page.waitForResponse((r) => r.url().includes("/api/log/sync"));
   release();
   await answered;
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count()).toBe(1);
   expect(await skeletonSeen(page), "an empty round re-read the list through the skeleton").toBe(false);
   await expect(rowLink(page, "alpha")).toBeVisible();
@@ -247,7 +247,7 @@ test("RNL-09: one round per open: each visit sends one, re-rendering the screen 
     window.dispatchEvent(new Event("resize"));
   });
   await expect(rowLink(page, "alpha")).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count(), "re-rendering without navigating sent a round").toBe(1);
 
   // Leave and come back by the bar, a client navigation: a new open.
@@ -257,14 +257,14 @@ test("RNL-09: one round per open: each visit sends one, re-rendering the screen 
   await nav.getByRole("link", { name: messages.nav.search }).click();
   await expect(page).toHaveURL((url) => url.pathname === "/");
   await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count(), "the home screen must not sync").toBe(1);
 
   await nav.getByRole("link", { name: messages.nav.log }).click();
   await expect(page).toHaveURL((url) => url.pathname === "/registro");
   await expect(rowLink(page, "alpha")).toBeVisible();
   await expect.poll(posts.count).toBe(2);
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count(), "one open sent more than one round").toBe(2);
 });
 
@@ -275,7 +275,7 @@ test("RNL-09: with no account and no copy, opening /registro sends nothing", asy
 
   await page.goto("/registro");
   await expect(rowLink(page, "alpha")).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count()).toBe(0);
 });
 
@@ -285,7 +285,7 @@ test("RNL-09, RL-22: a device already retired sends nothing on open", async ({ p
   const posts = trackSync(page);
   await page.goto("/registro");
   await expect(rowLink(page, "alpha")).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count(), "a device already retired sent a round").toBe(0);
 });
 
@@ -298,12 +298,12 @@ test("RNL-09, RL-22: a 409 retired answer on open stops the next open from sendi
   await page.goto("/registro");
   await first;
   await expect(rowLink(page, "alpha")).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count()).toBe(1);
 
   await page.goto("/registro");
   await expect(rowLink(page, "alpha")).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count(), "a device the server retired tried again on the next open").toBe(1);
 });
 
@@ -320,7 +320,7 @@ test("RNL-09: a failed round on open changes nothing on screen and is not retrie
   await expect(rowLink(page, "alpha")).toBeVisible();
   await watchSkeleton(page);
   await answered;
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
 
   await expect(rowLink(page, "alpha")).toBeVisible();
   await expect(page.getByText(messages.log.study.failedTitle)).toHaveCount(0);
@@ -342,10 +342,12 @@ test("RNL-09, RL-16: with the network gone, the open's round fails quietly and t
   page.on("pageerror", (error) => errors.push(error.message));
 
   const attempted = page.waitForRequest((r) => r.url().includes("/api/log/sync"));
+  await freezeTimers(page);
   await page.goto("/registro");
   await attempted;
   await expect(rowLink(page, "alpha")).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  // Five seconds of the page's own time: a retry on a timer would have left.
+  await runClock(page, 5_000);
   await expect(page.getByText(messages.log.study.failedTitle)).toHaveCount(0);
   await expect(page.getByText(messages.account.copy.failedTitle)).toHaveCount(0);
   expect(errors, "a dropped connection surfaced as an uncaught error").toEqual([]);
@@ -360,6 +362,6 @@ test("RNL-09: a word page under /registro does not sync", async ({ page }) => {
 
   await page.goto("/registro/apple");
   await expect(page.getByRole("heading", { name: "apple" }).first()).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await afterFrames(page);
   expect(posts.count()).toBe(0);
 });

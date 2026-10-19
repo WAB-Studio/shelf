@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { afterFrames, expect, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import manifest from "../public/dictionary/manifest.json";
@@ -17,10 +17,7 @@ async function openWordReady(page: Page, word: string): Promise<void> {
   );
   await page.goto(`/?q=${word}`);
   await assetResponse;
-  // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. Give it room before the first keystroke
-  // ever reaches an answer.
-  await page.waitForTimeout(1200);
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 // Fabricates the gap RNL-03's fallback closes: the browser that reads no
@@ -42,7 +39,7 @@ async function mockKeyboardOpen(page: Page, visibleHeight: number): Promise<void
     viewport.dispatchEvent(new Event("resize"));
   }, visibleHeight);
   // The listener's own state write, then the CSS relayout it feeds.
-  await page.waitForTimeout(200);
+  await afterFrames(page);
 }
 
 // docs/wordbook/DESIGN.md "Viewport": a bottom bar under 1024px, a sidebar
@@ -68,7 +65,7 @@ test("with nothing mocked, the bar sits exactly where it does today, bar and sid
 
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto("/");
-  await page.waitForTimeout(300);
+  await afterFrames(page);
   const barBox = await navBox(page);
   // `--rl-keyboard-inset` unset resolves to `0px`: the same `bottom: 0` the
   // bar has always drawn.
@@ -76,7 +73,7 @@ test("with nothing mocked, the bar sits exactly where it does today, bar and sid
   expect(barBox.x).toBe(0);
 
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.waitForTimeout(300);
+  await afterFrames(page);
   const sidebarBox = await navBox(page);
   // docs/wordbook/DESIGN.md "Viewport": the 240px band, full height — the
   // desktop rule sets `inset-block: 0` outright and never reads the
@@ -144,7 +141,7 @@ test("the last line of clamp's answer is reachable past the raised bar, uncovere
   expect(needed).toBeLessThanOrEqual(maxScroll);
 
   await page.evaluate((y) => window.scrollTo(0, y), needed);
-  await page.waitForTimeout(150);
+  await afterFrames(page);
 
   const lineAfter = (await lastLine.boundingBox())!;
   const barAfter = await navBox(page);
