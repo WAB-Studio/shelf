@@ -24,23 +24,23 @@ tanto necesitamos».
 |---|---|
 | «Hice la clase de inglés hoy» | `declare_fact` |
 | «Ya terminé el Informe» | `complete_task` |
-| «Agrega la tarea Pasaporte a Casa, de 2 horas» | `create_task` |
+| «Agrega la tarea Pasaporte a Casa, de 2 horas» | `create_task` (`estimate` 120: time is minutes) |
 | «Anota en el Informe: …» | `set_task_note` |
 | «Pon el Informe para el 27» | `schedule_task` |
-| «Ponle 25 horas a Inglés en noviembre» | `set_month_amount` |
+| «Ponle 25 horas a Inglés en noviembre» | `set_month_amount` (`amount` 1500) |
 | «Renombra Fitness a Salud» | `rename_goal` |
 | «Agrega una fase a Inglés de noviembre a diciembre» | `add_phase` |
 | «Agrega la clase de inglés los lunes y miércoles» | `add_commitment` |
 | «Mueve el final de Casa a marzo» | `move_horizon` |
 | «Pasa Maze a noviembre» | `fix_task` |
 | «Devuelve Documento al plan» | `unfix_task` |
-| «Estima Maze en 3 horas» | `set_task_estimate` (through `editTask`; null clears it) |
+| «Estima Maze en 3 horas» | `set_task_estimate` (`estimate` 180; through `editTask`; null clears it) |
 | «La fase 2 termina el 30» | `edit_phase` (through `editPhase`) |
 | «Crea la meta Viaje» | `create_goal` |
 | «Pon Fitness dentro de Salud» | `move_goal` |
 | «Anota en Casa: …» | `set_goal_note` |
 | «Cambia la clase de inglés por otra» | `retire_commitment` (then `add_commitment`, two steps) |
-| «El ritmo de Casa es de 10 horas al mes» | `set_rhythm` |
+| «El ritmo de Casa es de 10 horas al mes» | `set_rhythm` (`amount` 600) |
 | «Inglés se mide en horas» | `set_measure` |
 
 ### Two-step changes
@@ -62,7 +62,7 @@ prompt forbid them. The right answer proposes nothing and says so.
 |---|---|
 | Move a task to another goal («pasa Maze a Fitness») | **no existe** on any screen or tool (plan Q4 of oleada-4) |
 
-The estimate and the phase edit are built (RP-139, `set_task_estimate` over `editTask`, `edit_phase` over `editPhase`). The move is a domain act that does not exist, and waits for Q4.
+The estimate and the phase edit are built (RP-139); the bench scores them as `single` proposals (`m-estimate`, `m-phase`), not as missing. The move is a domain act that does not exist, and waits for Q4.
 A good model refuses it or says it cannot; a bad one proposes the nearest wrong tool (`create_task`, `fix_task`).
 
 ## What the chat does not need
@@ -98,7 +98,7 @@ not verified here.** Cost of one message = 15,000 × input + 1,500 × output; a 
 |---|---|---|---|---|---|
 | gpt-5-nano | 0.05 | 0.40 | USD 0.0014 | USD 0.034 | USD 0.07 |
 | gpt-4.1-nano | 0.10 | 0.40 | USD 0.0021 | USD 0.052 | USD 0.10 |
-| gpt-5-mini (RP-93, today) | 0.25 | 2.00 | USD 0.0068 | USD 0.17 | USD 0.34 |
+| gpt-5-mini (RP-93, until 2026-10-19) | 0.25 | 2.00 | USD 0.0068 | USD 0.17 | USD 0.34 |
 | gpt-4.1-mini | 0.40 | 1.60 | USD 0.0084 | USD 0.21 | USD 0.42 |
 | gpt-5 | 1.25 | 10.00 | USD 0.034 | USD 0.84 | USD 1.69 |
 | gpt-5.5 (the import's) | not known | not known | re-read | re-read | re-read |
@@ -109,7 +109,9 @@ A bench run is 25 calls of the bench person's fifty and counts in the app's cap.
 
 ## The bench
 
-`apps/goallog/scripts/chat-bench/`: `tasks.ts` (25 tasks mirroring this document), `score.ts` (pure scorer), `run.ts`. No
+Time amounts are minutes, as the tool descriptions say (`messages/es/mcp.json`): the bench measures the conversion from hours too. Casa measures hours, with no rhythm and no horizon.
+
+`apps/goallog/scripts/chat-bench/`: `tasks.ts` (25 tasks mirroring this document), `score.ts` (pure scorer), `run.ts`, `seed.ts` (builds the plan `SEED` names for each session and writes the `--seed` file; rerunnable). No
 `package.json` entry, no check, no CI job: only a person runs it, with the user's yes. The tests (`score.test.ts`) never reach
 the network.
 
@@ -120,8 +122,8 @@ the network.
   The tasks need a seeded plan (`SEED` in `tasks.ts`) per session and a `--seed` file mapping each session to its ids.
 - Writes `private/chat-bench/<model>-<time>.md`: model, task pass rate, mean input and output tokens, cost, p50 and p95 latency,
   and a line per task.
-- Reads tokens from `goals.model_calls` (the route answers none). That table records the model as `gpt-5-mini` whatever the
-  bench model is (`claimModelCall(CHAT_MODEL, …)`); the bench filters by source and time, never by model.
+- Reads tokens from `goals.model_calls` (the route answers none). That table records the model that ran (`chatModel()`: the bench model off Vercel,
+  `gpt-5.6-luna` on it (RP-140)); the bench filters by source and time, never by model.
 - Reads nothing the OpenAI CSV holds: it does not say what the app spent (`docs/TRAPS.md`, «El CSV de OpenAI no dice lo que gastó la app»).
 
-The bench decides nothing (RP-93 stands): it hands the user a table; the user picks the model.
+The bench decided nothing: it handed the user a table, and on 2026-10-19 the user picked gpt-5.6-luna (RP-140, succeeding RP-93).

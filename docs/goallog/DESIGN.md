@@ -1906,10 +1906,10 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
 - **Moving a task to another goal** (Q4 a): a new act on the task sheet and a tool, with its RP code and its board, as a
   slice of its own after oleada-4. Not planned yet.
 - **The paid chat measurement** (Q9, Q9 bis): OpenAI only, without gpt-5 and without the GPT-5.6 Sol tier («cosas caras»).
-  Models: `gpt-5-nano`, `gpt-4.1-nano`, `gpt-5-mini` (today's), `gpt-4.1-mini`, `gpt-6-luna` and `gpt-5.6-luna` («Luna, me
+  Models: `gpt-5-nano`, `gpt-4.1-nano`, `gpt-5-mini` (then today's), `gpt-4.1-mini`, `gpt-6-luna` and `gpt-5.6-luna` («Luna, me
   refiero al modelo Luna»). OpenAI's list prices read 2026-10-18 for the Lunas: GPT-6 Luna USD 0.10 in / 0.50 out per
   million tokens, GPT-5.6 Luna 0.20 / 1.20 (developers.openai.com/api/docs/pricing). About USD 1.40 for the run at the
-  bench's estimate; re-read every price on the day. RP-93 changes only once the user picks from the table.
+  bench's estimate; re-read every price on the day. RP-93 changed only once the user picked from the table; on 2026-10-19 it became RP-140.
 - **S1, the models measured** (2026-10-19, the user, option b): the six agreed, `gpt-5-nano`, `gpt-4.1-nano`, `gpt-5-mini`,
   `gpt-4.1-mini`, `gpt-6-luna`, `gpt-5.6-luna`, about USD 1.28, though OpenAI marks the first four deprecated (read
   2026-10-19 on developers.openai.com). Not run yet: the main session builds the bench seed, re-reads the prices, then runs it.
