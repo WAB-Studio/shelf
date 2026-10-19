@@ -1288,7 +1288,8 @@
         "categoryOutOfScope": "This category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account.",
         "adjustmentOneAccount": "An adjustment names one account only, as source or destination.",
         "adjustmentRefused": "The adjustment could not be booked: its date is before the account's opening or latest reconciliation, or the account is archived.",
-        "hasErrors": "The file still has errors. Fix them and import again."
+        "hasErrors": "The file still has errors. Fix them and import again.",
+        "alreadyCommitting": "This file was already being imported in another tab. Check the movements before importing it again."
       }
     }
   },

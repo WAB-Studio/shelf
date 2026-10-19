@@ -1,4 +1,4 @@
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { inArray, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -14,7 +14,7 @@ import {
 import type { Transaction } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { insertRow } from "@/db/insert-row";
-import { pgErrorCode } from "@/lib/db-error";
+import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
 import type { SheetEntity } from "@/lib/spreadsheet/schema";
@@ -76,6 +76,38 @@ function rowFailure(
   const error = new ActionError(JSON.stringify(failure));
   error.cause = cause;
   return error;
+}
+
+// The per-scope `external_ref` unique indexes (RF-52). The commit re-reads the file against the
+// fund right before it writes, so a key it classified new and still meets here was written by a
+// second commit of the same file that landed first — two tabs, or a double confirm.
+const EXTERNAL_REF_INDEXES = new Set([
+  "group_members_group_external_ref_unique",
+  "categories_owner_external_ref_unique",
+  "categories_group_external_ref_unique",
+  "accounts_owner_external_ref_unique",
+  "accounts_group_external_ref_unique",
+  "recurring_rules_owner_external_ref_unique",
+  "recurring_rules_group_external_ref_unique",
+  "transactions_owner_external_ref_unique",
+  "transactions_group_external_ref_unique",
+]);
+
+/**
+ * A commit that lost the race to another commit of the same file. `cause` keeps the original
+ * throw, a row failure included, so the sqlstate still reads through `pgErrorCode`.
+ */
+export class ImportAlreadyCommitting extends Error {
+  constructor(cause: unknown) {
+    super("import-commit: another commit of this file wrote its keys first");
+    this.name = "ImportAlreadyCommitting";
+    this.cause = cause;
+  }
+}
+
+function isExternalRefClash(error: unknown): boolean {
+  const constraint = pgConstraintName(error);
+  return pgErrorCode(error) === "23505" && constraint !== undefined && EXTERNAL_REF_INDEXES.has(constraint);
 }
 
 // `assert_split_matches_transaction` and its neighbours raise these; the preview
@@ -170,6 +202,19 @@ async function insertChunked(
   return out;
 }
 
+// The rows in the chunks a multi-row statement takes (RNF-15).
+function chunked<T>(rows: T[]): T[][] {
+  const out: T[][] = [];
+  for (let start = 0; start < rows.length; start += CHUNK_SIZE) out.push(rows.slice(start, start + CHUNK_SIZE));
+  return out;
+}
+
+// A set of records as ONE jsonb parameter for `jsonb_to_recordset` / `jsonb_array_elements_text`:
+// Drizzle expands a JS array into a parenthesised list, never an array (docs/TRAPS.md).
+function jsonbParam(value: unknown): SQL {
+  return sql`${JSON.stringify(value)}::jsonb`;
+}
+
 /**
  * Write the whole import in ONE caller-supplied transaction (RF-51): every insert and
  * update runs against `tx`, so a single failure rolls back ALL of it and the audit
@@ -181,6 +226,19 @@ async function insertChunked(
  * session; this function only writes.
  */
 export async function commitImport(
+  tx: Transaction,
+  input: CommitInput,
+  scope: CommitScope,
+): Promise<CommitOutcome> {
+  try {
+    return await writeImport(tx, input, scope);
+  } catch (error) {
+    if (isExternalRefClash(error)) throw new ImportAlreadyCommitting(error);
+    throw error;
+  }
+}
+
+async function writeImport(
   tx: Transaction,
   input: CommitInput,
   scope: CommitScope,
@@ -257,12 +315,14 @@ async function commitMembers(
     );
   }
 
-  for (const row of rows) {
-    if (row.status !== "update") continue;
-    await tx
-      .update(groupMembers)
-      .set({ name: row.object.name, inviteEmail: row.object.email ?? null })
-      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.externalRef, row.externalRef!)));
+  const updates = rows
+    .filter((row) => row.status === "update")
+    .map((row) => ({ external_ref: row.externalRef, name: row.object.name, invite_email: row.object.email ?? null }));
+  for (const chunk of chunked(updates)) {
+    await tx.execute(sql`
+      update ${groupMembers} as m set name = r.name, invite_email = r.invite_email
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(external_ref text, name text, invite_email text)
+      where m.group_id = ${groupId} and m.external_ref = r.external_ref`);
   }
 }
 
@@ -332,18 +392,20 @@ async function commitCategories(
     );
   }
 
-  for (const row of rows) {
-    if (row.status !== "update") continue;
-    const parentId = row.object.parentId === null ? null : map.get(row.object.parentId) ?? row.object.parentId;
-    await tx
-      .update(categories)
-      .set({ name: row.object.name, parentId, color: row.object.color })
-      .where(
-        and(
-          eq(categories.externalRef, row.externalRef!),
-          groupId ? eq(categories.groupId, groupId) : eq(categories.ownerUserId, scope.userId),
-        ),
-      );
+  const updates = rows
+    .filter((row) => row.status === "update")
+    .map((row) => ({
+      external_ref: row.externalRef,
+      name: row.object.name,
+      parent_id: row.object.parentId === null ? null : map.get(row.object.parentId) ?? row.object.parentId,
+      color: row.object.color,
+    }));
+  const inScope = groupId ? sql`c.group_id = ${groupId}` : sql`c.owner_user_id = ${scope.userId}`;
+  for (const chunk of chunked(updates)) {
+    await tx.execute(sql`
+      update ${categories} as c set name = r.name, parent_id = r.parent_id, color = r.color
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(external_ref text, name text, parent_id uuid, color text)
+      where c.external_ref = r.external_ref and ${inScope}`);
   }
 
   return map;
@@ -407,28 +469,33 @@ async function commitAccounts(
     });
   }
 
-  for (const row of rows) {
-    if (row.status !== "update") continue;
-    const scoped = placementColumns(row.object.placement);
-    const cents = toCents(row.object.amount);
-    await tx
-      .update(accounts)
-      .set({
+  // Each row carries the group its placement lands in, so one statement holds both scopes.
+  const updates = rows
+    .filter((row) => row.status === "update")
+    .map((row) => {
+      const scoped = placementColumns(row.object.placement);
+      const cents = toCents(row.object.amount);
+      return {
+        external_ref: row.externalRef,
+        group_id: scoped.groupId,
         name: row.object.name,
         subtype: row.object.subtype,
-        isShared: scoped.isShared,
+        is_shared: scoped.isShared,
         institution: row.object.institution,
-        initialBalanceCents: row.object.kind === "liability" ? -cents : cents,
-        initialBalanceOn: row.object.balanceOn,
-      })
-      .where(
-        and(
-          eq(accounts.externalRef, row.externalRef!),
-          scoped.groupId
-            ? eq(accounts.groupId, scoped.groupId)
-            : eq(accounts.ownerUserId, scope.userId),
-        ),
-      );
+        initial_balance_cents: row.object.kind === "liability" ? -cents : cents,
+        initial_balance_on: row.object.balanceOn,
+      };
+    });
+  for (const chunk of chunked(updates)) {
+    await tx.execute(sql`
+      update ${accounts} as a set
+        name = r.name, subtype = r.subtype, is_shared = r.is_shared, institution = r.institution,
+        initial_balance_cents = r.initial_balance_cents, initial_balance_on = r.initial_balance_on
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(
+        external_ref text, group_id uuid, name text, subtype text, is_shared boolean, institution text,
+        initial_balance_cents bigint, initial_balance_on date)
+      where a.external_ref = r.external_ref
+        and (case when r.group_id is null then a.owner_user_id = ${scope.userId} else a.group_id = r.group_id end)`);
   }
 
   return map;
@@ -540,49 +607,50 @@ async function commitRecurringRules(
     );
   }
 
-  for (const row of rows) {
-    if (row.status !== "update") continue;
-    const linked = resolve(row.object);
-    await tx
-      .update(recurringRules)
-      .set({
-        fromAccountId: linked.fromAccountId,
-        toAccountId: linked.toAccountId,
-        amountCents: toCents(row.object.amount),
-        categoryId: linked.categoryId,
+  const updates = rows
+    .filter((row) => row.status === "update")
+    .map((row) => {
+      const linked = resolve(row.object);
+      return {
+        external_ref: row.externalRef,
+        from_account_id: linked.fromAccountId,
+        to_account_id: linked.toAccountId,
+        amount_cents: toCents(row.object.amount),
+        category_id: linked.categoryId,
         description: row.object.description ?? null,
         frequency: row.object.frequency,
-        intervalN: row.object.intervalN,
-        dayOfMonth: row.object.dayOfMonth ?? null,
-        nextRunOn: row.object.nextRunOn,
-        endsOn: row.object.endsOn ?? null,
-      })
-      .where(
-        and(
-          eq(recurringRules.externalRef, row.externalRef!),
-          scopeMatch(recurringRules.groupId, recurringRules.ownerUserId, scope),
-        ),
-      );
+        interval_n: row.object.intervalN,
+        day_of_month: row.object.dayOfMonth ?? null,
+        next_run_on: row.object.nextRunOn,
+        ends_on: row.object.endsOn ?? null,
+      };
+    });
+  for (const chunk of chunked(updates)) {
+    await tx.execute(sql`
+      update ${recurringRules} as t set
+        from_account_id = r.from_account_id, to_account_id = r.to_account_id, amount_cents = r.amount_cents,
+        category_id = r.category_id, description = r.description, frequency = r.frequency,
+        interval_n = r.interval_n, day_of_month = r.day_of_month, next_run_on = r.next_run_on, ends_on = r.ends_on
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(
+        external_ref text, from_account_id uuid, to_account_id uuid, amount_cents bigint, category_id uuid,
+        description text, frequency text, interval_n smallint, day_of_month smallint, next_run_on date, ends_on date)
+      where t.external_ref = r.external_ref and ${inScope(scope)}`);
   }
 }
 
-// An `external_ref` is unique per scope, not globally: leading the filter with a
-// scope column lets the `(group_id, external_ref)` / `(owner_user_id, external_ref)`
-// unique indexes serve the lookup instead of a scan per updated row. The trigger
-// resolves a new row's scope from its accounts, so a row may sit in either.
-function scopeMatch(
-  groupColumn: Parameters<typeof eq>[0],
-  ownerColumn: Parameters<typeof eq>[0],
-  scope: CommitScope,
-): SQL {
-  const own = eq(ownerColumn, scope.userId);
-  return (scope.groupId ? or(eq(groupColumn, scope.groupId), own) : own) as SQL;
+// An `external_ref` is unique per scope, not globally, and the trigger resolves a row's
+// scope from its accounts, so a rule or movement may sit in either of the caller's scopes.
+// Written against the alias `t` the rule and movement updates both give their table.
+function inScope(scope: CommitScope): SQL {
+  return scope.groupId
+    ? sql`(t.group_id = ${scope.groupId} or t.owner_user_id = ${scope.userId})`
+    : sql`t.owner_user_id = ${scope.userId}`;
 }
 
-// A new row's write, resolved once: the real account and category ids a placeholder
+// A movement's write, resolved once: the real account and category ids a placeholder
 // stood for, the cents its amount and splits parse to. Shared by the batch attempt
 // and the serial fallback so the two write the exact same values.
-type ResolvedNewTransaction = {
+type ResolvedTransaction = {
   row: CommitRow<CreateTransactionInput>;
   fromAccountId: string | null;
   toAccountId: string | null;
@@ -590,12 +658,12 @@ type ResolvedNewTransaction = {
   splits: { categoryId: string; amountCents: number }[];
 };
 
-function resolveNewTransaction(
+function resolveTransaction(
   row: CommitRow<CreateTransactionInput>,
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
-): ResolvedNewTransaction {
+): ResolvedTransaction {
   const object = row.object;
   const fromAccountId = link(object.fromAccountId, accountMap);
   const toAccountId = link(object.toAccountId, accountMap);
@@ -611,10 +679,25 @@ function resolveNewTransaction(
   return { row, fromAccountId, toAccountId, amountCents: toCents(object.amount), splits };
 }
 
+// A row resolved for the write, or the row failure naming it (RF-51).
+function resolveRows(
+  rows: CommitRow<CreateTransactionInput>[],
+  accountMap: Map<string, string>,
+  categoryMap: Map<string, string>,
+  placeholders: Set<string>,
+): ResolvedTransaction[] {
+  return rows.map((row) => {
+    try {
+      return resolveTransaction(row, accountMap, categoryMap, placeholders);
+    } catch (error) {
+      throw rowFailure("transactions", row.sheetRow, transactionReasonKey(error), error);
+    }
+  });
+}
+
 // Transactions carry a child split, so a new row writes the movement then its splits,
 // and an update overwrites the row and replaces the split wholesale (delete + insert),
-// mirroring `updateTransaction`. New rows batch (RNF-15); an update stays serial, same
-// as every other entity's update path here.
+// mirroring `updateTransaction`. Both batch (RNF-15).
 async function commitTransactions(
   tx: Transaction,
   rows: CommitRow<CreateTransactionInput>[],
@@ -627,54 +710,83 @@ async function commitTransactions(
   const updateRows = rows.filter((row) => row.status === "update");
 
   await commitNewTransactions(tx, newRows, accountMap, categoryMap, placeholders);
+  await commitUpdatedTransactions(tx, updateRows, accountMap, categoryMap, placeholders, scope);
+}
 
-  for (const row of updateRows) {
-    try {
-      const object = row.object;
-      const fromAccountId = link(object.fromAccountId, accountMap);
-      const toAccountId = link(object.toAccountId, accountMap);
-      assertLinked(fromAccountId, placeholders);
-      assertLinked(toAccountId, placeholders);
+// Updates ride the same savepoint-then-serial shape as new rows: the set-based write runs
+// once for the whole file, and only a refused batch pays for redoing it row by row to name
+// the row an ordinary commit would have refused.
+async function commitUpdatedTransactions(
+  tx: Transaction,
+  rows: CommitRow<CreateTransactionInput>[],
+  accountMap: Map<string, string>,
+  categoryMap: Map<string, string>,
+  placeholders: Set<string>,
+  scope: CommitScope,
+): Promise<void> {
+  if (rows.length === 0) return;
+  const resolved = resolveRows(rows, accountMap, categoryMap, placeholders);
 
-      const splits = object.splits.map((split) => {
-        const categoryId = link(split.categoryId, categoryMap)!;
-        assertLinked(categoryId, placeholders);
-        return { categoryId, amountCents: toCents(split.amount) };
-      });
-      const amountCents = toCents(object.amount);
-
-      const [updated] = await tx
-        .update(transactions)
-        .set({
-          fromAccountId,
-          toAccountId,
-          amountCents,
-          occurredAt: object.occurredAt,
-          description: object.description,
-          // Mirrors `updateTransaction`: correcting a generated, unreviewed movement also
-          // confirms it, while a manual or already-reviewed row's stamp stays put (RF-31).
-          reviewedAt: sql`case when ${transactions.recurringRuleId} is not null and ${transactions.reviewedAt} is null then now() else ${transactions.reviewedAt} end`,
-        })
-        .where(
-          and(
-            eq(transactions.externalRef, row.externalRef!),
-            scopeMatch(transactions.groupId, transactions.ownerUserId, scope),
-          ),
-        )
-        .returning({ id: transactions.id });
-
-      if (!updated) continue;
-      await tx.delete(transactionSplits).where(eq(transactionSplits.transactionId, updated.id));
-      await tx.delete(transactionLabels).where(eq(transactionLabels.transactionId, updated.id));
-      await writeSplits(tx, updated.id, splits);
-    } catch (error) {
-      // Named here and nowhere upstream: `withUserDb` rolls the whole write back on
-      // this throw, and every row already inserted goes with it (RF-51) — the same
-      // all-or-nothing the preview promised, minus the three minutes of guessing
-      // which row it was.
-      throw rowFailure("transactions", row.sheetRow, transactionReasonKey(error), error);
+  try {
+    await tx.transaction(async (sp) => {
+      for (const chunk of chunked(resolved)) await updateTransactionsBatch(sp, chunk, scope);
+    });
+  } catch {
+    for (const item of resolved) {
+      try {
+        await updateTransactionsBatch(tx, [item], scope);
+      } catch (error) {
+        throw rowFailure("transactions", item.row.sheetRow, transactionReasonKey(error), error);
+      }
     }
   }
+}
+
+// Four statements per chunk whatever its size: the movements, their old splits and labels
+// gone, their new splits in. A key that matches nothing in scope writes no split.
+async function updateTransactionsBatch(
+  tx: Transaction,
+  chunk: ResolvedTransaction[],
+  scope: CommitScope,
+): Promise<void> {
+  const records = chunk.map((item) => ({
+    external_ref: item.row.externalRef,
+    from_account_id: item.fromAccountId,
+    to_account_id: item.toAccountId,
+    amount_cents: item.amountCents,
+    occurred_at: item.row.object.occurredAt,
+    description: item.row.object.description,
+  }));
+  // Mirrors `updateTransaction`: correcting a generated, unreviewed movement also
+  // confirms it, while a manual or already-reviewed row's stamp stays put (RF-31).
+  const updated = (await tx.execute(sql`
+    update ${transactions} as t set
+      from_account_id = r.from_account_id, to_account_id = r.to_account_id, amount_cents = r.amount_cents,
+      occurred_at = r.occurred_at, description = r.description,
+      reviewed_at = case when t.recurring_rule_id is not null and t.reviewed_at is null then now() else t.reviewed_at end
+    from jsonb_to_recordset(${jsonbParam(records)}) as r(
+      external_ref text, from_account_id uuid, to_account_id uuid, amount_cents bigint, occurred_at date, description text)
+    where t.external_ref = r.external_ref and ${inScope(scope)}
+    returning t.id, t.external_ref`)) as unknown as { id: string; external_ref: string }[];
+  if (updated.length === 0) return;
+
+  const ids = sql`(select value::uuid from jsonb_array_elements_text(${jsonbParam(updated.map((row) => row.id))}))`;
+  await tx.execute(sql`delete from ${transactionSplits} where transaction_id in ${ids}`);
+  await tx.execute(sql`delete from ${transactionLabels} where transaction_id in ${ids}`);
+
+  const splitsByRef = new Map(chunk.map((item) => [item.row.externalRef, item.splits]));
+  const splits = updated.flatMap((row) =>
+    (splitsByRef.get(row.external_ref) ?? []).map((split) => ({
+      transaction_id: row.id,
+      category_id: split.categoryId,
+      amount_cents: split.amountCents,
+    })),
+  );
+  if (splits.length === 0) return;
+  await tx.execute(sql`
+    insert into ${transactionSplits} (transaction_id, category_id, amount_cents)
+    select transaction_id, category_id, amount_cents
+    from jsonb_to_recordset(${jsonbParam(splits)}) as r(transaction_id uuid, category_id uuid, amount_cents bigint)`);
 }
 
 // New rows land in chunked, multi-row inserts (RNF-15): the movements first, then their
@@ -693,14 +805,7 @@ async function commitNewTransactions(
 ): Promise<void> {
   if (rows.length === 0) return;
 
-  const resolved: ResolvedNewTransaction[] = [];
-  for (const row of rows) {
-    try {
-      resolved.push(resolveNewTransaction(row, accountMap, categoryMap, placeholders));
-    } catch (error) {
-      throw rowFailure("transactions", row.sheetRow, transactionReasonKey(error), error);
-    }
-  }
+  const resolved = resolveRows(rows, accountMap, categoryMap, placeholders);
 
   try {
     await tx.transaction(async (sp) => {
@@ -718,7 +823,7 @@ async function commitNewTransactions(
 // same assumption `insertChunked` already leans on for every other entity.
 async function insertNewTransactionsBatch(
   tx: Transaction,
-  chunk: ResolvedNewTransaction[],
+  chunk: ResolvedTransaction[],
 ): Promise<void> {
   const rowValues = sql.join(
     chunk.map(
@@ -754,7 +859,7 @@ async function insertNewTransactionsBatch(
 // here so the one row a chunk chokes on is the one the thrown `ActionError` names.
 async function insertNewTransactionsSerially(
   tx: Transaction,
-  rows: ResolvedNewTransaction[],
+  rows: ResolvedTransaction[],
 ): Promise<void> {
   for (const item of rows) {
     try {
