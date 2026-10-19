@@ -53,13 +53,16 @@
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mock } from "node:test";
+import { isDeepStrictEqual } from "node:util";
 
 import { assertSuiteDatabase } from "@repo/harness-registry";
 import { createClient } from "@supabase/supabase-js";
-import type { SQL } from "drizzle-orm";
+import { sql as drizzleSql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+import * as schema from "@/db/schema";
 import { withSettledTransaction } from "@/lib/settled-transaction";
 import { civilDateInZone, civilDateToDate, todayInZone } from "@/lib/zone";
 
@@ -4017,6 +4020,199 @@ async function checkParentOwner0027(): Promise<void> {
   await sql.end();
 }
 
+// A receipt is what one act answered to one request id (RP-56, RNP-05): the
+// person reads and inserts only their own, and no role rewrites or deletes one.
+// Driven as `authenticated`, `anon` and `service_role` inside one rollback.
+async function checkWriteReceipts0029(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const a = randomUUID();
+  const b = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${a}), (${b})`;
+      const requestId = randomUUID();
+      const answer = { goalId: randomUUID(), created: ["meta", "fase"], count: 2 };
+
+      await enterUserContext(tx, a);
+      const ownInsert = await attemptRows<{ request_id: string }>(tx, (sp) => sp`
+        insert into goals.write_receipts (user_id, request_id, act, answer)
+        values (${a}, ${requestId}, 'createGoal', ${sp.json(answer)}) returning request_id`);
+      assert("P305", ownInsert.code === undefined && ownInsert.rows.length === 1,
+        `A inserts a receipt for A, sqlstate = ${ownInsert.code ?? "none"}, rows = ${ownInsert.rows.length}`);
+
+      const foreignInsert = await attempt(tx, (sp) => sp`
+        insert into goals.write_receipts (user_id, request_id, act, answer)
+        values (${b}, ${randomUUID()}, 'createGoal', '{}'::jsonb)`);
+      assert("P306", foreignInsert.code === "42501",
+        `A inserts a receipt with user_id = B, sqlstate = ${foreignInsert.code ?? "none"}`);
+
+      const ownRead = await attemptRows<{ answer: unknown }>(tx, (sp) => sp`
+        select answer from goals.write_receipts where request_id = ${requestId}`);
+      assert("P307", ownRead.code === undefined && ownRead.rows.length === 1 && isDeepStrictEqual(ownRead.rows[0].answer, answer),
+        `A reads its own receipt, sqlstate = ${ownRead.code ?? "none"}, rows = ${ownRead.rows.length}`);
+
+      const update = await attemptCount(tx, (sp) => sp`
+        update goals.write_receipts set answer = '{"forged":true}'::jsonb
+        where user_id = ${a} and request_id = ${requestId}`);
+      assert("P308", update.code === "42501",
+        `A rewrites its own receipt's answer, sqlstate = ${update.code ?? "none"}, rows = ${update.count}`);
+
+      const del = await attemptCount(tx, (sp) => sp`
+        delete from goals.write_receipts where user_id = ${a} and request_id = ${requestId}`);
+      assert("P309", del.code === "42501",
+        `A deletes its own receipt, sqlstate = ${del.code ?? "none"}, rows = ${del.count}`);
+
+      const replay = await attempt(tx, (sp) => sp`
+        insert into goals.write_receipts (user_id, request_id, act, answer)
+        values (${a}, ${requestId}, 'createGoal', '{"second":true}'::jsonb)`);
+      assert("P310", replay.code === "23505",
+        `A inserts a second receipt for the same request id, sqlstate = ${replay.code ?? "none"}`);
+
+      // `made_at` is the column's `now()`, never the caller's: a receipt dated
+      // by hand would dodge or hasten its own prune.
+      const dated = await attempt(tx, (sp) => sp`
+        insert into goals.write_receipts (user_id, request_id, act, answer, made_at)
+        values (${a}, ${randomUUID()}, 'createGoal', '{}'::jsonb, now() - interval '30 days')`);
+      assert("P311", dated.code === "42501",
+        `A inserts a receipt naming made_at, sqlstate = ${dated.code ?? "none"}`);
+
+      await enterUserContext(tx, b);
+      const foreignRead = await attemptRows<{ answer: unknown }>(tx, (sp) => sp`
+        select answer from goals.write_receipts where user_id = ${a} or request_id = ${requestId}`);
+      assert("P312", foreignRead.code === undefined && foreignRead.rows.length === 0,
+        `B selects A's receipt, sqlstate = ${foreignRead.code ?? "none"}, rows = ${foreignRead.rows.length}`);
+
+      const foreignUpdate = await attemptCount(tx, (sp) => sp`
+        update goals.write_receipts set answer = '{}'::jsonb where user_id = ${a}`);
+      const foreignDelete = await attemptCount(tx, (sp) => sp`
+        delete from goals.write_receipts where user_id = ${a}`);
+      assert("P313", foreignUpdate.code === "42501" && foreignDelete.code === "42501",
+        `B rewrites and deletes A's receipt, update = ${foreignUpdate.code ?? "none"}/${foreignUpdate.count}, delete = ${foreignDelete.code ?? "none"}/${foreignDelete.count}`);
+
+      // The key is the pair: another person may carry the same request id.
+      const sameIdOther = await attemptRows<{ request_id: string }>(tx, (sp) => sp`
+        insert into goals.write_receipts (user_id, request_id, act, answer)
+        values (${b}, ${requestId}, 'createGoal', '{"b":true}'::jsonb) returning request_id`);
+      assert("P314", sameIdOther.code === undefined && sameIdOther.rows.length === 1,
+        `B inserts its own receipt under A's request id, sqlstate = ${sameIdOther.code ?? "none"}, rows = ${sameIdOther.rows.length}`);
+
+      // From the catalogue, not by a refused query: `anon` and `service_role`
+      // hold no USAGE on `goals`, so they are refused with or without a grant.
+      const catalogue = await attemptRows<{ anon: boolean; service: boolean; upd: boolean; del: boolean; trunc: boolean }>(tx, (sp) => sp`
+        select
+          has_table_privilege('anon', 'goals.write_receipts', 'select, insert, update, delete') as anon,
+          has_table_privilege('service_role', 'goals.write_receipts', 'select, insert, update, delete') as service,
+          has_table_privilege('authenticated', 'goals.write_receipts', 'update') as upd,
+          has_table_privilege('authenticated', 'goals.write_receipts', 'delete') as del,
+          has_table_privilege('authenticated', 'goals.write_receipts', 'truncate') as trunc`);
+      const c = catalogue.rows[0];
+      const anonGrants = catalogue.code === undefined ? await privilegesOf(tx, "write_receipts", "anon") : "?";
+      const serviceGrants = catalogue.code === undefined ? await privilegesOf(tx, "write_receipts", "service_role") : "?";
+      assert("P315",
+        catalogue.code === undefined && c !== undefined && !c.anon && !c.service && !c.upd && !c.del && !c.trunc &&
+          anonGrants === "" && serviceGrants === "",
+        `catalogue, sqlstate = ${catalogue.code ?? "none"}, anon = "${anonGrants}", service_role = "${serviceGrants}", ` +
+          `authenticated update/delete/truncate = ${c ? `${c.upd}/${c.del}/${c.trunc}` : "?"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+
+  await checkReceiptAccessor0029();
+}
+
+// Drives `lib/receipts.ts` inside a drizzle transaction settled the way
+// `withGoalsDb` settles one, counting every statement that reaches the wire.
+async function checkReceiptAccessor0029(): Promise<void> {
+  let wire = 0;
+  const client = postgres(DATABASE_URL!, { prepare: false, max: 1, debug: () => { wire += 1; } });
+  const db = drizzle(client, { schema, casing: "snake_case" });
+  const a = randomUUID();
+  const b = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  let receipts: typeof import("@/lib/receipts");
+  try {
+    receipts = await import("@/lib/receipts");
+  } catch (error) {
+    const why = (error as Error).message.split("\n")[0];
+    for (const label of ["P316", "P317", "P318", "P319", "P320", "P321", "P322"]) {
+      assert(label, false, `lib/receipts.ts does not load: ${why}`);
+    }
+    await client.end();
+    return;
+  }
+  const { readReceipt, writeReceipt } = receipts;
+
+  await db
+    .transaction(async (tx) => {
+      const settle = (subject: string) => tx.execute(drizzleSql`select
+        set_config('request.jwt.claims', ${JSON.stringify({ sub: subject, role: "authenticated", aud: "authenticated" })}, true),
+        set_config('search_path', 'goals, public', true),
+        set_config('role', 'authenticated', true)`);
+      await tx.execute(drizzleSql`insert into auth.users (id) values (${a}), (${b})`);
+      const aOld = randomUUID();
+      const aRecent = randomUUID();
+      const bOld = randomUUID();
+      // Dated by the owner role: the column grant keeps `made_at` from `authenticated`.
+      await tx.execute(drizzleSql`
+        insert into goals.write_receipts (user_id, request_id, act, answer, made_at) values
+          (${a}, ${aOld}, 'createGoal', '{"age":"8d"}'::jsonb, now() - interval '8 days'),
+          (${a}, ${aRecent}, 'createGoal', '{"age":"1d"}'::jsonb, now() - interval '1 day'),
+          (${b}, ${bOld}, 'createGoal', '{"age":"8d"}'::jsonb, now() - interval '8 days')`);
+
+      await settle(a);
+      const requestId = randomUUID();
+      const answer = { goalId: randomUUID(), phases: [{ id: randomUUID(), aim: "Fase 1" }], note: null, count: 3 };
+
+      wire = 0;
+      await writeReceipt(tx, a, requestId, "createGoal", answer);
+      const writeStatements = wire;
+      wire = 0;
+      const read = await readReceipt(tx, a, requestId);
+      const readStatements = wire;
+      assert("P316", isDeepStrictEqual(read, answer),
+        `writeReceipt then readReceipt in one tx as A, read = ${JSON.stringify(read)}`);
+      assert("P317", writeStatements === 1 && readStatements === 1,
+        `one statement each, writeReceipt = ${writeStatements}, readReceipt = ${readStatements}`);
+
+      const missing = await readReceipt(tx, a, randomUUID());
+      assert("P318", missing === null, `readReceipt of an id never written, read = ${JSON.stringify(missing)}`);
+
+      // As the owner role every row is in sight, so only the accessor's own
+      // filter can keep another person's receipt out of the answer.
+      await tx.execute(drizzleSql`reset role`);
+      await tx.execute(drizzleSql`
+        insert into goals.write_receipts (user_id, request_id, act, answer)
+        values (${b}, ${requestId}, 'createGoal', '{"owner":"b"}'::jsonb)`);
+      const asA = await readReceipt(tx, a, requestId);
+      const asB = await readReceipt(tx, b, requestId);
+      const bOnA = await readReceipt(tx, b, aRecent);
+      assert("P319",
+        isDeepStrictEqual(asA, answer) && isDeepStrictEqual(asB, { owner: "b" }) && bOnA === null,
+        `same request id for A and B, A reads ${JSON.stringify(asA)}, B reads ${JSON.stringify(asB)}, B on A's id ${JSON.stringify(bOnA)}`);
+
+      const left = await tx.execute<{ request_id: string }>(drizzleSql`
+        select request_id from goals.write_receipts where request_id in (${aOld}, ${aRecent}, ${bOld})`);
+      const ids = new Set([...left].map((r) => r.request_id));
+      assert("P320", !ids.has(aOld), `A's receipt 8 days old after A writes a new one, still there = ${ids.has(aOld)}`);
+      assert("P321", ids.has(aRecent), `A's receipt 1 day old after A writes a new one, still there = ${ids.has(aRecent)}`);
+      assert("P322", ids.has(bOld), `B's receipt 8 days old after A writes a new one, still there = ${ids.has(bOld)}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error === forcedRollback) return;
+      assert("P316", false, `accessor run threw: ${pgCode(error) ?? ""} ${(error as Error).message.split("\n")[0]}`);
+    });
+  await client.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -4056,6 +4252,7 @@ async function main(): Promise<void> {
   await checkAllowedEmails0025();
   await checkSignInClaims0026();
   await checkParentOwner0027();
+  await checkWriteReceipts0029();
 
   if (failed) process.exit(1);
 }
