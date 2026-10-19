@@ -2,6 +2,7 @@ import type postgres from "postgres";
 
 import roadmap from "../messages/es/roadmap.json";
 import { test, expect, visit } from "./fixtures";
+import { todayInZone } from "@/lib/zone";
 
 // RP-35, module 853: a rhythm text that does not read as time says how to write it;
 // a text that reads and falls outside 1 min–744 h says the range. Neither is sent.
@@ -14,7 +15,7 @@ test.use({ viewport: { width: 390, height: 900 } });
 async function seedGoal(db: postgres.Sql, personId: string, rhythm: number | null) {
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${`Meta formato ${Date.now()}`}, ${`${new Date().getUTCFullYear() + 2}-12-01`}::date, 'minutos', 'minutos', ${rhythm})
+    values (${personId}, ${`Meta formato ${Date.now()}`}, ${`${Number(todayInZone().slice(0, 4)) + 2}-12-01`}::date, 'minutos', 'minutos', ${rhythm})
     returning id
   `;
   await db`

@@ -1,6 +1,7 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 
 import { test, expect, visit, type Person } from "./fixtures";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import { holdActions } from "./meta-arbol-seed";
 import type { Db } from "./meta-arbol-seed";
 import { PAGES, dialog, horizonOfGoal, postCounter, seedOpenGoal } from "./metas-sin-final-seed";
@@ -54,7 +55,7 @@ test("«Mudanza» offers «Ponerle medida» under «esta meta no mide nada»; a 
   await seedOpenGoal(db, person, { name: "Cocina", parent: holder, unit: null, created: DAY_BACK(3) });
   const archived = await seedOpenGoal(db, person, { name: "Vieja", unit: null, created: DAY_BACK(30) });
   await db`update goals.goals set archived_at = now() where id = ${archived}`;
-  const ended = await seedOpenGoal(db, person, { name: "Terminada", unit: null, horizon: new Date(Date.now() - 2 * DAY_MS).toISOString().slice(0, 10), created: DAY_BACK(60) });
+  const ended = await seedOpenGoal(db, person, { name: "Terminada", unit: null, horizon: dateToCivilDate(new Date(civilDateToDate(todayInZone()).getTime() - 2 * DAY_MS)), created: DAY_BACK(60) });
 
   const a = await open(browser, baseURL, person.sessionFile, `/metas/${bare}`);
   try {

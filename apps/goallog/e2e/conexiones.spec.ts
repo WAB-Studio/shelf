@@ -3,6 +3,7 @@ import { request as playwrightRequest, type APIResponse, type Page } from "@play
 import messages from "../messages/es/connections.json";
 import { test, expect, type Person } from "./fixtures";
 import { boxOf } from "./box";
+import { civilDateToDate, todayInZone } from "@/lib/zone";
 
 // RP-38, RNP-17 (`ConexionesVacio`, `ConexionesUna`, `ConexionesCreada`,
 // `ConexionesRevocada`, `ConexionesFallo`): the key is drawn once, right after
@@ -12,9 +13,9 @@ const KEY = /^pls_[A-Za-z0-9_-]{20,}$/;
 // What `row.metaUnusedFirst` draws for a key made today and never used.
 const FRESH_UNUSED = /^Creada hoy a las \d\d:\d\d · sin usar$/;
 
-// 15:00Z lands on the same calendar day in any zone the specs run in.
+// 15:00Z lands on the same calendar day in any zone the specs run in; the day counted back from is Bogotá's.
 function daysAgo(days: number): Date {
-  const when = new Date();
+  const when = civilDateToDate(todayInZone());
   when.setUTCDate(when.getUTCDate() - days);
   when.setUTCHours(15, 0, 0, 0);
   return when;
