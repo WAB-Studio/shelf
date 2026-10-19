@@ -144,8 +144,17 @@ async function withReader(
       signIn: async () => signInWith(page, await landToken(sql, reader)),
     });
   } finally {
-    await sql`delete from harness.identities where user_id = ${reader.id}`;
-    await sql`delete from auth.users where id = ${reader.id}`;
+    // Eight workers delete readers at once; Postgres may pick one as a deadlock victim, and the
+    // delete is safe to run again.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await sql`delete from harness.identities where user_id = ${reader.id}`;
+        await sql`delete from auth.users where id = ${reader.id}`;
+        break;
+      } catch (error) {
+        if ((error as { code?: string }).code !== "40P01" || attempt >= 4) throw error;
+      }
+    }
     await closeRun(sql);
     await sql.end();
   }
@@ -674,6 +683,10 @@ test.describe("the last-copy line keeps time", () => {
       const pullAnswered = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
       await page.goto("/cuenta");
       await Promise.all([devicesAsked, pullAnswered]);
+      // The device list is asked again once the pull has landed; that second ask is part of the open.
+      await expect
+        .poll(() => calls.filter((call) => call.includes("/api/devices")).length, { message: "device list asked again" })
+        .toBe(2);
       await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
       const before = [...calls];
 
