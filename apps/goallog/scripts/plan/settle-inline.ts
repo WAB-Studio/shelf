@@ -1,0 +1,199 @@
+// M16 (RNP-05): `withSettledTransaction` sends the claims inside the SQL
+// text, as a string literal drizzle quotes (`drizzle-orm/pg-core/
+// dialect.js:79`), rather than as a bind parameter. This file proves the
+// literal holds: claims carrying every character that ends or escapes a
+// literal settle to the same `request.jwt.claims` the parameterized settle
+// gives, and none of their text runs as SQL.
+//
+// A canary is what running as SQL would leave behind: a payload that breaks
+// out of the literal sets `app.m16_canary` on the session. The literal is the
+// only barrier: with no parameter, postgres.js sends the settle as a simple
+// query (`postgres/src/index.js:123`), which runs every command it carries.
+// The proof runs under `standard_conforming_strings` on (every Postgres since
+// 9.1, and this stack) and off, where `\` escapes inside a plain literal.
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { after, test } from "node:test";
+
+import { settleSessionSql } from "@repo/supabase-auth/settle";
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+
+import { withSettledTransaction } from "@/lib/settled-transaction";
+
+type Call = { query: string; parameters: unknown[] };
+const wire: Call[] = [];
+
+const door = postgres(process.env.DATABASE_URL!, {
+  prepare: false,
+  max: 1,
+  debug: (_connection: number, query: string, parameters: unknown[]) => void wire.push({ query, parameters }),
+});
+const orm = drizzle(door);
+type Tx = Parameters<Parameters<typeof orm.transaction>[0]>[0];
+
+after(() => door.end());
+
+const breakOut = "', true), set_config('app.m16_canary', 'ran', false), set_config('app.m16_rest', '";
+const hostile: Record<string, unknown> = {
+  sub: randomUUID(),
+  role: "authenticated",
+  aud: "authenticated",
+  quote: "'",
+  quotes: "''''",
+  backslash: "\\",
+  backslashQuote: "\\'",
+  trailingBackslash: "ends in \\",
+  dollars: "$$ select set_config('app.m16_canary', 'ran', false) $$",
+  tagged: "$m16$ ran $m16$",
+  placeholder: "$1 $2",
+  semicolon: "; select set_config('app.m16_canary', 'ran', false); --",
+  breakOut,
+  escapeString: "E'\\x27' || chr(39)",
+  comment: "/* */ -- ",
+  unicode: "ñandú 東京 🙂 ‮    ",
+  loneSurrogate: "\ud800",
+  control: "\b\f\n\r\t\u0001\u001f",
+  user_metadata: { "it's": ["'", "\\", { "$$": ";" }], [breakOut]: breakOut },
+};
+
+type Seen = { claims: string | null; who: string; canary: string | null; sub: string | null };
+
+// Off, the claims may no longer parse as JSON, so `sub` is read as text.
+const read = async (tx: Tx): Promise<Seen> => {
+  const [row] = (await tx.execute(sql`
+    select current_setting('request.jwt.claims', true) as claims,
+           current_user::text as who,
+           nullif(current_setting('app.m16_canary', true), '') as canary,
+           substring(current_setting('request.jwt.claims', true) from '"sub":"([0-9a-f-]{36})"') as sub`)) as unknown as Seen[];
+  return row;
+};
+
+const conforming = (on: boolean) => sql.raw(`set local standard_conforming_strings = ${on ? "on" : "off"}`);
+
+// The app's settle: `withSettledTransaction`, inlined.
+function inlined(claims: Record<string, unknown>, on: boolean): Promise<Seen> {
+  return withSettledTransaction<Tx, Seen>(
+    { claims },
+    "settle-inline",
+    "goals, public",
+    (cb) =>
+      orm.transaction(async (tx) => {
+        await tx.execute(conforming(on));
+        return cb(tx);
+      }),
+    (tx, statement) => tx.execute(statement),
+    read,
+  );
+}
+
+// The same statement with its values bound, as the settle ran before M16.
+function parameterized(claims: Record<string, unknown>, on: boolean): Promise<Seen> {
+  return orm.transaction(async (tx) => {
+    await tx.execute(conforming(on));
+    await tx.execute(settleSessionSql({ claims: JSON.stringify(claims), searchPath: "goals, public" }));
+    return read(tx);
+  });
+}
+
+test("inlined claims: the settle carries no bind parameter and its claims ride one literal", async () => {
+  wire.length = 0;
+  await inlined(hostile, true);
+  const settles = wire.filter((call) => call.query.includes("set_config('request.jwt.claims'"));
+  assert.equal(settles.length, 1);
+  assert.deepEqual(settles[0].parameters, []);
+  const literal = `'${JSON.stringify(hostile).replace(/'/g, "''")}'`;
+  assert.ok(settles[0].query.includes(`set_config('request.jwt.claims', ${literal}, true)`), settles[0].query);
+});
+
+test("inlined claims, standard_conforming_strings on: the same request.jwt.claims as bound, and nothing ran", async () => {
+  const [mine, bound] = [await inlined(hostile, true), await parameterized(hostile, true)];
+  assert.equal(mine.claims, JSON.stringify(hostile), "the settled text is the claims' JSON, byte for byte");
+  assert.deepEqual(mine, bound);
+  assert.deepEqual(JSON.parse(mine.claims!), JSON.parse(JSON.stringify(hostile)));
+  assert.equal(mine.who, "authenticated");
+  assert.equal(mine.sub, hostile.sub);
+  assert.equal(mine.canary, null, "a claim ran as SQL");
+});
+
+function pgCode(error: unknown): string | undefined {
+  for (let cursor: unknown = error; cursor; cursor = (cursor as { cause?: unknown }).cause) {
+    const code = (cursor as { code?: unknown }).code;
+    if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) return code;
+  }
+  return undefined;
+}
+
+// One claim alone, so a literal that ended early would leave valid SQL behind
+// it and the canary would be set rather than the statement refused.
+test("a claim built to close the literal stays a value: the canary is never set", async () => {
+  const claims = { sub: hostile.sub, role: "authenticated", breakOut };
+  const mine = await inlined(claims, true);
+  assert.equal(mine.claims, JSON.stringify(claims));
+  assert.equal(mine.who, "authenticated");
+  assert.equal(mine.canary, null, "a claim ran as SQL");
+});
+
+// Off, `\"` and `\n` lose their backslash, so the text may differ from the
+// JSON; what must hold is that no payload left the literal.
+test("inlined claims, standard_conforming_strings off: a backslash never ends the literal", async () => {
+  const plain = Object.fromEntries(Object.entries(hostile).filter(([key]) => key !== "control" && key !== "loneSurrogate"));
+  const mine = await inlined(plain, false);
+  assert.equal(mine.who, "authenticated");
+  assert.equal(mine.canary, null, "a claim ran as SQL");
+  assert.equal(mine.sub, hostile.sub);
+});
+
+test("inlined claims, standard_conforming_strings off: a lone surrogate fails closed in the lexer, never past the literal", async () => {
+  const outcome = await inlined(hostile, false).then(
+    (seen) => ({ ok: true as const, seen }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  if (outcome.ok) {
+    assert.equal(outcome.seen.who, "authenticated");
+    assert.equal(outcome.seen.canary, null, "a claim ran as SQL");
+    return;
+  }
+  // The lexer refuses a lone surrogate's `\ud800` while it reads the literal,
+  // before any of the statement runs; a literal that ended early would fail
+  // on the text after it instead, as a plain syntax error.
+  const message = String((outcome.error as { cause?: unknown }).cause ?? outcome.error);
+  console.log(`off, full claims: rejected with ${pgCode(outcome.error)}: ${message.split("\n")[0]}`);
+  assert.match(message, /invalid Unicode surrogate pair/);
+});
+
+// `fn` starts before the settle answers, so a settle that fails can leave
+// `fn` still running. A statement `fn` sends after the transaction rolled back
+// would run on the bare connection, as `postgres` and past RLS; it must meet
+// the aborted transaction instead. The pause stands for any await `fn` makes
+// between two statements.
+test("a settle that fails: a statement fn sends later never runs outside the transaction", async () => {
+  let late: unknown;
+  let finished: Promise<void> = Promise.resolve();
+  const body = async (tx: Tx) => {
+    await tx.execute(sql`select 1`).catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    late = await tx
+      .execute(sql`select current_user::text as who, set_config('app.m16_late', 'ran', false) as late`)
+      .catch((error: unknown) => pgCode(error));
+  };
+  const outcome = await withSettledTransaction<Tx, void>(
+    { claims: { sub: randomUUID(), role: "authenticated" } },
+    "settle-inline",
+    '"goals',
+    (cb) => orm.transaction(cb),
+    (tx, statement) => tx.execute(statement),
+    (tx) => (finished = body(tx)),
+  ).then(
+    () => "resolved",
+    (error: unknown) => pgCode(error),
+  );
+  await finished;
+  assert.equal(outcome, "22023", "the call rejects with the settle's error");
+  const [seen] = (await orm.execute(sql`select nullif(current_setting('app.m16_late', true), '') as late`)) as unknown as {
+    late: string | null;
+  }[];
+  assert.equal(seen.late, null, `fn's later statement ran on the bare connection: ${JSON.stringify(late)}`);
+  assert.equal(late, "25P02", "fn's later statement met the aborted transaction");
+});
