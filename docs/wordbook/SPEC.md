@@ -397,6 +397,7 @@ Dead codes. The number stays burned and the tick stays as it was.
   file, or to the copy held by the reader's account — and to bring back what the same reader's other
   devices recorded; never on the path that answers a lookup. Decided by the user 2026-10-08.
   _Retired 2026-10-18. Successor: RL-76. Offline, the word the dictionary has no entry for and the sentence that could not be translated left no row: the lookups a reader on a train needed most._
+
 - [ ] **RL-71** *(successor of RL-52)* — With an account open on the device, nothing leaves it until the reader
   confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
   had and brings down what the others recorded, with no further act. When the device last copied for another reader, it sends up only what is searched after this
