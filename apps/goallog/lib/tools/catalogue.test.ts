@@ -12,7 +12,16 @@ function act(name: string) {
 }
 
 mock.module("@/app/actions/budgets", { namedExports: { setMonthBudget: act("setMonthBudget") } });
-mock.module("@/app/actions/facts", { namedExports: { declareFact: act("declareFact") } });
+// A test may set what `declareFact` answers next; the rest answer ok.
+let declareFactAnswer: unknown = null;
+mock.module("@/app/actions/facts", {
+  namedExports: {
+    declareFact: async (input: unknown) => {
+      calls.push({ act: "declareFact", input });
+      return declareFactAnswer ?? { ok: true };
+    },
+  },
+});
 mock.module("@/app/actions/one-offs", {
   namedExports: {
     completeOneOff: act("completeOneOff"),
@@ -301,5 +310,23 @@ test("a creating tool hands its request_id to the act as requestId (M8)", async 
     assert.equal(calls.length, 1, name);
     assert.equal(calls[0].act, ACT_OF[name]);
     assert.equal((calls[0].input as Record<string, unknown>).requestId, REQUEST, `${name} lost the request id`);
+  }
+});
+
+// GoalLog 9 over /mcp: the stale «Anotar» names the quantity kept, as `shape.ts` reads a time.
+test("declare_fact's alreadyNoted answers the kept quantity in words, never {quantity} (M8)", async () => {
+  const { writeTool } = await catalogue();
+  const { errorOf } = await import("@/lib/mcp/errors");
+  declareFactAnswer = { ok: false, error: "day.errors.alreadyNoted", values: { quantity: 90, unit: "minutos" } };
+  try {
+    const outcome = await writeTool("declare_fact")!.run({ commitment_id: REQUEST, quantity: 45 });
+    assert.equal(outcome.ok, false);
+    const answer = outcome.ok ? null : errorOf(outcome.error, outcome.values, "declare_fact");
+    assert.deepEqual(answer, {
+      key: "day.errors.alreadyNoted",
+      message: "Ya anotaste 1 h 30 min hoy en otro lado. Ábrelo para cambiarlo.",
+    });
+  } finally {
+    declareFactAnswer = null;
   }
 });

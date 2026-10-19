@@ -20,10 +20,10 @@ import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
 
-// `values.quantity`: what another device already noted for the day, kept (RP-03).
+// `values`: what another device already noted for the day, kept, in the habit's unit (RP-03).
 export type DeclareFactResult =
   | { ok: true; factId: string }
-  | { ok: false; error: MessageKey; values?: { quantity: number } };
+  | { ok: false; error: MessageKey; values?: { quantity: number; unit: string | null } };
 export type UndoFactResult = { ok: true } | { ok: false; error: MessageKey };
 
 /**
@@ -49,7 +49,7 @@ export async function declareFact(
   const { commitmentId, oneOffId, quantity, note, replace } = parsed.data;
 
   try {
-    const written = await withGoalsDb(async (tx): Promise<{ id: string; day: string } | { kept: number }> => {
+    const written = await withGoalsDb(async (tx): Promise<{ id: string; day: string } | { kept: number; unit: string | null }> => {
       // Absent means today, decided here from the person's own zone, never
       // from the client (RNP-06); present, it is a day already past —
       // `requireDayInRange` (schema) and `requireDayForSubject` (below,
@@ -79,11 +79,13 @@ export async function declareFact(
       }
 
       let goalId: string | null = null;
+      let unit: string | null = null;
 
       if (commitmentId != null) {
         const [commitment] = await tx
           .select({
             satisfaction: commitments.satisfaction,
+            unit: commitments.unit,
             goalId: commitments.goalId,
             openedAt: goals.createdAt,
             createdAt: commitments.createdAt,
@@ -130,6 +132,7 @@ export async function declareFact(
         }
 
         goalId = commitment.goalId;
+        unit = commitment.unit;
       } else if (oneOffId != null) {
         const [oneOff] = await tx
           .select({
@@ -248,7 +251,7 @@ export async function declareFact(
         // Unreachable: the conflict that just fired proves a row is there.
         throw new NamedError("day.errors.notFound");
       }
-      if (existing.quantity !== null && existing.quantity !== (quantity ?? null)) return { kept: existing.quantity };
+      if (existing.quantity !== null && existing.quantity !== (quantity ?? null)) return { kept: existing.quantity, unit };
       return { id: existing.id, day };
     });
 
@@ -256,7 +259,7 @@ export async function declareFact(
     // its own route, revalidated by its literal path — never the pattern,
     // which would need a `'page'` `type` this call has no business asking
     // for since the route itself is still unbuilt.
-    if ("kept" in written) return { ok: false, error: "day.errors.alreadyNoted", values: { quantity: written.kept } };
+    if ("kept" in written) return { ok: false, error: "day.errors.alreadyNoted", values: { quantity: written.kept, unit: written.unit } };
 
     revalidatePath("/");
     revalidatePath("/semana");

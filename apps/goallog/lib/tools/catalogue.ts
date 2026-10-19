@@ -33,7 +33,7 @@ import mcp from "../../messages/es/mcp.json";
 
 export type ToolOutcome =
   | { ok: true; value: Record<string, unknown> }
-  | { ok: false; error: string; values?: { name?: string; date?: string; quantity?: number } };
+  | { ok: false; error: string; values?: { name?: string; date?: string; quantity?: number; unit?: string | null } };
 
 export type ToolAnnotations = { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean };
 
@@ -48,7 +48,7 @@ export type ToolSpec = {
 
 type ActResult =
   | { ok: true; [key: string]: unknown }
-  | { ok: false; error: string; values?: { name?: string; date?: string; quantity?: number } };
+  | { ok: false; error: string; values?: { name?: string; date?: string; quantity?: number; unit?: string | null } };
 
 const goalId = z.uuid();
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "month is YYYY-MM");

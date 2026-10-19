@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
 import { timeChipsAround } from "@/lib/day/time-chips";
-import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 import { quantitySchema } from "@/lib/validation/fact";
 import { useTimeWords } from "@/components/ui/figure";
 import { Button, Chip, Field, Flex, Sheet, Text } from "@/components/ui";
@@ -31,6 +31,19 @@ export type QuantitySheetProps = {
   day?: string;
   drawnToday?: string;
 };
+
+export type Refusal = { error: MessageKey; values?: { quantity: number; unit: string | null } };
+
+// What the sheet says to a refusal: a quantity kept elsewhere reads as the chips read it.
+export function refusalText(
+  t: (key: MessageKey, values?: Record<string, string>) => string,
+  refusal: Refusal,
+  unit: string,
+  words: TimeWords,
+): string {
+  if (refusal.values === undefined) return t(refusal.error);
+  return t(refusal.error, { quantity: formatQuantity(refusal.values.quantity, unit, words) });
+}
 
 // Four consecutive integers, the target second — `HoyCantidad.dc.html`'s own
 // spread, never a fifth and never a menu (docs/goallog/DESIGN.md "Decisions
@@ -72,7 +85,7 @@ export function QuantitySheet({
   const t = useTranslations();
   const words = useTimeWords();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<MessageKey | null>(null);
+  const [error, setError] = useState<Refusal | null>(null);
   const [selected, setSelected] = useState(loggedQuantity ?? target);
   const [customMode, setCustomMode] = useState(false);
   const [customValue, setCustomValue] = useState("");
@@ -117,10 +130,10 @@ export function QuantitySheet({
   // the props from before the write: a tap in that gap reopened the sheet as
   // undone, and it never re-read the fact once it landed. Inside the same
   // transition the close commits together with the fresh row.
-  function settle(result: { ok: true } | { ok: false; error: MessageKey }) {
+  function settle(result: { ok: true } | ({ ok: false } & Refusal)) {
     startTransition(() => {
       if (result.ok) onOpenChange(false);
-      else setError(result.error);
+      else setError(result);
     });
   }
 
@@ -128,7 +141,7 @@ export function QuantitySheet({
     if (pending) return;
     const quantity = customMode ? customQuantity() : selected;
     if (quantity == null) {
-      setError("day.errors.quantityInvalid");
+      setError({ error: "day.errors.quantityInvalid" });
       return;
     }
     const trimmedNote = note.trim();
@@ -218,7 +231,7 @@ export function QuantitySheet({
 
       {error ? (
         <Text as="p" variant="sentence">
-          {t(error)}
+          {refusalText(t, error, unit, words)}
         </Text>
       ) : null}
 

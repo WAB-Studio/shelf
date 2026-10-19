@@ -208,7 +208,7 @@ test("9: a stale «Anotar» of another quantity is refused with the quantity kep
   const first = await as(() => facts.declareFact({ commitmentId, quantity: 30 }));
   assert.equal(first.ok, true);
   const stale = await as(() => facts.declareFact({ commitmentId, quantity: 45 }));
-  assert.deepEqual(stale, { ok: false, error: "day.errors.alreadyNoted", values: { quantity: 30 } });
+  assert.deepEqual(stale, { ok: false, error: "day.errors.alreadyNoted", values: { quantity: 30, unit: "minutos" } });
   assert.deepEqual(await storedQuantities(commitmentId), [30]);
 });
 
