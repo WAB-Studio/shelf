@@ -97,14 +97,17 @@ function parameterized(claims: Record<string, unknown>, on: boolean): Promise<Se
   });
 }
 
-test("inlined claims: the settle carries no bind parameter and its claims ride one literal", async () => {
+test("inlined claims: the settle carries no bind parameter and its claims ride as hex", async () => {
   wire.length = 0;
   await inlined(hostile, true);
   const settles = wire.filter((call) => call.query.includes("set_config('request.jwt.claims'"));
   assert.equal(settles.length, 1);
   assert.deepEqual(settles[0].parameters, []);
-  const literal = `'${JSON.stringify(hostile).replace(/'/g, "''")}'`;
-  assert.ok(settles[0].query.includes(`set_config('request.jwt.claims', ${literal}, true)`), settles[0].query);
+  const hex = Buffer.from(JSON.stringify(hostile), "utf8").toString("hex");
+  assert.ok(
+    settles[0].query.includes(`set_config('request.jwt.claims', convert_from(decode('${hex}', 'hex'), 'UTF8'), true)`),
+    settles[0].query,
+  );
 });
 
 test("inlined claims, standard_conforming_strings on: the same request.jwt.claims as bound, and nothing ran", async () => {
@@ -271,4 +274,24 @@ test("M25 the settle and fn's first statement share a round trip: fn starts befo
     },
   );
   assert.equal(answeredWhenFnStarted, false, "fn waited for the settle");
+});
+
+// `fn` may return drizzle's lazy query, which runs again on every `.then`.
+test("M25 a lazy query fn returns runs exactly once", async () => {
+  let runs = 0;
+  await withSettledTransaction<Tx, unknown>(
+    { claims: { sub: caller, role: "authenticated" } },
+    "settle-inline",
+    "goals, public",
+    (cb) => orm.transaction(cb),
+    (tx, statement) => tx.execute(statement),
+    (tx) =>
+      ({
+        then(resolve: (value: unknown) => void, reject: (reason: unknown) => void) {
+          runs += 1;
+          return tx.execute(sql`select 1`).then(resolve, reject);
+        },
+      }) as unknown as Promise<unknown>,
+  );
+  assert.equal(runs, 1, "the lazy query ran more than once");
 });
