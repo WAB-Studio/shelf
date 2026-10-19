@@ -2,7 +2,8 @@
 // form pages draw of one goal, in one goals transaction and one statement.
 //
 // The shape it owes, field for field as `loadGoal` names them:
-//   name, horizon, createdAt, archivedAt, endedOn, measureUnit, phases;
+//   name, horizon, createdAt, archivedAt, endedOn, measureUnit, phases, commitments
+//   (id, name, cadence, retiredAt, factDayCount: the goal's own, live and retired);
 //   with a month ("YYYY-MM", as the page's `[mes]` carries it):
 //     month — that month's entry: `month` ("YYYY-MM-01") and `past`, as in `loadGoal`'s `months`;
 //     tasks — the month's tasks with their parent and children: id, parentId, name, plannedMonth,
@@ -70,6 +71,7 @@ type GoalForm = {
   endedOn: string | null;
   measureUnit: string | null;
   phases: unknown[];
+  commitments: unknown[];
   month?: { month: string; past: boolean } | null;
   tasks?: FormTask[];
 };
@@ -105,6 +107,14 @@ async function plantPhase(owner: string, goalId: string, aim: string, startsOn: 
   await admin`
     insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
     values (${owner}, ${goalId}, ${aim}, ${startsOn}::date, ${endsOn}::date)`;
+}
+
+async function plantCommitment(owner: string, goalId: string, name: string, retired: boolean): Promise<string> {
+  const [row] = await admin<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at, retired_at)
+    values (${owner}, ${goalId}, ${name}, 'daily', 'tap', now() - interval '10 days', ${retired ? new Date() : null})
+    returning id`;
+  return row.id;
 }
 
 async function plantTask(
@@ -143,6 +153,13 @@ before(async () => {
   await plantPhase(me.id, myGoal, "Cierre", `${later}-01`, `${later}-25`);
   await plantPhase(other.id, otherGoal, "Ajena", `${month}-01`, `${month}-20`);
 
+  ids.live = await plantCommitment(me.id, myGoal, "Viva", false);
+  ids.retired = await plantCommitment(me.id, myGoal, "Retirada", true);
+  for (const day of ["2026-01-05", "2026-01-06"]) {
+    await admin`
+      insert into goals.facts (user_id, commitment_id, goal_id, day)
+      values (${me.id}, ${ids.live}, ${myGoal}, ${day}::date)`;
+  }
   ids.parent = await plantTask(me.id, myGoal, "Padre del mes", { plannedMonth: month });
   ids.childA = await plantTask(me.id, myGoal, "Hija A", { parentId: ids.parent }, 30);
   ids.childB = await plantTask(me.id, myGoal, "Hija B", { parentId: ids.parent }, 45);
@@ -182,6 +199,17 @@ test("form loader shape: the goal's fields and phases equal loadGoal's", async (
   }
   assert.equal(view.phases.length, 2, "the fixture's two phases");
   assert.deepEqual(form.phases, view.phases);
+});
+
+test("form loader shape: the goal's commitments equal loadGoal's, with their retirement and fact days", async () => {
+  const [form, view] = await as(me, () => Promise.all([loadGoalForm(myGoal, month), goalQueries.loadGoal(myGoal)]));
+  assert.ok(view && form);
+  assert.equal(view.commitments.length, 2, "the fixture's two commitments");
+  assert.deepEqual(form.commitments, view.commitments);
+  const live = form.commitments.find((c) => (c as { id: string }).id === ids.live) as { factDayCount: number };
+  const retired = form.commitments.find((c) => (c as { id: string }).id === ids.retired) as { retiredAt: string | null };
+  assert.equal(live.factDayCount, 2);
+  assert.notEqual(retired.retiredAt, null);
 });
 
 test("form loader shape: with a month, that month's entry and its tasks with their parent and children", async () => {

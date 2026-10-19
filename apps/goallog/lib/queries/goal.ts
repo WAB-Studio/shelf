@@ -903,6 +903,7 @@ export type GoalForm = {
   endedOn: string | null;
   measureUnit: string | null;
   phases: Phase[];
+  commitments: GoalCommitment[];
   // The asked month's entry in the goal's span, null with no month or outside the span.
   month: { month: string; past: boolean } | null;
   // The asked month's tasks, the parents of its children and the children of its parents.
@@ -940,12 +941,27 @@ export async function loadGoalForm(
                               where m.goal_id = ${goalId} and m.planned_month = ${asked}::date)))`;
 
   const [row] = await withGoalsDb((tx) =>
-    tx.execute<{ goal: GoalRow | null; phases: PhaseRow[]; tasks: TaskRow[]; tree: TreeSqlRow[] }>(sql`
+    tx.execute<{
+      goal: GoalRow | null;
+      phases: PhaseRow[];
+      commitments: (CommitmentRow & { fact_day_count: number })[];
+      tasks: TaskRow[];
+      tree: TreeSqlRow[];
+    }>(sql`
       select
         (select to_jsonb(g) from "goals"."goals" g where g.id = ${goalId}) as goal,
         (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
            from "goals"."phases" p
            where p.goal_id = ${goalId}) as phases,
+        (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
+                   'source_key', s.key,
+                   'source_unit', s.unit,
+                   'source_label_key', s.label_key,
+                   'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id)
+                 ) order by c.position, c.created_at, c.id), '[]'::json)
+           from "goals"."commitments" c
+           left join "goals"."evidence_sources" s on s.id = c.source_id
+           where c.goal_id = ${goalId}) as commitments,
         ${tasks} as tasks,
         (select coalesce(json_agg(${TREE_COLUMNS}), '[]'::json) from "goals"."goals" g) as tree
     `),
@@ -971,6 +987,7 @@ export async function loadGoalForm(
     endedOn: goal.horizon !== null && goal.horizon <= today ? dayBefore(goal.horizon) : null,
     measureUnit,
     phases: row.phases.map(toPhase),
+    commitments: row.commitments.map((commitment) => toGoalCommitment(commitment, commitment.fact_day_count)),
     month: inSpan ? { month: asked, past: asked < monthOf(today) } : null,
     tasks: row.tasks.map((task) => toPlanTask(task, openedOn)),
   };

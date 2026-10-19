@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 
 import { CommitmentForm } from "@/components/goal/commitment-form";
-import { loadGoal } from "@/lib/queries/goal";
+import { loadGoalForm } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
 
 // Static per route: no title reads a goal or costs a statement (RNP-01).
@@ -26,7 +26,7 @@ export default async function CommitmentCadencePage({
   if (!person) redirect("/entrar");
 
   const { goalId, commitmentId } = await params;
-  const goal = await loadGoal(goalId);
+  const goal = await loadGoalForm(goalId);
   const commitment = goal?.commitments.find((candidate) => candidate.id === commitmentId);
   if (!goal || !commitment || commitment.retiredAt !== null || commitment.factDayCount > 0) notFound();
 
