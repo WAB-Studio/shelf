@@ -25,6 +25,7 @@ function idsOf(changes: Change[]) {
     goals: [...new Set([...pick("goal_id"), ...pick("parent_id")])],
     tasks: [...new Set([...pick("one_off_id"), ...pick("parent_id")])],
     commitments: pick("commitment_id"),
+    phases: pick("phase_id"),
   };
 }
 

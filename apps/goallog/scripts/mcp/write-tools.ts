@@ -291,7 +291,7 @@ after(async () => {
   }
 });
 
-test("exactly the eighteen write tools are registered, and none of the never-registered", () => {
+test("exactly the twenty write tools are registered, and none of the never-registered", () => {
   assert.deepEqual([...handlers.keys()].sort(), [
     "add_commitment",
     "add_phase",
@@ -299,6 +299,7 @@ test("exactly the eighteen write tools are registered, and none of the never-reg
     "create_goal",
     "create_task",
     "declare_fact",
+    "edit_phase",
     "fix_task",
     "move_goal",
     "move_horizon",
@@ -309,6 +310,7 @@ test("exactly the eighteen write tools are registered, and none of the never-reg
     "set_measure",
     "set_month_amount",
     "set_rhythm",
+    "set_task_estimate",
     "set_task_note",
     "unfix_task",
   ]);

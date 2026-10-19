@@ -259,6 +259,8 @@ const PLACEHOLDERS: Record<string, string[]> = {
   retire_commitment: ["commitment"],
   set_rhythm: ["goal"],
   set_measure: ["goal"],
+  set_task_estimate: ["estimate", "task"],
+  edit_phase: ["aim", "from", "phase", "to"],
 };
 
 test("every change phrase opens with an infinitive and keeps its placeholders", () => {

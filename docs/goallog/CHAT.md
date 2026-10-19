@@ -1,7 +1,7 @@
 # GoalLog chat: what it must be able to do, and what it costs
 
 Contract: RP-91–RP-95, RP-56 (retired for RP-119), RP-85 in `SPEC.md` §1. Boards: `DESIGN.md` «Decisions of 2026-10-13, the chat».
-The tools are `apps/goallog/lib/tools/catalogue.ts`: 6 reads and 18 writes. A write is a proposal the person taps «Hacer» on
+The tools are `apps/goallog/lib/tools/catalogue.ts`: 6 reads and 20 writes. A write is a proposal the person taps «Hacer» on
 (RP-92); a read runs at once. The user's words, 2026-10-18: «analizar varios modelos, tampoco cosas caras; echarle cabeza a qué
 tanto necesitamos».
 
@@ -34,6 +34,8 @@ tanto necesitamos».
 | «Mueve el final de Casa a marzo» | `move_horizon` |
 | «Pasa Maze a noviembre» | `fix_task` |
 | «Devuelve Documento al plan» | `unfix_task` |
+| «Estima Maze en 3 horas» | `set_task_estimate` (through `editTask`; null clears it) |
+| «La fase 2 termina el 30» | `edit_phase` (through `editPhase`) |
 | «Crea la meta Viaje» | `create_goal` |
 | «Pon Fitness dentro de Salud» | `move_goal` |
 | «Anota en Casa: …» | `set_goal_note` |
@@ -58,19 +60,17 @@ prompt forbid them. The right answer proposes nothing and says so.
 
 | Task | Status |
 |---|---|
-| Give an existing task an estimate («ponle 3 horas a Maze») | **falta** in the chat: the screen has `editTask`; `create_task` takes an estimate only on creation |
-| Change a phase («que la fase 2 termine en diciembre») | **falta** in the chat: the screen has `editPhase`; the chat has `add_phase` only |
 | Move a task to another goal («pasa Maze a Fitness») | **no existe** on any screen or tool (plan Q4 of oleada-4) |
 
-The two «falta» are a tool each over an act that exists; the third is a domain act that does not, and waits for Q4.
-A good model refuses these three or says it cannot; a bad one proposes the nearest wrong tool (`create_task`, `add_phase`).
+The estimate and the phase edit are built (RP-139, `set_task_estimate` over `editTask`, `edit_phase` over `editPhase`). The move is a domain act that does not exist, and waits for Q4.
+A good model refuses it or says it cannot; a bad one proposes the nearest wrong tool (`create_task`, `fix_task`).
 
 ## What the chat does not need
 
 - No free-form planning, no «arma mi plan»: the import does that (RP-86, gpt-5.5).
 - No long reasoning: a request names one or two acts over entities a read returns. `REASONING_EFFORT` is `low` in `lib/chat/model.ts`.
 - No memory beyond the tab (RP-94).
-- What it does need: pick the right tool among 24, fill ids from a read and never invent one, keep dates as AAAA-MM-DD, refuse
+- What it does need: pick the right tool among 26, fill ids from a read and never invent one, keep dates as AAAA-MM-DD, refuse
   what RP-119 forbids, answer in Spanish in a sentence or two.
 
 ## Tokens per message
@@ -80,7 +80,7 @@ Measured by size, not by a run; the bench replaces them with `goals.model_calls`
 | Part | Size | Tokens (about) |
 |---|---|---|
 | System prompt (`lib/chat/prompt.ts`, 1.3 KB) | 1.3 KB | 400 |
-| 24 tool schemas and descriptions (4.1 KB of descriptions, about 22 schema objects) | 12–14 KB | 3,500–4,000 |
+| 26 tool schemas and descriptions (4.1 KB of descriptions, about 22 schema objects) | 12–14 KB | 3,500–4,000 |
 | A turn of the person | up to 2,000 chars | 30–600 |
 | A read's payload (`lib/mcp/shape.ts`): `get_today`, `get_month` | 2–6 KB | 600–1,800 |
 | A read's payload: `list_goals`, `get_goal`, `get_report` on a plan of 3 levels | 4–12 KB | 1,200–3,600 |

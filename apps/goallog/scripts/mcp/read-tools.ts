@@ -326,9 +326,9 @@ async function registry(): Promise<Map<string, Registered>> {
   return seen;
 }
 
-test("the registry holds twenty-four tools: six read and eighteen write, each with the annotations its effect deserves", async () => {
+test("the registry holds twenty-six tools: six read and twenty write, each with the annotations its effect deserves", async () => {
   const seen = await registry();
-  assert.equal(seen.size, 24);
+  assert.equal(seen.size, 26);
   const reads = new Set(handlers.keys());
   assert.equal(reads.size, 6);
   const destructive = new Set(["set_goal_note", "set_task_note", "set_measure", "retire_commitment", "move_horizon", "set_rhythm"]);
@@ -341,7 +341,7 @@ test("the registry holds twenty-four tools: six read and eighteen write, each wi
         : { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
     assert.deepEqual(config.annotations, expected, name);
   }
-  assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 18);
+  assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 20);
 });
 
 test("every registered read refuses a key it does not declare", async () => {

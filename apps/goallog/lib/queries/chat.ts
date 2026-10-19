@@ -19,12 +19,14 @@ export type ChangeNames = {
   >;
   tasks: Map<string, { name: string; month: string | null; day: string | null; hasNote: boolean }>;
   commitments: Map<string, { name: string; unit: string | null; target: number | null }>;
+  phases: Map<string, { aim: string; startsOn: string; endsOn: string; goalId: string }>;
 };
 
 type NameRow =
   | { kind: "goal"; id: string; name: string; unit: string | null; extra: { horizon: string | null; hasNote: boolean; months: Record<string, number>; rhythm: number | null } }
   | { kind: "task"; id: string; name: string; unit: null; extra: { month: string | null; day: string | null; hasNote: boolean } }
-  | { kind: "commitment"; id: string; name: string; unit: string | null; extra: { target: number | null } };
+  | { kind: "commitment"; id: string; name: string; unit: string | null; extra: { target: number | null } }
+  | { kind: "phase"; id: string; name: string; unit: null; extra: { startsOn: string; endsOn: string; goalId: string } };
 
 // A bound array would expand into a row list; this keeps one parameter per id.
 function uuids(list: string[]) {
@@ -39,9 +41,11 @@ export async function loadChangeNames(ids: {
   goals: string[];
   tasks: string[];
   commitments: string[];
+  phases?: string[];
 }): Promise<ChangeNames> {
-  const names: ChangeNames = { goals: new Map(), tasks: new Map(), commitments: new Map() };
-  if (ids.goals.length + ids.tasks.length + ids.commitments.length === 0) return names;
+  const names: ChangeNames = { goals: new Map(), tasks: new Map(), commitments: new Map(), phases: new Map() };
+  const phaseIds = ids.phases ?? [];
+  if (ids.goals.length + ids.tasks.length + ids.commitments.length + phaseIds.length === 0) return names;
 
   const rows = await withGoalsDb((tx) =>
     tx.execute<NameRow>(sql`
@@ -61,12 +65,17 @@ export async function loadChangeNames(ids: {
       union all
       select 'commitment', c.id, c.name, c.unit, jsonb_build_object('target', c.target_quantity)
         from "goals"."commitments" c where c.id = any(${uuids(ids.commitments)})
+      union all
+      select 'phase', p.id, p.aim, null::text,
+             jsonb_build_object('startsOn', p.starts_on::text, 'endsOn', p.ends_on::text, 'goalId', p.goal_id)
+        from "goals"."phases" p where p.id = any(${uuids(phaseIds)})
     `),
   );
 
   for (const row of rows) {
     if (row.kind === "goal") names.goals.set(row.id, { name: row.name, unit: row.unit, ...row.extra });
     else if (row.kind === "task") names.tasks.set(row.id, { name: row.name, ...row.extra });
+    else if (row.kind === "phase") names.phases.set(row.id, { aim: row.name, ...row.extra });
     else names.commitments.set(row.id, { name: row.name, unit: row.unit, ...row.extra });
   }
 

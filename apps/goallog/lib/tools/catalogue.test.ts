@@ -197,6 +197,8 @@ const VALID: Record<string, Record<string, unknown>> = {
   move_horizon: { goal_id: "g", horizon: null },
   fix_task: { one_off_id: "t", month: "2027-01" },
   unfix_task: { one_off_id: "t" },
+  set_task_estimate: { one_off_id: "t", estimate: 60 },
+  edit_phase: { phase_id: "p", aim: "a", starts_on: "2027-01-01", ends_on: "2027-01-31" },
   create_goal: { name: "n" },
   move_goal: { goal_id: "g", parent_id: null },
   set_goal_note: { goal_id: "g", note: "n" },
@@ -207,7 +209,7 @@ const VALID: Record<string, Record<string, unknown>> = {
 
 test("every tool takes its own valid input and refuses the same input with a key it does not declare", async () => {
   const { readTools, writeTools } = await catalogue();
-  assert.equal(Object.keys(VALID).length, 24);
+  assert.equal(Object.keys(VALID).length, 26);
   for (const tool of [...readTools, ...writeTools]) {
     const base = VALID[tool.name];
     assert.equal(tool.input.safeParse(base).success, true, `${tool.name} refuses its own valid input`);

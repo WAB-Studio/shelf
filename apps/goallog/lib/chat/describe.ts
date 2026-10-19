@@ -32,7 +32,7 @@ const words: TimeWords = {
 
 type Field =
   | { as: "goal" | "task" | "commitment"; from: string; to: string; optional?: boolean }
-  | { as: "month" | "day" | "text"; from: string; to: string; optional?: boolean }
+  | { as: "month" | "day" | "text" | "phase" | "estimate"; from: string; to: string; optional?: boolean }
   | { as: "amount"; from: string; to: string; goal: string; optional?: boolean };
 
 // Which input fields a tool shows, and what each is looked up as. An id field
@@ -81,6 +81,16 @@ const FIELDS: Record<string, Field[]> = {
   move_horizon: [
     { as: "goal", from: "goal_id", to: "goal" },
     { as: "day", from: "horizon", to: "day", optional: true },
+  ],
+  set_task_estimate: [
+    { as: "task", from: "one_off_id", to: "task" },
+    { as: "estimate", from: "estimate", to: "estimate" },
+  ],
+  edit_phase: [
+    { as: "phase", from: "phase_id", to: "phase" },
+    { as: "text", from: "aim", to: "aim" },
+    { as: "day", from: "starts_on", to: "from" },
+    { as: "day", from: "ends_on", to: "to" },
   ],
   fix_task: [
     { as: "task", from: "one_off_id", to: "task" },
@@ -161,6 +171,14 @@ function replaced(change: Change, names: ChangeNames, values: Record<string, str
       };
     case "set_measure":
       return { before: goal?.unit == null ? say("noMeasure") : goal.unit, after: values.unit };
+    case "edit_phase": {
+      const phase = typeof change.input.phase_id === "string" ? names.phases.get(change.input.phase_id) : undefined;
+      if (phase === undefined) return {};
+      return {
+        before: translate("chat.span", { from: civilDayMonthShort(phase.startsOn), to: civilDayMonthShort(phase.endsOn) }),
+        after: translate("chat.span", { from: values.from, to: values.to }),
+      };
+    }
     case "retire_commitment":
       return commitment?.target != null ? { before: quantity(commitment.target, commitment.unit) } : {};
     default:
@@ -174,8 +192,14 @@ export function describeChange(change: Change, names: ChangeNames): Described {
   const fields = FIELDS[change.tool];
   if (fields === undefined) return REFUSED;
   const values: Record<string, string> = {};
+  let cleared = false;
   for (const field of fields) {
     const raw = change.input[field.from];
+    // A null estimate is a change of its own: it clears the task's estimate.
+    if (field.as === "estimate" && raw === null) {
+      cleared = true;
+      continue;
+    }
     if (raw === undefined || raw === null) {
       if (field.optional === true) continue;
       return REFUSED;
@@ -199,6 +223,16 @@ export function describeChange(change: Change, names: ChangeNames): Described {
         values[field.to] = found.name;
         break;
       }
+      case "phase": {
+        const found = typeof raw === "string" ? names.phases.get(raw) : undefined;
+        if (found === undefined) return REFUSED;
+        values[field.to] = found.aim;
+        break;
+      }
+      case "estimate":
+        if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 1) return REFUSED;
+        values[field.to] = formatQuantity(raw, "minutos", words);
+        break;
       case "month":
         if (typeof raw !== "string" || !MONTH.test(raw.slice(0, 7))) return REFUSED;
         values[field.to] = monthNameWithYear(raw);
@@ -220,5 +254,6 @@ export function describeChange(change: Change, names: ChangeNames): Described {
       }
     }
   }
-  return { key: `chat.change.${change.tool}`, values: { ...values, ...replaced(change, names, values) } };
+  const key = cleared ? "chat.clearEstimate" : `chat.change.${change.tool}`;
+  return { key, values: { ...values, ...replaced(change, names, values) } };
 }
