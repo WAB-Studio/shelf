@@ -57,7 +57,7 @@ test("pendingRowFrom: absent or null answer fields stay as they came", () => {
   assert.equal(pendingRowFrom({ ...base, definition: null }).definition, null);
 });
 
-test("pendingRowFrom: the row is written at schema 3", () => {
-  assert.equal(pendingRowFrom(base).schema, 3);
-  assert.equal(LOOKUP_SCHEMA, 3);
+test("pendingRowFrom: the row is written at schema 4", () => {
+  assert.equal(pendingRowFrom(base).schema, 4);
+  assert.equal(LOOKUP_SCHEMA, 4);
 });

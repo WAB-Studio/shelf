@@ -9,7 +9,9 @@
  * nothing survives. S22 needs real commits, so its one reader is registered
  * through `@repo/harness-registry` in the same transaction that creates it,
  * and deleted at the end; a run killed in between leaves a row that
- * `harness:census` counts and `harness:reap` prunes.
+ * `harness:census` counts and `harness:reap` prunes. S50 drives the device
+ * half too: the real `syncNow` and `answerPending` over an in-memory
+ * IndexedDB, with every `fetch` answered here and none leaving the process.
  */
 import { randomUUID } from "node:crypto";
 
@@ -225,6 +227,111 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
     const afterBoth = await stored();
     assert("S44", both.status === 200 && both.json.accepted === 0 && afterBoth === "0", `status = ${both.status}, accepted = ${both.json.accepted}, lookups (A,9) = ${afterBoth}`);
   });
+}
+
+// The slice of IndexedDB the device's log, its sync row and its drain reach,
+// for S50: one store per name, autoIncrement keys, the `lookups` indexes by
+// key path, and a transaction that completes once its last request settled.
+// No isolation between transactions: S50 drives them one at a time.
+type FakeRecord = Record<string, unknown>;
+function installDeviceStorage(): () => FakeRecord[] {
+  type Store = { keyPath: string; autoIncrement: boolean; next: number; rows: Map<IDBValidKey, FakeRecord>; indexes: Map<string, string | string[]> };
+  const stores = new Map<string, Store>();
+  let version = 0;
+  const valueAt = (row: FakeRecord, path: string | string[]): unknown =>
+    Array.isArray(path) ? path.map((part) => row[part]) : row[path];
+  class Range {
+    constructor(readonly lower: number, readonly open: boolean) {}
+    includes(key: unknown): boolean {
+      return typeof key === "number" && (this.open ? key > this.lower : key >= this.lower);
+    }
+    static lowerBound(lower: number, open = false) {
+      return new Range(lower, open);
+    }
+  }
+  const matches = (key: unknown, query: unknown) =>
+    query === undefined || query === null ? true : query instanceof Range ? query.includes(key) : JSON.stringify(key) === JSON.stringify(query);
+  const transaction = () => {
+    const tx: Record<string, unknown> & { oncomplete?: () => void; onerror?: () => void; onabort?: () => void } = {};
+    let open = 0;
+    const settle = () => setImmediate(() => open === 0 && tx.oncomplete?.());
+    const request = (run: () => unknown) => {
+      const req: { result?: unknown; error: null; onsuccess?: () => void; onerror?: () => void } = { error: null };
+      open += 1;
+      setImmediate(() => {
+        req.result = run();
+        req.onsuccess?.();
+        open -= 1;
+        if (open === 0) settle();
+      });
+      return req;
+    };
+    const storeApi = (name: string) => {
+      const store = stores.get(name)!;
+      const sorted = () => [...store.rows.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      const write = (value: FakeRecord) => {
+        const row = structuredClone(value);
+        if (row[store.keyPath] === undefined && store.autoIncrement) row[store.keyPath] = store.next;
+        const key = row[store.keyPath] as IDBValidKey;
+        if (typeof key === "number" && key >= store.next) store.next = key + 1;
+        store.rows.set(key, row);
+        return key;
+      };
+      return {
+        add: (value: FakeRecord) => request(() => write(value)),
+        put: (value: FakeRecord) => request(() => write(value)),
+        get: (key: IDBValidKey) => request(() => structuredClone(store.rows.get(key))),
+        delete: (key: IDBValidKey) => request(() => void store.rows.delete(key)),
+        clear: () => request(() => store.rows.clear()),
+        count: () => request(() => store.rows.size),
+        getAll: (query?: unknown, count?: number) =>
+          request(() => sorted().filter(([key]) => matches(key, query)).slice(0, count || undefined).map(([, row]) => structuredClone(row))),
+        openCursor: (_query: unknown, direction?: string) =>
+          request(() => {
+            const keys = sorted().map(([key]) => key);
+            const key = direction === "prev" ? keys.at(-1) : keys[0];
+            return key === undefined ? null : { key, value: structuredClone(store.rows.get(key)) };
+          }),
+        createIndex: (index: string, path: string | string[]) => void store.indexes.set(index, path),
+        index: (index: string) => ({
+          getAll: (query?: unknown) =>
+            request(() => sorted().filter(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query)).map(([, row]) => structuredClone(row))),
+          getKey: (query: unknown) => request(() => sorted().find(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query))?.[0]),
+        }),
+      };
+    };
+    tx.objectStore = storeApi;
+    settle();
+    return tx;
+  };
+  const database = {
+    onclose: null,
+    onversionchange: null,
+    close() {},
+    createObjectStore(name: string, options: { keyPath: string; autoIncrement?: boolean }) {
+      stores.set(name, { keyPath: options.keyPath, autoIncrement: !!options.autoIncrement, next: 1, rows: new Map(), indexes: new Map() });
+      return (transaction().objectStore as (store: string) => unknown)(name);
+    },
+    transaction,
+  };
+  const globals = globalThis as unknown as Record<string, unknown>;
+  globals.IDBKeyRange = Range;
+  globals.window ??= new EventTarget();
+  globals.indexedDB = {
+    open(_name: string, wanted: number) {
+      const req: Record<string, unknown> & { onupgradeneeded?: (event: unknown) => void; onsuccess?: () => void } = { result: database };
+      setImmediate(() => {
+        if (version < wanted) {
+          req.transaction = transaction();
+          req.onupgradeneeded?.({ oldVersion: version });
+          version = wanted;
+        }
+        req.onsuccess?.();
+      });
+      return req;
+    },
+  };
+  return () => [...(stores.get("lookups")?.rows.values() ?? [])].map((row) => structuredClone(row));
 }
 
 async function main() {
@@ -1183,6 +1290,71 @@ async function main() {
       answer.status === "ok" && texts.length === 2 && /sync_gate/.test(texts[0] ?? "") && !/sync_gate|sync_rows_today/.test(texts[1] ?? ""),
       `statements = ${texts.length}, first asks sync_gate = ${/sync_gate/.test(texts[0] ?? "")}, status = ${answer.status}`,
     );
+  });
+
+  // S50 (RL-76): a device holding a pending row uploads nothing for it; once the drain answers it, the next round
+  // uploads one answered row with the pending row's own moment. The real driver and drain, the real route and
+  // database; `fetch` reaches the route through `post`, and the paid route is a canned answer that costs nothing.
+  await scenario(async ({ reader, db, post }) => {
+    const deviceRows = installDeviceStorage();
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const realFetch = globals.fetch;
+    const paid: string[] = [];
+    globals.fetch = async (input: string, init?: { body?: string }) => {
+      if (input === "/api/log/sync") {
+        const answer = await post(reader, JSON.parse(init?.body ?? "{}"));
+        return Response.json(answer.json, { status: answer.status });
+      }
+      paid.push(input);
+      if (input === "/api/word/unlisted") {
+        return Response.json({ translations: ["zorpo"], definition: "a word no dictionary carries", example: { en: "A zorp.", es: "Un zorpo." }, lemma: null, rule: null });
+      }
+      return new Response(null, { status: 404 });
+    };
+    try {
+      const record = await import("../lib/log/record");
+      const { syncNow } = await import("../lib/sync/driver");
+      const { answerPending } = await import("../lib/log/answer-pending");
+      const { LOOKUP_SCHEMA } = await import("../lib/log/types");
+      const database = await record.openLogDatabase();
+      const at = Date.UTC(2026, 9, 18, 9, 30, 0, 123);
+      const row = { schema: LOOKUP_SCHEMA, at, text: "zorp", normalised: "zorp", kind: "word", outcome: "miss", headword: null, rule: null, senses: 0, translation: null, dictionaryReady: true, origin: null };
+      await new Promise<void>((resolve) => {
+        const tx = database.transaction("lookups", "readwrite");
+        tx.objectStore("lookups").add({ ...row, at: at - 60_000, text: "cat", normalised: "cat", outcome: "exact", headword: "cat", senses: 1, translation: "gato" });
+        tx.objectStore("lookups").add(row);
+        tx.oncomplete = () => resolve();
+      });
+      await record.writeSyncState({ enabled: true, readerId: reader });
+      const { deviceId } = await record.readSyncState();
+      const uploaded = async () =>
+        db<{ normalised: string; outcome: string; at_ms: string }[]>`
+          select normalised, outcome, (extract(epoch from "at") * 1000)::bigint::text as at_ms
+          from reading.lookups where user_id = ${reader} and device_id = ${deviceId} order by local_id`;
+      const before = await syncNow();
+      const whileWaiting = await uploaded();
+      await answerPending({ online: true, now: at + 3_600_000 });
+      const answeredOnDevice = deviceRows().filter((r) => r.normalised === "zorp").map((r) => r.outcome);
+      const after = await syncNow();
+      const afterAnswer = await uploaded();
+      const zorp = afterAnswer.filter((r) => r.normalised === "zorp");
+      assert(
+        "S50",
+        before.kind === "done" &&
+          whileWaiting.map((r) => r.normalised).join() === "cat" &&
+          answeredOnDevice.join() === "unlisted" &&
+          after.kind === "done" &&
+          zorp.length === 1 &&
+          zorp[0].outcome === "unlisted" &&
+          zorp[0].at_ms === String(at) &&
+          paid.join() === "/api/word/unlisted",
+        `rounds = ${before.kind}/${after.kind}, uploaded while pending = ${whileWaiting.map((r) => `${r.normalised}:${r.outcome}`).join() || "none"}, ` +
+          `device after the drain = ${answeredOnDevice.join()}, uploaded after = ${afterAnswer.map((r) => `${r.normalised}:${r.outcome}`).join()}, ` +
+          `same moment = ${zorp[0]?.at_ms === String(at)}, paid calls = ${paid.join() || "none"}`,
+      );
+    } finally {
+      globals.fetch = realFetch;
+    }
   });
 
   await checkRolledBackRounds();

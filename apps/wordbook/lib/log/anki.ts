@@ -23,27 +23,35 @@ export function cardBack(row: StudyRow): string | null {
   return row.lastTranslation ?? row.lastDefinition;
 }
 
-type AnkiExport = { csv: string; cards: number; skipped: number };
+type AnkiExport = { csv: string; cards: number; skipped: number; pending: number };
 
 /**
  * One Anki-importable CSV: the header, then a line per group that has a back,
- * in the order given; `skipped` counts the groups with none. Every field is
- * quoted, so commas, quotes and newlines survive the import.
+ * in the order given. `pending` counts the groups still waiting for their
+ * answer (RL-76), left out until it comes; `skipped` counts the answered
+ * groups with no back. Every field is quoted, so commas, quotes and newlines
+ * survive the import.
  */
 export function buildAnkiCsv(rows: readonly StudyRow[]): AnkiExport {
-  const cards = rows.flatMap((row) => {
+  const answered = rows.filter((row) => !row.pending);
+  const cards = answered.flatMap((row) => {
     const back = cardBack(row);
     return back === null ? [] : [`${field(cardFront(row))},${field(back)}`];
   });
-  return { csv: [...HEADER, ...cards].join("\n") + "\n", cards: cards.length, skipped: rows.length - cards.length };
+  return {
+    csv: [...HEADER, ...cards].join("\n") + "\n",
+    cards: cards.length,
+    skipped: answered.length - cards.length,
+    pending: rows.length - answered.length,
+  };
 }
 
 export async function buildAnkiExport(): Promise<AnkiExport> {
   return buildAnkiCsv((await readWordStudy()).rows);
 }
 
-export async function readAnkiCounts(): Promise<{ cards: number; skipped: number; words: number }> {
+export async function readAnkiCounts(): Promise<{ cards: number; skipped: number; pending: number; words: number }> {
   const { rows, total } = await readWordStudy();
-  const { cards, skipped } = buildAnkiCsv(rows);
-  return { cards, skipped, words: total };
+  const { cards, skipped, pending } = buildAnkiCsv(rows);
+  return { cards, skipped, pending, words: total };
 }

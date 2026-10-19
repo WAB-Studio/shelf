@@ -1,3 +1,4 @@
+import { isPendingLookup } from "./outcome";
 import { openLogDatabase } from "./record";
 import type { LookupOutcome, LookupRecord } from "./types";
 
@@ -39,11 +40,19 @@ export type StudyRow = {
   // The newest record's network definition; `null` when that record has none.
   lastDefinition: string | null;
   lastOutcome: LookupOutcome;
+  // Every row of the group waits for its answer (RL-76); one answered row
+  // clears it. Always set by `readWordStudy`; optional for a row built by hand.
+  pending?: boolean;
 };
 
 // Forms carry the time they were last searched while grouping, so the
 // finished row can order them; `StudyRow` hands callers the order alone.
-type Group = Omit<StudyRow, "forms"> & { forms: { text: string; count: number; at: number }[] };
+// `answerAt` is the moment of the row the `last*` answer fields come from.
+type Group = Omit<StudyRow, "forms" | "pending"> & {
+  forms: { text: string; count: number; at: number }[];
+  pending: boolean;
+  answerAt: number;
+};
 
 function addForm(forms: Group["forms"], text: string, at: number): Group["forms"] {
   const seen = forms.find((form) => form.text === text);
@@ -54,14 +63,19 @@ function addForm(forms: Group["forms"], text: string, at: number): Group["forms"
     : [...forms, { text, count: 1, at }];
 }
 
-function finishGroup(group: Group): StudyRow {
+function finishGroup({ answerAt, ...group }: Group): StudyRow {
+  void answerAt;
   const forms = [...group.forms]
     .sort((a, b) => b.count - a.count || b.at - a.at)
     .map(({ text, count }) => ({ text, count }));
   return { ...group, forms };
 }
 
+// A pending row still counts as a search and can name the group's newest
+// text, but never displaces the answer an answered row already gave it: the
+// Anki card and the registro read the answer, whatever came after it.
 function foldRow(group: Group | undefined, record: LookupRecord): Group {
+  const waiting = isPendingLookup(record);
   if (!group) {
     return {
       key: record.headword ?? record.normalised,
@@ -73,9 +87,12 @@ function foldRow(group: Group | undefined, record: LookupRecord): Group {
       lastTranslation: record.translation,
       lastDefinition: record.definition ?? null,
       lastOutcome: record.outcome,
+      pending: waiting,
+      answerAt: record.at,
     };
   }
   const newer = record.at > group.lastAt;
+  const takesAnswer = group.pending === waiting ? record.at > group.answerAt : !waiting;
   return {
     key: group.key,
     forms: addForm(group.forms, record.normalised, record.at),
@@ -83,9 +100,11 @@ function foldRow(group: Group | undefined, record: LookupRecord): Group {
     display: newer ? record.text : group.display,
     count: group.count + 1,
     lastAt: newer ? record.at : group.lastAt,
-    lastTranslation: newer ? record.translation : group.lastTranslation,
-    lastDefinition: newer ? (record.definition ?? null) : group.lastDefinition,
-    lastOutcome: newer ? record.outcome : group.lastOutcome,
+    lastTranslation: takesAnswer ? record.translation : group.lastTranslation,
+    lastDefinition: takesAnswer ? (record.definition ?? null) : group.lastDefinition,
+    lastOutcome: takesAnswer ? record.outcome : group.lastOutcome,
+    pending: group.pending && waiting,
+    answerAt: takesAnswer ? record.at : group.answerAt,
   };
 }
 

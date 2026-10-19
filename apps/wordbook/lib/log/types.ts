@@ -1,6 +1,8 @@
 // Persisted shape only. No IO here: `record.ts` owns the database.
 
-export const LOOKUP_SCHEMA = 3;
+// 4: a `miss` word or an `untranslated` sentence may be a pending row (RL-76).
+// Below 4 such a row predates the pending state and is never asked again.
+export const LOOKUP_SCHEMA = 4;
 
 export type LookupOutcome =
   | "exact" // the string was a headword
@@ -12,7 +14,7 @@ export type LookupOutcome =
 
 export type LookupRecord = {
   id?: number; // autoIncrement, assigned by the store
-  schema: number; // on the row, not the database: rows outlive versions — the store holds schemas 1, 2 and 3 at once
+  schema: number; // on the row, not the database: rows outlive versions — the store holds schemas 1 to 4 at once
   at: number; // Date.now(), epoch ms
   text: string; // as typed, trimmed and whitespace-collapsed, case preserved
   normalised: string; // normaliseHeadword(text) — the join key a deck is built on
@@ -29,6 +31,7 @@ export type LookupRecord = {
   origin: "device" | "network" | null; // a sentence only
   device?: string | null; // the device that recorded it; absent means this one
   deviceSeq?: number | null; // its `id` there; absent means its own `id`
+  askedOn?: string | null; // a pending row's last local day asked, YYYY-MM-DD; absent until asked
 };
 
 // The sync store's one row, keyed "state". A row this shape never existed
