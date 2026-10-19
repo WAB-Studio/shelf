@@ -69,3 +69,33 @@ test("past the 290 s the function allows, the pass is skipped", async () => {
   assert.equal((await proposedAt(295)).status, "none");
   assert.equal(fetched, 0);
 });
+
+// Two imports on one server: each pass is judged by its own request's start, whatever read began since.
+test("two interleaved requests each keep their own start", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-never-sent";
+  const { readPlan } = await import("./model");
+  const { proposeMoves } = await import("./arrange");
+  const stream = () =>
+    new Response(
+      new Blob([`data: ${JSON.stringify({ choices: [{ delta: { content: '{"goals":[]}' }, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`]).stream(),
+    );
+  fetched = 0;
+  globalThis.fetch = (async (_url: unknown, init: RequestInit) => {
+    if (JSON.parse(init.body as string).stream) return stream();
+    fetched += 1;
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ moves: [] }) }, finish_reason: "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+  }) as typeof fetch;
+
+  mock.timers.enable({ apis: ["Date"], now: START });
+  await readPlan({ kind: "text", text: "a" }, () => {});
+  const early = START;
+  mock.timers.setTime(START + 200_000);
+  await readPlan({ kind: "text", text: "b" }, () => {});
+  const late = START + 200_000;
+  mock.timers.setTime(START + 285_000);
+
+  const [first, second] = await Promise.all([proposeMoves(plan(), early), proposeMoves(plan(), late)]);
+  assert.equal(first.status, "none", "the early request has no time left");
+  assert.equal(second.status, "ok", "the late request still has 195 s");
+  assert.equal(fetched, 1);
+});

@@ -325,10 +325,6 @@ export function modelAvailable(): boolean {
   return Boolean(env.OPENAI_API_KEY) || stubNow() !== null;
 }
 
-// When the current read began: the arrange pass spends only the time the function has left after it.
-let readStartedAt: number | null = null;
-export const requestStartedAt = (): number | null => readStartedAt;
-
 type Answer = Awaited<ReturnType<typeof readStream>>;
 
 // One streamed call over `content`. Null when the provider answered with an error status.
@@ -466,7 +462,6 @@ export async function readPlan(input: PlanInput, onStep: (step: Step) => void): 
   if (!apiKey) return { status: "failed" };
 
   const startedAt = Date.now();
-  readStartedAt = startedAt;
   try {
     onStep("find");
     const answer = await ask(apiKey, userContent(input, route, text), REQUEST_TIMEOUT_MS, onStep);

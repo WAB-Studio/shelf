@@ -4,7 +4,7 @@ import { z } from "zod";
 import { env } from "@/lib/env";
 
 import type { Correction, ImportDraft } from "./draft";
-import { MODEL_NAME, requestStartedAt, type Usage } from "./model";
+import { MODEL_NAME, type Usage } from "./model";
 import { modelStub } from "./model-seam";
 
 // 903c: the second, short pass. The read puts the tasks of a plan where the plan wrote them, and a long
@@ -151,10 +151,9 @@ function validMoves(draft: ImportDraft, holders: number[], answer: z.infer<typeo
 /**
  * One short, non-streamed call (903c): the tasks of each goal that holds goals, and those goals, in; the
  * moves the model proposes out, kept only when the draft can hold them. Never throws: a failure is a named
- * status and the draft stays as the read left it. `startedAt` is when the request began (ms); left out, it
- * is when the last read began.
+ * status and the draft stays as the read left it. `startedAt` is when the request began (ms).
  */
-export async function proposeMoves(draft: ImportDraft, startedAt: number = requestStartedAt() ?? Date.now()): Promise<ArrangeReading> {
+export async function proposeMoves(draft: ImportDraft, startedAt: number): Promise<ArrangeReading> {
   const holders = holdersOf(draft);
   const apiKey = env.OPENAI_API_KEY;
   if (holders.length === 0 || !apiKey || stubbed()) return { status: "none" };

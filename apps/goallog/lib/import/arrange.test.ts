@@ -7,7 +7,7 @@ const fakeEnv: { OPENAI_API_KEY?: string; PULSAR_MODEL_STUB?: string } = {};
 mock.module("@/lib/env", { namedExports: { env: fakeEnv } });
 
 const arrange = () => import("./arrange");
-const proposeMoves = async (draft: ImportDraft) => (await arrange()).proposeMoves(draft);
+const proposeMoves = async (draft: ImportDraft) => (await arrange()).proposeMoves(draft, Date.now());
 const arrangeWanted = async (draft: ImportDraft) => (await arrange()).arrangeWanted(draft);
 
 const task = (name: string, over: Partial<DraftTask> = {}): DraftTask => ({
