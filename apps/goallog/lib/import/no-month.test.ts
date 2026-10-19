@@ -3,13 +3,16 @@
 // default) and a declined proposal leaves the task out with its reason (RP-90).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import test from "node:test";
+import test, { mock } from "node:test";
 
 import { check } from "./check";
 import { placeLeftovers } from "./coverage";
 import { decide, draftRefusals, normalize, rawDraftSchema, type Correction, type RawDraft, type Source } from "./draft";
 import { linesToTasks } from "./line-tasks";
 import { todayInZone } from "@/lib/zone";
+
+// `./model` reads `@/lib/env`, which refuses a process with no `.env.local` (CI's `pulsar-unit`).
+mock.module("@/lib/env", { namedExports: { env: {} } });
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
 const TODAY = todayInZone();
