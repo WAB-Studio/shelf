@@ -48,8 +48,14 @@ function stubNow(): ChatStub | null {
 }
 
 // The bench model replaces the product's only off Vercel, the guard the stub seam uses (RP-93).
-function modelName(): string {
+export function chatModel(): string {
   return process.env.VERCEL ? CHAT_MODEL : (env.PULSAR_CHAT_BENCH_MODEL ?? CHAT_MODEL);
+}
+
+// gpt-4.1 and gpt-4o are not reasoning models and answer the field with a 400; gpt-6 calls tools only with effort "none" (OpenAI's model page).
+export function reasoningEffortFor(model: string): "none" | "low" | undefined {
+  if (/^gpt-4(\.|o|-)/.test(model) || /^gpt-3/.test(model)) return undefined;
+  return /^gpt-6/.test(model) ? "none" : REASONING_EFFORT;
 }
 
 export function chatAvailable(): boolean {
@@ -187,12 +193,14 @@ const completionSchema = z.object({
 function modelSource(apiKey: string): Source {
   const tools = toolsOffered();
   return async (messages, timeoutMs) => {
+    const model = chatModel();
+    const effort = reasoningEffortFor(model);
     const response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: modelName(),
-        reasoning_effort: REASONING_EFFORT,
+        model,
+        ...(effort === undefined ? {} : { reasoning_effort: effort }),
         max_completion_tokens: MAX_OUTPUT_TOKENS,
         messages,
         tools,

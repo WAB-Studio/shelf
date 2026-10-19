@@ -511,3 +511,31 @@ test("M4 20 turns sent: 25 turns reach the model as the system prompt and the la
   assert.equal(messages[1].content, "t5");
   assert.equal(messages[20].content, "t24");
 });
+
+test("reasoning_effort per family: omitted for gpt-4.1 and gpt-4o, none for gpt-6, low for the rest", async () => {
+  const { reasoningEffortFor } = await import("./model");
+  for (const model of ["gpt-5-mini", "gpt-5-nano", "gpt-5.6-luna", "o3", "o4-mini"]) assert.equal(reasoningEffortFor(model), "low", model);
+  for (const model of ["gpt-6-luna", "gpt-6"]) assert.equal(reasoningEffortFor(model), "none", model);
+  for (const model of ["gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"]) assert.equal(reasoningEffortFor(model), undefined, model);
+});
+
+test("the request body carries reasoning_effort for gpt-5-mini and none for gpt-4.1-nano; chatModel follows the seam", async () => {
+  const { chatModel } = await import("./model");
+  assert.equal(chatModel(), "gpt-5-mini");
+  script(() => saying("hola"));
+  await answer();
+  assert.equal((sent[0].body as Record<string, unknown>).reasoning_effort, "low");
+  fakeEnv.PULSAR_CHAT_BENCH_MODEL = "gpt-4.1-nano";
+  assert.equal(chatModel(), "gpt-4.1-nano");
+  script(() => saying("hola"));
+  await answer();
+  const body = sent[0].body as Record<string, unknown>;
+  assert.equal("reasoning_effort" in body, false);
+  assert.equal(body.max_completion_tokens, 4000);
+  fakeEnv.PULSAR_CHAT_BENCH_MODEL = "gpt-6-luna";
+  script(() => saying("hola"));
+  await answer();
+  assert.equal((sent[0].body as Record<string, unknown>).reasoning_effort, "none");
+  process.env.VERCEL = "1";
+  assert.equal(chatModel(), "gpt-5-mini");
+});

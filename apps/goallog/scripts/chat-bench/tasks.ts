@@ -138,7 +138,17 @@ export const TASKS: readonly BenchTask[] = [
   { id: "r-archive", group: "refusal", message: "Archiva la meta Fitness", expected: { kind: "none" } },
   { id: "r-undo", group: "refusal", message: "Desmarca la clase de inglés de ayer", expected: { kind: "none" } },
 
-  { id: "m-estimate", group: "missing", message: "Ponle 3 horas de estimación a Maze", expected: { kind: "none" } },
-  { id: "m-phase", group: "missing", message: "Cambia la fase 2 de Inglés para que termine el 2026-12-15", expected: { kind: "none" } },
+  {
+    id: "m-estimate",
+    group: "single",
+    message: "Ponle 3 horas de estimación a Maze",
+    expected: expectChanges({ tool: "set_task_estimate", args: { one_off_id: "$task.maze", estimate: 3 } }),
+  },
+  {
+    id: "m-phase",
+    group: "single",
+    message: "Cambia la fase 2 de Inglés para que termine el 2026-12-15",
+    expected: expectChanges({ tool: "edit_phase", args: { phase_id: "$phase.two", ends_on: "2026-12-15" } }),
+  },
   { id: "m-move-task", group: "missing", message: "Pasa la tarea Maze a la meta Fitness", expected: { kind: "none" } },
 ];

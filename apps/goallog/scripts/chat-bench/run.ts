@@ -1,10 +1,18 @@
 // Measures one model on the 25 chat tasks through a lane's own `POST /chat/enviar` (docs/goallog/CHAT.md).
 // It spends real money and nothing imports it: no package.json entry, no check, no CI job. The main
-// session runs it with the user's yes, from apps/goallog:
-//   OPENAI_API_KEY=… PULSAR_CHAT_BENCH_MODEL=<model> npx tsx scripts/chat-bench/run.ts --i-pay \
-//     --target http://localhost:3208 --model <model> --price-in 0.25 --price-out 2 \
-//     --sessions private/session-8.json,private/session-9.json --seed private/chat-bench-seed.json
-// The lane's server must run with the same OPENAI_API_KEY and PULSAR_CHAT_BENCH_MODEL (lib/chat/model.ts).
+// session runs it with the user's yes, from apps/goallog, inside `scripts/supabase-local.sh exec`:
+//   1. Mint two sessions on the lane's server:
+//      HARNESS_LANE=8 PULSAR_BASE_URL=http://localhost:3206 npm run harness:mint-session   (and HARNESS_LANE=9)
+//   2. Seed each person's plan and write the ids:
+//      npx tsx --env-file=.env.local scripts/chat-bench/seed.ts \
+//        --sessions private/session-8.json,private/session-9.json --out private/chat-bench-seed.json
+//   3. Start the lane's server with the key and the model:
+//      OPENAI_API_KEY=… PULSAR_CHAT_BENCH_MODEL=<model> PORT=3206 npm run dev
+//   4. Run, with the same key and model:
+//      OPENAI_API_KEY=… PULSAR_CHAT_BENCH_MODEL=<model> npx tsx --env-file=.env.local scripts/chat-bench/run.ts --i-pay \
+//        --target http://localhost:3206 --model <model> --price-in 0.25 --price-out 2 \
+//        --sessions private/session-8.json,private/session-9.json --seed private/chat-bench-seed.json
+// Restart the server (step 3) for each model; the seed (steps 1-2) is built once.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 

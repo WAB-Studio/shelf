@@ -62,7 +62,7 @@ prompt forbid them. The right answer proposes nothing and says so.
 |---|---|
 | Move a task to another goal («pasa Maze a Fitness») | **no existe** on any screen or tool (plan Q4 of oleada-4) |
 
-The estimate and the phase edit are built (RP-139, `set_task_estimate` over `editTask`, `edit_phase` over `editPhase`). The move is a domain act that does not exist, and waits for Q4.
+The estimate and the phase edit are built (RP-139); the bench scores them as `single` proposals (`m-estimate`, `m-phase`), not as missing. The move is a domain act that does not exist, and waits for Q4.
 A good model refuses it or says it cannot; a bad one proposes the nearest wrong tool (`create_task`, `fix_task`).
 
 ## What the chat does not need
@@ -109,7 +109,7 @@ A bench run is 25 calls of the bench person's fifty and counts in the app's cap.
 
 ## The bench
 
-`apps/goallog/scripts/chat-bench/`: `tasks.ts` (25 tasks mirroring this document), `score.ts` (pure scorer), `run.ts`. No
+`apps/goallog/scripts/chat-bench/`: `tasks.ts` (25 tasks mirroring this document), `score.ts` (pure scorer), `run.ts`, `seed.ts` (builds the plan `SEED` names for each session and writes the `--seed` file; rerunnable). No
 `package.json` entry, no check, no CI job: only a person runs it, with the user's yes. The tests (`score.test.ts`) never reach
 the network.
 
@@ -120,8 +120,8 @@ the network.
   The tasks need a seeded plan (`SEED` in `tasks.ts`) per session and a `--seed` file mapping each session to its ids.
 - Writes `private/chat-bench/<model>-<time>.md`: model, task pass rate, mean input and output tokens, cost, p50 and p95 latency,
   and a line per task.
-- Reads tokens from `goals.model_calls` (the route answers none). That table records the model as `gpt-5-mini` whatever the
-  bench model is (`claimModelCall(CHAT_MODEL, …)`); the bench filters by source and time, never by model.
+- Reads tokens from `goals.model_calls` (the route answers none). That table records the model that ran (`chatModel()`: the bench model off Vercel,
+  `gpt-5-mini` on it); the bench filters by source and time, never by model.
 - Reads nothing the OpenAI CSV holds: it does not say what the app spent (`docs/TRAPS.md`, «El CSV de OpenAI no dice lo que gastó la app»).
 
 The bench decides nothing (RP-93 stands): it hands the user a table; the user picks the model.
