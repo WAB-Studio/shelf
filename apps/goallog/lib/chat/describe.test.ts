@@ -421,3 +421,11 @@ test("RP-139: a phase the person does not own, or a day that is no day, describe
     refused,
   );
 });
+
+test("RP-139: an estimate of 0 minutes, a fraction of a minute or a negative one describes nothing; one minute is drawn", () => {
+  const refused = { refused: "chat.errors.notInPlan" };
+  for (const estimate of [0, 1.5, 0.5, -30]) {
+    assert.deepEqual(describeChange(change("set_task_estimate", { one_off_id: T, estimate }), names), refused, String(estimate));
+  }
+  assert.ok("key" in describeChange(change("set_task_estimate", { one_off_id: T, estimate: 1 }), names));
+});
