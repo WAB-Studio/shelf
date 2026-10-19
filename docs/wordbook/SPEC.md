@@ -260,11 +260,14 @@ this gets built, and no schema, table or column is "prepared for" it.
   translation for a sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once
   that answer arrived. A word the dictionary has no entry for whose network answer failed or never arrived, and a
   sentence that could not be translated, are recorded **pending**: the row holds what was typed, whether it was
-  a word or a sentence, and when, and says it waits for an answer. When the network comes back, each pending row
-  is asked again — a paid call claimed under the same daily cap as any other network answer — and takes its
-  answer; from then on it reads and exports like any answered row. A pending row the network still cannot answer
-  stays pending and is asked again the next time the network comes back; past the day's cap it waits for the next
-  day. The record shows a pending row as pending, and the Anki file leaves it out until it is answered. A row
+  a word or a sentence, and when, and says it waits for an answer. Only a lookup that would have
+  been asked had the device been online becomes pending: a word the screen said the dictionary has no entry for,
+  and a sentence the translator would have taken; a word left while suggestions stood in its place, and a sentence
+  over 60 words or under the floor, leave no row. When the network comes back, each pending row not yet asked that
+  day is asked — a paid call claimed under the same daily cap as any other network answer — and takes its answer;
+  from then on it reads and exports like any answered row. A row is asked at most once a day; one the network still
+  cannot answer stays pending until the next day. A pending row stays on its device: the account's copy never
+  holds it, and it travels only once it is answered, as a new answered row with the same moment. The record shows a pending row as pending, and the Anki file leaves it out until it is answered. A row
   holds what was typed, whether it was answered as a word or a sentence, the headword it actually reached when an
   inflected form was typed, and when. The record gains rows on its own and nothing edits one but the answer a
   pending row takes; the reader can delete a row (RL-66) or empty it whole: on this device alone, or in the copy
@@ -272,7 +275,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   signs in afterwards sees it again. No screen on the read path shows the record. It is read to take it off the
   device — to a file, or to the copy held by the reader's account — and to bring back what the same reader's other
   devices recorded; never on the path that answers a lookup. Decided by the user 2026-10-18: «Se guardan como
-  pendiente y se responden solas cuando vuelve la red».
+  pendiente y se responden solas cuando vuelve la red»; which misses, once a day, and on the device alone, the same day (Q5–Q7).
 - [x] **RL-22** — A reader can keep their record in an account of their own: they sign in through a
   link sent to their address and, from then on, what this device records is copied to that account
   and what their other devices recorded comes down to this one **and stays in its local record,

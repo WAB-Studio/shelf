@@ -1895,3 +1895,15 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
 - **A goal's note reaches the AI cut to 2.000 characters** with its length, and `get_note` reads the whole (Q20 a), with
   the chat work of wave 3. MCP refusals keep their per-tool sentences (Q21 b).
 - **A refresh token or code reused within 30 s answers `invalid_grant` without revoking the connection** (Q22 a).
+
+## Decisions of 2026-10-18, on plan oleada-4, by the user
+
+- **A task the plan gives no month, in a goal with no rhythm** (Q2 a): the import puts it in the current month, and the
+  review shows it as a correction «el plan no le da mes → <mes>», accepted by default. Declined, the task is left out with
+  its reason (RP-90). No new screen. Not built yet.
+- **The chat and the connected AI change a task's estimate and a phase's aim and dates** (Q3 a): RP-119 retired, RP-139
+  opened. Two tools and their approval-card lines. Not built yet.
+- **Moving a task to another goal** (Q4 a): a new act on the task sheet and a tool, with its RP code and its board, as a
+  slice of its own after oleada-4. Not planned yet.
+- **The paid chat measurement** (Q9): without gpt-5. The user asked why other model families are not in it; the bench
+  speaks only to OpenAI today (`docs/goallog/SPEC.md` §4). Open until the user names them.

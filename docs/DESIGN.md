@@ -414,3 +414,11 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email stays unbuilt.
 - **A sign-out Auth refuses leaves this device signed out** (Q30 a): the session is never restored; the login says
   «Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.»
+
+## Decisions of 2026-10-18, on plan oleada-4, by the user
+
+- **A parent category's budget and its movement filter count its subcategories** (Q1 a): RF-72 retired, RF-160 opened.
+  Not built yet.
+- **«Ajustes del fondo» on the phone** (Q8 a): a row «Ajustes del fondo» at the top of «Ajustes», for the leader only. M1
+  measured it unreachable at 360 px (only the desktop rail's chevron leads there). Board and level-2 module in the slice
+  after oleada-4.
