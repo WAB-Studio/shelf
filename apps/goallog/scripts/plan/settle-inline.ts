@@ -295,3 +295,124 @@ test("M25 a lazy query fn returns runs exactly once", async () => {
   );
   assert.equal(runs, 1, "the lazy query ran more than once");
 });
+
+// M33 (RNP-05): the settle is the transaction's own. It sets role, search_path
+// and statement_timeout with `local`, so the pooled connection the next caller
+// borrows is the pool's again; it runs before anything `fn` sends; and with no
+// session it refuses by name, before a connection is taken.
+type Gucs = { pid: number; role: string; searchPath: string; timeout: string; claims: string | null };
+
+const readGucs = async (tx: Tx): Promise<Gucs> => {
+  const [row] = (await tx.execute(sql`
+    select pg_backend_pid() as pid,
+           current_user::text as role,
+           current_setting('search_path') as "searchPath",
+           current_setting('statement_timeout') as timeout,
+           nullif(current_setting('request.jwt.claims', true), '') as claims`)) as unknown as Gucs[];
+  return row;
+};
+
+const settleThen = <T>(fn: (tx: Tx) => Promise<T>, searchPath = "goals, public") =>
+  withSettledTransaction<Tx, T>(
+    { claims: { sub: caller, role: "authenticated", aud: "authenticated" } },
+    "settle-inline",
+    searchPath,
+    (cb) => orm.transaction(cb),
+    (tx, statement) => tx.execute(statement),
+    fn,
+  );
+
+test("M33 inside the settle: role authenticated, the given search_path and an 8 s statement_timeout", async () => {
+  const inside = await settleThen(readGucs, "goals, public");
+  assert.equal(inside.role, "authenticated");
+  assert.equal(inside.searchPath, "goals, public");
+  assert.equal(inside.timeout, "8s");
+  assert.ok(inside.claims?.includes(caller));
+});
+
+test("M33 after the settled transaction commits, the same connection is back to the pool's role, search_path and timeout", async () => {
+  const before = await orm.transaction(readGucs);
+  assert.notEqual(before.role, "authenticated", "the pool's own role is not the settled one");
+  assert.notEqual(before.searchPath, "goals, public");
+  assert.notEqual(before.timeout, "8s");
+
+  const inside = await settleThen(readGucs, "goals, public");
+  const after = await orm.transaction(readGucs);
+
+  assert.equal(inside.pid, before.pid, "pool max 1: one connection throughout");
+  assert.equal(after.pid, before.pid);
+  assert.equal(after.role, before.role, "role leaked past commit");
+  assert.equal(after.searchPath, before.searchPath, "search_path leaked past commit");
+  assert.equal(after.timeout, before.timeout, "statement_timeout leaked past commit");
+  assert.equal(after.claims, null, "claims leaked past commit");
+});
+
+test("M33 the settle also gives the connection back after a rollback", async () => {
+  const before = await orm.transaction(readGucs);
+  await settleThen(async (tx) => {
+    await readGucs(tx);
+    throw new Error("fn failed");
+  }).catch(() => undefined);
+  const after = await orm.transaction(readGucs);
+  assert.deepEqual({ ...after, claims: null }, { ...before, claims: null });
+});
+
+test("M33 the settle precedes fn: fn's first statement already sees the settled claims, and the wire carries the settle first", async () => {
+  wire.length = 0;
+  const seen = await settleThen(async (tx) => {
+    const [row] = (await tx.execute(sql`
+      select /* m33-fn-first */ auth.uid()::text as uid, current_user::text as role,
+             current_setting('statement_timeout') as timeout`)) as unknown as { uid: string | null; role: string; timeout: string }[];
+    return row;
+  });
+  assert.equal(seen.uid, caller, "fn's first statement ran before the settle");
+  assert.equal(seen.role, "authenticated");
+  assert.equal(seen.timeout, "8s");
+  const settle = wire.findIndex((call) => call.query.includes("set_config('request.jwt.claims'"));
+  const first = wire.findIndex((call) => call.query.includes("m33-fn-first"));
+  assert.ok(settle >= 0 && first >= 0, "both statements reached the wire");
+  assert.ok(settle < first, `fn's statement (#${first}) was sent before the settle (#${settle})`);
+});
+
+test("M33 no session: the call refuses with its own label, takes no connection and runs nothing", async () => {
+  let began = 0;
+  let ran = 0;
+  const error = await withSettledTransaction<Tx, void>(
+    null,
+    "settle-inline-label",
+    "goals, public",
+    async () => void (began += 1),
+    async () => void (ran += 1),
+    async () => void (ran += 1),
+  ).then(
+    () => null,
+    (reason: unknown) => reason,
+  );
+  assert.ok(error instanceof Error);
+  assert.ok(!(error instanceof TypeError), `a TypeError leaked: ${error.message}`);
+  assert.equal(error.message, "settle-inline-label called without a verified session");
+  assert.equal(began, 0);
+  assert.equal(ran, 0);
+});
+
+// Drizzle's own hops can put the settle on the wire first even when `fn` was
+// called first, so the order is also read where the module hands over control:
+// `run` must be invoked with the settle before `fn` is entered.
+test("M33 the settle statement is handed to run before fn is entered", async () => {
+  const order: string[] = [];
+  await withSettledTransaction<Tx, void>(
+    { claims: { sub: caller, role: "authenticated" } },
+    "settle-inline",
+    "goals, public",
+    (cb) => orm.transaction(cb),
+    (tx, statement) => {
+      order.push("settle");
+      return tx.execute(statement);
+    },
+    async (tx) => {
+      order.push("fn");
+      await tx.execute(sql`select 1`);
+    },
+  );
+  assert.deepEqual(order, ["settle", "fn"]);
+});
