@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import Module from "node:module";
 import { dirname, resolve } from "node:path";
-import { after, before, beforeEach, test } from "node:test";
+import { after, before, beforeEach, mock, test } from "node:test";
 
 import ExcelJS from "exceljs";
 import { createTranslator } from "next-intl";
@@ -110,7 +110,7 @@ const TEMPLATE_V1 =
 const realFetch = globalThis.fetch;
 // What each fake model call saw: the person's rows at the moment it was asked.
 let modelCalls: { rowsSeen: Rows }[] = [];
-let modelAnswer: () => Response = () => new Response("unset", { status: 500 });
+let modelAnswer: (init?: RequestInit) => Response = () => new Response("unset", { status: 500 });
 
 // A streamed completion, the way chat completions sends it: pieces of the answer, then usage.
 function sse(content: string): Response {
@@ -152,7 +152,7 @@ before(async () => {
   globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
     if (!String(url).startsWith("https://api.openai.com/")) return realFetch(url as string, init);
     modelCalls.push({ rowsSeen: await rows() });
-    return modelAnswer();
+    return modelAnswer(init);
   }) as typeof fetch;
 });
 
@@ -860,4 +860,62 @@ test("M18: the app's own Origin passes: the model path streams and one row is cl
   const lines = await ndjson(await route.POST(request({ text: "quiero aprender inglés este año" }, { origin: "http://localhost" })));
   assert.ok(lastLine(lines).done);
   assert.equal((await rows()).length, 1);
+});
+
+// ---- M27: what a long plan's review and the arrange pass owe the person
+
+// A streamed completion that ends on `finish`, the way a cut read does.
+function sseEnding(content: string, finish: string): Response {
+  const events = [
+    { choices: [{ delta: { content } }] },
+    { choices: [{ delta: {}, finish_reason: finish }] },
+    { choices: [], usage: { prompt_tokens: 50, completion_tokens: 60 } },
+  ];
+  return new Response(events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") + "data: [DONE]\n\n", {
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+
+const userText = (init?: RequestInit): string => JSON.parse(String(init?.body)).messages[1].content[0].text;
+
+test("M27: a long plan whose answer is cut and one section cut again reaches the review naming the section left out", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  const block = (title: string) => [`# ${title}`, ...Array.from({ length: 199 }, (_, i) => `- paso ${title} ${i}`)];
+  const text = [...block("Primero"), ...block("Segundo"), ...block("Tercero")].join("\n");
+  modelAnswer = (init) => {
+    const numbered = userText(init).split("\n");
+    if (numbered.length >= 600) return sseEnding('{"goals":[{"key":"cut', "length");
+    const first = Number(numbered[0].split("|")[0]);
+    const heading = numbered[0].slice(numbered[0].indexOf("|") + 1).replace(/^#\s+/, "");
+    if (heading === "Segundo") return sseEnding('{"goals":[{"key":"cut', "length");
+    return sseEnding(JSON.stringify({ goals: [rawGoal({ key: "g", name: heading, months: [], src: [{ from: first, to: first }] })] }), "stop");
+  };
+  const done = lastLine(await ndjson(await route.POST(request({ text })))).done;
+  assert.deepEqual(done.draft.goals.map((g: { name: string }) => g.name), ["Primero", "Tercero"]);
+  assert.deepEqual(done.leftOut, [{ heading: "Segundo", from: 201, to: 400 }]);
+});
+
+test("M27: a read that left nothing out carries no leftOut to the review", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  modelAnswer = () => sse(JSON.stringify({ goals: [rawGoal()] }));
+  const done = lastLine(await ndjson(await route.POST(request({ text: "quiero aprender inglés este año" })))).done;
+  assert.equal("leftOut" in done, false);
+});
+
+test("M27: a read that used up the function's time leaves the arrange pass no time: it asks the model nothing", async () => {
+  delete envHandle.PULSAR_MODEL_STUB;
+  mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  try {
+    let n = 0;
+    modelAnswer = () => {
+      if (++n > 1) return completion({ moves: [] });
+      mock.timers.tick(280_000);
+      return sse(JSON.stringify({ context: [], goals: holderDraft() }));
+    };
+    const lines = await ndjson(await route.POST(request({ text: PLAN_TEXT })));
+    assert.ok(lastLine(lines).done, "the plan still arrives as the read left it");
+    assert.equal(modelCalls.length, 1, "only the read went to the model");
+  } finally {
+    mock.timers.reset();
+  }
 });

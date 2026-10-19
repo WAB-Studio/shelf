@@ -146,3 +146,24 @@ test("the review words the correction «el plan no le da mes → <mes>»", () =>
   assert.equal(typeof words.proposed, "string");
   assert.match(`${words.said} ${words.proposed} ${words.why}`, /el plan no le da mes/i);
 });
+
+// M27, i4: the check's own `rhythm !== null` guard. After `normalize` a goal that holds goals has no rhythm
+// (RP-80), so the holder's monthless task is proposed the current month like any goal without one, while
+// the goal inside it that keeps its rhythm is placed by it and proposed nothing.
+test("a goal that holds goals and states a rhythm is proposed the current month for its monthless task; its sub-goal with a rhythm gets none", () => {
+  const holder = withRhythm();
+  const inner = rawGoal({
+    key: "g2",
+    parent: "g1",
+    name: "Lectura",
+    measure: { name: "estudio", unit: "horas" },
+    rate: { amount: 6, unit: "hours", per: "month" },
+    src: [{ from: 1, to: 1 }],
+    tasks: [rawTask("Capítulo", null, 3)],
+  });
+  const { draft, corrections } = read({ goals: [holder, inner] });
+  assert.equal(draft.goals[0].rhythm, null, "the holder's rhythm went to its note");
+  assert.equal(draft.goals[1].rhythm, 360);
+  assert.equal(monthCorrection(corrections, "goals.0.tasks.0").length, 1);
+  assert.deepEqual(corrections.filter((c) => c.at === "goals.1.tasks.0"), []);
+});
