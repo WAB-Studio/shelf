@@ -26,6 +26,11 @@ const MAX_OUTPUT_TOKENS = 4_000;
 const REASONING_EFFORT = "low";
 const REQUEST_TIMEOUT_MS = 60_000;
 
+// One budget for the whole call, under the route's 60 s so its settle always runs.
+export const CHAT_DEADLINE_MS = 50_000;
+// A round with less than this left would only be cut off mid-flight.
+const ROUND_MIN_MS = 2_000;
+
 export type Usage = { input: number; output: number };
 
 export type ChatAnswer =
@@ -40,6 +45,11 @@ const catalogue: readonly ToolSpec[] = [...readTools, ...writeTools];
 
 function stubNow(): ChatStub | null {
   return chatStub(env.PULSAR_CHAT_STUB, process.env.VERCEL);
+}
+
+// The bench model replaces the product's only off Vercel, the guard the stub seam uses (RP-93).
+function modelName(): string {
+  return process.env.VERCEL ? CHAT_MODEL : (env.PULSAR_CHAT_BENCH_MODEL ?? CHAT_MODEL);
 }
 
 export function chatAvailable(): boolean {
@@ -62,9 +72,17 @@ function messagesOf(turns: ChatTurn[]): Message[] {
     { role: "system", content: chatSystemPrompt(todayInZone()) },
     ...turns.slice(-CHAT_TURNS_SENT).map((turn) => ({
       role: turn.role === "person" ? "user" : "assistant",
-      content: turn.text,
+      content: turn.role === "person" ? turn.text : withOutcomes(turn),
     })),
   ];
+}
+
+const OUTCOME_WORD = { made: "hecha", refused: "rechazada", open: "sin hacer" } as const;
+
+// The model learns what became of each proposal; a turn with no change goes as written.
+function withOutcomes(turn: Extract<ChatTurn, { role: "chat" }>): string {
+  const lines = turn.changes.map((change) => `[propuesta ${change.tool}: ${OUTCOME_WORD[change.state]}]`);
+  return [...(turn.text === "" ? [] : [turn.text]), ...lines].join("\n");
 }
 
 function errorMessage(id: string, error: string): Message {
@@ -103,7 +121,8 @@ async function answerCall(call: ToolCall, changes: Change[]): Promise<Message> {
   };
 }
 
-type Source = (messages: Message[]) => Promise<Round | null>;
+// `timeoutMs` is what the round may take before the call's deadline.
+type Source = (messages: Message[], timeoutMs: number) => Promise<Round | null>;
 
 // The loop is the same for the model and the stub: only where a round comes from differs.
 async function converse(source: Source, base: Message[]): Promise<ChatAnswer> {
@@ -111,9 +130,15 @@ async function converse(source: Source, base: Message[]): Promise<ChatAnswer> {
   const changes: Change[] = [];
   const usage: Usage = { input: 0, output: 0 };
   const spent = () => (usage.input || usage.output ? { usage } : {});
+  const deadline = Date.now() + CHAT_DEADLINE_MS;
+  // Out of rounds or time: what was proposed is handed over, otherwise the call failed.
+  const ended = (): ChatAnswer =>
+    changes.length > 0 ? { status: "ok", reply: "", changes, usage } : { status: "failed", ...spent() };
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const got = await source(messages);
+    const left = deadline - Date.now();
+    if (left < ROUND_MIN_MS) return ended();
+    const got = await source(messages, Math.min(REQUEST_TIMEOUT_MS, left));
     if (got === null) return { status: "failed", ...spent() };
     usage.input += got.usage.input;
     usage.output += got.usage.output;
@@ -140,7 +165,7 @@ async function converse(source: Source, base: Message[]): Promise<ChatAnswer> {
     });
     for (const call of got.calls) messages.push(await answerCall(call, changes));
   }
-  return { status: "failed", ...spent() };
+  return ended();
 }
 
 const completionSchema = z.object({
@@ -161,18 +186,18 @@ const completionSchema = z.object({
 
 function modelSource(apiKey: string): Source {
   const tools = toolsOffered();
-  return async (messages) => {
+  return async (messages, timeoutMs) => {
     const response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: CHAT_MODEL,
+        model: modelName(),
         reasoning_effort: REASONING_EFFORT,
         max_completion_tokens: MAX_OUTPUT_TOKENS,
         messages,
         tools,
       }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return null;
     const parsed = completionSchema.safeParse(await response.json());
