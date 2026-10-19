@@ -197,3 +197,78 @@ test("a settle that fails: a statement fn sends later never runs outside the tra
   assert.equal(seen.late, null, `fn's later statement ran on the bare connection: ${JSON.stringify(late)}`);
   assert.equal(late, "25P02", "fn's later statement met the aborted transaction");
 });
+
+// M25 (RNP-05): the claims' meaning, not just the literal, must not depend on
+// `standard_conforming_strings`. What a policy sees is `auth.uid()` and
+// `auth.jwt()`, so those are what these tests read, in the caller's own role.
+type Who = { uid: string | null; jwt: Record<string, unknown> | null; role: string };
+
+const readAuth = async (tx: Tx): Promise<Who> => {
+  const [row] = (await tx.execute(sql`
+    select auth.uid()::text as uid, auth.jwt() as jwt, current_user::text as role`)) as unknown as Who[];
+  return row;
+};
+
+function settledAs(claims: Record<string, unknown>, on: boolean): Promise<Who> {
+  return withSettledTransaction<Tx, Who>(
+    { claims },
+    "settle-inline",
+    "goals, public",
+    (cb) =>
+      orm.transaction(async (tx) => {
+        await tx.execute(conforming(on));
+        return cb(tx);
+      }),
+    (tx, statement) => tx.execute(statement),
+    readAuth,
+  );
+}
+
+const caller = randomUUID();
+const victim = randomUUID();
+const forgedEmail = `x","sub":"${victim}`;
+
+for (const on of [false, true]) {
+  test(`M25 standard_conforming_strings ${on ? "on" : "off"}: a claim that imitates a sibling key leaves auth.uid() the caller's`, async () => {
+    const seen = await settledAs(
+      { sub: caller, role: "authenticated", aud: "authenticated", email: forgedEmail },
+      on,
+    );
+    assert.equal(seen.uid, caller, "auth.uid() followed a forged sub");
+    assert.equal(seen.jwt?.email, forgedEmail, "the email is the literal string it was");
+    assert.equal(seen.jwt?.sub, caller);
+    assert.equal(seen.role, "authenticated");
+  });
+
+  test(`M25 standard_conforming_strings ${on ? "on" : "off"}: backslash, quote, $$ and a non-BMP character read back identical`, async () => {
+    const values = {
+      backslash: "a\\b\\\\c\\",
+      quote: "it's ''quoted''",
+      dollars: "$$ $x$ $1",
+      astral: "🙂 𝔘 \u{1F9D1}‍\u{1F4BB}",
+      mixed: "\\'$$\\\"🙂",
+      user_metadata: { nested: "\\ ' $$ 🙂", list: ["\\", "'"] },
+    };
+    const seen = await settledAs({ sub: caller, role: "authenticated", aud: "authenticated", ...values }, on);
+    assert.equal(seen.uid, caller);
+    for (const [key, value] of Object.entries(values)) assert.deepEqual(seen.jwt?.[key], value, key);
+  });
+}
+
+// The settle is pipelined: `fn` starts before the settle has answered.
+test("M25 the settle and fn's first statement share a round trip: fn starts before the settle answers", async () => {
+  let settleAnswered = false;
+  let answeredWhenFnStarted: boolean | undefined;
+  await withSettledTransaction<Tx, void>(
+    { claims: { sub: caller, role: "authenticated" } },
+    "settle-inline",
+    "goals, public",
+    (cb) => orm.transaction(cb),
+    (tx, statement) => tx.execute(statement).then((result) => ((settleAnswered = true), result)),
+    async (tx) => {
+      answeredWhenFnStarted = settleAnswered;
+      await tx.execute(sql`select 1`);
+    },
+  );
+  assert.equal(answeredWhenFnStarted, false, "fn waited for the settle");
+});
