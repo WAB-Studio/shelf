@@ -4213,6 +4213,37 @@ async function checkReceiptAccessor0029(): Promise<void> {
   await client.end();
 }
 
+// EXECUTE on the prune is the caller's own: PUBLIC, anon and service_role must be refused. Each role is driven
+// with USAGE on `goals` lent inside the rolled-back transaction, so only the function's grant can refuse it.
+async function checkPruneExecute0029(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const forcedRollback = Symbol("forced rollback");
+  await sql
+    .begin(async (tx) => {
+      await tx`create role prune_nobody_0029 nologin`;
+      await tx`grant prune_nobody_0029 to current_user`;
+      await tx`grant usage on schema goals to prune_nobody_0029, anon, service_role`;
+      for (const [label, role] of [["P323", "prune_nobody_0029"], ["P324", "anon"], ["P325", "service_role"]] as const) {
+        await tx`reset role`;
+        await tx.unsafe(`set local role ${role}`);
+        const r = await attemptRows<{ n: number }>(tx, (sp) => sp`select goals.prune_write_receipts() as n`);
+        assert(label, r.code === "42501", `${role} calls prune_write_receipts(), sqlstate = ${r.code ?? "none"}`);
+      }
+      await tx`reset role`;
+      const a = randomUUID();
+      await tx`insert into auth.users (id) values (${a})`;
+      await enterUserContext(tx, a);
+      const own = await attemptRows<{ n: number }>(tx, (sp) => sp`select goals.prune_write_receipts() as n`);
+      assert("P326", own.code === undefined && own.rows[0]?.n === 0,
+        `authenticated calls prune_write_receipts() with nothing old, sqlstate = ${own.code ?? "none"}, pruned = ${own.rows[0]?.n}`);
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -4253,6 +4284,7 @@ async function main(): Promise<void> {
   await checkSignInClaims0026();
   await checkParentOwner0027();
   await checkWriteReceipts0029();
+  await checkPruneExecute0029();
 
   if (failed) process.exit(1);
 }

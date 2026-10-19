@@ -406,6 +406,15 @@ test("M4 nothing proposed at the cap: a model that only reads for ever is failed
   assert.equal("changes" in result, false);
 });
 
+test("M24 a failed round after a proposal is failed, not ok: the person is told the model failed, not shown a half answer", async () => {
+  script(fixIt, () => new Response("boom", { status: 500 }));
+  const result = await answer();
+  assert.equal(result.status, "failed");
+  assert.equal(sent.length, 2);
+  assert.equal("changes" in result, false);
+  assert.deepEqual(acts, []);
+});
+
 function clock(start: number) {
   const state = { now: start };
   mock.method(Date, "now", () => state.now);
