@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import { FUNCTION_WORDS, functionWordTranslation } from "../lib/phrase/function-words";
@@ -24,9 +24,8 @@ async function openReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. Give it room before the first keystroke.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 // `BottomNav` carries a heading of its own (`bottom-nav.tsx:148`), outside
@@ -43,9 +42,25 @@ function strayRequests(urls: string[]): string[] {
   return urls.filter((url) => !url.includes("/_next/static/"));
 }
 
+// The desktop project re-proves what a width can change: the sidebar and
+// the control's target. Every other test says the same at both widths and
+// runs on the phone alone.
+const WIDTH_BOUND = [
+  "the search screen carries no link to /fuente",
+  "the control is a 44px target",
+  "tapping the control opens the muted block and the control reads «ocultar»; tapping again folds it",
+];
+test.beforeEach(({}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "desktop" && !WIDTH_BOUND.includes(testInfo.title),
+    "the content is the same at every width",
+  );
+});
+
 test("a two-token miss draws both headwords, offline, with no request", async ({ page, context }) => {
   await deleteTranslator(page);
   await openReady(page);
+  await freezeTimers(page);
 
   // RL-16/RNL-01: the answer to a word never touches the network — cutting
   // it here proves the claim rather than assuming it.
@@ -64,7 +79,7 @@ test("a two-token miss draws both headwords, offline, with no request", async ({
   const expectedTitle = messages.search.noEntry.title.replace("{query}", "hello world");
   await expect(page.getByText(expectedTitle)).toBeVisible();
 
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
   const stray = strayRequests(requestUrls);
   console.log(`requests while offline and typing "hello world", static assets excluded: ${stray.length}`);
   expect(stray).toEqual([]);
@@ -86,9 +101,12 @@ test("a two-token miss where the dictionary lacks one word draws that word's own
     await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "provider" }) });
   });
   await openReady(page);
+  await freezeTimers(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("hello zzqx");
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
+  await expect.poll(() => translateCount, "the translation is attempted once, and fails").toBe(1);
 
   await expect(mainHeadings(page).filter({ hasText: "hello" })).toBeVisible();
   // The word that broke the phrase is the one word this screen must be able
@@ -99,14 +117,12 @@ test("a two-token miss where the dictionary lacks one word draws that word's own
   await expect(page.getByText(messages.search.noEntry.wordMiss)).toBeVisible();
   const failedTitle = messages.search.noEntry.titleTranslationFailed.replace("{query}", "hello zzqx");
   await expect(page.getByText(failedTitle)).toBeVisible();
-
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
-  expect(translateCount, "the translation is attempted once, and fails").toBe(1);
 });
 
 test("a 61-token string draws one line and no heading, and asks the dictionary nothing", async ({ page }) => {
   await deleteTranslator(page);
   await openReady(page);
+  await freezeTimers(page);
 
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
@@ -119,7 +135,7 @@ test("a 61-token string draws one line and no heading, and asks the dictionary n
   await expect(page.getByText(expectedTooLong)).toBeVisible();
   await expect(mainHeadings(page)).toHaveCount(0);
 
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
   const stray = strayRequests(requestUrls);
   console.log(`requests past the ceiling, static assets excluded: ${stray.length}`);
   expect(stray).toEqual([]);
@@ -139,15 +155,16 @@ test("the cat sits still debounces to exactly one translate request, 600ms after
     });
   });
   await openReady(page);
+  await freezeTimers(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("the cat sits");
 
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS - 100);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS - 100);
   expect(translateCount, "nothing is asked before the debounce settles").toBe(0);
 
-  await page.waitForTimeout(300);
-  expect(translateCount, "exactly one request once it does").toBe(1);
+  await page.clock.runFor(200);
+  await expect.poll(() => translateCount, "exactly one request once it does").toBe(1);
   await expect(page.getByText("El gato se sienta")).toBeVisible();
 });
 
@@ -178,6 +195,7 @@ test("a phrase whose translation fails falls to the per-word breakdown, capped a
     await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "provider" }) });
   });
   await openReady(page);
+  await freezeTimers(page);
 
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
@@ -188,8 +206,8 @@ test("a phrase whose translation fails falls to the per-word breakdown, capped a
 
   // The debounce, the failed request, and the on-device breakdown all have
   // to land before any of this is worth reading.
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
-  expect(translateCount, "the translation is attempted once, and fails").toBe(1);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
+  await expect.poll(() => translateCount, "the translation is attempted once, and fails").toBe(1);
 
   const expectedTitle = messages.search.noEntry.titleTranslationFailed.replace("{query}", phraseText);
   await expect(page.getByText(expectedTitle)).toBeVisible();
@@ -244,17 +262,17 @@ test("a two-token string reaches the translator, and falls back to the breakdown
     await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "provider" }) });
   });
   await openReady(page);
+  await freezeTimers(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("dog cat");
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
+  await expect.poll(() => translateCount, "a two-token string reaches the translate route exactly once").toBe(1);
 
   await expect(mainHeadings(page).filter({ hasText: "dog" })).toBeVisible();
   await expect(mainHeadings(page).filter({ hasText: "cat" })).toBeVisible();
   const failedTitle = messages.search.noEntry.titleTranslationFailed.replace("{query}", "dog cat");
   await expect(page.getByText(failedTitle)).toBeVisible();
-
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
-  expect(translateCount, "a two-token string reaches the translate route exactly once").toBe(1);
 });
 
 // The floor itself: one token is a word, never a phrase, whatever the
@@ -267,11 +285,12 @@ test("a one-token miss never reaches the translator", async ({ page }) => {
     await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "provider" }) });
   });
   await openReady(page);
+  await freezeTimers(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("zzzqqq");
 
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
   expect(translateCount, "a single token never reaches the translate route").toBe(0);
 });
 
@@ -368,7 +387,6 @@ async function top(page: Page, locator: ReturnType<Page["getByText"]>): Promise<
 
 async function breakdown(page: Page, query: string): Promise<void> {
   await page.getByRole("textbox", { name: messages.search.label }).fill(query);
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 400);
   await expect(page.getByText(messages.search.noEntry.titleTranslationFailed.replace("{query}", query))).toBeVisible();
 }
 
@@ -491,12 +509,14 @@ test("a content word's block draws the dictionary alone", async ({ page }) => {
 test("offline, the breakdown still leads with the table translation and asks for nothing", async ({ page, context }) => {
   await deleteTranslator(page);
   await openReady(page);
+  await freezeTimers(page);
   await context.setOffline(true);
 
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
   await page.getByRole("textbox", { name: messages.search.label }).fill("something weird happened");
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 600);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 600);
+  await expect.poll(async () => (await blockLines(page, "something", "weird")).length).toBeGreaterThan(0);
 
   const lines = (await blockLines(page, "something", "weird")).map((l) => l.text);
   expect(lines[0]).toBe(functionWordTranslation("something"));
@@ -636,6 +656,7 @@ test("offline, a sentence still answers from the device: the lemma block under l
 }) => {
   await deleteTranslator(page);
   await openReady(page);
+  await freezeTimers(page);
   await context.setOffline(true);
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
@@ -651,7 +672,7 @@ test("offline, a sentence still answers from the device: the lemma block under l
   await unfold(page, "it");
   await expect(visible(page, "tecnología de la información")).toHaveCount(1);
 
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
   expect(strayRequests(requestUrls).filter((url) => !url.includes("/api/translate"))).toEqual([]);
 });
 

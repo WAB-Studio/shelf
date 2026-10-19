@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, pageTasks, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -16,19 +16,17 @@ async function deleteTranslator(page: Page): Promise<void> {
   });
 }
 
-// `useDecoration`'s own debounce plus margin: long enough that its text
-// request, real or stubbed, has settled by the time this elapses.
-const DECORATION_SETTLE_MARGIN_MS = 900;
-
 // `manifest.asset.path` is only ever fetched once per browser context; a
 // second `loadBed` in the same test hits the cache and gives no fresh
 // `response` event for `waitForResponse` to catch, so this waits for the
 // heading itself, generously, instead of for the asset (`palabra-historial
 // .spec.ts`'s own `/?q=bed` navigation follows the same pattern).
 async function loadBed(page: Page): Promise<void> {
+  const decorated = page.waitForResponse((response) => response.url().includes("/api/word/text"));
   await page.goto("/?q=bed");
   await expect(page.getByRole("heading", { name: "bed", exact: true })).toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
+  await decorated;
+  await pageTasks(page);
 }
 
 // Everything the page drew before `GeneratedText`'s own block — the

@@ -10,7 +10,7 @@ import messages from "../messages/es.json";
 import { DATABASE_VERSION } from "../lib/log/record";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import manifest from "../public/dictionary/manifest.json";
-import { COPY_CONFIRM_LABEL, confirmCopy, expect, test } from "./fixtures";
+import { COPY_CONFIRM_LABEL, confirmCopy, expect, freezeTimers, pageTasks, runClock, test } from "./fixtures";
 
 // Module 526, RL-52: with a session open, nothing leaves the device until the
 // reader taps «Empezar a copiar». Written from `private/plan-voyager-auditoria.md`
@@ -318,6 +318,7 @@ test("RL-52: a session with no confirmation shows the address and the button, an
   await withReader(page, async ({ reader, signIn }) => {
     await signIn();
     const posts = trackSync(page);
+    await freezeTimers(page);
     await page.goto("/cuenta");
 
     await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
@@ -332,11 +333,11 @@ test("RL-52: a session with no confirmation shows the address and the button, an
     // The «done» state is not drawn before anyone confirmed.
     await expect(page.getByText(GONE_TITLE)).toHaveCount(0);
 
-    await page.waitForTimeout(3000);
+    await runClock(page, 3000);
     expect(posts, `POSTs while waiting: ${JSON.stringify(posts)}`).toHaveLength(0);
 
     await hideTab(page);
-    await page.waitForTimeout(1500);
+    await runClock(page, 1500);
     expect(posts, `POSTs after hide: ${JSON.stringify(posts)}`).toHaveLength(0);
 
     const row = await readSync(page);
@@ -388,7 +389,7 @@ test("RL-52: tapping the button sends exactly one POST and the button is gone wh
 
     release();
     await expectDone(page);
-    await page.waitForTimeout(500);
+    await pageTasks(page);
     expect(posts, `POSTs for one tap: ${JSON.stringify(posts)}`).toHaveLength(1);
   });
 });
@@ -413,7 +414,7 @@ test("RL-52, RNL-09: after the copy, the done state shows and the next POST leav
     const next = page.waitForRequest((r) => r.url().includes("/api/log/sync"));
     await hideTab(page);
     await next;
-    await page.waitForTimeout(500);
+    await pageTasks(page);
     expect(posts).toHaveLength(2);
   });
 });
@@ -443,7 +444,7 @@ test("RL-52: a server error names our side, keeps the retry, and retrying sends 
     failing = false;
     await page.getByRole("button", { name: copy.failedAction }).click();
     await expectDone(page);
-    await page.waitForTimeout(500);
+    await pageTasks(page);
     expect(posts, `POSTs after one retry: ${JSON.stringify(posts)}`).toHaveLength(2);
   });
 });
@@ -751,7 +752,7 @@ test("RL-52, RL-24: retiring this very device shows the retired state, no copy b
 
     const before = posts.length;
     await hideTab(page);
-    await page.waitForTimeout(1500);
+    await pageTasks(page);
     expect(posts.length, "POSTs after hide on a retired device").toBe(before);
 
     const row = await readSync(page);
@@ -838,15 +839,17 @@ test("RL-52: another reader on this device confirms under a new deviceId and upl
     });
     await signIn();
     const posts = trackSync(page);
+    await freezeTimers(page);
     await page.goto("/cuenta");
 
     // A copy running for A is not B's: B is asked.
     await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
     await expect(confirmButton(page)).toBeVisible();
     await expect(page.getByText(copy.otherReader, { exact: true })).toBeVisible();
-    await page.waitForTimeout(1000);
+    await runClock(page, 1000);
     expect(posts, "POSTs before B confirmed").toHaveLength(0);
 
+    await page.clock.resume();
     await confirmCopy(page);
     await expectDone(page);
 
@@ -872,7 +875,6 @@ test("RL-52: another reader on this device confirms under a new deviceId and upl
     await hideTab(page);
     await next;
     await expect.poll(() => countLookups(page), { message: "apple recorded" }).toBe(3);
-    await page.waitForTimeout(500);
     const second = posts[1]!;
     expect(second.deviceId).toBe(first.deviceId);
     expect(
@@ -900,13 +902,15 @@ test("RL-52: the same reader coming back confirms and keeps their deviceId and c
     });
     await signIn();
     const posts = trackSync(page);
+    await freezeTimers(page);
     await page.goto("/cuenta");
 
     await expect(confirmButton(page)).toBeVisible();
     await expect(page.getByText(copy.otherReader, { exact: true })).toHaveCount(0);
-    await page.waitForTimeout(1000);
+    await runClock(page, 1000);
     expect(posts, "POSTs before confirming").toHaveLength(0);
 
+    await page.clock.resume();
     await confirmCopy(page);
     await expectDone(page);
 
@@ -944,27 +948,29 @@ test("RL-25: with no device copying, the list says so, and keeps saying so", asy
   test.setTimeout(45_000);
   await withReader(page, async ({ reader, signIn }) => {
     await signIn();
+    await freezeTimers(page);
     await page.goto("/cuenta");
     await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
 
     await expect(page.getByText(messages.account.devices.empty)).toBeVisible();
     // Nothing was confirmed, so nothing seals a device behind the empty list.
-    await page.waitForTimeout(2000);
+    await runClock(page, 2000);
     await expect(page.getByText(messages.account.devices.empty)).toBeVisible();
   });
 });
 
 test("RNL-09: with no session, /cuenta offers the account and sends nothing, on load or on hide", async ({ page }) => {
   const posts = trackSync(page);
+  await freezeTimers(page);
   await page.goto("/cuenta");
 
   await expect(page.getByText(messages.account.copy.noSessionTitle)).toBeVisible();
   await expect(page.getByText(messages.account.copy.noSessionAction)).toBeVisible();
   await expect(confirmButton(page)).toHaveCount(0);
 
-  await page.waitForTimeout(1500);
+  await runClock(page, 1500);
   await hideTab(page);
-  await page.waitForTimeout(1500);
+  await runClock(page, 1500);
   expect(posts, `POSTs with no session: ${JSON.stringify(posts)}`).toHaveLength(0);
 });
 
@@ -1053,11 +1059,13 @@ test("RL-52, RNL-02: opening /cuenta with the copy on keeps the last-copy line w
       await gate;
       await route.continue();
     });
+    await freezeTimers(page);
     await page.goto("/cuenta");
 
     await expect(page.getByText(fillTemplate(copy.lastCopy, { time: "3 minutos" }), { exact: true })).toBeVisible();
-    await page.waitForTimeout(500);
+    await runClock(page, 500);
     await expect(page.getByText(/Copiando/)).toHaveCount(0);
+    await page.clock.resume();
     release();
     await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
     await expect(page.getByText(/Copiando/)).toHaveCount(0);
@@ -1085,7 +1093,7 @@ test("RL-52, RNL-09: opening /cuenta with the copy on pulls once, then the devic
     await page.goto("/cuenta");
     await expectDone(page);
     await expect.poll(() => deviceLists.length, { message: "device list asked again" }).toBeGreaterThanOrEqual(2);
-    await page.waitForTimeout(1500);
+    await pageTasks(page);
 
     expect(posts, `POSTs on open: ${JSON.stringify(posts)}`).toHaveLength(1);
     expect(posts[0]!.deviceId).toBe((await readSync(page))!.deviceId);
@@ -1103,9 +1111,10 @@ test("RL-52: a retired device that still has the copy flag opens /cuenta without
     await seedLocal(page, { sync: confirmedFor(reader, { retired: true }) });
     await signIn();
     const posts = trackSync(page);
+    await freezeTimers(page);
     await page.goto("/cuenta");
     await expect(page.getByText(RETIRED_TITLE)).toBeVisible();
-    await page.waitForTimeout(1500);
+    await runClock(page, 1500);
     expect(posts, `POSTs on a retired device: ${JSON.stringify(posts)}`).toHaveLength(0);
   });
 });
@@ -1127,12 +1136,13 @@ test("RNL-09: a copy left on with no session is turned off on /cuenta, and a hid
     lookups: [localRow("left-behind")],
   });
   const posts = trackSync(page);
+  await freezeTimers(page);
   await page.goto("/cuenta");
   await expect(page.getByText(copy.noSessionTitle)).toBeVisible();
   await expect.poll(async () => (await readSync(page))?.enabled, { message: "enabled in IndexedDB" }).toBe(false);
 
   await hideTab(page);
-  await page.waitForTimeout(1500);
+  await runClock(page, 1500);
   expect(posts, `POSTs after hide with no session: ${JSON.stringify(posts)}`).toHaveLength(0);
 });
 

@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 
-import { confirmCopy, expect, test } from "./fixtures";
+import { afterFrames, confirmCopy, expect, freezeTimers, pageTasks, runClock, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { AuthApiError, AuthRetryableFetchError } from "@supabase/supabase-js";
 import postgres from "postgres";
@@ -43,9 +43,9 @@ async function hideTab(page: Page): Promise<void> {
   });
 }
 
-// `useDecoration`'s own debounce (`PHRASE_DEBOUNCE_MS`) plus margin: long
-// enough that its pair of requests has fired by the time this elapses.
-const DECORATION_SETTLE_MARGIN_MS = 900;
+// `search-screen.tsx`'s own constant, not exported: the debounce the
+// decoration's pair of requests waits out.
+const PHRASE_DEBOUNCE_MS = 600;
 
 type SeedSyncRow = SyncState;
 type SeedLookupRow = Omit<LookupRecord, "id">;
@@ -236,7 +236,8 @@ test("RL-14: the word-path guard holds with the sync driver mounted in the layou
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   const tenKeystrokes = "throughout";
@@ -249,7 +250,9 @@ test("RL-14: the word-path guard holds with the sync driver mounted in the layou
   await searchBox.pressSequentially(tenKeystrokes, { delay: 40 });
   await expect(page.getByRole("heading", { name: tenKeystrokes })).toBeVisible();
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await expect(searchBox).toHaveValue("");
+  await afterFrames(page);
+  await freezeTimers(page);
 
   const requestsWhileTyping: string[] = [];
   page.on("request", (request) => requestsWhileTyping.push(request.url()));
@@ -265,16 +268,17 @@ test("RL-14: the word-path guard holds with the sync driver mounted in the layou
     `requests at paint, ten keystrokes issued: ${JSON.stringify(requestsWhileTyping)}`,
   ).toHaveLength(0);
 
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
+  await runClock(page, PHRASE_DEBOUNCE_MS);
 
   const stray = requestsWhileTyping.filter((url) => !url.includes("/api/word/"));
   expect(stray, `requests foreign to decoration: ${JSON.stringify(stray)}`).toEqual([]);
 
   // One settled word, never one request per keystroke — and not none: a
   // decoration that never fires would pass a ceiling alone.
-  const decoration = requestsWhileTyping.filter((url) => url.includes("/api/word/"));
-  expect(decoration.length, `decoration requests: ${JSON.stringify(decoration)}`).toBeGreaterThanOrEqual(1);
-  expect(decoration.length).toBeLessThanOrEqual(2);
+  const decorationRequests = () => requestsWhileTyping.filter((url) => url.includes("/api/word/"));
+  await expect.poll(() => decorationRequests().length, { message: "decoration never asked" }).toBeGreaterThanOrEqual(1);
+  await pageTasks(page);
+  expect(decorationRequests().length, `decoration requests: ${JSON.stringify(decorationRequests())}`).toBeLessThanOrEqual(2);
 });
 
 test("RL-24: the copy fires on hide, never on a keystroke, and the request lands even unauthenticated", async ({
@@ -324,6 +328,7 @@ test("RL-24: the copy fires on hide, never on a keystroke, and the request lands
     if (request.url().includes("/api/log/sync")) syncRequests.push(request.url());
   });
 
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.pressSequentially("throughout", { delay: 40 });
   expect(syncRequests, `while visible: ${JSON.stringify(syncRequests)}`).toHaveLength(0);
@@ -332,8 +337,9 @@ test("RL-24: the copy fires on hide, never on a keystroke, and the request lands
   await hideTab(page);
   await syncRequest;
   // The route answers 401 with no session; `postBatch` throws on it and
-  // `syncNow` stops there, so nothing more should follow.
-  await page.waitForTimeout(500);
+  // `syncNow` stops there, so nothing more should follow, not even a retry
+  // on the page's own timers.
+  await runClock(page, 5_000);
 
   expect(syncRequests, `after hide: ${JSON.stringify(syncRequests)}`).toHaveLength(1);
 });
@@ -474,7 +480,8 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
     await page.reload();
     await expect(page.getByText(ownLabel)).toBeVisible();
     await expect(page.getByText(foreignLabel)).toHaveCount(0);
-    await page.waitForTimeout(1500);
+    await readSyncRow(page);
+    await afterFrames(page);
     expect(openRequests, `pulls on opening an unconfirmed /cuenta: ${JSON.stringify(openRequests)}`).toHaveLength(0);
     const syncAttempt = await page.request.post("/api/log/sync", { data: oneRowRound(foreignDeviceId, readerId) });
     expect(syncAttempt.status()).toBe(409);
@@ -616,7 +623,8 @@ test("RL-52: opening /cuenta with a fresh session copies nothing; the tap turns 
 
     await page.goto("/cuenta");
     await expect(page.getByRole("heading", { name: messages.account.title })).toBeVisible();
-    await page.waitForTimeout(1500);
+    await readSyncRow(page);
+    await afterFrames(page);
     // The mount alone neither turns the copy on nor sends: RL-30's behaviour is gone.
     expect(syncRequests, `requests before the tap: ${JSON.stringify(syncRequests)}`).toHaveLength(0);
     const before = await readSyncRow(page);
@@ -628,7 +636,7 @@ test("RL-52: opening /cuenta with a fresh session copies nothing; the tap turns 
     const syncResponse = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
     await confirmCopy(page);
     await syncResponse;
-    await page.waitForTimeout(500);
+    await expect.poll(async () => (await readSyncRow(page))?.enabled).toBe(true);
 
     const row = await readSyncRow(page);
     expect(row?.enabled, `sync row: ${JSON.stringify(row)}`).toBe(true);
@@ -662,7 +670,7 @@ test("RL-52, RNL-09: signing out disables the copy, drops the box's stored query
     await page.goto("/cuenta");
     await confirmCopy(page);
     await firstSync;
-    await page.waitForTimeout(500);
+    await expect.poll(async () => (await readSyncRow(page))?.lastSyncedAt ?? null).not.toBeNull();
 
     // Opening /cuenta again with the copy confirmed pulls exactly once.
     const reopenRequests: string[] = [];
@@ -672,7 +680,8 @@ test("RL-52, RNL-09: signing out disables the copy, drops the box's stored query
     const reopened = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
     await page.reload();
     await reopened;
-    await page.waitForTimeout(1500);
+    await readSyncRow(page);
+    await afterFrames(page);
     expect(reopenRequests, `pulls on reopening: ${JSON.stringify(reopenRequests)}`).toHaveLength(1);
 
     // The leak the module 8 validator drove: a word looked up before
@@ -696,7 +705,7 @@ test("RL-52, RNL-09: signing out disables the copy, drops the box's stored query
       if (request.url().includes("/api/log/sync")) syncRequests.push(request.url());
     });
     await hideTab(page);
-    await page.waitForTimeout(1500);
+    await afterFrames(page);
     expect(syncRequests, `sync requests after sign-out: ${JSON.stringify(syncRequests)}`).toHaveLength(0);
   } finally {
     await dropReaderIdentity(sql, readerId);

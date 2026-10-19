@@ -10,7 +10,7 @@ import { DATABASE_VERSION } from "../lib/log/record";
 import { LOG_DELETED_EVENT } from "../lib/log/delete";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
-import { expect, test } from "./fixtures";
+import { afterFrames, expect, freezeTimers, runClock, test } from "./fixtures";
 
 // K10, RL-66, RL-70, RNL-11: each /registro row carries a ✕ that deletes its
 // group. Written from SPEC RL-66/RL-70, RNL-11 (successor of RNL-09, approved
@@ -405,7 +405,8 @@ test("Pending: a double tap on «Borrar» deletes once and shows «Borrando…»
   await page.evaluate(() => ((window as unknown as { __release: boolean }).__release = true));
   await expect(rowLink(page, "leave")).toHaveCount(0);
   await expect.poll(() => deletedEvents(page)).toBeGreaterThanOrEqual(1);
-  await page.waitForTimeout(300);
+  await expect(action(page, study("deleting"))).toHaveCount(0);
+  await afterFrames(page);
   expect(await deletedEvents(page), "deleteStudyGroup ran more than once").toBe(1);
 });
 
@@ -533,11 +534,12 @@ test("RNL-11, copy on: a delete starts exactly one round of its own, with no hid
   const ids = await groupIds(page, "leave");
   expect(ids).toHaveLength(2);
 
+  await freezeTimers(page);
   await deleteViaUi(page, "leave");
   await expect(rowLink(page, "leave")).toHaveCount(0);
   await expect.poll(rounds.count, { message: "the delete started no round", timeout: 3_000 }).toBeGreaterThan(before);
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(500);
+  // Five seconds of the page's own time: a second round, had one been owed, has left.
+  await runClock(page, 5_000);
   expect(rounds.count(), "one delete, one round").toBe(before + 1);
   const own = rounds.bodies[before];
   expect(own.tombstones.map((mark) => mark.localId).sort()).toEqual(ids);
@@ -545,6 +547,7 @@ test("RNL-11, copy on: a delete starts exactly one round of its own, with no hid
 
   // Sent once: the next trigger, a fresh open, carries none.
   const settled = rounds.count();
+  await page.clock.resume();
   await page.goto("/registro");
   await expect.poll(rounds.count).toBeGreaterThan(settled);
   await page.waitForLoadState("networkidle");
@@ -564,20 +567,29 @@ test("RNL-11, one round per delete: two deletes add at most three rounds, every 
   const ids = [...(await groupIds(page, "leave")), ...(await groupIds(page, "leaf"))].sort();
   expect(ids).toHaveLength(3);
 
+  await freezeTimers(page);
   await deleteViaUi(page, "leave");
   await expect(rowLink(page, "leave")).toHaveCount(0);
   await page.waitForLoadState("networkidle");
   await deleteViaUi(page, "leaf");
   await expect(rowLink(page, "leaf")).toHaveCount(0);
+  // The page's clock moves in small steps while the marks are awaited: a round that
+  // queues behind the one in flight is started by a timer.
   await expect
-    .poll(() => sentMarks(rounds.bodies), { message: "the marks never left", timeout: 3_000 })
+    .poll(
+      async () => {
+        await runClock(page, 250);
+        return sentMarks(rounds.bodies);
+      },
+      { message: "the marks never left", timeout: 3_000 },
+    )
     .toEqual(ids);
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(500);
+  await runClock(page, 5_000);
   expect(rounds.count() - before, "rounds per delete").toBeLessThanOrEqual(2 + 1);
   expect(sentMarks(rounds.bodies), "a mark sent twice").toEqual(ids);
 
   const settled = rounds.count();
+  await page.clock.resume();
   await page.goto("/registro");
   await expect.poll(rounds.count).toBeGreaterThan(settled);
   await page.waitForLoadState("networkidle");
@@ -624,9 +636,10 @@ for (const [variant, makeSync] of [
     await page.waitForLoadState("networkidle");
     const before = api.length;
 
+    await freezeTimers(page);
     await deleteViaUi(page, "leave");
     await expect(rowLink(page, "leave")).toHaveCount(0);
-    await page.waitForTimeout(2_000);
+    await runClock(page, 5_000);
     expect(api.slice(before), "a delete with the copy off sent a request").toEqual([]);
     expect(shape(await readLookups(page))).toEqual(["leave>leaf", "left>left"]);
     if (variant === "no account") expect(await syncKeys(page)).not.toContain("tombstones");

@@ -104,7 +104,7 @@ test("a second open of the same device issues no second delete request", async (
   const secondAsset = page.waitForResponse((response) => response.url().includes(manifest.asset.path) && response.ok());
   await page.goto("/");
   await secondAsset;
-  await page.waitForTimeout(300);
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const deleteCalls = await page.evaluate(() => Number(localStorage.getItem("e2e-delete-calls") ?? "0"));
   expect(deleteCalls).toBe(1);

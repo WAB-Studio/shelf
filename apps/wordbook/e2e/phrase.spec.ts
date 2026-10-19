@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, pageTasks, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -14,10 +14,8 @@ async function waitForDictionary(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  // The debounce assertions below read a clock; a `has()` call still queued
-  // behind index-building would stretch a keystroke's own timing, not the
-  // sentence path's. Settle the dictionary first.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 async function stubTranslateRoute(page: Page, text: string): Promise<{ count: () => number }> {
@@ -29,22 +27,33 @@ async function stubTranslateRoute(page: Page, text: string): Promise<{ count: ()
   return { count: () => count };
 }
 
-// One answer per source sentence, each held for its own artificial delay:
-// this is what lets two translate requests genuinely overlap in time, which
-// `stubTranslateRoute`'s zero-latency fulfil never gives a chance to happen.
+// One answer per source sentence, each held until its `hold` promise
+// settles: this is what lets two translate requests genuinely overlap in
+// time, which `stubTranslateRoute`'s zero-latency fulfil never gives a chance
+// to happen.
 async function stubTranslateRouteWithLatency(
   page: Page,
-  answers: Record<string, { text: string; delayMs: number }>,
-): Promise<{ count: () => number }> {
+  answers: Record<string, { text: string; hold?: Promise<void> }>,
+): Promise<{ count: () => number; answered: (source: string) => Promise<void> }> {
   let count = 0;
+  const answered = new Map<string, PromiseWithResolvers<void>>();
+  const done = (source: string) => {
+    if (!answered.has(source)) answered.set(source, Promise.withResolvers<void>());
+    return answered.get(source)!;
+  };
   await page.route("**/api/translate", async (route) => {
     count++;
     const { text: source } = route.request().postDataJSON() as { text: string };
     const answer = answers[source];
-    if (answer.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, answer.delayMs));
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ text: answer.text, origin: "network" }) });
+    await answer.hold;
+    // A request the page aborted can no longer be fulfilled; the answer was
+    // still sent, which is all the caller waits for.
+    await route
+      .fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ text: answer.text, origin: "network" }) })
+      .catch(() => {});
+    done(source).resolve();
   });
-  return { count: () => count };
+  return { count: () => count, answered: (source) => done(source).promise };
 }
 
 // The keystroke-to-answer gap is a worker round trip (`has()`), a few
@@ -75,6 +84,7 @@ test("the sentence path debounces, dedupes, and never raises the word UI", async
   });
   const translated = await stubTranslateRoute(page, "Me fui de mi casa ayer");
   await waitForDictionary(page);
+  await freezeTimers(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   const phraseText = "I left my house yesterday";
@@ -86,11 +96,11 @@ test("the sentence path debounces, dedupes, and never raises the word UI", async
   // RL-07: autocomplete never raises on a sentence.
   await expect(page.getByText(messages.word.suggestions)).toHaveCount(0);
 
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS - 100);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS - 100);
   expect(translated.count(), "nothing is asked before the debounce settles").toBe(0);
 
-  await page.waitForTimeout(300);
-  expect(translated.count(), "exactly one request once it does").toBe(1);
+  await page.clock.runFor(200);
+  await expect.poll(translated.count, "exactly one request once it does").toBe(1);
 
   await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible();
 
@@ -114,7 +124,8 @@ test("the sentence path debounces, dedupes, and never raises the word UI", async
   // RNL-05, rule 3: the same text, revisited, costs nothing further.
   await searchBox.fill("");
   await searchBox.fill(phraseText);
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible();
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
   expect(translated.count(), "a cached phrase never reaches the debounce, let alone the network").toBe(1);
 
   // Two tokens no longer sits below the floor (module 30): "I left" reaches
@@ -122,8 +133,8 @@ test("the sentence path debounces, dedupes, and never raises the word UI", async
   // its own — it is a distinct phrase, so RNL-05's cache owes it nothing.
   await searchBox.fill("");
   await searchBox.fill("I left");
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
-  expect(translated.count(), "a fresh two-token phrase reaches the translator on its own").toBe(2);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
+  await expect.poll(translated.count, "a fresh two-token phrase reaches the translator on its own").toBe(2);
   await expect(page.getByText("Me fui de mi casa ayer")).toBeVisible();
 
   // "give up" is a headword in its own right (RL-03): answered as a word,
@@ -184,32 +195,39 @@ test("a stale phrase response never lands once the query has moved on (RNL-05, r
   // The abandoned sentence answers long after the one that supersedes it —
   // long enough that, unaborted, it would still arrive and overwrite the
   // fresh answer already on screen.
+  let releaseStale: () => void = () => {};
+  const staleHold = new Promise<void>((resolve) => {
+    releaseStale = resolve;
+  });
   const translated = await stubTranslateRouteWithLatency(page, {
-    [staleText]: { text: staleAnswer, delayMs: 1400 },
-    [freshText]: { text: freshAnswer, delayMs: 0 },
+    [staleText]: { text: staleAnswer, hold: staleHold },
+    [freshText]: { text: freshAnswer },
   });
   await waitForDictionary(page);
+  await freezeTimers(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
   await searchBox.fill(staleText);
   // Past the debounce: the slow request is genuinely in flight now, not
   // merely scheduled.
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 200);
-  expect(translated.count(), "the slow request already left").toBe(1);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS);
+  await expect.poll(translated.count, "the slow request already left").toBe(1);
   await expect(page.getByText(staleAnswer)).toHaveCount(0);
 
   // A new sentence, typed while the first is still in flight, is what
   // rule 4 exists to answer for.
   await searchBox.fill(freshText);
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
-  expect(translated.count(), "the fresh query issues its own request").toBe(2);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS);
+  await expect.poll(translated.count, "the fresh query issues its own request").toBe(2);
   await expect(page.getByText(freshAnswer)).toBeVisible();
   await expect(page.getByText(staleAnswer)).toHaveCount(0);
 
-  // The slow response is still on its way; give it time to land and prove
-  // it never displaces what is already shown.
-  await page.waitForTimeout(700);
+  // Let the slow response land, then prove it never displaces what is
+  // already shown.
+  releaseStale();
+  await translated.answered(staleText);
+  await pageTasks(page);
   await expect(page.getByText(staleAnswer)).toHaveCount(0);
   await expect(page.getByText(freshAnswer)).toBeVisible();
 });
@@ -251,7 +269,7 @@ test("editing the box stops drawing the previous sentence's translation at once 
 
   await probeAfterInput(page, firstAnswer);
   await searchBox.fill(secondText);
-  await page.waitForTimeout(100);
+  await expect.poll(async () => (await samplesAfterInput(page)).length).toBeGreaterThanOrEqual(2);
   const samples = await samplesAfterInput(page);
   expect(samples.length, "the probe saw the keystroke").toBeGreaterThanOrEqual(2);
   expect(samples, "the old translation is gone on the next task and the next frame").not.toContain(true);
@@ -297,17 +315,18 @@ test("a translated sentence deleted from and typed back keeps its translation wi
 
   await probeAfterInput(page, answer);
   await searchBox.press("Backspace");
-  await page.waitForTimeout(100);
+  await expect.poll(async () => (await samplesAfterInput(page)).length).toBeGreaterThanOrEqual(2);
   const afterDelete = await samplesAfterInput(page);
   expect(afterDelete.length, "the probe saw the keystroke").toBeGreaterThanOrEqual(2);
   expect(afterDelete, "a shorter text is not the translated one, from the first frame").not.toContain(true);
   await expect(page.getByText(answer)).toHaveCount(0);
   await page.evaluate(() => ((window as unknown as { __frames: boolean[] }).__frames = []));
+  await freezeTimers(page);
   await searchBox.pressSequentially(text.slice(-1));
   await expect(page.getByText(answer)).toBeVisible();
   const frames = await page.evaluate(() => (window as unknown as { __frames: boolean[] }).__frames);
   expect(frames.includes(false), "once typed back, the answer never blinks out again").toBe(false);
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
   expect(translated.count(), "the cache answered, no second request").toBe(1);
   await expect(page.getByText(answer)).toBeVisible();
 });

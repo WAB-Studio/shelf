@@ -18,9 +18,8 @@ async function openReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  // The fetch settling is not the worker posting "ready" (buildIndex runs over
-  // the whole dictionary); same room the sibling specs give.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 // Two animation frames: React has committed whatever the settled request set.

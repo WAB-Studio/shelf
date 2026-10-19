@@ -232,3 +232,42 @@ export async function confirmCopy(page: Page): Promise<void> {
 }
 
 export { expect };
+
+// Freezes the page's timers so a debounce is advanced by hand with
+// `page.clock.runFor`, never raced against the wall clock. Call it once the
+// dictionary is ready: before that the worker's own boot is on timers.
+export async function freezeTimers(page: Page): Promise<void> {
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1_000);
+}
+
+// Lets the page run the tasks its last event queued (a settled fetch, a
+// commit). Timers are frozen, so a turn of the task queue is the only thing
+// that moves.
+export async function pageTasks(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((resolve) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => resolve();
+        channel.port2.postMessage(0);
+      });
+    }
+  });
+}
+
+// Runs the frozen clock past `ms` and lets what the timers started reach
+// the network and the screen.
+export async function runClock(page: Page, ms: number): Promise<void> {
+  await page.clock.runFor(ms);
+  await pageTasks(page);
+}
+
+// Two animation frames: React has committed whatever the last event set and
+// the browser has laid it out. A measurement right after the event alone
+// reads the frame before.
+export async function afterFrames(page: Page): Promise<void> {
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+}

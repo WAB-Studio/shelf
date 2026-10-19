@@ -18,9 +18,8 @@ async function loadDictionary(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. Give it room before cutting the network.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 // True when `first`'s own text sits before `second`'s in document order —

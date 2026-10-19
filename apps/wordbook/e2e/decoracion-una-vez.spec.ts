@@ -1,12 +1,10 @@
-import { expect, test, STUB_HEADER } from "./fixtures";
+import { expect, freezeTimers, runClock, test, STUB_HEADER } from "./fixtures";
 
 import messages from "../messages/es.json";
 import { PHRASE_DEBOUNCE_MS } from "../lib/query/settle";
 import manifest from "../public/dictionary/manifest.json";
 
 const KEYSTROKE_MS = 50;
-// Margin after one debounce window for a request to reach the route handler.
-const REQUEST_DELIVERY_MS = 400;
 
 test("typing a word letter by letter asks the paid text route exactly once", async ({ page }) => {
   await page.addInitScript(() => {
@@ -33,11 +31,12 @@ test("typing a word letter by letter asks the paid text route exactly once", asy
   await page.goto("/");
   await assetResponse;
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
+  await freezeTimers(page);
 
   const box = page.getByRole("textbox", { name: messages.search.label });
   await box.click();
   await box.pressSequentially("lighthouse", { delay: KEYSTROKE_MS });
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + REQUEST_DELIVERY_MS);
+  await runClock(page, PHRASE_DEBOUNCE_MS);
 
-  expect(asked).toEqual(["lighthouse"]);
+  await expect.poll(() => asked).toEqual(["lighthouse"]);
 });
