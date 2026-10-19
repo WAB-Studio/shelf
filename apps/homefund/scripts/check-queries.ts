@@ -4242,6 +4242,7 @@ async function main(): Promise<void> {
   await pendingAssetSettlementsScopeSuite();
   await dashboardRosterNamesSuite();
   await importCommitSetSuite();
+  await parentCategorySuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -11305,5 +11306,279 @@ async function importCommitSetSuite(): Promise<void> {
       wordsOf(en) ===
         "This file was already being imported in another tab. Check the movements before importing it again.",
     `es «${wordsOf(es)}»; en «${wordsOf(en)}»`,
+  );
+}
+
+// M13 (RF-160): a parent category's budget and its movement filter count its subcategories; a
+// savings goal sums only the aportes in its own currency; no two category rows a fund member sees
+// draw the same text. Every figure is read back through the app's own queries.
+async function parentCategorySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const open = async (name: string, settlementCurrency: "COP" | "USD") => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness m13 ${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency,
+        amountMinor: 1_000_000_000,
+        balanceOn: shiftDate(today, -120),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const [cop, otherCop, usd] = [await open("cop", "COP"), await open("cop2", "COP"), await open("usd", "USD")];
+  const category = async (name: string, parentId: string | null): Promise<string> => {
+    const { categoryId } = await asUser(user, () =>
+      createCategory({ scope: { ownerUserId: user.id }, name: `Harness m13 ${name} ${tag}`, kind: "expense", parentId, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const spend = async (from: string, splits: [string, number][], occurredAt = today): Promise<string> => {
+    const amountCents = splits.reduce((sum, [, cents]) => sum + cents, 0);
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: null,
+        amountCents,
+        occurredAt,
+        description: `Harness m13 gasto ${tag}`,
+        externalRef: null,
+        splits: splits.map(([categoryId, cents]) => ({ categoryId, amountCents: cents })),
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+
+  // P (Vivienda) with A, B; Q is another parent with child C; P2 has two children a mixed movement spans; E is empty.
+  const P = await category("padre", null);
+  const A = await category("hija A", P);
+  const B = await category("hija B", P);
+  const Q = await category("otro padre", null);
+  const C = await category("hija C", Q);
+  const P2 = await category("padre mixto", null);
+  const A2 = await category("mixto A", P2);
+  const B2 = await category("mixto B", P2);
+  const E = await category("padre vacio", null);
+  const E2 = await category("padre con hijas sin gasto", null);
+  await category("hija sin gasto", E2);
+
+  // W: only the window tells today's 2 on a child from last month's 40. X: only the currency tells 4 pesos from 3 dollars.
+  const W = await category("padre ventana", null);
+  const WA = await category("ventana hija", W);
+  const X = await category("padre moneda", null);
+  const XB = await category("moneda hija", X);
+  await spend(cop, [[WA, 2_00]]);
+  await spend(cop, [[WA, 40_00]], shiftDate(today, -45));
+  await spend(cop, [[XB, 4_00]]);
+  await spend(usd, [[XB, 3_00]]);
+
+  const onA = await spend(cop, [[A, 10_00]]);
+  const onB = await spend(otherCop, [[B, 20_00]]);
+  const onP = await spend(cop, [[P, 5_00]]);
+  const onC = await spend(cop, [[C, 7_00]]);
+  const onQ = await spend(cop, [[Q, 9_00]]);
+  const oldA = await spend(cop, [[A, 40_00]], shiftDate(today, -45));
+  const usdB = await spend(usd, [[B, 3_00]]);
+  const mixed = await spend(cop, [[A2, 10_00], [B2, 20_00]]);
+
+  const budgetOn = async (categoryId: string, accountId: string | null = null): Promise<string> => {
+    const { budgetId } = await asUser(user, () =>
+      createBudget({
+        ownerUserId: user.id,
+        groupId: null,
+        categoryId,
+        accountId,
+        labelId: null,
+        period: "monthly",
+        limitCents: 1_000_00,
+        thresholdPct: 80,
+        name: `Harness m13 presupuesto ${tag} ${categoryId.slice(0, 8)}`,
+      }),
+    );
+    keep("budgets", budgetId);
+    return budgetId;
+  };
+  const [bP, bA, bP2, bE, bE2, bPOtherCop, bQ, bW, bX] = [
+    await budgetOn(P),
+    await budgetOn(A),
+    await budgetOn(P2),
+    await budgetOn(E),
+    await budgetOn(E2),
+    await budgetOn(P, otherCop),
+    await budgetOn(Q),
+    await budgetOn(W),
+    await budgetOn(X),
+  ];
+  const statuses = await asUser(user, () => listBudgetsWithStatus());
+  const spentOf = (id: string) => statuses.find((row) => row.id === id)?.spentCents;
+
+  assert(
+    next("A parent's budget counts its own splits and its subcategories' (10 on A, 20 on B, 5 on P): 35, the sibling parent's child and the old and dollar splits out"),
+    spentOf(bP) === 35_00,
+    `spent ${spentOf(bP)}, expected 3500`,
+  );
+  assert(next("A child's budget counts that child alone"), spentOf(bA) === 10_00, `spent ${spentOf(bA)}, expected 1000`);
+  assert(
+    next("A movement split 10 on one child and 20 on its sibling counts 30 once in the parent's budget"),
+    spentOf(bP2) === 30_00,
+    `spent ${spentOf(bP2)}, expected 3000`,
+  );
+  assert(
+    next("A split on another parent's child is not in this parent's budget, and that parent counts it with its own: 7 on C, 9 on Q"),
+    spentOf(bP) === 35_00 && spentOf(bQ) === 16_00,
+    `P ${spentOf(bP)}, Q ${spentOf(bQ)}`,
+  );
+  assert(
+    next("A dollar split on a child is not counted in a peso parent's budget (3 on B in dollars)"),
+    spentOf(bP) === 35_00 && spentOf(bX) === 4_00,
+    `P ${spentOf(bP)}, X ${spentOf(bX)} (4 pesos expected, the 3 dollars out)`,
+  );
+  assert(
+    next("A split on a child last month is not in this month's parent budget"),
+    spentOf(bP) === 35_00 && spentOf(bW) === 2_00,
+    `P ${spentOf(bP)}, W ${spentOf(bW)} (the 40.00 on a child, ${shiftDate(today, -45)}, must stay out)`,
+  );
+  assert(
+    next("A parent's budget narrowed to an account counts only the subcategory splits booked on that account"),
+    spentOf(bPOtherCop) === 20_00,
+    `spent ${spentOf(bPOtherCop)}, expected 2000`,
+  );
+  assert(
+    next("A parent with no spend, and one whose subcategories have none, reads 0"),
+    spentOf(bE) === 0 && spentOf(bE2) === 0,
+    `empty ${spentOf(bE)}, children-only ${spentOf(bE2)}`,
+  );
+
+  const ids = async (categoryId: string) =>
+    (await asUser(user, () => listTransactions({ categoryId }))).map((row) => row.id).sort();
+  const sorted = (...list: string[]) => [...list].sort();
+  assert(
+    next("Filtering movements by a parent lists those with a split in the parent or in a subcategory"),
+    JSON.stringify(await ids(P)) === JSON.stringify(sorted(onA, onB, onP, oldA, usdB)),
+    `got ${JSON.stringify(await ids(P))}`,
+  );
+  assert(
+    next("Filtering by a child lists that child's movements alone"),
+    JSON.stringify(await ids(A)) === JSON.stringify(sorted(onA, oldA)),
+    `got ${JSON.stringify(await ids(A))}`,
+  );
+  assert(
+    next("A movement split across two subcategories is listed once under their parent"),
+    JSON.stringify(await ids(P2)) === JSON.stringify([mixed]),
+    `got ${JSON.stringify(await ids(P2))}`,
+  );
+  assert(
+    next("Filtering by a parent leaves out another parent's child and the other parent's own movements"),
+    !(await ids(P)).includes(onC) && !(await ids(P)).includes(onQ),
+    `got ${JSON.stringify(await ids(P))}`,
+  );
+  const monthStart = `${today.slice(0, 8)}01`;
+  const totals = await asUser(user, () => getTransactionTotals({ categoryId: P, from: monthStart, to: today }));
+  const month = await asUser(user, () => listTransactions({ categoryId: P, from: monthStart, to: today }));
+  assert(
+    next("The parent's this-month filter lists the A, B, P and dollar-B movements and its count agrees with the list"),
+    JSON.stringify(month.map((row) => row.id).sort()) === JSON.stringify(sorted(onA, onB, onP, usdB)) && totals.count === month.length,
+    `listed ${month.length}, counted ${totals.count}`,
+  );
+
+  // A goal on a dollar account sums only dollar aportes (RF-124).
+  const goalUsd = await spend(usd, [[A, 1_00]]);
+  const goalCop = await spend(cop, [[A, 1_00]]);
+  const { goalId } = await asUser(user, () =>
+    createGoal({ ownerUserId: user.id, groupId: null, name: `Harness m13 meta ${tag}`, targetAmountCents: 1_000_00, targetDate: null, accountId: usd }),
+  );
+  keep("savings_goals", goalId);
+  for (const [transactionId, amountCents] of [[null, 5_00], [goalUsd, 11_00], [goalCop, 7_00]] as const) {
+    const { contributionId } = await asUser(user, () => addGoalContribution({ goalId, transactionId, amountCents }));
+    keep("goal_contributions", contributionId);
+  }
+  const goal = (await asUser(user, () => listGoalsWithProgress())).find((row) => row.id === goalId);
+  assert(
+    next("A goal on a dollar account sums its virtual and dollar aportes and ignores one earmarking a peso movement"),
+    goal?.currency === "USD" && goal.savedCents === 16_00,
+    JSON.stringify(goal),
+  );
+
+  // Seed text (prove first): a fund member holds the personal set and the fund's, both seeded.
+  const leader = await createMembershipFreeUser();
+  const { groupId } = await asUser(leader, () =>
+    createGroup({ name: `Harness fondo m13 ${tag}`, leaderName: "Harness lider m13", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  await asUser(leader, () => withUserDb((tx) => seedPersonalCategories(tx, { userId: leader.id, locale: "es" })));
+  const [seededFund] = await fixtureSql<{ member_id: string; account_id: string }[]>`
+    select
+      (select id from group_members where group_id = ${groupId} and user_id = ${leader.id}) as member_id,
+      (select id from accounts where group_id = ${groupId} and subtype = 'cash') as account_id`;
+  track("group_members", seededFund.member_id);
+  track("accounts", seededFund.account_id);
+  for (const row of await fixtureSql<{ id: string }[]>`select id from categories where group_id = ${groupId} or owner_user_id = ${leader.id}`) {
+    track("categories", row.id);
+  }
+  const { listScopedCategories } = await import("@/db/queries/categories");
+  const { categoryNamesById, scopedCategoryName } = await import("@/lib/fund/category-names");
+  const mark = (name: string) => `${name} · fondo`;
+  const nodes = await asUser(leader, () => listScopedCategories(leader.id));
+  const pickerDrawn = [...categoryNamesById(nodes, mark).values()];
+  const pickerRepeats = pickerDrawn.filter((text, index) => pickerDrawn.indexOf(text) !== index);
+
+  // Every seeded category carries one expense so the report lists the whole set.
+  const fundCash = seededFund.account_id;
+  const { accountId: personalCash } = await asUser(leader, () =>
+    createAccount({
+      name: `Harness m13 propia ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: leader.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 1_000_000,
+      balanceOn: shiftDate(today, -10),
+    }),
+  );
+  track("accounts", personalCash);
+  const seededRows = await fixtureSql<{ id: string; group_id: string | null }[]>`
+    select id, group_id from categories where (group_id = ${groupId} or owner_user_id = ${leader.id}) and kind = 'expense'`;
+  for (const row of seededRows) {
+    const { transactionId } = await asUser(leader, () =>
+      createTransaction({
+        fromAccountId: row.group_id === null ? personalCash : fundCash,
+        toAccountId: null,
+        amountCents: 1_00,
+        occurredAt: today,
+        description: `Harness m13 semilla ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId: row.id, amountCents: 1_00 }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  }
+  const report = await asUser(leader, () => getExpensesByCategory(currentMonthRange()));
+  const reportDrawn = report.map((row) => scopedCategoryName(row.name, row.scope, mark));
+  const reportRepeats = reportDrawn.filter((text, index) => reportDrawn.indexOf(text) !== index);
+  assert(
+    next("A fund member's category pickers and report never draw two rows with identical text across the personal and fund seeded sets"),
+    nodes.length > 0 &&
+      pickerRepeats.length === 0 &&
+      report.length === seededRows.length &&
+      reportRepeats.length === 0,
+    `picker repeats [${pickerRepeats.join(", ")}] of ${pickerDrawn.length}; report repeats [${reportRepeats.join(", ")}] of ${report.length}/${seededRows.length}`,
   );
 }
