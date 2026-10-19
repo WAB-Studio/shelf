@@ -73,9 +73,14 @@ test("otra pestaña sube la versión: la conexión se cierra una vez y la siguie
 // transactions never complete — the teardown a navigation causes. What was
 // `add`ed, and what the localStorage relay still holds, is what the reader
 // would find on the next document.
-type Typed = { text: string; outcome?: string; at: number };
+type Typed = { text: string; outcome?: string; kind?: "word" | "phrase"; at: number };
 type Step = { type: Typed } | { wait: number } | { flush: true };
-type Seen = { added: string[]; relayed: string[]; addedBeforeFlush: string[] };
+type Seen = {
+  added: string[];
+  relayed: string[];
+  addedBeforeFlush: string[];
+  rows: { normalised: string; kind: string; outcome: string; schema: number }[];
+};
 
 async function runScenario(steps: Step[]): Promise<Seen> {
   const script = `
@@ -115,8 +120,8 @@ async function runScenario(steps: Step[]): Promise<Seen> {
     };
     const real = await import(${JSON.stringify(new URL("./record.ts", import.meta.url).href)});
     await new Promise((resolve) => setImmediate(resolve));
-    const rowFor = ({ text, outcome = "exact", at }) => ({
-      at, text, normalised: text.toLowerCase(), kind: "word", outcome,
+    const rowFor = ({ text, outcome = "exact", kind = "word", at }) => ({
+      at, text, normalised: text.toLowerCase(), kind, outcome,
       headword: text, rule: null, senses: 1, translation: null,
       dictionaryReady: true, origin: null,
     });
@@ -131,6 +136,7 @@ async function runScenario(steps: Step[]): Promise<Seen> {
       added: added.map((r) => r.normalised),
       relayed: raw ? JSON.parse(raw).map((r) => r.normalised) : [],
       addedBeforeFlush: addedBeforeFlush ?? added.map((r) => r.normalised),
+      rows: added.map(({ normalised, kind, outcome, schema }) => ({ normalised, kind, outcome, schema })),
     }));
     process.exit(0);
   `;
@@ -180,7 +186,67 @@ test("una pausa larga a media palabra, sin vaciar, no graba nada y deja una sola
   assert.deepEqual(seen.added, ["book"]);
 });
 
-test("un miss desplaza al prefijo asentado y no se graba, ni en el almacén ni en el relevo", async () => {
+test("un miss que no queda pendiente desplaza al prefijo asentado y no se graba, ni en el almacén ni en el relevo", async () => {
+  const seen = await runScenario([
+    { type: { text: "boo", at: 1000 } },
+    { wait: 1000 },
+    { type: { text: "zzz qqq", outcome: "miss", kind: "phrase", at: 2000 } },
+    { wait: 1000 },
+    { flush: true },
+  ]);
+  assert.deepEqual(seen.added, ["boo"]);
+  assert.deepEqual(seen.relayed, ["boo"]);
+});
+
+// RL-76: only a lookup that would have been asked online waits as pending —
+// a word with no entry, a sentence the translator would have taken. Every
+// other miss still leaves no row.
+test("pendiente: una palabra sin entrada se graba una vez, como «miss» de esquema 4 o más", async () => {
+  const seen = await runScenario([
+    { type: { text: "zorp", outcome: "miss", at: 1000 } },
+    { wait: 1000 },
+    { flush: true },
+  ]);
+  assert.equal(seen.rows.length, 1);
+  assert.equal(seen.rows[0].normalised, "zorp");
+  assert.equal(seen.rows[0].kind, "word");
+  assert.equal(seen.rows[0].outcome, "miss");
+  assert.ok(seen.rows[0].schema >= 4, `schema ${seen.rows[0].schema}`);
+  assert.deepEqual(seen.relayed, ["zorp"]);
+});
+
+test("pendiente: una frase sin traducir se graba una vez, como «untranslated»", async () => {
+  const seen = await runScenario([
+    { type: { text: "The cat sat", outcome: "untranslated", kind: "phrase", at: 1000 } },
+    { wait: 1000 },
+    { flush: true },
+  ]);
+  assert.equal(seen.rows.length, 1);
+  assert.equal(seen.rows[0].kind, "phrase");
+  assert.equal(seen.rows[0].outcome, "untranslated");
+  assert.ok(seen.rows[0].schema >= 4, `schema ${seen.rows[0].schema}`);
+});
+
+test("pendiente: una frase «miss» (larga o bajo el umbral) no deja fila", async () => {
+  const seen = await runScenario([
+    { type: { text: "a b", outcome: "miss", kind: "phrase", at: 1000 } },
+    { wait: 1000 },
+    { flush: true },
+  ]);
+  assert.deepEqual(seen.added, []);
+  assert.deepEqual(seen.relayed, []);
+});
+
+test("pendiente: una palabra «untranslated» no es una forma pendiente y no deja fila", async () => {
+  const seen = await runScenario([
+    { type: { text: "zorp", outcome: "untranslated", kind: "word", at: 1000 } },
+    { wait: 1000 },
+    { flush: true },
+  ]);
+  assert.deepEqual(seen.added, []);
+});
+
+test("pendiente: una palabra sin entrada desplaza al prefijo asentado y las dos se graban", async () => {
   const seen = await runScenario([
     { type: { text: "boo", at: 1000 } },
     { wait: 1000 },
@@ -188,6 +254,5 @@ test("un miss desplaza al prefijo asentado y no se graba, ni en el almacén ni e
     { wait: 1000 },
     { flush: true },
   ]);
-  assert.deepEqual(seen.added, ["boo"]);
-  assert.deepEqual(seen.relayed, ["boo"]);
+  assert.deepEqual(seen.added.slice().sort(), ["boo", "zzz"]);
 });
