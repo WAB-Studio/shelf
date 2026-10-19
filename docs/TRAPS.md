@@ -3442,3 +3442,29 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
   `scripts/supabase-local.sh exec` fails and `node --test` cannot resolve `@/lib`. The oleada-2 critic's lane hit it and
   borrowed the main checkout's env. Open lanes with `worktree.sh`; for a branch that already exists, cut a new branch from
   it (`worktree.sh <n> <new> <existing>`).
+
+## A spec that spawns `next start` needs a production build in its job (2026-10-18)
+
+- `apps/homefund/e2e/sign-in.spec.ts` (M40 at ~:885, M41 at ~:1090) start their own `next start` on a free port with a
+  `--require` hook. The CI job served only `next dev`, so each `beforeAll` polled 90 s and the describes failed at 0 ms
+  (run 39175054053). Each orbit e2e shard now builds before its dev server (M79): `next dev` writes `.next/dev`, the build
+  writes `.next`, and the two coexist. A lane running those describes builds first too.
+
+## Orbit's e2e outgrew its job: cancelled at the timeout, never red (2026-10-18)
+
+- 1348 tests on one worker reached about 1070 at 38 min; the job's `timeout-minutes: 40` cancelled three runs in a row
+  (39170958214, 39172544766, 39175054053), which read as «cancelled», not as a failure. Four shards now take 10–12 min
+  each (run 39178288545). A suite job that ends «cancelled» without anyone cancelling it hit its timeout: read the job's
+  duration before rerunning.
+
+## `check:queries` aborts at Q169 when several lanes load the database (2026-10-18)
+
+- With three or four lanes running suites on the one local stack, `check:queries` aborted twice at Q169 with
+  `canceling statement due to statement timeout` (oleada-2, M76 and M52 merges); `pg_stat_activity` showed no long
+  transaction, and the rerun passed both times (376/0, 398/0). Rerun once; a second abort in a row is a real lock.
+
+## A one-shot fault armed at load can be spent by the page itself (2026-10-18)
+
+- WordBook `e2e/export.spec.ts:487` armed its single IndexedDB failure right after load; under CI load a transaction the
+  page opened on its own (history, counts, sync) spent it, the study read succeeded, and the failure line never showed
+  (red in runs 39170958214 and 39179299274, green alone). Arm a one-shot fault on the action that must meet it (M80).
