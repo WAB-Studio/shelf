@@ -13,6 +13,7 @@ import {
   updateRecurringRuleAction,
 } from "@/app/actions/recurring-rules";
 import {
+  Box,
   Button,
   Callout,
   Dialog,
@@ -548,7 +549,13 @@ function RecurringForm({
                   </Select.Item>
                   {categories.map((category) => (
                     <Select.Item key={category.id} value={category.id}>
-                      {category.name}
+                      {/* One line whatever the name: the cap keeps it inside a
+                          360 px screen and the full name stays the option's own. */}
+                      <Box maxWidth="calc(100vw - 6rem)" asChild>
+                        <Text as="div" truncate>
+                          {category.name}
+                        </Text>
+                      </Box>
                     </Select.Item>
                   ))}
                 </Select.Content>

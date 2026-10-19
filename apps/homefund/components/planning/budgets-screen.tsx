@@ -37,7 +37,7 @@ import type { BudgetStatus } from "@/db/queries/budgets";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { addCivilMonths, civilDateToDate } from "@/lib/dates";
-import { categoryNamesById } from "@/lib/fund/category-names";
+import { categoryNamesById, scopedCategoryParts } from "@/lib/fund/category-names";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -118,10 +118,21 @@ export function BudgetsScreen({
     tKey("categories.scopedName", { name }),
   );
   const categoryColors = new Map<string, string | null>();
+  // The same names with the fund mark apart, so a card truncates the name alone.
+  const categoryParts = new Map<string, { name: string; suffix: string | null }>();
+  const markFund = (name: string) => tKey("categories.scopedName", { name });
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);
+    categoryParts.set(
+      category.id,
+      scopedCategoryParts(category.name, category.scope, markFund),
+    );
     for (const child of category.children) {
       categoryColors.set(child.id, child.color);
+      categoryParts.set(
+        child.id,
+        scopedCategoryParts(child.name, category.scope, markFund),
+      );
     }
   }
 
@@ -250,7 +261,10 @@ export function BudgetsScreen({
               <BudgetCard
                 key={budget.id}
                 budget={budget}
-                title={budget.name ?? categoryNames.get(budget.categoryId) ?? ""}
+                title={budget.name ?? categoryParts.get(budget.categoryId)?.name ?? ""}
+                suffix={
+                  budget.name ? null : (categoryParts.get(budget.categoryId)?.suffix ?? null)
+                }
                 color={categoryColors.get(budget.categoryId) ?? null}
                 archived={archived}
                 onEdit={() => setFormTarget(budget)}
@@ -349,6 +363,7 @@ export function BudgetsScreen({
 function BudgetCard({
   budget,
   title,
+  suffix,
   color,
   archived,
   onEdit,
@@ -358,6 +373,7 @@ function BudgetCard({
 }: {
   budget: BudgetStatus;
   title: string;
+  suffix: string | null;
   color: string | null;
   archived: boolean;
   onEdit: () => void;
@@ -403,10 +419,16 @@ function BudgetCard({
     <Flex direction="column" gap="3">
       <Flex align="center" gap="3">
         <CategoryTile color={color} size={16} />
-        <Flex flexGrow="1" minWidth="0">
+        <Flex flexGrow="1" minWidth="0" align="baseline">
           <Text weight="medium" truncate>
             {title}
           </Text>
+          {/* Whose it is stays whole however long the name runs. */}
+          {suffix && (
+            <Text color="gray" wrap="nowrap">
+              {suffix}
+            </Text>
+          )}
         </Flex>
         <Figure
           size="2"
@@ -427,7 +449,7 @@ function BudgetCard({
               tap
               variant="ghost"
               color="gray"
-              aria-label={tKey("common.actionsFor", { name: title })}
+              aria-label={tKey("common.actionsFor", { name: `${title}${suffix ?? ""}` })}
             >
               <EllipsisVertical size={16} />
             </IconButton>
