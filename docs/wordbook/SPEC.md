@@ -204,7 +204,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 #### The sentence
 
-- [ ] **RL-08** — A sentence is translated by the device's own translator when the browser offers one and it is ready. Whether it does is asked of the browser at runtime, on every open, and never inferred from the browser's name or version.
+- [x] **RL-08** — A sentence is translated by the device's own translator when the browser offers one and it is ready. Whether it does is asked of the browser at runtime, on every open, and never inferred from the browser's name or version.
 - [x] **RL-09** — When the device offers no translator, the sentence is translated over the network, and the answer says the translation came from the network. *This is a server surface and the sentence path's own exception to "no backend": one route handler that holds the provider's identity and any key it needs off the client and makes the provider a one-file change. Nothing on the word path passes through it, ever.*
 - [x] **RL-60** *(successor of RL-53)* — A sentence is translated over the network by the paid model the word routes use,
   each call counted against the shared daily cap; the model replies with the translation alone, and an empty reply or an
