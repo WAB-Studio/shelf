@@ -3288,3 +3288,11 @@ sockets per file: pass 2 took 1927 s for 31 s of tests.
 - Preload `scripts/harness/end-app-pool.ts` with `--import`; it ends `globalThis.sql` in a root `after()`.
 - Never lower the timeout for tests: `settle-pipeline.ts` asserts 240.
 - Never use `--test-force-exit`: under `--experimental-test-module-mocks` it drops tests (561 to 533).
+
+## A wire check that reads a statement's parameters breaks when that statement is inlined
+
+- `check:day` and `check:goal` named each connection from the settle's `parameters[2]`. M16 sent the settle with
+  `.inlineParams()`, so it carries no parameters and every connection read `unknown`. Read the value from the
+  statement's text, or from both.
+- Measured 2026-10-19: `pulsar-checks` red on CI 39346172548 (`2 connection(s): unknown, unknown`). Local
+  `check:plan` never runs these checks; the train's first CI was cancelled before `pulsar-checks` finished.
