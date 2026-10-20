@@ -205,13 +205,12 @@ function instantAtLocalTime(day: string, hour: number, minute: number, zone: str
   return instant;
 }
 
-// The settle statement's third `set_config` argument is the search path
-// `withGoalsDb`/`withReadingDb` chose (`lib/session.ts`) — read from
-// `parameters`, not guessed from the query text, which carries `$1`/`$2`/`$3`
-// placeholders and no values.
+// The settle's `search_path` is the schema `withGoalsDb`/`withReadingDb` chose
+// (`lib/session.ts`). It rides inlined in the settle's text
+// (`lib/settled-transaction.ts`), so the statement carries no parameters.
 function labelConnection(calls: DebugCall[]): string {
   const settle = calls.find((call) => /set_config/i.test(call.query));
-  const searchPath = typeof settle?.parameters[2] === "string" ? settle.parameters[2] : "";
+  const searchPath = /set_config\('search_path',\s*'([^']*)'/i.exec(settle?.query ?? "")?.[1] ?? "";
   if (searchPath.startsWith("goals")) return "goals";
   if (searchPath.startsWith("reading")) return "reading";
   return "unknown";
