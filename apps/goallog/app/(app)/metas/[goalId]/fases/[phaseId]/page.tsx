@@ -3,13 +3,13 @@ import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 
 import { PhaseForm } from "@/components/goal/phase-form";
-import { loadGoal } from "@/lib/queries/goal";
+import { loadGoalForm } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
 import { civilDateInZone } from "@/lib/zone";
 
 /**
  * A phase's own form (RP-127): `PhaseForm` in its edit mode, prefilled from
- * the phase named in the URL. One query, `loadGoal`, carries the goal's
+ * the phase named in the URL. One query, `loadGoalForm`, carries the goal's
  * opening, horizon and every phase; a phase not among them, or a goal that is
  * archived or ended, is the same not-found the new-phase route draws.
  */
@@ -27,7 +27,7 @@ export default async function EditPhasePage({
   const [person, { goalId, phaseId }] = await Promise.all([getPerson(), params]);
   if (!person) redirect("/entrar");
 
-  const goal = await loadGoal(goalId);
+  const goal = await loadGoalForm(goalId);
   if (!goal) notFound();
   if (goal.archivedAt || goal.endedOn) notFound();
   const phase = goal.phases.find((candidate) => candidate.id === phaseId);

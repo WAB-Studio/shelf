@@ -20,7 +20,10 @@ import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
 
-export type DeclareFactResult = { ok: true; factId: string } | { ok: false; error: MessageKey };
+// `values`: what another device already noted for the day, kept, in the habit's unit (RP-03).
+export type DeclareFactResult =
+  | { ok: true; factId: string }
+  | { ok: false; error: MessageKey; values?: { quantity: number; unit: string | null } };
 export type UndoFactResult = { ok: true } | { ok: false; error: MessageKey };
 
 /**
@@ -28,8 +31,15 @@ export type UndoFactResult = { ok: true } | { ok: false; error: MessageKey };
  * decided here, from the person's own zone, never taken from the client
  * (RNP-06); the moment it was written is left to the column's own `now()`, so
  * the two are never the same value read twice.
+ *
+ * `namesParent` is `completeOneOff`'s: a parent is refused by name, read under
+ * the task's lock in this one transaction. Bare, `facts_insert_self` refuses
+ * it as a 42501. Plain data, so a client that sends it only gets the name.
  */
-export async function declareFact(input: DeclareFactInput): Promise<DeclareFactResult> {
+export async function declareFact(
+  input: DeclareFactInput,
+  { namesParent = false }: { namesParent?: boolean } = {},
+): Promise<DeclareFactResult> {
   const parsed = declareFactSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
@@ -39,7 +49,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
   const { commitmentId, oneOffId, quantity, note, replace } = parsed.data;
 
   try {
-    const written = await withGoalsDb(async (tx) => {
+    const written = await withGoalsDb(async (tx): Promise<{ id: string; day: string } | { kept: number; unit: string | null }> => {
       // Absent means today, decided here from the person's own zone, never
       // from the client (RNP-06); present, it is a day already past —
       // `requireDayInRange` (schema) and `requireDayForSubject` (below,
@@ -69,11 +79,13 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       }
 
       let goalId: string | null = null;
+      let unit: string | null = null;
 
       if (commitmentId != null) {
         const [commitment] = await tx
           .select({
             satisfaction: commitments.satisfaction,
+            unit: commitments.unit,
             goalId: commitments.goalId,
             openedAt: goals.createdAt,
             createdAt: commitments.createdAt,
@@ -120,13 +132,22 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
         }
 
         goalId = commitment.goalId;
+        unit = commitment.unit;
       } else if (oneOffId != null) {
         const [oneOff] = await tx
-          .select({ goalId: oneOffs.goalId, createdAt: oneOffs.createdAt, day: oneOffs.day })
+          .select({
+            goalId: oneOffs.goalId,
+            createdAt: oneOffs.createdAt,
+            day: oneOffs.day,
+            // `${oneOffs}.id`: a bare `id` would bind to the subquery's own row.
+            hasChildren: sql<boolean>`exists (select 1 from ${oneOffs} c where c.parent_id = ${oneOffs}.id)`,
+          })
           .from(oneOffs)
           .where(eq(oneOffs.id, oneOffId));
 
         if (!oneOff) throw new NamedError("day.errors.notFound");
+        // A parent is done by its sub-tasks (RP-30); a sub-task added meanwhile is seen.
+        if (namesParent && oneOff.hasChildren) throw new NamedError("month.errors.parentIsDoneByChildren");
 
         // RP-129: a past day, but never before the task existed or its own day.
         const dayCheck = z
@@ -218,16 +239,19 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
 
       // The index refused this insert: another device's tap for the same
       // subject and day landed first. Read back its id rather than fail —
-      // a second tap from another device is a no-op, never an error.
-      const [existing] = await tx.execute<{ id: string }>(
+      // a second tap from another device is a no-op, never an error. A
+      // stale «Anotar» of another quantity is refused with the one kept:
+      // only «Cambiar» replaces it (RP-03).
+      const [existing] = await tx.execute<{ id: string; quantity: number | null }>(
         commitmentId != null
-          ? sql`select id from ${facts} where commitment_id = ${commitmentId} and day = ${day}`
-          : sql`select id from ${facts} where one_off_id = ${oneOffId}`,
+          ? sql`select id, quantity from ${facts} where commitment_id = ${commitmentId} and day = ${day}`
+          : sql`select id, quantity from ${facts} where one_off_id = ${oneOffId}`,
       );
       if (!existing) {
         // Unreachable: the conflict that just fired proves a row is there.
         throw new NamedError("day.errors.notFound");
       }
+      if (existing.quantity !== null && existing.quantity !== (quantity ?? null)) return { kept: existing.quantity, unit };
       return { id: existing.id, day };
     });
 
@@ -235,6 +259,8 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
     // its own route, revalidated by its literal path — never the pattern,
     // which would need a `'page'` `type` this call has no business asking
     // for since the route itself is still unbuilt.
+    if ("kept" in written) return { ok: false, error: "day.errors.alreadyNoted", values: { quantity: written.kept, unit: written.unit } };
+
     revalidatePath("/");
     revalidatePath("/semana");
     revalidatePath(`/dia/${written.day}`);

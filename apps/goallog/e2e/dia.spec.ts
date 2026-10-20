@@ -33,6 +33,14 @@ async function clearFactsFor(db: postgres.Sql, commitmentId: string): Promise<vo
   }
 }
 
+// RNP-02 runs from the navigation: the first mark drawn is what the person sees of Hoy.
+test("Hoy paints its first mark within five seconds of the navigation (RNP-02)", async ({ page }) => {
+  const start = Date.now();
+  await page.goto("/");
+  await expect(page.locator('[data-part="mark"]').first()).toBeVisible({ timeout: 6000 });
+  expect(Date.now() - start).toBeLessThan(5000);
+});
+
 test("one tap on a tap commitment fills its mark in under five seconds (RNP-02, RP-02)", async ({
   page,
   db,

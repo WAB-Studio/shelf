@@ -5,6 +5,7 @@ import { declareFact } from "@/app/actions/facts";
 import {
   completeOneOff,
   createOneOff,
+  editTask,
   fixTask,
   scheduleOneOff,
   setOneOffNote,
@@ -20,6 +21,7 @@ import {
   setGoalMeasure,
   setGoalNote,
 } from "@/app/actions/plan";
+import { editPhase } from "@/app/actions/plan-edit";
 import { setRhythm } from "@/app/actions/roadmap";
 import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "@/lib/mcp/shape";
 import { planMonthList } from "@/lib/plan/roadmap-read";
@@ -33,7 +35,7 @@ import mcp from "../../messages/es/mcp.json";
 
 export type ToolOutcome =
   | { ok: true; value: Record<string, unknown> }
-  | { ok: false; error: string; values?: { name?: string; date?: string } };
+  | { ok: false; error: string; values?: { name?: string; date?: string; quantity?: number; unit?: string | null } };
 
 export type ToolAnnotations = { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean };
 
@@ -48,9 +50,10 @@ export type ToolSpec = {
 
 type ActResult =
   | { ok: true; [key: string]: unknown }
-  | { ok: false; error: string; values?: { name?: string; date?: string } };
+  | { ok: false; error: string; values?: { name?: string; date?: string; quantity?: number; unit?: string | null } };
 
 const goalId = z.uuid();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "month is YYYY-MM");
 
 // The inputs of the writes are as loose as the wire allows: the act's own schema
@@ -61,6 +64,8 @@ const text = z.string();
 const looseMonth = z.string();
 const day = z.string();
 const count = z.number();
+// Unlike the rest, refused here: an id that is no uuid would reach no receipt.
+const requestId = z.uuid().optional().describe(mcp.fields.request_id);
 
 // The tools speak snake_case; the acts' schemas speak camelCase. A key maps
 // one to one, so nothing is renamed by guesswork.
@@ -72,8 +77,8 @@ function camelKeys(input: Record<string, unknown>): Record<string, unknown> {
 
 const READ_ONLY: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true };
+// A creating tool is idempotent too: a resend with its `request_id` answers the first answer (RP-56).
 const IDEMPOTENT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
-const CREATES: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
 
 // A replaced note, measure, end or rhythm cannot be read back after the write, so a client asks first.
 const DESTRUCTIVE_WRITES: ReadonlySet<string> = new Set([
@@ -84,11 +89,9 @@ const DESTRUCTIVE_WRITES: ReadonlySet<string> = new Set([
   "move_horizon",
   "set_rhythm",
 ]);
-const CREATING_WRITES: ReadonlySet<string> = new Set(["create_task", "create_goal", "add_phase", "add_commitment"]);
 
 function writeAnnotations(name: string): ToolAnnotations {
-  if (DESTRUCTIVE_WRITES.has(name)) return DESTRUCTIVE;
-  return CREATING_WRITES.has(name) ? CREATES : IDEMPOTENT;
+  return DESTRUCTIVE_WRITES.has(name) ? DESTRUCTIVE : IDEMPOTENT;
 }
 
 function read(
@@ -170,6 +173,7 @@ export const writeTools: readonly ToolSpec[] = [
       parent_id: id.optional(),
       note: text.optional(),
       in_plan: z.boolean().optional(),
+      request_id: requestId,
     },
     // The schema takes a missing day as a refusal; a task with none is dayless.
     (input) => createOneOff({ day: null, ...input } as Parameters<typeof createOneOff>[0]),
@@ -187,7 +191,7 @@ export const writeTools: readonly ToolSpec[] = [
   write("rename_goal", { goal_id: id, name: text }, (input) =>
     renameGoal(input as Parameters<typeof renameGoal>[0]),
   ),
-  write("add_phase", { goal_id: id, aim: text, starts_on: day, ends_on: day }, (input) =>
+  write("add_phase", { goal_id: id, aim: text, starts_on: day, ends_on: day, request_id: requestId }, (input) =>
     addPhase(input as Parameters<typeof addPhase>[0]),
   ),
   write(
@@ -203,6 +207,7 @@ export const writeTools: readonly ToolSpec[] = [
       unit: text.optional(),
       source_key: text.optional(),
       threshold: count.optional(),
+      request_id: requestId,
     },
     (input) => addCommitment(input as Parameters<typeof addCommitment>[0]),
   ),
@@ -219,7 +224,20 @@ export const writeTools: readonly ToolSpec[] = [
   write("unfix_task", { one_off_id: id }, (input) =>
     fixTask({ oneOffId: input.oneOffId, month: null } as Parameters<typeof fixTask>[0]),
   ),
-  write("create_goal", { name: text, horizon: day.optional(), parent_id: id.optional() }, (input) =>
+  // The act asks for the task's name with every edit; the tool sends the task's own, so only the estimate changes.
+  write("set_task_estimate", { one_off_id: id, estimate: count.nullable() }, async (input) => {
+    const target = input.oneOffId;
+    // An id that is no uuid goes to the act as it is, which refuses it with its own key.
+    if (typeof target !== "string" || !UUID.test(target)) return editTask({ ...input, name: "-" } as Parameters<typeof editTask>[0]);
+    const { loadChangeNames } = await import("@/lib/queries/chat");
+    const task = (await loadChangeNames({ goals: [], tasks: [target], commitments: [] })).tasks.get(target);
+    if (task === undefined) return { ok: false, error: "plan.errors.notFound" };
+    return editTask({ oneOffId: target, name: task.name, estimate: input.estimate } as Parameters<typeof editTask>[0]);
+  }),
+  write("edit_phase", { phase_id: id, aim: text, starts_on: day, ends_on: day }, (input) =>
+    editPhase(input),
+  ),
+  write("create_goal", { name: text, horizon: day.optional(), parent_id: id.optional(), request_id: requestId }, (input) =>
     createGoal(input as Parameters<typeof createGoal>[0]),
   ),
   write("move_goal", { goal_id: id, parent_id: id.nullable() }, (input) =>

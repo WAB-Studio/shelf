@@ -18,6 +18,21 @@ export function scopedCategoryName(
   return scope === "group" ? mark(name) : name;
 }
 
+// The name apart from what the mark adds after it, so a screen can truncate the
+// name and keep the mark whole. A mark that is not a suffix leaves the whole
+// marked string as the name.
+export function scopedCategoryParts(
+  name: string,
+  scope: CategoryScopeValue,
+  mark: ScopeMark,
+): { name: string; suffix: string | null } {
+  if (scope !== "group") return { name, suffix: null };
+  const marked = mark(name);
+  return marked.startsWith(name)
+    ? { name, suffix: marked.slice(name.length) }
+    : { name: marked, suffix: null };
+}
+
 // Insertion order is the input's, each parent before its children.
 export function categoryNamesById(
   nodes: readonly NamedCategoryNode[],

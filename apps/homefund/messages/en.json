@@ -1280,6 +1280,7 @@
         "fileRequired": "Choose a file to import.",
         "fileType": "The file must be an .xlsx spreadsheet.",
         "tooManyRows": "The file has too many rows. Split it and import in parts.",
+        "notWorkbook": "The file is not a spreadsheet this app can read. Download the template and fill it in.",
         "invalidCell": "This cell has an invalid value.",
         "unknownReference": "No account or category in your fund matches this name.",
         "ambiguousReference": "More than one account or category shares this name. Rename one so it is unique.",
@@ -1287,7 +1288,8 @@
         "categoryOutOfScope": "This category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account.",
         "adjustmentOneAccount": "An adjustment names one account only, as source or destination.",
         "adjustmentRefused": "The adjustment could not be booked: its date is before the account's opening or latest reconciliation, or the account is archived.",
-        "hasErrors": "The file still has errors. Fix them and import again."
+        "hasErrors": "The file still has errors. Fix them and import again.",
+        "alreadyCommitting": "This file was already being imported in another tab. Check the movements before importing it again."
       }
     }
   },

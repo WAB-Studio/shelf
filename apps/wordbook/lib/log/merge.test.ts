@@ -325,3 +325,68 @@ test("readSince: an empty page names no id", async () => {
   assert.equal(page.scannedThrough, null);
   assert.equal(page.scanned, 0);
 });
+
+// RL-76: a pending row stays on its device. The upload skips it and still
+// moves its cursor past it; a legacy `miss` (schema 3 or older) is not
+// pending and goes up as it always did.
+function ownRow(id: number, overrides: Partial<Row> = {}): Row {
+  return {
+    id,
+    schema: 4,
+    at: 1_700_000_000_000 + id,
+    text: `w${id}`,
+    normalised: `w${id}`,
+    kind: "word",
+    outcome: "exact",
+    headword: `w${id}`,
+    rule: null,
+    senses: 1,
+    translation: "t",
+    dictionaryReady: true,
+    origin: null,
+    ...overrides,
+  };
+}
+
+const pendingWord = { outcome: "miss", kind: "word", headword: null, senses: 0, translation: null };
+const pendingPhrase = { outcome: "untranslated", kind: "phrase", headword: null, senses: 0, translation: null };
+
+test("readSince: [respondida, pendiente, respondida] sube las dos respondidas y el cursor pasa las tres", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(1, ownRow(1));
+  currentStore.rows.set(2, ownRow(2, pendingWord));
+  currentStore.rows.set(3, ownRow(3));
+  const { own, scannedThrough } = await readSince(0, 10);
+  assert.deepEqual(own.map((r) => r.id), [1, 3]);
+  assert.equal(scannedThrough, 3);
+});
+
+test("readSince: una frase pendiente tampoco sube", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(1, ownRow(1, pendingPhrase));
+  currentStore.rows.set(2, ownRow(2, { kind: "phrase", outcome: "translated", headword: null }));
+  const { own, scannedThrough } = await readSince(0, 10);
+  assert.deepEqual(own.map((r) => r.id), [2]);
+  assert.equal(scannedThrough, 2);
+});
+
+test("readSince: una página solo de pendientes no sube nada y aun así avanza el cursor", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(5, ownRow(5, pendingWord));
+  currentStore.rows.set(6, ownRow(6, pendingPhrase));
+  const { own, scannedThrough } = await readSince(4, 10);
+  assert.deepEqual(own, []);
+  assert.equal(scannedThrough, 6);
+});
+
+test("readSince: un «miss» de esquema 3 no es pendiente y sube como siempre", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(1, ownRow(1, { ...pendingWord, schema: 3 }));
+  currentStore.rows.set(2, ownRow(2, { ...pendingWord, schema: 1 }));
+  const { own } = await readSince(0, 10);
+  assert.deepEqual(own.map((r) => r.id), [1, 2]);
+});

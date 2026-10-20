@@ -418,7 +418,7 @@ test.describe("the chat against a stubbed model (RP-91–RP-94)", () => {
     for (let i = 0; i < 50; i += 1) {
       const [row] = await db<{ id: string }[]>`
         insert into goals.model_calls (user_id, model, source, outcome)
-        values (${person.id}, 'gpt-5-mini', 'chat', 'ok') returning id
+        values (${person.id}, 'gpt-5.6-luna', 'chat', 'ok') returning id
       `;
       ids.push(row.id);
     }
@@ -609,7 +609,7 @@ test.describe("the chat's layout (RNP-07, RNP-17)", () => {
 });
 
 // Survivors of the train's mutator (private/reportes/tren-c1/MUTATOR.md), each one a thing a person can do.
-test.describe("the chat when the person acts fast or changes their mind (RP-92, RP-93)", () => {
+test.describe("the chat when the person acts fast or changes their mind (RP-92, RP-140)", () => {
   // Holds every server action (`Next-Action` POST) until `release()`; counts them.
   async function holdActions(page: Page) {
     let release!: () => void;
@@ -665,7 +665,7 @@ test.describe("the chat when the person acts fast or changes their mind (RP-92, 
     for (let i = 0; i < 50; i += 1) {
       const [row] = await db<{ id: string }[]>`
         insert into goals.model_calls (user_id, model, source, outcome)
-        values (${person.id}, 'gpt-5-mini', 'chat', 'ok') returning id
+        values (${person.id}, 'gpt-5.6-luna', 'chat', 'ok') returning id
       `;
       ids.push(row.id);
     }

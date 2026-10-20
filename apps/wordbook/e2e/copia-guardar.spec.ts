@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "./fixtures";
+import { afterFrames, expect, test } from "./fixtures";
 
 // Module 61 (Q19 a): under «Copia», while the browser has not kept the log and the API
 // exists, one line says why and «Pedirlo» asks. Written from the board (WordBook canvas,
@@ -17,6 +17,7 @@ type Stub = "no-api" | "not-kept" | "kept";
 declare global {
   interface Window {
     __persistCalls: number;
+    __persistedReads: number;
     __answerPersist: (granted: boolean) => void;
   }
 }
@@ -25,6 +26,7 @@ declare global {
 async function stubStorage(page: Page, stub: Stub): Promise<void> {
   await page.addInitScript((mode) => {
     window.__persistCalls = 0;
+    window.__persistedReads = 0;
     let answer: (granted: boolean) => void = () => {};
     window.__answerPersist = (granted) => answer(granted);
     if (mode === "no-api") {
@@ -35,7 +37,10 @@ async function stubStorage(page: Page, stub: Stub): Promise<void> {
     Object.defineProperty(navigator, "storage", {
       configurable: true,
       value: {
-        persisted: () => Promise.resolve(kept.value),
+        persisted: () => {
+          window.__persistedReads += 1;
+          return Promise.resolve(kept.value);
+        },
         persist: () => {
           window.__persistCalls += 1;
           return new Promise<boolean>((resolve) => {
@@ -147,8 +152,9 @@ for (const width of [360, 1280]) {
 
     test("kept: nothing is drawn and nothing is asked", async ({ page }) => {
       await open(page, "kept");
-      // Give the async read time to land before asserting an absence.
-      await page.waitForTimeout(500);
+      // The read has been asked and its answer committed before an absence means anything.
+      await expect.poll(() => page.evaluate(() => window.__persistedReads)).toBeGreaterThan(0);
+      await afterFrames(page);
       await expect(page.getByText(LINE)).toHaveCount(0);
       await expect(page.getByRole("button", { name: ASK, exact: true })).toHaveCount(0);
       expect(await page.evaluate(() => window.__persistCalls)).toBe(0);
@@ -156,7 +162,7 @@ for (const width of [360, 1280]) {
 
     test("no API: nothing is drawn", async ({ page }) => {
       await open(page, "no-api");
-      await page.waitForTimeout(500);
+      await afterFrames(page);
       await expect(page.getByText(LINE)).toHaveCount(0);
       await expect(page.getByRole("button", { name: ASK, exact: true })).toHaveCount(0);
       await noOverflow(page);

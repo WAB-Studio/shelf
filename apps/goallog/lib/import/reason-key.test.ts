@@ -30,6 +30,7 @@ const CORRECTIONS = [
   "cadenceToWeekdays",
   "lineToTask",
   "taskMoved",
+  "taskWithoutMonth",
 ];
 const FORMS = [
   "import.errors.form.goal",

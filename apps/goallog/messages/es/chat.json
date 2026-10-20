@@ -42,6 +42,8 @@
     "noMeasure": "sin medida"
   },
   "perMonth": "{amount} al mes",
+  "clearEstimate": "Quitar la estimación de «{task}»",
+  "span": "{from} – {to}",
   "change": {
     "declare_fact": "Marcar «{commitment}» como cumplido",
     "complete_task": "Marcar la tarea «{task}» como hecha",
@@ -55,6 +57,8 @@
     "move_horizon": "Mover el final de «{goal}»",
     "fix_task": "Fijar «{task}» en {month}",
     "unfix_task": "Devolver «{task}» al plan",
+    "set_task_estimate": "Estimar «{task}» en {estimate}",
+    "edit_phase": "Cambiar la fase «{phase}»: {aim}, {from} → {to}",
     "create_goal": "Crear la meta «{name}»",
     "move_goal": "Mover la meta «{goal}»",
     "set_goal_note": "Cambiar la nota de la meta «{goal}»",

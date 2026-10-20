@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, pageTasks, runClock, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -19,10 +19,16 @@ async function deleteTranslator(page: Page): Promise<void> {
   });
 }
 
-// `useDecoration`'s own debounce (`PHRASE_DEBOUNCE_MS`) plus margin: long
-// enough that its pair of requests has fired and resolved by the time this
-// elapses.
-const DECORATION_SETTLE_MARGIN_MS = 900;
+// The decoration's text request has been answered (stub or 204) and the
+// screen has drawn what came back.
+async function decorated(page: Page, answer: Promise<unknown>): Promise<void> {
+  await answer;
+  await pageTasks(page);
+}
+
+function textResponse(page: Page): Promise<unknown> {
+  return page.waitForResponse((response) => response.url().includes("/api/word/text"));
+}
 
 // Exposes the one `Worker` the hook creates as `window.__dictionaryWorker`,
 // so a test can drive it directly and measure the round trip RNL-01 governs
@@ -41,10 +47,10 @@ async function exposeDictionaryWorker(page: Page): Promise<void> {
   });
 }
 
-// The pause these tests hold past a keystroke before checking the offer:
-// long enough that the old, retired withdrawal timer would have fired.
-// RL-18 withdraws on the answer, never on a timer, so this constant is the
-// tests' own clock — long enough to prove no timer fires — not the
+// The pause these tests run the frozen clock past a keystroke before checking
+// the offer: long enough that the old, retired withdrawal timer would have
+// fired. RL-18 withdraws on the answer, never on a timer, so this constant is
+// the tests' own clock — long enough to prove no timer fires — not the
 // component's.
 const SUGGESTIONS_SETTLE_MS = 900;
 
@@ -147,9 +153,8 @@ test("an installed dictionary answers offline, fast, and within a thumb's reach"
   );
   await page.goto("/");
   await assetResponse;
-  // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. Give it room before cutting the network.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
   await context.setOffline(true);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
@@ -199,9 +204,11 @@ test("RL-18: the offer retires the moment an answer stands under it", async ({ p
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await freezeTimers(page);
   const suggestionsLabel = page.getByText(messages.word.suggestions);
   const heading = page.getByRole("heading", { name: "throughout" });
 
@@ -212,7 +219,7 @@ test("RL-18: the offer retires the moment an answer stands under it", async ({ p
   await expect(heading).toBeVisible({ timeout: SUGGESTIONS_SETTLE_MS - 400 });
   await expect(suggestionsLabel).toHaveCount(0);
 
-  await page.waitForTimeout(SUGGESTIONS_SETTLE_MS + 200);
+  await runClock(page, SUGGESTIONS_SETTLE_MS + 200);
   await expect(suggestionsLabel).toHaveCount(0);
   await expect(heading).toBeVisible();
 
@@ -220,7 +227,7 @@ test("RL-18: the offer retires the moment an answer stands under it", async ({ p
   // stays — this is the pause that used to leave the page blank.
   await searchBox.fill("throughou");
   await expect(suggestionsLabel).toBeVisible();
-  await page.waitForTimeout(SUGGESTIONS_SETTLE_MS + 200);
+  await runClock(page, SUGGESTIONS_SETTLE_MS + 200);
   await expect(suggestionsLabel).toBeVisible();
 });
 
@@ -232,8 +239,10 @@ test("a mid-word prefix stays silent past the settle, and a real miss still says
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   const notFound = page.getByText(messages.search.notFound);
 
@@ -242,13 +251,13 @@ test("a mid-word prefix stays silent past the settle, and a real miss still says
   // out regardless — the suppression reads the suggestion data, not
   // whether the list is still on screen.
   await searchBox.fill("ru");
-  await page.waitForTimeout(SUGGESTIONS_SETTLE_MS + 200);
+  await runClock(page, SUGGESTIONS_SETTLE_MS + 200);
   await expect(page.getByText(messages.word.suggestions)).toBeVisible();
   await expect(notFound).toHaveCount(0);
 
   // A string past every real headword — no suppression left to hide behind.
   await searchBox.fill("zzqx");
-  await page.waitForTimeout(SUGGESTIONS_SETTLE_MS + 200);
+  await runClock(page, SUGGESTIONS_SETTLE_MS + 200);
   await expect(notFound).toBeVisible();
 
   // Finishing the word answers as always, past any suppression.
@@ -267,7 +276,8 @@ test("RNL-03: an 85-character headword with no space to break on never scrolls t
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   // The dictionary's own longest headword, no space anywhere in it, paired
@@ -289,14 +299,16 @@ test("a paused prefix never leaves the page blank", async ({ page }) => {
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
   // "ru" answers nothing on its own — the old withdrawal timer left this
   // exact pause with nothing at all on screen.
+  await freezeTimers(page);
   await searchBox.fill("ru");
-  await page.waitForTimeout(1500);
+  await runClock(page, 1500);
   const textLength = await page.evaluate(() => document.querySelector("main")?.innerText.length ?? 0);
   expect(textLength).toBeGreaterThan(0);
 });
@@ -342,15 +354,17 @@ test("a headword with no definition at all draws no definition label and no dang
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   // "umbrella": one sense, no definition in the source, and no inflection
   // candidate the dictionary carries — nothing on the page but its own
   // headword and translations.
+  const answered = textResponse(page);
   await searchBox.fill("umbrella");
   await expect(page.getByRole("heading", { name: "umbrella", exact: true })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
+  await decorated(page, answered);
 
   await expect(page.getByText(messages.word.definitionEnglish)).toHaveCount(0);
   await expect(page.getByText(messages.word.definitionGenerated)).toHaveCount(0);
@@ -373,12 +387,14 @@ test("umbrella draws no dictionary definition, and the generated one arrives mar
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const answered = textResponse(page);
   await searchBox.fill("umbrella");
   await expect(page.getByRole("heading", { name: "umbrella", exact: true })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
+  await decorated(page, answered);
 
   // Still no dictionary label — umbrella's own source entry has none — but
   // now the generated block, carrying its «generada» mark.
@@ -409,12 +425,14 @@ test("a generated example with no definition heads itself as an example, never a
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const answered = textResponse(page);
   await searchBox.fill("umbrella");
   await expect(page.getByRole("heading", { name: "umbrella", exact: true })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
+  await decorated(page, answered);
 
   // No definition heading of either kind, the example headed by its own
   // label instead, and the «generada» mark still on it.
@@ -440,16 +458,18 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  const answered = textResponse(page);
   await searchBox.fill("left");
   await expect(page.getByRole("heading", { name: "left", exact: true })).toBeVisible({ timeout: 5000 });
   // RL-40 offers `leave` within `left`'s entry — its own senses carry no
   // definition at all, but the count below leaves its block out anyway, so
   // the period-only filter does not depend on that.
   await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
+  await decorated(page, answered);
 
   // Four senses of "left" carry a definition in the source: adj (null,
   // never had one), adv ("On the left side."), n ("The left side or
@@ -467,7 +487,8 @@ test("the English definition draws open with no interaction, and stays inside th
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("bitter");
@@ -499,7 +520,8 @@ test("a word the dictionary carries never offers a one-letter lemma or an irregu
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
@@ -532,8 +554,10 @@ test("a one-character query answers only `a` and `i`, never the other ten single
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   const suggestionsLabel = page.getByText(messages.word.suggestions);
   const notFound = page.getByText(messages.search.notFound);
@@ -541,7 +565,7 @@ test("a one-character query answers only `a` and `i`, never the other ten single
   // "b" is not answerable: no heading, no "not found" (a suggestion list
   // stands in for it, same as any other unmatched prefix), suggestions only.
   await searchBox.fill("b");
-  await page.waitForTimeout(SUGGESTIONS_SETTLE_MS + 200);
+  await runClock(page, SUGGESTIONS_SETTLE_MS + 200);
   await expect(page.getByRole("heading", { name: "b", exact: true })).toHaveCount(0);
   await expect(notFound).toHaveCount(0);
   await expect(suggestionsLabel).toBeVisible();
@@ -591,7 +615,8 @@ test("RL-40: a word's own entry answers first, and a plausible inflection is off
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
@@ -626,8 +651,6 @@ test("RL-40: a word's own entry answers first, and a plausible inflection is off
 
 // Long enough that "cat"'s answer, sent second, still lands well inside it
 // — long enough to still be in flight when "cat" replaces "dog" below.
-const SLOW_ANSWER_DELAY_MS = 3000;
-
 const DOG_TEXT = {
   definition: "Definición de dog: nunca debe aparecer bajo cat.",
   example: { en: "The dog barks loudly.", es: "El perro ladra fuerte." },
@@ -647,12 +670,16 @@ test("a headword replaced mid-flight never lands its text on the word that repla
   // tell "dog's answer" from "cat's answer" apart.
   await allowRealWordRoute("text", "this spec answers per headword itself, below, never the real route");
 
+  const dogAsked = Promise.withResolvers<void>();
+  const dogHeld = Promise.withResolvers<void>();
+  const dogAnswered = Promise.withResolvers<void>();
   await page.route(`${baseURL}/api/word/text`, async (route) => {
     const body = route.request().postDataJSON() as { headword: string };
     const isDog = body.headword === "dog";
     if (isDog) {
-      // Long enough to still be in flight when "cat" replaces it below.
-      await new Promise((resolve) => setTimeout(resolve, SLOW_ANSWER_DELAY_MS));
+      // Held until the test lets it go, so it is still in flight when "cat" replaces it below.
+      dogAsked.resolve();
+      await dogHeld.promise;
     }
     try {
       await route.fulfill({
@@ -664,6 +691,7 @@ test("a headword replaced mid-flight never lands its text on the word that repla
       // `dog`'s own AbortController already cancelled the fetch client-side
       // by the time this fires; there is nothing left to answer.
     }
+    if (isDog) dogAnswered.resolve();
   });
 
   const assetResponse = page.waitForResponse(
@@ -671,24 +699,26 @@ test("a headword replaced mid-flight never lands its text on the word that repla
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("dog");
   await expect(page.getByRole("heading", { name: "dog", exact: true })).toBeVisible({ timeout: 5000 });
 
-  // Past the debounce, so `dog`'s own fetch has actually been sent — the
-  // abort this proves is one of an in-flight request, not one still only
-  // queued behind the timer.
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  // `dog`'s own fetch has actually been sent — the abort this proves is one
+  // of an in-flight request, not one still only queued behind the timer.
+  await dogAsked.promise;
 
   await searchBox.fill("cat");
   await expect(page.getByRole("heading", { name: "cat", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByText(CAT_TEXT.example.en)).toBeVisible({ timeout: PHRASE_DEBOUNCE_MS + 2000 });
 
-  // Long enough that `dog`'s slow answer, had it not been abandoned, would
-  // already have landed.
-  await page.waitForTimeout(SLOW_ANSWER_DELAY_MS);
+  // `dog`'s answer is let go now: had its request not been abandoned, it
+  // would land on `cat`.
+  dogHeld.resolve();
+  await dogAnswered.promise;
+  await pageTasks(page);
   await expect(page.getByText(CAT_TEXT.example.en)).toBeVisible();
   await expect(page.getByText(DOG_TEXT.example.en)).toHaveCount(0);
 });
@@ -707,7 +737,8 @@ test("RL-51: a headword with one pronunciation draws no block, and keeps its IPA
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("leave");
@@ -743,7 +774,8 @@ test("a proper noun is labelled a proper noun, and the word «pronombre» is dra
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("facebook");

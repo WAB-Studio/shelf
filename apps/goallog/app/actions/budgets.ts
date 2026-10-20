@@ -48,6 +48,9 @@ export async function setMonthBudget(input: SetMonthBudgetInput): Promise<SetMon
 
   try {
     await withGoalsDb(async (tx) => {
+      // The person's lock of `plan.ts`, same key: a goal opened under this one at the same instant
+      // makes it a holder, and the holder check below must see it (RP-80).
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${person.id}::text, 1))`);
       const [goal] = await tx
         .select({
           horizon: goals.horizon,

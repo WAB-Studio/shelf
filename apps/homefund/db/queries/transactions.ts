@@ -434,7 +434,9 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
   if (filters.categoryId) {
     conditions.push(
       sql`exists (select 1 from ${transactionSplits} s
-        where s.transaction_id = ${transactions.id} and s.category_id = ${filters.categoryId})`,
+        join categories sc on sc.id = s.category_id
+        where s.transaction_id = ${transactions.id}
+          and (s.category_id = ${filters.categoryId} or sc.parent_id = ${filters.categoryId}))`,
     );
   }
   if (filters.labelId) {

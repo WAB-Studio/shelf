@@ -300,3 +300,46 @@ test("992 K7: a template with no corrections declines nothing, and a later revie
   saveReview(draft2(), [], [B.id]);
   assert.deepEqual(readDraft()?.declined, [B.id]);
 });
+
+// RP-86, RP-92: the id a confirm is sent with lives and dies with the draft.
+const KEY = "pulsar.import-draft";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+test("request id: a save mints one and a read returns it, the same on every read", () => {
+  saveDraft(base);
+  const first = readDraft()?.requestId;
+  assert.match(first ?? "", UUID);
+  assert.equal(readDraft()?.requestId, first);
+});
+
+test("request id: saveReview keeps it", () => {
+  saveDraft(base);
+  const first = readDraft()?.requestId;
+  saveReview(draft2(900), [], []);
+  assert.equal(readDraft()?.requestId, first);
+});
+
+test("request id: two saves mint two ids", () => {
+  saveDraft(base);
+  const first = readDraft()?.requestId;
+  saveDraft(base);
+  assert.notEqual(readDraft()?.requestId, first);
+});
+
+test("request id: a draft stored without one reads with a fresh one, minted once and stored", () => {
+  saveDraft(base);
+  const old = JSON.parse(memory.get(KEY) ?? "{}") as Record<string, unknown>;
+  delete old.requestId;
+  memory.set(KEY, JSON.stringify(old));
+  const minted = readDraft()?.requestId;
+  assert.match(minted ?? "", UUID);
+  assert.equal(readDraft()?.requestId, minted);
+  assert.equal((JSON.parse(memory.get(KEY) ?? "{}") as { requestId?: string }).requestId, minted);
+});
+
+test("request id: clearDraft takes it away with the draft", () => {
+  saveDraft(base);
+  clearDraft();
+  assert.equal(readDraft(), null);
+  assert.equal(memory.get(KEY), undefined);
+});

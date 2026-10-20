@@ -14,6 +14,8 @@ export const env = createEnv({
     PULSAR_MODEL_STUB: z.string().optional(),
     // Test servers only: answers the chat from a script, never the model.
     PULSAR_CHAT_STUB: z.string().optional(),
+    // Local benches only: replaces the chat model off Vercel. Production always sends gpt-5.6-luna.
+    PULSAR_CHAT_BENCH_MODEL: z.string().optional(),
     // Daily sign-in-link caps (RP-138): per caller, and per address.
     SIGN_IN_LINK_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(10),
     SIGN_IN_LINK_DAILY_ADDRESS_CAP: z.coerce.number().int().positive().default(3),

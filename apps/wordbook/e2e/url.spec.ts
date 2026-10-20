@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, pageTasks, runClock, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -12,12 +12,9 @@ async function deleteTranslator(page: Page): Promise<void> {
   });
 }
 
-// The debounce a settle waits out (`PHRASE_DEBOUNCE_MS` in
-// `search-screen.tsx`, not exported) plus enough margin that a slow CI
-// runner never reads the URL before the timer has actually fired. Also long
-// enough past `useDecoration`'s own debounce, the same constant, for its
-// pair of requests to have fired by the time this margin elapses.
-const SETTLE_MARGIN_MS = 900;
+// `search-screen.tsx`'s own constant, not exported: the debounce a settle
+// waits out before the address and the decoration move.
+const PHRASE_DEBOUNCE_MS = 600;
 
 async function openReady(page: Page): Promise<void> {
   const assetResponse = page.waitForResponse(
@@ -25,9 +22,8 @@ async function openReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. Give it room before the first keystroke.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 test("pressing back after one lookup keeps the app open and empties the box", async ({ page }) => {
@@ -37,8 +33,7 @@ test("pressing back after one lookup keeps the app open and empties the box", as
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("book");
   await expect(page.getByRole("heading", { name: "book" })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(SETTLE_MARGIN_MS);
-  expect(page.url()).toContain("q=book");
+  await expect(page).toHaveURL(/q=book/);
 
   await page.goBack();
 
@@ -58,18 +53,17 @@ test("three lookups in a row leave three stops for back to walk, in order", asyn
 
   await searchBox.fill("book");
   await expect(page.getByRole("heading", { name: "book" })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(SETTLE_MARGIN_MS);
+  await expect(page).toHaveURL(/q=book/);
   await searchBox.fill("");
 
   await searchBox.fill("sale");
   await expect(page.getByRole("heading", { name: "sale" })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(SETTLE_MARGIN_MS);
+  await expect(page).toHaveURL(/q=sale/);
   await searchBox.fill("");
 
   await searchBox.fill("run");
   await expect(page.getByRole("heading", { name: "run" })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(SETTLE_MARGIN_MS);
-  expect(page.url()).toContain("q=run");
+  await expect(page).toHaveURL(/q=run/);
 
   await page.goBack();
   await expect(searchBox).toHaveValue("sale");
@@ -92,7 +86,8 @@ test("opening /?q=serendipity cold answers it with no typing", async ({ page }) 
   );
   await page.goto("/?q=serendipity");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await expect(searchBox).toHaveValue("serendipity");
@@ -121,7 +116,7 @@ test("typing ten letters adds one history entry, not ten", async ({ page }) => {
 
   await searchBox.pressSequentially("throughout", { delay: 30 });
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(SETTLE_MARGIN_MS);
+  await expect(page).toHaveURL(/q=throughout/);
 
   const after = await page.evaluate(() => window.history.length);
   console.log(`history length before: ${before}, after ten keystrokes: ${after}`);
@@ -131,6 +126,7 @@ test("typing ten letters adds one history entry, not ten", async ({ page }) => {
 test("no request leaves the device while typing, past the dictionary asset itself", async ({ page }) => {
   await deleteTranslator(page);
   await openReady(page);
+  await freezeTimers(page);
 
   const requestUrls: string[] = [];
   page.on("request", (request) => requestUrls.push(request.url()));
@@ -147,7 +143,7 @@ test("no request leaves the device while typing, past the dictionary asset itsel
   );
   expect(atPaint, `requests at paint, before decoration could fire: ${JSON.stringify(atPaint)}`).toEqual([]);
 
-  await page.waitForTimeout(SETTLE_MARGIN_MS);
+  await runClock(page, PHRASE_DEBOUNCE_MS);
 
   // A lazily-loaded font past the fold is a rendering detail, not a lookup —
   // the box owes RL-14 no request of its own, and `_next/static/` never
@@ -163,8 +159,9 @@ test("no request leaves the device while typing, past the dictionary asset itsel
 
   // Ten keystrokes settle to one headword: at most one request per
   // decoration route, never one per keystroke.
-  const decoration = requestUrls.filter((url) => url.includes("/api/word/"));
-  console.log(`decoration requests for one settled word: ${decoration.length}`);
-  expect(decoration.length, "decoration never asked").toBeGreaterThanOrEqual(1);
-  expect(decoration.length).toBeLessThanOrEqual(2);
+  const decorationRequests = () => requestUrls.filter((url) => url.includes("/api/word/"));
+  await expect.poll(() => decorationRequests().length, { message: "decoration never asked" }).toBeGreaterThanOrEqual(1);
+  await pageTasks(page);
+  console.log(`decoration requests for one settled word: ${decorationRequests().length}`);
+  expect(decorationRequests().length).toBeLessThanOrEqual(2);
 });

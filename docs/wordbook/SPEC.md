@@ -204,8 +204,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 #### The sentence
 
-- [ ] **RL-08** — A sentence is translated by the device's own translator when the browser offers one and it is ready. Whether it does is asked of the browser at runtime, on every open, and never inferred from the browser's name or version.
-  - Open, 2026-10-16: the on-device path is not driven: no e2e answers with `Translator.availability()` at `"available"` or reads `phrase.originDevice`; `e2e/phrase.spec.ts:138` fakes `"downloadable"` and drives the network path and RL-11 only.
+- [x] **RL-08** — A sentence is translated by the device's own translator when the browser offers one and it is ready. Whether it does is asked of the browser at runtime, on every open, and never inferred from the browser's name or version.
 - [x] **RL-09** — When the device offers no translator, the sentence is translated over the network, and the answer says the translation came from the network. *This is a server surface and the sentence path's own exception to "no backend": one route handler that holds the provider's identity and any key it needs off the client and makes the provider a one-file change. Nothing on the word path passes through it, ever.*
 - [x] **RL-60** *(successor of RL-53)* — A sentence is translated over the network by the paid model the word routes use,
   each call counted against the shared daily cap; the model replies with the translation alone, and an empty reply or an
@@ -255,17 +254,27 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-66** — A row of `/registro` is deleted with a ✕ on its row. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-10-15.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/e2e/registro-borrar.spec.ts:259,295,364,408,430,484,496,632,673`, green.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: the local words, a delete with the copy off says it reaches this device alone and sends no request, `apps/wordbook/e2e/registro-borrar.spec.ts:315,335,611`, green.
-- [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
-  from the app's first day, only when it found something: an entry in the dictionary, a translation for a
-  sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that
-  answer arrived. A word whose network answer failed or never arrived, and a sentence that could not
-  be translated, leave no row. A row holds what was typed, whether it was answered as a word or a
-  sentence, the headword it actually reached when an inflected form was typed, and when. The record gains rows on its own and nothing edits one, but the reader can
-  delete a row (RL-66) or empty it whole: on this device alone, or in the copy their account holds as well. Emptying this
-  device alone leaves the account's copy standing, and a device that signs in afterwards sees it
-  again. No screen on the read path shows the record. It is read to take it off the device — to a
-  file, or to the copy held by the reader's account — and to bring back what the same reader's other
-  devices recorded; never on the path that answers a lookup. Decided by the user 2026-10-08.
+- [ ] **RL-76** *(successor of RL-55)* — A lookup a reader settles on is recorded on the device,
+  from the app's first day. It is recorded answered when it found something: an entry in the dictionary, a
+  translation for a sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once
+  that answer arrived. A word the dictionary has no entry for whose network answer failed or never arrived, and a
+  sentence that could not be translated, are recorded **pending**: the row holds what was typed, whether it was
+  a word or a sentence, and when, and says it waits for an answer. Only a lookup that would have
+  been asked had the device been online becomes pending: a word the screen said the dictionary has no entry for,
+  and a sentence the translator would have taken; a word left while suggestions stood in its place, and a sentence
+  over 60 words or under the floor, leave no row. When the network comes back, each pending row not yet asked that
+  day is asked — a paid call claimed under the same daily cap as any other network answer — and takes its answer;
+  from then on it reads and exports like any answered row. A row is asked at most once a day; one the network still
+  cannot answer stays pending until the next day. A pending row stays on its device: the account's copy never
+  holds it, and it travels only once it is answered, as a new answered row with the same moment. The record shows a pending row as pending, and the Anki file leaves it out until it is answered. A row
+  holds what was typed, whether it was answered as a word or a sentence, the headword it actually reached when an
+  inflected form was typed, and when. The record gains rows on its own and nothing edits one but the answer a
+  pending row takes; the reader can delete a row (RL-66) or empty it whole: on this device alone, or in the copy
+  their account holds as well. Emptying this device alone leaves the account's copy standing, and a device that
+  signs in afterwards sees it again. No screen on the read path shows the record. It is read to take it off the
+  device — to a file, or to the copy held by the reader's account — and to bring back what the same reader's other
+  devices recorded; never on the path that answers a lookup. Decided by the user 2026-10-18: «Se guardan como
+  pendiente y se responden solas cuando vuelve la red»; which misses, once a day, and on the device alone, the same day (Q5–Q7).
 - [x] **RL-22** — A reader can keep their record in an account of their own: they sign in through a
   link sent to their address and, from then on, what this device records is copied to that account
   and what their other devices recorded comes down to this one **and stays in its local record,
@@ -320,7 +329,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   added underneath what the dictionary said and marked as coming from the network; it never replaces
   it. What counts as thin is measured over the shipped index, not asserted.
 - [x] **RL-46** — A sentence answered by translation also names the terms in it that are not obvious
-  and says what they are. The app picks which terms earn a note; a note on every word is RL-31's
+  and says what they are. The app picks which terms earn a note; a note on every word is RL-54's
   answer, not this one.
 - [x] **RL-56** *(successor of RL-32)* — The reader reads their record grouped by the headword each search
   reached: one row per headword — the lemma when an inflected form was typed, the typed string when no headword was
@@ -377,6 +386,19 @@ this gets built, and no schema, table or column is "prepared for" it.
 ### Retired
 
 Dead codes. The number stays burned and the tick stays as it was.
+
+- [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
+  from the app's first day, only when it found something: an entry in the dictionary, a translation for a
+  sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that
+  answer arrived. A word whose network answer failed or never arrived, and a sentence that could not
+  be translated, leave no row. A row holds what was typed, whether it was answered as a word or a
+  sentence, the headword it actually reached when an inflected form was typed, and when. The record gains rows on its own and nothing edits one, but the reader can
+  delete a row (RL-66) or empty it whole: on this device alone, or in the copy their account holds as well. Emptying this
+  device alone leaves the account's copy standing, and a device that signs in afterwards sees it
+  again. No screen on the read path shows the record. It is read to take it off the device — to a
+  file, or to the copy held by the reader's account — and to bring back what the same reader's other
+  devices recorded; never on the path that answers a lookup. Decided by the user 2026-10-08.
+  _Retired 2026-10-18. Successor: RL-76. Offline, the word the dictionary has no entry for and the sentence that could not be translated left no row: the lookups a reader on a train needed most._
 
 - [ ] **RL-71** *(successor of RL-52)* — With an account open on the device, nothing leaves it until the reader
   confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
@@ -732,17 +754,23 @@ Principles, not recipes:
 |---|---|---|
 | Framework | **Next 16.4.1** | Routing (bumped from 16.3.3 on 2026-10-15: CVE set in 16.0.0–16.3.7), the static export of the payload, and the one route handler the sentence path needs. |
 | UI | **React 19.2.8** | The version Next 16.4.1 pairs with. |
-| Language | **next-intl 4** | The Spanish catalogue RNL-02 requires, with date and number formatting. |
-| Validation | **Zod 4** | One schema serves the translate route's input and its types. |
-| Components | **Radix Themes 3** | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |
-| Icons | **lucide-react** | An icon set, chosen independently of the component library. |
+| Language | **next-intl 4** (`^4.13.7`) | The Spanish catalogue RNL-02 requires, with date and number formatting. |
+| Validation | **Zod 4** (`^4.4.3`) | One schema serves the translate route's input and its types. |
+| Components | **Radix Themes 3** (`@radix-ui/themes ^3.3.0`) | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |
+| Icons | **lucide-react** (`^1.34.0`) | An icon set, chosen independently of the component library. |
 | Types | **TypeScript**, with **@typescript/native-preview** | `tsgo` checks the project in seconds. |
 | Lint | **eslint**, with **eslint-config-next** | The rules the framework's own conventions need. |
-| Browser verification | **Playwright** | Drives a real browser for the facts no server-side check reaches: the offline open, the install progress, the 360 px viewport and the tap targets. |
-| Postgres | **postgres 3 + drizzle-orm 0.45** | The copy of the record over the Supabase orbit already has, with the same client and the same ORM. |
-| Migrations | **drizzle-kit 0.31** (dev) | The `reading` schema versioned in the repository, with a migration journal of its own. |
-| Auth | **@supabase/ssr 0.12** | The cookie session and the magic link, with the same claim verification orbit uses. |
-| TEI parse | **fast-xml-parser** | Streams the source TEI into the payload; the build script's only dependency. |
+| Browser verification | **Playwright** (`@playwright/test ^1.62.1`, dev) | Drives a real browser for the facts no server-side check reaches: the offline open, the install progress, the 360 px viewport and the tap targets. |
+| Postgres | **postgres 3 + drizzle-orm 0.45** (`^3.4.9`, `^0.45.2`) | The copy of the record over the Supabase orbit already has, with the same client and the same ORM. |
+| Migrations | **drizzle-kit 0.31** (`^0.31.10`, dev) | The `reading` schema versioned in the repository, with a migration journal of its own. |
+| Auth | **@supabase/ssr 0.12** (`^0.12.5`) | The cookie session and the magic link, with the same claim verification orbit uses. |
+| Environment | **@t3-oss/env-nextjs** (`^0.13.11`) | Fails at build time on a missing variable, not in production. |
+| Supabase client | **@supabase/supabase-js** (`^2.112.4`) | The retryable-error test the sign-in code check uses; the sessions themselves ride on `@supabase/ssr`. |
+| Shared auth | **@repo/supabase-auth** (workspace `*`) | The cookie session and claim verification the apps share, already written and proved. |
+| Harness registry | **@repo/harness-registry** (workspace `*`, dev) | Records every identity and run a suite creates, so a purge names only its own rows. |
+| Script runner | **tsx** (`^4.23.12`, dev) | Runs the dictionary build, the checks and the harness scripts under `node --import tsx`. |
+| Type packages | **@types/node** (`^22`), **@types/react**, **@types/react-dom** (`^19`, dev) | The types `tsgo` and `eslint` read. |
+| TEI parse | **fast-xml-parser** (`^5.11.1`, dev) | Streams the source TEI into the payload; the build script's only dependency. |
 
 Playwright and `fast-xml-parser` are development dependencies. `fast-xml-parser`
 is build-time only: it runs in the script RNL-04 names and never reaches the

@@ -123,6 +123,9 @@ Each entry names the rule and the file it lives in now.
   unimported file could not break, and each module paid the same suite up to three times (worker, validator, CI).
 - Run every `check:*` that imports a changed action. Measured 2026-09-29: module 88 made `addCommitment` refuse an
   ended goal and broke three `check:day` probes nobody ran.
+- End the app's pool in every test process (`scripts/harness/end-app-pool.ts`). Measured 2026-10-19: `check:plan` pass 2
+  took 1927 s for tests that sum to 31 s; `db/client.ts` idles 240 s and each file waited it out. `habit-readers.ts`
+  alone: 243 s before, 4 s after. `--test-force-exit` is no cure: it dropped 561 tests to 533.
 - The whole e2e runs in CI. A chosen list missed `deshacer.spec.ts` and `cifra-unidad.spec.ts` on 2026-09-30; CI
   caught them.
 - The validator reads the worker's logs and never re-runs a suite logged green. Decided by the user 2026-10-10.

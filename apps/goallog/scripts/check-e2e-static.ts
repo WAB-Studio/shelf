@@ -154,6 +154,39 @@ export const ALLOWED: readonly Allowed[] = [
   },
 ];
 
+// RNP-09: a spec that types an address into `/entrar` and submits sends a real email unless it answers
+// the send action itself. A file that intercepts Server Actions (`next-action`) is the code step's fake.
+export type EntrarViolation = { file: string; line: number; text: string };
+export type EntrarAllowed = { file: string; why: string };
+
+const ADDRESS_TYPED = /\.(?:fill|type|pressSequentially)\(/;
+const ADDRESS_FIELD = /emailLabel|Correo electrónico|type=["']?email|name=["']?email/;
+const SUBMITS = /Enviar código|\bW\.send\b|\baccount\.action\b|press\(["']Enter["']\)/;
+const ACTION_FAKED = /["']next-action["']/;
+
+export function scanEntrar(
+  files: ReadonlyArray<{ name: string; text: string }>,
+  allowed: readonly EntrarAllowed[],
+): { violations: EntrarViolation[]; stale: EntrarAllowed[] } {
+  const typing = new Set<string>();
+  const violations: EntrarViolation[] = [];
+  for (const { name, text } of files) {
+    const lines = text.split("\n").map(stripComment);
+    const typed = lines.findIndex((l) => ADDRESS_TYPED.test(l) && ADDRESS_FIELD.test(l));
+    if (typed === -1 || !lines.some((l) => SUBMITS.test(l)) || lines.some((l) => ACTION_FAKED.test(l))) continue;
+    typing.add(name);
+    if (!allowed.some((a) => a.file === name)) violations.push({ file: name, line: typed + 1, text: lines[typed].trim() });
+  }
+  return { violations, stale: allowed.filter((a) => !typing.has(a.file)) };
+}
+
+// Files whose typed address goes to the local stack's mailbox (mailpit), the send being what they test.
+export const LOCAL_MAILBOX: readonly EntrarAllowed[] = [
+  { file: "campo-alerta.spec.ts", why: "sends to an invited address and reads the code step's alert; the mail lands in mailpit" },
+  { file: "entrar-invitacion.spec.ts", why: "the invitation's own send, read back from mailpit" },
+  { file: "entrar-sin-crear.spec.ts", why: "proves the send creates no user; the refusal is Auth's, the mailbox local" },
+];
+
 // Every `.ts` file of `dir`, specs and the helpers they import alike.
 export function readE2eFiles(dir: string): Array<{ name: string; text: string }> {
   return readdirSync(dir)
@@ -170,7 +203,12 @@ function main(): void {
     console.error(`${v.file}:${v.line} ${what} after a navigation with no expect/settled/visit: ${v.text}`);
   }
   for (const a of stale) console.error(`stale allowlist entry ${a.file}:${a.line} (${a.why}) matches nothing`);
-  if (violations.length || stale.length) process.exit(1);
+  const entrar = scanEntrar(files, LOCAL_MAILBOX);
+  for (const v of entrar.violations) {
+    console.error(`${v.file}:${v.line} types an address into /entrar and submits without faking the send action (RNP-09): ${v.text}`);
+  }
+  for (const a of entrar.stale) console.error(`stale local-mailbox entry ${a.file} (${a.why}) types nothing`);
+  if (violations.length || stale.length || entrar.violations.length || entrar.stale.length) process.exit(1);
   console.log(`check:e2e-static: ${files.length} files clean`);
 }
 

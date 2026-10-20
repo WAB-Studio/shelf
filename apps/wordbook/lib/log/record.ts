@@ -1,4 +1,4 @@
-import { isRecordedOutcome } from "./outcome";
+import { isPendingLookup, isRecordedLookup } from "./outcome";
 import { countPending } from "./pending";
 import { pendingRowFrom } from "./record-text";
 import { normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
@@ -260,11 +260,12 @@ function notifyFlushed(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(LOG_FLUSHED_EVENT));
 }
 
-// RL-55: a word that matched nothing and a sentence that could not be
-// translated leave no row. The guard lives here, at the one place every
-// settled candidate — hit or miss — ends up, never at the call that reports
-// it: `recordLookup` still has to run for a miss, so it can displace
-// whatever prefix was pending and let the chain keep extending past it.
+// RL-76: a miss leaves no row unless it is pending — a word with no entry, a
+// sentence the translator would have taken (`isPendingLookup`). The guard
+// lives here, at the one place every settled candidate — hit or miss — ends
+// up, never at the call that reports it: `recordLookup` still has to run for
+// a dropped miss, so it can displace whatever prefix was pending and let the
+// chain keep extending past it.
 //
 // Relays to `localStorage` before either IndexedDB path is even tried: a
 // killed tab still lets its transaction commit (measured), but a reload, a
@@ -279,11 +280,11 @@ function notifyFlushed(): void {
 // only while the connection is still opening, a gap that closes once,
 // early, at load.
 //
-// The outcome check runs before the relay is even touched: a miss must
-// never sit in `localStorage` waiting for a load that would resurrect it,
-// the same as it must never reach IndexedDB.
+// The outcome check runs before the relay is even touched: a dropped miss
+// must never sit in `localStorage` waiting for a load that would resurrect
+// it, the same as it must never reach IndexedDB.
 function commit(row: LookupRecord): void {
-  if (!isRecordedOutcome(row.outcome)) return;
+  if (!isRecordedLookup(row)) return;
   relayPendingRow(row);
   if (writeRowSync(row)) return;
   void writeRow(row).then(notifyFlushed);
@@ -308,7 +309,11 @@ function settleCandidate(): void {
   const candidate = latestCandidate;
   latestCandidate = null;
   if (!candidate) return;
-  if (pending && isStrictPrefix(pending.normalised, candidate.normalised)) {
+  // The same `at` and text is the same settle, answered late: the network's
+  // answer to a word with no entry arrives after its miss has settled, and
+  // must replace that miss rather than land beside it as a second lookup.
+  const sameSettle = pending && pending.at === candidate.at && pending.normalised === candidate.normalised;
+  if (pending && (sameSettle || isStrictPrefix(pending.normalised, candidate.normalised))) {
     pending = candidate;
     return;
   }
@@ -496,10 +501,13 @@ async function highestLocalId(): Promise<number | null> {
   });
 }
 
-/** How many of this device's own searches the copy has yet to upload. */
+/** How many of this device's own searches the copy has yet to upload; a row waiting for its answer is not one (RL-76). */
 export async function countPendingUpload(): Promise<number> {
   const [rows, state] = await Promise.all([readAll(), readSyncState()]);
-  return countPending(rows, state.pushedThroughLocalId);
+  return countPending(
+    rows.filter((row) => !isPendingLookup(row)),
+    state.pushedThroughLocalId,
+  );
 }
 
 /** Starts the copy for this reader: keeps the cursors only for the same reader on a live device; another reader leaves stored rows behind. */

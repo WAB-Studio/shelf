@@ -96,7 +96,7 @@ test("a deploy retires the previous build's chunks, and a re-open sweeps nothing
 
   const before = (await cachedStaticPaths(page, CACHE_NAME)).filter((path) => path.startsWith("/_next/static/"));
   await page.goto("/");
-  await page.waitForTimeout(2000);
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
   const after = (await cachedStaticPaths(page, CACHE_NAME)).filter((path) => path.startsWith("/_next/static/"));
   // A superset, not an equality: a second open still asks for a chunk the
   // first one never reached, and `cacheFirst` writes it. What must not

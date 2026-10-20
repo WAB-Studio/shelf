@@ -24,7 +24,8 @@ test("one <nav> at the side on every route, never a bar at the foot", async ({ p
 
   for (const { path, key } of ROUTES) {
     await page.goto(path);
-    await page.waitForTimeout(300);
+    await expect(page.locator("main")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
 
     // A single implementation, one media query: proven by count, not read
     // off the markup (docs/TRAPS.md "An unscoped locator finds both bands
@@ -56,7 +57,8 @@ test("one <nav> at the side on every route, never a bar at the foot", async ({ p
 test("the reading column on / keeps its 620px measure and clears the sidebar", async ({ page }) => {
   await disableTranslator(page);
   await page.goto("/");
-  await page.waitForTimeout(300);
+  await expect(page.locator("main")).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
 
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
@@ -94,7 +96,8 @@ for (const route of ["/registro", "/registro/apple", "/cuenta"]) {
   test(`${route} takes the width left of the sidebar without scrolling the page sideways`, async ({ page }) => {
     await disableTranslator(page);
     await page.goto(route);
-    await page.waitForTimeout(300);
+    await expect(page.locator("main")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
 
     const viewport = page.viewportSize();
     expect(viewport).not.toBeNull();

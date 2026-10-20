@@ -1,7 +1,33 @@
-import { expect, test } from "./fixtures";
+import { afterFrames, expect, test } from "./fixtures";
+import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
+
+// The screen is on the page: its main region is there, its fonts are in and
+// the browser has laid it out.
+async function drawn(page: Page): Promise<void> {
+  await expect(page.locator("main")).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await afterFrames(page);
+}
+
+// A readwrite transaction on `lookups` opens only once every write queued
+// before it has committed, so its completion says the log has settled.
+async function writesSettled(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const transaction = request.result.transaction("lookups", "readwrite");
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        };
+      }),
+  );
+}
 
 // docs/wordbook/DESIGN.md "Viewport": the bar every board draws.
 test("the bottom bar carries Buscar and Registro, and each reaches its route", async ({ page }) => {
@@ -10,7 +36,7 @@ test("the bottom bar carries Buscar and Registro, and each reaches its route", a
   });
 
   await page.goto("/");
-  await page.waitForTimeout(500);
+  await drawn(page);
 
   const nav = page.getByRole("navigation", { name: messages.nav.label });
   const buscar = nav.getByRole("link", { name: messages.nav.search });
@@ -64,7 +90,7 @@ test("the bar carries neither section as current on a page that isn't one", asyn
   });
 
   await page.goto("/registro/zzqqxv");
-  await page.waitForTimeout(300);
+  await drawn(page);
 
   const nav = page.getByRole("navigation", { name: messages.nav.label });
   // A word page is not a section (DESIGN.md "Viewport"): the bar still
@@ -86,10 +112,8 @@ test("Buscar carries the query past a trip through Registro, unretyped", async (
   );
   await page.goto("/?q=book");
   await assetResponse;
-  // buildIndex still has to run over 64,258 entries after the fetch settles
-  // (e2e/url.spec.ts's own margin), plus the effect that reads the address
-  // bar into the nav's own memory.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const nav = () => page.getByRole("navigation", { name: messages.nav.label });
   await nav().getByRole("link", { name: messages.nav.log }).click();
@@ -107,7 +131,7 @@ test("all three routes still draw the bar at 360px, with no horizontal overflow"
 
   for (const route of ["/", "/registro", "/cuenta"]) {
     await page.goto(route);
-    await page.waitForTimeout(300);
+    await drawn(page);
 
     const nav = page.getByRole("navigation", { name: messages.nav.label });
     const box = await nav.boundingBox();
@@ -129,7 +153,7 @@ test("Buscar reaches a bare / with nothing to remember", async ({ page }) => {
   });
 
   await page.goto("/registro");
-  await page.waitForTimeout(300);
+  await drawn(page);
 
   const buscar = page.getByRole("navigation", { name: messages.nav.label }).getByRole("link", { name: messages.nav.search });
   await expect(buscar).toHaveAttribute("href", "/");
@@ -152,7 +176,8 @@ test("returning through the bar does not record the restored query again", async
   // word up: the bar reads the address bar into its own memory at mount.
   await page.goto("/?q=manures");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const nav = () => page.getByRole("navigation", { name: messages.nav.label });
   for (let trip = 0; trip < 3; trip += 1) {
@@ -160,7 +185,10 @@ test("returning through the bar does not record the restored query again", async
     await expect(page).toHaveURL(/\/registro$/);
     await nav().getByRole("link", { name: messages.nav.search }).click();
     await expect(page).toHaveURL(/q=manures/);
-    await page.waitForTimeout(900);
+    // The answer on screen is what hands the row to the log; the barrier
+    // waits out the write it started.
+    await expect(page.getByRole("heading", { name: "manure", exact: true })).toBeVisible();
+    await writesSettled(page);
   }
 
   // One last trip away forces the final flush, then settle before counting.
@@ -169,7 +197,7 @@ test("returning through the bar does not record the restored query again", async
   // behind it — it wins a race against its own data.
   await nav().getByRole("link", { name: messages.nav.log }).click();
   await expect(page).toHaveURL(/\/registro$/);
-  await page.waitForTimeout(1500);
+  await writesSettled(page);
 
   const rows: Array<{ normalised: string }> = await page.evaluate(
     () =>
@@ -268,7 +296,7 @@ for (const width of LABEL_WIDTHS) {
       });
       await page.setViewportSize({ width, height: 740 });
       await page.goto("/registro");
-      await page.waitForTimeout(500);
+      await drawn(page);
     });
 
     test("no letter pair opens a gap wider than the label's own median", async ({ page }) => {

@@ -14,6 +14,7 @@ import { nameKey } from "@/lib/import/review";
 import { measureFed } from "@/lib/plan/fact-dependence";
 import { freezeClosedMonths } from "@/lib/plan/rhythm-freeze";
 import { loadImportSnapshots } from "@/lib/queries/import-match";
+import { readReceipt, writeReceipt } from "@/lib/receipts";
 import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
 import { isTimeUnit, TIME_UNITS } from "@/lib/units/time";
 import { monthStart } from "@/lib/validation/budget";
@@ -153,6 +154,9 @@ function emptyPlan() {
  * RP-90: a phase, month, commitment or task the table still refuses after those checks is returned in `failed`
  * with its name and reason, and the rest is written; only a goal the table refuses fails the call. A matched
  * goal's horizon, measure or rhythm the table or its rules refuse is listed the same way.
+ *
+ * RP-56: with a `requestId`, a confirm resent after its answer was lost answers the first answer
+ * and writes nothing. Two sends of one id wait on each other, so the second reads the first's receipt.
  */
 export async function confirmImport(input: unknown): Promise<ConfirmImportResult> {
   const parsed = importUpdateSchema.safeParse(input);
@@ -170,6 +174,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   const today = todayInZone();
   const draft = withCutPhases(parsed.data.draft, today);
   const updates: Update[] = parsed.data.updates;
+  const { requestId } = parsed.data;
 
   const sent = new Set<number>();
   for (const [u, update] of updates.entries()) {
@@ -436,7 +441,12 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   // transaction is gone: the same rows are written again with each table behind a savepoint, and a
   // table that refuses falls back to one savepoint per part, so only the refused part is left out (RP-90).
   const write = (tolerant: boolean) =>
-    withGoalsDb(async (tx): Promise<{ stale: string } | { plan: Plan; updatedIds: string[] }> => {
+    withGoalsDb(async (tx): Promise<{ stale: string } | { replay: ConfirmImportResult } | { plan: Plan; updatedIds: string[] }> => {
+      if (requestId !== undefined) {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${requestId}::text || ':request', 0))`);
+        const stored = await readReceipt(tx, person.id, requestId);
+        if (stored !== null) return { replay: stored as ConfirmImportResult };
+      }
       // RP-130: the review's matches are judged against the goals as they stand in this transaction.
       const matched = new Map<number, GoalSnapshot>();
       const matches = matchGoals(draft, await loadImportSnapshots(draft.goals.map((goal) => goal.name), tx));
@@ -631,7 +641,12 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
           insert into ${facts} (user_id, one_off_id, goal_id, day) values ${values}
         `,
       );
-      return { plan, updatedIds: [...matched.values()].map((snapshot) => snapshot.id) };
+      const updatedIds = [...matched.values()].map((snapshot) => snapshot.id);
+      if (requestId !== undefined) {
+        const answer: ConfirmImportResult = { ok: true, goalIds: plan.goalIds, updatedIds, failed: plan.failed };
+        await writeReceipt(tx, person.id, requestId, "confirmImport", answer);
+      }
+      return { plan, updatedIds };
     });
 
   let written: Awaited<ReturnType<typeof write>>;
@@ -641,6 +656,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     if (!isIntegrity(error)) throw error;
     written = await write(true);
   }
+  if ("replay" in written) return written.replay;
   if ("stale" in written) return { ok: false, error: "import.errors.reviewStale", at: written.stale };
 
   const { plan, updatedIds } = written;

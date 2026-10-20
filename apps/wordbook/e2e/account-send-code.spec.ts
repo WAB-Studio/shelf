@@ -7,7 +7,7 @@ import postgres from "postgres";
 import { closeRun, openRun } from "@repo/harness-registry";
 
 import messages from "../messages/es.json";
-import { expect, test } from "./fixtures";
+import { expect, pageTasks, test } from "./fixtures";
 
 // RL-73, from Board «CuentaCódigo» and the plan's Done table, not from the
 // component. Every action POST is simulated: `sendSignInLink` and
@@ -298,7 +298,7 @@ test("a good code refreshes the screen once and forgets the pending address", as
   await enter(page, CODE);
 
   await expect.poll(() => refreshes.length).toBe(1);
-  await page.waitForTimeout(1_500);
+  await pageTasks(page);
   expect(refreshes).toHaveLength(1);
   expect(verifyCalls).toEqual([{ email: EMAIL, code: CODE }]);
   expect(await keptAddress(page)).toEqual([]);
@@ -314,7 +314,7 @@ test("a refused code does not refresh the screen", async ({ page }) => {
 
   await enter(page, CODE);
   await expect(page.getByText(REFUSED)).toBeVisible();
-  await page.waitForTimeout(1_000);
+  await pageTasks(page);
 
   expect(refreshes).toEqual([]);
 });
@@ -431,7 +431,7 @@ test("Enter with a short code says so on the screen and asks the server nothing"
   const line = page.getByText(SHORT);
   await expect(line).toBeVisible();
   await expect(line).toHaveAttribute("role", "alert");
-  await page.waitForTimeout(500);
+  await pageTasks(page);
   expect(verifyCalls).toEqual([]);
 });
 
@@ -445,7 +445,7 @@ test("Enter on «Usar otro correo» leaves the step and verifies nothing", async
 
   await expect(emailField(page)).toBeVisible();
   await expect(field(page)).toHaveCount(0);
-  await page.waitForTimeout(500);
+  await pageTasks(page);
   expect(verifyCalls).toEqual([]);
 });
 
@@ -460,7 +460,7 @@ test("Enter on a ready resend asks for another code and never verifies the typed
 
   await expect(page.getByText(RESENT)).toBeVisible();
   // Actions run one at a time, so a stray verify would leave after the resend's answer.
-  await page.waitForTimeout(500);
+  await pageTasks(page);
   expect(sendCalls).toEqual([EMAIL, EMAIL]);
   expect(verifyCalls).toEqual([]);
 });
@@ -535,7 +535,7 @@ test("while the new code is on its way every control is locked, and a second tap
   await expect(page.getByRole("button", { name: OTHER })).toBeDisabled();
   await pending.dispatchEvent("click");
   await pending.dispatchEvent("click");
-  await page.waitForTimeout(300);
+  await pageTasks(page);
   expect(sendCalls).toEqual([EMAIL, EMAIL]);
   release();
   await expect(page.getByText(RESENT)).toBeVisible();

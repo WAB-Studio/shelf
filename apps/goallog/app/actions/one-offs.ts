@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 
 import { facts, goals, oneOffs } from "@/db/schema";
-import { getPerson, withGoalsDb } from "@/lib/session";
+import { readReceipt, writeReceipt } from "@/lib/receipts";
+import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
 import { monthOutsideSpan, monthStart } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
 import { ENDLESS_MONTHS_AHEAD } from "@/lib/plan/months";
@@ -40,6 +41,16 @@ export type SetOneOffNoteResult = { ok: true } | { ok: false; error: MessageKey 
 export type EditTaskResult = { ok: true } | { ok: false; error: MessageKey };
 export type FixTaskResult = EditTaskResult;
 
+// The key `declareFact` serialises a one-off's fact on: a task's sub-tasks,
+// day, estimate and fact are written one transaction at a time. Its own
+// statement, so the next read sees what the holder committed (docs/TRAPS.md).
+const taskLock = (tx: Transaction, oneOffId: string) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${oneOffId}::text || ':once', 0))`);
+
+// Two sends of one request wait on each other, so the second reads the first's receipt.
+const requestLock = (tx: Transaction, requestId: string) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${requestId}::text || ':request', 0))`);
+
 /**
  * Writes something to do once (RP-19, RP-20), or a task of a goal's month
  * (RP-30, RP-31). `goalId`, when given, is read back before the insert the
@@ -48,7 +59,8 @@ export type FixTaskResult = EditTaskResult;
  * of theirs, so `goals_select_self` — not this function's own `where` — is
  * what actually hides a foreign goal. A sub-task reads its parent back
  * instead and takes the parent's goal; the policy refuses the same parents,
- * so this read only buys the refusal its key.
+ * so this read only buys the refusal its key. With a `requestId` (RP-56), a
+ * resend answers the first answer and writes nothing.
  */
 export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneOffResult> {
   const parsed = createOneOffSchema.safeParse(input);
@@ -57,13 +69,21 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { name, day, estimate, parentId, note, inPlan } = parsed.data;
+  const { name, day, estimate, parentId, note, inPlan, requestId } = parsed.data;
   let plannedMonth = parsed.data.plannedMonth;
   // A plain one-off of a goal keeps RP-20's rules; a month's task obeys the goal's plan.
   const isTask = plannedMonth != null || estimate != null || parentId != null || inPlan === true;
 
   try {
-    const written = await withGoalsDb(async (tx) => {
+    type Written = { oneOffId: string; goalId: string | null; month: string | null };
+    const written = await withGoalsDb(async (tx): Promise<Written | { replay: CreateOneOffResult }> => {
+      if (parentId != null) await taskLock(tx, parentId);
+      if (requestId !== undefined) {
+        await requestLock(tx, requestId);
+        const stored = await readReceipt(tx, person.id, requestId);
+        if (stored !== null) return { replay: stored as CreateOneOffResult };
+      }
+
       let goalId = parsed.data.goalId ?? null;
       // The month the task counts in: its own, or its parent's.
       let month = plannedMonth ?? null;
@@ -180,8 +200,12 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
         returning id
       `);
 
+      if (requestId !== undefined) {
+        await writeReceipt(tx, person.id, requestId, "createOneOff", { ok: true, oneOffId: inserted.id });
+      }
       return { oneOffId: inserted.id, goalId, month };
     });
+    if ("replay" in written) return written.replay;
 
     revalidatePath("/");
     revalidatePath("/sueltas");
@@ -212,6 +236,7 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
 
   try {
     await withGoalsDb(async (tx) => {
+      await taskLock(tx, oneOffId);
       const [row] = await tx
         .select({
           id: oneOffs.id,
@@ -273,14 +298,9 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
 
   const { oneOffId, day } = parsed.data;
 
-  // A parent is done by its sub-tasks (RP-30). `facts_insert_self` refuses
-  // its fact too, but as a 42501 the row could not name.
-  const [child] = await withGoalsDb((tx) =>
-    tx.select({ id: oneOffs.id }).from(oneOffs).where(eq(oneOffs.parentId, oneOffId)).limit(1),
-  );
-  if (child) return { ok: false, error: "month.errors.parentIsDoneByChildren" };
-
-  return declareFact({ oneOffId, day });
+  // A parent is done by its sub-tasks (RP-30): `declareFact` refuses one under
+  // the task's lock, in the transaction that writes the fact.
+  return declareFact({ oneOffId, day }, { namesParent: true });
 }
 
 /**
@@ -367,7 +387,7 @@ const REFUSALS: Record<string, MessageKey> = {
 
 /**
  * The one write behind `editTask` and `fixTask` (RP-51, RP-55, RP-57), in one
- * statement. The CTEs read one snapshot: `chk` names the first refusal and
+ * statement under the task's lock, so a sub-task added meanwhile waits for it. The CTEs read one snapshot: `chk` names the first refusal and
  * `upd` writes only when there is none, so a refusal writes nothing and needs
  * no rollback. A task is done when it, or a child, has a fact. A fact or a
  * child landing in between makes `one_offs_guard_day` return 0 rows for an
@@ -387,8 +407,9 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
     sql`, `,
   )}]::text[]`;
 
-  const rows = await withGoalsDb((tx) =>
-    tx.execute<{ goal_id: string | null; refusal: string | null; updated: number }>(sql`
+  const rows = await withGoalsDb(async (tx) => {
+    await taskLock(tx, oneOffId);
+    return tx.execute<{ goal_id: string | null; refusal: string | null; updated: number }>(sql`
       with t as (
         select o.id, o.goal_id, o.parent_id, o.in_plan, o.day,
                exists (
@@ -444,8 +465,8 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
         returning id
       )
       select goal_id, refusal, (select count(*) from upd)::int as updated from chk
-    `),
-  );
+    `);
+  });
 
   const row = rows[0];
   if (!row) return { ok: false, error: "plan.errors.notFound" };

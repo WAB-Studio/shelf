@@ -979,7 +979,9 @@ test("an unlisted row with no translation draws the subtitle alone, no body and 
     page.getByText("1 búsqueda desde el", { exact: false }),
   ).toBeVisible();
   await asset;
-  await expect(page.getByText(/Instalando el diccionario/)).toHaveCount(0);
+  // This screen unmounts the status region once the dictionary is ready, so
+  // readiness is the busy region being gone, not a region saying it is idle.
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await expect(page.getByText(messages.log.word.skeletonAnswer)).toHaveCount(0);
   await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
   await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);

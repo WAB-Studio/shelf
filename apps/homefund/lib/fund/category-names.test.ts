@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   categoryNamesById,
   scopedCategoryName,
+  scopedCategoryParts,
   type NamedCategoryNode,
 } from "./category-names";
 
@@ -65,5 +66,53 @@ describe("categoryNamesById", () => {
 
   it("returns an empty map for no nodes", () => {
     assert.equal(categoryNamesById([], mark).size, 0);
+  });
+});
+
+describe("scopedCategoryParts", () => {
+  it("splits a fund name from the mark that follows it", () => {
+    assert.deepEqual(scopedCategoryParts("Mercado", "group", mark), {
+      name: "Mercado",
+      suffix: " · fondo",
+    });
+  });
+
+  it("leaves a personal name whole with no suffix and never calls mark", () => {
+    let calls = 0;
+    const spy = (name: string) => {
+      calls += 1;
+      return mark(name);
+    };
+    assert.deepEqual(scopedCategoryParts("Mercado", "personal", spy), {
+      name: "Mercado",
+      suffix: null,
+    });
+    assert.equal(calls, 0);
+  });
+
+  it("takes the suffix from what mark adds, not from the name's end", () => {
+    const long = "x".repeat(60);
+    assert.deepEqual(scopedCategoryParts(long, "group", mark), {
+      name: long,
+      suffix: " · fondo",
+    });
+    assert.deepEqual(scopedCategoryParts("Fondo", "group", (n) => `${n}!`), {
+      name: "Fondo",
+      suffix: "!",
+    });
+  });
+
+  it("keeps the whole marked string as the name when the mark does not follow it", () => {
+    assert.deepEqual(scopedCategoryParts("Mercado", "group", (n) => `Fondo: ${n}`), {
+      name: "Fondo: Mercado",
+      suffix: null,
+    });
+  });
+
+  it("joins back to exactly what scopedCategoryName returns", () => {
+    for (const scope of ["personal", "group"] as const) {
+      const { name, suffix } = scopedCategoryParts("Mercado", scope, mark);
+      assert.equal(name + (suffix ?? ""), scopedCategoryName("Mercado", scope, mark));
+    }
   });
 });

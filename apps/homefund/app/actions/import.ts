@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 
-import { commitImport } from "@/db/queries/import-commit";
+import { commitImport, ImportAlreadyCommitting } from "@/db/queries/import-commit";
 import type { CommitInput, CommitRow, CommitScope } from "@/db/queries/import-commit";
 import { getUserGroup } from "@/db/queries/groups";
 import { withUserDb } from "@/db/session";
@@ -26,6 +26,9 @@ const FILE_TYPE = "data.import.errors.fileType";
 // A commit is all-or-nothing (RF-51): a single errored row across any sheet stops the
 // write before it starts, so the caller never lands a partial import.
 const FILE_HAS_ERRORS = "data.import.errors.hasErrors";
+
+// Another tab's commit of the same file wrote its keys first; nothing of this one landed.
+const ALREADY_COMMITTING = "data.import.errors.alreadyCommitting";
 
 type PreviewRow = {
   index: number;
@@ -132,7 +135,9 @@ export const commitImportAction = authActionClient
       adjustments: rowsFor<ImportedAdjustment>(result, "transactions", isAdjustment),
     };
 
-    const outcome = await withUserDb((tx) => commitImport(tx, input, scope));
+    const outcome = await withUserDb((tx) => commitImport(tx, input, scope)).catch((error: unknown) => {
+      throw error instanceof ImportAlreadyCommitting ? new ActionError(ALREADY_COMMITTING) : error;
+    });
     refresh();
     return outcome;
   });

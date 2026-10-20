@@ -72,8 +72,11 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
     sql`, `,
   )}]::text[]`;
 
-  const rows = await withGoalsDb((tx) =>
-    tx.execute<{ measured: boolean; timed: boolean; open: boolean; holder: boolean }>(sql`
+  const rows = await withGoalsDb(async (tx) => {
+    // The person's lock of `plan.ts`, same key, in its own statement: the holder check reads a
+    // goal opened under this one at the same instant (RP-80).
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${person.id}::text, 1))`);
+    return tx.execute<{ measured: boolean; timed: boolean; open: boolean; holder: boolean }>(sql`
       with g as (
         select id, rhythm, measure_unit, horizon, archived_at,
                (created_at at time zone ${TIME_ZONE})::date as opened
@@ -112,8 +115,8 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
              archived_at is null and (horizon is null or horizon > ${today}::date) as open,
              exists (select 1 from goals c where c.parent_id = g.id and c.archived_at is null) as holder
       from g
-    `),
-  );
+    `);
+  });
 
   const goal = rows[0];
   if (!goal) return { ok: false, error: "month.errors.notFound" };

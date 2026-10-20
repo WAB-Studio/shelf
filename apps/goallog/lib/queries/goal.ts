@@ -894,6 +894,105 @@ export async function loadGoalPlace(goalId: string): Promise<GoalPlace | null> {
   };
 }
 
+export type GoalForm = {
+  id: string;
+  name: string;
+  horizon: string | null;
+  createdAt: string;
+  archivedAt: string | null;
+  endedOn: string | null;
+  measureUnit: string | null;
+  phases: Phase[];
+  commitments: GoalCommitment[];
+  // The asked month's entry in the goal's span, null with no month or outside the span.
+  month: { month: string; past: boolean } | null;
+  // The asked month's tasks, the parents of its children and the children of its parents.
+  tasks: PlanTask[];
+};
+
+/**
+ * What a form of one goal draws, each field as `loadGoal` reads it: one goals
+ * transaction, one statement, no evidence and no fact beyond a task's own.
+ * The person's tree rides along because a goal holding goals takes its unit
+ * and its first month from the goals under it (RP-80). `month` is "YYYY-MM";
+ * any other shape reads as no month.
+ */
+export async function loadGoalForm(
+  goalId: string,
+  month?: string,
+  today: string = todayInZone(),
+): Promise<GoalForm | null> {
+  if (!z.uuid().safeParse(goalId).success) return null;
+  const asked = month !== undefined && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? `${month}-01` : null;
+
+  const tasks =
+    asked === null
+      ? sql`'[]'::json`
+      : sql`(select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
+                 'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id),
+                 'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id limit 1)
+               ) order by o.position, o.created_at, o.id), '[]'::json)
+           from "goals"."one_offs" o
+          where o.goal_id = ${goalId}
+            and (o.planned_month = ${asked}::date
+                 or o.parent_id in (select m.id from "goals"."one_offs" m
+                                     where m.goal_id = ${goalId} and m.planned_month = ${asked}::date)
+                 or o.id in (select m.parent_id from "goals"."one_offs" m
+                              where m.goal_id = ${goalId} and m.planned_month = ${asked}::date)))`;
+
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{
+      goal: GoalRow | null;
+      phases: PhaseRow[];
+      commitments: (CommitmentRow & { fact_day_count: number })[];
+      tasks: TaskRow[];
+      tree: TreeSqlRow[];
+    }>(sql`
+      select
+        (select to_jsonb(g) from "goals"."goals" g where g.id = ${goalId}) as goal,
+        (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
+           from "goals"."phases" p
+           where p.goal_id = ${goalId}) as phases,
+        (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
+                   'source_key', s.key,
+                   'source_unit', s.unit,
+                   'source_label_key', s.label_key,
+                   'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id)
+                 ) order by c.position, c.created_at, c.id), '[]'::json)
+           from "goals"."commitments" c
+           left join "goals"."evidence_sources" s on s.id = c.source_id
+           where c.goal_id = ${goalId}) as commitments,
+        ${tasks} as tasks,
+        (select coalesce(json_agg(${TREE_COLUMNS}), '[]'::json) from "goals"."goals" g) as tree
+    `),
+  );
+  if (!row.goal) return null;
+  const goal = row.goal;
+
+  // The same reading `loadGoal` makes of a goal holding open goals: its span
+  // opens with the earliest of them and its unit is the one they roll up to.
+  const tree = buildTree(row.tree.map(toTreeRow));
+  const holdsGoals = (tree.byId.get(goal.id)?.children ?? []).some((id) => tree.byId.get(id)!.archivedAt === null);
+  const openedOn = holdsGoals ? spanStart(tree, goal.id) : civilDateInZone(new Date(goal.created_at));
+  const measureUnit = holdsGoals ? (rollUp(tree, new Map()).get(goal.id)?.unit ?? null) : goal.measure_unit;
+
+  const inSpan = asked !== null && monthsOfSpan(openedOn, goal.horizon, today).includes(asked);
+
+  return {
+    id: goal.id,
+    name: goal.name,
+    horizon: goal.horizon,
+    createdAt: goal.created_at,
+    archivedAt: goal.archived_at,
+    endedOn: goal.horizon !== null && goal.horizon <= today ? dayBefore(goal.horizon) : null,
+    measureUnit,
+    phases: row.phases.map(toPhase),
+    commitments: row.commitments.map((commitment) => toGoalCommitment(commitment, commitment.fact_day_count)),
+    month: inSpan ? { month: asked, past: asked < monthOf(today) } : null,
+    tasks: row.tasks.map((task) => toPlanTask(task, openedOn)),
+  };
+}
+
 // A habit with no goal (RP-100), as the «Hábitos sin meta» section draws it.
 export type LooseCommitment = GoalCommitment & { note: string | null };
 

@@ -1,3 +1,4 @@
+import { isPendingLookup } from "./outcome";
 import { openLogDatabase } from "./record";
 import type { LookupRecord } from "./types";
 
@@ -23,8 +24,9 @@ export type ForeignRow = Omit<LookupRecord, "id" | "device" | "deviceSeq"> & {
 
 /**
  * Rows above `afterLocalId`, in key order, at most `limit` of them. `own` is
- * the local ones; `scannedThrough` is the `id` of the last row read, foreign
- * or not, so a page of foreign rows still moves the caller past them.
+ * the local ones, less every pending row: one stays on its device (RL-76) and
+ * travels later as the new row its answer mints. `scannedThrough` is the `id`
+ * of the last row read, foreign or pending or not, so the caller moves past them.
  */
 export async function readSince(
   afterLocalId: number,
@@ -42,7 +44,7 @@ export async function readSince(
         page.push(...got);
         if (got.length === CHUNK && page.length < limit) return next(got[got.length - 1].id!, true);
         resolve({
-          own: page.filter((row) => row.device == null),
+          own: page.filter((row) => row.device == null && !isPendingLookup(row)),
           scannedThrough: page.length > 0 ? page[page.length - 1].id! : null,
           scanned: page.length,
         });

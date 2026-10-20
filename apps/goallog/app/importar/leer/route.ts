@@ -45,18 +45,20 @@ function readingError(status: Exclude<PlanReading["status"], "ok">): string {
 
 // 903c: the second pass, claimed and settled like the read and apart from its cap. Whatever goes wrong
 // here costs the person nothing: the plan arrives as the read left it, with no move proposed.
-async function arrange(draft: ImportDraft, source: "paste" | "file"): Promise<Correction[]> {
+async function arrange(draft: ImportDraft, source: "paste" | "file", startedAt: number): Promise<Correction[]> {
   if (!arrangeWanted(draft)) return [];
   let claim: { id: string } | null = null;
   try {
     claim = await claimFollowUp(MODEL_NAME, source);
     if (!claim) return [];
-    const reading = await proposeMoves(draft);
+    const reading = await proposeMoves(draft, startedAt);
     const outcome: ModelCallOutcome = reading.status === "none" ? "empty" : reading.status;
     await settleModelCall(claim.id, { inputTokens: reading.status === "none" ? 0 : (reading.usage?.input ?? 0), outputTokens: reading.status === "none" ? 0 : (reading.usage?.output ?? 0), outcome });
     return reading.status === "ok" ? moveCorrections(draft, reading.moves) : [];
   } catch {
-    if (claim) await settleModelCall(claim.id, { inputTokens: 0, outputTokens: 0, outcome: "failed" }).catch(() => {});
+    const held = claim;
+    // The person's reply is unchanged; a claim left open is someone else's to find.
+    if (held) await settleModelCall(held.id, { inputTokens: 0, outputTokens: 0, outcome: "failed" }).catch((error: Error) => console.error("import settle failed", held.id, error.name));
     return [];
   }
 }
@@ -69,6 +71,7 @@ async function arrange(draft: ImportDraft, source: "paste" | "file"): Promise<Co
  * the stream answers a body, never a 204: an absent key is a 503 a person can read.
  */
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
   const refused = refuseCrossSite(request, "multipart");
   if (refused) return refused;
 
@@ -157,7 +160,7 @@ export async function POST(request: NextRequest) {
         const normalized = normalize(reading.raw, reading.source);
         const placed = placeLeftovers(normalized.draft, reading.source);
         const lined = linesToTasks(placed, reading.source, todayInZone(), { onlyDone: false });
-        const arranged = await arrange(lined.draft, file ? "file" : "paste");
+        const arranged = await arrange(lined.draft, file ? "file" : "paste", startedAt);
         send({ step: "check" });
         // The check reads the plan with the proposed moves applied: a goal's month adds up its own tasks.
         const checked = check(decide(lined.draft, arranged, new Set()));
@@ -168,10 +171,11 @@ export async function POST(request: NextRequest) {
             corrections: [...normalized.corrections, ...lined.corrections, ...arranged, ...checked.corrections],
             notices: checked.notices,
             source: reading.source,
+            ...(reading.leftOut ? { leftOut: reading.leftOut } : {}),
           },
         });
       } catch {
-        if (!settled) await settle("failed").catch(() => {});
+        if (!settled) await settle("failed").catch((error: Error) => console.error("import settle failed", claim.id, error.name));
         send({ error: "import.errors.modelFailed" });
       } finally {
         try {

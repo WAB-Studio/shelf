@@ -1275,7 +1275,8 @@ test("setGoalMeasure: one statement reaches the wire between the begin and the c
     for (const [name, unit] of [["Pasos", "pasos"], ["Otra", "otra"]]) {
       const from = wire.length;
       await setGoalMeasure({ goalId: goal.id, name, unit });
-      assert.equal(body(from).length, 1, `${name}: ${body(from).join(" | ")}`);
+      // The person's lock, its own statement, then the one that writes.
+      assert.equal(body(from).length, 2, `${name}: ${body(from).join(" | ")}`);
     }
   } finally {
     await sql`delete from goals.goals where id = ${goal.id}`;

@@ -21,7 +21,7 @@ const passes = [
 
 let failed = false;
 for (const args of passes) {
-  const { status } = spawnSync(process.execPath, ["--import", "tsx", ...args], {
+  const { status } = spawnSync(process.execPath, ["--import", "tsx", "--import", "./scripts/harness/end-app-pool.ts", ...args], {
     env: process.env,
     stdio: "inherit",
   });

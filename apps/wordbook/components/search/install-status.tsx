@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import type { InstallFailure, InstallProgress } from "@/lib/dictionary/install";
-import { Button, Flex, Live, Progress, Separator, Spinner, Text } from "@/components/ui";
+import { Button, Flex, Live, Progress, Separator, Text } from "@/components/ui";
 
 // Structural, not imported: the worker's own status type only has to satisfy
 // this shape, so this file never depends on the module that produces it
@@ -21,7 +21,6 @@ export function InstallStatus({
   status,
   onRetry,
   query,
-  hasBox = true,
 }: {
   status: InstallStatusValue;
   onRetry: () => void;
@@ -29,9 +28,8 @@ export function InstallStatus({
   // Nothing here re-sends a query: the worker's own queue is what answers
   // it once the install lands (`use-dictionary.ts`).
   query: string;
-  // False on a screen that shows no search box of its own
-  // (`word-history.tsx`): "keep searching meanwhile" names a control that
-  // screen never has.
+  // Kept for the screen with no box of its own (`word-history.tsx`); the
+  // line that named the box is gone, so nothing here reads it.
   hasBox?: boolean;
 }) {
   const t = useTranslations("install");
@@ -52,21 +50,18 @@ export function InstallStatus({
     </>
   );
 
-  if (status.state === "ready") {
-    return live;
-  }
+  // Busy from the server render until the dictionary answers: a reader's
+  // tool, and the e2e specs, wait on this rather than on a line of text.
+  const busy = status.state === "booting" || status.state === "installing";
 
-  if (status.state === "booting") {
+  // `booting` draws nothing: an open that finds the dictionary on the device
+  // never installs, and a line that flashes then is a lie. The pending line
+  // still shows, since the typed words are waiting on something.
+  if (status.state === "ready" || status.state === "booting") {
     return (
-      <Flex direction="column" gap="1">
+      <Flex direction="column" gap="1" aria-busy={busy}>
         {live}
-        <Flex align="center" gap="2">
-          <Spinner />
-          <Text size="2" muted>
-            {hasBox ? t("preparing") : t("preparingReadOnly")}
-          </Text>
-        </Flex>
-        {pending}
+        {status.state === "booting" && pending}
       </Flex>
     );
   }
@@ -76,7 +71,7 @@ export function InstallStatus({
     // only promises that progress is shown, not a number that does not exist.
     if (!status.progress || status.progress.total === null) {
       return (
-        <Flex direction="column" gap="1">
+        <Flex direction="column" gap="1" aria-busy>
           {live}
           <Progress aria-label={t("progressLabel")} />
           <Text size="2" muted>
@@ -93,7 +88,7 @@ export function InstallStatus({
     // never short of it — whatever the wire's own compression ratio was.
     const percent = Math.min(100, Math.round((received / total) * 100));
     return (
-      <Flex direction="column" gap="1">
+      <Flex direction="column" gap="1" aria-busy>
         {live}
         <Progress value={percent} aria-label={t("progressLabel")} />
         <Text size="2" muted>
@@ -107,7 +102,7 @@ export function InstallStatus({
   // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a hairline
   // sets the break off, full-weight ink says it, the accent lives in retry.
   return (
-    <Flex direction="column" gap="3" align="start">
+    <Flex direction="column" gap="3" align="start" aria-busy={false}>
       {live}
       <Separator size="4" />
       <Text size="2" weight="bold">

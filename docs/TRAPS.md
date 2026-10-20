@@ -4,7 +4,7 @@ What has already cost this project a day, and how each one was found. Every entr
 file, the measurement and the date. Read the ones that touch what you are about to write.
 
 Working rules live in `AGENTS.md`. Session state lives in `private/handoffs/`. This file
-holds only what a person could not guess from the code.
+holds only what a person could not guess from the code. Entries whose cause is gone live in `docs/TRAPS-archivo.md`.
 
 
 ## A test seeded with the answer passes whether or not the code works
@@ -880,20 +880,6 @@ not count effects.
 build, not the tree. Reverting a guard and rerunning without rebuilding tests the old bundle and
 shows green for the wrong reason — which is exactly the failure a negative control exists to catch.
 
-### The voyager suite drives the real decoration routes, and pays for them
-
-**Superseded 2026-10-08.** Measured 2026-09-11, when `/api/word/photo` still existed: 79 tests reached
-it and `/api/word/text` for real on every run. That route went with RL-36 (2026-09-14). The cost it
-named stays true for the routes that remain and is now guarded in `apps/wordbook/e2e/fixtures.ts`:
-
-- `test`/`expect` imported from `./fixtures` intercept `/api/word/text`, `/api/word/unlisted` and
-  `/api/phrase/notes` and answer them deterministically, tagging each stub with `x-e2e-word-stub`.
-  A watchdog fails a spec that reached a real one without `allowRealWordRoute(route, reason)`.
-- A spec that imports `@playwright/test` directly skips the guard: those three routes then write
-  rows to the shared Postgres and spend the model's daily cap.
-- An unbounded network call inside a timing-sensitive test is a race, not a regression; keep real
-  routes out of any spec that races a settle window.
-
 ### Every worktree shares one stash, so a lane can pop another lane's work
 
 `git stash` writes to `refs/stash`, and that ref lives in the **common** git directory, not in the
@@ -964,18 +950,6 @@ errored; the branch just read as broken whenever another lane held the slot.
 Redirect with `2>&1` before the pipe when a guard reads a log. Fixed in `55c7eff`.
 
 Measured 2026-09-07.
-
-### `e2e-remote-db` is a one-slot concurrency group for the whole repository
-
-GitHub holds one run in progress and **one** in the queue per concurrency group. A third arrival
-does not queue behind the second: it **cancels** it. Opening a second PR while a first one's `e2e`
-is still running therefore kills the first one's queued run, and the PR reads as failed for a
-reason that has nothing to do with its diff.
-
-It happened with #30 and #31 on 2026-09-07. Land one PR's `e2e` before opening the next when both
-touch the group, or expect to re-run by hand.
-
-Closed 2026-10-05 by module 227: CI runs on its runner's own stack.
 
 ### "Keep a retired code's tick" means leave it as it was, not tick it
 
@@ -1055,39 +1029,6 @@ green but for one write-path timeout is the shape of contention, not of a defect
 
 Narrowed 2026-10-05 by module 227: CI no longer pays the shared pooler.
 The trap stands for lanes that still drive the remote database.
-
-### Every push enters the one-slot group, not just every PR
-
-The entry above and `AGENTS.md` both frame `e2e-remote-db` as something a second **PR** disturbs. It
-is wider than that: **any** push that triggers the workflow takes a place in the queue.
-
-Measured 2026-09-08. Fast-forwarding `integracion` to `main` — a branch update carrying commits
-`main` had already tested green — queued a run that evicted PR #37's `e2e` after 8m12s of waiting.
-The job's own annotation names it exactly:
-
-    Canceling since a higher priority waiting request for e2e-remote-db exists
-
-`cancel-in-progress: false` does not save you. It stops a new arrival from killing what is *running*;
-it does not stop a third arrival from evicting what is *queued*. GitHub keeps one running and one
-waiting, and the newest request wins the waiting slot.
-
-The eviction reads as a plain red `e2e` on the PR page. Check the run's ANNOTATIONS before chasing a
-diff: `gh run view <id>` prints them, and a cancelled-by-priority run names itself.
-
-Land one thing at a time when the group is busy, and prefer cancelling a redundant run
-(`gh run cancel <id>`) over adding another.
-
-**The redundant run is usually your own `integracion` fast-forward.** `docs/agentes/lanes.md` says to
-fast-forward it *before using it*; doing it after every merge instead queues a run over a SHA `main`
-has already tested, and that run is what evicts the PR waiting behind it. Measured again 2026-09-08:
-three fast-forwards in an afternoon, each one a push run on a SHA identical to `main`'s, and the last
-of them held the slot while PR #48 — the only PR of the day that actually needed orbit's `e2e` —
-waited in the queue behind it.
-
-Fast-forward `integracion` when you are about to merge into it. Not after every merge to `main`.
-
-Closed 2026-10-05 by module 227: CI runs on its runner's own stack. The group is gone; a push queues nothing.
-Fast-forwarding `integracion` still spends a run, so keep the advice above.
 
 ### A lane born for one app cannot typecheck the other until typegen runs there
 
@@ -1330,24 +1271,6 @@ la próxima vez.
   desfasado — no una molestia.
 - Un worker que ve un número que no cuadra con su despacho está viendo esto. Que lo diga y pare.
 
-## Los números de módulo se repiten entre slices, y los informes se pisan
-
-Medido 2026-09-08. `private/reportes/modulo-12-contrato-foto.md` iba a escribirse junto a un
-`modulo-12-driver-copia.md` de otro slice, y `modulo-13-proveedores-ia.md` junto a
-`modulo-13-cadenas.md`. Cada plan numera desde 1, así que el número solo es único dentro de su plan.
-
-- Nombra el informe por lo que hace, no solo por el número. `modulo-12-contrato-foto`, nunca `modulo-12`.
-- Comprueba `ls private/reportes/modulo-<n>-*` antes de escribir uno.
-
-## Copia el informe del carril antes de soltarlo
-
-Medido 2026-09-08. `git worktree remove ../finances-app-l3 --force` se llevó
-`modulo-12-contrato-foto.md` sin avisar: `private/` está en gitignore, así que el informe vivía solo
-ahí. Sobrevivió porque su contenido estaba en el cuerpo del PR y en `SPEC.md`.
-
-- `cp ../finances-app-l<n>/private/reportes/*.md private/reportes/` **antes** del `worktree remove`.
-- Escribe en el cuerpo del PR lo que decide, no solo en el informe. El PR sí viaja en git.
-
 ## Reddit bloquea el rastreador de Anthropic
 
 Medido 2026-09-08. `WebSearch` con `allowed_domains: ["reddit.com"]` devuelve
@@ -1426,6 +1349,9 @@ El segundo lo escribe `next dev`, no `next build`, y en un carril que corrió `n
   `Cannot find name 'PageProps'` en cada página—, y ése sí lo arregla un `next build`. Un carril
   recién nacido no tiene `.next` de ninguna app que no haya construido.
 - Ninguno de los dos es un rojo real. CI construye antes de comprobar y nunca los ve.
+- Un `validator.ts` generado que importa una ruta ya borrada (`Cannot find module '../../../app/<ruta>/page.js'`) es la misma
+  causa: una ruta de prueba o retirada deja su entrada en `.next/types` o `.next/dev/types`. `rm -rf .next/dev/types` basta.
+  Medido 2026-09-19 y 2026-09-22; el error aparece en el árbol del siguiente que corra `typecheck`.
 
 ## Una rama apilada no lleva la punta de la rama de la que salió
 
@@ -1741,6 +1667,9 @@ page already does, `</script` → `<\/script`, 164 of them as of version 24. Ass
 absence of a bare `</script` before publishing: a missed escape truncates the page into one that
 looks empty rather than broken.
 
+Before republishing, strip the publish skeleton the read prepends (everything before `<!doctype html>\n<html lang="en">`).
+Measured again 2026-10-16: the WordBook canvas read returned a 4.3 MB page, about 40k tokens.
+
 ### A server-rendered session turns a precached shell route into a leak
 
 `apps/wordbook/public/sw.js` precaches three shell routes and rewrites each one's cache entry on
@@ -1768,45 +1697,6 @@ it.** `npm run build -w apps/wordbook` prints `○ /registro` before and `ƒ /re
 fails; the route just starts costing a server render per visit. Diff the route table against the
 base branch whenever a page gains a call that reads cookies or headers.
 
-
-## Openverse y el bucket de Supabase: tres cosas que muerden al escribir el módulo
-
-**Describe una ruta retirada.** `RL-36`, la foto de la palabra, se retiró entero el 2026-09-14
-(`docs/wordbook/SPEC.md` §1 «Retired»); lo de abajo queda escrito porque costó un día, no porque siga
-en pie.
-
-Medido 2026-09-10 conduciendo la cadena entera —buscar, bajar, subir— antes de despachar nada.
-Las tres salieron en las primeras cinco palabras.
-
-### Los metadatos de S3 sólo admiten ASCII, y los autores de Openverse no lo son
-
-`put_object` con `Metadata={"creator": ...}` revienta con
-`ParamValidationError: Non ascii characters found in S3 metadata`. El autor que lo destapó venía
-como **`☺ Lee J Haywood`** — un emoticono dentro del nombre, en el primer resultado de `kettle`.
-
-**La atribución no va pegada al objeto en S3. Va a Postgres**, que además es de donde lee la lista
-por imagen de `/cuenta`. Pegarla al objeto era la arquitectura equivocada y el error lo dice antes.
-
-### Un resultado de Openverse puede apuntar a una imagen muerta
-
-`abeyance` devolvió un resultado válido cuya miniatura dio **`HTTP 424 Failed Dependency`** — el
-proxy de miniaturas de Openverse contesta 424 cuando el original de aguas arriba ya no está.
-
-- Pide **varios candidatos** (`page_size=5`), no uno.
-- Por cada candidato prueba `thumbnail` y, si falla, `url`.
-- Con eso, medido sobre 60 palabras: **93,3% bajan**, y en el 100% de las que tenían resultado
-  **sirvió el primer candidato**. El 424 es ocasional, no sistemático — pero sin reintento se lleva
-  por delante una palabra que sí tenía foto.
-- **La cobertura real es 93,3%, no el 95,7%** que salió al contar resultados en vez de descargas.
-  Contar resultados cuenta también los muertos.
-
-### Una «miniatura» de Openverse puede pesar 5,3 MB
-
-Sobre las mismas 60: mediana **44.117 B**, p90 **154.415 B**, **máximo 5.338.962 B**. No hay
-garantía de tamaño en el campo `thumbnail`.
-
-Guardar 5 MB para dibujar un cuadro de 76 px es tirar el bucket. **Pon un tope de bytes y descarta
-el candidato que lo pase**, pasando al siguiente — no lo recortes después de haberlo subido.
 
 ## El CSV de OpenAI no dice lo que gastó la app
 
@@ -1896,43 +1786,6 @@ navegación de URL o un `history.back()` sí destruyen antes de que la transacci
 comprometer — a diferencia de una pestaña matada, a esos tres nunca les da tiempo ni a eso. El
 arreglo sólo hace que *recuperar* dos veces la misma fila cueste una lectura de índice, nunca una
 fila de más.
-
-## `foto.spec.ts` no puede pedirle píxeles al bucket en CI, y no debe pedirle credenciales tampoco
-
-**Describe una ruta retirada.** `RL-36`, la foto de la palabra, se retiró entero el 2026-09-14
-(`docs/wordbook/SPEC.md` §1 «Retired»); `foto.spec.ts` y `/api/word/photo` salen del código en el
-módulo que lo construye, y lo de abajo queda escrito porque costó un día, no porque siga en pie.
-
-Medido 2026-09-11. `.github/workflows/ci.yml`'s `voyager-e2e` no define ninguna de las cinco
-`SUPABASE_STORAGE_*` que `isStorageConfigured()` exige — a propósito: dárselas a cada corrida de CI
-le daría a cualquier push escritura sobre el bucket de producción del usuario. Sin ellas, la ruta
-`GET /api/word/photo` nunca puede servir el objeto, así que una prueba que dependa del bucket para
-dibujar píxeles reales **no puede pasar en CI jamás**, con o sin credenciales de más.
-
-- La guarda (`isPhotographableHeadword`) sí se prueba sin bucket: corta antes de tocar Postgres o
-  Openverse, así que `grudge` responde 204 igual con o sin almacenamiento.
-- Que la ruta **acepte** una palabra fotografiable sólo se distingue de un fallo de bucket cuando la
-  palabra ya tiene una fila `found` cacheada — `dog` la tiene, en la base compartida que usan tanto
-  los carriles como CI (mismo `DATABASE_URL`). Sin esa fila cacheada, un `dog` sin bucket responde
-  204 igual que uno cuya guarda lo hubiera cortado: `getCachedPhoto` corre antes que
-  `isStorageConfigured`, así que una palabra sin caché y sin bucket nunca llega a Openverse. Purgar
-  esa fila deja esta distinción sin piso.
-- La costura del dibujo — que los bytes se conviertan en píxeles — se prueba con bytes **sembrados**,
-  no con el bucket: intercepta sólo `GET /api/word/photo?*` en el propio origen de la prueba
-  (`VOYAGER_BASE_URL`, nunca un patrón `**` que también atrape una URL absoluta a otro host) y
-  responde con un PNG generado por el propio `<canvas>` del navegador — decodificable de verdad,
-  nunca un data URI copiado a mano. El POST sigue siendo real: sólo se sustituyen los bytes que el
-  bucket habría servido.
-- Control negativo de la guarda: `isPhotographableHeadword` a `return true`, más `DATABASE_URL`
-  apuntado a un puerto que rechaza la conexión (nunca a la base real: así la guarda rota nunca llega
-  a escribir una fila de un headword que no pasa el corpus). `grudge` da `500`, no `204` — la prueba
-  se pone roja sin tocar la base compartida.
-- Control negativo del dibujo: revertir sólo `toWordPhoto` en `route.ts` a construir la URL absoluta
-  con `NEXT_PUBLIC_SITE_URL` (el defecto original de #152) sin tocar `protocol.ts`. El esquema
-  `photoResponseSchema` — endurecido en el mismo commit que arregló el defecto — ya rechaza esa URL
-  en el cliente (`.startsWith("/api/word/photo?")`), así que `fetchPhoto` cae a `catch` y la foto
-  queda `{ kind: "absent" }`: ni siquiera se monta un `<img>`. La prueba se pone roja en
-  `expect(img).toBeVisible()`, antes de llegar a la interceptación.
 
 ## The CREATE TABLE auto-grant does not reach a schema Supabase did not make
 
@@ -2172,6 +2025,8 @@ mv node_modules/exceljs.hidden node_modules/exceljs
 
 Hazlo con un `trap ... EXIT` que la restaure: la raíz de `node_modules` la comparten las dos apps.
 
+**Update:** `scripts/build-concreteness.ts` and `tsconfig.scripts.json` are gone from the tree; the lesson stands.
+
 ## El service worker guarda todas las versiones a la vez, y la pantalla mezcla dos
 
 **Medido el 2026-09-14, desde la consola del usuario en producción.**
@@ -2240,34 +2095,6 @@ Corrido desde el carril que sí tenía el fichero, la migración cayó y esas do
 Con una base compartida por todos los carriles y por producción, el fallo silencioso va en la
 dirección amable — no aplicar — pero la inversa es la misma trampa: un carril viejo puede aplicar
 una migración que otra rama ya renumeró.
-
-## `.next/types/validator.ts` sobrevive a la ruta que describe
-
-Medido tres veces el 2026-09-19, en tres árboles distintos, tras retirar `/api/word/photo`:
-
-```
-.next/types/validator.ts(134,39): error TS2307: Cannot find module '../../app/api/word/photo/route.js'
-```
-
-`tsgo` lee los tipos generados por una corrida anterior a que la ruta muriera. **No es una
-regresión y no hay nada que arreglar en el código.** `rm -rf .next && npx next typegen`, o
-cualquier `next build`, lo borra. `.next` no está versionado, así que no deja rastro en el árbol.
-
-Cuesta minutos cada vez que alguien lo lee como un rojo suyo: lo tropezaron el worker del módulo 8,
-su validador y el rebase de RL-49.
-
-Vuelve en Next 16 con otra ruta y otro nombre de archivo. Medido el 2026-09-22 en `apps/goallog`,
-lane 4, después de que un validador creara `app/uicheck9x/page.tsx` para medir la pantalla y la
-borrara al terminar:
-
-```
-.next/dev/types/validator.ts(51,39): error TS2307: Cannot find module '../../../app/uicheck9x/page.js'
-```
-
-Ahora los tipos del servidor de desarrollo viven en `.next/dev/types`, no en `.next/types`, y
-`rm -rf .next/dev/types` basta: no hace falta tirar `.next` entero ni volver a construir. **Una
-ruta de prueba que se borra deja su entrada detrás**, así que el rojo aparece en el árbol del
-siguiente que corra `typecheck`, no en el del que la creó.
 
 ## Un censo sobre el asset crudo no dice lo que la pantalla dibuja
 
@@ -2649,30 +2476,6 @@ attach, not to be visible.
 - **Also on the phone.** Bottom-right is the Metas tab's corner at 360: a spec that taps it (`varias-metas.spec.ts:16`)
   reads «`<nextjs-portal>` subtree intercepts pointer events» under `next dev`, with no error behind the badge.
   Measured 2026-10-06. Run the e2e against `npm run build` + `next start`, as `playwright.config.ts` says; never click `force`.
-
-## The `pulsar-e2e` queue holds one waiting run, and a newer one cancels it
-
-- **What.** The job's `concurrency: { group: pulsar-e2e, cancel-in-progress: false }` keeps one run
-  going and one waiting. A third pull request replaces the waiting one, which ends `cancelled` with no
-  steps. `gh pr checks` prints it as `fail`.
-- **Measured 2026-09-30.** #319 cancelled that way; #329 twice in one hour, each time by a PR opened
-  while it waited (#330, then #331). Both showed `fail 36s`–`1m7s`, `steps: []`.
-- **Do.** Open pulsar pull requests one at a time, each after the previous one's `pulsar-e2e` started.
-  Read `gh api repos/<repo>/actions/jobs/<id> -q .conclusion` before reading a `fail` as a red.
-  Relaunch a cancelled one with `gh run rerun <run> --failed`, or a rebase and push.
-- Closed 2026-10-05 by module 227: CI runs on its runner's own stack. The `pulsar-e2e` group is gone; a cancelled run with no steps is no longer this queue.
-
-## Two `voyager-e2e` runs at once fail `registro.spec.ts:568`
-
-- **What.** `voyager-e2e` has no concurrency group. Two pull requests ran it one minute apart against
-  the one database, and both failed «the foreign row never made it down» at `registro.spec.ts:606`.
-  The spec waits for the sync with `waitForTimeout(2000)`.
-- **Measured 2026-09-30.** #329 at 20:55 and #331 at 20:56, 191 passed / 1 failed each. #330 alone,
-  minutes before, passed. #329's rerun, alone, passed. Logs in `private/ci-reds/`.
-- **Do.** Read two simultaneous `voyager-e2e` reds on that spec as this collision, not as the branch.
-  Rerun it alone. Never answer it with a retry or a longer sleep: the sleep is the defect.
-- Closed 2026-10-05 by module 227: CI runs on its runner's own stack. Two `voyager-e2e` runs no longer share a database.
-  The `waitForTimeout(2000)` in the spec is still the defect.
 
 ## A policy mutant proved inside a rollback locks the shared database for everyone
 
@@ -3316,10 +3119,6 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - Every worktree that started `next dev` showed ` M apps/<app>/AGENTS.md`: the generated block's heading changes from `#` to `##`.
 - Do: commit the generated block with the work that started the server. Never count it as a worker's change.
 
-## A canvas read costs the main session about 40k tokens (2026-10-16)
-- `Artifact read` of the WordBook canvas returned the 4.3 MB page: the editor's stylesheet and fonts, before any board.
-- Do: read it once, and take the boards from the saved file with a script. They live in the `appifact-doc` script, `content.files`, one `.dc.html` each, plus `canvas.json`. Splice new boards in there. Before republishing, strip the publish skeleton the read prepends (everything before `<!doctype html>\n<html lang="en">`), and escape `</` in the JSON.
-
 ## `scripts/worktree.sh` cannot open a branch that already exists (2026-10-16)
 - `scripts/worktree.sh 7 wordbook-k1 --app wordbook` died with `fatal: a branch named 'wordbook-k1' already exists`: the script always passes `-b`.
 - Do: when the local branch equals its remote, delete the local one and open the lane from the remote: `git branch -D <b> && scripts/worktree.sh <n> <b> origin/<b>`, then `git branch --set-upstream-to=origin/<b>`.
@@ -3468,3 +3267,32 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - WordBook `e2e/export.spec.ts:487` armed its single IndexedDB failure right after load; under CI load a transaction the
   page opened on its own (history, counts, sync) spent it, the study read succeeded, and the failure line never showed
   (red in runs 39170958214 and 39179299274, green alone). Arm a one-shot fault on the action that must meet it (M80).
+
+## postgres.js with `prepare: false` describes every statement with parameters first
+
+Measured 2026-10-19 on GoalLog (M16's tester, `apps/goallog/scripts/plan/settle-pipeline.ts`). Under `prepare: false`,
+postgres.js sends a Describe for any statement with bind parameters and writes nothing else on the connection until it
+answers (`node_modules/postgres/src/connection.js:238`). Each such statement costs two round trips, and a second
+statement cannot ride the first by dropping an `await`: a one-statement form loader measured 5 round trips, not 4.
+
+- Count round trips on the wire, never from the number of `await`s.
+- A statement sent with no parameters (`.inlineParams()`, literals in the text) skips the Describe. It puts the values in
+  the SQL text: escape them, and make the validator read it.
+
+## A long `idle_timeout` keeps every test process alive
+
+Measured 2026-10-19 on GoalLog (`check:plan`). `apps/goallog/db/client.ts` sets `idle_timeout: 240` (RNP-02). A test file
+that reaches the app's code opens that pool and ends only its own `sql`, so `node --test` waits ~240 s for the idle
+sockets per file: pass 2 took 1927 s for 31 s of tests.
+
+- Preload `scripts/harness/end-app-pool.ts` with `--import`; it ends `globalThis.sql` in a root `after()`.
+- Never lower the timeout for tests: `settle-pipeline.ts` asserts 240.
+- Never use `--test-force-exit`: under `--experimental-test-module-mocks` it drops tests (561 to 533).
+
+## A wire check that reads a statement's parameters breaks when that statement is inlined
+
+- `check:day` and `check:goal` named each connection from the settle's `parameters[2]`. M16 sent the settle with
+  `.inlineParams()`, so it carries no parameters and every connection read `unknown`. Read the value from the
+  statement's text, or from both.
+- Measured 2026-10-19: `pulsar-checks` red on CI 39346172548 (`2 connection(s): unknown, unknown`). Local
+  `check:plan` never runs these checks; the train's first CI was cancelled before `pulsar-checks` finished.

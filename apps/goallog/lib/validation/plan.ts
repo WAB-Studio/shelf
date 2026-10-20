@@ -8,6 +8,10 @@ const civilDate = (message: string) => z.string().refine(isCivilDate, { error: m
 
 export const GOAL_NAME_MAX = 120;
 
+// RP-56: the id a client mints once per create and resends when the answer was lost. Never typed
+// by a person, so its refusal borrows a generic sentence.
+const requestId = z.uuid({ error: "plan.errors.notFound" }).optional();
+
 export const createGoalSchema = z.object({
   // Two fields, no measure (§0.3, 3): the measure columns land null and are
   // named later, by the first commitment that measures something.
@@ -20,6 +24,7 @@ export const createGoalSchema = z.object({
   horizon: civilDate("plan.errors.horizonInvalid").nullable().default(null),
   // The goal it opens inside (RP-78); absent for a goal on its own.
   parentId: z.uuid({ error: "plan.errors.goalInvalid" }).optional(),
+  requestId,
 });
 
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
@@ -43,7 +48,7 @@ export const phaseNotBackwards = {
 };
 
 export const addPhaseSchema = z
-  .object({ goalId: z.uuid({ error: "plan.errors.goalInvalid" }), ...phaseFields })
+  .object({ goalId: z.uuid({ error: "plan.errors.goalInvalid" }), ...phaseFields, requestId })
   .refine(phaseNotBackwards.check, phaseNotBackwards.params);
 
 export type AddPhaseInput = z.infer<typeof addPhaseSchema>;
@@ -173,6 +178,7 @@ export const addCommitmentSchema = z.intersection(
         .max(2000, { error: "plan.errors.noteTooLong" })
         .transform((value) => (value === "" ? undefined : value))
         .optional(),
+      requestId,
     }),
     cadenceSchema,
   ),

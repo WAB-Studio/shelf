@@ -20,7 +20,8 @@ const sql =
     // single connection turns them back into a queue (RNP-03).
     max: 8,
     // Seconds. postgres@3 defaults to null and would hold the socket forever.
-    idle_timeout: 20,
+    // Four minutes, so a person moving between screens finds one still open (RNP-02).
+    idle_timeout: 240,
     connect_timeout: 10,
     // Seconds before a failed connection retries. The default is pool-wide and
     // grows to 20 s, which holds a retried page on `loading.tsx` in an outage.

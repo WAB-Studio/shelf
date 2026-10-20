@@ -173,3 +173,15 @@ test("day.json: the task's two new refusals and the past heading read as the use
   assert.equal(done.titlePast, "Hechas ese día");
   assert.equal("dayOnOneOff" in errors, false);
 });
+
+// M8 (RP-56): a create resent after a lost answer carries the id it was sent with.
+test("createOneOffSchema: a uuid requestId is kept, one that is not a uuid is refused, none is as before", () => {
+  const requestId = "0b6f3c1e-2a4d-4e8f-9c7b-5d1a2e3f4b6c";
+  const kept = createOneOffSchema.safeParse({ name: "x", day: null, requestId });
+  assert.equal(kept.success, true);
+  assert.equal((kept.data as { requestId?: string }).requestId, requestId);
+  assert.equal(createOneOffSchema.safeParse({ name: "x", day: null, requestId: "otra-vez" }).success, false);
+  const bare = createOneOffSchema.safeParse({ name: "x", day: null });
+  assert.equal(bare.success, true);
+  assert.equal((bare.data as { requestId?: string }).requestId, undefined);
+});

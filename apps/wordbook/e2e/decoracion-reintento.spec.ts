@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, pageTasks, runClock, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -19,11 +19,8 @@ async function openReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  await expect(page.getByText(/Instalando el diccionario/)).toHaveCount(0);
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
-
-// Margin after one debounce window for a request to reach `page.on("request")`.
-const REQUEST_DELIVERY_MS = 300;
 
 const TEXT = {
   definition: null,
@@ -52,8 +49,10 @@ async function lookUp(page: Page, word: string): Promise<void> {
   await page.getByRole("textbox", { name: messages.search.label }).fill(word);
 }
 
+// Past one debounce window on a frozen clock: a request the screen was going
+// to send has left, and the screen has drawn what came back.
 async function settle(page: Page): Promise<void> {
-  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + REQUEST_DELIVERY_MS);
+  await runClock(page, PHRASE_DEBOUNCE_MS);
 }
 
 test("pending: the decoration's line shows while the text request is held open", async ({
@@ -81,9 +80,11 @@ test("an aborted text request is asked again the next time the word is looked up
   const asked = track(page, "/api/word/text", "headword");
   await openReady(page);
 
+  const aborted = page.waitForEvent("requestfailed", (request) => request.url().includes("/api/word/text"));
   await lookUp(page, "umbrella");
+  await aborted;
+  await pageTasks(page);
   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(1);
-  await settle(page);
   await expect(page.getByText(TEXT.example.en)).toHaveCount(0);
 
   await lookUp(page, "apple");
@@ -100,9 +101,11 @@ test("a 503 is asked again: first 503, then 200, and the example draws", async (
   const asked = track(page, "/api/word/text", "headword");
   await openReady(page);
 
+  const refused = page.waitForResponse((response) => response.url().includes("/api/word/text"));
   await lookUp(page, "umbrella");
+  await refused;
+  await pageTasks(page);
   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(1);
-  await settle(page);
   await expect(page.getByText(TEXT.example.en)).toHaveCount(0);
 
   await lookUp(page, "apple");
@@ -122,6 +125,7 @@ test("a 204 is not asked again: umbrella, apple, umbrella costs one request for 
   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(1);
   await lookUp(page, "apple");
   await expect.poll(() => asked.filter((w) => w === "apple").length).toBe(1);
+  await freezeTimers(page);
   await lookUp(page, "umbrella");
   await settle(page);
 
@@ -141,6 +145,7 @@ test("a 200 is not asked again: umbrella, apple, umbrella costs one request for 
   await expect(page.getByText(TEXT.example.en)).toBeVisible();
   await lookUp(page, "apple");
   await expect.poll(() => asked.filter((w) => w === "apple").length).toBe(1);
+  await freezeTimers(page);
   await lookUp(page, "umbrella");
   await expect(page.getByText(TEXT.example.en)).toBeVisible();
   await settle(page);

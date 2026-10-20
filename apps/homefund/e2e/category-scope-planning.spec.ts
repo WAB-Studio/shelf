@@ -60,6 +60,12 @@ function band(page: Page): Locator {
   return page.locator("main > div > .rt-Box").filter({ visible: true });
 }
 
+// One row menu per budget, named by its whole title: on the phone the fund's card
+// splits name and mark into two elements, so the bare name alone cannot count budgets.
+function budgetsTitled(page: Page, title: string): Locator {
+  return rowMenu(page, title);
+}
+
 function rowMenu(page: Page, title: string): Locator {
   return band(page).getByRole("button", {
     name: common.actionsFor.replace("{name}", title),
@@ -141,7 +147,7 @@ test.describe("budgets", () => {
     // Kills: every scope marked.
     await page.goto("/es/planning/budgets");
 
-    await expect(band(page).getByText(NAME, { exact: true })).toHaveCount(1);
+    await expect(budgetsTitled(page, NAME)).toHaveCount(1);
   });
 
   test("the new-budget dialog offers both categories apart", async ({ page }) => {
@@ -391,7 +397,7 @@ test.describe("a budget takes the place of its account", () => {
     expect(rows[0].account_id).toBe(ids.personalAccount);
     // The seeded personal budget and the new one both title bare; the fund's stays alone marked.
     await page.goto("/es/planning/budgets");
-    await expect(band(page).getByText(NAME, { exact: true })).toHaveCount(2);
+    await expect(budgetsTitled(page, NAME)).toHaveCount(2);
     await expect(band(page).getByText(MARKED, { exact: true })).toHaveCount(1);
   });
 

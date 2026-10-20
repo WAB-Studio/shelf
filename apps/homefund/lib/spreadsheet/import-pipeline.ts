@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { zipWithin } from "@repo/zip-guard";
 import { getLocale, getTranslations } from "next-intl/server";
 import { z } from "zod";
 
@@ -16,7 +17,7 @@ import { ActionError } from "@/lib/errors";
 import { centsToPesos } from "@/lib/money";
 import { resolveCategoryInScope, scopeKeyOf, type ScopeKey } from "@/lib/spreadsheet/resolve-category";
 import { SHEET_ENTITIES, sheetDescriptors, type SheetEntity } from "@/lib/spreadsheet/schema";
-import { parseWorkbook, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
+import { parseWorkbook, type ParsedRow, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
 import { importedAdjustmentSchema } from "@/lib/validation/account-reconciliation";
 import { createAccountSchema } from "@/lib/validation/account";
 import { createCategorySchema } from "@/lib/validation/category";
@@ -28,10 +29,15 @@ import { createTransactionSchema } from "@/lib/validation/transaction";
 // never runs the free tier's execution budget dry (RNF-15).
 const MAX_DATA_ROWS = 10_000;
 
+// What an upload may inflate to, judged by inflating before ExcelJS reads a byte (RNF-15).
+const ZIP_CAPS = { inflatedMax: 64 * 1024 * 1024, entriesMax: 200 };
+
 // Every error the pipeline reports is a catalogue key, translated by the screen that
 // shows it. The cap and the reference resolver raise these; a schema failure
 // carries its own field keys.
 export const TOO_MANY_ROWS = "data.import.errors.tooManyRows";
+// The bytes are not a workbook that inflates within the caps below.
+export const NOT_A_WORKBOOK = "data.import.errors.notWorkbook";
 const UNKNOWN_REFERENCE = "data.import.errors.unknownReference";
 const AMBIGUOUS_REFERENCE = "data.import.errors.ambiguousReference";
 // The name exists, but only in the scope the row's account is not in (RF-140).
@@ -310,6 +316,11 @@ function toNameShaped(entity: SheetEntity, raw: RawRow): Record<string, unknown>
         : typeof value === "string"
           ? value
           : "";
+  }
+  // A transfer carries no category (RF-20): the cell is dropped before the light guard, so
+  // whatever a backup left in it, even a name past the guard's bound, never refuses the row.
+  if (entity === "transactions" && text(raw.fromAccount).length > 0 && text(raw.toAccount).length > 0) {
+    shaped.category = null;
   }
   return shaped;
 }
@@ -712,6 +723,30 @@ export function processRow(
   return { ...carried, errors: [], object: checked.data };
 }
 
+// A blank reference becomes a key derived from the row's own content, so the same file imported
+// again lands on the same rows (RF-52). `twins` counts the identical rows already keyed in the
+// sheet: two equal rows keep two keys, and neither depends on where it sits.
+function withContentKeys(entity: SheetEntity, rows: ParsedRow[]): void {
+  const twins = new Map<string, number>();
+  for (const row of rows) {
+    const record = row.record as RawRow;
+    if (text(record.externalRef).length > 0) continue;
+    const content = Object.keys(record)
+      .filter((key) => key !== "externalRef")
+      .sort()
+      .flatMap((key) => {
+        const value = record[key];
+        const cell = typeof value === "string" ? value.trim() : value;
+        return cell == null || cell === "" ? [] : [[key, cell]];
+      });
+    const body = JSON.stringify([entity, content]);
+    const k = twins.get(body) ?? 0;
+    twins.set(body, k + 1);
+    const digest = createHash("sha256").update(`${body}\u0000${k}`).digest("hex");
+    record.externalRef = `imp:${digest.slice(0, 32)}`;
+  }
+}
+
 // The reverse label maps, built from the SAME `data` namespace the writer used for
 // the request locale, so a file downloaded in either language round-trips (RF-49).
 async function reverseLabels(): Promise<ReverseSheetLabels> {
@@ -774,7 +809,9 @@ export function buildEffectiveRefs(
  * a commit to apply. RLS bounds every read to the caller's scope.
  */
 export async function runImportPipeline(input: { buffer: ArrayBuffer }): Promise<ImportResult> {
+  if (!zipWithin(new Uint8Array(input.buffer), ZIP_CAPS)) throw new ActionError(NOT_A_WORKBOOK);
   const parsed = await parseWorkbook({ buffer: input.buffer, labels: await reverseLabels() });
+  for (const entity of SHEET_ENTITIES) withContentKeys(entity, parsed[entity] ?? []);
 
   // The cap is measured before any per-row work, across every sheet (RNF-15).
   const total = SHEET_ENTITIES.reduce((sum, entity) => sum + (parsed[entity]?.length ?? 0), 0);

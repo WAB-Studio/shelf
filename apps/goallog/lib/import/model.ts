@@ -29,8 +29,11 @@ export type PlanInput =
 
 export type Usage = { input: number; output: number };
 
+// A section of a long plan the second read could not answer: its heading and the lines it spans.
+export type LeftOutSection = { heading: string; from: number; to: number };
+
 export type PlanReading =
-  | { status: "ok"; raw: RawDraft; source: Source; usage: Usage }
+  | { status: "ok"; raw: RawDraft; source: Source; usage: Usage; leftOut?: LeftOutSection[] }
   | { status: "failed" | "invalid" | "empty" | "unreadableType"; usage?: Usage };
 
 // Strict mode takes `minimum`, `maximum`, `minItems` and `maxItems` but no `minLength` or
@@ -52,8 +55,6 @@ type Node = Record<string, any>; // eslint-disable-line @typescript-eslint/no-ex
 
 const NAME_LIMIT = "At most 120 characters: shorten it on a word and keep the plan's whole line in the note.";
 
-// `context` comes first: the answer is written in key order, so the moment `goals` opens is the
-// moment the model has finished finding.
 function buildSchema(): Node {
   const schema = withoutBounds(rawDraftJsonSchema) as Node;
   const goals = schema.properties.goals;
@@ -67,6 +68,7 @@ function buildSchema(): Node {
   goal.parent.description = "The key of the goal this one sits inside, or null. At most three levels: a goal inside a goal inside a goal.";
   goal.measure.description = "What the plan counts in. Hours when the plan counts hours.";
   task.name.description = NAME_LIMIT;
+  task.month.description = "YYYY-MM: the month the plan puts the task in. null when the plan gives the task no month: never invent one.";
   child.name.description = NAME_LIMIT;
   task.estimate.description = "Hours only on a task with no sub-tasks; null on a task that has sub-tasks. In the plan's own unit.";
   child.estimate.description = "In the plan's own unit; null when the plan gives none.";
@@ -85,26 +87,7 @@ function buildSchema(): Node {
   task.rule.description = "The \"id\" of the goal's rule that governs this task, or null.";
   child.rule.description = "The \"id\" of the rule that governs this sub-task, or null to take its task's.";
 
-  return {
-    ...schema,
-    properties: {
-      context: {
-        type: "array",
-        description: "What the plan is not: a diagnosis, costs, sources, a reading list, with the lines each spans.",
-        items: {
-          type: "object",
-          properties: {
-            what: { type: "string" },
-            src: goal.src,
-          },
-          required: ["what", "src"],
-          additionalProperties: false,
-        },
-      },
-      goals: schema.properties.goals,
-    },
-    required: ["context", "goals"],
-  };
+  return schema;
 }
 
 export const rawDraftStrictSchema = buildSchema();
@@ -206,7 +189,7 @@ function userContent(input: PlanInput, route: ReadableRoute, text: string | null
 }
 
 // Types, not limits: `rawDraftSchema` has none, so a name of 150 or nine times a week passes
-// and `normalize` fixes it. `context` is the model's scratch for the first step and is dropped.
+// and `normalize` fixes it. A `context` key from an older answer is dropped.
 function judge(content: unknown, usage: Usage | undefined, source: Source): PlanReading {
   let parsed: unknown;
   try {
@@ -342,11 +325,127 @@ export function modelAvailable(): boolean {
   return Boolean(env.OPENAI_API_KEY) || stubNow() !== null;
 }
 
+type Answer = Awaited<ReturnType<typeof readStream>>;
+
+// One streamed call over `content`. Null when the provider answered with an error status.
+async function ask(apiKey: string, content: unknown[], timeoutMs: number, onStep: (step: Step) => void): Promise<Answer | null> {
+  const body = {
+    model: MODEL_NAME,
+    reasoning_effort: REASONING_EFFORT,
+    max_completion_tokens: MAX_OUTPUT_TOKENS,
+    stream: true,
+    stream_options: { include_usage: true },
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "import_draft", schema: rawDraftStrictSchema, strict: true },
+    },
+    messages: [
+      { role: "system", content: importSystemPrompt(todayInZone()) },
+      { role: "user", content },
+    ],
+  };
+  const response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok || !response.body) {
+    console.error("import model read failed: status", response.status, await errorOf(response));
+    return null;
+  }
+  return readStream(response.body, onStep);
+}
+
+// The function lives 300 s: a second read starts only with this much left, and gets all but a margin.
+const FUNCTION_BUDGET_MS = 290_000;
+const SECTION_MARGIN_MS = 10_000;
+const SECTION_MIN_MS = 15_000;
+const SPLIT_OVER_LINES = 300;
+const TOP_HEADING = /^\s{0,3}#\s+(.*?)(?:\s+#+)?\s*$/;
+
+type Section = { heading: string; from: number; to: number };
+
+// The top-level (`#`) sections of a text longer than the cut read could carry; null when it has fewer
+// than two, since one section is the read that was just cut. Lines above the first heading join it.
+function topSections(lines: string[]): Section[] | null {
+  if (lines.length <= SPLIT_OVER_LINES) return null;
+  const starts = lines.flatMap((line, i) => (TOP_HEADING.test(line) ? [i + 1] : []));
+  if (starts.length < 2) return null;
+  return starts.map((from, k) => ({
+    heading: lines[from - 1].match(TOP_HEADING)?.[1].trim() ?? "",
+    from: k === 0 ? 1 : from,
+    to: k + 1 < starts.length ? starts[k + 1] - 1 : lines.length,
+  }));
+}
+
+const addUsage = (a: Usage, b?: Usage): Usage => ({ input: a.input + (b?.input ?? 0), output: a.output + (b?.output ?? 0) });
+
+/**
+ * A read the model cut by `length`, read again one top-level section at a time, in parallel. Each
+ * section is numbered with the plan's own line numbers, so every `src` is absolute. A section cut
+ * again, refused or unreadable is left out and named; the rest are kept. One follow-up claim covers
+ * the lot, and the read's own claim stays the caller's. Null when there is nothing to split or
+ * claim, or no section came back.
+ */
+async function readBySection(
+  apiKey: string,
+  input: PlanInput,
+  source: Source,
+  lines: string[],
+  startedAt: number,
+): Promise<PlanReading | null> {
+  const sections = topSections(lines);
+  if (sections === null) return null;
+  const timeoutMs = Math.min(REQUEST_TIMEOUT_MS, startedAt + FUNCTION_BUDGET_MS - Date.now() - SECTION_MARGIN_MS);
+  if (timeoutMs < SECTION_MIN_MS) return null;
+
+  // Loaded here, not at the top: `spend` is server-only and reaches the database, and the unit suite
+  // loads this file without either. A `require` is the load the suite's module mock also catches.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { claimFollowUp, settleModelCall } = require("./spend") as typeof import("./spend");
+  const claim = await claimFollowUp(MODEL_NAME, input.kind === "text" ? "paste" : "file");
+  if (!claim) return null;
+
+  const readings = await Promise.all(
+    sections.map(async (section): Promise<PlanReading> => {
+      try {
+        const text = lines.slice(section.from - 1, section.to).join("\n");
+        const answer = await ask(apiKey, [{ type: "text", text: numberLines(text, section.from) }], timeoutMs, () => {});
+        if (!answer || answer.finish === "length" || answer.refusal) return { status: "failed", usage: answer?.usage };
+        return judge(answer.content, answer.usage, source);
+      } catch (error) {
+        console.error("import model read failed:", error instanceof Error ? `${error.name}: ${error.message}` : "unknown");
+        return { status: "failed" };
+      }
+    }),
+  );
+
+  let usage: Usage = { input: 0, output: 0 };
+  const goals: RawDraft["goals"] = [];
+  const leftOut: LeftOutSection[] = [];
+  readings.forEach((reading, k) => {
+    usage = addUsage(usage, reading.usage);
+    if (reading.status === "ok") {
+      // Keys repeat from one section to the next: a parent is found by key inside its own section.
+      for (const goal of reading.raw.goals) {
+        goals.push({ ...goal, key: `s${k}:${goal.key}`, parent: goal.parent === null ? null : `s${k}:${goal.parent}` });
+      }
+    } else if (reading.status !== "empty") leftOut.push(sections[k]);
+  });
+
+  const settled = goals.length > 0;
+  await settleModelCall(claim.id, { inputTokens: usage.input, outputTokens: usage.output, outcome: settled ? "ok" : "failed" }).catch(() => false);
+  if (!settled) return null;
+  return { status: "ok", raw: { goals }, source, usage: { input: 0, output: 0 }, ...(leftOut.length > 0 ? { leftOut } : {}) };
+}
+
 /**
  * One streamed call: a pasted text or an uploaded file in, the model's raw draft out with the
  * source its lines came from. `onStep` hears «find» when the request leaves and «arrange» when
  * the answer opens `goals`. A PDF and an image go as parts, never parsed; a workbook is not the
- * model's. Never throws: every failure is a named status.
+ * model's. A long text whose answer is cut is read again by section. Never throws: every failure
+ * is a named status.
  */
 export async function readPlan(input: PlanInput, onStep: (step: Step) => void): Promise<PlanReading> {
   const route = input.kind === "text" ? "text" : fileRoute(input.name, input.type);
@@ -362,37 +461,16 @@ export async function readPlan(input: PlanInput, onStep: (step: Step) => void): 
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) return { status: "failed" };
 
-  const body = {
-    model: MODEL_NAME,
-    reasoning_effort: REASONING_EFFORT,
-    max_completion_tokens: MAX_OUTPUT_TOKENS,
-    stream: true,
-    stream_options: { include_usage: true },
-    response_format: {
-      type: "json_schema",
-      json_schema: { name: "import_draft", schema: rawDraftStrictSchema, strict: true },
-    },
-    messages: [
-      { role: "system", content: importSystemPrompt(todayInZone()) },
-      { role: "user", content: userContent(input, route, text) },
-    ],
-  };
-
+  const startedAt = Date.now();
   try {
     onStep("find");
-    const response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok || !response.body) {
-      console.error("import model read failed: status", response.status, await errorOf(response));
-      return { status: "failed" };
+    const answer = await ask(apiKey, userContent(input, route, text), REQUEST_TIMEOUT_MS, onStep);
+    if (!answer) return { status: "failed" };
+    if (answer.refusal) return { status: "failed", usage: answer.usage };
+    if (answer.finish === "length") {
+      const split = text === null ? null : await readBySection(apiKey, input, source, splitLines(text), startedAt);
+      return split ? { ...split, usage: answer.usage ?? { input: 0, output: 0 } } : { status: "failed", usage: answer.usage };
     }
-
-    const answer = await readStream(response.body, onStep);
-    if (answer.finish === "length" || answer.refusal) return { status: "failed", usage: answer.usage };
     return judge(answer.content, answer.usage, source);
   } catch (error) {
     console.error("import model read failed:", error instanceof Error ? `${error.name}: ${error.message}` : "unknown");

@@ -109,7 +109,7 @@ export function ChatScreen() {
     const change = turn?.role === "chat" ? turn.changes.find((c) => c.id === id) : undefined;
     if (!change || change.state !== "open") return;
     try {
-      const result = await makeChatChange({ tool: change.tool, input: change.input });
+      const result = await makeChatChange({ tool: change.tool, input: change.input, requestId: change.id });
       updateTurns((all) =>
         restate(all, at, id, result.ok ? { state: "made" } : { state: "refused", reason: { text: result.message } }),
       );

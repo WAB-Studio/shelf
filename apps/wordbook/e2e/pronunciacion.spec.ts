@@ -18,9 +18,8 @@ async function loadDictionary(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. Give it room before the box is used.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 // The IPA heading each pronunciation block of the entry at the top of the
@@ -37,10 +36,6 @@ async function blockHeads(page: Page): Promise<string[]> {
       .map((block) => block.getAttribute("data-pronunciation-block") ?? "");
   });
 }
-
-// `word.spec.ts`'s own margin: what the decoration hook needs to resolve
-// `/api/word/text` and paint, past the answer the device already drew.
-const DECORATION_SETTLE_MARGIN_MS = 900;
 
 async function answer(page: Page, word: string): Promise<void> {
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
@@ -237,7 +232,6 @@ test("RL-51: the generated example names the block it belongs to, and only on a 
   await loadDictionary(page);
 
   await answer(page, "row");
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
   await expect(page.getByText("Me gusta remar el bote.")).toBeVisible();
   const named = messages.word.examplePronunciation.replace("{ipa}", "/rɑː/");
   await expect(page.getByText(named, { exact: true })).toBeVisible();
@@ -255,7 +249,6 @@ test("RL-51: the generated example names the block it belongs to, and only on a 
   // An entry that draws no block gains nothing: there is no second
   // pronunciation the example could have been read as.
   await answer(page, "umbrella");
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
   await expect(page.getByText("Me gusta remar el bote.")).toBeVisible();
   await expect(page.locator("main [data-generated-pronunciation]")).toHaveCount(0);
 });

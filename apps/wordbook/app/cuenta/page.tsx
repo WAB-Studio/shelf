@@ -52,7 +52,11 @@ export default async function CuentaPage({
               {t(`errors.${linkFailure}Title`)}
             </Text>
             <Text size="2" muted>
-              {t(`errors.${linkFailure}Body`)}
+              {t(
+                linkFailure === "linkOtherBrowser" && reader
+                  ? "errors.linkOtherBrowserSignedInBody"
+                  : `errors.${linkFailure}Body`,
+              )}
             </Text>
           </Flex>
         )}

@@ -1895,3 +1895,21 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
 - **A goal's note reaches the AI cut to 2.000 characters** with its length, and `get_note` reads the whole (Q20 a), with
   the chat work of wave 3. MCP refusals keep their per-tool sentences (Q21 b).
 - **A refresh token or code reused within 30 s answers `invalid_grant` without revoking the connection** (Q22 a).
+
+## Decisions of 2026-10-18, on plan oleada-4, by the user
+
+- **A task the plan gives no month, in a goal with no rhythm** (Q2 a): the import puts it in the current month, and the
+  review shows it as a correction «el plan no le da mes → <mes>», accepted by default. Declined, the task is left out with
+  its reason (RP-90). No new screen. Not built yet.
+- **The chat and the connected AI change a task's estimate and a phase's aim and dates** (Q3 a): RP-119 retired, RP-139
+  opened. Two tools and their approval-card lines. Not built yet.
+- **Moving a task to another goal** (Q4 a): a new act on the task sheet and a tool, with its RP code and its board, as a
+  slice of its own after oleada-4. Not planned yet.
+- **The paid chat measurement** (Q9, Q9 bis): OpenAI only, without gpt-5 and without the GPT-5.6 Sol tier («cosas caras»).
+  Models: `gpt-5-nano`, `gpt-4.1-nano`, `gpt-5-mini` (then today's), `gpt-4.1-mini`, `gpt-6-luna` and `gpt-5.6-luna` («Luna, me
+  refiero al modelo Luna»). OpenAI's list prices read 2026-10-18 for the Lunas: GPT-6 Luna USD 0.10 in / 0.50 out per
+  million tokens, GPT-5.6 Luna 0.20 / 1.20 (developers.openai.com/api/docs/pricing). About USD 1.40 for the run at the
+  bench's estimate; re-read every price on the day. RP-93 changed only once the user picked from the table; on 2026-10-19 it became RP-140.
+- **S1, the models measured** (2026-10-19, the user, option b): the six agreed, `gpt-5-nano`, `gpt-4.1-nano`, `gpt-5-mini`,
+  `gpt-4.1-mini`, `gpt-6-luna`, `gpt-5.6-luna`, about USD 1.28, though OpenAI marks the first four deprecated (read
+  2026-10-19 on developers.openai.com). Not run yet: the main session builds the bench seed, re-reads the prices, then runs it.

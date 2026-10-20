@@ -15,9 +15,9 @@ type ExportState = { kind: "idle" } | { kind: "building" } | { kind: "done" } | 
 type AnkiState =
   | { kind: "idle" }
   | { kind: "building" }
-  | { kind: "done"; cards: number; skipped: number }
+  | { kind: "done"; cards: number; skipped: number; pending: number }
   | { kind: "failed" };
-type AnkiCounts = { kind: "loading" } | { kind: "ready"; cards: number; words: number } | { kind: "failed" };
+type AnkiCounts = { kind: "loading" } | { kind: "ready"; cards: number; words: number; pending: number; skipped: number } | { kind: "failed" };
 
 function pad(value: number): string {
   return value.toString().padStart(2, "0");
@@ -67,9 +67,9 @@ export function ExportPanel() {
         });
       // The card count rides the same request id: the newer reply wins.
       readAnkiCounts()
-        .then(({ cards, words }) => {
+        .then(({ cards, words, pending, skipped }) => {
           if (cancelled || thisRequest !== requestId) return;
-          setAnkiCounts({ kind: "ready", cards, words });
+          setAnkiCounts({ kind: "ready", cards, words, pending, skipped });
         })
         .catch(() => {
           if (!cancelled && thisRequest === requestId) setAnkiCounts({ kind: "failed" });
@@ -110,9 +110,9 @@ export function ExportPanel() {
   async function handleAnki(): Promise<void> {
     setAnkiState({ kind: "building" });
     try {
-      const { csv, cards, skipped } = await buildAnkiExport();
+      const { csv, cards, skipped, pending } = await buildAnkiExport();
       downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), exportFileName(new Date(), "-anki.csv"));
-      setAnkiState({ kind: "done", cards, skipped });
+      setAnkiState({ kind: "done", cards, skipped, pending });
     } catch {
       setAnkiState({ kind: "failed" });
     }
@@ -166,7 +166,22 @@ export function ExportPanel() {
           {/* No card to give: the link is gone and its place says why
               (RL-72). Until the count is known the link does not draw; a
               failed count draws it, and the click builds and reports. */}
-          {ankiCounts.kind === "ready" && ankiCounts.cards === 0 && (
+          {/* Words that wait are not «sin traducción guardada»: with any, the
+              no-card line gives way to the waiting line and the left-out one. */}
+          {ankiCounts.kind === "ready" && ankiCounts.cards === 0 && ankiCounts.pending > 0 && (
+            <Flex direction="column" gap="1">
+              <Text size="2" muted>
+                {t("study.ankiPending", { count: ankiCounts.pending })}
+              </Text>
+              {ankiCounts.skipped > 0 && (
+                <Text size="2" muted>
+                  {t("study.ankiSkipped", { count: ankiCounts.skipped })}
+                </Text>
+              )}
+            </Flex>
+          )}
+
+          {ankiCounts.kind === "ready" && ankiCounts.cards === 0 && ankiCounts.pending === 0 && (
             <Text size="2" muted>
               {t("study.ankiNone", { words: ankiCounts.words })}
             </Text>
@@ -187,6 +202,11 @@ export function ExportPanel() {
                   <Text size="2" muted>
                     {t("study.ankiDone", { cards: ankiState.cards })}
                   </Text>
+                  {ankiState.pending > 0 && (
+                    <Text size="2" muted>
+                      {t("study.ankiPending", { count: ankiState.pending })}
+                    </Text>
+                  )}
                   {ankiState.skipped > 0 && (
                     <Text size="2" muted>
                       {t("study.ankiSkipped", { count: ankiState.skipped })}

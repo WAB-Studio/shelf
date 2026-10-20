@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, runClock, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -38,9 +38,9 @@ async function deleteSpeechSynthesis(page: Page): Promise<void> {
   });
 }
 
-// `useDecoration`'s own debounce (`PHRASE_DEBOUNCE_MS`) plus margin: long
-// enough that its pair of requests has fired by the time this elapses.
-const DECORATION_SETTLE_MARGIN_MS = 900;
+// `search-screen.tsx`'s own constant, not exported: the debounce the
+// decoration's requests wait out.
+const PHRASE_DEBOUNCE_MS = 600;
 
 async function gotoReady(page: Page): Promise<void> {
   const assetResponse = page.waitForResponse(
@@ -48,9 +48,8 @@ async function gotoReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  // The fetch settling is not the worker posting "ready": buildIndex still
-  // has to run over 64,258 entries. Give it room before the box is used.
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 }
 
 test("RL-26: a headword with IPA can be heard, in the browser's own voice", async ({ page }) => {
@@ -131,6 +130,7 @@ test("RL-26: pressing the speak control fires no network request of its own", as
   await deleteTranslator(page);
   await captureSpeech(page);
   await gotoReady(page);
+  await freezeTimers(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
@@ -139,7 +139,7 @@ test("RL-26: pressing the speak control fires no network request of its own", as
   // count below isolates typing and speaking, not that one-time cost.
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(300);
+  await page.evaluate(() => document.fonts.ready);
 
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));
@@ -157,7 +157,7 @@ test("RL-26: pressing the speak control fires no network request of its own", as
   // nothing of its own.
   const speakButton = page.getByRole("button", { name: "Escuchar «abandonable»" });
   await speakButton.click();
-  await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
+  await runClock(page, PHRASE_DEBOUNCE_MS);
 
   const stray = requests.filter((url) => !url.includes(manifest.asset.path) && !url.includes("/api/word/"));
   expect(stray, `requests foreign to decoration: ${JSON.stringify(stray)}`).toEqual([]);

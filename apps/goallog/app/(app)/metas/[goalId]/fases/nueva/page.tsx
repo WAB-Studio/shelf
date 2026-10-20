@@ -4,14 +4,14 @@ import { notFound, redirect } from "next/navigation";
 
 import { PhaseForm } from "@/components/goal/phase-form";
 import { defaultPhaseWeeks } from "@/components/goal/phase-weeks";
-import { loadGoal } from "@/lib/queries/goal";
+import { loadGoalForm } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
 import { civilDateInZone } from "@/lib/zone";
 
 /**
  * `CompromisoNuevo.dc.html`'s own shape, for a phase (RP-15): the auth gate
  * and the one query `PhaseForm` needs — the goal's own opening, horizon and
- * every phase it already has, all in `loadGoal`'s single statement
+ * every phase it already has, all in `loadGoalForm`'s single statement
  * (`lib/queries/goal.ts`), the same shape `app/metas/[goalId]/compromisos/
  * nuevo/page.tsx` takes for a commitment. Prefills the next open span: from
  * the week after the last phase ends (1 with none), four weeks long at most,
@@ -32,7 +32,7 @@ export default async function NewPhasePage({
   if (!person) redirect("/entrar");
 
   const { goalId } = await params;
-  const goal = await loadGoal(goalId);
+  const goal = await loadGoalForm(goalId);
   if (!goal) notFound();
   // RP-24: an archived or ended goal draws no "Añadir una fase" way in; a
   // direct visit to this route is refused the same way `listGoals` (open-only)

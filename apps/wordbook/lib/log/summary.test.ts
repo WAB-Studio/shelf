@@ -454,3 +454,50 @@ test("subida de versión: a v2 base opens at v3 with the same rows and the headw
   assert.ok(seen.indexes.includes("headword"));
   assert.ok(seen.indexes.includes("normalised"));
 });
+
+// --- RL-76: a group whose every row waits for its answer reads pending ---
+
+const waiting = { schema: 4, outcome: "miss" as const, headword: null, senses: 0, translation: null };
+
+test("pendiente: un grupo con solo filas pendientes se lee pendiente", async () => {
+  currentRows = [row(1, "zorp", waiting), row(2, "zorp", { ...waiting, at: 1_800_000_000_000 })];
+  const { readWordStudy } = await getSummary();
+  const { rows } = await readWordStudy();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].pending, true);
+});
+
+test("pendiente: una frase sin traducir y pendiente se lee pendiente", async () => {
+  currentRows = [row(1, "the cat sat", { ...waiting, kind: "phrase", outcome: "untranslated" })];
+  const { readWordStudy } = await getSummary();
+  assert.equal((await readWordStudy()).rows[0].pending, true);
+});
+
+test("pendiente: una fila respondida en el grupo lo deja respondido, la vieja o la nueva", async () => {
+  const answered = { outcome: "unlisted" as const, headword: null, senses: 0, translation: "zorpo" };
+  const { readWordStudy } = await getSummary();
+  currentRows = [row(1, "zorp", { ...waiting, at: 2000 }), row(2, "zorp", { ...answered, at: 1000 })];
+  assert.notEqual((await readWordStudy()).rows[0].pending, true, "answered row older");
+  currentRows = [row(1, "zorp", { ...waiting, at: 1000 }), row(2, "zorp", { ...answered, at: 2000 })];
+  assert.notEqual((await readWordStudy()).rows[0].pending, true, "answered row newer");
+});
+
+test("pendiente: un grupo pendiente no contagia a los demás", async () => {
+  currentRows = [row(1, "zorp", waiting), row(2, "cat")];
+  const { readWordStudy } = await getSummary();
+  const byWord = new Map((await readWordStudy()).rows.map((r) => [r.normalised, r]));
+  assert.equal(byWord.get("zorp")?.pending, true);
+  assert.notEqual(byWord.get("cat")?.pending, true);
+});
+
+test("legado: un «miss» de esquema 3 nunca se lee pendiente", async () => {
+  currentRows = [row(1, "zorp", { ...waiting, schema: 3 })];
+  const { readWordStudy } = await getSummary();
+  assert.notEqual((await readWordStudy()).rows[0].pending, true);
+});
+
+test("ajena: un «miss» de esquema 4 bajado de otro dispositivo no se lee pendiente", async () => {
+  currentRows = [row(1, "zorp", { ...waiting, device: "other", deviceSeq: 3 })];
+  const { readWordStudy } = await getSummary();
+  assert.notEqual((await readWordStudy()).rows[0].pending, true);
+});

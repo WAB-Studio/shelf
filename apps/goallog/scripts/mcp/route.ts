@@ -151,7 +151,7 @@ test("tools/list lists the read and write tools and none that deletes or archive
   for (const name of ["list_goals", "get_goal", "get_month", "get_today", "create_task", "complete_task", "set_month_amount"]) {
     assert.ok(names.includes(name), `${name} missing`);
   }
-  assert.equal(names.length, 6 + 18, names.join(","));
+  assert.equal(names.length, 6 + 20, names.join(","));
   assert.deepEqual(names.filter((name) => /delete|archive|remove|undo|revoke/.test(name)), []);
   for (const name of ["fix_task", "unfix_task"]) assert.ok(names.includes(name), `${name} missing`);
   for (const name of ["accept_shift", "move_task_to_month"]) assert.ok(!names.includes(name), `${name} must be gone`);

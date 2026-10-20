@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { readE2eFiles, scan, type Allowed } from "./check-e2e-static";
+import { readE2eFiles, scan, scanEntrar, type Allowed } from "./check-e2e-static";
 
 const lines = (...l: string[]) => [{ name: "x.spec.ts", text: ["test(\"a\", async ({ page }) => {", ...l, "});"].join("\n") }];
 const run = (l: string[], allowed: Allowed[] = []) => scan(lines(...l), allowed);
@@ -184,4 +184,55 @@ test("the files the check reads are every .ts of the folder: helpers beside spec
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// RNP-09: no spec submits `/entrar` with a typed address unless it answers the send action itself.
+const TYPES_AND_SENDS = [
+  "  await page.goto(\"/entrar\");",
+  "  await page.getByLabel(\"Correo electrónico\").fill(\"a@b.co\");",
+  "  await page.getByRole(\"button\", { name: \"Enviar código\", exact: true }).click();",
+];
+const FAKED = [
+  "  await page.route(\"**/*\", async (route) => {",
+  "    if (!route.request().headers()[\"next-action\"]) return route.continue();",
+  "    await route.fulfill({ status: 200, contentType: \"text/x-component\", body });",
+  "  });",
+];
+
+test("a spec that fills /entrar's address and submits is reported", () => {
+  const out = scanEntrar([SPEC(TYPES_AND_SENDS)], []);
+  assert.equal(out.violations.length, 1);
+  assert.equal(out.violations[0].file, "y.spec.ts");
+  assert.equal(out.violations[0].line, 3);
+});
+
+for (const verb of ["type", "pressSequentially"]) {
+  test(`${verb} on the address field counts as typing`, () => {
+    const lines = TYPES_AND_SENDS.map((l) => l.replace(".fill(", `.${verb}(`));
+    assert.equal(scanEntrar([SPEC(lines)], []).violations.length, 1);
+  });
+}
+
+test("a spec that fakes the send action's answer is not reported", () => {
+  assert.equal(scanEntrar([SPEC([...FAKED, ...TYPES_AND_SENDS])], []).violations.length, 0);
+});
+
+test("a spec that visits /entrar and types nothing is not reported", () => {
+  assert.equal(scanEntrar([SPEC([TYPES_AND_SENDS[0]])], []).violations.length, 0);
+});
+
+test("a spec that types the address and never submits is not reported", () => {
+  assert.equal(scanEntrar([SPEC(TYPES_AND_SENDS.slice(0, 2))], []).violations.length, 0);
+});
+
+test("a comment is not a typed address", () => {
+  const commented = TYPES_AND_SENDS.map((l) => l.replace(/^ {2}/, "  // "));
+  assert.equal(scanEntrar([SPEC(commented)], []).violations.length, 0);
+});
+
+test("a file in the local-mailbox list is not reported, and a listed file that no longer types is stale", () => {
+  const allowed = [{ file: "y.spec.ts", why: "reason" }];
+  assert.equal(scanEntrar([SPEC(TYPES_AND_SENDS)], allowed).violations.length, 0);
+  const out = scanEntrar([SPEC([TYPES_AND_SENDS[0]])], allowed);
+  assert.deepEqual(out.stale, allowed);
 });

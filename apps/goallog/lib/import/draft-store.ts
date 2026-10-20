@@ -27,7 +27,12 @@ export type StoredDraft = {
   declined: string[];
   // Correction ids the person accepted by hand; with `declined` they decide which panel a correction draws.
   accepted?: string[];
+  // The id «Crear plan» sends (RP-56): minted with the draft, so a tap repeated after a lost answer, or after a
+  // reload, is the same request. A read always has one.
+  requestId?: string;
 };
+
+export type ReadDraft = StoredDraft & { requestId: string };
 
 // A plan written in the template or the workbook is saved as written: its corrections start declined and the
 // person accepts the ones she wants. The model's reading starts with them accepted (RP-122).
@@ -42,7 +47,7 @@ export function saveDraft(input: {
   sourceName?: string | null;
   text?: string | null;
 }): void {
-  write({ version: 2, ...input, sourceName: input.sourceName ?? null, text: input.text ?? null, unmarked: null, declined: input.via === "model" ? [] : input.corrections.map((c) => c.id) });
+  write({ version: 2, requestId: crypto.randomUUID(), ...input, sourceName: input.sourceName ?? null, text: input.text ?? null, unmarked: null, declined: input.via === "model" ? [] : input.corrections.map((c) => c.id) });
 }
 
 // Rewrites the draft, the unmarked paths and the declined corrections, and the corrections themselves when
@@ -57,7 +62,7 @@ const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filt
 const records = <T>(value: unknown): T[] => (Array.isArray(value) ? value.filter((p): p is T => typeof p === "object" && p !== null) : []);
 
 // `null` for nothing stored, anything unreadable, a version other than 2, or a draft the schema refuses.
-export function readDraft(): StoredDraft | null {
+export function readDraft(): ReadDraft | null {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
@@ -70,8 +75,12 @@ export function readDraft(): StoredDraft | null {
     if (source === null || typeof source !== "object") return null;
     if (source.kind !== "lines" && source.kind !== "rows" && source.kind !== "parts") return null;
     if (source.lines !== null && !Array.isArray(source.lines)) return null;
-    return {
+    // A draft stored before the id existed gets one now, kept for every later read.
+    const minted = typeof parsed.requestId !== "string";
+    const requestId = typeof parsed.requestId === "string" ? parsed.requestId : crypto.randomUUID();
+    const read: ReadDraft = {
       version: 2,
+      requestId,
       via: parsed.via,
       draft: draft.data,
       corrections: records<Correction>(parsed.corrections),
@@ -83,6 +92,8 @@ export function readDraft(): StoredDraft | null {
       declined: strings(parsed.declined),
       accepted: strings(parsed.accepted),
     };
+    if (minted) write(read);
+    return read;
   } catch {
     return null;
   }

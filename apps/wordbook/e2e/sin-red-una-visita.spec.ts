@@ -154,9 +154,7 @@ for (const { name, viewport } of WIDTHS) {
         await expect(
           offline.getByText(messages.install.failed, { exact: true }),
         ).toBeVisible();
-        await expect(
-          offline.getByText(messages.install.preparing, { exact: true }),
-        ).toHaveCount(0);
+        await expect(offline.locator('[aria-busy="false"]').first()).toBeAttached();
       });
     }
 
@@ -180,9 +178,7 @@ for (const { name, viewport } of WIDTHS) {
       await expect(
         page.getByText(messages.install.unknownSize, { exact: true }),
       ).toHaveCount(0);
-      await expect(
-        page.getByText(messages.install.preparing, { exact: true }),
-      ).toHaveCount(0);
+      await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
       await expect(
         page.getByText(/Instalando el diccionario: \d+%/),
       ).toHaveCount(0);

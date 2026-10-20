@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, freezeTimers, runClock, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -259,7 +259,22 @@ async function stopProbe(page: Page): Promise<number[]> {
   });
 }
 
-test("every lookup that finds an answer is recorded, a miss leaves no row, a fat log costs nothing, and a lost log costs nothing either", async ({
+// The install has finished drawing; a lookup typed now queues behind the worker's index build.
+async function dictionaryReady(page: Page): Promise<void> {
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
+  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+}
+
+// The write is asynchronous: wait for the row count of `normalised` instead of sleeping.
+async function rowsFor(page: Page, normalised: string, count: number): Promise<void> {
+  await expect
+    .poll(async () => (await readLogRows(page)).filter((row) => row.normalised === normalised).length, {
+      message: `rows for "${normalised}"`,
+    })
+    .toBe(count);
+}
+
+test("every lookup that finds an answer is recorded, a miss the network was asked about waits as a pending row, a fat log costs nothing, and a lost log costs nothing either", async ({
   page,
   context,
 }) => {
@@ -274,7 +289,7 @@ test("every lookup that finds an answer is recorded, a miss leaves no row, a fat
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
@@ -282,21 +297,25 @@ test("every lookup that finds an answer is recorded, a miss leaves no row, a fat
   // one row, not a deck full of "thro" and "throu".
   await searchBox.pressSequentially("throughout", { delay: 30 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "throughout", 1);
 
   const afterWord = await readLogRows(page);
-  expect(afterWord.filter((row) => row.normalised === "throughout")).toHaveLength(1);
   expect(afterWord).toHaveLength(1);
 
-  // A word the dictionary carries nothing for: RL-39 leaves no row for a
-  // miss, so the log stays at the one row "throughout" already wrote.
+  // RL-76: a word the dictionary carries nothing for, whose network answer
+  // never came (the stubbed route answers 204), waits as one pending row.
   await searchBox.fill("zzqxplorph");
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "zzqxplorph", 1);
 
   const afterMiss = await readLogRows(page);
-  expect(afterMiss.find((row) => row.normalised === "zzqxplorph")).toBeUndefined();
-  expect(afterMiss).toHaveLength(1);
+  expect(afterMiss.find((row) => row.normalised === "zzqxplorph")).toMatchObject({
+    schema: 4,
+    kind: "word",
+    outcome: "miss",
+    text: "zzqxplorph",
+  });
+  expect(afterMiss).toHaveLength(2);
 
   // A query typed while the install is still running: a second page shares
   // the same origin's storage, so its row lands beside the first one. A
@@ -318,7 +337,7 @@ test("every lookup that finds an answer is recorded, a miss leaves no row, a fat
   // cleared to force the row's flush.
   await expect(installingPage.getByRole("heading", { name: "apple" })).toBeVisible({ timeout: 8000 });
   await installingBox.fill("");
-  await installingPage.waitForTimeout(300);
+  await rowsFor(installingPage, "apple", 1);
   await installingPage.close();
 
   const afterInstalling = await readLogRows(page);
@@ -330,11 +349,11 @@ test("every lookup that finds an answer is recorded, a miss leaves no row, a fat
   await seedLocalRows(page, 10_000);
 
   const seededCount = (await readLogRows(page)).length;
-  expect(seededCount).toBe(10_002);
+  expect(seededCount).toBe(10_003);
 
   const durations = await measureWorkerRoundTrips(page, 200, "throughout");
   const p95 = percentile(durations, 95);
-  console.log(`RNL-01 worker round trip, 200 lookups, log at 10,002 rows — p95 ${p95.toFixed(3)} ms`);
+  console.log(`RNL-01 worker round trip, 200 lookups, log at 10,003 rows — p95 ${p95.toFixed(3)} ms`);
   expect(p95).toBeLessThan(10);
 
   // A lost log, mid-session: force-clear IndexedDB the way a browser's own
@@ -353,7 +372,9 @@ test("every lookup that finds an answer is recorded, a miss leaves no row, a fat
   await searchBox.fill("throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  // Leaving forces the write the vanished log must swallow before errors are read.
+  await page.reload();
+  await dictionaryReady(page);
 
   expect(pageErrors).toEqual([]);
 });
@@ -384,14 +405,15 @@ test("RNL-01: a lookup answers in under 10ms at the median and at the 95th perce
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   // `reading-log` opens lazily, on the first settled query: one throwaway
   // lookup stands up the v3 schema and the app mints its device row.
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.pressSequentially("primer", { delay: 30 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "primer", 1);
 
   // The copy is switched on in storage; the tab then hides, which is what runs
   // the driver for a signed-in reader. The first round waits at the gate.
@@ -428,7 +450,8 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut betw
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
@@ -440,7 +463,7 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut betw
   await searchBox.fill("back");
   await expect(page.getByRole("heading", { name: "back" })).toBeVisible({ timeout: 5000 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "back", 1);
 
   const backRow = (await readLogRows(page)).find((row) => row.normalised === "back");
   expect(backRow?.senses).toBe(4);
@@ -454,7 +477,7 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut betw
     timeout: 5000,
   });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "the road to hell is paved with good intentions", 1);
 
   const idiomRow = (await readLogRows(page)).find(
     (row) => row.normalised === "the road to hell is paved with good intentions",
@@ -470,7 +493,7 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut betw
   await searchBox.fill("anyway");
   await expect(page.getByRole("heading", { name: "anyway" })).toBeVisible({ timeout: 5000 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "anyway", 1);
 
   const anywayRow = (await readLogRows(page)).find((row) => row.normalised === "anyway");
   expect(anywayRow?.senses).toBe(1);
@@ -494,14 +517,17 @@ test("a killed tab still commits the query it had settled on, and a fast one sti
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
   // Past the 800ms settle, short of the 5000ms forced flush: only the
   // `pagehide` path below, not a timer, can be what lands this row.
   await searchBox.fill("lemon");
-  await page.waitForTimeout(2000);
+  await expect(page.getByRole("heading", { name: "lemon" })).toBeVisible({ timeout: 5000 });
+  await runClock(page, 1000);
   await page.close();
 
   const reopened = await context.newPage();
@@ -511,10 +537,12 @@ test("a killed tab still commits the query it had settled on, and a fast one sti
 
   // The regression the fix must not open: four keystrokes chained well
   // under the settle window, killed mid-chain, must still land as one row.
+  await dictionaryReady(reopened);
+  await freezeTimers(reopened);
   const chainedBox = reopened.getByRole("textbox", { name: messages.search.label });
   for (const step of ["b", "bo", "boo", "book"]) {
     await chainedBox.fill(step);
-    await reopened.waitForTimeout(150);
+    await runClock(reopened, 150);
   }
   await reopened.close();
 
@@ -538,13 +566,16 @@ test("a reload still commits the query it had settled on", async ({ page }) => {
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   // Past the 800ms settle, short of the 5000ms forced flush: only the
   // reload path below, not a timer, can be what lands this row.
   await searchBox.fill("lemon");
-  await page.waitForTimeout(2000);
+  await expect(page.getByRole("heading", { name: "lemon" })).toBeVisible({ timeout: 5000 });
+  await runClock(page, 1000);
   await page.reload();
 
   const rows = await readLogRows(page);
@@ -558,11 +589,14 @@ test("a URL navigation to another route still commits the query it had settled o
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("lemon");
-  await page.waitForTimeout(2000);
+  await expect(page.getByRole("heading", { name: "lemon" })).toBeVisible({ timeout: 5000 });
+  await runClock(page, 1000);
   await page.goto("/cuenta");
 
   const rows = await readLogRows(page);
@@ -576,11 +610,14 @@ test("going back in the history still commits the query it had settled on", asyn
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("lemon");
-  await page.waitForTimeout(2000);
+  await expect(page.getByRole("heading", { name: "lemon" })).toBeVisible({ timeout: 5000 });
+  await runClock(page, 1000);
   await page.goto("/cuenta");
   await page.goBack();
   // `goBack()` itself resolves once the browser commits the navigation;
@@ -600,15 +637,17 @@ test("a reload still groups four keystrokes chained under the settle window into
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   // The regression the relay must not open: four keystrokes chained well
   // under the settle window, killed by a reload mid-chain, must still land
   // as the one row the last of them named, never four.
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   for (const step of ["b", "bo", "boo", "book"]) {
     await searchBox.fill(step);
-    await page.waitForTimeout(150);
+    await runClock(page, 150);
   }
   await page.reload();
 
@@ -625,7 +664,7 @@ test("a reload still groups four keystrokes chained under the settle window into
 // real entry — translation "TEA" — so typing on to "asdkjhqwe" (a miss)
 // and leaving reproduces exactly what a live drive of `integracion` found:
 // `asd | exact | TEA`, a row the reader never searched for.
-test("a headword typed on into nonsense and abandoned leaves no row, not the headword it passed through", async ({
+test("a headword typed on into nonsense and abandoned leaves the nonsense waiting as one pending row, not the headword it passed through", async ({
   page,
 }) => {
   await deleteTranslator(page);
@@ -634,20 +673,14 @@ test("a headword typed on into nonsense and abandoned leaves no row, not the hea
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.pressSequentially("asdkjhqwe", { delay: 30 });
-  // Past the 800ms settle: "asd" (a hit) has already been displaced from
-  // `pending` by "asdkjhqwe" (a miss) through the strict-prefix merge in
-  // `settleCandidate`, well before either navigation below runs.
-  await page.waitForTimeout(1000);
-
-  // The relay `commit` would otherwise write before either IndexedDB path
-  // is tried (`record.ts`): a miss must never reach it, or a reload could
-  // resurrect the very row this test proves never lands.
-  const relayedBeforeLeaving = await page.evaluate(() => window.localStorage.getItem("voyager:pending-log-row"));
-  expect(relayedBeforeLeaving).toBeNull();
+  // "asd" (a hit) is displaced from `pending` by "asdkjhqwe" (a miss) through
+  // the strict-prefix merge in `settleCandidate`, as the keystrokes land.
+  await expect(searchBox).toHaveValue("asdkjhqwe");
+  await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
 
   // The reported reproduction itself: leave for `/registro` with the box
   // still full of "asdkjhqwe" — a full navigation, so `pagehide` is what
@@ -656,13 +689,17 @@ test("a headword typed on into nonsense and abandoned leaves no row, not the hea
   // from instead.
   await page.goto("/registro");
 
+  await rowsFor(page, "asdkjhqwe", 1);
   const rows = await readLogRows(page);
   expect(rows.find((row) => row.normalised === "asd")).toBeUndefined();
-  expect(rows.find((row) => row.normalised === "asdkjhqwe")).toBeUndefined();
-  expect(rows).toHaveLength(0);
-
-  const relayedAfterLeaving = await page.evaluate(() => window.localStorage.getItem("voyager:pending-log-row"));
-  expect(relayedAfterLeaving).toBeNull();
+  // RL-76: the nonsense the reader left was a word the network would have been
+  // asked about; it waits, and the headword it passed through leaves nothing.
+  expect(rows.find((row) => row.normalised === "asdkjhqwe")).toMatchObject({
+    schema: 4,
+    kind: "word",
+    outcome: "miss",
+  });
+  expect(rows.filter((row) => row.normalised.startsWith("asd"))).toHaveLength(1);
 });
 
 test("book, an emptied box, then cat leaves exactly two rows, one per word", async ({ page }) => {
@@ -672,19 +709,20 @@ test("book, an emptied box, then cat leaves exactly two rows, one per word", asy
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
 
   await searchBox.fill("book");
   await expect(page.getByRole("heading", { name: "book" })).toBeVisible({ timeout: 5000 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "book", 1);
 
   await searchBox.fill("cat");
   await expect(page.getByRole("heading", { name: "cat" })).toBeVisible({ timeout: 5000 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "cat", 1);
 
   const rows = await readLogRows(page);
   expect(rows).toHaveLength(2);
@@ -701,7 +739,8 @@ test("a word typed slowly enough to have crossed the retired 5s ceiling still la
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   // The reported reproduction, unchanged: "weight" typed one letter at a
   // time with 2200ms between keystrokes is the exact gap that used to split
@@ -710,13 +749,14 @@ test("a word typed slowly enough to have crossed the retired 5s ceiling still la
   // box empties, this screen unmounts, the tab hides or the page unloads —
   // never on a clock — so six keystrokes spanning 13s+ still owe one row.
   const word = "weight";
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   for (let length = 1; length <= word.length; length++) {
     await searchBox.fill(word.slice(0, length));
-    await page.waitForTimeout(2200);
+    await runClock(page, 2200);
   }
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "weight", 1);
 
   const rows = await readLogRows(page);
   expect(rows.filter((row) => row.normalised.startsWith("w"))).toHaveLength(1);
@@ -730,7 +770,8 @@ test("the same word typed at ordinary speed, 120ms per keystroke, still lands as
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   // The other timing named in the regression: fast enough that every
   // intermediate prefix's own lookup answer can still land before the next
@@ -741,7 +782,7 @@ test("the same word typed at ordinary speed, 120ms per keystroke, still lands as
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.pressSequentially(word, { delay: 120 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "weight", 1);
 
   const rows = await readLogRows(page);
   expect(rows.filter((row) => row.normalised.startsWith("w"))).toHaveLength(1);
@@ -766,12 +807,15 @@ for (const teardown of ["goto", "reload"] as const) {
     );
     await page.goto("/");
     await assetResponse;
-    await page.waitForTimeout(1000);
+    // aria-busy turns false once the worker has built its index and the install is done.
+    await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
+    await freezeTimers(page);
     const searchBox = page.getByRole("textbox", { name: messages.search.label });
     await searchBox.fill("book");
+    await expect(page.getByRole("heading", { name: "book" })).toBeVisible({ timeout: 5000 });
     // Past the 800ms settle: "book" is `pending` before "cat" displaces it.
-    await page.waitForTimeout(1200);
+    await runClock(page, 1200);
     // Replace the box's whole content, never emptying it first.
     await searchBox.fill("cat");
 
@@ -796,19 +840,24 @@ test("three words answered in a row with no empty box between them, abandoned co
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   // Each word given its own full settle before the next replaces it: the
   // relay never has to hold more than one row at a time here, unlike the
   // matrix above. This is the ordinary chain the list-based relay must
   // still not break — three separate words, three separate rows.
+  await freezeTimers(page);
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("book");
-  await page.waitForTimeout(1200);
+  await expect(page.getByRole("heading", { name: "book" })).toBeVisible({ timeout: 5000 });
+  await runClock(page, 1200);
   await searchBox.fill("cat");
-  await page.waitForTimeout(1200);
+  await expect(page.getByRole("heading", { name: "cat" })).toBeVisible({ timeout: 5000 });
+  await runClock(page, 1200);
   await searchBox.fill("lemon");
-  await page.waitForTimeout(1200);
+  await expect(page.getByRole("heading", { name: "lemon" })).toBeVisible({ timeout: 5000 });
+  await runClock(page, 1200);
   await page.goto("/registro");
 
   const rows = await readLogRows(page);
@@ -825,7 +874,8 @@ test("one word, no navigating away, leaves exactly one row, not a duplicate from
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  // aria-busy turns false once the worker has built its index and the install is done.
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   // Emptying the box is what commits "lemon" here, the same trigger the
   // "book, an emptied box, then cat" test above uses: nothing tears the
@@ -835,10 +885,11 @@ test("one word, no navigating away, leaves exactly one row, not a duplicate from
   await searchBox.fill("lemon");
   await expect(page.getByRole("heading", { name: "lemon" })).toBeVisible({ timeout: 5000 });
   await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await rowsFor(page, "lemon", 1);
 
-  const relayed = await page.evaluate(() => window.localStorage.getItem("voyager:pending-log-row"));
-  expect(relayed).toBeNull();
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem("voyager:pending-log-row")))
+    .toBeNull();
 
   // A later reload is not the teardown "lemon" was ever at risk from — its
   // own relay entry already cleared once `oncomplete` ran — so

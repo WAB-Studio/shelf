@@ -44,3 +44,13 @@ test("a malformed update is refused whatever is wrong with it", () => {
 test("updates must be a list", () => {
   assert.equal(importUpdateSchema.safeParse({ draft, updates: update }).success, false);
 });
+
+// M8 (RP-56): the review sends the id its draft was saved with; a resend carries the same.
+test("importUpdateSchema: a uuid requestId is kept beside the draft, one that is not a uuid is refused", () => {
+  const requestId = "0b6f3c1e-2a4d-4e8f-9c7b-5d1a2e3f4b6c";
+  const kept = importUpdateSchema.safeParse({ draft, updates: [], requestId });
+  assert.equal(kept.success, true);
+  assert.equal((kept.data as { requestId?: string }).requestId, requestId);
+  assert.equal(importUpdateSchema.safeParse({ draft, updates: [], requestId: "otra-vez" }).success, false);
+  assert.equal(importUpdateSchema.safeParse({ draft, updates: [] }).success, true);
+});

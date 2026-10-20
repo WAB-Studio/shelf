@@ -14,6 +14,10 @@ const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 const MAX_OUTPUT_TOKENS = 8_000;
 const REASONING_EFFORT = "low";
 const REQUEST_TIMEOUT_MS = 120_000;
+// The function lives 300 s: the pass gets what is left of 290 s less a margin, and is skipped under the floor.
+const FUNCTION_BUDGET_MS = 290_000;
+const MARGIN_MS = 10_000;
+const FLOOR_MS = 15_000;
 
 export type Move = { from: number; task: number; to: number };
 
@@ -147,18 +151,20 @@ function validMoves(draft: ImportDraft, holders: number[], answer: z.infer<typeo
 /**
  * One short, non-streamed call (903c): the tasks of each goal that holds goals, and those goals, in; the
  * moves the model proposes out, kept only when the draft can hold them. Never throws: a failure is a named
- * status and the draft stays as the read left it.
+ * status and the draft stays as the read left it. `startedAt` is when the request began (ms).
  */
-export async function proposeMoves(draft: ImportDraft): Promise<ArrangeReading> {
+export async function proposeMoves(draft: ImportDraft, startedAt: number): Promise<ArrangeReading> {
   const holders = holdersOf(draft);
   const apiKey = env.OPENAI_API_KEY;
   if (holders.length === 0 || !apiKey || stubbed()) return { status: "none" };
+  const timeoutMs = Math.min(REQUEST_TIMEOUT_MS, startedAt + FUNCTION_BUDGET_MS - Date.now() - MARGIN_MS);
+  if (timeoutMs < FLOOR_MS) return { status: "none" };
   try {
     const response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(requestBody(draft, holders)),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
       console.error("import arrange failed: status", response.status);

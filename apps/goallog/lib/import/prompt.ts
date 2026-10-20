@@ -2,16 +2,17 @@
 // each part came from (`src`) and `normalize` can copy them literally.
 export const splitLines = (text: string): string[] => text.split(/\r?\n/);
 
-export function numberLines(text: string): string {
+// `first` numbers a part of a longer text with the whole text's own line numbers.
+export function numberLines(text: string, first = 1): string {
   return splitLines(text)
-    .map((line, index) => `${index + 1}|${line}`)
+    .map((line, index) => `${first + index}|${line}`)
     .join("\n");
 }
 
 export const SYSTEM_PROMPT = [
   `You read a personal plan and write it into the given schema in three steps, in one answer.`,
   `Step 1, find: decide what is plan (goals, phases, months, weeks, commitments, tasks, steps, hours) and what is context ` +
-    `(a diagnosis, costs, sources, a reading list). Write the context first, under "context", each with the lines it spans.`,
+    `(a diagnosis, costs, sources, a reading list). Leave the context out of the answer.`,
   `Step 2, arrange: put the plan into the app's shape under "goals", up to three levels of goals (a goal names its parent by key), ` +
     `phases, months, commitments, tasks with sub-tasks.`,
   `Step 3 is not yours: the app checks the plan against itself.`,
@@ -29,7 +30,7 @@ export const SYSTEM_PROMPT = [
   `Write each week the plan lists as a task, with its sub-tasks where the plan writes them.`,
   `Write a rule the plan sets («3 hours of English every week») under "rules" with its quantity per week, and name it on the tasks it governs.`,
   `A commitment's cadence stays in range: times per week from 1 to 7.`,
-  `Write every date as YYYY-MM-DD and every month as YYYY-MM. A goal's horizon is the day after its last day; ` +
+  `Write every date as YYYY-MM-DD and every month as YYYY-MM. A task's month is null when the plan gives the task none: never invent one. A goal's horizon is the day after its last day; ` +
     `it is null when the plan sets no end for the goal. ` +
     `Keep the plan's own language for names.`,
 ].join(" ");

@@ -1857,3 +1857,30 @@ Canvas «Diccionario de lectura», page «Registro», v55. Dark 360. Built in de
 - **«Pedirlo» says when the browser refuses** (Q29 a, 2026-10-18): the button stays, and a refusal shows «El navegador no lo
   permitió; instala WordBook en tu pantalla de inicio para que lo guarde.» Board to draw before its module.
 - **RL-75 opened, RL-74 kept** (the user, 2026-10-18).
+
+## Boards of 2026-10-18: the pending row (RL-76), the signed-in link line, and the install line's silence
+
+Canvas «Diccionario de lectura», v58. Dark 360, the primary face; no second face (light and desktop change only tokens
+and width). RL-76 decided by the user 2026-10-18.
+
+- **`RegistroPendiente`** (page «Registro»): a pending group sits among the answered ones in their usual order, same row
+  structure (typed text in the accent, the count on the right). Its second line, in the quietest ink, reads
+  «Sin respuesta todavía»; its third reads «Se responde sola cuando vuelva la conexión.» for a word and
+  «Se traduce sola cuando vuelva la conexión.» for a sentence. It shows no translation and no forms. Tapping it opens
+  its word page.
+- **`PalabraPendiente`** (page «Registro»): `/registro/<word>` for a word whose only row waits. Under the heading, a
+  bare notice (rule, then a bold line, then body): «Esta búsqueda espera respuesta» over «No había conexión cuando la
+  buscaste. Se responde sola cuando vuelva, y su traducción aparece aquí.» Then «Búsquedas» with the row's moment. No
+  translation, no «Escuchar», no example, and no button to ask now.
+- **`CopiaAnkiPendiente`** (page «Registro»): after a download, a line of its own, before the left-out line and never
+  summed with it: «3 palabras esperan respuesta: entran en Anki cuando la tengan.»; one: «1 palabra espera respuesta:
+  entra en Anki cuando la tenga.» The left-out line (`log.study.ankiSkipped`) stays as it is.
+- **`CuentaOtroNavegadorConSesion`** (page «Cuenta»): `?error=linkOtherBrowser` with a session open. Same notice and
+  title as `CuentaEnlaceOtroNavegador`; its body (`errors.linkOtherBrowserSignedInBody`) reads «Por seguridad el enlace
+  solo entra en el navegador que lo pidió. Aquí ya tienes la sesión abierta; si querías entrar en otro navegador, abre
+  el enlace allí.» Below it, the signed-in screen as it is. Without a session the body stays «… Pide uno nuevo aquí
+  abajo si cambiaste.»
+- **The install line draws nothing while the worker boots.** «Instalando el diccionario en el dispositivo» appears only
+  once installing starts. No board for that silence.
+- **Not drawn:** a pending row on desktop, in light, and while the network is answering it (it changes in place to an
+  answered row, as `RegistroClaroMovil` draws); a pending sentence's own page (a sentence has no word page).

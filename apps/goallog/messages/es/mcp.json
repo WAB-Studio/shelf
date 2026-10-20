@@ -14,17 +14,22 @@
     "schedule_task": "Pone un día a una tarea suelta o del mes. El día va como AAAA-MM-DD y no puede ser anterior a hoy. Nunca borra.",
     "set_month_amount": "Fija cuánto se planea en un mes abierto de una meta que mide algo. El monto va como entero en la unidad de la meta y el mes como AAAA-MM. Un mes ya terminado no se cambia. Nunca borra.",
     "rename_goal": "Cambia el nombre de una meta: texto de hasta 120 caracteres, sin espacios a los lados; un nombre en blanco se rechaza. Nunca borra ni archiva.",
-    "add_phase": "Agrega a una meta una fase de semanas con un solo objetivo (aim, hasta 200 caracteres), del día starts_on al día ends_on, ambos incluidos y como AAAA-MM-DD. ends_on no va antes de starts_on ni pasa del plazo de la meta, y la fase no comparte ningún día con otra. Para cambiar una fase hay que agregar otra. Nunca borra.",
+    "add_phase": "Agrega a una meta una fase de semanas con un solo objetivo (aim, hasta 200 caracteres), del día starts_on al día ends_on, ambos incluidos y como AAAA-MM-DD. ends_on no va antes de starts_on ni pasa del plazo de la meta, y la fase no comparte ningún día con otra. Nunca borra.",
     "add_commitment": "Agrega un compromiso (name, hasta 120 caracteres) a una meta; sin goal_id crea un hábito sin meta. Su cadencia (cadence_kind): daily, a diario; weekdays, los días de cadence_weekdays, numerados de 1 = lunes a 7 = domingo; times_per_week, cadence_n veces por semana (1 a 7); every_n_days, cada cadence_n días (1 a 365); times_per_month, cadence_n veces por mes (1 a 31). Se satisface (satisfaction) con un toque (tap); con una cantidad (quantity), que pide target_quantity, un entero positivo, y unit, la palabra de la persona para lo que cuenta; o con la evidencia de otra app (evidence), que pide source_key, la clave de la fuente (reading_lookups: las palabras buscadas en WordBook), y threshold, el mínimo que la fuente debe contar ese día. Nunca borra.",
     "move_horizon": "Mueve el plazo de una meta a otro día, o se lo da a una meta que no tiene final. El plazo es el día siguiente al último día de la meta, va como AAAA-MM-DD, debe ser posterior a hoy y no puede quedar antes del final de una fase. Nunca quita el final: eso lo hace solo la persona. Nunca borra ni archiva.",
     "fix_task": "Fija una tarea sin hacer a un mes de su meta, con sus sub-tareas: la tarea queda en ese mes; las demás se acomodan. El mes va como AAAA-MM, dentro de la meta y sin haber terminado. Una tarea hecha o con día no se fija. No cambia el ritmo de la meta. Nunca borra.",
     "unfix_task": "Devuelve al plan una tarea fijada a un mes: el plan vuelve a darle su mes y las demás se acomodan. Una tarea hecha no se cambia. No cambia el ritmo de la meta. Nunca borra.",
+    "set_task_estimate": "Cambia la estimación de una tarea sin hacer de una meta que mide tiempo: estimate es un entero positivo en minutos; nulo la quita, y la tarea sigue en su mes. Una tarea con sub-tareas no tiene estimación propia. Una tarea hecha no se cambia. Nunca borra.",
+    "edit_phase": "Cambia el objetivo (aim, hasta 200 caracteres) y los días de una fase: del día starts_on al día ends_on, ambos incluidos y como AAAA-MM-DD. Van los cuatro valores, también los que no cambian. ends_on no va antes de starts_on ni pasa del plazo de la meta, y la fase no comparte ningún día con otra. Nunca borra.",
     "create_goal": "Abre una meta nueva con su nombre (hasta 120 caracteres) y, si lo tiene, su plazo: el día siguiente a su último día, como AAAA-MM-DD; sin plazo la meta no termina nunca; mide lo que mida su primer compromiso con cantidad. Con parent_id la abre dentro de otra meta: caben tres niveles y su plazo no pasa del de la de arriba. Nunca borra.",
     "move_goal": "Mueve una meta bajo otra (parent_id) o la deja arriba, sin meta encima (parent_id nulo), con las metas que tiene dentro. Se rechaza lo que cierra un ciclo, pasa de tres niveles o termina después que la de arriba. Una meta con metas dentro no tiene ritmo ni monto propios. Nunca borra ni archiva.",
     "set_goal_note": "Escribe la nota de una meta, o la reemplaza por una nueva: texto plano de hasta 100 000 caracteres, con saltos de línea. Nunca la vacía: una nota en blanco se rechaza. Nunca borra.",
     "retire_commitment": "Retira un compromiso: deja de preguntar desde hoy y los días ya hechos quedan hechos. Para cambiarlo, retíralo y agrega otro. Nunca borra.",
     "set_rhythm": "Pone o cambia el ritmo de una meta que mide algo: amount es un entero en la unidad de la meta, y en minutos si mide tiempo (de 1 a 44 640). Una meta con metas dentro no tiene ritmo propio. El primer ritmo de una meta en tiempo devuelve al plan sus tareas fijas sin hacer; cambiarlo no toca los meses ya cerrados. Nunca lo quita: eso lo hace solo la persona. Nunca borra.",
     "set_measure": "Le da su medida a una meta que todavía no mide: name es lo que cuenta (hasta 120 caracteres) y unit su unidad (hasta 40); «horas» se guarda en minutos. Una meta que ya mide nunca cambia su medida, y una con metas dentro no tiene medida propia. Nunca borra."
+  },
+  "fields": {
+    "request_id": "Un uuid tuyo: si repites la llamada con el mismo, no se crea dos veces."
   },
   "errors": {
     "goalNotFound": "Esa meta no existe o no es de esta persona.",
@@ -34,6 +39,7 @@
     "unauthorized": "La llave no es válida o ya se revocó. Crea otra en GoalLog, en Conexiones.",
     "byTool": {
       "create_task:month.errors.invalid": "Combinación no válida. Usa una de estas: suelta (solo name, y day opcional); del mes (goal_id + planned_month, sin day); en el plan (goal_id + in_plan: true, sin day ni parent_id); sub-tarea (parent_id, sin goal_id ni planned_month ni day).",
+      "set_task_estimate:plan.errors.notFound": "Eso ya no existe.",
       "*:day.errors.notFound": "No hay una tarea o compromiso con ese id para esta persona. Lee los ids con get_goal, get_today o list_loose_one_offs.",
       "*:plan.errors.notFound": "No hay nada con ese id para esta persona. Vuelve a leerlo con list_goals o get_goal.",
       "*:month.errors.invalid": "Algún campo no es válido. Revisa el formato: ids uuid, meses AAAA-MM, días AAAA-MM-DD, montos enteros."

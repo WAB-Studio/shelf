@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { createTranslator } from "next-intl";
+
 import mcp from "../../messages/es/mcp.json";
 import chat from "../../messages/es/chat.json";
 import { errorOf } from "../mcp/errors";
+import { civilDayMonthShort } from "../zone";
 import { describeChange, type ChangeNames } from "./describe";
 
 const WRITES = Object.keys(mcp.tools).filter((name) => !/^(get|list)_/.test(name));
@@ -11,21 +14,23 @@ const WRITES = Object.keys(mcp.tools).filter((name) => !/^(get|list)_/.test(name
 const G = "11111111-1111-4111-8111-111111111111";
 const T = "22222222-2222-4222-8222-222222222222";
 const C = "33333333-3333-4333-8333-333333333333";
+const P = "55555555-5555-4555-8555-555555555555";
 const OTHER = "99999999-9999-4999-8999-999999999999";
 
-const names: ChangeNames = {
+const names = {
+  phases: new Map([[P, { aim: "Fundamentos", startsOn: "2026-10-05", endsOn: "2026-10-25", goalId: G }]]),
   goals: new Map([
     [G, { name: "EF SET 36+", unit: "minutos", horizon: "2027-03-01", hasNote: false, months: { "2026-12": 90 }, rhythm: 600 }],
     ["44444444-4444-4444-8444-444444444444", { name: "Inglés B1", unit: null, horizon: "2027-01-01", hasNote: true, months: {} as Record<string, number>, rhythm: null }],
   ]),
   tasks: new Map([[T, { name: "Maze", month: null, day: null, hasNote: false }]]),
   commitments: new Map([[C, { name: "Repasar vocabulario", unit: null, target: null }]]),
-};
+} as ChangeNames;
 
 const change = (tool: string, input: Record<string, unknown>) => ({ id: "c1", tool, input });
 
 test("the catalogue holds one sentence per write tool", () => {
-  assert.equal(WRITES.length, 18);
+  assert.equal(WRITES.length, 20);
   for (const name of WRITES) {
     assert.equal(typeof (chat.change as Record<string, unknown>)[name], "string", name);
   }
@@ -99,6 +104,8 @@ test("every tool describes itself over its own ids", () => {
     retire_commitment: { commitment_id: C },
     set_rhythm: { goal_id: G, amount: 600 },
     set_measure: { goal_id: G, name: "Cajas", unit: "cajas" },
+    set_task_estimate: { one_off_id: T, estimate: 180 },
+    edit_phase: { phase_id: P, aim: "Medir", starts_on: "2026-11-02", ends_on: "2026-11-30" },
   };
   assert.deepEqual(Object.keys(inputs).sort(), [...WRITES].sort());
   for (const name of WRITES) {
@@ -252,6 +259,8 @@ const PLACEHOLDERS: Record<string, string[]> = {
   retire_commitment: ["commitment"],
   set_rhythm: ["goal"],
   set_measure: ["goal"],
+  set_task_estimate: ["estimate", "task"],
+  edit_phase: ["aim", "from", "phase", "to"],
 };
 
 test("every change phrase opens with an infinitive and keeps its placeholders", () => {
@@ -337,4 +346,86 @@ test("set_rhythm and set_measure on a goal the person has not are refused; a bla
   for (const amount of [null, -1, 1.5, "40"]) {
     assert.deepEqual(describeChange(change("set_rhythm", { goal_id: READING, amount }), withGoals), REFUSED, String(amount));
   }
+});
+
+const say = createTranslator({ locale: "es", messages: { chat } });
+const sentence = (out: { key: string; values: Record<string, string> }) =>
+  say(out.key as Parameters<typeof say>[0], out.values);
+
+// RP-139, DESIGN «A change's line keeps the screens' words».
+test("RP-139: an estimate reads «Estimar «Maze» en 3 h»", () => {
+  const out = describeChange(change("set_task_estimate", { one_off_id: T, estimate: 180 }), names);
+  assert.ok("key" in out);
+  assert.equal(sentence(out), "Estimar «Maze» en 3 h");
+});
+
+test("RP-139: an estimate of an hour and a half reads in the app's time words", () => {
+  const out = describeChange(change("set_task_estimate", { one_off_id: T, estimate: 90 }), names);
+  assert.ok("key" in out);
+  assert.equal(sentence(out), "Estimar «Maze» en 1 h 30 min");
+});
+
+test("RP-139: a null estimate reads «Quitar la estimación de «Maze»»", () => {
+  const out = describeChange(change("set_task_estimate", { one_off_id: T, estimate: null }), names);
+  assert.ok("key" in out);
+  assert.equal(sentence(out), "Quitar la estimación de «Maze»");
+});
+
+test("RP-139: an estimate of a task the person does not own describes nothing", () => {
+  assert.ok("key" in describeChange(change("set_task_estimate", { one_off_id: T, estimate: 60 }), names));
+  assert.deepEqual(describeChange(change("set_task_estimate", { one_off_id: OTHER, estimate: 60 }), names), {
+    refused: "chat.errors.notInPlan",
+  });
+});
+
+test("RP-139: a phase change names the phase, the new aim and the new days", () => {
+  const out = describeChange(
+    change("edit_phase", { phase_id: P, aim: "Medir", starts_on: "2026-11-02", ends_on: "2026-11-30" }),
+    names,
+  );
+  assert.ok("key" in out);
+  assert.equal(out.key, "chat.change.edit_phase");
+  const line = sentence(out);
+  assert.match(line, /^Cambiar la fase «/);
+  assert.ok(line.includes("Medir"), line);
+  assert.ok(line.includes(civilDayMonthShort("2026-11-02")), line);
+  assert.ok(line.includes(civilDayMonthShort("2026-11-30")), line);
+  assert.ok(line.includes("→"), line);
+});
+
+test("RP-139: a phase change keeps «antes → después» in mono, the days it had and the days it takes", () => {
+  const out = describeChange(
+    change("edit_phase", { phase_id: P, aim: "Medir", starts_on: "2026-11-02", ends_on: "2026-11-30" }),
+    names,
+  );
+  assert.ok("key" in out);
+  const before = Object.values(out.values).join(" | ");
+  assert.ok(before.includes(civilDayMonthShort("2026-10-05")), before);
+  assert.ok(before.includes(civilDayMonthShort("2026-10-25")), before);
+});
+
+test("RP-139: a phase the person does not own, or a day that is no day, describes nothing", () => {
+  const refused = { refused: "chat.errors.notInPlan" };
+  const owned = { phase_id: P, aim: "x", starts_on: "2026-11-02", ends_on: "2026-11-30" };
+  assert.ok("key" in describeChange(change("edit_phase", owned), names));
+  assert.deepEqual(
+    describeChange(change("edit_phase", { phase_id: OTHER, aim: "x", starts_on: "2026-11-02", ends_on: "2026-11-30" }), names),
+    refused,
+  );
+  assert.deepEqual(
+    describeChange(change("edit_phase", { phase_id: P, aim: "x", starts_on: "mañana", ends_on: "2026-11-30" }), names),
+    refused,
+  );
+  assert.deepEqual(
+    describeChange(change("edit_phase", { phase_id: P, aim: "  ", starts_on: "2026-11-02", ends_on: "2026-11-30" }), names),
+    refused,
+  );
+});
+
+test("RP-139: an estimate of 0 minutes, a fraction of a minute or a negative one describes nothing; one minute is drawn", () => {
+  const refused = { refused: "chat.errors.notInPlan" };
+  for (const estimate of [0, 1.5, 0.5, -30]) {
+    assert.deepEqual(describeChange(change("set_task_estimate", { one_off_id: T, estimate }), names), refused, String(estimate));
+  }
+  assert.ok("key" in describeChange(change("set_task_estimate", { one_off_id: T, estimate: 1 }), names));
 });

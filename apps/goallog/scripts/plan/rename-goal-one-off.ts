@@ -133,7 +133,7 @@ async function dated(name: string): Promise<string> {
   return result.oneOffId;
 }
 
-test("editTask: a goal's dated one-off outside the plan takes a new name in one statement, done or not", async () => {
+test("editTask: a goal's dated one-off outside the plan takes a new name in one statement under its lock, done or not", async () => {
   const id = await dated("RP-55 fechada");
   assert.equal((await rowOf(id)).in_plan, false);
   wire = [];
@@ -142,7 +142,8 @@ test("editTask: a goal's dated one-off outside the plan takes a new name in one 
   wire = null;
   assert.deepEqual(result, { ok: true });
   const statements = calls.filter((q) => q !== "begin" && q !== "commit" && !q.includes("pg_catalog.pg_type") && !q.includes("set_config("));
-  assert.equal(statements.length, 1, statements.join(" | "));
+  assert.equal(statements.length, 2, statements.join(" | "));
+  assert.ok(statements[0].includes("pg_advisory_xact_lock"), statements[0]);
   assert.equal((await rowOf(id)).name, "RP-55 fechada, renombrada");
 
   assert.equal((await actions.completeOneOff({ oneOffId: id })).ok, true);
