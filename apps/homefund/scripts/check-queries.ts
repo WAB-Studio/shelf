@@ -4688,8 +4688,11 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     `sqlstate ${movementCode}, currency ${await currencyOf(used)}`,
   );
 
+  const [{ stamp: usedStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from accounts where id = ${used}`;
   const action = await updateAccountAction({
     accountId: used,
+    expectedUpdatedAt: usedStamp,
     name: `${prefix} usada`,
     kind: "asset",
     subtype: "bank",
@@ -4843,8 +4846,11 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     forward === "ok" && still.n === 3,
     `forward ${forward}, ${still.n} movements`,
   );
+  const [{ stamp: ruleStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from recurring_rules where id = ${recurringRuleId}`;
   const ruleAction = await updateRecurringRuleAction({
     ...rule(booked[0].occurred_at),
+    expectedUpdatedAt: ruleStamp,
     amount: "10",
   });
   assert(
@@ -5135,8 +5141,10 @@ async function recurringRuleCategoryScopeSuite(
     createRecurringRule({ ...rule(ownCategoryId), amountCents: 1000 }),
   );
   const ruleId = created.recurringRuleId;
+  const [{ stamp: ruleStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from recurring_rules where id = ${ruleId}`;
   const rewritten = await asUser(groupless, () =>
-    updateRecurringRuleAction({ id: ruleId, ...rule(scope.categoryId) }),
+    updateRecurringRuleAction({ id: ruleId, expectedUpdatedAt: ruleStamp, ...rule(scope.categoryId) }),
   );
   const [kept] = await fixtureSql<{ category_id: string }[]>`
     select category_id from recurring_rules where from_account_id = ${accountId}`;
@@ -5332,8 +5340,14 @@ async function recurringRuleCategoryFitSuite(
   const heldRule = await asUser(groupless, () =>
     createRecurringRule({ ...foreignFundRule(expenseId), amountCents: 1000 }),
   );
+  const [{ stamp: heldStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from recurring_rules where id = ${heldRule.recurringRuleId}`;
   const fundUpdateRefused = await asUser(groupless, () =>
-    updateRecurringRuleAction({ id: heldRule.recurringRuleId, ...foreignFundRule(foreignFundCategoryId) }),
+    updateRecurringRuleAction({
+      id: heldRule.recurringRuleId,
+      expectedUpdatedAt: heldStamp,
+      ...foreignFundRule(foreignFundCategoryId),
+    }),
   );
   const [fundKept] = await fixtureSql<{ category_id: string }[]>`
     select category_id from recurring_rules where from_account_id = ${accountId}`;
@@ -7821,13 +7835,14 @@ async function idempotencySuite(): Promise<void> {
     `splits = ${JSON.stringify(kept)}, labels = ${JSON.stringify(keptLabels)}`,
   );
 
-  // Q: an edit that names no stamp still lands
+  // Q: an edit that names no stamp is stale (RF-156) and writes nothing
+  const stampBeforeBlind = await stamp();
   const blind = await update(id, { amount: "600", splits: [{ categoryId: catA, amount: "600" }] });
   const afterBlind = (await byId(id))[0];
   assert(
-    next("An edit that carries no expectedUpdatedAt is not refused"),
-    blind.serverError === undefined && !isStale(blind) && afterBlind?.amount_cents === "60000",
-    `result = ${JSON.stringify(blind)}, amount = ${afterBlind?.amount_cents}`,
+    next("An edit that carries no expectedUpdatedAt is refused as stale and writes nothing"),
+    isStale(blind) && afterBlind?.amount_cents === "50000" && (await stamp()) === stampBeforeBlind,
+    `result = ${JSON.stringify(blind)}, amount = ${afterBlind?.amount_cents}, stamp ${stampBeforeBlind} -> ${await stamp()}`,
   );
 
   // Q: the create and its cause are one transaction
@@ -8678,11 +8693,11 @@ async function accountPlannedVersionSuite(): Promise<void> {
     `result = ${JSON.stringify(freshAccount)}, opening = ${await opening()}`,
   );
 
-  // Q: an account save naming no stamp still lands
+  // Q: an account save naming no stamp is stale (RF-156) and writes nothing
   const blindAccount = await saveAccount("456");
   assert(
-    next("An account saved with no expectedUpdatedAt is not refused"),
-    blindAccount?.serverError === undefined && !isStale(blindAccount) && (await opening()) === "45600",
+    next("An account saved with no expectedUpdatedAt is refused as stale and leaves the opening balance as it was"),
+    isStale(blindAccount) && (await opening()) === "12300",
     `result = ${JSON.stringify(blindAccount)}, opening = ${await opening()}`,
   );
 
@@ -8714,11 +8729,11 @@ async function accountPlannedVersionSuite(): Promise<void> {
     `result = ${JSON.stringify(freshPlanned)}, amount = ${await plannedAmount()}, stamp ${freshStamp}`,
   );
 
-  // Q: a planned payment save naming no stamp still lands
+  // Q: a planned payment save naming no stamp is stale (RF-156) and writes nothing
   const blindPlanned = await savePlanned("66");
   assert(
-    next("A planned payment saved with no expectedUpdatedAt is not refused"),
-    blindPlanned?.serverError === undefined && !isStale(blindPlanned) && (await plannedAmount()) === "6600",
+    next("A planned payment saved with no expectedUpdatedAt is refused as stale and leaves the amount as it was"),
+    isStale(blindPlanned) && (await plannedAmount()) === "5500",
     `result = ${JSON.stringify(blindPlanned)}, amount = ${await plannedAmount()}`,
   );
 }
@@ -9368,7 +9383,7 @@ async function resendAndMissingSuite(): Promise<void> {
     `first = ${JSON.stringify(w1)}, second = ${JSON.stringify(w2)}, rows = ${JSON.stringify(wRows)}`,
   );
 
-  // Q: an unstamped edit of a rule that is gone
+  // Q: a stamped edit of a rule that is gone (the stamp guard would otherwise answer stale first)
   const { recurringRuleId } = await asUser(user, () =>
     createRecurringRule({
       fromAccountId: accountA,
@@ -9383,10 +9398,14 @@ async function resendAndMissingSuite(): Promise<void> {
       endsOn: null,
     }),
   );
+  // The stamp guard answers before the lookup, so the form's stamp is read before the row goes.
+  const [{ stamp: goneStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from recurring_rules where id = ${recurringRuleId}`;
   await fixtureSql`delete from recurring_rules where id = ${recurringRuleId}`;
   const gone = (await asUser(user, () =>
     updateRecurringRuleAction({
       id: recurringRuleId,
+      expectedUpdatedAt: goneStamp,
       fromAccountId: accountA,
       toAccountId: null,
       amount: "20",
@@ -9400,7 +9419,7 @@ async function resendAndMissingSuite(): Promise<void> {
     } as Parameters<typeof updateRecurringRuleAction>[0]),
   )) as { serverError?: string; data?: { ok?: boolean; reason?: string } } | undefined;
   assert(
-    next("An edit with no expectedUpdatedAt of a rule that is gone is refused notFound"),
+    next("A stamped edit of a rule that is gone is refused notFound"),
     gone?.serverError === "errors.notFound" && gone?.data?.ok !== true,
     `result = ${JSON.stringify(gone)}`,
   );
