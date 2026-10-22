@@ -8,7 +8,7 @@ import { signOutAction } from "@/app/actions/auth";
 import { Box, Button, Text } from "@/components/ui";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
-export function SignOutButton() {
+export function SignOutButton({ compact = false }: { compact?: boolean }) {
   const t = useTranslations("auth");
   const { execute, isPending } = useAction(signOutAction, { onError: useActionErrorToast() });
 
@@ -21,8 +21,8 @@ export function SignOutButton() {
       onClick={() => execute()}
     >
       <LogOutIcon size={16} />
-      {/* Hidden below `sm`; the button's own `aria-label` keeps the name regardless. */}
-      <Box display={{ initial: "none", sm: "inline" }} asChild>
+      {/* Compact hides the word below `sm`; the button's own `aria-label` keeps the name regardless. */}
+      <Box display={compact ? { initial: "none", sm: "inline" } : "inline"} asChild>
         <Text>{t("signOut")}</Text>
       </Box>
     </Button>

@@ -76,8 +76,8 @@ export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
             align={{ initial: "stretch", md: "center" }}
             gap="3"
           >
-            <LanguageSwitcher width={{ initial: "100%", md: "11rem" }} />
-            <ThemeSwitcher width={{ initial: "100%", md: "11rem" }} />
+            <LanguageSwitcher width={{ initial: "100%", md: "11rem" }} showText />
+            <ThemeSwitcher width={{ initial: "100%", md: "11rem" }} showText />
             <SignOutButton />
           </Flex>
         </Card>

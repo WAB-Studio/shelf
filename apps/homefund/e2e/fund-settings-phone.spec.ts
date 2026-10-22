@@ -184,3 +184,32 @@ test.describe("from md up, a member of a fund", () => {
     );
   });
 });
+
+test.describe("at 360, the controls under the list", () => {
+  test.skip(({ viewport }) => !isPhone(viewport), "the phone's lists render below md");
+
+  for (const open of [openScreen, openSheet]) {
+    test(`${open.name}: language, theme and sign-out show their words and carry them as names`, async ({
+      page,
+    }) => {
+      const surface = await open(page);
+      for (const name of [messages.language.endonym.es, messages.auth.signOut]) {
+        await expect(surface.getByText(name, { exact: true }).first()).toBeVisible();
+      }
+      await expect(surface.getByRole("combobox", { name: messages.language.label })).toContainText(
+        messages.language.endonym.es,
+      );
+      await expect(surface.getByRole("combobox", { name: messages.theme.label })).toContainText(
+        new RegExp(`${messages.theme.light}|${messages.theme.dark}|${messages.theme.system}`),
+      );
+      await expect(surface.getByRole("button", { name: messages.auth.signOut, exact: true })).toBeVisible();
+    });
+  }
+
+  test("«Ajustes del fondo» leads back to Ajustes", async ({ page }) => {
+    await seedGroup();
+    await page.goto(GROUP_HREF);
+    await page.getByRole("link", { name: nav.settings, exact: true }).first().click();
+    await expect(page).toHaveURL("/es/settings");
+  });
+});

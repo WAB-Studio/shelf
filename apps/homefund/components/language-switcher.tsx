@@ -11,7 +11,13 @@ import { usePathname } from "@/i18n/navigation";
 import { isLocale, LOCALES } from "@/lib/locales";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
-export function LanguageSwitcher({ width }: { width?: Responsive<string> }) {
+export function LanguageSwitcher({
+  width,
+  showText,
+}: {
+  width?: Responsive<string>;
+  showText?: boolean;
+}) {
   const t = useTranslations("language");
   const locale = useLocale();
   const pathname = usePathname();
@@ -45,6 +51,7 @@ export function LanguageSwitcher({ width }: { width?: Responsive<string> }) {
       icon={pending ? <Spinner /> : <LanguagesIcon size={16} />}
       text={t(`endonym.${locale}`)}
       width={width}
+      showText={showText}
     >
       {LOCALES.map((option) => (
         <Select.Item key={option} value={option}>

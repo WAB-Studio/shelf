@@ -72,8 +72,8 @@ export function SettingsPanel({
       )}
       <NavList items={items} onNavigate={() => setOpen(false)} />
       <Flex direction="column" gap="2">
-        <LanguageSwitcher width="100%" />
-        <ThemeSwitcher width="100%" />
+        <LanguageSwitcher width="100%" showText />
+        <ThemeSwitcher width="100%" showText />
         <SignOutButton />
       </Flex>
     </NavPanel>
