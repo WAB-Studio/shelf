@@ -1969,15 +1969,45 @@ for (const [bandLabel, width] of [
     test("planning tile: «Deudas» totals what is owed and leaves the credit out", async ({
       page,
     }) => {
-      await page.goto("/es/planning");
+      // Both projects seed cards for this one user, so the tile's total is not
+      // this describe's alone. The expectation comes from the same scope at
+      // assert time: what every liability owes in pesos, a credit adding nothing.
+      // The page's read falls between two of ours, so it names one of them unless
+      // a second seed landed in the window, and then the poll takes it again.
+      async function owedNow(): Promise<number> {
+        let owed = 0;
+        await asHarnessUser(async (tx) => {
+          const [row] = await tx<{ owed: string }[]>`
+            select coalesce(sum(greatest(0, -b.balance_cents)), 0)::text as owed
+            from account_balances b
+            join accounts a on a.id = b.id
+            where a.kind = 'liability' and a.archived_at is null and b.currency = 'COP'
+              and a.owner_user_id = ${scope.userId}`;
+          owed = Number(row.owed);
+        });
+        return owed;
+      }
 
-      const total = `$ ${groupedPesos(CARD_OWED_CENTS + BARE_OWED_CENTS + STATE_OWING_CENTS)}`;
-      const summary = page
-        .getByText(/^\$\s[\d.]+\s(·|en deudas)/)
-        .filter({ visible: true });
-      await expect(summary).toHaveCount(1);
-      const text = flat(await summary.innerText());
-      expect(text.startsWith(`${total} `)).toBe(true);
+      await expect
+        .poll(
+          async () => {
+            const before = await owedNow();
+            await page.goto("/es/planning");
+            const summary = page
+              .getByText(/^\$\s[\d.]+\s(·|en deudas)/)
+              .filter({ visible: true });
+            await expect(summary).toHaveCount(1);
+            const text = flat(await summary.innerText());
+            const after = await owedNow();
+            return [before, after].some((owed) =>
+              text.startsWith(`$ ${groupedPesos(owed)} `),
+            )
+              ? "match"
+              : `${text} | ${before} ${after}`;
+          },
+          { timeout: 25_000 },
+        )
+        .toBe("match");
     });
   });
 
