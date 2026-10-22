@@ -1441,6 +1441,9 @@ async function failureRedirectSuite(): Promise<void> {
     };
   };
 
+  // The first call on a cold server can reach Auth before its connection is up; Auth
+  // then answers a retryable error and the stale cookie is kept, which is not what is measured.
+  await land("token_hash=abc&type=magiclink", sessionCookie);
   const byHash = await land("token_hash=abc&type=magiclink", sessionCookie);
   assert(
     next("a rejected token_hash link lands on the login with linkInvalid and says no-store"),
