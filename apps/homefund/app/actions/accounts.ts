@@ -75,6 +75,8 @@ export const createAccountAction = authActionClient
 export const updateAccountAction = authActionClient
   .inputSchema(updateAccountSchema)
   .action(async ({ parsedInput: { amount, ...account } }) => {
+    // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
+    if (!account.expectedUpdatedAt) throw new ActionError("errors.stale");
     const amountMinor = parseAmount(amount);
     if (amountMinor === null) throw new ActionError("errors.unexpected");
 
