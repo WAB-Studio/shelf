@@ -131,7 +131,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-73** — A budget carries an overspend alert threshold as a percentage of its limit; a budget is flagged once its derived spending crosses that threshold.
 - [x] **RF-74** — CRUD for one-off planned payments: a future movement — its accounts, amount, category and due date — with an optional reminder date, kept distinct from recurring rules.
 - [ ] **RF-141** — A planned payment's reminder (RF-74) notifies the person by email on its reminder date. Decided by the user 2026-10-15.
-- [x] **RF-75** — Settling a planned payment records the transaction it planned, links the two, and marks the planned payment done; a settled or cancelled planned payment cannot be settled again.
+- [ ] **RF-161** *(successor of RF-75)* — Settling a planned payment records the transaction it planned, links the two, and marks the planned payment done; while that movement exists the payment cannot be settled again, and a cancelled one is never settled. Deleting the movement that settled a planned payment returns the payment to «Por pagar», unlinked, so it can be settled again. Decided by the user 2026-10-22 (Q4 b).
 - [x] **RF-76** — CRUD for savings goals: a target amount and an optional target date, scoped to a user or a group.
 - [x] **RF-87** — A savings goal's progress — amount saved and amount remaining — derives from its contributions (`goal_contributions`), each an amount set aside virtually with no movement required; it is never stored.
 - [x] **RF-119** — A savings goal's contributions are listed with their amounts and dates and one is removed from that list; the goal's progress re-derives from what remains.
@@ -224,6 +224,7 @@ The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no
 
 Dead codes. The number stays burned and the tick stays as it was.
 
+- [x] **RF-75** — Settling a planned payment records the transaction it planned, links the two, and marks the planned payment done; a settled or cancelled planned payment cannot be settled again. _Retired 2026-10-22, by the user. Successor: RF-161 (deleting the movement that settled a planned payment returns the payment to «Por pagar»)._
 - [x] **RF-72** — A budget's spent and remaining amounts derive from the transaction splits that fall in the current period and match its category and any account or label narrowing; they are never stored. _Retired 2026-10-18, by the user. Successor: RF-160 (a parent category's budget and its movement filter count its subcategories)._
 - [x] **RF-50** — Export accounts, members, categories, recurring rules and transactions, in the same shape the import accepts. _Retired 2026-10-15, by the user. Successor: RF-142 (the backup restores everything: budgets, goals, debts, statements, labels, and a dollar purchase in dollars)._
 - [x] **RF-66** — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member. _Retired 2026-10-15, by the user. Successor: RF-139 (a household bill paid from a personal card, marked «del hogar», counts as a contribution)._
@@ -725,7 +726,8 @@ Rules the model must always guarantee, regardless of how they are implemented:
   category and any account or label narrowing; they are never stored.
 - A planned payment's scope derives from the accounts it touches, never chosen by
   the user. A settled planned payment links the transaction it recorded and is
-  never re-settled; a cancelled one is never settled.
+  never re-settled while that transaction exists; deleting the transaction
+  returns the payment to pending, unlinked. A cancelled one is never settled.
 - A recurring rule belongs to exactly one of a user or a group (XOR), derived
   from the accounts it touches, never chosen by the user — mirroring transactions.
 - A recurring rule names exactly one account and exactly one category and is

@@ -210,7 +210,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RP-137** — On the code step, «Pedir otro código» sends a new code to the same address without typing it again, once a countdown of Auth's wait between sends has run out; the new code replaces the last. Decided by the user 2026-10-17.
 - [x] **RP-138** — Asking for a code is capped per caller and per address each day, as `apps/homefund` does (RF-143): past either cap the screen says it opens again tomorrow and Auth is not asked. A send Auth refuses does not count against the caps. Decided by the user 2026-10-17.
 - [ ] **RP-131** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
-- [ ] **RP-141** — A signed-in person signs out from GoalLog. It ends the session on this device only and lands on `/entrar`; their other devices stay signed in, and a connected AI's key (RP-39) is untouched. Decided by the user 2026-10-22.
+- [x] **RP-141** — A signed-in person signs out from GoalLog. It ends the session on this device only and lands on `/entrar`; their other devices stay signed in, and a connected AI's key (RP-39) is untouched. Decided by the user 2026-10-22.
 
 ### Non-functional requirements
 
