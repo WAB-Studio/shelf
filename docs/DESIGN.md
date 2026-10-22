@@ -422,3 +422,11 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **«Ajustes del fondo» on the phone** (Q8 a): a row «Ajustes del fondo» at the top of «Ajustes», for the leader only. M1
   measured it unreachable at 360 px (only the desktop rail's chevron leads there). Board and level-2 module in the slice
   after oleada-4.
+
+## Decisions of 2026-10-22, on plan oleada-5, by the user
+
+- **«Ajustes del fondo» on the phone is for every member of a fund** (Q1 a), like the desktop rail's chevron; it replaces
+  the 2026-10-18 Q8 «leader only» above. A member leaves the fund from that page (RF-154). Board and module M13.
+- **Deleting a movement that settled a planned payment puts the payment back to «Por pagar»** (Q4 b): RF-75 is retired
+  and RF-161 opens when the module is built (migration 0069). Next train.
+- **A movement dated before its account's opening day is refused** (Q5 a), on save and on import, in words. Next train.
