@@ -1,10 +1,7 @@
-"use client";
-
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { FUND_SETTINGS, SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
-import { usePhone } from "@/components/fund/settings-panel";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import {
@@ -27,9 +24,8 @@ import {
  * The fund's settings lead the phone's list alone: from `md` up the chevron beside
  * the fund name reaches them, and no surface offers a destination twice.
  */
-export function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
-  const t = useTranslations("nav");
-  const isPhone = usePhone();
+export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
+  const t = await getTranslations("nav");
 
   // Every destination named here sits below this route, so no row of the list is
   // ever the current one.
@@ -43,7 +39,7 @@ export function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
     }),
   );
 
-  const phoneItems: NavListItem[] = hasGroup
+  const fundItems: NavListItem[] = hasGroup
     ? [
         {
           key: FUND_SETTINGS.key,
@@ -52,9 +48,8 @@ export function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
           label: <Text weight="bold">{t(FUND_SETTINGS.key)}</Text>,
           current: false,
         },
-        ...items,
       ]
-    : items;
+    : [];
 
   return (
     <Flex direction="column" gap="4">
@@ -64,18 +59,16 @@ export function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
           hands it over; below it the page's own padding still holds. */}
       <Flex direction="column" gap="4" px={{ initial: "0", md: "6" }}>
         {/* One list, two shapes: the sidebar's pill rows on a laptop, the sheet's
-            stack on a phone. Exactly one is displayed at any width, and the phone's mounts only on a phone,
-            so its fund row is in no laptop's DOM. */}
+            stack on a phone. Exactly one is displayed at any width. */}
         <Box display={{ initial: "none", md: "block" }}>
           <Card size="2">
             <NavList variant="sidebar" items={items} />
           </Card>
         </Box>
-        {isPhone && (
-          <Box display={{ initial: "block", md: "none" }}>
-            <NavList items={phoneItems} />
-          </Box>
-        )}
+        <Box display={{ initial: "block", md: "none" }}>
+          {fundItems.length > 0 && <NavList items={fundItems} />}
+          <NavList items={items} />
+        </Box>
 
         <Card size="2">
           <Flex

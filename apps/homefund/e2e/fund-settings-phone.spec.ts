@@ -79,6 +79,16 @@ async function expectNoRow(surface: Locator) {
   await expect(surface.locator(`a[href="${GROUP_HREF}"]`)).toHaveCount(0);
 }
 
+// From md up the phone's list may stay in the DOM; what matters is that nobody sees the row.
+async function expectNoVisibleRow(surface: Locator) {
+  await expect(
+    surface.getByRole("link", { name: nav.fundSettings }).filter({ visible: true }),
+  ).toHaveCount(0);
+  await expect(
+    surface.locator(`a[href="${GROUP_HREF}"]`).filter({ visible: true }),
+  ).toHaveCount(0);
+}
+
 test.describe("at 360, a member of a fund", () => {
   test.skip(({ viewport }) => !isPhone(viewport), "the phone's lists render below md");
   test.use({ storageState: MEMBER_STORAGE_STATE });
@@ -157,7 +167,7 @@ test.describe("from md up, a member of a fund", () => {
     page,
   }) => {
     const screen = await openScreen(page);
-    await expectNoRow(screen);
+    await expectNoVisibleRow(screen);
     // The rest of the list is untouched: its first row is the inbox.
     expect((await rows(screen))[0]?.name).toBe(nav.inbox);
 
@@ -165,7 +175,7 @@ test.describe("from md up, a member of a fund", () => {
     await page.getByRole("button", { name: LEADER_MEMBER_NAME }).click();
     const panel = page.getByRole("dialog", { name: nav.settings });
     await expect(panel).toBeVisible();
-    await expectNoRow(panel);
+    await expectNoVisibleRow(panel);
 
     await page.keyboard.press("Escape");
     await expect(page.getByRole("link", { name: nav.fundSettings, exact: true })).toHaveAttribute(
