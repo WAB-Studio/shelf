@@ -1929,6 +1929,10 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   the first goal, one muted line per section in the text's order: «No se pudo leer la sección «{heading}» (líneas {from} a
   {to}): quedó fuera. Pégala sola para importarla.» The line counts no goal, is not markable and never blocks «Crear». With
   none left out there is no line. At 1280 it sits in the tree's column.
+- **A section held in a note says where** (Q10 b, decided by the user 2026-10-22). When its lines went into a goal's note,
+  the line reads: «No se pudo leer la sección «{heading}» (líneas {from} a {to}): quedó en la nota de «{goal}»; pégala sola
+  si la quieres como meta.» A section whose lines did not fit the note keeps «…quedó fuera. Pégala sola para importarla.»
+  The count reads the held lines «en notas», never «fuera».
 - Both boards hold every state side by side in one file: the canvas is at its 512-file cap.
 
 ## The canvas regrouped (2026-10-22)
