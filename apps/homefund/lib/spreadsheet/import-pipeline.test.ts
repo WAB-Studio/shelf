@@ -6,6 +6,8 @@ import { beforeEach, mock, test } from "node:test";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 
+import { parseAmount } from "@/lib/money";
+
 // M2 (RF-51, RF-52). The real pipeline runs, over a real .xlsx; the database read and the request
 // locale are doubled at module resolution, and the scope is whatever each test seeds.
 
@@ -204,6 +206,102 @@ test("an expense row keeps its category and its single split", async () => {
   const rows = await run(await book([spend(1000, "a")]));
   const object = rows[0].object as { splits: { categoryId: string }[] };
   assert.deepEqual(object.splits.map((s) => s.categoryId), [FOOD.id]);
+});
+
+// ---- a purchase in dollars on a peso card (RF-142, RF-122, RF-123) -----------------------------
+
+const CARD = { id: UUID(3), name: "Tarjeta COP", externalRef: "acc-3", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP" };
+
+type ForeignCells = Record<string, string | number | boolean | null | undefined>;
+const FOREIGN_COLUMNS = [...COLUMNS, "counterAmount", "counterIsEstimate"] as const;
+
+async function bookWith(columns: readonly string[], transactions: Record<string, string | number | boolean | null | undefined>[]) {
+  const wb = new ExcelJS.Workbook();
+  const sheet = wb.addWorksheet(messages.data.sheets.transactions);
+  sheet.addRow(columns.map((key) => messages.data.columns[key]));
+  for (const row of transactions) sheet.addRow(columns.map((key) => row[key] ?? null));
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+const bookForeign = (rows: ForeignCells[]) => bookWith(FOREIGN_COLUMNS, rows);
+
+const dollarPurchase = (over: ForeignCells = {}): ForeignCells => ({
+  fromAccount: "Tarjeta COP",
+  amount: 25,
+  currency: "USD",
+  counterAmount: 105000,
+  counterIsEstimate: true,
+  category: "Food",
+  occurredAt: "2026-01-10",
+  description: "dollar purchase",
+  ...over,
+});
+
+type Parsed = { currency?: string; amount?: string; amountCents?: number; counterAmount?: string | null; counterAmountCents?: number | null; counterIsEstimate?: boolean };
+const centsOf = (cents: number | null | undefined, text: string | null | undefined) =>
+  cents ?? (text == null ? null : parseAmount(text));
+
+beforeEach(() => {
+  scope.accounts = [CHECKING, SAVINGS, CARD];
+  scope.existingRefs.accounts = new Set(["acc-1", "acc-2", "acc-3"]);
+});
+
+test("RF-142: USD 25 on a peso card with 105.000 estimated parses in dollars, never converted, with its peso amount and the mark", async () => {
+  const rows = await run(await bookForeign([dollarPurchase()]));
+  assert.deepEqual(rows[0].errors, []);
+  const object = rows[0].object as Parsed;
+  assert.equal(object.currency, "USD");
+  assert.equal(centsOf(object.amountCents, object.amount), 2500);
+  assert.equal(centsOf(object.counterAmountCents, object.counterAmount), 10_500_000);
+  assert.equal(object.counterIsEstimate, true);
+});
+
+test("RF-123: a blank estimate cell on a dollar purchase means billed, not estimated", async () => {
+  const rows = await run(await bookForeign([dollarPurchase({ counterIsEstimate: null })]));
+  assert.deepEqual(rows[0].errors, []);
+  assert.equal((rows[0].object as Parsed).counterIsEstimate, false);
+});
+
+test("RF-122: a dollar purchase on a peso card without its peso amount is refused with the currency words it was refused with", async () => {
+  const rows = await run(await bookForeign([dollarPurchase({ counterAmount: null, counterIsEstimate: null })]));
+  assert.equal(rows[0].object, null);
+  assert.deepEqual(rows[0].errors.map((e) => e.key), ["transactions.errors.currencyMismatch"]);
+  assert.equal(rows[0].errors[0].column, "currency");
+});
+
+test("RF-122: a peso row on a peso card carrying a second amount is refused as counterAmountForbidden, at its column", async () => {
+  const rows = await run(await bookForeign([dollarPurchase({ currency: "COP", amount: 105000 })]));
+  assert.equal(rows[0].object, null);
+  assert.deepEqual(rows[0].errors.map((e) => [e.key, e.column]), [["transactions.errors.counterAmountForbidden", "counterAmount"]]);
+});
+
+test("RF-122: a peso row with the currency cell blank and a second amount is refused too", async () => {
+  const rows = await run(await bookForeign([dollarPurchase({ currency: null, amount: 105000 })]));
+  assert.equal(rows[0].object, null);
+  assert.ok(rows[0].errors.some((e) => e.key === "transactions.errors.counterAmountForbidden"));
+});
+
+test("RF-52: a sheet written before the two columns existed parses as it did, a peso row with no second amount", async () => {
+  const old = await bookWith(COLUMNS, [{ ...spend(1000, "old"), externalRef: "old-1", currency: "COP" }, spend(2000, "older")]);
+  const rows = await run(old);
+  assert.deepEqual(rows.map((r) => r.errors), [[], []]);
+  for (const row of rows) {
+    const object = row.object as Parsed;
+    assert.equal(object.counterAmount ?? null, null);
+    assert.equal(object.counterAmountCents ?? null, null);
+  }
+  assert.equal(centsOf((rows[0].object as Parsed).amountCents, (rows[0].object as Parsed).amount), 100_000);
+});
+
+test("RF-52: a foreign row keeps its reference, so importing the file twice updates it instead of duplicating", async () => {
+  const file = await bookForeign([dollarPurchase({ externalRef: "usd-1" })]);
+  const first = (await run(file))[0];
+  assert.deepEqual(first.errors, []);
+  assert.equal(first.status, "new");
+  scope.existingRefs.transactions = new Set(["usd-1"]);
+  const again = (await run(file))[0];
+  assert.deepEqual(again.errors, []);
+  assert.equal(again.status, "update");
 });
 
 // ---- the zip guard ----------------------------------------------------------------------------
