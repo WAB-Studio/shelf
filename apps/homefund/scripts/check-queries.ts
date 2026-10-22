@@ -61,6 +61,7 @@ import {
 import { createGroup } from "@/db/queries/create-group";
 import { getDebtDetail } from "@/db/queries/debt-detail";
 import { getDebtOverview } from "@/db/queries/debt-overview";
+import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { getCurrentStatement } from "@/db/queries/debt-statements";
 import { getDebtTerms, upsertDebtTerms } from "@/db/queries/debt-terms";
 import { getDebtsScreenData } from "@/db/queries/debts-screen";
@@ -4244,6 +4245,7 @@ async function main(): Promise<void> {
   await importCommitSetSuite();
   await parentCategorySuite();
   await importCommitScopesSuite();
+  await debtCreditSideSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -11928,5 +11930,323 @@ async function importCommitScopesSuite(): Promise<void> {
     next("A new movement whose key the fund's movement already holds throws ImportAlreadyCommitting, as a second tab does"),
     !clash.ok && clash.error instanceof typedClass,
     `${said(clash)}`,
+  );
+}
+
+// o5-m1: a liability's settlement pocket read by its sign. Owed only below zero, credit only above,
+// interest and the minimum struck on what is owed alone, and the credit lifting the available credit
+// (RF-79, RF-80, RF-83, RF-124; docs/DESIGN.md «Debts»).
+async function debtCreditSideSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const IN_CREDIT = 15_000_000;
+  const OWING = 8_000_000;
+  const LIMIT = 100_000_000;
+  const FIXED = 5_000_000;
+  const PCT = "0.0333";
+  const RATE = "0.3000";
+  const MIXED_OWING = 1_000_000;
+  const USD_CREDIT = 2_000;
+  const BARE_CREDIT = 3_000_000;
+  const monthlyRate = Math.pow(1 + Number(RATE), 1 / 12) - 1;
+  const interestOn = (owed: number) => Math.round(owed * monthlyRate);
+  const pctMinimumOn = (owed: number) => Math.round(owed * Number(PCT));
+
+  const holder = await createMembershipFreeUser();
+  const open = async (
+    kind: "asset" | "liability",
+    name: string,
+    amountMinor: number,
+  ): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness o5m1 ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const terms = async (
+    accountId: string,
+    minimum: { fixed: number | null; pct: string | null },
+    creditLimitCents: number | null,
+  ): Promise<void> => {
+    await asUser(holder, () =>
+      upsertDebtTerms({
+        accountId,
+        debtKind: "revolving",
+        annualRate: RATE,
+        minimumPaymentCents: minimum.fixed,
+        minimumPaymentPct: minimum.pct,
+        creditLimitCents,
+        statementCutOffDay: 15,
+        paymentDueDay: 5,
+        avalCents: null,
+      }),
+    );
+    keep("debt_terms", accountId);
+  };
+  const pay = async (fromAccountId: string, toAccountId: string, amountCents: number) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId,
+        toAccountId,
+        amountCents,
+        occurredAt: today,
+        description: `o5m1 ${tag}`,
+        externalRef: null,
+        splits: [],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const refundInDollars = async (toAccountId: string, amountCents: number) => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({
+        scope: { ownerUserId: holder.id },
+        name: `Harness o5m1 refund ${tag}`,
+        kind: "income",
+        parentId: null,
+        color: "#B4542F",
+      }),
+    );
+    keep("categories", categoryId);
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: null,
+        toAccountId,
+        amountCents,
+        currency: "USD",
+        counterAmountCents: amountCents * 4_000,
+        counterIsEstimate: true,
+        occurredAt: today,
+        description: `o5m1 refund ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+
+  const bank = await open("asset", "bank", 1_000_000_000);
+  const pctCredit = await open("liability", "pct credit", 0);
+  const pctOwing = await open("liability", "pct owing", OWING);
+  const fixedCredit = await open("liability", "fixed credit", 0);
+  const fixedOwing = await open("liability", "fixed owing", OWING);
+  const bareCredit = await open("liability", "bare credit", 0);
+  const mixed = await open("liability", "mixed", MIXED_OWING);
+  const noTerms = await open("liability", "no terms", 0);
+  await terms(pctCredit, { fixed: null, pct: PCT }, LIMIT);
+  await terms(pctOwing, { fixed: null, pct: PCT }, LIMIT);
+  await terms(fixedCredit, { fixed: FIXED, pct: null }, null);
+  await terms(fixedOwing, { fixed: FIXED, pct: null }, null);
+  await terms(bareCredit, { fixed: null, pct: null }, null);
+  await terms(mixed, { fixed: null, pct: PCT }, null);
+
+  const screenBefore = await asUser(holder, () => getDebtsScreenData());
+  await pay(bank, pctCredit, IN_CREDIT);
+  await pay(bank, fixedCredit, IN_CREDIT);
+  await pay(bank, bareCredit, IN_CREDIT);
+  await pay(bank, noTerms, BARE_CREDIT);
+  await refundInDollars(mixed, USD_CREDIT);
+
+  const [overview, screen, statementCredit, statementOwing, statementFixedCredit, statementFixedOwing] =
+    await asUser(holder, () =>
+      Promise.all([
+        getDebtOverview(),
+        getDebtsScreenData(),
+        getCurrentStatement(pctCredit),
+        getCurrentStatement(pctOwing),
+        getCurrentStatement(fixedCredit),
+        getCurrentStatement(fixedOwing),
+      ]),
+    );
+  const rowOf = (accountId: string) => overview.find((row) => row.accountId === accountId);
+  const screenRowOf = (accountId: string) => screen.withTerms.find((row) => row.accountId === accountId);
+  const show = (row: object | undefined) => JSON.stringify(row ?? "no row");
+  const pick = (row: DebtOverviewRow | undefined) =>
+    row === undefined
+      ? "no row"
+      : JSON.stringify({
+          owedCents: row.owedCents,
+          creditCents: row.creditCents,
+          availableCreditCents: row.availableCreditCents,
+          monthlyInterestCents: row.monthlyInterestCents,
+          minimumPaymentCents: row.minimumPaymentCents,
+          otherOwed: row.otherOwed,
+        });
+
+  // Owed in credit: the overview row and the screen's row of the same card.
+  const creditRow = rowOf(pctCredit);
+  const creditScreenRow = screenRowOf(pctCredit);
+  assert(
+    next("Owed in credit: a terms card holding 15000000 in its favour owes 0 and carries 15000000 credit, on the overview and the screen"),
+    creditRow?.owedCents === 0 &&
+      creditRow.creditCents === IN_CREDIT &&
+      creditScreenRow?.owedCents === 0 &&
+      creditScreenRow.creditCents === IN_CREDIT,
+    `overview ${pick(creditRow)}, screen ${pick(creditScreenRow)}`,
+  );
+
+  // Owed when owing: the card that owes reads exactly as before.
+  const owingRow = rowOf(pctOwing);
+  const owingScreenRow = screenRowOf(pctOwing);
+  assert(
+    next("Owed when owing: a terms card at -8000000 owes 8000000 and carries 0 credit, on the overview and the screen"),
+    owingRow?.owedCents === OWING &&
+      owingRow.creditCents === 0 &&
+      owingScreenRow?.owedCents === OWING &&
+      owingScreenRow.creditCents === 0,
+    `overview ${pick(owingRow)}, screen ${pick(owingScreenRow)}`,
+  );
+
+  // Available credit: the limit plus the signed balance, and the totals fold the same figures.
+  const copAfter = screen.totals.byCurrency.find((set) => set.currency === "COP");
+  const copBefore = screenBefore.totals.byCurrency.find((set) => set.currency === "COP");
+  assert(
+    next("Available credit: limit 100000000 with 15000000 in credit leaves 115000000 available; owing 8000000 leaves 92000000"),
+    creditRow?.availableCreditCents === LIMIT + IN_CREDIT &&
+      owingRow?.availableCreditCents === LIMIT - OWING &&
+      creditScreenRow?.availableCreditCents === LIMIT + IN_CREDIT &&
+      owingScreenRow?.availableCreditCents === LIMIT - OWING,
+    `in credit ${creditRow?.availableCreditCents} (screen ${creditScreenRow?.availableCreditCents}), expected ${LIMIT + IN_CREDIT}; owing ${owingRow?.availableCreditCents} (screen ${owingScreenRow?.availableCreditCents}), expected ${LIMIT - OWING}`,
+  );
+  assert(
+    next("Available credit: the peso totals add the 15000000 credit to the available credit, and the limit stays the summed limits"),
+    copAfter?.availableCreditCents === LIMIT + IN_CREDIT + (LIMIT - OWING) &&
+      copAfter.creditLimitCents === 2 * LIMIT &&
+      copBefore?.availableCreditCents === LIMIT + (LIMIT - OWING),
+    `before ${copBefore?.availableCreditCents}, after ${copAfter?.availableCreditCents} of limit ${copAfter?.creditLimitCents}, expected ${LIMIT + (LIMIT - OWING)} then ${LIMIT + IN_CREDIT + (LIMIT - OWING)} of ${2 * LIMIT}`,
+  );
+
+  // Interest: struck on what is owed, at the effective monthly rate of 30 % EA.
+  assert(
+    next("Interest: a card in credit carries 0 interest; owing 8000000 at 30 % EA carries round(8000000 × ((1.30)^(1/12) − 1)) to the cent"),
+    creditRow?.monthlyInterestCents === 0 &&
+      creditScreenRow?.monthlyInterestCents === 0 &&
+      owingRow?.monthlyInterestCents === interestOn(OWING) &&
+      owingScreenRow?.monthlyInterestCents === interestOn(OWING),
+    `in credit ${creditRow?.monthlyInterestCents} (screen ${creditScreenRow?.monthlyInterestCents}), owing ${owingRow?.monthlyInterestCents} (screen ${owingScreenRow?.monthlyInterestCents}), expected 0 and ${interestOn(OWING)}`,
+  );
+
+  // Minimum, pct: on what is owed alone.
+  assert(
+    next("Minimum, pct: a card in credit has a minimum of 0; owing 8000000 at 0.0333 has round(8000000 × 0.0333)"),
+    creditRow?.minimumPaymentCents === 0 &&
+      creditScreenRow?.minimumPaymentCents === 0 &&
+      owingRow?.minimumPaymentCents === pctMinimumOn(OWING) &&
+      owingScreenRow?.minimumPaymentCents === pctMinimumOn(OWING),
+    `in credit ${creditRow?.minimumPaymentCents} (screen ${creditScreenRow?.minimumPaymentCents}), owing ${owingRow?.minimumPaymentCents} (screen ${owingScreenRow?.minimumPaymentCents}), expected 0 and ${pctMinimumOn(OWING)}`,
+  );
+
+  // Minimum, fixed: the fixed amount only while something is owed.
+  const fixedCreditRow = rowOf(fixedCredit);
+  const fixedOwingRow = rowOf(fixedOwing);
+  assert(
+    next("Minimum, fixed: terms fixing 5000000 ask 0 of a card in credit and 5000000 of a card owing 8000000"),
+    fixedCreditRow?.minimumPaymentCents === 0 &&
+      screenRowOf(fixedCredit)?.minimumPaymentCents === 0 &&
+      fixedOwingRow?.minimumPaymentCents === FIXED &&
+      screenRowOf(fixedOwing)?.minimumPaymentCents === FIXED,
+    `in credit ${fixedCreditRow?.minimumPaymentCents}, owing ${fixedOwingRow?.minimumPaymentCents}, expected 0 and ${FIXED}`,
+  );
+  const bareRow = rowOf(bareCredit);
+  assert(
+    next("Minimum, no minimum in the terms: a card in credit has a minimum of 0, whatever the terms"),
+    bareRow?.minimumPaymentCents === 0 && bareRow.owedCents === 0 && bareRow.monthlyInterestCents === 0,
+    pick(bareRow),
+  );
+
+  // Statement minimum: the current statement strikes its minimum through the same rule.
+  assert(
+    next("Statement minimum: getCurrentStatement asks 0 of the cards in credit and the owed minimum of the cards owing"),
+    statementCredit?.minimumPaymentCents === 0 &&
+      statementFixedCredit?.minimumPaymentCents === 0 &&
+      statementOwing?.minimumPaymentCents === pctMinimumOn(OWING) &&
+      statementFixedOwing?.minimumPaymentCents === FIXED,
+    `pct in credit ${statementCredit?.minimumPaymentCents}, fixed in credit ${statementFixedCredit?.minimumPaymentCents}, pct owing ${statementOwing?.minimumPaymentCents}, fixed owing ${statementFixedOwing?.minimumPaymentCents}; expected 0, 0, ${pctMinimumOn(OWING)}, ${FIXED}`,
+  );
+
+  // Other pocket: a dollar pocket in credit beside a peso pocket that owes.
+  const mixedRow = rowOf(mixed);
+  const usdPocket = mixedRow?.otherOwed.find((pocket) => pocket.currency === "USD");
+  assert(
+    next("Other pocket: a USD pocket at +2000 beside a COP pocket at -1000000 owes 0 and carries 2000 credit; the COP pocket owes 1000000"),
+    usdPocket?.owedCents === 0 &&
+      usdPocket.creditCents === USD_CREDIT &&
+      mixedRow?.owedCents === MIXED_OWING &&
+      mixedRow.creditCents === 0,
+    pick(mixedRow),
+  );
+
+  // Totals unchanged: a credit adds 0 owed and 0 interest to every set.
+  const usdAfter = screen.totals.byCurrency.find((set) => set.currency === "USD");
+  const owedTotal = OWING + OWING + MIXED_OWING;
+  const interestTotal = interestOn(OWING) + interestOn(OWING) + interestOn(MIXED_OWING);
+  assert(
+    next("Totals unchanged: the peso set owes 17000000 and charges the owing cards' interest alone, before and after the credits; the dollar set owes 0"),
+    copBefore?.owedCents === owedTotal &&
+      copAfter?.owedCents === owedTotal &&
+      copAfter.monthlyInterestCents === copBefore.monthlyInterestCents &&
+      copAfter.monthlyInterestCents === interestTotal &&
+      screen.totals.owedCents === owedTotal &&
+      (usdAfter?.owedCents ?? 0) === 0,
+    `peso owed ${copBefore?.owedCents} before, ${copAfter?.owedCents} after; interest ${copBefore?.monthlyInterestCents} before, ${copAfter?.monthlyInterestCents} after; dollar owed ${usdAfter?.owedCents ?? "no set"}; expected ${owedTotal}, ${interestTotal}, 0`,
+  );
+
+  // No-terms row: the same shape as a terms row.
+  const noTermsRow = screen.withoutTerms.find((debt) => debt.accountId === noTerms);
+  assert(
+    next("No-terms row: a liability with no terms holding 3000000 in its favour owes 0 and carries 3000000 credit"),
+    noTermsRow?.owedCents === 0 && noTermsRow.creditCents === BARE_CREDIT,
+    show(noTermsRow),
+  );
+
+  // Integer cents: every figure the three reads hand out.
+  const figures: [string, unknown][] = [];
+  const pocketFigures = (where: string, pockets: DebtPocket[]) =>
+    pockets.forEach((pocket) =>
+      figures.push([`${where} ${pocket.currency} owed`, pocket.owedCents], [`${where} ${pocket.currency} credit`, pocket.creditCents]),
+    );
+  for (const row of [...overview, ...screen.withTerms]) {
+    figures.push(
+      [`${row.accountId} owed`, row.owedCents],
+      [`${row.accountId} credit`, row.creditCents],
+      [`${row.accountId} interest`, row.monthlyInterestCents],
+      [`${row.accountId} due installments`, row.dueInstallmentsCents],
+    );
+    if (row.availableCreditCents !== null) figures.push([`${row.accountId} available`, row.availableCreditCents]);
+    if (row.minimumPaymentCents !== null) figures.push([`${row.accountId} minimum`, row.minimumPaymentCents]);
+    pocketFigures(row.accountId, row.otherOwed);
+  }
+  for (const debt of screen.withoutTerms) {
+    figures.push([`${debt.accountId} owed`, debt.owedCents], [`${debt.accountId} credit`, debt.creditCents]);
+    pocketFigures(debt.accountId, debt.otherOwed);
+  }
+  for (const set of screen.totals.byCurrency) {
+    figures.push([`${set.currency} owed`, set.owedCents], [`${set.currency} interest`, set.monthlyInterestCents]);
+    if (set.availableCreditCents !== null) figures.push([`${set.currency} available`, set.availableCreditCents]);
+  }
+  for (const statement of [statementCredit, statementOwing, statementFixedCredit, statementFixedOwing]) {
+    figures.push([`statement minimum`, statement?.minimumPaymentCents]);
+  }
+  const notInteger = figures.filter(([, value]) => !Number.isSafeInteger(value));
+  assert(
+    next("Integer cents: every owed, credit, available, interest and minimum figure the overview, the screen and the statement hand out is a safe integer"),
+    figures.length > 0 && notInteger.length === 0,
+    `${figures.length} figures, not integer: ${JSON.stringify(notInteger.slice(0, 6))}`,
   );
 }
