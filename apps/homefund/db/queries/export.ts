@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, exists, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, exists, gte, lte, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 
@@ -66,6 +66,11 @@ const dateColumn: Partial<Record<SheetEntity, PgColumn>> = {
   transactions: transactions.occurredAt,
   recurringRules: recurringRules.nextRunOn,
 };
+
+// Movements leave in the order they happened, so two backups of the same ledger
+// list it alike and twin rows keep their relative place; heap order shifts with
+// every update.
+const chronological = [asc(transactions.occurredAt), asc(transactions.createdAt), asc(transactions.id)];
 
 // A Date bound reads back as its own Bogotá day; a string is already a civil date.
 function toCivilDate(value: Date | string): string {
@@ -135,7 +140,8 @@ async function readEntityRows<E extends SheetEntity>(
     const rows = await tx
       .select(projection)
       .from(table as typeof accounts)
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(...(entity === "transactions" ? chronological : []));
 
     return rows as Record<string, unknown>[];
   });
@@ -223,6 +229,13 @@ function toExportRows<E extends SheetEntity>(
 
       if (column.flag) {
         cell[column.key] = value == null ? null : true;
+        continue;
+      }
+
+      // The estimate mark belongs to a second amount: a movement with none leaves the
+      // cell blank rather than the column's FALSE (RF-123).
+      if (entity === "transactions" && column.field === "counterIsEstimate") {
+        cell[column.key] = row.counterAmountCents == null ? null : (value as boolean);
         continue;
       }
 
