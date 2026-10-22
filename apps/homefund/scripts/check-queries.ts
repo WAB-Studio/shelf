@@ -12662,12 +12662,12 @@ async function dollarBackupSuite(): Promise<void> {
     `billed ${JSON.stringify(byRef(restored, "billed"))}; peso ${JSON.stringify(byRef(restored, "cop"))}`,
   );
 
-  // ---- RF-124: the same pockets, per currency, on both accounts.
+  // ---- RF-124: the same pockets, per currency, on both accounts. A billed purchase lands in the card's pesos (0051), so only the estimated one stays in dollars.
   const after = await balances(clean);
   const cardUsd = before.find((r) => r.name === cardName && r.currency === "USD");
   assert(
     next("After the round trip each account's balance per currency is what it was, the card's dollars standing apart from its pesos"),
-    Math.abs(Number(cardUsd?.balance)) === USD_CENTS + BILLED_USD_CENTS &&
+    Math.abs(Number(cardUsd?.balance)) === USD_CENTS &&
       before.some((r) => r.name === bankName) &&
       JSON.stringify(before) === JSON.stringify(after),
     `before ${JSON.stringify(before)}; after ${JSON.stringify(after)}`,
