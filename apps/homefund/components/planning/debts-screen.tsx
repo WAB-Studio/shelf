@@ -16,6 +16,7 @@ import { DebtFormDialog } from "@/components/planning/debt-form-dialog";
 import type { DebtAccount } from "@/components/planning/debt-form-dialog";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
 import { DebtsTable } from "@/components/planning/debts-table";
+import { PocketFigure } from "@/components/planning/debts-table";
 import type { DebtTableRow } from "@/components/planning/debts-table";
 import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
 import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
@@ -90,17 +91,14 @@ function offeredCurrency(currency: CurrencyCode): OfferedCurrency {
 
 // The pockets a debt holds beside the one it bills in, each drawn in its own
 // currency and never added to the figure above it (RF-124).
-function OtherOwed({
-  pockets,
-  locale,
-}: {
-  pockets: DebtPocket[];
-  locale: Locale;
-}) {
+function OtherOwed({ pockets }: { pockets: DebtPocket[] }) {
   return pockets.map((pocket) => (
-    <Figure key={pocket.currency} size="1" color="gray">
-      {formatMoney(pocket.owedCents, pocket.currency, locale)}
-    </Figure>
+    <PocketFigure
+      key={pocket.currency}
+      owedCents={pocket.owedCents}
+      creditCents={pocket.creditCents}
+      currency={pocket.currency}
+    />
   ));
 }
 
@@ -152,6 +150,7 @@ export function DebtsScreen({
         name: row.name,
         currency: row.currency,
         owedCents: row.owedCents,
+        creditCents: row.creditCents,
         otherOwed: row.otherOwed,
         planPosition: row.planPosition,
         terms: row,
@@ -585,6 +584,7 @@ function CardHead({
   meta,
   currency,
   owedCents,
+  creditCents,
   otherOwed,
 }: {
   icon: LucideIcon;
@@ -593,10 +593,9 @@ function CardHead({
   meta: string;
   currency: CurrencyCode;
   owedCents: number;
+  creditCents: number;
   otherOwed: DebtPocket[];
 }) {
-  const locale = useLocale() as Locale;
-
   return (
     <Flex align="center" gap="3">
       <Disc
@@ -616,8 +615,13 @@ function CardHead({
         </Text>
       </Flex>
       <Flex direction="column" align="end">
-        <Figure weight="bold">{formatMoney(owedCents, currency, locale)}</Figure>
-        <OtherOwed pockets={otherOwed} locale={locale} />
+        <PocketFigure
+          owedCents={owedCents}
+          creditCents={creditCents}
+          currency={currency}
+          bold
+        />
+        <OtherOwed pockets={otherOwed} />
       </Flex>
     </Flex>
   );
@@ -687,8 +691,10 @@ function RevolvingCard({
   const format = useFormatter();
   const locale = useLocale() as Locale;
 
+  // A card in credit or at zero owes no minimum (RF-80).
+  const showMinimum = row.minimumPaymentCents !== null && row.owedCents > 0;
   const hasFooter =
-    row.minimumPaymentCents !== null ||
+    showMinimum ||
     row.nextCutOffDate !== null ||
     row.availableCreditCents !== null;
 
@@ -711,20 +717,20 @@ function RevolvingCard({
           })}
           currency={row.currency}
           owedCents={row.owedCents}
+          creditCents={row.creditCents}
           otherOwed={row.otherOwed}
         />
 
         {hasFooter && (
           <>
             <Separator size="4" />
-            {(row.minimumPaymentCents !== null ||
-              row.nextCutOffDate !== null) && (
+            {(showMinimum || row.nextCutOffDate !== null) && (
               <Flex justify="between" gap="3">
-                {row.minimumPaymentCents !== null && (
+                {showMinimum && (
                   <Stat
                     label={t("minimumPayment")}
                     value={formatMoney(
-                      row.minimumPaymentCents,
+                      row.minimumPaymentCents!,
                       row.currency,
                       locale,
                     )}
@@ -800,6 +806,7 @@ function InstallmentCard({
           }
           currency={row.currency}
           owedCents={row.owedCents}
+          creditCents={row.creditCents}
           otherOwed={row.otherOwed}
         />
 
@@ -858,6 +865,7 @@ function NoTermsCard({
     name: string;
     currency: CurrencyCode;
     owedCents: number;
+    creditCents: number;
     otherOwed: DebtPocket[];
   };
   // Absent for a caller who cannot write the debt: the head already says what it
@@ -877,6 +885,7 @@ function NoTermsCard({
           meta={t("noTermsMeta")}
           currency={debt.currency}
           owedCents={debt.owedCents}
+          creditCents={debt.creditCents}
           otherOwed={debt.otherOwed}
         />
         {onComplete && (
