@@ -343,3 +343,34 @@ test("request id: clearDraft takes it away with the draft", () => {
   assert.equal(readDraft(), null);
   assert.equal(memory.get(KEY), undefined);
 });
+
+// RP-90: the sections the model could not read travel with the draft.
+const twoLeftOut = [
+  { heading: "Salud", from: 4, to: 9 },
+  { heading: "Casa", from: 10, to: 15 },
+];
+
+test("leftOut: a save with two left-out sections reads back with both", () => {
+  saveDraft({ ...base, leftOut: twoLeftOut });
+  assert.deepEqual(readDraft()?.leftOut, twoLeftOut);
+});
+
+test("leftOut: a save without them, and a draft stored before the field, read with none", () => {
+  saveDraft(base);
+  assert.deepEqual(readDraft()?.leftOut, []);
+  put(stored2());
+  assert.deepEqual(readDraft()?.leftOut, []);
+});
+
+test("leftOut: an entry of the wrong shape is dropped on read, the good ones stay", () => {
+  put(stored2({ leftOut: [{ heading: 3, from: 1, to: 2 }, { heading: "Ok", from: 1, to: 2 }, { heading: "x", from: "1", to: 2 }, null, 5] }));
+  assert.deepEqual(readDraft()?.leftOut, [{ heading: "Ok", from: 1, to: 2 }]);
+  put(stored2({ leftOut: "texto" }));
+  assert.deepEqual(readDraft()?.leftOut, []);
+});
+
+test("leftOut: saveReview keeps them", () => {
+  saveDraft({ ...base, leftOut: twoLeftOut });
+  saveReview(draft2(900), [], []);
+  assert.deepEqual(readDraft()?.leftOut, twoLeftOut);
+});

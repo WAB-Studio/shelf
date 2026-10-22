@@ -7,6 +7,7 @@ import {
   type Notice,
   type Source,
 } from "./draft";
+import type { LeftOutSection } from "./model";
 
 const KEY = "pulsar.import-draft";
 
@@ -18,6 +19,8 @@ export type StoredDraft = {
   draft: ImportDraft;
   corrections: Correction[];
   notices: Notice[];
+  // The sections the model could not read (RP-90); a draft stored before the field has none.
+  leftOut?: LeftOutSection[];
   source: Source;
   sourceName: string | null;
   // The text as the person wrote it, for the box and the review's left column; `source.lines`
@@ -32,7 +35,7 @@ export type StoredDraft = {
   requestId?: string;
 };
 
-export type ReadDraft = StoredDraft & { requestId: string };
+export type ReadDraft = StoredDraft & { requestId: string; leftOut: LeftOutSection[] };
 
 // A plan written in the template or the workbook is saved as written: its corrections start declined and the
 // person accepts the ones she wants. The model's reading starts with them accepted (RP-122).
@@ -43,11 +46,12 @@ export function saveDraft(input: {
   draft: ImportDraft;
   corrections: Correction[];
   notices: Notice[];
+  leftOut?: LeftOutSection[];
   source: Source;
   sourceName?: string | null;
   text?: string | null;
 }): void {
-  write({ version: 2, requestId: crypto.randomUUID(), ...input, sourceName: input.sourceName ?? null, text: input.text ?? null, unmarked: null, declined: input.via === "model" ? [] : input.corrections.map((c) => c.id) });
+  write({ version: 2, requestId: crypto.randomUUID(), ...input, leftOut: input.leftOut ?? [], sourceName: input.sourceName ?? null, text: input.text ?? null, unmarked: null, declined: input.via === "model" ? [] : input.corrections.map((c) => c.id) });
 }
 
 // Rewrites the draft, the unmarked paths and the declined corrections, and the corrections themselves when
@@ -60,6 +64,14 @@ export function saveReview(draft: ImportDraft, unmarked: string[], declined: str
 
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((p): p is string => typeof p === "string") : []);
 const records = <T>(value: unknown): T[] => (Array.isArray(value) ? value.filter((p): p is T => typeof p === "object" && p !== null) : []);
+
+const leftOutSections = (value: unknown): LeftOutSection[] =>
+  Array.isArray(value)
+    ? value.filter(
+        (p): p is LeftOutSection =>
+          typeof p === "object" && p !== null && typeof p.heading === "string" && typeof p.from === "number" && typeof p.to === "number",
+      )
+    : [];
 
 // `null` for nothing stored, anything unreadable, a version other than 2, or a draft the schema refuses.
 export function readDraft(): ReadDraft | null {
@@ -85,6 +97,7 @@ export function readDraft(): ReadDraft | null {
       draft: draft.data,
       corrections: records<Correction>(parsed.corrections),
       notices: records<Notice>(parsed.notices),
+      leftOut: leftOutSections(parsed.leftOut),
       source: { kind: source.kind, lines: source.lines === null ? null : strings(source.lines) },
       sourceName: typeof parsed.sourceName === "string" ? parsed.sourceName : null,
       text: typeof parsed.text === "string" ? parsed.text : parsed.text === null ? null : undefined,
