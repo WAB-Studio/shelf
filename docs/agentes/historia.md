@@ -99,8 +99,8 @@ Each entry names the rule and the file it lives in now.
   3 and 6. Measured 2026-10-13: the canvas capture scripts in `apps/pulsar/private/cap/` went with lane 3.
 - Assign the migration number by hand. Two lanes took `idx 43` the same afternoon and both applied.
 - `harness:reap` refuses while a heartbeat is fresh. Measured 2026-09-29: `BLOCKED a live run holds harness.runs`.
-
 - Lanes, 2026-10-22: five lanes with suites at once (two validators, a mutator, a tester and a worker, each with a dev server and Playwright) filled the 15 GB WSL and 4 GB of its 8 GB swap; the user saw WSL dying. Cap set at two.
+
 ## Git (`.claude/skills/orchestrator/SKILL.md` § Git)
 
 - `gh pr merge --squash` signs with the GitHub account. Decided by the user 2026-09-09; see `docs/TRAPS.md`.
