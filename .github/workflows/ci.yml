@@ -15,7 +15,13 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  typecheck:
+  # Everything that answers in seconds, over files already in the tree, in one
+  # job so the setup (checkout, Node, `npm ci`) is paid once instead of six
+  # times. No database, no browser, no secret. Each step runs whatever the one
+  # before did, so a red names itself. The dictionary asset is committed, so
+  # `check:dict` needs no build; it sat red on `integracion` for a day in
+  # 2026-09 because nothing ran it. `node:test` ships with Node 22.
+  fast:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -33,49 +39,17 @@ jobs:
       - run: npx next typegen
         working-directory: apps/goallog
       - run: npm run typecheck
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+        if: ${{ !cancelled() }}
       - run: npm run lint
-
-  # Seconds, over files already in the tree: the dictionary asset is committed,
-  # so this needs no build, no browser and no secret. It runs on its own rather
-  # than inside `voyager-e2e` because a red here should answer in seconds, not
-  # behind a 20-minute suite. It was absent until 2026-09-10, and `D7` sat red
-  # on `integracion` for a day with nothing to say so.
-  dictionary:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+        if: ${{ !cancelled() }}
       - run: npm run check:dict -w apps/wordbook
-
-  # The pure modules, in milliseconds. `node:test` ships with Node 22, so this
-  # job installs nothing the others do not. It exists so a mutation costs
-  # seconds instead of the six minutes `voyager-e2e` charges: 33 tests, 255ms
-  # measured 2026-09-19 against a suite that could not afford to break its own
-  # code on purpose.
-  unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+        if: ${{ !cancelled() }}
       - run: npm run check:unit -w apps/wordbook
+        if: ${{ !cancelled() }}
+      - run: npm run check:unit -w apps/goallog
+        if: ${{ !cancelled() }}
+      - run: npm run check:unit -w packages/harness-registry
+        if: ${{ !cancelled() }}
 
   # Drives the policies on `reading` against the real database, DELETE included
   # — the only proof RNL-10 has. One transaction that always rolls back, so it
@@ -85,6 +59,10 @@ jobs:
   policies:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # No paid model is reachable from here: the key is blank, and every check
+    # that reaches a provider stubs `fetch` and throws on any other URL.
+    env:
+      OPENAI_API_KEY: ""
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -101,19 +79,17 @@ jobs:
       - run: npm run check:sign-in-budget -w apps/wordbook
       - run: npm run check:allow-email -w apps/wordbook
       - run: npm run check:sign-in-code -w apps/wordbook
-
-  # The pure modules, mirrors voyager's `unit` job. No database, no secret.
-  pulsar-unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run check:unit -w apps/goallog
-      - run: npm run check:unit -w packages/harness-registry
+      # Model-free, localhost-only, run before 2026-10-22 under a blank key.
+      # `check:thinness` is a measurement, not a check. `check:decoration` and
+      # `check:notes` need a running server and write today's `model_spend`,
+      # which the e2e shards read at the same time: they stay local.
+      - run: npm run check:translate -w apps/wordbook
+      - run: npm run check:translate-model -w apps/wordbook
+      - run: npm run check:unlisted -w apps/wordbook
+      - run: npm run check:admission -w apps/wordbook
+      # No npm script names it; the file is the check.
+      - run: node --import tsx --env-file=.env.local scripts/check-budget.ts
+        working-directory: apps/wordbook
 
   # Drives the `goals` policies against the real database, exactly as
   # `policies` does for `reading` — one transaction that always rolls back,
@@ -258,15 +234,14 @@ jobs:
       - run: npm run build -w apps/homefund
 
   # `next build` for pulsar runs nowhere else since it ships production-only,
-  # same as orbit. Unlike `build-orbit` this runs on every pull request rather
-  # than only the ones a `changes` job says touch the app: pulsar is one app
-  # with no sibling paths feeding it, so the fork check is the only gate.
+  # same as orbit. Pull requests only: `pulsar-e2e` and `pulsar-checks` build
+  # the same tree on a push, so a second build there proves nothing new.
   build-pulsar:
     runs-on: ubuntu-latest
     needs: changes
     if: >-
-      (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       needs.changes.outputs.pulsar == 'true'
     timeout-minutes: 15
     env:
@@ -751,9 +726,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2]
     env:
-      SHARD_TOTAL: 3
+      SHARD_TOTAL: 2
       VOYAGER_BASE_URL: http://localhost:3100
       # Arms `app/layout.tsx`'s test hook for this job's own build alone.
       # `apps/wordbook/vercel.json` names no such variable, so a Vercel build
