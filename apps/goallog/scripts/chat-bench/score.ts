@@ -76,3 +76,10 @@ export function percentile(values: number[], p: number): number {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)] ?? 0;
 }
+
+// One task's line: the verdict, then the answer's proposals and reply as JSON, so a FAIL can be read without a rerun.
+export function benchLine(task: { id: string }, verdict: Verdict, body: Answer | null): string {
+  const head = `${verdict.pass ? "pass" : "FAIL"} ${task.id}${verdict.why ? `: ${verdict.why}` : ""}`;
+  if (!body) return head;
+  return `${head}\n  proposals: ${JSON.stringify(body.changes)}\n  reply: ${JSON.stringify(body.reply)}`;
+}
