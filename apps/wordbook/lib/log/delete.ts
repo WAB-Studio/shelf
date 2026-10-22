@@ -17,8 +17,6 @@ export const LOG_DELETED_EVENT = "voyager:log-deleted";
 // switches reader never sends the first one's marks under the second's session.
 type QueueRow = { key: typeof QUEUE_KEY; readerId: string; pending: Tombstone[]; since: string | null };
 
-const sameMark = (a: Tombstone, b: Tombstone) => a.deviceId === b.deviceId && a.localId === b.localId;
-
 const markKey = (mark: Tombstone) => JSON.stringify([mark.deviceId, mark.localId]);
 
 function asPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -125,7 +123,8 @@ export async function settleTombstones(readerId: string, sent: Tombstone[], curs
   const done = completion(transaction);
   const store = transaction.objectStore(SYNC_STORE_NAME);
   const current = queueFor(await asPromise(store.get(QUEUE_KEY) as IDBRequest<QueueRow | undefined>), readerId);
-  const pending = current.pending.filter((queued) => !sent.some((mark) => sameMark(mark, queued)));
+  const delivered = new Set(sent.map(markKey));
+  const pending = current.pending.filter((queued) => !delivered.has(markKey(queued)));
   store.put({ ...current, pending, since: cursor } satisfies QueueRow);
   await done;
 }
