@@ -12,12 +12,13 @@
 //      OPENAI_API_KEY=… PULSAR_CHAT_BENCH_MODEL=<model> npx tsx --env-file=.env.local scripts/chat-bench/run.ts --i-pay \
 //        --target http://localhost:3206 --model <model> --price-in 0.25 --price-out 2 \
 //        --sessions private/session-8.json,private/session-9.json --seed private/chat-bench-seed.json
+//    Add `--only s-schedule,s-complete` (ids from tasks.ts) to send just those tasks; an unknown id refuses before any request.
 // Restart the server (step 3) for each model; the seed (steps 1-2) is built once.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { benchLine, percentile, resolveExpected, scoreAnswer, type Answer } from "./score";
-import { TASKS } from "./tasks";
+import { TASKS, type BenchTask } from "./tasks";
 
 // Prices are USD per million tokens, kept as micro-USD per million (0.25 -> 250000) so no cost is a float.
 export type Prices = { inMicro: number; outMicro: number };
@@ -37,7 +38,22 @@ export type BenchConfig = {
   prices: Prices;
   sessions: string[];
   seed: string;
+  // Task ids to send; absent means every task.
+  only?: string[];
 };
+
+// Throws on an id tasks.ts does not hold, naming it, so a typo costs nothing.
+export function selectTasks(only?: string[]): readonly BenchTask[] {
+  if (only === undefined) return TASKS;
+  const known = new Set(TASKS.map((task) => task.id));
+  for (const id of only) if (!known.has(id)) throw new Error(`--only names an unknown task id: ${id}`);
+  const wanted = new Set(only);
+  return TASKS.filter((task) => wanted.has(task.id));
+}
+
+export function estimateUnits(count: number, prices: Prices): number {
+  return costUnits(count * EST_INPUT_TOKENS, count * EST_OUTPUT_TOKENS, prices);
+}
 
 export function parsePrice(raw: string | undefined, flag: string): number {
   const match = /^([0-9]+)(?:\.([0-9]{1,6}))?$/.exec(raw ?? "");
@@ -91,17 +107,21 @@ export function parseBenchArgs(argv: string[], env: Record<string, string | unde
     outMicro: parsePrice(flagValue(argv, "--price-out"), "--price-out"),
   };
   const sessions = (flagValue(argv, "--sessions") ?? "").split(",").filter(Boolean);
-  if (sessions.length * MESSAGES_PER_PERSON < TASKS.length) {
-    throw new Error(`--sessions needs ${Math.ceil(TASKS.length / MESSAGES_PER_PERSON)} harness sessions at least`);
+  const onlyRaw = flagValue(argv, "--only");
+  const only = onlyRaw === undefined ? undefined : onlyRaw.split(",").map((id) => id.trim()).filter(Boolean);
+  if (onlyRaw !== undefined && only!.length === 0) throw new Error("--only needs task ids, like s-schedule,s-complete");
+  const selected = selectTasks(only);
+  if (sessions.length * MESSAGES_PER_PERSON < selected.length) {
+    throw new Error(`--sessions needs ${Math.ceil(selected.length / MESSAGES_PER_PERSON)} harness sessions at least`);
   }
   const seed = flagValue(argv, "--seed");
   if (!seed) throw new Error("--seed names the file of ids each session holds");
 
-  const estimate = costUnits(TASKS.length * EST_INPUT_TOKENS, TASKS.length * EST_OUTPUT_TOKENS, prices);
+  const estimate = estimateUnits(selected.length, prices);
   if (estimate >= CEILING_USD * UNITS_PER_USD) {
     throw new Error(`the estimate, USD ${formatUsd(estimate)}, reaches the USD ${CEILING_USD} ceiling`);
   }
-  return { target: url.origin, model, prices, sessions, seed };
+  return { target: url.origin, model, prices, sessions, seed, ...(only ? { only } : {}) };
 }
 
 function cookieHeader(file: string): string {
@@ -134,7 +154,7 @@ export async function runBench(config: BenchConfig, io: BenchIo): Promise<BenchR
   let lastFile = "";
   let current = "";
   try {
-    for (const [index, task] of TASKS.entries()) {
+    for (const [index, task] of selectTasks(config.only).entries()) {
       current = task.id;
       if (ceilingReached(tokensIn + EST_INPUT_TOKENS, tokensOut + EST_OUTPUT_TOKENS, config.prices)) {
         lines.push(`stopped before ${task.id}: the ceiling`);
@@ -209,8 +229,9 @@ export async function runBench(config: BenchConfig, io: BenchIo): Promise<BenchR
 
 async function main(): Promise<void> {
   const config = parseBenchArgs(process.argv.slice(2), process.env);
-  const estimate = costUnits(TASKS.length * EST_INPUT_TOKENS, TASKS.length * EST_OUTPUT_TOKENS, config.prices);
-  console.log(`${TASKS.length} messages to ${config.model}: estimate USD ${formatUsd(estimate)}, ceiling USD ${CEILING_USD}`);
+  const count = selectTasks(config.only).length;
+  const estimate = estimateUnits(count, config.prices);
+  console.log(`${count} messages to ${config.model}: estimate USD ${formatUsd(estimate)}, ceiling USD ${CEILING_USD}`);
 
   const seeds = JSON.parse(readFileSync(resolve(config.seed), "utf8")) as Record<string, Record<string, string>>;
   const { default: postgres } = await import("postgres");
