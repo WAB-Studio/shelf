@@ -2,14 +2,32 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
+import { FUND_SETTINGS, SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { Flex, NavPanel, NavList } from "@/components/ui";
+import { Flex, NavPanel, NavList, type NavListItem, Text } from "@/components/ui";
 import { usePathname } from "@/i18n/navigation";
+
+// Radix's `md` breakpoint.
+const PHONE_QUERY = "(max-width: 767px)";
+
+function subscribePhone(onChange: () => void) {
+  const query = window.matchMedia(PHONE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+// False on the server and until hydration, so a laptop never paints a phone-only row.
+export function usePhone(): boolean {
+  return useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE_QUERY).matches,
+    () => false,
+  );
+}
 
 /**
  * The secondary destinations and the preferences, behind one trigger. Both the
@@ -34,7 +52,10 @@ export function SettingsPanel({
     setOpen(false);
   }
 
-  const items = destinations(SETTINGS_KEYS, hasGroup).map(
+  // The sidebar opens this same panel on a laptop, where the chevron owns the fund's settings.
+  const isPhone = usePhone();
+
+  const items: NavListItem[] = destinations(SETTINGS_KEYS, hasGroup).map(
     ({ key, href, icon: Icon }) => ({
       key,
       href,
@@ -43,6 +64,16 @@ export function SettingsPanel({
       current: pathname === href,
     }),
   );
+
+  if (hasGroup && isPhone) {
+    items.unshift({
+      key: FUND_SETTINGS.key,
+      href: FUND_SETTINGS.href,
+      icon: <FUND_SETTINGS.icon size={18} />,
+      label: <Text weight="bold">{t(FUND_SETTINGS.key)}</Text>,
+      current: pathname === FUND_SETTINGS.href,
+    });
+  }
 
   return (
     <NavPanel
