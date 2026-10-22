@@ -36,5 +36,10 @@
   "resendIn": "Pedir otro en {seconds} s",
   "resending": "Enviando…",
   "resent": "Te mandamos otro código a <fig>{email}</fig>. Usa el del último correo.",
+  "signOut": "Cerrar sesión",
+  "signingOut": "Cerrando…",
+  "signedInAs": "Entraste como {email}",
+  "accountTitle": "Tu cuenta",
+  "partialSignOut": "Cerraste sesión en este dispositivo, pero no pudimos confirmarlo con el servidor.",
   "linkLine": "También puedes abrir el enlace del correo en este navegador."
 }
