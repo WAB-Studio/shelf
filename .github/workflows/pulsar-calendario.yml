@@ -22,25 +22,53 @@ permissions:
   issues: write
 
 jobs:
+  # The pins are computed from the run's own date in Bogota, never typed: a
+  # hand-written date falls behind the calendar and the cell stops testing the
+  # day it is named for. `next X` is strictly after today.
+  pins:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pins.outputs.matrix }}
+    steps:
+      - id: pins
+        env:
+          TZ: America/Bogota
+        run: |
+          today="$(date +%F)"
+          year="$(date +%Y)"
+          day20="$(date +%Y-%m-20)"
+          if [ "$today" \> "$day20" ]; then day20="$(date -d "$(date +%Y-%m-01) +1 month" +%Y-%m-20)"; fi
+          matrix="$(jq -cn \
+            --arg monday "$(date -d 'next monday' +%F)" \
+            --arg tuesday "$(date -d 'next tuesday' +%F)" \
+            --arg sunday "$(date -d 'next sunday' +%F)" \
+            --arg day20 "$day20" \
+            --arg dec31 "$year-12-31" \
+            --arg jan1 "$((year + 1))-01-01" \
+            '{include: [
+              {name: "monday", clock: $monday},
+              {name: "tuesday", clock: $tuesday},
+              {name: "sunday", clock: $sunday},
+              {name: "day-20", clock: $day20},
+              {name: "dec-31", clock: $dec31},
+              {name: "jan-1", clock: $jan1},
+              {name: "real", clock: ""}
+            ]}')"
+          echo "$matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   dates:
     name: dates (${{ matrix.name }})
+    needs: pins
     runs-on: ubuntu-latest
     # The suite is about two minutes; `playwright install --with-deps` alone
     # took eight on 2026-09-30, when apt was slow.
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { name: monday, clock: "2026-10-12" }
-          - { name: tuesday, clock: "2026-10-13" }
-          - { name: sunday, clock: "2026-10-11" }
-          - { name: day-20, clock: "2026-10-20" }
-          - { name: dec-31, clock: "2026-12-31" }
-          - { name: jan-1, clock: "2027-01-01" }
-          # Unpinned: the real date, which only a schedule or a dispatch meets
-          # on a day nobody chose.
-          - { name: real, clock: "" }
+      # `real` is unpinned: the real date, which only a schedule or a dispatch
+      # meets on a day nobody chose. `clockOverride` reads an empty pin as none.
+      matrix: ${{ fromJSON(needs.pins.outputs.matrix) }}
     env:
       HARNESS_LANE: 6
       SPECS: >-

@@ -1927,3 +1927,17 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   {to}): quedó fuera. Pégala sola para importarla.» The line counts no goal, is not markable and never blocks «Crear». With
   none left out there is no line. At 1280 it sits in the tree's column.
 - Both boards hold every state side by side in one file: the canvas is at its 512-file cap.
+
+## The canvas regrouped (2026-10-22)
+
+- GoalLog's canvas reached its 512-file cap. Decided by the user 2026-10-22: «haz todo». Nothing was deleted.
+- The 38 `Captura*` boards (integracion 4063b24, 5 Oct) moved into `Archivo.dc.html`, below the boards already there.
+- Every feature drawn as numbered boards became one board holding all its states at the same places on the canvas, each
+  under its old title: `ImportarAdjunto`, `ImportarArchivoYAviso`, `ImportarCorreccion`, `ImportarCreadoConFallos`,
+  `ImportarPasos`, `ImportarRevisionConAno`, `ImportarRevisionLarga`, `JerarquiaArbol`, `JerarquiaCrearDentro`,
+  `JerarquiaFinRechazado`, `JerarquiaHoy`, `JerarquiaInforme`, `JerarquiaMetaGeneral`, `JerarquiaNota`, `JerarquiaPorMes`,
+  `MesesFuturoYTareas`, `MetasConCifra`, `ParteExplicada`, `ReporteFilasSinMonto`, `ReporteImpresoTareasFuera`,
+  `RevisionConAno`, `RitmoSinEstimacion`, `UnidadUnaVez`. A name above such as `ImportarPasos_1_encuentra_360` is the state
+  titled so inside `ImportarPasos.dc.html`.
+- `ImportarArbol` keeps its four boards: grouped, they would cover the boards between them.
+- 512 → 366 files.
