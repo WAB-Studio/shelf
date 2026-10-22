@@ -41,6 +41,8 @@ function EntrarForm() {
   const params = useSearchParams();
   const linkError = readLinkError(params.get("error"));
   const next = params.get("next") ?? undefined;
+  // `signOutAction` sends `?salida=parcial` when Auth did not confirm (RP-141).
+  const partial = params.get("salida") === "parcial";
 
   return (
     <Page alone middle>
@@ -50,7 +52,14 @@ function EntrarForm() {
         title={t("title")}
         lead={t("lead")}
         notice={
-          linkError ? <FailureNotice title={t(`errors.${linkError}Title`)} body={t(`errors.${linkError}Body`)} /> : null
+          <>
+            {partial ? (
+              <Text as="p" variant="sentence" tone="muted">
+                {t("partialSignOut")}
+              </Text>
+            ) : null}
+            {linkError ? <FailureNotice title={t(`errors.${linkError}Title`)} body={t(`errors.${linkError}Body`)} /> : null}
+          </>
         }
       />
     </Page>
