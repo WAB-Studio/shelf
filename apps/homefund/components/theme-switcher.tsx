@@ -21,7 +21,13 @@ function useMounted() {
   );
 }
 
-export function ThemeSwitcher({ width }: { width?: Responsive<string> }) {
+export function ThemeSwitcher({
+  width,
+  showText,
+}: {
+  width?: Responsive<string>;
+  showText?: boolean;
+}) {
   const t = useTranslations("theme");
   const { theme, resolvedTheme, setTheme } = useTheme();
   const mounted = useMounted();
@@ -37,6 +43,7 @@ export function ThemeSwitcher({ width }: { width?: Responsive<string> }) {
         icon={<Monitor size={16} />}
         text={t("label")}
         width={width}
+        showText={showText}
       />
     );
   }
@@ -56,6 +63,7 @@ export function ThemeSwitcher({ width }: { width?: Responsive<string> }) {
       icon={<TriggerIcon size={16} />}
       text={t(theme)}
       width={width}
+      showText={showText}
     >
       {THEMES.map((option) => {
         const Icon = icons[option];
