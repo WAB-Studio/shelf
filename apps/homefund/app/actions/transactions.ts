@@ -196,6 +196,8 @@ export const createTransactionAction = authActionClient
 export const updateTransactionAction = authActionClient
   .inputSchema(updateTransactionSchema)
   .action(async ({ parsedInput }) => {
+    // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
+    if (!parsedInput.expectedUpdatedAt) throw new ActionError("errors.stale");
     await assertCauseReadable(parsedInput.causedByTransactionId, updateTransactionSchema);
     const counter = await resolveCounterAmount(parsedInput);
 
