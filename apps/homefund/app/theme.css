@@ -43,6 +43,18 @@ body {
   --color-background: #141310;
 }
 
+/* Dark: a control with its own colour rings at step 8, 2.80:1 on the dialog
+   panel (gray «Cancelar»). Step 11 measures 8.39:1 (gray) and 8.35:1 (red) on
+   the panel #191918, 8.86:1 and 8.82:1 on the ground #141310. */
+.dark [data-accent-color][data-accent-color] {
+  --focus-8: var(--accent-11);
+}
+
+.dark .rt-BaseButton.rt-variant-soft:focus-visible,
+.dark .rt-SelectTrigger.rt-variant-soft:focus-visible {
+  outline-color: var(--accent-11);
+}
+
 /* The solid button's white label: Radix's jade-9 and red-9 carry it at 3.15:1
    and 3.91:1. These steps reach 5.23:1 and 6.15:1 (jade), 4.79:1 and 5.65:1
    (red), in both appearances. */
