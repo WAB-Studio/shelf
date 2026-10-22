@@ -2017,9 +2017,11 @@ async function readSuite(
         getAccountBalances([debtAccountId]),
       ]);
 
-      return { screen, owedCents: Math.abs(balances[0]?.balanceCents ?? 0) };
+      // Signed: the available credit is the limit plus the balance, so a card in
+      // credit lifts it (RF-80) rather than reading its credit as owed.
+      return { screen, balanceCents: balances[0]?.balanceCents ?? 0 };
     },
-    ({ screen, owedCents }) => {
+    ({ screen, balanceCents }) => {
       const limited = screen.withTerms.find((row) => row.accountId === debtAccountId);
       const unlimited = screen.withTerms.find(
         (row) => row.accountId === debt.unlimitedAccountId,
@@ -2031,8 +2033,8 @@ async function readSuite(
           unlimited?.creditLimitCents === null &&
           unlimited.owedCents > 0 &&
           screen.totals.creditLimitCents === CREDIT_LIMIT_CENTS &&
-          screen.totals.availableCreditCents === CREDIT_LIMIT_CENTS - owedCents,
-        detail: `${screen.withTerms.length} debts with terms, limit summed ${screen.totals.creditLimitCents} of ${CREDIT_LIMIT_CENTS}, available ${screen.totals.availableCreditCents} against ${CREDIT_LIMIT_CENTS - owedCents}; the debt with no limit owes ${unlimited?.owedCents ?? "no row"} and reports a limit of ${unlimited?.creditLimitCents ?? "null"}`,
+          screen.totals.availableCreditCents === CREDIT_LIMIT_CENTS + balanceCents,
+        detail: `${screen.withTerms.length} debts with terms, limit summed ${screen.totals.creditLimitCents} of ${CREDIT_LIMIT_CENTS}, available ${screen.totals.availableCreditCents} against ${CREDIT_LIMIT_CENTS + balanceCents}; the debt with no limit owes ${unlimited?.owedCents ?? "no row"} and reports a limit of ${unlimited?.creditLimitCents ?? "null"}`,
       };
     },
   );
@@ -6173,8 +6175,8 @@ async function e5MinimumPayment(leader: HarnessUser): Promise<void> {
     `fixed 5000 with 10 percent of 1000000 gave ${fixedWins.value ?? fixedWins.error}`,
   );
   assert(
-    next("minimumPaymentSql: a percentage is of the absolute balance, rounded to the cent"),
-    pctOnly.value === "50001" && pctOnOwed.value === "50001",
+    next("minimumPaymentSql: a percentage is of what is owed, rounded to the cent; a balance in credit asks 0"),
+    pctOnly.value === "50001" && pctOnOwed.value === "0",
     `5 percent of -1000010 gave ${pctOnly.value ?? pctOnly.error}, of 1000010 gave ${pctOnOwed.value ?? pctOnOwed.error}`,
   );
   assert(
