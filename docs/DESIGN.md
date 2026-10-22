@@ -440,3 +440,14 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Deleting a movement that settled a planned payment puts the payment back to «Por pagar»** (Q4 b): RF-75 is retired
   and RF-161 opens when the module is built (migration 0069). Next train.
 - **A movement dated before its account's opening day is refused** (Q5 a), on save and on import, in words. Next train.
+- **Where and how it is refused** (Q11 a, Q12 a, Q13 b, Q14): the database refuses it on every path; an account's opening
+  cannot move past one of its movements; movements already stored before their opening stay, and the main session counts
+  them read-only in production before the deploy. The words:
+  - Deleting a movement that settled a payment: «Este movimiento saldó «{name}». Al eliminarlo, el pago vuelve a «Por
+    pagar».» With no name: «Este movimiento saldó un pago planeado. Al eliminarlo, el pago vuelve a «Por pagar».»
+  - Saving a movement before the opening: «La fecha es anterior a la apertura de la cuenta. Cambia la fecha o la apertura
+    de la cuenta.»
+  - An import row: «Fecha anterior a la apertura de su cuenta.»
+  - Moving the opening past a movement: «Hay movimientos antes de esa fecha. La apertura no puede quedar después de ellos.»
+- **A card in credit with a dollar purchase still to bill reads both, apart** (Q9 a): «A favor $ 8.000 · Debes US$ 25
+  (≈ $ 105.000 por facturar)». Currencies never sum (RF-124).
