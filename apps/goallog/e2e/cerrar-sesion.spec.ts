@@ -10,6 +10,7 @@ import { expect, mintDisposablePerson, test, visit } from "./fixtures";
 // worker's, would break the specs that run after.
 const SIGN_OUT = "Cerrar sesión";
 const PENDING = "Cerrando…";
+const FAILED = "No se pudo cerrar la sesión. Inténtalo otra vez cuando tengas conexión.";
 const PARTIAL = "Cerraste sesión en este dispositivo, pero no pudimos confirmarlo con el servidor.";
 
 test.afterAll(async () => {
@@ -72,6 +73,34 @@ test.describe("«Cerrar sesión» at the foot of /metas (RP-141)", () => {
 
     release();
     await page.waitForURL("**/entrar");
+    await context.close();
+  });
+
+  test("failed: offline, one line says it, the button is enabled and the person stays signed in", async ({ browser, db, baseURL }) => {
+    const person = mintDisposablePerson(baseURL!);
+    const context = await deviceOf(browser, person.sessionFile);
+    const page = await context.newPage();
+    await visit(page, "/metas");
+
+    await page.route("**/metas", async (route) => {
+      const request = route.request();
+      if (request.method() === "POST" && request.headers()["next-action"]) return route.abort("internetdisconnected");
+      return route.continue();
+    });
+
+    await page.getByRole("button", { name: SIGN_OUT }).click();
+    const line = page.getByRole("alert").filter({ hasText: FAILED });
+    await expect(line).toBeVisible();
+    expect((account as Record<string, unknown>).signOutFailed).toBe(FAILED);
+    await expect(page.getByRole("button", { name: SIGN_OUT })).toBeEnabled();
+    expect(new URL(page.url()).pathname).toBe("/metas");
+    const [{ n }] = await db<{ n: number }[]>`select count(*)::int as n from auth.sessions where user_id = ${person.id}`;
+    expect(n).toBe(1);
+
+    // Trying again once connected signs out.
+    await page.unroute("**/metas");
+    await page.getByRole("button", { name: SIGN_OUT }).click();
+    await page.waitForURL((url) => url.pathname === "/entrar");
     await context.close();
   });
 
