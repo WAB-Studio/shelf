@@ -806,6 +806,9 @@ test("while the JSON is built, its control reads «Exportando…» and is disabl
   page,
 }) => {
   await openSeeded(page);
+  // The Anki control waits on its own readonly count of `lookups`, which the JSON control does not:
+  // a count still in flight when the hold starts would queue behind it and the control would never show.
+  await expect(ankiControl(page)).toBeEnabled();
   // A readwrite transaction on `lookups` kept alive by chained reads: the
   // export's readonly transaction queues behind it until it is released.
   await page.evaluate(
