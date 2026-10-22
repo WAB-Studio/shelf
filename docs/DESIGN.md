@@ -54,7 +54,13 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   the available credit. Decided by the user 2026-10-08 (Q-D4, module 601).
 - Keep instalments under RF-136: the next payment is the minimum, with no instalments added to it. The instalment dialog
   becomes «proponer diferir». Decided by the user 2026-10-08 (Q-D5, module 604).
-- Neither has a board yet. Module 451 opens orbit's canvas with `Deudas · saldo a favor` and `Deudas · cuotas`.
+- `Deudas · saldo a favor` is drawn (boards `DeudasAFavorMovil`, `DeudasEnCeroMovil`, `DeudasBolsilloAFavorMovil`, page «T4 ·
+  pantallas», 2026-10-22, module M12): the row's figure reads «A favor $ 150.000» (`debts.inFavour` «A favor {amount}») in
+  `--accent-11`; no «Pago mínimo» and no interest line for a card in credit or at zero (both are 0 and are not drawn); «Corte»
+  stays; «Cupo disponible · …» adds the credit to the limit. At zero the figure is «$ 0» in the normal ink. «Deuda total» and
+  «Interés mensual» never count a credit. A pocket in another currency reads by its own sign under the settlement figure
+  («A favor US$ 20» under «$ 80.000»). The laptop's table uses the same figure and tone in its balance column; not drawn apart.
+- `Deudas · cuotas` has no board yet.
 
 ## Decision of 2026-10-14: the app is called «HomeFund»
 
