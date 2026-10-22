@@ -947,6 +947,7 @@
     "nextPayment": "Próximo pago · {amount} el {date}",
     "monthlyInterest": "Interés mensual · {amount}",
     "availableCredit": "Cupo disponible · {amount}",
+    "inFavour": "A favor {amount}",
     "minimumPayment": "Pago mínimo",
     "cutOff": "Corte",
     "dueDate": "Vence",
@@ -1269,7 +1270,9 @@
       "dayOfMonth": "Día del mes",
       "nextRunOn": "Próxima ejecución",
       "endsOn": "Fecha de fin",
-      "occurredAt": "Fecha"
+      "occurredAt": "Fecha",
+      "counterAmount": "Monto en la moneda de la cuenta",
+      "counterIsEstimate": "Monto estimado"
     },
     "filenames": {
       "export": "finanzas-datos",
