@@ -100,6 +100,7 @@ Each entry names the rule and the file it lives in now.
 - Assign the migration number by hand. Two lanes took `idx 43` the same afternoon and both applied.
 - `harness:reap` refuses while a heartbeat is fresh. Measured 2026-09-29: `BLOCKED a live run holds harness.runs`.
 
+- Lanes, 2026-10-22: five lanes with suites at once (two validators, a mutator, a tester and a worker, each with a dev server and Playwright) filled the 15 GB WSL and 4 GB of its 8 GB swap; the user saw WSL dying. Cap set at two.
 ## Git (`.claude/skills/orchestrator/SKILL.md` § Git)
 
 - `gh pr merge --squash` signs with the GitHub account. Decided by the user 2026-09-09; see `docs/TRAPS.md`.
@@ -205,4 +206,3 @@ Each entry names the rule and the file it lives in now.
   e2e runs in two shards. A push no longer builds GoalLog twice. The calendar pins come from the run's date, not typed dates.
 - M6 straightened HomeFund's drizzle snapshot chain (the 0052 fork), closing the trap archived 2026-10-22.
 - WordBook's Playwright reads `VOYAGER_BASE_URL`; a lane with only `HARNESS_BASE_URL` drove :3100. Rule in `apps/wordbook/AGENTS.md`.
-- Lanes, 2026-10-22: five lanes with suites at once (two validators, a mutator, a tester and a worker, each with a dev server and Playwright) filled the 15 GB WSL and 4 GB of its 8 GB swap; the user saw WSL dying. Cap set at two.
