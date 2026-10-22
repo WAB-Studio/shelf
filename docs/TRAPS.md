@@ -3127,10 +3127,6 @@ That 503 calls no model, so a forgotten key costs nothing but the confusion.
 - In lane 3, `git switch -q -C homefund-t1 origin/homefund-t1 && git merge …` printed nothing: `homefund-t1` was checked out in lane 8, so the switch refused and the merge ran on the lane's own branch. The train never got module 9 until `git merge-base --is-ancestor` caught it.
 - Do: merge a train in the worktree that holds it (`git worktree list`), and check `git merge-base --is-ancestor <module tip> origin/<train>` after every push.
 
-## HomeFund's drizzle snapshot chain forks at 0052 (2026-10-16)
-- `npm run db:generate` fails on `integracion`: snapshots 0053 and 0054 both name 0052's id as `prevId`. A migration's own proof «generate writes nothing» can only be taken with the chain straightened by hand, then reverted.
-- Do: fix the chain in a module of its own before relying on `db:generate`. Until then, say in a report that the proof ran on a straightened chain.
-
 ## The 0059 trigger hides old account words in test inserts (2026-10-16)
 - `private.set_account_subtype()` rewrites any subtype on INSERT (`efectivo` → `cash`, anything else from `kind`), so a fixture that still inserts `'bancaria'` lands as `bank` and no suite goes red.
 - Do: prove a fixture's words with a grep count, not a suite. Only an UPDATE, a read by the old word or a read-back equality turns red.

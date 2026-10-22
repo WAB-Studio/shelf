@@ -51,11 +51,14 @@ The why: `docs/agentes/historia.md` § Verification.
   run's `pulsar-e2e` is green.
 - Fire it too on any single pulsar PR that touches `messages/`, the template or a screen.
 - Run a new pulsar spec under `pulsar-e2e`, fired on its branch, before calling it green.
-- `pulsar-e2e` runs on the push only, never on a pull request. Merge a pulsar PR on `typecheck`, `lint`, `pulsar-unit`,
-  `pulsar-policies` and `pulsar-checks`.
+- `pulsar-e2e` runs on the push only, never on a pull request. Merge a pulsar PR on `fast`, `pulsar-policies` and
+  `pulsar-checks`.
 - Orbit's `e2e` is informative, not blocking: no check is required by `main`'s ruleset. It runs on a pull request only
   when the change reaches `apps/homefund`, `packages/` or the lockfile, and always on the push to `main`. Merge on
-  `typecheck`, `lint` and `voyager-e2e`; read a red on `main` and fix forward.
+  `fast` and `voyager-e2e`; read a red on `main` and fix forward.
+- `fast` is the one seconds-long job: `next typegen` for each app, `typecheck`, `lint`, `check:dict` and `check:unit`
+  (WordBook, GoalLog, `packages/harness-registry`). It has no database, browser or secret. Name it, never `typecheck`
+  or `lint` alone.
 - `voyager-e2e` runs on a pull request only when it reaches `apps/wordbook`, `packages/`, the lockfile or `ci.yml`, and
   always on a push. Skipped, it does not block the merge.
 - Fix a red on `integracion` before anything else. Take `integracion` to `main` only with the whole suite green, and
@@ -75,6 +78,8 @@ The why: `docs/agentes/historia.md` § Verification.
 
 - One run per ref: `ci.yml` has `concurrency: ci-${{ github.ref }}` and cancels the older run in progress. `main` is never cancelled.
 - Path filters: the `changes` job compares the run against its base (the PR base; the tip before a push to `integracion`; the merge-base with `integracion` on a dispatch) and every app job (`build-orbit`, `build-pulsar`, `pulsar-e2e`, `pulsar-checks`, `orbit-checks`, `e2e`, `voyager-e2e-shard`) runs only when its app, `packages/`, the lockfile or `ci.yml` changed. `main` and a base that cannot be resolved run everything. A skipped job does not block the merge.
-- `pulsar-fechas` (the pinned-clock date matrix) is out of `ci.yml`. `pulsar-calendario.yml` runs it nightly and on its own manual dispatch: `gh workflow run pulsar-calendario.yml --ref <branch>`.
+- `pulsar-fechas` (the pinned-clock date matrix) is out of `ci.yml`. `pulsar-calendario.yml` runs it nightly and on its own manual dispatch: `gh workflow run pulsar-calendario.yml --ref <branch>`. Its `pins` job computes the pinned dates from the run's date in Bogota; type none by hand.
+- `build-pulsar` (`next build` for GoalLog) runs on a pull request only; on a push `pulsar-e2e` and `pulsar-checks` build the same tree.
+- `voyager-e2e` runs 2 shards (`voyager-e2e-shard`); the job `voyager-e2e` merges them. The WordBook model-free checks (`check:sync`, `grants`, `sign-in-budget`, `allow-email`, `sign-in-code`, `translate`, `translate-model`, `unlisted`, `admission`) run in the `policies` job, with no paid model.
 - `pulsar-e2e` runs 6 shards; `pulsar-e2e-report` merges them. Past six, `pulsar-checks` and orbit's `e2e` set the wall time (`private/reportes/ci-costo.md`).
 - Orbit's e2e runs 4 shards (`e2e-shard`), each building the app before its dev server; the job `e2e` merges them. A spec that spawns `next start` reads that build.

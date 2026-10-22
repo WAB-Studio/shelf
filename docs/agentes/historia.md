@@ -193,3 +193,10 @@ Each entry names the rule and the file it lives in now.
 - The review found four partial losses, now restored: the `/cuenta` rule in every WordBook dispatch (orchestrator
   skill), the rename's destination names (core, § Apps and contracts), `**Bloqueado:**` in plan-watch (orchestrator
   skill) and the reason behind revoking ALL (above).
+
+## CI reshape of oleada-5 (`docs/agentes/verificacion.md`, § CI)
+
+- M10 replaced five seconds-long jobs with one `fast`, so the setup (checkout, Node, `npm ci`) is paid once. WordBook's
+  e2e runs in two shards. A push no longer builds GoalLog twice. The calendar pins come from the run's date, not typed dates.
+- M6 straightened HomeFund's drizzle snapshot chain (the 0052 fork), closing the trap archived 2026-10-22.
+- WordBook's Playwright reads `VOYAGER_BASE_URL`; a lane with only `HARNESS_BASE_URL` drove :3100. Rule in `apps/wordbook/AGENTS.md`.

@@ -252,3 +252,9 @@ _Archived 2026-10-18: CI runs on its runner's own stack since module 227; the co
 _Archived 2026-10-18: merged into «Reading the design canvas spends 30k tokens before the file exists»._
 - `Artifact read` of the WordBook canvas returned the 4.3 MB page: the editor's stylesheet and fonts, before any board.
 - Do: read it once, and take the boards from the saved file with a script. They live in the `appifact-doc` script, `content.files`, one `.dc.html` each, plus `canvas.json`. Splice new boards in there. Before republishing, strip the publish skeleton the read prepends (everything before `<!doctype html>\n<html lang="en">`), and escape `</` in the JSON.
+
+## HomeFund's drizzle snapshot chain forks at 0052 (2026-10-16)
+
+_Archived 2026-10-22: M6 repaired the chain. Snapshots 0053–0057 carry 0053's 24 foreign-key indexes; `drizzle-kit check` passes and `db:generate` writes nothing._
+- `npm run db:generate` fails on `integracion`: snapshots 0053 and 0054 both name 0052's id as `prevId`. A migration's own proof «generate writes nothing» can only be taken with the chain straightened by hand, then reverted.
+- Do: fix the chain in a module of its own before relying on `db:generate`. Until then, say in a report that the proof ran on a straightened chain.
