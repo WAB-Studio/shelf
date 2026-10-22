@@ -54,6 +54,11 @@ Each entry names the rule and the file it lives in now.
   in-train, 762k, the dearest; on the smallest train (cierre-d17) 2 for 62k: kept, scoped. CI caught nothing unique in
   4 of 4. Nothing pruned. The third review's rule broke: six level-3 survivors (critic-6c b04, b09, b10, m24; oleada-1
   i23, a08) sat in a handoff's Pendiente instead of a next train's `tester` module.
+- Sixth pruning review, 2026-10-22, over 6 trains (oleada-2, oleada-4a, oleada-4b, oleada-4b-fixes, oleada-5,
+  oleada-5b): validators found something unique in 2 of 6 (oleada-2 7, oleada-4b 2), 0 in the last four, 913k in all;
+  on oleada-5 and oleada-5b both reported reds CI and the mutator had already shown (`errors.stale`, `debts.spec.ts:1969`).
+  Kept, on watch. Mutators found 158 survivors, all unique, 53 fixed in-train: kept. Critics found 33 unique in 2 of 2,
+  5 fixed in-train: kept. CI caught something unique in 3 of 4. Nothing pruned.
 
 ## Retired 2026-10-14 by the user
 
