@@ -108,3 +108,20 @@ export async function verifySignInCode(email: string, code: string, next?: strin
 
   redirect(landingAfterSignIn(next, env.NEXT_PUBLIC_SITE_URL));
 }
+
+/**
+ * Signs the person out of this device only (RP-141): `local` leaves their other devices and a connected
+ * AI's key alone. `signOut` drops this device's cookies even when Auth refuses, so a refusal still lands
+ * the person out and only marks the page to say the other side may have kept the session.
+ */
+export async function signOutAction(): Promise<never> {
+  const supabase = await supabaseClient();
+
+  const { error } = await supabase.auth.signOut({ scope: "local" });
+  if (error) {
+    console.error("sign-out failed", error);
+    redirect("/entrar?salida=parcial");
+  }
+
+  redirect("/entrar");
+}
