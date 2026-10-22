@@ -451,3 +451,14 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - Moving the opening past a movement: «Hay movimientos antes de esa fecha. La apertura no puede quedar después de ellos.»
 - **A card in credit with a dollar purchase still to bill reads both, apart** (Q9 a): «A favor $ 8.000 · Debes US$ 25
   (≈ $ 105.000 por facturar)». Currencies never sum (RF-124).
+- **Boards of oleada-6** (HomeFund canvas, page «T4 · pantallas», 2026-10-22):
+  - `MovimientoEliminarSaldoPagoMovil` (M4): the delete confirmation of a movement that settled a payment names it, or says
+    «un pago planeado» when it has no name; one that settled nothing keeps «Esta acción no se puede deshacer.» Pending: both
+    buttons disabled, a spinner on «Eliminar». Refused: the action's own toast, the dialog stays. Done: the payment is under
+    «Por pagar» in Planeación. The laptop detail and the list row use the same dialog: no 1280 board.
+  - `DeudasAbonarAFavorMovil` (M5): the dialog's balance beside the debt's name. Owing: the amount in ink. In credit: «A favor
+    $ 150.000» whole in the accent, no sign. At zero: «$ 0» in ink.
+  - `DeudasProximoPagoSinDeudaMovil` (M5): with only cards in credit or at zero, «Próximo pago» reads «—» and has no note.
+  - `DeudasAFavorPorFacturar` (M5, Q9 a): «A favor $ 8.000» in the accent, then «· Debes US$ 25» in ink, then «(≈ $ 105.000 por
+    facturar)» muted. At 360 it wraps only at « · » or before the parenthesis; at 1280 it sits right-aligned in «Saldo». A
+    billed purchase drops the parenthesis. Pesos that owe keep today's drawing.
