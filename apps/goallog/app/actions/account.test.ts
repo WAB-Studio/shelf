@@ -18,6 +18,11 @@ type VerifyAnswer = { data: { user: { id: string } | null; session: unknown }; e
 const signedIn: VerifyAnswer = { data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null };
 let verifyAnswer: VerifyAnswer = signedIn;
 const verifyCalls: unknown[] = [];
+// RP-141: every `signOut` the action sends; `signOutError` is what Auth answers. Like the real client, the
+// fake drops this device's session on every call, error or not (auth-js `_signOut` removes it before it returns).
+const signOutCalls: unknown[] = [];
+let signOutError: unknown = null;
+let deviceSession: "kept" | "dropped" = "kept";
 // RP-138: the daily caps live in `sign-in-budget`, which the action loads with a dynamic import that no
 // module mock reaches; its own `db` and `env` are what get simulated. Every statement it sends is recorded.
 // `refuseAt` is the claim (0 the caller's, 1 the address's) the database refuses; `salt` unset is no key.
@@ -93,6 +98,11 @@ const fakes: Record<string, unknown> = {
           verifyCalls.push(params);
           return verifyAnswer;
         },
+        signOut: async (options: unknown) => {
+          signOutCalls.push(options);
+          deviceSession = "dropped";
+          return { error: signOutError };
+        },
       },
     }),
   },
@@ -140,9 +150,10 @@ untyped._load = (request, parent, isMain) => {
 
 let sendSignInLink: typeof import("./account").sendSignInLink;
 let verifySignInCode: typeof import("./account").verifySignInCode;
+let signOutAction: typeof import("./account").signOutAction;
 
 before(async () => {
-  ({ sendSignInLink, verifySignInCode } = await import("./account"));
+  ({ sendSignInLink, verifySignInCode, signOutAction } = await import("./account"));
   // The act logs the provider's error on a failed send; the tests below read the result instead.
   mock.method(console, "error", () => {});
 });
@@ -156,6 +167,9 @@ beforeEach(() => {
   listChecked.length = 0;
   verifyAnswer = signedIn;
   verifyCalls.length = 0;
+  signOutCalls.length = 0;
+  signOutError = null;
+  deviceSession = "kept";
   statements.length = 0;
   refuseAt = null;
   salt = "test-salt-0123456789abcdef";
@@ -432,4 +446,24 @@ test("RP-138 with no key a refused send has nothing to give back", async () => {
   answer = { error: { status: 500 } };
   assert.deepEqual(await sendSignInLink("ana@correo.test"), { ok: false, error: "sendFailed" });
   assert.deepEqual(statements, []);
+});
+
+// RP-141 · sign out on this device only.
+test("RP-141 signing out asks Auth once, for this device alone, and lands on /entrar", async () => {
+  assert.equal(await landing(signOutAction()), "/entrar");
+  assert.deepEqual(signOutCalls, [{ scope: "local" }]);
+  assert.equal(deviceSession, "dropped");
+});
+
+test("RP-141 an Auth refusal still leaves this device signed out and lands on /entrar?salida=parcial", async () => {
+  signOutError = new Error("auth down");
+  assert.equal(await landing(signOutAction()), "/entrar?salida=parcial");
+  assert.deepEqual(signOutCalls, [{ scope: "local" }]);
+  assert.equal(deviceSession, "dropped");
+});
+
+test("RP-141 signing out touches no connected AI's key", async () => {
+  await landing(signOutAction());
+  assert.deepEqual(statements, []);
+  assert.equal(otpCalls.length, 0);
 });
