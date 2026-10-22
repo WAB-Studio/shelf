@@ -948,6 +948,9 @@ void (async () => {
     await adjustmentTypeSuite();
     await securityHeadersSuite();
     await pathnameHeaderSuite();
+    await failureRedirectSuite();
+    await unreviewedExportSuite();
+    await credentialDefaultCategorySuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -1011,6 +1014,7 @@ async function edgeCredential(
   options: {
     rateLimitPerMin?: number;
     defaultAccountId?: string;
+    defaultCategoryId?: string;
   } = {},
 ): Promise<string> {
   const id = randomUUID();
@@ -1025,10 +1029,11 @@ async function edgeCredential(
     await tx`select set_config('request.jwt.claims', ${claims}, true)`;
     await tx`
       insert into webhook_credentials
-        (id, owner_user_id, name, token_hash, rate_limit_per_min, default_account_id)
+        (id, owner_user_id, name, token_hash, rate_limit_per_min, default_account_id, default_category_id)
       values (${id}, ${userId}, 'Harness HTTP edge credential',
         ${createHash("sha256").update(token).digest("hex")},
-        ${options.rateLimitPerMin ?? 60}, ${options.defaultAccountId ?? null})`;
+        ${options.rateLimitPerMin ?? 60}, ${options.defaultAccountId ?? null},
+        ${options.defaultCategoryId ?? null})`;
   });
   track("webhook_credentials", id);
 
@@ -1402,5 +1407,187 @@ async function edgeSuite(): Promise<void> {
       exported.headers.get("content-disposition") === null &&
       !(exported.headers.get("content-type") ?? "").includes("spreadsheet"),
     `it answered ${exported.status} to ${exportedTo ?? "(no location)"} typed ${exported.headers.get("content-type") ?? "(none)"}`,
+  );
+}
+
+// RF-01: a failed landing that clears a stale session cookie rides the no-store
+// directives Auth hands back; without them a CDN may cache the `Set-Cookie`.
+// A redirect that sets no cookie (`linkOtherBrowser`, which never asks Auth) has
+// nothing to protect and carries none.
+async function failureRedirectSuite(): Promise<void> {
+  const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname.split(".")[0];
+  const stale = {
+    access_token: "a.b.c",
+    refresh_token: "not-a-refresh-token",
+    expires_at: 1000,
+    expires_in: 1,
+    token_type: "bearer",
+    user: { id: "00000000-0000-0000-0000-000000000000" },
+  };
+  const sessionCookie = `sb-${host}-auth-token=base64-${Buffer.from(JSON.stringify(stale)).toString("base64url")}`;
+  const verifierCookie = `sb-${host}-auth-token-code-verifier=base64-${Buffer.from(JSON.stringify("abc")).toString("base64url")}`;
+
+  const land = async (query: string, cookie: string) => {
+    const response = await fetch(`${HARNESS_BASE_URL}/auth/confirm?${query}`, {
+      redirect: "manual",
+      headers: { cookie },
+    });
+
+    return {
+      status: response.status,
+      location: response.headers.get("location") ?? "",
+      cacheControl: response.headers.get("cache-control") ?? "",
+      clearsSession: response.headers.getSetCookie().some((one) => one.startsWith(`sb-${host}-auth-token=;`)),
+    };
+  };
+
+  // The first call on a cold server can reach Auth before its connection is up; Auth
+  // then answers a retryable error and the stale cookie is kept, which is not what is measured.
+  await land("token_hash=abc&type=magiclink", sessionCookie);
+  const byHash = await land("token_hash=abc&type=magiclink", sessionCookie);
+  assert(
+    next("a rejected token_hash link lands on the login with linkInvalid and says no-store"),
+    [302, 307].includes(byHash.status) &&
+      byHash.location.endsWith("/es/login?error=linkInvalid") &&
+      byHash.clearsSession &&
+      byHash.cacheControl.includes("no-store"),
+    `it answered ${byHash.status} to ${byHash.location}, cache-control «${byHash.cacheControl}», clears session ${byHash.clearsSession}`,
+  );
+
+  const byCode = await land("code=abc", `${sessionCookie}; ${verifierCookie}`);
+  assert(
+    next("a rejected code link lands on the login with linkInvalid and says no-store"),
+    [302, 307].includes(byCode.status) &&
+      byCode.location.endsWith("/es/login?error=linkInvalid") &&
+      byCode.clearsSession &&
+      byCode.cacheControl.includes("no-store"),
+    `it answered ${byCode.status} to ${byCode.location}, cache-control «${byCode.cacheControl}», clears session ${byCode.clearsSession}`,
+  );
+
+  const otherBrowser = await land("code=abc", sessionCookie);
+  assert(
+    next("a code opened where no verifier was set lands on the login with linkOtherBrowser"),
+    [302, 307].includes(otherBrowser.status) && otherBrowser.location.endsWith("/es/login?error=linkOtherBrowser"),
+    `it answered ${otherBrowser.status} to ${otherBrowser.location}`,
+  );
+}
+
+// RF-118: the export carries the movement list's own filters, `unreviewed=1`
+// among them, so the sheet holds only the movements awaiting review.
+async function unreviewedExportSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("unreviewedExportSuite ran before the session was read");
+  const claims = JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
+  const tag = randomUUID().slice(0, 8);
+  const accountId = randomUUID();
+  const categoryId = randomUUID();
+  const waiting = `Harness X04 por revisar ${tag}`;
+  const reviewed = `Harness X04 revisado ${tag}`;
+  const plain = `Harness X04 manual ${tag}`;
+  const ids = { waiting: randomUUID(), reviewed: randomUUID(), plain: randomUUID() };
+
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${accountId}, ${userId}, ${`Harness X04 ${tag}`}, 'asset', 'bank', 1000000, (now() at time zone 'America/Bogota')::date)`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${categoryId}, ${userId}, ${`Harness X04 cat ${tag}`}, 'expense', '#4C8C4A')`;
+    for (const [id, description] of [
+      [ids.waiting, waiting],
+      [ids.reviewed, reviewed],
+      [ids.plain, plain],
+    ]) {
+      await tx`
+        insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
+        values (${id}, ${accountId}, 10000, (now() at time zone 'America/Bogota')::date, ${description})`;
+      await tx`
+        insert into transaction_splits (transaction_id, category_id, amount_cents)
+        values (${id}, ${categoryId}, 10000)`;
+    }
+  });
+  track("accounts", accountId);
+  track("categories", categoryId);
+  for (const id of Object.values(ids)) track("transactions", id);
+  await asOwner(userId, async (tx) => {
+    await tx`update transactions set awaiting_counterparty = true where id in (${ids.waiting}, ${ids.reviewed})`;
+    await tx`update transactions set reviewed_at = now() where id = ${ids.reviewed}`;
+  });
+
+  const cookie = await cookieHeader();
+  const sheetOf = async (query: string): Promise<string[]> => {
+    const response = await fetch(`${HARNESS_BASE_URL}/${LOCALE}/settings/data/export?entities=transactions${query}`, {
+      headers: { cookie },
+    });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await response.arrayBuffer());
+    const sheet = workbook.worksheets[0];
+    const at = (sheet.getRow(1).values as unknown[]).indexOf(messages.data.columns.description);
+    const found: string[] = [];
+    sheet.eachRow((row, number) => {
+      const text = String((row.values as unknown[])[at] ?? "");
+      if (number > 1 && text.includes(tag)) found.push(text);
+    });
+
+    return found.sort();
+  };
+
+  const everything = await sheetOf("");
+  assert(
+    next("the unfiltered export holds the waiting, the reviewed and the manual movement"),
+    everything.length === 3,
+    `it held ${JSON.stringify(everything)}`,
+  );
+
+  const onlyWaiting = await sheetOf("&unreviewed=1");
+  assert(
+    next("the export with unreviewed=1 holds only the movement awaiting review"),
+    onlyWaiting.length === 1 && onlyWaiting[0] === waiting,
+    `it held ${JSON.stringify(onlyWaiting)}`,
+  );
+}
+
+// RF-86: a message the interpreter cannot categorize lands proposed under the
+// credential's default category, and says so; a credential without one proposes none.
+async function credentialDefaultCategorySuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("credentialDefaultCategorySuite ran before the session was read");
+  const claims = JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
+  const tag = randomUUID().slice(0, 8).toUpperCase();
+  const categoryId = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${categoryId}, ${userId}, ${`Harness X06 ${tag}`}, 'expense', '#4C8C4A')`;
+  });
+  track("categories", categoryId);
+
+  const deliver = async (token: string, merchant: string) => {
+    const text = `Bancolombia: Compraste COP12.000,00 en ${merchant} con tu T.Cred *4872, el 25/08/2026 a las 20:07.`;
+    const reply = await postRaw({ authorization: `Bearer ${token}` }, JSON.stringify({ text }));
+    if (typeof reply.body.deliveryId === "string") landedDeliveries.push(reply.body.deliveryId);
+    const [row] = await fixtureSql<{ categoryId: string | null; source: string | null }[]>`
+      select proposed_category_id as "categoryId", category_source as source
+      from ingest_deliveries where owner_user_id = ${userId} and raw_text = ${text}`;
+
+    return { status: reply.status, row };
+  };
+
+  const withDefault = await deliver(await edgeCredential(userId, { defaultCategoryId: categoryId }), `ZXQ DEFAULT ${tag}`);
+  assert(
+    next("a delivery on a credential with a default category is proposed under it, sourced credential_default"),
+    withDefault.status === 200 &&
+      withDefault.row?.categoryId === categoryId &&
+      withDefault.row?.source === "credential_default",
+    `it answered ${withDefault.status}, landed ${JSON.stringify(withDefault.row)}`,
+  );
+
+  const without = await deliver(await edgeCredential(userId), `ZXQ BARE ${tag}`);
+  assert(
+    next("a delivery on a credential with no default category is proposed under none"),
+    without.status === 200 && without.row?.categoryId === null && without.row?.source === null,
+    `it answered ${without.status}, landed ${JSON.stringify(without.row)}`,
   );
 }

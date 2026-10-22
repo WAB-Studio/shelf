@@ -700,6 +700,57 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
     expect(left.n).toBe("2");
   });
 
+  test("a forged edit of the adjustment that carries its own current stamp is refused read-only and writes nothing", async ({
+    page,
+  }, testInfo) => {
+    // Kills: the `adjustment` refusal removed from the update action (a stamp that
+    // matches cannot be answered `stale`, so only that refusal can be heard).
+    test.skip(testInfo.project.name !== "desktop", "the row menu is the laptop's");
+    await seedAdjustment(1_200_000);
+    const [before] = await fixtureSql<{ stamp: string; amount: string }[]>`
+      select updated_at::text as stamp, amount_cents::text as amount from transactions where id = ${adjustmentId}`;
+
+    const [expense] = await fixtureSql<{ id: string }[]>`
+      select id from transactions
+      where owner_user_id = ${scope.userId} and description = ${EXPENSE_DESCRIPTION}`;
+    const forgedBodies: Record<string, unknown>[] = [];
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      const body = request.postData();
+      if (request.method() === "POST" && request.headers()["next-action"] && body?.includes(expense.id)) {
+        const [input] = JSON.parse(body) as Record<string, unknown>[];
+        const forged = { ...input, transactionId: adjustmentId, expectedUpdatedAt: before.stamp };
+        forgedBodies.push(forged);
+        await route.continue({ postData: JSON.stringify([forged]) });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/es/movements");
+    await page
+      .getByRole("button", {
+        name: common.actionsFor.replace("{name}", EXPENSE_DESCRIPTION),
+        exact: true,
+      })
+      .click();
+    await page.getByRole("menuitem", { name: transactions.edit, exact: true }).click();
+    await page.getByLabel(transactions.amountLabel, { exact: true }).fill("99999");
+    await page
+      .locator("form")
+      .getByRole("button", { name: transactions.saveMovement, exact: true })
+      .click();
+
+    await expect(page.getByText(errorsText.adjustmentReadOnly)).toBeVisible();
+    await expect(page.getByText(errorsText.stale)).toHaveCount(0);
+    expect(forgedBodies).toHaveLength(1);
+    expect(forgedBodies[0].transactionId).toBe(adjustmentId);
+    expect(forgedBodies[0].expectedUpdatedAt).toBe(before.stamp);
+    const [after] = await fixtureSql<{ stamp: string; amount: string }[]>`
+      select updated_at::text as stamp, amount_cents::text as amount from transactions where id = ${adjustmentId}`;
+    expect(after).toEqual(before);
+  });
+
   test("a forged edit of the adjustment surfaces the read-only refusal, not a saved dialog", async ({
     page,
   }, testInfo) => {

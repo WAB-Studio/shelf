@@ -428,7 +428,10 @@ test.describe("the dialog's states", () => {
       const dialog = await openDialog(page, account);
       await realField(dialog).fill(String(DERIVED_TODAY / 100 - 8_000));
 
-      await expect(line(dialog, accounts.reconcileGap)).toContainText(signed(-8_000));
+      // Kills: the magnitude not taken before the minus is prefixed (a doubled sign still «contains» the figure).
+      await expect(
+        line(dialog, accounts.reconcileGap).locator("span").filter({ hasText: peso(8_000) }).last(),
+      ).toHaveText(signed(-8_000));
       await expect(
         dialog.getByText(accounts.reconcileGapHint.split("{date}")[0], { exact: false }),
       ).toBeVisible();
@@ -598,6 +601,48 @@ test.describe("refusals (B5b)", () => {
       expect(await adjustmentsOf(account.id)).toHaveLength(0);
     } finally {
       await dropAccount(account.id);
+    }
+  });
+
+  test("a forged confirm against an archived account is answered with the refusal, never ok", async ({ page }) => {
+    // Kills: the `archived` refusal answering `{ ok: true }`.
+    const live = await seedAccount();
+    const archived = await seedAccount({ archived: true });
+    try {
+      const dialog = await openDialog(page, live);
+      await realField(dialog).fill("480000");
+
+      // The menu offers no Cuadrar on an archived account, so the confirm of the live
+      // one is sent with the archived account's id swapped in.
+      const answers: string[] = [];
+      let forged = 0;
+      await page.route("**/*", async (route) => {
+        const request = route.request();
+        const body = request.postData();
+        if (request.method() === "POST" && request.headers()["next-action"] && body?.includes(live.id)) {
+          forged += 1;
+          const response = await route.fetch({ postData: body.replaceAll(live.id, archived.id) });
+          answers.push(await response.text());
+          await route.fulfill({ response });
+          return;
+        }
+        await route.continue();
+      });
+
+      await submit(dialog).click();
+
+      await expect(page.getByText(errors.reconcileFailed, { exact: true })).toBeVisible();
+      expect(forged).toBe(1);
+      expect(answers).toHaveLength(1);
+      expect(answers[0]).not.toContain('"ok":true');
+      expect(answers[0]).not.toMatch(/"gapCents"/);
+      await expect(page.getByText(accounts.reconciled, { exact: true })).toHaveCount(0);
+      expect(await reconciliationsOf(archived.id)).toHaveLength(0);
+      expect(await adjustmentsOf(archived.id)).toHaveLength(0);
+      expect(await reconciliationsOf(live.id)).toHaveLength(0);
+    } finally {
+      await dropAccount(live.id);
+      await dropAccount(archived.id);
     }
   });
 
@@ -878,6 +923,12 @@ test.describe("at 360 px", () => {
       await expect(line(dialog, accounts.reconcileGap)).toBeVisible();
       await expect(historyFigures(dialog)).toHaveCount(1);
       await expect(hint(dialog, hintAsset)).toBeVisible();
+      // Radix scales the dialog in; a box read mid-animation is smaller than the settled one.
+      await expect
+        .poll(() =>
+          dialog.evaluate((el) => el.getAnimations().every((animation) => animation.playState === "finished")),
+        )
+        .toBe(true);
 
       const overflow = await page.evaluate(() => {
         const wide = (el: Element) => el.scrollWidth > el.clientWidth + 1;
