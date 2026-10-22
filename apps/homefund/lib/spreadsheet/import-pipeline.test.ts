@@ -201,8 +201,10 @@ test("a backup transfer row holding an income category passes: the cell is never
 
 // Mutation: decide "transfer" from the resolved ids instead of the names the row wrote.
 test("a transfer to an account that does not exist is refused for that account alone, never also for its category", async () => {
+  scope.categories = [...scope.categories, { id: UUID(12), name: "Salary", externalRef: "cat-2", ownerUserId: UUID(99), groupId: null, kind: "income" }];
+  scope.existingRefs.categories = new Set(["cat-1", "cat-2"]);
   const rows = await run(
-    await book([{ fromAccount: "Checking", toAccount: "Nowhere", amount: 5000, category: "Nothing like it", occurredAt: "2026-01-10", description: "move" }]),
+    await book([{ fromAccount: "Checking", toAccount: "Nowhere", amount: 5000, category: "Salary", occurredAt: "2026-01-10", description: "move" }]),
   );
   assert.equal(rows[0].errors.length, 1);
   assert.equal(rows[0].errors[0].column, "toAccount");
