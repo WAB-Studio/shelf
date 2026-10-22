@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { test } from "node:test";
 
-import { ceilingReached, CEILING_USD, costUnits, parseBenchArgs, parsePrice, runBench, type BenchConfig } from "./run";
+import { ceilingReached, CEILING_USD, costUnits, estimateUnits, parseBenchArgs, parsePrice, runBench, selectTasks, type BenchConfig } from "./run";
 import { benchLine, percentile, resolveExpected, scoreAnswer } from "./score";
 import { TASKS, type Expected } from "./tasks";
 
@@ -177,4 +177,35 @@ test("any other thrown error still writes the file", async () => {
   const [file] = readdirSync(rig.outDir);
   assert.ok(file);
   assert.ok(readFileSync(resolve(rig.outDir, file), "utf8").includes("stopped at"));
+});
+
+test("--only sends exactly the chosen tasks and scales the estimate", async () => {
+  const only = ["s-schedule", "s-complete"];
+  const parsed = parseBenchArgs([...args, "--only", only.join(",")], env);
+  assert.deepEqual(parsed.only, only);
+  assert.ok(estimateUnits(2, parsed.prices) < estimateUnits(TASKS.length, parsed.prices));
+  assert.equal(estimateUnits(2, parsed.prices) * (TASKS.length / 2), estimateUnits(TASKS.length, parsed.prices));
+
+  const messages: string[] = [];
+  const rig = io((async (_url: string, init: RequestInit) => {
+    messages.push((JSON.parse(init.body as string) as { turns: { text: string }[] }).turns[0]!.text);
+    return ok();
+  }) as unknown as typeof fetch);
+  rig.seeds["a.json"] = { "task.report": "t-2" };
+  await runBench({ ...config(["a.json"]), only }, rig);
+  assert.deepEqual(messages, only.map((id) => TASKS.find((task) => task.id === id)!.message));
+});
+
+test("--only refuses an unknown id before any fetch", async () => {
+  let fetched = 0;
+  const real = globalThis.fetch;
+  globalThis.fetch = (async () => (fetched++, ok())) as typeof fetch;
+  try {
+    assert.throws(() => parseBenchArgs([...args, "--only", "s-schedule,s-typo"], env), /s-typo/);
+    assert.throws(() => selectTasks(["nope"]), /nope/);
+    await assert.rejects(runBench({ ...config(["a.json"]), only: ["nope"] }, io((async () => (fetched++, ok())) as typeof fetch)), /nope/);
+  } finally {
+    globalThis.fetch = real;
+  }
+  assert.equal(fetched, 0);
 });
