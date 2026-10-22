@@ -32,6 +32,8 @@ The main session reads this before a screen is dispatched. The why: `docs/agente
 - The roadmap, «Hoja de ruta de Shelf»: https://claude.ai/artifact/BvxPYpkcqSDerHBXrNhUwF. Questions to the user go in its
   «Te toca a ti», never the terminal; read the answers from its db collection `respuestas`.
 - Add the URL here the day a canvas is created. A canvas nobody can find is a canvas nobody uses.
+- Count a canvas's files before adding boards: a canvas holds 512. GoalLog's reached 512 on 2026-10-22. Put a feature's
+  states side by side in one board there, or fold superseded boards into «Archivo» first.
 
 ## Reading and dispatching
 
