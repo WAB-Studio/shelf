@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 // No `server-only` import: the unit suite cannot load it. The key is a server
 // variable of `@/lib/env`, which refuses to read it in a client bundle.
 import { env } from "@/lib/env";
+import { postCompletion } from "@/lib/model/completions";
 
 import { rawDraftJsonSchema, rawDraftSchema, type RawDraft, type Source } from "./draft";
 import { modelStub, type ModelStub } from "./model-seam";
@@ -10,8 +11,6 @@ import { importSystemPrompt, numberLines, splitLines } from "./prompt";
 import { todayInZone } from "@/lib/zone";
 
 export const MODEL_NAME = "gpt-5.5";
-
-const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
 // Unmeasured: the answer grows with the source lines it copies, and reasoning counts
 // against this budget. The orchestrator's paid run (Unresolved of the import plan) replaces both.
@@ -344,12 +343,7 @@ async function ask(apiKey: string, content: unknown[], timeoutMs: number, onStep
       { role: "user", content },
     ],
   };
-  const response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const response = await postCompletion({ apiKey, body, signal: AbortSignal.timeout(timeoutMs) });
   if (!response.ok || !response.body) {
     console.error("import model read failed: status", response.status, await errorOf(response));
     return null;

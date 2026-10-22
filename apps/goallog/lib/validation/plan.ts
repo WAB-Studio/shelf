@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-import { isCivilDate } from "@/lib/zone";
-
-// A day the person named, never the server's own clock (unlike a fact's
-// `writtenAt`): a horizon or a phase boundary is chosen ahead of time.
-const civilDate = (message: string) => z.string().refine(isCivilDate, { error: message });
+import { civilDate } from "./civil-date";
 
 export const GOAL_NAME_MAX = 120;
 
