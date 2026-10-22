@@ -42,6 +42,7 @@ export function DataTable<Row>({
   empty,
   footer,
   minWidth,
+  columnGap,
 }: {
   label: string;
   // A head inside the frame, over the column headers: what this run of rows is
@@ -63,6 +64,9 @@ export function DataTable<Row>({
   // collapsing when the fixed columns alone already outrun the viewport. Unset
   // everywhere but the one screen that draws this table under `md`.
   minWidth?: string;
+  // Space between two tracks, for a table whose end-aligned figure would
+  // otherwise run into the column before it. Unset, the tracks abut.
+  columnGap?: string;
 }) {
   const groups: DataSection<Row>[] = sections ?? [
     { key: "rows", label: "", rows: rows ?? [] },
@@ -84,6 +88,7 @@ export function DataTable<Row>({
           {
             "--data-table-columns": columns.map((c) => c.width).join(" "),
             ...(minWidth ? { "--data-table-min-width": minWidth } : {}),
+            ...(columnGap ? { "--data-table-column-gap": columnGap } : {}),
           } as CSSProperties
         }
       >
