@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { z } from "zod";
 
 import { env } from "@/lib/env";
+import { postCompletion } from "@/lib/model/completions";
 import { readTools, writeTools, type ToolSpec } from "@/lib/tools/catalogue";
 
 import { chatSystemPrompt } from "./prompt";
@@ -13,8 +14,6 @@ import { chatStub, type ChatStub } from "./seam";
 import { CHAT_TURNS_SENT, type Change, type ChatTurn } from "./types";
 
 export const CHAT_MODEL = "gpt-5.6-luna";
-
-const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
 const MAX_ROUNDS = 5;
 
@@ -195,16 +194,15 @@ function modelSource(apiKey: string): Source {
   return async (messages, timeoutMs) => {
     const model = chatModel();
     const effort = reasoningEffortFor(model);
-    const response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
+    const response = await postCompletion({
+      apiKey,
+      body: {
         model,
         ...(effort === undefined ? {} : { reasoning_effort: effort }),
         max_completion_tokens: MAX_OUTPUT_TOKENS,
         messages,
         tools,
-      }),
+      },
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return null;

@@ -54,6 +54,7 @@ export type DebtsScreenData = {
     // the ones it does not (RF-121).
     currency: CurrencyCode;
     owedCents: number;
+    creditCents: number;
     otherOwed: DebtPocket[];
     planPosition: PlanPosition | null;
     canWrite: boolean;
@@ -83,6 +84,10 @@ function emptyTotals(currency: CurrencyCode): DebtCurrencyTotals {
 // is positive and owes nothing, so it never lowers or lifts a total.
 function owedOf(balanceCents: number): number {
   return Math.max(0, -balanceCents);
+}
+
+function creditOf(balanceCents: number): number {
+  return Math.max(0, balanceCents);
 }
 
 function addOwed(
@@ -159,54 +164,45 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
   });
 
   // A liability absent from the overview owes without a rate (RF-78, RF-79); its
-  // owed is the magnitude of the derived balance, never a stored figure, read in
-  // the pocket it settles in and with its other pockets beside it. It may still
-  // carry a plan, so its position is looked up the same way.
+  // owed and its credit are the two sides of the derived balance, never a stored
+  // figure, read in the pocket it settles in and with its other pockets beside
+  // it. It may still carry a plan, so its position is looked up the same way.
   const withTermsIds = new Set(withTerms.map((row) => row.accountId));
   const withoutTerms = accounts
     .filter((account) => account.kind === "liability" && !withTermsIds.has(account.id))
-    .map((account) => ({
-      accountId: account.id,
-      name: account.name,
-      currency: account.settlementCurrency,
-      owedCents: owedOf(
-        balanceByPocket.get(`${account.id}:${account.settlementCurrency}`) ?? 0,
-      ),
-      otherOwed: account.balances
-        .filter((balance) => balance.currency !== account.settlementCurrency)
-        .map((balance) => ({
-          currency: balance.currency,
-          owedCents: owedOf(balance.balanceCents),
-        })),
-      planPosition: positionById.get(account.id) ?? null,
-      canWrite: account.canWrite,
-    }));
+    .map((account) => {
+      const settlementCents =
+        balanceByPocket.get(`${account.id}:${account.settlementCurrency}`) ?? 0;
+
+      return {
+        accountId: account.id,
+        name: account.name,
+        currency: account.settlementCurrency,
+        owedCents: owedOf(settlementCents),
+        creditCents: creditOf(settlementCents),
+        otherOwed: account.balances
+          .filter((balance) => balance.currency !== account.settlementCurrency)
+          .map((balance) => ({
+            currency: balance.currency,
+            owedCents: owedOf(balance.balanceCents),
+            creditCents: creditOf(balance.balanceCents),
+          })),
+        planPosition: positionById.get(account.id) ?? null,
+        canWrite: account.canWrite,
+      };
+    });
 
   // Every pocket of every debt, folded into the set of the currency it is
   // denominated in. A no-terms debt has no rate, so only the overview rows
   // contribute interest (RF-79), and only their settlement pocket does: the
   // terms are written against the currency the card bills in.
   const sets = new Map<CurrencyCode, DebtCurrencyTotals>();
-  // The overview hands a magnitude, which hides the sign, so a terms row's
-  // pockets are re-read from the signed balances: a pocket in credit adds 0.
+  // Only the owed side is summed: a pocket in credit adds 0, and the overview
+  // already strikes no interest on it.
   for (const row of withTerms) {
-    const settlementOwed = owedOf(
-      balanceByPocket.get(`${row.accountId}:${row.currency}`) ?? 0,
-    );
-    // Interest is struck on an owed magnitude; a credit has none to charge.
-    addOwed(
-      sets,
-      row.currency,
-      settlementOwed,
-      settlementOwed > 0 ? row.monthlyInterestCents : 0,
-    );
+    addOwed(sets, row.currency, row.owedCents, row.monthlyInterestCents);
     for (const pocket of row.otherOwed) {
-      addOwed(
-        sets,
-        pocket.currency,
-        owedOf(balanceByPocket.get(`${row.accountId}:${pocket.currency}`) ?? 0),
-        0,
-      );
+      addOwed(sets, pocket.currency, pocket.owedCents, 0);
     }
   }
   for (const debt of withoutTerms) {

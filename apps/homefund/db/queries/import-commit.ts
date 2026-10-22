@@ -655,6 +655,10 @@ type ResolvedTransaction = {
   fromAccountId: string | null;
   toAccountId: string | null;
   amountCents: number;
+  // Null on insert leaves `set_transaction_currency` to derive it from the accounts.
+  currency: string | null;
+  counterAmountCents: number | null;
+  counterIsEstimate: boolean;
   splits: { categoryId: string; amountCents: number }[];
 };
 
@@ -676,7 +680,22 @@ function resolveTransaction(
     return { categoryId, amountCents: toCents(split.amount) };
   });
 
-  return { row, fromAccountId, toAccountId, amountCents: toCents(object.amount), splits };
+  // The pipeline read the second amount once in its account's currency and carries the
+  // integer beside the string; a caller that sends only the string has it read here.
+  const carried = (object as { counterAmountCents?: number | null }).counterAmountCents;
+  const counterAmountCents =
+    carried ?? (object.counterAmount != null && object.counterAmount.trim() !== "" ? toCents(object.counterAmount) : null);
+
+  return {
+    row,
+    fromAccountId,
+    toAccountId,
+    amountCents: toCents(object.amount),
+    currency: object.currency ?? null,
+    counterAmountCents,
+    counterIsEstimate: object.counterIsEstimate ?? false,
+    splits,
+  };
 }
 
 // A row resolved for the write, or the row failure naming it (RF-51).
@@ -754,18 +773,27 @@ async function updateTransactionsBatch(
     from_account_id: item.fromAccountId,
     to_account_id: item.toAccountId,
     amount_cents: item.amountCents,
+    currency: item.currency,
+    counter_amount_cents: item.counterAmountCents,
+    counter_is_estimate: item.counterIsEstimate,
     occurred_at: item.row.object.occurredAt,
     description: item.row.object.description,
   }));
   // Mirrors `updateTransaction`: correcting a generated, unreviewed movement also
   // confirms it, while a manual or already-reviewed row's stamp stays put (RF-31).
+  // A row with no currency, from a sheet written before the column existed, says
+  // nothing of it: the stored currency and its second amount stay as they are.
   const updated = (await tx.execute(sql`
     update ${transactions} as t set
       from_account_id = r.from_account_id, to_account_id = r.to_account_id, amount_cents = r.amount_cents,
+      currency = coalesce(r.currency, t.currency),
+      counter_amount_cents = case when r.currency is null then t.counter_amount_cents else r.counter_amount_cents end,
+      counter_is_estimate = case when r.currency is null then t.counter_is_estimate else r.counter_is_estimate end,
       occurred_at = r.occurred_at, description = r.description,
       reviewed_at = case when t.recurring_rule_id is not null and t.reviewed_at is null then now() else t.reviewed_at end
     from jsonb_to_recordset(${jsonbParam(records)}) as r(
-      external_ref text, from_account_id uuid, to_account_id uuid, amount_cents bigint, occurred_at date, description text)
+      external_ref text, from_account_id uuid, to_account_id uuid, amount_cents bigint, currency text,
+      counter_amount_cents bigint, counter_is_estimate boolean, occurred_at date, description text)
     where t.external_ref = r.external_ref and ${inScope(scope)}
     returning t.id, t.external_ref`)) as unknown as { id: string; external_ref: string }[];
   if (updated.length === 0) return;
@@ -828,14 +856,16 @@ async function insertNewTransactionsBatch(
   const rowValues = sql.join(
     chunk.map(
       (item) =>
-        sql`(${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents},
+        sql`(${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
+          ${item.counterAmountCents}, ${item.counterIsEstimate},
           ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})`,
     ),
     sql`, `,
   );
   const inserted = (await tx.execute(
     sql`insert into ${transactions}
-      (from_account_id, to_account_id, amount_cents, occurred_at, description, external_ref)
+      (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
+        occurred_at, description, external_ref)
       values ${rowValues}
       returning id`,
   )) as unknown as { id: string }[];
@@ -865,9 +895,10 @@ async function insertNewTransactionsSerially(
     try {
       const [inserted] = (await tx.execute(
         sql`insert into ${transactions}
-          (from_account_id, to_account_id, amount_cents, occurred_at, description, external_ref)
-          values (${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents},
-            ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
+          (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
+            occurred_at, description, external_ref)
+          values (${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
+            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
           returning id`,
       )) as unknown as { id: string }[];
       await writeSplits(tx, inserted.id, item.splits);

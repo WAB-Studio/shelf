@@ -16,6 +16,7 @@ export function ToolbarSelect({
   text,
   children,
   width = TRIGGER_WIDTH,
+  showText = false,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -25,6 +26,8 @@ export function ToolbarSelect({
   text: string;
   children?: ReactNode;
   width?: Responsive<string>;
+  /** Keeps the word beside the icon at every width; off, it hides below `sm`. */
+  showText?: boolean;
 }) {
   return (
     <Select.Root
@@ -37,7 +40,7 @@ export function ToolbarSelect({
           {/* Fixed content, not the selected item's text: the trigger's width holds. */}
           <Flex as="span" align="center" gap="2">
             {icon}
-            <Box asChild display={{ initial: "none", sm: "inline" }}>
+            <Box asChild display={showText ? "inline" : { initial: "none", sm: "inline" }}>
               <Text truncate>{text}</Text>
             </Box>
           </Flex>

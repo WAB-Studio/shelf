@@ -1,11 +1,12 @@
 import { z } from "zod";
 
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
-import { isCivilDate, todayInZone } from "@/lib/zone";
+import { todayInZone } from "@/lib/zone";
+
+import { civilDate } from "./civil-date";
 
 // A day the person named for their errand, never one already gone: a past
 // one is refused (RP-19). Today is read at parse time, not at import.
-const civilDate = (message: string) => z.string().refine(isCivilDate, { error: message });
 const futureOrToday = (day: string) => day >= todayInZone();
 const oneOffDay = () =>
   civilDate("day.errors.oneOffDayInvalid").refine(futureOrToday, {

@@ -12,12 +12,13 @@
 //      OPENAI_API_KEY=… PULSAR_CHAT_BENCH_MODEL=<model> npx tsx --env-file=.env.local scripts/chat-bench/run.ts --i-pay \
 //        --target http://localhost:3206 --model <model> --price-in 0.25 --price-out 2 \
 //        --sessions private/session-8.json,private/session-9.json --seed private/chat-bench-seed.json
+//    Add `--only s-schedule,s-complete` (ids from tasks.ts) to send just those tasks; an unknown id refuses before any request.
 // Restart the server (step 3) for each model; the seed (steps 1-2) is built once.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { percentile, resolveExpected, scoreAnswer, type Answer } from "./score";
-import { TASKS } from "./tasks";
+import { benchLine, percentile, resolveExpected, scoreAnswer, type Answer } from "./score";
+import { TASKS, type BenchTask } from "./tasks";
 
 // Prices are USD per million tokens, kept as micro-USD per million (0.25 -> 250000) so no cost is a float.
 export type Prices = { inMicro: number; outMicro: number };
@@ -37,7 +38,22 @@ export type BenchConfig = {
   prices: Prices;
   sessions: string[];
   seed: string;
+  // Task ids to send; absent means every task.
+  only?: string[];
 };
+
+// Throws on an id tasks.ts does not hold, naming it, so a typo costs nothing.
+export function selectTasks(only?: string[]): readonly BenchTask[] {
+  if (only === undefined) return TASKS;
+  const known = new Set(TASKS.map((task) => task.id));
+  for (const id of only) if (!known.has(id)) throw new Error(`--only names an unknown task id: ${id}`);
+  const wanted = new Set(only);
+  return TASKS.filter((task) => wanted.has(task.id));
+}
+
+export function estimateUnits(count: number, prices: Prices): number {
+  return costUnits(count * EST_INPUT_TOKENS, count * EST_OUTPUT_TOKENS, prices);
+}
 
 export function parsePrice(raw: string | undefined, flag: string): number {
   const match = /^([0-9]+)(?:\.([0-9]{1,6}))?$/.exec(raw ?? "");
@@ -91,17 +107,21 @@ export function parseBenchArgs(argv: string[], env: Record<string, string | unde
     outMicro: parsePrice(flagValue(argv, "--price-out"), "--price-out"),
   };
   const sessions = (flagValue(argv, "--sessions") ?? "").split(",").filter(Boolean);
-  if (sessions.length * MESSAGES_PER_PERSON < TASKS.length) {
-    throw new Error(`--sessions needs ${Math.ceil(TASKS.length / MESSAGES_PER_PERSON)} harness sessions at least`);
+  const onlyRaw = flagValue(argv, "--only");
+  const only = onlyRaw === undefined ? undefined : onlyRaw.split(",").map((id) => id.trim()).filter(Boolean);
+  if (onlyRaw !== undefined && only!.length === 0) throw new Error("--only needs task ids, like s-schedule,s-complete");
+  const selected = selectTasks(only);
+  if (sessions.length * MESSAGES_PER_PERSON < selected.length) {
+    throw new Error(`--sessions needs ${Math.ceil(selected.length / MESSAGES_PER_PERSON)} harness sessions at least`);
   }
   const seed = flagValue(argv, "--seed");
   if (!seed) throw new Error("--seed names the file of ids each session holds");
 
-  const estimate = costUnits(TASKS.length * EST_INPUT_TOKENS, TASKS.length * EST_OUTPUT_TOKENS, prices);
+  const estimate = estimateUnits(selected.length, prices);
   if (estimate >= CEILING_USD * UNITS_PER_USD) {
     throw new Error(`the estimate, USD ${formatUsd(estimate)}, reaches the USD ${CEILING_USD} ceiling`);
   }
-  return { target: url.origin, model, prices, sessions, seed };
+  return { target: url.origin, model, prices, sessions, seed, ...(only ? { only } : {}) };
 }
 
 function cookieHeader(file: string): string {
@@ -109,69 +129,129 @@ function cookieHeader(file: string): string {
   return state.cookies.map(({ name, value }) => `${name}=${value}`).join("; ");
 }
 
-async function main(): Promise<void> {
-  const config = parseBenchArgs(process.argv.slice(2), process.env);
-  const estimate = costUnits(TASKS.length * EST_INPUT_TOKENS, TASKS.length * EST_OUTPUT_TOKENS, config.prices);
-  console.log(`${TASKS.length} messages to ${config.model}: estimate USD ${formatUsd(estimate)}, ceiling USD ${CEILING_USD}`);
+// What the run reaches outside itself, so a test can stand in for the server, the database and the disk.
+export type BenchIo = {
+  seeds: Record<string, Record<string, string>>;
+  cookie: (session: string) => string;
+  usage: (since: Date) => Promise<{ input: number; output: number }>;
+  outDir: string;
+  fetch?: typeof fetch;
+};
 
-  const seeds = JSON.parse(readFileSync(resolve(config.seed), "utf8")) as Record<string, Record<string, string>>;
-  const { default: postgres } = await import("postgres");
-  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+export type BenchResult = { file: string; stopped: boolean };
 
+// Rejected calls spend the daily allowance too, so a 429 moves to the next session and, with none left, ends the run.
+// The table and every line so far reach the file whatever ends it.
+export async function runBench(config: BenchConfig, io: BenchIo): Promise<BenchResult> {
+  const send = io.fetch ?? fetch;
   let tokensIn = 0;
   let tokensOut = 0;
   let passed = 0;
+  let stopped = false;
   const latencies: number[] = [];
   const lines: string[] = [];
+  const capped = new Set<string>();
+  let lastFile = "";
+  let current = "";
   try {
-    for (const [index, task] of TASKS.entries()) {
+    for (const [index, task] of selectTasks(config.only).entries()) {
+      current = task.id;
       if (ceilingReached(tokensIn + EST_INPUT_TOKENS, tokensOut + EST_OUTPUT_TOKENS, config.prices)) {
         lines.push(`stopped before ${task.id}: the ceiling`);
         break;
       }
-      const session = config.sessions[index % config.sessions.length]!;
-      const ids = seeds[session];
+      let response: Response | null = null;
+      let session = "";
+      let started = new Date();
+      let t0 = 0;
+      while (response === null) {
+        const open = config.sessions.filter((candidate) => !capped.has(candidate));
+        const next = open[index % open.length];
+        if (next === undefined) {
+          stopped = true;
+          break;
+        }
+        session = next;
+        started = new Date();
+        t0 = performance.now();
+        const attempt = await send(`${config.target}/chat/enviar`, {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: config.target, cookie: io.cookie(session) },
+          body: JSON.stringify({ turns: [{ role: "person", text: task.message }] }),
+        });
+        if (attempt.status === 429) {
+          capped.add(session);
+          if (capped.size >= config.sessions.length) {
+            lines.push(`stopped at ${task.id}: ${session} reached its daily cap`);
+            stopped = true;
+            break;
+          }
+          continue;
+        }
+        response = attempt;
+      }
+      if (response === null) break;
+      latencies.push(Math.round(performance.now() - t0));
+
+      const ids = io.seeds[session];
       if (!ids) throw new Error(`--seed holds no ids for ${session}`);
 
-      const started = new Date();
-      const t0 = performance.now();
-      const response = await fetch(`${config.target}/chat/enviar`, {
-        method: "POST",
-        headers: { "content-type": "application/json", origin: config.target, cookie: cookieHeader(session) },
-        body: JSON.stringify({ turns: [{ role: "person", text: task.message }] }),
-      });
-      latencies.push(Math.round(performance.now() - t0));
-      if (response.status === 429) throw new Error(`${session} reached its daily cap at ${task.id}`);
-
       // The route answers no usage; the call's own row holds it. Runs are sequential, so the newest row is this one's.
-      const [row] = await sql<{ input_tokens: number | null; output_tokens: number | null }[]>`
-        select input_tokens, output_tokens from goals.model_calls
-        where source = 'chat' and called_at >= ${started} order by called_at desc limit 1`;
-      tokensIn += row?.input_tokens ?? 0;
-      tokensOut += row?.output_tokens ?? 0;
+      const usage = await io.usage(started);
+      tokensIn += usage.input;
+      tokensOut += usage.output;
 
       const body = response.ok ? ((await response.json()) as Answer) : null;
       const verdict = body
         ? scoreAnswer(resolveExpected(task.expected, ids), body)
         : { pass: false, why: `HTTP ${response.status}` };
       if (verdict.pass) passed += 1;
-      lines.push(`${verdict.pass ? "pass" : "FAIL"} ${task.id}${verdict.why ? `: ${verdict.why}` : ""}`);
+      lines.push(benchLine(task, verdict, body));
     }
+  } catch (error) {
+    stopped = true;
+    lines.push(`stopped at ${current}: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  } finally {
+    const asked = latencies.length;
+    const table = [
+      "| model | task pass rate | mean input tokens | mean output tokens | cost (USD) | p50 ms | p95 ms |",
+      "|---|---|---|---|---|---|---|",
+      `| ${config.model} | ${passed}/${asked} | ${Math.round(tokensIn / Math.max(asked, 1))} | ${Math.round(tokensOut / Math.max(asked, 1))} | ${formatUsd(costUnits(tokensIn, tokensOut, config.prices))} | ${percentile(latencies, 50)} | ${percentile(latencies, 95)} |`,
+    ].join("\n");
+    mkdirSync(io.outDir, { recursive: true });
+    lastFile = resolve(io.outDir, `${config.model}-${Date.now()}.md`);
+    writeFileSync(lastFile, `${table}\n\n${lines.join("\n")}\n`, "utf8");
+    console.log(`${table}\n${lines.join("\n")}\nwritten to ${lastFile}`);
+  }
+  return { file: lastFile, stopped };
+}
+
+async function main(): Promise<void> {
+  const config = parseBenchArgs(process.argv.slice(2), process.env);
+  const count = selectTasks(config.only).length;
+  const estimate = estimateUnits(count, config.prices);
+  console.log(`${count} messages to ${config.model}: estimate USD ${formatUsd(estimate)}, ceiling USD ${CEILING_USD}`);
+
+  const seeds = JSON.parse(readFileSync(resolve(config.seed), "utf8")) as Record<string, Record<string, string>>;
+  const { default: postgres } = await import("postgres");
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    const { stopped } = await runBench(config, {
+      seeds,
+      cookie: cookieHeader,
+      usage: async (since) => {
+        const [row] = await sql<{ input_tokens: number | null; output_tokens: number | null }[]>`
+          select input_tokens, output_tokens from goals.model_calls
+          where source = 'chat' and called_at >= ${since} order by called_at desc limit 1`;
+        return { input: row?.input_tokens ?? 0, output: row?.output_tokens ?? 0 };
+      },
+      outDir: resolve(process.cwd(), "private/chat-bench"),
+    });
+    if (stopped) process.exitCode = 1;
   } finally {
     await sql.end();
   }
-
-  const asked = latencies.length;
-  const table = [
-    "| model | task pass rate | mean input tokens | mean output tokens | cost (USD) | p50 ms | p95 ms |",
-    "|---|---|---|---|---|---|---|",
-    `| ${config.model} | ${passed}/${asked} | ${Math.round(tokensIn / Math.max(asked, 1))} | ${Math.round(tokensOut / Math.max(asked, 1))} | ${formatUsd(costUnits(tokensIn, tokensOut, config.prices))} | ${percentile(latencies, 50)} | ${percentile(latencies, 95)} |`,
-  ].join("\n");
-  const dir = resolve(process.cwd(), "private/chat-bench");
-  mkdirSync(dir, { recursive: true });
-  const file = resolve(dir, `${config.model}-${Date.now()}.md`);
-  writeFileSync(file, `${table}\n\n${lines.join("\n")}\n`, "utf8");
-  console.log(`${table}\n${lines.join("\n")}\nwritten to ${file}`);
 }
 
 if (require.main === module) {

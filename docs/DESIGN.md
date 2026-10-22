@@ -25,7 +25,7 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 
 | Token | Light | Dark | Ratio |
 |---|---|---|---|
-| `--focus-8` (ring) | `--jade-11` `#208368` | Radix's `--accent-8`, unchanged | 4.20:1 on `#f5f3ef` |
+| `--focus-8` (ring) | `--jade-11` `#208368` | the control's `--accent-11` (Radix's step 8 was 2.80:1 on the panel) | light 4.20:1 on `#f5f3ef`; dark 8.39:1 gray and 8.35:1 red on `#191918`, 8.86:1 and 8.82:1 on `#141310` |
 | `--accent-9` (primary button) | `#1f7a62` | `#1f7a62` (Radix `#29a383` was 3.15:1) | 5.23:1 with white |
 | `--accent-10` (primary hover) | `#1b6e57` | `#1b6e57` (Radix `#27b08b` was 2.74:1) | 6.15:1 with white |
 | `--red-9` (danger button) | `#d13a3f` (Radix `#e5484d` was 3.91:1) | `#d13a3f` | 4.79:1 with white |
@@ -54,7 +54,13 @@ RNF-08 sets the requirement. This is how it shows in the interface.
   the available credit. Decided by the user 2026-10-08 (Q-D4, module 601).
 - Keep instalments under RF-136: the next payment is the minimum, with no instalments added to it. The instalment dialog
   becomes «proponer diferir». Decided by the user 2026-10-08 (Q-D5, module 604).
-- Neither has a board yet. Module 451 opens orbit's canvas with `Deudas · saldo a favor` and `Deudas · cuotas`.
+- `Deudas · saldo a favor` is drawn (boards `DeudasAFavorMovil`, `DeudasEnCeroMovil`, `DeudasBolsilloAFavorMovil`, page «T4 ·
+  pantallas», 2026-10-22, module M12): the row's figure reads «A favor $ 150.000» (`debts.inFavour` «A favor {amount}») in
+  `--accent-11`; no «Pago mínimo» and no interest line for a card in credit or at zero (both are 0 and are not drawn); «Corte»
+  stays; «Cupo disponible · …» adds the credit to the limit. At zero the figure is «$ 0» in the normal ink. «Deuda total» and
+  «Interés mensual» never count a credit. A pocket in another currency reads by its own sign under the settlement figure
+  («A favor US$ 20» under «$ 80.000»). The laptop's table uses the same figure and tone in its balance column; not drawn apart.
+- `Deudas · cuotas` has no board yet.
 
 ## Decision of 2026-10-14: the app is called «HomeFund»
 
@@ -422,3 +428,15 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **«Ajustes del fondo» on the phone** (Q8 a): a row «Ajustes del fondo» at the top of «Ajustes», for the leader only. M1
   measured it unreachable at 360 px (only the desktop rail's chevron leads there). Board and level-2 module in the slice
   after oleada-4.
+
+## Decisions of 2026-10-22, on plan oleada-5, by the user
+
+- **«Ajustes del fondo» on the phone is for every member of a fund** (Q1 a), like the desktop rail's chevron; it replaces
+  the 2026-10-18 Q8 «leader only» above. A member leaves the fund from that page (RF-154). Module M13. Boards
+  `AjustesFondoMiembroMovil` and `AjustesSinFondoMovil` (page «Miembros», 2026-10-22): below `md`, «Ajustes del fondo»
+  (`nav.fundSettings`, the gear icon) is the first row of the «Ajustes» list, on the screen and in the bottom bar's sheet,
+  emphasised over the rows under it, and leads to `/settings/group`. No fund: no row (and no «Miembros», as today). From `md`
+  up there is no such row: the chevron beside the fund name owns it, so the desktop board was not drawn.
+- **Deleting a movement that settled a planned payment puts the payment back to «Por pagar»** (Q4 b): RF-75 is retired
+  and RF-161 opens when the module is built (migration 0069). Next train.
+- **A movement dated before its account's opening day is refused** (Q5 a), on save and on import, in words. Next train.

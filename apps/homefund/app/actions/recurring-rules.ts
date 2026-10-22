@@ -121,6 +121,8 @@ export const createRecurringRuleAction = authActionClient
 export const updateRecurringRuleAction = authActionClient
   .inputSchema(updateRecurringRuleSchema)
   .action(async ({ parsedInput: { amount, frequency, dayOfMonth, description, endsOn, ...rule } }) => {
+    // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
+    if (!rule.expectedUpdatedAt) throw new ActionError("errors.stale");
     const [amountCents] = await Promise.all([toMinor(amount, rule), assertCategoryFits(rule)]);
 
     let updated: Awaited<ReturnType<typeof updateRecurringRule>>;

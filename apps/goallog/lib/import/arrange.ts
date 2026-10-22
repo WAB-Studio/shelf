@@ -2,6 +2,7 @@ import { z } from "zod";
 
 // No `server-only` import: the unit suite cannot load it (as `model.ts`).
 import { env } from "@/lib/env";
+import { postCompletion } from "@/lib/model/completions";
 
 import type { Correction, ImportDraft } from "./draft";
 import { MODEL_NAME, type Usage } from "./model";
@@ -10,7 +11,6 @@ import { modelStub } from "./model-seam";
 // 903c: the second, short pass. The read puts the tasks of a plan where the plan wrote them, and a long
 // plan writes them under its general goal. This asks which goal below each one serves, in one call.
 
-const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 const MAX_OUTPUT_TOKENS = 8_000;
 const REASONING_EFFORT = "low";
 const REQUEST_TIMEOUT_MS = 120_000;
@@ -160,10 +160,9 @@ export async function proposeMoves(draft: ImportDraft, startedAt: number): Promi
   const timeoutMs = Math.min(REQUEST_TIMEOUT_MS, startedAt + FUNCTION_BUDGET_MS - Date.now() - MARGIN_MS);
   if (timeoutMs < FLOOR_MS) return { status: "none" };
   try {
-    const response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(requestBody(draft, holders)),
+    const response = await postCompletion({
+      apiKey,
+      body: requestBody(draft, holders),
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {

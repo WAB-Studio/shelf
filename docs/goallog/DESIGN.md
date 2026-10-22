@@ -1913,3 +1913,34 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
 - **S1, the models measured** (2026-10-19, the user, option b): the six agreed, `gpt-5-nano`, `gpt-4.1-nano`, `gpt-5-mini`,
   `gpt-4.1-mini`, `gpt-6-luna`, `gpt-5.6-luna`, about USD 1.28, though OpenAI marks the first four deprecated (read
   2026-10-19 on developers.openai.com). Not run yet: the main session builds the bench seed, re-reads the prices, then runs it.
+
+## Boards of 2026-10-22: «Cerrar sesión» and the sections an import left out (oleada-5)
+
+- **`MetasCerrarSesion`** (page «Metas y una meta», RP-141, module M17). At the foot of `/metas`, after «El plan», a section
+  «Tu cuenta»: the muted line «Entraste como {email}» and «Cerrar sesión», outlined like the page's other buttons. It ends
+  the session on this device only (decided by the user 2026-10-22, Q2 a); a connected AI's key stays. While it runs:
+  «Cerrando…», the button disabled. Done: `/entrar` as it is today. If Auth does not confirm the sign-out, this device's
+  session is cleared anyway and `/entrar` shows one muted line under its lead: «Cerraste sesión en este dispositivo, pero no
+  pudimos confirmarlo con el servidor.» No 1280 face: `/metas` sits in the 640 px column and the section keeps its shape.
+  Failed (the call never reached the server, e.g. offline): the button returns to «Cerrar sesión», enabled, and one line
+  in the ink-ringed refusal box sits under it: «No se pudo cerrar la sesión. Inténtalo otra vez cuando tengas conexión.»
+  The person stays signed in; the line clears when they press again.
+- **`ImportarSeccionFuera`** (page «Importar», module M19). When the model could not read a section, the review says so above
+  the first goal, one muted line per section in the text's order: «No se pudo leer la sección «{heading}» (líneas {from} a
+  {to}): quedó fuera. Pégala sola para importarla.» The line counts no goal, is not markable and never blocks «Crear». With
+  none left out there is no line. At 1280 it sits in the tree's column.
+- Both boards hold every state side by side in one file: the canvas is at its 512-file cap.
+
+## The canvas regrouped (2026-10-22)
+
+- GoalLog's canvas reached its 512-file cap. Decided by the user 2026-10-22: «haz todo». Nothing was deleted.
+- The 38 `Captura*` boards (integracion 4063b24, 5 Oct) moved into `Archivo.dc.html`, below the boards already there.
+- Every feature drawn as numbered boards became one board holding all its states at the same places on the canvas, each
+  under its old title: `ImportarAdjunto`, `ImportarArchivoYAviso`, `ImportarCorreccion`, `ImportarCreadoConFallos`,
+  `ImportarPasos`, `ImportarRevisionConAno`, `ImportarRevisionLarga`, `JerarquiaArbol`, `JerarquiaCrearDentro`,
+  `JerarquiaFinRechazado`, `JerarquiaHoy`, `JerarquiaInforme`, `JerarquiaMetaGeneral`, `JerarquiaNota`, `JerarquiaPorMes`,
+  `MesesFuturoYTareas`, `MetasConCifra`, `ParteExplicada`, `ReporteFilasSinMonto`, `ReporteImpresoTareasFuera`,
+  `RevisionConAno`, `RitmoSinEstimacion`, `UnidadUnaVez`. A name above such as `ImportarPasos_1_encuentra_360` is the state
+  titled so inside `ImportarPasos.dc.html`.
+- `ImportarArbol` keeps its four boards: grouped, they would cover the boards between them.
+- 512 → 366 files.

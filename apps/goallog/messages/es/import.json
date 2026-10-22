@@ -96,6 +96,7 @@
     "place": "tu texto",
     "sourceLabel": "tu texto",
     "sourceFile": "leído de {name}",
+    "leftOut": "No se pudo leer la sección «{heading}» (líneas {from} a {to}): quedó fuera. Pégala sola para importarla.",
     "sourceFileAnon": "leído de un archivo",
     "change": "Volver al texto",
     "repeated": "Tienes más de una meta abierta con este nombre: no sabemos cuál actualizar. Quedó desmarcada: márcala si quieres otra.",

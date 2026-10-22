@@ -43,6 +43,8 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
   live lane's identity out from under it.
 - Run `harness:reap` only when every lane is quiet; it refuses while any heartbeat is fresh. It never touches a lane
   identity.
+- Give a lane opened with `--app goallog` its identities before GoalLog's database checks: copy `apps/homefund/.env.local`
+  into it and run `HARNESS_LANE=<n> scripts/supabase-local.sh exec npm run harness:token` from its `apps/homefund`.
 - Run `harness:census` from the main checkout when the lane is single-app. A lane opened with `--app wordbook` copies
   no `apps/homefund/.env.local`, so the census dies there. Both checkouts share one database.
 
@@ -65,7 +67,8 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
 - Assign the migration number by hand when two lanes may generate one. Renumbering after is safe (drizzle matches on
   the SQL's hash: keep the entry's `when`, rename file, tag and snapshot), but the merge collides in
   `meta/_journal.json`.
-- Run at most five suites at once. Drop back one when `free -g` shows under 2 GB available.
+- Run at most two lanes with a dev server or a suite at once: each takes 1.5 to 2 GB, and five filled the 15 GB WSL and its swap on 2026-10-22. Keep the main checkout's :3000 down while lanes run.
+- Stop a lane's dev server when its agent returns, and drop the lane when its branch merges.
 - Copy everything an agent left in the lane before you drop it: `cp -r ../finances-app-l<n>/private/{reportes,ux-*} private/`
   and the lane's `apps/*/private/`. `worktree remove --force` deletes them.
 - Drop the worktree when its branch lands: `git worktree remove ../finances-app-l<n> --force`.

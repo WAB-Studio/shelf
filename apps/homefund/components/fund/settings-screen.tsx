@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
+import { FUND_SETTINGS, SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import {
@@ -11,6 +11,7 @@ import {
   NavList,
   type NavListItem,
   ScreenHeader,
+  Text,
 } from "@/components/ui";
 
 /**
@@ -20,8 +21,8 @@ import {
  * arrives here without an edit, and it holds the sheet's own language, theme and
  * sign-out controls (RF-46, RF-47, RF-54).
  *
- * The fund's settings stay out of it: the chevron beside the fund name reaches
- * them, and no surface offers a destination twice.
+ * The fund's settings lead the phone's list alone: from `md` up the chevron beside
+ * the fund name reaches them, and no surface offers a destination twice.
  */
 export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
   const t = await getTranslations("nav");
@@ -38,6 +39,18 @@ export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
     }),
   );
 
+  const fundItems: NavListItem[] = hasGroup
+    ? [
+        {
+          key: FUND_SETTINGS.key,
+          href: FUND_SETTINGS.href,
+          icon: <FUND_SETTINGS.icon size={19} strokeWidth={1.8} />,
+          label: <Text weight="bold">{t(FUND_SETTINGS.key)}</Text>,
+          current: false,
+        },
+      ]
+    : [];
+
   return (
     <Flex direction="column" gap="4">
       <ScreenHeader title={t("settings")} />
@@ -53,6 +66,7 @@ export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
           </Card>
         </Box>
         <Box display={{ initial: "block", md: "none" }}>
+          {fundItems.length > 0 && <NavList items={fundItems} />}
           <NavList items={items} />
         </Box>
 
@@ -62,8 +76,8 @@ export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
             align={{ initial: "stretch", md: "center" }}
             gap="3"
           >
-            <LanguageSwitcher width={{ initial: "100%", md: "11rem" }} />
-            <ThemeSwitcher width={{ initial: "100%", md: "11rem" }} />
+            <LanguageSwitcher width={{ initial: "100%", md: "11rem" }} showText />
+            <ThemeSwitcher width={{ initial: "100%", md: "11rem" }} showText />
             <SignOutButton />
           </Flex>
         </Card>

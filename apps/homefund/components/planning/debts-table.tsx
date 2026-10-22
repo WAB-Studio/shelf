@@ -1,12 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 
 import {
   Badge,
   Button,
   DataTable,
+  Figure,
   Flex,
   Money,
   RowMenu,
@@ -18,22 +19,30 @@ import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import type { PlanPosition } from "@/db/queries/installment-plans";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import type { Locale } from "@/lib/locales";
+import { formatMoney } from "@/lib/money";
 
 // The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
-// The tracks of the Deudas artboard, in order.
+// The tracks of the Deudas artboard, in order. The balance track holds
+// «A favor $ 150.000» in bold with room to spare; the figure columns before it
+// give up what it and the gaps take, so the debt's own track keeps its width.
 const WIDTHS = {
   debt: "minmax(0, 1fr)",
-  availableCredit: "140px",
-  monthlyInterest: "124px",
-  minimum: "130px",
-  cutOff: "78px",
-  dueDate: "78px",
-  owed: "140px",
+  availableCredit: "128px",
+  monthlyInterest: "100px",
+  minimum: "104px",
+  cutOff: "64px",
+  dueDate: "68px",
+  owed: "170px",
   menu: "36px",
 } as const;
+
+// Every figure is end-aligned against the next column's start, so the gap is
+// what keeps a long one clear of the date before it.
+const COLUMN_GAP = "8px";
 
 /**
  * One liability the screen draws. `terms` is null on a debt with no `debt_terms`
@@ -49,11 +58,68 @@ export type DebtTableRow = {
   // what it owes in another one rides in `otherOwed` (RF-121, RF-124).
   currency: CurrencyCode;
   owedCents: number;
+  creditCents: number;
   otherOwed: DebtPocket[];
   planPosition: PlanPosition | null;
   terms: DebtOverviewRow | null;
   canWrite: boolean;
 };
+
+const AMOUNT_SLOT = "\u0000";
+
+/**
+ * A pocket read by its own sign (RF-80, RF-124): «A favor …» in the accent ink
+ * while it holds credit, the plain amount otherwise. `bold` is the debt's own
+ * figure; the pockets under it stay small and grey. `inherit` takes the type and
+ * the ink of a tile or a header that already sets its own.
+ */
+export function PocketFigure({
+  owedCents,
+  creditCents,
+  currency,
+  bold = false,
+  inherit = false,
+}: {
+  owedCents: number;
+  creditCents: number;
+  currency: CurrencyCode;
+  bold?: boolean;
+  inherit?: boolean;
+}) {
+  const t = useTranslations("debts");
+  const locale = useLocale() as Locale;
+  const size = bold || inherit ? undefined : "1";
+
+  if (creditCents > 0) {
+    // The word's own text around the amount, which `Money` then draws in the
+    // accent ink: the placeholder only marks where it goes.
+    const [before, after = ""] = t("inFavour", { amount: AMOUNT_SLOT }).split(
+      AMOUNT_SLOT,
+    );
+    return (
+      <Figure size={size} weight={bold ? "bold" : undefined}>
+        {before}
+        <Money
+          minor={creditCents}
+          currency={currency}
+          tone="income"
+          size="inherit"
+          signed={false}
+        />
+        {after}
+      </Figure>
+    );
+  }
+  return (
+    <Figure
+      size={size}
+      weight={bold ? "bold" : undefined}
+      color={bold || inherit ? undefined : "gray"}
+    >
+      {formatMoney(owedCents, currency, locale)}
+    </Figure>
+  );
+}
 
 /**
  * The dense Deudas of `private/design-desktop/SPEC-A3.md` (RF-83, RF-117): a debt
@@ -165,7 +231,7 @@ export function DebtsTable({
       align: "end",
       numeric: true,
       cell: (row) =>
-        row.terms === null ? (
+        row.terms === null || row.owedCents === 0 ? (
           absent()
         ) : (
           <Text color="gray">
@@ -184,7 +250,7 @@ export function DebtsTable({
       align: "end",
       numeric: true,
       cell: (row) =>
-        row.terms?.minimumPaymentCents == null ? (
+        row.terms?.minimumPaymentCents == null || row.owedCents === 0 ? (
           absent()
         ) : (
           <Text color="gray">
@@ -241,16 +307,27 @@ export function DebtsTable({
       // never a sum of the two (RF-124).
       cell: (row) => (
         <Flex direction="column" align="end">
-          <Money minor={row.owedCents} currency={row.currency} signed={false} />
+          {row.creditCents > 0 ? (
+            <PocketFigure
+              owedCents={0}
+              creditCents={row.creditCents}
+              currency={row.currency}
+              bold
+            />
+          ) : (
+            <Money
+              minor={row.owedCents}
+              currency={row.currency}
+              signed={false}
+            />
+          )}
           {row.otherOwed.map((pocket) => (
-            <Text key={pocket.currency} size="1" color="gray">
-              <Money
-                minor={pocket.owedCents}
-                currency={pocket.currency}
-                signed={false}
-                size="inherit"
-              />
-            </Text>
+            <PocketFigure
+              key={pocket.currency}
+              owedCents={pocket.owedCents}
+              creditCents={pocket.creditCents}
+              currency={pocket.currency}
+            />
           ))}
         </Flex>
       ),
@@ -310,6 +387,7 @@ export function DebtsTable({
       columns={columns}
       rows={rows}
       rowKey={(row) => row.accountId}
+      columnGap={COLUMN_GAP}
       empty={empty}
       footer={
         pageCount > 1 && (

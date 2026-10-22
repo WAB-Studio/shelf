@@ -227,6 +227,37 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
     const afterBoth = await stored();
     assert("S44", both.status === 200 && both.json.accepted === 0 && afterBoth === "0", `status = ${both.status}, accepted = ${both.json.accepted}, lookups (A,9) = ${afterBoth}`);
   });
+
+  // S51 (RL-73): an upload from a retired device, through the route, is refused with «retired» and writes
+  // nothing: no lookup, no new device row, and the retired device's seal is not refreshed.
+  if (!only || only === "S51") await rolledBack("S51", async ({ reader, tx, post }) => {
+    const retired = randomUUID();
+    await tx`insert into reading.devices (user_id, device_id, label, retired_at, last_seen_at)
+      values (${reader}, ${retired}, 'chrome:android', now(), '2000-01-01T00:00:00Z')`;
+    const count = async (table: "devices" | "lookups") =>
+      (await tx<{ n: string }[]>`select count(*)::text as n from reading.${tx(table)} where user_id = ${reader}`)[0].n;
+    const refused = await post({ deviceId: retired, rows: rowsOf(retired, [1, 2, 3]), since: null });
+    const [seal] = await tx<{ year: number; label: string; retired: boolean }[]>`
+      select extract(year from last_seen_at)::int as year, label, retired_at is not null as retired
+      from reading.devices where user_id = ${reader} and device_id = ${retired}`;
+    const lookups = await count("lookups");
+    const devices = await count("devices");
+    // The control: a live device's upload of the same rows is accepted, so the refusal is the gate's.
+    const live = randomUUID();
+    const accepted = await post({ deviceId: live, rows: rowsOf(live, [1, 2, 3]), since: null });
+    assert(
+      "S51",
+      refused.status === 409 &&
+        (refused.json as { error?: string }).error === "retired" &&
+        lookups === "0" &&
+        devices === "1" &&
+        seal?.year === 2000 &&
+        seal?.retired === true &&
+        accepted.status === 200 &&
+        accepted.json.accepted === 3,
+      `status = ${refused.status}, error = ${(refused.json as { error?: string }).error}, lookups = ${lookups}, devices = ${devices}, seal year = ${seal?.year}, control = ${accepted.status}/${accepted.json.accepted}`,
+    );
+  });
 }
 
 // The slice of IndexedDB the device's log, its sync row and its drain reach,

@@ -98,6 +98,8 @@ export const createPlannedPaymentAction = authActionClient
 export const updatePlannedPaymentAction = authActionClient
   .inputSchema(updatePlannedPaymentSchema)
   .action(async ({ parsedInput: { amount, categoryId, remindOn, description, ...payment } }) => {
+    // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
+    if (!payment.expectedUpdatedAt) throw new ActionError("errors.stale");
     const amountCents = await toMinor(amount, payment);
 
     let updated: Awaited<ReturnType<typeof updatePlannedPayment>>;

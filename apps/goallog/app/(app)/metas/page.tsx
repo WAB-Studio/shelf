@@ -35,6 +35,13 @@ export default async function GoalsIndexPage() {
     </Button>
   );
   return (
-    <GoalsScreen open={open} ended={ended} archived={archived} habits={habits} connect={connect} />
+    <GoalsScreen
+      open={open}
+      ended={ended}
+      archived={archived}
+      habits={habits}
+      connect={connect}
+      email={person.email}
+    />
   );
 }

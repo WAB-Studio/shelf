@@ -79,14 +79,17 @@ for (const width of [360, 1280]) {
       await expect(line).toHaveCount(1);
 
       // Figure, then the line, then the bar, then «llevas».
-      const figure = page.getByText(new RegExp(`de ${say(firstShare)}$`)).locator("visible=true").first();
+      // From the 20th the pace line holds the figure and ends «, bajo el 60 %».
+      const figure = page.getByText(new RegExp(`de ${say(firstShare)}( ?, bajo el 60 %)?$`)).locator("visible=true").first();
       const bar = page.locator("[data-part='progress-track']").locator("visible=true");
       const lleva = visible(page, /^(llevas \d+ %|día \d+ ·)/);
       await expect(bar).toHaveCount(1);
       const [y0, y1, y2, y3] = [await top(figure), await top(line), await top(bar), await top(lleva)];
       expect(y1).toBeGreaterThan(y0);
       expect(y2).toBeGreaterThan(y1);
-      expect(y3).toBeGreaterThan(y2);
+      // From the 20th «día N ·» is the figure's own line, above the share, not «llevas» under the bar.
+      if (dayOfMonth < 20) expect(y3).toBeGreaterThan(y2);
+      else expect(y3).toBeLessThanOrEqual(y0);
 
       // The share and the rhythm are figure spans, the day is plain text.
       const figures = await line.locator("[data-part='figure']").allTextContents();

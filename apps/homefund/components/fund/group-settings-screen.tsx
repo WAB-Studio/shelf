@@ -54,6 +54,7 @@ export function GroupSettingsScreen({
 }) {
   const t = useTranslations("group");
   const tCommon = useTranslations("common");
+  const tNav = useTranslations("nav");
   const router = useRouter();
   const [asking, setAsking] = useState(false);
 
@@ -90,7 +91,10 @@ export function GroupSettingsScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <ScreenHeader title={t("title")} />
+      <ScreenHeader
+        title={t("title")}
+        back={{ href: "/settings", label: tNav("settings") }}
+      />
 
       {isLeader ? (
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate>

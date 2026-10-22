@@ -15,6 +15,7 @@ import {
   Split,
   Text,
 } from "@/components/ui";
+import { SignOutButton } from "@/components/account/sign-out-button";
 import { GoalBranch, type BranchGoal } from "@/components/goal/goal-branch";
 import { RetiredHabits } from "@/components/goal/retired-habits";
 import { dayBefore } from "@/lib/day/weeks";
@@ -38,6 +39,7 @@ export async function GoalsScreen({
   archived,
   habits,
   connect,
+  email,
 }: {
   open: MetasOpenGoal[];
   ended: GoalSummary[];
@@ -45,6 +47,8 @@ export async function GoalsScreen({
   // The commitments that belong to no goal, retired ones included (RP-100).
   habits: LooseCommitment[];
   connect?: ReactNode;
+  // Who is signed in, for «Tu cuenta» (RP-141).
+  email?: string;
 }) {
   const t = await getTranslations();
 
@@ -112,6 +116,19 @@ export async function GoalsScreen({
     </Panel>
   );
 
+  // `MetasCerrarSesion`: the foot of the page, after «El plan».
+  const accountSection =
+    email === undefined ? null : (
+      <Panel>
+        <Section label={t("account.accountTitle")}>
+          <Text as="p" variant="sentence" tone="muted">
+            {t("account.signedInAs", { email })}
+          </Text>
+          <SignOutButton />
+        </Section>
+      </Panel>
+    );
+
   if (open.length === 0 && ended.length === 0 && archived.length === 0) {
     return (
       <Page>
@@ -132,6 +149,7 @@ export async function GoalsScreen({
           </Button>
           {connect}
         </Section>
+        {accountSection}
       </Page>
     );
   }
@@ -317,6 +335,7 @@ export async function GoalsScreen({
           </Panel>
         }
       />
+      {accountSection}
     </Page>
   );
 }

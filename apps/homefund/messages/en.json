@@ -947,6 +947,7 @@
     "nextPayment": "Next payment · {amount} on {date}",
     "monthlyInterest": "Monthly interest · {amount}",
     "availableCredit": "Available credit · {amount}",
+    "inFavour": "In credit {amount}",
     "minimumPayment": "Minimum payment",
     "cutOff": "Cut-off",
     "dueDate": "Due",
@@ -1269,7 +1270,9 @@
       "dayOfMonth": "Day of the month",
       "nextRunOn": "Next run",
       "endsOn": "End date",
-      "occurredAt": "Date"
+      "occurredAt": "Date",
+      "counterAmount": "Amount in the account's currency",
+      "counterIsEstimate": "Estimated amount"
     },
     "filenames": {
       "export": "finances-export",

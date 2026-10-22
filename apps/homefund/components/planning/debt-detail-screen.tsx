@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { deleteInstallmentPlanAction } from "@/app/actions/installment-plans";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
+import { PocketFigure } from "@/components/planning/debts-table";
 import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
 import { SettlementRow } from "@/components/planning/settlement-row";
 import { StatementsSection } from "@/components/planning/statements-section";
@@ -100,18 +101,34 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     onError: onActionError,
   });
 
-  // The magnitude the liability owes in the currency it bills in, off the balance
-  // the view derives from movements; a debt reads without a sign.
-  const owedCents = Math.abs(account.balanceCents);
+  // The pocket it bills in, read by its sign off the balance the view derives
+  // from movements: below zero it owes, above zero it holds a credit that owes
+  // nothing and reads «A favor» (RF-80).
+  const owedCents = Math.max(0, -account.balanceCents);
+  const creditCents = Math.max(0, account.balanceCents);
 
   // What the plans still owe: the unpaid lines the server summed, never a
   // stored figure (RF-82).
   const pendingCents = plans.reduce((sum, plan) => sum + plan.pendingCents, 0);
 
-  // The limit less what is owed, the pair the overview states for the list; with
-  // no limit there is no cupo, which is not the same as a cupo of zero (RF-117).
+  // The limit plus the signed pocket, the figure the list states: a credit
+  // lifts the cupo past the limit. With no limit there is no cupo, which is not
+  // the same as a cupo of zero (RF-117).
   const availableCreditCents =
-    terms?.creditLimitCents == null ? null : terms.creditLimitCents - owedCents;
+    terms?.creditLimitCents == null
+      ? null
+      : terms.creditLimitCents + account.balanceCents;
+
+  // A debt that owes nothing has no minimum to pay, whatever its terms say.
+  const nextPayment =
+    currentStatement === null ||
+    currentStatement.nextDueDate === null ||
+    owedCents === 0
+      ? null
+      : {
+          amountCents: currentStatement.minimumPaymentCents,
+          date: currentStatement.nextDueDate,
+        };
 
   function shortDate(date: string): string {
     return format.dateTime(civilDateToDate(date), {
@@ -129,12 +146,12 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       value: (
         <Flex direction="column">
           {account.balances.map((pocket) => (
-            <Money
+            <PocketFigure
               key={pocket.currency}
-              minor={Math.abs(pocket.balanceCents)}
+              owedCents={Math.max(0, -pocket.balanceCents)}
+              creditCents={Math.max(0, pocket.balanceCents)}
               currency={pocket.currency}
-              signed={false}
-              size="inherit"
+              inherit
             />
           ))}
         </Flex>
@@ -161,20 +178,17 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       // The open period's own minimum, derived by the server on the live
       // balance; a debt with no due day names no next payment.
       value:
-        currentStatement === null || currentStatement.nextDueDate === null ? (
+        nextPayment === null ? (
           NO_VALUE
         ) : (
           <Money
-            minor={currentStatement.minimumPaymentCents}
+            minor={nextPayment.amountCents}
             currency={currency}
             signed={false}
             size="inherit"
           />
         ),
-      note:
-        currentStatement?.nextDueDate == null
-          ? undefined
-          : shortDate(currentStatement.nextDueDate),
+      note: nextPayment === null ? undefined : shortDate(nextPayment.date),
     },
     {
       key: "availableCredit",
@@ -218,11 +232,11 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       <ScreenHeader
         title={account.name}
         meta={
-          <Money
-            minor={owedCents}
+          <PocketFigure
+            owedCents={owedCents}
+            creditCents={creditCents}
             currency={currency}
-            signed={false}
-            size="inherit"
+            inherit
           />
         }
         back={{ href: "/planning/debts", label: tDebts("title") }}
@@ -292,26 +306,30 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
               <Fact
                 label={t("statementBalance")}
                 value={
-                  <Money
-                    minor={Math.abs(currentStatement.balanceCents)}
+                  <PocketFigure
+                    owedCents={Math.max(0, -currentStatement.balanceCents)}
+                    creditCents={Math.max(0, currentStatement.balanceCents)}
                     currency={currency}
-                    signed={false}
-                    size="inherit"
+                    inherit
                   />
                 }
               />
-              <Separator size="4" />
-              <Fact
-                label={t("statementMinimum")}
-                value={
-                  <Money
-                    minor={currentStatement.minimumPaymentCents}
-                    currency={currency}
-                    signed={false}
-                    size="inherit"
+              {currentStatement.balanceCents < 0 && (
+                <>
+                  <Separator size="4" />
+                  <Fact
+                    label={t("statementMinimum")}
+                    value={
+                      <Money
+                        minor={currentStatement.minimumPaymentCents}
+                        currency={currency}
+                        signed={false}
+                        size="inherit"
+                      />
+                    }
                   />
-                }
-              />
+                </>
+              )}
               {currentStatement.nextCutOffDate !== null && (
                 <>
                   <Separator size="4" />

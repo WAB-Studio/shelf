@@ -1,12 +1,8 @@
 import { z } from "zod";
 
-import { civilDateToDate, dateToCivilDate, isCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// The same shape check `one-off.ts`'s own `civilDate` runs, reused here: a
-// caller-supplied day is a real calendar date or refused before it ever
-// reaches the range and subject checks below, which assume a well-formed
-// string and compare it lexicographically against another one.
-const civilDate = (message: string) => z.string().refine(isCivilDate, { error: message });
+import { civilDate } from "./civil-date";
 
 // How far back a fact may reach (RP-06), in
 // exactly one place — the one the date pickers read their floor from, never a second 7 typed beside this one.

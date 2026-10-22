@@ -82,47 +82,88 @@ test.describe("light", () => {
 
 // «Cancelar» (gray) and «Eliminar» (red) in the confirm dialog are the controls
 // whose ring Radix takes from their own scale: measured on the real buttons,
-// against the dialog panel they sit on (WCAG 1.4.11).
-test.describe("light, in a confirm dialog", () => {
-  test.use({ storageState: STORAGE_STATE });
+// against the dialog panel and the ground they sit on (WCAG 1.4.11).
+for (const theme of ["light", "dark"] as const) {
+  test.describe(`${theme}, in a confirm dialog`, () => {
+    test.use({ storageState: STORAGE_STATE });
 
-  test("the keyboard ring on «Cancelar» and «Eliminar» reaches 3:1 on the panel", async ({
-    page,
-  }) => {
-    await page.addInitScript(() => localStorage.setItem("theme", "light"));
-    await page.goto("/es/settings/accounts");
-    await expect(page.locator("html")).toHaveClass(/light/);
-    await page
-      .getByRole("button", {
-        name: messages.common.actionsFor.replace("{name}", readScope().accountName),
-        exact: true,
-      })
-      .click();
-    await page.getByRole("menuitem", { name: messages.common.delete, exact: true }).click();
-    const dialog = page.getByRole("alertdialog");
-    await expect(dialog).toBeVisible();
-    const panel = await dialog.evaluate((el) => getComputedStyle(el).backgroundColor);
+    test("the keyboard ring on «Cancelar» and «Eliminar» reaches 3:1 on the panel and the ground", async ({
+      page,
+    }) => {
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/es/settings/accounts");
+      await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+      await page
+        .getByRole("button", {
+          name: messages.common.actionsFor.replace("{name}", readScope().accountName),
+          exact: true,
+        })
+        .click();
+      await page.getByRole("menuitem", { name: messages.common.delete, exact: true }).click();
+      const dialog = page.getByRole("alertdialog");
+      await expect(dialog).toBeVisible();
+      const panel = await dialog.evaluate((el) => getComputedStyle(el).backgroundColor);
+      const ground = await resolved(page, "var(--color-background)");
+      const rings: Record<string, string> = {};
 
-    for (const name of [messages.common.cancel, messages.common.delete]) {
-      const button = dialog.getByRole("button", { name, exact: true });
-      // The keyboard, so :focus-visible applies: Tab until the button holds focus.
-      for (let i = 0; i < 4 && !(await button.evaluate((el) => el === document.activeElement)); i++) {
-        await page.keyboard.press("Tab");
+      for (const name of [messages.common.cancel, messages.common.delete]) {
+        const button = dialog.getByRole("button", { name, exact: true });
+        // The keyboard, so :focus-visible applies: Tab until the button holds focus.
+        for (let i = 0; i < 4 && !(await button.evaluate((el) => el === document.activeElement)); i++) {
+          await page.keyboard.press("Tab");
+        }
+        await expect(button).toBeFocused();
+        const ring = await button.evaluate((el) => getComputedStyle(el).outlineColor);
+        rings[name] = ring;
+        console.log(
+          `${theme} ${name}: ring ${ring} on panel ${panel} = ${ratio(ring, panel).toFixed(2)}:1, on ground ${ground} = ${ratio(ring, ground).toFixed(2)}:1`,
+        );
+        expect(ratio(ring, panel), `${name} on the panel`).toBeGreaterThanOrEqual(3);
+        expect(ratio(ring, ground), `${name} on the ground`).toBeGreaterThanOrEqual(3);
       }
-      await expect(button).toBeFocused();
-      const ring = await button.evaluate((el) => getComputedStyle(el).outlineColor);
-      const measured = ratio(ring, panel);
-      console.log(`${name}: ring ${ring} on ${panel} = ${measured.toFixed(2)}:1`);
-      expect(measured, name).toBeGreaterThanOrEqual(3);
-    }
+      if (theme === "light") {
+        expect(ratio(rings[messages.common.cancel], panel)).toBeCloseTo(6.04, 1);
+      }
+    });
   });
-});
+}
+
+// The soft variants draw the ring from step 8 directly; a soft gray button is
+// planted on the sign-in page and reached by Tab.
+for (const theme of ["light", "dark"] as const) {
+  test(`${theme}: a focused soft button's ring reaches 3:1 on the ground`, async ({ page }) => {
+    await open(page, theme);
+    await page.evaluate(() => {
+      const b = document.createElement("button");
+      b.className = "rt-reset rt-BaseButton rt-r-size-2 rt-variant-soft rt-Button";
+      b.setAttribute("data-accent-color", "gray");
+      b.textContent = "soft";
+      // Outside React's tree, so a re-render cannot drop it; its own theme node keeps the tokens.
+      const host = document.createElement("div");
+      host.className = "radix-themes";
+      host.appendChild(b);
+      document.body.appendChild(host);
+    });
+    const soft = page.getByRole("button", { name: "soft", exact: true });
+    await page.getByLabel(messages.auth.emailLabel).focus();
+    for (let i = 0; i < 6 && !(await soft.evaluate((el) => el === document.activeElement)); i++) {
+      await page.keyboard.press("Tab");
+    }
+    await expect(soft).toBeFocused();
+    const ring = await soft.evaluate((el) => getComputedStyle(el).outlineColor);
+    const ground = await resolved(page, "var(--color-background)");
+    console.log(`${theme} soft: ring ${ring} on ground ${ground} = ${ratio(ring, ground).toFixed(2)}:1`);
+    expect(ratio(ring, ground)).toBeGreaterThanOrEqual(3);
+  });
+}
 
 test.describe("dark", () => {
   test.beforeEach(async ({ page }) => open(page, "dark"));
 
-  test("the focus ring stays the accent's own step", async ({ page }) => {
-    expect(await resolved(page, "var(--focus-8)")).toBe(await resolved(page, "var(--accent-8)"));
+  test("the focus ring is the accent's step 11 and reaches 3:1 on the ground", async ({ page }) => {
+    const ring = await resolved(page, "var(--focus-8)");
+    expect(ring).toBe(await resolved(page, "var(--accent-11)"));
+    expect(ratio(ring, await resolved(page, "var(--color-background)"))).toBeGreaterThanOrEqual(3);
   });
 
   test("the primary button's white label reads at 4.5:1", async ({ page }) => {
