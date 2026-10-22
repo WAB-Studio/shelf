@@ -25,7 +25,7 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 
 | Token | Light | Dark | Ratio |
 |---|---|---|---|
-| `--focus-8` (ring) | `--jade-11` `#208368` | Radix's `--accent-8`, unchanged | 4.20:1 on `#f5f3ef` |
+| `--focus-8` (ring) | `--jade-11` `#208368` | the control's `--accent-11` (Radix's step 8 was 2.80:1 on the panel) | light 4.20:1 on `#f5f3ef`; dark 8.39:1 gray and 8.35:1 red on `#191918`, 8.86:1 and 8.82:1 on `#141310` |
 | `--accent-9` (primary button) | `#1f7a62` | `#1f7a62` (Radix `#29a383` was 3.15:1) | 5.23:1 with white |
 | `--accent-10` (primary hover) | `#1b6e57` | `#1b6e57` (Radix `#27b08b` was 2.74:1) | 6.15:1 with white |
 | `--red-9` (danger button) | `#d13a3f` (Radix `#e5484d` was 3.91:1) | `#d13a3f` | 4.79:1 with white |
