@@ -708,3 +708,76 @@ test("two different marks whose parts concatenate alike are both queued", async 
     [{ deviceId: "d1", localId: 23 }, { deviceId: "d12", localId: 3 }],
   );
 });
+
+// ---- settleTombstones: the settle is linear (o5-m8) ----
+
+type Mark = { deviceId: string; localId: number };
+
+// The old function, kept as the reference: what a settle must still store.
+const referenceSettle = (pending: Mark[], sent: Mark[]) =>
+  pending.filter((q) => !sent.some((m) => m.deviceId === q.deviceId && m.localId === q.localId));
+
+test("settleTombstones keeps exactly what the reference filter keeps, over 200 random queues", async () => {
+  const { settleTombstones, readTombstoneQueue } = await load();
+  const devices = [OWN, OTHER, THIRD];
+  let seed = 20261022;
+  const next = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2147483648), seed % n);
+  for (let trial = 0; trial < 200; trial++) {
+    stores = freshStores();
+    const mark = (): Mark => ({ deviceId: devices[next(3)], localId: next(12) });
+    const pending = Array.from({ length: next(15) }, mark);
+    const sent = Array.from({ length: next(15) }, mark);
+    put("sync", queueRow(pending));
+    await settleTombstones("reader-1", sent, `c${trial}`);
+    const queue = await readTombstoneQueue("reader-1");
+    assert.deepEqual(queue.pending, referenceSettle(pending, sent), `trial ${trial}`);
+    assert.equal(queue.since, `c${trial}`);
+  }
+});
+
+test("a mark of another device with the same localId as a sent one stays queued", async () => {
+  put("sync", queueRow([{ deviceId: OTHER, localId: 4 }, { deviceId: OWN, localId: 4 }]));
+  const { settleTombstones, readTombstoneQueue } = await load();
+  await settleTombstones("reader-1", [{ deviceId: OWN, localId: 4 }], "c");
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, [{ deviceId: OTHER, localId: 4 }]);
+});
+
+test("a sent mark with a localId no queued mark has drops nothing, whatever the device", async () => {
+  put("sync", queueRow([{ deviceId: OWN, localId: 1 }, { deviceId: OTHER, localId: 2 }]));
+  const { settleTombstones, readTombstoneQueue } = await load();
+  await settleTombstones("reader-1", [{ deviceId: THIRD, localId: 1 }, { deviceId: OWN, localId: 2 }], "c");
+  assert.deepEqual((await readTombstoneQueue("reader-1")).pending, [{ deviceId: OWN, localId: 1 }, { deviceId: OTHER, localId: 2 }]);
+});
+
+test("settleTombstones stores the cursor it is given, and null when given null", async () => {
+  put("sync", queueRow([{ deviceId: OWN, localId: 1 }]));
+  const { settleTombstones, readTombstoneQueue } = await load();
+  await settleTombstones("reader-1", [], "cursor-xyz");
+  assert.equal((await readTombstoneQueue("reader-1")).since, "cursor-xyz");
+  await settleTombstones("reader-1", [], null);
+  assert.equal((await readTombstoneQueue("reader-1")).since, null);
+});
+
+test("5 000 queued against 5 000 sent settle in under 200 ms and by one visit per sent mark", async () => {
+  const size = 5000;
+  // No sent mark matches: the worst case for a scan of `sent` per queued mark.
+  const pending: Mark[] = Array.from({ length: size }, (_, i) => ({ deviceId: OWN, localId: i }));
+  let reads = 0;
+  const sent: Mark[] = Array.from({ length: size }, (_, i) => {
+    const mark = { deviceId: OTHER, localId: i };
+    return {
+      get deviceId() { reads += 1; return mark.deviceId; },
+      get localId() { reads += 1; return mark.localId; },
+    };
+  });
+  put("sync", queueRow(pending));
+  const { settleTombstones, readTombstoneQueue } = await load();
+  reads = 0;
+  const started = performance.now();
+  await settleTombstones("reader-1", sent, "c");
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < 200, `settle took ${elapsed.toFixed(0)} ms`);
+  // A keyed lookup reads each sent mark a constant number of times, never once per queued mark.
+  assert.ok(reads <= size * 10, `sent marks were read ${reads} times for ${size} marks`);
+  assert.equal((await readTombstoneQueue("reader-1")).pending.length, size);
+});
