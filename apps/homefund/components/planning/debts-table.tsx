@@ -1,12 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 
 import {
   Badge,
   Button,
   DataTable,
+  Figure,
   Flex,
   Money,
   RowMenu,
@@ -18,6 +19,8 @@ import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import type { PlanPosition } from "@/db/queries/installment-plans";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import type { Locale } from "@/lib/locales";
+import { formatMoney } from "@/lib/money";
 
 // The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
 // translator would ever change.
@@ -49,11 +52,65 @@ export type DebtTableRow = {
   // what it owes in another one rides in `otherOwed` (RF-121, RF-124).
   currency: CurrencyCode;
   owedCents: number;
+  creditCents: number;
   otherOwed: DebtPocket[];
   planPosition: PlanPosition | null;
   terms: DebtOverviewRow | null;
   canWrite: boolean;
 };
+
+const AMOUNT_SLOT = "\u0000";
+
+/**
+ * A pocket read by its own sign (RF-80, RF-124): «A favor …» in the accent ink
+ * while it holds credit, the plain amount otherwise. `bold` is the debt's own
+ * figure; the pockets under it stay small and grey.
+ */
+export function PocketFigure({
+  owedCents,
+  creditCents,
+  currency,
+  bold = false,
+}: {
+  owedCents: number;
+  creditCents: number;
+  currency: CurrencyCode;
+  bold?: boolean;
+}) {
+  const t = useTranslations("debts");
+  const locale = useLocale() as Locale;
+  const size = bold ? undefined : "1";
+
+  if (creditCents > 0) {
+    // The word's own text around the amount, which `Money` then draws in the
+    // accent ink: the placeholder only marks where it goes.
+    const [before, after = ""] = t("inFavour", { amount: AMOUNT_SLOT }).split(
+      AMOUNT_SLOT,
+    );
+    return (
+      <Figure size={size} weight={bold ? "bold" : undefined}>
+        {before}
+        <Money
+          minor={creditCents}
+          currency={currency}
+          tone="income"
+          size="inherit"
+          signed={false}
+        />
+        {after}
+      </Figure>
+    );
+  }
+  return (
+    <Figure
+      size={size}
+      weight={bold ? "bold" : undefined}
+      color={bold ? undefined : "gray"}
+    >
+      {formatMoney(owedCents, currency, locale)}
+    </Figure>
+  );
+}
 
 /**
  * The dense Deudas of `private/design-desktop/SPEC-A3.md` (RF-83, RF-117): a debt
@@ -165,7 +222,7 @@ export function DebtsTable({
       align: "end",
       numeric: true,
       cell: (row) =>
-        row.terms === null ? (
+        row.terms === null || row.owedCents === 0 ? (
           absent()
         ) : (
           <Text color="gray">
@@ -184,7 +241,7 @@ export function DebtsTable({
       align: "end",
       numeric: true,
       cell: (row) =>
-        row.terms?.minimumPaymentCents == null ? (
+        row.terms?.minimumPaymentCents == null || row.owedCents === 0 ? (
           absent()
         ) : (
           <Text color="gray">
@@ -241,16 +298,27 @@ export function DebtsTable({
       // never a sum of the two (RF-124).
       cell: (row) => (
         <Flex direction="column" align="end">
-          <Money minor={row.owedCents} currency={row.currency} signed={false} />
+          {row.creditCents > 0 ? (
+            <PocketFigure
+              owedCents={0}
+              creditCents={row.creditCents}
+              currency={row.currency}
+              bold
+            />
+          ) : (
+            <Money
+              minor={row.owedCents}
+              currency={row.currency}
+              signed={false}
+            />
+          )}
           {row.otherOwed.map((pocket) => (
-            <Text key={pocket.currency} size="1" color="gray">
-              <Money
-                minor={pocket.owedCents}
-                currency={pocket.currency}
-                signed={false}
-                size="inherit"
-              />
-            </Text>
+            <PocketFigure
+              key={pocket.currency}
+              owedCents={pocket.owedCents}
+              creditCents={pocket.creditCents}
+              currency={pocket.currency}
+            />
           ))}
         </Flex>
       ),

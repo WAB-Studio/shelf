@@ -1726,3 +1726,322 @@ test.describe("a debt payment sent again", () => {
     expect(rows.map((row) => row.amount_cents).sort()).toEqual(["12000000", "13000000"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A card in credit, at zero, and a pocket in another currency (RF-80, RF-83,
+// RF-124, RF-125; `docs/DESIGN.md` § Debts, boards DeudasAFavorMovil,
+// DeudasEnCeroMovil, DeudasBolsilloAFavorMovil).
+// ---------------------------------------------------------------------------
+
+const STATE_LIMIT_CENTS = 100_000_000;
+const STATE_CREDIT_CENTS = 15_000_000;
+const STATE_OWING_CENTS = 20_000_000;
+const STATE_MINIMUM_CENTS = 1_000_000;
+const STATE_RATE = 0.24;
+const STATE_OWING_INTEREST_CENTS = Math.round(
+  STATE_OWING_CENTS * ((1 + STATE_RATE) ** (1 / 12) - 1),
+);
+
+// What a row reads once the spaces ICU chooses (no-break included) are one.
+function flat(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+// Whole pesos with the Colombian dot, written here so the browser's ICU is not
+// what the expectation is read from.
+function groupedPesos(cents: number): string {
+  return String(cents / 100).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+// The ink of the first leaf under a figure's container, which is the element
+// `Money` or `Figure` paints; computed, so a tone read off the token is a tone.
+async function inkOf(container: Locator): Promise<string> {
+  return container.evaluate((node) => {
+    let leaf: Element = node;
+    while (leaf.firstElementChild) leaf = leaf.firstElementChild;
+    return getComputedStyle(leaf).color;
+  });
+}
+
+async function accentInk(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--accent-11)";
+    document.querySelector("main")!.appendChild(probe);
+    const ink = getComputedStyle(probe).color;
+    probe.remove();
+    return ink;
+  });
+}
+
+// The figure column of one debt, at whichever width is displayed: on the phone
+// the head's right-hand column, on the laptop the balance cell.
+function figureOf(page: Page, name: string, cells: Locator | null): Locator {
+  return cells ?? cardOwed(page, name);
+}
+
+for (const [bandLabel, width] of [
+  ["phone", 360],
+  ["laptop", 1280],
+] as const) {
+  const laptop = width >= 1024;
+
+  test.describe(`${bandLabel}: a card in credit, at zero and owing`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    const creditId = randomUUID();
+    const creditName = `Tarjeta a favor ${bandLabel} ${stamp}`;
+    const payerId = randomUUID();
+    const payerName = `Cuenta pagadora ${bandLabel} ${stamp}`;
+    const zeroId = randomUUID();
+    const zeroName = `Tarjeta en cero ${bandLabel} ${stamp}`;
+    const owingId = randomUUID();
+    const owingName = `Tarjeta con saldo ${bandLabel} ${stamp}`;
+
+    const terms: SeededTerms = {
+      debtKind: "revolving",
+      annualRate: STATE_RATE,
+      minimumPaymentCents: STATE_MINIMUM_CENTS,
+      creditLimitCents: STATE_LIMIT_CENTS,
+      cutOffDay: 15,
+      dueDay: 5,
+    };
+
+    test.beforeAll(async () => {
+      // A liability cannot open positive, so the credit is an overpayment: it
+      // opens at zero and a transfer from an asset lands on it.
+      await seedAsset({ id: payerId, name: payerName, openingCents: 900_000_000 });
+      await seedDebt({ id: creditId, name: creditName, owedCents: 0, terms });
+      await seedPayment({
+        fromId: payerId,
+        toId: creditId,
+        amountCents: STATE_CREDIT_CENTS,
+        occurredAt: todayInBogota(),
+      });
+      await seedDebt({ id: zeroId, name: zeroName, owedCents: 0, terms });
+      await seedDebt({ id: owingId, name: owingName, owedCents: STATE_OWING_CENTS, terms });
+    });
+
+    test.afterAll(async () => {
+      await dropAccounts([creditId, zeroId, owingId, payerId]);
+    });
+
+    // The element holding a debt's whole card (phone) or its table row (laptop).
+    function rowOf(page: Page, name: string, id: string): Locator {
+      return laptop
+        ? page.getByRole("table", { name: debts.title }).getByRole("row").filter({ hasText: name })
+        : band(page)
+            .getByText(name, { exact: true })
+            .locator(`xpath=ancestor::*[.//a[@href="/es/planning/debts/${id}"]][1]`);
+    }
+
+    function balanceOf(page: Page, name: string, id: string): Locator {
+      return figureOf(
+        page,
+        name,
+        laptop ? rowOf(page, name, id).getByRole("cell").nth(6) : null,
+      );
+    }
+
+    test("in credit: the row reads «A favor $ 150.000» and nothing owed, no minimum, no interest, Corte stays", async ({
+      page,
+    }) => {
+      await page.goto("/es/planning/debts");
+      await expect(rowOf(page, creditName, creditId)).toBeVisible();
+
+      const figure = await balanceOf(page, creditName, creditId).innerText();
+      expect(flat(figure)).toBe(
+        debts.inFavour.replace("{amount}", `$ ${groupedPesos(STATE_CREDIT_CENTS)}`),
+      );
+      expect(figure).not.toContain(MINUS);
+
+      const row = flat(await rowOf(page, creditName, creditId).innerText());
+      expect(row).not.toContain("Debes");
+      if (laptop) {
+        const cells = rowOf(page, creditName, creditId).getByRole("cell");
+        // Minimum and monthly interest columns are not drawn for a credit.
+        expect(await cells.nth(3).innerText()).not.toMatch(/\d/);
+        expect(await cells.nth(2).innerText()).not.toMatch(/\d/);
+        expect(await cells.nth(4).innerText()).toMatch(/\d/);
+      } else {
+        expect(row).not.toContain(debts.minimumPayment);
+        expect(row).toContain(debts.cutOff);
+      }
+    });
+
+    test("in credit: the figure carries the accent tone, the owing one does not", async ({
+      page,
+    }) => {
+      await page.goto("/es/planning/debts");
+      await expect(rowOf(page, creditName, creditId)).toBeVisible();
+
+      const accent = await accentInk(page);
+      expect(await inkOf(balanceOf(page, creditName, creditId))).toBe(accent);
+      expect(await inkOf(balanceOf(page, owingName, owingId))).not.toBe(accent);
+    });
+
+    test("in credit: the cupo disponible is the limit plus the credit", async ({ page }) => {
+      await page.goto("/es/planning/debts");
+      await expect(rowOf(page, creditName, creditId)).toBeVisible();
+
+      const available = pesos(STATE_LIMIT_CENTS + STATE_CREDIT_CENTS);
+      if (laptop) {
+        const cell = rowOf(page, creditName, creditId).getByRole("cell").nth(1);
+        expect(digitsIn(await cell.innerText())).toBe(available);
+      } else {
+        expect(flat(await rowOf(page, creditName, creditId).innerText())).toContain(
+          debts.availableCredit.replace("{amount}", `$ ${groupedPesos(STATE_LIMIT_CENTS + STATE_CREDIT_CENTS)}`),
+        );
+      }
+    });
+
+    test("owing is unchanged: the figure, the minimum and the cupo read as before", async ({
+      page,
+    }) => {
+      await page.goto("/es/planning/debts");
+      await expect(rowOf(page, owingName, owingId)).toBeVisible();
+
+      expect(flat(await balanceOf(page, owingName, owingId).innerText())).toBe(
+        `$ ${groupedPesos(STATE_OWING_CENTS)}`,
+      );
+      const row = rowOf(page, owingName, owingId);
+      const text = flat(await row.innerText());
+      expect(text).not.toContain("A favor");
+      if (laptop) {
+        const cells = row.getByRole("cell");
+        expect(digitsIn(await cells.nth(3).innerText())).toBe(pesos(STATE_MINIMUM_CENTS));
+        expect(digitsIn(await cells.nth(1).innerText())).toBe(
+          pesos(STATE_LIMIT_CENTS - STATE_OWING_CENTS),
+        );
+      } else {
+        expect(text).toContain(debts.minimumPayment);
+        expect(text).toContain(
+          debts.availableCredit.replace(
+            "{amount}",
+            `$ ${groupedPesos(STATE_LIMIT_CENTS - STATE_OWING_CENTS)}`,
+          ),
+        );
+      }
+    });
+
+    test("at zero: the figure is «$ 0» in the normal ink, with no minimum", async ({ page }) => {
+      await page.goto("/es/planning/debts");
+      await expect(rowOf(page, zeroName, zeroId)).toBeVisible();
+
+      const figure = await balanceOf(page, zeroName, zeroId).innerText();
+      expect(flat(figure)).toBe("$ 0");
+
+      const accent = await accentInk(page);
+      expect(await inkOf(balanceOf(page, zeroName, zeroId))).not.toBe(accent);
+      expect(await inkOf(balanceOf(page, zeroName, zeroId))).toBe(
+        await inkOf(balanceOf(page, owingName, owingId)),
+      );
+
+      if (laptop) {
+        expect(
+          await rowOf(page, zeroName, zeroId).getByRole("cell").nth(3).innerText(),
+        ).not.toMatch(/\d/);
+      } else {
+        expect(flat(await rowOf(page, zeroName, zeroId).innerText())).not.toContain(
+          debts.minimumPayment,
+        );
+      }
+    });
+
+    if (laptop) {
+      test("the tiles never count a credit: the total and the interest are the owing cards' alone", async ({
+        page,
+      }) => {
+        await page.goto("/es/planning/debts");
+        const shown = band(page);
+        await expect(shown.getByText(creditName, { exact: true })).toBeVisible();
+
+        expect(await digitsOf(tileValue(shown, debts.tileTotal))).toBe(
+          pesos(CARD_OWED_CENTS + BARE_OWED_CENTS + STATE_OWING_CENTS),
+        );
+        const interest = await digitsOf(tileValue(shown, debts.tileMonthlyInterest));
+        expect(
+          Math.abs(interest - pesos(MONTHLY_INTEREST_CENTS + STATE_OWING_INTEREST_CENTS)),
+        ).toBeLessThanOrEqual(2);
+      });
+    }
+
+    test("planning tile: «Deudas» totals what is owed and leaves the credit out", async ({
+      page,
+    }) => {
+      await page.goto("/es/planning");
+
+      const total = `$ ${groupedPesos(CARD_OWED_CENTS + BARE_OWED_CENTS + STATE_OWING_CENTS)}`;
+      const summary = page
+        .getByText(/^\$\s[\d.]+\s(·|en deudas)/)
+        .filter({ visible: true });
+      await expect(summary).toHaveCount(1);
+      const text = flat(await summary.innerText());
+      expect(text.startsWith(`${total} `)).toBe(true);
+    });
+  });
+
+  test.describe(`${bandLabel}: a pocket in another currency`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    const pocketId = randomUUID();
+    const pocketName = `Tarjeta con bolsillo ${bandLabel} ${stamp}`;
+    const refundCategoryId = randomUUID();
+    const POCKET_OWED_CENTS = 8_000_000;
+    const POCKET_USD_CREDIT_CENTS = 2_000;
+
+    test.beforeAll(async () => {
+      await seedDebt({
+        id: pocketId,
+        name: pocketName,
+        owedCents: POCKET_OWED_CENTS,
+        terms: { debtKind: "revolving", annualRate: STATE_RATE },
+      });
+      await asHarnessUser(async (tx) => {
+        await tx`
+          insert into categories (id, owner_user_id, name, kind, color)
+          values (${refundCategoryId}, ${scope.userId}, ${`Reembolso ${bandLabel} ${stamp}`}, 'income', '#4C8C4A')`;
+        const [movement] = await tx<{ id: string }[]>`
+          insert into transactions (
+            to_account_id, amount_cents, occurred_at, description,
+            currency, counter_amount_cents, counter_is_estimate)
+          values (
+            ${pocketId}, ${POCKET_USD_CREDIT_CENTS}, ${todayInBogota()},
+            ${`Reembolso en dólares ${stamp}`}, 'USD', 8000000, true)
+          returning id`;
+        await tx`
+          insert into transaction_splits (transaction_id, category_id, amount_cents)
+          values (${movement.id}, ${refundCategoryId}, ${POCKET_USD_CREDIT_CENTS})`;
+      });
+    });
+
+    test.afterAll(async () => {
+      await dropAccounts([pocketId]);
+      await fixtureSql`delete from categories where id = ${refundCategoryId}`;
+    });
+
+    test("the dollar pocket reads «A favor US$ 20» under the peso owed «$ 80.000»", async ({
+      page,
+    }) => {
+      await page.goto("/es/planning/debts");
+
+      const cell = laptop
+        ? page
+            .getByRole("table", { name: debts.title })
+            .getByRole("row")
+            .filter({ hasText: pocketName })
+            .getByRole("cell")
+            .nth(6)
+        : cardOwed(page, pocketName);
+      await expect(cell).toBeVisible();
+
+      const lines = (await cell.innerText())
+        .split("\n")
+        .map((line) => flat(line))
+        .filter((line) => line !== "");
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toBe(`$ ${groupedPesos(POCKET_OWED_CENTS)}`);
+      expect(lines[1]).toMatch(/^A favor US\$ 20([.,]00)?$/);
+    });
+  });
+}
