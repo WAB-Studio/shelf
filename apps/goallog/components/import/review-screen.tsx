@@ -298,6 +298,16 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
 
       {review.nothingWritable ? <Notice role="note">{t("import.review.nothing")}</Notice> : null}
 
+      {stored.leftOut.length > 0 ? (
+        <Flex direction="column" gap="2">
+          {stored.leftOut.map((section) => (
+            <Text key={`${section.from}-${section.to}`} as="p" variant="sentence" tone="muted">
+              {t("import.review.leftOut", { heading: section.heading, from: String(section.from), to: String(section.to) })}
+            </Text>
+          ))}
+        </Flex>
+      ) : null}
+
       <ReviewTree
         review={review}
         corrections={review.corrections}
