@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import type { Correction, ImportDraft, Notice as DraftNotice, Source } from "@/lib/import/draft";
+import type { LeftOutSection } from "@/lib/import/model";
 import { readText as readStoredText, saveDraft } from "@/lib/import/draft-store";
 import { formKey } from "@/lib/import/reason-key";
 import { parseTemplate, type FormCode } from "@/lib/import/template";
@@ -36,6 +37,7 @@ type Reading = {
   draft: ImportDraft;
   corrections: Correction[];
   notices: DraftNotice[];
+  leftOut?: LeftOutSection[];
   source: Source;
 };
 
@@ -238,7 +240,7 @@ export function ImportScreen() {
         | null;
 
       if (response.ok && body?.draft && body.via && body.source) {
-        reading({ via: body.via, draft: body.draft, corrections: body.corrections ?? [], notices: body.notices ?? [], source: body.source });
+        reading({ via: body.via, draft: body.draft, corrections: body.corrections ?? [], notices: body.notices ?? [], leftOut: body.leftOut ?? [], source: body.source });
         return;
       }
       if (body?.error === "import.errors.workbookRows" && body.rows?.length) {
