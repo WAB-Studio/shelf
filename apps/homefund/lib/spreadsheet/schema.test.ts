@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { LEGACY_ACCOUNT_SUBTYPES, accountRowSchema } from "./schema";
+import { LEGACY_ACCOUNT_SUBTYPES, accountRowSchema, transactionRowSchema, transactionSheetDescriptor } from "./schema";
 
 const row = {
   externalRef: null,
@@ -79,4 +79,43 @@ test("the blank currency fallback still holds beside a mapped word", () => {
   assert.equal(result.success, true);
   assert.equal(result.data?.settlementCurrency, "COP");
   assert.equal(result.data?.subtype, "cash");
+});
+
+const spendRow = {
+  externalRef: null,
+  fromAccount: "Tarjeta COP",
+  toAccount: null,
+  amount: "25",
+  category: "Food",
+  occurredAt: "2026-01-10",
+  description: null,
+};
+
+test("RF-142: the transaction sheet carries counterAmount as a money column and counterIsEstimate as a flag", () => {
+  const columns = transactionSheetDescriptor.columns as readonly { key: string; money?: unknown; flag?: true; field?: string }[];
+  const counter = columns.find((c) => c.key === "counterAmount");
+  const estimate = columns.find((c) => c.key === "counterIsEstimate");
+  assert.ok(counter?.money, "counterAmount is read through the money boundary");
+  assert.equal(counter?.field, "counterAmountCents");
+  assert.equal(estimate?.field, "counterIsEstimate");
+  assert.ok(columns.findIndex((c) => c.key === "currency") < columns.findIndex((c) => c.key === "counterAmount"));
+});
+
+test("RF-142: the row schema keeps a second amount and its estimate mark", () => {
+  const result = transactionRowSchema.safeParse({ ...spendRow, currency: "USD", counterAmount: "105000", counterIsEstimate: true });
+  assert.equal(result.success, true);
+  const data = result.data as { counterAmount?: string; counterIsEstimate?: boolean };
+  assert.equal(data.counterAmount, "105000");
+  assert.equal(data.counterIsEstimate, true);
+});
+
+test("RF-142: a row without the two cells still passes the row schema", () => {
+  assert.equal(transactionRowSchema.safeParse({ ...spendRow, currency: null }).success, true);
+  assert.equal(transactionRowSchema.safeParse(spendRow).success, true);
+});
+
+test("RF-122: a second amount that is not an amount is refused at its own column", () => {
+  const result = transactionRowSchema.safeParse({ ...spendRow, currency: "USD", counterAmount: "abc", counterIsEstimate: null });
+  assert.equal(result.success, false);
+  assert.ok(result.error?.issues.some((i) => i.path[0] === "counterAmount"));
 });

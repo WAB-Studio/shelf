@@ -20,6 +20,7 @@ import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import ExcelJS from "exceljs";
 
+import { todayInBogota } from "@/lib/dates";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import {
   SHEET_ENTITIES,
@@ -91,6 +92,9 @@ type SheetRow = {
   category: string | null;
   occurredAt: string;
   description?: string | null;
+  currency?: string | null;
+  counterAmount?: number | null;
+  counterIsEstimate?: boolean | null;
 };
 
 // A transactions sheet with the header the descriptor's columns carry in Spanish.
@@ -604,5 +608,65 @@ test.describe("import resolves a category by its account's scope", () => {
     await expect(totalsBadge(page, "2 nuevas")).toBeVisible();
     await expect(totalsBadge(page, "0 con errores")).toBeVisible();
     expect(await count("transactions")).toBe(0);
+  });
+});
+
+test.describe("a purchase in dollars on a peso account (RF-142, RF-52, RF-123)", () => {
+  test("import books it in dollars with the amount charged on the account, and importing the file again leaves it pending its billed amount on Cuentas", async ({
+    page,
+  }) => {
+    // Kills: the import booking the row in pesos, or dropping the estimate mark, so the card shows nothing pending.
+    const description = `E9 dólares ${stamp}`;
+    const path = await workbookFile("dollars.xlsx", [
+      {
+        externalRef: `e9-${stamp}-usd`,
+        fromAccount: ACCOUNT_NAME,
+        amount: 25,
+        currency: "USD",
+        counterAmount: 105000,
+        counterIsEstimate: true,
+        category: CATEGORY_NAME,
+        occurredAt: todayInBogota(),
+        description,
+      },
+    ]);
+    const dollarRow = () =>
+      fixtureSql<{ currency: string; amount_cents: string; counter: string | null; estimate: boolean }[]>`
+        select currency, amount_cents::text as amount_cents, counter_amount_cents::text as counter,
+          counter_is_estimate as estimate
+        from transactions
+        where owner_user_id = ${scope.userId} and external_ref = ${`e9-${stamp}-usd`}`;
+
+    await chooseFile(page, path);
+    await expect(totalsBadge(page, "1 nueva")).toBeVisible();
+    await expect(totalsBadge(page, "0 con errores")).toBeVisible();
+    await page.getByRole("button", { name: data.screen.confirmImport, exact: true }).click();
+    await expect(page.getByText(data.screen.importDone, { exact: true })).toBeVisible();
+    expect(await dollarRow()).toEqual([
+      { currency: "USD", amount_cents: "2500", counter: "10500000", estimate: true },
+    ]);
+
+    await page.locator('input[type="file"]').setInputFiles(path);
+    await expect(totalsBadge(page, "0 nuevas")).toBeVisible();
+    await expect(totalsBadge(page, "1 actualizada")).toBeVisible();
+    const committed = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().endsWith("/es/settings/data"),
+    );
+    await page.getByRole("button", { name: data.screen.confirmImport, exact: true }).click();
+    await committed;
+    expect(await dollarRow()).toEqual([
+      { currency: "USD", amount_cents: "2500", counter: "10500000", estimate: true },
+    ]);
+
+    await page.goto("/es/settings/accounts");
+    const settlement = messages.debts.settlement;
+    await expect(page.getByText(settlement.title, { exact: true }).filter({ visible: true })).toHaveCount(1);
+    await expect(page.getByText(description, { exact: false }).filter({ visible: true })).toHaveCount(1);
+    const estimate = page.getByText(settlement.estimate, { exact: true }).filter({ visible: true });
+    await expect(estimate).toHaveCount(1);
+    expect(Number((await estimate.locator("..").innerText()).replace(/\D/g, ""))).toBe(105000);
+    await expect(
+      page.getByRole("button", { name: "Confirmar monto", exact: true }).filter({ visible: true }),
+    ).toHaveCount(1);
   });
 });

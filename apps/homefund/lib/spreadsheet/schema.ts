@@ -12,7 +12,7 @@ import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { accountCurrencySchema, createAccountSchema } from "@/lib/validation/account";
 import { CATEGORY_KINDS } from "@/lib/validation/category";
 import { createMemberSchema } from "@/lib/validation/member";
-import { occurredAtSchema, pesoAmountSchema } from "@/lib/validation/transaction";
+import { anyCurrencyAmountSchema, occurredAtSchema, pesoAmountSchema } from "@/lib/validation/transaction";
 
 // The five entities export (RF-50) writes and import (RF-51/52) reads, in one
 // declared shape so both sides agree on the columns, their order and the rule
@@ -223,6 +223,23 @@ export const transactionRowSchema = z.object({
   adjustment: z.literal(true).nullish(),
   // Blank in a sheet written before the column existed: the account's own currency then.
   currency: accountCurrencySchema.nullish(),
+  // The same movement in its account's own currency, when `currency` is another one (RF-122). Only
+  // its shape is read here: the account it is expressed in is known after the name resolves. A blank
+  // cell is no second amount, never a required one.
+  counterAmount: z.preprocess(
+    (cell) => (typeof cell === "string" && cell.trim().length === 0 ? null : cell),
+    anyCurrencyAmountSchema({
+      required: "transactions.errors.counterAmountRequired",
+      invalid: "transactions.errors.counterAmountInvalid",
+      tooLarge: "transactions.errors.amountTooLarge",
+    }).nullish(),
+  ),
+  // TRUE while that amount is what the person expected, not what the issuer billed (RF-123); blank
+  // is billed.
+  counterIsEstimate: z
+    .boolean()
+    .nullish()
+    .transform((cell) => cell ?? false),
 });
 export type TransactionRow = z.infer<typeof transactionRowSchema>;
 
@@ -293,9 +310,8 @@ export const recurringRuleSheetDescriptor = {
 // them, so they carry no column here and stay out of the flat row schema.
 //
 // `currency` names what the row's `amount` is written in (RF-121, RF-124). The import
-// books a row in its account's own currency and never converts, so a row whose cell
-// differs from the account it names is refused: a foreign purchase on a peso card
-// carries a second amount the sheet does not hold.
+// never converts, so a row whose cell differs from the account it names carries that account's own amount in `counterAmount`
+// (RF-122) and the estimate mark beside it (RF-123); without it the row is refused.
 export const transactionSheetDescriptor = {
   entity: "transactions",
   refField: "externalRef",
@@ -305,6 +321,8 @@ export const transactionSheetDescriptor = {
     { key: "toAccount", field: "toAccountId", ref: { entity: "accounts" } },
     { key: "amount", field: "amountCents", money: moneyBoundary },
     { key: "currency", field: "currency" },
+    { key: "counterAmount", field: "counterAmountCents", money: moneyBoundary },
+    { key: "counterIsEstimate", field: "counterIsEstimate" },
     { key: "category", synthetic: true, ref: { entity: "categories" } },
     { key: "occurredAt", field: "occurredAt" },
     { key: "description", field: "description" },

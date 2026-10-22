@@ -155,7 +155,8 @@ import { commitImport } from "@/db/queries/import-commit";
 import * as importCommitModule from "@/db/queries/import-commit";
 import { commitImportAction } from "@/app/actions/import";
 import { ActionError } from "@/lib/errors";
-import { buildWorkbook } from "@/lib/spreadsheet/workbook";
+import { buildWorkbook, parseWorkbook } from "@/lib/spreadsheet/workbook";
+import type { ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
 import type { CommitInput } from "@/db/queries/import-commit";
 import { getUserLocale, upsertUserLocale } from "@/db/queries/user-locale";
 import {
@@ -182,6 +183,7 @@ import {
   memberRowSchema,
   recurringRuleRowSchema,
   SHEET_ENTITIES,
+  sheetDescriptors,
   transactionRowSchema,
 } from "@/lib/spreadsheet/schema";
 import { createTransactionSchema } from "@/lib/validation/transaction";
@@ -4249,6 +4251,7 @@ async function main(): Promise<void> {
   await importCommitScopesSuite();
   await debtCreditSideSuite();
   await o5m2SurvivorsSuite();
+  await dollarBackupSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -4685,8 +4688,11 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     `sqlstate ${movementCode}, currency ${await currencyOf(used)}`,
   );
 
+  const [{ stamp: usedStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from accounts where id = ${used}`;
   const action = await updateAccountAction({
     accountId: used,
+    expectedUpdatedAt: usedStamp,
     name: `${prefix} usada`,
     kind: "asset",
     subtype: "bank",
@@ -4840,8 +4846,11 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     forward === "ok" && still.n === 3,
     `forward ${forward}, ${still.n} movements`,
   );
+  const [{ stamp: ruleStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from recurring_rules where id = ${recurringRuleId}`;
   const ruleAction = await updateRecurringRuleAction({
     ...rule(booked[0].occurred_at),
+    expectedUpdatedAt: ruleStamp,
     amount: "10",
   });
   assert(
@@ -4931,11 +4940,17 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     category.errors.length === 0 && accountRows.every((r) => r.errors.length === 0) && usdRow.errors.length === 0,
     `category [${keys(category)}], accounts [${accountRows.map(keys)}], usd movement [${keys(usdRow)}]`,
   );
+  const foreignRaw = fileMovements.find((r) => r.description === `${prefix} compra en dolares`)!;
+  const withoutCounter = run("transactions", { ...foreignRaw, counterAmount: null, counterIsEstimate: null }, 8);
+  const foreignObject = foreignRow.object as { currency?: string; counterAmountCents?: number } | null;
   assert(
-    next("A foreign purchase on a peso account is refused by the import, not booked as pesos"),
-    foreignRow.errors.some((e) => e.key === "transactions.errors.currencyMismatch" && e.column === "currency") &&
-      foreignRow.object === null,
-    `errors [${keys(foreignRow)}]`,
+    next("A foreign purchase on a peso account is refused by the import without its amount in the account's currency, and accepted with it"),
+    withoutCounter.errors.some((e) => e.key === "transactions.errors.currencyMismatch" && e.column === "currency") &&
+      withoutCounter.object === null &&
+      foreignRow.errors.length === 0 &&
+      foreignObject?.currency === "USD" &&
+      foreignObject?.counterAmountCents === 40_000_000,
+    `without the amount [${keys(withoutCounter)}], with it [${keys(foreignRow)}] ${JSON.stringify(foreignObject)}`,
   );
   const blank = run("transactions", { ...fileMovements.find((r) => r.description === `${prefix} gasto usd`)!, currency: null }, 9);
   assert(
@@ -5126,8 +5141,10 @@ async function recurringRuleCategoryScopeSuite(
     createRecurringRule({ ...rule(ownCategoryId), amountCents: 1000 }),
   );
   const ruleId = created.recurringRuleId;
+  const [{ stamp: ruleStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from recurring_rules where id = ${ruleId}`;
   const rewritten = await asUser(groupless, () =>
-    updateRecurringRuleAction({ id: ruleId, ...rule(scope.categoryId) }),
+    updateRecurringRuleAction({ id: ruleId, expectedUpdatedAt: ruleStamp, ...rule(scope.categoryId) }),
   );
   const [kept] = await fixtureSql<{ category_id: string }[]>`
     select category_id from recurring_rules where from_account_id = ${accountId}`;
@@ -5323,8 +5340,14 @@ async function recurringRuleCategoryFitSuite(
   const heldRule = await asUser(groupless, () =>
     createRecurringRule({ ...foreignFundRule(expenseId), amountCents: 1000 }),
   );
+  const [{ stamp: heldStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from recurring_rules where id = ${heldRule.recurringRuleId}`;
   const fundUpdateRefused = await asUser(groupless, () =>
-    updateRecurringRuleAction({ id: heldRule.recurringRuleId, ...foreignFundRule(foreignFundCategoryId) }),
+    updateRecurringRuleAction({
+      id: heldRule.recurringRuleId,
+      expectedUpdatedAt: heldStamp,
+      ...foreignFundRule(foreignFundCategoryId),
+    }),
   );
   const [fundKept] = await fixtureSql<{ category_id: string }[]>`
     select category_id from recurring_rules where from_account_id = ${accountId}`;
@@ -7812,13 +7835,14 @@ async function idempotencySuite(): Promise<void> {
     `splits = ${JSON.stringify(kept)}, labels = ${JSON.stringify(keptLabels)}`,
   );
 
-  // Q: an edit that names no stamp still lands
+  // Q: an edit that names no stamp is stale (RF-156) and writes nothing
+  const stampBeforeBlind = await stamp();
   const blind = await update(id, { amount: "600", splits: [{ categoryId: catA, amount: "600" }] });
   const afterBlind = (await byId(id))[0];
   assert(
-    next("An edit that carries no expectedUpdatedAt is not refused"),
-    blind.serverError === undefined && !isStale(blind) && afterBlind?.amount_cents === "60000",
-    `result = ${JSON.stringify(blind)}, amount = ${afterBlind?.amount_cents}`,
+    next("An edit that carries no expectedUpdatedAt is refused as stale and writes nothing"),
+    isStale(blind) && afterBlind?.amount_cents === "50000" && (await stamp()) === stampBeforeBlind,
+    `result = ${JSON.stringify(blind)}, amount = ${afterBlind?.amount_cents}, stamp ${stampBeforeBlind} -> ${await stamp()}`,
   );
 
   // Q: the create and its cause are one transaction
@@ -8669,11 +8693,11 @@ async function accountPlannedVersionSuite(): Promise<void> {
     `result = ${JSON.stringify(freshAccount)}, opening = ${await opening()}`,
   );
 
-  // Q: an account save naming no stamp still lands
+  // Q: an account save naming no stamp is stale (RF-156) and writes nothing
   const blindAccount = await saveAccount("456");
   assert(
-    next("An account saved with no expectedUpdatedAt is not refused"),
-    blindAccount?.serverError === undefined && !isStale(blindAccount) && (await opening()) === "45600",
+    next("An account saved with no expectedUpdatedAt is refused as stale and leaves the opening balance as it was"),
+    isStale(blindAccount) && (await opening()) === "12300",
     `result = ${JSON.stringify(blindAccount)}, opening = ${await opening()}`,
   );
 
@@ -8705,11 +8729,11 @@ async function accountPlannedVersionSuite(): Promise<void> {
     `result = ${JSON.stringify(freshPlanned)}, amount = ${await plannedAmount()}, stamp ${freshStamp}`,
   );
 
-  // Q: a planned payment save naming no stamp still lands
+  // Q: a planned payment save naming no stamp is stale (RF-156) and writes nothing
   const blindPlanned = await savePlanned("66");
   assert(
-    next("A planned payment saved with no expectedUpdatedAt is not refused"),
-    blindPlanned?.serverError === undefined && !isStale(blindPlanned) && (await plannedAmount()) === "6600",
+    next("A planned payment saved with no expectedUpdatedAt is refused as stale and leaves the amount as it was"),
+    isStale(blindPlanned) && (await plannedAmount()) === "5500",
     `result = ${JSON.stringify(blindPlanned)}, amount = ${await plannedAmount()}`,
   );
 }
@@ -9359,7 +9383,7 @@ async function resendAndMissingSuite(): Promise<void> {
     `first = ${JSON.stringify(w1)}, second = ${JSON.stringify(w2)}, rows = ${JSON.stringify(wRows)}`,
   );
 
-  // Q: an unstamped edit of a rule that is gone
+  // Q: a stamped edit of a rule that is gone (the stamp guard would otherwise answer stale first)
   const { recurringRuleId } = await asUser(user, () =>
     createRecurringRule({
       fromAccountId: accountA,
@@ -9374,10 +9398,14 @@ async function resendAndMissingSuite(): Promise<void> {
       endsOn: null,
     }),
   );
+  // The stamp guard answers before the lookup, so the form's stamp is read before the row goes.
+  const [{ stamp: goneStamp }] = await fixtureSql<{ stamp: string }[]>`
+    select updated_at::text as stamp from recurring_rules where id = ${recurringRuleId}`;
   await fixtureSql`delete from recurring_rules where id = ${recurringRuleId}`;
   const gone = (await asUser(user, () =>
     updateRecurringRuleAction({
       id: recurringRuleId,
+      expectedUpdatedAt: goneStamp,
       fromAccountId: accountA,
       toAccountId: null,
       amount: "20",
@@ -9391,7 +9419,7 @@ async function resendAndMissingSuite(): Promise<void> {
     } as Parameters<typeof updateRecurringRuleAction>[0]),
   )) as { serverError?: string; data?: { ok?: boolean; reason?: string } } | undefined;
   assert(
-    next("An edit with no expectedUpdatedAt of a rule that is gone is refused notFound"),
+    next("A stamped edit of a rule that is gone is refused notFound"),
     gone?.serverError === "errors.notFound" && gone?.data?.ok !== true,
     `result = ${JSON.stringify(gone)}`,
   );
@@ -12428,5 +12456,323 @@ async function o5m2SurvivorsSuite(): Promise<void> {
       parents.includes("Housing") && childrenOf("Housing").includes("Rent") &&
       rows.length === SEED_CATEGORIES.reduce((sum, category) => sum + 1 + (category.children?.length ?? 0), 0),
     `parents ${JSON.stringify(parents)}, parents with other children [${wrongChildren.join(", ")}], ${rows.length} rows`,
+  );
+}
+
+// o5-m15 (RF-142, RF-52, RF-124): a backup of a fund holding a dollar purchase on a peso card comes back in
+// dollars, with the amount the card was charged and whether it is still an estimate, and the balances stand
+// where they stood. The file is the real one: written by the workbook, read by the workbook, then the pipeline
+// and the commit, as the person who imports.
+async function dollarBackupSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const source = await createMembershipFreeUser();
+  const refOf = (suffix: string) => `o5m15-${tag}-${suffix}`;
+  const cardName = `Harness o5m15 tarjeta ${tag}`;
+  const bankName = `Harness o5m15 banco ${tag}`;
+  const categoryName = `Harness o5m15 categoria ${tag}`;
+  const USD_CENTS = 2_500;
+  const ESTIMATE_CENTS = 10_500_000;
+  const BILLED_USD_CENTS = 1_000;
+  const BILLED_CENTS = 4_200_000;
+  const COP_CENTS = 40_000;
+
+  await asUser(source, async () => {
+    const { categoryId } = await createCategory({
+      scope: { ownerUserId: source.id },
+      name: categoryName,
+      kind: "expense",
+      parentId: null,
+      color: CATEGORY_COLORS[0],
+    });
+    track("categories", categoryId);
+    const open = async (name: string, kind: "asset" | "liability", subtype: string, amountMinor: number) => {
+      const { accountId } = await createAccount({
+        name,
+        kind,
+        subtype,
+        ownerUserId: source.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor,
+        balanceOn: shiftDate(today, -60),
+      } as never);
+      track("accounts", accountId);
+      return accountId;
+    };
+    const card = await open(cardName, "liability", "card", 0);
+    const bank = await open(bankName, "asset", "bank", 900_000_000);
+    const book = async (
+      from: string,
+      amountCents: number,
+      suffix: string,
+      foreign?: { counterAmountCents: number; counterIsEstimate: boolean },
+    ) => {
+      const { transactionId } = await createTransaction({
+        fromAccountId: from,
+        toAccountId: null,
+        amountCents,
+        ...(foreign ? { currency: "USD", ...foreign } : {}),
+        occurredAt: shiftDate(today, -5),
+        description: `Harness o5m15 ${suffix} ${tag}`,
+        externalRef: refOf(suffix),
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      } as never);
+      track("transactions", transactionId);
+    };
+    await book(card, USD_CENTS, "usd", { counterAmountCents: ESTIMATE_CENTS, counterIsEstimate: true });
+    await book(card, BILLED_USD_CENTS, "billed", { counterAmountCents: BILLED_CENTS, counterIsEstimate: false });
+    await book(bank, COP_CENTS, "cop");
+  });
+
+  const labels: ReverseSheetLabels = {
+    entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    columnKeyByHeader: new Map(
+      SHEET_ENTITIES.map(
+        (entity) =>
+          [entity, new Map(sheetDescriptors[entity].columns.map((column) => [`columns.${column.key}`, column.key] as const))] as const,
+      ),
+    ),
+  };
+  const sheetLabels = {
+    sheetName: (entity: string) => `sheets.${entity}`,
+    columnHeader: (key: string) => `columns.${key}`,
+  };
+
+  // The fund's own backup. Accounts and categories carry the stable key a re-import matches on.
+  const exported = await asUser(source, () => readExport({ entityKeys: ["accounts", "categories", "transactions"] }));
+  const keyed = <T extends { name?: unknown }>(rows: T[] | undefined, names: Record<string, string>) =>
+    (rows ?? []).filter((row) => String(row.name) in names).map((row) => ({ ...row, externalRef: names[String(row.name)] }));
+  const accountRows = keyed(exported.accounts, { [cardName]: refOf("card"), [bankName]: refOf("bank") });
+  const categoryRows = keyed(exported.categories, { [categoryName]: refOf("category") });
+  const movementRows = (exported.transactions ?? []).filter((row) => String(row.externalRef).startsWith(`o5m15-${tag}-`));
+  const fileOf = async (movements: typeof movementRows) => {
+    const workbook = buildWorkbook({
+      data: { accounts: accountRows as never, categories: categoryRows as never, transactions: movements as never },
+      labels: sheetLabels,
+    });
+    return { workbook, bytes: new Uint8Array(await workbook.xlsx.writeBuffer()) };
+  };
+  const original = await fileOf(movementRows);
+
+  // ---- Export: what the sheet carries for each movement.
+  const cell = (ref: string, column: string) => {
+    const sheet = original.workbook.getWorksheet("sheets.transactions")!;
+    const header = (sheet.getRow(1).values as unknown[]).slice(1);
+    const at = (key: string) => header.indexOf(`columns.${key}`) + 1;
+    for (let r = 2; r <= sheet.rowCount; r += 1) {
+      if (sheet.getRow(r).getCell(at("externalRef")).value === refOf(ref)) {
+        const value = sheet.getRow(r).getCell(at(column)).value;
+        return value === undefined ? null : value;
+      }
+    }
+    return "no such row";
+  };
+  assert(
+    next("The export writes a dollar purchase on a peso card with its currency, 25, the 105000 estimated on the card, and the estimate flag TRUE"),
+    cell("usd", "currency") === "USD" &&
+      cell("usd", "amount") === 25 &&
+      cell("usd", "counterAmount") === 105_000 &&
+      cell("usd", "counterIsEstimate") === true,
+    `currency ${cell("usd", "currency")}, amount ${cell("usd", "amount")}, counterAmount ${cell("usd", "counterAmount")}, counterIsEstimate ${cell("usd", "counterIsEstimate")}`,
+  );
+  assert(
+    next("The export writes a billed dollar purchase with the 42000 the card charged and no estimate mark, and leaves both cells blank on a peso movement"),
+    cell("billed", "counterAmount") === 42_000 &&
+      cell("billed", "counterIsEstimate") !== true &&
+      cell("cop", "counterAmount") === null &&
+      cell("cop", "counterIsEstimate") === null,
+    `billed ${cell("billed", "counterAmount")}/${cell("billed", "counterIsEstimate")}, peso ${cell("cop", "counterAmount")}/${cell("cop", "counterIsEstimate")}`,
+  );
+
+  // ---- The reader: a file in, the commit input out.
+  const prepare = async (user: HarnessUser, bytes: Uint8Array) => {
+    const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels });
+    const importScope = await asUser(user, () => readImportScope());
+    const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
+    const refs = buildEffectiveRefs(importScope, recordsOf);
+    const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
+      (parsed[entity] ?? []).map((row, index) =>
+        processRow(entity, row.record as RawRow, index, row.sheetRow, refs, importScope.existingRefs[entity]),
+      );
+    const [categories, accounts, transactions] = [rows("categories"), rows("accounts"), rows("transactions")];
+    const errors = [...categories, ...accounts, ...transactions].flatMap((row) => row.errors.map((e) => `${e.key}@${e.column ?? ""}`));
+    const input: CommitInput = {
+      members: [],
+      categories: categories.map((row) => ({ ...row, object: row.object as never })),
+      accounts: accounts.map((row) => ({ ...row, object: row.object as never })),
+      recurringRules: [],
+      transactions: transactions.map((row) => ({ ...row, object: row.object as never })),
+      adjustments: [],
+    };
+    return { input, errors };
+  };
+  type Committed = { outcome?: { inserted: number; updated: number }; error?: unknown; role?: string; trips: number };
+  const commitAs = async (user: HarnessUser, input: CommitInput): Promise<Committed> => {
+    const before = roundTrips();
+    let role: string | undefined;
+    try {
+      const outcome = await asUser(user, () =>
+        withUserDb(async (tx) => {
+          role = String(((await tx.execute(sql`select current_user as role`)) as unknown as { role: string }[])[0].role);
+          return commitImport(tx, input, { userId: user.id, groupId: null });
+        }),
+      );
+      return { outcome, role, trips: roundTrips() - before };
+    } catch (error) {
+      return { error, role, trips: roundTrips() - before };
+    }
+  };
+  const said = (result: Committed) => (result.error === undefined ? "ok" : `threw ${refusal(result.error)}`);
+  const stored = (user: HarnessUser) =>
+    fixtureSql<{ ref: string; currency: string; amount: string; counter: string | null; estimate: boolean }[]>`
+      select t.external_ref as ref, t.currency, t.amount_cents::text as amount,
+        t.counter_amount_cents::text as counter, t.counter_is_estimate as estimate
+      from transactions t
+      join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
+      where a.owner_user_id = ${user.id}
+      order by t.external_ref`;
+  const balances = (user: HarnessUser) =>
+    fixtureSql<{ name: string; currency: string; balance: string }[]>`
+      select a.name, b.currency, b.balance_cents::text as balance
+      from account_balances b join accounts a on a.id = b.id
+      where a.owner_user_id = ${user.id}
+      order by a.name, b.currency`;
+  const owned = async (user: HarnessUser) => {
+    const [row] = await fixtureSql<{ accounts: number; categories: number; movements: number }[]>`
+      select (select count(*)::int from accounts where owner_user_id = ${user.id}) as accounts,
+        (select count(*)::int from categories where owner_user_id = ${user.id}) as categories,
+        (select count(*)::int from transactions t join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
+          where a.owner_user_id = ${user.id}) as movements`;
+    return row;
+  };
+  const trackOwned = async (user: HarnessUser) => {
+    for (const r of await fixtureSql<{ id: string }[]>`select id from accounts where owner_user_id = ${user.id}`) track("accounts", r.id);
+    for (const r of await fixtureSql<{ id: string }[]>`select id from categories where owner_user_id = ${user.id}`) track("categories", r.id);
+  };
+
+  // ---- Round trip into a clean fund.
+  const before = await balances(source);
+  const clean = await createMembershipFreeUser();
+  const first = await prepare(clean, original.bytes);
+  const firstCommit = await commitAs(clean, first.input);
+  await trackOwned(clean);
+  const restored = await stored(clean);
+  const byRef = (rows: typeof restored, suffix: string) => rows.find((r) => r.ref === refOf(suffix));
+  assert(
+    next("Importing the backup into a clean fund gives the dollar purchase back as USD 25.00 charged 105000.00 on the card, still an estimate"),
+    first.errors.length === 0 &&
+      said(firstCommit) === "ok" &&
+      JSON.stringify(byRef(restored, "usd")) ===
+        JSON.stringify({ ref: refOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: String(ESTIMATE_CENTS), estimate: true }),
+    `file errors [${first.errors.join(",")}]; commit ${said(firstCommit)}; restored ${JSON.stringify(byRef(restored, "usd"))}`,
+  );
+  assert(
+    next("The billed dollar purchase comes back billed and the peso movement comes back in pesos with no second amount"),
+    JSON.stringify(byRef(restored, "billed")) ===
+      JSON.stringify({ ref: refOf("billed"), currency: "USD", amount: String(BILLED_USD_CENTS), counter: String(BILLED_CENTS), estimate: false }) &&
+      JSON.stringify(byRef(restored, "cop")) ===
+        JSON.stringify({ ref: refOf("cop"), currency: "COP", amount: String(COP_CENTS), counter: null, estimate: false }),
+    `billed ${JSON.stringify(byRef(restored, "billed"))}; peso ${JSON.stringify(byRef(restored, "cop"))}`,
+  );
+
+  // ---- RF-124: the same pockets, per currency, on both accounts. A billed purchase lands in the card's pesos (0051), so only the estimated one stays in dollars.
+  const after = await balances(clean);
+  const cardUsd = before.find((r) => r.name === cardName && r.currency === "USD");
+  assert(
+    next("After the round trip each account's balance per currency is what it was, the card's dollars standing apart from its pesos"),
+    Math.abs(Number(cardUsd?.balance)) === USD_CENTS &&
+      before.some((r) => r.name === bankName) &&
+      JSON.stringify(before) === JSON.stringify(after),
+    `before ${JSON.stringify(before)}; after ${JSON.stringify(after)}`,
+  );
+
+  // ---- As the caller: the role that writes is the one that is granted.
+  assert(
+    next("The import commit runs as the authenticated role and is never refused for a column it has no grant on"),
+    firstCommit.role === "authenticated" &&
+      pgErrorCode(firstCommit.error) !== "42501" &&
+      said(firstCommit) === "ok" &&
+      byRef(restored, "usd")?.currency === "USD" &&
+      byRef(restored, "usd")?.counter === String(ESTIMATE_CENTS),
+    `role ${firstCommit.role}; ${said(firstCommit)}; dollar row ${JSON.stringify(byRef(restored, "usd"))}`,
+  );
+
+  // ---- RF-52: the same file again.
+  const again = await prepare(clean, original.bytes);
+  const secondCommit = await commitAs(clean, again.input);
+  const restoredAgain = await stored(clean);
+  assert(
+    next("Importing the same backup again inserts nothing, updates its six rows by their keys, and leaves every amount, currency and estimate mark as they were"),
+    again.errors.length === 0 &&
+      again.input.transactions.every((row) => row.status === "update") &&
+      secondCommit.outcome?.inserted === 0 &&
+      secondCommit.outcome?.updated === 6 &&
+      JSON.stringify(restoredAgain) === JSON.stringify(restored) &&
+      JSON.stringify(await balances(clean)) === JSON.stringify(before),
+    `commit ${said(secondCommit)} ${JSON.stringify(secondCommit.outcome)}; rows ${JSON.stringify(restoredAgain)}`,
+  );
+  const copOnly = await commitAs(clean, { ...again.input, transactions: again.input.transactions.filter((row) => row.externalRef === refOf("cop")) });
+  assert(
+    next("Updating the dollar rows costs the commit no more round trips than updating one peso row: the updates stay one statement per kind"),
+    secondCommit.error === undefined &&
+      copOnly.error === undefined &&
+      byRef(restoredAgain, "usd")?.counter === String(ESTIMATE_CENTS) &&
+      secondCommit.trips === copOnly.trips,
+    `three rows ${secondCommit.trips} trips, one row ${copOnly.trips}`,
+  );
+
+  // ---- RF-52: the file says the bank has now billed 106000.
+  const corrected = movementRows.map((row) =>
+    row.externalRef === refOf("usd") ? { ...row, counterAmount: 10_600_000, counterIsEstimate: false } : row,
+  );
+  const correctedFile = await fileOf(corrected);
+  const third = await prepare(clean, correctedFile.bytes);
+  const thirdCommit = await commitAs(clean, third.input);
+  const restoredCorrected = await stored(clean);
+  assert(
+    next("A re-import whose file carries the billed amount updates the purchase to 106000.00 charged and no longer an estimate, its dollars untouched"),
+    third.errors.length === 0 &&
+      thirdCommit.outcome?.inserted === 0 &&
+      JSON.stringify(byRef(restoredCorrected, "usd")) ===
+        JSON.stringify({ ref: refOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: "10600000", estimate: false }),
+    `commit ${said(thirdCommit)}; row ${JSON.stringify(byRef(restoredCorrected, "usd"))}`,
+  );
+
+  // ---- All or nothing: a movement the database refuses takes the whole file with it.
+  const doomed = await createMembershipFreeUser();
+  const whole = await prepare(doomed, original.bytes);
+  const peso = whole.input.transactions.find((row) => row.externalRef === refOf("cop"))!;
+  const bad = {
+    ...peso,
+    sheetRow: 99,
+    externalRef: refOf("bad"),
+    object: { ...(peso.object as object), currency: "USD", externalRef: refOf("bad") } as never,
+  };
+  const refused = await commitAs(doomed, { ...whole.input, transactions: [...whole.input.transactions, bad] });
+  await trackOwned(doomed);
+  const left = await owned(doomed);
+  let named: { entity?: string; sheetRow?: number; reasonKey?: string } = {};
+  try {
+    named = JSON.parse((refused.error as Error).message);
+  } catch {
+    named = {};
+  }
+  assert(
+    next("A file with one dollar row the card cannot take is refused naming that row, and not one account, category or movement of it is written"),
+    whole.errors.length === 0 &&
+      refused.error !== undefined &&
+      named.entity === "transactions" &&
+      named.sheetRow === 99 &&
+      named.reasonKey === "transactions.errors.currencyMismatch" &&
+      left.accounts === 0 &&
+      left.categories === 0 &&
+      left.movements === 0,
+    `${said(refused)}; named ${JSON.stringify(named)}; left ${JSON.stringify(left)}`,
   );
 }
