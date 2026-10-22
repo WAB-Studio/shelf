@@ -210,6 +210,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "o5m2") {
+    await checkO5M2Survivors();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -277,6 +282,7 @@ async function main() {
   await checkInvitationAcceptance();
   await checkPendingInvitationRead();
   await checkLeaderGuardAndInvitationPredicates();
+  await checkO5M2Survivors();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -12134,6 +12140,113 @@ async function checkLeaderGuardAndInvitationPredicates() {
       detail: `rows = ${JSON.stringify(rows)}`,
     }];
   });
+}
+
+// Three rows that each kill a survivor of an earlier mutation round: the invitation stores its address
+// trimmed and folded (RF-148), the allow-email script reports the user it created (RF-145), and a
+// person's own UPDATE never reaches the adjustment a count booked (RF-137).
+async function checkO5M2Survivors() {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const labels = {
+    padded: "o5m2-1. an invitation typed with spaces and capitals lists the trimmed, folded address and nothing padded",
+    created: "o5m2-2. the first allow-email run for a new address reports «usuario creado», the second «ya tenía usuario»",
+    adjustment: "o5m2-3. a person's own UPDATE of the adjustment a count booked changes zero rows; a plain movement of theirs changes one",
+  };
+
+  await m1Rows([labels.padded], async (tx) => {
+    const group = await m1Group(tx);
+    const folded = `inv.${tag}@y.invalid`;
+    await enterUserContext(tx, group.leader);
+    await tx`insert into group_members (group_id, name, role, invite_email)
+      values (${group.groupId}, 'rls o5m2 padded', 'member', ${` Inv.${tag}@Y.invalid `})`;
+    await tx`reset role`;
+    const listed = await tx<{ email: string }[]>`
+      select email from finances.allowed_emails where email like ${`%${tag}%`}`;
+    return [{
+      ok: listed.length === 1 && listed[0].email === folded,
+      detail: `listed = ${JSON.stringify(listed.map((row) => row.email))}, expected only ${folded}`,
+    }];
+  });
+
+  await m1Rows([labels.adjustment], async (tx) => {
+    const owner = randomUUID();
+    await tx`insert into auth.users (id) values (${owner})`;
+    await tx`insert into app_users (id) values (${owner})`;
+    const today = todayInBogota();
+    await enterUserContext(tx, owner);
+    const [{ id: account }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, initial_balance_on)
+      values (${owner}, 'rls o5m2 counted', 'asset', ${today}) returning id`;
+    const [{ id: spare }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, initial_balance_on)
+      values (${owner}, 'rls o5m2 spare', 'asset', ${today}) returning id`;
+    const [{ id: plain }] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at)
+      values (${spare}, ${account}, 100000, ${today}) returning id`;
+    const [{ id: counted }] = await tx<{ id: string }[]>`
+      insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+      values (${account}, ${today}, 250000) returning id`;
+    const booked = await tx<{ id: string; amount_cents: string }[]>`
+      select id, amount_cents::text from transactions where reconciliation_id = ${counted}`;
+    const edited = await tx`update transactions set description = 'rls o5m2 edit' where reconciliation_id = ${counted} returning id`;
+    const plainEdited = await tx`update transactions set description = 'rls o5m2 edit' where id = ${plain} returning id`;
+    const after = await tx<{ description: string | null }[]>`
+      select description from transactions where reconciliation_id = ${counted}`;
+    return [{
+      ok: booked.length === 1 && booked[0].amount_cents === "150000" && edited.length === 0 &&
+        plainEdited.length === 1 && after[0]?.description !== "rls o5m2 edit",
+      detail: `adjustments booked ${booked.length} for ${booked[0]?.amount_cents}, adjustment rows updated ${edited.length}, plain rows updated ${plainEdited.length}, description now ${after[0]?.description ?? "null"}`,
+    }];
+  });
+
+  const apiUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const listUrl = process.env.MIGRATION_DATABASE_URL ?? "";
+  const local = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/;
+  if (!local.test(apiUrl) || !/@(127\.0\.0\.1|localhost):/.test(listUrl)) {
+    assert(labels.created, false, `refusing to run against anything but the local stack: API ${apiUrl || "unset"}`);
+    return;
+  }
+  let serviceKey = "";
+  try {
+    serviceKey = m1StackEnv().SERVICE_ROLE_KEY ?? "";
+  } catch (error) {
+    assert(labels.created, false, `the local stack's keys could not be read — ${String(error)}`);
+    return;
+  }
+  const address = `harness-o5m2-${tag}@example.invalid`;
+  const run = () => {
+    const result = spawnSync("npm", ["run", "--silent", "allow-email", "--", address], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      timeout: 90_000,
+      env: { ...process.env, MIGRATION_DATABASE_URL: listUrl, NEXT_PUBLIC_SUPABASE_URL: apiUrl, SUPABASE_SERVICE_ROLE_KEY: serviceKey },
+    });
+    return { code: result.status, out: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+  };
+  try {
+    const first = run();
+    const users = await sql<{ id: string }[]>`select id from auth.users where email = ${address}`;
+    for (const user of users) {
+      await sql`insert into harness.identities (user_id, run_id, email, disposition)
+        values (${user.id}, ${runId()}, ${address}, 'ephemeral') on conflict (user_id) do nothing`;
+    }
+    const second = run();
+    assert(
+      labels.created,
+      first.code === 0 && /usuario creado/.test(first.out) && !/ya tenía usuario/.test(first.out) &&
+        second.code === 0 && /ya tenía usuario/.test(second.out) && users.length === 1,
+      `first exit ${first.code} «${first.out.trim().split("\n").pop()}», second exit ${second.code} «${second.out.trim().split("\n").pop()}», Auth users after the first = ${users.length}`,
+    );
+  } finally {
+    await sql`delete from finances.allowed_emails where email = ${address}`.catch(() => undefined);
+    const ids = (await sql<{ id: string }[]>`select id from auth.users where email = ${address}`).map((user) => user.id);
+    for (const id of ids) {
+      await sql`delete from harness.identities where user_id = ${id}`.catch(() => undefined);
+      await sql`delete from app_users where id = ${id}`.catch(() => undefined);
+      await sql`delete from auth.users where id = ${id}`.catch(() => undefined);
+    }
+  }
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

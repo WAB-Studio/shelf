@@ -64,3 +64,24 @@ test(".invalid is exempt on the local stack alone", () => {
   assert.equal(deliverabilityExempt("x.invalid", "https://abc.supabase.co"), false);
   assert.equal(deliverabilityExempt("gmail.com", "http://127.0.0.1:54321"), false);
 });
+
+// Mutation: exempt any domain containing "invalid" instead of the `.invalid` suffix.
+test("a real-looking domain that merely contains «invalid» is not exempt, even locally", () => {
+  assert.equal(deliverabilityExempt("invalidmail.com", "http://127.0.0.1:54321"), false);
+  assert.equal(deliverabilityExempt("invalid.com", "http://localhost:54321"), false);
+  assert.equal(deliverabilityExempt("mail.invalid.org", "http://127.0.0.1:54321"), false);
+});
+
+// Mutation: the null-MX test reads `records.length >= 1`.
+test("a null MX beside a real MX is deliverable", async () => {
+  const result = await isDomainDeliverable(
+    "example.com",
+    resolvers({
+      resolveMx: async () => [
+        { exchange: ".", priority: 0 },
+        { exchange: "mx.real.", priority: 10 },
+      ],
+    }),
+  );
+  assert.equal(result, true);
+});
