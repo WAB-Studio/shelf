@@ -12,9 +12,9 @@ import {
   type ScopedCategory,
   type ScopedEntity,
 } from "@/db/queries/import-preview";
-import { BASE_CURRENCY } from "@/lib/currency";
+import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { ActionError } from "@/lib/errors";
-import { centsToPesos } from "@/lib/money";
+import { centsToPesos, maxAmountMinor, parseAmount } from "@/lib/money";
 import { resolveCategoryInScope, scopeKeyOf, type ScopeKey } from "@/lib/spreadsheet/resolve-category";
 import { SHEET_ENTITIES, sheetDescriptors, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { parseWorkbook, type ParsedRow, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
@@ -23,7 +23,7 @@ import { createAccountSchema } from "@/lib/validation/account";
 import { createCategorySchema } from "@/lib/validation/category";
 import { createMemberSchema } from "@/lib/validation/member";
 import { createRecurringRuleSchema } from "@/lib/validation/recurring-rule";
-import { createTransactionSchema } from "@/lib/validation/transaction";
+import { createTransactionSchema, foreignSettlementCurrency } from "@/lib/validation/transaction";
 
 // The soft cap the whole import obeys before any per-row work, so a runaway file
 // never runs the free tier's execution budget dry (RNF-15).
@@ -52,9 +52,12 @@ const CATEGORY_KIND_MISMATCH = "data.import.errors.categoryKindMismatch";
 // wherever a pesos-only path meets an account outside BASE_CURRENCY.
 const FOREIGN_CURRENCY_UNSUPPORTED = "errors.foreignCurrencyUnsupported";
 const ADJUSTMENT_ONE_ACCOUNT = "data.import.errors.adjustmentOneAccount";
-// The row names a currency its account does not settle in: the import books in the account's own
-// and holds no second amount, so it refuses instead of re-denominating (RF-50, RF-121).
+// The row names a currency its account does not settle in and brings no amount in the account's own,
+// so it refuses instead of re-denominating (RF-50, RF-121, RF-122).
 const ROW_CURRENCY_MISMATCH = "transactions.errors.currencyMismatch";
+// A row in its account's own currency names a second amount the movement does not have (RF-122).
+const COUNTER_AMOUNT_FORBIDDEN = "transactions.errors.counterAmountForbidden";
+const COUNTER_AMOUNT_TOO_LARGE = "transactions.errors.amountTooLarge";
 // A file row for an existing account that names another settlement currency than the one it has.
 const ACCOUNT_CURRENCY_CHANGE = "accounts.errors.currencyLocked";
 
@@ -468,30 +471,64 @@ function checkBaseCurrency(
   }
 }
 
-// A transaction row's `currency` cell read against both accounts it names (RF-50, RF-121). A named
-// cell must be the settlement currency of every account the row touches; a blank one is a sheet
-// from before the column and passes only on base-currency accounts, as every such sheet was.
+// A transaction row's `currency` cell read against both accounts it names (RF-50, RF-121), by the
+// rule `transactions_verify_currency` holds at write time. A blank cell is a sheet from before the
+// column and passes only on base-currency accounts, as every such sheet was. A named one may differ
+// from one side's settlement currency when `counterAmount` carries that side's amount (RF-122) —
+// never on an adjustment, which is one account's own gap. Returns the second amount in that
+// currency's minor unit, or null when the row has none or is refused.
 function checkRowCurrency(
   entity: SheetEntity,
   raw: RawRow,
-  rowCurrency: string | null | undefined,
-  accountIds: (string | null)[],
+  row: { currency?: string | null; counterAmount?: string | null; adjustment?: true | null },
+  fromAccountId: string | null,
+  toAccountId: string | null,
   currencies: Map<string, string>,
   errors: RowFieldError[],
-): void {
-  for (const id of accountIds) {
-    const currency = id !== null ? currencies.get(id) : undefined;
-    if (currency === undefined) continue;
-    if (rowCurrency == null) {
-      if (currency !== BASE_CURRENCY) {
-        errors.push({ key: FOREIGN_CURRENCY_UNSUPPORTED, column: "currency", value: null });
-        return;
-      }
-    } else if (currency !== rowCurrency) {
-      errors.push({ key: ROW_CURRENCY_MISMATCH, column: "currency", value: rawCellValue(entity, raw, "currency") });
-      return;
+): number | null {
+  const settlementOf = (id: string | null) =>
+    ((id !== null ? currencies.get(id) : undefined) ?? null) as CurrencyCode | null;
+  const settlement = { from: settlementOf(fromAccountId), to: settlementOf(toAccountId) };
+  const counter = row.counterAmount ?? null;
+  const mismatch = () =>
+    errors.push({ key: ROW_CURRENCY_MISMATCH, column: "currency", value: rawCellValue(entity, raw, "currency") });
+
+  if (row.currency == null) {
+    if ([settlement.from, settlement.to].some((c) => c !== null && c !== BASE_CURRENCY)) {
+      errors.push({ key: FOREIGN_CURRENCY_UNSUPPORTED, column: "currency", value: null });
+      return null;
     }
+  } else if (
+    settlement.from !== null &&
+    settlement.to !== null &&
+    settlement.from !== settlement.to &&
+    row.currency !== settlement.from &&
+    row.currency !== settlement.to
+  ) {
+    mismatch();
+    return null;
   }
+
+  const foreign = foreignSettlementCurrency((row.currency ?? BASE_CURRENCY) as CurrencyCode, settlement);
+  if (foreign === null) {
+    if (counter !== null) {
+      errors.push({ key: COUNTER_AMOUNT_FORBIDDEN, column: "counterAmount", value: rawCellValue(entity, raw, "counterAmount") });
+    }
+    return null;
+  }
+
+  if (counter === null || row.adjustment === true) {
+    mismatch();
+    return null;
+  }
+
+  // The light guard read the cell in some currency; the one it is in is known only now.
+  const minor = parseAmount(counter);
+  if (minor === null || minor > maxAmountMinor(foreign)) {
+    errors.push({ key: COUNTER_AMOUNT_TOO_LARGE, column: "counterAmount", value: rawCellValue(entity, raw, "counterAmount") });
+    return null;
+  }
+  return minor;
 }
 
 // The guard's output (names, all references still names) turned id-shaped for the
@@ -602,11 +639,13 @@ function resolveAndShape(
       const fromAccountId = resolveInto(data.fromAccount, refs.accounts, "fromAccount");
       const toAccountId = resolveInto(data.toAccount, refs.accounts, "toAccount");
       const rowCurrency = data.currency as string | null | undefined;
-      checkRowCurrency(
+      const counterAmount = (data.counterAmount ?? null) as string | null;
+      const counterAmountCents = checkRowCurrency(
         entity,
         raw,
-        rowCurrency,
-        [fromAccountId, toAccountId],
+        { currency: rowCurrency, counterAmount, adjustment: data.adjustment as true | null | undefined },
+        fromAccountId,
+        toAccountId,
         refs.accountCurrencies,
         errors,
       );
@@ -662,6 +701,14 @@ function resolveAndShape(
           amount: data.amount,
           // Amounts and splits are read in the row's own currency; blank keeps the base one.
           ...(rowCurrency != null ? { currency: rowCurrency } : {}),
+          // A row in its account's own currency stays as an old sheet's did; a foreign one carries
+          // its account's amount and whether it is still an estimate (RF-122, RF-123). An estimate
+          // with no amount goes through too, so the authoritative schema refuses it in its words.
+          ...(counterAmountCents !== null
+            ? { counterAmount, counterAmountCents, counterIsEstimate: data.counterIsEstimate === true }
+            : data.counterIsEstimate === true
+              ? { counterIsEstimate: true }
+              : {}),
           occurredAt: data.occurredAt,
           description: data.description,
           externalRef: data.externalRef,
@@ -720,7 +767,11 @@ export function processRow(
     };
   }
 
-  return { ...carried, errors: [], object: checked.data };
+  // The authoritative schema keeps the second amount as the string it judged; its integer, read once
+  // in the account's currency, rides back beside it for the commit.
+  const counter = (resolved.object as { counterAmountCents?: number }).counterAmountCents;
+  const object = counter !== undefined ? { ...checked.data, counterAmountCents: counter } : checked.data;
+  return { ...carried, errors: [], object };
 }
 
 // A blank reference becomes a key derived from the row's own content, so the same file imported
