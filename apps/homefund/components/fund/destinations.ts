@@ -10,6 +10,7 @@ import {
   Inbox,
   Repeat,
   ScrollText,
+  Settings,
   Tag,
   Tags,
   Target,
@@ -106,11 +107,17 @@ export const SETTINGS_KEYS = [
 ] as const;
 
 /**
- * The fund's own settings sit outside the catalogue: the chevron beside the fund
- * name is what reaches them, and the settings panel owns the list of every other
- * destination. No surface lists this one, so no surface can offer it twice.
+ * The fund's own settings sit outside the catalogue: on a laptop the chevron beside
+ * the fund name reaches them, and the settings list holds every other destination.
+ * Only the phone, which has no rail, leads its list with this row (`FUND_SETTINGS`).
  */
 export const GROUP_SETTINGS_HREF = "/settings/group";
+
+export const FUND_SETTINGS = {
+  key: "fundSettings",
+  href: GROUP_SETTINGS_HREF,
+  icon: Settings,
+} as const;
 
 // One group per user with no switching (RF-55), so every destination is a fixed
 // path. Members only exist inside a group, so that entry drops without one.

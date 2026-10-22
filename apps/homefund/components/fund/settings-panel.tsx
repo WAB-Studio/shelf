@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
+import { FUND_SETTINGS, SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { Flex, NavPanel, NavList } from "@/components/ui";
+import { Box, Flex, NavPanel, NavList, type NavListItem, Text } from "@/components/ui";
 import { usePathname } from "@/i18n/navigation";
 
 /**
@@ -44,6 +44,19 @@ export function SettingsPanel({
     }),
   );
 
+  // The phone has no rail; from `md` up the chevron beside the fund name owns this row.
+  const fundItems: NavListItem[] = hasGroup
+    ? [
+        {
+          key: FUND_SETTINGS.key,
+          href: FUND_SETTINGS.href,
+          icon: <FUND_SETTINGS.icon size={18} />,
+          label: <Text weight="bold">{t(FUND_SETTINGS.key)}</Text>,
+          current: pathname === FUND_SETTINGS.href,
+        },
+      ]
+    : [];
+
   return (
     <NavPanel
       open={open}
@@ -52,6 +65,11 @@ export function SettingsPanel({
       closeLabel={t("close")}
       trigger={trigger}
     >
+      {fundItems.length > 0 && (
+        <Box display={{ initial: "block", md: "none" }}>
+          <NavList items={fundItems} onNavigate={() => setOpen(false)} />
+        </Box>
+      )}
       <NavList items={items} onNavigate={() => setOpen(false)} />
       <Flex direction="column" gap="2">
         <LanguageSwitcher width="100%" />
