@@ -94,9 +94,20 @@ test("821 · an open goal ending before the month's end counts «faltan» to its
     horizon: midNextWeek,
     budgetMonth: thisMonth,
   });
+  // Reached in full: under 60 % from the 20th the pace line replaces «llevas… · faltan…».
+  const [commitment] = await db<{ id: string }[]>`
+    insert into goals.commitments
+      (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+    values (${personId}, ${goalId}, ${`Sesión ${Date.now()}`}, 'daily', 'quantity', 30, 'minutos', now() - interval '40 days')
+    returning id
+  `;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${personId}, ${goalId}, ${commitment.id}, ${today}::date, 600)
+  `;
   try {
     await page.goto(`/metas/${goalId}`);
-    const line = days === 1 ? "faltan 1 día" : `faltan ${days} días`;
+    const line = days === 0 ? "último día" : days === 1 ? "faltan 1 día" : `faltan ${days} días`;
     await expect(page.getByText(new RegExp(`llevas \\d+ % · ${line}$`))).toBeVisible();
   } finally {
     await drop(db, personId, goalId);
