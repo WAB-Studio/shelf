@@ -4248,6 +4248,7 @@ async function main(): Promise<void> {
   await parentCategorySuite();
   await importCommitScopesSuite();
   await debtCreditSideSuite();
+  await o5m2SurvivorsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -11322,6 +11323,18 @@ async function parentCategorySuite(): Promise<void> {
   const tag = randomUUID().slice(0, 8);
   const today = todayInBogota();
   const user = await createMembershipFreeUser();
+  // Every read below scans the ledger the whole run has built, through the row policies, so on a database another
+  // lane is loading one can cross the 8 s statement timeout (57014). A read changes nothing: it is asked again, twice
+  // at most, and a read that is slow every time still fails. The timeout itself stays where it is.
+  const patient = async <T>(read: () => Promise<T>): Promise<T> => {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await read();
+      } catch (error) {
+        if (pgErrorCode(error) !== "57014" || attempt === 3) throw error;
+      }
+    }
+  };
   const open = async (name: string, settlementCurrency: "COP" | "USD") => {
     const { accountId } = await asUser(user, () =>
       createAccount({
@@ -11427,7 +11440,7 @@ async function parentCategorySuite(): Promise<void> {
     await budgetOn(W),
     await budgetOn(X),
   ];
-  const statuses = await asUser(user, () => listBudgetsWithStatus());
+  const statuses = await asUser(user, () => patient(() => listBudgetsWithStatus()));
   const spentOf = (id: string) => statuses.find((row) => row.id === id)?.spentCents;
 
   assert(
@@ -11468,7 +11481,7 @@ async function parentCategorySuite(): Promise<void> {
   );
 
   const ids = async (categoryId: string) =>
-    (await asUser(user, () => listTransactions({ categoryId }))).map((row) => row.id).sort();
+    (await asUser(user, () => patient(() => listTransactions({ categoryId })))).map((row) => row.id).sort();
   const sorted = (...list: string[]) => [...list].sort();
   assert(
     next("Filtering movements by a parent lists those with a split in the parent or in a subcategory"),
@@ -11491,8 +11504,8 @@ async function parentCategorySuite(): Promise<void> {
     `got ${JSON.stringify(await ids(P))}`,
   );
   const monthStart = `${today.slice(0, 8)}01`;
-  const totals = await asUser(user, () => getTransactionTotals({ categoryId: P, from: monthStart, to: today }));
-  const month = await asUser(user, () => listTransactions({ categoryId: P, from: monthStart, to: today }));
+  const totals = await asUser(user, () => patient(() => getTransactionTotals({ categoryId: P, from: monthStart, to: today })));
+  const month = await asUser(user, () => patient(() => listTransactions({ categoryId: P, from: monthStart, to: today })));
   assert(
     next("The parent's this-month filter lists the A, B, P and dollar-B movements and its count agrees with the list"),
     JSON.stringify(month.map((row) => row.id).sort()) === JSON.stringify(sorted(onA, onB, onP, usdB)) && totals.count === month.length,
@@ -11510,7 +11523,7 @@ async function parentCategorySuite(): Promise<void> {
     const { contributionId } = await asUser(user, () => addGoalContribution({ goalId, transactionId, amountCents }));
     keep("goal_contributions", contributionId);
   }
-  const goal = (await asUser(user, () => listGoalsWithProgress())).find((row) => row.id === goalId);
+  const goal = (await asUser(user, () => patient(() => listGoalsWithProgress()))).find((row) => row.id === goalId);
   assert(
     next("A goal on a dollar account sums its virtual and dollar aportes and ignores one earmarking a peso movement"),
     goal?.currency === "USD" && goal.savedCents === 16_00,
@@ -11536,7 +11549,7 @@ async function parentCategorySuite(): Promise<void> {
   const { listScopedCategories } = await import("@/db/queries/categories");
   const { categoryNamesById, scopedCategoryName } = await import("@/lib/fund/category-names");
   const mark = (name: string) => `${name} · fondo`;
-  const nodes = await asUser(leader, () => listScopedCategories(leader.id));
+  const nodes = await asUser(leader, () => patient(() => listScopedCategories(leader.id)));
   const pickerDrawn = [...categoryNamesById(nodes, mark).values()];
   const pickerRepeats = pickerDrawn.filter((text, index) => pickerDrawn.indexOf(text) !== index);
 
@@ -11575,7 +11588,7 @@ async function parentCategorySuite(): Promise<void> {
     );
     track("transactions", transactionId);
   }
-  const report = await asUser(leader, () => getExpensesByCategory(currentMonthRange()));
+  const report = await asUser(leader, () => patient(() => getExpensesByCategory(currentMonthRange())));
   const reportDrawn = report.map((row) => scopedCategoryName(row.name, row.scope, mark));
   const reportRepeats = reportDrawn.filter((text, index) => reportDrawn.indexOf(text) !== index);
   assert(
@@ -12250,5 +12263,170 @@ async function debtCreditSideSuite(): Promise<void> {
     next("Integer cents: every owed, credit, available, interest and minimum figure the overview, the screen and the statement hand out is a safe integer"),
     figures.length > 0 && notInteger.length === 0,
     `${figures.length} figures, not integer: ${JSON.stringify(notInteger.slice(0, 6))}`,
+  );
+}
+
+// O5-M2: what a count that takes money out of an account, the first and last day of a range, and an English seed owe
+// the person (RF-137, RF-138, RF-118, RF-50, RF-46). Each block is a survivor of an earlier mutation round.
+async function o5m2SurvivorsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const thisMonth = today.slice(0, 7);
+  const holder = await createMembershipFreeUser();
+  const open = async (name: string, amountMinor: number): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness o5m2 ${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor,
+        balanceOn: shiftDate(today, -60),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const category = async (name: string, kind: "expense" | "income"): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness o5m2 ${name} ${tag}`, kind, parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const spend = async (from: string, categoryId: string, amountCents: number, occurredAt: string, description: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: null,
+        amountCents,
+        occurredAt,
+        description,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+
+  // A count that leaves the account: the gap is negative, and no report reads it as an expense.
+  const bank = await open("banco", 1_000_000);
+  const wallet = await open("billetera", 0);
+  const food = await category("mercado", "expense");
+  await spend(bank, food, 50_000, today, `Harness o5m2 gasto ${tag}`);
+  const down = await asUser(holder, () =>
+    reconcileAccount({ accountId: bank, reconciledOn: today, realMagnitudeCents: 350_000, expectedDerivedCents: 950_000 }),
+  );
+  const up = await asUser(holder, () =>
+    reconcileAccount({ accountId: wallet, reconciledOn: today, realMagnitudeCents: 80_000, expectedDerivedCents: 0 }),
+  );
+  const bookedLegs = async (reconciliationId: string) =>
+    fixtureSql<{ from_account_id: string | null; to_account_id: string | null; amount_cents: string }[]>`
+      select from_account_id, to_account_id, amount_cents::text from transactions where reconciliation_id = ${reconciliationId}`;
+  const [downLegs, upLegs] = await Promise.all([
+    down.ok ? bookedLegs(down.id) : Promise.resolve([]),
+    up.ok ? bookedLegs(up.id) : Promise.resolve([]),
+  ]);
+  assert(
+    next("A count below the derived figure books 600000 out of the account and reports a gap of -600000; one above books 80000 in and reports +80000"),
+    down.ok && up.ok &&
+      downLegs.length === 1 && downLegs[0].from_account_id === bank && downLegs[0].to_account_id === null && downLegs[0].amount_cents === "600000" &&
+      upLegs.length === 1 && upLegs[0].to_account_id === wallet && upLegs[0].from_account_id === null && upLegs[0].amount_cents === "80000" &&
+      down.gapCents === -600_000 && up.gapCents === 80_000,
+    `down ${down.ok ? down.gapCents : down.reason} (legs ${JSON.stringify(downLegs)}), up ${up.ok ? up.gapCents : up.reason} (legs ${JSON.stringify(upLegs)})`,
+  );
+
+  const history = await asUser(holder, () => listAccountReconciliations(bank));
+  assert(
+    next("The account's count history reads the same gap with the same sign, and the derived figure it was shown"),
+    history.length === 1 && history[0].gapCents === -600_000 && history[0].countedCents === 350_000 && history[0].derivedCents === 950_000,
+    JSON.stringify(history),
+  );
+
+  const [six, month] = await asUser(holder, () => Promise.all([getSixMonthFlow(), getMonthlyFlow(currentMonthRange())]));
+  const sixNow = six.find((row) => row.currency === "COP" && row.monthStart.startsWith(thisMonth));
+  const monthNow = month.find((row) => row.currency === "COP");
+  assert(
+    next("The six-month trend and the month count the 50000 spent as the only expense and no income; the two adjustments are their own signed sum, -520000"),
+    sixNow?.expenseCents === 50_000 && sixNow.incomeCents === 0 && sixNow.adjustmentCents === -520_000 &&
+      monthNow?.expenseCents === 50_000 && monthNow.incomeCents === 0 && monthNow.netCents === -50_000 && monthNow.adjustmentCents === -520_000,
+    `six ${JSON.stringify(sixNow)}, month ${JSON.stringify(monthNow)}`,
+  );
+
+  // A range keeps its first and its last day and drops the days beside them.
+  const ranged = await open("rango", 1_000_000);
+  const first = shiftDate(today, -30);
+  const last = shiftDate(today, -20);
+  const days: [string, number][] = [["before", -31], ["first", -30], ["middle", -25], ["last", -20], ["after", -19]];
+  const dayOf = new Map<string, string>();
+  for (const [name, offset] of days) {
+    const description = `Harness o5m2 dia ${name} ${tag}`;
+    await spend(ranged, food, 1_00, shiftDate(today, offset), description);
+    dayOf.set(description, name);
+  }
+  const names = (rows: { description?: string | null }[]) =>
+    rows.flatMap((row) => (typeof row.description === "string" && dayOf.has(row.description) ? [dayOf.get(row.description) as string] : [])).sort();
+  const listed = (filters: { from?: string; to?: string }) =>
+    asUser(holder, () => listTransactions({ accountId: ranged, ...filters })).then(names);
+  const exported = (range: { from?: Date | string; to?: Date | string }) =>
+    asUser(holder, () => readExport({ entityKeys: ["transactions"], ...range })).then((result) => names(result.transactions ?? []));
+  const civilNoon = (day: string) => new Date(`${day}T12:00:00-05:00`);
+  const [both, onlyFrom, onlyTo] = await Promise.all([
+    listed({ from: first, to: last }),
+    listed({ from: first }),
+    listed({ to: last }),
+  ]);
+  assert(
+    next("The movement list keeps the first and the last day of its range, drops the day before and the day after, and honours either bound alone"),
+    JSON.stringify(both) === JSON.stringify(["first", "last", "middle"]) &&
+      JSON.stringify(onlyFrom) === JSON.stringify(["after", "first", "last", "middle"]) &&
+      JSON.stringify(onlyTo) === JSON.stringify(["before", "first", "last", "middle"]),
+    `both ${JSON.stringify(both)}, from alone ${JSON.stringify(onlyFrom)}, to alone ${JSON.stringify(onlyTo)}`,
+  );
+  const [xBoth, xFrom, xTo, xDates] = await Promise.all([
+    exported({ from: first, to: last }),
+    exported({ from: first }),
+    exported({ to: last }),
+    exported({ from: civilNoon(first), to: civilNoon(last) }),
+  ]);
+  assert(
+    next("The export keeps the first and the last day of its range, drops the day before and the day after, honours either bound alone, and reads a Date as its Bogota day"),
+    JSON.stringify(xBoth) === JSON.stringify(["first", "last", "middle"]) &&
+      JSON.stringify(xFrom) === JSON.stringify(["after", "first", "last", "middle"]) &&
+      JSON.stringify(xTo) === JSON.stringify(["before", "first", "last", "middle"]) &&
+      JSON.stringify(xDates) === JSON.stringify(["first", "last", "middle"]),
+    `both ${JSON.stringify(xBoth)}, from alone ${JSON.stringify(xFrom)}, to alone ${JSON.stringify(xTo)}, dates ${JSON.stringify(xDates)}`,
+  );
+
+  // The English seed writes the English names, parent and child alike.
+  const seeded = await createMembershipFreeUser();
+  const { seedCategoryTree } = await import("@/db/queries/seed-categories");
+  await asUser(seeded, () => withUserDb((tx) => seedCategoryTree(tx, { ownerUserId: seeded.id }, "en")));
+  const rows = await fixtureSql<{ id: string; name: string; parent_id: string | null }[]>`
+    select id, name, parent_id from categories where owner_user_id = ${seeded.id}`;
+  for (const row of rows) track("categories", row.id);
+  const nameOf = new Map(rows.map((row) => [row.id, row.name]));
+  const parents = rows.filter((row) => row.parent_id === null).map((row) => row.name).sort();
+  const childrenOf = (parent: string) =>
+    rows.filter((row) => row.parent_id !== null && nameOf.get(row.parent_id) === parent).map((row) => row.name).sort();
+  const expectedParents = SEED_CATEGORIES.map((category) => category.name.en).sort();
+  const wrongChildren = SEED_CATEGORIES.filter(
+    (category) => JSON.stringify(childrenOf(category.name.en)) !== JSON.stringify((category.children ?? []).map((child) => child.name.en).sort()),
+  ).map((category) => category.name.en);
+  assert(
+    next("Seeding in English writes the English parent names and the English child names, each child under its English parent"),
+    JSON.stringify(parents) === JSON.stringify(expectedParents) &&
+      wrongChildren.length === 0 &&
+      parents.includes("Housing") && childrenOf("Housing").includes("Rent") &&
+      rows.length === SEED_CATEGORIES.reduce((sum, category) => sum + 1 + (category.children?.length ?? 0), 0),
+    `parents ${JSON.stringify(parents)}, parents with other children [${wrongChildren.join(", ")}], ${rows.length} rows`,
   );
 }

@@ -172,3 +172,21 @@ test("checkRealAmount refuses with the schema's own key, never the fallback", as
     messageKey: "transactions.errors.amountTooLarge",
   });
 });
+
+// Mutation: `cents > maxAmountMinor` becomes `>=`, in the field schema or in checkRealAmount.
+test("the cap is inclusive: 99 999 999 999 whole units pass, one cent more is too large, both signs", () => {
+  const TOO = "transactions.errors.amountTooLarge";
+  for (const sign of ["", "-", "−"]) {
+    assert.equal(parse({ realAmount: `${sign}99999999999` }).success, true, `${sign}99999999999`);
+    const over = parse({ realAmount: `${sign}99999999999,01` });
+    assert.equal(over.success, false, `${sign}99999999999,01 was accepted`);
+    assert.deepEqual(messages(over), [TOO]);
+
+    const atCap = checkRealAmount(`${sign}99999999999`, "COP");
+    assert.equal(atCap.ok, true, `${sign}99999999999`);
+    assert.deepEqual(checkRealAmount(`${sign}99999999999,01`, "COP"), { ok: false, messageKey: TOO });
+  }
+  assert.deepEqual(checkRealAmount("99999999999", "COP"), { ok: true, cents: 9_999_999_999_900 });
+  assert.deepEqual(checkRealAmount("-99999999999", "USD"), { ok: true, cents: -9_999_999_999_900 });
+  assert.deepEqual(checkRealAmount("100000000000", "COP"), { ok: false, messageKey: TOO });
+});

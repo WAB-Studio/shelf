@@ -188,6 +188,18 @@ for (const [label, category] of [
   });
 }
 
+// Mutation: build the single split for a transfer too. The row guard already blanks the category cell of a
+// two-account row, so resolving it first, or checking its kind, cannot be seen from outside: the split is.
+test("a backup transfer row holding an income category passes: the cell is never read for its kind", async () => {
+  scope.categories = [...scope.categories, { id: UUID(12), name: "Salary", externalRef: "cat-2", ownerUserId: UUID(99), groupId: null, kind: "income" }];
+  scope.existingRefs.categories = new Set(["cat-1", "cat-2"]);
+  const rows = await run(
+    await book([{ fromAccount: "Checking", toAccount: "Savings", amount: 5000, category: "Salary", occurredAt: "2026-01-10", description: "move" }]),
+  );
+  assert.deepEqual(rows[0].errors, []);
+  assert.deepEqual((rows[0].object as { splits: unknown[] }).splits, []);
+});
+
 test("an expense row keeps its category and its single split", async () => {
   const rows = await run(await book([spend(1000, "a")]));
   const object = rows[0].object as { splits: { categoryId: string }[] };
