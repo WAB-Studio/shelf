@@ -43,6 +43,8 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
   live lane's identity out from under it.
 - Run `harness:reap` only when every lane is quiet; it refuses while any heartbeat is fresh. It never touches a lane
   identity.
+- Give a lane opened with `--app goallog` its identities before GoalLog's database checks: copy `apps/homefund/.env.local`
+  into it and run `HARNESS_LANE=<n> scripts/supabase-local.sh exec npm run harness:token` from its `apps/homefund`.
 - Run `harness:census` from the main checkout when the lane is single-app. A lane opened with `--app wordbook` copies
   no `apps/homefund/.env.local`, so the census dies there. Both checkouts share one database.
 
