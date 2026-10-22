@@ -1922,6 +1922,9 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   «Cerrando…», the button disabled. Done: `/entrar` as it is today. If Auth does not confirm the sign-out, this device's
   session is cleared anyway and `/entrar` shows one muted line under its lead: «Cerraste sesión en este dispositivo, pero no
   pudimos confirmarlo con el servidor.» No 1280 face: `/metas` sits in the 640 px column and the section keeps its shape.
+  Failed (the call never reached the server, e.g. offline): the button returns to «Cerrar sesión», enabled, and one line
+  in the ink-ringed refusal box sits under it: «No se pudo cerrar la sesión. Inténtalo otra vez cuando tengas conexión.»
+  The person stays signed in; the line clears when they press again.
 - **`ImportarSeccionFuera`** (page «Importar», module M19). When the model could not read a section, the review says so above
   the first goal, one muted line per section in the text's order: «No se pudo leer la sección «{heading}» (líneas {from} a
   {to}): quedó fuera. Pégala sola para importarla.» The line counts no goal, is not markable and never blocks «Crear». With

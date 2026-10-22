@@ -38,6 +38,7 @@
   "resent": "Te mandamos otro código a <fig>{email}</fig>. Usa el del último correo.",
   "signOut": "Cerrar sesión",
   "signingOut": "Cerrando…",
+  "signOutFailed": "No se pudo cerrar la sesión. Inténtalo otra vez cuando tengas conexión.",
   "signedInAs": "Entraste como {email}",
   "accountTitle": "Tu cuenta",
   "partialSignOut": "Cerraste sesión en este dispositivo, pero no pudimos confirmarlo con el servidor.",
