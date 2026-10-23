@@ -1954,6 +1954,43 @@ async function accentInk(page: Page): Promise<string> {
   });
 }
 
+// The deepest elements under `scope` whose whole text is exactly `whole`, each
+// with the ink it computes to. A figure drawn as bare text beside a span holds
+// its words in the wrapper and only the amount in the span, so the deepest
+// holder of the whole text is the wrapper and its ink is not the span's.
+async function holdersOf(
+  scope: Locator,
+  whole: string,
+): Promise<{ text: string; ink: string }[]> {
+  return scope.evaluate((root, wanted) => {
+    const flatten = (node: Element) => (node.textContent ?? "").replace(/\s+/g, " ").trim();
+    const hits = [root, ...Array.from(root.querySelectorAll("*"))].filter(
+      (node) => flatten(node) === wanted,
+    );
+    return hits
+      .filter((node) => !hits.some((other) => other !== node && node.contains(other)))
+      .map((node) => ({ text: flatten(node), ink: getComputedStyle(node).color }));
+  }, whole);
+}
+
+// The ink of the element that directly holds the text matching `pattern`.
+async function inkOfText(scope: Locator, pattern: RegExp): Promise<string[]> {
+  return scope.evaluate(
+    (root, source) => {
+      const matcher = new RegExp(source);
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const inks: string[] = [];
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (matcher.test(node.textContent ?? "") && node.parentElement) {
+          inks.push(getComputedStyle(node.parentElement).color);
+        }
+      }
+      return inks;
+    },
+    pattern.source,
+  );
+}
+
 // The figure column of one debt, at whichever width is displayed: on the phone
 // the head's right-hand column, on the laptop the balance cell.
 function figureOf(page: Page, name: string, cells: Locator | null): Locator {
@@ -2138,6 +2175,86 @@ for (const [bandLabel, width] of [
       }
     });
 
+    test("in credit, the row: «A favor $ 150.000» is one element in the accent, with no sign", async ({
+      page,
+    }) => {
+      await page.goto("/es/planning/debts");
+      await expect(rowOf(page, creditName, creditId)).toBeVisible();
+
+      const whole = debts.inFavour.replace("{amount}", `$ ${groupedPesos(STATE_CREDIT_CENTS)}`);
+      const holders = await holdersOf(balanceOf(page, creditName, creditId), whole);
+      expect(holders.map((holder) => holder.text)).toEqual([whole]);
+      expect(holders[0].ink).toBe(await accentInk(page));
+      expect(whole).not.toMatch(/[+\u2212]/);
+      expect(flat(await balanceOf(page, creditName, creditId).innerText())).not.toMatch(
+        /[+\u2212]/,
+      );
+    });
+
+    test("in credit, the detail: every «A favor $ 150.000» is one element in the accent, with no sign", async ({
+      page,
+    }) => {
+      await page.goto(`/es/planning/debts/${creditId}`);
+      await expect(page.getByRole("heading", { name: creditName, exact: true })).toBeVisible();
+
+      const whole = debts.inFavour.replace("{amount}", `$ ${groupedPesos(STATE_CREDIT_CENTS)}`);
+      // The hero under the title, the saldo tile and the open period.
+      const holders = await holdersOf(page.getByRole("main"), whole);
+      expect(holders).toHaveLength(3);
+      const accent = await accentInk(page);
+      for (const holder of holders) expect(holder.ink).toBe(accent);
+      expect(flat(await page.getByRole("main").innerText())).not.toMatch(/[+\u2212]/);
+    });
+
+    // The abono dialog's balance field, beside the debt's name (DeudasAbonarAFavorMovil).
+    async function openPayDialog(page: Page, id: string, name: string) {
+      await page.goto(`/es/planning/debts/${id}`);
+      await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+      await page.getByRole("button", { name: debts.rowPay, exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      return {
+        dialog,
+        balance: dialog
+          .getByText(debts.tableBalance, { exact: true })
+          .locator("xpath=following-sibling::*[1]"),
+        name: dialog.getByText(name, { exact: true }),
+      };
+    }
+
+    test("abonar a card in credit: the balance reads «A favor $ 150.000» whole in the accent", async ({
+      page,
+    }) => {
+      const { balance } = await openPayDialog(page, creditId, creditName);
+      const whole = debts.inFavour.replace("{amount}", `$ ${groupedPesos(STATE_CREDIT_CENTS)}`);
+
+      expect(flat(await balance.innerText())).toBe(whole);
+      const holders = await holdersOf(balance, whole);
+      expect(holders).toHaveLength(1);
+      expect(holders[0].ink).toBe(await accentInk(page));
+      expect(flat(await balance.innerText())).not.toMatch(/[+\u2212]/);
+    });
+
+    test("abonar a card that owes: the balance is the owed amount in the normal ink", async ({
+      page,
+    }) => {
+      const { balance, name } = await openPayDialog(page, owingId, owingName);
+
+      expect(flat(await balance.innerText())).toBe(`$ ${groupedPesos(STATE_OWING_CENTS)}`);
+      const ink = (await holdersOf(balance, flat(await balance.innerText())))[0].ink;
+      expect(ink).not.toBe(await accentInk(page));
+      expect(ink).toBe(await inkOf(name));
+    });
+
+    test("abonar a card at zero: the balance is «$ 0» in the normal ink", async ({ page }) => {
+      const { balance, name } = await openPayDialog(page, zeroId, zeroName);
+
+      expect(flat(await balance.innerText())).toBe("$ 0");
+      const ink = (await holdersOf(balance, "$ 0"))[0].ink;
+      expect(ink).not.toBe(await accentInk(page));
+      expect(ink).toBe(await inkOf(name));
+    });
+
     if (laptop) {
       test("the tiles never count a credit: the total and the interest are the owing cards' alone", async ({
         page,
@@ -2224,7 +2341,7 @@ for (const [bandLabel, width] of [
         ),
       );
 
-      // The abono states what the card owes, which is nothing.
+      // The abono states the credit whole, in the accent, as the detail does.
       await page.getByRole("button", { name: debts.rowPay, exact: true }).click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
@@ -2235,8 +2352,7 @@ for (const [bandLabel, width] of [
             .locator("xpath=following-sibling::*[1]")
             .innerText(),
         ),
-      ).toBe("$ 0");
-      expect(flat(await dialog.innerText())).not.toContain(credit);
+      ).toBe(inFavour);
       await dialog.getByRole("button", { name: common.cancel, exact: true }).click();
       await expect(dialog).toBeHidden();
     });
@@ -2397,3 +2513,351 @@ for (const [bandLabel, width] of [
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// A card in credit with a dollar purchase still to bill, and the next payment
+// of a fund with nothing to pay (RF-80, RF-83, RF-123, RF-124; `docs/DESIGN.md`
+// § Debts, Q9 a; boards DeudasAFavorPorFacturar, DeudasProximoPagoSinDeudaMovil).
+//
+// Both read a whole fund, so they run as the second identity, whose personal
+// fund no other spec of this file seeds: every figure below is that fund's alone
+// and the expectations are constants. A session lock keyed like the plain
+// member's describe keeps a group from forming around that identity meanwhile.
+// ---------------------------------------------------------------------------
+
+const Q9_CREDIT_CENTS = 800_000;
+const Q9_USD_CENTS = 2_500;
+const Q9_ESTIMATE_CENTS = 10_500_000;
+const Q9_OWED_CENTS = 8_000_000;
+const Q9_PESO_OWED_CENTS = 4_000_000;
+const Q9_MINIMUM_CENTS = 1_000_000;
+
+type MemberTx = postgres.TransactionSql;
+
+async function asMember(fn: (tx: MemberTx) => Promise<void>): Promise<void> {
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${JSON.stringify({
+      sub: scope.memberUserId,
+      role: "authenticated",
+      aud: "authenticated",
+    })}, true)`;
+    await fn(tx);
+  });
+}
+
+type MemberCard = {
+  id: string;
+  name: string;
+  // Owed in pesos at the opening, or credited by an overpayment from `payerId`.
+  owedCents?: number;
+  creditCents?: number;
+  // A dollar purchase on the card; `estimateCents` null leaves it with no peso
+  // estimate at all.
+  usd?: { cents: number; estimateCents: number | null };
+  withMinimum?: boolean;
+};
+
+const MEMBER_TERMS_RATE = 0.2;
+
+test.describe("a card in credit with a dollar purchase, and the next payment", () => {
+  test.use({ storageState: MEMBER_STORAGE_STATE });
+
+  const lockKey = `debts.spec fund ${scope.userId}`;
+  let lock: postgres.Sql | null = null;
+  let seeded: string[] = [];
+  let categories: string[] = [];
+
+  test.beforeAll(async () => {
+    lock = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
+    await lock`select pg_advisory_lock(hashtext(${lockKey}))`;
+    // No fund around the second identity, so its debts are its own alone.
+    await clearGroup();
+  });
+
+  test.afterAll(async () => {
+    if (lock !== null) {
+      await lock`select pg_advisory_unlock(hashtext(${lockKey}))`;
+      await lock.end();
+      lock = null;
+    }
+  });
+
+  test.afterEach(async () => {
+    const ids = seeded;
+    const cats = categories;
+    seeded = [];
+    categories = [];
+    if (ids.length === 0) return;
+    await asMember(async (tx) => {
+      await tx`
+        delete from transactions
+        where from_account_id in ${tx(ids)} or to_account_id in ${tx(ids)}`;
+      await tx`delete from debt_terms where account_id in ${tx(ids)}`;
+      await tx`delete from accounts where id in ${tx(ids)}`;
+    });
+    if (cats.length > 0) await fixtureSql`delete from categories where id in ${fixtureSql(cats)}`;
+  });
+
+  async function seedFund(cards: MemberCard[]): Promise<void> {
+    const payerId = randomUUID();
+    const categoryId = randomUUID();
+    seeded.push(payerId, ...cards.map((card) => card.id));
+    categories.push(categoryId);
+
+    await asMember(async (tx) => {
+      await tx`
+        insert into accounts (
+          id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (
+          ${payerId}, ${scope.memberUserId}, ${`Cuenta pagadora Q9 ${stamp}`}, 'asset', 'bank',
+          ${900_000_000}, ${todayInBogota()})`;
+      await tx`
+        insert into categories (id, owner_user_id, name, kind, color)
+        values (${categoryId}, ${scope.memberUserId}, ${`Compra Q9 ${stamp}`}, 'expense', '#4C8C4A')`;
+
+      for (const card of cards) {
+        await tx`
+          insert into accounts (
+            id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+          values (
+            ${card.id}, ${scope.memberUserId}, ${card.name}, 'liability', 'card',
+            ${-(card.owedCents ?? 0)}, ${todayInBogota()})`;
+        await tx`
+          insert into debt_terms (
+            account_id, debt_kind, annual_rate, minimum_payment_cents,
+            credit_limit_cents, statement_cut_off_day, payment_due_day)
+          values (
+            ${card.id}, 'revolving', ${MEMBER_TERMS_RATE},
+            ${card.withMinimum ? Q9_MINIMUM_CENTS : null},
+            ${card.withMinimum ? 100_000_000 : null},
+            ${card.withMinimum ? 15 : null}, ${card.withMinimum ? 5 : null})`;
+
+        if (card.creditCents !== undefined) {
+          await tx`
+            insert into transactions (
+              from_account_id, to_account_id, amount_cents, occurred_at, description)
+            values (${payerId}, ${card.id}, ${card.creditCents}, ${todayInBogota()}, ${`Abono Q9 ${stamp}`})`;
+        }
+        if (card.usd !== undefined) {
+          // The ledger refuses a dollar movement with no peso amount, and a
+          // billed one leaves no dollar pocket, so a dollar balance with no
+          // estimate behind it is written by taking the estimate off a valid
+          // purchase with the triggers off: the row the screen must draw
+          // without a parenthesis.
+          const [movement] = await tx<{ id: string }[]>`
+            insert into transactions (
+              from_account_id, amount_cents, occurred_at, description,
+              currency, counter_amount_cents, counter_is_estimate)
+            values (
+              ${card.id}, ${card.usd.cents}, ${todayInBogota()}, ${`Compra en dólares Q9 ${stamp}`},
+              'USD', ${card.usd.estimateCents ?? 1}, true)
+            returning id`;
+          await tx`
+            insert into transaction_splits (transaction_id, category_id, amount_cents)
+            values (${movement.id}, ${categoryId}, ${card.usd.cents})`;
+          if (card.usd.estimateCents === null) {
+            await tx`set local session_replication_role = replica`;
+            await tx`
+              update transactions
+              set counter_is_estimate = false, counter_amount_cents = null
+              where id = ${movement.id}`;
+            await tx`set local session_replication_role = origin`;
+          }
+        }
+      }
+    });
+  }
+
+  for (const [bandLabel, width] of [
+    ["phone", 360],
+    ["laptop", 1280],
+  ] as const) {
+    const laptop = width >= 1024;
+
+    test.describe(bandLabel, () => {
+      test.use({ viewport: { width, height: 900 } });
+
+      function rowOf(page: Page, name: string, id: string): Locator {
+        return laptop
+          ? page.getByRole("table", { name: debts.title }).getByRole("row").filter({ hasText: name })
+          : band(page)
+              .getByText(name, { exact: true })
+              .locator(`xpath=ancestor::*[.//a[@href="/es/planning/debts/${id}"]][1]`);
+      }
+
+      const FULL_LINE =
+        /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/;
+      const BILLED_LINE = /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?$/;
+      const START_OF_LINE = /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25/;
+
+      function lineOf(page: Page, card: MemberCard): Locator {
+        return rowOf(page, card.name, card.id).getByText(START_OF_LINE);
+      }
+
+      test("Q9: the row reads the credit, what is owed in dollars and what is still to bill", async ({
+        page,
+      }) => {
+        const card: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+        };
+        await seedFund([card]);
+        await page.goto("/es/planning/debts");
+
+        const line = lineOf(page, card);
+        await expect(line).toHaveText(FULL_LINE);
+
+        // «A favor $ 8.000» is the accent's and the rest is the normal ink.
+        const accent = await accentInk(page);
+        const holders = await holdersOf(line, "A favor $ 8.000");
+        expect(holders).toHaveLength(1);
+        expect(holders[0].ink).toBe(accent);
+        for (const rest of [/Debes/, /por facturar/]) {
+          const inks = await inkOfText(line, rest);
+          expect(inks.length).toBeGreaterThan(0);
+          for (const ink of inks) expect(ink).not.toBe(accent);
+        }
+      });
+
+      test("Q9: with no estimate pending the row names the dollars and draws no parenthesis", async ({
+        page,
+      }) => {
+        const card: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 sin estimado ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: null },
+        };
+        await seedFund([card]);
+        await page.goto("/es/planning/debts");
+
+        await expect(lineOf(page, card)).toHaveText(BILLED_LINE);
+        await expect(rowOf(page, card.name, card.id)).not.toContainText("(");
+      });
+
+      test("Q9: the figures are never summed, Deuda total in pesos does not move", async ({
+        page,
+      }) => {
+        const credited: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 suma ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+        };
+        const peso: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 en pesos ${bandLabel} ${stamp}`,
+          owedCents: Q9_PESO_OWED_CENTS,
+        };
+        await seedFund([credited, peso]);
+        await page.goto("/es/planning/debts");
+        await expect(lineOf(page, credited)).toHaveText(FULL_LINE);
+
+        const shown = band(page);
+        const totals = laptop
+          ? tileValue(shown, debts.tileTotal)
+          : shown
+              .getByText(new RegExp(`^${debts.total}`))
+              .locator("xpath=following-sibling::*[1]");
+        await expect(totals).toHaveCount(2);
+        // Pesos first: only what the peso card owes, with neither the credit
+        // taken off, nor the dollars added, nor the estimate.
+        expect(await digitsOf(totals.nth(0))).toBe(pesos(Q9_PESO_OWED_CENTS));
+        // The dollar set: what the purchase owes, in dollars.
+        expect(await digitsOf(totals.nth(1))).toBe(Q9_USD_CENTS);
+        expect(await totals.nth(1).innerText()).toContain("US$");
+      });
+
+      test("Q9: a card that owes pesos keeps today's drawing beside the dollar pocket", async ({
+        page,
+      }) => {
+        const card: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 debe ${bandLabel} ${stamp}`,
+          owedCents: Q9_OWED_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+        };
+        await seedFund([card]);
+        await page.goto("/es/planning/debts");
+
+        const figure = laptop
+          ? rowOf(page, card.name, card.id).getByRole("cell").nth(6)
+          : band(page)
+              .getByText(card.name, { exact: true })
+              .locator("xpath=../following-sibling::*[1]");
+        await expect(figure).toBeVisible();
+        const lines = (await figure.innerText())
+          .split("\n")
+          .map((line) => flat(line))
+          .filter((line) => line !== "");
+        expect(lines).toHaveLength(2);
+        expect(lines[0]).toBe(`$ ${groupedPesos(Q9_OWED_CENTS)}`);
+        expect(lines[1]).toMatch(/^US\$ 25([.,]00)?$/);
+      });
+
+      test("Próximo pago: a fund whose only due card is in credit reads «—» and names no date", async ({
+        page,
+      }) => {
+        const card: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta a favor con pago ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          withMinimum: true,
+        };
+        await seedFund([card]);
+        await page.goto("/es/planning/debts");
+        await expect(rowOf(page, card.name, card.id)).toBeVisible();
+
+        const label = band(page).getByText(debts.tileNextPayment, { exact: true }).first();
+        await expect(label).toBeVisible();
+        const tile = label.locator("xpath=..");
+        // textContent: the label is drawn in capitals, which innerText returns.
+        expect(flat((await tile.textContent()) ?? "")).toMatch(
+          new RegExp(`^${debts.tileNextPayment}\\s*${NO_VALUE}$`),
+        );
+      });
+
+      test("Próximo pago: a fund with a card that owes names that card's minimum and date", async ({
+        page,
+      }) => {
+        const credited: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta a favor sin pago ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          withMinimum: true,
+        };
+        const owing: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta con pago ${bandLabel} ${stamp}`,
+          owedCents: Q9_OWED_CENTS,
+          withMinimum: true,
+        };
+        await seedFund([credited, owing]);
+        await page.goto("/es/planning/debts");
+        await expect(rowOf(page, owing.name, owing.id)).toBeVisible();
+
+        const label = band(page).getByText(debts.tileNextPayment, { exact: true }).first();
+        const text = flat(
+          await (laptop ? label.locator("xpath=..") : band(page)).innerText(),
+        );
+        if (laptop) {
+          // The tile: the owing card's minimum, then its date and its name.
+          expect(digitsIn(await label.locator("xpath=following-sibling::*[1]").innerText())).toBe(
+            pesos(Q9_MINIMUM_CENTS),
+          );
+          expect(text).toMatch(new RegExp(`\\d{1,2} \\p{L}+\\.? · ${owing.name}$`, "u"));
+          expect(text).not.toContain(credited.name);
+        } else {
+          expect(text).toMatch(
+            new RegExp(
+              `Próximo pago · \\$ ${groupedPesos(Q9_MINIMUM_CENTS)} el \\d{1,2} \\p{L}+`,
+              "u",
+            ),
+          );
+        }
+      });
+    });
+  }
+});

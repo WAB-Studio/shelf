@@ -43,6 +43,7 @@ export type PaymentDebt = {
   accountId: string;
   name: string;
   owedCents: number;
+  creditCents: number;
 };
 
 export type PaymentSource = {
@@ -102,6 +103,8 @@ function PaymentForm({
   // Root-scoped: the keys under `common` and `debts` sit outside this namespace.
   const tKey = useTranslations();
   const locale = useLocale();
+  // The words around the amount, which `Money` draws inside its own span.
+  const inFavour = tKey("debts.inFavour", { amount: "\u0000" }).split("\u0000");
 
   // One key per opening: a payment sent again after a lost answer carries the same one, and
   // the form unmounts on close, so the next opening mints its own.
@@ -182,12 +185,25 @@ function PaymentForm({
         <Field>
           <FieldLabel>{tKey("debts.tableBalance")}</FieldLabel>
           <Text size="3">
-            <Money
-              minor={debt.owedCents}
-              currency={currency}
-              size="inherit"
-              signed={false}
-            />
+            {debt.creditCents > 0 ? (
+              <Money
+                minor={debt.creditCents}
+                currency={currency}
+                tone="credit"
+                size="inherit"
+                words={{
+                  before: inFavour[0],
+                  after: inFavour[1] ?? "",
+                }}
+              />
+            ) : (
+              <Money
+                minor={debt.owedCents}
+                currency={currency}
+                size="inherit"
+                signed={false}
+              />
+            )}
           </Text>
         </Field>
 

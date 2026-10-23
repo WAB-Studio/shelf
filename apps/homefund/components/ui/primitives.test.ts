@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { createElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import { type ComponentProps, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { AmountField } from "./amount-field";
 import { Disc } from "./disc";
 import { Eyebrow } from "./eyebrow";
 import { Figure } from "./figure";
+import { Money, type MoneyProps } from "./money";
 import { RawText } from "./raw-text";
 import { ToneSurface } from "./tone-surface";
 import { Stepper } from "./stepper";
@@ -108,4 +110,70 @@ test("panel.module.css draws the notice card at 560px with a 16px corner", () =>
   const css = readFileSync(new URL("./panel.module.css", import.meta.url), "utf8");
   assert.match(css, /\[data-variant="notice"\]\s*\{[^}]*width: 560px;[^}]*padding: 34px 32px;/);
   assert.match(css, /\.panel\s*\{[^}]*border-radius: 16px;/);
+});
+
+// ICU separates the mark from the figure with a no-break space.
+const money = (props: MoneyProps) =>
+  html(
+    createElement(
+      NextIntlClientProvider,
+      { locale: "es", messages: {} } as ComponentProps<typeof NextIntlClientProvider>,
+      createElement(Money, props),
+    ),
+  ).replaceAll("\u00a0", " ");
+
+const textOf = (markup: string) => markup.replace(/<[^>]*>/g, "");
+
+test("Money with no tone renders the markup it always has", () => {
+  assert.equal(
+    money({ minor: 15_000_000, currency: "COP" }),
+    '<span style="font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">$ 150.000</span>',
+  );
+  assert.equal(
+    money({ minor: -2_500, currency: "USD", size: "figure" }),
+    '<span style="font-size:23px;font-weight:700;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;white-space:nowrap">\u2212US$ 25,00</span>',
+  );
+});
+
+test("Money in credit inks the accent and never writes a sign", () => {
+  for (const signed of [true, false] as const) {
+    const out = money({ minor: 15_000_000, currency: "COP", tone: "credit", signed });
+    assert.match(out, /color:var\(--accent-11\)/);
+    assert.equal(textOf(out), "$ 150.000");
+  }
+  assert.doesNotMatch(textOf(money({ minor: 2_500, currency: "USD", tone: "credit" })), /[+\u2212-]/);
+});
+
+test("Money draws its words inside its one span, in its ink", () => {
+  const out = money({
+    minor: 15_000_000,
+    currency: "COP",
+    tone: "credit",
+    size: "inherit",
+    words: { before: "A favor ", after: "" },
+  });
+  assert.equal(out.match(/<span/g)?.length, 1);
+  assert.match(out, /^<span[^>]*color:var\(--accent-11\)[^>]*>A favor \$ 150\.000<\/span>$/);
+
+  const wrapped = money({
+    minor: 10_500_000,
+    currency: "COP",
+    words: { before: "(", after: " por facturar)" },
+  });
+  assert.equal(wrapped.match(/<span/g)?.length, 1);
+  assert.equal(textOf(wrapped), "($ 105.000 por facturar)");
+  assert.doesNotMatch(wrapped, /color:/);
+});
+
+test("the foreign-pocket words exist in both languages with their amount slot", () => {
+  const catalogue = (locale: string) =>
+    JSON.parse(
+      readFileSync(new URL(`../../messages/${locale}.json`, import.meta.url), "utf8"),
+    ).debts as Record<string, string>;
+  const es = catalogue("es");
+  const en = catalogue("en");
+  assert.equal(es.owesForeign, "Debes {amount}");
+  assert.equal(es.toBill, "(\u2248 {amount} por facturar)");
+  assert.equal(en.owesForeign, "You owe {amount}");
+  assert.equal(en.toBill, "(\u2248 {amount} to be billed)");
 });

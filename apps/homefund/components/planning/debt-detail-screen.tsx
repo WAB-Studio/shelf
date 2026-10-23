@@ -375,6 +375,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             accountId: account.id,
             name: account.name,
             owedCents,
+            creditCents,
           }}
           currency={currency}
           payFrom={payFrom}
