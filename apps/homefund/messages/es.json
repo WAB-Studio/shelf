@@ -553,6 +553,8 @@
     "confirmedToast": "Movimiento confirmado.",
     "deleteTitle": "Eliminar movimiento",
     "deleteDescription": "Esta acción no se puede deshacer.",
+    "deleteSettlesPayment": "Este movimiento saldó «{name}». Al eliminarlo, el pago vuelve a «Por pagar».",
+    "deleteSettlesPaymentUnnamed": "Este movimiento saldó un pago planeado. Al eliminarlo, el pago vuelve a «Por pagar».",
     "splitAddCategory": "Agregar categoría",
     "splitRowCategory": "Categoría {position}",
     "splitRowAmount": "Monto {position}",

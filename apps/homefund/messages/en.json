@@ -553,6 +553,8 @@
     "confirmedToast": "Movement confirmed.",
     "deleteTitle": "Delete movement",
     "deleteDescription": "This action cannot be undone.",
+    "deleteSettlesPayment": "This movement settled “{name}”. Deleting it returns the payment to “To pay”.",
+    "deleteSettlesPaymentUnnamed": "This movement settled a planned payment. Deleting it returns the payment to “To pay”.",
     "splitAddCategory": "Add category",
     "splitRowCategory": "Category {position}",
     "splitRowAmount": "Amount {position}",
