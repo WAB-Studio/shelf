@@ -631,7 +631,7 @@ function CardHead({
         <Icon size={20} />
       </Disc>
       <Flex direction="column" flexGrow="1" minWidth="0">
-        <Text weight="bold" truncate>
+        <Text weight="bold">
           {name}
         </Text>
         <Text size="1" color="gray">

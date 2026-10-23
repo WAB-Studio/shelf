@@ -2724,6 +2724,57 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         }
       });
 
+      test("Q9: at the phone the name reads whole and the line wraps only at its dots", async ({
+        page,
+      }) => {
+        test.skip(laptop, "the laptop table keeps M5's columns");
+        const card: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 ancho ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+        };
+        await seedFund([card]);
+        await page.goto("/es/planning/debts");
+
+        const line = lineOf(page, card);
+        await expect(line).toHaveText(FULL_LINE);
+
+        // The locator waits; the measures read it once it is there.
+        const name = rowOf(page, card.name, card.id).getByText(card.name, { exact: true });
+        await expect(name).toBeVisible();
+        const fit = await name.evaluate((el) => ({
+          scroll: el.scrollWidth,
+          client: el.clientWidth,
+          ellipsis: getComputedStyle(el).textOverflow,
+        }));
+        expect(fit.scroll).toBeLessThanOrEqual(fit.client);
+        expect(fit.ellipsis).not.toBe("ellipsis");
+
+        // The board wraps the line at a dot or before the parenthesis, never inside a word or a figure.
+        const breaks = await line.evaluate((el) => {
+          const marks: { top: number; ch: string }[] = [];
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = node.textContent ?? "";
+            for (let i = 0; i < text.length; i++) {
+              if (/\s/.test(text[i])) continue;
+              const range = document.createRange();
+              range.setStart(node, i);
+              range.setEnd(node, i + 1);
+              const rect = range.getClientRects()[0];
+              if (rect) marks.push({ top: Math.round(rect.top), ch: text[i] });
+            }
+          }
+          const starts: string[] = [];
+          for (let i = 1; i < marks.length; i++) {
+            if (marks[i].top > marks[i - 1].top + 2) starts.push(marks[i].ch);
+          }
+          return starts;
+        });
+        for (const start of breaks) expect(["·", "("]).toContain(start);
+      });
+
       test("Q9: with no estimate pending the row names the dollars and draws no parenthesis", async ({
         page,
       }) => {
