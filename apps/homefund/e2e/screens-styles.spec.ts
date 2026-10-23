@@ -306,7 +306,7 @@ test.describe("planning hub", () => {
 });
 
 test.describe("debts", () => {
-  test("the owed total is tabular, the disc is 42 square, the name truncates and the cut-off column reads right", async ({
+  test("the owed total is tabular, the disc is 42 square, the name wraps whole and the cut-off column reads right", async ({
     page,
   }, testInfo) => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's cards");
@@ -317,7 +317,8 @@ test.describe("debts", () => {
 
     const name = page.getByText(names.debt, { exact: true }).locator("visible=true").first();
     await expect(name).toBeVisible();
-    expect(await computed(name, "text-overflow")).toBe("ellipsis");
+    expect(await computed(name, "text-overflow")).not.toBe("ellipsis");
+    expect(await computed(name, "white-space")).not.toBe("nowrap");
 
     const card = page.locator(".rt-Card:visible").filter({ hasText: names.debt }).first();
     const disc = await squares(card, 42);
