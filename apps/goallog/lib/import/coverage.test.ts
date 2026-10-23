@@ -272,3 +272,19 @@ test("130: held ⇔ none of the section's lines is in outLines, and the count re
   assert.deepEqual([c.notes, c.out], [1, 3]);
   assert.ok(c.outLines.every((o) => o.reason === "noteFull"));
 });
+
+test("130: a section half held by a note and half held by none has no holder", () => {
+  const lines = ["uno", "dos", "tres"];
+  const d = draft(goal({ src: [{ from: 2, to: 3 }], note: "uno", noteSrc: [{ from: 1, to: 1 }] }));
+  assert.equal(coverage(d, source(lines), none, none).out, 0);
+  assert.equal(sectionHolder(d, { from: 1, to: 1 }, source(lines))?.goalName, "IA aplicada");
+  assert.equal(sectionHolder(d, { from: 1, to: 2 }, source(lines)), null);
+});
+
+test("130: a section no note holds, though nothing is out, has no holder and does not crash", () => {
+  const lines = ["uno", "dos"];
+  const d = draft(goal({ src: [{ from: 1, to: 2 }] }));
+  assert.equal(coverage(d, source(lines), none, none).out, 0);
+  assert.equal(sectionHolder(d, { from: 1, to: 2 }, source(lines)), null);
+  assert.equal(sectionHolder(draft(), { from: 1, to: 2 }, source(lines), []), null);
+});
