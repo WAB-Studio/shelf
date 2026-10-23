@@ -456,6 +456,13 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
     «un pago planeado» when it has no name; one that settled nothing keeps «Esta acción no se puede deshacer.» Pending: both
     buttons disabled, a spinner on «Eliminar». Refused: the action's own toast, the dialog stays. Done: the payment is under
     «Por pagar» in Planeación. The laptop detail and the list row use the same dialog: no 1280 board.
+- **Decided by the user 2026-10-23, after oleada-6's critic:**
+  - Toasts draw above dialogs in the whole app, so a refusal raised from a dialog is seen. RF-162's refusal also shows inside
+    the movement form, beside the date, and inside the account form, beside the opening day.
+  - «Abonar» on a card whose pesos are in credit while another pocket owes reads the row's whole line: «A favor $ 8.000 ·
+    Debes US$ 25,00 (≈ $ 105.000 por facturar)», under the card's name (fourth state of `DeudasAbonarAFavorMovil`).
+  - A bank notice in the Bandeja dated before its account's opening is incomplete: «Anotar» opens the form with the date
+    showing, never the one-tap save.
   - `DeudasAbonarAFavorMovil` (M5): the dialog's balance beside the debt's name. Owing: the amount in ink. In credit: «A favor
     $ 150.000» whole in the accent, no sign. At zero: «$ 0» in ink.
   - `DeudasProximoPagoSinDeudaMovil` (M5): with only cards in credit or at zero, «Próximo pago» reads «—» and has no note.

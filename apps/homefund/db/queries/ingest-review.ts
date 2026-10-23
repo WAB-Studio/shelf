@@ -5,6 +5,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
 import {
+  accounts,
   ingestDeliveries,
   ingestMerchants,
   ingestShapes,
@@ -27,6 +28,8 @@ export type PendingDeliveryRow = {
   proposedOccurredAt: string | null;
   proposedDescription: string | null;
   isComplete: boolean;
+  // The proposal is dated before its account opened, so the database would refuse it (MO001).
+  beforeOpening: boolean;
   createdAt: Date;
 };
 
@@ -61,6 +64,19 @@ export type RejectDeliveryArgs = {
   silenceShape: boolean;
 };
 
+function isBeforeOpening(
+  row: Pick<PendingDeliveryRow, "proposedOccurredAt"> & {
+    accountOpeningOn: string | null;
+  },
+): boolean {
+  // ISO days compare as text.
+  return (
+    row.proposedOccurredAt !== null &&
+    row.accountOpeningOn !== null &&
+    row.proposedOccurredAt < row.accountOpeningOn
+  );
+}
+
 function isComplete(
   row: Pick<
     PendingDeliveryRow,
@@ -68,8 +84,12 @@ function isComplete(
     | "proposedAccountId"
     | "proposedCategoryId"
     | "categorySource"
-  >,
+    | "proposedOccurredAt"
+  > & { accountOpeningOn: string | null },
 ): boolean {
+  // A day before the account opened cannot be one tap.
+  if (isBeforeOpening(row)) return false;
+
   return (
     row.proposedAmountCents !== null &&
     row.proposedAccountId !== null &&
@@ -97,8 +117,10 @@ export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
         proposedOccurredAt: ingestDeliveries.proposedOccurredAt,
         proposedDescription: ingestDeliveries.proposedDescription,
         createdAt: ingestDeliveries.createdAt,
+        accountOpeningOn: accounts.initialBalanceOn,
       })
       .from(ingestDeliveries)
+      .leftJoin(accounts, eq(accounts.id, ingestDeliveries.proposedAccountId))
       .leftJoin(
         ingestMerchants,
         and(
@@ -109,7 +131,11 @@ export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
       .where(eq(ingestDeliveries.status, "pending"))
       .orderBy(asc(ingestDeliveries.createdAt));
 
-    return rows.map((row) => ({ ...row, isComplete: isComplete(row) }));
+    return rows.map(({ accountOpeningOn, ...row }) => ({
+      ...row,
+      isComplete: isComplete({ ...row, accountOpeningOn }),
+      beforeOpening: isBeforeOpening({ ...row, accountOpeningOn }),
+    }));
   });
 }
 

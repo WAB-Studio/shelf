@@ -19,6 +19,10 @@ const common = messages.common;
 
 const scope = readScope();
 
+// The refusal's words, read from the file the form reads.
+const BEFORE_OPENING = messages.errors.movementBeforeOpening;
+const BEFORE_OPENING_NOTE = /anterior a la apertura de la cuenta/;
+
 // 45.000 pesos, as the card reads it and as the prefilled form carries it.
 const AMOUNT_CENTS = 4500000;
 const AMOUNT_PESOS = "45000";
@@ -464,5 +468,106 @@ test.describe("the queue at 360 px", () => {
         `control ${index} named ${JSON.stringify(await control.textContent())}`,
       ).toBeGreaterThanOrEqual(32);
     }
+  });
+});
+
+// A notice dated before its account opened can never be recorded (MO001), so it
+// reads as incomplete and its accept opens the form carrying that date; a notice
+// dated on the opening day keeps the one tap.
+test.describe("a notice dated before its account opened", () => {
+  async function dateDelivery(id: string, offsetDays: number): Promise<string> {
+    const [row] = await fixtureSql<{ day: string }[]>`
+      update ingest_deliveries
+      set proposed_occurred_at = (
+        select initial_balance_on + ${offsetDays}::int from accounts where id = ${scope.accountId})
+      where id = ${id}
+      returning proposed_occurred_at::text as day`;
+    return row.day;
+  }
+
+  test.beforeEach(async () => {
+    await clearLedger();
+  });
+
+  test.describe("the laptop band", () => {
+    test.use({ viewport: { width: 1280, height: 900 } });
+
+    test("is incomplete and its accept opens the form with that date, writing nothing", async ({
+      page,
+    }) => {
+      const [id] = await seedQueue([complete]);
+      const day = await dateDelivery(id, -1);
+      await page.goto("/es/inbox");
+
+      const row = page
+        .getByRole("table", { name: ingest.title })
+        .getByRole("row")
+        .filter({ hasText: TRUSTED });
+      await expect(
+        row.getByText(ingest.stateIncomplete, { exact: true }),
+      ).toBeVisible();
+      await expect(row.getByText(BEFORE_OPENING_NOTE)).toBeVisible();
+
+      await rowActions(page, TRUSTED).click();
+      await page
+        .getByRole("menuitem", { name: ingest.accept, exact: true })
+        .click();
+
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day);
+      await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
+      await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
+
+      const movements = await fixtureSql<{ id: string }[]>`
+        select id from transactions where owner_user_id = ${scope.userId}`;
+      expect(movements).toHaveLength(0);
+    });
+
+    test("keeps the one tap on the opening day", async ({ page }) => {
+      const [id] = await seedQueue([complete]);
+      await dateDelivery(id, 0);
+      await page.goto("/es/inbox");
+
+      const row = page
+        .getByRole("table", { name: ingest.title })
+        .getByRole("row")
+        .filter({ hasText: TRUSTED });
+      await expect(
+        row.getByText(ingest.stateComplete, { exact: true }),
+      ).toBeVisible();
+      await expect(row.getByText(BEFORE_OPENING_NOTE)).toHaveCount(0);
+    });
+  });
+
+  test.describe("the phone list", () => {
+    test.use({ viewport: { width: 360, height: 740 } });
+
+    test("offers review, never the one tap, and opens the form with that date", async ({
+      page,
+    }) => {
+      const [id] = await seedQueue([complete]);
+      const day = await dateDelivery(id, -1);
+      await page.goto("/es/inbox");
+
+      await expect(acceptButton(page)).toHaveCount(0);
+      await expect(band(page).getByText(BEFORE_OPENING_NOTE)).toBeVisible();
+      await reviewButton(page).click();
+
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day);
+      await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
+      await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
+    });
+
+    test("keeps the one tap on the opening day", async ({ page }) => {
+      const [id] = await seedQueue([complete]);
+      await dateDelivery(id, 0);
+      await page.goto("/es/inbox");
+
+      await expect(acceptButton(page)).toHaveCount(1);
+      await expect(reviewButton(page)).toHaveCount(0);
+    });
   });
 });

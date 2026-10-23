@@ -4255,6 +4255,8 @@ async function main(): Promise<void> {
   await o6m2DebtsAndSettledSuite();
   await o6m3BackupRestoreSuite();
   await o7m11bSurvivorsSuite();
+  await o6m7OpeningRefusalsSuite();
+  await detailPocketToBillSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -7197,6 +7199,7 @@ async function importCategoryScopeSuite(): Promise<void> {
     ownerUserId: owner === "user" ? U : null,
     groupId: owner === "group" ? G : null,
     settlementCurrency: "COP",
+    initialBalanceOn: "2026-01-01",
   });
 
   const mercadoOwn = cat("M28 Mercado", "expense", "user");
@@ -13920,3 +13923,411 @@ async function o7m11bSurvivorsSuite(): Promise<void> {
   console.log(`REPORT  o7m11b: commits refused in words by the ${refusedBy.join(", ") || "no"} bucket(s).`);
 }
 
+// O6-M7 (RF-162, RF-51): the database refuses a movement dated before the opening of an account it names (MO001) and an
+// opening moved past a movement (MO002). The words come from `handleServerError` alone, through every action that writes
+// a movement; the import preview refuses the same row on `occurredAt`, and the commit names it if a row slips past.
+async function o6m7OpeningRefusalsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const OPENING = shiftDate(today, -10);
+  const BEFORE = shiftDate(today, -11);
+  const MOVEMENT_KEY = "errors.movementBeforeOpening";
+  const OPENING_KEY = "accounts.errors.openingAfterMovement";
+  const IMPORT_KEY = "data.import.errors.beforeOpening";
+  // The statements `readImportScope` put on the wire under the harness before this module (oleada-6 at ab45f478); it
+  // reads one more column and no more.
+  const SCOPE_TRIPS = 24;
+  const show = (value: unknown) => JSON.stringify(value ?? "nothing");
+
+  type Said = { serverError?: string; validationErrors?: unknown; data?: Record<string, unknown> } | undefined;
+  type Call = (input: Record<string, unknown>) => Promise<Said>;
+  const movements = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: Call;
+    updateTransactionAction: Call;
+  };
+  const planning = (await import("@/app/actions/planned-payments")) as unknown as { settlePlannedPaymentAction: Call };
+  const installments = (await import("@/app/actions/installment-plans")) as unknown as { recordDebtPaymentAction: Call };
+  const cashActions = (await import("@/app/actions/cash")) as unknown as { withdrawCashAction: Call };
+  const inbox = (await import("@/app/actions/ingest")) as unknown as { acceptDeliveryAction: Call };
+  const said = (result: { serverError?: string; validationErrors?: unknown } | undefined) => `serverError = ${result?.serverError ?? "none"}, validation = ${show(result?.validationErrors)}`;
+
+  const user = await createMembershipFreeUser();
+  const open = async (name: string, kind: "asset" | "liability", subtype: string, balanceOn: string, currency: "COP" | "USD" = "COP") => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness o6m7 ${name} ${tag}`,
+        kind,
+        subtype,
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: currency,
+        amountMinor: 100_000_000,
+        balanceOn,
+      } as never),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await open("banco", "asset", "bank", OPENING);
+  const later = await open("banco tardio", "asset", "bank", shiftDate(today, -2));
+  const card = await open("tarjeta", "liability", "card", OPENING);
+  const dollars = await open("dolares", "asset", "bank", OPENING, "USD");
+  const cashSource = await open("origen efectivo", "asset", "bank", OPENING);
+  const lonely = await open("con movimiento", "asset", "bank", OPENING);
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness o6m7 categoria ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),
+  );
+  track("categories", categoryId);
+
+  const expense = (over: Record<string, unknown> = {}) => ({
+    fromAccountId: bank,
+    toAccountId: null,
+    amount: "100",
+    occurredAt: shiftDate(today, -5),
+    description: `Harness o6m7 gasto ${tag}`,
+    splits: [{ categoryId, amount: "100" }],
+    labelIds: [],
+    ...over,
+  });
+  const create = (over: Record<string, unknown> = {}) => asUser(user, () => movements.createTransactionAction(expense(over)));
+  const stored = async (account: string) =>
+    fixtureSql<{ id: string; occurred_at: string }[]>`
+      select id, occurred_at::text as occurred_at from transactions where from_account_id = ${account} or to_account_id = ${account}`;
+  const trackStored = async (account: string) => {
+    for (const row of await stored(account)) track("transactions", row.id);
+  };
+
+  // ---- Create, and the day itself.
+  const refusedCreate = await create({ occurredAt: BEFORE });
+  const onTheDay = await create({ occurredAt: OPENING, description: `Harness o6m7 dia ${tag}` });
+  await trackStored(bank);
+  assert(
+    next("createTransactionAction dated the day before the opening answers errors.movementBeforeOpening and writes nothing"),
+    refusedCreate?.serverError === MOVEMENT_KEY && (await stored(bank)).every((row) => row.occurred_at !== BEFORE),
+    said(refusedCreate),
+  );
+  assert(
+    next("createTransactionAction dated the opening day itself is booked"),
+    onTheDay?.serverError === undefined && onTheDay?.data?.ok === true && (await stored(bank)).some((row) => row.occurred_at === OPENING),
+    said(onTheDay),
+  );
+  const transferToLater = await create({ toAccountId: later, splits: [], occurredAt: shiftDate(today, -5), description: `Harness o6m7 traslado ${tag}` });
+  assert(
+    next("A transfer is refused when only its destination account opens after the day"),
+    transferToLater?.serverError === MOVEMENT_KEY && (await stored(later)).length === 0,
+    said(transferToLater),
+  );
+
+  // ---- Update.
+  const booked = await create({ description: `Harness o6m7 editar ${tag}` });
+  const bookedId = booked?.data?.transactionId as string | undefined;
+  await trackStored(bank);
+  const [bookedStamp] = await fixtureSql<{ stamp: string }[]>`select updated_at::text as stamp from transactions where id = ${bookedId ?? randomUUID()}`;
+  const moved = await asUser(user, () =>
+    movements.updateTransactionAction({ transactionId: bookedId, expectedUpdatedAt: bookedStamp?.stamp, ...expense({ occurredAt: BEFORE, description: `Harness o6m7 editar ${tag}` }) }),
+  );
+  const [afterMove] = await fixtureSql<{ occurred_at: string }[]>`select occurred_at::text as occurred_at from transactions where id = ${bookedId ?? randomUUID()}`;
+  assert(
+    next("updateTransactionAction moving the date before the opening answers the same key and keeps the stored day"),
+    bookedId !== undefined && moved?.serverError === MOVEMENT_KEY && afterMove?.occurred_at === shiftDate(today, -5),
+    `${said(moved)}; stored day ${afterMove?.occurred_at}`,
+  );
+
+  // ---- The other writers.
+  const { plannedPaymentId } = await asUser(user, () =>
+    createPlannedPayment({
+      fromAccountId: bank,
+      toAccountId: null,
+      amountCents: 5_000,
+      categoryId,
+      dueDate: today,
+      remindOn: null,
+      description: `Harness o6m7 por pagar ${tag}`,
+    }),
+  );
+  track("planned_payments", plannedPaymentId);
+  const settled = await asUser(user, () => planning.settlePlannedPaymentAction({ plannedPaymentId, occurredAt: BEFORE }));
+  assert(
+    next("settlePlannedPaymentAction dated before the opening answers the same key and leaves the payment pending"),
+    settled?.serverError === MOVEMENT_KEY && (await readColumn<string>("planned_payments", "id", plannedPaymentId, "status")) === "pending",
+    `${said(settled)}; status ${await readColumn("planned_payments", "id", plannedPaymentId, "status")}`,
+  );
+
+  const paid = await asUser(user, () =>
+    installments.recordDebtPaymentAction({ fromAccountId: bank, toAccountId: card, amount: "100", occurredAt: BEFORE }),
+  );
+  assert(
+    next("recordDebtPaymentAction dated before the opening answers the same key"),
+    paid?.serverError === MOVEMENT_KEY && (await stored(card)).length === 0,
+    said(paid),
+  );
+
+  // A withdrawal is dated today, so the opening has to be the one in the future.
+  await fixtureSql`update accounts set initial_balance_on = ${shiftDate(today, 3)}::date where id = ${cashSource}`;
+  const withdrawn = await asUser(user, () => cashActions.withdrawCashAction({ sourceAccountId: cashSource, amount: "100" }));
+  assert(
+    next("withdrawCashAction from an account that opens after today answers the same key and moves no cash"),
+    withdrawn?.serverError === MOVEMENT_KEY && (await stored(cashSource)).length === 0,
+    said(withdrawn),
+  );
+
+  const claims = JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" });
+  const deliveryId = await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    const [row] = await tx<{ id: string }[]>`
+      insert into ingest_deliveries (external_ref, raw_text, shape_hash)
+      values (${`harness-o6m7-${tag}`}, ${`Harness o6m7 mensaje ${tag}`}, ${createHash("sha256").update(`o6m7-${tag}`).digest("hex")})
+      returning id`;
+    return row.id;
+  });
+  const accepted = await asUser(user, () =>
+    inbox.acceptDeliveryAction({
+      deliveryId,
+      fromAccountId: bank,
+      toAccountId: null,
+      amount: "100",
+      occurredAt: BEFORE,
+      description: `Harness o6m7 bandeja ${tag}`,
+      splits: [{ categoryId, amount: "100" }],
+      labelIds: [],
+    }),
+  );
+  assert(
+    next("acceptDeliveryAction dated before the opening answers the same key and leaves the proposal pending"),
+    accepted?.serverError === MOVEMENT_KEY && (await readColumn<string>("ingest_deliveries", "id", deliveryId, "status")) === "pending",
+    `${said(accepted)}; status ${await readColumn("ingest_deliveries", "id", deliveryId, "status")}`,
+  );
+
+  // ---- The opening moved past a movement.
+  await asUser(user, () => movements.createTransactionAction(expense({ fromAccountId: lonely, description: `Harness o6m7 solo ${tag}` })));
+  await trackStored(lonely);
+  const stamp = async () => (await fixtureSql<{ stamp: string }[]>`select updated_at::text as stamp from accounts where id = ${lonely}`)[0].stamp;
+  const editOpening = async (balanceOn: string) =>
+    asUser(user, async () =>
+      updateAccountAction({
+        accountId: lonely,
+        expectedUpdatedAt: await stamp(),
+        name: `Harness o6m7 con movimiento ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        isShared: false,
+        institution: "",
+        lastFour: "",
+        settlementCurrency: "COP",
+        amount: "1000000",
+        balanceOn,
+      }),
+    );
+  const openingOf = async () => (await fixtureSql<{ day: string }[]>`select initial_balance_on::text as day from accounts where id = ${lonely}`)[0].day;
+  const pastMovement = await editOpening(shiftDate(today, -3));
+  const openingAfterRefusal = String(await openingOf());
+  assert(
+    next("updateAccountAction moving the opening past a movement answers accounts.errors.openingAfterMovement and keeps the day"),
+    pastMovement?.serverError === OPENING_KEY && openingAfterRefusal === OPENING,
+    `${said(pastMovement)}; opening ${openingAfterRefusal}`,
+  );
+  const upToMovement = await editOpening(shiftDate(today, -5));
+  assert(
+    next("updateAccountAction moving the opening up to the day of its first movement is saved"),
+    upToMovement?.serverError === undefined && (await openingOf()) === shiftDate(today, -5),
+    `${said(upToMovement)}; opening ${await openingOf()}`,
+  );
+
+  // ---- What is not these two codes reads as before.
+  const crossCurrency = await create({ fromAccountId: bank, toAccountId: dollars, splits: [], description: `Harness o6m7 divisas ${tag}` });
+  assert(
+    next("A transfer between a peso and a dollar account still answers transactions.errors.currencyMismatch"),
+    crossCurrency?.serverError === "transactions.errors.currencyMismatch",
+    said(crossCurrency),
+  );
+  const strangerAccount = await create({ fromAccountId: randomUUID(), description: `Harness o6m7 ajena ${tag}` });
+  assert(
+    next("A movement from an account that does not exist still answers errors.notFound, never the opening words"),
+    strangerAccount?.serverError === "errors.notFound",
+    said(strangerAccount),
+  );
+
+  // ---- The import preview.
+  const importScope = await asUser(user, () => readImportScope());
+  const scoped = (id: string) => importScope.accounts.find((account) => account.id === id) as unknown as { initialBalanceOn?: string } | undefined;
+  assert(
+    next("The import scope hands the pipeline each account's opening day"),
+    scoped(bank)?.initialBalanceOn === OPENING && scoped(later)?.initialBalanceOn === shiftDate(today, -2),
+    `bank ${scoped(bank)?.initialBalanceOn}, later ${scoped(later)?.initialBalanceOn}`,
+  );
+  const tripsBefore = roundTrips();
+  await asUser(user, () => readImportScope());
+  const scopeTrips = roundTrips() - tripsBefore;
+  assert(next("The import scope read spends the round trips it spent before"), scopeTrips === SCOPE_TRIPS, `${scopeTrips} round trips, expected ${SCOPE_TRIPS}`);
+
+  const bankName = `Harness o6m7 banco ${tag}`;
+  const row = (account: string, occurredAt: string, over: Record<string, string | number | boolean | null> = {}): RawRow => ({
+    externalRef: null,
+    fromAccount: account,
+    toAccount: null,
+    amount: 100,
+    currency: null,
+    category: `Harness o6m7 categoria ${tag}`,
+    occurredAt,
+    description: `Harness o6m7 fila ${tag}`,
+    adjustment: null,
+    ...over,
+  });
+  const preview = (entityRows: RawRow[], newAccounts: RawRow[] = []) => {
+    const refs = buildEffectiveRefs(importScope, (entity) => (entity === "accounts" ? newAccounts : []));
+    const processed = entityRows.map((raw, index) => processRow("transactions", raw, index, index + 2, refs, importScope.existingRefs.transactions));
+    const accountRows = newAccounts.map((raw, index) => processRow("accounts", raw, index, index + 2, refs, importScope.existingRefs.accounts));
+    return { processed, accountRows, errorRows: [...processed, ...accountRows].filter((r) => r.errors.length > 0).length };
+  };
+  const words = (r: { errors: { key: string; column: string | null }[] }) => r.errors.map((e) => `${e.key}@${e.column}`);
+  const wanted = [`${IMPORT_KEY}@occurredAt`];
+
+  const before = preview([row(bankName, BEFORE)]);
+  const onDay = preview([row(bankName, OPENING)]);
+  assert(
+    next("Preview: a row dated the day before an existing account's opening is refused on occurredAt and counted; the opening day is clean"),
+    JSON.stringify(words(before.processed[0])) === JSON.stringify(wanted) &&
+      before.processed[0].object === null &&
+      before.errorRows === 1 &&
+      onDay.processed[0].errors.length === 0 &&
+      onDay.errorRows === 0,
+    `before ${show(words(before.processed[0]))}, on the day ${show(words(onDay.processed[0]))}`,
+  );
+  const lateBank = `Harness o6m7 banco tardio ${tag}`;
+  const lateTransfer = preview([row(bankName, shiftDate(today, -5), { toAccount: lateBank, category: null })]);
+  assert(
+    next("Preview: a transfer is refused when its second account is the one that opens after the day"),
+    JSON.stringify(words(lateTransfer.processed[0])) === JSON.stringify(wanted),
+    show(words(lateTransfer.processed[0])),
+  );
+
+  const freshName = `Harness o6m7 nueva ${tag}`;
+  const fresh: RawRow = {
+    externalRef: `o6m7-${tag}`,
+    name: freshName,
+    kind: "asset",
+    subtype: "bank",
+    placement: "personal",
+    institution: null,
+    amount: 1000,
+    balanceOn: shiftDate(today, -4),
+    settlementCurrency: "COP",
+  };
+  const freshBefore = preview([row(freshName, shiftDate(today, -6))], [fresh]);
+  const freshOnDay = preview([row(freshName, shiftDate(today, -4))], [fresh]);
+  assert(
+    next("Preview: a movement earlier than the opening of an account created in the same file is refused on occurredAt and counted; on the day it is clean"),
+    freshBefore.accountRows.every((r) => r.errors.length === 0) &&
+      JSON.stringify(words(freshBefore.processed[0])) === JSON.stringify(wanted) &&
+      freshBefore.errorRows === 1 &&
+      freshOnDay.errorRows === 0,
+    `before ${show(words(freshBefore.processed[0]))}, on the day ${show(words(freshOnDay.processed[0]))}`,
+  );
+
+  // ---- The commit, handed a row the preview did not stop.
+  const clean = onDay.processed[0];
+  const slipped = { ...clean, sheetRow: 7, object: { ...(clean.object as object), occurredAt: BEFORE } as never };
+  const commitInput: CommitInput = { members: [], categories: [], accounts: [], recurringRules: [], transactions: [slipped], adjustments: [] };
+  let commitError: unknown;
+  try {
+    await asUser(user, () => withUserDb((tx) => commitImport(tx, commitInput, { userId: user.id, groupId: null })));
+  } catch (error) {
+    commitError = error;
+  }
+  let named: { entity?: string; sheetRow?: number; reasonKey?: string } = {};
+  try {
+    named = JSON.parse((commitError as Error).message);
+  } catch {
+    named = {};
+  }
+  const landed = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where owner_user_id = ${user.id} and description = ${`Harness o6m7 fila ${tag}`}`;
+  assert(
+    next("Commit: a row dated before the opening that slipped past the preview is refused naming its row with data.import.errors.beforeOpening"),
+    clean.errors.length === 0 &&
+      commitError instanceof ActionError &&
+      named.entity === "transactions" &&
+      named.sheetRow === 7 &&
+      named.reasonKey === IMPORT_KEY &&
+      landed[0].n === 0,
+    `${show(named)}; rows written ${landed[0].n}; ${commitError === undefined ? "no error" : refusal(commitError)}`,
+  );
+
+  await fixtureSql`delete from ingest_deliveries where owner_user_id = ${user.id}`;
+}
+
+// The detail's pockets carry the same estimate the overview does: a purchase adds, a refund takes away.
+async function detailPocketToBillSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const PURCHASE_ESTIMATE = 10_500_000;
+  const REFUND_ESTIMATE = 2_000_000;
+  const holder = await createMembershipFreeUser();
+  const open = async (kind: "asset" | "liability", name: string, amountMinor: number): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness detail ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const category = async (kind: "expense" | "income"): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness detail ${kind} ${tag}`, kind, parentId: null, color: "#B4542F" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const usd = async (from: string | null, to: string | null, amountCents: number, estimate: number, categoryId: string, label: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: to,
+        amountCents,
+        currency: "USD",
+        counterAmountCents: estimate,
+        counterIsEstimate: true,
+        occurredAt: today,
+        description: `Harness detail ${label} ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const toBill = async (card: string) => {
+    const detail = await asUser(holder, () => getDebtDetail(card));
+    return detail?.account.balances.find((pocket) => pocket.currency === "USD")?.toBillCents;
+  };
+
+  const card = await open("liability", "tarjeta", 0);
+  const expense = await category("expense");
+  const income = await category("income");
+  const none = (await asUser(holder, () => getDebtDetail(card)))?.account.balances.find((pocket) => pocket.currency === "USD");
+  await usd(card, null, 2_500, PURCHASE_ESTIMATE, expense, "compra");
+  const purchaseOnly = await toBill(card);
+  await usd(null, card, 500, REFUND_ESTIMATE, income, "reembolso");
+  const withRefund = await toBill(card);
+  assert(
+    next("Detail pocket to bill: nothing pending is null, a USD purchase estimated at 10500000 reads 10500000, and a USD refund estimated at 2000000 beside it reads 8500000"),
+    none === undefined && purchaseOnly === PURCHASE_ESTIMATE && withRefund === PURCHASE_ESTIMATE - REFUND_ESTIMATE,
+    `no pocket ${none === undefined}, purchase ${purchaseOnly}, with refund ${withRefund}`,
+  );
+}

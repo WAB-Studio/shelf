@@ -77,7 +77,7 @@ type DialogTarget =
   | { mode: "complete"; account: DebtAccount; currency: CurrencyCode }
   | {
       mode: "pay";
-      account: DebtAccount & { creditCents: number };
+      account: DebtAccount & { creditCents: number; otherOwed: DebtPocket[] };
       currency: CurrencyCode;
     }
   | { mode: "plan"; account: DebtAccount; currency: CurrencyCode };
@@ -146,7 +146,7 @@ export function DebtsScreen({
   }
 
   function payTarget(
-    account: DebtAccount & { creditCents: number },
+    account: DebtAccount & { creditCents: number; otherOwed: DebtPocket[] },
     currency: CurrencyCode,
   ) {
     setTarget({ mode: "pay", account, currency });
@@ -384,6 +384,7 @@ export function DebtsScreen({
                 name: row.name,
                 owedCents: row.owedCents,
                 creditCents: row.creditCents,
+                otherOwed: row.otherOwed,
               },
               row.currency,
             )
@@ -501,6 +502,7 @@ export function DebtsScreen({
                           name: row.name,
                           owedCents: row.owedCents,
                           creditCents: row.creditCents,
+                          otherOwed: row.otherOwed,
                         },
                         row.currency,
                       )
@@ -539,6 +541,7 @@ export function DebtsScreen({
                               name: debt.name,
                               owedCents: debt.owedCents,
                               creditCents: debt.creditCents,
+                              otherOwed: debt.otherOwed,
                             },
                             debt.currency,
                           )
@@ -631,7 +634,7 @@ function CardHead({
         <Icon size={20} />
       </Disc>
       <Flex direction="column" flexGrow="1" minWidth="0">
-        <Text weight="bold" truncate>
+        <Text weight="bold">
           {name}
         </Text>
         <Text size="1" color="gray">

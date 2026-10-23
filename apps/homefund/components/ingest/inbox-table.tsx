@@ -14,6 +14,7 @@ import {
   type DataColumn,
 } from "@/components/ui";
 import type { CurrencyCode } from "@/lib/currency";
+import { civilDateToDate } from "@/lib/dates";
 
 // The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
 // translator would ever change.
@@ -34,6 +35,8 @@ export type InboxTableRow = {
   amountMinor: number | null;
   currency: CurrencyCode;
   isComplete: boolean;
+  // The proposal's own day, set only when it is before the account opened.
+  beforeOpeningOn: string | null;
 };
 
 // Tight on purpose: `lg` starts at 1280px (Radix Themes' own breakpoint), and
@@ -170,35 +173,47 @@ export function InboxTable({
       width: WIDTHS.state,
       align: "end",
       cell: (row) => (
-        <Flex align="center" justify="end" gap="2">
-          <Badge color={row.isComplete ? "green" : "amber"}>
-            {row.isComplete ? t("stateComplete") : t("stateIncomplete")}
-          </Badge>
-          <RowMenu
-            rowName={row.merchantLabel ?? t("noMerchant")}
-            items={[
-              {
-                key: "accept",
-                label: t("accept"),
-                // A complete proposal records in one action; an incomplete one
-                // opens the same prefilled form "openForm" does, never writing
-                // on its own (RF-91).
-                onSelect: () =>
-                  row.isComplete ? onAccept(row.id) : onReview(row.id),
-              },
-              {
-                key: "openForm",
-                label: t("openForm"),
-                onSelect: () => onReview(row.id),
-              },
-              {
-                key: "reject",
-                label: t("reject"),
-                tone: "danger",
-                onSelect: () => onReject(row.id),
-              },
-            ]}
-          />
+        <Flex direction="column" align="end" gap="1">
+          <Flex align="center" justify="end" gap="2">
+            <Badge color={row.isComplete ? "green" : "amber"}>
+              {row.isComplete ? t("stateComplete") : t("stateIncomplete")}
+            </Badge>
+            <RowMenu
+              rowName={row.merchantLabel ?? t("noMerchant")}
+              items={[
+                {
+                  key: "accept",
+                  label: t("accept"),
+                  // A complete proposal records in one action; an incomplete one
+                  // opens the same prefilled form "openForm" does, never writing
+                  // on its own (RF-91).
+                  onSelect: () =>
+                    row.isComplete ? onAccept(row.id) : onReview(row.id),
+                },
+                {
+                  key: "openForm",
+                  label: t("openForm"),
+                  onSelect: () => onReview(row.id),
+                },
+                {
+                  key: "reject",
+                  label: t("reject"),
+                  tone: "danger",
+                  onSelect: () => onReject(row.id),
+                },
+              ]}
+            />
+          </Flex>
+          {row.beforeOpeningOn !== null && (
+            <Text size="1" color="amber" align="right">
+              {t("beforeOpening", {
+                date: format.dateTime(civilDateToDate(row.beforeOpeningOn), {
+                  day: "numeric",
+                  month: "short",
+                }),
+              })}
+            </Text>
+          )}
         </Flex>
       ),
     },

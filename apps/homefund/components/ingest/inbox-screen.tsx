@@ -225,6 +225,7 @@ export function InboxScreen({
         options.scopeCurrency)
       : options.scopeCurrency,
     isComplete: delivery.isComplete,
+    beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,
   }));
 
   const reviewing = deliveries.find((one) => one.id === reviewId) ?? null;
@@ -289,6 +290,7 @@ export function InboxScreen({
               options={options}
               deliveryId={reviewing.id}
               defaults={movementDefaults(reviewing, options)}
+              dateBeforeOpening={reviewing.beforeOpening}
               onSaved={() => toast.success(t("acceptedToast"))}
               onDone={() => setReviewId(null)}
             />
