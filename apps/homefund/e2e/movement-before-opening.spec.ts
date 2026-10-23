@@ -32,18 +32,25 @@ const OPENING = addCivilDays(today, -5);
 const BEFORE = addCivilDays(today, -6);
 const AFTER = addCivilDays(today, -4);
 const NOTE = `O6M7 nota ${stamp}`;
+const categoryId = randomUUID();
 
 test.beforeAll(async () => {
   await asHarnessUser(async (tx) => {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (${accountId}, ${scope.userId}, ${ACCOUNT_NAME}, 'asset', 'bank', 50000000, ${OPENING})`;
+    // The category a seeded movement's split needs; torn down in afterAll so a later spec in this
+    // identity reads no category of ours.
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${categoryId}, ${scope.userId}, ${`O6 categoría ${stamp}`}, 'expense', '#4C8C4A')`;
   });
 });
 
 test.afterAll(async () => {
   await clearLedger();
   await fixtureSql`delete from accounts where id = ${accountId}`;
+  await fixtureSql`delete from categories where id = ${categoryId}`;
 });
 
 test.beforeEach(async () => {
@@ -109,11 +116,7 @@ const accounts = messages.accounts;
 
 // A movement on the account, dated on its opening day, with the category its split needs.
 async function seedMovementOnOpening(transactionId: string) {
-  const categoryId = randomUUID();
   await asHarnessUser(async (tx) => {
-    await tx`
-      insert into categories (id, owner_user_id, name, kind, color)
-      values (${categoryId}, ${scope.userId}, ${`O6 categoría ${stamp}`}, 'expense', '#4C8C4A')`;
     await tx`
       insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
       values (${transactionId}, ${accountId}, 400000, ${OPENING}, ${NOTE})`;
