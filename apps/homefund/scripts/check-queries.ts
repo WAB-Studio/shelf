@@ -4255,6 +4255,7 @@ async function main(): Promise<void> {
   await o6m2DebtsAndSettledSuite();
   await o6m3BackupRestoreSuite();
   await o6m7OpeningRefusalsSuite();
+  await detailPocketToBillSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -13993,4 +13994,76 @@ async function o6m7OpeningRefusalsSuite(): Promise<void> {
   );
 
   await fixtureSql`delete from ingest_deliveries where owner_user_id = ${user.id}`;
+}
+
+// The detail's pockets carry the same estimate the overview does: a purchase adds, a refund takes away.
+async function detailPocketToBillSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const PURCHASE_ESTIMATE = 10_500_000;
+  const REFUND_ESTIMATE = 2_000_000;
+  const holder = await createMembershipFreeUser();
+  const open = async (kind: "asset" | "liability", name: string, amountMinor: number): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness detail ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const category = async (kind: "expense" | "income"): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness detail ${kind} ${tag}`, kind, parentId: null, color: "#B4542F" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const usd = async (from: string | null, to: string | null, amountCents: number, estimate: number, categoryId: string, label: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: to,
+        amountCents,
+        currency: "USD",
+        counterAmountCents: estimate,
+        counterIsEstimate: true,
+        occurredAt: today,
+        description: `Harness detail ${label} ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const toBill = async (card: string) => {
+    const detail = await asUser(holder, () => getDebtDetail(card));
+    return detail?.account.balances.find((pocket) => pocket.currency === "USD")?.toBillCents;
+  };
+
+  const card = await open("liability", "tarjeta", 0);
+  const expense = await category("expense");
+  const income = await category("income");
+  const none = (await asUser(holder, () => getDebtDetail(card)))?.account.balances.find((pocket) => pocket.currency === "USD");
+  await usd(card, null, 2_500, PURCHASE_ESTIMATE, expense, "compra");
+  const purchaseOnly = await toBill(card);
+  await usd(null, card, 500, REFUND_ESTIMATE, income, "reembolso");
+  const withRefund = await toBill(card);
+  assert(
+    next("Detail pocket to bill: nothing pending is null, a USD purchase estimated at 10500000 reads 10500000, and a USD refund estimated at 2000000 beside it reads 8500000"),
+    none === undefined && purchaseOnly === PURCHASE_ESTIMATE && withRefund === PURCHASE_ESTIMATE - REFUND_ESTIMATE,
+    `no pocket ${none === undefined}, purchase ${purchaseOnly}, with refund ${withRefund}`,
+  );
 }

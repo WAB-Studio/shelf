@@ -109,24 +109,14 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   const creditCents = Math.max(0, account.balanceCents);
 
   // The pockets in other currencies, as the list reads them off the overview.
-  // The detail's query holds only the pending estimates, which carry no
-  // direction, so each one counts as a purchase that adds to what is to bill.
   const otherOwed: DebtPocket[] = account.balances
     .filter((pocket) => pocket.currency !== account.settlementCurrency)
-    .map((pocket) => {
-      const pending = pendingSettlements.filter(
-        (settlement) => settlement.currency === pocket.currency,
-      );
-      return {
-        currency: pocket.currency as CurrencyCode,
-        owedCents: Math.max(0, -pocket.balanceCents),
-        creditCents: Math.max(0, pocket.balanceCents),
-        toBillCents:
-          pending.length === 0
-            ? null
-            : pending.reduce((sum, s) => sum + s.counterAmountCents, 0),
-      };
-    });
+    .map((pocket) => ({
+      currency: pocket.currency as CurrencyCode,
+      owedCents: Math.max(0, -pocket.balanceCents),
+      creditCents: Math.max(0, pocket.balanceCents),
+      toBillCents: pocket.toBillCents,
+    }));
 
   // What the plans still owe: the unpaid lines the server summed, never a
   // stored figure (RF-82).

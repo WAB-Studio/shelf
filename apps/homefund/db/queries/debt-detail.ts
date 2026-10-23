@@ -21,7 +21,14 @@ import { withUserDb } from "@/db/session";
 
 // One pocket of the account: the view derives a figure per currency and no
 // surface sums two of them (RF-124).
-export type AccountBalance = { currency: string; balanceCents: number };
+export type AccountBalance = {
+  currency: string;
+  balanceCents: number;
+  // What the pocket's movements still marked an estimate expect the issuer to
+  // bill, in the currency the debt bills in; the overview's reading of it
+  // (RF-123). Null while nothing is pending.
+  toBillCents: number | null;
+};
 
 export type DebtDetailAccount = {
   id: string;
@@ -85,7 +92,20 @@ async function readAccount(accountId: string): Promise<AccountRead> {
         // bills in pesos holds two, and the screen names each one (RF-124).
         balances: sql<AccountBalance[]>`coalesce((
           select jsonb_agg(jsonb_build_object(
-            'currency', ab.currency, 'balanceCents', ab.balance_cents
+            'currency', ab.currency, 'balanceCents', ab.balance_cents,
+            -- The overview's sum: a purchase leaves the card and adds, a refund
+            -- enters it and takes away. The cast keeps a bigint out of a JSON
+            -- number.
+            'toBillCents', (
+              select sum(case when t.from_account_id = accounts.id
+                then t.counter_amount_cents
+                else -t.counter_amount_cents end)::text
+              from transactions t
+              where (t.from_account_id = accounts.id or t.to_account_id = accounts.id)
+                and t.currency = ab.currency
+                and t.currency <> accounts.settlement_currency
+                and t.counter_is_estimate
+            )
           ) order by (ab.currency = accounts.settlement_currency) desc, ab.currency)
           from account_balances ab
           where ab.id = accounts.id
@@ -127,7 +147,12 @@ async function readAccount(accountId: string): Promise<AccountRead> {
         settlementCurrency: row.settlementCurrency,
         // A bigint sum arrives from the driver as a string; the ledger keeps cents a number.
         balanceCents: Number(row.balanceCents),
-        balances: row.balances,
+        balances: row.balances.map((balance) => ({
+          ...balance,
+          // A bigint sum arrives as text; a pocket with nothing pending stays null.
+          toBillCents:
+            balance.toBillCents === null ? null : Number(balance.toBillCents),
+        })),
         archivedAt: row.archivedAt,
       },
       terms: row.terms,
