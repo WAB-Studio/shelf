@@ -5,6 +5,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
 import {
+  accounts,
   ingestDeliveries,
   ingestMerchants,
   ingestShapes,
@@ -68,8 +69,19 @@ function isComplete(
     | "proposedAccountId"
     | "proposedCategoryId"
     | "categorySource"
-  >,
+    | "proposedOccurredAt"
+  > & { accountOpeningOn: string | null },
 ): boolean {
+  // A day before the account opened is refused by the database (MO001), so the
+  // proposal cannot be one tap. ISO days compare as text.
+  if (
+    row.proposedOccurredAt !== null &&
+    row.accountOpeningOn !== null &&
+    row.proposedOccurredAt < row.accountOpeningOn
+  ) {
+    return false;
+  }
+
   return (
     row.proposedAmountCents !== null &&
     row.proposedAccountId !== null &&
@@ -97,8 +109,10 @@ export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
         proposedOccurredAt: ingestDeliveries.proposedOccurredAt,
         proposedDescription: ingestDeliveries.proposedDescription,
         createdAt: ingestDeliveries.createdAt,
+        accountOpeningOn: accounts.initialBalanceOn,
       })
       .from(ingestDeliveries)
+      .leftJoin(accounts, eq(accounts.id, ingestDeliveries.proposedAccountId))
       .leftJoin(
         ingestMerchants,
         and(
@@ -109,7 +123,10 @@ export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
       .where(eq(ingestDeliveries.status, "pending"))
       .orderBy(asc(ingestDeliveries.createdAt));
 
-    return rows.map((row) => ({ ...row, isComplete: isComplete(row) }));
+    return rows.map(({ accountOpeningOn, ...row }) => ({
+      ...row,
+      isComplete: isComplete({ ...row, accountOpeningOn }),
+    }));
   });
 }
 
