@@ -5,12 +5,10 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { removeMonthBudget, setMonthBudget } from "@/app/actions/budgets";
-import { isTimeUnit, splitMinutes } from "@/lib/units/time";
+import { isTimeUnit, minutesFromFields, splitMinutes } from "@/lib/units/time";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { Button, Field, Flex, Sheet, SheetActions } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
-
-const WHOLE = /^\d+$/;
 
 /**
  * `MesPlan.dc.html` (RP-28): a month's amount, set, changed or removed. A time
@@ -54,12 +52,14 @@ export function BudgetSheet({
   }
 
   function typedAmount(): number | MessageKey {
-    if (!timed) return WHOLE.test(single.trim()) ? Number(single.trim()) : Number.NaN;
-    const h = hours.trim() === "" ? "0" : hours.trim();
-    const min = minutes.trim() === "" ? "0" : minutes.trim();
-    if (!WHOLE.test(h)) return Number.NaN;
-    if (!WHOLE.test(min) || Number(min) > 59) return "month.errors.minutesInvalid";
-    return Number(h) * 60 + Number(min);
+    if (!timed) {
+      const count = minutesFromFields(single, "");
+      return count.kind === "minutes" ? count.minutes / 60 : Number.NaN;
+    }
+    const read = minutesFromFields(hours, minutes);
+    if (read.kind === "hoursInvalid") return Number.NaN;
+    if (read.kind === "minutesInvalid") return "month.errors.minutesInvalid";
+    return read.kind === "minutes" ? read.minutes : 0;
   }
 
   async function handleSave() {

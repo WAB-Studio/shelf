@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import { clearCreated, reasonSentence, type CreatedResult } from "@/lib/import/created-store";
-import { civilDateToDate } from "@/lib/zone";
+import { monthWord } from "@/lib/plan/month-name";
 import { ActionBar, Button, Flex, Page, ScreenHeader, Section, Text } from "@/components/ui";
 import type { MessageKey } from "@/i18n/translator";
 
@@ -14,8 +14,6 @@ import type { MessageKey } from "@/i18n/translator";
  */
 export function CreatedScreen({ result }: { result: CreatedResult }) {
   const t = useTranslations();
-  const format = useFormatter();
-  const monthWord = (month: string) => format.dateTime(civilDateToDate(`${month}-01`), { month: "long", timeZone: "UTC" });
 
   return (
     <Page width="full">
