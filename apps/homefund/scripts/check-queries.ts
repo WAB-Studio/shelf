@@ -60,7 +60,7 @@ import {
 } from "@/db/queries/categories";
 import { createGroup } from "@/db/queries/create-group";
 import { getDebtDetail } from "@/db/queries/debt-detail";
-import { getDebtOverview } from "@/db/queries/debt-overview";
+import { getDebtOverview, sumDebtCreditTotals } from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { getCurrentStatement } from "@/db/queries/debt-statements";
 import { getDebtTerms, upsertDebtTerms } from "@/db/queries/debt-terms";
@@ -4252,6 +4252,7 @@ async function main(): Promise<void> {
   await debtCreditSideSuite();
   await o5m2SurvivorsSuite();
   await dollarBackupSuite();
+  await o6m2DebtsAndSettledSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -12774,5 +12775,523 @@ async function dollarBackupSuite(): Promise<void> {
       left.categories === 0 &&
       left.movements === 0,
     `${said(refused)}; named ${JSON.stringify(named)}; left ${JSON.stringify(left)}`,
+  );
+}
+
+// O6-M2: a movement names the planned payment it settled (RF-161), the consolidated next payment is never a debt that
+// owes nothing (RF-83), a foreign pocket states what it is still expected to bill and nothing sums it (RF-123, RF-124),
+// and the minimum and credit totals hold at their edges (D2, D14). Every holder is fresh, so each fund reads only its
+// own debts.
+async function o6m2DebtsAndSettledSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const LIMIT = 100_000_000;
+  const RATE = "0.3000";
+  const IN_CREDIT = 800_000;
+  const USD_PURCHASE = 2_500;
+  const PURCHASE_ESTIMATE = 10_500_000;
+  const USD_REFUND = 500;
+  const REFUND_ESTIMATE = 2_000_000;
+  const FIXED = 5_000_000;
+  const show = (value: unknown) => JSON.stringify(value ?? "nothing");
+
+  const open = async (
+    holder: HarnessUser,
+    kind: "asset" | "liability",
+    name: string,
+    amountMinor: number,
+    settlementCurrency: "COP" | "USD" = "COP",
+  ): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness o6m2 ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency,
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const terms = async (
+    holder: HarnessUser,
+    accountId: string,
+    { fixed, limit, dueDay }: { fixed: number | null; limit: number | null; dueDay: number },
+  ): Promise<void> => {
+    await asUser(holder, () =>
+      upsertDebtTerms({
+        accountId,
+        debtKind: "revolving",
+        annualRate: RATE,
+        minimumPaymentCents: fixed,
+        minimumPaymentPct: null,
+        creditLimitCents: limit,
+        statementCutOffDay: 20,
+        paymentDueDay: dueDay,
+        avalCents: null,
+      }),
+    );
+    keep("debt_terms", accountId);
+  };
+  const category = async (holder: HarnessUser, kind: "expense" | "income"): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({
+        scope: { ownerUserId: holder.id },
+        name: `Harness o6m2 ${kind} ${tag}`,
+        kind,
+        parentId: null,
+        color: "#B4542F",
+      }),
+    );
+    keep("categories", categoryId);
+    return categoryId;
+  };
+  const move = async (
+    holder: HarnessUser,
+    args: {
+      from: string | null;
+      to: string | null;
+      amountCents: number;
+      categoryId?: string;
+      currency?: "COP" | "USD";
+      estimate?: number;
+      description: string;
+    },
+  ): Promise<string> => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: args.from,
+        toAccountId: args.to,
+        amountCents: args.amountCents,
+        ...(args.currency
+          ? { currency: args.currency, counterAmountCents: args.estimate ?? null, counterIsEstimate: args.estimate !== undefined }
+          : {}),
+        occurredAt: today,
+        description: `Harness o6m2 ${args.description} ${tag}`,
+        externalRef: null,
+        splits: args.categoryId ? [{ categoryId: args.categoryId, amountCents: args.amountCents }] : [],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const usdOf = (pockets: DebtPocket[] | undefined) => pockets?.find((pocket) => pocket.currency === "USD");
+  const copSetOf = (screen: DebtsScreenData) => screen.totals.byCurrency.find((set) => set.currency === "COP");
+  const pocketFigures = (pocket: DebtPocket | undefined) =>
+    pocket === undefined
+      ? "no USD pocket"
+      : JSON.stringify({ owedCents: pocket.owedCents, creditCents: pocket.creditCents, toBillCents: pocket.toBillCents });
+  const integerFigures: [string, unknown][] = [];
+  const collect = (where: string, overview: DebtOverviewRow[], screen: DebtsScreenData) => {
+    const pockets = (row: string, list: DebtPocket[]) => {
+      for (const pocket of list) {
+        integerFigures.push([`${where} ${row} ${pocket.currency} owed`, pocket.owedCents]);
+        integerFigures.push([`${where} ${row} ${pocket.currency} credit`, pocket.creditCents]);
+        if (pocket.toBillCents !== null) integerFigures.push([`${where} ${row} ${pocket.currency} to bill`, pocket.toBillCents]);
+      }
+    };
+    for (const row of [...overview, ...screen.withTerms]) {
+      integerFigures.push([`${where} owed`, row.owedCents], [`${where} credit`, row.creditCents]);
+      integerFigures.push([`${where} interest`, row.monthlyInterestCents], [`${where} installments`, row.dueInstallmentsCents]);
+      if (row.availableCreditCents !== null) integerFigures.push([`${where} available`, row.availableCreditCents]);
+      if (row.minimumPaymentCents !== null) integerFigures.push([`${where} minimum`, row.minimumPaymentCents]);
+      pockets(row.accountId, row.otherOwed);
+    }
+    for (const debt of screen.withoutTerms) {
+      integerFigures.push([`${where} no-terms owed`, debt.owedCents], [`${where} no-terms credit`, debt.creditCents]);
+      pockets(debt.accountId, debt.otherOwed);
+    }
+    for (const set of screen.totals.byCurrency) {
+      integerFigures.push([`${where} ${set.currency} total owed`, set.owedCents]);
+      integerFigures.push([`${where} ${set.currency} total interest`, set.monthlyInterestCents]);
+      if (set.availableCreditCents !== null) integerFigures.push([`${where} ${set.currency} total available`, set.availableCreditCents]);
+      if (set.creditLimitCents !== null) integerFigures.push([`${where} ${set.currency} total limit`, set.creditLimitCents]);
+    }
+    if (screen.totals.nextPayment !== null) integerFigures.push([`${where} next payment`, screen.totals.nextPayment.amountCents]);
+  };
+
+  // --- Pocket to bill: a peso card in credit with a dollar purchase the issuer has not billed yet.
+  const card = await createMembershipFreeUser();
+  const cardBank = await open(card, "asset", "bank", 1_000_000_000);
+  const cardExpense = await category(card, "expense");
+  const cardIncome = await category(card, "income");
+  const visa = await open(card, "liability", "visa", 0);
+  await terms(card, visa, { fixed: null, limit: LIMIT, dueDay: 5 });
+  await move(card, { from: cardBank, to: visa, amountCents: IN_CREDIT, description: "abono" });
+  const screenWithout = await asUser(card, () => getDebtsScreenData());
+  await move(card, {
+    from: visa,
+    to: null,
+    amountCents: USD_PURCHASE,
+    categoryId: cardExpense,
+    currency: "USD",
+    estimate: PURCHASE_ESTIMATE,
+    description: "compra en dolares",
+  });
+  const [overviewWith, screenWith] = await asUser(card, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("pocket", overviewWith, screenWith);
+  const visaRow = overviewWith.find((row) => row.accountId === visa);
+  const visaScreenRow = screenWith.withTerms.find((row) => row.accountId === visa);
+  assert(
+    next("Pocket to bill: a COP card in credit 800000 with a USD 2500 purchase estimated at 10500000 reads its USD pocket owing 2500 with toBillCents 10500000, its COP pocket in credit 800000, on the overview and the screen"),
+    visaRow?.currency === "COP" &&
+      visaRow.creditCents === IN_CREDIT &&
+      visaRow.owedCents === 0 &&
+      usdOf(visaRow.otherOwed)?.owedCents === USD_PURCHASE &&
+      usdOf(visaRow.otherOwed)?.creditCents === 0 &&
+      usdOf(visaRow.otherOwed)?.toBillCents === PURCHASE_ESTIMATE &&
+      visaScreenRow?.creditCents === IN_CREDIT &&
+      usdOf(visaScreenRow.otherOwed)?.toBillCents === PURCHASE_ESTIMATE,
+    `overview COP owed ${visaRow?.owedCents} credit ${visaRow?.creditCents}, USD ${pocketFigures(usdOf(visaRow?.otherOwed))}; screen USD ${pocketFigures(usdOf(visaScreenRow?.otherOwed))}`,
+  );
+
+  // --- Never summed: the peso set and the flat tiles read as if the dollar purchase were not there.
+  const copWithout = copSetOf(screenWithout);
+  const copWith = copSetOf(screenWith);
+  const tiles = (screen: DebtsScreenData) =>
+    JSON.stringify({
+      owedCents: screen.totals.owedCents,
+      monthlyInterestCents: screen.totals.monthlyInterestCents,
+      availableCreditCents: screen.totals.availableCreditCents,
+      creditLimitCents: screen.totals.creditLimitCents,
+      cop: copSetOf(screen),
+      nextPaymentCents: screen.totals.nextPayment?.amountCents ?? null,
+      rowOwed: screen.withTerms.find((row) => row.accountId === visa)?.owedCents,
+      rowAvailable: screen.withTerms.find((row) => row.accountId === visa)?.availableCreditCents,
+    });
+  assert(
+    next("Never summed: with the USD purchase's toBillCents 10500000 beside it, the COP set, the flat tiles and the card's own owed and available read exactly as without the purchase"),
+    usdOf(visaScreenRow?.otherOwed)?.toBillCents === PURCHASE_ESTIMATE &&
+      copWithout !== undefined &&
+      copWith?.owedCents === 0 &&
+      copWith.availableCreditCents === LIMIT + IN_CREDIT &&
+      tiles(screenWith) === tiles(screenWithout),
+    `without ${tiles(screenWithout)}; with ${tiles(screenWith)}; USD ${pocketFigures(usdOf(visaScreenRow?.otherOwed))}`,
+  );
+
+  // --- Refund subtracts: a dollar refund still estimated lowers what is to bill.
+  await move(card, {
+    from: null,
+    to: visa,
+    amountCents: USD_REFUND,
+    categoryId: cardIncome,
+    currency: "USD",
+    estimate: REFUND_ESTIMATE,
+    description: "reembolso en dolares",
+  });
+  const [overviewRefund, screenRefund] = await asUser(card, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("refund", overviewRefund, screenRefund);
+  const refundPocket = usdOf(overviewRefund.find((row) => row.accountId === visa)?.otherOwed);
+  assert(
+    next("Refund subtracts: a USD 500 refund estimated at 2000000 beside the purchase leaves the USD pocket owing 2000 with toBillCents 8500000"),
+    refundPocket?.owedCents === USD_PURCHASE - USD_REFUND &&
+      refundPocket.toBillCents === PURCHASE_ESTIMATE - REFUND_ESTIMATE &&
+      copSetOf(screenRefund)?.owedCents === 0,
+    `USD ${pocketFigures(refundPocket)}, COP owed ${copSetOf(screenRefund)?.owedCents}`,
+  );
+
+  // --- Billed drops out: two estimated purchases on one card; billing the first leaves only the second to bill.
+  const biller = await createMembershipFreeUser();
+  const billerExpense = await category(biller, "expense");
+  const master = await open(biller, "liability", "master", 0);
+  await terms(biller, master, { fixed: null, limit: LIMIT, dueDay: 5 });
+  const first = await move(biller, {
+    from: master,
+    to: null,
+    amountCents: USD_PURCHASE,
+    categoryId: billerExpense,
+    currency: "USD",
+    estimate: PURCHASE_ESTIMATE,
+    description: "primera compra en dolares",
+  });
+  const second = await move(biller, {
+    from: master,
+    to: null,
+    amountCents: 1_000,
+    categoryId: billerExpense,
+    currency: "USD",
+    estimate: 4_200_000,
+    description: "segunda compra en dolares",
+  });
+  const billedFirst = await asUser(biller, () =>
+    recordBilledAmount({ transactionId: first, accountId: master, currency: "COP", billedCents: 10_600_000 }),
+  );
+  const afterFirst = usdOf((await asUser(biller, () => getDebtOverview())).find((row) => row.accountId === master)?.otherOwed);
+  const billedSecond = await asUser(biller, () =>
+    recordBilledAmount({ transactionId: second, accountId: master, currency: "COP", billedCents: 4_300_000 }),
+  );
+  const [overviewBilled, screenBilled] = await asUser(biller, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("billed", overviewBilled, screenBilled);
+  const afterBoth = usdOf(overviewBilled.find((row) => row.accountId === master)?.otherOwed);
+  assert(
+    next("Billed drops out: billing one of two estimated USD purchases leaves toBillCents 4200000, the other's estimate alone; billing both leaves no USD pocket or toBillCents null"),
+    billedFirst &&
+      billedSecond &&
+      afterFirst?.owedCents === 1_000 &&
+      afterFirst.toBillCents === 4_200_000 &&
+      (afterBoth === undefined || afterBoth.toBillCents === null),
+    `billed ${billedFirst}/${billedSecond}; after the first ${pocketFigures(afterFirst)}; after both ${pocketFigures(afterBoth)}`,
+  );
+
+  // --- No-terms row: the same card with no terms carries the same pocket figures.
+  const bare = await createMembershipFreeUser();
+  const bareBank = await open(bare, "asset", "bank", 1_000_000_000);
+  const bareExpense = await category(bare, "expense");
+  const bareCard = await open(bare, "liability", "sin condiciones", 0);
+  await move(bare, { from: bareBank, to: bareCard, amountCents: IN_CREDIT, description: "abono" });
+  await move(bare, {
+    from: bareCard,
+    to: null,
+    amountCents: USD_PURCHASE,
+    categoryId: bareExpense,
+    currency: "USD",
+    estimate: PURCHASE_ESTIMATE,
+    description: "compra en dolares",
+  });
+  const [overviewBare, screenBare] = await asUser(bare, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("no terms", overviewBare, screenBare);
+  const bareRow = screenBare.withoutTerms.find((debt) => debt.accountId === bareCard);
+  assert(
+    next("No-terms row: a COP card with no terms in credit 800000 with the same USD purchase reads USD owing 2500, toBillCents 10500000, COP credit 800000"),
+    bareRow?.currency === "COP" &&
+      bareRow.creditCents === IN_CREDIT &&
+      bareRow.owedCents === 0 &&
+      usdOf(bareRow.otherOwed)?.owedCents === USD_PURCHASE &&
+      usdOf(bareRow.otherOwed)?.toBillCents === PURCHASE_ESTIMATE &&
+      copSetOf(screenBare)?.owedCents === 0,
+    `${bareRow === undefined ? "no row" : `COP owed ${bareRow.owedCents} credit ${bareRow.creditCents}, USD ${pocketFigures(usdOf(bareRow.otherOwed))}`}`,
+  );
+
+  // --- Next payment skips credit: the fund's only due card is in credit.
+  const credited = await createMembershipFreeUser();
+  const creditedBank = await open(credited, "asset", "bank", 1_000_000_000);
+  const creditedCard = await open(credited, "liability", "a favor", 0);
+  await terms(credited, creditedCard, { fixed: FIXED, limit: LIMIT, dueDay: 5 });
+  await move(credited, { from: creditedBank, to: creditedCard, amountCents: 15_000_000, description: "abono" });
+  const [overviewCredited, screenCredited] = await asUser(credited, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("credited", overviewCredited, screenCredited);
+  assert(
+    next("Next payment skips credit: a fund whose only card, due on the 5th, holds 15000000 in its favour has no next payment"),
+    screenCredited.withTerms.some((row) => row.accountId === creditedCard && row.creditCents === 15_000_000) &&
+      screenCredited.totals.nextPayment === null,
+    `next payment ${show(screenCredited.totals.nextPayment)}`,
+  );
+
+  // --- Next payment skips zero, and D2: a card paid down to exactly 0 owes no minimum and is no next payment.
+  const zeroed = await createMembershipFreeUser();
+  const zeroedBank = await open(zeroed, "asset", "bank", 1_000_000_000);
+  const zeroCard = await open(zeroed, "liability", "en cero", FIXED);
+  await terms(zeroed, zeroCard, { fixed: FIXED, limit: LIMIT, dueDay: 5 });
+  await move(zeroed, { from: zeroedBank, to: zeroCard, amountCents: FIXED, description: "pago total" });
+  const [overviewZero, screenZero, statementZero] = await asUser(zeroed, () =>
+    Promise.all([getDebtOverview(), getDebtsScreenData(), getCurrentStatement(zeroCard)]),
+  );
+  collect("zero", overviewZero, screenZero);
+  integerFigures.push(["zero statement minimum", statementZero?.minimumPaymentCents]);
+  const zeroRow = overviewZero.find((row) => row.accountId === zeroCard);
+  assert(
+    next("Next payment skips zero: a fund whose only card sits at a balance of exactly 0 has no next payment"),
+    zeroRow?.owedCents === 0 && zeroRow.creditCents === 0 && screenZero.totals.nextPayment === null,
+    `row ${show(zeroRow && { owed: zeroRow.owedCents, credit: zeroRow.creditCents })}, next payment ${show(screenZero.totals.nextPayment)}`,
+  );
+  assert(
+    next("D2: a card at a balance of exactly 0 whose terms fix a minimum of 5000000 has a minimum of 0, on the overview, the screen and the current statement"),
+    zeroRow?.owedCents === 0 &&
+      zeroRow.creditCents === 0 &&
+      zeroRow.minimumPaymentCents === 0 &&
+      screenZero.withTerms.find((row) => row.accountId === zeroCard)?.minimumPaymentCents === 0 &&
+      statementZero?.balanceCents === 0 &&
+      statementZero.minimumPaymentCents === 0,
+    `overview minimum ${zeroRow?.minimumPaymentCents} at owed ${zeroRow?.owedCents}, statement minimum ${statementZero?.minimumPaymentCents} at balance ${statementZero?.balanceCents}`,
+  );
+
+  // --- Next payment owing: a card in credit due first, a card owing with no minimum due a week later.
+  const two = await createMembershipFreeUser();
+  const twoBank = await open(two, "asset", "bank", 1_000_000_000);
+  const earlyCard = await open(two, "liability", "a favor primero", 0);
+  const lateCard = await open(two, "liability", "debe despues", 3_000_000);
+  // Due today is the earliest a due date can fall; the same day of the month a week on is always later.
+  const earlyDay = Number(today.slice(8, 10));
+  const lateDate = shiftDate(today, 7);
+  await terms(two, earlyCard, { fixed: FIXED, limit: LIMIT, dueDay: earlyDay });
+  await terms(two, lateCard, { fixed: null, limit: LIMIT, dueDay: Number(lateDate.slice(8, 10)) });
+  await move(two, { from: twoBank, to: earlyCard, amountCents: 2_000_000, description: "abono" });
+  const [overviewTwo, screenTwo] = await asUser(two, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("two", overviewTwo, screenTwo);
+  const earlyRow = overviewTwo.find((row) => row.accountId === earlyCard);
+  const lateRow = overviewTwo.find((row) => row.accountId === lateCard);
+  const nextTwo = screenTwo.totals.nextPayment;
+  assert(
+    next("Next payment owing: card A in credit due today, card B owing 3000000 with no minimum due a week later; the next payment is B's, on B's date, at B's minimum (0) plus its installments (0)"),
+    earlyRow?.nextDueDate === today &&
+      earlyRow.creditCents === 2_000_000 &&
+      lateRow?.nextDueDate === lateDate &&
+      lateRow.owedCents === 3_000_000 &&
+      lateRow.minimumPaymentCents === null &&
+      nextTwo?.accountId === lateCard &&
+      nextTwo.date === lateDate &&
+      nextTwo.amountCents === 0 &&
+      nextTwo.currency === "COP",
+    `A due ${earlyRow?.nextDueDate} credit ${earlyRow?.creditCents}; B due ${lateRow?.nextDueDate} owed ${lateRow?.owedCents} minimum ${lateRow?.minimumPaymentCents}; next payment ${show(nextTwo)}`,
+  );
+
+  // --- D14: a currency whose only cards carry no limit has no credit set.
+  const dollars = await createMembershipFreeUser();
+  const usdCard = await open(dollars, "liability", "en dolares", 40_000, "USD");
+  await terms(dollars, usdCard, { fixed: null, limit: null, dueDay: 5 });
+  const [overviewUsd, screenUsd] = await asUser(dollars, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("usd", overviewUsd, screenUsd);
+  const usdTotals = sumDebtCreditTotals(overviewUsd);
+  const usdSet = screenUsd.totals.byCurrency.find((set) => set.currency === "USD");
+  assert(
+    next("D14: sumDebtCreditTotals over the overview's USD rows, none with a limit, answers no USD entry, and the screen's USD set has no limit and no available credit"),
+    overviewUsd.some((row) => row.accountId === usdCard && row.currency === "USD" && row.creditLimitCents === null) &&
+      !usdTotals.some((totals) => totals.currency === "USD") &&
+      usdSet?.owedCents === 40_000 &&
+      usdSet.creditLimitCents === null &&
+      usdSet.availableCreditCents === null,
+    `credit totals ${show(usdTotals)}; USD set ${show(usdSet)}`,
+  );
+
+  // --- Integer cents: every figure the debts reads handed out above.
+  const notInteger = integerFigures.filter(([, value]) => !Number.isSafeInteger(value));
+  assert(
+    next("Integer cents: every owed, credit, to-bill, available, interest, minimum and next-payment figure above is a safe integer"),
+    integerFigures.length > 0 && notInteger.length === 0,
+    `${integerFigures.length} figures, not integer: ${JSON.stringify(notInteger.slice(0, 6))}`,
+  );
+
+  // --- The movement names the planned payment it settled (RF-161, the listing half).
+  const payer = await createMembershipFreeUser();
+  const payerBank = await open(payer, "asset", "bank", 50_000_000);
+  const payerExpense = await category(payer, "expense");
+  const PAYMENT_NAME = `Harness o6m2 arriendo ${tag}`;
+  const { plannedPaymentId } = await asUser(payer, () =>
+    createPlannedPayment({
+      fromAccountId: payerBank,
+      toAccountId: null,
+      amountCents: 123_400,
+      categoryId: payerExpense,
+      dueDate: today,
+      remindOn: null,
+      description: PAYMENT_NAME,
+    }),
+  );
+  keep("planned_payments", plannedPaymentId);
+  // The movement carries a description of its own, so the name the row reads can only come from the payment.
+  const settle = () =>
+    asUser(payer, () =>
+      settlePlannedPayment({
+        plannedPaymentId,
+        fromAccountId: payerBank,
+        toAccountId: null,
+        amountCents: 123_400,
+        categoryId: payerExpense,
+        occurredAt: today,
+        description: `Harness o6m2 movimiento del pago ${tag}`,
+      }),
+    );
+  const settled = await settle();
+  const settledId = settled.settled ? settled.transactionId : null;
+  if (settledId) track("transactions", settledId);
+  const unrelated = await move(payer, { from: payerBank, to: null, amountCents: 5_000, categoryId: payerExpense, description: "mercado" });
+  const foreignTarget = await move(payer, { from: payerBank, to: null, amountCents: 7_000, categoryId: payerExpense, description: "farmacia" });
+
+  const named = settledId ? await asUser(payer, () => getTransactionById(settledId)) : null;
+  assert(
+    next("Row names its payment: getTransactionById on the movement that settled a planned payment carries settledPlannedPayment with that payment's id and description"),
+    named !== null &&
+      named.settledPlannedPayment?.id === plannedPaymentId &&
+      named.settledPlannedPayment.description === PAYMENT_NAME,
+    `settled ${show(settled)}; row's settledPlannedPayment ${show(named?.settledPlannedPayment)}, expected ${plannedPaymentId} «${PAYMENT_NAME}»`,
+  );
+
+  const listed = await asUser(payer, () => listTransactions({}, { limit: 20 }));
+  const listedUnrelated = listed.find((row) => row.id === unrelated);
+  const byIdUnrelated = await asUser(payer, () => getTransactionById(unrelated));
+  assert(
+    next("Others null: a movement no planned payment settled carries settledPlannedPayment null, in the list and by id"),
+    listedUnrelated !== undefined &&
+      byIdUnrelated !== null &&
+      (listedUnrelated.settledPlannedPayment ?? null) === null &&
+      (byIdUnrelated.settledPlannedPayment ?? null) === null,
+    `listed ${show(listedUnrelated?.settledPlannedPayment)}, by id ${show(byIdUnrelated?.settledPlannedPayment)}`,
+  );
+
+  // --- One round trip: the list costs what the same list with no row costs, and what one plain read costs.
+  const trips = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = roundTrips();
+    await run();
+    return roundTrips() - started;
+  };
+  const baseRead = await asUser(payer, () => trips(() => listAccounts({ archived: false })));
+  const emptyList = await asUser(payer, () => trips(() => listTransactions({ id: randomUUID() }, { limit: 20 })));
+  const fullList = await asUser(payer, () => trips(() => listTransactions({}, { limit: 20 })));
+  const byIdTrips = settledId ? await asUser(payer, () => trips(() => getTransactionById(settledId))) : -1;
+  const listedSettled = listed.find((row) => row.id === settledId);
+  assert(
+    next("One round trip: listTransactions({}, {limit: 20}) over three movements, one of them settling a payment, costs what an empty listing and one plain read cost, and so does getTransactionById; the settling row names its payment"),
+    listed.length >= 3 &&
+      listedSettled?.settledPlannedPayment?.id === plannedPaymentId &&
+      fullList === emptyList &&
+      emptyList === baseRead &&
+      byIdTrips === baseRead,
+    `${listed.length} rows; trips: list ${fullList}, empty list ${emptyList}, listAccounts ${baseRead}, by id ${byIdTrips}; settling row ${show(listedSettled?.settledPlannedPayment)}`,
+  );
+
+  // --- Unreadable payment: a payment in a stranger's scope that points at this fund's movement never shows.
+  const stranger = await createMembershipFreeUser();
+  const strangerBank = await open(stranger, "asset", "bank", 50_000_000);
+  const strangerClaims = JSON.stringify({ sub: stranger.id, role: "authenticated", aud: "authenticated" });
+  // Written as the owner: no write path of the app links a payment to a movement outside its scope, and the
+  // read must hold whatever row the table holds.
+  const [foreignPayment] = await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${strangerClaims}, true)`;
+    return tx<{ id: string }[]>`
+      insert into planned_payments (from_account_id, amount_cents, due_date, description, status, settled_transaction_id)
+      values (${strangerBank}, 7000, ${today}, ${`Harness o6m2 ajeno ${tag}`}, 'done', ${foreignTarget})
+      returning id`;
+  });
+  track("planned_payments", foreignPayment.id);
+  const ownView = await asUser(payer, () => getTransactionById(foreignTarget));
+  const strangerView = settledId ? await asUser(stranger, () => getTransactionById(settledId)) : "no movement";
+  assert(
+    next("Unreadable payment: a movement whose settling payment lies in another scope reads settledPlannedPayment null for its own fund, and a stranger reading the fund's settling movement gets no row"),
+    ownView !== null &&
+      "settledPlannedPayment" in ownView &&
+      ownView.settledPlannedPayment === null &&
+      strangerView === null,
+    `own fund reads ${ownView === null ? "no row" : show(ownView.settledPlannedPayment)} (field present: ${ownView !== null && "settledPlannedPayment" in ownView}); stranger reads ${show(strangerView)}`,
+  );
+  // Dropped here: the purge deletes the movement it points at, and the scope trigger would hand the unlinked row to
+  // whoever deleted it, which then blocks that identity's own drop.
+  await fixtureSql`delete from planned_payments where id = ${foreignPayment.id}`;
+
+  // --- After RF-161: deleting the settling movement returns the payment to pending; settling it again is named again.
+  const deleted = settledId ? await asUser(payer, () => deleteTransaction({ transactionId: settledId })) : "no movement";
+  const afterDelete = (await asUser(payer, () => listPlannedPayments())).find((row) => row.id === plannedPaymentId);
+  const resettled = await settle();
+  const resettledId = resettled.settled ? resettled.transactionId : null;
+  if (resettledId) track("transactions", resettledId);
+  const renamed = resettledId ? await asUser(payer, () => getTransactionById(resettledId)) : null;
+  assert(
+    next("After RF-161: deleting the settling movement leaves the payment pending and unlinked; a fresh movement settling it again names it"),
+    deleted === "done" &&
+      afterDelete?.status === "pending" &&
+      afterDelete.settledTransactionId === null &&
+      resettledId !== null &&
+      resettledId !== settledId &&
+      renamed?.settledPlannedPayment?.id === plannedPaymentId &&
+      renamed.settledPlannedPayment.description === PAYMENT_NAME,
+    `delete ${deleted}; payment ${show(afterDelete && { status: afterDelete.status, settled: afterDelete.settledTransactionId })}; resettle ${show(resettled)}; new row ${show(renamed?.settledPlannedPayment)}`,
   );
 }
