@@ -948,6 +948,8 @@
     "monthlyInterest": "Interés mensual · {amount}",
     "availableCredit": "Cupo disponible · {amount}",
     "inFavour": "A favor {amount}",
+    "owesForeign": "Debes {amount}",
+    "toBill": "(≈ {amount} por facturar)",
     "minimumPayment": "Pago mínimo",
     "cutOff": "Corte",
     "dueDate": "Vence",

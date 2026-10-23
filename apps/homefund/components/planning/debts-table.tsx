@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
 import {
@@ -31,12 +31,12 @@ const NO_VALUE = "—";
 // give up what it and the gaps take, so the debt's own track keeps its width.
 const WIDTHS = {
   debt: "minmax(0, 1fr)",
-  availableCredit: "128px",
-  monthlyInterest: "100px",
-  minimum: "104px",
+  availableCredit: "112px",
+  monthlyInterest: "92px",
+  minimum: "96px",
   cutOff: "64px",
   dueDate: "68px",
-  owed: "170px",
+  owed: "196px",
   menu: "36px",
 } as const;
 
@@ -67,6 +67,101 @@ export type DebtTableRow = {
 
 const AMOUNT_SLOT = "\u0000";
 
+// The words of a message around its amount, which `Money` then draws inside its
+// own span: the placeholder only marks where the figure goes.
+function wordsAround(message: string): { before: string; after: string } {
+  const [before, after = ""] = message.split(AMOUNT_SLOT);
+  return { before, after };
+}
+
+function joined(words: { before: string; after: string }) {
+  return { before: SEPARATOR + words.before, after: words.after };
+}
+
+// The dot rides inside the figure that follows it, so a line wraps at the space
+// before the dot and never inside a figure.
+const SEPARATOR = "· ";
+
+/**
+ * Whether a debt in credit also owes in another currency (Q9 a): the one case
+ * its balance reads as a line of two figures instead of one.
+ */
+export function owesBesideCredit(
+  creditCents: number,
+  otherOwed: DebtPocket[],
+): boolean {
+  return creditCents > 0 && otherOwed.some((pocket) => pocket.owedCents > 0);
+}
+
+/**
+ * «A favor $ 8.000 · Debes US$ 25 (≈ $ 105.000 por facturar)» (RF-80, RF-124):
+ * the credit in the accent, what the other pockets owe and what is still to bill
+ * in the normal ink. The figures are never added to one another. The estimate
+ * is drawn only while the pocket has one, in the currency the debt bills in.
+ */
+export function CreditAndOwedLine({
+  creditCents,
+  currency,
+  otherOwed,
+}: {
+  creditCents: number;
+  currency: CurrencyCode;
+  otherOwed: DebtPocket[];
+}) {
+  const t = useTranslations("debts");
+
+  return (
+    <Figure as="div" size="2" align="right">
+      <Money
+        minor={creditCents}
+        currency={currency}
+        tone="credit"
+        size="inherit"
+        words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
+      />
+      {otherOwed
+        .filter((pocket) => pocket.owedCents > 0)
+        .map((pocket) => {
+          // `Money` writes the estimate mark itself, so the message's own is
+          // dropped from the words.
+          const toBill = wordsAround(t("toBill", { amount: AMOUNT_SLOT }));
+          return (
+            <Fragment key={pocket.currency}>
+ {" "}
+              <Money
+                minor={pocket.owedCents}
+                currency={pocket.currency}
+                size="inherit"
+                signed={false}
+                words={joined(
+                  wordsAround(t("owesForeign", { amount: AMOUNT_SLOT })),
+                )}
+              />
+              {pocket.toBillCents !== null && (
+                <>
+                  {" "}
+                  <Text color="gray">
+                    <Money
+                      minor={pocket.toBillCents}
+                      currency={currency}
+                      size="inherit"
+                      signed={false}
+                      estimate
+                      words={{
+                        before: toBill.before.replace("\u2248 ", ""),
+                        after: toBill.after,
+                      }}
+                    />
+                  </Text>
+                </>
+              )}
+            </Fragment>
+          );
+        })}
+    </Figure>
+  );
+}
+
 /**
  * A pocket read by its own sign (RF-80, RF-124): «A favor …» in the accent ink
  * while it holds credit, the plain amount otherwise. `bold` is the debt's own
@@ -91,22 +186,15 @@ export function PocketFigure({
   const size = bold || inherit ? undefined : "1";
 
   if (creditCents > 0) {
-    // The word's own text around the amount, which `Money` then draws in the
-    // accent ink: the placeholder only marks where it goes.
-    const [before, after = ""] = t("inFavour", { amount: AMOUNT_SLOT }).split(
-      AMOUNT_SLOT,
-    );
     return (
       <Figure size={size} weight={bold ? "bold" : undefined}>
-        {before}
         <Money
           minor={creditCents}
           currency={currency}
-          tone="income"
+          tone="credit"
           size="inherit"
-          signed={false}
+          words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
         />
-        {after}
       </Figure>
     );
   }
@@ -305,7 +393,26 @@ export function DebtsTable({
       // its movements; the debt reads without a sign. The pocket it bills in
       // first, then what it owes in a currency it does not — one figure each,
       // never a sum of the two (RF-124).
-      cell: (row) => (
+      cell: (row) =>
+        owesBesideCredit(row.creditCents, row.otherOwed) ? (
+          <Flex direction="column" align="end">
+            <CreditAndOwedLine
+              creditCents={row.creditCents}
+              currency={row.currency}
+              otherOwed={row.otherOwed}
+            />
+            {row.otherOwed
+              .filter((pocket) => pocket.owedCents === 0)
+              .map((pocket) => (
+                <PocketFigure
+                  key={pocket.currency}
+                  owedCents={pocket.owedCents}
+                  creditCents={pocket.creditCents}
+                  currency={pocket.currency}
+                />
+              ))}
+          </Flex>
+        ) : (
         <Flex direction="column" align="end">
           {row.creditCents > 0 ? (
             <PocketFigure
@@ -330,7 +437,7 @@ export function DebtsTable({
             />
           ))}
         </Flex>
-      ),
+        ),
     },
     {
       key: "menu",

@@ -948,6 +948,8 @@
     "monthlyInterest": "Monthly interest · {amount}",
     "availableCredit": "Available credit · {amount}",
     "inFavour": "In credit {amount}",
+    "owesForeign": "You owe {amount}",
+    "toBill": "(≈ {amount} to be billed)",
     "minimumPayment": "Minimum payment",
     "cutOff": "Cut-off",
     "dueDate": "Due",
