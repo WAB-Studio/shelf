@@ -18,6 +18,10 @@ export type DebtPocket = {
   currency: CurrencyCode;
   owedCents: number;
   creditCents: number;
+  // What the pocket's movements still marked an estimate expect the issuer to
+  // bill, in the currency the debt bills in (RF-123): a purchase adds, a refund
+  // takes away. Null while nothing is pending. Never added to the owed (RF-124).
+  toBillCents: number | null;
 };
 
 export type DebtOverviewRow = {
@@ -68,6 +72,15 @@ function nextDayOfMonthOnOrAfterSql(dayCol: SQL, today: string): SQL {
   )`;
 }
 
+// The to-bill figure of every liability's foreign pockets, keyed by
+// `${accountId}:${currency}`: keyed by the currency alone, one card's dollar
+// estimate would land on every other card's dollar pocket.
+export type ToBillByPocket = Map<string, number>;
+
+export function toBillKey(accountId: string, currency: CurrencyCode): string {
+  return `${accountId}:${currency}`;
+}
+
 /**
  * Every liability that carries debt terms with its derived figures in ONE round
  * trip (RF-78, RF-79, RNF-09): owed is what the balance derived by
@@ -97,6 +110,19 @@ function nextDayOfMonthOnOrAfterSql(dayCol: SQL, today: string): SQL {
  * (RF-121, RF-124).
  */
 export async function getDebtOverview(): Promise<DebtOverviewRow[]> {
+  return (await getDebtOverviewWithPockets()).rows;
+}
+
+/**
+ * The overview above, and from the same statement the to-bill figure of every
+ * liability's foreign pockets, the ones it does not list included: the debts
+ * screen reads its no-terms rows' pockets off this one round trip rather than a
+ * fifth one of their own.
+ */
+export async function getDebtOverviewWithPockets(): Promise<{
+  rows: DebtOverviewRow[];
+  toBillByPocket: ToBillByPocket;
+}> {
   const today = todayInBogota();
   const nextCutOff = nextDayOfMonthOnOrAfterSql(sql`dt.statement_cut_off_day`, today);
   const nextDue = nextDayOfMonthOnOrAfterSql(sql`dt.payment_due_day`, today);
@@ -104,7 +130,8 @@ export async function getDebtOverview(): Promise<DebtOverviewRow[]> {
   return withUserDb(async (tx) => {
     const rows = await tx.execute<{
       account_id: string;
-      debt_kind: DebtTerms["debtKind"];
+      // Null on a liability with no terms.
+      debt_kind: DebtTerms["debtKind"] | null;
       owed_cents: string;
       credit_cents: string;
       credit_limit_cents: string | null;
@@ -116,15 +143,39 @@ export async function getDebtOverview(): Promise<DebtOverviewRow[]> {
       next_due_date: string | null;
       due_installments_cents: string;
       currency: string;
-      other_owed: { currency: string; owedCents: string; creditCents: string }[];
+      other_owed: {
+        currency: string;
+        owedCents: string;
+        creditCents: string;
+        toBillCents: string | null;
+      }[];
     }>(sql`
+      -- The estimates still waiting for the issuer, per account AND currency:
+      -- the movement's own currency names the pocket, its second amount is in
+      -- the one the debt bills in. A purchase leaves the card and adds to what
+      -- is to bill; a refund enters it and takes away.
+      with to_bill as (
+        select
+          ac.id,
+          t.currency,
+          sum(case when t.from_account_id = ac.id
+            then t.counter_amount_cents
+            else -t.counter_amount_cents end) as cents
+        from accounts ac
+        join transactions t
+          on t.from_account_id = ac.id or t.to_account_id = ac.id
+        where ac.kind = 'liability'
+          and t.currency <> ac.settlement_currency
+          and t.counter_is_estimate
+        group by ac.id, t.currency
+      ),
       -- ONE pass over the view for both readings a debt takes off it: the pocket
       -- it bills in, and the ones it does not. A correlated subselect for the
       -- second would re-run the whole aggregate once per debt (RNF-09).
       -- Grouped by the account's own key, never the view's column of that name:
       -- the settlement currency is then functionally dependent and reads
       -- unaggregated inside the two filters.
-      with pockets as (
+      pockets as (
         select
           ac.id,
           max(ab.balance_cents) filter (
@@ -135,15 +186,17 @@ export async function getDebtOverview(): Promise<DebtOverviewRow[]> {
               'currency', ab.currency,
               -- The cast keeps a bigint out of a JSON number.
               'owedCents', greatest(0, -ab.balance_cents)::text,
-              'creditCents', greatest(0, ab.balance_cents)::text
+              'creditCents', greatest(0, ab.balance_cents)::text,
+              'toBillCents', tb.cents::text
             ) order by ab.currency
           ) filter (where ab.currency <> ac.settlement_currency), '[]'::jsonb) as other_owed
         from account_balances ab
         join accounts ac on ac.id = ab.id and ac.kind = 'liability'
+        left join to_bill tb on tb.id = ac.id and tb.currency = ab.currency
         group by ac.id
       )
       select
-        dt.account_id,
+        b.id as account_id,
         dt.debt_kind,
         a.settlement_currency as currency,
         -- A liability's balance is negative while it owes (RNF-05).
@@ -173,9 +226,11 @@ export async function getDebtOverview(): Promise<DebtOverviewRow[]> {
             and l.due_date <= nd.next_due
         ), 0) as due_installments_cents,
         b.other_owed
-      from debt_terms dt
-      join accounts a on a.id = dt.account_id and a.kind = 'liability'
-      join pockets b on b.id = dt.account_id
+      -- Every liability, terms or not: a row with no terms carries only its
+      -- pockets out, for the debts screen's no-terms rows, and lists nowhere.
+      from pockets b
+      join accounts a on a.id = b.id
+      left join debt_terms dt on dt.account_id = b.id
       -- The latest closed statement's own printed dates, when one exists
       -- (RF-131): the same row getCurrentStatement reads, so the overview and
       -- the detail screen never name different dates for the same debt.
@@ -194,30 +249,48 @@ export async function getDebtOverview(): Promise<DebtOverviewRow[]> {
       order by a.name
     `);
 
-    return rows.map((row) => ({
-      accountId: row.account_id,
-      debtKind: row.debt_kind,
-      currency: row.currency,
-      // A bigint arrives from the driver as a string; the ledger keeps cents a number.
-      owedCents: Number(row.owed_cents),
-      creditCents: Number(row.credit_cents),
-      creditLimitCents:
-        row.credit_limit_cents === null ? null : Number(row.credit_limit_cents),
-      availableCreditCents:
-        row.available_credit_cents === null ? null : Number(row.available_credit_cents),
-      monthlyInterestCents: Number(row.monthly_interest_cents),
-      monthlyRatePct: Number(row.monthly_rate_pct),
-      minimumPaymentCents:
-        row.minimum_payment_cents === null ? null : Number(row.minimum_payment_cents),
-      nextCutOffDate: row.next_cut_off_date,
-      nextDueDate: row.next_due_date,
-      dueInstallmentsCents: Number(row.due_installments_cents),
-      otherOwed: row.other_owed.map((pocket) => ({
-        currency: pocket.currency,
-        owedCents: Number(pocket.owedCents),
-        creditCents: Number(pocket.creditCents),
-      })),
-    }));
+    const toBillByPocket: ToBillByPocket = new Map();
+    for (const row of rows) {
+      for (const pocket of row.other_owed) {
+        if (pocket.toBillCents === null) continue;
+        toBillByPocket.set(toBillKey(row.account_id, pocket.currency), Number(pocket.toBillCents));
+      }
+    }
+
+    const overview = rows.flatMap((row) => {
+      // A liability with no terms carried its pockets out above and is no overview row.
+      if (row.debt_kind === null) return [];
+
+      return [
+        {
+          accountId: row.account_id,
+          debtKind: row.debt_kind,
+          currency: row.currency,
+          // A bigint arrives from the driver as a string; the ledger keeps cents a number.
+          owedCents: Number(row.owed_cents),
+          creditCents: Number(row.credit_cents),
+          creditLimitCents:
+            row.credit_limit_cents === null ? null : Number(row.credit_limit_cents),
+          availableCreditCents:
+            row.available_credit_cents === null ? null : Number(row.available_credit_cents),
+          monthlyInterestCents: Number(row.monthly_interest_cents),
+          monthlyRatePct: Number(row.monthly_rate_pct),
+          minimumPaymentCents:
+            row.minimum_payment_cents === null ? null : Number(row.minimum_payment_cents),
+          nextCutOffDate: row.next_cut_off_date,
+          nextDueDate: row.next_due_date,
+          dueInstallmentsCents: Number(row.due_installments_cents),
+          otherOwed: row.other_owed.map((pocket) => ({
+            currency: pocket.currency,
+            owedCents: Number(pocket.owedCents),
+            creditCents: Number(pocket.creditCents),
+            toBillCents: pocket.toBillCents === null ? null : Number(pocket.toBillCents),
+          })),
+        },
+      ];
+    });
+
+    return { rows: overview, toBillByPocket };
   });
 }
 

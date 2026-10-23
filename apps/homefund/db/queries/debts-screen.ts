@@ -2,7 +2,11 @@ import "server-only";
 
 import { getAccountBalances } from "@/db/queries/account-balances";
 import { listAccounts } from "@/db/queries/accounts";
-import { getDebtOverview, sumDebtCreditTotals } from "@/db/queries/debt-overview";
+import {
+  getDebtOverviewWithPockets,
+  sumDebtCreditTotals,
+  toBillKey,
+} from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { listPlanPositions } from "@/db/queries/installment-plans";
 import type { PlanPosition } from "@/db/queries/installment-plans";
@@ -119,8 +123,8 @@ function addOwed(
  * owes. Every set is labelled by the screen and no figure crosses two of them.
  */
 export async function getDebtsScreenData(): Promise<DebtsScreenData> {
-  const [overview, accounts, balances, positions] = await Promise.all([
-    getDebtOverview(),
+  const [{ rows: overview, toBillByPocket }, accounts, balances, positions] = await Promise.all([
+    getDebtOverviewWithPockets(),
     listAccounts({ archived: false }),
     getAccountBalances(),
     listPlanPositions(),
@@ -186,6 +190,8 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
             currency: balance.currency,
             owedCents: owedOf(balance.balanceCents),
             creditCents: creditOf(balance.balanceCents),
+            // Read off the overview's statement; only shown, never summed (RF-124).
+            toBillCents: toBillByPocket.get(toBillKey(account.id, balance.currency)) ?? null,
           })),
         planPosition: positionById.get(account.id) ?? null,
         canWrite: account.canWrite,
@@ -250,9 +256,14 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
   // The earliest named due date carries the consolidated next payment (RF-83):
   // that row's minimum plus the installments falling due by then, the currency it
   // bills in, and the debt it belongs to — its id as well as its name, so the row
-  // that carries the badge is named rather than matched back by hand.
+  // that carries the badge is named rather than matched back by hand. Only a debt
+  // that owes in the pocket it bills in competes: one at zero or in credit has
+  // nothing to pay, whatever date its terms name.
   const nextPayment = withTerms
-    .filter((row): row is typeof row & { nextDueDate: string } => row.nextDueDate !== null)
+    .filter(
+      (row): row is typeof row & { nextDueDate: string } =>
+        row.nextDueDate !== null && row.owedCents > 0,
+    )
     .reduce<DebtsScreenData["totals"]["nextPayment"]>((earliest, row) => {
       if (earliest !== null && earliest.date <= row.nextDueDate) return earliest;
       return {

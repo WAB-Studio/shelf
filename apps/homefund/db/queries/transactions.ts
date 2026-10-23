@@ -18,6 +18,7 @@ import { insertRow } from "@/db/insert-row";
 import {
   accounts,
   ingestCounterparties,
+  plannedPayments,
   transactionLabels,
   transactionSplits,
   transactions,
@@ -126,6 +127,9 @@ export type TransactionListRow = {
   // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
   // else's is refused. Never a Date: its milliseconds make the row look newer than itself.
   updatedAt: string;
+  // The planned payment this movement settled (RF-161), when the caller can read it; null for
+  // every other movement, and for one whose payment lies in a scope the caller cannot see.
+  settledPlannedPayment: { id: string; description: string | null } | null;
 };
 
 // Where a resent create lands: the scope-keyed index it hit says which scope the first copy
@@ -540,6 +544,16 @@ export async function listTransactions(
     where tl.transaction_id = ${outerId}
   ), '[]'::jsonb)`;
 
+  // Read under the caller's policies like the rest of the row, so a payment in another
+  // scope that points here reads as none. Nothing makes the link unique; the earliest
+  // due date answers, so two reads of the same row never name different payments.
+  const settledPlannedPaymentJson = sql<{ id: string; description: string | null } | null>`(
+    select jsonb_build_object('id', p.id, 'description', p.description)
+    from ${plannedPayments} p where p.settled_transaction_id = ${outerId}
+    order by p.due_date, p.id
+    limit 1
+  )`;
+
   return withUserDbOrTx(options?.tx, async (tx) => {
     const query = tx
       .select({
@@ -569,6 +583,7 @@ export async function listTransactions(
         toSettlementCurrency: sql<string | null>`to_account.settlement_currency`,
         splits: splitsJson,
         labels: labelsJson,
+        settledPlannedPayment: settledPlannedPaymentJson,
       })
       .from(transactions)
       // What each named side settles in, alongside the movement's own currency
