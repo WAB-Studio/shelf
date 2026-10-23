@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
-import { asPerson, createButton, planText, readWithTemplate, streamInPlaceOfModel, unfold } from "./importar-plan";
+import { asPerson, createButton, GENERAL, lineOf, planText, readWithTemplate, streamInPlaceOfModel, unfold } from "./importar-plan";
 
 // A section the model could not read is said above the first goal, one muted line each, in the
 // text's order; it counts no goal and never blocks «Crear» (RP-90, RP-86). The board is
@@ -16,8 +16,11 @@ const line = ({ heading, from, to }: Out) =>
 const SECTIONS = /No se pudo leer la sección/;
 
 // `json` answers as the route does for a plain read, `stream` as it does for a model read.
-async function review(page: Page, leftOut: Out[] | undefined, mode: "json" | "stream") {
-  const done = { ...(await readWithTemplate(page, planText({ rhythm: false }))), via: "model", ...(leftOut ? { leftOut } : {}) };
+type Answer = Awaited<ReturnType<typeof readWithTemplate>>;
+async function review(page: Page, leftOut: Out[] | undefined, mode: "json" | "stream", shape: (answer: Answer) => void = () => undefined) {
+  const answer = await readWithTemplate(page, planText({ rhythm: false }));
+  shape(answer);
+  const done = { ...answer, via: "model", ...(leftOut ? { leftOut } : {}) };
   if (mode === "stream") await streamInPlaceOfModel(page, { done }, 50);
   else {
     await page.route("**/importar/leer", (route) =>
@@ -97,3 +100,64 @@ test.describe("a section the model could not read is said above the goals (RP-90
     });
   });
 });
+
+// RP-130: the template's general goal holds its two «nota:» lines (5 and 6) in its note.
+const HELD: Out = { heading: "Notas", from: 5, to: 6 };
+const heldLine = (out: Out) =>
+  `No se pudo leer la sección «${out.heading}» (líneas ${out.from} a ${out.to}): quedó en la nota de «${GENERAL}»; pégala sola si la quieres como meta.`;
+type Root = { note: string | null; noteSrc: { from: number; to: number }[] };
+const root = (answer: Answer) => (answer.draft as { goals: Root[] }).goals[0];
+const count = (page: Page) => page.getByText(/ en notas, /);
+
+for (const width of [360, 1280]) {
+  const viewport = { width, height: width === 360 ? 740 : 900 };
+  test.describe(`a section held in a note names the goal that holds it, at ${width} (RP-130)`, () => {
+    test("held: the line names the goal and the count reads «en notas», not «fuera»", async ({ person, browser, baseURL }) => {
+      // Kills: the old words for a held section, or counting held lines as «fuera».
+      await asPerson({ person, browser, baseURL }, async (page) => {
+        await review(page, [HELD], "json");
+        await expect(page.getByText(SECTIONS)).toHaveText(heldLine(HELD));
+        await expect(count(page)).toContainText(/, [1-9]\d* en notas, 0 fuera/);
+      }, viewport);
+    });
+
+    test("two held: two lines, each named", async ({ person, browser, baseURL }) => {
+      // Kills: one line for all the sections.
+      const second: Out = { heading: "Reglas", from: 5, to: 5 };
+      await asPerson({ person, browser, baseURL }, async (page) => {
+        await review(page, [HELD, second], "stream");
+        await expect(page.getByText(SECTIONS)).toHaveText([heldLine(HELD), heldLine(second)]);
+      }, viewport);
+    });
+
+    test("not held: a note that lacks the lines keeps «quedó fuera» and the count says «fuera»", async ({ person, browser, baseURL }) => {
+      // Kills: naming a holder for a section the note does not carry.
+      await asPerson({ person, browser, baseURL }, async (page) => {
+        await review(page, [HELD], "json", (answer) => {
+          root(answer).note = "otra cosa";
+        });
+        await expect(page.getByText(SECTIONS)).toHaveText(line(HELD));
+        await expect(count(page)).toContainText(/, [1-9]\d* fuera/);
+      }, viewport);
+    });
+
+    test("a section out of the text keeps the old line; none left out draws none", async ({ person, browser, baseURL }) => {
+      // Kills: a holder for a range no note holds.
+      await asPerson({ person, browser, baseURL }, async (page) => {
+        await review(page, [ONE], "json");
+        await expect(page.getByText(SECTIONS)).toHaveText(line(ONE));
+      }, viewport);
+    });
+
+    test("a draft without the new fields opens as before: the stored shape is the same", async ({ person, browser, baseURL }) => {
+      // Kills: a new key in the stored draft.
+      await asPerson({ person, browser, baseURL }, async (page) => {
+        await review(page, [HELD], "json", (answer) => {
+          expect(Object.keys(root(answer)).sort()).toContain("noteSrc");
+          expect(lineOf(planText({ rhythm: false }), "nota:")).toBeGreaterThan(0);
+        });
+        await expect(page.getByText(SECTIONS)).toHaveCount(1);
+      }, viewport);
+    });
+  });
+}

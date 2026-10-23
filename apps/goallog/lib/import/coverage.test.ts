@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { coverage, placeLeftovers } from "./coverage";
+import { coverage, placeLeftovers, sectionHolder } from "./coverage";
 import { normalize, type DraftGoal, type DraftTask, type ImportDraft, type RawGoal, type Source } from "./draft";
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
@@ -230,4 +230,45 @@ test("903: a line a refused part and an unmarked part both cover is out as refus
   }));
   const c = coverage(d, source(["una sola línea"]), new Set(["goals.0.tasks.0"]), new Set(["goals.0.phases.0"]));
   assert.deepEqual(c.outLines.map((o) => o.reason), ["refused"]);
+});
+
+// ---- RP-130: the goal whose note holds a section the model could not read.
+
+test("130: the first root goal that holds the section is named, not the last root", () => {
+  const lines = ["uno", "dos", "tres"];
+  const d = placeLeftovers(draft(goal({ key: "a", name: "Primera", src: [{ from: 1, to: 1 }] }), goal({ key: "b", name: "Segunda", src: [] })), source(lines));
+  assert.deepEqual(sectionHolder(d, { from: 2, to: 3 }, source(lines)), { goalName: "Primera" });
+});
+
+test("130: a section with a line the ceiling cut has no holder", () => {
+  const lines = ["a".repeat(60000), "b".repeat(60000), "corta"];
+  const placed = placeLeftovers(draft(goal()), source(lines));
+  assert.equal(sectionHolder(placed, { from: 1, to: 1 }, source(lines))?.goalName, "IA aplicada");
+  assert.equal(sectionHolder(placed, { from: 2, to: 3 }, source(lines)), null);
+  assert.equal(sectionHolder(placed, { from: 1, to: 3 }, source(lines)), null);
+});
+
+test("130: a draft with no root goal has no holder and does not crash", () => {
+  const lines = ["uno", "dos"];
+  const d = draft(goal({ key: "p", parent: "r", name: "Hija" }));
+  assert.equal(sectionHolder(placeLeftovers(d, source(lines)), { from: 1, to: 2 }, source(lines)), null);
+});
+
+test("130: blank lines are not asked of the note; an all-blank section has no holder", () => {
+  const lines = ["uno", "", "tres", ""];
+  const d = placeLeftovers(draft(goal()), source(lines));
+  assert.equal(sectionHolder(d, { from: 1, to: 3 }, source(lines))?.goalName, "IA aplicada");
+  assert.equal(sectionHolder(d, { from: 4, to: 4 }, source(lines)), null);
+});
+
+test("130: held ⇔ none of the section's lines is in outLines, and the count reads held lines as notes", () => {
+  const lines = ["a".repeat(60000), "b".repeat(60000), "corta", "fin"];
+  const placed = placeLeftovers(draft(goal()), source(lines));
+  const c = coverage(placed, source(lines), none, none);
+  for (const section of [{ from: 1, to: 1 }, { from: 2, to: 2 }, { from: 3, to: 4 }, { from: 1, to: 4 }]) {
+    const out = c.outLines.some((o) => o.line >= section.from && o.line <= section.to);
+    assert.equal(sectionHolder(placed, section, source(lines), c.outLines) === null, out);
+  }
+  assert.deepEqual([c.notes, c.out], [1, 3]);
+  assert.ok(c.outLines.every((o) => o.reason === "noteFull"));
 });
