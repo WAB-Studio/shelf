@@ -144,6 +144,12 @@ test("Money in credit inks the accent and never writes a sign", () => {
   assert.doesNotMatch(textOf(money({ minor: 2_500, currency: "USD", tone: "credit" })), /[+\u2212-]/);
 });
 
+test("Money in credit draws no sign even when signed is always and the amount is negative", () => {
+  const out = money({ minor: -2_500, currency: "USD", tone: "credit", signed: "always" });
+  assert.match(out, /color:var\(--accent-11\)/);
+  assert.equal(textOf(out), "US$ 25,00");
+});
+
 test("Money draws its words inside its one span, in its ink", () => {
   const out = money({
     minor: 15_000_000,
