@@ -494,7 +494,13 @@ export function MovementDetail({
           open={deleteOpen}
           onOpenChange={setDeleteOpen}
           title={t("deleteTitle")}
-          description={t("deleteDescription")}
+          description={
+          movement.settledPlannedPayment
+            ? movement.settledPlannedPayment.description
+              ? t("deleteSettlesPayment", { name: movement.settledPlannedPayment.description })
+              : t("deleteSettlesPaymentUnnamed")
+            : t("deleteDescription")
+        }
           confirmLabel={t("delete")}
           cancelLabel={tKey("common.cancel")}
           pending={remove.isPending}
