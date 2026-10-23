@@ -11885,6 +11885,8 @@ async function importCommitScopesSuite(): Promise<void> {
   track("groups", groupId);
   const [{ id: fundCash }] = await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${groupId} and subtype = 'cash'`;
   track("accounts", fundCash);
+  // The fund's cash opens today; back to the own bank's day, so the movements below postdate it (RF-162).
+  await fixtureSql`update accounts set initial_balance_on = ${shiftDate(today, -60)} where id = ${fundCash}`;
   const ownBank = await openAccount(leader, "propia", 50_000_000, shiftDate(today, -60));
   const ownCategory = (await asUser(leader, () =>
     createCategory({ scope: { ownerUserId: leader.id }, name: `Harness m24 propia ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),

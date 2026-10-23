@@ -900,10 +900,11 @@ async function checkAnalyticsAggregates() {
           to_char(date_trunc('month', now() at time zone 'America/Bogota'), 'YYYY-MM-DD') as start,
           to_char(date_trunc('month', now() at time zone 'America/Bogota') + interval '1 month', 'YYYY-MM-DD') as end_exclusive`;
 
-      // The caller's personal account and the group's shared account: contribution flows between the two.
+      // The caller's personal account and the group's shared account: contribution flows between the two. The personal
+      // one opens a month back, so the previous-month income below postdates its opening (RF-162).
       const [{ id: personalAccount }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_on)
-        values (${leaderUser}, 'rls analytics personal cash', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${leaderUser}, 'rls analytics personal cash', 'asset', (date_trunc('month', now() at time zone 'America/Bogota') - interval '1 month')::date) returning id`;
       const [{ id: groupAccount }] = await tx<{ id: string }[]>`
         insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
         values (${groupId}, true, 'rls analytics group cash', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
@@ -2149,12 +2150,13 @@ async function checkAccountStatementPolicies() {
       await tx`insert into app_users (id) values (${subject}), (${otherUser})`;
       await enterUserContext(tx, subject);
 
+      // Both open on the previous month's first day, before every movement below (RF-162).
       const [{ id: card }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_cents, initial_balance_on)
-        values (${subject}, 'rls debt statement card', 'liability', -200000, (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${subject}, 'rls debt statement card', 'liability', -200000, (date_trunc('month', now() at time zone 'America/Bogota') - interval '1 month')::date) returning id`;
       const [{ id: cash }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_cents, initial_balance_on)
-        values (${subject}, 'rls debt statement cash', 'asset', 1000000, (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${subject}, 'rls debt statement cash', 'asset', 1000000, (date_trunc('month', now() at time zone 'America/Bogota') - interval '1 month')::date) returning id`;
       await tx`insert into debt_terms (account_id, debt_kind, annual_rate, minimum_payment_pct, statement_cut_off_day, payment_due_day)
         values (${card}, 'revolving', 0.28, 0.05, 28, 15)`;
 
@@ -2797,9 +2799,10 @@ async function checkRecurringRulePolicies() {
       await tx`insert into group_members (group_id, user_id, name, role)
         values (${groupId}, ${memberUser}, 'rls recurring member', 'member')`;
       await enterUserContext(tx, memberUser);
+      // Opened the day 108's overdue rule first falls due, so every period it back-fills postdates the opening (RF-162).
       const [{ id: memberAccount }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_on)
-        values (${memberUser}, 'rls recurring member cash', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${memberUser}, 'rls recurring member cash', 'asset', (now() at time zone 'America/Bogota')::date - 21) returning id`;
       const [{ id: memberExpenseCat }] = await tx<{ id: string }[]>`
         insert into categories (owner_user_id, name, kind)
         values (${memberUser}, 'rls recurring member expense', 'expense') returning id`;
@@ -3029,7 +3032,7 @@ async function checkAuditLogPolicies() {
       await enterUserContext(tx, subject);
       const [{ id: dueAccount }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_on)
-        values (${subject}, 'rls audit account', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${subject}, 'rls audit account', 'asset', (now() at time zone 'America/Bogota')::date - 7) returning id`;
       const [{ id: dueCat }] = await tx<{ id: string }[]>`
         insert into categories (owner_user_id, name, kind)
         values (${subject}, 'rls audit expense', 'expense') returning id`;
@@ -12777,8 +12780,7 @@ async function checkReturnKeepsScope() {
 
 // RF-162: a movement is never dated before the opening day of an account it names, and an account's opening day never
 // moves past one of its movements. Days are civil `date` columns compared as days, so the fixture names fixed past days
-// and no clock or zone enters. Every row rolls back. O6M6_MIGRATION_FILE runs a candidate migration inside each row's
-// transaction first, so a candidate or a mutant is proved without persisting DDL.
+// and no clock or zone enters. Every row rolls back.
 const O6M6_OPEN = "2026-03-10";
 const O6M6_EVE = "2026-03-09";
 const O6M6_MID = "2026-03-20";
@@ -12800,8 +12802,6 @@ async function o6m6Rows(labels: string[], body: (tx: M1Tx) => Promise<M1Verdict[
   let verdicts: M1Verdict[] = labels.map(() => ({ ok: false, detail: "the body never ran" }));
   await sql
     .begin(async (tx) => {
-      const candidate = process.env.O6M6_MIGRATION_FILE;
-      if (candidate) await m1RunMigration(tx, candidate);
       verdicts = await body(tx);
       throw M1_ROLLBACK;
     })

@@ -401,12 +401,13 @@ async function seedScope(userId: string, memberUserId: string): Promise<E2eScope
   await fixtureSql.begin(async (tx) => {
     await tx`select set_config('request.jwt.claims', ${claimsFor(userId)}, true)`;
 
+    // Opened at the start of last year, so a spec may book on it any day of the months it reads (RF-162).
     await tx`
       insert into accounts (
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (
         ${scope.accountId}, ${userId}, ${scope.accountName}, 'asset', 'bank',
-        5000000, (now() at time zone ${TIME_ZONE})::date)`;
+        5000000, (date_trunc('year', now() at time zone ${TIME_ZONE}) - interval '1 year')::date)`;
 
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)
