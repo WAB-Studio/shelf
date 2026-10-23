@@ -24,6 +24,7 @@ const jar = new Map<string, string>();
 type AuthCall = { path: string; body: Record<string, unknown> };
 const authCalls: AuthCall[] = [];
 let tokenAnswer: "session" | "refused" | "timeout" = "session";
+let verifyAnswer: "session" | "refused" = "session";
 
 const fakes: Record<string, unknown> = {
   "server-only": {},
@@ -73,7 +74,14 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const body = init?.body ? JSON.parse(String(init.body)) : {};
   authCalls.push({ path: `${url.pathname}${url.search}`, body });
   if (url.pathname === "/auth/v1/otp") return json(200, {});
-  if (url.pathname === "/auth/v1/verify") return json(200, session());
+  if (url.pathname === "/auth/v1/verify") {
+    if (verifyAnswer === "refused") {
+      // Auth takes a moment, as it does over a network: the client settles its stored session meanwhile.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return json(403, { code: "otp_expired", error_code: "otp_expired", msg: "Email link is invalid or has expired" });
+    }
+    return json(200, session());
+  }
   if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "pkce") {
     if (tokenAnswer === "timeout") return new Response("Gateway Timeout", { status: 504 });
     if (tokenAnswer === "refused") {
@@ -96,6 +104,7 @@ beforeEach(() => {
   jar.clear();
   authCalls.length = 0;
   tokenAnswer = "session";
+  verifyAnswer = "session";
 });
 
 // Asks for a link the way `sendSignInLink` does, so the jar holds the verifier cookies `@supabase/ssr` writes.
@@ -289,4 +298,27 @@ test("a landed link stays a redirect to / and is not turned into a failure", asy
   const response = await land("code=c-123");
   assert.equal(target(response), "/");
   assert.equal(new URL(response.headers.get("location")!, SITE).searchParams.get("error"), null);
+});
+
+// A session cookie Auth cannot read is cleared while the link is being verified, so `setAll` hands the route
+// Auth's own `Cache-Control` (which already says `no-store`) before the refused link fails.
+async function landRefusedWithBrokenSession() {
+  jar.set("sb-s-auth-token", `base64-${b64url({ stale: true })}`);
+  verifyAnswer = "refused";
+  const response = await land("token_hash=h-1&type=magiclink");
+  assert.equal(target(response), "/entrar?error=linkInvalid");
+  assert.equal(jar.has("sb-s-auth-token"), false, "Auth cleared the broken session, so its headers rode the redirect");
+  return response;
+}
+
+test("a refused link whose Auth headers already say no-store says it once", async () => {
+  noStoreOnce(await landRefusedWithBrokenSession());
+});
+
+test("a refused link keeps Auth's other cache directives beside no-store", async () => {
+  const cacheControl = (await landRefusedWithBrokenSession()).headers.get("cache-control") ?? "";
+  const directives = cacheControl.split(/[\s,]+/).filter(Boolean);
+  for (const directive of ["private", "no-cache", "must-revalidate", "max-age=0"]) {
+    assert.ok(directives.includes(directive), `«${cacheControl}» keeps ${directive}`);
+  }
 });

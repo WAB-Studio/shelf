@@ -4254,6 +4254,7 @@ async function main(): Promise<void> {
   await dollarBackupSuite();
   await o6m2DebtsAndSettledSuite();
   await o6m3BackupRestoreSuite();
+  await o7m11bSurvivorsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -13655,3 +13656,267 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
     `3 rows: ${said(smallCommit)} in ${smallCommit.trips} trips; 12 rows: ${said(largeCommit)} in ${largeCommit.trips} trips; stored ${batched.length}; dollar counters ${counterOf(refOf("small-0"))}, ${counterOf(refOf("large-0"))}; errors [${[...small.errors, ...large.errors].join(",")}]`,
   );
 }
+
+// O7-M11b: what oleada-6's mutants left unproven. Each card's foreign pocket reads its own estimate to bill, one
+// per currency (RF-122, RF-124); a movement two planned payments point at still reads as one row naming one of
+// them (RF-161); and an errored row in any bucket refuses the whole commit, written by nobody (RF-51).
+async function o7m11bSurvivorsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const show = (value: unknown) => JSON.stringify(value ?? "nothing");
+  const LIMIT = 100_000_000;
+
+  const open = async (holder: HarnessUser, kind: "asset" | "liability", name: string, amountMinor: number): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness o7m11b ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const expenseOf = async (holder: HarnessUser): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness o7m11b gasto ${tag}`, kind: "expense", parentId: null, color: "#B4542F" }),
+    );
+    keep("categories", categoryId);
+    return categoryId;
+  };
+  const buyInDollars = async (holder: HarnessUser, card: string, categoryId: string, amountCents: number, estimate: number, what: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: card,
+        toAccountId: null,
+        amountCents,
+        currency: "USD",
+        counterAmountCents: estimate,
+        counterIsEstimate: true,
+        occurredAt: today,
+        description: `Harness o7m11b ${what} ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const pocketOf = (pockets: DebtPocket[] | undefined, currency: string) => pockets?.find((pocket) => pocket.currency === currency);
+
+  // ---- O7: two cards in one fund, neither with terms, each with a dollar purchase of its own estimate.
+  const twoCards = await createMembershipFreeUser();
+  const twoExpense = await expenseOf(twoCards);
+  const cardA = await open(twoCards, "liability", "tarjeta A", 0);
+  const cardB = await open(twoCards, "liability", "tarjeta B", 0);
+  await buyInDollars(twoCards, cardA, twoExpense, 2_500, 10_500_000, "compra A");
+  await buyInDollars(twoCards, cardB, twoExpense, 1_000, 4_200_000, "compra B");
+  const twoScreen = await asUser(twoCards, () => getDebtsScreenData());
+  const usdA = pocketOf(twoScreen.withoutTerms.find((debt) => debt.accountId === cardA)?.otherOwed, "USD");
+  const usdB = pocketOf(twoScreen.withoutTerms.find((debt) => debt.accountId === cardB)?.otherOwed, "USD");
+  assert(
+    next("O7: two cards, each with a USD purchase (A 2500 estimated at 10500000, B 1000 at 4200000), each read only their own toBillCents on the debts screen"),
+    usdA?.owedCents === 2_500 && usdA.toBillCents === 10_500_000 && usdB?.owedCents === 1_000 && usdB.toBillCents === 4_200_000,
+    `A USD ${show(usdA)}; B USD ${show(usdB)}`,
+  );
+
+  // ---- O8: one card with a dollar and a euro pocket, each estimated apart.
+  // The selector offers COP and USD only, but the column holds any ISO code (RF-121); the read must hold whatever
+  // the table holds, so the euro purchase is booked as a dollar one and its currency rewritten as the owner.
+  const twoPockets = await createMembershipFreeUser();
+  const pocketsExpense = await expenseOf(twoPockets);
+  const multi = await open(twoPockets, "liability", "dos bolsillos", 0);
+  await asUser(twoPockets, () =>
+    upsertDebtTerms({
+      accountId: multi,
+      debtKind: "revolving",
+      annualRate: "0.3000",
+      minimumPaymentCents: null,
+      minimumPaymentPct: null,
+      creditLimitCents: LIMIT,
+      statementCutOffDay: 20,
+      paymentDueDay: 5,
+      avalCents: null,
+    }),
+  );
+  keep("debt_terms", multi);
+  await buyInDollars(twoPockets, multi, pocketsExpense, 2_500, 10_500_000, "compra en dolares");
+  const euro = await buyInDollars(twoPockets, multi, pocketsExpense, 1_000, 4_800_000, "compra en euros");
+  await fixtureSql`update transactions set currency = 'EUR' where id = ${euro}`;
+  const [multiOverview, multiScreen] = await asUser(twoPockets, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  const overviewPockets = multiOverview.find((row) => row.accountId === multi)?.otherOwed ?? [];
+  const screenPockets = multiScreen.withTerms.find((row) => row.accountId === multi)?.otherOwed ?? [];
+  const pocketsRead = (pockets: DebtPocket[]) =>
+    pockets.length === 2 &&
+    pocketOf(pockets, "USD")?.owedCents === 2_500 &&
+    pocketOf(pockets, "USD")?.toBillCents === 10_500_000 &&
+    pocketOf(pockets, "EUR")?.owedCents === 1_000 &&
+    pocketOf(pockets, "EUR")?.toBillCents === 4_800_000;
+  assert(
+    next("O8: a COP card with a USD 2500 purchase estimated at 10500000 and a EUR 1000 one at 4800000 reads two pockets, each with its own owed and toBillCents, on the overview and the screen"),
+    pocketsRead(overviewPockets) && pocketsRead(screenPockets),
+    `overview ${show(overviewPockets)}; screen ${show(screenPockets)}`,
+  );
+
+  // ---- X3: two planned payments point at one movement; the movement still reads as one row naming one of them.
+  // No write path of the app links a second payment to a movement, and nothing in the schema forbids it: the
+  // link's only index, planned_payments_settled_transaction_id_idx, is not unique.
+  const payer = await createMembershipFreeUser();
+  const payerBank = await open(payer, "asset", "banco", 50_000_000);
+  const payerExpense = await expenseOf(payer);
+  const { plannedPaymentId } = await asUser(payer, () =>
+    createPlannedPayment({
+      fromAccountId: payerBank,
+      toAccountId: null,
+      amountCents: 123_400,
+      categoryId: payerExpense,
+      dueDate: today,
+      remindOn: null,
+      description: `Harness o7m11b arriendo ${tag}`,
+    }),
+  );
+  keep("planned_payments", plannedPaymentId);
+  const settled = await asUser(payer, () =>
+    settlePlannedPayment({
+      plannedPaymentId,
+      fromAccountId: payerBank,
+      toAccountId: null,
+      amountCents: 123_400,
+      categoryId: payerExpense,
+      occurredAt: today,
+      description: `Harness o7m11b movimiento del pago ${tag}`,
+    }),
+  );
+  const settledId = settled.settled ? settled.transactionId : null;
+  if (settledId) track("transactions", settledId);
+  const payerClaims = JSON.stringify({ sub: payer.id, role: "authenticated", aud: "authenticated" });
+  const [secondPayment] = settledId
+    ? await fixtureSql.begin(async (tx) => {
+        await tx`select set_config('request.jwt.claims', ${payerClaims}, true)`;
+        return tx<{ id: string }[]>`
+          insert into planned_payments (from_account_id, amount_cents, due_date, description, status, settled_transaction_id)
+          values (${payerBank}, 123400, ${shiftDate(today, -1)}, ${`Harness o7m11b segundo pago ${tag}`}, 'done', ${settledId})
+          returning id`;
+      })
+    : [];
+  if (secondPayment) track("planned_payments", secondPayment.id);
+  const readOrError = async <T>(run: () => Promise<T>): Promise<{ value: T | null; error: string }> => {
+    try {
+      return { value: await asUser(payer, run), error: "" };
+    } catch (error) {
+      return { value: null, error: rootMessage(error) };
+    }
+  };
+  const doubleListed = await readOrError(() => listTransactions({}, { limit: 20 }));
+  const doubleById = settledId ? await readOrError(() => getTransactionById(settledId)) : { value: null, error: "no movement" };
+  const linkedRows = (doubleListed.value ?? []).filter((row) => row.id === settledId);
+  const both = new Set([plannedPaymentId, secondPayment?.id]);
+  const listedName = linkedRows[0]?.settledPlannedPayment?.id;
+  assert(
+    next("X3: a movement two planned payments point at lists once and reads by id, both naming the same one of the two payments"),
+    secondPayment !== undefined &&
+      doubleListed.error === "" &&
+      doubleById.error === "" &&
+      linkedRows.length === 1 &&
+      listedName !== undefined &&
+      both.has(listedName) &&
+      doubleById.value?.settledPlannedPayment?.id === listedName,
+    `second payment ${show(secondPayment)}; list ${doubleListed.error || `${linkedRows.length} rows naming ${show(listedName)}`}; by id ${doubleById.error || show(doubleById.value?.settledPlannedPayment)}`,
+  );
+  // Dropped here: the purge deletes the movement it points at, and the scope trigger would hand the unlinked row to
+  // whoever deleted it, which then blocks that identity's own drop.
+  if (secondPayment) await fixtureSql`delete from planned_payments where id = ${secondPayment.id}`;
+
+  // ---- G3, G4, G5, G7: an errored row in the members, recurring rules, categories or adjustments bucket.
+  const HAS_ERRORS = "data.import.errors.hasErrors";
+  const cleanAccount = (i: number): CommitInput["accounts"][number] => ({
+    status: "new",
+    index: 0,
+    sheetRow: 2,
+    externalRef: `o7m11b-${tag}-a${i}`,
+    placeholderId: `00000000-0000-4000-8000-${String(700 + i).padStart(12, "0")}`,
+    object: {
+      name: `Harness o7m11b limpia ${i} ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      placement: "personal",
+      institution: null,
+      settlementCurrency: "COP",
+      amount: "1000.00",
+      balanceOn: shiftDate(today, -20),
+    },
+  });
+  // The shape the pipeline hands back for a row a gate refused: its errors, and no object to write.
+  const erroredRow = (i: number) => ({
+    status: "new" as const,
+    index: 0,
+    sheetRow: 2,
+    externalRef: `o7m11b-${tag}-e${i}`,
+    placeholderId: null,
+    object: null as never,
+    errors: [{ key: "data.import.errors.required", column: "name", value: "" }],
+  });
+  // The control: the same clean account alone is written, so the refusals below are the errored row's doing.
+  const control = await createMembershipFreeUser();
+  let controlOutcome = "ok";
+  try {
+    await asUser(control, () =>
+      withUserDb((tx) =>
+        commitImport(tx, { members: [], categories: [], accounts: [cleanAccount(9)], recurringRules: [], transactions: [], adjustments: [] }, { userId: control.id, groupId: null }),
+      ),
+    );
+  } catch (error) {
+    controlOutcome = `threw ${rootMessage(error)}`;
+  }
+  const controlAccounts = await fixtureSql<{ id: string }[]>`select id from accounts where owner_user_id = ${control.id}`;
+  for (const r of controlAccounts) track("accounts", r.id);
+  assert(
+    next("G control: the clean account alone commits and is written"),
+    controlOutcome === "ok" && controlAccounts.length === 1,
+    `${controlOutcome}; ${controlAccounts.length} accounts written`,
+  );
+  const buckets = ["members", "recurringRules", "categories", "adjustments"] as const;
+  const refusedBy: string[] = [];
+  for (const [i, bucket] of buckets.entries()) {
+    const holder = await createMembershipFreeUser();
+    const input: CommitInput = {
+      members: [],
+      categories: [],
+      accounts: [cleanAccount(i)],
+      recurringRules: [],
+      transactions: [],
+      adjustments: [],
+      [bucket]: [erroredRow(i)],
+    };
+    let outcome = "ok";
+    try {
+      await asUser(holder, () => withUserDb((tx) => commitImport(tx, input, { userId: holder.id, groupId: null })));
+    } catch (error) {
+      outcome = error instanceof ActionError && error.message === HAS_ERRORS ? "hasErrors" : `threw ${rootMessage(error)}`;
+    }
+    const [left] = await fixtureSql<{ accounts: number; categories: number; rules: number; movements: number }[]>`
+      select (select count(*)::int from accounts where owner_user_id = ${holder.id}) as accounts,
+        (select count(*)::int from categories where owner_user_id = ${holder.id}) as categories,
+        (select count(*)::int from recurring_rules where owner_user_id = ${holder.id}) as rules,
+        (select count(*)::int from transactions where owner_user_id = ${holder.id}) as movements`;
+    for (const r of await fixtureSql<{ id: string }[]>`select id from accounts where owner_user_id = ${holder.id}`) track("accounts", r.id);
+    assert(
+      next(`G: an errored row in the ${bucket} bucket beside a clean account makes commitImport refuse with ${HAS_ERRORS} and write nothing`),
+      outcome === "hasErrors" && left.accounts === 0 && left.categories === 0 && left.rules === 0 && left.movements === 0,
+      `${outcome}; left ${show(left)}`,
+    );
+    if (outcome === "hasErrors") refusedBy.push(bucket);
+  }
+  console.log(`REPORT  o7m11b: commits refused in words by the ${refusedBy.join(", ") || "no"} bucket(s).`);
+}
+

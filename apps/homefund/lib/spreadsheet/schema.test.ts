@@ -143,3 +143,21 @@ test("RF-51: an asset row with a negative opening stays refused, with the form's
     ], amount);
   }
 });
+
+// The minus a tool writes for a card opened in debt is the typographic one (U+2212) as often as the ASCII
+// one, and a cell can carry leading spaces before it: each still reads as the magnitude owed.
+function openingOf(amount: string) {
+  const result = parse({ ...card, amount });
+  assert.equal(result.success, true, `«${amount}» passes`);
+  return (result.data as { amount: unknown }).amount;
+}
+
+test("RF-142: a card opening written with the Unicode minus reads as the same magnitude", () => {
+  assert.deepEqual(openingOf("−150000"), openingOf("150000"));
+  assert.deepEqual(openingOf("−150.000,00"), openingOf("150.000,00"));
+});
+
+test("RF-142: a card opening with leading spaces before its minus reads as the same magnitude", () => {
+  assert.deepEqual(openingOf("  -150000"), openingOf("150000"));
+  assert.deepEqual(openingOf("\t −150000"), openingOf("150000"));
+});
