@@ -24,13 +24,24 @@ const confirmSchema = z
   })
   .refine((query) => query.code !== undefined || (query.token_hash !== undefined && query.type !== undefined));
 
+// Auth's own directives, when `setAll` has run, are kept; `no-store` joins them once.
+function withNoStore(response: NextResponse): NextResponse {
+  const directives = (response.headers.get("Cache-Control") ?? "")
+    .split(",")
+    .map((directive) => directive.trim())
+    .filter(Boolean);
+  if (!directives.some((directive) => directive.toLowerCase() === "no-store")) directives.push("no-store");
+  response.headers.set("Cache-Control", directives.join(", "));
+  return response;
+}
+
 function failure(request: NextRequest, headers: Headers, reason: FailureReason): NextResponse {
   const url = new URL("/entrar", request.url);
   url.searchParams.set("error", reason);
 
   const response = NextResponse.redirect(url);
   headers.forEach((value, name) => response.headers.set(name, value));
-  return response;
+  return withNoStore(response);
 }
 
 /**

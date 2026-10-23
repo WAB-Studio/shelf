@@ -33,6 +33,17 @@ function applyHeaders(response: NextResponse, headers: Headers): NextResponse {
   return response;
 }
 
+// Auth's own directives, when `setAll` has run, are kept; `no-store` joins them once.
+function withNoStore(response: NextResponse): NextResponse {
+  const directives = (response.headers.get("Cache-Control") ?? "")
+    .split(",")
+    .map((directive) => directive.trim())
+    .filter(Boolean);
+  if (!directives.some((directive) => directive.toLowerCase() === "no-store")) directives.push("no-store");
+  response.headers.set("Cache-Control", directives.join(", "));
+  return response;
+}
+
 function invalidLink(
   request: NextRequest,
   locale: Locale,
@@ -42,7 +53,7 @@ function invalidLink(
   const url = new URL(`/${locale}/login`, request.url);
   url.searchParams.set("error", reason);
 
-  return applyHeaders(NextResponse.redirect(url), headers);
+  return withNoStore(applyHeaders(NextResponse.redirect(url), headers));
 }
 
 /**
