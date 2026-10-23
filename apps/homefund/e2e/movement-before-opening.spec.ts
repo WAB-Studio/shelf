@@ -91,6 +91,37 @@ async function rows() {
 
 const toasts = (page: Page) => page.locator("[data-sonner-toaster]");
 
+// toBeVisible does not see a dialog drawn over the toast; the element at the toast's centre does.
+async function expectTopmost(toast: Locator) {
+  await expect(toast).toBeVisible();
+  await expect
+    .poll(() =>
+      toast.evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return !!hit && node.contains(hit);
+      }),
+    )
+    .toBe(true);
+}
+
+const accounts = messages.accounts;
+
+// A movement on the account, dated on its opening day, with the category its split needs.
+async function seedMovementOnOpening(transactionId: string) {
+  const categoryId = randomUUID();
+  await asHarnessUser(async (tx) => {
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${categoryId}, ${scope.userId}, ${`O6 categoría ${stamp}`}, 'expense', '#4C8C4A')`;
+    await tx`
+      insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
+      values (${transactionId}, ${accountId}, 400000, ${OPENING}, ${NOTE})`;
+    await tx`insert into transaction_splits (transaction_id, category_id, amount_cents) values (${transactionId}, ${categoryId}, 400000)`;
+  });
+}
+const WORDS_OPENING = "Hay movimientos antes de esa fecha. La apertura no puede quedar después de ellos.";
+
 test.describe("a date before the account's opening", () => {
   let release: () => void = () => {};
 
@@ -117,7 +148,8 @@ test.describe("a date before the account's opening", () => {
     await expect(saveButton(dialog)).toBeDisabled();
     release();
 
-    await expect(toasts(page).getByText(WORDS, { exact: true })).toBeVisible();
+    await expectTopmost(toasts(page).getByText(WORDS, { exact: true }));
+    await expect(dialog.getByText(WORDS, { exact: true })).toBeVisible();
     await expect(toasts(page).getByText(messages.errors.unexpected, { exact: true })).toHaveCount(0);
 
     await expect(dialog).toBeVisible();
@@ -152,5 +184,42 @@ test.describe("a date before the account's opening", () => {
     await expect(dialog).toBeHidden();
     await expect(toasts(page).getByText(WORDS, { exact: true })).toHaveCount(0);
     expect((await rows()).map((row) => row.occurred_at)).toEqual([AFTER]);
+  });
+
+  test("an edit dated before the opening: the toast is on top and the date field says why", async ({ page }) => {
+    // Kills: the edit form refusing out of sight, or only in a toast.
+    release();
+    const transactionId = randomUUID();
+    await seedMovementOnOpening(transactionId);
+    await page.goto(`/es/movements/${transactionId}`);
+    await page.getByRole("button", { name: transactions.edit, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await field(dialog, "movement-date").fill(BEFORE);
+    await saveButton(dialog).click();
+
+    await expectTopmost(toasts(page).getByText(WORDS, { exact: true }));
+    await expect(dialog.getByText(WORDS, { exact: true })).toBeVisible();
+    await expect(field(dialog, "movement-date")).toHaveValue(BEFORE);
+    await expect(field(dialog, "movement-note")).toHaveValue(NOTE);
+  });
+
+  test("an opening moved past a movement: the toast is on top and the opening-day field says why", async ({ page }) => {
+    // Kills: the account form refusing out of sight, or only in a toast.
+    release();
+    await seedMovementOnOpening(randomUUID());
+    await page.goto("/es/settings/accounts");
+    await page
+      .getByRole("button", { name: messages.common.actionsFor.replace("{name}", ACCOUNT_NAME), exact: true })
+      .filter({ visible: true })
+      .click();
+    await page.getByRole("menuitem", { name: messages.common.edit, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await field(dialog, "account-balance-on").fill(AFTER);
+    await dialog.getByRole("button", { name: messages.common.save, exact: true }).click();
+
+    await expectTopmost(toasts(page).getByText(WORDS_OPENING, { exact: true }));
+    await expect(dialog.getByText(WORDS_OPENING, { exact: true })).toBeVisible();
+    await expect(field(dialog, "account-balance-on")).toHaveValue(AFTER);
+    expect(accounts.errors.openingAfterMovement).toBe(WORDS_OPENING);
   });
 });

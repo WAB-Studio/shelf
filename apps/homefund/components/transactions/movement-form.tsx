@@ -449,10 +449,17 @@ export function MovementForm({
 
   // Three hooks, not one behind a ternary: the actions' input types differ, and
   // rules of hooks forbid picking which one to call.
+  // A date before the account's opening is also written beside the date, with what was typed kept.
+  function refuseDate(result: { error: { serverError?: string } }) {
+    onActionError(result);
+    form.setError("occurredAt", { type: "server", message: "errors.movementBeforeOpening" });
+  }
+
   const create = useAction(createTransactionAction, {
     onSuccess: onActionSuccess,
     onError: (result) => {
       if (result.error.serverError === "errors.resendChanged") setRefusal("errors.resendChanged");
+      else if (result.error.serverError === "errors.movementBeforeOpening") refuseDate(result);
       else onActionError(result);
     },
   });
@@ -460,12 +467,16 @@ export function MovementForm({
     onSuccess: onActionSuccess,
     onError: (result) => {
       if (result.error.serverError === "errors.stale") setRefusal("errors.stale");
+      else if (result.error.serverError === "errors.movementBeforeOpening") refuseDate(result);
       else onActionError(result);
     },
   });
   const accept = useAction(acceptDeliveryAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.movementBeforeOpening") refuseDate(result);
+      else onActionError(result);
+    },
   });
 
   const isPending = isEdit
