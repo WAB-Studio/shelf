@@ -12561,16 +12561,6 @@ type O6m1bRow = {
   rest: Record<string, unknown>;
 };
 
-// `O6M1B_SQL` names a file whose statements run inside each row's rolled-back transaction before
-// the body: the way a candidate trigger, or a mutant of it, is driven without persisting DDL.
-async function o6m1bRows(labels: string[], body: (tx: M1Tx) => Promise<M1Verdict[]>): Promise<void> {
-  await m1Rows(labels, async (tx) => {
-    const file = process.env.O6M1B_SQL;
-    if (file) await m1RunMigration(tx, file);
-    return body(tx);
-  });
-}
-
 // The member is the plain member A who owns the personal payment; the leader is someone else in the fund.
 async function o6m1bFund(tx: M1Tx): Promise<O6m1bFund> {
   const { leader, member, groupId } = await m1Group(tx);
@@ -12644,7 +12634,7 @@ async function checkReturnKeepsScope() {
     tail: "o6m1b-6. the rolled-back o6m1b transactions leave no fixture behind",
   };
 
-  await o6m1bRows([labels.member], async (tx) => {
+  await m1Rows([labels.member], async (tx) => {
     const f = await o6m1bFund(tx);
     const { payment, movement } = await o6m1bPersonalSettled(tx, f, f.shared, f.groupCategory);
     const before = await o6m1bRead(tx, payment);
@@ -12661,7 +12651,7 @@ async function checkReturnKeepsScope() {
     }];
   });
 
-  await o6m1bRows([labels.tableOwner], async (tx) => {
+  await m1Rows([labels.tableOwner], async (tx) => {
     const f = await o6m1bFund(tx);
     const asLeader = await o6m1bPersonalSettled(tx, f, f.personal, f.personalCategory);
     const asNoOne = await o6m1bPersonalSettled(tx, f, f.personal, f.personalCategory);
@@ -12683,7 +12673,7 @@ async function checkReturnKeepsScope() {
     }];
   });
 
-  await o6m1bRows([labels.scope], async (tx) => {
+  await m1Rows([labels.scope], async (tx) => {
     const f = await o6m1bFund(tx);
     const { payment, movement } = await o6m1bPersonalSettled(tx, f, f.personal, f.personalCategory);
     // A's account placed in the group after the payment was planned: deriving the scope from the accounts now
@@ -12702,7 +12692,7 @@ async function checkReturnKeepsScope() {
     }];
   });
 
-  await o6m1bRows([labels.direct], async (tx) => {
+  await m1Rows([labels.direct], async (tx) => {
     const f = await o6m1bFund(tx);
     await enterUserContext(tx, f.leader);
     const [{ id: groupPayment }] = await tx<{ id: string }[]>`
@@ -12728,7 +12718,7 @@ async function checkReturnKeepsScope() {
     }];
   });
 
-  await o6m1bRows([labels.audit], async (tx) => {
+  await m1Rows([labels.audit], async (tx) => {
     const f = await o6m1bFund(tx);
     const { payment, movement } = await o6m1bPersonalSettled(tx, f, f.shared, f.groupCategory);
     const [{ last }] = await tx<{ last: string | null }[]>`select max(id)::text as last from audit_log`;
