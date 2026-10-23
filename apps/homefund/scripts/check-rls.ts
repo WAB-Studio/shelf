@@ -215,6 +215,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "o6m1") {
+    await checkSettlingMovementDelete();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -283,6 +288,7 @@ async function main() {
   await checkPendingInvitationRead();
   await checkLeaderGuardAndInvitationPredicates();
   await checkO5M2Survivors();
+  await checkSettlingMovementDelete();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -12247,6 +12253,277 @@ async function checkO5M2Survivors() {
       await sql`delete from auth.users where id = ${id}`.catch(() => undefined);
     }
   }
+}
+
+// RF-161: deleting the movement that settled a planned payment returns the payment to pending,
+// unlinked, in the same statement, audited as the deleter; while the movement exists every other way
+// back is refused, whoever writes it. The leader records and settles a group payment on the shared
+// account; the plain member is the fund's writer who deletes the movement. Every row rolls back.
+type O6m1Fund = {
+  leader: string;
+  member: string;
+  shared: string;
+  payment: string;
+  settling: string;
+  other: string;
+};
+
+type O6m1Payment = { status: string; settled_transaction_id: string | null };
+
+// Records a movement and links it the way `settlePlannedPayment` does; returns the rows the claim touched.
+async function o6m1Settle(tx: M1Tx, payment: string, account: string, amount: number) {
+  const [{ id: movement }] = await tx<{ id: string }[]>`
+    insert into transactions (from_account_id, amount_cents, occurred_at, description)
+    values (${account}, ${amount}, ${todayInBogota()}, 'rls o6m1 movement') returning id`;
+  const claimed = await tx`update planned_payments set status = 'done', settled_transaction_id = ${movement}
+    where id = ${payment} and status = 'pending' returning id`;
+  return { movement, claimed: claimed.length };
+}
+
+async function o6m1Fund(tx: M1Tx): Promise<O6m1Fund> {
+  const { leader, member, groupId } = await m1Group(tx);
+  await tx`update groups set name = 'rls o6m1' where id = ${groupId}`;
+  await enterUserContext(tx, leader);
+  const [{ id: shared }] = await tx<{ id: string }[]>`
+    insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
+    values (${groupId}, true, 'rls o6m1 shared cash', 'asset', ${todayInBogota()}) returning id`;
+  const [{ id: payment }] = await tx<{ id: string }[]>`
+    insert into planned_payments (from_account_id, amount_cents, due_date, description)
+    values (${shared}, 30000, ${todayInBogota()}, 'rls o6m1 payment') returning id`;
+  const settled = await o6m1Settle(tx, payment, shared, 30000);
+  if (settled.claimed !== 1) throw new Error(`the fixture's settle claimed ${settled.claimed} rows`);
+  const [{ id: other }] = await tx<{ id: string }[]>`
+    insert into transactions (from_account_id, amount_cents, occurred_at, description)
+    values (${shared}, 1000, ${todayInBogota()}, 'rls o6m1 other') returning id`;
+  return { leader, member, shared, payment, settling: settled.movement, other };
+}
+
+async function o6m1Payment(tx: M1Tx, id: string): Promise<O6m1Payment | undefined> {
+  const [row] = await tx<O6m1Payment[]>`
+    select status, settled_transaction_id from planned_payments where id = ${id}`;
+  return row;
+}
+
+function o6m1Show(row: O6m1Payment | undefined, f: O6m1Fund): string {
+  if (!row) return "row not visible";
+  const link = row.settled_transaction_id === null ? "null"
+    : row.settled_transaction_id === f.settling ? "the settling movement"
+    : row.settled_transaction_id === f.other ? "the other movement"
+    : row.settled_transaction_id;
+  return `status ${row.status}, link ${link}`;
+}
+
+// Each way back a writer could take by hand, as the fund's writer and as the table owner.
+async function o6m1Refusals(
+  tx: M1Tx,
+  f: O6m1Fund,
+  write: (sp: M1Tx) => Promise<unknown>,
+): Promise<{ writer: string | null; owner: string | null }> {
+  await enterUserContext(tx, f.member);
+  const writer = await m1Refusal(tx, write);
+  await tx`reset role`;
+  const owner = await m1Refusal(tx, write);
+  return { writer, owner };
+}
+
+async function checkSettlingMovementDelete() {
+  console.log("");
+  const labels = {
+    deleted: "o6m1-1. the fund's writer deletes the movement that settled a planned payment: one row, no error",
+    returned: "o6m1-2. after that delete the payment is pending and unlinked",
+    sameStatement: "o6m1-3. the next read inside the deleting transaction, before commit, already sees it pending and unlinked",
+    unlink: "o6m1-4. clearing the link while its movement exists is refused (23514), by the writer and the owner",
+    reopen: "o6m1-5. a done payment whose movement exists cannot return to pending (23514), by the writer and the owner",
+    rewrite: "o6m1-6. pointing a settled payment at another movement is refused (23514), by the writer and the owner",
+    cancelled: "o6m1-7. a cancelled payment and another done payment are untouched by any delete",
+    resettle: "o6m1-8. the returned payment settles again into a new movement, and that new link is permanent",
+    audit: "o6m1-9. the return leaves one planned_payments UPDATE in audit_log, actor the deleter, done→pending",
+    tail: "o6m1-10. the rolled-back RF-161 transactions leave no fixture behind",
+  };
+
+  await m1Rows([labels.deleted], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.member);
+    const deleted = await tx`delete from transactions where id = ${f.settling} returning id`;
+    await tx`reset role`;
+    const [{ n: left }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from transactions where id = ${f.settling}`;
+    return [{
+      ok: deleted.length === 1 && left === 0,
+      detail: `rows deleted ${deleted.length}, the movement still there ${left}`,
+    }];
+  });
+
+  await m1Rows([labels.returned], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${f.settling}`;
+    // Fires anything deferred, as the commit would.
+    await tx`set constraints all immediate`;
+    await tx`reset role`;
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: row?.status === "pending" && row.settled_transaction_id === null,
+      detail: o6m1Show(row, f),
+    }];
+  });
+
+  await m1Rows([labels.sameStatement], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${f.settling}`;
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: row?.status === "pending" && row.settled_transaction_id === null,
+      detail: `read by the deleter before commit: ${o6m1Show(row, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.unlink], async (tx) => {
+    const f = await o6m1Fund(tx);
+    const cleared = await o6m1Refusals(tx, f, (sp) =>
+      sp`update planned_payments set settled_transaction_id = null where id = ${f.payment}`);
+    // The exact shape of the return, written by hand while the movement still exists.
+    const returned = await o6m1Refusals(tx, f, (sp) =>
+      sp`update planned_payments set status = 'pending', settled_transaction_id = null where id = ${f.payment}`);
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: [cleared.writer, cleared.owner, returned.writer, returned.owner].every((code) => code === "23514") &&
+        row?.status === "done" && row.settled_transaction_id === f.settling,
+      detail: `link cleared: writer ${cleared.writer ?? "accepted"}, owner ${cleared.owner ?? "accepted"}; ` +
+        `pending and unlinked: writer ${returned.writer ?? "accepted"}, owner ${returned.owner ?? "accepted"}; after: ${o6m1Show(row, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.reopen], async (tx) => {
+    const f = await o6m1Fund(tx);
+    const reopened = await o6m1Refusals(tx, f, (sp) =>
+      sp`update planned_payments set status = 'pending' where id = ${f.payment}`);
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: reopened.writer === "23514" && reopened.owner === "23514" &&
+        row?.status === "done" && row.settled_transaction_id === f.settling,
+      detail: `writer ${reopened.writer ?? "accepted"}, owner ${reopened.owner ?? "accepted"}; after: ${o6m1Show(row, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.rewrite], async (tx) => {
+    const f = await o6m1Fund(tx);
+    const rewritten = await o6m1Refusals(tx, f, (sp) =>
+      sp`update planned_payments set settled_transaction_id = ${f.other} where id = ${f.payment}`);
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: rewritten.writer === "23514" && rewritten.owner === "23514" &&
+        row?.status === "done" && row.settled_transaction_id === f.settling,
+      detail: `writer ${rewritten.writer ?? "accepted"}, owner ${rewritten.owner ?? "accepted"}; after: ${o6m1Show(row, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.cancelled], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.leader);
+    const [{ id: cancelled }] = await tx<{ id: string }[]>`
+      insert into planned_payments (from_account_id, amount_cents, due_date, description)
+      values (${f.shared}, 2000, ${todayInBogota()}, 'rls o6m1 cancelled') returning id`;
+    // The app's cancel path: only a pending payment is cancelled.
+    await tx`update planned_payments set status = 'cancelled' where id = ${cancelled} and status = 'pending'`;
+    const [{ id: bystander }] = await tx<{ id: string }[]>`
+      insert into planned_payments (from_account_id, amount_cents, due_date, description)
+      values (${f.shared}, 1000, ${todayInBogota()}, 'rls o6m1 bystander') returning id`;
+    await tx`update planned_payments set status = 'done', settled_transaction_id = ${f.other}
+      where id = ${bystander} and status = 'pending'`;
+    const [{ id: unrelated }] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, amount_cents, occurred_at, description)
+      values (${f.shared}, 500, ${todayInBogota()}, 'rls o6m1 unrelated') returning id`;
+    await tx`reset role`;
+    const [{ last }] = await tx<{ last: string | null }[]>`select max(id)::text as last from audit_log`;
+
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${unrelated}`;
+    await tx`reset role`;
+    const afterUnrelated = await o6m1Payment(tx, cancelled);
+    await enterUserContext(tx, f.member);
+    const settlingDelete = await m1Refusal(tx, (sp) => sp`delete from transactions where id = ${f.settling}`);
+    await tx`reset role`;
+    const afterSettling = await o6m1Payment(tx, cancelled);
+    const other = await o6m1Payment(tx, bystander);
+    const [{ n: touched }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from audit_log
+      where entity = 'planned_payments' and record_id in (${cancelled}, ${bystander}) and id > ${last ?? "0"}::bigint`;
+    return [{
+      ok: afterUnrelated?.status === "cancelled" && afterUnrelated.settled_transaction_id === null &&
+        settlingDelete === null &&
+        afterSettling?.status === "cancelled" && afterSettling.settled_transaction_id === null &&
+        other?.status === "done" && other.settled_transaction_id === f.other && touched === 0,
+      detail: `cancelled after the unrelated delete: ${o6m1Show(afterUnrelated, f)}; settling delete ${settlingDelete ?? "accepted"}; ` +
+        `cancelled after it: ${o6m1Show(afterSettling, f)}; the other done payment: ${o6m1Show(other, f)}; audit rows on either ${touched}`,
+    }];
+  });
+
+  await m1Rows([labels.resettle], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${f.settling}`;
+    await enterUserContext(tx, f.leader);
+    const again = await o6m1Settle(tx, f.payment, f.shared, 30000);
+    const row = await o6m1Payment(tx, f.payment);
+    const rewrite = await m1Refusal(tx, (sp) =>
+      sp`update planned_payments set settled_transaction_id = ${f.other} where id = ${f.payment}`);
+    const reopen = await m1Refusal(tx, (sp) =>
+      sp`update planned_payments set status = 'pending' where id = ${f.payment}`);
+    const unlink = await m1Refusal(tx, (sp) =>
+      sp`update planned_payments set settled_transaction_id = null where id = ${f.payment}`);
+    return [{
+      ok: again.claimed === 1 && row?.status === "done" && row.settled_transaction_id === again.movement &&
+        rewrite === "23514" && reopen === "23514" && unlink === "23514",
+      detail: `settle claimed ${again.claimed}, ${row?.status ?? "row not visible"} linked to the new movement ` +
+        `${row?.settled_transaction_id === again.movement}; then rewrite ${rewrite ?? "accepted"}, reopen ${reopen ?? "accepted"}, unlink ${unlink ?? "accepted"}`,
+    }];
+  });
+
+  await m1Rows([labels.audit], async (tx) => {
+    const f = await o6m1Fund(tx);
+    const [{ last }] = await tx<{ last: string | null }[]>`select max(id)::text as last from audit_log`;
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${f.settling}`;
+    await tx`reset role`;
+    const rows = await tx<{
+      action: string;
+      actor_user_id: string | null;
+      before_status: string | null;
+      before_link: string | null;
+      after_status: string | null;
+      after_link: string | null;
+    }[]>`
+      select action, actor_user_id,
+        before_data->>'status' as before_status, before_data->>'settled_transaction_id' as before_link,
+        after_data->>'status' as after_status, after_data->>'settled_transaction_id' as after_link
+      from audit_log
+      where entity = 'planned_payments' and record_id = ${f.payment} and id > ${last ?? "0"}::bigint
+      order by id`;
+    const [row] = rows;
+    return [{
+      ok: rows.length === 1 && row.action === "UPDATE" && row.actor_user_id === f.member &&
+        row.before_status === "done" && row.before_link === f.settling &&
+        row.after_status === "pending" && row.after_link === null,
+      detail: `rows ${rows.length}` + (row
+        ? `, action ${row.action}, actor ${row.actor_user_id === f.member ? "the deleter" : row.actor_user_id === f.leader ? "the leader" : row.actor_user_id}, ` +
+          `${row.before_status}→${row.after_status}, link before is the settling movement ${row.before_link === f.settling}, link after ${row.after_link}`
+        : ""),
+    }];
+  });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ groups, payments, movements }] = await sql<{ groups: number; payments: number; movements: number }[]>`
+    select
+      (select count(*)::int from groups where name like 'rls o6m1%') as groups,
+      (select count(*)::int from planned_payments where description like 'rls o6m1%') as payments,
+      (select count(*)::int from transactions where description like 'rls o6m1%') as movements`;
+  assert(
+    labels.tail,
+    afterUser === "postgres" && groups === 0 && payments === 0 && movements === 0,
+    `current_user = ${afterUser}, groups ${groups}, payments ${payments}, movements ${movements} named 'rls o6m1%'`,
+  );
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile
