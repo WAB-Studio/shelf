@@ -254,7 +254,7 @@ async function found(): Promise<Found> {
     out.commitments.push(...(view.commitments ?? []).map((commitment) => ({ id: commitment.id, name: commitment.name })));
   }
   const loose = (await run("list_loose_one_offs")) as Record<string, { id: string; name: string }[] | undefined>;
-  out.tasks.push(...[...(loose.dayless ?? []), ...(loose.scheduled ?? [])].map((task) => ({ id: task.id, name: task.name })));
+  out.tasks.push(...[...(loose.dayless ?? []), ...(loose.scheduled ?? []), ...(loose.inGoals ?? [])].map((task) => ({ id: task.id, name: task.name })));
   return out;
 }
 

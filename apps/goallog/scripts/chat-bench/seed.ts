@@ -138,10 +138,10 @@ async function seedSession(): Promise<Record<keyof typeof SEED, string>> {
   }
   const looseReport = async () =>
     (await read<{ dayless: (Named & { goalId: string | null })[] }>("list_loose_one_offs")).dayless.find(
-      (task) => task.name === "Informe" && task.goalId === null,
+      (task) => task.name === "Carta al banco" && task.goalId === null,
     )?.id;
   if ((await looseReport()) === undefined) {
-    must("createOneOff(Informe)", await createOneOff({ name: "Informe", day: null }));
+    must("createOneOff(Carta al banco)", await createOneOff({ name: "Carta al banco", day: null }));
   }
 
   view = await goalView(english);

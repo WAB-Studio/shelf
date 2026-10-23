@@ -485,14 +485,16 @@ test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes
   assert.deepEqual(bare.tasks[0].owes, { value: 0, unit: null });
 });
 
-test("loose one-offs keep the two lists apart, the scheduled with their day", () => {
+test("loose one-offs keep the three lists apart, the scheduled with their day, the goals' with their month", () => {
   const shaped = shapeLoose({
     dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null, note: "Empezar por el estante" }],
     scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", note: null, day: "2026-10-09" }],
+    inGoals: [{ id: ID(32), name: "Maze", goalId: ID(10), goalName: "Leer más", note: null, plannedMonth: "2026-11" }],
   });
   assert.deepEqual(shaped, {
     dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null, note: "Empezar por el estante" }],
     scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", note: null, day: "2026-10-09" }],
+    inGoals: [{ id: ID(32), name: "Maze", goalId: ID(10), goalName: "Leer más", note: null, plannedMonth: "2026-11" }],
   });
 });
 

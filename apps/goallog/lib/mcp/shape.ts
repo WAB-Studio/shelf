@@ -10,7 +10,7 @@ import { civilDateInZone } from "@/lib/zone";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import type { loadDay } from "@/lib/queries/day";
 import type { GoalCommitment, GoalView, LooseCommitment, MetasSummary } from "@/lib/queries/goal";
-import type { DaylessOneOff, ScheduledOneOff } from "@/lib/queries/one-offs";
+import type { DaylessOneOff, GoalOneOff, ScheduledOneOff } from "@/lib/queries/one-offs";
 
 import units from "../../messages/es/units.json";
 
@@ -432,7 +432,7 @@ export function shapeReport(report: Report) {
   };
 }
 
-export function shapeLoose(input: { dayless: DaylessOneOff[]; scheduled: ScheduledOneOff[] }) {
+export function shapeLoose(input: { dayless: DaylessOneOff[]; scheduled: ScheduledOneOff[]; inGoals: GoalOneOff[] }) {
   const one = (oneOff: DaylessOneOff) => ({
     id: oneOff.id,
     name: oneOff.name,
@@ -443,5 +443,6 @@ export function shapeLoose(input: { dayless: DaylessOneOff[]; scheduled: Schedul
   return {
     dayless: input.dayless.map(one),
     scheduled: input.scheduled.map((oneOff) => ({ ...one(oneOff), day: oneOff.day })),
+    inGoals: input.inGoals.map((oneOff) => ({ ...one(oneOff), plannedMonth: oneOff.plannedMonth })),
   };
 }
