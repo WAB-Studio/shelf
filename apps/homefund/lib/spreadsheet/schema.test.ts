@@ -119,3 +119,27 @@ test("RF-122: a second amount that is not an amount is refused at its own column
   assert.equal(result.success, false);
   assert.ok(result.error?.issues.some((i) => i.path[0] === "counterAmount"));
 });
+
+// ---- M3: an account's opening amount read off a backup (RF-142, RF-51) -------------------------
+
+const card = { kind: "liability", subtype: "card" };
+
+test("RF-142: a card row whose opening carries the minus a backup writes passes, read as what is owed", () => {
+  for (const amount of ["-150000,00", "-150000", "-150.000,00"]) {
+    assert.deepEqual(failures({ ...card, amount }), null, amount);
+  }
+});
+
+test("RF-142: a card row whose opening is written without a sign passes as it always did", () => {
+  for (const amount of ["150000,00", "150000"]) {
+    assert.deepEqual(failures({ ...card, amount }), null, amount);
+  }
+});
+
+test("RF-51: an asset row with a negative opening stays refused, with the form's key on the amount", () => {
+  for (const amount of ["-100", "-100,00", "-1"]) {
+    assert.deepEqual(failures({ kind: "asset", subtype: "bank", amount }), [
+      { message: "accounts.errors.amountInvalid", path: ["amount"] },
+    ], amount);
+  }
+});

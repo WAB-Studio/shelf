@@ -4253,6 +4253,7 @@ async function main(): Promise<void> {
   await o5m2SurvivorsSuite();
   await dollarBackupSuite();
   await o6m2DebtsAndSettledSuite();
+  await o6m3BackupRestoreSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -13293,5 +13294,362 @@ async function o6m2DebtsAndSettledSuite(): Promise<void> {
       renamed?.settledPlannedPayment?.id === plannedPaymentId &&
       renamed.settledPlannedPayment.description === PAYMENT_NAME,
     `delete ${deleted}; payment ${show(afterDelete && { status: afterDelete.status, settled: afterDelete.settledTransactionId })}; resettle ${show(resettled)}; new row ${show(renamed?.settledPlannedPayment)}`,
+  );
+}
+
+// O6-M3: a backup restores a card opened in debt with the opening it had, never signed twice (RF-142, RF-52); an asset
+// opened negative stays refused; a commit handed an errored row writes nothing and says so in the import's own words
+// (RF-51); a blank-currency re-import keeps a dollar purchase's second amount (RF-122, RF-123); and new movements land
+// through the batch, never the row-by-row fallback (RNF-15). Every holder is fresh, so each fund reads only its own rows.
+async function o6m3BackupRestoreSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const OPENING = 15_000_000;
+  const BANK_OPENING = 900_000_000;
+  const USD_CENTS = 2_500;
+  const ESTIMATE_CENTS = 10_500_000;
+  const PESO_CENTS = 4_000_000;
+  const HAS_ERRORS = "data.import.errors.hasErrors";
+  const show = (value: unknown) => JSON.stringify(value ?? "nothing");
+  const refOf = (suffix: string) => `o6m3-${tag}-${suffix}`;
+  const cardName = `Harness o6m3 tarjeta ${tag}`;
+  const bankName = `Harness o6m3 banco ${tag}`;
+  const categoryName = `Harness o6m3 categoria ${tag}`;
+
+  type Opened = { cardId: string; bankId: string; categoryId: string };
+  const openFund = async (holder: HarnessUser): Promise<Opened> =>
+    asUser(holder, async () => {
+      const { categoryId } = await createCategory({
+        scope: { ownerUserId: holder.id },
+        name: categoryName,
+        kind: "expense",
+        parentId: null,
+        color: CATEGORY_COLORS[0],
+      });
+      track("categories", categoryId);
+      const open = async (name: string, kind: "asset" | "liability", subtype: string, amountMinor: number) => {
+        const { accountId } = await createAccount({
+          name,
+          kind,
+          subtype,
+          ownerUserId: holder.id,
+          groupId: null,
+          isShared: false,
+          institution: null,
+          lastFour: null,
+          settlementCurrency: "COP",
+          amountMinor,
+          balanceOn: shiftDate(today, -60),
+        } as never);
+        track("accounts", accountId);
+        return accountId;
+      };
+      return {
+        categoryId,
+        cardId: await open(cardName, "liability", "card", OPENING),
+        bankId: await open(bankName, "asset", "bank", BANK_OPENING),
+      };
+    });
+
+  const source = await createMembershipFreeUser();
+  const fund = await openFund(source);
+  await asUser(source, async () => {
+    const book = async (from: string, amountCents: number, suffix: string, foreign?: { counterAmountCents: number; counterIsEstimate: boolean }) => {
+      const { transactionId } = await createTransaction({
+        fromAccountId: from,
+        toAccountId: null,
+        amountCents,
+        ...(foreign ? { currency: "USD", ...foreign } : {}),
+        occurredAt: shiftDate(today, -5),
+        description: `Harness o6m3 ${suffix} ${tag}`,
+        externalRef: refOf(suffix),
+        splits: [{ categoryId: fund.categoryId, amountCents }],
+        labelIds: [],
+      } as never);
+      track("transactions", transactionId);
+    };
+    await book(fund.cardId, USD_CENTS, "usd", { counterAmountCents: ESTIMATE_CENTS, counterIsEstimate: true });
+    await book(fund.cardId, PESO_CENTS, "peso");
+    await book(fund.bankId, PESO_CENTS, "bank");
+  });
+
+  // ---- 4b: an account created by the form carries its id as its stable key.
+  const keyed = await fixtureSql<{ id: string; external_ref: string | null }[]>`
+    select id::text as id, external_ref from accounts where id in (${fund.cardId}, ${fund.bankId}) order by id`;
+  console.log(
+    `REPORT  4b: select id::text, external_ref from accounts where id in (card, bank) → ${show(keyed)}`,
+  );
+  assert(
+    next("4b: an account created through createAccount reads external_ref equal to its own id as text"),
+    keyed.length === 2 && keyed.every((row) => row.external_ref === row.id),
+    show(keyed),
+  );
+
+  const labels: ReverseSheetLabels = {
+    entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    columnKeyByHeader: new Map(
+      SHEET_ENTITIES.map(
+        (entity) =>
+          [entity, new Map(sheetDescriptors[entity].columns.map((column) => [`columns.${column.key}`, column.key] as const))] as const,
+      ),
+    ),
+  };
+  const sheetLabels = {
+    sheetName: (entity: string) => `sheets.${entity}`,
+    columnHeader: (key: string) => `columns.${key}`,
+  };
+  type Rows = Record<string, unknown>[];
+  const fileOf = async (data: { accounts?: Rows; categories?: Rows; transactions?: Rows }) =>
+    new Uint8Array(await buildWorkbook({ data: data as never, labels: sheetLabels }).xlsx.writeBuffer());
+
+  // A file in, the commit input out, each row as the pipeline left it: its errors ride along.
+  const prepare = async (user: HarnessUser, bytes: Uint8Array) => {
+    const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels });
+    const importScope = await asUser(user, () => readImportScope());
+    const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
+    const refs = buildEffectiveRefs(importScope, recordsOf);
+    const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
+      (parsed[entity] ?? []).map((row, index) =>
+        processRow(entity, row.record as RawRow, index, row.sheetRow, refs, importScope.existingRefs[entity]),
+      );
+    const [categories, accounts, transactions] = [rows("categories"), rows("accounts"), rows("transactions")];
+    const errors = [...categories, ...accounts, ...transactions].flatMap((row) => row.errors.map((e) => `${e.key}@${e.column ?? ""}`));
+    const input: CommitInput = {
+      members: [],
+      categories: categories.map((row) => ({ ...row, object: row.object as never })),
+      accounts: accounts.map((row) => ({ ...row, object: row.object as never })),
+      recurringRules: [],
+      transactions: transactions.map((row) => ({ ...row, object: row.object as never })),
+      adjustments: [],
+    };
+    return { input, errors, accounts };
+  };
+  type Committed = { outcome?: { inserted: number; updated: number }; error?: unknown; trips: number };
+  const commitAs = async (user: HarnessUser, input: CommitInput): Promise<Committed> => {
+    const before = roundTrips();
+    try {
+      const outcome = await asUser(user, () => withUserDb((tx) => commitImport(tx, input, { userId: user.id, groupId: null })));
+      return { outcome, trips: roundTrips() - before };
+    } catch (error) {
+      return { error, trips: roundTrips() - before };
+    }
+  };
+  const said = (result: Committed) =>
+    result.error === undefined
+      ? "ok"
+      : `threw ${(result.error as Error)?.name} «${(result.error as Error)?.message}» (${refusal(result.error)})`;
+  const openings = (user: HarnessUser) =>
+    fixtureSql<{ name: string; opening: string }[]>`
+      select name, initial_balance_cents::text as opening from accounts where owner_user_id = ${user.id} order by name`;
+  const openingOf = async (user: HarnessUser, name: string) => (await openings(user)).find((row) => row.name === name)?.opening ?? null;
+  const balances = (user: HarnessUser) =>
+    fixtureSql<{ name: string; currency: string; balance: string }[]>`
+      select a.name, b.currency, b.balance_cents::text as balance
+      from account_balances b join accounts a on a.id = b.id
+      where a.owner_user_id = ${user.id}
+      order by a.name, b.currency`;
+  const owned = async (user: HarnessUser) => {
+    const [row] = await fixtureSql<{ accounts: number; categories: number; movements: number }[]>`
+      select (select count(*)::int from accounts where owner_user_id = ${user.id}) as accounts,
+        (select count(*)::int from categories where owner_user_id = ${user.id}) as categories,
+        (select count(*)::int from transactions t join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
+          where a.owner_user_id = ${user.id}) as movements`;
+    return row;
+  };
+  const trackOwned = async (user: HarnessUser) => {
+    for (const r of await fixtureSql<{ id: string }[]>`select id from accounts where owner_user_id = ${user.id}`) track("accounts", r.id);
+    for (const r of await fixtureSql<{ id: string }[]>`select id from categories where owner_user_id = ${user.id}`) track("categories", r.id);
+  };
+  const storedMovements = (user: HarnessUser) =>
+    fixtureSql<{ ref: string; currency: string; amount: string; counter: string | null; estimate: boolean }[]>`
+      select t.external_ref as ref, t.currency, t.amount_cents::text as amount,
+        t.counter_amount_cents::text as counter, t.counter_is_estimate as estimate
+      from transactions t
+      join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
+      where a.owner_user_id = ${user.id}
+      order by t.external_ref`;
+
+  // ---- The fund's own backup, as the export writes it.
+  const exported = await asUser(source, () => readExport({ entityKeys: ["accounts", "categories", "transactions"] }));
+  const accountRows = (exported.accounts ?? []).filter((row) => [cardName, bankName].includes(String(row.name))) as Rows;
+  const categoryRows = (exported.categories ?? []).filter((row) => String(row.name) === categoryName) as Rows;
+  const movementRows = (exported.transactions ?? []).filter((row) => String(row.externalRef).startsWith(`o6m3-${tag}-`)) as Rows;
+  const exportedCard = accountRows.find((row) => row.name === cardName);
+  assert(
+    next("RF-142: the export writes a card opened at 150000 owed as -15000000 cents, the shape an older backup already carries"),
+    accountRows.length === 2 && categoryRows.length === 1 && movementRows.length === 3 && exportedCard?.amount === -OPENING,
+    `accounts ${accountRows.length}, categories ${categoryRows.length}, movements ${movementRows.length}; card amount ${show(exportedCard?.amount)}`,
+  );
+  const original = await fileOf({ accounts: accountRows, categories: categoryRows, transactions: movementRows });
+  const positive = await fileOf({
+    accounts: accountRows.map((row) => (row.name === cardName ? { ...row, amount: OPENING } : row)),
+    categories: categoryRows,
+    transactions: movementRows,
+  });
+  const sourceBalances = await balances(source);
+
+  // ---- Liability negative restores: the backup into a fund that has never seen it.
+  const clean = await createMembershipFreeUser();
+  const first = await prepare(clean, original);
+  const firstCommit = await commitAs(clean, first.input);
+  await trackOwned(clean);
+  const cleanBalances = await balances(clean);
+  assert(
+    next("Liability negative restores: a backup holding a card opened at -150000 imports into a new fund with its opening -15000000 and every balance as it was"),
+    first.errors.length === 0 &&
+      said(firstCommit) === "ok" &&
+      (await openingOf(clean, cardName)) === String(-OPENING) &&
+      (await openingOf(clean, bankName)) === String(BANK_OPENING) &&
+      sourceBalances.length > 0 &&
+      JSON.stringify(cleanBalances) === JSON.stringify(sourceBalances),
+    `file errors [${first.errors.join(",")}]; commit ${said(firstCommit)}; openings ${show(await openings(clean))}; balances source ${show(sourceBalances)} restored ${show(cleanBalances)}`,
+  );
+
+  // ---- No double sign on the update path: the same backup, then the unsigned one, over the restored card.
+  const again = await prepare(clean, original);
+  const againCommit = await commitAs(clean, again.input);
+  const afterSigned = await openingOf(clean, cardName);
+  const unsigned = await prepare(clean, positive);
+  const unsignedCommit = await commitAs(clean, unsigned.input);
+  const afterUnsigned = await openingOf(clean, cardName);
+  assert(
+    next("No double sign, update: re-importing the backup over the restored card, signed or not, updates it and leaves its opening at -15000000"),
+    again.errors.length === 0 &&
+      again.accounts.find((row) => row.externalRef === exportedCard?.externalRef)?.status === "update" &&
+      said(againCommit) === "ok" &&
+      againCommit.outcome?.inserted === 0 &&
+      afterSigned === String(-OPENING) &&
+      unsigned.errors.length === 0 &&
+      said(unsignedCommit) === "ok" &&
+      afterUnsigned === String(-OPENING) &&
+      JSON.stringify(await balances(clean)) === JSON.stringify(sourceBalances),
+    `signed: errors [${again.errors.join(",")}], commit ${said(againCommit)} ${show(againCommit.outcome)}, opening ${afterSigned}; unsigned: errors [${unsigned.errors.join(",")}], commit ${said(unsignedCommit)}, opening ${afterUnsigned}`,
+  );
+
+  // ---- Liability positive restores: a sheet that wrote the card's debt without its minus.
+  const fromPositive = await createMembershipFreeUser();
+  const positiveRun = await prepare(fromPositive, positive);
+  const positiveCommit = await commitAs(fromPositive, positiveRun.input);
+  await trackOwned(fromPositive);
+  assert(
+    next("Liability positive restores: a sheet with 150000 on a card imports it with its opening -15000000"),
+    positiveRun.errors.length === 0 && said(positiveCommit) === "ok" && (await openingOf(fromPositive, cardName)) === String(-OPENING),
+    `file errors [${positiveRun.errors.join(",")}]; commit ${said(positiveCommit)}; openings ${show(await openings(fromPositive))}`,
+  );
+
+  // ---- An errored row reaches the commit: nothing is written, and the refusal is the import's own.
+  const bankAt = (name: string, ref: string, amount: number) => ({
+    ...accountRows.find((row) => row.name === bankName)!,
+    name,
+    externalRef: refOf(ref),
+    amount,
+  });
+  const doomed = await createMembershipFreeUser();
+  const lone = await prepare(doomed, await fileOf({ accounts: [bankAt(`Harness o6m3 negativo ${tag}`, "negative", -10_000)] }));
+  const loneCommit = await commitAs(doomed, lone.input);
+  const loneLeft = await owned(doomed);
+  assert(
+    next("Asset negative refused: an asset row opened at -100 reaches the commit with accounts.errors.amountInvalid on amount"),
+    lone.errors.length === 1 && lone.errors[0] === "accounts.errors.amountInvalid@amount",
+    `file errors [${lone.errors.join(",")}]`,
+  );
+  assert(
+    next("Errored row refused: commitImport handed one errored account row throws ActionError data.import.errors.hasErrors and writes no row"),
+    loneCommit.error instanceof ActionError &&
+      (loneCommit.error as ActionError).message === HAS_ERRORS &&
+      loneLeft.accounts === 0 &&
+      loneLeft.categories === 0 &&
+      loneLeft.movements === 0,
+    `${said(loneCommit)}; left ${show(loneLeft)}`,
+  );
+
+  const beside = await prepare(
+    doomed,
+    await fileOf({ accounts: [bankAt(`Harness o6m3 limpia ${tag}`, "clean", 10_000), bankAt(`Harness o6m3 negativa ${tag}`, "negative-2", -10_000)] }),
+  );
+  const besideCommit = await commitAs(doomed, beside.input);
+  const strayMovement = { ...movementRows.find((row) => row.externalRef === refOf("bank"))!, externalRef: refOf("stray"), fromAccount: `Harness o6m3 nadie ${tag}` };
+  const cleanAccountErroredMovement = await prepare(
+    doomed,
+    await fileOf({ accounts: [bankAt(`Harness o6m3 limpia dos ${tag}`, "clean-2", 10_000)], categories: categoryRows, transactions: [strayMovement] }),
+  );
+  const movementCommit = await commitAs(doomed, cleanAccountErroredMovement.input);
+  await trackOwned(doomed);
+  const besideLeft = await owned(doomed);
+  assert(
+    next("All or nothing: a clean row beside an errored one, in the same sheet or another, is not written either; each commit refuses with hasErrors"),
+    beside.errors.length === 1 &&
+      cleanAccountErroredMovement.errors.length > 0 &&
+      cleanAccountErroredMovement.errors.every((error) => error.endsWith("@fromAccount")) &&
+      besideCommit.error instanceof ActionError &&
+      (besideCommit.error as ActionError).message === HAS_ERRORS &&
+      movementCommit.error instanceof ActionError &&
+      (movementCommit.error as ActionError).message === HAS_ERRORS &&
+      besideLeft.accounts === 0 &&
+      besideLeft.categories === 0 &&
+      besideLeft.movements === 0,
+    `same sheet: errors [${beside.errors.join(",")}], ${said(besideCommit)}; across sheets: errors [${cleanAccountErroredMovement.errors.join(",")}], ${said(movementCommit)}; left ${show(besideLeft)}`,
+  );
+
+  // ---- C6, C7: an old sheet's blank currency over a stored dollar purchase.
+  const blankCurrency = movementRows
+    .filter((row) => row.externalRef === refOf("usd"))
+    .map((row) => ({ ...row, currency: null, counterAmount: null, counterIsEstimate: null }));
+  const storedBefore = (await storedMovements(source)).find((row) => row.ref === refOf("usd"));
+  const blank = await prepare(source, await fileOf({ transactions: blankCurrency }));
+  const blankCommit = await commitAs(source, blank.input);
+  const storedAfter = (await storedMovements(source)).find((row) => row.ref === refOf("usd"));
+  assert(
+    next("C6 / C7: a blank-currency re-import over a dollar purchase keeps its 105000 on the card and its estimate mark as stored"),
+    storedBefore?.counter === String(ESTIMATE_CENTS) &&
+      storedBefore.estimate === true &&
+      blank.errors.length === 0 &&
+      blank.input.transactions.length === 1 &&
+      blank.input.transactions[0].status === "update" &&
+      said(blankCommit) === "ok" &&
+      blankCommit.outcome?.updated === 1 &&
+      JSON.stringify(storedAfter) === JSON.stringify(storedBefore),
+    `before ${show(storedBefore)}; file errors [${blank.errors.join(",")}]; commit ${said(blankCommit)} ${show(blankCommit.outcome)}; after ${show(storedAfter)}`,
+  );
+
+  // ---- C8: new movements land through the batch, whose round trips do not grow with the file.
+  const batcher = await createMembershipFreeUser();
+  await openFund(batcher);
+  const movement = (suffix: string, foreign: boolean) => ({
+    externalRef: refOf(suffix),
+    fromAccount: cardName,
+    toAccount: null,
+    amount: foreign ? USD_CENTS : PESO_CENTS,
+    currency: foreign ? "USD" : "COP",
+    counterAmount: foreign ? ESTIMATE_CENTS : null,
+    counterIsEstimate: foreign ? true : null,
+    category: categoryName,
+    occurredAt: shiftDate(today, -3),
+    description: `Harness o6m3 lote ${suffix} ${tag}`,
+    adjustment: null,
+  });
+  const batchOf = (prefix: string, size: number) =>
+    Array.from({ length: size }, (_, i) => movement(`${prefix}-${i}`, i === 0));
+  const small = await prepare(batcher, await fileOf({ transactions: batchOf("small", 3) }));
+  const smallCommit = await commitAs(batcher, small.input);
+  const large = await prepare(batcher, await fileOf({ transactions: batchOf("large", 12) }));
+  const largeCommit = await commitAs(batcher, large.input);
+  await trackOwned(batcher);
+  const batched = await storedMovements(batcher);
+  const counterOf = (ref: string) => batched.find((row) => row.ref === ref)?.counter ?? null;
+  assert(
+    next("C8: importing 3 or 12 new movements runs the batch: the same round trips either way, every movement written, the dollar ones with their 105000"),
+    small.errors.length === 0 &&
+      large.errors.length === 0 &&
+      said(smallCommit) === "ok" &&
+      said(largeCommit) === "ok" &&
+      smallCommit.outcome?.inserted === 3 &&
+      largeCommit.outcome?.inserted === 12 &&
+      batched.length === 15 &&
+      smallCommit.trips === largeCommit.trips &&
+      counterOf(refOf("small-0")) === String(ESTIMATE_CENTS) &&
+      counterOf(refOf("large-0")) === String(ESTIMATE_CENTS),
+    `3 rows: ${said(smallCommit)} in ${smallCommit.trips} trips; 12 rows: ${said(largeCommit)} in ${largeCommit.trips} trips; stored ${batched.length}; dollar counters ${counterOf(refOf("small-0"))}, ${counterOf(refOf("large-0"))}; errors [${[...small.errors, ...large.errors].join(",")}]`,
   );
 }
