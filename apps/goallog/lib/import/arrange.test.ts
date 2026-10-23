@@ -160,3 +160,61 @@ test("a move is a correction at the task's own place, naming where it went", asy
     ],
   );
 });
+
+test("a task number equal to the holder's task count is dropped; the last real one is kept", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-never-sent";
+  answers({ moves: [{ holder: "g", task: 3, to: "c1" }, { holder: "g", task: -1, to: "c1" }, { holder: "g", task: 2, to: "c1" }] });
+  const result = await proposeMoves(plan());
+  assert.equal(result.status, "ok");
+  if (result.status === "ok") assert.deepEqual(result.moves, [{ from: 0, task: 2, to: 1 }]);
+});
+
+test("a goal that names itself as its parent is not below itself: no task moves into it", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-never-sent";
+  answers({ moves: [{ holder: "a", task: 0, to: "a" }] });
+  const loop = draft(goal("a", "a", "Ciclo", [task("x")]));
+  const result = await proposeMoves(loop);
+  assert.equal(result.status, "ok");
+  if (result.status === "ok") assert.deepEqual(result.moves, []);
+});
+
+test("a goal written before its parent is not below it: no task moves into it", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-never-sent";
+  answers({ moves: [{ holder: "y", task: 0, to: "x" }] });
+  const result = await proposeMoves(draft(goal("x", "y", "Antes"), goal("y", null, "Después", [task("t")])));
+  assert.equal(result.status, "ok");
+  if (result.status === "ok") assert.deepEqual(result.moves, []);
+  const sent = JSON.parse((calls[0].body as { messages: { content: string }[] }).messages[1].content) as { holders: { goals: unknown[] }[] };
+  assert.deepEqual(sent.holders.map((h) => h.goals), [[]]);
+});
+
+test("a goal four levels under the holder is below it; five levels is not", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-never-sent";
+  const deep = draft(
+    goal("g0", null, "Raíz", [task("a"), task("b")]),
+    goal("g1", "g0", "N1"),
+    goal("g2", "g1", "N2"),
+    goal("g3", "g2", "N3"),
+    goal("g4", "g3", "N4"),
+    goal("g5", "g4", "N5"),
+  );
+  answers({ moves: [{ holder: "g0", task: 0, to: "g4" }, { holder: "g0", task: 1, to: "g5" }] });
+  const result = await proposeMoves(deep);
+  assert.equal(result.status, "ok");
+  if (result.status === "ok") assert.deepEqual(result.moves, [{ from: 0, task: 0, to: 4 }]);
+  const sent = JSON.parse((calls[0].body as { messages: { content: string }[] }).messages[1].content) as { holders: { goals: { key: string }[] }[] };
+  assert.deepEqual(sent.holders[0].goals.map((g) => g.key), ["g1", "g2", "g3", "g4"]);
+});
+
+test("a refusal from the model is failed even when it carries well-formed moves", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-never-sent";
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ moves: [{ holder: "g", task: 0, to: "c1" }] }), refusal: "No puedo ayudar con eso." }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 10, completion_tokens: 2 },
+      }),
+      { headers: { "content-type": "application/json" } },
+    )) as typeof fetch;
+  assert.deepEqual(await proposeMoves(plan()), { status: "failed", usage: { input: 10, output: 2 } });
+});
