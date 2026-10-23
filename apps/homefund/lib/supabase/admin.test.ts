@@ -11,7 +11,7 @@ const state: { key?: string } = {};
 const DOUBLES: Record<string, string> = {
   "server-only": "export {};",
   "@/lib/env": `export const env = {
-    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:44321",
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_x",
     NEXT_PUBLIC_SITE_URL: "http://site.invalid",
     get SUPABASE_SECRET_KEY() { return globalThis.__adminEnv.key; },

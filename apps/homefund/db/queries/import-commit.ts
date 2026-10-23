@@ -53,6 +53,8 @@ export type CommitRow<T> = {
   externalRef: string | null;
   placeholderId: string | null;
   object: T;
+  // What the pipeline found wrong with the row; a row carrying any has no object to write.
+  errors?: readonly unknown[];
 };
 
 // What a row-level write failure reports back to the confirm screen (RF-51): the
@@ -117,11 +119,14 @@ function isExternalRefClash(error: unknown): boolean {
 // `mapTransactionError` in the live create action, minus the throw: this caller
 // still has a row index to attach to whichever reason wins.
 const CURRENCY_REFUSAL = "23901";
+// `transactions_after_opening` (RF-162): the preview refuses the same row on its day.
+const BEFORE_OPENING_REFUSAL = "MO001";
 
 function transactionReasonKey(error: unknown): string {
   const code = pgErrorCode(error);
   if (code === "42501") return "errors.notFound";
   if (code === CURRENCY_REFUSAL) return "transactions.errors.currencyMismatch";
+  if (code === BEFORE_OPENING_REFUSAL) return "data.import.errors.beforeOpening";
   if (code === "23514") return "transactions.errors.splitsScopeViolation";
   if (code === "23503") return "errors.referenceGone";
   return "errors.unexpected";
@@ -141,6 +146,9 @@ export type CommitInput = {
 };
 
 export type CommitOutcome = { inserted: number; updated: number };
+
+// The key the commit action raises for the same refusal, so the screen reads one message.
+const FILE_HAS_ERRORS = "data.import.errors.hasErrors";
 
 // A multi-row statement stays well under the free tier's execution budget (RNF-15); a
 // larger file chunks into several, all inside the one transaction so all-or-nothing holds.
@@ -230,6 +238,20 @@ export async function commitImport(
   input: CommitInput,
   scope: CommitScope,
 ): Promise<CommitOutcome> {
+  // All or nothing (RF-51), whoever assembled the input: one errored row anywhere refuses the
+  // whole file before a single write, a clean row beside it included.
+  const buckets: CommitRow<unknown>[][] = [
+    input.members,
+    input.categories,
+    input.accounts,
+    input.recurringRules,
+    input.transactions,
+    input.adjustments ?? [],
+  ];
+  if (buckets.some((rows) => rows.some((row) => (row.errors?.length ?? 0) > 0 || row.object == null))) {
+    throw new ActionError(FILE_HAS_ERRORS);
+  }
+
   try {
     return await writeImport(tx, input, scope);
   } catch (error) {

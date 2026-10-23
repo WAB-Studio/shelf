@@ -215,6 +215,21 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "o6m1") {
+    await checkSettlingMovementDelete();
+    return;
+  }
+
+  if (process.env.RLS_ONLY === "o6m1b") {
+    await checkReturnKeepsScope();
+    return;
+  }
+
+  if (process.env.RLS_ONLY === "o6m6") {
+    await checkMovementBeforeOpening();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -283,6 +298,9 @@ async function main() {
   await checkPendingInvitationRead();
   await checkLeaderGuardAndInvitationPredicates();
   await checkO5M2Survivors();
+  await checkSettlingMovementDelete();
+  await checkReturnKeepsScope();
+  await checkMovementBeforeOpening();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -882,10 +900,11 @@ async function checkAnalyticsAggregates() {
           to_char(date_trunc('month', now() at time zone 'America/Bogota'), 'YYYY-MM-DD') as start,
           to_char(date_trunc('month', now() at time zone 'America/Bogota') + interval '1 month', 'YYYY-MM-DD') as end_exclusive`;
 
-      // The caller's personal account and the group's shared account: contribution flows between the two.
+      // The caller's personal account and the group's shared account: contribution flows between the two. The personal
+      // one opens a month back, so the previous-month income below postdates its opening (RF-162).
       const [{ id: personalAccount }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_on)
-        values (${leaderUser}, 'rls analytics personal cash', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${leaderUser}, 'rls analytics personal cash', 'asset', (date_trunc('month', now() at time zone 'America/Bogota') - interval '1 month')::date) returning id`;
       const [{ id: groupAccount }] = await tx<{ id: string }[]>`
         insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
         values (${groupId}, true, 'rls analytics group cash', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
@@ -2131,12 +2150,13 @@ async function checkAccountStatementPolicies() {
       await tx`insert into app_users (id) values (${subject}), (${otherUser})`;
       await enterUserContext(tx, subject);
 
+      // Both open on the previous month's first day, before every movement below (RF-162).
       const [{ id: card }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_cents, initial_balance_on)
-        values (${subject}, 'rls debt statement card', 'liability', -200000, (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${subject}, 'rls debt statement card', 'liability', -200000, (date_trunc('month', now() at time zone 'America/Bogota') - interval '1 month')::date) returning id`;
       const [{ id: cash }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_cents, initial_balance_on)
-        values (${subject}, 'rls debt statement cash', 'asset', 1000000, (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${subject}, 'rls debt statement cash', 'asset', 1000000, (date_trunc('month', now() at time zone 'America/Bogota') - interval '1 month')::date) returning id`;
       await tx`insert into debt_terms (account_id, debt_kind, annual_rate, minimum_payment_pct, statement_cut_off_day, payment_due_day)
         values (${card}, 'revolving', 0.28, 0.05, 28, 15)`;
 
@@ -2779,9 +2799,10 @@ async function checkRecurringRulePolicies() {
       await tx`insert into group_members (group_id, user_id, name, role)
         values (${groupId}, ${memberUser}, 'rls recurring member', 'member')`;
       await enterUserContext(tx, memberUser);
+      // Opened the day 108's overdue rule first falls due, so every period it back-fills postdates the opening (RF-162).
       const [{ id: memberAccount }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_on)
-        values (${memberUser}, 'rls recurring member cash', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${memberUser}, 'rls recurring member cash', 'asset', (now() at time zone 'America/Bogota')::date - 21) returning id`;
       const [{ id: memberExpenseCat }] = await tx<{ id: string }[]>`
         insert into categories (owner_user_id, name, kind)
         values (${memberUser}, 'rls recurring member expense', 'expense') returning id`;
@@ -3011,7 +3032,7 @@ async function checkAuditLogPolicies() {
       await enterUserContext(tx, subject);
       const [{ id: dueAccount }] = await tx<{ id: string }[]>`
         insert into accounts (owner_user_id, name, kind, initial_balance_on)
-        values (${subject}, 'rls audit account', 'asset', (now() at time zone 'America/Bogota')::date) returning id`;
+        values (${subject}, 'rls audit account', 'asset', (now() at time zone 'America/Bogota')::date - 7) returning id`;
       const [{ id: dueCat }] = await tx<{ id: string }[]>`
         insert into categories (owner_user_id, name, kind)
         values (${subject}, 'rls audit expense', 'expense') returning id`;
@@ -10590,7 +10611,7 @@ async function m1ScriptRows(tag: string, labels: M1Labels) {
     return;
   }
   const serviceKey = stack.SERVICE_ROLE_KEY ?? "";
-  const mailpit = stack.MAILPIT_URL ?? "http://127.0.0.1:54324";
+  const mailpit = stack.MAILPIT_URL ?? "http://127.0.0.1:44324";
   if (!serviceKey) {
     fail("the local stack reported no service-role key");
     return;
@@ -12247,6 +12268,902 @@ async function checkO5M2Survivors() {
       await sql`delete from auth.users where id = ${id}`.catch(() => undefined);
     }
   }
+}
+
+// RF-161: deleting the movement that settled a planned payment returns the payment to pending,
+// unlinked, in the same statement, audited as the deleter; while the movement exists every other way
+// back is refused, whoever writes it. The leader records and settles a group payment on the shared
+// account; the plain member is the fund's writer who deletes the movement. Every row rolls back.
+type O6m1Fund = {
+  leader: string;
+  member: string;
+  shared: string;
+  category: string;
+  payment: string;
+  settling: string;
+  other: string;
+};
+
+type O6m1Payment = { status: string; settled_transaction_id: string | null };
+
+// An expense with its one split, so the deferred split-sum check holds at any `set constraints`.
+async function o6m1Movement(tx: M1Tx, account: string, category: string, amount: number, description: string) {
+  const [{ id }] = await tx<{ id: string }[]>`
+    insert into transactions (from_account_id, amount_cents, occurred_at, description)
+    values (${account}, ${amount}, ${todayInBogota()}, ${description}) returning id`;
+  await tx`insert into transaction_splits (transaction_id, category_id, amount_cents)
+    values (${id}, ${category}, ${amount})`;
+  return id;
+}
+
+// Records a movement and links it the way `settlePlannedPayment` does; returns the rows the claim touched.
+async function o6m1Settle(tx: M1Tx, payment: string, account: string, category: string, amount: number) {
+  const movement = await o6m1Movement(tx, account, category, amount, "rls o6m1 movement");
+  const claimed = await tx`update planned_payments set status = 'done', settled_transaction_id = ${movement}
+    where id = ${payment} and status = 'pending' returning id`;
+  return { movement, claimed: claimed.length };
+}
+
+async function o6m1Fund(tx: M1Tx): Promise<O6m1Fund> {
+  const { leader, member, groupId } = await m1Group(tx);
+  await tx`update groups set name = 'rls o6m1' where id = ${groupId}`;
+  await enterUserContext(tx, leader);
+  const [{ id: shared }] = await tx<{ id: string }[]>`
+    insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
+    values (${groupId}, true, 'rls o6m1 shared cash', 'asset', ${todayInBogota()}) returning id`;
+  const [{ id: category }] = await tx<{ id: string }[]>`
+    insert into categories (group_id, name, kind)
+    values (${groupId}, 'rls o6m1 category', 'expense') returning id`;
+  const [{ id: payment }] = await tx<{ id: string }[]>`
+    insert into planned_payments (from_account_id, amount_cents, category_id, due_date, description)
+    values (${shared}, 30000, ${category}, ${todayInBogota()}, 'rls o6m1 payment') returning id`;
+  const settled = await o6m1Settle(tx, payment, shared, category, 30000);
+  if (settled.claimed !== 1) throw new Error(`the fixture's settle claimed ${settled.claimed} rows`);
+  const other = await o6m1Movement(tx, shared, category, 1000, "rls o6m1 other");
+  return { leader, member, shared, category, payment, settling: settled.movement, other };
+}
+
+async function o6m1Payment(tx: M1Tx, id: string): Promise<O6m1Payment | undefined> {
+  const [row] = await tx<O6m1Payment[]>`
+    select status, settled_transaction_id from planned_payments where id = ${id}`;
+  return row;
+}
+
+function o6m1Show(row: O6m1Payment | undefined, f: O6m1Fund): string {
+  if (!row) return "row not visible";
+  const link = row.settled_transaction_id === null ? "null"
+    : row.settled_transaction_id === f.settling ? "the settling movement"
+    : row.settled_transaction_id === f.other ? "the other movement"
+    : row.settled_transaction_id;
+  return `status ${row.status}, link ${link}`;
+}
+
+// Each way back a writer could take by hand, as the fund's writer and as the table owner.
+async function o6m1Refusals(
+  tx: M1Tx,
+  f: O6m1Fund,
+  write: (sp: M1Tx) => Promise<unknown>,
+): Promise<{ writer: string | null; owner: string | null }> {
+  await enterUserContext(tx, f.member);
+  const writer = await m1Refusal(tx, write);
+  await tx`reset role`;
+  const owner = await m1Refusal(tx, write);
+  return { writer, owner };
+}
+
+async function checkSettlingMovementDelete() {
+  console.log("");
+  const labels = {
+    deleted: "o6m1-1. the fund's writer deletes the movement that settled a planned payment: one row, no error",
+    returned: "o6m1-2. after that delete the payment is pending and unlinked",
+    sameStatement: "o6m1-3. the next read inside the deleting transaction, before commit, already sees it pending and unlinked",
+    unlink: "o6m1-4. clearing the link while its movement exists is refused (23514), by the writer and the owner",
+    reopen: "o6m1-5. a done payment whose movement exists cannot return to pending (23514), by the writer and the owner",
+    rewrite: "o6m1-6. pointing a settled payment at another movement is refused (23514), by the writer and the owner",
+    cancelled: "o6m1-7. a cancelled payment and another done payment are untouched by any delete",
+    resettle: "o6m1-8. the returned payment settles again into a new movement, and that new link is permanent",
+    audit: "o6m1-9. the return leaves one planned_payments UPDATE in audit_log, actor the deleter, done→pending",
+    tail: "o6m1-10. the rolled-back RF-161 transactions leave no fixture behind",
+  };
+
+  await m1Rows([labels.deleted], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.member);
+    const deleted = await tx`delete from transactions where id = ${f.settling} returning id`;
+    await tx`reset role`;
+    const [{ n: left }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from transactions where id = ${f.settling}`;
+    return [{
+      ok: deleted.length === 1 && left === 0,
+      detail: `rows deleted ${deleted.length}, the movement still there ${left}`,
+    }];
+  });
+
+  await m1Rows([labels.returned], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${f.settling}`;
+    // Fires anything deferred, as the commit would.
+    await tx`set constraints all immediate`;
+    await tx`reset role`;
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: row?.status === "pending" && row.settled_transaction_id === null,
+      detail: o6m1Show(row, f),
+    }];
+  });
+
+  await m1Rows([labels.sameStatement], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${f.settling}`;
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: row?.status === "pending" && row.settled_transaction_id === null,
+      detail: `read by the deleter before commit: ${o6m1Show(row, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.unlink], async (tx) => {
+    const f = await o6m1Fund(tx);
+    const cleared = await o6m1Refusals(tx, f, (sp) =>
+      sp`update planned_payments set settled_transaction_id = null where id = ${f.payment}`);
+    // The exact shape of the return, written by hand while the movement still exists.
+    const returned = await o6m1Refusals(tx, f, (sp) =>
+      sp`update planned_payments set status = 'pending', settled_transaction_id = null where id = ${f.payment}`);
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: [cleared.writer, cleared.owner, returned.writer, returned.owner].every((code) => code === "23514") &&
+        row?.status === "done" && row.settled_transaction_id === f.settling,
+      detail: `link cleared: writer ${cleared.writer ?? "accepted"}, owner ${cleared.owner ?? "accepted"}; ` +
+        `pending and unlinked: writer ${returned.writer ?? "accepted"}, owner ${returned.owner ?? "accepted"}; after: ${o6m1Show(row, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.reopen], async (tx) => {
+    const f = await o6m1Fund(tx);
+    const reopened = await o6m1Refusals(tx, f, (sp) =>
+      sp`update planned_payments set status = 'pending' where id = ${f.payment}`);
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: reopened.writer === "23514" && reopened.owner === "23514" &&
+        row?.status === "done" && row.settled_transaction_id === f.settling,
+      detail: `writer ${reopened.writer ?? "accepted"}, owner ${reopened.owner ?? "accepted"}; after: ${o6m1Show(row, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.rewrite], async (tx) => {
+    const f = await o6m1Fund(tx);
+    const rewritten = await o6m1Refusals(tx, f, (sp) =>
+      sp`update planned_payments set settled_transaction_id = ${f.other} where id = ${f.payment}`);
+    const row = await o6m1Payment(tx, f.payment);
+    return [{
+      ok: rewritten.writer === "23514" && rewritten.owner === "23514" &&
+        row?.status === "done" && row.settled_transaction_id === f.settling,
+      detail: `writer ${rewritten.writer ?? "accepted"}, owner ${rewritten.owner ?? "accepted"}; after: ${o6m1Show(row, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.cancelled], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.leader);
+    const [{ id: cancelled }] = await tx<{ id: string }[]>`
+      insert into planned_payments (from_account_id, amount_cents, due_date, description)
+      values (${f.shared}, 2000, ${todayInBogota()}, 'rls o6m1 cancelled') returning id`;
+    // The app's cancel path: only a pending payment is cancelled.
+    await tx`update planned_payments set status = 'cancelled' where id = ${cancelled} and status = 'pending'`;
+    const [{ id: bystander }] = await tx<{ id: string }[]>`
+      insert into planned_payments (from_account_id, amount_cents, due_date, description)
+      values (${f.shared}, 1000, ${todayInBogota()}, 'rls o6m1 bystander') returning id`;
+    await tx`update planned_payments set status = 'done', settled_transaction_id = ${f.other}
+      where id = ${bystander} and status = 'pending'`;
+    const unrelated = await o6m1Movement(tx, f.shared, f.category, 500, "rls o6m1 unrelated");
+    await tx`reset role`;
+    const [{ last }] = await tx<{ last: string | null }[]>`select max(id)::text as last from audit_log`;
+
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${unrelated}`;
+    await tx`reset role`;
+    const afterUnrelated = await o6m1Payment(tx, cancelled);
+    await enterUserContext(tx, f.member);
+    const settlingDelete = await m1Refusal(tx, (sp) => sp`delete from transactions where id = ${f.settling}`);
+    await tx`reset role`;
+    const afterSettling = await o6m1Payment(tx, cancelled);
+    const other = await o6m1Payment(tx, bystander);
+    const [{ n: touched }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from audit_log
+      where entity = 'planned_payments' and record_id in (${cancelled}, ${bystander}) and id > ${last ?? "0"}::bigint`;
+    return [{
+      ok: afterUnrelated?.status === "cancelled" && afterUnrelated.settled_transaction_id === null &&
+        settlingDelete === null &&
+        afterSettling?.status === "cancelled" && afterSettling.settled_transaction_id === null &&
+        other?.status === "done" && other.settled_transaction_id === f.other && touched === 0,
+      detail: `cancelled after the unrelated delete: ${o6m1Show(afterUnrelated, f)}; settling delete ${settlingDelete ?? "accepted"}; ` +
+        `cancelled after it: ${o6m1Show(afterSettling, f)}; the other done payment: ${o6m1Show(other, f)}; audit rows on either ${touched}`,
+    }];
+  });
+
+  await m1Rows([labels.resettle], async (tx) => {
+    const f = await o6m1Fund(tx);
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${f.settling}`;
+    await enterUserContext(tx, f.leader);
+    const again = await o6m1Settle(tx, f.payment, f.shared, f.category, 30000);
+    const row = await o6m1Payment(tx, f.payment);
+    const rewrite = await m1Refusal(tx, (sp) =>
+      sp`update planned_payments set settled_transaction_id = ${f.other} where id = ${f.payment}`);
+    const reopen = await m1Refusal(tx, (sp) =>
+      sp`update planned_payments set status = 'pending' where id = ${f.payment}`);
+    const unlink = await m1Refusal(tx, (sp) =>
+      sp`update planned_payments set settled_transaction_id = null where id = ${f.payment}`);
+    return [{
+      ok: again.claimed === 1 && row?.status === "done" && row.settled_transaction_id === again.movement &&
+        rewrite === "23514" && reopen === "23514" && unlink === "23514",
+      detail: `settle claimed ${again.claimed}, ${row?.status ?? "row not visible"} linked to the new movement ` +
+        `${row?.settled_transaction_id === again.movement}; then rewrite ${rewrite ?? "accepted"}, reopen ${reopen ?? "accepted"}, unlink ${unlink ?? "accepted"}`,
+    }];
+  });
+
+  await m1Rows([labels.audit], async (tx) => {
+    const f = await o6m1Fund(tx);
+    const [{ last }] = await tx<{ last: string | null }[]>`select max(id)::text as last from audit_log`;
+    await enterUserContext(tx, f.member);
+    await tx`delete from transactions where id = ${f.settling}`;
+    await tx`reset role`;
+    const rows = await tx<{
+      action: string;
+      actor_user_id: string | null;
+      before_status: string | null;
+      before_link: string | null;
+      after_status: string | null;
+      after_link: string | null;
+    }[]>`
+      select action, actor_user_id,
+        before_data->>'status' as before_status, before_data->>'settled_transaction_id' as before_link,
+        after_data->>'status' as after_status, after_data->>'settled_transaction_id' as after_link
+      from audit_log
+      where entity = 'planned_payments' and record_id = ${f.payment} and id > ${last ?? "0"}::bigint
+      order by id`;
+    const [row] = rows;
+    return [{
+      ok: rows.length === 1 && row.action === "UPDATE" && row.actor_user_id === f.member &&
+        row.before_status === "done" && row.before_link === f.settling &&
+        row.after_status === "pending" && row.after_link === null,
+      detail: `rows ${rows.length}` + (row
+        ? `, action ${row.action}, actor ${row.actor_user_id === f.member ? "the deleter" : row.actor_user_id === f.leader ? "the leader" : row.actor_user_id}, ` +
+          `${row.before_status}→${row.after_status}, link before is the settling movement ${row.before_link === f.settling}, link after ${row.after_link}`
+        : ""),
+    }];
+  });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ groups, payments, movements }] = await sql<{ groups: number; payments: number; movements: number }[]>`
+    select
+      (select count(*)::int from groups where name like 'rls o6m1%') as groups,
+      (select count(*)::int from planned_payments where description like 'rls o6m1%') as payments,
+      (select count(*)::int from transactions where description like 'rls o6m1%') as movements`;
+  assert(
+    labels.tail,
+    afterUser === "postgres" && groups === 0 && payments === 0 && movements === 0,
+    `current_user = ${afterUser}, groups ${groups}, payments ${payments}, movements ${movements} named 'rls o6m1%'`,
+  );
+}
+
+// RF-161 return keeps the payment's scope: the FK's set-null that returns a payment to pending runs as an UPDATE, and
+// it must leave the owner, the group and every other column as they were, whoever deleted the movement. A direct
+// update by a member still re-derives the scope from the accounts. Every row rolls back.
+type O6m1bFund = {
+  leader: string;
+  member: string;
+  groupId: string;
+  shared: string;
+  groupCategory: string;
+  personal: string;
+  personalCategory: string;
+};
+
+type O6m1bRow = {
+  status: string;
+  settled_transaction_id: string | null;
+  owner_user_id: string | null;
+  group_id: string | null;
+  rest: Record<string, unknown>;
+};
+
+// The member is the plain member A who owns the personal payment; the leader is someone else in the fund.
+async function o6m1bFund(tx: M1Tx): Promise<O6m1bFund> {
+  const { leader, member, groupId } = await m1Group(tx);
+  await tx`update groups set name = 'rls o6m1b' where id = ${groupId}`;
+  await enterUserContext(tx, leader);
+  const [{ id: shared }] = await tx<{ id: string }[]>`
+    insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
+    values (${groupId}, true, 'rls o6m1b shared cash', 'asset', ${todayInBogota()}) returning id`;
+  const [{ id: groupCategory }] = await tx<{ id: string }[]>`
+    insert into categories (group_id, name, kind)
+    values (${groupId}, 'rls o6m1b group category', 'expense') returning id`;
+  await enterUserContext(tx, member);
+  const [{ id: personal }] = await tx<{ id: string }[]>`
+    insert into accounts (owner_user_id, name, kind, initial_balance_on)
+    values (${member}, 'rls o6m1b member cash', 'asset', ${todayInBogota()}) returning id`;
+  const [{ id: personalCategory }] = await tx<{ id: string }[]>`
+    insert into categories (owner_user_id, name, kind)
+    values (${member}, 'rls o6m1b member category', 'expense') returning id`;
+  await tx`reset role`;
+  return { leader, member, groupId, shared, groupCategory, personal, personalCategory };
+}
+
+// A's personal payment on A's own account, settled by `account`'s movement as A. Leaves the role reset.
+async function o6m1bPersonalSettled(tx: M1Tx, f: O6m1bFund, account: string, category: string) {
+  await enterUserContext(tx, f.member);
+  const [{ id: payment }] = await tx<{ id: string }[]>`
+    insert into planned_payments (from_account_id, amount_cents, category_id, due_date, remind_on, description)
+    values (${f.personal}, 42000, ${f.personalCategory}, ${todayInBogota()}, ${todayInBogota()}, 'rls o6m1b payment')
+    returning id`;
+  const movement = await o6m1Movement(tx, account, category, 42000, "rls o6m1b movement");
+  const claimed = await tx`update planned_payments set status = 'done', settled_transaction_id = ${movement}
+    where id = ${payment} and status = 'pending' returning id`;
+  await tx`reset role`;
+  if (claimed.length !== 1) throw new Error(`the fixture's settle claimed ${claimed.length} rows`);
+  return { payment, movement };
+}
+
+// Read as the table owner, so no policy hides the row whichever scope it ended in.
+async function o6m1bRead(tx: M1Tx, id: string): Promise<O6m1bRow | undefined> {
+  const [row] = await tx<O6m1bRow[]>`
+    select status, settled_transaction_id, owner_user_id, group_id,
+      to_jsonb(p) - 'status' - 'settled_transaction_id' as rest
+    from planned_payments p where id = ${id}`;
+  return row;
+}
+
+function o6m1bWho(id: string | null, f: O6m1bFund): string {
+  return id === null ? "null" : id === f.member ? "A" : id === f.leader ? "the leader" : id === f.groupId ? "the group" : id;
+}
+
+function o6m1bShow(row: O6m1bRow | undefined, f: O6m1bFund): string {
+  if (!row) return "row gone";
+  return `status ${row.status}, link ${row.settled_transaction_id ?? "null"}, owner ${o6m1bWho(row.owner_user_id, f)}, group ${o6m1bWho(row.group_id, f)}`;
+}
+
+// Every column but status and link whose value moved between the two reads.
+function o6m1bChanged(before: O6m1bRow | undefined, after: O6m1bRow | undefined): string[] {
+  if (!before || !after) return ["row missing"];
+  const keys = new Set([...Object.keys(before.rest), ...Object.keys(after.rest)]);
+  return [...keys].filter((key) => JSON.stringify(before.rest[key]) !== JSON.stringify(after.rest[key]));
+}
+
+async function checkReturnKeepsScope() {
+  console.log("");
+  const labels = {
+    member: "o6m1b-1. another member deletes the shared movement that settled A's personal payment: pending, unlinked, owner still A, nothing else moved",
+    tableOwner: "o6m1b-2. the table owner deletes A's own settling movement, as someone else and as no one: pending, unlinked, owner still A",
+    scope: "o6m1b-3. a return whose stored scope differs from what its accounts would derive keeps the stored owner, group and every other column",
+    direct: "o6m1b-4. a member's direct update still derives the scope: moved onto A's account it is A's; moved onto the shared account it is the group's",
+    audit: "o6m1b-5. the return leaves one planned_payments UPDATE in audit_log, done→pending, owner A before and after",
+    tail: "o6m1b-6. the rolled-back o6m1b transactions leave no fixture behind",
+  };
+
+  await m1Rows([labels.member], async (tx) => {
+    const f = await o6m1bFund(tx);
+    const { payment, movement } = await o6m1bPersonalSettled(tx, f, f.shared, f.groupCategory);
+    const before = await o6m1bRead(tx, payment);
+    await enterUserContext(tx, f.leader);
+    const deleted = await tx`delete from transactions where id = ${movement} returning id`;
+    await tx`set constraints all immediate`;
+    await tx`reset role`;
+    const after = await o6m1bRead(tx, payment);
+    const changed = o6m1bChanged(before, after);
+    return [{
+      ok: deleted.length === 1 && after?.status === "pending" && after.settled_transaction_id === null &&
+        after.owner_user_id === f.member && after.group_id === null && changed.length === 0,
+      detail: `rows deleted ${deleted.length}; after: ${o6m1bShow(after, f)}; other columns changed: ${changed.join(", ") || "none"}`,
+    }];
+  });
+
+  await m1Rows([labels.tableOwner], async (tx) => {
+    const f = await o6m1bFund(tx);
+    const asLeader = await o6m1bPersonalSettled(tx, f, f.personal, f.personalCategory);
+    const asNoOne = await o6m1bPersonalSettled(tx, f, f.personal, f.personalCategory);
+    // The table owner, with the leader's claims left in the session: auth.uid() is the leader.
+    await enterUserContext(tx, f.leader);
+    await tx`reset role`;
+    const leaderDelete = await m1Refusal(tx, (sp) => sp`delete from transactions where id = ${asLeader.movement}`);
+    // The table owner with no claims at all: auth.uid() is null.
+    await tx`select set_config('request.jwt.claims', '', true)`;
+    const noOneDelete = await m1Refusal(tx, (sp) => sp`delete from transactions where id = ${asNoOne.movement}`);
+    const one = await o6m1bRead(tx, asLeader.payment);
+    const two = await o6m1bRead(tx, asNoOne.payment);
+    const back = (row: O6m1bRow | undefined) =>
+      row?.status === "pending" && row.settled_transaction_id === null && row.owner_user_id === f.member && row.group_id === null;
+    return [{
+      ok: leaderDelete === null && noOneDelete === null && back(one) && back(two),
+      detail: `with the leader's claims: delete ${leaderDelete ?? "accepted"}, ${o6m1bShow(one, f)}; ` +
+        `with no claims: delete ${noOneDelete ?? "accepted"}, ${o6m1bShow(two, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.scope], async (tx) => {
+    const f = await o6m1bFund(tx);
+    const { payment, movement } = await o6m1bPersonalSettled(tx, f, f.personal, f.personalCategory);
+    // A's account placed in the group after the payment was planned: deriving the scope from the accounts now
+    // yields the group, while the stored scope is A's. Only a return that keeps the stored row tells them apart.
+    await tx`update accounts set owner_user_id = null, group_id = ${f.groupId}, is_shared = true where id = ${f.personal}`;
+    const before = await o6m1bRead(tx, payment);
+    await enterUserContext(tx, f.leader);
+    await tx`reset role`;
+    const deleteCode = await m1Refusal(tx, (sp) => sp`delete from transactions where id = ${movement}`);
+    const after = await o6m1bRead(tx, payment);
+    const changed = o6m1bChanged(before, after);
+    return [{
+      ok: deleteCode === null && after?.status === "pending" && after.settled_transaction_id === null &&
+        after.owner_user_id === f.member && after.group_id === null && changed.length === 0,
+      detail: `delete ${deleteCode ?? "accepted"}; after: ${o6m1bShow(after, f)}; other columns changed: ${changed.join(", ") || "none"}`,
+    }];
+  });
+
+  await m1Rows([labels.direct], async (tx) => {
+    const f = await o6m1bFund(tx);
+    await enterUserContext(tx, f.leader);
+    const [{ id: groupPayment }] = await tx<{ id: string }[]>`
+      insert into planned_payments (from_account_id, amount_cents, due_date, description)
+      values (${f.shared}, 5000, ${todayInBogota()}, 'rls o6m1b group payment') returning id`;
+    await enterUserContext(tx, f.member);
+    const [{ id: personalPayment }] = await tx<{ id: string }[]>`
+      insert into planned_payments (from_account_id, amount_cents, due_date, description)
+      values (${f.personal}, 6000, ${todayInBogota()}, 'rls o6m1b personal payment') returning id`;
+    const toPersonal = await tx`update planned_payments set from_account_id = ${f.personal}
+      where id = ${groupPayment} returning id`;
+    const toShared = await tx`update planned_payments set from_account_id = ${f.shared}
+      where id = ${personalPayment} returning id`;
+    await tx`reset role`;
+    const mine = await o6m1bRead(tx, groupPayment);
+    const ours = await o6m1bRead(tx, personalPayment);
+    return [{
+      ok: toPersonal.length === 1 && toShared.length === 1 &&
+        mine?.owner_user_id === f.member && mine.group_id === null &&
+        ours?.owner_user_id === null && ours.group_id === f.groupId,
+      detail: `the group payment moved onto A's account by A (${toPersonal.length} row): ${o6m1bShow(mine, f)}; ` +
+        `A's payment moved onto the shared account (${toShared.length} row): ${o6m1bShow(ours, f)}`,
+    }];
+  });
+
+  await m1Rows([labels.audit], async (tx) => {
+    const f = await o6m1bFund(tx);
+    const { payment, movement } = await o6m1bPersonalSettled(tx, f, f.shared, f.groupCategory);
+    const [{ last }] = await tx<{ last: string | null }[]>`select max(id)::text as last from audit_log`;
+    await enterUserContext(tx, f.leader);
+    await tx`delete from transactions where id = ${movement}`;
+    await tx`reset role`;
+    const rows = await tx<{
+      action: string;
+      owner_user_id: string | null;
+      before_status: string | null;
+      after_status: string | null;
+      before_owner: string | null;
+      after_owner: string | null;
+      after_group: string | null;
+    }[]>`
+      select action, owner_user_id,
+        before_data->>'status' as before_status, after_data->>'status' as after_status,
+        before_data->>'owner_user_id' as before_owner, after_data->>'owner_user_id' as after_owner,
+        after_data->>'group_id' as after_group
+      from audit_log
+      where entity = 'planned_payments' and record_id = ${payment} and id > ${last ?? "0"}::bigint
+      order by id`;
+    const [row] = rows;
+    return [{
+      ok: rows.length === 1 && row.action === "UPDATE" && row.before_status === "done" && row.after_status === "pending" &&
+        row.before_owner === f.member && row.after_owner === f.member && row.after_group === null &&
+        row.owner_user_id === f.member,
+      detail: `rows ${rows.length}` + (row
+        ? `, action ${row.action}, ${row.before_status}→${row.after_status}, owner before ${o6m1bWho(row.before_owner, f)}, ` +
+          `after ${o6m1bWho(row.after_owner, f)}, group after ${o6m1bWho(row.after_group, f)}, the log's owner ${o6m1bWho(row.owner_user_id, f)}`
+        : ""),
+    }];
+  });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ groups, payments, movements, accounts }] = await sql<{
+    groups: number; payments: number; movements: number; accounts: number;
+  }[]>`
+    select
+      (select count(*)::int from groups where name like 'rls o6m1b%') as groups,
+      (select count(*)::int from planned_payments where description like 'rls o6m1b%') as payments,
+      (select count(*)::int from transactions where description like 'rls o6m1b%') as movements,
+      (select count(*)::int from accounts where name like 'rls o6m1b%') as accounts`;
+  assert(
+    labels.tail,
+    afterUser === "postgres" && groups === 0 && payments === 0 && movements === 0 && accounts === 0,
+    `current_user = ${afterUser}, groups ${groups}, payments ${payments}, movements ${movements}, accounts ${accounts} named 'rls o6m1b%'`,
+  );
+}
+
+// RF-162: a movement is never dated before the opening day of an account it names, and an account's opening day never
+// moves past one of its movements. Days are civil `date` columns compared as days, so the fixture names fixed past days
+// and no clock or zone enters. Every row rolls back.
+const O6M6_OPEN = "2026-03-10";
+const O6M6_EVE = "2026-03-09";
+const O6M6_MID = "2026-03-20";
+const O6M6_LATER_OPEN = "2026-04-10";
+
+type O6m6Fund = {
+  leader: string;
+  member: string;
+  groupId: string;
+  // Shared, opened on O6M6_OPEN.
+  shared: string;
+  // Shared, opened on O6M6_LATER_OPEN.
+  later: string;
+  expense: string;
+  income: string;
+};
+
+async function o6m6Rows(labels: string[], body: (tx: M1Tx) => Promise<M1Verdict[]>): Promise<void> {
+  let verdicts: M1Verdict[] = labels.map(() => ({ ok: false, detail: "the body never ran" }));
+  await sql
+    .begin(async (tx) => {
+      verdicts = await body(tx);
+      throw M1_ROLLBACK;
+    })
+    .catch((error: unknown) => {
+      if (error === M1_ROLLBACK) return;
+      verdicts = labels.map(() => ({ ok: false, detail: `aborted — ${describeRefusal(error)}` }));
+    });
+  labels.forEach((label, i) => assert(label, verdicts[i].ok, verdicts[i].detail));
+}
+
+async function o6m6Fund(tx: M1Tx): Promise<O6m6Fund> {
+  const { leader, member, groupId } = await m1Group(tx);
+  await tx`update groups set name = 'rls o6m6' where id = ${groupId}`;
+  await enterUserContext(tx, leader);
+  const [{ id: shared }] = await tx<{ id: string }[]>`
+    insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
+    values (${groupId}, true, 'rls o6m6 shared', 'asset', ${O6M6_OPEN}) returning id`;
+  const [{ id: later }] = await tx<{ id: string }[]>`
+    insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
+    values (${groupId}, true, 'rls o6m6 later', 'asset', ${O6M6_LATER_OPEN}) returning id`;
+  const [{ id: expense }] = await tx<{ id: string }[]>`
+    insert into categories (group_id, name, kind) values (${groupId}, 'rls o6m6 expense', 'expense') returning id`;
+  const [{ id: income }] = await tx<{ id: string }[]>`
+    insert into categories (group_id, name, kind) values (${groupId}, 'rls o6m6 income', 'income') returning id`;
+  await tx`reset role`;
+  return { leader, member, groupId, shared, later, expense, income };
+}
+
+// One movement with its split when it is an income or an expense, in the session's current role.
+async function o6m6Movement(
+  tx: M1Tx,
+  legs: { from?: string; to?: string },
+  day: string,
+  category: string | null,
+  amount = 1000,
+): Promise<string> {
+  const [{ id }] = await tx<{ id: string }[]>`
+    insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at, description)
+    values (${legs.from ?? null}, ${legs.to ?? null}, ${amount}, ${day}, 'rls o6m6 movement') returning id`;
+  if (category) {
+    await tx`insert into transaction_splits (transaction_id, category_id, amount_cents) values (${id}, ${category}, ${amount})`;
+  }
+  return id;
+}
+
+// The sqlstate an insert is refused with, or null when it saved and its deferred checks held.
+async function o6m6Insert(
+  tx: M1Tx,
+  legs: { from?: string; to?: string },
+  day: string,
+  category: string | null,
+): Promise<string | null> {
+  return m1Refusal(tx, async (sp) => {
+    await o6m6Movement(sp, legs, day, category);
+    await sp`set constraints all immediate`;
+    await sp`set constraints all deferred`;
+  });
+}
+
+async function o6m6Day(tx: M1Tx, id: string): Promise<string | undefined> {
+  const [row] = await tx<{ day: string }[]>`select occurred_at::text as day from transactions where id = ${id}`;
+  return row?.day;
+}
+
+async function o6m6Opening(tx: M1Tx, id: string): Promise<string | undefined> {
+  const [row] = await tx<{ day: string }[]>`select initial_balance_on::text as day from accounts where id = ${id}`;
+  return row?.day;
+}
+
+// Moves an account's opening with every trigger off, as the table owner, so a movement already stored ends up before
+// it: the state RF-162 leaves alone. Leaves the role reset.
+async function o6m6Predate(tx: M1Tx, account: string, day: string): Promise<void> {
+  await tx`reset role`;
+  await tx`set local session_replication_role = replica`;
+  await tx`update accounts set initial_balance_on = ${day} where id = ${account}`;
+  await tx`set local session_replication_role = origin`;
+}
+
+function o6m6Code(code: string | null): string {
+  return code ?? "accepted";
+}
+
+async function checkMovementBeforeOpening() {
+  console.log("");
+  const labels = {
+    fromEve: "o6m6-1. an expense dated the day before its account opens is refused with MO001",
+    toEve: "o6m6-2. an income dated the day before its account opens is refused with MO001",
+    transfer: "o6m6-3. a transfer dated before either side opens is refused with MO001, whichever side opened later",
+    onTheDay: "o6m6-4. an expense, an income and a transfer dated an account's opening day save",
+    redate: "o6m6-5. moving a movement's date before its account opens is refused with MO001 and the date stays",
+    reaccount: "o6m6-6. moving a movement onto an account opened after its date, by either leg, is refused with MO001",
+    oldRow: "o6m6-7. a movement already stored before its opening saves an amount, split and description edit, the form's own included",
+    openingPast: "o6m6-8. moving an opening past one of the account's movements, by either leg, is refused with MO002",
+    openingClear: "o6m6-9. moving an opening to the first movement's day, earlier, on an empty account, or re-sending it unchanged saves",
+    adjustment: "o6m6-10. a reconciliation before the opening keeps its RC002 refusal; one on the opening day books its adjustment",
+    underRls: "o6m6-11. as authenticated both refusals carry their codes, and one who left the fund cannot move past a movement they no longer read",
+    owner: "o6m6-12. the table owner with no claims, as the import and the nightly run write, is refused a pre-opening movement with MO001",
+    definer: "o6m6-13. both guards run as definers with an empty search_path, and no API role may execute them",
+    tail: "o6m6-14. the rolled-back RF-162 transactions leave no fixture behind",
+  };
+
+  await o6m6Rows([labels.fromEve], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const code = await o6m6Insert(tx, { from: f.shared }, O6M6_EVE, f.expense);
+    return [{ ok: code === "MO001", detail: `expense from the account opened ${O6M6_OPEN}, dated ${O6M6_EVE}: ${o6m6Code(code)}` }];
+  });
+
+  await o6m6Rows([labels.toEve], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const code = await o6m6Insert(tx, { to: f.shared }, O6M6_EVE, f.income);
+    return [{ ok: code === "MO001", detail: `income into the account opened ${O6M6_OPEN}, dated ${O6M6_EVE}: ${o6m6Code(code)}` }];
+  });
+
+  await o6m6Rows([labels.transfer], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const intoLater = await o6m6Insert(tx, { from: f.shared, to: f.later }, O6M6_MID, null);
+    const outOfLater = await o6m6Insert(tx, { from: f.later, to: f.shared }, O6M6_MID, null);
+    const beforeBoth = await o6m6Insert(tx, { from: f.shared, to: f.later }, O6M6_EVE, null);
+    return [{
+      ok: intoLater === "MO001" && outOfLater === "MO001" && beforeBoth === "MO001",
+      detail: `dated ${O6M6_MID}, the destination opened ${O6M6_LATER_OPEN}: ${o6m6Code(intoLater)}; the source opened then: ` +
+        `${o6m6Code(outOfLater)}; dated ${O6M6_EVE}, before both: ${o6m6Code(beforeBoth)}`,
+    }];
+  });
+
+  await o6m6Rows([labels.onTheDay], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const expense = await o6m6Insert(tx, { from: f.shared }, O6M6_OPEN, f.expense);
+    const income = await o6m6Insert(tx, { to: f.shared }, O6M6_OPEN, f.income);
+    const transfer = await o6m6Insert(tx, { from: f.shared, to: f.later }, O6M6_LATER_OPEN, null);
+    return [{
+      ok: expense === null && income === null && transfer === null,
+      detail: `expense on ${O6M6_OPEN}: ${o6m6Code(expense)}; income on ${O6M6_OPEN}: ${o6m6Code(income)}; ` +
+        `transfer into the account opened ${O6M6_LATER_OPEN}, on that day: ${o6m6Code(transfer)}`,
+    }];
+  });
+
+  await o6m6Rows([labels.redate], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const id = await o6m6Movement(tx, { from: f.shared }, O6M6_MID, f.expense);
+    const code = await m1Refusal(tx, (sp) => sp`update transactions set occurred_at = ${O6M6_EVE} where id = ${id}`);
+    const day = await o6m6Day(tx, id);
+    return [{
+      ok: code === "MO001" && day === O6M6_MID,
+      detail: `expense on ${O6M6_MID} moved to ${O6M6_EVE}: ${o6m6Code(code)}, stored day ${day}`,
+    }];
+  });
+
+  await o6m6Rows([labels.reaccount], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const expense = await o6m6Movement(tx, { from: f.shared }, O6M6_MID, f.expense);
+    const income = await o6m6Movement(tx, { to: f.shared }, O6M6_MID, f.income);
+    const viaFrom = await m1Refusal(tx, (sp) => sp`update transactions set from_account_id = ${f.later} where id = ${expense}`);
+    const viaTo = await m1Refusal(tx, (sp) => sp`update transactions set to_account_id = ${f.later} where id = ${income}`);
+    return [{
+      ok: viaFrom === "MO001" && viaTo === "MO001",
+      detail: `movements on ${O6M6_MID} moved onto the account opened ${O6M6_LATER_OPEN}: the expense's source ${o6m6Code(viaFrom)}, ` +
+        `the income's destination ${o6m6Code(viaTo)}`,
+    }];
+  });
+
+  await o6m6Rows([labels.oldRow], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const id = await o6m6Movement(tx, { from: f.shared }, O6M6_MID, f.expense, 1000);
+    // The account now opens after the movement it already had.
+    await o6m6Predate(tx, f.shared, O6M6_LATER_OPEN);
+    await enterUserContext(tx, f.member);
+    const amount = await m1Refusal(tx, async (sp) => {
+      await sp`update transactions set amount_cents = 2000 where id = ${id}`;
+      await sp`update transaction_splits set amount_cents = 2000 where transaction_id = ${id}`;
+      await sp`set constraints all immediate`;
+      await sp`set constraints all deferred`;
+    });
+    const description = await m1Refusal(tx, (sp) =>
+      sp`update transactions set description = 'rls o6m6 corrected' where id = ${id}`);
+    // `updateTransaction` names every column the form carries, the unchanged date and accounts among them.
+    const form = await m1Refusal(tx, async (sp) => {
+      await sp`update transactions set from_account_id = ${f.shared}, to_account_id = null, amount_cents = 3000,
+        occurred_at = ${O6M6_MID}, description = 'rls o6m6 from the form' where id = ${id}`;
+      await sp`update transaction_splits set amount_cents = 3000 where transaction_id = ${id}`;
+      await sp`set constraints all immediate`;
+      await sp`set constraints all deferred`;
+    });
+    await tx`reset role`;
+    const [row] = await tx<{ day: string; amount: number }[]>`
+      select occurred_at::text as day, amount_cents::int as amount from transactions where id = ${id}`;
+    return [{
+      ok: amount === null && description === null && form === null && row?.day === O6M6_MID && row.amount === 3000,
+      detail: `a movement on ${O6M6_MID} in an account opening ${O6M6_LATER_OPEN}: amount and split ${o6m6Code(amount)}, ` +
+        `description ${o6m6Code(description)}, the form naming the same day and account ${o6m6Code(form)}; ` +
+        `stored day ${row?.day}, amount ${row?.amount}`,
+    }];
+  });
+
+  await o6m6Rows([labels.openingPast], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    // The expense names the shared account as its source; the transfer names the later one as its destination.
+    await o6m6Movement(tx, { from: f.shared }, O6M6_MID, f.expense);
+    await o6m6Movement(tx, { from: f.shared, to: f.later }, "2026-04-20", null);
+    const source = await m1Refusal(tx, (sp) =>
+      sp`update accounts set initial_balance_on = '2026-03-21' where id = ${f.shared}`);
+    const destination = await m1Refusal(tx, (sp) =>
+      sp`update accounts set initial_balance_on = '2026-04-21' where id = ${f.later}`);
+    const shared = await o6m6Opening(tx, f.shared);
+    const later = await o6m6Opening(tx, f.later);
+    return [{
+      ok: source === "MO002" && destination === "MO002" && shared === O6M6_OPEN && later === O6M6_LATER_OPEN,
+      detail: `an expense out of the account on ${O6M6_MID}, opening moved to 2026-03-21: ${o6m6Code(source)}; ` +
+        `a transfer into the account on 2026-04-20, opening moved to 2026-04-21: ${o6m6Code(destination)}; ` +
+        `openings stored ${shared} and ${later}`,
+    }];
+  });
+
+  await o6m6Rows([labels.openingClear], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    await o6m6Movement(tx, { to: f.shared }, O6M6_MID, f.income);
+    const onTheDay = await m1Refusal(tx, (sp) =>
+      sp`update accounts set initial_balance_on = ${O6M6_MID} where id = ${f.shared}`);
+    const earlier = await m1Refusal(tx, (sp) =>
+      sp`update accounts set initial_balance_on = '2026-03-01' where id = ${f.shared}`);
+    const empty = await m1Refusal(tx, (sp) =>
+      sp`update accounts set initial_balance_on = '2026-05-01' where id = ${f.later}`);
+    // An account already past one of its movements, edited the way `updateAccount` writes: every column, the
+    // unchanged opening among them; and a rename alone.
+    await o6m6Predate(tx, f.shared, O6M6_LATER_OPEN);
+    await enterUserContext(tx, f.member);
+    const form = await m1Refusal(tx, (sp) =>
+      sp`update accounts set name = 'rls o6m6 renamed', initial_balance_on = ${O6M6_LATER_OPEN} where id = ${f.shared}`);
+    const rename = await m1Refusal(tx, (sp) =>
+      sp`update accounts set name = 'rls o6m6 renamed again' where id = ${f.shared}`);
+    const [{ day, name }] = await tx<{ day: string; name: string }[]>`
+      select initial_balance_on::text as day, name from accounts where id = ${f.shared}`;
+    return [{
+      ok: onTheDay === null && earlier === null && empty === null && form === null && rename === null &&
+        day === O6M6_LATER_OPEN && name === "rls o6m6 renamed again",
+      detail: `income on ${O6M6_MID}: opening moved to that day ${o6m6Code(onTheDay)}, to 2026-03-01 ${o6m6Code(earlier)}; ` +
+        `an account with no movement moved to 2026-05-01 ${o6m6Code(empty)}; an account already past its movement, ` +
+        `the form re-sending its opening ${o6m6Code(form)}, a rename ${o6m6Code(rename)}; stored ${day}, «${name}»`,
+    }];
+  });
+
+  await o6m6Rows([labels.adjustment], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const before = await m1Refusal(tx, (sp) =>
+      sp`insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+        values (${f.shared}, ${O6M6_EVE}, 5000)`);
+    const onTheDay = await m1Refusal(tx, (sp) =>
+      sp`insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+        values (${f.shared}, ${O6M6_OPEN}, 5000)`);
+    await tx`reset role`;
+    const adjustments = await tx<{ day: string; amount: number }[]>`
+      select occurred_at::text as day, amount_cents::int as amount from transactions
+      where to_account_id = ${f.shared} and reconciliation_id is not null`;
+    return [{
+      ok: before === "RC002" && onTheDay === null && adjustments.length === 1 &&
+        adjustments[0].day === O6M6_OPEN && adjustments[0].amount === 5000,
+      detail: `counted on ${O6M6_EVE}: ${o6m6Code(before)}; counted on ${O6M6_OPEN}: ${o6m6Code(onTheDay)}, ` +
+        `adjustments ${adjustments.map((a) => `${a.amount} on ${a.day}`).join(", ") || "none"}`,
+    }];
+  });
+
+  await o6m6Rows([labels.underRls], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await enterUserContext(tx, f.member);
+    const [{ role }] = await tx<{ role: string }[]>`select current_user as role`;
+    const insert = await o6m6Insert(tx, { from: f.shared }, O6M6_EVE, f.expense);
+    await o6m6Movement(tx, { from: f.shared }, O6M6_MID, f.expense);
+    const opening = await m1Refusal(tx, (sp) =>
+      sp`update accounts set initial_balance_on = '2026-03-21' where id = ${f.shared}`);
+    // The member's own account sends money to the fund; the transfer is the fund's. Once the member leaves, only the
+    // guard reads that transfer, not the person moving their own account's opening.
+    const [{ id: own }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, initial_balance_on)
+      values (${f.member}, 'rls o6m6 member cash', 'asset', ${O6M6_OPEN}) returning id`;
+    await o6m6Movement(tx, { from: own, to: f.shared }, O6M6_MID, null);
+    await tx`reset role`;
+    await tx`update group_members set archived_at = now() where group_id = ${f.groupId} and user_id = ${f.member}`;
+    await enterUserContext(tx, f.member);
+    const [{ visible }] = await tx<{ visible: number }[]>`
+      select count(*)::int as visible from transactions where from_account_id = ${own}`;
+    const left = await m1Refusal(tx, (sp) =>
+      sp`update accounts set initial_balance_on = '2026-03-21' where id = ${own}`);
+    return [{
+      ok: role === "authenticated" && insert === "MO001" && opening === "MO002" && visible === 0 && left === "MO002",
+      detail: `as ${role}: a pre-opening expense ${o6m6Code(insert)}, the opening moved past a movement ${o6m6Code(opening)}; ` +
+        `after leaving, the transfers out of their own account they read ${visible}, its opening moved past one ${o6m6Code(left)}`,
+    }];
+  });
+
+  await o6m6Rows([labels.owner], async (tx) => {
+    const f = await o6m6Fund(tx);
+    await tx`reset role`;
+    await tx`select set_config('request.jwt.claims', '', true)`;
+    const code = await m1Refusal(tx, async (sp) => {
+      const [{ id }] = await sp<{ id: string }[]>`
+        insert into transactions (group_id, from_account_id, amount_cents, occurred_at, description, created_by)
+        values (${f.groupId}, ${f.shared}, 1000, ${O6M6_EVE}, 'rls o6m6 nightly', ${f.leader}) returning id`;
+      await sp`insert into transaction_splits (transaction_id, category_id, amount_cents) values (${id}, ${f.expense}, 1000)`;
+      await sp`set constraints all immediate`;
+      await sp`set constraints all deferred`;
+    });
+    const [{ uid }] = await tx<{ uid: string | null }[]>`select auth.uid() as uid`;
+    return [{
+      ok: uid === null && code === "MO001",
+      detail: `as the table owner, auth.uid() ${uid}, an expense dated ${O6M6_EVE}: ${o6m6Code(code)}`,
+    }];
+  });
+
+  await o6m6Rows([labels.definer], async (tx) => {
+    // The guards are whichever trigger functions on the two tables raise the new codes; the check is what the
+    // executor enforces, read from the live catalog.
+    const guards = await tx<{
+      relation: string;
+      fn: string;
+      definer: boolean;
+      config: string[] | null;
+      grantees: string[];
+    }[]>`
+      select distinct c.relname as relation, p.oid::regprocedure::text as fn, p.prosecdef as definer,
+        p.proconfig as config,
+        array(select r from unnest(array['public', 'anon', 'authenticated', 'service_role']) r
+          where (r = 'public' and exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                   where a.grantee = 0 and a.privilege_type = 'EXECUTE'))
+             or (r <> 'public' and has_function_privilege(r, p.oid, 'EXECUTE'))) as grantees
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_proc p on p.oid = t.tgfoid
+      where n.nspname = 'finances' and c.relname in ('transactions', 'accounts') and not t.tgisinternal
+        and ((c.relname = 'transactions' and p.prosrc like '%MO001%') or (c.relname = 'accounts' and p.prosrc like '%MO002%'))`;
+    const shaped = (g: (typeof guards)[number]) =>
+      g.definer && (g.config ?? []).some((c) => c === 'search_path=""' || c === "search_path=") && g.grantees.length === 0;
+    const relations = new Set(guards.map((g) => g.relation));
+    return [{
+      ok: relations.has("transactions") && relations.has("accounts") && guards.every(shaped),
+      detail: guards.length === 0 ? "no trigger on transactions raises MO001 and none on accounts raises MO002"
+        : guards.map((g) => `${g.relation}: ${g.fn} definer ${g.definer}, config ${JSON.stringify(g.config)}, ` +
+          `executable by ${g.grantees.join(", ") || "no API role"}`).join("; "),
+    }];
+  });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ groups, accounts, movements }] = await sql<{ groups: number; accounts: number; movements: number }[]>`
+    select
+      (select count(*)::int from groups where name like 'rls o6m6%') as groups,
+      (select count(*)::int from accounts where name like 'rls o6m6%') as accounts,
+      (select count(*)::int from transactions where description like 'rls o6m6%') as movements`;
+  assert(
+    labels.tail,
+    afterUser === "postgres" && groups === 0 && accounts === 0 && movements === 0,
+    `current_user = ${afterUser}, groups ${groups}, accounts ${accounts}, movements ${movements} named 'rls o6m6%'`,
+  );
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

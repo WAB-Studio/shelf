@@ -6,7 +6,7 @@ import { beforeEach, mock, test } from "node:test";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 
-import { parseAmount } from "@/lib/money";
+import { maxAmountMinor, parseAmount } from "@/lib/money";
 
 // M2 (RF-51, RF-52). The real pipeline runs, over a real .xlsx; the database read and the request
 // locale are doubled at module resolution, and the scope is whatever each test seeds.
@@ -16,8 +16,8 @@ const messages = JSON.parse(readFileSync(new URL("../../messages/en.json", impor
 };
 
 const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const CHECKING = { id: UUID(1), name: "Checking", externalRef: "acc-1", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP" };
-const SAVINGS = { id: UUID(2), name: "Savings", externalRef: "acc-2", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP" };
+const CHECKING = { id: UUID(1), name: "Checking", externalRef: "acc-1", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP", initialBalanceOn: "2026-01-01" };
+const SAVINGS = { id: UUID(2), name: "Savings", externalRef: "acc-2", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP", initialBalanceOn: "2026-01-01" };
 const FOOD = { id: UUID(11), name: "Food", externalRef: "cat-1", ownerUserId: UUID(99), groupId: null, kind: "expense" };
 
 type Scope = {
@@ -304,6 +304,83 @@ test("RF-52: a foreign row keeps its reference, so importing the file twice upda
   assert.equal(again.status, "update");
 });
 
+// ---- M3: an account's opening off a backup, and the cap on a second amount (RF-142, RF-51, RF-126) --
+
+const ACCOUNT_COLUMNS = ["externalRef", "name", "kind", "subtype", "placement", "institution", "amount", "balanceOn", "settlementCurrency"] as const;
+
+async function bookAccounts(rows: Record<string, string | number | null>[]) {
+  const wb = new ExcelJS.Workbook();
+  const sheet = wb.addWorksheet(messages.data.sheets.accounts);
+  sheet.addRow(ACCOUNT_COLUMNS.map((key) => messages.data.columns[key]));
+  for (const row of rows) sheet.addRow(ACCOUNT_COLUMNS.map((key) => row[key] ?? null));
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+async function runAccounts(bytes: Uint8Array) {
+  const { runImportPipeline } = await import("./import-pipeline");
+  const result = await runImportPipeline({ buffer: buffer(bytes) });
+  return result.perEntity.find((e) => e.entity === "accounts")!.rows;
+}
+
+const cardRow = (amount: string | number, over: Record<string, string | number | null> = {}) => ({
+  externalRef: "card-m3",
+  name: "Tarjeta M3",
+  kind: "liability",
+  subtype: "card",
+  placement: "personal",
+  amount,
+  balanceOn: "2026-01-01",
+  settlementCurrency: "COP",
+  ...over,
+});
+
+test("RF-142: a card the backup wrote at -150000 (a number cell, as the export writes it) passes the import with no error", async () => {
+  const rows = await runAccounts(await bookAccounts([cardRow(-150000)]));
+  assert.deepEqual(rows.map((r) => r.errors), [[]]);
+  assert.notEqual(rows[0].object, null);
+});
+
+test("RF-142: a card typed at -150000,00 and one typed at 150000,00 both pass the import with no error", async () => {
+  const rows = await runAccounts(
+    await bookAccounts([cardRow("-150000,00"), cardRow("150000,00", { externalRef: "card-m3-b", name: "Tarjeta M3 b" })]),
+  );
+  assert.deepEqual(rows.map((r) => r.errors), [[], []]);
+});
+
+test("RF-51: an asset row opened at -100 is refused as accounts.errors.amountInvalid on its amount, and carries no object", async () => {
+  const rows = await runAccounts(
+    await bookAccounts([cardRow("-100", { externalRef: "bank-m3", name: "Banco M3", kind: "asset", subtype: "bank" })]),
+  );
+  assert.equal(rows[0].object, null);
+  assert.deepEqual(rows[0].errors.map((e) => [e.key, e.column]), [["accounts.errors.amountInvalid", "amount"]]);
+});
+
+// The cap a second amount is held to is the one its account's currency stores (RF-126): the card settles in pesos.
+const CAP = maxAmountMinor("COP");
+const written = (minor: number) => `${Math.trunc(minor / 100)},${String(minor % 100).padStart(2, "0")}`;
+
+test("U4: a second amount of exactly the cap passes, read to the cap's own integer", async () => {
+  const rows = await run(await bookForeign([dollarPurchase({ counterAmount: written(CAP) })]));
+  assert.deepEqual(rows[0].errors, []);
+  const object = rows[0].object as Parsed;
+  assert.equal(centsOf(object.counterAmountCents, object.counterAmount), CAP);
+});
+
+test("U4: a second amount one stored unit over the cap is refused on that row, amountTooLarge on counterAmount", async () => {
+  const rows = await run(await bookForeign([dollarPurchase({ counterAmount: written(CAP + 1) })]));
+  assert.equal(rows[0].object, null);
+  assert.deepEqual(rows[0].errors.map((e) => [e.key, e.column]), [["transactions.errors.amountTooLarge", "counterAmount"]]);
+});
+
+test("U5: a second amount far over the cap is refused on that row alone, amountTooLarge on counterAmount", async () => {
+  const rows = await run(
+    await bookForeign([dollarPurchase({ counterAmount: written(CAP * 100), externalRef: "far" }), dollarPurchase({ externalRef: "fine" })]),
+  );
+  assert.equal(rows[0].object, null);
+  assert.deepEqual(rows[0].errors.map((e) => [e.key, e.column]), [["transactions.errors.amountTooLarge", "counterAmount"]]);
+  assert.deepEqual(rows[1].errors, []);
+});
+
 // ---- the zip guard ----------------------------------------------------------------------------
 
 // Overwrites the size a directory entry (and its local header) declares.
@@ -424,4 +501,133 @@ test("the entries fixture really holds the entry count it names", async () => {
   const zip = await padded(honest, Object.fromEntries(Array.from({ length: 200 - base }, (_, i) => [`pad${i}.txt`, Buffer.from("x")])), "STORE");
   const end = zip.length - 22;
   assert.equal(new DataView(zip.buffer, zip.byteOffset).getUint16(end + 10, true), 200);
+});
+
+// ---- O6-M7: a row dated before the opening of an account it names (RF-162) ---------------------------
+
+const BEFORE_OPENING = "data.import.errors.beforeOpening";
+
+async function bookBoth(accountRows: Record<string, string | number | null>[], transactions: Cells[]) {
+  const wb = new ExcelJS.Workbook();
+  const accountSheet = wb.addWorksheet(messages.data.sheets.accounts);
+  accountSheet.addRow(ACCOUNT_COLUMNS.map((key) => messages.data.columns[key]));
+  for (const row of accountRows) accountSheet.addRow(ACCOUNT_COLUMNS.map((key) => row[key] ?? null));
+  const movementSheet = wb.addWorksheet(messages.data.sheets.transactions);
+  movementSheet.addRow(COLUMNS.map((key) => messages.data.columns[key]));
+  for (const row of transactions) movementSheet.addRow(COLUMNS.map((key) => row[key] ?? null));
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+async function runAll(bytes: Uint8Array) {
+  const { runImportPipeline } = await import("./import-pipeline");
+  return runImportPipeline({ buffer: buffer(bytes) });
+}
+
+const on = (day: string, over: Cells = {}): Cells => ({ ...spend(1000, `on ${day}`), occurredAt: day, ...over });
+const wordsOf = (row: { errors: { key: string; column: string | null }[] }) => row.errors.map((e) => [e.key, e.column]);
+
+test("RF-162: a row dated the day before an existing account's opening is refused on occurredAt, with no object", async () => {
+  const rows = await run(await book([on("2025-12-31")]));
+  assert.deepEqual(wordsOf(rows[0]), [[BEFORE_OPENING, "occurredAt"]]);
+  assert.equal(rows[0].object, null);
+});
+
+test("RF-162: a row dated the opening day itself is clean", async () => {
+  const rows = await run(await book([on("2026-01-01")]));
+  assert.deepEqual(rows[0].errors, []);
+  assert.notEqual(rows[0].object, null);
+});
+
+test("RF-162: the day after the opening is clean too, so the line is the opening and not a week around it", async () => {
+  const rows = await run(await book([on("2026-01-02"), on("2026-06-30")]));
+  assert.deepEqual(rows.map((r) => r.errors), [[], []]);
+});
+
+test("RF-162: the refused row is counted in the totals, and its clean neighbour is counted as new", async () => {
+  const result = await runAll(await book([on("2025-12-31"), on("2026-01-05")]));
+  assert.deepEqual(result.totals, { new: 1, update: 0, error: 1 });
+});
+
+test("RF-162: the destination leg is held to its account's opening as well", async () => {
+  scope.categories = [FOOD, { ...FOOD, id: UUID(12), name: "Pay", externalRef: "cat-2", kind: "income" }];
+  const rows = await run(
+    await book([{ toAccount: "Checking", amount: 5000, occurredAt: "2025-12-31", description: "income", category: "Pay" }]),
+  );
+  assert.deepEqual(wordsOf(rows[0]), [[BEFORE_OPENING, "occurredAt"]]);
+});
+
+test("RF-162: a transfer is refused when only its second account opens later than the day", async () => {
+  scope.accounts = [CHECKING, { ...SAVINGS, initialBalanceOn: "2026-03-01" }];
+  const rows = await run(
+    await book([{ fromAccount: "Checking", toAccount: "Savings", amount: 5000, occurredAt: "2026-02-01", description: "move" }]),
+  );
+  assert.deepEqual(wordsOf(rows[0]), [[BEFORE_OPENING, "occurredAt"]]);
+});
+
+test("RF-162: each account is held to its own opening, not to the earliest or the latest of the file", async () => {
+  scope.accounts = [CHECKING, { ...SAVINGS, initialBalanceOn: "2026-03-01" }];
+  const rows = await run(
+    await book([
+      on("2026-02-01"),
+      { fromAccount: "Savings", amount: 100, category: "Food", occurredAt: "2026-02-01", description: "savings early" },
+      { fromAccount: "Savings", amount: 100, category: "Food", occurredAt: "2026-03-01", description: "savings on the day" },
+    ]),
+  );
+  assert.deepEqual(rows.map((r) => r.errors.length), [0, 1, 0]);
+});
+
+test("RF-162: a row that names an account nobody has reports the unknown reference and no opening error", async () => {
+  const rows = await run(await book([on("2025-12-31", { fromAccount: "Nadie" })]));
+  assert.ok(rows[0].errors.length > 0);
+  assert.ok(rows[0].errors.every((e) => e.key !== BEFORE_OPENING));
+});
+
+test("RF-162: an adjustment row dated before its account's opening is refused the same way", async () => {
+  const rows = await run(
+    await book([{ fromAccount: "Checking", amount: 500, occurredAt: "2025-12-31", description: "adjust", adjustment: true as never }]),
+  );
+  assert.ok(rows[0].errors.some((e) => e.key === BEFORE_OPENING && e.column === "occurredAt"), JSON.stringify(rows[0].errors));
+});
+
+const newBank = (balanceOn: string, over: Record<string, string | number | null> = {}) => ({
+  externalRef: "bank-new",
+  name: "Banco nuevo",
+  kind: "asset",
+  subtype: "bank",
+  placement: "personal",
+  amount: 1000,
+  balanceOn,
+  settlementCurrency: "COP",
+  ...over,
+});
+
+test("RF-162: a movement earlier than the opening of an account created in the same file is refused on occurredAt", async () => {
+  const result = await runAll(
+    await bookBoth([newBank("2026-02-01")], [on("2026-01-15", { fromAccount: "Banco nuevo" })]),
+  );
+  const accountRows = result.perEntity.find((e) => e.entity === "accounts")!.rows;
+  const movementRows = result.perEntity.find((e) => e.entity === "transactions")!.rows;
+  assert.deepEqual(accountRows.map((r) => r.errors), [[]]);
+  assert.deepEqual(wordsOf(movementRows[0]), [[BEFORE_OPENING, "occurredAt"]]);
+  assert.equal(result.totals.error, 1);
+});
+
+test("RF-162: a movement on the opening day of an account created in the same file is clean", async () => {
+  const result = await runAll(
+    await bookBoth([newBank("2026-02-01")], [on("2026-02-01", { fromAccount: "Banco nuevo" })]),
+  );
+  assert.deepEqual(result.totals, { new: 2, update: 0, error: 0 });
+});
+
+test("RF-162: the file-new account is held to its own row's day, not to a same-named stored account's", async () => {
+  // The file-new account opens in January; the stored Checking opens 2026-01-01. A movement on 2026-01-10 on the
+  // new one passes only if its own opening (2025-12-01) is what counts, and one dated 2025-11-30 fails.
+  const result = await runAll(
+    await bookBoth(
+      [newBank("2025-12-01")],
+      [on("2025-12-15", { fromAccount: "Banco nuevo" }), on("2025-11-30", { fromAccount: "Banco nuevo", description: "early" })],
+    ),
+  );
+  const movementRows = result.perEntity.find((e) => e.entity === "transactions")!.rows;
+  assert.deepEqual(movementRows.map((r) => r.errors.length), [0, 1]);
 });

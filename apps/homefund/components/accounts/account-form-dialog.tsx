@@ -197,7 +197,10 @@ function AccountForm({
     onSuccess: onActionSuccess,
     onError: (result) => {
       if (result.error.serverError === "errors.stale") setStale(true);
-      else onActionError(result);
+      else if (result.error.serverError === "accounts.errors.openingAfterMovement") {
+        onActionError(result);
+        form.setError("balanceOn", { type: "server", message: "accounts.errors.openingAfterMovement" });
+      } else onActionError(result);
     },
   });
 

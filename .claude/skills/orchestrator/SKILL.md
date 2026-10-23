@@ -116,7 +116,7 @@ Subagents: `planner` takes a slice and returns a plan. `tester` writes a level-3
 - Lanes 2 to 6 take e2e work, 7 and up work with no e2e (`docs/agentes/lanes.md`). Lane 1 is yours: you merge, you tick, you run the suites the branches share.
 - Give each dispatch its lane number, its worktree path, its port and its branch.
 - Never put two workers on one lane, and never two on one file.
-- Cap the lanes running a dev server or a suite at once at two (`docs/agentes/lanes.md`). Queue the rest.
+- Cap the lanes running a dev server or a suite at once at four (`docs/agentes/lanes.md`). Queue the rest.
 - Serialize only what a dependency forces. Nothing else.
 - Never hold work behind a judge. Run the `validator`, `mutator` and `critic` beside the next module's worker,
   and cut the next train from the branch of the one in review.

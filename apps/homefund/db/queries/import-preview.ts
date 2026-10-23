@@ -38,7 +38,8 @@ export type ScopedEntity = {
 
 // An account additionally carries what it settles in (RF-121): the pipeline checks a
 // resolved reference against it before a row that names one ever reaches `parsePesos`.
-export type ScopedAccount = ScopedEntity & { settlementCurrency: string };
+// Its opening day too (RF-162): a movement row dated before it is refused in the preview.
+export type ScopedAccount = ScopedEntity & { settlementCurrency: string; initialBalanceOn: string };
 
 // A category additionally carries its kind (RF-27): a transaction row resolving one
 // checks it against the movement's own direction before the row ever reaches a write.
@@ -97,6 +98,7 @@ export async function readImportScope(): Promise<ImportScope> {
             ownerUserId: accounts.ownerUserId,
             groupId: accounts.groupId,
             settlementCurrency: accounts.settlementCurrency,
+            initialBalanceOn: accounts.initialBalanceOn,
           })
           .from(accounts),
       ),

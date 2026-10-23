@@ -21,7 +21,7 @@ export const SEED = {
   "goal.house": "goal «Casa», measure hours (stored in minutes), no rhythm, no horizon",
   "com.class": "commitment «Clase de inglés», weekdays, tap, of goal.english",
   "task.maze": "one-off «Maze» in goal.english, planned in the plan for 2026-10, not fixed",
-  "task.report": "one-off «Informe» with no day, no goal",
+  "task.report": "one-off «Carta al banco» with no day, no goal",
   "task.doc": "task «Documento» in goal.english, fixed to 2026-11",
   "phase.two": "phase 2 of goal.english, 2026-11-01 to 2026-11-30",
 } as const;
@@ -46,7 +46,7 @@ export const TASKS: readonly BenchTask[] = [
     id: "q-loose",
     group: "question",
     message: "¿Qué tareas tengo sueltas esperando un día?",
-    expected: { kind: "reply", facts: ["Informe"] },
+    expected: { kind: "reply", facts: ["Carta al banco"] },
   },
 
   {
@@ -58,7 +58,7 @@ export const TASKS: readonly BenchTask[] = [
   {
     id: "s-schedule",
     group: "single",
-    message: "Pon el Informe para el 2026-10-27",
+    message: "Pon la Carta al banco para el 2026-10-27",
     expected: expectChanges({ tool: "schedule_task", args: { one_off_id: "$task.report", day: "2026-10-27" } }),
   },
   {
@@ -76,7 +76,7 @@ export const TASKS: readonly BenchTask[] = [
   {
     id: "s-complete",
     group: "single",
-    message: "Ya terminé el Informe",
+    message: "Ya terminé la Carta al banco",
     expected: expectChanges({ tool: "complete_task", args: { one_off_id: "$task.report" } }),
   },
   {
@@ -106,7 +106,7 @@ export const TASKS: readonly BenchTask[] = [
   {
     id: "s-note",
     group: "single",
-    message: "Anota en el Informe: entregar con la portada nueva",
+    message: "Anota en la Carta al banco: entregar con la portada nueva",
     expected: expectChanges({ tool: "set_task_note", args: { one_off_id: "$task.report", note: { includes: "portada" } } }),
   },
 
@@ -119,10 +119,10 @@ export const TASKS: readonly BenchTask[] = [
   {
     id: "t-fix-note",
     group: "two-step",
-    message: "Pasa Maze a noviembre y anota que depende del Informe",
+    message: "Pasa Maze a noviembre y anota que depende de la Carta al banco",
     expected: expectChanges(
       { tool: "fix_task", args: { one_off_id: "$task.maze", month: "2026-11" } },
-      { tool: "set_task_note", args: { one_off_id: "$task.maze", note: { includes: "Informe" } } },
+      { tool: "set_task_note", args: { one_off_id: "$task.maze", note: { includes: "Carta al banco" } } },
     ),
   },
   {

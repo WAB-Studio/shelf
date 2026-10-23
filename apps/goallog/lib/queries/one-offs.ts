@@ -82,3 +82,50 @@ export async function listScheduledOneOffs(today: string): Promise<ScheduledOneO
     day: row.day,
   }));
 }
+
+export type GoalOneOff = {
+  id: string;
+  name: string;
+  goalId: string;
+  goalName: string;
+  note: string | null;
+  plannedMonth: string | null;
+};
+
+type GoalOneOffRow = {
+  id: string;
+  name: string;
+  goal_id: string;
+  goal_name: string;
+  note: string | null;
+  planned_month: string | null;
+};
+
+// Every not-done task with no day that belongs to a goal open on `today`, top-level
+// or subtask, whether or not a month holds it. A subtask answers to its parent's goal.
+export async function listGoalOneOffs(today: string): Promise<GoalOneOff[]> {
+  const rows = await withGoalsDb((tx) =>
+    tx.execute<GoalOneOffRow>(sql`
+      select o.id, o.name, g.id as goal_id, g.name as goal_name, o.note,
+             to_char(o.planned_month, 'YYYY-MM') as planned_month
+        from "goals"."one_offs" o
+        left join "goals"."one_offs" p on p.id = o.parent_id
+        join "goals"."goals" g on g.id = coalesce(o.goal_id, p.goal_id)
+        where o.day is null
+          and not exists (
+            select 1 from "goals"."facts" f where f.one_off_id = o.id
+          )
+          and (${openGoal(today)})
+        order by g.created_at, g.id, o.position, o.created_at, o.id
+    `),
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    goalId: row.goal_id,
+    goalName: row.goal_name,
+    note: row.note,
+    plannedMonth: row.planned_month,
+  }));
+}

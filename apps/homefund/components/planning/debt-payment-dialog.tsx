@@ -8,6 +8,7 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { recordDebtPaymentAction } from "@/app/actions/installment-plans";
+import { CreditAndOwedLine, owesBesideCredit } from "@/components/planning/debts-table";
 import {
   Button,
   Callout,
@@ -24,6 +25,7 @@ import {
   Text,
   TextField,
 } from "@/components/ui";
+import type { DebtPocket } from "@/db/queries/debt-overview";
 import {
   BASE_CURRENCY,
   minorUnitExponent,
@@ -43,6 +45,10 @@ export type PaymentDebt = {
   accountId: string;
   name: string;
   owedCents: number;
+  creditCents: number;
+  // The pockets in other currencies, which the balance reads beside a credit
+  // exactly as the debt's row does (RF-124). None reads as none.
+  otherOwed?: DebtPocket[];
 };
 
 export type PaymentSource = {
@@ -102,6 +108,8 @@ function PaymentForm({
   // Root-scoped: the keys under `common` and `debts` sit outside this namespace.
   const tKey = useTranslations();
   const locale = useLocale();
+  // The words around the amount, which `Money` draws inside its own span.
+  const inFavour = tKey("debts.inFavour", { amount: "\u0000" }).split("\u0000");
 
   // One key per opening: a payment sent again after a lost answer carries the same one, and
   // the form unmounts on close, so the next opening mints its own.
@@ -182,12 +190,34 @@ function PaymentForm({
         <Field>
           <FieldLabel>{tKey("debts.tableBalance")}</FieldLabel>
           <Text size="3">
-            <Money
-              minor={debt.owedCents}
-              currency={currency}
-              size="inherit"
-              signed={false}
-            />
+            {owesBesideCredit(debt.creditCents, debt.otherOwed ?? []) ? (
+              <CreditAndOwedLine
+                creditCents={debt.creditCents}
+                currency={currency}
+                otherOwed={debt.otherOwed ?? []}
+                align="left"
+                size="3"
+                owedBold
+              />
+            ) : debt.creditCents > 0 ? (
+              <Money
+                minor={debt.creditCents}
+                currency={currency}
+                tone="credit"
+                size="inherit"
+                words={{
+                  before: inFavour[0],
+                  after: inFavour[1] ?? "",
+                }}
+              />
+            ) : (
+              <Money
+                minor={debt.owedCents}
+                currency={currency}
+                size="inherit"
+                signed={false}
+              />
+            )}
           </Text>
         </Field>
 

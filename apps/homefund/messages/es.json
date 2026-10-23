@@ -375,7 +375,8 @@
       "amountTooLarge": "El monto es demasiado alto.",
       "dateRequired": "Elige una fecha.",
       "dateInvalid": "Elige una fecha válida.",
-      "dateInFuture": "La fecha no puede ser futura."
+      "dateInFuture": "La fecha no puede ser futura.",
+      "openingAfterMovement": "Hay movimientos antes de esa fecha. La apertura no puede quedar después de ellos."
     },
     "reconcile": "Cuadrar",
     "reconcileTitle": "Cuadrar {name}",
@@ -553,6 +554,8 @@
     "confirmedToast": "Movimiento confirmado.",
     "deleteTitle": "Eliminar movimiento",
     "deleteDescription": "Esta acción no se puede deshacer.",
+    "deleteSettlesPayment": "Este movimiento saldó «{name}». Al eliminarlo, el pago vuelve a «Por pagar».",
+    "deleteSettlesPaymentUnnamed": "Este movimiento saldó un pago planeado. Al eliminarlo, el pago vuelve a «Por pagar».",
     "splitAddCategory": "Agregar categoría",
     "splitRowCategory": "Categoría {position}",
     "splitRowAmount": "Monto {position}",
@@ -948,6 +951,8 @@
     "monthlyInterest": "Interés mensual · {amount}",
     "availableCredit": "Cupo disponible · {amount}",
     "inFavour": "A favor {amount}",
+    "owesForeign": "Debes {amount}",
+    "toBill": "(≈ {amount} por facturar)",
     "minimumPayment": "Pago mínimo",
     "cutOff": "Corte",
     "dueDate": "Vence",
@@ -1208,7 +1213,8 @@
     "reconcileBeforeLatest": "Ya cuadraste esta cuenta el {date}. Elige ese día o uno posterior.",
     "reconcileStale": "Los movimientos cambiaron mientras cuadrabas. Revisa las cifras y vuelve a intentarlo.",
     "reconcileFailed": "No se pudo cuadrar la cuenta. Inténtalo de nuevo.",
-    "adjustmentReadOnly": "Un descuadre no se edita ni se borra; se corrige cuadrando la cuenta de nuevo."
+    "adjustmentReadOnly": "Un descuadre no se edita ni se borra; se corrige cuadrando la cuenta de nuevo.",
+    "movementBeforeOpening": "La fecha es anterior a la apertura de la cuenta. Cambia la fecha o la apertura de la cuenta."
   },
   "data": {
     "screen": {
@@ -1292,7 +1298,8 @@
         "adjustmentOneAccount": "Un descuadre lleva una sola cuenta, de origen o de destino.",
         "adjustmentRefused": "El descuadre no se pudo registrar: su fecha es anterior a la apertura o al último cuadre de la cuenta, o la cuenta está archivada.",
         "hasErrors": "El archivo todavía tiene errores. Corrígelos e impórtalo de nuevo.",
-        "alreadyCommitting": "Este archivo ya se estaba importando en otra pestaña. Revisa los movimientos antes de importarlo otra vez."
+        "alreadyCommitting": "Este archivo ya se estaba importando en otra pestaña. Revisa los movimientos antes de importarlo otra vez.",
+        "beforeOpening": "Fecha anterior a la apertura de su cuenta."
       }
     }
   },
@@ -1373,6 +1380,7 @@
     "amountLabel": "Monto",
     "stateLabel": "Estado",
     "stateComplete": "Completo",
+    "beforeOpening": "Fecha {date}, anterior a la apertura de la cuenta",
     "stateIncomplete": "Incompleto",
     "openForm": "Abrir formulario prellenado",
     "categoryFromMerchant": "Categoría del comercio",

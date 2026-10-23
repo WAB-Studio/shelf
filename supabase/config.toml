@@ -3,12 +3,12 @@ project_id = "shelf"
 
 [api]
 enabled = true
-port = 54321
+port = 44321
 schemas = []
 
 [db]
-port = 54322
-shadow_port = 54320
+port = 44322
+shadow_port = 44320
 major_version = 17
 
 [db.pooler]
@@ -25,7 +25,7 @@ enabled = false
 
 [local_smtp]
 enabled = true
-port = 54324
+port = 44324
 
 [storage]
 enabled = false

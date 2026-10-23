@@ -60,7 +60,7 @@ import {
 } from "@/db/queries/categories";
 import { createGroup } from "@/db/queries/create-group";
 import { getDebtDetail } from "@/db/queries/debt-detail";
-import { getDebtOverview } from "@/db/queries/debt-overview";
+import { getDebtOverview, sumDebtCreditTotals } from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { getCurrentStatement } from "@/db/queries/debt-statements";
 import { getDebtTerms, upsertDebtTerms } from "@/db/queries/debt-terms";
@@ -4252,6 +4252,10 @@ async function main(): Promise<void> {
   await debtCreditSideSuite();
   await o5m2SurvivorsSuite();
   await dollarBackupSuite();
+  await o6m2DebtsAndSettledSuite();
+  await o6m3BackupRestoreSuite();
+  await o6m7OpeningRefusalsSuite();
+  await detailPocketToBillSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -7194,6 +7198,7 @@ async function importCategoryScopeSuite(): Promise<void> {
     ownerUserId: owner === "user" ? U : null,
     groupId: owner === "group" ? G : null,
     settlementCurrency: "COP",
+    initialBalanceOn: "2026-01-01",
   });
 
   const mercadoOwn = cat("M28 Mercado", "expense", "user");
@@ -11883,6 +11888,8 @@ async function importCommitScopesSuite(): Promise<void> {
   track("groups", groupId);
   const [{ id: fundCash }] = await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${groupId} and subtype = 'cash'`;
   track("accounts", fundCash);
+  // The fund's cash opens today; back to the own bank's day, so the movements below postdate it (RF-162).
+  await fixtureSql`update accounts set initial_balance_on = ${shiftDate(today, -60)} where id = ${fundCash}`;
   const ownBank = await openAccount(leader, "propia", 50_000_000, shiftDate(today, -60));
   const ownCategory = (await asUser(leader, () =>
     createCategory({ scope: { ownerUserId: leader.id }, name: `Harness m24 propia ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),
@@ -12774,5 +12781,1289 @@ async function dollarBackupSuite(): Promise<void> {
       left.categories === 0 &&
       left.movements === 0,
     `${said(refused)}; named ${JSON.stringify(named)}; left ${JSON.stringify(left)}`,
+  );
+}
+
+// O6-M2: a movement names the planned payment it settled (RF-161), the consolidated next payment is never a debt that
+// owes nothing (RF-83), a foreign pocket states what it is still expected to bill and nothing sums it (RF-123, RF-124),
+// and the minimum and credit totals hold at their edges (D2, D14). Every holder is fresh, so each fund reads only its
+// own debts.
+async function o6m2DebtsAndSettledSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const LIMIT = 100_000_000;
+  const RATE = "0.3000";
+  const IN_CREDIT = 800_000;
+  const USD_PURCHASE = 2_500;
+  const PURCHASE_ESTIMATE = 10_500_000;
+  const USD_REFUND = 500;
+  const REFUND_ESTIMATE = 2_000_000;
+  const FIXED = 5_000_000;
+  const show = (value: unknown) => JSON.stringify(value ?? "nothing");
+
+  const open = async (
+    holder: HarnessUser,
+    kind: "asset" | "liability",
+    name: string,
+    amountMinor: number,
+    settlementCurrency: "COP" | "USD" = "COP",
+  ): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness o6m2 ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency,
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const terms = async (
+    holder: HarnessUser,
+    accountId: string,
+    { fixed, limit, dueDay }: { fixed: number | null; limit: number | null; dueDay: number },
+  ): Promise<void> => {
+    await asUser(holder, () =>
+      upsertDebtTerms({
+        accountId,
+        debtKind: "revolving",
+        annualRate: RATE,
+        minimumPaymentCents: fixed,
+        minimumPaymentPct: null,
+        creditLimitCents: limit,
+        statementCutOffDay: 20,
+        paymentDueDay: dueDay,
+        avalCents: null,
+      }),
+    );
+    keep("debt_terms", accountId);
+  };
+  const category = async (holder: HarnessUser, kind: "expense" | "income"): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({
+        scope: { ownerUserId: holder.id },
+        name: `Harness o6m2 ${kind} ${tag}`,
+        kind,
+        parentId: null,
+        color: "#B4542F",
+      }),
+    );
+    keep("categories", categoryId);
+    return categoryId;
+  };
+  const move = async (
+    holder: HarnessUser,
+    args: {
+      from: string | null;
+      to: string | null;
+      amountCents: number;
+      categoryId?: string;
+      currency?: "COP" | "USD";
+      estimate?: number;
+      description: string;
+    },
+  ): Promise<string> => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: args.from,
+        toAccountId: args.to,
+        amountCents: args.amountCents,
+        ...(args.currency
+          ? { currency: args.currency, counterAmountCents: args.estimate ?? null, counterIsEstimate: args.estimate !== undefined }
+          : {}),
+        occurredAt: today,
+        description: `Harness o6m2 ${args.description} ${tag}`,
+        externalRef: null,
+        splits: args.categoryId ? [{ categoryId: args.categoryId, amountCents: args.amountCents }] : [],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const usdOf = (pockets: DebtPocket[] | undefined) => pockets?.find((pocket) => pocket.currency === "USD");
+  const copSetOf = (screen: DebtsScreenData) => screen.totals.byCurrency.find((set) => set.currency === "COP");
+  const pocketFigures = (pocket: DebtPocket | undefined) =>
+    pocket === undefined
+      ? "no USD pocket"
+      : JSON.stringify({ owedCents: pocket.owedCents, creditCents: pocket.creditCents, toBillCents: pocket.toBillCents });
+  const integerFigures: [string, unknown][] = [];
+  const collect = (where: string, overview: DebtOverviewRow[], screen: DebtsScreenData) => {
+    const pockets = (row: string, list: DebtPocket[]) => {
+      for (const pocket of list) {
+        integerFigures.push([`${where} ${row} ${pocket.currency} owed`, pocket.owedCents]);
+        integerFigures.push([`${where} ${row} ${pocket.currency} credit`, pocket.creditCents]);
+        if (pocket.toBillCents !== null) integerFigures.push([`${where} ${row} ${pocket.currency} to bill`, pocket.toBillCents]);
+      }
+    };
+    for (const row of [...overview, ...screen.withTerms]) {
+      integerFigures.push([`${where} owed`, row.owedCents], [`${where} credit`, row.creditCents]);
+      integerFigures.push([`${where} interest`, row.monthlyInterestCents], [`${where} installments`, row.dueInstallmentsCents]);
+      if (row.availableCreditCents !== null) integerFigures.push([`${where} available`, row.availableCreditCents]);
+      if (row.minimumPaymentCents !== null) integerFigures.push([`${where} minimum`, row.minimumPaymentCents]);
+      pockets(row.accountId, row.otherOwed);
+    }
+    for (const debt of screen.withoutTerms) {
+      integerFigures.push([`${where} no-terms owed`, debt.owedCents], [`${where} no-terms credit`, debt.creditCents]);
+      pockets(debt.accountId, debt.otherOwed);
+    }
+    for (const set of screen.totals.byCurrency) {
+      integerFigures.push([`${where} ${set.currency} total owed`, set.owedCents]);
+      integerFigures.push([`${where} ${set.currency} total interest`, set.monthlyInterestCents]);
+      if (set.availableCreditCents !== null) integerFigures.push([`${where} ${set.currency} total available`, set.availableCreditCents]);
+      if (set.creditLimitCents !== null) integerFigures.push([`${where} ${set.currency} total limit`, set.creditLimitCents]);
+    }
+    if (screen.totals.nextPayment !== null) integerFigures.push([`${where} next payment`, screen.totals.nextPayment.amountCents]);
+  };
+
+  // --- Pocket to bill: a peso card in credit with a dollar purchase the issuer has not billed yet.
+  const card = await createMembershipFreeUser();
+  const cardBank = await open(card, "asset", "bank", 1_000_000_000);
+  const cardExpense = await category(card, "expense");
+  const cardIncome = await category(card, "income");
+  const visa = await open(card, "liability", "visa", 0);
+  await terms(card, visa, { fixed: null, limit: LIMIT, dueDay: 5 });
+  await move(card, { from: cardBank, to: visa, amountCents: IN_CREDIT, description: "abono" });
+  const screenWithout = await asUser(card, () => getDebtsScreenData());
+  await move(card, {
+    from: visa,
+    to: null,
+    amountCents: USD_PURCHASE,
+    categoryId: cardExpense,
+    currency: "USD",
+    estimate: PURCHASE_ESTIMATE,
+    description: "compra en dolares",
+  });
+  const [overviewWith, screenWith] = await asUser(card, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("pocket", overviewWith, screenWith);
+  const visaRow = overviewWith.find((row) => row.accountId === visa);
+  const visaScreenRow = screenWith.withTerms.find((row) => row.accountId === visa);
+  assert(
+    next("Pocket to bill: a COP card in credit 800000 with a USD 2500 purchase estimated at 10500000 reads its USD pocket owing 2500 with toBillCents 10500000, its COP pocket in credit 800000, on the overview and the screen"),
+    visaRow?.currency === "COP" &&
+      visaRow.creditCents === IN_CREDIT &&
+      visaRow.owedCents === 0 &&
+      usdOf(visaRow.otherOwed)?.owedCents === USD_PURCHASE &&
+      usdOf(visaRow.otherOwed)?.creditCents === 0 &&
+      usdOf(visaRow.otherOwed)?.toBillCents === PURCHASE_ESTIMATE &&
+      visaScreenRow?.creditCents === IN_CREDIT &&
+      usdOf(visaScreenRow.otherOwed)?.toBillCents === PURCHASE_ESTIMATE,
+    `overview COP owed ${visaRow?.owedCents} credit ${visaRow?.creditCents}, USD ${pocketFigures(usdOf(visaRow?.otherOwed))}; screen USD ${pocketFigures(usdOf(visaScreenRow?.otherOwed))}`,
+  );
+
+  // --- Never summed: the peso set and the flat tiles read as if the dollar purchase were not there.
+  const copWithout = copSetOf(screenWithout);
+  const copWith = copSetOf(screenWith);
+  const tiles = (screen: DebtsScreenData) =>
+    JSON.stringify({
+      owedCents: screen.totals.owedCents,
+      monthlyInterestCents: screen.totals.monthlyInterestCents,
+      availableCreditCents: screen.totals.availableCreditCents,
+      creditLimitCents: screen.totals.creditLimitCents,
+      cop: copSetOf(screen),
+      nextPaymentCents: screen.totals.nextPayment?.amountCents ?? null,
+      rowOwed: screen.withTerms.find((row) => row.accountId === visa)?.owedCents,
+      rowAvailable: screen.withTerms.find((row) => row.accountId === visa)?.availableCreditCents,
+    });
+  assert(
+    next("Never summed: with the USD purchase's toBillCents 10500000 beside it, the COP set, the flat tiles and the card's own owed and available read exactly as without the purchase"),
+    usdOf(visaScreenRow?.otherOwed)?.toBillCents === PURCHASE_ESTIMATE &&
+      copWithout !== undefined &&
+      copWith?.owedCents === 0 &&
+      copWith.availableCreditCents === LIMIT + IN_CREDIT &&
+      tiles(screenWith) === tiles(screenWithout),
+    `without ${tiles(screenWithout)}; with ${tiles(screenWith)}; USD ${pocketFigures(usdOf(visaScreenRow?.otherOwed))}`,
+  );
+
+  // --- Refund subtracts: a dollar refund still estimated lowers what is to bill.
+  await move(card, {
+    from: null,
+    to: visa,
+    amountCents: USD_REFUND,
+    categoryId: cardIncome,
+    currency: "USD",
+    estimate: REFUND_ESTIMATE,
+    description: "reembolso en dolares",
+  });
+  const [overviewRefund, screenRefund] = await asUser(card, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("refund", overviewRefund, screenRefund);
+  const refundPocket = usdOf(overviewRefund.find((row) => row.accountId === visa)?.otherOwed);
+  assert(
+    next("Refund subtracts: a USD 500 refund estimated at 2000000 beside the purchase leaves the USD pocket owing 2000 with toBillCents 8500000"),
+    refundPocket?.owedCents === USD_PURCHASE - USD_REFUND &&
+      refundPocket.toBillCents === PURCHASE_ESTIMATE - REFUND_ESTIMATE &&
+      copSetOf(screenRefund)?.owedCents === 0,
+    `USD ${pocketFigures(refundPocket)}, COP owed ${copSetOf(screenRefund)?.owedCents}`,
+  );
+
+  // --- Billed drops out: two estimated purchases on one card; billing the first leaves only the second to bill.
+  const biller = await createMembershipFreeUser();
+  const billerExpense = await category(biller, "expense");
+  const master = await open(biller, "liability", "master", 0);
+  await terms(biller, master, { fixed: null, limit: LIMIT, dueDay: 5 });
+  const first = await move(biller, {
+    from: master,
+    to: null,
+    amountCents: USD_PURCHASE,
+    categoryId: billerExpense,
+    currency: "USD",
+    estimate: PURCHASE_ESTIMATE,
+    description: "primera compra en dolares",
+  });
+  const second = await move(biller, {
+    from: master,
+    to: null,
+    amountCents: 1_000,
+    categoryId: billerExpense,
+    currency: "USD",
+    estimate: 4_200_000,
+    description: "segunda compra en dolares",
+  });
+  const billedFirst = await asUser(biller, () =>
+    recordBilledAmount({ transactionId: first, accountId: master, currency: "COP", billedCents: 10_600_000 }),
+  );
+  const afterFirst = usdOf((await asUser(biller, () => getDebtOverview())).find((row) => row.accountId === master)?.otherOwed);
+  const billedSecond = await asUser(biller, () =>
+    recordBilledAmount({ transactionId: second, accountId: master, currency: "COP", billedCents: 4_300_000 }),
+  );
+  const [overviewBilled, screenBilled] = await asUser(biller, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("billed", overviewBilled, screenBilled);
+  const afterBoth = usdOf(overviewBilled.find((row) => row.accountId === master)?.otherOwed);
+  assert(
+    next("Billed drops out: billing one of two estimated USD purchases leaves toBillCents 4200000, the other's estimate alone; billing both leaves no USD pocket or toBillCents null"),
+    billedFirst &&
+      billedSecond &&
+      afterFirst?.owedCents === 1_000 &&
+      afterFirst.toBillCents === 4_200_000 &&
+      (afterBoth === undefined || afterBoth.toBillCents === null),
+    `billed ${billedFirst}/${billedSecond}; after the first ${pocketFigures(afterFirst)}; after both ${pocketFigures(afterBoth)}`,
+  );
+
+  // --- No-terms row: the same card with no terms carries the same pocket figures.
+  const bare = await createMembershipFreeUser();
+  const bareBank = await open(bare, "asset", "bank", 1_000_000_000);
+  const bareExpense = await category(bare, "expense");
+  const bareCard = await open(bare, "liability", "sin condiciones", 0);
+  await move(bare, { from: bareBank, to: bareCard, amountCents: IN_CREDIT, description: "abono" });
+  await move(bare, {
+    from: bareCard,
+    to: null,
+    amountCents: USD_PURCHASE,
+    categoryId: bareExpense,
+    currency: "USD",
+    estimate: PURCHASE_ESTIMATE,
+    description: "compra en dolares",
+  });
+  const [overviewBare, screenBare] = await asUser(bare, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("no terms", overviewBare, screenBare);
+  const bareRow = screenBare.withoutTerms.find((debt) => debt.accountId === bareCard);
+  assert(
+    next("No-terms row: a COP card with no terms in credit 800000 with the same USD purchase reads USD owing 2500, toBillCents 10500000, COP credit 800000"),
+    bareRow?.currency === "COP" &&
+      bareRow.creditCents === IN_CREDIT &&
+      bareRow.owedCents === 0 &&
+      usdOf(bareRow.otherOwed)?.owedCents === USD_PURCHASE &&
+      usdOf(bareRow.otherOwed)?.toBillCents === PURCHASE_ESTIMATE &&
+      copSetOf(screenBare)?.owedCents === 0,
+    `${bareRow === undefined ? "no row" : `COP owed ${bareRow.owedCents} credit ${bareRow.creditCents}, USD ${pocketFigures(usdOf(bareRow.otherOwed))}`}`,
+  );
+
+  // --- Next payment skips credit: the fund's only due card is in credit.
+  const credited = await createMembershipFreeUser();
+  const creditedBank = await open(credited, "asset", "bank", 1_000_000_000);
+  const creditedCard = await open(credited, "liability", "a favor", 0);
+  await terms(credited, creditedCard, { fixed: FIXED, limit: LIMIT, dueDay: 5 });
+  await move(credited, { from: creditedBank, to: creditedCard, amountCents: 15_000_000, description: "abono" });
+  const [overviewCredited, screenCredited] = await asUser(credited, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("credited", overviewCredited, screenCredited);
+  assert(
+    next("Next payment skips credit: a fund whose only card, due on the 5th, holds 15000000 in its favour has no next payment"),
+    screenCredited.withTerms.some((row) => row.accountId === creditedCard && row.creditCents === 15_000_000) &&
+      screenCredited.totals.nextPayment === null,
+    `next payment ${show(screenCredited.totals.nextPayment)}`,
+  );
+
+  // --- Next payment skips zero, and D2: a card paid down to exactly 0 owes no minimum and is no next payment.
+  const zeroed = await createMembershipFreeUser();
+  const zeroedBank = await open(zeroed, "asset", "bank", 1_000_000_000);
+  const zeroCard = await open(zeroed, "liability", "en cero", FIXED);
+  await terms(zeroed, zeroCard, { fixed: FIXED, limit: LIMIT, dueDay: 5 });
+  await move(zeroed, { from: zeroedBank, to: zeroCard, amountCents: FIXED, description: "pago total" });
+  const [overviewZero, screenZero, statementZero] = await asUser(zeroed, () =>
+    Promise.all([getDebtOverview(), getDebtsScreenData(), getCurrentStatement(zeroCard)]),
+  );
+  collect("zero", overviewZero, screenZero);
+  integerFigures.push(["zero statement minimum", statementZero?.minimumPaymentCents]);
+  const zeroRow = overviewZero.find((row) => row.accountId === zeroCard);
+  assert(
+    next("Next payment skips zero: a fund whose only card sits at a balance of exactly 0 has no next payment"),
+    zeroRow?.owedCents === 0 && zeroRow.creditCents === 0 && screenZero.totals.nextPayment === null,
+    `row ${show(zeroRow && { owed: zeroRow.owedCents, credit: zeroRow.creditCents })}, next payment ${show(screenZero.totals.nextPayment)}`,
+  );
+  assert(
+    next("D2: a card at a balance of exactly 0 whose terms fix a minimum of 5000000 has a minimum of 0, on the overview, the screen and the current statement"),
+    zeroRow?.owedCents === 0 &&
+      zeroRow.creditCents === 0 &&
+      zeroRow.minimumPaymentCents === 0 &&
+      screenZero.withTerms.find((row) => row.accountId === zeroCard)?.minimumPaymentCents === 0 &&
+      statementZero?.balanceCents === 0 &&
+      statementZero.minimumPaymentCents === 0,
+    `overview minimum ${zeroRow?.minimumPaymentCents} at owed ${zeroRow?.owedCents}, statement minimum ${statementZero?.minimumPaymentCents} at balance ${statementZero?.balanceCents}`,
+  );
+
+  // --- Next payment owing: a card in credit due first, a card owing with no minimum due a week later.
+  const two = await createMembershipFreeUser();
+  const twoBank = await open(two, "asset", "bank", 1_000_000_000);
+  const earlyCard = await open(two, "liability", "a favor primero", 0);
+  const lateCard = await open(two, "liability", "debe despues", 3_000_000);
+  // Due today is the earliest a due date can fall; the same day of the month a week on is always later.
+  const earlyDay = Number(today.slice(8, 10));
+  const lateDate = shiftDate(today, 7);
+  await terms(two, earlyCard, { fixed: FIXED, limit: LIMIT, dueDay: earlyDay });
+  await terms(two, lateCard, { fixed: null, limit: LIMIT, dueDay: Number(lateDate.slice(8, 10)) });
+  await move(two, { from: twoBank, to: earlyCard, amountCents: 2_000_000, description: "abono" });
+  const [overviewTwo, screenTwo] = await asUser(two, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("two", overviewTwo, screenTwo);
+  const earlyRow = overviewTwo.find((row) => row.accountId === earlyCard);
+  const lateRow = overviewTwo.find((row) => row.accountId === lateCard);
+  const nextTwo = screenTwo.totals.nextPayment;
+  assert(
+    next("Next payment owing: card A in credit due today, card B owing 3000000 with no minimum due a week later; the next payment is B's, on B's date, at B's minimum (0) plus its installments (0)"),
+    earlyRow?.nextDueDate === today &&
+      earlyRow.creditCents === 2_000_000 &&
+      lateRow?.nextDueDate === lateDate &&
+      lateRow.owedCents === 3_000_000 &&
+      lateRow.minimumPaymentCents === null &&
+      nextTwo?.accountId === lateCard &&
+      nextTwo.date === lateDate &&
+      nextTwo.amountCents === 0 &&
+      nextTwo.currency === "COP",
+    `A due ${earlyRow?.nextDueDate} credit ${earlyRow?.creditCents}; B due ${lateRow?.nextDueDate} owed ${lateRow?.owedCents} minimum ${lateRow?.minimumPaymentCents}; next payment ${show(nextTwo)}`,
+  );
+
+  // --- D14: a currency whose only cards carry no limit has no credit set.
+  const dollars = await createMembershipFreeUser();
+  const usdCard = await open(dollars, "liability", "en dolares", 40_000, "USD");
+  await terms(dollars, usdCard, { fixed: null, limit: null, dueDay: 5 });
+  const [overviewUsd, screenUsd] = await asUser(dollars, () => Promise.all([getDebtOverview(), getDebtsScreenData()]));
+  collect("usd", overviewUsd, screenUsd);
+  const usdTotals = sumDebtCreditTotals(overviewUsd);
+  const usdSet = screenUsd.totals.byCurrency.find((set) => set.currency === "USD");
+  assert(
+    next("D14: sumDebtCreditTotals over the overview's USD rows, none with a limit, answers no USD entry, and the screen's USD set has no limit and no available credit"),
+    overviewUsd.some((row) => row.accountId === usdCard && row.currency === "USD" && row.creditLimitCents === null) &&
+      !usdTotals.some((totals) => totals.currency === "USD") &&
+      usdSet?.owedCents === 40_000 &&
+      usdSet.creditLimitCents === null &&
+      usdSet.availableCreditCents === null,
+    `credit totals ${show(usdTotals)}; USD set ${show(usdSet)}`,
+  );
+
+  // --- Integer cents: every figure the debts reads handed out above.
+  const notInteger = integerFigures.filter(([, value]) => !Number.isSafeInteger(value));
+  assert(
+    next("Integer cents: every owed, credit, to-bill, available, interest, minimum and next-payment figure above is a safe integer"),
+    integerFigures.length > 0 && notInteger.length === 0,
+    `${integerFigures.length} figures, not integer: ${JSON.stringify(notInteger.slice(0, 6))}`,
+  );
+
+  // --- The movement names the planned payment it settled (RF-161, the listing half).
+  const payer = await createMembershipFreeUser();
+  const payerBank = await open(payer, "asset", "bank", 50_000_000);
+  const payerExpense = await category(payer, "expense");
+  const PAYMENT_NAME = `Harness o6m2 arriendo ${tag}`;
+  const { plannedPaymentId } = await asUser(payer, () =>
+    createPlannedPayment({
+      fromAccountId: payerBank,
+      toAccountId: null,
+      amountCents: 123_400,
+      categoryId: payerExpense,
+      dueDate: today,
+      remindOn: null,
+      description: PAYMENT_NAME,
+    }),
+  );
+  keep("planned_payments", plannedPaymentId);
+  // The movement carries a description of its own, so the name the row reads can only come from the payment.
+  const settle = () =>
+    asUser(payer, () =>
+      settlePlannedPayment({
+        plannedPaymentId,
+        fromAccountId: payerBank,
+        toAccountId: null,
+        amountCents: 123_400,
+        categoryId: payerExpense,
+        occurredAt: today,
+        description: `Harness o6m2 movimiento del pago ${tag}`,
+      }),
+    );
+  const settled = await settle();
+  const settledId = settled.settled ? settled.transactionId : null;
+  if (settledId) track("transactions", settledId);
+  const unrelated = await move(payer, { from: payerBank, to: null, amountCents: 5_000, categoryId: payerExpense, description: "mercado" });
+  const foreignTarget = await move(payer, { from: payerBank, to: null, amountCents: 7_000, categoryId: payerExpense, description: "farmacia" });
+
+  const named = settledId ? await asUser(payer, () => getTransactionById(settledId)) : null;
+  assert(
+    next("Row names its payment: getTransactionById on the movement that settled a planned payment carries settledPlannedPayment with that payment's id and description"),
+    named !== null &&
+      named.settledPlannedPayment?.id === plannedPaymentId &&
+      named.settledPlannedPayment.description === PAYMENT_NAME,
+    `settled ${show(settled)}; row's settledPlannedPayment ${show(named?.settledPlannedPayment)}, expected ${plannedPaymentId} «${PAYMENT_NAME}»`,
+  );
+
+  const listed = await asUser(payer, () => listTransactions({}, { limit: 20 }));
+  const listedUnrelated = listed.find((row) => row.id === unrelated);
+  const byIdUnrelated = await asUser(payer, () => getTransactionById(unrelated));
+  assert(
+    next("Others null: a movement no planned payment settled carries settledPlannedPayment null, in the list and by id"),
+    listedUnrelated !== undefined &&
+      byIdUnrelated !== null &&
+      (listedUnrelated.settledPlannedPayment ?? null) === null &&
+      (byIdUnrelated.settledPlannedPayment ?? null) === null,
+    `listed ${show(listedUnrelated?.settledPlannedPayment)}, by id ${show(byIdUnrelated?.settledPlannedPayment)}`,
+  );
+
+  // --- One round trip: the list costs what the same list with no row costs, and what one plain read costs.
+  const trips = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = roundTrips();
+    await run();
+    return roundTrips() - started;
+  };
+  const baseRead = await asUser(payer, () => trips(() => listAccounts({ archived: false })));
+  const emptyList = await asUser(payer, () => trips(() => listTransactions({ id: randomUUID() }, { limit: 20 })));
+  const fullList = await asUser(payer, () => trips(() => listTransactions({}, { limit: 20 })));
+  const byIdTrips = settledId ? await asUser(payer, () => trips(() => getTransactionById(settledId))) : -1;
+  const listedSettled = listed.find((row) => row.id === settledId);
+  assert(
+    next("One round trip: listTransactions({}, {limit: 20}) over three movements, one of them settling a payment, costs what an empty listing and one plain read cost, and so does getTransactionById; the settling row names its payment"),
+    listed.length >= 3 &&
+      listedSettled?.settledPlannedPayment?.id === plannedPaymentId &&
+      fullList === emptyList &&
+      emptyList === baseRead &&
+      byIdTrips === baseRead,
+    `${listed.length} rows; trips: list ${fullList}, empty list ${emptyList}, listAccounts ${baseRead}, by id ${byIdTrips}; settling row ${show(listedSettled?.settledPlannedPayment)}`,
+  );
+
+  // --- Unreadable payment: a payment in a stranger's scope that points at this fund's movement never shows.
+  const stranger = await createMembershipFreeUser();
+  const strangerBank = await open(stranger, "asset", "bank", 50_000_000);
+  const strangerClaims = JSON.stringify({ sub: stranger.id, role: "authenticated", aud: "authenticated" });
+  // Written as the owner: no write path of the app links a payment to a movement outside its scope, and the
+  // read must hold whatever row the table holds.
+  const [foreignPayment] = await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${strangerClaims}, true)`;
+    return tx<{ id: string }[]>`
+      insert into planned_payments (from_account_id, amount_cents, due_date, description, status, settled_transaction_id)
+      values (${strangerBank}, 7000, ${today}, ${`Harness o6m2 ajeno ${tag}`}, 'done', ${foreignTarget})
+      returning id`;
+  });
+  track("planned_payments", foreignPayment.id);
+  const ownView = await asUser(payer, () => getTransactionById(foreignTarget));
+  const strangerView = settledId ? await asUser(stranger, () => getTransactionById(settledId)) : "no movement";
+  assert(
+    next("Unreadable payment: a movement whose settling payment lies in another scope reads settledPlannedPayment null for its own fund, and a stranger reading the fund's settling movement gets no row"),
+    ownView !== null &&
+      "settledPlannedPayment" in ownView &&
+      ownView.settledPlannedPayment === null &&
+      strangerView === null,
+    `own fund reads ${ownView === null ? "no row" : show(ownView.settledPlannedPayment)} (field present: ${ownView !== null && "settledPlannedPayment" in ownView}); stranger reads ${show(strangerView)}`,
+  );
+  // Dropped here: the purge deletes the movement it points at, and the scope trigger would hand the unlinked row to
+  // whoever deleted it, which then blocks that identity's own drop.
+  await fixtureSql`delete from planned_payments where id = ${foreignPayment.id}`;
+
+  // --- After RF-161: deleting the settling movement returns the payment to pending; settling it again is named again.
+  const deleted = settledId ? await asUser(payer, () => deleteTransaction({ transactionId: settledId })) : "no movement";
+  const afterDelete = (await asUser(payer, () => listPlannedPayments())).find((row) => row.id === plannedPaymentId);
+  const resettled = await settle();
+  const resettledId = resettled.settled ? resettled.transactionId : null;
+  if (resettledId) track("transactions", resettledId);
+  const renamed = resettledId ? await asUser(payer, () => getTransactionById(resettledId)) : null;
+  assert(
+    next("After RF-161: deleting the settling movement leaves the payment pending and unlinked; a fresh movement settling it again names it"),
+    deleted === "done" &&
+      afterDelete?.status === "pending" &&
+      afterDelete.settledTransactionId === null &&
+      resettledId !== null &&
+      resettledId !== settledId &&
+      renamed?.settledPlannedPayment?.id === plannedPaymentId &&
+      renamed.settledPlannedPayment.description === PAYMENT_NAME,
+    `delete ${deleted}; payment ${show(afterDelete && { status: afterDelete.status, settled: afterDelete.settledTransactionId })}; resettle ${show(resettled)}; new row ${show(renamed?.settledPlannedPayment)}`,
+  );
+}
+
+// O6-M3: a backup restores a card opened in debt with the opening it had, never signed twice (RF-142, RF-52); an asset
+// opened negative stays refused; a commit handed an errored row writes nothing and says so in the import's own words
+// (RF-51); a blank-currency re-import keeps a dollar purchase's second amount (RF-122, RF-123); and new movements land
+// through the batch, never the row-by-row fallback (RNF-15). Every holder is fresh, so each fund reads only its own rows.
+async function o6m3BackupRestoreSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const OPENING = 15_000_000;
+  const BANK_OPENING = 900_000_000;
+  const USD_CENTS = 2_500;
+  const ESTIMATE_CENTS = 10_500_000;
+  const PESO_CENTS = 4_000_000;
+  const HAS_ERRORS = "data.import.errors.hasErrors";
+  const show = (value: unknown) => JSON.stringify(value ?? "nothing");
+  const refOf = (suffix: string) => `o6m3-${tag}-${suffix}`;
+  const cardName = `Harness o6m3 tarjeta ${tag}`;
+  const bankName = `Harness o6m3 banco ${tag}`;
+  const categoryName = `Harness o6m3 categoria ${tag}`;
+
+  type Opened = { cardId: string; bankId: string; categoryId: string };
+  const openFund = async (holder: HarnessUser): Promise<Opened> =>
+    asUser(holder, async () => {
+      const { categoryId } = await createCategory({
+        scope: { ownerUserId: holder.id },
+        name: categoryName,
+        kind: "expense",
+        parentId: null,
+        color: CATEGORY_COLORS[0],
+      });
+      track("categories", categoryId);
+      const open = async (name: string, kind: "asset" | "liability", subtype: string, amountMinor: number) => {
+        const { accountId } = await createAccount({
+          name,
+          kind,
+          subtype,
+          ownerUserId: holder.id,
+          groupId: null,
+          isShared: false,
+          institution: null,
+          lastFour: null,
+          settlementCurrency: "COP",
+          amountMinor,
+          balanceOn: shiftDate(today, -60),
+        } as never);
+        track("accounts", accountId);
+        return accountId;
+      };
+      return {
+        categoryId,
+        cardId: await open(cardName, "liability", "card", OPENING),
+        bankId: await open(bankName, "asset", "bank", BANK_OPENING),
+      };
+    });
+
+  const source = await createMembershipFreeUser();
+  const fund = await openFund(source);
+  await asUser(source, async () => {
+    const book = async (from: string, amountCents: number, suffix: string, foreign?: { counterAmountCents: number; counterIsEstimate: boolean }) => {
+      const { transactionId } = await createTransaction({
+        fromAccountId: from,
+        toAccountId: null,
+        amountCents,
+        ...(foreign ? { currency: "USD", ...foreign } : {}),
+        occurredAt: shiftDate(today, -5),
+        description: `Harness o6m3 ${suffix} ${tag}`,
+        externalRef: refOf(suffix),
+        splits: [{ categoryId: fund.categoryId, amountCents }],
+        labelIds: [],
+      } as never);
+      track("transactions", transactionId);
+    };
+    await book(fund.cardId, USD_CENTS, "usd", { counterAmountCents: ESTIMATE_CENTS, counterIsEstimate: true });
+    await book(fund.cardId, PESO_CENTS, "peso");
+    await book(fund.bankId, PESO_CENTS, "bank");
+  });
+
+  // ---- 4b: an account created by the form carries its id as its stable key.
+  const keyed = await fixtureSql<{ id: string; external_ref: string | null }[]>`
+    select id::text as id, external_ref from accounts where id in (${fund.cardId}, ${fund.bankId}) order by id`;
+  console.log(
+    `REPORT  4b: select id::text, external_ref from accounts where id in (card, bank) → ${show(keyed)}`,
+  );
+  assert(
+    next("4b: an account created through createAccount reads external_ref equal to its own id as text"),
+    keyed.length === 2 && keyed.every((row) => row.external_ref === row.id),
+    show(keyed),
+  );
+
+  const labels: ReverseSheetLabels = {
+    entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    columnKeyByHeader: new Map(
+      SHEET_ENTITIES.map(
+        (entity) =>
+          [entity, new Map(sheetDescriptors[entity].columns.map((column) => [`columns.${column.key}`, column.key] as const))] as const,
+      ),
+    ),
+  };
+  const sheetLabels = {
+    sheetName: (entity: string) => `sheets.${entity}`,
+    columnHeader: (key: string) => `columns.${key}`,
+  };
+  type Rows = Record<string, unknown>[];
+  const fileOf = async (data: { accounts?: Rows; categories?: Rows; transactions?: Rows }) =>
+    new Uint8Array(await buildWorkbook({ data: data as never, labels: sheetLabels }).xlsx.writeBuffer());
+
+  // A file in, the commit input out, each row as the pipeline left it: its errors ride along.
+  const prepare = async (user: HarnessUser, bytes: Uint8Array) => {
+    const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels });
+    const importScope = await asUser(user, () => readImportScope());
+    const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
+    const refs = buildEffectiveRefs(importScope, recordsOf);
+    const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
+      (parsed[entity] ?? []).map((row, index) =>
+        processRow(entity, row.record as RawRow, index, row.sheetRow, refs, importScope.existingRefs[entity]),
+      );
+    const [categories, accounts, transactions] = [rows("categories"), rows("accounts"), rows("transactions")];
+    const errors = [...categories, ...accounts, ...transactions].flatMap((row) => row.errors.map((e) => `${e.key}@${e.column ?? ""}`));
+    const input: CommitInput = {
+      members: [],
+      categories: categories.map((row) => ({ ...row, object: row.object as never })),
+      accounts: accounts.map((row) => ({ ...row, object: row.object as never })),
+      recurringRules: [],
+      transactions: transactions.map((row) => ({ ...row, object: row.object as never })),
+      adjustments: [],
+    };
+    return { input, errors, accounts };
+  };
+  type Committed = { outcome?: { inserted: number; updated: number }; error?: unknown; trips: number };
+  const commitAs = async (user: HarnessUser, input: CommitInput): Promise<Committed> => {
+    const before = roundTrips();
+    try {
+      const outcome = await asUser(user, () => withUserDb((tx) => commitImport(tx, input, { userId: user.id, groupId: null })));
+      return { outcome, trips: roundTrips() - before };
+    } catch (error) {
+      return { error, trips: roundTrips() - before };
+    }
+  };
+  const said = (result: Committed) =>
+    result.error === undefined
+      ? "ok"
+      : `threw ${(result.error as Error)?.name} «${(result.error as Error)?.message}» (${refusal(result.error)})`;
+  const openings = (user: HarnessUser) =>
+    fixtureSql<{ name: string; opening: string }[]>`
+      select name, initial_balance_cents::text as opening from accounts where owner_user_id = ${user.id} order by name`;
+  const openingOf = async (user: HarnessUser, name: string) => (await openings(user)).find((row) => row.name === name)?.opening ?? null;
+  const balances = (user: HarnessUser) =>
+    fixtureSql<{ name: string; currency: string; balance: string }[]>`
+      select a.name, b.currency, b.balance_cents::text as balance
+      from account_balances b join accounts a on a.id = b.id
+      where a.owner_user_id = ${user.id}
+      order by a.name, b.currency`;
+  const owned = async (user: HarnessUser) => {
+    const [row] = await fixtureSql<{ accounts: number; categories: number; movements: number }[]>`
+      select (select count(*)::int from accounts where owner_user_id = ${user.id}) as accounts,
+        (select count(*)::int from categories where owner_user_id = ${user.id}) as categories,
+        (select count(*)::int from transactions t join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
+          where a.owner_user_id = ${user.id}) as movements`;
+    return row;
+  };
+  const trackOwned = async (user: HarnessUser) => {
+    for (const r of await fixtureSql<{ id: string }[]>`select id from accounts where owner_user_id = ${user.id}`) track("accounts", r.id);
+    for (const r of await fixtureSql<{ id: string }[]>`select id from categories where owner_user_id = ${user.id}`) track("categories", r.id);
+  };
+  const storedMovements = (user: HarnessUser) =>
+    fixtureSql<{ ref: string; currency: string; amount: string; counter: string | null; estimate: boolean }[]>`
+      select t.external_ref as ref, t.currency, t.amount_cents::text as amount,
+        t.counter_amount_cents::text as counter, t.counter_is_estimate as estimate
+      from transactions t
+      join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
+      where a.owner_user_id = ${user.id}
+      order by t.external_ref`;
+
+  // ---- The fund's own backup, as the export writes it.
+  const exported = await asUser(source, () => readExport({ entityKeys: ["accounts", "categories", "transactions"] }));
+  const accountRows = (exported.accounts ?? []).filter((row) => [cardName, bankName].includes(String(row.name))) as Rows;
+  const categoryRows = (exported.categories ?? []).filter((row) => String(row.name) === categoryName) as Rows;
+  const movementRows = (exported.transactions ?? []).filter((row) => String(row.externalRef).startsWith(`o6m3-${tag}-`)) as Rows;
+  const exportedCard = accountRows.find((row) => row.name === cardName);
+  assert(
+    next("RF-142: the export writes a card opened at 150000 owed as -15000000 cents, the shape an older backup already carries"),
+    accountRows.length === 2 && categoryRows.length === 1 && movementRows.length === 3 && exportedCard?.amount === -OPENING,
+    `accounts ${accountRows.length}, categories ${categoryRows.length}, movements ${movementRows.length}; card amount ${show(exportedCard?.amount)}`,
+  );
+  const original = await fileOf({ accounts: accountRows, categories: categoryRows, transactions: movementRows });
+  const positive = await fileOf({
+    accounts: accountRows.map((row) => (row.name === cardName ? { ...row, amount: OPENING } : row)),
+    categories: categoryRows,
+    transactions: movementRows,
+  });
+  const sourceBalances = await balances(source);
+
+  // ---- Liability negative restores: the backup into a fund that has never seen it.
+  const clean = await createMembershipFreeUser();
+  const first = await prepare(clean, original);
+  const firstCommit = await commitAs(clean, first.input);
+  await trackOwned(clean);
+  const cleanBalances = await balances(clean);
+  assert(
+    next("Liability negative restores: a backup holding a card opened at -150000 imports into a new fund with its opening -15000000 and every balance as it was"),
+    first.errors.length === 0 &&
+      said(firstCommit) === "ok" &&
+      (await openingOf(clean, cardName)) === String(-OPENING) &&
+      (await openingOf(clean, bankName)) === String(BANK_OPENING) &&
+      sourceBalances.length > 0 &&
+      JSON.stringify(cleanBalances) === JSON.stringify(sourceBalances),
+    `file errors [${first.errors.join(",")}]; commit ${said(firstCommit)}; openings ${show(await openings(clean))}; balances source ${show(sourceBalances)} restored ${show(cleanBalances)}`,
+  );
+
+  // ---- No double sign on the update path: the same backup, then the unsigned one, over the restored card.
+  const again = await prepare(clean, original);
+  const againCommit = await commitAs(clean, again.input);
+  const afterSigned = await openingOf(clean, cardName);
+  const unsigned = await prepare(clean, positive);
+  const unsignedCommit = await commitAs(clean, unsigned.input);
+  const afterUnsigned = await openingOf(clean, cardName);
+  assert(
+    next("No double sign, update: re-importing the backup over the restored card, signed or not, updates it and leaves its opening at -15000000"),
+    again.errors.length === 0 &&
+      again.accounts.find((row) => row.externalRef === exportedCard?.externalRef)?.status === "update" &&
+      said(againCommit) === "ok" &&
+      againCommit.outcome?.inserted === 0 &&
+      afterSigned === String(-OPENING) &&
+      unsigned.errors.length === 0 &&
+      said(unsignedCommit) === "ok" &&
+      afterUnsigned === String(-OPENING) &&
+      JSON.stringify(await balances(clean)) === JSON.stringify(sourceBalances),
+    `signed: errors [${again.errors.join(",")}], commit ${said(againCommit)} ${show(againCommit.outcome)}, opening ${afterSigned}; unsigned: errors [${unsigned.errors.join(",")}], commit ${said(unsignedCommit)}, opening ${afterUnsigned}`,
+  );
+
+  // ---- Liability positive restores: a sheet that wrote the card's debt without its minus.
+  const fromPositive = await createMembershipFreeUser();
+  const positiveRun = await prepare(fromPositive, positive);
+  const positiveCommit = await commitAs(fromPositive, positiveRun.input);
+  await trackOwned(fromPositive);
+  assert(
+    next("Liability positive restores: a sheet with 150000 on a card imports it with its opening -15000000"),
+    positiveRun.errors.length === 0 && said(positiveCommit) === "ok" && (await openingOf(fromPositive, cardName)) === String(-OPENING),
+    `file errors [${positiveRun.errors.join(",")}]; commit ${said(positiveCommit)}; openings ${show(await openings(fromPositive))}`,
+  );
+
+  // ---- An errored row reaches the commit: nothing is written, and the refusal is the import's own.
+  const bankAt = (name: string, ref: string, amount: number) => ({
+    ...accountRows.find((row) => row.name === bankName)!,
+    name,
+    externalRef: refOf(ref),
+    amount,
+  });
+  const doomed = await createMembershipFreeUser();
+  const lone = await prepare(doomed, await fileOf({ accounts: [bankAt(`Harness o6m3 negativo ${tag}`, "negative", -10_000)] }));
+  const loneCommit = await commitAs(doomed, lone.input);
+  const loneLeft = await owned(doomed);
+  assert(
+    next("Asset negative refused: an asset row opened at -100 reaches the commit with accounts.errors.amountInvalid on amount"),
+    lone.errors.length === 1 && lone.errors[0] === "accounts.errors.amountInvalid@amount",
+    `file errors [${lone.errors.join(",")}]`,
+  );
+  assert(
+    next("Errored row refused: commitImport handed one errored account row throws ActionError data.import.errors.hasErrors and writes no row"),
+    loneCommit.error instanceof ActionError &&
+      (loneCommit.error as ActionError).message === HAS_ERRORS &&
+      loneLeft.accounts === 0 &&
+      loneLeft.categories === 0 &&
+      loneLeft.movements === 0,
+    `${said(loneCommit)}; left ${show(loneLeft)}`,
+  );
+
+  const beside = await prepare(
+    doomed,
+    await fileOf({ accounts: [bankAt(`Harness o6m3 limpia ${tag}`, "clean", 10_000), bankAt(`Harness o6m3 negativa ${tag}`, "negative-2", -10_000)] }),
+  );
+  const besideCommit = await commitAs(doomed, beside.input);
+  const strayMovement = { ...movementRows.find((row) => row.externalRef === refOf("bank"))!, externalRef: refOf("stray"), fromAccount: `Harness o6m3 nadie ${tag}` };
+  const cleanAccountErroredMovement = await prepare(
+    doomed,
+    await fileOf({ accounts: [bankAt(`Harness o6m3 limpia dos ${tag}`, "clean-2", 10_000)], categories: categoryRows, transactions: [strayMovement] }),
+  );
+  const movementCommit = await commitAs(doomed, cleanAccountErroredMovement.input);
+  await trackOwned(doomed);
+  const besideLeft = await owned(doomed);
+  assert(
+    next("All or nothing: a clean row beside an errored one, in the same sheet or another, is not written either; each commit refuses with hasErrors"),
+    beside.errors.length === 1 &&
+      cleanAccountErroredMovement.errors.length > 0 &&
+      cleanAccountErroredMovement.errors.every((error) => error.endsWith("@fromAccount")) &&
+      besideCommit.error instanceof ActionError &&
+      (besideCommit.error as ActionError).message === HAS_ERRORS &&
+      movementCommit.error instanceof ActionError &&
+      (movementCommit.error as ActionError).message === HAS_ERRORS &&
+      besideLeft.accounts === 0 &&
+      besideLeft.categories === 0 &&
+      besideLeft.movements === 0,
+    `same sheet: errors [${beside.errors.join(",")}], ${said(besideCommit)}; across sheets: errors [${cleanAccountErroredMovement.errors.join(",")}], ${said(movementCommit)}; left ${show(besideLeft)}`,
+  );
+
+  // ---- C6, C7: an old sheet's blank currency over a stored dollar purchase.
+  const blankCurrency = movementRows
+    .filter((row) => row.externalRef === refOf("usd"))
+    .map((row) => ({ ...row, currency: null, counterAmount: null, counterIsEstimate: null }));
+  const storedBefore = (await storedMovements(source)).find((row) => row.ref === refOf("usd"));
+  const blank = await prepare(source, await fileOf({ transactions: blankCurrency }));
+  const blankCommit = await commitAs(source, blank.input);
+  const storedAfter = (await storedMovements(source)).find((row) => row.ref === refOf("usd"));
+  assert(
+    next("C6 / C7: a blank-currency re-import over a dollar purchase keeps its 105000 on the card and its estimate mark as stored"),
+    storedBefore?.counter === String(ESTIMATE_CENTS) &&
+      storedBefore.estimate === true &&
+      blank.errors.length === 0 &&
+      blank.input.transactions.length === 1 &&
+      blank.input.transactions[0].status === "update" &&
+      said(blankCommit) === "ok" &&
+      blankCommit.outcome?.updated === 1 &&
+      JSON.stringify(storedAfter) === JSON.stringify(storedBefore),
+    `before ${show(storedBefore)}; file errors [${blank.errors.join(",")}]; commit ${said(blankCommit)} ${show(blankCommit.outcome)}; after ${show(storedAfter)}`,
+  );
+
+  // ---- C8: new movements land through the batch, whose round trips do not grow with the file.
+  const batcher = await createMembershipFreeUser();
+  await openFund(batcher);
+  const movement = (suffix: string, foreign: boolean) => ({
+    externalRef: refOf(suffix),
+    fromAccount: cardName,
+    toAccount: null,
+    amount: foreign ? USD_CENTS : PESO_CENTS,
+    currency: foreign ? "USD" : "COP",
+    counterAmount: foreign ? ESTIMATE_CENTS : null,
+    counterIsEstimate: foreign ? true : null,
+    category: categoryName,
+    occurredAt: shiftDate(today, -3),
+    description: `Harness o6m3 lote ${suffix} ${tag}`,
+    adjustment: null,
+  });
+  const batchOf = (prefix: string, size: number) =>
+    Array.from({ length: size }, (_, i) => movement(`${prefix}-${i}`, i === 0));
+  const small = await prepare(batcher, await fileOf({ transactions: batchOf("small", 3) }));
+  const smallCommit = await commitAs(batcher, small.input);
+  const large = await prepare(batcher, await fileOf({ transactions: batchOf("large", 12) }));
+  const largeCommit = await commitAs(batcher, large.input);
+  await trackOwned(batcher);
+  const batched = await storedMovements(batcher);
+  const counterOf = (ref: string) => batched.find((row) => row.ref === ref)?.counter ?? null;
+  assert(
+    next("C8: importing 3 or 12 new movements runs the batch: the same round trips either way, every movement written, the dollar ones with their 105000"),
+    small.errors.length === 0 &&
+      large.errors.length === 0 &&
+      said(smallCommit) === "ok" &&
+      said(largeCommit) === "ok" &&
+      smallCommit.outcome?.inserted === 3 &&
+      largeCommit.outcome?.inserted === 12 &&
+      batched.length === 15 &&
+      smallCommit.trips === largeCommit.trips &&
+      counterOf(refOf("small-0")) === String(ESTIMATE_CENTS) &&
+      counterOf(refOf("large-0")) === String(ESTIMATE_CENTS),
+    `3 rows: ${said(smallCommit)} in ${smallCommit.trips} trips; 12 rows: ${said(largeCommit)} in ${largeCommit.trips} trips; stored ${batched.length}; dollar counters ${counterOf(refOf("small-0"))}, ${counterOf(refOf("large-0"))}; errors [${[...small.errors, ...large.errors].join(",")}]`,
+  );
+}
+
+// O6-M7 (RF-162, RF-51): the database refuses a movement dated before the opening of an account it names (MO001) and an
+// opening moved past a movement (MO002). The words come from `handleServerError` alone, through every action that writes
+// a movement; the import preview refuses the same row on `occurredAt`, and the commit names it if a row slips past.
+async function o6m7OpeningRefusalsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const OPENING = shiftDate(today, -10);
+  const BEFORE = shiftDate(today, -11);
+  const MOVEMENT_KEY = "errors.movementBeforeOpening";
+  const OPENING_KEY = "accounts.errors.openingAfterMovement";
+  const IMPORT_KEY = "data.import.errors.beforeOpening";
+  // The statements `readImportScope` put on the wire under the harness before this module (oleada-6 at ab45f478); it
+  // reads one more column and no more.
+  const SCOPE_TRIPS = 24;
+  const show = (value: unknown) => JSON.stringify(value ?? "nothing");
+
+  type Said = { serverError?: string; validationErrors?: unknown; data?: Record<string, unknown> } | undefined;
+  type Call = (input: Record<string, unknown>) => Promise<Said>;
+  const movements = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: Call;
+    updateTransactionAction: Call;
+  };
+  const planning = (await import("@/app/actions/planned-payments")) as unknown as { settlePlannedPaymentAction: Call };
+  const installments = (await import("@/app/actions/installment-plans")) as unknown as { recordDebtPaymentAction: Call };
+  const cashActions = (await import("@/app/actions/cash")) as unknown as { withdrawCashAction: Call };
+  const inbox = (await import("@/app/actions/ingest")) as unknown as { acceptDeliveryAction: Call };
+  const said = (result: { serverError?: string; validationErrors?: unknown } | undefined) => `serverError = ${result?.serverError ?? "none"}, validation = ${show(result?.validationErrors)}`;
+
+  const user = await createMembershipFreeUser();
+  const open = async (name: string, kind: "asset" | "liability", subtype: string, balanceOn: string, currency: "COP" | "USD" = "COP") => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness o6m7 ${name} ${tag}`,
+        kind,
+        subtype,
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: currency,
+        amountMinor: 100_000_000,
+        balanceOn,
+      } as never),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await open("banco", "asset", "bank", OPENING);
+  const later = await open("banco tardio", "asset", "bank", shiftDate(today, -2));
+  const card = await open("tarjeta", "liability", "card", OPENING);
+  const dollars = await open("dolares", "asset", "bank", OPENING, "USD");
+  const cashSource = await open("origen efectivo", "asset", "bank", OPENING);
+  const lonely = await open("con movimiento", "asset", "bank", OPENING);
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness o6m7 categoria ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),
+  );
+  track("categories", categoryId);
+
+  const expense = (over: Record<string, unknown> = {}) => ({
+    fromAccountId: bank,
+    toAccountId: null,
+    amount: "100",
+    occurredAt: shiftDate(today, -5),
+    description: `Harness o6m7 gasto ${tag}`,
+    splits: [{ categoryId, amount: "100" }],
+    labelIds: [],
+    ...over,
+  });
+  const create = (over: Record<string, unknown> = {}) => asUser(user, () => movements.createTransactionAction(expense(over)));
+  const stored = async (account: string) =>
+    fixtureSql<{ id: string; occurred_at: string }[]>`
+      select id, occurred_at::text as occurred_at from transactions where from_account_id = ${account} or to_account_id = ${account}`;
+  const trackStored = async (account: string) => {
+    for (const row of await stored(account)) track("transactions", row.id);
+  };
+
+  // ---- Create, and the day itself.
+  const refusedCreate = await create({ occurredAt: BEFORE });
+  const onTheDay = await create({ occurredAt: OPENING, description: `Harness o6m7 dia ${tag}` });
+  await trackStored(bank);
+  assert(
+    next("createTransactionAction dated the day before the opening answers errors.movementBeforeOpening and writes nothing"),
+    refusedCreate?.serverError === MOVEMENT_KEY && (await stored(bank)).every((row) => row.occurred_at !== BEFORE),
+    said(refusedCreate),
+  );
+  assert(
+    next("createTransactionAction dated the opening day itself is booked"),
+    onTheDay?.serverError === undefined && onTheDay?.data?.ok === true && (await stored(bank)).some((row) => row.occurred_at === OPENING),
+    said(onTheDay),
+  );
+  const transferToLater = await create({ toAccountId: later, splits: [], occurredAt: shiftDate(today, -5), description: `Harness o6m7 traslado ${tag}` });
+  assert(
+    next("A transfer is refused when only its destination account opens after the day"),
+    transferToLater?.serverError === MOVEMENT_KEY && (await stored(later)).length === 0,
+    said(transferToLater),
+  );
+
+  // ---- Update.
+  const booked = await create({ description: `Harness o6m7 editar ${tag}` });
+  const bookedId = booked?.data?.transactionId as string | undefined;
+  await trackStored(bank);
+  const [bookedStamp] = await fixtureSql<{ stamp: string }[]>`select updated_at::text as stamp from transactions where id = ${bookedId ?? randomUUID()}`;
+  const moved = await asUser(user, () =>
+    movements.updateTransactionAction({ transactionId: bookedId, expectedUpdatedAt: bookedStamp?.stamp, ...expense({ occurredAt: BEFORE, description: `Harness o6m7 editar ${tag}` }) }),
+  );
+  const [afterMove] = await fixtureSql<{ occurred_at: string }[]>`select occurred_at::text as occurred_at from transactions where id = ${bookedId ?? randomUUID()}`;
+  assert(
+    next("updateTransactionAction moving the date before the opening answers the same key and keeps the stored day"),
+    bookedId !== undefined && moved?.serverError === MOVEMENT_KEY && afterMove?.occurred_at === shiftDate(today, -5),
+    `${said(moved)}; stored day ${afterMove?.occurred_at}`,
+  );
+
+  // ---- The other writers.
+  const { plannedPaymentId } = await asUser(user, () =>
+    createPlannedPayment({
+      fromAccountId: bank,
+      toAccountId: null,
+      amountCents: 5_000,
+      categoryId,
+      dueDate: today,
+      remindOn: null,
+      description: `Harness o6m7 por pagar ${tag}`,
+    }),
+  );
+  track("planned_payments", plannedPaymentId);
+  const settled = await asUser(user, () => planning.settlePlannedPaymentAction({ plannedPaymentId, occurredAt: BEFORE }));
+  assert(
+    next("settlePlannedPaymentAction dated before the opening answers the same key and leaves the payment pending"),
+    settled?.serverError === MOVEMENT_KEY && (await readColumn<string>("planned_payments", "id", plannedPaymentId, "status")) === "pending",
+    `${said(settled)}; status ${await readColumn("planned_payments", "id", plannedPaymentId, "status")}`,
+  );
+
+  const paid = await asUser(user, () =>
+    installments.recordDebtPaymentAction({ fromAccountId: bank, toAccountId: card, amount: "100", occurredAt: BEFORE }),
+  );
+  assert(
+    next("recordDebtPaymentAction dated before the opening answers the same key"),
+    paid?.serverError === MOVEMENT_KEY && (await stored(card)).length === 0,
+    said(paid),
+  );
+
+  // A withdrawal is dated today, so the opening has to be the one in the future.
+  await fixtureSql`update accounts set initial_balance_on = ${shiftDate(today, 3)}::date where id = ${cashSource}`;
+  const withdrawn = await asUser(user, () => cashActions.withdrawCashAction({ sourceAccountId: cashSource, amount: "100" }));
+  assert(
+    next("withdrawCashAction from an account that opens after today answers the same key and moves no cash"),
+    withdrawn?.serverError === MOVEMENT_KEY && (await stored(cashSource)).length === 0,
+    said(withdrawn),
+  );
+
+  const claims = JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" });
+  const deliveryId = await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    const [row] = await tx<{ id: string }[]>`
+      insert into ingest_deliveries (external_ref, raw_text, shape_hash)
+      values (${`harness-o6m7-${tag}`}, ${`Harness o6m7 mensaje ${tag}`}, ${createHash("sha256").update(`o6m7-${tag}`).digest("hex")})
+      returning id`;
+    return row.id;
+  });
+  const accepted = await asUser(user, () =>
+    inbox.acceptDeliveryAction({
+      deliveryId,
+      fromAccountId: bank,
+      toAccountId: null,
+      amount: "100",
+      occurredAt: BEFORE,
+      description: `Harness o6m7 bandeja ${tag}`,
+      splits: [{ categoryId, amount: "100" }],
+      labelIds: [],
+    }),
+  );
+  assert(
+    next("acceptDeliveryAction dated before the opening answers the same key and leaves the proposal pending"),
+    accepted?.serverError === MOVEMENT_KEY && (await readColumn<string>("ingest_deliveries", "id", deliveryId, "status")) === "pending",
+    `${said(accepted)}; status ${await readColumn("ingest_deliveries", "id", deliveryId, "status")}`,
+  );
+
+  // ---- The opening moved past a movement.
+  await asUser(user, () => movements.createTransactionAction(expense({ fromAccountId: lonely, description: `Harness o6m7 solo ${tag}` })));
+  await trackStored(lonely);
+  const stamp = async () => (await fixtureSql<{ stamp: string }[]>`select updated_at::text as stamp from accounts where id = ${lonely}`)[0].stamp;
+  const editOpening = async (balanceOn: string) =>
+    asUser(user, async () =>
+      updateAccountAction({
+        accountId: lonely,
+        expectedUpdatedAt: await stamp(),
+        name: `Harness o6m7 con movimiento ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        isShared: false,
+        institution: "",
+        lastFour: "",
+        settlementCurrency: "COP",
+        amount: "1000000",
+        balanceOn,
+      }),
+    );
+  const openingOf = async () => (await fixtureSql<{ day: string }[]>`select initial_balance_on::text as day from accounts where id = ${lonely}`)[0].day;
+  const pastMovement = await editOpening(shiftDate(today, -3));
+  const openingAfterRefusal = String(await openingOf());
+  assert(
+    next("updateAccountAction moving the opening past a movement answers accounts.errors.openingAfterMovement and keeps the day"),
+    pastMovement?.serverError === OPENING_KEY && openingAfterRefusal === OPENING,
+    `${said(pastMovement)}; opening ${openingAfterRefusal}`,
+  );
+  const upToMovement = await editOpening(shiftDate(today, -5));
+  assert(
+    next("updateAccountAction moving the opening up to the day of its first movement is saved"),
+    upToMovement?.serverError === undefined && (await openingOf()) === shiftDate(today, -5),
+    `${said(upToMovement)}; opening ${await openingOf()}`,
+  );
+
+  // ---- What is not these two codes reads as before.
+  const crossCurrency = await create({ fromAccountId: bank, toAccountId: dollars, splits: [], description: `Harness o6m7 divisas ${tag}` });
+  assert(
+    next("A transfer between a peso and a dollar account still answers transactions.errors.currencyMismatch"),
+    crossCurrency?.serverError === "transactions.errors.currencyMismatch",
+    said(crossCurrency),
+  );
+  const strangerAccount = await create({ fromAccountId: randomUUID(), description: `Harness o6m7 ajena ${tag}` });
+  assert(
+    next("A movement from an account that does not exist still answers errors.notFound, never the opening words"),
+    strangerAccount?.serverError === "errors.notFound",
+    said(strangerAccount),
+  );
+
+  // ---- The import preview.
+  const importScope = await asUser(user, () => readImportScope());
+  const scoped = (id: string) => importScope.accounts.find((account) => account.id === id) as unknown as { initialBalanceOn?: string } | undefined;
+  assert(
+    next("The import scope hands the pipeline each account's opening day"),
+    scoped(bank)?.initialBalanceOn === OPENING && scoped(later)?.initialBalanceOn === shiftDate(today, -2),
+    `bank ${scoped(bank)?.initialBalanceOn}, later ${scoped(later)?.initialBalanceOn}`,
+  );
+  const tripsBefore = roundTrips();
+  await asUser(user, () => readImportScope());
+  const scopeTrips = roundTrips() - tripsBefore;
+  assert(next("The import scope read spends the round trips it spent before"), scopeTrips === SCOPE_TRIPS, `${scopeTrips} round trips, expected ${SCOPE_TRIPS}`);
+
+  const bankName = `Harness o6m7 banco ${tag}`;
+  const row = (account: string, occurredAt: string, over: Record<string, string | number | boolean | null> = {}): RawRow => ({
+    externalRef: null,
+    fromAccount: account,
+    toAccount: null,
+    amount: 100,
+    currency: null,
+    category: `Harness o6m7 categoria ${tag}`,
+    occurredAt,
+    description: `Harness o6m7 fila ${tag}`,
+    adjustment: null,
+    ...over,
+  });
+  const preview = (entityRows: RawRow[], newAccounts: RawRow[] = []) => {
+    const refs = buildEffectiveRefs(importScope, (entity) => (entity === "accounts" ? newAccounts : []));
+    const processed = entityRows.map((raw, index) => processRow("transactions", raw, index, index + 2, refs, importScope.existingRefs.transactions));
+    const accountRows = newAccounts.map((raw, index) => processRow("accounts", raw, index, index + 2, refs, importScope.existingRefs.accounts));
+    return { processed, accountRows, errorRows: [...processed, ...accountRows].filter((r) => r.errors.length > 0).length };
+  };
+  const words = (r: { errors: { key: string; column: string | null }[] }) => r.errors.map((e) => `${e.key}@${e.column}`);
+  const wanted = [`${IMPORT_KEY}@occurredAt`];
+
+  const before = preview([row(bankName, BEFORE)]);
+  const onDay = preview([row(bankName, OPENING)]);
+  assert(
+    next("Preview: a row dated the day before an existing account's opening is refused on occurredAt and counted; the opening day is clean"),
+    JSON.stringify(words(before.processed[0])) === JSON.stringify(wanted) &&
+      before.processed[0].object === null &&
+      before.errorRows === 1 &&
+      onDay.processed[0].errors.length === 0 &&
+      onDay.errorRows === 0,
+    `before ${show(words(before.processed[0]))}, on the day ${show(words(onDay.processed[0]))}`,
+  );
+  const lateBank = `Harness o6m7 banco tardio ${tag}`;
+  const lateTransfer = preview([row(bankName, shiftDate(today, -5), { toAccount: lateBank, category: null })]);
+  assert(
+    next("Preview: a transfer is refused when its second account is the one that opens after the day"),
+    JSON.stringify(words(lateTransfer.processed[0])) === JSON.stringify(wanted),
+    show(words(lateTransfer.processed[0])),
+  );
+
+  const freshName = `Harness o6m7 nueva ${tag}`;
+  const fresh: RawRow = {
+    externalRef: `o6m7-${tag}`,
+    name: freshName,
+    kind: "asset",
+    subtype: "bank",
+    placement: "personal",
+    institution: null,
+    amount: 1000,
+    balanceOn: shiftDate(today, -4),
+    settlementCurrency: "COP",
+  };
+  const freshBefore = preview([row(freshName, shiftDate(today, -6))], [fresh]);
+  const freshOnDay = preview([row(freshName, shiftDate(today, -4))], [fresh]);
+  assert(
+    next("Preview: a movement earlier than the opening of an account created in the same file is refused on occurredAt and counted; on the day it is clean"),
+    freshBefore.accountRows.every((r) => r.errors.length === 0) &&
+      JSON.stringify(words(freshBefore.processed[0])) === JSON.stringify(wanted) &&
+      freshBefore.errorRows === 1 &&
+      freshOnDay.errorRows === 0,
+    `before ${show(words(freshBefore.processed[0]))}, on the day ${show(words(freshOnDay.processed[0]))}`,
+  );
+
+  // ---- The commit, handed a row the preview did not stop.
+  const clean = onDay.processed[0];
+  const slipped = { ...clean, sheetRow: 7, object: { ...(clean.object as object), occurredAt: BEFORE } as never };
+  const commitInput: CommitInput = { members: [], categories: [], accounts: [], recurringRules: [], transactions: [slipped], adjustments: [] };
+  let commitError: unknown;
+  try {
+    await asUser(user, () => withUserDb((tx) => commitImport(tx, commitInput, { userId: user.id, groupId: null })));
+  } catch (error) {
+    commitError = error;
+  }
+  let named: { entity?: string; sheetRow?: number; reasonKey?: string } = {};
+  try {
+    named = JSON.parse((commitError as Error).message);
+  } catch {
+    named = {};
+  }
+  const landed = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where owner_user_id = ${user.id} and description = ${`Harness o6m7 fila ${tag}`}`;
+  assert(
+    next("Commit: a row dated before the opening that slipped past the preview is refused naming its row with data.import.errors.beforeOpening"),
+    clean.errors.length === 0 &&
+      commitError instanceof ActionError &&
+      named.entity === "transactions" &&
+      named.sheetRow === 7 &&
+      named.reasonKey === IMPORT_KEY &&
+      landed[0].n === 0,
+    `${show(named)}; rows written ${landed[0].n}; ${commitError === undefined ? "no error" : refusal(commitError)}`,
+  );
+
+  await fixtureSql`delete from ingest_deliveries where owner_user_id = ${user.id}`;
+}
+
+// The detail's pockets carry the same estimate the overview does: a purchase adds, a refund takes away.
+async function detailPocketToBillSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const PURCHASE_ESTIMATE = 10_500_000;
+  const REFUND_ESTIMATE = 2_000_000;
+  const holder = await createMembershipFreeUser();
+  const open = async (kind: "asset" | "liability", name: string, amountMinor: number): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness detail ${name} ${tag}`,
+        kind,
+        subtype: kind === "asset" ? "bank" : "card",
+        ownerUserId: holder.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const category = async (kind: "expense" | "income"): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness detail ${kind} ${tag}`, kind, parentId: null, color: "#B4542F" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const usd = async (from: string | null, to: string | null, amountCents: number, estimate: number, categoryId: string, label: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: to,
+        amountCents,
+        currency: "USD",
+        counterAmountCents: estimate,
+        counterIsEstimate: true,
+        occurredAt: today,
+        description: `Harness detail ${label} ${tag}`,
+        externalRef: null,
+        splits: [{ categoryId, amountCents }],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const toBill = async (card: string) => {
+    const detail = await asUser(holder, () => getDebtDetail(card));
+    return detail?.account.balances.find((pocket) => pocket.currency === "USD")?.toBillCents;
+  };
+
+  const card = await open("liability", "tarjeta", 0);
+  const expense = await category("expense");
+  const income = await category("income");
+  const none = (await asUser(holder, () => getDebtDetail(card)))?.account.balances.find((pocket) => pocket.currency === "USD");
+  await usd(card, null, 2_500, PURCHASE_ESTIMATE, expense, "compra");
+  const purchaseOnly = await toBill(card);
+  await usd(null, card, 500, REFUND_ESTIMATE, income, "reembolso");
+  const withRefund = await toBill(card);
+  assert(
+    next("Detail pocket to bill: nothing pending is null, a USD purchase estimated at 10500000 reads 10500000, and a USD refund estimated at 2000000 beside it reads 8500000"),
+    none === undefined && purchaseOnly === PURCHASE_ESTIMATE && withRefund === PURCHASE_ESTIMATE - REFUND_ESTIMATE,
+    `no pocket ${none === undefined}, purchase ${purchaseOnly}, with refund ${withRefund}`,
   );
 }

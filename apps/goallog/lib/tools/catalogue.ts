@@ -27,7 +27,7 @@ import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import { loadDay } from "@/lib/queries/day";
 import { listGoalsForMetas, listLooseCommitments, loadGoal } from "@/lib/queries/goal";
-import { listDaylessOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
+import { listDaylessOneOffs, listGoalOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
 import { loadReport } from "@/lib/queries/report";
 import { todayInZone } from "@/lib/zone";
 
@@ -121,8 +121,13 @@ export const readTools: readonly ToolSpec[] = [
   read("get_today", z.strictObject({}), async () => ({ ok: true, value: shapeDay(await loadDay(todayInZone())) })),
   read("get_report", z.strictObject({}), async () => ({ ok: true, value: shapeReport(await loadReport(todayInZone())) })),
   read("list_loose_one_offs", z.strictObject({}), async () => {
-    const [dayless, scheduled] = await Promise.all([listDaylessOneOffs(), listScheduledOneOffs(todayInZone())]);
-    return { ok: true, value: shapeLoose({ dayless, scheduled }) };
+    const today = todayInZone();
+    const [dayless, scheduled, inGoals] = await Promise.all([
+      listDaylessOneOffs(),
+      listScheduledOneOffs(today),
+      listGoalOneOffs(today),
+    ]);
+    return { ok: true, value: shapeLoose({ dayless, scheduled, inGoals }) };
   }),
 ];
 

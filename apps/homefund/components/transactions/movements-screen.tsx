@@ -297,6 +297,8 @@ export function MovementsScreen({
     );
   }
 
+  const removingPayment =
+    rows.find((row) => row.id === removingId)?.settledPlannedPayment ?? null;
   const editing = rows.find((row) => row.id === editingId) ?? null;
 
   // The picker's candidates for the row under edit (RF-132): the caller's recent
@@ -691,7 +693,13 @@ export function MovementsScreen({
         open={removingId !== null}
         onOpenChange={(open) => !open && setRemovingId(null)}
         title={t("deleteTitle")}
-        description={t("deleteDescription")}
+        description={
+          removingPayment
+            ? removingPayment.description
+              ? t("deleteSettlesPayment", { name: removingPayment.description })
+              : t("deleteSettlesPaymentUnnamed")
+            : t("deleteDescription")
+        }
         confirmLabel={t("delete")}
         cancelLabel={tKey("common.cancel")}
         pending={remove.isPending}

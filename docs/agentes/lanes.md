@@ -67,7 +67,7 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
 - Assign the migration number by hand when two lanes may generate one. Renumbering after is safe (drizzle matches on
   the SQL's hash: keep the entry's `when`, rename file, tag and snapshot), but the merge collides in
   `meta/_journal.json`.
-- Run at most two lanes with a dev server or a suite at once: each takes 1.5 to 2 GB, and five filled the 15 GB WSL and its swap on 2026-10-22. Keep the main checkout's :3000 down while lanes run.
+- Run at most four lanes with a dev server or a suite at once: each takes 1.5 to 2 GB, and five filled the 15 GB WSL and its swap on 2026-10-22. The user raised the cap from two to four on 2026-10-22 («HABILITA MAS CARRILES»). Keep the main checkout's :3000 down while lanes run.
 - Stop a lane's dev server when its agent returns, and drop the lane when its branch merges.
 - Copy everything an agent left in the lane before you drop it: `cp -r ../finances-app-l<n>/private/{reportes,ux-*} private/`
   and the lane's `apps/*/private/`. `worktree remove --force` deletes them.

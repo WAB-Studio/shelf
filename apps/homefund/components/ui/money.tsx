@@ -10,12 +10,19 @@ const MINUS = "−";
 // U+2248, the mark a figure the issuer has not billed yet carries (RF-123).
 const APPROXIMATELY = "≈";
 
-export type MoneyTone = "expense" | "income" | "transfer" | "plain";
+export type MoneyTone =
+  | "expense"
+  | "income"
+  | "transfer"
+  | "credit"
+  | "plain";
 
 const TONE_COLOR: Record<MoneyTone, string | undefined> = {
   income: "var(--accent-11)",
   expense: "var(--gray-12)",
   transfer: "var(--gray-11)",
+  // A balance in the holder's favour (RF-80): the accent of income, with no sign.
+  credit: "var(--accent-11)",
   // Inherits the surrounding ink, so a tile or a heading keeps its own colour.
   plain: undefined,
 };
@@ -46,6 +53,9 @@ export type MoneyProps = {
   // Marks the figure as what a person expects to be billed, not what was
   // billed (RF-123). No screen writes that mark itself.
   estimate?: boolean;
+  // Text that belongs to the figure («A favor », «Debes »): drawn inside the same
+  // span so it takes the figure's ink and never wraps away from it.
+  words?: { before: string; after: string };
 };
 
 /**
@@ -60,6 +70,7 @@ export function Money({
   size = "row",
   signed = true,
   estimate = false,
+  words,
 }: MoneyProps) {
   const locale = useLocale();
 
@@ -68,7 +79,7 @@ export function Money({
   // sign it stores — a balance below zero is an overdraft, not an amount. A zero
   // total reads without a sign whatever its tone.
   const sign =
-    !signed || amountMinor === 0
+    !signed || amountMinor === 0 || tone === "credit"
       ? ""
       : signed === "always"
         ? amountMinor < 0
@@ -82,6 +93,8 @@ export function Money({
             ? MINUS
             : "";
 
+  const figure = `${estimate ? `${APPROXIMATELY}\u00a0` : ""}${sign}${formatMoney(amountMinor, currency, locale)}`;
+
   return (
     <span
       style={{
@@ -91,9 +104,9 @@ export function Money({
         whiteSpace: "nowrap",
       }}
     >
-      {estimate ? `${APPROXIMATELY} ` : ""}
-      {sign}
-      {formatMoney(amountMinor, currency, locale)}
+      {words?.before}
+      {figure}
+      {words?.after}
     </span>
   );
 }

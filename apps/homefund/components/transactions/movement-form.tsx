@@ -164,6 +164,7 @@ export function MovementForm({
   movement,
   deliveryId,
   defaults,
+  dateBeforeOpening,
   causeOptions = [],
   causedByTransactionId = null,
   onSaved,
@@ -187,6 +188,9 @@ export function MovementForm({
     description?: string | null;
     splits?: { categoryId: string; amount: string }[];
   };
+  // A notice dated before its account opened: the form opens with the refusal already beside the
+  // date, which is brought into view.
+  dateBeforeOpening?: boolean;
   // Runs on a stored write only; `onDone` also runs on the back button.
   onSaved?: () => void;
   onDone: () => void;
@@ -449,10 +453,29 @@ export function MovementForm({
 
   // Three hooks, not one behind a ternary: the actions' input types differ, and
   // rules of hooks forbid picking which one to call.
+  // A date before the account's opening is also written beside the date, with what was typed kept.
+  function refuseDate(result: { error: { serverError?: string } }) {
+    onActionError(result);
+    form.setError("occurredAt", { type: "server", message: "errors.movementBeforeOpening" });
+  }
+
+  useEffect(() => {
+    if (!dateBeforeOpening) return;
+    form.setError("occurredAt", { type: "server", message: "errors.movementBeforeOpening" });
+    // After the dialog has taken its own initial focus.
+    const timer = setTimeout(() => {
+      const input = document.getElementById("movement-date");
+      input?.scrollIntoView({ block: "center" });
+      input?.focus({ preventScroll: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [dateBeforeOpening, form]);
+
   const create = useAction(createTransactionAction, {
     onSuccess: onActionSuccess,
     onError: (result) => {
       if (result.error.serverError === "errors.resendChanged") setRefusal("errors.resendChanged");
+      else if (result.error.serverError === "errors.movementBeforeOpening") refuseDate(result);
       else onActionError(result);
     },
   });
@@ -460,12 +483,16 @@ export function MovementForm({
     onSuccess: onActionSuccess,
     onError: (result) => {
       if (result.error.serverError === "errors.stale") setRefusal("errors.stale");
+      else if (result.error.serverError === "errors.movementBeforeOpening") refuseDate(result);
       else onActionError(result);
     },
   });
   const accept = useAction(acceptDeliveryAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.movementBeforeOpening") refuseDate(result);
+      else onActionError(result);
+    },
   });
 
   const isPending = isEdit

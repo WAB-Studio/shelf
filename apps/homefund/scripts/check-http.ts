@@ -346,9 +346,11 @@ async function seedHttpScope(userId: string): Promise<HttpScope> {
   await fixtureSql.begin(async (tx) => {
     await tx`select set_config('request.jwt.claims', ${claims}, true)`;
 
+    // Opened with the liability below, so the abono that settled its first line two months back postdates it (RF-162).
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-      values (${scope.accountId}, ${userId}, 'Harness HTTP bank', 'asset', 'bank', 5000000, current_date)`;
+      values (${scope.accountId}, ${userId}, 'Harness HTTP bank', 'asset', 'bank', 5000000,
+        (current_date - interval '3 months')::date)`;
 
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)
@@ -951,6 +953,7 @@ void (async () => {
     await failureRedirectSuite();
     await unreviewedExportSuite();
     await credentialDefaultCategorySuite();
+    await failureNoStoreSuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -1410,10 +1413,10 @@ async function edgeSuite(): Promise<void> {
   );
 }
 
-// RF-01: a failed landing that clears a stale session cookie rides the no-store
-// directives Auth hands back; without them a CDN may cache the `Set-Cookie`.
-// A redirect that sets no cookie (`linkOtherBrowser`, which never asks Auth) has
-// nothing to protect and carries none.
+// RF-01: every failed landing says `no-store`, whether or not it reached Auth. One
+// that clears a stale session cookie rides the directives Auth hands back; one that
+// never asked Auth (`linkOtherBrowser`, a malformed query) carries `no-store` too, so
+// no CDN keeps a redirect that sent a reader away from a link still good elsewhere.
 async function failureRedirectSuite(): Promise<void> {
   const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname.split(".")[0];
   const stale = {
@@ -1466,9 +1469,11 @@ async function failureRedirectSuite(): Promise<void> {
 
   const otherBrowser = await land("code=abc", sessionCookie);
   assert(
-    next("a code opened where no verifier was set lands on the login with linkOtherBrowser"),
-    [302, 307].includes(otherBrowser.status) && otherBrowser.location.endsWith("/es/login?error=linkOtherBrowser"),
-    `it answered ${otherBrowser.status} to ${otherBrowser.location}`,
+    next("a code opened where no verifier was set lands on the login with linkOtherBrowser and says no-store"),
+    [302, 307].includes(otherBrowser.status) &&
+      otherBrowser.location.endsWith("/es/login?error=linkOtherBrowser") &&
+      otherBrowser.cacheControl.includes("no-store"),
+    `it answered ${otherBrowser.status} to ${otherBrowser.location}, cache-control «${otherBrowser.cacheControl}»`,
   );
 }
 
@@ -1589,5 +1594,60 @@ async function credentialDefaultCategorySuite(): Promise<void> {
     next("a delivery on a credential with no default category is proposed under none"),
     without.status === 200 && without.row?.categoryId === null && without.row?.source === null,
     `it answered ${without.status}, landed ${JSON.stringify(without.row)}`,
+  );
+}
+
+// RF-01: the failures that never reach Auth say `no-store` too, and a failure that
+// does reach it says it once, not once from Auth and once from the route.
+async function failureNoStoreSuite(): Promise<void> {
+  const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname.split(".")[0];
+  const stale = {
+    access_token: "a.b.c",
+    refresh_token: "not-a-refresh-token",
+    expires_at: 1000,
+    expires_in: 1,
+    token_type: "bearer",
+    user: { id: "00000000-0000-0000-0000-000000000000" },
+  };
+  const sessionCookie = `sb-${host}-auth-token=base64-${Buffer.from(JSON.stringify(stale)).toString("base64url")}`;
+
+  const land = async (query: string, cookie = "") => {
+    const response = await fetch(`${HARNESS_BASE_URL}/auth/confirm?${query}`, {
+      redirect: "manual",
+      headers: cookie ? { cookie } : {},
+    });
+
+    return {
+      status: response.status,
+      location: response.headers.get("location") ?? "",
+      cacheControl: response.headers.get("cache-control") ?? "",
+    };
+  };
+
+  const malformed = await land("x=1");
+  assert(
+    next("a malformed landing query goes to the login with linkInvalid and says no-store"),
+    [302, 307].includes(malformed.status) &&
+      malformed.location.endsWith("/es/login?error=linkInvalid") &&
+      malformed.cacheControl.includes("no-store"),
+    `it answered ${malformed.status} to ${malformed.location}, cache-control «${malformed.cacheControl}»`,
+  );
+
+  // Auth refuses with no session to clear: the route alone must say no-store.
+  await land("token_hash=abc&type=magiclink");
+  const bare = await land("token_hash=abc&type=magiclink");
+  assert(
+    next("a rejected token_hash link from a browser with no session says no-store"),
+    bare.location.endsWith("/es/login?error=linkInvalid") && bare.cacheControl.includes("no-store"),
+    `it answered ${bare.status} to ${bare.location}, cache-control «${bare.cacheControl}»`,
+  );
+
+  // Auth refuses and clears a stale session: its directives and the route's merge into one.
+  const rejected = await land("token_hash=abc&type=magiclink", sessionCookie);
+  const mentions = rejected.cacheControl.split(/[\s,]+/).filter((directive) => directive === "no-store").length;
+  assert(
+    next("a rejected token_hash link that clears a session says no-store once, never doubled"),
+    rejected.location.endsWith("/es/login?error=linkInvalid") && mentions === 1,
+    `it answered ${rejected.status} to ${rejected.location}, cache-control «${rejected.cacheControl}»`,
   );
 }

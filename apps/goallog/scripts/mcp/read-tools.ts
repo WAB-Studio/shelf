@@ -3,8 +3,8 @@
 // `withMcpAuth` will, answers its shape under the subject and runs exactly
 // the statements its loader runs. Statements come off the wire as
 // `scripts/plan/report.ts` counts them: a connection's bracket and its
-// first-use type fetch are netted out, two connections overlap when their
-// windows do.
+// first-use type fetch are netted out, connections overlap when
+// every window shares a point.
 import assert from "node:assert/strict";
 import Module from "node:module";
 import { after, before, test } from "node:test";
@@ -92,8 +92,8 @@ function readWire(calls: Call[]): Wire {
     const times = group.map((call) => call.at);
     windows.push({ start: Math.min(...times), end: Math.max(...times) });
   }
-  const [a, b] = windows;
-  return { statements, connections: byConnection.size, overlap: windows.length === 2 && a.start <= b.end && b.start <= a.end };
+  const overlap = windows.length >= 2 && Math.max(...windows.map((w) => w.start)) <= Math.min(...windows.map((w) => w.end));
+  return { statements, connections: byConnection.size, overlap };
 }
 
 async function call(name: string, input: Record<string, unknown>, person: Person = subject) {
@@ -245,7 +245,7 @@ test("get_report answers the open goal with its months as YYYY-MM", async () => 
   for (const row of body.goals[0].months) assert.match(row.month, /^\d{4}-\d{2}$/);
 });
 
-test("list_loose_one_offs answers both lists", async () => {
+test("list_loose_one_offs answers its lists", async () => {
   const result = await call("list_loose_one_offs", {});
   const body = result.structuredContent as { dayless: { name: string }[]; scheduled: { name: string; day: string }[] };
   assert.deepEqual(body.dayless.map((item) => item.name), ["sin día"]);
@@ -288,12 +288,12 @@ test("each tool issues exactly its loader's statements", async () => {
   assert.equal(counts.get_month.statements, 4);
   assert.equal(counts.get_today.statements, 4);
   assert.equal(counts.get_report.statements, 4);
-  assert.equal(counts.list_loose_one_offs.statements, 4);
+  assert.equal(counts.list_loose_one_offs.statements, 6);
 });
 
-test("the two loose lists run in overlapping transactions", async () => {
+test("the loose lists run in overlapping transactions", async () => {
   const wireOf = await measured("list_loose_one_offs", {});
-  assert.equal(wireOf.connections, 2);
+  assert.equal(wireOf.connections, 3);
   assert.equal(wireOf.overlap, true);
 });
 
@@ -309,6 +309,49 @@ test("list_loose_one_offs keeps a goal's dayless task out of dayless and a goal'
   const body = result.structuredContent as { dayless: { name: string }[]; scheduled: { name: string; day: string }[] };
   assert.deepEqual(body.dayless.map((item) => item.name), ["sin día"]);
   assert.ok(body.scheduled.some((item) => item.name === "tarea de meta con día" && item.day === dayFrom(4)));
+});
+
+// RP-91: a goal's dayless task is readable beside the loose ones, with its goal and its month.
+test("list_loose_one_offs lists a goal's dayless tasks in inGoals, and not the done, the ended goal's or the dated", async () => {
+  type Row = { id: string; name: string; goalId: string; goalName: string; plannedMonth: string | null };
+  const made: Record<string, string> = {};
+  let endedGoal = "";
+  await session.actAs(asResolved(subject), async () => {
+    const create = async (key: string, input: Parameters<typeof oneOffs.createOneOff>[0]) => {
+      const result = await oneOffs.createOneOff(input);
+      if (!result.ok) throw new Error(`createOneOff ${key}: ${result.error}`);
+      made[key] = result.oneOffId;
+    };
+    await create("planned", { name: "inGoals planeada", day: null, goalId: subjectGoal, plannedMonth: nextMonth });
+    await create("done", { name: "inGoals hecha", day: null, goalId: subjectGoal, plannedMonth: nextMonth });
+    await create("child", { name: "inGoals hija", day: null, parentId: made.planned });
+    const ended = await plan.createGoal({ name: "inGoals terminada", horizon: dayFrom(120) });
+    if (!ended.ok) throw new Error(`createGoal ended: ${ended.error}`);
+    endedGoal = ended.goalId;
+    await create("closed", { name: "inGoals de meta terminada", day: null, goalId: endedGoal, inPlan: true });
+    const completed = await oneOffs.completeOneOff({ oneOffId: made.done, day: dayFrom(0) });
+    if (!completed.ok) throw new Error(`completeOneOff: ${completed.error}`);
+  });
+  await admin`update goals.goals set horizon = ${dayFrom(0)} where id = ${endedGoal}`;
+
+  const body = (await call("list_loose_one_offs", {})).structuredContent as {
+    dayless: { name: string }[];
+    scheduled: { name: string }[];
+    inGoals: Row[];
+  };
+  const listed = body.inGoals.filter((row) => row.name.startsWith("inGoals"));
+  assert.deepEqual(listed.map((row) => row.name), ["inGoals planeada", "inGoals hija"]);
+  assert.equal(listed[0].plannedMonth, nextMonth);
+  assert.equal(listed[1].plannedMonth, null);
+  for (const row of listed) {
+    assert.equal(row.goalId, subjectGoal);
+    assert.equal(row.goalName, "leer tools");
+  }
+  assert.ok(body.inGoals.some((row) => row.name === "tarea de meta sin día" && row.plannedMonth === null));
+  assert.ok(body.inGoals.some((row) => row.name === "tarea del mes" && row.plannedMonth === currentMonth));
+  assert.equal(body.inGoals.some((row) => row.name === "tarea de meta con día"), false);
+  assert.deepEqual(body.dayless.map((item) => item.name), ["sin día"]);
+  assert.equal(body.scheduled.some((item) => item.name.startsWith("inGoals")), false);
 });
 
 // RP-39, RP-56: the annotations of every registered tool, taken from the registry.

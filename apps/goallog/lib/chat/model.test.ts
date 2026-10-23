@@ -74,6 +74,7 @@ mock.module("@/lib/queries/one-offs", {
       reads.push("listDaylessOneOffs");
       return [{ id: "task-maze", name: "Maze" }];
     },
+    listGoalOneOffs: async () => [{ id: "task-carta", name: "Carta" }],
     listScheduledOneOffs: async () => [],
   },
 });
@@ -84,7 +85,11 @@ mock.module("@/lib/mcp/shape", {
     shapeDay: () => ({ today: "READ-VALUE" }),
     shapeGoal: () => ({}),
     shapeGoalList: () => ({ open: [{ id: "g-1", name: "Inglés" }], ended: [], archived: [] }),
-    shapeLoose: (input: { dayless: { id: string; name: string }[] }) => ({ dayless: input.dayless, scheduled: [] }),
+    shapeLoose: (input: { dayless: { id: string; name: string }[]; inGoals: { id: string; name: string }[] }) => ({
+      dayless: input.dayless,
+      scheduled: [],
+      inGoals: input.inGoals,
+    }),
     shapeMonth: () => ({}),
     shapeReport: () => ({}),
   },
@@ -274,6 +279,24 @@ test("stub script maps the person's text to one change with the placeholder reso
 
   assert.equal((await answer(ask("rompe"))).status, "failed");
   assert.equal((await answer(ask("otra cosa"))).status, "failed");
+});
+
+test("a stubbed chat asked to schedule a goal's dayless task proposes schedule_task on its id", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "chat-stub-"));
+  const path = join(dir, "script.json");
+  writeFileSync(
+    path,
+    JSON.stringify({
+      "agenda Carta": { reply: "Propongo agendarla.", calls: [{ name: "schedule_task", arguments: { one_off_id: "{{task:Carta}}", day: "2026-10-27" } }] },
+    }),
+  );
+  fakeEnv.PULSAR_CHAT_STUB = `script:${path}`;
+  const result = await answer(ask("agenda Carta"));
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(result.changes.length, 1);
+  assert.equal(result.changes[0].tool, "schedule_task");
+  assert.deepEqual(result.changes[0].input, { one_off_id: "task-carta", day: "2026-10-27" });
 });
 
 test("a stub placeholder the plan cannot resolve fails instead of staying literal", async () => {

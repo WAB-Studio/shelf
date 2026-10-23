@@ -440,3 +440,32 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Deleting a movement that settled a planned payment puts the payment back to «Por pagar»** (Q4 b): RF-75 is retired
   and RF-161 opens when the module is built (migration 0069). Next train.
 - **A movement dated before its account's opening day is refused** (Q5 a), on save and on import, in words. Next train.
+- **Where and how it is refused** (Q11 a, Q12 a, Q13 b, Q14): the database refuses it on every path; an account's opening
+  cannot move past one of its movements; movements already stored before their opening stay, and the main session counts
+  them read-only in production before the deploy. The words:
+  - Deleting a movement that settled a payment: «Este movimiento saldó «{name}». Al eliminarlo, el pago vuelve a «Por
+    pagar».» With no name: «Este movimiento saldó un pago planeado. Al eliminarlo, el pago vuelve a «Por pagar».»
+  - Saving a movement before the opening: «La fecha es anterior a la apertura de la cuenta. Cambia la fecha o la apertura
+    de la cuenta.»
+  - An import row: «Fecha anterior a la apertura de su cuenta.»
+  - Moving the opening past a movement: «Hay movimientos antes de esa fecha. La apertura no puede quedar después de ellos.»
+- **A card in credit with a dollar purchase still to bill reads both, apart** (Q9 a): «A favor $ 8.000 · Debes US$ 25
+  (≈ $ 105.000 por facturar)». Currencies never sum (RF-124).
+- **Boards of oleada-6** (HomeFund canvas, page «T4 · pantallas», 2026-10-22):
+  - `MovimientoEliminarSaldoPagoMovil` (M4): the delete confirmation of a movement that settled a payment names it, or says
+    «un pago planeado» when it has no name; one that settled nothing keeps «Esta acción no se puede deshacer.» Pending: both
+    buttons disabled, a spinner on «Eliminar». Refused: the action's own toast, the dialog stays. Done: the payment is under
+    «Por pagar» in Planeación. The laptop detail and the list row use the same dialog: no 1280 board.
+- **Decided by the user 2026-10-23, after oleada-6's critic:**
+  - Toasts draw above dialogs in the whole app, so a refusal raised from a dialog is seen. RF-162's refusal also shows inside
+    the movement form, beside the date, and inside the account form, beside the opening day.
+  - «Abonar» on a card whose pesos are in credit while another pocket owes reads the row's whole line: «A favor $ 8.000 ·
+    Debes US$ 25,00 (≈ $ 105.000 por facturar)», under the card's name (fourth state of `DeudasAbonarAFavorMovil`).
+  - A bank notice in the Bandeja dated before its account's opening is incomplete: «Anotar» opens the form with the date
+    showing, never the one-tap save.
+  - `DeudasAbonarAFavorMovil` (M5): the dialog's balance beside the debt's name. Owing: the amount in ink. In credit: «A favor
+    $ 150.000» whole in the accent, no sign. At zero: «$ 0» in ink.
+  - `DeudasProximoPagoSinDeudaMovil` (M5): with only cards in credit or at zero, «Próximo pago» reads «—» and has no note.
+  - `DeudasAFavorPorFacturar` (M5, Q9 a): «A favor $ 8.000» in the accent, then «· Debes US$ 25» in ink, then «(≈ $ 105.000 por
+    facturar)» muted. At 360 it wraps only at « · » or before the parenthesis; at 1280 it sits right-aligned in «Saldo». A
+    billed purchase drops the parenthesis. Pesos that owe keep today's drawing.

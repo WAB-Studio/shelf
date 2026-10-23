@@ -10,7 +10,7 @@ import { test, expect, visit } from "./fixtures";
 // makes an Auth user of its own: the invitation's user exists before the send, or the send is refused.
 
 const signedOut = { cookies: [], origins: [] };
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 
 function invitee(): string {
   return `harness-inv-${randomUUID()}@gmail.com`;

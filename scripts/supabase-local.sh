@@ -6,8 +6,8 @@ set -euo pipefail
 SUPABASE_VERSION="2.119.0"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXCLUDED="studio,postgres-meta,postgrest,realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor"
-DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-API_URL="http://127.0.0.1:54321"
+DB_URL="postgresql://postgres:postgres@127.0.0.1:44322/postgres"
+API_URL="http://127.0.0.1:44321"
 
 cli() { (cd "$ROOT" && npx --yes "supabase@${SUPABASE_VERSION}" "$@"); }
 
@@ -84,7 +84,7 @@ case "${1:-}" in
     # A failed print_env must stop here: an empty env falls back to .env.local, the remote project.
     env_lines="$(print_env)" || exit 1
     eval "$env_lines"
-    echo "supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322" >&2
+    echo "supabase-local: API 127.0.0.1:44321, DB 127.0.0.1:44322" >&2
     exec "$@"
     ;;
   status) cli status ;;

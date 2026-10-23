@@ -1,0 +1,15 @@
+.layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 2;
+  min-height: 0;
+  background: none;
+}
+
+/* An open dialog sets pointer-events: none on <body>, and the toast would inherit it. */
+.layer :global([data-sonner-toast]) {
+  pointer-events: auto;
+}

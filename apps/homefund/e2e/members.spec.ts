@@ -321,7 +321,7 @@ for (const [title, flag, warned] of [
 // RF-149: «Añadir miembro» takes an optional address, and with one it invites (RF-148) and lists.
 // Every address here is `harness-m2-<uuid>@example.invalid`: it goes to the local stack's inbox
 // only, and the `auth.users` row a send mints is registered under the run and dropped by address.
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 const inviteStepWarning = messages.onboarding.inviteStep.emailFailed;
 
 function freshAddress(): string {

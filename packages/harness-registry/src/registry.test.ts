@@ -12,7 +12,7 @@ async function freshRegistry(): Promise<typeof import("./registry")> {
 }
 
 const REMOTE = "postgresql://postgres.abc:s3cret@aws-0-us.pooler.supabase.com:6543/postgres";
-const LOCAL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+const LOCAL = "postgresql://postgres:postgres@127.0.0.1:44322/postgres";
 
 function withEnv(value: string | undefined, fn: () => void | Promise<void>) {
   const before = process.env.HARNESS_DATABASE;

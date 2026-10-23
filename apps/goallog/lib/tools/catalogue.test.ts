@@ -52,7 +52,11 @@ mock.module("@/lib/queries/goal", {
   namedExports: { listGoalsForMetas: async () => [], loadGoal: async () => null },
 });
 mock.module("@/lib/queries/one-offs", {
-  namedExports: { listDaylessOneOffs: async () => [], listScheduledOneOffs: async () => [] },
+  namedExports: {
+    listDaylessOneOffs: async () => [],
+    listGoalOneOffs: async () => [],
+    listScheduledOneOffs: async () => [],
+  },
 });
 mock.module("@/lib/queries/report", { namedExports: { loadReport: async () => ({}) } });
 mock.module("@/lib/plan/roadmap-read", { namedExports: { planMonthList: () => [] } });

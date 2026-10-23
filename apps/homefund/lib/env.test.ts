@@ -8,7 +8,7 @@ const REQUIRED = {
   DATABASE_URL: "postgresql://u:p@localhost:6543/db",
   MIGRATION_DATABASE_URL: "postgresql://u:p@localhost:5432/db",
   CRON_SECRET: "0123456789abcdef-secret",
-  NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
+  NEXT_PUBLIC_SUPABASE_URL: "http://localhost:44321",
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
   NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
 };

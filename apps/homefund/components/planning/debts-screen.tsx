@@ -16,7 +16,11 @@ import { DebtFormDialog } from "@/components/planning/debt-form-dialog";
 import type { DebtAccount } from "@/components/planning/debt-form-dialog";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
 import { DebtsTable } from "@/components/planning/debts-table";
-import { PocketFigure } from "@/components/planning/debts-table";
+import {
+  CreditAndOwedLine,
+  owesBesideCredit,
+  PocketFigure,
+} from "@/components/planning/debts-table";
 import type { DebtTableRow } from "@/components/planning/debts-table";
 import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
 import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
@@ -71,7 +75,11 @@ const columns = columnHelper.columns([columnHelper.accessor("accountId", {})]);
 type DialogTarget =
   | { mode: "create" }
   | { mode: "complete"; account: DebtAccount; currency: CurrencyCode }
-  | { mode: "pay"; account: DebtAccount; currency: CurrencyCode }
+  | {
+      mode: "pay";
+      account: DebtAccount & { creditCents: number; otherOwed: DebtPocket[] };
+      currency: CurrencyCode;
+    }
   | { mode: "plan"; account: DebtAccount; currency: CurrencyCode };
 
 // A row carrying its plan position, which is what the phone's cards read.
@@ -137,7 +145,10 @@ export function DebtsScreen({
     });
   }
 
-  function payTarget(account: DebtAccount, currency: CurrencyCode) {
+  function payTarget(
+    account: DebtAccount & { creditCents: number; otherOwed: DebtPocket[] },
+    currency: CurrencyCode,
+  ) {
     setTarget({ mode: "pay", account, currency });
   }
 
@@ -372,6 +383,8 @@ export function DebtsScreen({
                 accountId: row.accountId,
                 name: row.name,
                 owedCents: row.owedCents,
+                creditCents: row.creditCents,
+                otherOwed: row.otherOwed,
               },
               row.currency,
             )
@@ -433,6 +446,16 @@ export function DebtsScreen({
                 <Figure as="h2" size="8">
                   {formatMoney(set.owedCents, set.currency, locale)}
                 </Figure>
+                {totals.nextPayment === null && set === currencySets[0] && (
+                  <Flex gap="2" align="baseline">
+                    <Text size="2" color="gray">
+                      {t("tileNextPayment")}
+                    </Text>
+                    <Text size="2" color="gray">
+                      {NO_VALUE}
+                    </Text>
+                  </Flex>
+                )}
                 {totals.nextPayment !== null &&
                   totals.nextPayment.currency === set.currency && (
                     <Text size="2" color="gray">
@@ -478,6 +501,8 @@ export function DebtsScreen({
                           accountId: row.accountId,
                           name: row.name,
                           owedCents: row.owedCents,
+                          creditCents: row.creditCents,
+                          otherOwed: row.otherOwed,
                         },
                         row.currency,
                       )
@@ -515,6 +540,8 @@ export function DebtsScreen({
                               accountId: debt.accountId,
                               name: debt.name,
                               owedCents: debt.owedCents,
+                              creditCents: debt.creditCents,
+                              otherOwed: debt.otherOwed,
                             },
                             debt.currency,
                           )
@@ -607,22 +634,35 @@ function CardHead({
         <Icon size={20} />
       </Disc>
       <Flex direction="column" flexGrow="1" minWidth="0">
-        <Text weight="bold" truncate>
+        <Text weight="bold">
           {name}
         </Text>
         <Text size="1" color="gray">
           {meta}
         </Text>
       </Flex>
-      <Flex direction="column" align="end">
-        <PocketFigure
-          owedCents={owedCents}
-          creditCents={creditCents}
-          currency={currency}
-          bold
-        />
-        <OtherOwed pockets={otherOwed} />
-      </Flex>
+      {owesBesideCredit(creditCents, otherOwed) ? (
+        // The line wraps at its dots inside this column, so the column has a
+        // ceiling and the name keeps what is left.
+        <Flex direction="column" align="end" maxWidth="64%">
+          <CreditAndOwedLine
+            creditCents={creditCents}
+            currency={currency}
+            otherOwed={otherOwed}
+          />
+          <OtherOwed pockets={otherOwed.filter((p) => p.owedCents === 0)} />
+        </Flex>
+      ) : (
+        <Flex direction="column" align="end">
+          <PocketFigure
+            owedCents={owedCents}
+            creditCents={creditCents}
+            currency={currency}
+            bold
+          />
+          <OtherOwed pockets={otherOwed} />
+        </Flex>
+      )}
     </Flex>
   );
 }

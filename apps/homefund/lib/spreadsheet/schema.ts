@@ -132,6 +132,17 @@ function fromLegacySubtype(cell: unknown): unknown {
     : cell;
 }
 
+// A card's opening is what is owed, and the export writes it as the ledger keeps it: negative
+// (RF-142). The form takes a magnitude and the commit signs it by kind, so the minus a backup
+// carries is dropped here, before the form's own schema judges the figure; signing it again
+// would double it. An asset keeps its minus, so the form's schema still refuses it (RF-51).
+const OPENING_MINUS = /^\s*[-\u2212]/;
+
+function asOwedMagnitude<Row extends { kind: string; amount: string }>(row: Row): Row {
+  if (row.kind !== "liability" || !OPENING_MINUS.test(row.amount)) return row;
+  return { ...row, amount: row.amount.replace(OPENING_MINUS, "") };
+}
+
 // The settlement currency is the one cell a workbook may not carry (RF-121). The
 // form has a picker and so demands it; a sheet written before the column existed
 // has nobody to choose, and re-importing one has to keep matching on `external_ref`
@@ -150,6 +161,7 @@ export const accountRowSchema = z
     settlementCurrency: accountCurrencySchema.nullish().transform((value) => value ?? BASE_CURRENCY),
     subtype: z.unknown().transform(fromLegacySubtype),
   })
+  .transform(asOwedMagnitude)
   .pipe(accountRowFields);
 export type AccountRow = z.infer<typeof accountRowSchema>;
 

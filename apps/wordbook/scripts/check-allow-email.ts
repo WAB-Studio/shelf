@@ -1,7 +1,7 @@
 /**
  * Drives `scripts/allow-email.ts` (RL-69) as a process, against the local stack
  * (`scripts/supabase-local.sh exec`): the list row, the Auth user the script
- * creates through the admin API, and the inbox (mailpit, :54324) that must stay
+ * creates through the admin API, and the inbox (mailpit, :44324) that must stay
  * empty. Every address is `harness-allow-<uuid>@example.invalid`, registered
  * under this run and dropped by exact address on the way in and the way out.
  * Nothing is typed into `/cuenta` and no email leaves the machine.
@@ -19,7 +19,7 @@ import postgres from "postgres";
 
 assertSuiteDatabase();
 
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 const root = resolve(import.meta.dirname, "../../..");
 
 const apiUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";

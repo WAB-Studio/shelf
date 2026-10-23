@@ -24,7 +24,7 @@ registerHooks({
         format: "module",
         shortCircuit: true,
         source: `export const env = {
-          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:44321",
           SUPABASE_SECRET_KEY: "sb_secret_x",
         };`,
       };
