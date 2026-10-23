@@ -34,7 +34,7 @@ import {
 } from "@/components/ui";
 import type { PendingDeliveryRow } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
-import { todayInBogota } from "@/lib/dates";
+import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { scopeOfAccounts } from "@/lib/fund/category-scope";
 import { centsToPesos } from "@/lib/money";
@@ -254,6 +254,16 @@ export function DeliveryCard({
           <Text color={account ? undefined : "amber"}>
             {account ?? t("accountMissing")}
           </Text>
+          {delivery.beforeOpening && delivery.proposedOccurredAt !== null && (
+            <Text size="2" color="amber">
+              {t("beforeOpening", {
+                date: format.dateTime(
+                  civilDateToDate(delivery.proposedOccurredAt),
+                  { day: "numeric", month: "short", year: "numeric" },
+                ),
+              })}
+            </Text>
+          )}
           <Text color={category ? undefined : "amber"}>
             {category ?? t("categoryMissing")}
           </Text>
@@ -347,6 +357,7 @@ export function DeliveryCard({
               options={options}
               deliveryId={delivery.id}
               defaults={defaults}
+              dateBeforeOpening={delivery.beforeOpening}
               onSaved={() => toast.success(t("acceptedToast"))}
               onDone={() => setReviewOpen(false)}
             />

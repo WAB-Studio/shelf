@@ -28,6 +28,8 @@ export type PendingDeliveryRow = {
   proposedOccurredAt: string | null;
   proposedDescription: string | null;
   isComplete: boolean;
+  // The proposal is dated before its account opened, so the database would refuse it (MO001).
+  beforeOpening: boolean;
   createdAt: Date;
 };
 
@@ -62,6 +64,19 @@ export type RejectDeliveryArgs = {
   silenceShape: boolean;
 };
 
+function isBeforeOpening(
+  row: Pick<PendingDeliveryRow, "proposedOccurredAt"> & {
+    accountOpeningOn: string | null;
+  },
+): boolean {
+  // ISO days compare as text.
+  return (
+    row.proposedOccurredAt !== null &&
+    row.accountOpeningOn !== null &&
+    row.proposedOccurredAt < row.accountOpeningOn
+  );
+}
+
 function isComplete(
   row: Pick<
     PendingDeliveryRow,
@@ -72,15 +87,8 @@ function isComplete(
     | "proposedOccurredAt"
   > & { accountOpeningOn: string | null },
 ): boolean {
-  // A day before the account opened is refused by the database (MO001), so the
-  // proposal cannot be one tap. ISO days compare as text.
-  if (
-    row.proposedOccurredAt !== null &&
-    row.accountOpeningOn !== null &&
-    row.proposedOccurredAt < row.accountOpeningOn
-  ) {
-    return false;
-  }
+  // A day before the account opened cannot be one tap.
+  if (isBeforeOpening(row)) return false;
 
   return (
     row.proposedAmountCents !== null &&
@@ -126,6 +134,7 @@ export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
     return rows.map(({ accountOpeningOn, ...row }) => ({
       ...row,
       isComplete: isComplete({ ...row, accountOpeningOn }),
+      beforeOpening: isBeforeOpening({ ...row, accountOpeningOn }),
     }));
   });
 }

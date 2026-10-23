@@ -19,6 +19,10 @@ const common = messages.common;
 
 const scope = readScope();
 
+// The refusal's words, read from the file the form reads.
+const BEFORE_OPENING = messages.errors.movementBeforeOpening;
+const BEFORE_OPENING_NOTE = /anterior a la apertura de la cuenta/;
+
 // 45.000 pesos, as the card reads it and as the prefilled form carries it.
 const AMOUNT_CENTS = 4500000;
 const AMOUNT_PESOS = "45000";
@@ -502,6 +506,7 @@ test.describe("a notice dated before its account opened", () => {
       await expect(
         row.getByText(ingest.stateIncomplete, { exact: true }),
       ).toBeVisible();
+      await expect(row.getByText(BEFORE_OPENING_NOTE)).toBeVisible();
 
       await rowActions(page, TRUSTED).click();
       await page
@@ -511,6 +516,8 @@ test.describe("a notice dated before its account opened", () => {
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day);
+      await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
+      await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
 
       const movements = await fixtureSql<{ id: string }[]>`
         select id from transactions where owner_user_id = ${scope.userId}`;
@@ -529,6 +536,7 @@ test.describe("a notice dated before its account opened", () => {
       await expect(
         row.getByText(ingest.stateComplete, { exact: true }),
       ).toBeVisible();
+      await expect(row.getByText(BEFORE_OPENING_NOTE)).toHaveCount(0);
     });
   });
 
@@ -543,11 +551,14 @@ test.describe("a notice dated before its account opened", () => {
       await page.goto("/es/inbox");
 
       await expect(acceptButton(page)).toHaveCount(0);
+      await expect(band(page).getByText(BEFORE_OPENING_NOTE)).toBeVisible();
       await reviewButton(page).click();
 
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day);
+      await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
+      await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
     });
 
     test("keeps the one tap on the opening day", async ({ page }) => {

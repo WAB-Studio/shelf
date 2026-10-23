@@ -164,6 +164,7 @@ export function MovementForm({
   movement,
   deliveryId,
   defaults,
+  dateBeforeOpening,
   causeOptions = [],
   causedByTransactionId = null,
   onSaved,
@@ -187,6 +188,9 @@ export function MovementForm({
     description?: string | null;
     splits?: { categoryId: string; amount: string }[];
   };
+  // A notice dated before its account opened: the form opens with the refusal already beside the
+  // date, which is brought into view.
+  dateBeforeOpening?: boolean;
   // Runs on a stored write only; `onDone` also runs on the back button.
   onSaved?: () => void;
   onDone: () => void;
@@ -454,6 +458,18 @@ export function MovementForm({
     onActionError(result);
     form.setError("occurredAt", { type: "server", message: "errors.movementBeforeOpening" });
   }
+
+  useEffect(() => {
+    if (!dateBeforeOpening) return;
+    form.setError("occurredAt", { type: "server", message: "errors.movementBeforeOpening" });
+    // After the dialog has taken its own initial focus.
+    const timer = setTimeout(() => {
+      const input = document.getElementById("movement-date");
+      input?.scrollIntoView({ block: "center" });
+      input?.focus({ preventScroll: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [dateBeforeOpening, form]);
 
   const create = useAction(createTransactionAction, {
     onSuccess: onActionSuccess,

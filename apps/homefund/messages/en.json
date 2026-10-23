@@ -1380,6 +1380,7 @@
     "amountLabel": "Amount",
     "stateLabel": "State",
     "stateComplete": "Complete",
+    "beforeOpening": "Dated {date}, before the account's opening",
     "stateIncomplete": "Incomplete",
     "openForm": "Open the prefilled form",
     "categoryFromMerchant": "Category from the merchant",

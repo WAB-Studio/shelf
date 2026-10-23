@@ -1380,6 +1380,7 @@
     "amountLabel": "Monto",
     "stateLabel": "Estado",
     "stateComplete": "Completo",
+    "beforeOpening": "Fecha {date}, anterior a la apertura de la cuenta",
     "stateIncomplete": "Incompleto",
     "openForm": "Abrir formulario prellenado",
     "categoryFromMerchant": "Categoría del comercio",
