@@ -375,7 +375,8 @@
       "amountTooLarge": "The amount is too large.",
       "dateRequired": "Choose a date.",
       "dateInvalid": "Choose a valid date.",
-      "dateInFuture": "The date cannot be in the future."
+      "dateInFuture": "The date cannot be in the future.",
+      "openingAfterMovement": "There are movements before that date. The opening cannot come after them."
     },
     "reconcile": "Reconcile",
     "reconcileTitle": "Reconcile {name}",
@@ -1212,7 +1213,8 @@
     "reconcileBeforeLatest": "You already reconciled this account on {date}. Pick that day or a later one.",
     "reconcileStale": "Movements changed while you were reconciling. Check the figures and try again.",
     "reconcileFailed": "The account could not be reconciled. Try again.",
-    "adjustmentReadOnly": "A gap movement cannot be edited or deleted; fix it by reconciling the account again."
+    "adjustmentReadOnly": "A gap movement cannot be edited or deleted; fix it by reconciling the account again.",
+    "movementBeforeOpening": "The date is before the account's opening. Change the date or the account's opening."
   },
   "data": {
     "screen": {
@@ -1296,7 +1298,8 @@
         "adjustmentOneAccount": "An adjustment names one account only, as source or destination.",
         "adjustmentRefused": "The adjustment could not be booked: its date is before the account's opening or latest reconciliation, or the account is archived.",
         "hasErrors": "The file still has errors. Fix them and import again.",
-        "alreadyCommitting": "This file was already being imported in another tab. Check the movements before importing it again."
+        "alreadyCommitting": "This file was already being imported in another tab. Check the movements before importing it again.",
+        "beforeOpening": "Date before its account's opening."
       }
     }
   },

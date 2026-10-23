@@ -7197,6 +7197,7 @@ async function importCategoryScopeSuite(): Promise<void> {
     ownerUserId: owner === "user" ? U : null,
     groupId: owner === "group" ? G : null,
     settlementCurrency: "COP",
+    initialBalanceOn: "2026-01-01",
   });
 
   const mercadoOwn = cat("M28 Mercado", "expense", "user");
