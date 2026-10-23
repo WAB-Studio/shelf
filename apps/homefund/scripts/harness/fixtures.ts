@@ -15,8 +15,6 @@ import {
 import postgres from "postgres";
 import type { Sql, TransactionSql } from "postgres";
 
-import { TIME_ZONE } from "@/lib/locales";
-
 // The suite this process runs as, read by `applicationName` and by the run this
 // process opens. `setSuite` is the entry point's job to call before the first
 // query; a process that never calls it still gets a name and a run, both under
@@ -345,14 +343,16 @@ export async function seedHarnessScope(userId: string): Promise<HarnessScope> {
       values (${memberId}, ${scope.groupId}, ${userId}, 'Harness leader', 'leader')`;
 
     // Personal placement throughout: the group exists so the group-scoped reads
-    // take their non-empty branch, not so the fixtures live inside it.
-    const today = tx`(now() at time zone ${TIME_ZONE})::date`;
+    // take their non-empty branch, not so the fixtures live inside it. Opened on
+    // the first day the suites book on, so none of their movements predates the
+    // opening (RF-162); the 2021 statements still fall before it.
+    const openedOn = "2026-01-01";
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values
-        (${scope.assetAccountId}, ${userId}, 'Harness bank', 'asset', 'bank', 5000000, ${today}),
-        (${scope.cashAccountId}, ${userId}, 'Harness cash', 'asset', 'cash', 0, ${today}),
-        (${scope.liabilityAccountId}, ${userId}, 'Harness card', 'liability', 'card', -300000, ${today})`;
+        (${scope.assetAccountId}, ${userId}, 'Harness bank', 'asset', 'bank', 5000000, ${openedOn}),
+        (${scope.cashAccountId}, ${userId}, 'Harness cash', 'asset', 'cash', 0, ${openedOn}),
+        (${scope.liabilityAccountId}, ${userId}, 'Harness card', 'liability', 'card', -300000, ${openedOn})`;
 
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)

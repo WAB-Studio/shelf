@@ -346,9 +346,11 @@ async function seedHttpScope(userId: string): Promise<HttpScope> {
   await fixtureSql.begin(async (tx) => {
     await tx`select set_config('request.jwt.claims', ${claims}, true)`;
 
+    // Opened with the liability below, so the abono that settled its first line two months back postdates it (RF-162).
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-      values (${scope.accountId}, ${userId}, 'Harness HTTP bank', 'asset', 'bank', 5000000, current_date)`;
+      values (${scope.accountId}, ${userId}, 'Harness HTTP bank', 'asset', 'bank', 5000000,
+        (current_date - interval '3 months')::date)`;
 
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)

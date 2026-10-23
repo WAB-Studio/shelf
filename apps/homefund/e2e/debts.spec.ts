@@ -447,10 +447,12 @@ async function seedAsset({
   id,
   name,
   openingCents,
+  openedOn,
 }: {
   id: string;
   name: string;
   openingCents: number;
+  openedOn?: string;
 }): Promise<void> {
   await asHarnessUser(async (tx) => {
     await tx`
@@ -458,7 +460,7 @@ async function seedAsset({
         id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (
         ${id}, ${scope.userId}, ${name}, 'asset', 'bank',
-        ${openingCents}, ${todayInBogota()})`;
+        ${openingCents}, ${openedOn ?? todayInBogota()})`;
   });
 }
 
@@ -986,7 +988,8 @@ test.describe("the detail route", () => {
   test.beforeEach(async () => {
     const openedOn = addCivilMonths(todayInBogota(), -4);
 
-    await seedAsset({ id: payerId, name: payerName, openingCents: 900_000_000 });
+    // The payer opens with the debt, so the payment 70 days back postdates it (RF-162).
+    await seedAsset({ id: payerId, name: payerName, openingCents: 900_000_000, openedOn });
     await seedDebt({
       id: detailId,
       name: detailName,
