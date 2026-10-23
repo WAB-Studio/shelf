@@ -10,12 +10,6 @@ const MINUS = "−";
 // U+2248, the mark a figure the issuer has not billed yet carries (RF-123).
 const APPROXIMATELY = "≈";
 
-// A figure inside words reads as part of the sentence, whose spaces are plain;
-// the span already holds the whole of it to one line.
-function inSentence(figure: string): string {
-  return figure.replaceAll("\u00a0", " ");
-}
-
 export type MoneyTone =
   | "expense"
   | "income"
@@ -111,7 +105,7 @@ export function Money({
       }}
     >
       {words?.before}
-      {words ? inSentence(figure) : figure}
+      {figure}
       {words?.after}
     </span>
   );

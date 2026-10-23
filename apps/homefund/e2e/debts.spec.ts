@@ -2686,9 +2686,9 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
       }
 
       const FULL_LINE =
-        /^A favor \$ 8\.000 · Debes US\$ 25([.,]00)? \(≈ \$ 105\.000 por facturar\)$/;
-      const BILLED_LINE = /^A favor \$ 8\.000 · Debes US\$ 25([.,]00)?$/;
-      const START_OF_LINE = /^A favor \$ 8\.000 · Debes US\$ 25/;
+        /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/;
+      const BILLED_LINE = /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?$/;
+      const START_OF_LINE = /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25/;
 
       function lineOf(page: Page, card: MemberCard): Locator {
         return rowOf(page, card.name, card.id).getByText(START_OF_LINE);
