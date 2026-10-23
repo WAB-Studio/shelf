@@ -6,7 +6,7 @@ import { beforeEach, mock, test } from "node:test";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 
-import { parseAmount } from "@/lib/money";
+import { maxAmountMinor, parseAmount } from "@/lib/money";
 
 // M2 (RF-51, RF-52). The real pipeline runs, over a real .xlsx; the database read and the request
 // locale are doubled at module resolution, and the scope is whatever each test seeds.
@@ -302,6 +302,83 @@ test("RF-52: a foreign row keeps its reference, so importing the file twice upda
   const again = (await run(file))[0];
   assert.deepEqual(again.errors, []);
   assert.equal(again.status, "update");
+});
+
+// ---- M3: an account's opening off a backup, and the cap on a second amount (RF-142, RF-51, RF-126) --
+
+const ACCOUNT_COLUMNS = ["externalRef", "name", "kind", "subtype", "placement", "institution", "amount", "balanceOn", "settlementCurrency"] as const;
+
+async function bookAccounts(rows: Record<string, string | number | null>[]) {
+  const wb = new ExcelJS.Workbook();
+  const sheet = wb.addWorksheet(messages.data.sheets.accounts);
+  sheet.addRow(ACCOUNT_COLUMNS.map((key) => messages.data.columns[key]));
+  for (const row of rows) sheet.addRow(ACCOUNT_COLUMNS.map((key) => row[key] ?? null));
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+async function runAccounts(bytes: Uint8Array) {
+  const { runImportPipeline } = await import("./import-pipeline");
+  const result = await runImportPipeline({ buffer: buffer(bytes) });
+  return result.perEntity.find((e) => e.entity === "accounts")!.rows;
+}
+
+const cardRow = (amount: string | number, over: Record<string, string | number | null> = {}) => ({
+  externalRef: "card-m3",
+  name: "Tarjeta M3",
+  kind: "liability",
+  subtype: "card",
+  placement: "personal",
+  amount,
+  balanceOn: "2026-01-01",
+  settlementCurrency: "COP",
+  ...over,
+});
+
+test("RF-142: a card the backup wrote at -150000 (a number cell, as the export writes it) passes the import with no error", async () => {
+  const rows = await runAccounts(await bookAccounts([cardRow(-150000)]));
+  assert.deepEqual(rows.map((r) => r.errors), [[]]);
+  assert.notEqual(rows[0].object, null);
+});
+
+test("RF-142: a card typed at -150000,00 and one typed at 150000,00 both pass the import with no error", async () => {
+  const rows = await runAccounts(
+    await bookAccounts([cardRow("-150000,00"), cardRow("150000,00", { externalRef: "card-m3-b", name: "Tarjeta M3 b" })]),
+  );
+  assert.deepEqual(rows.map((r) => r.errors), [[], []]);
+});
+
+test("RF-51: an asset row opened at -100 is refused as accounts.errors.amountInvalid on its amount, and carries no object", async () => {
+  const rows = await runAccounts(
+    await bookAccounts([cardRow("-100", { externalRef: "bank-m3", name: "Banco M3", kind: "asset", subtype: "bank" })]),
+  );
+  assert.equal(rows[0].object, null);
+  assert.deepEqual(rows[0].errors.map((e) => [e.key, e.column]), [["accounts.errors.amountInvalid", "amount"]]);
+});
+
+// The cap a second amount is held to is the one its account's currency stores (RF-126): the card settles in pesos.
+const CAP = maxAmountMinor("COP");
+const written = (minor: number) => `${Math.trunc(minor / 100)},${String(minor % 100).padStart(2, "0")}`;
+
+test("U4: a second amount of exactly the cap passes, read to the cap's own integer", async () => {
+  const rows = await run(await bookForeign([dollarPurchase({ counterAmount: written(CAP) })]));
+  assert.deepEqual(rows[0].errors, []);
+  const object = rows[0].object as Parsed;
+  assert.equal(centsOf(object.counterAmountCents, object.counterAmount), CAP);
+});
+
+test("U4: a second amount one stored unit over the cap is refused on that row, amountTooLarge on counterAmount", async () => {
+  const rows = await run(await bookForeign([dollarPurchase({ counterAmount: written(CAP + 1) })]));
+  assert.equal(rows[0].object, null);
+  assert.deepEqual(rows[0].errors.map((e) => [e.key, e.column]), [["transactions.errors.amountTooLarge", "counterAmount"]]);
+});
+
+test("U5: a second amount far over the cap is refused on that row alone, amountTooLarge on counterAmount", async () => {
+  const rows = await run(
+    await bookForeign([dollarPurchase({ counterAmount: written(CAP * 100), externalRef: "far" }), dollarPurchase({ externalRef: "fine" })]),
+  );
+  assert.equal(rows[0].object, null);
+  assert.deepEqual(rows[0].errors.map((e) => [e.key, e.column]), [["transactions.errors.amountTooLarge", "counterAmount"]]);
+  assert.deepEqual(rows[1].errors, []);
 });
 
 // ---- the zip guard ----------------------------------------------------------------------------
