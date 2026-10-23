@@ -7,12 +7,10 @@ import { useTranslations } from "next-intl";
 
 import { createOneOff } from "@/app/actions/one-offs";
 import { useTimeWords } from "@/components/ui/figure";
-import { isTimeUnit, formatQuantity } from "@/lib/units/time";
+import { isTimeUnit, formatQuantity, minutesFromFields } from "@/lib/units/time";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { Button, Chip, Field, Flex, Page, ScreenHeader, Text } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
-
-const WHOLE = /^\d+$/;
 
 // The shared one-off schema speaks Hoy's field; a month task names its own.
 function taskError(key: MessageKey): MessageKey {
@@ -59,12 +57,11 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
   // a value that is not a whole number, a message key for minutes past 59.
   function typedAmount(): number | MessageKey | null {
     if (!asksAmount) return null;
-    if (hours.trim() === "" && minutes.trim() === "") return null;
-    const h = hours.trim() === "" ? "0" : hours.trim();
-    const min = minutes.trim() === "" ? "0" : minutes.trim();
-    if (!WHOLE.test(h)) return Number.NaN;
-    if (!WHOLE.test(min) || Number(min) > 59) return "month.errors.minutesInvalid";
-    return Number(h) * 60 + Number(min);
+    const read = minutesFromFields(hours, minutes);
+    if (read.kind === "blank") return null;
+    if (read.kind === "hoursInvalid") return Number.NaN;
+    if (read.kind === "minutesInvalid") return "month.errors.minutesInvalid";
+    return read.minutes;
   }
 
   const words = useTimeWords();

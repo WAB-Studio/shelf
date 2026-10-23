@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
 import { sectionHolder } from "@/lib/import/coverage";
@@ -13,7 +13,7 @@ import { clearDraft, readDraft, saveReview, storedText, type ReadDraft } from "@
 import { edit, editedCorrections, goalHorizonRefusal, remapUnmarked, reviewTree, weekdaysIn, type ReviewNode } from "@/lib/import/review";
 import type { GoalSnapshot } from "@/lib/import/differences";
 import { monthsOfSpan } from "@/lib/plan/months";
-import { civilDateToDate } from "@/lib/zone";
+import { monthWord } from "@/lib/plan/month-name";
 import { ActionBar, Button, Flex, ListDetail, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
@@ -36,7 +36,6 @@ function subscribeWide(notify: () => void) {
  */
 export function ReviewScreen({ today, snapshots }: { today: string; snapshots: GoalSnapshot[] }) {
   const t = useTranslations();
-  const format = useFormatter();
   const router = useRouter();
   // The original text stands beside the tree only from 1024px; below, the page holds none of it.
   const wide = useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => false);
@@ -121,7 +120,6 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
     keep({ ...stored!, declined: [...next], accepted: [...taken] }, new Set(remapUnmarked(stored!, next, [...review!.unmarked])));
   }
 
-  const monthWord = (month: string) => format.dateTime(civilDateToDate(`${month}-01`), { month: "long", timeZone: "UTC" });
 
   function open(node: ReviewNode) {
     const g = Number(node.path.split(".")[1]);
