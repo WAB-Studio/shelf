@@ -2791,6 +2791,65 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         await expect(rowOf(page, card.name, card.id)).not.toContainText("(");
       });
 
+      test("Q9: Abonar, from the row and from the detail, reads the row's whole line under the card's name", async ({
+        page,
+      }) => {
+        const card: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 abono ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+        };
+        await seedFund([card]);
+
+        async function checkDialog() {
+          const dialog = page.getByRole("dialog");
+          await expect(dialog).toBeVisible();
+          const balance = dialog
+            .getByText(debts.tableBalance, { exact: true })
+            .locator("xpath=following-sibling::*[1]");
+          await expect(balance).toHaveText(FULL_LINE);
+
+          // «A favor» in the accent, «Debes» bold in the normal ink, the parenthesis muted.
+          const accent = await accentInk(page);
+          const credit = await holdersOf(balance, "A favor $ 8.000");
+          expect(credit).toHaveLength(1);
+          expect(credit[0].ink).toBe(accent);
+          const owedInks = await inkOfText(balance, /Debes/);
+          expect(owedInks.length).toBeGreaterThan(0);
+          for (const ink of owedInks) expect(ink).not.toBe(accent);
+          const weight = await balance
+            .getByText(/Debes/)
+            .first()
+            .evaluate((el) => Number(getComputedStyle(el).fontWeight));
+          expect(weight).toBeGreaterThanOrEqual(600);
+          const muted = await inkOfText(balance, /por facturar/);
+          expect(muted.length).toBeGreaterThan(0);
+          for (const ink of muted) {
+            expect(ink).not.toBe(accent);
+            expect(ink).not.toBe(owedInks[0]);
+          }
+          await page.keyboard.press("Escape");
+          await expect(dialog).toBeHidden();
+        }
+
+        await page.goto("/es/planning/debts");
+        if (laptop) {
+          await rowMenu(page, card.name).click();
+          await page.getByRole("menuitem", { name: debts.rowPay, exact: true }).click();
+        } else {
+          await rowOf(page, card.name, card.id)
+            .getByRole("button", { name: debts.rowPay, exact: true })
+            .click();
+        }
+        await checkDialog();
+
+        await page.goto(`/es/planning/debts/${card.id}`);
+        await expect(page.getByRole("heading", { name: card.name, exact: true })).toBeVisible();
+        await page.getByRole("button", { name: debts.rowPay, exact: true }).click();
+        await checkDialog();
+      });
+
       test("Q9: the figures are never summed, Deuda total in pesos does not move", async ({
         page,
       }) => {

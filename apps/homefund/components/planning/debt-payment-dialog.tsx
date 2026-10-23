@@ -8,6 +8,7 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { recordDebtPaymentAction } from "@/app/actions/installment-plans";
+import { CreditAndOwedLine, owesBesideCredit } from "@/components/planning/debts-table";
 import {
   Button,
   Callout,
@@ -24,6 +25,7 @@ import {
   Text,
   TextField,
 } from "@/components/ui";
+import type { DebtPocket } from "@/db/queries/debt-overview";
 import {
   BASE_CURRENCY,
   minorUnitExponent,
@@ -44,6 +46,9 @@ export type PaymentDebt = {
   name: string;
   owedCents: number;
   creditCents: number;
+  // The pockets in other currencies, which the balance reads beside a credit
+  // exactly as the debt's row does (RF-124). None reads as none.
+  otherOwed?: DebtPocket[];
 };
 
 export type PaymentSource = {
@@ -185,7 +190,16 @@ function PaymentForm({
         <Field>
           <FieldLabel>{tKey("debts.tableBalance")}</FieldLabel>
           <Text size="3">
-            {debt.creditCents > 0 ? (
+            {owesBesideCredit(debt.creditCents, debt.otherOwed ?? []) ? (
+              <CreditAndOwedLine
+                creditCents={debt.creditCents}
+                currency={currency}
+                otherOwed={debt.otherOwed ?? []}
+                align="left"
+                size="3"
+                owedBold
+              />
+            ) : debt.creditCents > 0 ? (
               <Money
                 minor={debt.creditCents}
                 currency={currency}

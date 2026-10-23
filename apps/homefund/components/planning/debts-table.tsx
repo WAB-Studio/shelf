@@ -103,15 +103,23 @@ export function CreditAndOwedLine({
   creditCents,
   currency,
   otherOwed,
+  align = "right",
+  size = "2",
+  owedBold = false,
 }: {
   creditCents: number;
   currency: CurrencyCode;
   otherOwed: DebtPocket[];
+  // The row hangs the line off its right edge; the abono dialog reads it from the left.
+  align?: "left" | "right";
+  size?: "1" | "2" | "3";
+  // What the other pockets owe in bold, as the abono dialog draws it.
+  owedBold?: boolean;
 }) {
   const t = useTranslations("debts");
 
   return (
-    <Figure as="div" size="2" align="right">
+    <Figure as="div" size={size} align={align}>
       <Money
         minor={creditCents}
         currency={currency}
@@ -128,15 +136,17 @@ export function CreditAndOwedLine({
           return (
             <Fragment key={pocket.currency}>
  {" "}
-              <Money
-                minor={pocket.owedCents}
-                currency={pocket.currency}
-                size="inherit"
-                signed={false}
-                words={joined(
-                  wordsAround(t("owesForeign", { amount: AMOUNT_SLOT })),
-                )}
-              />
+              <Text weight={owedBold ? "bold" : undefined}>
+                <Money
+                  minor={pocket.owedCents}
+                  currency={pocket.currency}
+                  size="inherit"
+                  signed={false}
+                  words={joined(
+                    wordsAround(t("owesForeign", { amount: AMOUNT_SLOT })),
+                  )}
+                />
+              </Text>
               {pocket.toBillCents !== null && (
                 <>
                   {" "}
