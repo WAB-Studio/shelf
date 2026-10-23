@@ -246,3 +246,47 @@ test("a timed-out link leaves no marker", async () => {
 test("a link opened in another browser leaves no marker", async () => {
   assert.equal(marker(await land("code=c-123")), undefined);
 });
+
+// RP-136: every failed landing says `no-store`, whether or not Auth was asked, and says it once even
+// when Auth's own directives ride the same redirect.
+const noStoreOnce = (response: Response) => {
+  const cacheControl = response.headers.get("cache-control") ?? "";
+  const directives = cacheControl.split(/[\s,]+/).filter(Boolean);
+  assert.ok(directives.includes("no-store"), `cache-control «${cacheControl}» says no-store`);
+  assert.equal(directives.filter((directive) => directive === "no-store").length, 1, `«${cacheControl}» says it once`);
+};
+
+test("a malformed landing query is linkInvalid and says no-store", async () => {
+  const response = await land("type=magiclink");
+  assert.equal(target(response), "/entrar?error=linkInvalid");
+  noStoreOnce(response);
+});
+
+test("a code opened in another browser is linkOtherBrowser and says no-store", async () => {
+  const response = await land("code=c-123");
+  assert.equal(target(response), "/entrar?error=linkOtherBrowser");
+  noStoreOnce(response);
+});
+
+test("a code Auth refuses is linkInvalid and says no-store once", async () => {
+  await askForLink();
+  tokenAnswer = "refused";
+  const response = await land("code=c-123");
+  assert.equal(target(response), "/entrar?error=linkInvalid");
+  noStoreOnce(response);
+});
+
+test("a code whose exchange times out is linkTimeout and says no-store once", async () => {
+  await askForLink();
+  tokenAnswer = "timeout";
+  const response = await land("code=c-123");
+  assert.equal(target(response), "/entrar?error=linkTimeout");
+  noStoreOnce(response);
+});
+
+test("a landed link stays a redirect to / and is not turned into a failure", async () => {
+  await askForLink();
+  const response = await land("code=c-123");
+  assert.equal(target(response), "/");
+  assert.equal(new URL(response.headers.get("location")!, SITE).searchParams.get("error"), null);
+});
