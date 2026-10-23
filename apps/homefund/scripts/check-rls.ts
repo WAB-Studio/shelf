@@ -12263,6 +12263,7 @@ type O6m1Fund = {
   leader: string;
   member: string;
   shared: string;
+  category: string;
   payment: string;
   settling: string;
   other: string;
@@ -12270,11 +12271,19 @@ type O6m1Fund = {
 
 type O6m1Payment = { status: string; settled_transaction_id: string | null };
 
-// Records a movement and links it the way `settlePlannedPayment` does; returns the rows the claim touched.
-async function o6m1Settle(tx: M1Tx, payment: string, account: string, amount: number) {
-  const [{ id: movement }] = await tx<{ id: string }[]>`
+// An expense with its one split, so the deferred split-sum check holds at any `set constraints`.
+async function o6m1Movement(tx: M1Tx, account: string, category: string, amount: number, description: string) {
+  const [{ id }] = await tx<{ id: string }[]>`
     insert into transactions (from_account_id, amount_cents, occurred_at, description)
-    values (${account}, ${amount}, ${todayInBogota()}, 'rls o6m1 movement') returning id`;
+    values (${account}, ${amount}, ${todayInBogota()}, ${description}) returning id`;
+  await tx`insert into transaction_splits (transaction_id, category_id, amount_cents)
+    values (${id}, ${category}, ${amount})`;
+  return id;
+}
+
+// Records a movement and links it the way `settlePlannedPayment` does; returns the rows the claim touched.
+async function o6m1Settle(tx: M1Tx, payment: string, account: string, category: string, amount: number) {
+  const movement = await o6m1Movement(tx, account, category, amount, "rls o6m1 movement");
   const claimed = await tx`update planned_payments set status = 'done', settled_transaction_id = ${movement}
     where id = ${payment} and status = 'pending' returning id`;
   return { movement, claimed: claimed.length };
@@ -12287,15 +12296,16 @@ async function o6m1Fund(tx: M1Tx): Promise<O6m1Fund> {
   const [{ id: shared }] = await tx<{ id: string }[]>`
     insert into accounts (group_id, is_shared, name, kind, initial_balance_on)
     values (${groupId}, true, 'rls o6m1 shared cash', 'asset', ${todayInBogota()}) returning id`;
+  const [{ id: category }] = await tx<{ id: string }[]>`
+    insert into categories (group_id, name, kind)
+    values (${groupId}, 'rls o6m1 category', 'expense') returning id`;
   const [{ id: payment }] = await tx<{ id: string }[]>`
-    insert into planned_payments (from_account_id, amount_cents, due_date, description)
-    values (${shared}, 30000, ${todayInBogota()}, 'rls o6m1 payment') returning id`;
-  const settled = await o6m1Settle(tx, payment, shared, 30000);
+    insert into planned_payments (from_account_id, amount_cents, category_id, due_date, description)
+    values (${shared}, 30000, ${category}, ${todayInBogota()}, 'rls o6m1 payment') returning id`;
+  const settled = await o6m1Settle(tx, payment, shared, category, 30000);
   if (settled.claimed !== 1) throw new Error(`the fixture's settle claimed ${settled.claimed} rows`);
-  const [{ id: other }] = await tx<{ id: string }[]>`
-    insert into transactions (from_account_id, amount_cents, occurred_at, description)
-    values (${shared}, 1000, ${todayInBogota()}, 'rls o6m1 other') returning id`;
-  return { leader, member, shared, payment, settling: settled.movement, other };
+  const other = await o6m1Movement(tx, shared, category, 1000, "rls o6m1 other");
+  return { leader, member, shared, category, payment, settling: settled.movement, other };
 }
 
 async function o6m1Payment(tx: M1Tx, id: string): Promise<O6m1Payment | undefined> {
@@ -12432,9 +12442,7 @@ async function checkSettlingMovementDelete() {
       values (${f.shared}, 1000, ${todayInBogota()}, 'rls o6m1 bystander') returning id`;
     await tx`update planned_payments set status = 'done', settled_transaction_id = ${f.other}
       where id = ${bystander} and status = 'pending'`;
-    const [{ id: unrelated }] = await tx<{ id: string }[]>`
-      insert into transactions (from_account_id, amount_cents, occurred_at, description)
-      values (${f.shared}, 500, ${todayInBogota()}, 'rls o6m1 unrelated') returning id`;
+    const unrelated = await o6m1Movement(tx, f.shared, f.category, 500, "rls o6m1 unrelated");
     await tx`reset role`;
     const [{ last }] = await tx<{ last: string | null }[]>`select max(id)::text as last from audit_log`;
 
@@ -12465,7 +12473,7 @@ async function checkSettlingMovementDelete() {
     await enterUserContext(tx, f.member);
     await tx`delete from transactions where id = ${f.settling}`;
     await enterUserContext(tx, f.leader);
-    const again = await o6m1Settle(tx, f.payment, f.shared, 30000);
+    const again = await o6m1Settle(tx, f.payment, f.shared, f.category, 30000);
     const row = await o6m1Payment(tx, f.payment);
     const rewrite = await m1Refusal(tx, (sp) =>
       sp`update planned_payments set settled_transaction_id = ${f.other} where id = ${f.payment}`);
