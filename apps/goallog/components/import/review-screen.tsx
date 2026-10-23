@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
+import { sectionHolder } from "@/lib/import/coverage";
 import { srcLines, strayEstimates } from "@/lib/import/draft";
 import { clearCreated, describePart, readCreated, saveCreated, type CreatedResult } from "@/lib/import/created-store";
 import { clearDraft, readDraft, saveReview, storedText, type ReadDraft } from "@/lib/import/draft-store";
@@ -300,11 +301,15 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
 
       {stored.leftOut.length > 0 ? (
         <Flex direction="column" gap="2">
-          {stored.leftOut.map((section) => (
-            <Text key={`${section.from}-${section.to}`} as="p" variant="sentence" tone="muted">
-              {t("import.review.leftOut", { heading: section.heading, from: String(section.from), to: String(section.to) })}
-            </Text>
-          ))}
+          {stored.leftOut.map((section) => {
+            const holder = sectionHolder(stored.draft, section, stored.source, coverage.outLines);
+            const words = { heading: section.heading, from: String(section.from), to: String(section.to) };
+            return (
+              <Text key={`${section.from}-${section.to}`} as="p" variant="sentence" tone="muted">
+                {holder ? t("import.review.leftOutInNote", { ...words, goal: holder.goalName }) : t("import.review.leftOut", words)}
+              </Text>
+            );
+          })}
         </Flex>
       ) : null}
 

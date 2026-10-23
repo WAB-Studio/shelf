@@ -156,3 +156,25 @@ export function placeLeftovers(draft: ImportDraft, source: Source): ImportDraft 
   );
   return { ...draft, goals };
 }
+
+// RP-130: the goal whose note holds every line with text of a section the model could not read, or
+// null when any of them is out (cut by the ceiling, refused, or no general goal took it). `out` is
+// the review's own out lines, so the line and the count never read different drafts.
+export function sectionHolder(
+  draft: ImportDraft,
+  section: { from: number; to: number },
+  source: Source,
+  out: { line: number }[] = coverage(draft, source, new Set(), new Set()).outLines,
+): { goalName: string } | null {
+  const lines = source.lines;
+  if (lines === null) return null;
+  const mine = srcLines([{ from: section.from, to: section.to }], lines.length).filter((n) => lines[n - 1].trim() !== "");
+  if (mine.length === 0) return null;
+  const cut = new Set(out.map((entry) => entry.line));
+  if (mine.some((n) => cut.has(n))) return null;
+  const goal = draft.goals.find((candidate) => {
+    const held = new Set(srcLines(candidate.noteSrc, lines.length));
+    return mine.every((n) => held.has(n));
+  });
+  return goal ? { goalName: goal.name } : null;
+}
