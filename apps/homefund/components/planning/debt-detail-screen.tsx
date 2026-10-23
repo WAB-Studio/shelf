@@ -32,6 +32,7 @@ import {
   type DataColumn,
 } from "@/components/ui";
 import type { DebtDetailData } from "@/db/queries/debt-detail";
+import type { DebtPocket } from "@/db/queries/debt-overview";
 import type { PendingSettlement } from "@/db/queries/debt-statements";
 import type {
   InstallmentPlanLine,
@@ -106,6 +107,16 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   // nothing and reads «A favor» (RF-80).
   const owedCents = Math.max(0, -account.balanceCents);
   const creditCents = Math.max(0, account.balanceCents);
+
+  // The pockets in other currencies, as the list reads them off the overview.
+  const otherOwed: DebtPocket[] = account.balances
+    .filter((pocket) => pocket.currency !== account.settlementCurrency)
+    .map((pocket) => ({
+      currency: pocket.currency as CurrencyCode,
+      owedCents: Math.max(0, -pocket.balanceCents),
+      creditCents: Math.max(0, pocket.balanceCents),
+      toBillCents: pocket.toBillCents,
+    }));
 
   // What the plans still owe: the unpaid lines the server summed, never a
   // stored figure (RF-82).
@@ -376,6 +387,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             name: account.name,
             owedCents,
             creditCents,
+            otherOwed,
           }}
           currency={currency}
           payFrom={payFrom}

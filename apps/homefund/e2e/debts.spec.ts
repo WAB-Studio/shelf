@@ -2557,6 +2557,8 @@ type MemberCard = {
   // A dollar purchase on the card; `estimateCents` null leaves it with no peso
   // estimate at all.
   usd?: { cents: number; estimateCents: number | null };
+  // A dollar refund beside the purchase, estimated in pesos.
+  usdRefund?: { cents: number; estimateCents: number };
   withMinimum?: boolean;
 };
 
@@ -2666,6 +2668,24 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
               where id = ${movement.id}`;
             await tx`set local session_replication_role = origin`;
           }
+        }
+        if (card.usdRefund !== undefined) {
+          const refundCategoryId = randomUUID();
+          categories.push(refundCategoryId);
+          await tx`
+            insert into categories (id, owner_user_id, name, kind, color)
+            values (${refundCategoryId}, ${scope.memberUserId}, ${`Reembolso Q9 ${stamp}`}, 'income', '#4C8C4A')`;
+          const [refund] = await tx<{ id: string }[]>`
+            insert into transactions (
+              to_account_id, amount_cents, occurred_at, description,
+              currency, counter_amount_cents, counter_is_estimate)
+            values (
+              ${card.id}, ${card.usdRefund.cents}, ${todayInBogota()}, ${`Reembolso en dólares Q9 ${stamp}`},
+              'USD', ${card.usdRefund.estimateCents}, true)
+            returning id`;
+          await tx`
+            insert into transaction_splits (transaction_id, category_id, amount_cents)
+            values (${refund.id}, ${refundCategoryId}, ${card.usdRefund.cents})`;
         }
       }
     });
@@ -2789,6 +2809,103 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
 
         await expect(lineOf(page, card)).toHaveText(BILLED_LINE);
         await expect(rowOf(page, card.name, card.id)).not.toContainText("(");
+      });
+
+      test("Q9: Abonar, from the row and from the detail, reads the row's whole line under the card's name", async ({
+        page,
+      }) => {
+        const card: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 abono ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+        };
+        await seedFund([card]);
+
+        async function checkDialog() {
+          const dialog = page.getByRole("dialog");
+          await expect(dialog).toBeVisible();
+          const balance = dialog
+            .getByText(debts.tableBalance, { exact: true })
+            .locator("xpath=following-sibling::*[1]");
+          await expect(balance).toHaveText(FULL_LINE);
+
+          // «A favor» in the accent, «Debes» bold in the normal ink, the parenthesis muted.
+          const accent = await accentInk(page);
+          const credit = await holdersOf(balance, "A favor $ 8.000");
+          expect(credit).toHaveLength(1);
+          expect(credit[0].ink).toBe(accent);
+          const owedInks = await inkOfText(balance, /Debes/);
+          expect(owedInks.length).toBeGreaterThan(0);
+          for (const ink of owedInks) expect(ink).not.toBe(accent);
+          const weight = await balance
+            .getByText(/Debes/)
+            .first()
+            .evaluate((el) => Number(getComputedStyle(el).fontWeight));
+          expect(weight).toBeGreaterThanOrEqual(600);
+          const muted = await inkOfText(balance, /por facturar/);
+          expect(muted.length).toBeGreaterThan(0);
+          for (const ink of muted) {
+            expect(ink).not.toBe(accent);
+            expect(ink).not.toBe(owedInks[0]);
+          }
+          await page.keyboard.press("Escape");
+          await expect(dialog).toBeHidden();
+        }
+
+        await page.goto("/es/planning/debts");
+        if (laptop) {
+          await rowMenu(page, card.name).click();
+          await page.getByRole("menuitem", { name: debts.rowPay, exact: true }).click();
+        } else {
+          await rowOf(page, card.name, card.id)
+            .getByRole("button", { name: debts.rowPay, exact: true })
+            .click();
+        }
+        await checkDialog();
+
+        await page.goto(`/es/planning/debts/${card.id}`);
+        await expect(page.getByRole("heading", { name: card.name, exact: true })).toBeVisible();
+        await page.getByRole("button", { name: debts.rowPay, exact: true }).click();
+        await checkDialog();
+      });
+
+      test("Q9: Abonar with a dollar refund beside the purchase reads the estimate net of it, on the row and the detail", async ({
+        page,
+      }) => {
+        const card: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 reembolso ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+          usdRefund: { cents: 500, estimateCents: 2_000_000 },
+        };
+        await seedFund([card]);
+        // US$ 25 bought and US$ 5 refunded: US$ 20 owed, 10.500.000 less 2.000.000 to bill.
+        const netLine =
+          /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s20([.,]00)?\s\(≈\s\$\s85\.000\spor\sfacturar\)$/;
+        const balanceOf = (dialog: Locator) =>
+          dialog
+            .getByText(debts.tableBalance, { exact: true })
+            .locator("xpath=following-sibling::*[1]");
+
+        await page.goto("/es/planning/debts");
+        if (laptop) {
+          await rowMenu(page, card.name).click();
+          await page.getByRole("menuitem", { name: debts.rowPay, exact: true }).click();
+        } else {
+          await rowOf(page, card.name, card.id)
+            .getByRole("button", { name: debts.rowPay, exact: true })
+            .click();
+        }
+        await expect(balanceOf(page.getByRole("dialog"))).toHaveText(netLine);
+        await page.keyboard.press("Escape");
+        await expect(page.getByRole("dialog")).toBeHidden();
+
+        await page.goto(`/es/planning/debts/${card.id}`);
+        await expect(page.getByRole("heading", { name: card.name, exact: true })).toBeVisible();
+        await page.getByRole("button", { name: debts.rowPay, exact: true }).click();
+        await expect(balanceOf(page.getByRole("dialog"))).toHaveText(netLine);
       });
 
       test("Q9: the figures are never summed, Deuda total in pesos does not move", async ({
