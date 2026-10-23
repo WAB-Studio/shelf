@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatQuantity, formatTime, isHourUnit, isTimeUnit, parseTime, splitMinutes, storedMeasure } from "./time";
+import { formatQuantity, formatTime, isHourUnit, isTimeUnit, minutesFromFields, parseTime, splitMinutes, storedMeasure } from "./time";
 
 const words = {
   h: (h: string) => `${h} h`,
@@ -136,4 +136,18 @@ test("minutes and minute are stored as minutos with the amount as it is, and sti
   assert.deepEqual(storedMeasure("Minute", 10), { unit: "minutos", amount: 10 });
   assert.equal(isTimeUnit("minutes"), false);
   assert.deepEqual(storedMeasure("minutos", 5), { unit: "minutos", amount: 5 });
+});
+
+test("minutesFromFields: blank, one blank read as 0, whole numbers only, minutes to 59", () => {
+  assert.deepEqual(minutesFromFields("", ""), { kind: "blank" });
+  assert.deepEqual(minutesFromFields(" ", ""), { kind: "blank" });
+  assert.deepEqual(minutesFromFields("2", ""), { kind: "minutes", minutes: 120 });
+  assert.deepEqual(minutesFromFields("", "45"), { kind: "minutes", minutes: 45 });
+  assert.deepEqual(minutesFromFields("1", "30"), { kind: "minutes", minutes: 90 });
+  assert.deepEqual(minutesFromFields("0", "59"), { kind: "minutes", minutes: 59 });
+  assert.deepEqual(minutesFromFields("0", "60"), { kind: "minutesInvalid" });
+  assert.deepEqual(minutesFromFields("1,5", "0"), { kind: "hoursInvalid" });
+  assert.deepEqual(minutesFromFields("-1", ""), { kind: "hoursInvalid" });
+  assert.deepEqual(minutesFromFields("1", "x"), { kind: "minutesInvalid" });
+  assert.deepEqual(minutesFromFields("1", "2.5"), { kind: "minutesInvalid" });
 });

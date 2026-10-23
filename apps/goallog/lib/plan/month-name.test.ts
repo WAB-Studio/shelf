@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { monthName, monthNameWithYear } from "./month-name";
+import { monthName, monthNameWithYear, monthWord } from "./month-name";
 
 test("monthName: this year's month is bare, another year's carries its year", () => {
   assert.equal(monthName("2026-12-01", "2026"), "diciembre");
@@ -12,4 +12,11 @@ test("monthName: this year's month is bare, another year's carries its year", ()
 test("monthNameWithYear: the full four-digit year always, even this year's", () => {
   assert.equal(monthNameWithYear("2026-11-01"), "noviembre de 2026");
   assert.equal(monthNameWithYear("2027-12"), "diciembre de 2027");
+});
+
+test("monthWord: the bare month from YYYY-MM or YYYY-MM-DD, every month of a year", () => {
+  const words = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  words.forEach((w, i) => assert.equal(monthWord(`2026-${String(i + 1).padStart(2, "0")}`), w));
+  assert.equal(monthWord("2026-10"), "octubre");
+  assert.equal(monthWord("2026-12-31"), "diciembre");
 });
