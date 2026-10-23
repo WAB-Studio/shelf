@@ -12,9 +12,9 @@ import { boxOf } from "./box";
 // signs the person in with it, on `/entrar` and on the consent signed out. The words are the
 // board «EntrarCódigo» (private/tableros/EntrarCodigo*.dc.html), written here as literals: a spec
 // that read them from messages/es would agree with whatever the messages say. Every send goes to
-// the local inbox (mailpit, :54324) and the code typed is the one read from the mail.
+// the local inbox (mailpit, :44324) and the code typed is the one read from the mail.
 
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 const REDIRECT = "http://localhost:6274/oauth/callback";
 const signedOut = { cookies: [], origins: [] };
 const from = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::2`;

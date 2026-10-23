@@ -1,7 +1,7 @@
 /**
  * Passwordless sign-in end to end (RF-01), through the local stack's mailbox.
  *
- * Every send goes to the local Auth and lands in its mailpit (:54324); nothing
+ * Every send goes to the local Auth and lands in its mailpit (:44324); nothing
  * leaves the machine, and the spec refuses to run against any other stack. The
  * addresses end in `.invalid`, so even a leak could not be delivered.
  *
@@ -33,7 +33,7 @@ import { fixtureSql, purgeAuditTrail, purgeIdentity } from "../scripts/harness/f
 import { asHarnessUser, clearGroup, seedGroup, test } from "./global-setup";
 
 const auth = messages.auth;
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 const signedOut = { cookies: [], origins: [] };
 
 const stamp = randomUUID().slice(0, 8);

@@ -35,7 +35,7 @@ test("a civil day reads as day and three-letter month, no weekday, whatever the 
   assert.equal(civilDayMonthShort("2026-12-31"), "31 dic");
 });
 
-const LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+const LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:44322/postgres";
 const REMOTE_DB = "postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres";
 
 test("no PULSAR_CLOCK, no override, whatever the database", () => {

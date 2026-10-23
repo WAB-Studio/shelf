@@ -5,7 +5,7 @@
  * is spelled out here, so a changed value in `es.json` or `en.json` reddens a test; only the words
  * this slice leaves alone are read by key (`auth.sendLink` clicks the send button, whatever it says).
  *
- * The code is the one the local stack mailed: the spec reads it from mailpit (:54324) and types it
+ * The code is the one the local stack mailed: the spec reads it from mailpit (:44324) and types it
  * the way a person would. Nothing leaves the machine and the spec refuses any other stack; the
  * addresses end in `.invalid`. The answers «our side» and «too many» cannot be provoked on demand,
  * so the action's POST is answered by the browser with the reason the action would throw.
@@ -26,7 +26,7 @@ import messages from "@/messages/es.json";
 import { fixtureSql, purgeAuditTrail, purgeIdentity } from "../scripts/harness/fixtures";
 import { asHarnessUser, clearGroup, seedGroup, test } from "./global-setup";
 
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 const signedOut = { cookies: [], origins: [] };
 
 // The board's words, spelled out.

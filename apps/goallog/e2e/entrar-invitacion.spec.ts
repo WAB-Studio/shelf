@@ -11,13 +11,13 @@ import { invite } from "./entrar-invitado";
 import { test, expect, seededPerson, visit } from "./fixtures";
 
 // RP-131: GoalLog lets in only the addresses on `goals.allowed_emails`. Every send here goes to the
-// local stack's inbox (mailpit, :54324), never out: the address is a deliverable domain only
+// local stack's inbox (mailpit, :44324), never out: the address is a deliverable domain only
 // because the domain guard answers before the send, and each spec runs under
 // `scripts/supabase-local.sh exec`. The link is the PKCE one: its `code` is built from the token
 // row Auth wrote and Auth's own verify redirect, as the mail's button would.
 
 const signedOut = { cookies: [], origins: [] };
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 
 function invitee(): string {
   return `harness-inv-${randomUUID()}@gmail.com`;

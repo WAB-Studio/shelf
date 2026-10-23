@@ -2843,6 +2843,17 @@ in use`, the job goes red with no spec run, and `pulsar-e2e-report` follows it r
 - It is the runner, not the branch. Read the shard's setup step before any spec: no `✘` line means nothing ran.
 - `gh run rerun <id> --failed` and read the rerun before merging.
 
+## The local stack is up and healthy, but its ports refuse every connection
+
+`docker ps` shows `supabase_db_shelf` healthy on `0.0.0.0:<port>`, and `harness:token` fails with `ECONNREFUSED`. Windows
+(WinNAT, Hyper-V) reserved a block of its dynamic range, 49152–65535, over the stack's ports. Docker cannot bind there and
+says nothing. The blocks can move after each boot.
+
+- Seen 2026-10-22, after Docker restarted: Windows reserved 54284–54383, which covers 54321–54324. Ilumno's 5432 and 8000
+  kept answering.
+- Read the blocks with `netsh.exe interface ipv4 show excludedportrange protocol=tcp`.
+- Keep every port in `supabase/config.toml` below 49152. The stack moved to 44320–44324 that day.
+
 ## The service worker's cache name lives in two files
 
 - `apps/wordbook/e2e/despliegue.spec.ts` writes `CACHE_NAME` by hand. Bumping it in `apps/wordbook/public/sw.js` without the

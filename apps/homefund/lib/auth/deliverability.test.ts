@@ -59,17 +59,17 @@ test("a resolver that hangs reads as deliverable once the 2.5s budget passes", a
 
 // Mutation: drop the host test, or exempt every domain locally.
 test(".invalid is exempt on the local stack alone", () => {
-  assert.equal(deliverabilityExempt("x.invalid", "http://127.0.0.1:54321"), true);
-  assert.equal(deliverabilityExempt("x.invalid", "http://localhost:54321"), true);
+  assert.equal(deliverabilityExempt("x.invalid", "http://127.0.0.1:44321"), true);
+  assert.equal(deliverabilityExempt("x.invalid", "http://localhost:44321"), true);
   assert.equal(deliverabilityExempt("x.invalid", "https://abc.supabase.co"), false);
-  assert.equal(deliverabilityExempt("gmail.com", "http://127.0.0.1:54321"), false);
+  assert.equal(deliverabilityExempt("gmail.com", "http://127.0.0.1:44321"), false);
 });
 
 // Mutation: exempt any domain containing "invalid" instead of the `.invalid` suffix.
 test("a real-looking domain that merely contains «invalid» is not exempt, even locally", () => {
-  assert.equal(deliverabilityExempt("invalidmail.com", "http://127.0.0.1:54321"), false);
-  assert.equal(deliverabilityExempt("invalid.com", "http://localhost:54321"), false);
-  assert.equal(deliverabilityExempt("mail.invalid.org", "http://127.0.0.1:54321"), false);
+  assert.equal(deliverabilityExempt("invalidmail.com", "http://127.0.0.1:44321"), false);
+  assert.equal(deliverabilityExempt("invalid.com", "http://localhost:44321"), false);
+  assert.equal(deliverabilityExempt("mail.invalid.org", "http://127.0.0.1:44321"), false);
 });
 
 // Mutation: the null-MX test reads `records.length >= 1`.

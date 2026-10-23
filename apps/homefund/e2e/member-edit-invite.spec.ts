@@ -31,7 +31,7 @@ const errors = messages.errors;
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 
 const alreadyMember = members.errors.alreadyMember;
 const emailTaken = members.errors.emailTaken;

@@ -8,7 +8,7 @@
  *   takes it), registered under this run and deleted by exact address on the way
  *   in and the way out.
  * - The mail is asked for with `signInWithOtp` here, on a PKCE client as
- *   `@supabase/ssr` sends; nothing is typed into `/cuenta`, and mailpit (:54324)
+ *   `@supabase/ssr` sends; nothing is typed into `/cuenta`, and mailpit (:44324)
  *   is the only inbox it reaches.
  * - `server-only` and `next/headers` are doubled through `module.registerHooks`
  *   (never `Module._load`, which misses `await import`): `cookies()` is this
@@ -24,7 +24,7 @@ import postgres from "postgres";
 
 assertSuiteDatabase();
 
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 const root = resolve(import.meta.dirname, "../../..");
 
 const apiUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";

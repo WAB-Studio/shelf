@@ -11,9 +11,9 @@ import { test, expect, visit } from "./fixtures";
 // 8 s says so and frees every control; an answer that arrives later still lands, for the newest
 // attempt only. The action POST is held behind a gate and the page's clock is moved; the words are
 // the board's, written as literals. Every address is listed in the local inbox's allow-list and
-// every mail goes to mailpit (:54324).
+// every mail goes to mailpit (:44324).
 
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 const REDIRECT = "http://localhost:6274/oauth/callback";
 const signedOut = { cookies: [], origins: [] };
 const from = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::3`;

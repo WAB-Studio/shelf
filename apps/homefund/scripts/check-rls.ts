@@ -10590,7 +10590,7 @@ async function m1ScriptRows(tag: string, labels: M1Labels) {
     return;
   }
   const serviceKey = stack.SERVICE_ROLE_KEY ?? "";
-  const mailpit = stack.MAILPIT_URL ?? "http://127.0.0.1:54324";
+  const mailpit = stack.MAILPIT_URL ?? "http://127.0.0.1:44324";
   if (!serviceKey) {
     fail("the local stack reported no service-role key");
     return;

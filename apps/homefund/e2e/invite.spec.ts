@@ -8,7 +8,7 @@
  * length) and one message in the local mailbox. And the server, never the client,
  * names the member.
  *
- * Every send goes to the local stack's inbox (mailpit, :54324) under
+ * Every send goes to the local stack's inbox (mailpit, :44324) under
  * `scripts/supabase-local.sh exec`; the addresses are `harness-inv-<uuid>@...invalid`
  * and never reach a real mailbox. The `auth.users` row a send mints is registered
  * under the run at once and dropped by exact address at the end.
@@ -34,7 +34,7 @@ import {
 
 const step = messages.onboarding.inviteStep;
 const members = messages.members;
-const MAILBOX = "http://127.0.0.1:54324";
+const MAILBOX = "http://127.0.0.1:44324";
 const NAME_MAX = 80;
 
 let groupId = "";

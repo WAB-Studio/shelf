@@ -104,7 +104,7 @@ const DOUBLES: Record<string, string> = {
   "@/db/queries/groups": `export const getUserGroup = (...a) => ${D}.group(...a);`,
   "node:dns/promises": `export const resolveMx = (...a) => ${D}.resolveMx(...a);
     export const resolve4 = async () => ["192.0.2.1"]; export const resolve6 = async () => [];`,
-  "@/lib/env": `export const env = { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321", NEXT_PUBLIC_SITE_URL: "http://site.invalid" };`,
+  "@/lib/env": `export const env = { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:44321", NEXT_PUBLIC_SITE_URL: "http://site.invalid" };`,
   "@/lib/safe-action": `import { createSafeActionClient } from "next-safe-action";
     export const actionClient = createSafeActionClient({ defaultValidationErrorsShape: "flattened", handleServerError: (e) => e.messageKey ?? "errors.unexpected" });
     export const authActionClient = actionClient;`,

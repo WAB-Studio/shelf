@@ -30,7 +30,7 @@ test("the seam alone, or Vercel alone, builds", async () => {
   await load({ VERCEL: "1", PULSAR_FAULT_SEAM: undefined });
 });
 
-const LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+const LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:44322/postgres";
 const REMOTE_DB = "postgresql://postgres.abc:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres";
 
 test("a server whose clock is pinned against a database off the local stack refuses to boot", async () => {
