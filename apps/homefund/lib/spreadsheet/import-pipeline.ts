@@ -13,6 +13,7 @@ import {
   type ScopedEntity,
 } from "@/db/queries/import-preview";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
+import { isCivilDate } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { centsToPesos, maxAmountMinor, parseAmount } from "@/lib/money";
 import { resolveCategoryInScope, scopeKeyOf, type ScopeKey } from "@/lib/spreadsheet/resolve-category";
@@ -60,6 +61,9 @@ const COUNTER_AMOUNT_FORBIDDEN = "transactions.errors.counterAmountForbidden";
 const COUNTER_AMOUNT_TOO_LARGE = "transactions.errors.amountTooLarge";
 // A file row for an existing account that names another settlement currency than the one it has.
 const ACCOUNT_CURRENCY_CHANGE = "accounts.errors.currencyLocked";
+// The row is dated before the opening day of an account it names (RF-162), the rule
+// `transactions_after_opening` holds at write time.
+const BEFORE_OPENING = "data.import.errors.beforeOpening";
 
 // A catalogue key is a dotted identifier with no spaces; a raw Zod default is an
 // English sentence. The light guard's number/enum/date fields carry no custom key,
@@ -154,6 +158,8 @@ export type EffectiveRefs = {
   // maps hold. A file-new fund account of a caller with no fund has none (null).
   accountScopes: Map<string, ScopeKey | null>;
   categoryScopes: Map<string, ScopeKey>;
+  // Each effective account's opening day, by the same ids the name map holds.
+  accountOpenings: Map<string, string>;
 };
 
 // The money column keys of each entity, so the light guard sees a peso string where
@@ -256,6 +262,24 @@ function buildAccountCurrencies(
   });
 
   return currencyById;
+}
+
+// Every account's opening day by its effective id, as the commit leaves it before any movement lands:
+// a file row writes its own `balanceOn` over an existing account's and gives a file-new one its day.
+// A cell that is no civil day is left out; that account row refuses itself.
+function buildAccountOpenings(existing: ScopedAccount[], fileRows: RawRow[]): Map<string, string> {
+  const openingById = new Map(existing.map((row) => [row.id, row.initialBalanceOn]));
+  const idByRef = new Map(existing.flatMap((row) => (row.externalRef != null ? [[row.externalRef, row.id] as const] : [])));
+
+  fileRows.forEach((raw, rowIndex) => {
+    const ref = text(raw.externalRef);
+    const day = text(raw.balanceOn);
+    if (!isCivilDate(day)) return;
+    const existingId = ref.length > 0 ? idByRef.get(ref) : undefined;
+    openingById.set(existingId ?? placeholderFor("accounts", ref, rowIndex), day);
+  });
+
+  return openingById;
 }
 
 // The effective post-import id→kind map for categories, over the same ids
@@ -638,6 +662,12 @@ function resolveAndShape(
     case "transactions": {
       const fromAccountId = resolveInto(data.fromAccount, refs.accounts, "fromAccount");
       const toAccountId = resolveInto(data.toAccount, refs.accounts, "toAccount");
+      // Civil days compare as strings. One line for the row, whichever leg opens later.
+      const day = data.occurredAt as string;
+      const openings = [fromAccountId, toAccountId].flatMap((id) => (id !== null ? [refs.accountOpenings.get(id)] : []));
+      if (openings.some((opening) => opening !== undefined && day < opening)) {
+        errors.push({ key: BEFORE_OPENING, column: "occurredAt", value: rawCellValue(entity, raw, "occurredAt") });
+      }
       const rowCurrency = data.currency as string | null | undefined;
       const counterAmount = (data.counterAmount ?? null) as string | null;
       const counterAmountCents = checkRowCurrency(
@@ -835,6 +865,7 @@ export function buildEffectiveRefs(
       ),
     ),
     categoryKinds: buildCategoryKinds(scope.categories, recordsOf("categories")),
+    accountOpenings: buildAccountOpenings(scope.accounts, recordsOf("accounts")),
     // Mirrors the commit: a new account lands by its placement, a new category in the
     // caller's fund when there is one, else with the caller.
     accountScopes: buildScopes<ScopeKey | null>(scope.accounts, recordsOf("accounts"), "accounts", (raw) =>

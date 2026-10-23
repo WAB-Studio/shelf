@@ -119,11 +119,14 @@ function isExternalRefClash(error: unknown): boolean {
 // `mapTransactionError` in the live create action, minus the throw: this caller
 // still has a row index to attach to whichever reason wins.
 const CURRENCY_REFUSAL = "23901";
+// `transactions_after_opening` (RF-162): the preview refuses the same row on its day.
+const BEFORE_OPENING_REFUSAL = "MO001";
 
 function transactionReasonKey(error: unknown): string {
   const code = pgErrorCode(error);
   if (code === "42501") return "errors.notFound";
   if (code === CURRENCY_REFUSAL) return "transactions.errors.currencyMismatch";
+  if (code === BEFORE_OPENING_REFUSAL) return "data.import.errors.beforeOpening";
   if (code === "23514") return "transactions.errors.splitsScopeViolation";
   if (code === "23503") return "errors.referenceGone";
   return "errors.unexpected";
