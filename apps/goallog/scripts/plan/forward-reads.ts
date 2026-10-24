@@ -63,7 +63,7 @@ function monthFrom(delta: number): string {
 }
 
 async function goal(person: Person, name: string, horizon: string | null): Promise<string> {
-  const created = await as(person, () => plan.createGoal(horizon === null ? { name } : { name, horizon }));
+  const created = await as(person, () => plan.createGoal({ name, horizon }));
   if (!created.ok) throw new Error(`createGoal: ${created.error}`);
   goalIds.push(created.goalId);
   return created.goalId;
