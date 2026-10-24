@@ -31,19 +31,17 @@ This file is the core every agent loads. Read the file the index names before th
 
 - `docs/agentes/lanes.md`: opening, working in and dropping a lane; `HARNESS_LANE`; the harness.
 - `docs/agentes/verificacion.md`: suites, judges, CI, what a session spends.
-- `docs/agentes/canvas.md`: drawing a screen before it is built; the canvases. Main session.
+- `docs/agentes/canvas.md`: the canvases, when the user asks for a drawing.
 - `docs/agentes/wordbook.md`: WordBook's `/cuenta`, auth, keys and census.
 - `docs/agentes/historia.md`: the measurements and decisions behind these rules.
 - `docs/TRAPS.md`: read it before writing a query, a migration or a spec.
 - `docs/TRAPS-archivo.md`: traps whose cause is gone. Read it only to learn why a rule exists.
 - `apps/<app>/AGENTS.md`: what holds inside one app. Loaded when you work there.
-- «iniciemos» and «cerremos handoff»: the `handoff` skill. To develop: the `orchestrator` skill.
+- «iniciemos» and «cerremos handoff»: the `handoff` skill. To develop: the `orchestrator` skill (one session, § Modules).
 
 ## Working here
 
-- Write your full report to a file under the lane's `private/reportes/` and return three lines: green or red, the
-  commit, and what blocks.
-- Ask only what the user alone can decide, whole (options, costs, pick), in the roadmap's «Te toca a ti»; work on.
+- Ask only what the user alone can decide, whole (options, costs, pick), in the chat; work on what does not wait for it.
 - Use the credential the user hands you. Never tell the user to rotate, revoke or replace one.
 - Work in your own lane: its worktree, its port, its `HARNESS_LANE`. Ports: homefund :300<n-1>, wordbook :310<n-1>,
   goallog :320<n-1>. Wrap every suite and dev server in `scripts/supabase-local.sh exec`.
@@ -52,17 +50,12 @@ This file is the core every agent loads. Read the file the index names before th
 
 ## Modules
 
-- Rate each module by its riskiest trait. The level decides its chain:
-
-| Level | Trait | Chain |
-|---|---|---|
-| 3 | money, a delete, a permission, policy or grant, a migration, what is stored, a refusal | `tester` → `worker` → `validator` + `mutator` |
-| 2 | a NEW screen, or a new state of one | `tester` → `worker`; the train's `validator` judges it |
-| 2 | a change to an existing screen, or a query, with none of level 3 | one `worker` that writes its Done table red first; the train's `validator` judges it |
-| 1 | words, docs, a pure function | one `worker` |
-
-- Cap a module at one diff a person reviews at once: about 400 changed lines of its code, not its tests. Split a bigger one.
-- A slice is reviewed when a reviewer read it in a clean context. A reviewer with no findings is a valid result.
+- Work in one session. Write the code and its tests together; spawn a subagent only for work that truly runs in parallel.
+  Decided by the user 2026-10-24: «no hacemos todo este circo de agentes».
+- Build a screen straight from its `DESIGN.md` words. Draw no board first; show the screen when it is done.
+- Review before merging: run `/code-review` on the branch's diff, then `/simplify`. Fix what they find; that is the review.
+- Keep a module to one diff a person reads at once: about 400 changed lines of code, tests not counted.
+- Report in two lines: what landed and what blocks. No report files, no roadmap update per step.
 
 ## Code
 
@@ -105,7 +98,6 @@ This file is the core every agent loads. Read the file the index names before th
   - A pure function, or a file nothing imports yet: `typecheck`, `lint`, `check:unit` and its own tests.
   - A query or a server action: add every `check:*` that imports it. Grep the importers; in doubt, run them all.
   - A screen: its own specs and the specs the plan names. The whole e2e suite runs in CI, never locally.
-- Save every check's output to a file under the lane's `private/`, grep it, and name the paths in your report.
 - Chase a red with the one spec that failed and the server log. Never by repeating the suite.
 - Stub every paid model in a test, a check and a CI job. No proof calls OpenAI or spends a key. Decided by the user
   2026-10-15: «no me gusta eso de que los tests gastan dinero».
