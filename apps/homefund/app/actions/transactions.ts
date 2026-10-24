@@ -171,6 +171,7 @@ export const createTransactionAction = authActionClient
         amountCents: toMinor(parsedInput.amount),
         currency: parsedInput.currency ?? null,
         ...counter,
+        amountFromWords: parsedInput.amountFromWords ?? false,
         occurredAt: parsedInput.occurredAt,
         description: parsedInput.description,
         externalRef: parsedInput.externalRef ?? null,

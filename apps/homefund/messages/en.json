@@ -1420,5 +1420,10 @@
       "merchantInvalid": "Choose a valid merchant.",
       "shapeInvalid": "Choose a valid silenced message."
     }
+  },
+  "review": {
+    "errors": {
+      "cannotMark": "You can't mark this movement."
+    }
   }
 }

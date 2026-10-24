@@ -29,6 +29,7 @@ import {
   listAccountReconciliations,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
+import { getMonthReview, getMonthReviewPending, markReviewed } from "@/db/queries/month-review";
 import {
   getAccountStatementHistory,
   listAccountStatements,
@@ -4257,6 +4258,7 @@ async function main(): Promise<void> {
   await o7m11bSurvivorsSuite();
   await o6m7OpeningRefusalsSuite();
   await detailPocketToBillSuite();
+  await o7m3MonthReviewSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -14331,3 +14333,162 @@ async function detailPocketToBillSuite(): Promise<void> {
     `no pocket ${none === undefined}, purchase ${purchaseOnly}, with refund ${withRefund}`,
   );
 }
+
+// O7-M3 (RF-155, O7-Q2 a): «Revisar el mes» reads last month's items by its four rules in one
+// statement, marks each «Está bien» once, and quick entry's words flag rides the create path.
+async function o7m3MonthReviewSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const month = shiftMonth(today, -1);
+  const day = (n: number, back = 1) => `${shiftMonth(today, -back)}-${String(n).padStart(2, "0")}`;
+  const holder = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const movements = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: (input: Record<string, unknown>) => Promise<{ serverError?: string; data?: { transactionId: string } } | undefined>;
+  };
+  const review = (await import("@/app/actions/month-review")) as unknown as {
+    markReviewedAction: (input: Record<string, unknown>) => Promise<{ serverError?: string } | undefined>;
+  };
+
+  const open = async (name: string, amountMinor: number): Promise<string> => {
+    const { accountId } = await asUser(holder, () =>
+      createAccount({
+        name: `Harness o7m3 ${name} ${tag}`, kind: "asset", subtype: "bank", ownerUserId: holder.id, groupId: null,
+        isShared: false, institution: null, lastFour: null, settlementCurrency: "COP", amountMinor, balanceOn: day(1, 9),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const category = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness o7m3 ${name} ${tag}`, kind: "expense", parentId: null, color: "#B4542F" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const spend = async (account: string, categoryId: string, amountCents: number, occurredAt: string, extra: Record<string, unknown> = {}) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: account, toAccountId: null, amountCents, occurredAt, description: `Harness o7m3 ${tag}`,
+        externalRef: null, splits: [{ categoryId, amountCents }], labelIds: [], ...extra,
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+
+  const bank = await open("banco", 500_000_000);
+  const counted = await open("cuadre", 50_000_000);
+  const usual = await category("mercado");
+  const thin = await category("ropa");
+  const plain = await category("varios");
+
+  // Above usual: three splits of 100.000 in the six months before, then 400.000 in the month.
+  await spend(bank, usual, 10_000_000, day(10, 4));
+  await spend(bank, usual, 10_000_000, day(10, 3));
+  await spend(bank, usual, 10_000_000, day(10, 2));
+  const big = await spend(bank, usual, 40_000_000, day(10));
+  // Not enough history: two splits in the window and one seven months back.
+  await spend(bank, thin, 10_000_000, day(5, 8));
+  await spend(bank, thin, 10_000_000, day(5, 3));
+  await spend(bank, thin, 10_000_000, day(5, 2));
+  await spend(bank, thin, 40_000_000, day(5));
+  // Currency apart: a USD split against the COP history raises nothing.
+  await spend(bank, usual, 40_000_000, day(12), { currency: "USD", counterAmountCents: 160_000_000, counterIsEstimate: true });
+  // Twins: two equal expenses on one account and day; the same amount on another day is not one.
+  const twinA = await spend(bank, plain, 5_000_000, day(15));
+  const twinB = await spend(bank, plain, 5_000_000, day(15));
+  await spend(bank, plain, 5_000_000, day(16));
+  // From words: quick entry's flag through the action; a form save without it stores false.
+  const said = await asUser(holder, () => movements.createTransactionAction({
+    fromAccountId: bank, toAccountId: null, amount: "25000", occurredAt: day(20), description: `Harness o7m3 palabras ${tag}`,
+    splits: [{ categoryId: plain, amount: "25000" }], labelIds: [], amountFromWords: true,
+  }));
+  const plainSaid = await asUser(holder, () => movements.createTransactionAction({
+    fromAccountId: bank, toAccountId: null, amount: "26000", occurredAt: day(21), description: `Harness o7m3 formulario ${tag}`,
+    splits: [{ categoryId: plain, amount: "26000" }], labelIds: [],
+  }));
+  const words = said?.data?.transactionId ?? "";
+  const formMade = plainSaid?.data?.transactionId ?? "";
+  for (const id of [words, formMade]) if (id) track("transactions", id);
+  const flags = await fixtureSql<{ id: string; amount_from_words: boolean }[]>`
+    select id, amount_from_words from transactions where id in (${words || randomUUID()}, ${formMade || randomUUID()})`;
+  const flagOf = (id: string) => flags.find((row) => row.id === id)?.amount_from_words;
+  assert(
+    next("O7-M3 words flag: createTransactionAction with amountFromWords true stores true; without it stores false"),
+    flagOf(words) === true && flagOf(formMade) === false,
+    `with ${flagOf(words)}, without ${flagOf(formMade)}`,
+  );
+  // Gap: a count booked in the month.
+  const booked = await asUser(holder, () =>
+    reconcileAccount({ accountId: counted, reconciledOn: day(25), realMagnitudeCents: 52_000_000, expectedDerivedCents: 50_000_000 }),
+  );
+  const gapRows = await fixtureSql<{ id: string }[]>`select id from transactions where from_account_id = ${counted} or to_account_id = ${counted}`;
+  for (const row of gapRows) track("transactions", row.id);
+
+  const before = roundTrips();
+  const read = await asUser(holder, () => getMonthReview(month));
+  const readTrips = roundTrips() - before;
+  const rules = read.items.map((item) => item.rule).sort();
+  const above = read.items.filter((item) => item.rule === "above_usual");
+  const twins = read.items.filter((item) => item.rule === "twin");
+  const fromWords = read.items.filter((item) => item.rule === "from_words");
+  const gaps = read.items.filter((item) => item.rule === "reconciliation_gap");
+  assert(
+    next("O7-M3 items: one above usual (400.000 against a usual of 100.000), one twin with both ids, one from words, one gap with its count; nothing for thin history, another currency or another day"),
+    read.items.length === 4 &&
+      above.length === 1 && above[0].transactionIds[0] === big && above[0].usualCents === 10_000_000 && above[0].amountCents === 40_000_000 &&
+      twins.length === 1 && [...twins[0].transactionIds].sort().join() === [twinA, twinB].sort().join() &&
+      fromWords.length === 1 && fromWords[0].transactionIds[0] === words &&
+      gaps.length === 1 && gaps[0].countedCents === 52_000_000 && booked !== undefined &&
+      read.items.every((item) => !item.reviewed && item.canMark),
+    `rules ${rules.join(",")}; above ${JSON.stringify(above.map((i) => [i.amountCents, i.usualCents]))}; twins ${twins.map((i) => i.transactionIds.length)}; gap ${gaps.map((i) => i.countedCents)}`,
+  );
+  assert(
+    next("O7-M3 first month: the month of the holder's oldest movement"),
+    read.firstMonth === shiftMonth(today, -8),
+    `firstMonth ${read.firstMonth}`,
+  );
+  assert(next("O7-M3 one trip: getMonthReview costs one round trip"), readTrips === 1, `${readTrips} trips`);
+
+  const empty = await asUser(holder, () => getMonthReview(shiftMonth(today, -5)));
+  const strangers = await asUser(stranger, () => getMonthReview(month));
+  assert(
+    next("O7-M3 none: a month with nothing standing out has no item, and another person reads none of the holder's"),
+    empty.items.length === 0 && strangers.items.length === 0 && strangers.firstMonth === null,
+    `quiet month ${empty.items.length}, stranger ${strangers.items.length}, stranger first ${strangers.firstMonth}`,
+  );
+
+  const pendingBefore = await asUser(holder, () => getMonthReviewPending());
+  await asUser(holder, () => markReviewed({ transactionIds: twins[0].transactionIds, rule: "twin" }));
+  await asUser(holder, () => markReviewed({ transactionIds: twins[0].transactionIds, rule: "twin" }));
+  const marks = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transaction_reviews where transaction_id in (${twinA}, ${twinB}) and rule = 'twin'`;
+  const tripsBefore = roundTrips();
+  const pendingAfter = await asUser(holder, () => getMonthReviewPending());
+  const pendingTrips = roundTrips() - tripsBefore;
+  const reread = await asUser(holder, () => getMonthReview(month));
+  assert(
+    next("O7-M3 mark: marking a twin twice stores one mark per id, the item reads reviewed, and the pending count drops from 4 to 3 in one round trip"),
+    marks[0].n === 2 && reread.items.find((item) => item.rule === "twin")?.reviewed === true &&
+      pendingBefore?.count === 4 && pendingBefore.month === month && pendingAfter?.count === 3 && pendingTrips === 1,
+    `marks ${marks[0].n}, pending ${pendingBefore?.count} → ${pendingAfter?.count} (${pendingTrips} trips)`,
+  );
+  const strangerPending = await asUser(stranger, () => getMonthReviewPending());
+  const refused = await asUser(stranger, () => review.markReviewedAction({ transactionIds: [big], rule: "above_usual" }));
+  assert(
+    next("O7-M3 refused: a person who cannot write the movement is told «review.errors.cannotMark», and with nothing pending Inicio reads null"),
+    refused?.serverError === "review.errors.cannotMark" && strangerPending === null,
+    `serverError ${refused?.serverError}, stranger pending ${JSON.stringify(strangerPending)}`,
+  );
+}
+
+// `YYYY-MM` of the month `back` months before `base`'s, as civil months.
+function shiftMonth(base: string, delta: number): string {
+  const date = new Date(`${base.slice(0, 7)}-01T12:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + delta);
+  return date.toISOString().slice(0, 7);
+}
+
