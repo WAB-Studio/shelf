@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { parseMonthParam } from "./month-param";
+
+const TODAY = "2026-10-22";
+const FIRST = "2026-07";
+const LAST = "2027-03";
+
+test("absent and this month read as this month", () => {
+  assert.deepEqual(parseMonthParam(undefined, TODAY, FIRST, LAST), { kind: "this" });
+  assert.deepEqual(parseMonthParam("2026-10", TODAY, FIRST, LAST), { kind: "this" });
+});
+
+test("next month, and the limit itself, are coming", () => {
+  assert.deepEqual(parseMonthParam("2026-11", TODAY, FIRST, LAST), { kind: "coming", month: "2026-11" });
+  assert.deepEqual(parseMonthParam("2027-03", TODAY, FIRST, LAST), { kind: "coming", month: "2027-03" });
+});
+
+test("a month after the first goal, and the first one itself, are past", () => {
+  assert.deepEqual(parseMonthParam("2026-09", TODAY, FIRST, LAST), { kind: "past", month: "2026-09" });
+  assert.deepEqual(parseMonthParam("2026-07", TODAY, FIRST, LAST), { kind: "past", month: "2026-07" });
+});
+
+test("before the first goal and past the limit redirect", () => {
+  assert.deepEqual(parseMonthParam("2026-06", TODAY, FIRST, LAST), { kind: "redirect" });
+  assert.deepEqual(parseMonthParam("2027-04", TODAY, FIRST, LAST), { kind: "redirect" });
+});
+
+test("with no goal opened no past month exists", () => {
+  assert.deepEqual(parseMonthParam("2026-09", TODAY, null, "2026-10"), { kind: "redirect" });
+});
+
+test("a malformed value, a false month, a full date and an array redirect", () => {
+  for (const raw of ["", "abc", "2026-13", "2026-00", "2026-9", "2026-10-01", ["2026-09"], ["a", "b"]]) {
+    assert.deepEqual(parseMonthParam(raw, TODAY, FIRST, LAST), { kind: "redirect" }, JSON.stringify(raw));
+  }
+});
+
+test("a year boundary steps both ways", () => {
+  assert.deepEqual(parseMonthParam("2026-12", "2027-01-05", "2026-11", "2027-02"), { kind: "past", month: "2026-12" });
+  assert.deepEqual(parseMonthParam("2027-01", "2026-12-31", "2026-11", "2027-02"), { kind: "coming", month: "2027-01" });
+});

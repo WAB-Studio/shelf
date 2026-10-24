@@ -274,6 +274,8 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
 
     revalidatePath("/");
     revalidatePath("/sueltas");
+    revalidatePath("/semana");
+    revalidatePath("/mes");
     return { ok: true };
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };

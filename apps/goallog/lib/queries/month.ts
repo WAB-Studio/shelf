@@ -18,7 +18,8 @@ import {
   type TreeRow,
 } from "@/lib/goals/tree";
 import type { MonthItem } from "@/lib/plan/carry";
-import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
+import { forwardLimit } from "@/lib/plan/forward-limit";
+import { monthLine, monthOf, nextMonth, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
@@ -31,6 +32,7 @@ import {
 } from "@/lib/queries/goal";
 import { toCadence, toDeclaredFact } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
+import { dayBefore } from "@/lib/day/weeks";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 export type MonthAcrossGoal = {
@@ -61,7 +63,13 @@ export type MonthAcrossItem = MonthItem &
   Pick<PlanItem, "hours" | "part" | "from" | "to" | "fixed" | "endsOn" | "pastEnd">;
 
 export type MonthAcross = {
+  // "YYYY-MM-01".
   month: string;
+  // This month as lived so far, a month still to come, or one already closed (RP-142).
+  view: "this" | "coming" | "past";
+  // "YYYY-MM": the month the first goal or habit was opened in, and the last «Mes» steps forward to.
+  firstMonth: string | null;
+  lastMonth: string;
   today: string;
   evidence: "read" | "unreadable";
   // In the tree's order: each goal after the one above it.
@@ -98,7 +106,14 @@ type Row = {
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
   tasks: PlanTaskRow[];
+  first_month: string | null;
+  // Horizons of the goals open today, null for one with no end.
+  horizons: (string | null)[];
 };
+
+// What decides which goals and days the one statement reads: the month's first day, the last
+// day facts are read to, the day a goal must still be open after, and how an archive is read.
+type Reading = { month: string; until: string; lastDay: string; openAfter: string; view: MonthAcross["view"] };
 
 // What `to_jsonb(o)` already carries beyond the screens' `TaskRow`.
 type PlanTaskRow = TaskRow & { in_plan: boolean; created_at: string; position: number };
@@ -123,7 +138,15 @@ function looseHabit({ id, name, daysDone, row, byWeek }: LooseRow, month: string
   return { id, name, daysDone, cadence, asked, weeks, thisWeek, retiredOn };
 }
 
-async function queryRows(tx: Transaction, month: string, today: string): Promise<Row[]> {
+async function queryRows(tx: Transaction, reading: Reading, today: string): Promise<Row[]> {
+  const { month, until, lastDay, openAfter, view } = reading;
+  // A closed month keeps a goal archived since; the current and coming ones read none that is archived.
+  const archived = (alias: "g" | "a") =>
+    view === "past"
+      ? sql`(${sql.raw(alias)}.archived_at is null or (${sql.raw(alias)}.archived_at at time zone ${TIME_ZONE})::date > ${lastDay}::date)`
+      : sql`${sql.raw(alias)}.archived_at is null`;
+  const archivedG = archived("g");
+  const archivedA = archived("a");
   const firstWeek = weeksOfMonth(month)[0] ?? month;
   const todayWeek = weekOf(today)[0];
   const weekFrom = todayWeek < firstWeek ? todayWeek : firstWeek;
@@ -135,16 +158,17 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
                  'name', h.name,
                  'row', to_jsonb(h),
                  'daysDone', (select count(distinct f.day)::int from "goals"."facts" f
-                               where f.commitment_id = h.id and f.day between ${month}::date and ${today}::date),
+                               where f.commitment_id = h.id and f.day between ${month}::date and ${until}::date),
                  'byWeek', (select coalesce(json_agg(jsonb_build_object('week', to_char(w.week, 'YYYY-MM-DD'), 'days', w.days)), '[]'::json)
                               from (select date_trunc('week', f.day)::date as week, count(distinct f.day)::int as days
                                       from "goals"."facts" f
                                      where f.commitment_id = h.id
-                                       and f.day between ${weekFrom}::date and ${today}::date
+                                       and f.day between ${weekFrom}::date and ${until}::date
                                      group by 1) w)
                ) order by h.position, h.created_at, h.id), '[]'::json)
          from "goals"."commitments" h
          where h.goal_id is null
+           and (h.created_at at time zone ${TIME_ZONE})::date <= ${lastDay}::date
            and (h.retired_at is null or (h.retired_at at time zone ${TIME_ZONE})::date >= ${month}::date)) as loose,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
@@ -160,7 +184,7 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.goal_id = g.id
-           and f.day between ${month}::date and ${today}::date) as facts,
+           and f.day between ${month}::date and ${until}::date) as facts,
       (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                 order by b.month), '[]'::json)
          from "goals"."month_budgets" b
@@ -170,16 +194,25 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
                  'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id
                              order by f.day, f.id limit 1)
                ) order by o.position, o.created_at, o.id), '[]'::json)
-         from "goals"."one_offs" o where o.goal_id = g.id) as tasks
+         from "goals"."one_offs" o where o.goal_id = g.id) as tasks,
+      (select to_char(min(t.created_at at time zone ${TIME_ZONE}), 'YYYY-MM')
+         from (
+           select x.created_at from "goals"."goals" x
+           union all
+           select c.created_at from "goals"."commitments" c where c.goal_id is null
+         ) t) as first_month,
+      (select coalesce(json_agg(x.horizon::text), '[]'::json)
+         from "goals"."goals" x
+         where x.archived_at is null and (x.horizon is null or x.horizon > ${today}::date)) as horizons
     from (select 1) one
     left join "goals"."goals" g
-      on g.archived_at is null
-      and (g.created_at at time zone ${TIME_ZONE})::date <= ${today}::date
-      and (g.horizon is null or g.horizon > ${today}::date
+      on ${archivedG}
+      and (g.created_at at time zone ${TIME_ZONE})::date <= ${until}::date
+      and (g.horizon is null or g.horizon > ${openAfter}::date
         or exists (
           select 1 from "goals"."goals" a
-          where a.archived_at is null
-            and (a.horizon is null or a.horizon > ${today}::date)
+          where ${archivedA}
+            and (a.horizon is null or a.horizon > ${openAfter}::date)
             and a.id in (g.parent_id, (select pp.parent_id from "goals"."goals" pp where pp.id = g.parent_id))
         ))
     order by g.position, g.created_at, g.id
@@ -191,13 +224,13 @@ async function queryEvidence(
   tx: Transaction,
   personId: string,
   month: string,
-  today: string,
+  until: string,
 ): Promise<Record<string, EvidenceDay[]>> {
   const bySourceKey: Record<string, EvidenceDay[]> = {};
   for (const key of knownSourceKeys()) {
     const reader = readerFor(key);
     if (!reader) continue;
-    bySourceKey[key] = await reader({ personId, from: month, to: today, zone: TIME_ZONE, tx });
+    bySourceKey[key] = await reader({ personId, from: month, to: until, zone: TIME_ZONE, tx });
   }
   return bySourceKey;
 }
@@ -207,21 +240,44 @@ async function queryEvidence(
  * its own screen reads them, in two transactions fanned with `Promise.all`
  * whatever the goal count (RNP-03). An evidence rejection degrades to
  * `"unreadable"` and every goal keeps its declared half (RNP-04). Writes nothing.
+ *
+ * `month` is "YYYY-MM" or "YYYY-MM-01" and defaults to today's (RP-142). A
+ * coming month lists the goals open in it, each with its planned amount and
+ * the tasks the plan places there, and reads no facts or evidence. A closed
+ * month lists the goals open in it, with what was reached and its tasks as
+ * the plan and the facts left them. A bare string is `today`.
  */
-export async function loadMonthAcross(today: string = todayInZone()): Promise<MonthAcross> {
+export async function loadMonthAcross(
+  arg: string | { month?: string; today?: string } = {},
+): Promise<MonthAcross> {
   const person = await getPerson();
   if (!person) throw new Error("loadMonthAcross called without a verified session");
 
-  const month = monthOf(today);
+  const input = typeof arg === "string" ? { today: arg } : arg;
+  const today = input.today ?? todayInZone();
+  const month = monthOf(input.month ?? today);
+  const thisMonth = monthOf(today);
+  const view: MonthAcross["view"] = month === thisMonth ? "this" : month > thisMonth ? "coming" : "past";
+  const lastDay = dayBefore(nextMonth(month));
+  const until = today < lastDay ? today : lastDay;
+  const reading: Reading = { month, until, lastDay, openAfter: view === "this" ? today : month, view };
+
   const [rows, outcome] = await Promise.all([
-    withGoalsDb((tx) => queryRows(tx, month, today)),
-    withReadingDb((tx) => queryEvidence(tx, person.id, month, today)).then(
-      (bySourceKey) => ({ status: "read" as const, bySourceKey }),
+    withGoalsDb((tx) => queryRows(tx, reading, today)),
+    withReadingDb((tx) => queryEvidence(tx, person.id, month, until)).then(
+      // A month not yet lived has no evidence; the statement still runs so the count holds.
+      (bySourceKey) => ({ status: "read" as const, bySourceKey: view === "coming" ? {} : bySourceKey }),
       () => ({ status: "unreadable" as const, bySourceKey: {} as Record<string, EvidenceDay[]> }),
     ),
   ]);
 
-  const loose = (rows[0]?.loose ?? []).map((habit) => looseHabit(habit, month, today));
+  const loose =
+    view === "coming"
+      ? []
+      : (rows[0]?.loose ?? []).map((habit) => {
+          const read = looseHabit(habit, month, view === "this" ? today : until);
+          return view === "this" ? read : { ...read, thisWeek: null };
+        });
   const goalRows = rows.filter((row): row is Row & { goal: NonNullable<Row["goal"]> } => row.goal !== null);
   const tree = buildTree(goalRows.map(treeRowOf));
   const holders = new Set(tree.order.filter((node) => node.children.length > 0).map((node) => node.id));
@@ -311,7 +367,8 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
   }
   const rolled = rollUp(tree, own);
 
-  const open = (row: { goal: { horizon: string | null } }): boolean => row.goal.horizon === null || row.goal.horizon > today;
+  const open = (row: { goal: { horizon: string | null } }): boolean =>
+    row.goal.horizon === null || row.goal.horizon > reading.openAfter;
   const goals = built.filter(({ row }) => open(row)).map(({ row, unit, line, items, plan }): MonthAcrossGoal => {
     const id = row.goal.id;
     const sum = rolled.get(id);
@@ -337,7 +394,17 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
     .map((node) => ({ rootId: node.id, goalIds: branchOf(tree, node.id).filter((id) => drawn.has(id)) }))
     .filter((group) => group.goalIds.length > 0);
 
-  return { month, today, evidence: outcome.status === "read" ? "read" : "unreadable", goals, groups, loose };
+  return {
+    month,
+    view,
+    firstMonth: rows[0]?.first_month ?? null,
+    lastMonth: forwardLimit({ horizons: rows[0]?.horizons ?? [], today }),
+    today,
+    evidence: outcome.status === "read" ? "read" : "unreadable",
+    goals,
+    groups,
+    loose,
+  };
 }
 
 function treeRowOf(row: Row & { goal: NonNullable<Row["goal"]> }): TreeRow {
