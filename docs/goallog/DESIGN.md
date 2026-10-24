@@ -1948,3 +1948,10 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
   titled so inside `ImportarPasos.dc.html`.
 - `ImportarArbol` keeps its four boards: grouped, they would cover the boards between them.
 - 512 → 366 files.
+
+## Decisions of 2026-10-24, on plan oleada-7, by the user
+
+- Semana and «Mes» step forward (O7-Q5 a): RP-43 and RP-44 retired; successor RP-142.
+- «Mes» steps both ways (O7-Q6 b): past months read as they were lived, as Semana's past weeks do.
+- How far forward (O7-Q7 a): to the last month of the furthest open goal's span; a goal with no end counts twelve months.
+  A coming week allows only «Darle día»; a coming month's tasks mark done in one tap as this month's.

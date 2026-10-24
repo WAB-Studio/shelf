@@ -390,7 +390,8 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   sign-in settle their shapes.
 - **Region** (Q13 b): HomeFund's and WordBook's Vercel region is measured with `vercel inspect` before anything is pinned.
 - **«Revisar el mes»** (2026-10-18, the user's idea): RF-155 opened. A screen and an MCP tool list the month's anomalies
-  by fixed rules; Claude does any AI review through MCP. Its own train with its board, after wave 2. Not built yet.
+  by fixed rules; Claude does any AI review through MCP. The screen ships in oleada-7; the MCP tool `review_month`
+  lands with RF-144's server, reading the same query, and RF-155 stays open until then (O7-Q4 a, 2026-10-24).
 - **Quick entry, lowercase «m»** (critic C2 b, later the same day): a lowercase «m» is never a million; only «M» or
   «millón/millones» multiply. «25 m» is 25, «5 m de cable» is 5; «3 M arriendo» asks. Supersedes the «m» lines above.
 - **Fund labels read «· fondo»** in the budget forms (critic C1 a), as categories do.
@@ -469,3 +470,14 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - `DeudasAFavorPorFacturar` (M5, Q9 a): «A favor $ 8.000» in the accent, then «· Debes US$ 25» in ink, then «(≈ $ 105.000 por
     facturar)» muted. At 360 it wraps only at « · » or before the parenthesis; at 1280 it sits right-aligned in «Saldo». A
     billed purchase drops the parenthesis. Pesos that owe keep today's drawing.
+- **Decided by the user 2026-10-24, on oleada-7 and the short critic of oleada-6's fixes:**
+  - «Revisar el mes» (O7-Q1 a): from the 1st, Inicio shows one line «Revisar septiembre · 4 movimientos» while last month
+    has unmarked items; the screen opens from it and from «Reportes» for any closed month.
+  - «Muy por encima de lo usual» (O7-Q2 a): an expense split more than three times the median of the same category's splits,
+    same currency, over the six months before, counted only when that history holds at least three splits.
+  - «m / mil» (O7-Q3 a): migration 0072 adds `transactions.amount_from_words`, true when quick entry saved the amount its
+    interpreter read from words («25 mil») and the person did not retype it. Months before the deploy show no such item.
+  - The phone debt card (Q17 a): the Q9 line sits under the card's name, never beside it; the name keeps the row's whole width
+    and wraps between words. Each card grows about 40 px. Supersedes the side-by-side drawing of `DeudasAFavorPorFacturar` at 360.
+  - The debt detail's «Saldo» tile (Q18 a): it reads the row's whole Q9 line, as the row and «Abonar» do: «A favor $ 8.000 ·
+    Debes US$ 25,00 (≈ $ 105.000 por facturar)»; a card that only owes reads «Debes US$ 20,00».
