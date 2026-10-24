@@ -505,6 +505,13 @@
       "when": 1792725484952,
       "tag": "0071_a_movement_follows_its_opening",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792820044621,
+      "tag": "0072_a_movement_is_marked_reviewed",
+      "breakpoints": true
     }
   ]
 }

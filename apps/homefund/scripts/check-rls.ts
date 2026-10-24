@@ -235,6 +235,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "o7m2") {
+    await checkTransactionReviews();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "c6c") {
     await checkMemberAddress();
     return;
@@ -307,6 +312,7 @@ async function main() {
   await checkReturnKeepsScope();
   await checkMovementBeforeOpening();
   await checkO7M11Survivors();
+  await checkTransactionReviews();
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -5117,6 +5123,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   savings_goals: ["archived_at", "created_at", "id", "updated_at"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: [],
+  // `marked_by` is stamped by the trigger from auth.uid(); the movement and the rule are the input.
+  transaction_reviews: ["id", "marked_at", "marked_by"],
   transaction_sources: ["created_at", "id"],
   transaction_splits: ["id"],
   transactions: [
@@ -5269,6 +5277,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   savings_goals: ["created_at", "group_id", "id", "owner_user_id", "updated_at"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: ["label_id", "transaction_id"],
+  // A mark is final: no column is writable.
+  transaction_reviews: ["id", "marked_at", "marked_by", "rule", "transaction_id"],
   transaction_sources: [
     "account_id",
     "created_at",
@@ -5280,6 +5290,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   ],
   transaction_splits: ["id", "transaction_id"],
   transactions: [
+    // Quick entry decides it once, on the way in.
+    "amount_from_words",
     "created_at",
     "created_by",
     "external_ref",
@@ -13301,6 +13313,382 @@ async function checkO7M11Survivors() {
     labels.tail,
     afterUser === "postgres" && payments === 0 && movements === 0,
     `current_user = ${afterUser}, payments ${payments}, movements ${movements} named 'rls o7m11%'`,
+  );
+}
+
+// RF-155 and RF-45: a person marks a standing-out movement «Está bien» once per rule, the mark is final, readable
+// by whoever reads the movement, written only by whoever may write it, and audited; quick entry flags an amount it
+// read from words. Every row rolls back.
+//
+// O7M2_MIGRATION_FILE  a path to a SQL file; each row drops what 0072 made and installs that file instead, inside
+//                      its own transaction, so a mutant never outlives the ROLLBACK.
+// O7M2_ROW             runs only the row with that number, so a mutant meets the one row that kills it.
+const O7M2_RULES = ["above_usual", "twin", "from_words", "reconciliation_gap"] as const;
+const O7M2_PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"] as const;
+
+type O7m2Mark = { id: string; transaction_id: string; rule: string; marked_by: string; marked_at: string };
+
+async function o7m2Rows(labels: string[], body: (tx: M1Tx) => Promise<M1Verdict[]>): Promise<void> {
+  const only = process.env.O7M2_ROW;
+  if (only && !labels.some((label) => label.startsWith(`o7m2-${only}.`))) return;
+  let verdicts: M1Verdict[] = labels.map(() => ({ ok: false, detail: "the body never ran" }));
+  await sql
+    .begin(async (tx) => {
+      const override = process.env.O7M2_MIGRATION_FILE;
+      if (override) {
+        await tx.unsafe(`drop table if exists finances.transaction_reviews cascade`);
+        await tx.unsafe(`alter table finances.transactions drop column if exists amount_from_words`);
+        await m1RunMigration(tx, override);
+      }
+      verdicts = await body(tx);
+      throw M1_ROLLBACK;
+    })
+    .catch((error: unknown) => {
+      if (error === M1_ROLLBACK) return;
+      verdicts = labels.map(() => ({ ok: false, detail: `aborted — ${describeRefusal(error)}` }));
+    });
+  labels.forEach((label, i) => assert(label, verdicts[i].ok, verdicts[i].detail));
+}
+
+// The member A owns a personal account and its movement; the leader reads it as a fund member; a shared account
+// carries a movement the leader wrote. Leaves the role reset.
+async function o7m2Fund(tx: M1Tx) {
+  const f = await o6m1bFund(tx);
+  await tx`update groups set name = 'rls o7m2' where id = ${f.groupId}`;
+  await enterUserContext(tx, f.member);
+  const personalMovement = await o6m1Movement(tx, f.personal, f.personalCategory, 4200, "rls o7m2 movement");
+  await enterUserContext(tx, f.leader);
+  const sharedMovement = await o6m1Movement(tx, f.shared, f.groupCategory, 5100, "rls o7m2 movement");
+  await tx`reset role`;
+  return { ...f, personalMovement, sharedMovement };
+}
+
+// A leader of a fund of their own, who reads nothing of the first. Leaves the role reset.
+async function o7m2Stranger(tx: M1Tx): Promise<string> {
+  const { leader } = await m1Group(tx);
+  await tx`reset role`;
+  return leader;
+}
+
+// Inserts one mark in the session's current role, naming only the granted columns.
+async function o7m2Mark(tx: M1Tx, movement: string, rule: string): Promise<string> {
+  const [{ id }] = await tx<{ id: string }[]>`
+    insert into transaction_reviews (transaction_id, rule) values (${movement}, ${rule}) returning id`;
+  return id;
+}
+
+// The sqlstate a mark is refused with, or null when it saved.
+async function o7m2Try(tx: M1Tx, movement: string, rule: string): Promise<string | null> {
+  return m1Refusal(tx, (sp) => sp`insert into transaction_reviews (transaction_id, rule) values (${movement}, ${rule})`);
+}
+
+// Read as the table owner, so no policy hides a mark.
+async function o7m2Stored(tx: M1Tx, movement: string): Promise<O7m2Mark[]> {
+  return tx<O7m2Mark[]>`
+    select id, transaction_id, rule, marked_by, marked_at::text as marked_at
+    from finances.transaction_reviews where transaction_id = ${movement} order by rule`;
+}
+
+function o7m2Code(code: string | null): string {
+  return code ?? "accepted";
+}
+
+async function checkTransactionReviews() {
+  console.log("");
+  const labels = {
+    writer: "o7m2-1. the owner of a personal account marks its movement 'twin' and the mark is stored",
+    reader: "o7m2-2. another member of the fund reads that mark",
+    readerCannot: "o7m2-3. that member, who only reads the owner's personal movement, cannot mark it: 42501",
+    shared: "o7m2-4. a plain member and the leader each mark a movement of a shared fund account",
+    stranger: "o7m2-5. a user of another fund reads none of the fund's marks and cannot mark its movements: 42501",
+    oncePerRule: "o7m2-6. a second 'twin' on one movement is 23505; a 'from_words' on it saves",
+    ruleClosed: "o7m2-7. the four rules save and any other rule is 23514",
+    final: "o7m2-8. the writer can neither update nor delete a mark: 0 rows or 42501, and the mark stays as stored",
+    markedBy: "o7m2-9. naming marked_by is refused by the grant, even naming oneself; the stored one is auth.uid() at now()",
+    cascade: "o7m2-10. deleting the movement deletes its marks",
+    audit: "o7m2-11. a mark writes one INSERT row to audit_log naming transaction_reviews, the mark and its writer",
+    grants: "o7m2-12. anon and service_role hold no privilege on transaction_reviews; authenticated holds select and insert (transaction_id, rule) alone",
+    column: "o7m2-13. amount_from_words is false when the insert omits it, true when it names true, and no update can name it",
+    index: "o7m2-14. transaction_reviews carries an index led by marked_by",
+    tail: "o7m2-15. the rolled-back o7m2 transactions leave no fixture behind",
+  };
+
+  await o7m2Rows([labels.writer, labels.reader, labels.readerCannot], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    const writeCode = await m1Refusal(tx, (sp) => o7m2Mark(sp, f.personalMovement, "twin"));
+    await enterUserContext(tx, f.leader);
+    const seen = await tx<{ id: string }[]>`
+      select id from transaction_reviews where transaction_id = ${f.personalMovement}`;
+    const [{ movements }] = await tx<{ movements: number }[]>`
+      select count(*)::int as movements from transactions where id = ${f.personalMovement}`;
+    const readerCode = await o7m2Try(tx, f.personalMovement, "above_usual");
+    await tx`reset role`;
+    const stored = await o7m2Stored(tx, f.personalMovement);
+    return [
+      {
+        ok: writeCode === null && stored.filter((m) => m.rule === "twin").length === 1,
+        detail: `A marks A's personal movement 'twin': ${o7m2Code(writeCode)}; stored 'twin' marks ${stored.filter((m) => m.rule === "twin").length}`,
+      },
+      {
+        ok: movements === 1 && seen.length === 1,
+        detail: `the leader reads the movement (${movements} row) and its marks: ${seen.length} row`,
+      },
+      {
+        ok: movements === 1 && readerCode === "42501" && stored.every((m) => m.rule !== "above_usual"),
+        detail: `the leader marks A's personal movement 'above_usual': ${o7m2Code(readerCode)}; stored rules ` +
+          `[${stored.map((m) => m.rule).join(", ")}]`,
+      },
+    ];
+  });
+
+  await o7m2Rows([labels.shared], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    const memberCode = await o7m2Try(tx, f.sharedMovement, "twin");
+    await enterUserContext(tx, f.leader);
+    const leaderCode = await o7m2Try(tx, f.sharedMovement, "above_usual");
+    await tx`reset role`;
+    const stored = await o7m2Stored(tx, f.sharedMovement);
+    const by = (rule: string) => stored.find((m) => m.rule === rule)?.marked_by;
+    return [{
+      ok: memberCode === null && leaderCode === null && stored.length === 2 &&
+        by("twin") === f.member && by("above_usual") === f.leader,
+      detail: `the leader's movement on the shared account: A marks 'twin' ${o7m2Code(memberCode)}, the leader marks ` +
+        `'above_usual' ${o7m2Code(leaderCode)}; stored ${stored.length}, 'twin' by ${o6m1bWho(by("twin") ?? null, f)}, ` +
+        `'above_usual' by ${o6m1bWho(by("above_usual") ?? null, f)}`,
+    }];
+  });
+
+  await o7m2Rows([labels.stranger], async (tx) => {
+    const f = await o7m2Fund(tx);
+    const stranger = await o7m2Stranger(tx);
+    await enterUserContext(tx, f.member);
+    await o7m2Mark(tx, f.personalMovement, "twin");
+    await enterUserContext(tx, f.leader);
+    await o7m2Mark(tx, f.sharedMovement, "twin");
+    await enterUserContext(tx, stranger);
+    const [{ role }] = await tx<{ role: string }[]>`select current_user as role`;
+    const seen = await tx<{ id: string }[]>`
+      select id from transaction_reviews where transaction_id in (${f.personalMovement}, ${f.sharedMovement})`;
+    const personalCode = await o7m2Try(tx, f.personalMovement, "above_usual");
+    const sharedCode = await o7m2Try(tx, f.sharedMovement, "above_usual");
+    await tx`reset role`;
+    const stored = [...(await o7m2Stored(tx, f.personalMovement)), ...(await o7m2Stored(tx, f.sharedMovement))];
+    return [{
+      ok: role === "authenticated" && stored.length === 2 && seen.length === 0 &&
+        personalCode === "42501" && sharedCode === "42501",
+      detail: `as ${role}, a leader of another fund: reads ${seen.length} of the ${stored.length} stored marks; marks the ` +
+        `personal movement ${o7m2Code(personalCode)}, the shared one ${o7m2Code(sharedCode)}`,
+    }];
+  });
+
+  await o7m2Rows([labels.oncePerRule], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    const first = await o7m2Try(tx, f.personalMovement, "twin");
+    const again = await o7m2Try(tx, f.personalMovement, "twin");
+    const words = await o7m2Try(tx, f.personalMovement, "from_words");
+    await tx`reset role`;
+    const stored = await o7m2Stored(tx, f.personalMovement);
+    return [{
+      ok: first === null && again === "23505" && words === null &&
+        stored.map((m) => m.rule).join(",") === "from_words,twin",
+      detail: `'twin' ${o7m2Code(first)}, 'twin' again ${o7m2Code(again)}, 'from_words' ${o7m2Code(words)}; stored ` +
+        `[${stored.map((m) => m.rule).join(", ")}]`,
+    }];
+  });
+
+  await o7m2Rows([labels.ruleClosed], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    const known: string[] = [];
+    for (const rule of O7M2_RULES) known.push(`${rule} ${o7m2Code(await o7m2Try(tx, f.personalMovement, rule))}`);
+    const other = await o7m2Try(tx, f.personalMovement, "other");
+    const blank = await o7m2Try(tx, f.sharedMovement, "");
+    await tx`reset role`;
+    const stored = await o7m2Stored(tx, f.personalMovement);
+    const shared = await o7m2Stored(tx, f.sharedMovement);
+    return [{
+      ok: known.every((entry) => entry.endsWith(" accepted")) && stored.length === 4 &&
+        other === "23514" && blank === "23514" && shared.length === 0,
+      detail: `${known.join(", ")}; 'other' ${o7m2Code(other)}; '' ${o7m2Code(blank)}; stored ${stored.length} + ${shared.length}`,
+    }];
+  });
+
+  await o7m2Rows([labels.final], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    const id = await o7m2Mark(tx, f.personalMovement, "twin");
+    await tx`reset role`;
+    const [before] = await o7m2Stored(tx, f.personalMovement);
+    await enterUserContext(tx, f.member);
+    const outcome = async (run: (sp: M1Tx) => PromiseLike<readonly unknown[]>) => {
+      let rows = -1;
+      const code = await m1Refusal(tx, async (sp) => {
+        rows = (await run(sp)).length;
+      });
+      return { ok: code === "42501" || (code === null && rows === 0), shown: code ?? `${rows} rows` };
+    };
+    const rule = await outcome((sp) => sp`update transaction_reviews set rule = 'from_words' where id = ${id} returning id`);
+    const when = await outcome((sp) =>
+      sp`update transaction_reviews set marked_at = now() - interval '1 day' where id = ${id} returning id`);
+    const gone = await outcome((sp) => sp`delete from transaction_reviews where id = ${id} returning id`);
+    await tx`reset role`;
+    const after = await o7m2Stored(tx, f.personalMovement);
+    return [{
+      ok: rule.ok && when.ok && gone.ok && after.length === 1 && JSON.stringify(after[0]) === JSON.stringify(before),
+      detail: `as the writer: update rule ${rule.shown}, update marked_at ${when.shown}, delete ${gone.shown}; ` +
+        `after: ${after.length} mark, ${after.length === 1 && JSON.stringify(after[0]) === JSON.stringify(before) ? "unchanged" : `now ${JSON.stringify(after)}`}`,
+    }];
+  });
+
+  await o7m2Rows([labels.markedBy], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    const foreign = await m1Refusal(tx, (sp) =>
+      sp`insert into transaction_reviews (transaction_id, rule, marked_by) values (${f.personalMovement}, 'twin', ${f.leader})`);
+    const self = await m1Refusal(tx, (sp) =>
+      sp`insert into transaction_reviews (transaction_id, rule, marked_by) values (${f.personalMovement}, 'from_words', ${f.member})`);
+    const plain = await o7m2Try(tx, f.personalMovement, "above_usual");
+    await tx`reset role`;
+    const stored = await o7m2Stored(tx, f.personalMovement);
+    const [{ now }] = await tx<{ now: string }[]>`select now()::text as now`;
+    const mark = stored.find((m) => m.rule === "above_usual");
+    return [{
+      ok: foreign === "42501" && self === "42501" && plain === null && stored.length === 1 &&
+        mark?.marked_by === f.member && mark.marked_at === now,
+      detail: `A names the leader as marked_by: ${o7m2Code(foreign)}; names itself: ${o7m2Code(self)}; names neither: ` +
+        `${o7m2Code(plain)}; stored [${stored.map((m) => `${m.rule} by ${o6m1bWho(m.marked_by, f)} at ${m.marked_at}`).join("; ")}], now ${now}`,
+    }];
+  });
+
+  await o7m2Rows([labels.cascade], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    await o7m2Mark(tx, f.personalMovement, "twin");
+    await o7m2Mark(tx, f.personalMovement, "from_words");
+    await tx`reset role`;
+    const before = (await o7m2Stored(tx, f.personalMovement)).length;
+    await enterUserContext(tx, f.member);
+    const code = await m1Refusal(tx, async (sp) => {
+      await sp`delete from transactions where id = ${f.personalMovement}`;
+      await sp`set constraints all immediate`;
+      await sp`set constraints all deferred`;
+    });
+    await tx`reset role`;
+    const after = (await o7m2Stored(tx, f.personalMovement)).length;
+    const [{ movements }] = await tx<{ movements: number }[]>`
+      select count(*)::int as movements from transactions where id = ${f.personalMovement}`;
+    return [{
+      ok: before === 2 && code === null && movements === 0 && after === 0,
+      detail: `${before} marks; A deletes the movement: ${o7m2Code(code)}; movement rows ${movements}, marks left ${after}`,
+    }];
+  });
+
+  await o7m2Rows([labels.audit], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    const id = await o7m2Mark(tx, f.personalMovement, "twin");
+    await tx`reset role`;
+    const rows = await tx<{ action: string; actor_user_id: string | null; rule: string | null }[]>`
+      select action, actor_user_id, after_data->>'rule' as rule
+      from audit_log where entity = 'transaction_reviews' and record_id = ${id}`;
+    return [{
+      ok: rows.length === 1 && rows[0].action === "INSERT" && rows[0].actor_user_id === f.member && rows[0].rule === "twin",
+      detail: `audit rows for the mark: ${rows.length}` +
+        (rows.length ? ` — ${rows.map((r) => `${r.action} by ${o6m1bWho(r.actor_user_id, f)}, rule ${r.rule}`).join("; ")}` : ""),
+    }];
+  });
+
+  await o7m2Rows([labels.grants], async (tx) => {
+    const held = await tx<{ role: string; privilege: string }[]>`
+      select r.role, p.privilege
+      from unnest(array['anon', 'service_role']) as r(role)
+      cross join unnest(${O7M2_PRIVILEGES as unknown as string[]}::text[]) as p(privilege)
+      where has_table_privilege(r.role, 'finances.transaction_reviews', p.privilege)
+         or (p.privilege in ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
+             and has_any_column_privilege(r.role, 'finances.transaction_reviews', p.privilege))`;
+    const [mine] = await tx<{ select_all: boolean; table_insert: boolean; any_update: boolean; del: boolean; trunc: boolean }[]>`
+      select
+        has_table_privilege('authenticated', 'finances.transaction_reviews', 'SELECT') as select_all,
+        has_table_privilege('authenticated', 'finances.transaction_reviews', 'INSERT') as table_insert,
+        has_any_column_privilege('authenticated', 'finances.transaction_reviews', 'UPDATE') as any_update,
+        has_table_privilege('authenticated', 'finances.transaction_reviews', 'DELETE') as del,
+        has_table_privilege('authenticated', 'finances.transaction_reviews', 'TRUNCATE') as trunc`;
+    const insertable = await tx<{ column_name: string }[]>`
+      select column_name from information_schema.columns
+      where table_schema = 'finances' and table_name = 'transaction_reviews'
+        and has_column_privilege('authenticated', 'finances.transaction_reviews', column_name, 'INSERT')
+      order by column_name`;
+    const driven: string[] = [];
+    for (const role of ["anon", "service_role"] as const) {
+      await m1Become(tx, role, randomUUID());
+      driven.push(`${role} select ${o7m2Code(await m1Refusal(tx, (sp) => sp`select id from finances.transaction_reviews limit 1`))}`);
+      await tx`reset role`;
+    }
+    const insertColumns = insertable.map((c) => c.column_name).join(",");
+    return [{
+      ok: held.length === 0 && driven.every((entry) => entry.endsWith(" 42501")) && mine.select_all && !mine.table_insert &&
+        !mine.any_update && !mine.del && !mine.trunc && insertColumns === "rule,transaction_id",
+      detail: `anon/service_role hold [${held.map((h) => `${h.role} ${h.privilege}`).join(", ")}]; ${driven.join(", ")}; ` +
+        `authenticated: select ${mine.select_all}, table insert ${mine.table_insert}, insert columns [${insertColumns}], ` +
+        `any update ${mine.any_update}, delete ${mine.del}, truncate ${mine.trunc}`,
+    }];
+  });
+
+  await o7m2Rows([labels.column], async (tx) => {
+    const f = await o7m2Fund(tx);
+    await enterUserContext(tx, f.member);
+    const [{ id: omitted }] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, amount_cents, occurred_at, description)
+      values (${f.personal}, 3000, ${todayInBogota()}, 'rls o7m2 movement') returning id`;
+    await tx`insert into transaction_splits (transaction_id, category_id, amount_cents) values (${omitted}, ${f.personalCategory}, 3000)`;
+    const [{ id: worded }] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, amount_cents, occurred_at, description, amount_from_words)
+      values (${f.personal}, 300000, ${todayInBogota()}, 'rls o7m2 movement', true) returning id`;
+    await tx`insert into transaction_splits (transaction_id, category_id, amount_cents) values (${worded}, ${f.personalCategory}, 300000)`;
+    const nulled = await m1Refusal(tx, (sp) =>
+      sp`insert into transactions (from_account_id, amount_cents, occurred_at, description, amount_from_words)
+        values (${f.personal}, 3000, ${todayInBogota()}, 'rls o7m2 movement', null)`);
+    const raise = await m1Refusal(tx, (sp) => sp`update transactions set amount_from_words = true where id = ${omitted}`);
+    const lower = await m1Refusal(tx, (sp) => sp`update transactions set amount_from_words = false where id = ${worded}`);
+    const description = await m1Refusal(tx, (sp) =>
+      sp`update transactions set description = 'rls o7m2 movement edited' where id = ${worded}`);
+    await tx`reset role`;
+    const stored = await tx<{ id: string; amount_from_words: boolean | null }[]>`
+      select id, amount_from_words from finances.transactions where id in (${omitted}, ${worded})`;
+    const flag = (id: string) => stored.find((row) => row.id === id)?.amount_from_words;
+    return [{
+      ok: flag(omitted) === false && flag(worded) === true && nulled === "23502" &&
+        raise === "42501" && lower === "42501" && description === null,
+      detail: `as A: omitted → ${flag(omitted)}, named true → ${flag(worded)}, named null ${o7m2Code(nulled)}; ` +
+        `update to true ${o7m2Code(raise)}, to false ${o7m2Code(lower)}; the same update of the description ${o7m2Code(description)}`,
+    }];
+  });
+
+  await o7m2Rows([labels.index], async (tx) => {
+    const indexes = await tx<{ name: string; lead: string }[]>`
+      select c.relname as name, a.attname as lead
+      from pg_index i
+      join pg_class c on c.oid = i.indexrelid
+      join pg_attribute a on a.attrelid = i.indrelid and a.attnum = i.indkey[0]
+      where i.indrelid = 'finances.transaction_reviews'::regclass`;
+    return [{
+      ok: indexes.some((index) => index.lead === "marked_by"),
+      detail: `indexes: [${indexes.map((index) => `${index.name} on ${index.lead}…`).join(", ")}]`,
+    }];
+  });
+
+  const [{ current_user: afterUser }] = await sql<{ current_user: string }[]>`select current_user`;
+  const [{ groups, movements }] = await sql<{ groups: number; movements: number }[]>`
+    select
+      (select count(*)::int from groups where name = 'rls o7m2') as groups,
+      (select count(*)::int from transactions where description like 'rls o7m2%') as movements`;
+  assert(
+    labels.tail,
+    afterUser === "postgres" && groups === 0 && movements === 0,
+    `current_user = ${afterUser}, groups ${groups}, movements ${movements} named 'rls o7m2%'`,
   );
 }
 
