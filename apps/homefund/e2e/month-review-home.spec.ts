@@ -10,7 +10,7 @@ import { expect, type Page } from "@playwright/test";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { HARNESS_EMAIL } from "../scripts/harness/session";
-import { asHarnessUser, readScope, test } from "./global-setup";
+import { asHarnessUser, clearGroup, readScope, test } from "./global-setup";
 import { lastClosedMonth, shiftMonth } from "@/lib/dates";
 
 const MONTHS = [
@@ -91,7 +91,10 @@ test("two twins count «4 movimientos»; every one marked leaves no line", async
 });
 
 test("an invitation waiting for this address is answered first: Inicio shows its card alone, no «Revisar» line", async ({ page }) => {
+  await clearGroup();
   await seedTwins(5_000_000, "15");
+  await page.goto("/es");
+  await expect(line(page)).toHaveText(`Revisar ${monthName} · 2 movimientos`);
   // A fund the second identity leads, with a pending row addressed to the first one's email.
   const groupId = randomUUID();
   const inviter = `Carlos ${stamp}`;

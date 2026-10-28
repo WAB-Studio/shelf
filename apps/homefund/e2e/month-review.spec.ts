@@ -170,6 +170,8 @@ for (const width of [360, 1280]) {
     await expect(back).toHaveAttribute("href", `/es/reports/review?month=${month}`);
     await back.click();
     await expect(page).toHaveURL(new RegExp(`/es/reports/review\\?month=${month}$`));
+    // Left without a change: the item still waits.
+    await expect(okButtons(page)).toHaveCount(4);
     // A review the page cannot read leads back to the movements.
     await page.goto(`/es/movements/${ids.big}?review=nada`);
     await expect(page.getByRole("link", { name: "Revisar el mes" })).toHaveCount(0);
@@ -225,7 +227,6 @@ test.describe("as a member who only reads the leader's account", () => {
   });
 });
 
-
 test("«Está bien» reads «Guardando…» and holds still while the server answers", async ({ page }) => {
   await page.goto(`/es/reports/review?month=${month}`);
   let release: () => void = () => {};
@@ -255,13 +256,6 @@ test("a mark the server refuses says so in a toast and leaves the item waiting",
   const [{ marks }] = await fixtureSql<{ marks: number }[]>`
     select count(*)::int as marks from transaction_reviews where transaction_id in ${fixtureSql(movements)}`;
   expect(marks).toBe(0);
-});
-
-test("«Corregir» left without a change returns to the month with the item still waiting", async ({ page }) => {
-  await page.goto(`/es/reports/review?month=${month}`);
-  await page.locator(`a[href="/es/movements/${ids.words}?review=${month}"]`).click();
-  await page.getByRole("link", { name: "Revisar el mes" }).locator("visible=true").click();
-  await expect(page).toHaveURL(new RegExp(`/es/reports/review\\?month=${month}$`));
   await expect(okButtons(page)).toHaveCount(4);
   await expect(page.getByRole("button", { name: /^Revisados/ })).toHaveCount(0);
 });
