@@ -86,6 +86,7 @@ jobs:
         e2e/meta-mes.spec.ts
         e2e/meta-ritmo-unidad.spec.ts
         e2e/meta-terminada-sin-ritmo.spec.ts
+        e2e/mes-cerrado.spec.ts
         e2e/mes.spec.ts
         e2e/parte-cero-pantallas.spec.ts
         e2e/parte-explicada.spec.ts

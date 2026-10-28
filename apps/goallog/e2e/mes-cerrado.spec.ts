@@ -30,9 +30,10 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seeded> {
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
     values
       (${person.id}, ${goal.id}, ${`Pintar ${stamp}`}, ${monthBefore}::date),
-      (${person.id}, ${goal.id}, ${`Barrer ${stamp}`}, ${lastMonth}::date)
+      (${person.id}, ${goal.id}, ${`Barrer ${stamp}`}, ${lastMonth}::date),
+      (${person.id}, ${goal.id}, ${`Lavar ${stamp}`}, ${previousMonth(monthBefore)}::date)
   `;
-  // A parent of the month before last: one sub-task done in it, one done only today.
+  // A parent of the month before last: one sub-task done in it, one done on the next month's first day.
   const [parent] = await db<{ id: string }[]>`
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
     values (${person.id}, ${goal.id}, ${`Mudar ${stamp}`}, ${monthBefore}::date) returning id
@@ -44,7 +45,7 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seeded> {
   `;
   await db`
     insert into goals.facts (user_id, goal_id, one_off_id, day)
-    values (${person.id}, ${goal.id}, ${inMonth.id}, ${`${key(monthBefore)}-10`}::date), (${person.id}, ${goal.id}, ${later.id}, ${today}::date)
+    values (${person.id}, ${goal.id}, ${inMonth.id}, ${`${key(monthBefore)}-10`}::date), (${person.id}, ${goal.id}, ${later.id}, ${lastMonth}::date)
   `;
   // A loose weekly habit: a closed month reads no «esta semana» tally.
   const [habit] = await db<{ id: string }[]>`
@@ -52,14 +53,14 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seeded> {
     values (${person.id}, null, ${`Nadar ${stamp}`}, 'times_per_week', 3, 'tap', ${`${key(previousMonth(monthBefore))}-15T17:00:00Z`})
     returning id
   `;
-  // Archived today: the month before last still draws it, as it was lived.
+  // Archived today (the pinned day, not the database's clock): the month before last still draws it, as it was lived.
   const [archived] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, created_at, archived_at)
-    values (${person.id}, ${`Huerta ${stamp}`}, ${`${key(previousMonth(monthBefore))}-15T17:00:00Z`}, now()) returning id
+    values (${person.id}, ${`Huerta ${stamp}`}, ${`${key(previousMonth(monthBefore))}-15T17:00:00Z`}, ${`${today}T17:00:00Z`}) returning id
   `;
   await db`
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
-    values (${person.id}, ${archived.id}, ${`Sembrar ${stamp}`}, ${monthBefore}::date)
+    values (${person.id}, ${archived.id}, ${`Sembrar ${stamp}`}, ${monthBefore}::date), (${person.id}, ${archived.id}, ${`Regar ${stamp}`}, ${lastMonth}::date)
   `;
   // A goal with no task: an open month would offer it «Añadir una tarea».
   const [bare] = await db<{ id: string }[]>`
@@ -113,6 +114,11 @@ test("past the reach, the goal's month page shows its task with no mark and no s
     await expect(page.getByRole("button", { name: new RegExp(`Pintar ${stamp}`) })).toHaveCount(0);
     await page.getByText(`Pintar ${stamp}`, { exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    // A sub-task done on the next month's first day was not done in this one.
+    const markOf = (name: string) =>
+      page.getByText(name, { exact: true }).locator("xpath=ancestor::*[.//*[@data-state]][1]").locator("[data-state]").first();
+    await expect(markOf(`Empacar ${stamp}`)).toHaveAttribute("data-state", "declared");
+    await expect(markOf(`Cargar ${stamp}`)).toHaveAttribute("data-state", "empty");
 
     await page.goto(`/mes?mes=${key(monthBefore)}`);
     await expect(page.getByText(`Pintar ${stamp}`, { exact: true })).toBeVisible();
@@ -127,6 +133,8 @@ test("past the reach, the goal's month page shows its task with no mark and no s
     // A parent reads as its own month page does, never «sigue en».
     await expect(stood(`Mudar ${stamp}`)).toHaveText("sin hacer");
     await expect(stood(`Reservar ${stamp}`)).toHaveText("sin hacer");
+    // Carried in from the month before, it reads as its own month page has it, never «sigue en».
+    await expect(stood(`Lavar ${stamp}`)).toHaveText("sin hacer");
     // A goal archived since carries nothing on.
     await expect(stood(`Sembrar ${stamp}`)).toHaveText("sin hacer");
     await expect(page.getByText(`Nadar ${stamp}`, { exact: true })).toBeVisible();
@@ -142,13 +150,18 @@ test("within the reach, last month's task marks on both pages and its fact is da
   person,
 }) => {
   test.skip(lastMarkDay === null, "last month is past a fact's reach from the eighth day on");
-  await withClosed(browser, baseURL, db, person, async (page, { goalId, stamp }) => {
+  await withClosed(browser, baseURL, db, person, async (page, { goalId, archivedId, stamp }) => {
+    // A goal archived since marks nothing, not even within the reach.
+    await page.goto(`/metas/${archivedId}/meses/${key(lastMonth)}`);
+    await expect(page.getByText(`Regar ${stamp}`, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Marcar como hecho: Regar ${stamp}` })).toHaveCount(0);
+
     await page.goto(`/mes?mes=${key(lastMonth)}`);
     await page.getByRole("button", { name: `Marcar hecha: Barrer ${stamp}` }).click();
     await expect(page.getByRole("button", { name: `Deshacer: Barrer ${stamp}` })).toBeVisible();
     const [fact] = await db<{ day: string }[]>`
       select f.day::text as day from goals.facts f join goals.one_offs o on o.id = f.one_off_id
-      where o.goal_id = ${goalId}`;
+      where o.goal_id = ${goalId} and o.name = ${`Barrer ${stamp}`}`;
     expect(fact.day).toBe(lastMarkDay);
 
     await page.goto(`/metas/${goalId}/meses/${key(lastMonth)}`);
