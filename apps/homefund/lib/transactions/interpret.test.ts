@@ -382,3 +382,12 @@ test("one account matching the mentioned last four is picked over the default", 
   });
   assert.equal(proposal.accountId, "a1");
 });
+
+test("an amount read through «mil», «M» or a bare word is from words; digits alone and an unanswered ask are not (RF-155)", () => {
+  const fromWords = (text: string) => interpretQuickEntry(text, ctx).amountFromWords;
+  assert.equal(fromWords("25 mil mercado"), true);
+  assert.equal(fromWords("2M arriendo"), true);
+  assert.equal(fromWords("25000 mercado"), false);
+  assert.equal(fromWords("25 m de cable"), false);
+  assert.equal(fromWords("3 M arriendo"), false);
+});

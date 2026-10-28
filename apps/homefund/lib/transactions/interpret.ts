@@ -60,6 +60,8 @@ export interface AmountAsk {
 
 interface QuickEntryProposal {
   amountPesos: string | null;
+  // The amount came from words («25 mil», «un millón»), not from digits alone (RF-155).
+  amountFromWords: boolean;
   ask: AmountAsk | null;
   categoryId: string | null;
   description: string;
@@ -213,6 +215,7 @@ export function interpretQuickEntry(
 
   return {
     amountPesos,
+    amountFromWords: amountPesos !== null && (bareWord !== null || multiplierMatch !== null),
     ask,
     categoryId: matchedCategory?.id ?? null,
     description,
