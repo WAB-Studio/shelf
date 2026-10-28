@@ -152,15 +152,44 @@ before(async () => {
   ids.parent = await oneOff(owner, ids.a, "madre", { day: wednesday });
   ids.child = await oneOff(owner, ids.a, "hija", { parent: ids.parent });
   ids.loose = await oneOff(owner, null, "suelta", { day: wednesday });
+  // The week's first and last days hold their tasks, listed by day.
+  const [monday, , , , , , sunday] = zone.weekOf(nextMonday);
+  ids.monday = await oneOff(owner, ids.a, "lunes", { day: monday });
+  ids.sunday = await oneOff(owner, ids.a, "domingo", { day: sunday });
+  // D ends on that Wednesday: a task dated its last day's morrow is past its span.
+  ids.d = await goal(owner, "o7-m8 D", wednesday);
+  ids.ended = await oneOff(owner, ids.d, "fuera de D", { day: wednesday });
+  // A fact on this month's first day: last month's reached never reads it.
+  await admin`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${owner.id}, ${ids.c}, ${commitment.commitmentId}, ${thisMonth}, 30)`;
+  // Loose habits: one opened two months back, one this month.
+  const [old] = await admin<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${owner.id}, null, 'o7-m8 suelto viejo', 'daily', 'tap', ${`${monthFrom(-2)}T12:00:00-05:00`}) returning id`;
+  const [fresh] = await admin<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${owner.id}, null, 'o7-m8 suelto nuevo', 'daily', 'tap', ${`${thisMonth}T12:00:00-05:00`}) returning id`;
+  ids.oldHabit = old.id;
+  ids.freshHabit = fresh.id;
 
   // `capped` has one goal ending in three months; `bare` has none.
   ids.x = await goal(capped, "o7-m8 X", monthFrom(3));
+  // An archived goal reaching further never stretches the limit.
+  ids.gone = await goal(capped, "o7-m8 archivada", monthFrom(20));
+  await admin`update goals.goals set archived_at = now() where id = ${ids.gone}`;
+  // A loose habit opened four months back is what `capped` first opened.
+  const [early] = await admin<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${capped.id}, null, 'o7-m8 suelto de X', 'daily', 'tap', ${`${monthFrom(-4)}T12:00:00-05:00`}) returning id`;
+  ids.earlyHabit = early.id;
 });
 
 after(async () => {
   try {
     if (goalIds.length > 0) await admin`delete from goals.goals where id in ${admin(goalIds)}`;
     await admin`delete from goals.one_offs where id in ${admin([ids.loose])}`;
+    await admin`delete from goals.commitments where id in ${admin([ids.oldHabit, ids.freshHabit, ids.earlyHabit])}`;
     await dropPeople(admin);
   } finally {
     await door.end();
@@ -170,10 +199,12 @@ after(async () => {
 
 const names = (items: { task: { name: string } }[]) => items.map((item) => item.task.name);
 
-test("Dated tasks: a not-done one-off dated next Wednesday is in tasks, done and parent are not", async () => {
+test("Dated tasks: a not-done one-off dated next week is in tasks, by day, Monday to Sunday; done, parent and a task past its goal's span are not", async () => {
   const read = await as(owner, () => week.loadWeek(nextMonday));
   const byName = new Map(read.tasks.map((task) => [task.name, task]));
-  assert.deepEqual([...byName.keys()].sort(), ["abierta", "suelta"]);
+  assert.deepEqual([...byName.keys()].sort(), ["abierta", "domingo", "lunes", "suelta"]);
+  assert.equal(read.tasks[0].name, "lunes");
+  assert.equal(read.tasks.at(-1)?.name, "domingo");
   assert.deepEqual(byName.get("abierta"), {
     id: ids.open,
     name: "abierta",
@@ -209,8 +240,9 @@ test("Limit: lastMonday follows the furthest open goal, a goal with no end and n
   assert.equal((await as(bare, () => month.loadMonthAcross({ today }))).lastMonth, thisMonth.slice(0, 7));
 });
 
-test("Month: firstMonth is the month the first goal was opened", async () => {
+test("Month: firstMonth is the month the first goal or loose habit was opened", async () => {
   assert.equal((await as(owner, () => month.loadMonthAcross({ today }))).firstMonth, monthFrom(-2).slice(0, 7));
+  assert.equal((await as(capped, () => month.loadMonthAcross({ today }))).firstMonth, monthFrom(-4).slice(0, 7));
   assert.equal((await as(bare, () => month.loadMonthAcross({ today }))).firstMonth, null);
 });
 
@@ -256,6 +288,15 @@ test("Past month: last month reads its reached amount and its tasks' done state 
   assert.equal(done.get("P1 hecha"), true);
   assert.equal(done.get("P2 sin hacer"), false);
   assert.ok(!past.goals.some((entry) => entry.id === ids.a), "A was opened this month");
+});
+
+test("Loose habits: a closed month lists the ones opened by its end; a coming month lists none", async () => {
+  const past = await as(owner, () => month.loadMonthAcross({ month: monthFrom(-1), today }));
+  const pastNames = past.loose.map((habit) => habit.name);
+  assert.ok(pastNames.includes("o7-m8 suelto viejo"), JSON.stringify(pastNames));
+  assert.ok(!pastNames.includes("o7-m8 suelto nuevo"), JSON.stringify(pastNames));
+  const coming = await as(owner, () => month.loadMonthAcross({ month: monthFrom(1), today }));
+  assert.deepEqual(coming.loose, []);
 });
 
 test("Past month: a month before the first goal reads no goal", async () => {
