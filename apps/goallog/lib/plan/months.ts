@@ -2,7 +2,7 @@ import { measureOf } from "@/lib/day/derive";
 import { dayBefore } from "@/lib/day/weeks";
 import type { DeclaredFact, EvidenceDay } from "@/lib/day/types";
 import { formatCount, isTimeUnit } from "@/lib/units/time";
-import { addWeeksToCivilDate, civilDayMonthShort, todayInZone, weekOf } from "@/lib/zone";
+import { civilDayMonthShort, todayInZone } from "@/lib/zone";
 
 export type MonthBudget = { month: string; amount: number };
 
@@ -212,12 +212,4 @@ export function toDate(rows: MonthRow[]): { planned: number; reached: number } {
       }),
       { planned: 0, reached: 0 },
     );
-}
-
-// The Mondays of the weeks a month ("YYYY-MM-01") touches, the one it starts in first (RP-145).
-export function weeksOfMonth(month: string): string[] {
-  const last = dayBefore(nextMonth(month));
-  const mondays: string[] = [];
-  for (let monday = weekOf(month)[0]; monday <= last; monday = addWeeksToCivilDate(monday, 1)) mondays.push(monday);
-  return mondays;
 }

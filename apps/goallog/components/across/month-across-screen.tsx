@@ -24,7 +24,9 @@ import {
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
-import { nextMonth, weeksOfMonth } from "@/lib/plan/months";
+import { nextMonth } from "@/lib/plan/months";
+import { mondaysTouching } from "@/lib/day/habit-weeks";
+import { weekHref } from "@/lib/day/week-href";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
@@ -64,9 +66,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   ]);
   const seg = across.month.slice(0, 7);
   // The page cannot know the bounds before the read: a month past them lands on the nearer one; with no goal, on this one.
-  if (parseMonthParam(seg, today, across.firstMonth, across.lastMonth).kind === "redirect") {
-    redirect(monthHref(seg > across.lastMonth ? across.lastMonth : across.firstMonth, thisMonth) ?? "/mes");
-  }
+  const asked = parseMonthParam(seg, today, across.firstMonth, across.lastMonth);
+  if (asked.kind === "redirect") redirect(monthHref(asked.to, thisMonth) ?? "/mes");
   const past = across.view === "past";
   const markDay = past ? closedMonthMarkDay(across.month, today) : undefined;
   const after = nextMonth(across.month);
@@ -471,11 +472,11 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           <Text as="span" variant="meta">
             {t("month.across.weeks.label")}
           </Text>
-          {weeksOfMonth(across.month).map((monday) => (
+          {mondaysTouching(across.month).map((monday) => (
             <TextLink
               key={monday}
               nowrap
-              href={monday === thisMonday ? "/semana" : `/semana?semana=${monday}`}
+              href={weekHref(monday, thisMonday)}
               aria-label={t("month.across.weeks.link", { day: civilDayMonthShort(monday) })}
             >
               {civilDayMonthShort(monday)}

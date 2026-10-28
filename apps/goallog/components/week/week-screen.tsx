@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { type Translator } from "@/i18n/translator";
 import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, Text, TextLink } from "@/components/ui";
 import { endedOnPhrase } from "@/lib/day/day-phrase";
-import { weekDayHref } from "@/lib/day/week-href";
+import { weekDayHref, weekHref } from "@/lib/day/week-href";
 import { daysBetween } from "@/lib/day/weeks";
 import { weekSteps } from "@/lib/day/week-param";
 import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
@@ -52,8 +52,7 @@ function eyebrowFor(monday: string, thisMonday: string, firstMonday: string | nu
 }
 
 function stepHref(monday: string | null, thisMonday: string): string | null {
-  if (monday === null) return null;
-  return monday === thisMonday ? "/semana" : `/semana?semana=${monday}`;
+  return monday === null ? null : weekHref(monday, thisMonday);
 }
 
 /**
@@ -76,11 +75,11 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
   ]);
   const { view, evidence, goals } = week;
   // The page cannot know the limit before the read: a week past it lands on the last.
-  if (view.start > week.lastMonday) redirect(stepHref(week.lastMonday, thisMonday) ?? "/semana");
+  if (view.start > week.lastMonday) redirect(weekHref(week.lastMonday, thisMonday));
 
   // A week before the first goal's has nothing to read: land on the first.
   if (week.firstMonday !== null && view.start < week.firstMonday) {
-    redirect(stepHref(week.firstMonday, thisMonday) ?? "/semana");
+    redirect(weekHref(week.firstMonday, thisMonday));
   }
   const past = view.start < thisMonday;
   const steps = weekSteps({ monday: view.start, thisMonday, firstMonday: week.firstMonday, lastMonday: week.lastMonday });

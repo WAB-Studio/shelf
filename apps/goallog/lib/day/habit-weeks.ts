@@ -1,3 +1,4 @@
+import { nextMonth } from "@/lib/plan/months";
 import { civilDateToDate, dateToCivilDate, weekOf } from "@/lib/zone";
 
 function plusDays(day: string, days: number): string {
@@ -25,6 +26,15 @@ export function weeksOfMonth(month: string): string[] {
     if (weekMonthOf(monday) === month) weeks.push(monday);
   }
   return weeks;
+}
+
+// Every Monday of a week `month` touches, the one holding the 1st first: «Mes» links each (RP-145). Unlike
+// `weeksOfMonth`, a week whose Thursday falls in the month next door is still here.
+export function mondaysTouching(month: string): string[] {
+  const last = plusDays(nextMonth(month), -1);
+  const mondays: string[] = [];
+  for (let monday = mondayOf(month); monday <= last; monday = plusDays(monday, 7)) mondays.push(monday);
+  return mondays;
 }
 
 // A week counts once its Sunday is before `today` and the habit lived its Thursday.

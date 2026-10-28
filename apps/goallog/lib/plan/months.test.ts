@@ -3,7 +3,6 @@ import test from "node:test";
 
 import type { DeclaredFact, EvidenceDay } from "@/lib/day/types";
 import {
-  weeksOfMonth,
   monthLine,
   monthOf,
   previousMonth,
@@ -286,13 +285,4 @@ test("partOf: names the days a first, a last and a one-month goal fill; a whole 
   assert.equal(partOf("2026-10-01", { ...base, openedOn: "2026-10-01", horizon: "2026-12-01" }), null);
   assert.equal(partOf("2026-10-01", { ...first, budgets: [{ month: "2026-10-01", amount: 60 }] }), null);
   assert.equal(partOf("2026-10-01", { ...first, rhythm: null }), null);
-});
-
-test("weeksOfMonth: the Mondays of every week a month touches, from the one it starts in (RP-145)", () => {
-  // October 2026 starts on a Thursday and ends on a Saturday.
-  assert.deepEqual(weeksOfMonth("2026-10-01"), ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"]);
-  // February 2027 starts on a Monday and ends on a Sunday: four weeks, none outside it.
-  assert.deepEqual(weeksOfMonth("2027-02-01"), ["2027-02-01", "2027-02-08", "2027-02-15", "2027-02-22"]);
-  // March 2027 ends on a Wednesday: its last week starts in it.
-  assert.equal(weeksOfMonth("2027-03-01").at(-1), "2027-03-29");
 });

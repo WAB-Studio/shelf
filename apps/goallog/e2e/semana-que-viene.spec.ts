@@ -176,7 +176,6 @@ test("the last week of the limit month has no ›, past the goal's end it asks n
     await expect(page.getByText("Ninguna meta pide algo esta semana.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
     await page.goto(`/semana?semana=${shift(lastMonday, 7)}`);
-    await expect(page).not.toHaveURL(new RegExp(`semana=${shift(lastMonday, 7)}$`));
     await expect(page).toHaveURL(new RegExp(`/semana\\?semana=${lastMonday}$`));
   });
 });

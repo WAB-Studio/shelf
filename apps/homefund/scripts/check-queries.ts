@@ -14657,12 +14657,12 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
   const marks = await marksOf();
   const cleared = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
   assert(
-    next("O8 typed amount: an edit that keeps the amount keeps «read from words» and every mark; one that changes it clears it and its mark"),
-    String(kept) === "true" && keptMarks === "above_usual,from_words,reconciliation_gap,twin" && String(cleared) === "false" && !marks.includes("from_words"),
-    `kept ${kept} with ${keptMarks}, cleared ${cleared}, marks left ${marks}`,
+    next("O8 typed amount: an edit that keeps the amount keeps «read from words» and every mark; one that changes it clears the flag"),
+    String(kept) === "true" && keptMarks === "above_usual,from_words,reconciliation_gap,twin" && String(cleared) === "false",
+    `kept ${kept} with ${keptMarks}, cleared ${cleared}`,
   );
   assert(
-    next("O8-M11 amount edit: «Muy por encima de lo usual» and «Dos iguales» lose their «Está bien» with it; a count's gap keeps its own (RF-165)"),
+    next("O8-M11 amount edit: «read from words», «Muy por encima de lo usual» and «Dos iguales» lose their «Está bien»; a count's gap keeps its own (RF-164, RF-165)"),
     marks === "reconciliation_gap",
     `marks left ${marks}`,
   );
