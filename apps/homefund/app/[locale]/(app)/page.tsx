@@ -111,7 +111,11 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       getTransactionFormOptions(),
       resolveWithdrawalTarget(),
       listDueReminders(DUE_LIMIT),
-      getMonthReviewPending(),
+      // The review line is optional: a failed read drops the line, never Inicio.
+      getMonthReviewPending().catch((error: unknown) => {
+        console.error("getMonthReviewPending", error);
+        return null;
+      }),
       getTranslations("transactions"),
       getTranslations("dashboard"),
       getTranslations("accounts"),
