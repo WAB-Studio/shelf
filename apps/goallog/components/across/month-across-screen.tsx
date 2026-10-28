@@ -22,6 +22,7 @@ import {
   TextLink,
 } from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
+import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
 import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
@@ -46,7 +47,8 @@ function monthHref(month: string | null, thisMonth: string): string | null {
  * `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio`, `MesTodasNada`,
  * `MesTodasHecho`, `MesTodasSinEvidencia` (RP-142, RP-31): a month of every
  * goal open in it, as `loadMonthAcross` reads it, stepped ‹ › one month at a
- * time. A past month reads as it was lived and marks nothing; a coming one
+ * time. A past month reads as it was lived, and marks its tasks on its last
+ * day only while that day is within a fact's reach (RP-143); a coming one
  * marks its tasks as this month does and lists after it what waits with no
  * day. Adding a task or an amount stays on the goal's own month page, which
  * each goal's name opens.
@@ -64,6 +66,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   // The page cannot know the bounds before the read: a month past them leaves for this one.
   if (parseMonthParam(seg, today, across.firstMonth, across.lastMonth).kind === "redirect") redirect("/mes");
   const past = across.view === "past";
+  const markDay = past ? closedMonthMarkDay(across.month, today) : undefined;
   const t = await getTranslations();
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const monthNames = t.raw("day.monthLong") as string[];
@@ -122,8 +125,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
 
       const placed =
         where === undefined ? sub : where === "" ? undefined : t("month.group.line", { goal: where, amount: say(owes) });
-      // A closed month says how each task stood and marks nothing (RP-142).
-      if (past) {
+      // A closed month past a fact's reach says how each task stood and marks nothing (RP-142, RP-143).
+      if (markDay === null) {
         return (
           <Flex key={task.id} direction="column" gap="3">
             {[task, ...children].map((row) => (
@@ -167,6 +170,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                 : undefined
             }
             fixedMonth={goal.plan.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined}
+            markDay={markDay}
             sheet={sheetOf(task, children)}
           />
           {children.map((child) => (
@@ -181,6 +185,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               markLabel={t("month.across.mark", { name: child.name })}
               note={child.note}
               noteEyebrow={noteEyebrow}
+              markDay={markDay}
               sheet={sheetOf(child, [])}
             />
           ))}

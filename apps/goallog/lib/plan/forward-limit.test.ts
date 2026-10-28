@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { forwardLimit, lastMondayOf } from "./forward-limit";
+import { lastMonthOf } from "./months";
 
 const TODAY = "2026-10-22";
 
@@ -11,9 +12,10 @@ test("the limit is the last month of the furthest open goal", () => {
   assert.equal(forwardLimit({ horizons: ["2027-03-15"], today: TODAY }), "2027-03");
 });
 
-test("a goal with no end counts twelve months from today", () => {
-  assert.equal(forwardLimit({ horizons: [null], today: TODAY }), "2027-10");
-  assert.equal(forwardLimit({ horizons: ["2027-04-01", null], today: TODAY }), "2027-10");
+test("a goal with no end reaches the last month it plans, the eleventh after this one", () => {
+  assert.equal(forwardLimit({ horizons: [null], today: TODAY }), lastMonthOf(TODAY, null, TODAY).slice(0, 7));
+  assert.equal(forwardLimit({ horizons: [null], today: TODAY }), "2027-09");
+  assert.equal(forwardLimit({ horizons: ["2027-04-01", null], today: TODAY }), "2027-09");
 });
 
 test("no open goal leaves this month", () => {

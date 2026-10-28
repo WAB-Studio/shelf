@@ -1955,6 +1955,6 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
 - «Mes» steps both ways (O7-Q6 b): past months read as they were lived, as Semana's past weeks do.
 - How far forward (O7-Q7 a): to the last month of the furthest open goal's span; a goal with no end counts twelve months.
   A coming week allows only «Darle día»; a coming month's tasks mark done in one tap as this month's.
-- **Decided by the user 2026-10-28, on oleada-7's critic** (not built yet; opens the next free RP when planned): a past
+- **Decided by the user 2026-10-28, on oleada-7's critic** (RP-143): a past
   month is read-only everywhere, the goal's own month screen included, once seven days have passed since it closed;
   until then its tasks still mark and unmark, for a task done on the 31st and logged on the 2nd.

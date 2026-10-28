@@ -222,6 +222,16 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     );
   }
 
+  // A row nothing acts on (a closed month's task, RP-143) is no control at all.
+  if (!onClick && type === "button") {
+    return (
+      <div className={merged}>
+        {leading ? <span className={styles.leading}>{leading}</span> : null}
+        {body}
+      </div>
+    );
+  }
+
   return (
     <button ref={ref} type={type} className={merged} disabled={disabled} onClick={onClick} {...props}>
       {leading ? <span className={styles.leading}>{leading}</span> : null}

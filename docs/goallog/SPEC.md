@@ -205,6 +205,10 @@ of this gets built, and no schema, table or column is "prepared for" it.
   marked done in one tap as this month's. A coming week and a coming month list after them the tasks with no day — a goal's
   and the loose ones (RP-59) — each with «Darle día», the step «lo que espera» offers (RP-61). Reading any of them writes
   nothing. Decided by the user 2026-10-22 (Q6 a) and 2026-10-24 (O7-Q5 a, O7-Q6 b, O7-Q7 a).
+- [ ] **RP-143** — A closed month's tasks still mark and unmark, on «Mes» and on the goal's own month page, while the month's
+  last day is within a fact's reach (RP-129): seven days after it closes. The mark is dated that last day, so a task done on
+  the 31st and logged on the 2nd counts in its own month. From the eighth day the month reads only, everywhere: no mark, no
+  task's sheet. Decided by the user 2026-10-28.
 - [x] **RP-123** — A goal that holds goals reads week by week as it reads month by month (RP-80): each week, what it reached is the sum of its goals' in the same unit, plus what its own tasks reached; a goal in another unit adds nothing. Its «Ver por semana» never says it has no figure while its screen shows one. Decided by the user 2026-10-14 (critic of the whole app, question B = a).
 
 #### The account

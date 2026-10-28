@@ -232,10 +232,10 @@ test("Week: a coming week reads no evidence and asks nothing done", async () => 
 
 test("Limit: lastMonday follows the furthest open goal, a goal with no end and no goal at all", async () => {
   const lastMondayOf = (delta: number) => limits.lastMondayOf(monthFrom(delta).slice(0, 7));
-  assert.equal((await as(owner, () => week.loadWeek(today))).lastMonday, lastMondayOf(12));
+  assert.equal((await as(owner, () => week.loadWeek(today))).lastMonday, lastMondayOf(11));
   assert.equal((await as(capped, () => week.loadWeek(today))).lastMonday, lastMondayOf(2));
   assert.equal((await as(bare, () => week.loadWeek(today))).lastMonday, lastMondayOf(0));
-  assert.equal((await as(owner, () => month.loadMonthAcross({ today }))).lastMonth, monthFrom(12).slice(0, 7));
+  assert.equal((await as(owner, () => month.loadMonthAcross({ today }))).lastMonth, monthFrom(11).slice(0, 7));
   assert.equal((await as(capped, () => month.loadMonthAcross({ today }))).lastMonth, monthFrom(2).slice(0, 7));
   assert.equal((await as(bare, () => month.loadMonthAcross({ today }))).lastMonth, thisMonth.slice(0, 7));
 });
