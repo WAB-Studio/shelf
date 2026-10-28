@@ -29,7 +29,7 @@ import {
   listAccountReconciliations,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
-import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed } from "@/db/queries/month-review";
+import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed, type ReviewItem } from "@/db/queries/month-review";
 import {
   getAccountStatementHistory,
   listAccountStatements,
@@ -14732,6 +14732,39 @@ async function o8m5ReviewSurvivorsSuite(): Promise<void> {
     next("O8-M8 noted: a month whose movements raise nothing reads noted; one with none reads not"),
     quiet.noted === true && quiet.items.length === 0 && blank.noted === false && blank.items.length === 0,
     `quiet ${quiet.noted} with ${quiet.items.length} items, blank ${blank.noted} with ${blank.items.length} items`,
+  );
+
+  // Two equal expenses that read differently: their twin names neither; read alike, it names them.
+  const said = async (description: string, occurredAt: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents: 1_700_000, occurredAt, description,
+        externalRef: null, splits: [{ categoryId: plain, amountCents: 1_700_000 }], labelIds: [], amountFromWords: true,
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const apart = [await said(`Harness o8m9 pan ${tag}`, day(22)), await said(`Harness o8m9 leche ${tag}`, day(22))];
+  const alike = [await said(`Harness o8m9 gas ${tag}`, day(23)), await said(`Harness o8m9 gas ${tag}`, day(23))];
+  const twinOf = (items: ReviewItem[], ids: string[]) =>
+    items.find((item) => item.rule === "twin" && item.transactionIds.includes(ids[0]));
+  const named = await asUser(holder, () => getMonthReview(month));
+  assert(
+    next("O8-M9 twin description: a twin read differently names neither movement; read alike it names them"),
+    twinOf(named.items, apart)?.description === null && twinOf(named.items, alike)?.description === `Harness o8m9 gas ${tag}`,
+    `apart ${twinOf(named.items, apart)?.description}, alike ${twinOf(named.items, alike)?.description}`,
+  );
+  // «Deshacer» under one rule leaves the movement's mark under another.
+  await asUser(holder, () => markReviewed({ transactionIds: alike, rule: "twin" }));
+  await asUser(holder, () => markReviewed({ transactionIds: [alike[0]], rule: "from_words" }));
+  await asUser(holder, () => unmarkReviewed({ transactionIds: [alike[0]], rule: "from_words" }));
+  const undone = await asUser(holder, () => getMonthReview(month));
+  const words = undone.items.find((item) => item.rule === "from_words" && item.transactionIds.includes(alike[0]));
+  assert(
+    next("O8-M9 undo: «Deshacer» on a movement's from-words mark leaves its twin mark"),
+    twinOf(undone.items, alike)?.reviewed === true && words?.reviewed === false,
+    `twin ${twinOf(undone.items, alike)?.reviewed}, words ${words?.reviewed}`,
   );
 }
 
