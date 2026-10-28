@@ -33,6 +33,15 @@ export function nextMonth(month: string): string {
     : `${year}-${String(index + 1).padStart(2, "0")}-01`;
 }
 
+// "YYYY-MM-01" of the month before `month`.
+export function previousMonth(month: string): string {
+  const year = Number(month.slice(0, 4));
+  const index = Number(month.slice(5, 7));
+  return index === 1
+    ? `${year - 1}-12-01`
+    : `${year}-${String(index - 1).padStart(2, "0")}-01`;
+}
+
 // A goal with no end (RP-99) plans this many months past the current one.
 export const ENDLESS_MONTHS_AHEAD = 11;
 

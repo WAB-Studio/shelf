@@ -17,12 +17,14 @@ export function GiveDayRow({
   name,
   meta,
   scheduled,
+  suggest,
 }: {
   oneOffId: string;
   name: string;
   meta?: string;
   // Set for a task that already has a day: the sheet moves it.
   scheduled?: { day: string; label: string };
+  suggest?: string;
 }) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
@@ -48,6 +50,7 @@ export function GiveDayRow({
         oneOffId={oneOffId}
         name={name}
         current={scheduled}
+        suggest={suggest}
       />
     </>
   );

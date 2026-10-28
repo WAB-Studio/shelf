@@ -5,6 +5,7 @@ import type { DeclaredFact, EvidenceDay } from "@/lib/day/types";
 import {
   monthLine,
   monthOf,
+  previousMonth,
   monthRows,
   monthsOfSpan,
   partOf,
@@ -27,6 +28,11 @@ const OCT = "2026-10-01";
 const budget = { month: OCT, amount: 720 };
 // A goal that fills September to November whole, for the rules that are not RP-74's.
 const span = { openedOn: "2026-09-01", horizon: "2026-12-01" };
+
+test("previousMonth: steps back within a year and across January", () => {
+  assert.equal(previousMonth("2026-10-01"), "2026-09-01");
+  assert.equal(previousMonth("2027-01-01"), "2026-12-01");
+});
 
 test("monthOf: any day reads as the first of its month", () => {
   assert.equal(monthOf("2026-10-31"), "2026-10-01");

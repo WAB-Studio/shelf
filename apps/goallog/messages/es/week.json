@@ -27,7 +27,8 @@
     "datedTitle": "con día",
     "noneDated": "Nada tiene día en esta semana todavía.",
     "dayLabel": "{weekday} {day}",
-    "goal": "de {goal}"
+    "datedMeta": "{day} · de {goal}",
+    "nothingAsked": "Ninguna meta pide algo esta semana."
   },
   "unreadableTitle": "No pudimos leer una fuente.",
   "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",

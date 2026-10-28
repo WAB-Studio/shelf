@@ -24,7 +24,8 @@
     "give": "Darle día",
     "move": "Moverla",
     "giveLabel": "Darle día a {name}",
-    "moveLabel": "Mover {name} a otro día"
+    "moveLabel": "Mover {name} a otro día",
+    "goal": "de {goal}"
   },
   "schedule": {
     "title": "¿Para cuándo?",

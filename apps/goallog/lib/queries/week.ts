@@ -180,6 +180,8 @@ async function queryGoalsRow(
          from "goals"."one_offs" o
          left join "goals"."goals" g on g.id = o.goal_id
          where o.day between ${weekStart}::date and ${weekEnd}::date
+           -- A goal's task counts while its goal is open on the task's own day.
+           and (o.goal_id is null or (g.archived_at is null and (g.horizon is null or g.horizon > o.day)))
            and not exists (select 1 from "goals"."facts" f where f.one_off_id = o.id)
            and not exists (select 1 from "goals"."one_offs" c where c.parent_id = o.id)) as tasks
   `);

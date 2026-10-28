@@ -7,7 +7,7 @@ import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, Text, TextLink }
 import { endedOnPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref } from "@/lib/day/week-href";
 import { weekSteps } from "@/lib/day/week-param";
-import { listDaylessOneOffs } from "@/lib/queries/one-offs";
+import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
 import { loadWeek, type GoalSummary } from "@/lib/queries/week";
 import { civilDateToDate, weekOf } from "@/lib/zone";
 
@@ -75,7 +75,11 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
   const thisMonday = weekOf(today)[0];
   const coming = weekOf(day)[0] > thisMonday;
   // A coming week also offers the tasks that wait with no day: read beside the week, never after it.
-  const [week, dayless] = await Promise.all([loadWeek(day, today), coming ? listDaylessOneOffs() : Promise.resolve([])]);
+  const [week, goalDayless, looseDayless] = await Promise.all([
+    loadWeek(day, today),
+    coming ? listGoalOneOffs(today) : [],
+    coming ? listDaylessOneOffs() : [],
+  ]);
   const { view, evidence, goals } = week;
   // The page cannot know the limit before the read: a week past it leaves for this one.
   if (view.start > week.lastMonday) redirect("/semana");
@@ -177,7 +181,14 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
       ) : null}
 
       {goals.length === 0 && week.loose.commitments.length === 0 ? (
-        <EmptyWeek title={t("week.empty.title")} action={t("week.empty.action")} />
+        // A coming week past every goal's end still has a goal open today.
+        coming ? (
+          <Text as="p" variant="sentence">
+            {t("week.coming.nothingAsked")}
+          </Text>
+        ) : (
+          <EmptyWeek title={t("week.empty.title")} action={t("week.empty.action")} />
+        )
       ) : null}
 
       <WeekTableFace week={week} today={today} past={past} columns={columns} t={t} endedNote={endedNote} />
@@ -198,14 +209,14 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
                     key={task.id}
                     oneOffId={task.id}
                     name={task.name}
-                    meta={task.goalName ? `${label} · ${t("week.coming.goal", { goal: task.goalName })}` : label}
+                    meta={task.goalName ? t("week.coming.datedMeta", { day: label, goal: task.goalName }) : label}
                     scheduled={{ day: task.day, label }}
                   />
                 );
               })
             )}
           </Section>
-          <GiveDayList tasks={dayless} />
+          <GiveDayList tasks={[...goalDayless, ...looseDayless]} suggest={view.start} />
         </>
       ) : null}
     </Page>

@@ -23,6 +23,8 @@ export type ScheduleSheetProps = {
   // Set for a one-off that already has a day: the sheet moves it instead of
   // giving it one (`SueltaMover.dc.html`).
   current?: { day: string; label: string };
+  // The day the sheet proposes for a task with none: a coming week's or month's first.
+  suggest?: string;
 };
 
 /**
@@ -36,12 +38,15 @@ export function ScheduleSheet({
   oneOffId,
   name,
   current,
+  suggest,
 }: ScheduleSheetProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [choice, setChoice] = useState<DayChoiceValue>(
     !current
-      ? DEFAULT_DAY_CHOICE
+      ? suggest
+        ? { kind: "other", date: suggest }
+        : DEFAULT_DAY_CHOICE
       : current.day > todayInZone()
         ? { kind: "other", date: current.day }
         : current.day === todayInZone()

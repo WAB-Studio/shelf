@@ -26,7 +26,9 @@ function longName(day: string): string {
 const today = todayInZone();
 const thisMonday = mondayOf(today);
 const nextMonday = shift(thisMonday, 7);
-const HORIZON = shift(today, 45);
+// The third of the month after next: the goal's span ends early in the limit
+// month, so the last weeks › reaches ask nothing of it.
+const HORIZON = `${shift(`${shift(`${today.slice(0, 7)}-28`, 7).slice(0, 7)}-28`, 7).slice(0, 7)}-03`;
 // The goal's last day closes the limit month; its week is the last one.
 const limitMonth = shift(HORIZON, -1).slice(0, 7);
 const limitMonthEnd = shift(`${shift(`${limitMonth}-28`, 7).slice(0, 7)}-01`, -1);
@@ -36,6 +38,8 @@ const GOAL = "Correr la media";
 const COMMITMENT = "Trotar";
 const DATED = "Llamar al banco";
 const DAYLESS = "Comprar tenis";
+const ARCHIVED = "Meta dejada";
+const ARCHIVED_TASK = "Pagar la inscripción";
 const datedDay = shift(nextMonday, 2);
 
 // Noon Bogotá on the civil day: the same civil day in every zone near it.
@@ -56,7 +60,12 @@ async function seed(db: postgres.Sql, person: Person) {
   const [dayless] = await db<{ id: string }[]>`
     insert into goals.one_offs (user_id, name) values (${person.id}, ${DAYLESS}) returning id
   `;
-  return { goalId: goal.id, daylessId: dayless.id };
+  const [archived] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at, archived_at)
+    values (${person.id}, ${ARCHIVED}, ${HORIZON}, ${noonOf(shift(today, -10))}, ${noonOf(shift(today, -1))}) returning id
+  `;
+  await db`insert into goals.one_offs (user_id, goal_id, name, day) values (${person.id}, ${archived.id}, ${ARCHIVED_TASK}, ${datedDay})`;
+  return { goalIds: [goal.id, archived.id], daylessId: dayless.id };
 }
 
 async function withComing(
@@ -67,7 +76,7 @@ async function withComing(
   width: number,
   run: (page: Page) => Promise<void>,
 ) {
-  const { goalId, daylessId } = await seed(db, person);
+  const { goalIds, daylessId } = await seed(db, person);
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
     const page = await context.newPage();
@@ -76,7 +85,7 @@ async function withComing(
   } finally {
     await context.close();
     await db`delete from goals.one_offs where id = ${daylessId}`;
-    await db`delete from goals.goals where id = ${goalId}`;
+    await db`delete from goals.goals where id in ${db(goalIds)}`;
   }
 }
 
@@ -102,6 +111,8 @@ for (const width of [390, 1440]) {
 
       await expect(page.getByRole("link", { name: /^Abrir el (?!chat$)/ })).toHaveCount(0);
       await expect(page.getByRole("button", { name: `Mover ${DATED} a otro día` })).toContainText(longName(datedDay));
+      // A task of a goal archived since is no task of the weeks to come.
+      await expect(page.getByText(ARCHIVED_TASK)).toHaveCount(0);
       await expect(giveDay(page, DAYLESS)).toBeVisible();
     });
   });
@@ -126,7 +137,9 @@ test("«Darle día» on a coming week moves the task from «Sin día» to its da
     const thursday = shift(nextMonday, 3);
     await giveDay(page, DAYLESS).click();
     const sheet = page.getByRole("dialog");
-    await sheet.getByRole("radio", { name: "otro día" }).click();
+    // The sheet proposes the week's own Monday, never today.
+    await expect(sheet.getByRole("radio", { name: "otro día" })).toBeChecked();
+    await expect(sheet.getByLabel("qué día")).toHaveValue(nextMonday);
     await sheet.getByLabel("qué día").fill(thursday);
     await sheet.getByRole("button", { name: "Ponerle ese día" }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -150,7 +163,7 @@ test("two weeks out reads «dentro de 2 semanas» and, with nothing dated, the e
   });
 });
 
-test("the last week of the goal's span has no ›, and the week after it lands on /semana (RP-142)", async ({
+test("the last week of the limit month has no ›, past the goal's end it asks nothing, and the week after it lands on /semana (RP-142)", async ({
   browser,
   baseURL,
   db,
@@ -160,6 +173,8 @@ test("the last week of the goal's span has no ›, and the week after it lands o
     await page.goto(`/semana?semana=${lastMonday}`);
     await expect(page).toHaveURL(new RegExp(`/semana\\?semana=${lastMonday}$`));
     await expect(next(page)).toHaveCount(0);
+    await expect(page.getByText("Ninguna meta pide algo esta semana.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
     await page.goto(`/semana?semana=${shift(lastMonday, 7)}`);
     await expect(page).toHaveURL(/\/semana$/);
   });
