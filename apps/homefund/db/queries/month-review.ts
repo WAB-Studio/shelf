@@ -39,6 +39,7 @@ function reviewItemsSql(month: string): SQL {
       join transactions t on t.id = s.transaction_id
       where t.from_account_id is not null and t.to_account_id is null
         and t.reconciliation_id is null and s.category_id is not null
+        and t.occurred_at >= ${historyStart}::date and t.occurred_at < ${endExclusive}::date
     ),
     -- One item per movement: its largest split over three times its category's median, with
     -- at least three splits of history in the six months before the month, in its currency.
@@ -133,15 +134,18 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
 }
 
 /**
- * Inicio's line (RF-155, O7-Q1 a): last month's unmarked items, or null when none stand out.
- * The same rules as the screen, one round trip.
+ * Inicio's line (RF-155, O7-Q1 a): last month's unmarked items the caller can mark, or null when
+ * none stand out. The screen's rows and account join, so the count never names a row it hides.
  */
 export async function getMonthReviewPending(): Promise<{ month: string; count: number } | null> {
   const month = addCivilMonths(`${todayInBogota().slice(0, 7)}-01`, -1).slice(0, 7);
   const count = await withUserDb(async (tx) => {
     const [row] = await tx.execute<{ count: number }>(sql`
       ${reviewItemsSql(month)}
-      select count(*)::int as count from marked m where not m.reviewed`);
+      select count(*)::int as count
+      from marked m
+      join accounts a on a.id = m.account_id
+      where not m.reviewed and m.can_mark`);
     return row?.count ?? 0;
   });
   return count > 0 ? { month, count } : null;

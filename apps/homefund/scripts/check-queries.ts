@@ -4214,6 +4214,7 @@ async function main(): Promise<void> {
   await ledgerGuardSuite(userId, scope);
   console.log("");
   await reconcileStrangerSuite(userId, fellow);
+  await o7m3ReaderPendingSuite(userId, fellow);
   console.log("");
   await recurringRuleCategoryScopeSuite(scope, groupless);
   await recurringRuleCategoryFitSuite(userId, scope, groupless, fellow);
@@ -14486,6 +14487,56 @@ async function o7m3MonthReviewSuite(): Promise<void> {
     next("O7-M3 refused: a person who cannot write the movement is told «review.errors.cannotMark», and with nothing pending Inicio reads null"),
     refused?.serverError === "review.errors.cannotMark" && strangerPending === null,
     `serverError ${refused?.serverError}, stranger pending ${JSON.stringify(strangerPending)}`,
+  );
+
+  // A twin group past any form's size is still marked in one «Está bien».
+  const many: string[] = [];
+  for (let n = 0; n < 21; n += 1) many.push(await spend(bank, plain, 7_000_000, day(18)));
+  const crowd = (await asUser(holder, () => getMonthReview(month))).items.find(
+    (item) => item.rule === "twin" && item.transactionIds.includes(many[0]),
+  );
+  const crowdMarked = await asUser(holder, () =>
+    review.markReviewedAction({ transactionIds: crowd?.transactionIds ?? [], rule: "twin" }),
+  );
+  const crowdMarks = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transaction_reviews where transaction_id in ${fixtureSql(many)} and rule = 'twin'`;
+  assert(
+    next("O7-M3 crowd: a twin group of 21 is one item, and one «Está bien» through the action marks all 21"),
+    crowd?.transactionIds.length === 21 && crowdMarked?.serverError === undefined && crowdMarks[0].n === 21,
+    `ids ${crowd?.transactionIds.length}, serverError ${crowdMarked?.serverError}, marks ${crowdMarks[0].n}`,
+  );
+}
+
+// RF-155, O7-Q1 a: a fellow who reads the leader's personal account sees its item on the screen,
+// unmarkable, and Inicio's count never names it: a line they could never clear.
+async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Promise<void> {
+  const today = todayInBogota();
+  const month = shiftMonth(today, -1);
+  const { accountId } = await createAccount({
+    name: "Harness o7m3 ajena", kind: "asset", subtype: "bank", ownerUserId: userId, groupId: null,
+    isShared: false, institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 10_000_000,
+    balanceOn: `${shiftMonth(today, -2)}-01`,
+  });
+  track("accounts", accountId);
+  const { categoryId } = await createCategory({
+    scope: { ownerUserId: userId }, name: "Harness o7m3 ajena", kind: "expense", parentId: null, color: "#B4542F",
+  });
+  track("categories", categoryId);
+  const pendingBefore = await asUser(fellow, () => getMonthReviewPending());
+  const { transactionId } = await createTransaction({
+    fromAccountId: accountId, toAccountId: null, amountCents: 2_500_000, occurredAt: `${month}-14`,
+    description: "Harness o7m3 ajena palabras", externalRef: null, splits: [{ categoryId, amountCents: 2_500_000 }],
+    labelIds: [], amountFromWords: true,
+  });
+  track("transactions", transactionId);
+  const seen = (await asUser(fellow, () => getMonthReview(month))).items.find((item) =>
+    item.transactionIds.includes(transactionId),
+  );
+  const pendingAfter = await asUser(fellow, () => getMonthReviewPending());
+  assert(
+    next("O7-M3 reader: a fellow sees the leader's from-words item as unmarkable, and their Inicio count stays where it was"),
+    seen?.rule === "from_words" && seen.canMark === false && (pendingAfter?.count ?? 0) === (pendingBefore?.count ?? 0),
+    `seen ${seen?.rule} canMark ${seen?.canMark}, pending ${pendingBefore?.count ?? 0} → ${pendingAfter?.count ?? 0}`,
   );
 }
 
