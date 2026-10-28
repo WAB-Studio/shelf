@@ -176,6 +176,15 @@ for (const width of [360, 1280]) {
   });
 }
 
+test("deleting a twin opened from «Corregir» lands back on the month, where the twin is gone", async ({ page }) => {
+  await page.goto(`/es/movements/${ids.twinB}?review=${month}`);
+  await page.getByRole("button", { name: "Eliminar", exact: true }).locator("visible=true").click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Eliminar", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/es/reports/review\\?month=${month}$`));
+  await expect(page.getByText("Dos iguales el mismo día")).toHaveCount(0);
+  await expect(okButtons(page)).toHaveCount(3);
+});
+
 test.describe("as a member who only reads the leader's account", () => {
   test.use({ storageState: MEMBER_STORAGE_STATE });
   test.beforeEach(async () => {

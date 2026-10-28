@@ -80,10 +80,13 @@ function reviewItemsSql(month: string): SQL {
       select 'reconciliation_gap', array[t.id], t.amount_cents, null, null, r.counted_balance_cents
       from month_tx t join account_reconciliations r on r.id = t.reconciliation_id
     ),
-    -- A twin's ids share their day and accounts, so its first movement speaks for all of them.
+    -- A twin's ids share their day and accounts, so its first movement speaks for all of them; its
+    -- description too, unless the twin's movements read differently.
     marked as (
       select f.rule, f.ids, f.amount_cents, f.usual_cents, f.counted_cents, t.occurred_at, t.currency,
-        t.account_id, t.description,
+        t.account_id,
+        case when f.rule = 'twin' and (select count(distinct coalesce(x.description, '')) from month_tx x
+          where x.id = any(f.ids)) > 1 then null else t.description end as description,
         case when f.rule = 'reconciliation_gap' then null else coalesce(f.category_id,
           (select s.category_id from transaction_splits s where s.transaction_id = t.id limit 1)) end
           as category_id,
@@ -164,10 +167,15 @@ export async function unmarkReviewed(input: {
   transactionIds: string[];
   rule: ReviewRule;
 }): Promise<void> {
+  // Every movement's mark goes or none does: a policy that filters one out leaves the item as it was.
   await withUserDb(async (tx) => {
-    await tx.execute(sql`
+    const gone = await tx.execute(sql`
       delete from ${transactionReviews}
       where rule = ${input.rule}
-        and transaction_id in (${sql.join(input.transactionIds.map((id) => sql`${id}::uuid`), sql`, `)})`);
+        and transaction_id in (${sql.join(input.transactionIds.map((id) => sql`${id}::uuid`), sql`, `)})
+      returning transaction_id`);
+    if (gone.length < input.transactionIds.length) throw new UnmarkRefusedError();
   });
 }
+
+export class UnmarkRefusedError extends Error {}

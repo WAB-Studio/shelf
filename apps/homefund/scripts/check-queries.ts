@@ -29,7 +29,13 @@ import {
   listAccountReconciliations,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
-import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed } from "@/db/queries/month-review";
+import {
+  UnmarkRefusedError,
+  getMonthReview,
+  getMonthReviewPending,
+  markReviewed,
+  unmarkReviewed,
+} from "@/db/queries/month-review";
 import {
   getAccountStatementHistory,
   listAccountStatements,
@@ -14618,19 +14624,22 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
   );
 
   // RF-163: «Deshacer» drops the mark for the one who may write it; a reader's delete reaches no row.
-  const reviewedOf = async (who: HarnessUser | null) =>
-    ((await (who ? asUser(who, () => getMonthReview(month)) : getMonthReview(month))).items.find((item) =>
+  const reviewedOf = async () =>
+    (await getMonthReview(month)).items.find((item) =>
       item.transactionIds.includes(transactionId) && item.rule === "from_words",
-    ))?.reviewed;
+    )?.reviewed;
   await markReviewed({ transactionIds: [transactionId], rule: "from_words" });
-  await asUser(fellow, () => unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" }));
-  const afterReader = await reviewedOf(null);
+  const readerUndo = await asUser(fellow, () => unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" })).then(
+    () => "undone",
+    (error: unknown) => (error instanceof UnmarkRefusedError ? "refused" : rootMessage(error)),
+  );
+  const afterReader = await reviewedOf();
   await unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" });
-  const afterHolder = await reviewedOf(null);
+  const afterHolder = await reviewedOf();
   assert(
-    next("O8 undo: a reader's «Deshacer» leaves the mark; the holder's drops it and the item waits again"),
-    afterReader === true && afterHolder === false,
-    `after the reader ${afterReader}, after the holder ${afterHolder}`,
+    next("O8 undo: a reader's «Deshacer» is refused and leaves the mark; the holder's drops it and the item waits again"),
+    readerUndo === "refused" && afterReader === true && afterHolder === false,
+    `reader ${readerUndo}, after the reader ${afterReader}, after the holder ${afterHolder}`,
   );
 
   // RF-164: an edit that keeps the amount keeps the mark; one that changes it clears it.
@@ -14641,12 +14650,15 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
     });
   await edit(2_500_000, "Harness o7m3 ajena palabras, renombrada");
   const kept = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
+  await markReviewed({ transactionIds: [transactionId], rule: "from_words" });
   await edit(2_600_000, "Harness o7m3 ajena palabras, otro monto");
+  const [{ marks }] = await fixtureSql<{ marks: number }[]>`
+    select count(*)::int as marks from transaction_reviews where transaction_id = ${transactionId}`;
   const cleared = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
   assert(
-    next("O8 typed amount: an edit that keeps the amount keeps «read from words»; one that changes it clears it"),
-    String(kept) === "true" && String(cleared) === "false",
-    `kept ${kept}, cleared ${cleared}`,
+    next("O8 typed amount: an edit that keeps the amount keeps «read from words»; one that changes it clears it and its mark"),
+    String(kept) === "true" && String(cleared) === "false" && marks === 0,
+    `kept ${kept}, cleared ${cleared}, marks left ${marks}`,
   );
 }
 

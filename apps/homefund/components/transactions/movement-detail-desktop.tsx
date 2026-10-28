@@ -89,7 +89,7 @@ export function MovementDetailDesktop({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const remove = useAction(deleteTransactionAction, {
-    onSuccess: () => router.push("/movements"),
+    onSuccess: () => router.push(back?.href ?? "/movements"),
     onError: onActionError,
   });
 
