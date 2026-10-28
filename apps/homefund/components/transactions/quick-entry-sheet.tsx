@@ -267,6 +267,7 @@ function QuickEntryForm({
       // to «3 M arriendo» 3 000 000; neither may outlive the text that proposed it.
       form.setValue("amount", "");
       proposedAmount.current = null;
+      setWordsAmount(null);
     }
     if (proposal.accountId && !form.getValues("fromAccountId")) {
       form.setValue("fromAccountId", proposal.accountId, { shouldValidate: true });
@@ -332,7 +333,7 @@ function QuickEntryForm({
     proposedAmount.current = null;
     const picked = amountToInput(ask.choices[Number(index)], accountCurrency);
     pickedAmount.current = picked;
-    setWordsAmount(Number(index) > 0 ? picked : null);
+    setWordsAmount(ask.choices[Number(index)] === ask.bare ? null : picked);
     form.setValue("amount", picked, { shouldValidate: true });
   }
 

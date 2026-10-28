@@ -56,6 +56,8 @@ interface InterpretContext {
 export interface AmountAsk {
   token: string;
   choices: number[];
+  // The digits as written, when offered: every other choice is read from words (RF-155).
+  bare: number | null;
 }
 
 interface QuickEntryProposal {
@@ -149,10 +151,12 @@ export function interpretQuickEntry(
   let ask: AmountAsk | null = null;
   if (isLowerAsk && amountMatch) {
     const choices = lowerMChoices(amountMatch[0]);
+    const written = parseAmount(normalizeAmountInput(amountMatch[0]));
     if (choices.length > 1) {
       ask = {
         token: text.slice(amountMatch.index, amountEnd + tokenText.length),
         choices,
+        bare: written !== null && choices.includes(written) ? written : null,
       };
     }
   } else if (isAsk && amountMatch) {
@@ -163,6 +167,7 @@ export function interpretQuickEntry(
       ask = {
         token: text.slice(amountMatch.index, amountEnd + tokenText.length),
         choices: [bare, million],
+        bare,
       };
     }
   }

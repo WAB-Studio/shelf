@@ -355,6 +355,20 @@ test("picking «$ 3.000.000» fills the amount and saving stores 3.000.000 pesos
   expect(await storedFromWords()).toEqual([true]);
 });
 
+test("«1,15 m» offers no bare figure, so its first choice «$ 1.150» is still read from words (RF-155)", async ({ page }) => {
+  const { sheet, quick, amount, save } = await openSheet(page);
+  await quick.pressSequentially(`${scope.categoryName} 1,15 m`);
+  const group = sheet.getByRole("radiogroup");
+  await group.getByRole("radio", { name: "$ 1.150", exact: true }).check();
+  await expect(amount).toHaveValue("1150");
+
+  await pickAccount(page, sheet);
+  await save.click();
+  await expect(sheet).toBeHidden();
+  expect(await storedAmounts()).toEqual(["115000"]);
+  expect(await storedFromWords()).toEqual([true]);
+});
+
 test("picking «$ 3» stores 3 pesos", async ({ page }) => {
   const { sheet, quick, amount, save, group } = await openSheet(page);
   await quick.pressSequentially(`${scope.categoryName} ${ASK_TEXT}`);
