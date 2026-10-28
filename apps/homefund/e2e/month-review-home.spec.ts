@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { HARNESS_EMAIL } from "../scripts/harness/session";
 import { asHarnessUser, readScope, test } from "./global-setup";
 import { lastClosedMonth, shiftMonth } from "@/lib/dates";
 
@@ -87,4 +88,28 @@ test("two twins count «4 movimientos»; every one marked leaves no line", async
   // The reload waits for the server's whole page, so an absent line is absent, not late.
   await page.reload();
   await expect(line(page)).toHaveCount(0);
+});
+
+test("an invitation waiting for this address is answered first: Inicio shows its card alone, no «Revisar» line", async ({ page }) => {
+  await seedTwins(5_000_000, "15");
+  // A fund the second identity leads, with a pending row addressed to the first one's email.
+  const groupId = randomUUID();
+  const inviter = `Carlos ${stamp}`;
+  const fund = `Casa ${stamp}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: scope.memberUserId, role: "authenticated", aud: "authenticated" })}, true)`;
+    await tx`insert into groups (id, name, cash_mode) values (${groupId}, ${fund}, 'per_member')`;
+    await tx`insert into group_members (group_id, user_id, name, role) values (${groupId}, ${scope.memberUserId}, ${inviter}, 'leader')`;
+    await tx`
+      insert into group_members (group_id, name, role, invite_email)
+      values (${groupId}, ${`Invitado ${stamp}`}, 'member', ${HARNESS_EMAIL})`;
+  });
+  try {
+    await page.goto("/es");
+    await expect(page.getByRole("heading", { name: `${inviter} te invitó a su fondo «${fund}»`, exact: true })).toBeVisible();
+    await expect(line(page)).toHaveCount(0);
+  } finally {
+    await fixtureSql`delete from group_members where group_id = ${groupId}`;
+    await fixtureSql`delete from groups where id = ${groupId}`;
+  }
 });
