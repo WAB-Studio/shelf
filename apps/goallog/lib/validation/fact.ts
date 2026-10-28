@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { civilDate } from "./civil-date";
 
@@ -17,12 +17,6 @@ export function earliestPastDay(today: string): string {
   return dateToCivilDate(date);
 }
 
-function shiftDay(day: string, days: number): string {
-  const date = civilDateToDate(day);
-  date.setUTCDate(date.getUTCDate() + days);
-  return dateToCivilDate(date);
-}
-
 // Needs only today's own date, never the subject's: a day the person could
 // never have meant, whatever it explains. `requireDayForSubject` below
 // carries what only the subject itself can say.
@@ -34,7 +28,7 @@ function requireDayInRange(data: { day?: string | null; onHoy?: boolean }, ctx: 
     ctx.addIssue({ code: "custom", message: "day.errors.dayFuture", path: ["day"] });
     return;
   }
-  if (data.onHoy && data.day < shiftDay(today, -1)) {
+  if (data.onHoy && data.day < addDaysToCivilDate(today, -1)) {
     ctx.addIssue({ code: "custom", message: "day.errors.dayStale", path: ["day"] });
     return;
   }

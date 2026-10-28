@@ -19,6 +19,7 @@ import { planHrefFrom } from "@/lib/plan/return-to";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal } from "@/lib/queries/goal";
+import { claudeBrief, claudeChatHref } from "@/lib/export/claude-brief";
 import { dayBefore, weekIndexOf } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 import {
@@ -231,6 +232,33 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const monthOwn = goal.plan.rhythm !== null && goal.plan.budgets.some((budget) => budget.month === monthKey);
   const planItems = planMonthList(goal.plan, monthKey);
   const planDone = planItems.filter((item) => item.done).length;
+  // A new Claude chat that starts from where the goal stands: no plan pasted, no old chat carried (RP-144).
+  const claudeHref =
+    archived || ended
+      ? null
+      : claudeChatHref(
+          claudeBrief({
+            name: goal.name,
+            note: goal.note,
+            phase: currentPhase ?? null,
+            tasks: goal.tasks,
+            open: planItems
+              .filter((item) => !item.done)
+              .flatMap((item) =>
+                item.children.length === 0
+                  ? [item.task.name]
+                  : item.children.filter((child) => child.doneOn === null).map((child) => child.name),
+              ),
+            month:
+              month && planned && goal.measureUnit
+                ? {
+                    reached: formatQuantity(month.reached, goal.measureUnit, words),
+                    planned: formatQuantity(planned, goal.measureUnit, words),
+                  }
+                : null,
+            today,
+          }),
+        );
   const planEndLabel = planEnd
     ? t("day.dateYear", {
         day: Number(planEnd.slice(8, 10)),
@@ -695,6 +723,23 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <MoveGoalAction goalId={goal.id} name={goal.name} tree={goal.tree} today={today} />
       )}
       <GoalNote goalId={goal.id} name={goal.name} note={goal.note} />
+      {claudeHref === null ? null : (
+        <Flex direction="column" gap="2">
+          <Button asChild variant="outline" block>
+            <a
+              href={claudeHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t("goal.claude.openLabel", { goal: goal.name })}
+            >
+              {t("goal.claude.open")}
+            </a>
+          </Button>
+          <Text as="p" variant="meta">
+            {t("goal.claude.hint")}
+          </Text>
+        </Flex>
+      )}
 
       {archived ? (
         <>

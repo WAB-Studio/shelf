@@ -209,6 +209,11 @@ of this gets built, and no schema, table or column is "prepared for" it.
   last day is within a fact's reach (RP-129): seven days after it closes. The mark is dated that last day, so a task done on
   the 31st and logged on the 2nd counts in its own month. From the eighth day the month reads only, everywhere: no mark, no
   task's sheet. Decided by the user 2026-10-28.
+- [ ] **RP-144** — An open goal's screen offers «Abrir en Claude»: a new claude.ai chat, in a new tab, with a short brief
+  already typed in its box for the person to read and send — the goal, its note and current phase, this month's amount
+  against its plan, what was done over the last seven days with each task's note, and up to ten tasks still open this
+  month. Nothing is sent from GoalLog and no model runs; the chat starts from where the goal stands instead of the whole
+  plan or a previous conversation. Decided by the user 2026-10-28.
 - [x] **RP-123** — A goal that holds goals reads week by week as it reads month by month (RP-80): each week, what it reached is the sum of its goals' in the same unit, plus what its own tasks reached; a goal in another unit adds nothing. Its «Ver por semana» never says it has no figure while its screen shows one. Decided by the user 2026-10-14 (critic of the whole app, question B = a).
 
 #### The account

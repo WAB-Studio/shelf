@@ -92,6 +92,12 @@ export function dateToCivilDate(date: Date): string {
 // The civil date `weeks` weeks after `day`, in the same midday-UTC arithmetic
 // `weekOf` already runs: a horizon typed in weeks (RP-11) is turned into the
 // civil date `createGoal` stores, never the caller's own local offset.
+export function addDaysToCivilDate(day: string, days: number): string {
+  const date = civilDateToDate(day);
+  date.setUTCDate(date.getUTCDate() + days);
+  return dateToCivilDate(date);
+}
+
 export function addWeeksToCivilDate(day: string, weeks: number): string {
   const date = civilDateToDate(day);
   date.setUTCDate(date.getUTCDate() + weeks * 7);
