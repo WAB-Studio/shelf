@@ -305,6 +305,12 @@ async function storedAmounts() {
   return rows.map((row) => row.amount_cents);
 }
 
+async function storedFromWords() {
+  const rows = await fixtureSql<{ amount_from_words: boolean }[]>`
+    select amount_from_words from transactions where owner_user_id = ${scope.userId}`;
+  return rows.map((row) => row.amount_from_words);
+}
+
 test("«3 M arriendo» asks, with no amount, Guardar disabled and nothing stored (C3m)", async ({
   page,
 }) => {
@@ -345,6 +351,8 @@ test("picking «$ 3.000.000» fills the amount and saving stores 3.000.000 pesos
   await save.click();
   await expect(sheet).toBeHidden();
   expect(await storedAmounts()).toEqual(["300000000"]);
+  // The million is the multiplied reading of «M»: «Revisar el mes» asks about it (RF-155).
+  expect(await storedFromWords()).toEqual([true]);
 });
 
 test("picking «$ 3» stores 3 pesos", async ({ page }) => {
@@ -358,6 +366,8 @@ test("picking «$ 3» stores 3 pesos", async ({ page }) => {
   await save.click();
   await expect(sheet).toBeHidden();
   expect(await storedAmounts()).toEqual(["300"]);
+  // The bare figure is no reading of words.
+  expect(await storedFromWords()).toEqual([false]);
 });
 
 test("an amount typed by hand wins over the question and saves", async ({ page }) => {

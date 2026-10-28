@@ -140,7 +140,8 @@
     "title": "Inicio",
     "firstAccountTitle": "Abre tu primera cuenta",
     "addAccountKind": "Añadir",
-    "monthAdjustment": "Descuadre del mes"
+    "monthAdjustment": "Descuadre del mes",
+    "reviewLine": "Revisar {month} · {count, plural, one {# movimiento} other {# movimientos}}"
   },
   "reports": {
     "title": "Reportes",

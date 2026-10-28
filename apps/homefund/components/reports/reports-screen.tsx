@@ -13,6 +13,7 @@ import {
   Money,
   ReportCard,
   ReportRow,
+  TapTarget,
   Text,
 } from "@/components/ui";
 import type { BarChartDatum } from "@/components/ui";
@@ -39,7 +40,9 @@ function ReportsHead({ title }: { title: string }) {
     <Flex justify="between" align="center" gap="3" wrap="wrap">
       <Heading size="6">{title}</Heading>
       <Link asChild size="2" weight="medium">
-        <LocaleLink href="/reports/review">{t("entry")}</LocaleLink>
+        <LocaleLink href="/reports/review">
+          <TapTarget align="center">{t("entry")}</TapTarget>
+        </LocaleLink>
       </Link>
     </Flex>
   );
