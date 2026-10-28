@@ -63,8 +63,10 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
     coming ? listDaylessOneOffs() : [],
   ]);
   const seg = across.month.slice(0, 7);
-  // The page cannot know the bounds before the read: a month past them leaves for this one.
-  if (parseMonthParam(seg, today, across.firstMonth, across.lastMonth).kind === "redirect") redirect("/mes");
+  // The page cannot know the bounds before the read: a month past them lands on the nearer one; with no goal, on this one.
+  if (parseMonthParam(seg, today, across.firstMonth, across.lastMonth).kind === "redirect") {
+    redirect(monthHref(seg > across.lastMonth ? across.lastMonth : across.firstMonth, thisMonth) ?? "/mes");
+  }
   const past = across.view === "past";
   const markDay = past ? closedMonthMarkDay(across.month, today) : undefined;
   const after = nextMonth(across.month);

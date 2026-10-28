@@ -75,8 +75,8 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
     coming ? listDaylessOneOffs() : [],
   ]);
   const { view, evidence, goals } = week;
-  // The page cannot know the limit before the read: a week past it leaves for this one.
-  if (view.start > week.lastMonday) redirect("/semana");
+  // The page cannot know the limit before the read: a week past it lands on the last.
+  if (view.start > week.lastMonday) redirect(stepHref(week.lastMonday, thisMonday) ?? "/semana");
 
   // A week before the first goal's has nothing to read: land on the first.
   if (week.firstMonday !== null && view.start < week.firstMonday) {
