@@ -1409,6 +1409,8 @@ Three answers of the user, 2026-10-09.
 - **A goal's note is the task note's sheet with other words**: placeholder «Lo que quieras recordar de esta meta», cap 100 000,
   the count from 90 000. Emptying it and saving removes it; it is never stored empty. It sits between the end line and «Archivar
   esta meta», folded; with no note, «Agregar una nota» (outline, full width) stands in its place.
+- **«Mes» lists its weeks under the header** (RP-145): «Semanas» in meta ink, then one `TextLink` per week the month touches,
+  its Monday as «6 oct», wrapping on the phone; the accessible name is «Semana del 6 oct». Nothing draws it with no goal open.
 - **«Abrir en Claude» sits under the goal's note** (RP-144): outline, full width, a link that opens claude.ai in a new tab,
   with one meta line under it: «Abre un chat nuevo en claude.ai con tu plan y lo que hiciste estos días ya escrito.» An
   archived or ended goal draws neither.

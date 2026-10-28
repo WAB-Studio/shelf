@@ -3,8 +3,9 @@ import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
 import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
-import { monthOf, nextMonth, previousMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { monthOf, nextMonth, previousMonth, weeksOfMonth } from "@/lib/plan/months";
+import { civilDayMonthShort, todayInZone, weekOf } from "@/lib/zone";
+import { noOverflow } from "./mover-nota-ayuda";
 
 // RP-142 on «Mes»: ‹ › step a month at a time, back to the month the first
 // goal was opened and forward to the last month of the furthest goal's span.
@@ -177,5 +178,31 @@ test("the last month of the span has no ›; past it lands on it, before the fir
       await expect(page).not.toHaveURL(new RegExp(`mes=${param}$`));
       await expect(page).toHaveURL(url);
     }
+  });
+});
+
+test("«Semanas» under the month's header opens each week it touches; this week is /semana (RP-145)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  await withMonths(browser, baseURL, db, person, 390, async (page) => {
+    await page.goto("/mes");
+    const mondays = weeksOfMonth(thisMonth);
+    const links = page.getByRole("link", { name: /^Semana del / });
+    await expect(links).toHaveCount(mondays.length);
+    await expect(page.getByText("Semanas", { exact: true })).toBeVisible();
+    const thisMonday = weekOf(todayInZone())[0];
+    for (const [i, monday] of mondays.entries()) {
+      await expect(links.nth(i)).toHaveAccessibleName(`Semana del ${civilDayMonthShort(monday)}`);
+      await expect(links.nth(i)).toHaveAttribute("href", monday === thisMonday ? "/semana" : `/semana?semana=${monday}`);
+    }
+    await page.goto(`/mes?mes=${key(comingMonth)}`);
+    // Its second week: the first may still be this one.
+    const second = weeksOfMonth(comingMonth)[1];
+    await noOverflow(page, 390);
+    await page.getByRole("link", { name: `Semana del ${civilDayMonthShort(second)}`, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/semana\\?semana=${second}$`));
   });
 });

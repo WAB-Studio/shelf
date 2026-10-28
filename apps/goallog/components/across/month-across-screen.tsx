@@ -24,14 +24,14 @@ import {
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
-import { nextMonth } from "@/lib/plan/months";
+import { nextMonth, weeksOfMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
 import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
-import { civilDayMonthShort } from "@/lib/zone";
+import { civilDayMonthShort, weekOf } from "@/lib/zone";
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -70,6 +70,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   const past = across.view === "past";
   const markDay = past ? closedMonthMarkDay(across.month, today) : undefined;
   const after = nextMonth(across.month);
+  const thisMonday = weekOf(today)[0];
   // Unarchived and lasting past the month: what it left undone moves to the next one.
   const carriesOn = (goal: MonthAcrossGoal) => goal.open && (goal.plan.horizon === null || goal.plan.horizon > after);
   // A closed month counts a sub-task done only when it was done in it.
@@ -465,6 +466,23 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           </Face>
         }
       />
+      {nothingOpen ? null : (
+        <Flex align="baseline" gap="3" wrap="wrap">
+          <Text as="span" variant="meta">
+            {t("month.across.weeks.label")}
+          </Text>
+          {weeksOfMonth(across.month).map((monday) => (
+            <TextLink
+              key={monday}
+              nowrap
+              href={monday === thisMonday ? "/semana" : `/semana?semana=${monday}`}
+              aria-label={t("month.across.weeks.link", { day: civilDayMonthShort(monday) })}
+            >
+              {civilDayMonthShort(monday)}
+            </TextLink>
+          ))}
+        </Flex>
+      )}
       {nothingOpen && across.view !== "this" ? (
         <Text as="p" variant="sentence">
           {t(coming ? "month.across.comingEmpty" : "month.across.pastEmpty", { month: thisName })}

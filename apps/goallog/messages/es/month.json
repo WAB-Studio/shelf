@@ -146,6 +146,10 @@
       "create": "Crear una meta",
       "import": "Importar un plan"
     },
+    "weeks": {
+      "label": "Semanas",
+      "link": "Semana del {day}"
+    },
     "titleYear": "{month} {year}"
   }
 }
