@@ -185,6 +185,28 @@ test("deleting a twin opened from «Corregir» lands back on the month, where th
   await expect(okButtons(page)).toHaveCount(3);
 });
 
+test("the first month keeps its page and offers no ‹, the one after steps back to it, the one before last steps into last month; a malformed month lands on last month", async ({
+  page,
+}) => {
+  // The page's own first month: the earliest movement the harness user's policies let it read.
+  let first = "";
+  await asHarnessUser(async (tx) => {
+    [{ first }] = await tx<{ first: string }[]>`select to_char(min(occurred_at), 'YYYY-MM') as first from transactions`;
+  });
+  const after = (from: string, n: number) => addCivilMonths(`${from}-01`, n).slice(0, 7);
+  await page.goto(`/es/reports/review?month=${first}`);
+  await expect(page).toHaveURL(new RegExp(`month=${first}$`));
+  await expect(page.getByRole("link", { name: "‹ mes anterior" })).toHaveCount(0);
+  await page.goto(`/es/reports/review?month=${after(first, 1)}`);
+  await expect(page.getByRole("link", { name: "‹ mes anterior" })).toHaveAttribute("href", `/es/reports/review?month=${first}`);
+  const lastClosed = after(currentMonthStart().slice(0, 7), -1);
+  await page.goto(`/es/reports/review?month=${after(lastClosed, -1)}`);
+  await expect(page.getByRole("link", { name: "mes siguiente ›" })).toHaveAttribute("href", `/es/reports/review?month=${lastClosed}`);
+  // Earlier than any month and still not one: the shape alone turns it away.
+  await page.goto("/es/reports/review?month=1999-xx");
+  await expect(page).toHaveURL(/\/es\/reports\/review$/);
+});
+
 test.describe("as a member who only reads the leader's account", () => {
   test.use({ storageState: MEMBER_STORAGE_STATE });
   test.beforeEach(async () => {

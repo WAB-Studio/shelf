@@ -4261,6 +4261,7 @@ async function main(): Promise<void> {
   await detailPocketToBillSuite();
   await o7m3MonthReviewSuite();
   await o7m3RuleEdgesSuite();
+  await o8m5ReviewSurvivorsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -14652,6 +14653,73 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
     next("O8 typed amount: an edit that keeps the amount keeps «read from words»; one that changes it clears it and its mark"),
     String(kept) === "true" && String(cleared) === "false" && marks === 0,
     `kept ${kept}, cleared ${cleared}, marks left ${marks}`,
+  );
+}
+
+// O8-M5: what o7's mutation run left alive in «Revisar el mes»: a count's adjustment beside an
+// equal movement is no twin, and a movement over the usual in two categories reports its largest split.
+async function o8m5ReviewSurvivorsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const month = shiftMonth(today, -1);
+  const day = (n: number, back = 1) => `${shiftMonth(today, -back)}-${String(n).padStart(2, "0")}`;
+  const holder = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(holder, () =>
+    createAccount({
+      name: `Harness o8m5 banco ${tag}`, kind: "asset", subtype: "bank", ownerUserId: holder.id, groupId: null,
+      isShared: false, institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 50_000_000, balanceOn: day(1, 9),
+    }),
+  );
+  track("accounts", bank);
+  const category = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness o8m5 ${name} ${tag}`, kind: "expense", parentId: null, color: "#B4542F" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const spend = async (splits: { categoryId: string; amountCents: number }[], occurredAt: string) => {
+    const amountCents = splits.reduce((sum, split) => sum + split.amountCents, 0);
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents, occurredAt, description: `Harness o8m5 ${tag}`,
+        externalRef: null, splits, labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+
+  // A count 20.000 short books a 20.000 outflow; a 20.000 expense on the same account and day is no twin of it.
+  const plain = await category("varios");
+  await spend([{ categoryId: plain, amountCents: 2_000_000 }], day(18));
+  await asUser(holder, () =>
+    reconcileAccount({ accountId: bank, reconciledOn: day(18), realMagnitudeCents: 46_000_000, expectedDerivedCents: 48_000_000 }),
+  );
+  const booked = await fixtureSql<{ id: string }[]>`select id from transactions where from_account_id = ${bank} or to_account_id = ${bank}`;
+  for (const row of booked) track("transactions", row.id);
+  // Two categories with a usual of 100.000; one movement splits 400.000 and 500.000 between them.
+  const food = await category("mercado");
+  const home = await category("hogar");
+  for (const back of [2, 3, 4]) {
+    await spend([{ categoryId: food, amountCents: 10_000_000 }], day(5, back));
+    await spend([{ categoryId: home, amountCents: 10_000_000 }], day(5, back));
+  }
+  const both = await spend([{ categoryId: food, amountCents: 40_000_000 }, { categoryId: home, amountCents: 50_000_000 }], day(5));
+
+  const read = await asUser(holder, () => getMonthReview(month));
+  const twins = read.items.filter((item) => item.rule === "twin");
+  assert(
+    next("O8-M5 twin: a count's adjustment beside an equal expense on its day and account is no twin"),
+    twins.length === 0 && read.items.some((item) => item.rule === "reconciliation_gap"),
+    `twins ${twins.length}, gap ${read.items.some((item) => item.rule === "reconciliation_gap")}`,
+  );
+  const above = read.items.filter((item) => item.rule === "above_usual" && item.transactionIds.includes(both));
+  assert(
+    next("O8-M5 above usual: a movement over the usual in two categories is one item, read from its largest split"),
+    above.length === 1 && above[0].amountCents === 50_000_000,
+    `items ${above.length}, amount ${above[0]?.amountCents}`,
   );
 }
 
