@@ -23,8 +23,8 @@ const PAST_KEY: Partial<Record<FlexibleKey, MessageKey>> = {
  * week as commitments down and days across, one set of groups drawn twice.
  * A day on or after a goal's horizon asks nothing of it, and neither does a
  * day before its commitment was written; each such day reads «no pedía».
- * `past` is a week already over: its counts say «esa semana». A week not yet begun counts nothing:
- * a flexible row says its cadence alone and no «hechos» row is drawn.
+ * `past` is a week already over: its counts say «esa semana». A `coming` week has no «hechos» row,
+ * and a weekly habit says its cadence alone.
  */
 // «13 sep 2026»: the year always, even in this one.
 function archivedDay(instant: string): string {
@@ -36,6 +36,7 @@ export function WeekTableFace({
   week,
   today,
   past,
+  coming,
   columns,
   t,
   endedNote,
@@ -43,12 +44,12 @@ export function WeekTableFace({
   week: Week;
   today: string;
   past: boolean;
+  coming: boolean;
   columns: readonly WeekTableColumn[];
   t: Translator;
   endedNote: (goal: GoalSummary) => ReactNode;
 }) {
   const { view, goals, commitments, oneOffFacts } = week;
-  const coming = view.start > today;
   const weekdayLong = t.raw("week.weekdayLong") as string[];
   const horizonOf = new Map(goals.map((goal) => [goal.id, goal.horizon]));
   // A goal with no end has a null horizon: every day from its opening is live.
@@ -101,7 +102,12 @@ export function WeekTableFace({
         return {
           key: commitment.id,
           name: commitment.name,
-          detail: words ? (coming ? words.cadence : t("week.flexible.detail", words)) : undefined,
+          // A week not yet begun has no weekly count; a monthly one is this month's, already real.
+          detail: words
+            ? coming && commitment.cadence.kind === "times_per_week"
+              ? words.cadence
+              : t("week.flexible.detail", words)
+            : undefined,
           cells: view.days.map((dayView) => {
             const slot = dayView.slots.find((s) => s.commitmentId === commitment.id);
             // A flexible row marks the days it was done or logged in part and
@@ -158,8 +164,7 @@ export function WeekTableFace({
   const cells = tallyDays(week).map(({ day, done, total }) =>
     day > today || total === 0 ? null : { figure: String(done), rest: t("week.ratioOf", { total }) },
   );
-  // A week with no day lived yet has nothing to tally.
-  const footer = cells.some((cell) => cell !== null) ? { label: t("week.table.footer"), cells } : undefined;
+  const footer = coming ? undefined : { label: t("week.table.footer"), cells };
 
   // `SemanaEnParte.dc.html`: the phone footer carries the partial days, over
   // the days that have come. Without one the per-day tally says it all.

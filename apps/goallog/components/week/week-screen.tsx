@@ -185,7 +185,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
         )
       ) : null}
 
-      <WeekTableFace week={week} today={today} past={past} columns={columns} t={t} endedNote={endedNote} />
+      <WeekTableFace week={week} today={today} past={past} coming={coming} columns={columns} t={t} endedNote={endedNote} />
 
       {coming ? (
         <>
