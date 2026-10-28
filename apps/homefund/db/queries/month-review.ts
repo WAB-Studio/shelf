@@ -123,7 +123,8 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
 }
 
 /**
- * Inicio's line (RF-155, O7-Q1 a): last month's unmarked items the caller can mark, or null when
+ * Inicio's line (RF-155, O7-Q1 a): the movements in last month's unmarked items the caller can
+ * mark, each once though a twin holds two and one movement may stand under two rules; null when
  * none stand out. The screen's rows and account join, so the count never names a row it hides.
  */
 export async function getMonthReviewPending(): Promise<{ month: string; count: number } | null> {
@@ -131,9 +132,10 @@ export async function getMonthReviewPending(): Promise<{ month: string; count: n
   const count = await withUserDb(async (tx) => {
     const [row] = await tx.execute<{ count: number }>(sql`
       ${reviewItemsSql(month)}
-      select count(*)::int as count
+      select count(distinct movement_id)::int as count
       from marked m
       join accounts a on a.id = m.account_id
+      cross join unnest(m.ids) as movement_id
       where not m.reviewed and m.can_mark`);
     return row?.count ?? 0;
   });

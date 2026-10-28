@@ -88,9 +88,10 @@ test("reads the amount and the category out of one line and records the movement
       amount_cents: string;
       from_account_id: string | null;
       to_account_id: string | null;
+      amount_from_words: boolean;
     }[]
   >`
-    select id, amount_cents::text as amount_cents, from_account_id, to_account_id
+    select id, amount_cents::text as amount_cents, from_account_id, to_account_id, amount_from_words
     from transactions
     where owner_user_id = ${scope.userId}`;
   expect(movements).toHaveLength(1);
@@ -98,6 +99,8 @@ test("reads the amount and the category out of one line and records the movement
   // A source and no destination: the sheet only ever writes an expense (RF-18).
   expect(movements[0].from_account_id).toBe(scope.accountId);
   expect(movements[0].to_account_id).toBeNull();
+  // Digits alone are no reading of words: «Revisar el mes» has nothing to ask (RF-155).
+  expect(movements[0].amount_from_words).toBe(false);
 
   const splits = await fixtureSql<
     { category_id: string; amount_cents: string }[]
@@ -130,10 +133,33 @@ test("«25 mil» proposes 25000 pesos and saving writes 2500000 cents", async ({
   await sheet.getByRole("button", { name: transactions.quickSave, exact: true }).click();
   await expect(sheet).toBeHidden();
 
-  const rows = await fixtureSql<{ amount_cents: string }[]>`
-    select amount_cents::text as amount_cents from transactions
+  const rows = await fixtureSql<{ amount_cents: string; amount_from_words: boolean }[]>`
+    select amount_cents::text as amount_cents, amount_from_words from transactions
     where owner_user_id = ${scope.userId}`;
-  expect(rows).toEqual([{ amount_cents: "2500000" }]);
+  // Read from words, so «Revisar el mes» asks about it (RF-155).
+  expect(rows).toEqual([{ amount_cents: "2500000", amount_from_words: true }]);
+});
+
+test("«25 mil» with Monto retyped by hand saves the person's figure, not one read from words (RF-155)", async ({ page }) => {
+  await page.goto("/es");
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await sheet
+    .getByRole("textbox", { name: transactions.quickTitle, exact: true })
+    .fill(`${scope.categoryName} 25 mil`);
+  const amount = sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true });
+  await expect(amount).toHaveValue("25000");
+  await amount.fill("26000");
+
+  await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
+  await page.getByRole("option", { name: scope.accountName, exact: true }).click();
+  await sheet.getByRole("button", { name: transactions.quickSave, exact: true }).click();
+  await expect(sheet).toBeHidden();
+
+  const rows = await fixtureSql<{ amount_cents: string; amount_from_words: boolean }[]>`
+    select amount_cents::text as amount_cents, amount_from_words from transactions
+    where owner_user_id = ${scope.userId}`;
+  expect(rows).toEqual([{ amount_cents: "2600000", amount_from_words: false }]);
 });
 
 test("«1.500 mil» proposes no amount and the sheet refuses to save", async ({ page }) => {
@@ -279,6 +305,12 @@ async function storedAmounts() {
   return rows.map((row) => row.amount_cents);
 }
 
+async function storedFromWords() {
+  const rows = await fixtureSql<{ amount_from_words: boolean }[]>`
+    select amount_from_words from transactions where owner_user_id = ${scope.userId}`;
+  return rows.map((row) => row.amount_from_words);
+}
+
 test("«3 M arriendo» asks, with no amount, Guardar disabled and nothing stored (C3m)", async ({
   page,
 }) => {
@@ -319,6 +351,22 @@ test("picking «$ 3.000.000» fills the amount and saving stores 3.000.000 pesos
   await save.click();
   await expect(sheet).toBeHidden();
   expect(await storedAmounts()).toEqual(["300000000"]);
+  // The million is the multiplied reading of «M»: «Revisar el mes» asks about it (RF-155).
+  expect(await storedFromWords()).toEqual([true]);
+});
+
+test("«1,15 m» offers no bare figure, so its first choice «$ 1.150» is still read from words (RF-155)", async ({ page }) => {
+  const { sheet, quick, amount, save } = await openSheet(page);
+  await quick.pressSequentially(`${scope.categoryName} 1,15 m`);
+  const group = sheet.getByRole("radiogroup");
+  await group.getByRole("radio", { name: "$ 1.150", exact: true }).check();
+  await expect(amount).toHaveValue("1150");
+
+  await pickAccount(page, sheet);
+  await save.click();
+  await expect(sheet).toBeHidden();
+  expect(await storedAmounts()).toEqual(["115000"]);
+  expect(await storedFromWords()).toEqual([true]);
 });
 
 test("picking «$ 3» stores 3 pesos", async ({ page }) => {
@@ -332,6 +380,8 @@ test("picking «$ 3» stores 3 pesos", async ({ page }) => {
   await save.click();
   await expect(sheet).toBeHidden();
   expect(await storedAmounts()).toEqual(["300"]);
+  // The bare figure is no reading of words.
+  expect(await storedFromWords()).toEqual([false]);
 });
 
 test("an amount typed by hand wins over the question and saves", async ({ page }) => {

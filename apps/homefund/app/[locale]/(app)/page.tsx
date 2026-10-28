@@ -17,6 +17,7 @@ import {
 } from "@/components/reports/recent-movements";
 import { InvitationCard } from "@/components/members/invitation-card";
 import { DueRemindersCard } from "@/components/planning/due-reminders-card";
+import { MonthReviewLine } from "@/components/reports/month-review-line";
 import { QuickEntryPill } from "@/components/transactions/quick-entry-pill";
 import {
   Box,
@@ -36,6 +37,7 @@ import {
 } from "@/components/ui";
 import { resolveWithdrawalTarget } from "@/db/queries/cash";
 import { listDueReminders } from "@/db/queries/due-reminders";
+import { getMonthReviewPending } from "@/db/queries/month-review";
 import { getPendingInvitation } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
 import { getDashboardData } from "@/db/queries/reports/dashboard";
@@ -99,7 +101,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
   // movements list fans out (RF-23); the amount is formatted for display only.
-  const [, group, invitation, dashboardData, rows, options, withdrawal, due, t, td, ta, tc] =
+  const [, group, invitation, dashboardData, rows, options, withdrawal, due, review, t, td, ta, tc] =
     await Promise.all([
       requireUser(),
       getUserGroup(),
@@ -109,6 +111,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       getTransactionFormOptions(),
       resolveWithdrawalTarget(),
       listDueReminders(DUE_LIMIT),
+      getMonthReviewPending(),
       getTranslations("transactions"),
       getTranslations("dashboard"),
       getTranslations("accounts"),
@@ -268,6 +271,12 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
             />
           }
         />
+
+        {review && (
+          <Box px={{ initial: "0", md: "6" }}>
+            <MonthReviewLine month={review.month} count={review.count} />
+          </Box>
+        )}
 
         {due.total > 0 && (
           <Box px={{ initial: "0", md: "6" }}>

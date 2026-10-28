@@ -218,6 +218,9 @@ function QuickEntryForm({
   // The amount the interpreter last wrote into the field, so a later reading
   // with no amount can take back its own figure and leave a typed one alone.
   const proposedAmount = useRef<string | null>(null);
+  // The figure read from words («25 mil», or a pick past the bare one for «3 M»), which
+  // «Revisar el mes» asks about (RF-155); Monto typed over it no longer matches.
+  const [wordsAmount, setWordsAmount] = useState<string | null>(null);
 
   // The figure a pick wrote, so a changed token takes back that figure and
   // leaves one typed into Monto alone.
@@ -237,6 +240,7 @@ function QuickEntryForm({
 
     if (proposal.ask?.token !== ask?.token) {
       setPickedChoice("");
+      setWordsAmount(null);
       if (
         pickedAmount.current !== null &&
         form.getValues("amount") === pickedAmount.current
@@ -254,6 +258,7 @@ function QuickEntryForm({
         form.setValue("amount", proposal.amountPesos, { shouldValidate: true });
         proposedAmount.current = proposal.amountPesos;
       }
+      setWordsAmount(proposal.amountFromWords ? proposal.amountPesos : null);
     } else if (
       proposedAmount.current !== null &&
       form.getValues("amount") === proposedAmount.current
@@ -262,6 +267,7 @@ function QuickEntryForm({
       // to «3 M arriendo» 3 000 000; neither may outlive the text that proposed it.
       form.setValue("amount", "");
       proposedAmount.current = null;
+      setWordsAmount(null);
     }
     if (proposal.accountId && !form.getValues("fromAccountId")) {
       form.setValue("fromAccountId", proposal.accountId, { shouldValidate: true });
@@ -325,8 +331,10 @@ function QuickEntryForm({
     if (!ask) return;
     setPickedChoice(index);
     proposedAmount.current = null;
-    const picked = amountToInput(ask.choices[Number(index)], accountCurrency);
+    const choice = ask.choices[Number(index)];
+    const picked = amountToInput(choice, accountCurrency);
     pickedAmount.current = picked;
+    setWordsAmount(choice === ask.bare ? null : picked);
     form.setValue("amount", picked, { shouldValidate: true });
   }
 
@@ -344,7 +352,7 @@ function QuickEntryForm({
         : t("quickUnrecognized");
 
   function onSubmit(values: QuickEntryValues) {
-    create.execute({ ...values, requestRef });
+    create.execute({ ...values, requestRef, amountFromWords: values.amount === wordsAmount });
   }
 
   return (

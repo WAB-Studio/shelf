@@ -14476,9 +14476,9 @@ async function o7m3MonthReviewSuite(): Promise<void> {
   const pendingTrips = roundTrips() - tripsBefore;
   const reread = await asUser(holder, () => getMonthReview(month));
   assert(
-    next("O7-M3 mark: marking a twin twice stores one mark per id, the item reads reviewed, and the pending count drops from 4 to 3 in one statement's trips"),
+    next("O7-M3 mark: marking a twin twice stores one mark per id, the item reads reviewed, and the pending count of movements drops from 5 to 3 (the twin holds two) in one statement's trips"),
     marks[0].n === 2 && reread.items.find((item) => item.rule === "twin")?.reviewed === true &&
-      pendingBefore?.count === 4 && pendingBefore.month === month && pendingAfter?.count === 3 && pendingTrips === unit,
+      pendingBefore?.count === 5 && pendingBefore.month === month && pendingAfter?.count === 3 && pendingTrips === unit,
     `marks ${marks[0].n}, pending ${pendingBefore?.count} → ${pendingAfter?.count} (${pendingTrips} trips)`,
   );
   const strangerPending = await asUser(stranger, () => getMonthReviewPending());

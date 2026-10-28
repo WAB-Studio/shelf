@@ -56,6 +56,8 @@ interface InterpretContext {
 export interface AmountAsk {
   token: string;
   choices: number[];
+  // The digits as written, when offered: every other choice is read from words (RF-155).
+  bare: number | null;
 }
 
 interface QuickEntryProposal {
@@ -94,8 +96,9 @@ function multiplyPesos(mantissa: string, zeros: number): string | null {
 
 // The bare number, thousands and millions of a lowercase «m», each as stored
 // cents. A choice that is not whole pesos («1,15» bare) is left out: the sheet
-// never offers a figure with cents the person did not write as such.
-function lowerMChoices(amount: string): number[] {
+// never offers a figure with cents the person did not write as such, and then
+// there is no `bare`: every choice left is read from words.
+function lowerMChoices(amount: string): { choices: number[]; bare: number | null } {
   const mantissa = MANTISSA_PATTERN.test(amount)
     ? amount
     : normalizeAmountInput(amount);
@@ -104,12 +107,11 @@ function lowerMChoices(amount: string): number[] {
     multiplyPesos(mantissa, THOUSAND_ZEROS) ?? `${mantissa}000`,
     multiplyPesos(mantissa, MILLION_ZEROS) ?? `${mantissa}000000`,
   ];
-  return pesos
-    .map((value) => parseAmount(value))
-    .filter(
-      (cents): cents is number =>
-        cents !== null && cents > 0 && cents % 100 === 0,
-    );
+  const [written, ...multiplied] = pesos.map((value) => parseAmount(value));
+  const offered = (cents: number | null): cents is number =>
+    cents !== null && cents > 0 && cents % 100 === 0;
+  const bare = offered(written) ? written : null;
+  return { choices: [bare, ...multiplied].filter(offered), bare };
 }
 
 function escapeRegExp(value: string): string {
@@ -148,11 +150,12 @@ export function interpretQuickEntry(
 
   let ask: AmountAsk | null = null;
   if (isLowerAsk && amountMatch) {
-    const choices = lowerMChoices(amountMatch[0]);
+    const { choices, bare } = lowerMChoices(amountMatch[0]);
     if (choices.length > 1) {
       ask = {
         token: text.slice(amountMatch.index, amountEnd + tokenText.length),
         choices,
+        bare,
       };
     }
   } else if (isAsk && amountMatch) {
@@ -163,6 +166,7 @@ export function interpretQuickEntry(
       ask = {
         token: text.slice(amountMatch.index, amountEnd + tokenText.length),
         choices: [bare, million],
+        bare,
       };
     }
   }

@@ -180,7 +180,7 @@ test("a lowercase «m» after a number asks with three choices and proposes no a
     assert.equal(interpretQuickEntry(text, ctx).amountPesos, null, `${text} proposes no amount`);
     assert.deepEqual(
       askOf(text),
-      { token, choices: [pesos * 100, pesos * 100_000, pesos * 100_000_000] },
+      { token, choices: [pesos * 100, pesos * 100_000, pesos * 100_000_000], bare: pesos * 100 },
       text,
     );
   }
@@ -191,6 +191,8 @@ test("«1,15 m» asks with whole-peso choices only, never a figure with cents", 
   assert.deepEqual(askOf("1,15 m"), {
     token: "1,15 m",
     choices: [115_000, 115_000_000],
+    // «1,15» holds centavos, so no bare figure is offered: both choices are read from words.
+    bare: null,
   });
 });
 
@@ -253,6 +255,7 @@ test("«3 M arriendo» asks: no amount, the token as typed, two choices in cents
   assert.deepEqual(askOf("3 M arriendo"), {
     token: "3 M",
     choices: [300, 300_000_000],
+    bare: 300,
   });
 });
 
@@ -261,6 +264,7 @@ test("«5 M de cable» asks too, with its own token and choices", () => {
   assert.deepEqual(askOf("5 M de cable"), {
     token: "5 M",
     choices: [500, 500_000_000],
+    bare: 500,
   });
 });
 
@@ -269,6 +273,7 @@ test("the ask sits in the middle of a message and after other words", () => {
   assert.deepEqual(askOf("pagué 12 M de tubo hoy"), {
     token: "12 M",
     choices: [1_200, 1_200_000_000],
+    bare: 1_200,
   });
 });
 
@@ -276,10 +281,12 @@ test("a decimal mantissa asks in cents without float drift", () => {
   assert.deepEqual(askOf("2,5 M cable"), {
     token: "2,5 M",
     choices: [250, 250_000_000],
+    bare: 250,
   });
   assert.deepEqual(askOf("0,07 M cable"), {
     token: "0,07 M",
     choices: [7, 7_000_000],
+    bare: 7,
   });
 });
 
