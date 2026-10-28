@@ -13,6 +13,10 @@ import { todayInZone } from "@/lib/zone";
 
 const today = todayInZone();
 const lastMonth = previousMonth(monthOf(today));
+const MONTHS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
 const monthBefore = previousMonth(lastMonth);
 const key = (month: string) => month.slice(0, 7);
 const lastMarkDay = closedMonthMarkDay(lastMonth, today);
@@ -110,10 +114,12 @@ test("past the reach, the goal's month page shows its task with no mark and no s
     // How each stood at the month's close: a sub-task done after it reads «sin hacer».
     const stood = (name: string) =>
       page.getByText(name, { exact: true }).locator("xpath=following-sibling::*[1]");
-    await expect(stood(`Pintar ${stamp}`)).toHaveText("sin hacer");
+    // Undone, an open goal's task carries on into the next month; its sub-task reads «sin hacer».
+    await expect(stood(`Pintar ${stamp}`)).toHaveText(`sigue en ${MONTHS[Number(lastMonth.slice(5, 7)) - 1]}`);
     await expect(stood(`Empacar ${stamp}`)).toHaveText("hecha");
     await expect(stood(`Cargar ${stamp}`)).toHaveText("sin hacer");
-    await expect(page.getByText(`Sembrar ${stamp}`, { exact: true })).toBeVisible();
+    // A goal archived since carries nothing on.
+    await expect(stood(`Sembrar ${stamp}`)).toHaveText("sin hacer");
     await expect(page.getByText(`Nadar ${stamp}`, { exact: true })).toBeVisible();
     await expect(page.getByText(/esta semana/)).toHaveCount(0);
     await expect(page.getByRole("link", { name: /^(Añadir una tarea|Planear )/ })).toHaveCount(0);

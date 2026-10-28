@@ -126,6 +126,8 @@
     "mark": "Marcar hecha: {name}",
     "noAmount": "en {month} · sin monto este mes",
     "nothingPlanned": "en {month} · nada planeado todavía",
+    "comingNothingPlanned": "Nada planeado para {month} todavía.",
+    "comingPlanned": "Plan de <fig>{planned}</fig> para {month}.",
     "noTasks": "ninguna tarea en {month}",
     "measuresNothing": "no mide nada · solo sus tareas",
     "measuresNothingCount": "no mide nada · {done} de {total} tareas hechas",

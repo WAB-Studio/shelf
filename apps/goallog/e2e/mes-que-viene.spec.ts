@@ -106,7 +106,10 @@ for (const width of [390, 1280]) {
       await expect(prev(page)).toHaveAttribute("href", "/mes");
 
       const english = page.locator("section", { has: page.getByRole("heading", { name: `Inglés ${stamp}` }) });
-      expect((await english.innerText()).replace(/\s+/g, " ")).toContain("de 5 h");
+      // A month not yet lived says its plan alone, never a reached figure that can only be zero.
+      const card = (await english.innerText()).replace(/\s+/g, " ");
+      expect(card).toContain(`Plan de 5 h para ${NAMES[Number(comingMonth.slice(5, 7)) - 1]}`);
+      expect(card).not.toMatch(/\b0 min\b/);
       await expect(page.getByRole("heading", { name: `Mudanza ${stamp}` })).toHaveCount(0);
 
       await page.getByRole("button", { name: `Marcar hecha: Clase ${stamp}` }).click();
