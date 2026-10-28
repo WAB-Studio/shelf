@@ -3,12 +3,27 @@
 import { useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { Button, Flex, Heading, Link, Panel, Separator, Text } from "@/components/ui";
+import { Button, Flex, Link, Panel, ScreenHeader, Separator, Text } from "@/components/ui";
 import type { MonthReview } from "@/db/queries/month-review";
 import { Link as LocaleLink } from "@/i18n/navigation";
-import { addCivilMonths, civilDateToDate } from "@/lib/dates";
+import { civilDateToDate, shiftMonth } from "@/lib/dates";
 
 import { MonthReviewRow } from "./month-review-row";
+
+type ReviewItem = MonthReview["items"][number];
+
+function ReviewList({ items }: { items: ReviewItem[] }) {
+  return (
+    <Panel>
+      {items.map((item, index) => (
+        <Flex key={`${item.rule}:${item.transactionIds.join(",")}`} direction="column">
+          {index > 0 && <Separator size="4" />}
+          <MonthReviewRow item={item} />
+        </Flex>
+      ))}
+    </Panel>
+  );
+}
 
 /**
  * «Revisar el mes» (RF-155): the closed month's items by the four fixed rules,
@@ -20,18 +35,18 @@ export function MonthReviewScreen({ review, lastClosed }: { review: MonthReview;
   const format = useFormatter();
   const [showReviewed, setShowReviewed] = useState(false);
   const monthName = format.dateTime(civilDateToDate(`${review.month}-01`), { month: "long", year: "numeric" });
-  const prev = addCivilMonths(`${review.month}-01`, -1).slice(0, 7);
-  const next = addCivilMonths(`${review.month}-01`, 1).slice(0, 7);
+  const prev = shiftMonth(review.month, -1);
+  const next = shiftMonth(review.month, 1);
   const hasPrev = review.firstMonth !== null && prev >= review.firstMonth;
   const hasNext = next <= lastClosed;
-  const pending = review.items.filter((item) => !item.reviewed);
-  const reviewed = review.items.filter((item) => item.reviewed);
-  const key = (item: MonthReview["items"][number]) => `${item.rule}:${item.transactionIds.join(",")}`;
+  const pending: ReviewItem[] = [];
+  const reviewed: ReviewItem[] = [];
+  for (const item of review.items) (item.reviewed ? reviewed : pending).push(item);
 
   return (
     <Flex direction="column" gap="5">
       <Flex direction="column" gap="2">
-        <Heading size="6">{t("title", { month: monthName })}</Heading>
+        <ScreenHeader title={t("title", { month: monthName })} back={{ href: "/reports", label: t("back") }} />
         {(hasPrev || hasNext) && (
           <Flex justify={hasPrev ? "between" : "end"} gap="3">
             {hasPrev && (
@@ -53,14 +68,7 @@ export function MonthReviewScreen({ review, lastClosed }: { review: MonthReview;
       ) : pending.length === 0 ? (
         <Text as="p">{t("allDone", { month: monthName })}</Text>
       ) : (
-        <Panel>
-          {pending.map((item, index) => (
-            <Flex key={key(item)} direction="column">
-              {index > 0 && <Separator size="4" />}
-              <MonthReviewRow item={item} />
-            </Flex>
-          ))}
-        </Panel>
+        <ReviewList items={pending} />
       )}
 
       {reviewed.length > 0 && (
@@ -68,16 +76,7 @@ export function MonthReviewScreen({ review, lastClosed }: { review: MonthReview;
           <Button variant="ghost" aria-expanded={showReviewed} onClick={() => setShowReviewed((open) => !open)}>
             {t("reviewed", { count: reviewed.length })}
           </Button>
-          {showReviewed && (
-            <Panel>
-              {reviewed.map((item, index) => (
-                <Flex key={key(item)} direction="column">
-                  {index > 0 && <Separator size="4" />}
-                  <MonthReviewRow item={{ ...item, canMark: false }} />
-                </Flex>
-              ))}
-            </Panel>
-          )}
+          {showReviewed && <ReviewList items={reviewed} />}
         </Flex>
       )}
     </Flex>

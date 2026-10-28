@@ -154,8 +154,7 @@
     "contributionsTitle": "Aportes del mes",
     "contributionsEmpty": "Sin aportes este mes.",
     "noGroup": "Los aportes son una cifra del fondo. Todavía no tienes fondo.",
-    "monthAdjustment": "Descuadre del mes",
-    "reviewMonth": "Revisar el mes"
+    "monthAdjustment": "Descuadre del mes"
   },
   "nav": {
     "title": "Navegación",
@@ -1446,6 +1445,7 @@
     "allDone": "Revisaste {month}.",
     "errors": {
       "cannotMark": "No puedes marcar este movimiento."
-    }
+    },
+    "back": "Volver a Reportes"
   }
 }

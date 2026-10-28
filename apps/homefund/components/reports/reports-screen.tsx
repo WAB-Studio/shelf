@@ -33,12 +33,13 @@ const SERIES_COLORS = {
 } as const;
 
 // The title and the way into «Revisar el mes» (RF-155), on both faces.
-function ReportsHead({ title, review }: { title: string; review: string }) {
+function ReportsHead({ title }: { title: string }) {
+  const t = useTranslations("review");
   return (
     <Flex justify="between" align="center" gap="3" wrap="wrap">
       <Heading size="6">{title}</Heading>
       <Link asChild size="2" weight="medium">
-        <LocaleLink href="/reports/review">{review}</LocaleLink>
+        <LocaleLink href="/reports/review">{t("entry")}</LocaleLink>
       </Link>
     </Flex>
   );
@@ -67,7 +68,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           below takes over (RF-19). */}
       <Box display={{ initial: "block", md: "none" }}>
         <Flex direction="column" gap="6">
-          <ReportsHead title={t("title")} review={t("reviewMonth")} />
+          <ReportsHead title={t("title")} />
 
           <Flex direction="column" gap="3" asChild>
             <section>
@@ -120,7 +121,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           RF-67). */}
       <Box display={{ initial: "none", md: "block" }}>
         <Flex direction="column" gap="6">
-          <ReportsHead title={t("title")} review={t("reviewMonth")} />
+          <ReportsHead title={t("title")} />
 
           <Flex direction="column" gap="4">
             <ReportCard>

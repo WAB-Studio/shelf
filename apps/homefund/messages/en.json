@@ -154,8 +154,7 @@
     "contributionsTitle": "Contributions this month",
     "contributionsEmpty": "No contributions this month.",
     "noGroup": "Contributions are a fund figure. You have no fund yet.",
-    "monthAdjustment": "Month gap",
-    "reviewMonth": "Review the month"
+    "monthAdjustment": "Month gap"
   },
   "nav": {
     "title": "Navigation",
@@ -1446,6 +1445,7 @@
     "allDone": "You reviewed {month}.",
     "errors": {
       "cannotMark": "You can't mark this movement."
-    }
+    },
+    "back": "Back to Reports"
   }
 }

@@ -4,7 +4,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { transactionReviews } from "@/db/schema";
 import { withUserDb } from "@/db/session";
-import { addCivilMonths, currentMonthStart, monthRange } from "@/lib/dates";
+import { addCivilMonths, lastClosedMonth, monthRange } from "@/lib/dates";
 
 import type { ReviewRule } from "@/lib/month-review-rules";
 
@@ -127,7 +127,7 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
  * none stand out. The screen's rows and account join, so the count never names a row it hides.
  */
 export async function getMonthReviewPending(): Promise<{ month: string; count: number } | null> {
-  const month = addCivilMonths(currentMonthStart(), -1).slice(0, 7);
+  const month = lastClosedMonth();
   const count = await withUserDb(async (tx) => {
     const [row] = await tx.execute<{ count: number }>(sql`
       ${reviewItemsSql(month)}

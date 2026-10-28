@@ -54,7 +54,7 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
         </Text>
       )}
       <Flex gap="3" align="center" wrap="wrap">
-        {item.canMark && (
+        {item.canMark && !item.reviewed && (
           <Button
             variant="soft"
             disabled={mark.isPending}
@@ -65,6 +65,7 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
         )}
         <Link asChild size="2" weight="medium">
           <LocaleLink
+            prefetch={false}
             href={
               item.rule === "reconciliation_gap"
                 ? "/settings/accounts"
