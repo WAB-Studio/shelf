@@ -133,7 +133,7 @@ async function queryGoalsRow(
          from "goals"."goals" g
          where (g.created_at at time zone ${TIME_ZONE})::date <= ${weekEnd}::date
            and (g.horizon is null or g.horizon > ${weekStart}::date)
-           and (g.archived_at is null or (g.archived_at at time zone ${TIME_ZONE})::date > ${weekEnd}::date)) as goals,
+           and (g.archived_at is null or (g.archived_at at time zone ${TIME_ZONE})::date >= ${weekEnd}::date)) as goals,
       (select date_trunc('week', min(t.created_at at time zone ${TIME_ZONE}))::date::text
          from (
            select g.created_at from "goals"."goals" g

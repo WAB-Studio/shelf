@@ -87,6 +87,8 @@ let deleteOneOff: typeof import("@/app/actions/one-offs").deleteOneOff;
 let fixTask: typeof import("@/app/actions/one-offs").fixTask;
 let completeOneOff: typeof import("@/app/actions/one-offs").completeOneOff;
 let loadWeek: typeof import("@/lib/queries/week").loadWeek;
+let loadMonthAcross: typeof import("@/lib/queries/month").loadMonthAcross;
+let TIME_ZONE: string;
 let loadGoal: typeof import("@/lib/queries/goal").loadGoal;
 let planMonthList: typeof import("@/lib/plan/roadmap-read").planMonthList;
 let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
@@ -152,10 +154,11 @@ before(async () => {
   ({ setRhythm } = await import("@/app/actions/roadmap"));
   ({ createOneOff, scheduleOneOff, deleteOneOff, fixTask, completeOneOff } = await import("@/app/actions/one-offs"));
   ({ loadWeek } = await import("@/lib/queries/week"));
+  ({ loadMonthAcross } = await import("@/lib/queries/month"));
   ({ loadGoal } = await import("@/lib/queries/goal"));
   ({ planMonthList } = await import("@/lib/plan/roadmap-read"));
   ({ declareFact, undoFact } = await import("@/app/actions/facts"));
-  ({ todayInZone } = await import("@/lib/zone"));
+  ({ todayInZone, TIME_ZONE } = await import("@/lib/zone"));
   ({ PAST_DAY_LIMIT } = await import("@/lib/validation/fact"));
 
   const { getPerson } = await import("@/lib/session");
@@ -1335,6 +1338,35 @@ test("addCommitment: the first quantity commitment measures the goal in its unit
   } finally {
     await sql`delete from goals.commitments where goal_id in ${sql([run, study, read, yesNo])}`;
     await sql`delete from goals.goals where id in ${sql([run, study, read, yesNo])}`;
+  }
+});
+
+test("a goal archived on a closed month's last day, or a past week's Sunday, still counts there; one archived the day before does not", async () => {
+  // The last day at 23:00 in the person's zone: the instant lands on the next day in UTC, the day it counts by does not.
+  const lastDay = shiftDay(`${today.slice(0, 7)}-01`, -1);
+  const monday = shiftDay(today, -((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7) - 7);
+  const sunday = shiftDay(monday, 6);
+  const goals = await sql<{ id: string; name: string }[]>`
+    insert into goals.goals (user_id, name, created_at, archived_at)
+    values
+      (${personId}, 'Archivada el último día', ${lastDay}::date - 40, (${lastDay}::date + time '23:00') at time zone ${TIME_ZONE}),
+      (${personId}, 'Archivada la víspera', ${lastDay}::date - 40, (${lastDay}::date - 1 + time '23:00') at time zone ${TIME_ZONE}),
+      (${personId}, 'Archivada el domingo', ${sunday}::date - 40, (${sunday}::date + time '23:00') at time zone ${TIME_ZONE}),
+      (${personId}, 'Archivada el sábado', ${sunday}::date - 40, (${sunday}::date - 1 + time '23:00') at time zone ${TIME_ZONE})
+    returning id, name`;
+  const id = (name: string) => goals.find((goal) => goal.name === name)!.id;
+  try {
+    const month = await loadMonthAcross({ month: lastDay });
+    const inMonth = new Set(month.goals.map((goal) => goal.id));
+    assert.equal(inMonth.has(id("Archivada el último día")), true);
+    assert.equal(inMonth.has(id("Archivada la víspera")), false);
+
+    const week = await loadWeek(monday);
+    const inWeek = new Set(week.goals.map((goal) => goal.id));
+    assert.equal(inWeek.has(id("Archivada el domingo")), true);
+    assert.equal(inWeek.has(id("Archivada el sábado")), false);
+  } finally {
+    await sql`delete from goals.goals where id in ${sql(goals.map((goal) => goal.id))}`;
   }
 });
 
