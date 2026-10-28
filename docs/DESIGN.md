@@ -483,3 +483,12 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
     and wraps between words. Each card grows about 40 px. Supersedes the side-by-side drawing of `DeudasAFavorPorFacturar` at 360.
   - The debt detail's «Saldo» tile (Q18 a): it reads the row's whole Q9 line, as the row and «Abonar» do: «A favor $ 8.000 ·
     Debes US$ 25,00 (≈ $ 105.000 por facturar)»; a card that only owes reads «Debes US$ 20,00».
+
+- **Decided by the user 2026-10-28, on oleada-7's critic** (not built yet; each opens the next free RF when planned):
+  - «Está bien» is undoable: a reviewed row under «Revisados» offers «Deshacer», which drops its mark and brings it back
+    to Inicio's count. A delete policy and a migration; RF-155's own behaviour stays.
+  - A reader in «Revisar el mes» sees the fund's items with neither «Está bien» nor «Corregir», and one line naming who
+    can fix them.
+  - A movement's `amount_from_words` clears when an edit changes its amount: a typed amount is the person's own.
+  - Still to fix from the same critic, no decision needed: the row names the movement's description; «Corregir» comes back
+    to the review; the debt detail's header reads the Q9 line as its «Saldo» tile does (Q18 left the header in pesos).
