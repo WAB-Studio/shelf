@@ -111,7 +111,8 @@ test("‹ four times lands on the week holding the fact, done and read-only; ›
   await withWeeks(browser, baseURL, db, person, 390, async (page) => {
     await page.goto("/semana");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(thisMonday));
-    await expect(next(page)).toHaveCount(0);
+    // The seeded goal ends two months out: this week steps forward too (RP-142).
+    await expect(next(page)).toHaveAttribute("href", `/semana?semana=${shift(thisMonday, 7)}`);
 
     for (let weeks = 1; weeks <= 4; weeks++) {
       await prev(page).click();
@@ -140,7 +141,7 @@ test("‹ four times lands on the week holding the fact, done and read-only; ›
     await next(page).click();
     await expect(page).toHaveURL(/\/semana$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(thisMonday));
-    await expect(next(page)).toHaveCount(0);
+    await expect(next(page)).toHaveAttribute("href", `/semana?semana=${shift(thisMonday, 7)}`);
   });
 });
 
@@ -168,9 +169,9 @@ test("the oldest week has no ‹, the one after it has; a goal archived since is
   });
 });
 
-test("a future week and a malformed one land on /semana (RP-44)", async ({ browser, baseURL, db, person }) => {
+test("a week past the furthest goal's end and a malformed one land on /semana (RP-142)", async ({ browser, baseURL, db, person }) => {
   await withWeeks(browser, baseURL, db, person, 390, async (page) => {
-    for (const param of [shift(thisMonday, 7), "nada", shift(today, 400)]) {
+    for (const param of [shift(today, 120), "nada", shift(today, 400)]) {
       await page.goto(`/semana?semana=${param}`);
       await expect(page).toHaveURL(/\/semana$/);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(thisMonday));
@@ -307,7 +308,7 @@ test("the first week with a goal has no back step; › stays at the right edge (
   });
 });
 
-test("this week has no next step; the back step stays at the left edge (RP-44)", async ({
+test("this week's next step reads «semana siguiente»; the back step stays at the left edge (RP-142)", async ({
   browser,
   baseURL,
   db,
@@ -315,8 +316,8 @@ test("this week has no next step; the back step stays at the left edge (RP-44)",
 }) => {
   await withWeeks(browser, baseURL, db, person, 390, async (page) => {
     await page.goto("/semana");
-    await expect(next(page)).toHaveCount(0);
-    expect(await page.getByText(/semana siguiente/i).count()).toBe(0);
+    await expect(next(page)).toHaveCount(1);
+    expect(await visibleText(next(page))).toContain("semana siguiente");
     const p = (await boxOf(prev(page)));
     expect(p.x).toBeLessThanOrEqual(40);
   });

@@ -3,14 +3,17 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
-import { Face, Flex, Page, ScreenHeader, SectionLabel, TextLink } from "@/components/ui";
+import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, Text, TextLink } from "@/components/ui";
 import { endedOnPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref } from "@/lib/day/week-href";
 import { weekSteps } from "@/lib/day/week-param";
+import { listDaylessOneOffs } from "@/lib/queries/one-offs";
 import { loadWeek, type GoalSummary } from "@/lib/queries/week";
 import { civilDateToDate, weekOf } from "@/lib/zone";
 
 import { EvidenceNote } from "@/components/day/evidence-note";
+import { GiveDayList } from "@/components/one-offs/give-day-list";
+import { GiveDayRow } from "@/components/one-offs/give-day-row";
 import { EmptyWeek } from "./empty-week";
 import { EndedLine } from "./ended-line";
 import { endedLastDay } from "./week-progress";
@@ -40,6 +43,12 @@ function formatWeekRange(start: string, end: string, t: Translator): string {
 // The week's distance from today, said the way `SemanaPasada.dc.html` heads it.
 function eyebrowFor(monday: string, thisMonday: string, firstMonday: string | null, t: Translator): string {
   if (monday === thisMonday) return t("week.eyebrow.this");
+  if (monday > thisMonday) {
+    const weeksAhead = Math.round(
+      (civilDateToDate(monday).getTime() - civilDateToDate(thisMonday).getTime()) / (7 * 86_400_000),
+    );
+    return weeksAhead === 1 ? t("week.eyebrow.next") : t("week.eyebrow.ahead", { count: weeksAhead });
+  }
   const month = (t.raw("day.monthLong") as string[])[Number(monday.slice(5, 7)) - 1];
   if (monday === firstMonday) return t("week.eyebrow.first", { month });
   const weeksAgo = Math.round(
@@ -63,16 +72,20 @@ function stepHref(monday: string | null, thisMonday: string): string | null {
  */
 export async function WeekScreen({ day, today }: { day: string; today: string }) {
   const t = await getTranslations();
-  const week = await loadWeek(day);
-  const { view, evidence, goals } = week;
-
   const thisMonday = weekOf(today)[0];
+  const coming = weekOf(day)[0] > thisMonday;
+  // A coming week also offers the tasks that wait with no day: read beside the week, never after it.
+  const [week, dayless] = await Promise.all([loadWeek(day, today), coming ? listDaylessOneOffs() : Promise.resolve([])]);
+  const { view, evidence, goals } = week;
+  // The page cannot know the limit before the read: a week past it leaves for this one.
+  if (view.start > week.lastMonday) redirect("/semana");
+
   // A week before the first goal's has nothing to read: land on the first.
   if (week.firstMonday !== null && view.start < week.firstMonday) {
     redirect(stepHref(week.firstMonday, thisMonday) ?? "/semana");
   }
-  const past = view.start !== thisMonday;
-  const steps = weekSteps({ monday: view.start, thisMonday, firstMonday: week.firstMonday });
+  const past = view.start < thisMonday;
+  const steps = weekSteps({ monday: view.start, thisMonday, firstMonday: week.firstMonday, lastMonday: week.lastMonday });
   const prev = stepHref(steps.prev, thisMonday);
   const next = stepHref(steps.next, thisMonday);
 
@@ -168,6 +181,33 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
       ) : null}
 
       <WeekTableFace week={week} today={today} past={past} columns={columns} t={t} endedNote={endedNote} />
+
+      {coming ? (
+        <>
+          <Section as="div" label={t("week.coming.datedTitle")}>
+            {week.tasks.length === 0 ? (
+              <Text as="p" variant="sentence">
+                {t("week.coming.noneDated")}
+              </Text>
+            ) : (
+              week.tasks.map((task) => {
+                const weekday = (civilDateToDate(task.day).getUTCDay() + 6) % 7;
+                const label = t("week.coming.dayLabel", { weekday: weekdayLong[weekday], day: Number(task.day.slice(8, 10)) });
+                return (
+                  <GiveDayRow
+                    key={task.id}
+                    oneOffId={task.id}
+                    name={task.name}
+                    meta={task.goalName ? `${label} · ${t("week.coming.goal", { goal: task.goalName })}` : label}
+                    scheduled={{ day: task.day, label }}
+                  />
+                );
+              })
+            )}
+          </Section>
+          <GiveDayList tasks={dayless} />
+        </>
+      ) : null}
     </Page>
   );
 }

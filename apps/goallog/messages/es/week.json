@@ -23,6 +23,12 @@
     "weekProgressPast": "{done} de {total} esa semana",
     "monthProgressPast": "{done} de {total} ese mes"
   },
+  "coming": {
+    "datedTitle": "con día",
+    "noneDated": "Nada tiene día en esta semana todavía.",
+    "dayLabel": "{weekday} {day}",
+    "goal": "de {goal}"
+  },
   "unreadableTitle": "No pudimos leer una fuente.",
   "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
   "weekdayShort": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
@@ -51,6 +57,8 @@
   "eyebrow": {
     "this": "esta semana",
     "last": "la semana pasada",
+    "next": "la semana que viene",
+    "ahead": "dentro de {count} semanas",
     "first": "{month} · la primera",
     "ago": "{month} · hace {count} semanas"
   },

@@ -20,6 +20,12 @@
     "giveDay": "Darle un día",
     "giveOtherDay": "Darle otro día"
   },
+  "giveDay": {
+    "give": "Darle día",
+    "move": "Moverla",
+    "giveLabel": "Darle día a {name}",
+    "moveLabel": "Mover {name} a otro día"
+  },
   "schedule": {
     "title": "¿Para cuándo?",
     "now": "ahora: {when}",
