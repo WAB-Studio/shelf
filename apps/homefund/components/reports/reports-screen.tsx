@@ -9,6 +9,7 @@ import {
   Flex,
   Heading,
   Disc,
+  Link,
   Money,
   ReportCard,
   ReportRow,
@@ -20,6 +21,7 @@ import type { MonthFlow } from "@/db/queries/reports/monthly-flow";
 import type { ReportsData } from "@/db/queries/reports/reports-screen";
 import type { MemberContributionNamed } from "@/db/queries/reports/reports-screen";
 import type { CurrencyCode } from "@/lib/currency";
+import { Link as LocaleLink } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 
@@ -29,6 +31,18 @@ const SERIES_COLORS = {
   income: "var(--jade-9)",
   expense: "var(--tomato-9)",
 } as const;
+
+// The title and the way into «Revisar el mes» (RF-155), on both faces.
+function ReportsHead({ title, review }: { title: string; review: string }) {
+  return (
+    <Flex justify="between" align="center" gap="3" wrap="wrap">
+      <Heading size="6">{title}</Heading>
+      <Link asChild size="2" weight="medium">
+        <LocaleLink href="/reports/review">{review}</LocaleLink>
+      </Link>
+    </Flex>
+  );
+}
 
 /**
  * The reports screen: this month's expenses by category (largest first, RF-34),
@@ -53,7 +67,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           below takes over (RF-19). */}
       <Box display={{ initial: "block", md: "none" }}>
         <Flex direction="column" gap="6">
-          <Heading size="6">{t("title")}</Heading>
+          <ReportsHead title={t("title")} review={t("reviewMonth")} />
 
           <Flex direction="column" gap="3" asChild>
             <section>
@@ -106,7 +120,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           RF-67). */}
       <Box display={{ initial: "none", md: "block" }}>
         <Flex direction="column" gap="6">
-          <Heading size="6">{t("title")}</Heading>
+          <ReportsHead title={t("title")} review={t("reviewMonth")} />
 
           <Flex direction="column" gap="4">
             <ReportCard>

@@ -154,7 +154,8 @@
     "contributionsTitle": "Contributions this month",
     "contributionsEmpty": "No contributions this month.",
     "noGroup": "Contributions are a fund figure. You have no fund yet.",
-    "monthAdjustment": "Month gap"
+    "monthAdjustment": "Month gap",
+    "reviewMonth": "Review the month"
   },
   "nav": {
     "title": "Navigation",
@@ -1422,6 +1423,27 @@
     }
   },
   "review": {
+    "entry": "Review the month",
+    "title": "Review {month}",
+    "prev": "‹ previous month",
+    "next": "next month ›",
+    "rules": {
+      "above_usual": "Far above the usual",
+      "twin": "Two equal on the same day",
+      "from_words": "Amount read from words",
+      "reconciliation_gap": "Gap when reconciling"
+    },
+    "meta": "{account} · {date}",
+    "metaCategory": "{account} · {date} · {category}",
+    "usual": "Usual:",
+    "counted": "You counted",
+    "twinCount": "{count} equal movements",
+    "ok": "Looks fine",
+    "saving": "Saving…",
+    "fix": "Fix",
+    "reviewed": "Reviewed ({count})",
+    "empty": "Nothing stands out in {month}.",
+    "allDone": "You reviewed {month}.",
     "errors": {
       "cannotMark": "You can't mark this movement."
     }
