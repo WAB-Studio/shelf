@@ -6,6 +6,7 @@ import { type Translator } from "@/i18n/translator";
 import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, Text, TextLink } from "@/components/ui";
 import { endedOnPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref } from "@/lib/day/week-href";
+import { daysBetween } from "@/lib/day/weeks";
 import { weekSteps } from "@/lib/day/week-param";
 import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
 import { loadWeek, type GoalSummary } from "@/lib/queries/week";
@@ -42,19 +43,12 @@ function formatWeekRange(start: string, end: string, t: Translator): string {
 
 // The week's distance from today, said the way `SemanaPasada.dc.html` heads it.
 function eyebrowFor(monday: string, thisMonday: string, firstMonday: string | null, t: Translator): string {
-  if (monday === thisMonday) return t("week.eyebrow.this");
-  if (monday > thisMonday) {
-    const weeksAhead = Math.round(
-      (civilDateToDate(monday).getTime() - civilDateToDate(thisMonday).getTime()) / (7 * 86_400_000),
-    );
-    return weeksAhead === 1 ? t("week.eyebrow.next") : t("week.eyebrow.ahead", { count: weeksAhead });
-  }
+  const weeks = daysBetween(thisMonday, monday) / 7;
+  if (weeks === 0) return t("week.eyebrow.this");
+  if (weeks > 0) return weeks === 1 ? t("week.eyebrow.next") : t("week.eyebrow.ahead", { count: weeks });
   const month = (t.raw("day.monthLong") as string[])[Number(monday.slice(5, 7)) - 1];
   if (monday === firstMonday) return t("week.eyebrow.first", { month });
-  const weeksAgo = Math.round(
-    (civilDateToDate(thisMonday).getTime() - civilDateToDate(monday).getTime()) / (7 * 86_400_000),
-  );
-  return weeksAgo === 1 ? t("week.eyebrow.last") : t("week.eyebrow.ago", { month, count: weeksAgo });
+  return weeks === -1 ? t("week.eyebrow.last") : t("week.eyebrow.ago", { month, count: -weeks });
 }
 
 function stepHref(monday: string | null, thisMonday: string): string | null {

@@ -275,7 +275,7 @@ export async function loadMonthAcross(
     view === "coming"
       ? []
       : (rows[0]?.loose ?? []).map((habit) => {
-          const read = looseHabit(habit, month, view === "this" ? today : until);
+          const read = looseHabit(habit, month, until);
           return view === "this" ? read : { ...read, thisWeek: null };
         });
   const goalRows = rows.filter((row): row is Row & { goal: NonNullable<Row["goal"]> } => row.goal !== null);

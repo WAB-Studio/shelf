@@ -2,6 +2,8 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
+import { lastMondayOf } from "@/lib/plan/forward-limit";
+import { monthOf, nextMonth } from "@/lib/plan/months";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-142 on Semana: › steps past this week to the last week of the furthest
@@ -28,11 +30,9 @@ const thisMonday = mondayOf(today);
 const nextMonday = shift(thisMonday, 7);
 // The third of the month after next: the goal's span ends early in the limit
 // month, so the last weeks › reaches ask nothing of it.
-const HORIZON = `${shift(`${shift(`${today.slice(0, 7)}-28`, 7).slice(0, 7)}-28`, 7).slice(0, 7)}-03`;
-// The goal's last day closes the limit month; its week is the last one.
-const limitMonth = shift(HORIZON, -1).slice(0, 7);
-const limitMonthEnd = shift(`${shift(`${limitMonth}-28`, 7).slice(0, 7)}-01`, -1);
-const lastMonday = mondayOf(limitMonthEnd);
+const HORIZON = `${nextMonth(nextMonth(monthOf(today))).slice(0, 7)}-03`;
+// The goal's last day falls in the limit month; the week holding that month's end is the last one.
+const lastMonday = lastMondayOf(shift(HORIZON, -1).slice(0, 7));
 
 const GOAL = "Correr la media";
 const COMMITMENT = "Trotar";
