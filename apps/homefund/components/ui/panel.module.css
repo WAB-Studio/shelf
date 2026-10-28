@@ -5,6 +5,8 @@
   /* SPEC-A3 gives a card 16px and its dense table 14px, and has not said which
      one a card that carries a list of rows takes. */
   border-radius: 16px;
+  /* What holds a row's content off the card's edge, `PanelRow` and `PanelBlock` alike. */
+  --panel-inset: 18px;
 }
 
 /* Only a stack clips: its rows run edge to edge and the last one has to meet the
@@ -46,7 +48,7 @@
   /* SPEC-A3's dense row measures ~44px, which is the table's; what a row inside
      a card measures is unsettled. */
   height: 54px;
-  padding: 0 18px;
+  padding: 0 var(--panel-inset);
   /* SPEC-A3 rules each row underneath and leaves the last one bare. Ruling on
      top instead spares the head a rule of its own, and no artboard settles it. */
   border-top: 1px solid var(--gray-a3);
@@ -56,7 +58,7 @@
 
 /* A free-form row of a stack, kept off the card's edge as a row is. */
 .block {
-  padding: 0 18px;
+  padding: 0 var(--panel-inset);
 }
 
 /* A block box, so inline content is laid against the row's inherited strut and

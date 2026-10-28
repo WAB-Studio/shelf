@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { Button, Flex, Link, Panel, PanelBlock, ScreenHeader, Separator, Text } from "@/components/ui";
@@ -16,12 +16,12 @@ function ReviewList({ items }: { items: ReviewItem[] }) {
   return (
     <Panel>
       {items.map((item, index) => (
-        <Flex key={`${item.rule}:${item.transactionIds.join(",")}`} direction="column">
+        <Fragment key={`${item.rule}:${item.transactionIds.join(",")}`}>
           {index > 0 && <Separator size="4" />}
           <PanelBlock>
             <MonthReviewRow item={item} />
           </PanelBlock>
-        </Flex>
+        </Fragment>
       ))}
     </Panel>
   );

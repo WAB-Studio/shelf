@@ -2733,7 +2733,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const line = lineOf(page, card);
         await expect(line).toHaveText(FULL_LINE);
 
-        // «A favor $ 8.000» is the accent's and the rest is the normal ink.
+        // «A favor $ 8.000 ·» is the accent's (the dot closes its figure) and the rest is the normal ink.
         const accent = await accentInk(page);
         const holders = await holdersOf(line, "A favor $ 8.000 ·");
         expect(holders).toHaveLength(1);
