@@ -169,6 +169,7 @@ export function TaskRow({
         trailing={trail}
         data-done={done}
         onClick={openSheet}
+        still={locked}
         disabled={pending}
       />
     );
@@ -188,6 +189,7 @@ export function TaskRow({
         {...noteProps}
         onLeadingClick={locked ? undefined : () => factId && run(() => undoFact({ factId }))}
         onClick={openSheet}
+        still={locked}
         disabled={pending}
       />
     );
@@ -203,6 +205,7 @@ export function TaskRow({
         {...noteProps}
         onLeadingClick={locked ? undefined : () => run(() => completeOneOff({ oneOffId, day: markDay }))}
         onClick={openSheet}
+        still={locked}
         disabled={pending}
       />
     );

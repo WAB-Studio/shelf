@@ -88,6 +88,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
     const unit = goal.unit;
     const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
     const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: thisName });
+    // A goal archived since marks nothing, even within the reach.
+    const rowMarkDay = goal.open ? markDay : null;
 
     const openMonths = openMonthsOf(goal.plan);
     const sheetOf = (task: MonthAcrossItem["task"], kids: MonthAcrossItem["children"]) => ({
@@ -126,7 +128,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
       const placed =
         where === undefined ? sub : where === "" ? undefined : t("month.group.line", { goal: where, amount: say(owes) });
       // A closed month past a fact's reach says how each task stood and marks nothing (RP-142, RP-143).
-      if (markDay === null) {
+      if (rowMarkDay === null) {
         return (
           <Flex key={task.id} direction="column" gap="3">
             {[task, ...children].map((row) => (
@@ -170,7 +172,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                 : undefined
             }
             fixedMonth={goal.plan.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined}
-            markDay={markDay}
+            markDay={rowMarkDay}
             sheet={sheetOf(task, children)}
           />
           {children.map((child) => (
@@ -179,13 +181,14 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               oneOffId={child.id}
               name={child.name}
               factId={child.factId ?? null}
-              done={child.doneOn !== null}
+              // Done in this month: a closed month does not count a sub-task finished after it.
+              done={child.doneOn !== null && (!past || child.doneOn < nextMonth(across.month))}
               child
               trailing={unit && child.estimate ? say(child.estimate) : undefined}
               markLabel={t("month.across.mark", { name: child.name })}
               note={child.note}
               noteEyebrow={noteEyebrow}
-              markDay={markDay}
+              markDay={rowMarkDay}
               sheet={sheetOf(child, [])}
             />
           ))}

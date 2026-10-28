@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { commitments, facts, goals, oneOffs } from "@/db/schema";
@@ -12,6 +12,7 @@ import {
   declareFactSchema,
   requireDayForSubject,
   requireQuantityFor,
+  earliestPastDay,
   undoFactSchema,
   type DeclareFactInput,
   type UndoFactInput,
@@ -293,14 +294,19 @@ export async function undoFact(input: UndoFactInput): Promise<UndoFactResult> {
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const deleted = await withGoalsDb((tx) =>
-    tx
-      .delete(facts)
-      .where(and(eq(facts.id, parsed.data.factId), eq(facts.userId, person.id)))
-      .returning({ id: facts.id }),
-  );
+  // A closed month past a fact's reach reads only (RP-143): its facts stay. This month's stay undoable.
+  const today = todayInZone();
+  const floor = [earliestPastDay(today), `${today.slice(0, 7)}-01`].sort()[0];
+  const outcome = await withGoalsDb(async (tx) => {
+    const own = and(eq(facts.id, parsed.data.factId), eq(facts.userId, person.id));
+    const deleted = await tx.delete(facts).where(and(own, gte(facts.day, floor))).returning({ id: facts.id });
+    if (deleted.length > 0) return "undone";
+    const kept = await tx.select({ id: facts.id }).from(facts).where(own);
+    return kept.length > 0 ? "closed" : "missing";
+  });
 
-  if (deleted.length === 0) return { ok: false, error: "day.errors.notFound" };
+  if (outcome === "closed") return { ok: false, error: "day.errors.monthClosed" };
+  if (outcome === "missing") return { ok: false, error: "day.errors.notFound" };
 
   revalidatePath("/");
   return { ok: true };

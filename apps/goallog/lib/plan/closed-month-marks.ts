@@ -1,6 +1,5 @@
 import { dayBefore } from "@/lib/day/weeks";
-import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
-import { civilDateToDate, dateToCivilDate } from "@/lib/zone";
+import { earliestPastDay } from "@/lib/validation/fact";
 
 import { nextMonth } from "./months";
 
@@ -9,7 +8,5 @@ import { nextMonth } from "./months";
 // Null once the reach has passed, and for a month not yet closed: the month is read only.
 export function closedMonthMarkDay(month: string, today: string): string | null {
   const last = dayBefore(nextMonth(`${month.slice(0, 7)}-01`));
-  const floor = civilDateToDate(today);
-  floor.setUTCDate(floor.getUTCDate() - PAST_DAY_LIMIT);
-  return last < today && last >= dateToCivilDate(floor) ? last : null;
+  return last < today && last >= earliestPastDay(today) ? last : null;
 }

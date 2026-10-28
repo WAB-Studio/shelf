@@ -3,10 +3,28 @@
   "pastTitle": "Día pasado",
   "date": "{weekday} {day} de {month}",
   "dateYear": "{day} de {month} de {year}",
-  "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
+  "weekdayLong": [
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado",
+    "domingo"
+  ],
   "monthLong": [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre"
   ],
   "nav": {
     "yesterday": "ayer",
@@ -21,7 +39,18 @@
     "startedOn": "{goal} empezó el {weekday} {day}",
     "startedOnFar": "{goal} empezó el {weekday} {day} de {month}",
     "asked": "{goal} · ese día pedía {count}",
-    "askedWords": ["ninguno", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"],
+    "askedWords": [
+      "ninguno",
+      "uno",
+      "dos",
+      "tres",
+      "cuatro",
+      "cinco",
+      "seis",
+      "siete",
+      "ocho",
+      "nueve"
+    ],
     "limit": "Siete días atrás es lo más lejos que se anota."
   },
   "weekFigure": {
@@ -114,12 +143,44 @@
     "undo": "Deshacer"
   },
   "cadence": {
-    "weekdayShort": ["L", "M", "X", "J", "V", "S", "D"],
-    "weekdayFull": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
-    "weekdayName": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
+    "weekdayShort": [
+      "L",
+      "M",
+      "X",
+      "J",
+      "V",
+      "S",
+      "D"
+    ],
+    "weekdayFull": [
+      "lunes",
+      "martes",
+      "miércoles",
+      "jueves",
+      "viernes",
+      "sábado",
+      "domingo"
+    ],
+    "weekdayName": [
+      "lun",
+      "mar",
+      "mié",
+      "jue",
+      "vie",
+      "sáb",
+      "dom"
+    ],
     "everyDay": "todos los días",
     "daysJoin": "{list} y {last}",
-    "weekdayPlural": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"],
+    "weekdayPlural": [
+      "lunes",
+      "martes",
+      "miércoles",
+      "jueves",
+      "viernes",
+      "sábados",
+      "domingos"
+    ],
     "onlyWeekday": "solo los {weekday}",
     "timesPerWeek": "{count, plural, one {# vez por semana} other {# veces por semana}}",
     "everyNDays": "cada {n} días",
@@ -180,6 +241,7 @@
     "dayBeforeCommitment": "Ese día es anterior a cuando empezó este compromiso.",
     "dayAfterRetired": "Ese día es posterior a cuando se retiró este compromiso.",
     "dayBeforeOneOff": "Esa tarea todavía no existía ese día.",
-    "dayBeforeOneOffDay": "Esa tarea era para un día después."
+    "dayBeforeOneOffDay": "Esa tarea era para un día después.",
+    "monthClosed": "Ese mes ya cerró: lo hecho en él queda como está."
   }
 }

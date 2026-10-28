@@ -11,6 +11,8 @@ import styles from "./row.module.css";
 // tall, ruled from the next by a hairline. A border box only as `card`, a link row the boards draw so.
 // Writing a fact costs one tap, so the whole row is the target (RNP-02).
 type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & {
+  // Nothing acts on the row (a closed month's task, RP-143): it draws as text, never as a control.
+  still?: boolean;
   // What sits at the head of the row — usually the mark, sometimes a plain
   // label (`Semana.dc.html`'s own day row has no mark of its own to lead
   // with).
@@ -93,6 +95,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     preview,
     end,
     card,
+    still,
     level = 0,
     foldSlot,
     fold,
@@ -222,10 +225,9 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     );
   }
 
-  // A row nothing acts on (a closed month's task, RP-143) is no control at all.
-  if (!onClick && type === "button") {
+  if (still) {
     return (
-      <div className={merged}>
+      <div className={merged} {...(props as ComponentPropsWithoutRef<"div">)}>
         {leading ? <span className={styles.leading}>{leading}</span> : null}
         {body}
       </div>

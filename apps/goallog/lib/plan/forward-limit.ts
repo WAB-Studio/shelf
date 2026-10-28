@@ -1,13 +1,7 @@
 import { dayBefore } from "@/lib/day/weeks";
 import { weekOf } from "@/lib/zone";
 
-import { ENDLESS_MONTHS_AHEAD, monthOf, nextMonth } from "./months";
-
-function monthsAfter(month: string, count: number): string {
-  let last = month;
-  for (let i = 0; i < count; i += 1) last = nextMonth(last);
-  return last;
-}
+import { lastMonthOf, monthOf, nextMonth } from "./months";
 
 // "YYYY-MM" of the last month «Mes» and «Semana» step forward to: the last
 // month of the furthest open goal's span. A goal with no end spans what it
@@ -17,7 +11,7 @@ export function forwardLimit({ horizons, today }: { horizons: (string | null)[];
   let limit = monthOf(today);
   for (const horizon of horizons) {
     if (horizon !== null && horizon <= today) continue;
-    const last = horizon === null ? monthsAfter(monthOf(today), ENDLESS_MONTHS_AHEAD) : monthOf(dayBefore(horizon));
+    const last = horizon === null ? lastMonthOf(today, null, today) : monthOf(dayBefore(horizon));
     if (last > limit) limit = last;
   }
   return limit.slice(0, 7);

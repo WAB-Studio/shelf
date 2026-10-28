@@ -192,8 +192,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RP-16** — The week is drawn as it was: the days with facts and the days without. No streak, no score, no praise and no reproach. A deliberate rest day is a plan's instruction, not a failure. Decided by the user 2026-09-22.
 - [x] **RP-17** — A goal's measure is read week by week, as the one table its review needs, from the first week to the current one.
 - [x] **RP-142** *(successor of RP-44 and RP-43)* — The week is read for any week, one step back or forward at a time, from
-  the week the first goal was opened to the last week of the furthest open goal's span (a goal with no end reaches twelve
-  months from today). A past week draws as it was lived (RP-16): the goals open in it, its facts and its evidence, a goal
+  the week the first goal was opened to the last week of the furthest open goal's span (a goal with no end reaches the
+  months it plans: this one and the eleven after, RP-99). A past week draws as it was lived (RP-16): the goals open in it, its facts and its evidence, a goal
   archived since still in the weeks it governed (RP-24); a day in it opens its own screen only within the seven days a fact may
   still name (RP-06). A coming week draws, day by day, what each open goal's commitments will ask, with no mark, and the tasks
   dated that day; in it only «Darle día» acts. «Mes» reads this month across every open goal — the amount planned and reached
