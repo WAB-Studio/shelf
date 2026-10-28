@@ -392,6 +392,8 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **«Revisar el mes»** (2026-10-18, the user's idea): RF-155 opened. A screen and an MCP tool list the month's anomalies
   by fixed rules; Claude does any AI review through MCP. The screen ships in oleada-7; the MCP tool `review_month`
   lands with RF-144's server, reading the same query, and RF-155 stays open until then (O7-Q4 a, 2026-10-24).
+  Shipped on oleada-7: `/reports/review` (from «Reportes» and Inicio's «Revisar <mes> · N movimientos», which counts
+  movements, a twin pair as two) and quick entry's `amount_from_words`. The MCP tool still waits for RF-144.
 - **Quick entry, lowercase «m»** (critic C2 b, later the same day): a lowercase «m» is never a million; only «M» or
   «millón/millones» multiply. «25 m» is 25, «5 m de cable» is 5; «3 M arriendo» asks. Supersedes the «m» lines above.
 - **Fund labels read «· fondo»** in the budget forms (critic C1 a), as categories do.
