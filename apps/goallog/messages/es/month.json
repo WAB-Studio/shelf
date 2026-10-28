@@ -147,9 +147,9 @@
       "import": "Importar un plan"
     },
     "weeks": {
-        "label": "Semanas",
-        "link": "Semana del {day}"
-      },
-      "titleYear": "{month} {year}"
+      "label": "Semanas",
+      "link": "Semana del {day}"
+    },
+    "titleYear": "{month} {year}"
   }
 }
