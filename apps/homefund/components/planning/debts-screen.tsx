@@ -623,44 +623,49 @@ function CardHead({
   creditCents: number;
   otherOwed: DebtPocket[];
 }) {
+  const beside = owesBesideCredit(creditCents, otherOwed);
+
   return (
-    <Flex align="center" gap="3">
-      <Disc
-        size={42}
-        radius={5}
-        surface={`var(--${tint}-a3)`}
-        ink={`var(--${tint}-11)`}
-      >
-        <Icon size={20} />
-      </Disc>
-      <Flex direction="column" flexGrow="1" minWidth="0">
-        <Text weight="bold">
-          {name}
-        </Text>
-        <Text size="1" color="gray">
-          {meta}
-        </Text>
+    <Flex direction="column" gap="2">
+      <Flex align="center" gap="3">
+        <Disc
+          size={42}
+          radius={5}
+          surface={`var(--${tint}-a3)`}
+          ink={`var(--${tint}-11)`}
+        >
+          <Icon size={20} />
+        </Disc>
+        <Flex direction="column" flexGrow="1" minWidth="0">
+          <Text weight="bold">{name}</Text>
+          <Text size="1" color="gray">
+            {meta}
+          </Text>
+        </Flex>
+        {!beside && (
+          <Flex direction="column" align="end">
+            <PocketFigure
+              owedCents={owedCents}
+              creditCents={creditCents}
+              currency={currency}
+              bold
+            />
+            <OtherOwed pockets={otherOwed} />
+          </Flex>
+        )}
       </Flex>
-      {owesBesideCredit(creditCents, otherOwed) ? (
-        // The line wraps at its dots inside this column, so the column has a
-        // ceiling and the name keeps what is left.
-        <Flex direction="column" align="end" maxWidth="64%">
+      {beside && (
+        // The credit with a pocket owed is a line too long to sit beside the
+        // name: it takes the card's whole width under the head, wrapping at its
+        // dots, so the name keeps the row.
+        <Flex direction="column">
           <CreditAndOwedLine
             creditCents={creditCents}
             currency={currency}
             otherOwed={otherOwed}
+            align="left"
           />
           <OtherOwed pockets={otherOwed.filter((p) => p.owedCents === 0)} />
-        </Flex>
-      ) : (
-        <Flex direction="column" align="end">
-          <PocketFigure
-            owedCents={owedCents}
-            creditCents={creditCents}
-            currency={currency}
-            bold
-          />
-          <OtherOwed pockets={otherOwed} />
         </Flex>
       )}
     </Flex>

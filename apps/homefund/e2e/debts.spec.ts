@@ -2528,6 +2528,44 @@ for (const [bandLabel, width] of [
 // member's describe keeps a group from forming around that identity meanwhile.
 // ---------------------------------------------------------------------------
 
+/**
+ * How a name sits in the browser: each word's characters on one line or not, the
+ * lines it takes, its wrapping properties and where it ends. A name cut inside a
+ * word has a word whose characters sit on two lines.
+ */
+async function nameLayout(name: Locator) {
+  return name.evaluate((el) => {
+    const tops: number[] = [];
+    const split: string[] = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.textContent ?? "";
+      for (const match of text.matchAll(/\S+/g)) {
+        const own: number[] = [];
+        for (let i = 0; i < match[0].length; i++) {
+          const range = document.createRange();
+          range.setStart(node, match.index + i);
+          range.setEnd(node, match.index + i + 1);
+          const rect = range.getClientRects()[0];
+          if (rect) own.push(Math.round(rect.top));
+        }
+        if (own.some((top) => Math.abs(top - own[0]) > 2)) split.push(match[0]);
+        tops.push(...own);
+      }
+    }
+    const lines = tops.filter((top, i) => tops.findIndex((t) => Math.abs(t - top) <= 2) === i);
+    const style = getComputedStyle(el);
+    return {
+      split,
+      lines: lines.length,
+      overflowWrap: style.overflowWrap,
+      wordBreak: style.wordBreak,
+      ellipsis: style.textOverflow,
+      bottom: el.getBoundingClientRect().bottom,
+    };
+  });
+}
+
 const Q9_CREDIT_CENTS = 800_000;
 const Q9_USD_CENTS = 2_500;
 const Q9_ESTIMATE_CENTS = 10_500_000;
@@ -2744,13 +2782,13 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         }
       });
 
-      test("Q9: at the phone the name reads whole and the line wraps only at its dots", async ({
+      test("Q9: at the phone the name reads whole under no ellipsis and the line sits under it, wrapping only at its dots", async ({
         page,
       }) => {
         test.skip(laptop, "the laptop table keeps M5's columns");
         const card: MemberCard = {
           id: randomUUID(),
-          name: `Tarjeta Q9 ancho ${stamp}`,
+          name: "Mastercard Black Bancolombia",
           creditCents: Q9_CREDIT_CENTS,
           usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
         };
@@ -2763,13 +2801,20 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         // The locator waits; the measures read it once it is there.
         const name = rowOf(page, card.name, card.id).getByText(card.name, { exact: true });
         await expect(name).toBeVisible();
-        const fit = await name.evaluate((el) => ({
-          scroll: el.scrollWidth,
-          client: el.clientWidth,
-          ellipsis: getComputedStyle(el).textOverflow,
-        }));
-        expect(fit.scroll).toBeLessThanOrEqual(fit.client);
-        expect(fit.ellipsis).not.toBe("ellipsis");
+        const layout = await nameLayout(name);
+        expect(layout.split).toEqual([]);
+        expect(layout.lines).toBeLessThanOrEqual(2);
+        expect(layout.ellipsis).not.toBe("ellipsis");
+        expect(layout.overflowWrap).not.toBe("anywhere");
+        expect(layout.wordBreak).not.toBe("break-all");
+
+        // The line sits under the name, never beside it, and spans the card's width.
+        const nameBox = (await name.boundingBox())!;
+        const lineBox = (await line.boundingBox())!;
+        const cardBox = (await rowOf(page, card.name, card.id).boundingBox())!;
+        expect(lineBox.y).toBeGreaterThanOrEqual(layout.bottom - 1);
+        expect(lineBox.x).toBeLessThanOrEqual(nameBox.x);
+        expect(lineBox.width).toBeGreaterThan(cardBox.width / 2);
 
         // The board wraps the line at a dot or before the parenthesis, never inside a word or a figure.
         const breaks = await line.evaluate((el) => {
@@ -2868,6 +2913,57 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         await expect(page.getByRole("heading", { name: card.name, exact: true })).toBeVisible();
         await page.getByRole("button", { name: debts.rowPay, exact: true }).click();
         await checkDialog();
+      });
+
+      test("Q9: the detail's Saldo tile reads the big figure and the rest of the line under it", async ({
+        page,
+      }) => {
+        const credit: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 saldo a favor ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+        };
+        const dollars: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 saldo dólares ${bandLabel} ${stamp}`,
+          usd: { cents: 2_000, estimateCents: 8_400_000 },
+        };
+        await seedFund([credit, dollars]);
+        const fontSize = (el: Locator) =>
+          el.evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+
+        await page.goto(`/es/planning/debts/${credit.id}`);
+        await expect(page.getByRole("heading", { name: credit.name, exact: true })).toBeVisible();
+        const accent = await accentInk(page);
+        const main = page.getByRole("main");
+        const label = main.getByText(debts.tableBalance, { exact: true }).first();
+        const big = label.locator("xpath=following-sibling::*[1]");
+        const rest = label.locator("xpath=following-sibling::*[2]");
+        await expect(big).toHaveText(/^A\sfavor\s\$\s8\.000$/);
+        expect(await inkOf(big)).toBe(accent);
+        expect(await fontSize(big)).toBeGreaterThanOrEqual(20);
+        await expect(rest).toHaveText(
+          /^·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
+        );
+        expect(await fontSize(rest)).toBeLessThan(await fontSize(big));
+        const owedInks = await inkOfText(rest, /Debes/);
+        expect(owedInks.length).toBeGreaterThan(0);
+        for (const ink of owedInks) expect(ink).not.toBe(accent);
+        const muted = await inkOfText(rest, /por facturar/);
+        expect(muted.length).toBeGreaterThan(0);
+        for (const ink of muted) expect(ink).not.toBe(owedInks[0]);
+        expect((await big.boundingBox())!.y + (await big.boundingBox())!.height).toBeLessThanOrEqual(
+          (await rest.boundingBox())!.y + 1,
+        );
+
+        await page.goto(`/es/planning/debts/${dollars.id}`);
+        await expect(page.getByRole("heading", { name: dollars.name, exact: true })).toBeVisible();
+        const owesLabel = page.getByRole("main").getByText(debts.tableBalance, { exact: true }).first();
+        const owes = owesLabel.locator("xpath=following-sibling::*[1]");
+        await expect(owes).toHaveText(/^Debes\sUS\$\s20([.,]00)?$/);
+        expect(await inkOf(owes)).not.toBe(accent);
+        expect(await fontSize(owes)).toBeGreaterThanOrEqual(20);
       });
 
       test("Q9: Abonar with a dollar refund beside the purchase reads the estimate net of it, on the row and the detail", async ({

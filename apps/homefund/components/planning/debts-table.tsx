@@ -106,6 +106,7 @@ export function CreditAndOwedLine({
   align = "right",
   size = "2",
   owedBold = false,
+  only = "all",
 }: {
   creditCents: number;
   currency: CurrencyCode;
@@ -115,18 +116,23 @@ export function CreditAndOwedLine({
   size?: "1" | "2" | "3";
   // What the other pockets owe in bold, as the abono dialog draws it.
   owedBold?: boolean;
+  // «owed» leaves the credit out: the detail's tile draws it big on its own and
+  // reads the rest of the line under it.
+  only?: "all" | "owed";
 }) {
   const t = useTranslations("debts");
 
   return (
     <Figure as="div" size={size} align={align}>
-      <Money
-        minor={creditCents}
-        currency={currency}
-        tone="credit"
-        size="inherit"
-        words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
-      />
+      {only === "all" && (
+        <Money
+          minor={creditCents}
+          currency={currency}
+          tone="credit"
+          size="inherit"
+          words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
+        />
+      )}
       {otherOwed
         .filter((pocket) => pocket.owedCents > 0)
         .map((pocket) => {
@@ -135,7 +141,7 @@ export function CreditAndOwedLine({
           const toBill = wordsAround(t("toBill", { amount: AMOUNT_SLOT }));
           return (
             <Fragment key={pocket.currency}>
- {" "}
+              {only === "all" && " "}
               <Text weight={owedBold ? "bold" : undefined}>
                 <Money
                   minor={pocket.owedCents}
@@ -184,12 +190,15 @@ export function PocketFigure({
   currency,
   bold = false,
   inherit = false,
+  named = false,
 }: {
   owedCents: number;
   creditCents: number;
   currency: CurrencyCode;
   bold?: boolean;
   inherit?: boolean;
+  // A pocket that owes reads «Debes US$ 20,00» instead of the bare amount.
+  named?: boolean;
 }) {
   const t = useTranslations("debts");
   const locale = useLocale() as Locale;
@@ -204,6 +213,19 @@ export function PocketFigure({
           tone="credit"
           size="inherit"
           words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
+        />
+      </Figure>
+    );
+  }
+  if (named && owedCents > 0) {
+    return (
+      <Figure size={size}>
+        <Money
+          minor={owedCents}
+          currency={currency}
+          size="inherit"
+          signed={false}
+          words={wordsAround(t("owesForeign", { amount: AMOUNT_SLOT }))}
         />
       </Figure>
     );
