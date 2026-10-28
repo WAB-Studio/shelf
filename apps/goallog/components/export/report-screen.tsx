@@ -16,6 +16,7 @@ import {
 import { endlessCut, foldsMonths } from "@/lib/lists/endless-cut";
 import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
+import { monthWord } from "@/lib/plan/month-name";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { formatCount, formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { civilDateToDate, civilDayMonthYear } from "@/lib/zone";
@@ -46,15 +47,6 @@ import { useTimeWords } from "@/components/ui/figure";
 
 import { PrintButton } from "./print-button";
 
-const monthYear = new Intl.DateTimeFormat("es-CO", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-const monthOnly = new Intl.DateTimeFormat("es-CO", {
-  month: "long",
-  timeZone: "UTC",
-});
 const monthShort = new Intl.DateTimeFormat("es-CO", {
   month: "short",
   timeZone: "UTC",
@@ -75,9 +67,7 @@ const dateWithWeekday = new Intl.DateTimeFormat("es-CO", {
 
 // «agosto 2026»: the month and its year, without the «de» ICU puts between.
 function monthLabel(day: string): string {
-  const parts = monthYear.formatToParts(civilDateToDate(day));
-  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${part("month")} ${part("year")}`;
+  return `${monthWord(day)} ${day.slice(0, 4)}`;
 }
 
 function MonthFigures({
@@ -305,7 +295,7 @@ function InsideRow({
       : planned !== null
         ? [
             t("insideRow", {
-              month: monthOnly.format(civilDateToDate(today)),
+              month: monthWord(today),
               done: isTimeUnit(goal.unit as string)
                 ? formatQuantity(goal.thisMonth.reached, goal.unit as string, words)
                 : formatCount(goal.thisMonth.reached),
@@ -494,7 +484,7 @@ function GoalPart({
   if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
   if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
   const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
-  const thisMonth = monthOnly.format(civilDateToDate(today));
+  const thisMonth = monthWord(today);
 
   const measureLine =
     unit === null ? (
@@ -572,14 +562,14 @@ function GoalPart({
                   meta={
                     task.from !== null
                       ? t("fromMonth", {
-                          month: monthOnly.format(civilDateToDate(task.from)),
+                          month: monthWord(task.from),
                         })
                       : undefined
                   }
                   continues={
                     unit !== null && task.part !== null && task.continuesIn !== null
                       ? t.rich("continuesIn", {
-                          month: monthOnly.format(civilDateToDate(task.continuesIn)),
+                          month: monthWord(task.continuesIn),
                           total: () => <Quantity value={totalOf(task) ?? 0} unit={unit} />,
                         })
                       : undefined
@@ -666,7 +656,7 @@ function GoalPart({
         const nextMonth = (month: string) => {
           const day = civilDateToDate(month);
           day.setUTCMonth(day.getUTCMonth() + 1);
-          return monthOnly.format(day);
+          return monthWord(day.toISOString());
         };
         const timed = isTimeUnit(unit as string);
         const rowsOf = (list: GoalReport["months"]): TableRow[] => list.map((month) => {
@@ -986,12 +976,13 @@ function GoalPart({
 // (a figure pair does not fit a line at 360), paper a table with «—» where a goal has no amount.
 function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> }) {
   const words = useTimeWords();
-  const month = monthOnly.format(civilDateToDate(report.today));
+  const month = monthWord(report.today);
   const monday = civilDateToDate(report.today);
   monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
   const sunday = new Date(monday);
   sunday.setUTCDate(sunday.getUTCDate() + 6);
-  // A week across two months names both, so «28 al 3» never reads without its months.
+  // A week across two months names both, so «28 al 3» never reads without its months, and the
+  // year after them, which every date on paper carries (RP-49).
   const crosses = monday.getUTCMonth() !== sunday.getUTCMonth();
   const shortMonth = (date: Date) => monthShort.format(date).replace(".", "").slice(0, 3);
   const weekHead = t("summary.weekHead", {
@@ -1000,6 +991,7 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
     crosses: crosses ? "yes" : "no",
     fromMonth: shortMonth(monday),
     toMonth: shortMonth(sunday),
+    year: sunday.getUTCFullYear(),
   });
 
   const lines = report.goals

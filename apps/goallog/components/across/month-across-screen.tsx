@@ -1,15 +1,33 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { redirect } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
-import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
+import { GiveDayList } from "@/components/one-offs/give-day-list";
+import {
+  Button,
+  Face,
+  Flex,
+  Figure,
+  Grid,
+  Page,
+  Panel,
+  ScreenHeader,
+  Section,
+  SectionLabel,
+  Text,
+  TextLink,
+} from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
+import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
+import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
+import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
 import { civilDayMonthShort } from "@/lib/zone";
@@ -18,20 +36,39 @@ function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
 
+// `/mes` for this month, `/mes?mes=YYYY-MM` for any other.
+function monthHref(month: string | null, thisMonth: string): string | null {
+  if (month === null) return null;
+  return month === thisMonth ? "/mes" : `/mes?mes=${month}`;
+}
+
 /**
  * `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio`, `MesTodasNada`,
- * `MesTodasHecho`, `MesTodasSinEvidencia` (RP-43, RP-31): this month of every
- * open goal, as `loadMonthAcross` reads it. Adding a task or an amount stays
- * on the goal's own month page, which each goal's name opens.
+ * `MesTodasHecho`, `MesTodasSinEvidencia` (RP-142, RP-31): a month of every
+ * goal open in it, as `loadMonthAcross` reads it, stepped ‹ › one month at a
+ * time. A past month reads as it was lived and marks nothing; a coming one
+ * marks its tasks as this month does and lists after it what waits with no
+ * day. Adding a task or an amount stays on the goal's own month page, which
+ * each goal's name opens.
  */
-export async function MonthAcrossScreen() {
-  const across = await loadMonthAcross();
+export async function MonthAcrossScreen({ month, today }: { month?: string; today: string }) {
+  const thisMonth = today.slice(0, 7);
+  const coming = month !== undefined && month > thisMonth;
+  // A coming month also offers the tasks that wait with no day: read beside the month, never after it.
+  const [across, goalDayless, looseDayless] = await Promise.all([
+    loadMonthAcross({ month, today }),
+    coming ? listGoalOneOffs(today) : [],
+    coming ? listDaylessOneOffs() : [],
+  ]);
+  const seg = across.month.slice(0, 7);
+  // The page cannot know the bounds before the read: a month past them leaves for this one.
+  if (parseMonthParam(seg, today, across.firstMonth, across.lastMonth).kind === "redirect") redirect("/mes");
+  const past = across.view === "past";
   const t = await getTranslations();
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const monthNames = t.raw("day.monthLong") as string[];
   const weekdayNames = t.raw("day.weekdayLong") as string[];
   const monthName = (month: string) => monthNames[Number(month.slice(5, 7)) - 1];
-  const seg = across.month.slice(0, 7);
   const thisName = monthName(across.month);
   const weekday = weekdayNames[(new Date(`${across.today}T12:00:00Z`).getUTCDay() + 6) % 7];
   const dateLine = t("day.date", {
@@ -85,6 +122,27 @@ export async function MonthAcrossScreen() {
 
       const placed =
         where === undefined ? sub : where === "" ? undefined : t("month.group.line", { goal: where, amount: say(owes) });
+      // A closed month says how each task stood and marks nothing (RP-142).
+      if (past) {
+        return (
+          <Flex key={task.id} direction="column" gap="3">
+            {[task, ...children].map((row) => (
+              <Flex key={row.id} direction="column">
+                <Text as="p" variant="name">
+                  {row.name}
+                </Text>
+                <Text as="p" variant="meta">
+                  {t(
+                    (row.id === task.id ? entry.done : row.doneOn !== null && row.doneOn < nextMonth(across.month))
+                      ? "month.across.pastDone"
+                      : "month.across.pastOpen",
+                  )}
+                </Text>
+              </Flex>
+            ))}
+          </Flex>
+        );
+      }
       return (
         <Flex key={task.id} direction="column">
           <TaskRow
@@ -162,7 +220,7 @@ export async function MonthAcrossScreen() {
       meta = t("month.declaredOnly");
     }
 
-    const planLink = collapsed
+    const planLink = collapsed || past
       ? null
       : goal.line && goal.line.planned === null
         ? { href: planHrefFrom(goal.id, seg, "/mes"), label: t("month.planMonth", { month: thisName }) }
@@ -170,7 +228,7 @@ export async function MonthAcrossScreen() {
           ? { href: `${goalHref}/tarea/nueva`, label: t("month.across.addTask") }
           : null;
     // A goal with tasks closes its card with the same link, to the real route.
-    const addLink = !collapsed && !planLink && goal.items.length > 0 ? `${goalHref}/tarea/nueva` : null;
+    const addLink = !collapsed && !past && !planLink && goal.items.length > 0 ? `${goalHref}/tarea/nueva` : null;
 
     return (
       <Panel key={goal.id}>
@@ -326,10 +384,71 @@ export async function MonthAcrossScreen() {
       </Panel>
     ) : null;
 
+  const { prev, next } = monthSteps({ month: seg, firstMonth: across.firstMonth, lastMonth: across.lastMonth });
+  function step(href: string | null, label: string, icon: "prev" | "next") {
+    if (href === null) return <Flex flexGrow="1" aria-hidden />;
+    return (
+      <TextLink href={href} nowrap>
+        <Flex as="span" align="center" gap="1">
+          {icon === "prev" ? <ChevronLeft size={16} aria-hidden /> : null}
+          {label}
+          {icon === "next" ? <ChevronRight size={16} aria-hidden /> : null}
+        </Flex>
+      </TextLink>
+    );
+  }
+  const stepLinks = (
+    <>
+      {step(monthHref(prev, thisMonth), t("month.across.nav.prev"), "prev")}
+      {step(monthHref(next, thisMonth), t("month.across.nav.next"), "next")}
+    </>
+  );
+  const eyebrow = t(
+    across.view === "this"
+      ? "month.across.eyebrow.this"
+      : coming
+        ? "month.across.eyebrow.coming"
+        : seg === across.firstMonth
+          ? "month.across.eyebrow.first"
+          : "month.across.eyebrow.past",
+  );
+  const title = thisName.charAt(0).toUpperCase() + thisName.slice(1);
+  const nothingOpen = across.goals.length === 0 && across.loose.length === 0;
+  const drawn = new Set(
+    across.goals.flatMap((goal) => goal.items.flatMap((entry) => [entry.task.id, ...entry.children.map((kid) => kid.id)])),
+  );
+
   return (
     <Page width="full">
-      <ScreenHeader chat title={thisName.charAt(0).toUpperCase() + thisName.slice(1)} meta={dateLine} />
-      {across.goals.length === 0 && across.loose.length === 0 ? (
+      <ScreenHeader
+        chat
+        steps
+        title={seg.slice(0, 4) === thisMonth.slice(0, 4) ? title : t("month.across.titleYear", { month: title, year: seg.slice(0, 4) })}
+        meta={across.view === "this" ? dateLine : undefined}
+        eyebrowFill
+        eyebrow={
+          <>
+            <Face on="phone">
+              <Flex justify="between" align="center" gap="3" width="100%">
+                {stepLinks}
+              </Flex>
+            </Face>
+            <SectionLabel>{eyebrow}</SectionLabel>
+          </>
+        }
+        actions={
+          <Face on="desktop">
+            <Flex align="center" justify="end" gap="5">
+              {stepLinks}
+            </Flex>
+          </Face>
+        }
+      />
+      {nothingOpen && across.view !== "this" ? (
+        <Text as="p" variant="sentence">
+          {t(coming ? "month.across.comingEmpty" : "month.across.pastEmpty", { month: thisName })}
+        </Text>
+      ) : nothingOpen ? (
         <Section as="div">
           <Text as="p" variant="sentence">
             {t("month.across.empty.title")}
@@ -352,6 +471,13 @@ export async function MonthAcrossScreen() {
           </Grid>
         </>
       )}
+      {coming ? (
+        <GiveDayList
+          // A task the month already draws, or one its plan holds in another month, waits in that plan.
+          tasks={[...goalDayless.filter((task) => task.plannedMonth === null && !drawn.has(task.id)), ...looseDayless]}
+          suggest={across.month}
+        />
+      ) : null}
     </Page>
   );
 }

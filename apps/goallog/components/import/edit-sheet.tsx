@@ -8,7 +8,7 @@ import { z } from "zod";
 import { dayBefore, horizonForWeeks, horizonWeeksOf } from "@/lib/day/weeks";
 import { commitmentFormIssue, type DraftGoal } from "@/lib/import/draft";
 import type { Cadence } from "@/lib/import/review";
-import { isTimeUnit, splitMinutes } from "@/lib/units/time";
+import { isTimeUnit, minutesFromFields, splitMinutes } from "@/lib/units/time";
 import { civilDateLabel, civilDayMonthYear } from "@/lib/zone";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
@@ -17,7 +17,6 @@ import { MAX_TIME_RHYTHM, setRhythmSchema } from "@/lib/validation/rhythm";
 import { Button, Chip, ChipRow, Field, FieldPair, Flex, Sheet, SheetActions, SectionLabel, Text } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
-const WHOLE = /^\d+$/;
 
 export type Editing = {
   path: string;
@@ -127,15 +126,16 @@ export function EditSheet({
     if (editing.amount !== null && (editing.kind === "month" || editing.kind === "task" || editing.kind === "subtask" || editing.kind === "rhythm" || editing.kind === "commitment")) {
       let typed: number;
       if (timed) {
-        const h = hours.trim() === "" ? "0" : hours.trim();
-        const min = minutes.trim() === "" ? "0" : minutes.trim();
-        typed = WHOLE.test(h) && WHOLE.test(min) && Number(min) <= 59 ? Number(h) * 60 + Number(min) : Number.NaN;
-        if (WHOLE.test(min) && Number(min) > 59) {
+        const read = minutesFromFields(hours, minutes);
+        typed = read.kind === "minutes" ? read.minutes : read.kind === "blank" ? 0 : Number.NaN;
+        // Minutes past 59 are named even beside an invalid hour; any other bad figure goes to the schema.
+        if (Number.isInteger(Number(minutes.trim())) && Number(minutes.trim()) > 59) {
           setAmountError(t("month.errors.minutesInvalid"));
           refused = true;
         }
       } else {
-        typed = WHOLE.test(single.trim()) ? Number(single.trim()) : Number.NaN;
+        const read = minutesFromFields(single, "");
+        typed = read.kind === "minutes" ? read.minutes / 60 : Number.NaN;
       }
       if (!refused || !timed) {
         // A commitment's quantity is judged with its cadence below, by the form's own schema.

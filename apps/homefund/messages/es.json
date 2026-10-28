@@ -140,7 +140,8 @@
     "title": "Inicio",
     "firstAccountTitle": "Abre tu primera cuenta",
     "addAccountKind": "Añadir",
-    "monthAdjustment": "Descuadre del mes"
+    "monthAdjustment": "Descuadre del mes",
+    "reviewLine": "Revisar {month} · {count, plural, one {# movimiento} other {# movimientos}}"
   },
   "reports": {
     "title": "Reportes",
@@ -1420,5 +1421,32 @@
       "merchantInvalid": "Elige un comercio válido.",
       "shapeInvalid": "Elige un mensaje silenciado válido."
     }
+  },
+  "review": {
+    "entry": "Revisar el mes",
+    "title": "Revisar {month}",
+    "prev": "‹ mes anterior",
+    "next": "mes siguiente ›",
+    "rules": {
+      "above_usual": "Muy por encima de lo usual",
+      "twin": "Dos iguales el mismo día",
+      "from_words": "Monto leído de palabras",
+      "reconciliation_gap": "Diferencia al cuadrar"
+    },
+    "meta": "{account} · {date}",
+    "metaCategory": "{account} · {date} · {category}",
+    "usual": "Lo usual: {amount}",
+    "counted": "Contaste {amount}",
+    "twinCount": "{count} movimientos iguales",
+    "ok": "Está bien",
+    "saving": "Guardando…",
+    "fix": "Corregir",
+    "reviewed": "Revisados ({count})",
+    "empty": "Nada sobresale en {month}.",
+    "allDone": "Revisaste {month}.",
+    "errors": {
+      "cannotMark": "No puedes marcar este movimiento."
+    },
+    "back": "Volver a Reportes"
   }
 }

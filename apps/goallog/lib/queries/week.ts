@@ -17,7 +17,8 @@ import {
   type PhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
+import { forwardLimit, lastMondayOf } from "@/lib/plan/forward-limit";
+import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts`
@@ -65,6 +66,16 @@ type FactRow = {
   one_off_parent_name: string | null;
 };
 
+// A not-done one-off dated inside the week, a parent never among them.
+export type WeekTask = {
+  id: string;
+  name: string;
+  day: string;
+  goalId: string | null;
+  goalName: string | null;
+  note: string | null;
+};
+
 type WeekQueryRow = {
   goals: GoalRow[];
   first_monday: string | null;
@@ -72,6 +83,9 @@ type WeekQueryRow = {
   phases: PhaseRow[];
   facts: FactRow[];
   period_facts: { commitment_id: string; day: string }[];
+  // Horizons of the goals open today, null for one with no end: what the forward limit reads.
+  horizons: (string | null)[];
+  tasks: WeekTask[];
 };
 
 /**
@@ -111,6 +125,7 @@ async function queryGoalsRow(
   weekStart: string,
   weekEnd: string,
   anyDay: string,
+  today: string,
 ): Promise<WeekQueryRow> {
   const [row] = await tx.execute<WeekQueryRow>(sql`
     select
@@ -150,7 +165,25 @@ async function queryGoalsRow(
          from "goals"."facts" f
          where f.commitment_id is not null
            and f.day >= least(${weekStart}::date, date_trunc('month', ${anyDay}::date)::date)
-           and f.day <= greatest(${weekEnd}::date, (date_trunc('month', ${anyDay}::date) + interval '1 month - 1 day')::date)) as period_facts
+           and f.day <= greatest(${weekEnd}::date, (date_trunc('month', ${anyDay}::date) + interval '1 month - 1 day')::date)) as period_facts,
+      (select coalesce(json_agg(g.horizon::text), '[]'::json)
+         from "goals"."goals" g
+         where g.archived_at is null and (g.horizon is null or g.horizon > ${today}::date)) as horizons,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'id', o.id,
+                 'name', o.name,
+                 'day', o.day,
+                 'goalId', o.goal_id,
+                 'goalName', g.name,
+                 'note', o.note
+               ) order by o.day, o.position, o.created_at, o.id), '[]'::json)
+         from "goals"."one_offs" o
+         left join "goals"."goals" g on g.id = o.goal_id
+         where o.day between ${weekStart}::date and ${weekEnd}::date
+           -- A goal's task counts while its goal is open on the task's own day.
+           and (o.goal_id is null or (g.archived_at is null and (g.horizon is null or g.horizon > o.day)))
+           and not exists (select 1 from "goals"."facts" f where f.one_off_id = o.id)
+           and not exists (select 1 from "goals"."one_offs" c where c.parent_id = o.id)) as tasks
   `);
 
   return row;
@@ -250,7 +283,7 @@ export type OneOffFact = {
  * goal they belong to and draws a goalless one under its own "Sueltas"
  * group; `WeekView` and `deriveWeek` are unchanged.
  */
-export async function loadWeek(anyDayInIt: string): Promise<{
+export async function loadWeek(anyDayInIt: string, today: string = todayInZone()): Promise<{
   view: WeekView;
   evidence: "read" | "unreadable";
   goals: GoalSummary[];
@@ -259,6 +292,10 @@ export async function loadWeek(anyDayInIt: string): Promise<{
   // Habits with no goal (RP-100): their commitments and the week's tally for them, a day each.
   loose: { commitments: CommitmentGoal[]; days: DayTally[] };
   oneOffFacts: OneOffFact[];
+  // The last Monday «Semana» steps forward to (RP-142).
+  lastMonday: string;
+  // Not-done one-offs dated inside the week, parents excluded: what a coming week offers «Darle día» on.
+  tasks: WeekTask[];
 }> {
   const person = await getPerson();
   if (!person) throw new Error("loadWeek called without a verified session");
@@ -267,10 +304,12 @@ export async function loadWeek(anyDayInIt: string): Promise<{
   const weekStart = week[0];
   const weekEnd = week[6];
 
+  const coming = weekStart > weekOf(today)[0];
   const [row, evidenceOutcome] = await Promise.all([
-    withGoalsDb((tx) => queryGoalsRow(tx, weekStart, weekEnd, anyDayInIt)),
+    withGoalsDb((tx) => queryGoalsRow(tx, weekStart, weekEnd, anyDayInIt, today)),
     withReadingDb((tx) => queryEvidenceBySource(tx, person.id, weekStart, weekEnd)).then(
-      (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
+      // A week not yet lived has no evidence; the statement still runs so the count holds.
+      (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey: coming ? {} : bySourceKey }),
       (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
     ),
   ]);
@@ -311,6 +350,8 @@ export async function loadWeek(anyDayInIt: string): Promise<{
     evidence: evidenceOutcome.status,
     goals: row.goals.map(toGoalSummary),
     firstMonday: row.first_monday,
+    lastMonday: lastMondayOf(forwardLimit({ horizons: row.horizons, today })),
+    tasks: row.tasks,
     commitments: placed,
     loose: {
       commitments: looseCommitments,

@@ -8,6 +8,7 @@ export * from "./transactions";
 export * from "./transaction-splits";
 export * from "./labels";
 export * from "./transaction-labels";
+export * from "./transaction-reviews";
 export * from "./budgets";
 export * from "./planned-payments";
 export * from "./recurring-rules";

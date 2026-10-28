@@ -109,6 +109,20 @@
     "line": "{goal} · {amount}"
   },
   "across": {
+    "nav": {
+      "prev": "mes anterior",
+      "next": "mes siguiente"
+    },
+    "eyebrow": {
+      "this": "este mes",
+      "coming": "el plan de ese mes",
+      "past": "como fue",
+      "first": "el primero"
+    },
+    "comingEmpty": "Ninguna meta está abierta en {month}.",
+    "pastEmpty": "Ninguna meta estaba abierta en {month}.",
+    "pastDone": "hecha",
+    "pastOpen": "sin hacer",
     "mark": "Marcar hecha: {name}",
     "noAmount": "en {month} · sin monto este mes",
     "nothingPlanned": "en {month} · nada planeado todavía",
@@ -129,6 +143,7 @@
       "title": "Todavía no tienes una meta abierta.",
       "create": "Crear una meta",
       "import": "Importar un plan"
-    }
+    },
+    "titleYear": "{month} {year}"
   }
 }

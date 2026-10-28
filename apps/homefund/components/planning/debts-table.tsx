@@ -106,6 +106,7 @@ export function CreditAndOwedLine({
   align = "right",
   size = "2",
   owedBold = false,
+  inherit = false,
 }: {
   creditCents: number;
   currency: CurrencyCode;
@@ -115,11 +116,13 @@ export function CreditAndOwedLine({
   size?: "1" | "2" | "3";
   // What the other pockets owe in bold, as the abono dialog draws it.
   owedBold?: boolean;
+  // Takes the type of the tile it sits in, as `PocketFigure` does.
+  inherit?: boolean;
 }) {
   const t = useTranslations("debts");
 
   return (
-    <Figure as="div" size={size} align={align}>
+    <Figure as="div" size={inherit ? undefined : size} align={align}>
       <Money
         minor={creditCents}
         currency={currency}
@@ -135,7 +138,7 @@ export function CreditAndOwedLine({
           const toBill = wordsAround(t("toBill", { amount: AMOUNT_SLOT }));
           return (
             <Fragment key={pocket.currency}>
- {" "}
+              {" "}
               <Text weight={owedBold ? "bold" : undefined}>
                 <Money
                   minor={pocket.owedCents}
@@ -184,26 +187,32 @@ export function PocketFigure({
   currency,
   bold = false,
   inherit = false,
+  named = false,
 }: {
   owedCents: number;
   creditCents: number;
   currency: CurrencyCode;
   bold?: boolean;
   inherit?: boolean;
+  // A pocket that owes reads «Debes US$ 20,00» instead of the bare amount.
+  named?: boolean;
 }) {
   const t = useTranslations("debts");
   const locale = useLocale() as Locale;
   const size = bold || inherit ? undefined : "1";
 
-  if (creditCents > 0) {
+  // «A favor $ 8.000», or with `named` «Debes US$ 20,00»: the amount in words.
+  const worded = creditCents > 0 ? "inFavour" : named && owedCents > 0 ? "owesForeign" : null;
+  if (worded !== null) {
     return (
       <Figure size={size} weight={bold ? "bold" : undefined}>
         <Money
-          minor={creditCents}
+          minor={worded === "inFavour" ? creditCents : owedCents}
           currency={currency}
-          tone="credit"
+          tone={worded === "inFavour" ? "credit" : undefined}
           size="inherit"
-          words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
+          signed={false}
+          words={wordsAround(t(worded, { amount: AMOUNT_SLOT }))}
         />
       </Figure>
     );

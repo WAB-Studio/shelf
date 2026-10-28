@@ -83,3 +83,22 @@ export function parseTime(text: string): number | null {
   if (scaled % unit !== 0) return null;
   return Number(whole) * 60 + scaled / unit + Number(minutes ?? 0);
 }
+
+export type FieldMinutes =
+  | { kind: "blank" }
+  | { kind: "minutes"; minutes: number }
+  | { kind: "hoursInvalid" }
+  | { kind: "minutesInvalid" };
+
+const WHOLE = /^\d+$/;
+
+// The «h» and «min» field pair read into minutes. One blank field reads as 0;
+// integers only, and minutes stop at 59.
+export function minutesFromFields(hours: string, minutes: string): FieldMinutes {
+  const h = hours.trim();
+  const m = minutes.trim();
+  if (h === "" && m === "") return { kind: "blank" };
+  if (h !== "" && !WHOLE.test(h)) return { kind: "hoursInvalid" };
+  if (m !== "" && (!WHOLE.test(m) || Number(m) > 59)) return { kind: "minutesInvalid" };
+  return { kind: "minutes", minutes: Number(h || "0") * 60 + Number(m || "0") };
+}

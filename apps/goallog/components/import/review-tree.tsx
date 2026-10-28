@@ -15,6 +15,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { shortMonth } from "@/lib/dates/short-month";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { monthWord } from "@/lib/plan/month-name";
 import { civilDateToDate } from "@/lib/zone";
 import { useTimeWords } from "@/components/ui/figure";
 import { Button, CheckRow, Figure, Flex, Fold, Panel, Section, Text } from "@/components/ui";
@@ -114,7 +115,6 @@ export function ReviewTree({
   }
 
   const fmt = (amount: number, unit: string) => formatQuantity(amount, unit, words);
-  const monthWord = (month: string) => format.dateTime(civilDateToDate(`${month}-01`), { month: "long", timeZone: "UTC" });
   const monthName = (month: string) => {
     const word = monthWord(month);
     const name = word.charAt(0).toUpperCase() + word.slice(1);

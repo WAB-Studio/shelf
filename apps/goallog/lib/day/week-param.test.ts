@@ -21,7 +21,7 @@ test("absent, today and any day of this week read as this week", () => {
   assert.deepEqual(parseWeekParam("2026-10-11", TODAY), { kind: "this" });
 });
 
-test("next week, a far future, a false date, a non-date and an array redirect", () => {
+test("with no limit given next week, a far future, a false date, a non-date and an array redirect", () => {
   for (const raw of ["2026-10-12", "2030-01-01", "2026-02-30", "abc", "", ["a", "b"], ["2026-09-14"]]) {
     assert.deepEqual(parseWeekParam(raw, TODAY), { kind: "redirect" }, JSON.stringify(raw));
   }
@@ -49,4 +49,24 @@ test("a person with no goal has no prev", () => {
     weekSteps({ monday: "2026-09-28", thisMonday: "2026-10-05", firstMonday: null }),
     { prev: null, next: "2026-10-05" },
   );
+});
+
+test("next Monday, any day of it, and the last Monday are coming weeks", () => {
+  const last = "2026-10-26";
+  assert.deepEqual(parseWeekParam("2026-10-12", TODAY, last), { kind: "coming", monday: "2026-10-12" });
+  assert.deepEqual(parseWeekParam("2026-10-18", TODAY, last), { kind: "coming", monday: "2026-10-12" });
+  assert.deepEqual(parseWeekParam("2026-10-26", TODAY, last), { kind: "coming", monday: "2026-10-26" });
+});
+
+test("the Monday after the last Monday redirects, and a past week still reads as today", () => {
+  assert.deepEqual(parseWeekParam("2026-11-02", TODAY, "2026-10-26"), { kind: "redirect" });
+  assert.deepEqual(parseWeekParam("2026-09-16", TODAY, "2026-10-26"), { kind: "past", monday: "2026-09-14" });
+  assert.deepEqual(parseWeekParam(undefined, TODAY, "2026-10-26"), { kind: "this" });
+});
+
+test("this week's next is next Monday and the last Monday's next is null", () => {
+  const base = { thisMonday: "2026-10-05", firstMonday: "2026-09-14", lastMonday: "2026-10-19" };
+  assert.deepEqual(weekSteps({ ...base, monday: "2026-10-05" }), { prev: "2026-09-28", next: "2026-10-12" });
+  assert.deepEqual(weekSteps({ ...base, monday: "2026-10-12" }), { prev: "2026-10-05", next: "2026-10-19" });
+  assert.deepEqual(weekSteps({ ...base, monday: "2026-10-19" }), { prev: "2026-10-12", next: null });
 });

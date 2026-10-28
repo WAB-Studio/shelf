@@ -140,7 +140,8 @@
     "title": "Home",
     "firstAccountTitle": "Open your first account",
     "addAccountKind": "Add",
-    "monthAdjustment": "Month gap"
+    "monthAdjustment": "Month gap",
+    "reviewLine": "Review {month} · {count, plural, one {# movement} other {# movements}}"
   },
   "reports": {
     "title": "Reports",
@@ -1420,5 +1421,32 @@
       "merchantInvalid": "Choose a valid merchant.",
       "shapeInvalid": "Choose a valid silenced message."
     }
+  },
+  "review": {
+    "entry": "Review the month",
+    "title": "Review {month}",
+    "prev": "‹ previous month",
+    "next": "next month ›",
+    "rules": {
+      "above_usual": "Far above the usual",
+      "twin": "Two equal on the same day",
+      "from_words": "Amount read from words",
+      "reconciliation_gap": "Gap when reconciling"
+    },
+    "meta": "{account} · {date}",
+    "metaCategory": "{account} · {date} · {category}",
+    "usual": "Usual: {amount}",
+    "counted": "You counted {amount}",
+    "twinCount": "{count} equal movements",
+    "ok": "Looks fine",
+    "saving": "Saving…",
+    "fix": "Fix",
+    "reviewed": "Reviewed ({count})",
+    "empty": "Nothing stands out in {month}.",
+    "allDone": "You reviewed {month}.",
+    "errors": {
+      "cannotMark": "You can't mark this movement."
+    },
+    "back": "Back to Reports"
   }
 }

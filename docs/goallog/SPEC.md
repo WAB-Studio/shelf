@@ -150,13 +150,6 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RP-66** — A measure written in hours — horas, hora or h, in any case — is stored as minutes, and the amounts written with it are multiplied by sixty: a goal whose first quantity commitment is «2 horas» measures in minutos with a target of 120, and a template or a model import whose measure is in hours writes minutes. Nothing stored changes. RP-35 stands: what is stored in minutes reads in hours and minutes. Decided by the user 2026-10-09.
 - [x] **RP-132** — On a month's last day a goal reads «último día», never «faltan 0 días». Decided by the user 2026-10-15.
 
-#### The month across goals
-
-- [x] **RP-43** — «Mes» reads this month across every open goal: for each, the amount planned and reached (RP-28), and its
-  month's list — the tasks carried in first, with the month they came from and what they owe (RP-31), then the month's
-  own — where a task is marked done in one tap. A goal that measures nothing shows its tasks with no amount. Reading it
-  writes nothing. Decided by the user 2026-10-05.
-
 #### Bringing a plan in
 
 - [x] **RP-72** — A plan in the template with mistakes is answered in one reading: every line that cannot be read is listed at once, in the text's order, each with its number, its text and what it should say, under a line that counts them («3 líneas por corregir»). A goal measured in a unit other than time accepts that unit written on every line that carries its amount — a month and a commitment («8 km») — and a line written in another unit names the unit that goes. Decided by the user 2026-10-10, on the board `ImportarTodosLosErrores`.
@@ -198,10 +191,20 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 - [x] **RP-16** — The week is drawn as it was: the days with facts and the days without. No streak, no score, no praise and no reproach. A deliberate rest day is a plan's instruction, not a failure. Decided by the user 2026-09-22.
 - [x] **RP-17** — A goal's measure is read week by week, as the one table its review needs, from the first week to the current one.
-- [x] **RP-44** — The week is read for any past week, one step back or forward at a time, from the week the first goal was
-  opened to this one. A past week draws as it was lived (RP-16): the goals that were open in it, its facts and its evidence,
-  a goal archived since still in the weeks it governed (RP-24). It is read-only: a day in it opens its own screen only
-  within the seven days a fact may still name (RP-06). Decided by the user 2026-10-05.
+- [x] **RP-142** *(successor of RP-44 and RP-43)* — The week is read for any week, one step back or forward at a time, from
+  the week the first goal was opened to the last week of the furthest open goal's span (a goal with no end reaches twelve
+  months from today). A past week draws as it was lived (RP-16): the goals open in it, its facts and its evidence, a goal
+  archived since still in the weeks it governed (RP-24); a day in it opens its own screen only within the seven days a fact may
+  still name (RP-06). A coming week draws, day by day, what each open goal's commitments will ask, with no mark, and the tasks
+  dated that day; in it only «Darle día» acts. «Mes» reads this month across every open goal — the amount planned and reached
+  (RP-28) and its month's list, the tasks carried in first with the month they came from and what they owe (RP-31), then the
+  month's own, where a task is marked done in one tap; a goal that measures nothing shows its tasks with no amount — and steps
+  one month at a time, back to the month the first goal was opened and forward to the same last month. A past month draws as
+  it was lived: the goals open in it, the amount planned and reached, its tasks as they stood. A coming month draws, for each
+  goal open in it, its planned amount (RP-28, RP-50) and the tasks its plan places there (RP-50–RP-54), fixed ones included,
+  marked done in one tap as this month's. A coming week and a coming month list after them the tasks with no day — a goal's
+  and the loose ones (RP-59) — each with «Darle día», the step «lo que espera» offers (RP-61). Reading any of them writes
+  nothing. Decided by the user 2026-10-22 (Q6 a) and 2026-10-24 (O7-Q5 a, O7-Q6 b, O7-Q7 a).
 - [x] **RP-123** — A goal that holds goals reads week by week as it reads month by month (RP-80): each week, what it reached is the sum of its goals' in the same unit, plus what its own tasks reached; a goal in another unit adds nothing. Its «Ver por semana» never says it has no figure while its screen shows one. Decided by the user 2026-10-14 (critic of the whole app, question B = a).
 
 #### The account
@@ -253,6 +256,16 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 ### Retired
 
+- [x] **RP-43** — «Mes» reads this month across every open goal: for each, the amount planned and reached (RP-28), and its
+  month's list — the tasks carried in first, with the month they came from and what they owe (RP-31), then the month's
+  own — where a task is marked done in one tap. A goal that measures nothing shows its tasks with no amount. Reading it
+  writes nothing. Decided by the user 2026-10-05.
+  - Retired 2026-10-24 by the user (O7-Q5 a): «Mes» steps back and forward. Successor: **RP-142**.
+- [x] **RP-44** — The week is read for any past week, one step back or forward at a time, from the week the first goal was
+  opened to this one. A past week draws as it was lived (RP-16): the goals that were open in it, its facts and its evidence,
+  a goal archived since still in the weeks it governed (RP-24). It is read-only: a day in it opens its own screen only
+  within the seven days a fact may still name (RP-06). Decided by the user 2026-10-05.
+  - Retired 2026-10-24 by the user (O7-Q5 a): the week steps forward past this one. Successor: **RP-142**.
 - [x] **RP-119** *(successor of RP-56)* — An AI connected to a person's log writes through the app's own acts and nothing else. It annotates: marks a commitment or a task done, logs a quantity, writes a one-off, a month task or a sub-task. It reorganizes: fixes a task not yet done to a month and returns a fixed task to the plan (RP-51), gives a one-off a day, renames a goal, moves a goal's last day, sets an open month's amount, adds a phase or a commitment, retires a commitment to change it (RP-12). It creates a goal. It sets and changes a goal's rhythm (RP-50) and gives a goal with no measure its own (RP-117). **It never deletes, never archives, never undoes a mark, never removes a month's amount and never reopens an archived goal.** What the app refuses the person, it refuses the AI, with the same reason in Spanish. Decided by the user 2026-10-06 and 2026-10-14, succeeding RP-56.
   - Retired 2026-10-18 by the user: the chat and the connected AI also change a task's estimate and a phase's aim and dates (the screen already does). Successor: **RP-139**.
 - [x] **RP-18** — A person signs in with a link sent to their address, with the session and the claim verification `apps/wordbook` already uses. The log is theirs and reaches every device they sign in on.

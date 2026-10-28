@@ -206,3 +206,14 @@ Each entry names the rule and the file it lives in now.
   e2e runs in two shards. A push no longer builds GoalLog twice. The calendar pins come from the run's date, not typed dates.
 - M6 straightened HomeFund's drizzle snapshot chain (the 0052 fork), closing the trap archived 2026-10-22.
 - WordBook's Playwright reads `VOYAGER_BASE_URL`; a lane with only `HARNESS_BASE_URL` drove :3100. Rule in `apps/wordbook/AGENTS.md`.
+
+## One session instead of a fleet (`AGENTS.md` § Modules), 2026-10-24
+
+- The user: «no hacemos todo este circo de agentes, que si trabajan pero muy lento y dan muchas vueltas». In their
+  other repo (turno) one Claude Code session builds and `/code-review` + `/simplify` review, and it moves faster.
+- Measured on 2026-10-23: closing oleada-6 after its last module took a critic, three fix workers, one test fix and
+  four CI runs (~15 min each); two of the CI reds were tests the fix workers had written.
+- Four lanes with dev servers and suites at once froze WSL on 2026-10-24.
+- Dropped: boards before a screen, tester/validator/mutator chains, per-step reports and roadmap updates. Kept: the
+  hard rules in `AGENTS.md` § Code, the local stack, CI on the train's PR.
+

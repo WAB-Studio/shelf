@@ -34,6 +34,8 @@ The why: `docs/agentes/historia.md` § Verification.
 
 ## Judging
 
+- Since 2026-10-24 the review is `/code-review` then `/simplify` on the branch (`AGENTS.md` § Modules). The
+  validator, mutator and critic below run only when the user asks for one.
 - The worker saves every check's output under the lane's `private/` and names the paths. The train's validator reads
   those logs, re-runs only the train's own tests, and asks of each assertion whether it can fail. It never re-runs a
   suite a worker logged green: it checks that log ran the right code.
@@ -80,6 +82,6 @@ The why: `docs/agentes/historia.md` § Verification.
 - Path filters: the `changes` job compares the run against its base (the PR base; the tip before a push to `integracion`; the merge-base with `integracion` on a dispatch) and every app job (`build-orbit`, `build-pulsar`, `pulsar-e2e`, `pulsar-checks`, `orbit-checks`, `e2e`, `voyager-e2e-shard`) runs only when its app, `packages/`, the lockfile or `ci.yml` changed. `main` and a base that cannot be resolved run everything. A skipped job does not block the merge.
 - `pulsar-fechas` (the pinned-clock date matrix) is out of `ci.yml`. `pulsar-calendario.yml` runs it nightly and on its own manual dispatch: `gh workflow run pulsar-calendario.yml --ref <branch>`. Its `pins` job computes the pinned dates from the run's date in Bogota; type none by hand.
 - `build-pulsar` (`next build` for GoalLog) runs on a pull request only; on a push `pulsar-e2e` and `pulsar-checks` build the same tree.
-- `voyager-e2e` runs 2 shards (`voyager-e2e-shard`); the job `voyager-e2e` merges them. The WordBook model-free checks (`check:sync`, `grants`, `sign-in-budget`, `allow-email`, `sign-in-code`, `translate`, `translate-model`, `unlisted`, `admission`) run in the `policies` job, with no paid model.
+- `voyager-e2e` runs 2 shards (`voyager-e2e-shard`); the job `voyager-e2e` merges them. The WordBook model-free checks (`check:sync`, `grants`, `sign-in-budget`, `allow-email`, `sign-in-code`, `translate`, `translate-model`, `unlisted`, `admission`) run in the `policies` job, with no paid model. `check:decoration` and `check:notes` run in `voyager-e2e-shard` on shard 1, after the suite (the first seeds today's `model_spend` row), with a blank `OPENAI_API_KEY`. HomeFund's `check:unit` runs in `fast`.
 - `pulsar-e2e` runs 6 shards; `pulsar-e2e-report` merges them. Past six, `pulsar-checks` and orbit's `e2e` set the wall time (`private/reportes/ci-costo.md`).
 - Orbit's e2e runs 4 shards (`e2e-shard`), each building the app before its dev server; the job `e2e` merges them. A spec that spawns `next start` reads that build.

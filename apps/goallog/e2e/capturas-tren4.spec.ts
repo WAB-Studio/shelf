@@ -307,9 +307,9 @@ test.describe("F. a closed month that carried nothing reads «cerrado» alone", 
 
   test("the Mes tab on the closed month", async ({ mine: page }) => {
     await page.goto(`/mes?mes=${lastMonth.slice(0, 7)}`);
-    // The Mes tab draws the current month alone and ignores `?mes=` (RP-43): its heading names it.
-    const current = dayMessages.monthLong[Number(m0.slice(5, 7)) - 1];
-    await expect(page.getByRole("heading", { level: 1, name: new RegExp(`^${current}$`, "i") })).toBeVisible();
+    // «Mes» opens the closed month `?mes=` names (RP-142): its heading names that month.
+    const closed = dayMessages.monthLong[Number(lastMonth.slice(5, 7)) - 1];
+    await expect(page.getByRole("heading", { level: 1, name: new RegExp(`^${closed}( \\d{4})?$`, "i") })).toBeVisible();
     await expect(page.getByRole("main").getByText(`Meta cerrada ${stamp}`).first()).toBeVisible();
     expect(await body(page)).not.toMatch(zero);
   });

@@ -48,8 +48,18 @@ function shiftMonthStart(monthStart: string, months: number): string {
   return dateToCivilDate(date);
 }
 
+// Shifts a `YYYY-MM` month by whole months.
+export function shiftMonth(month: string, months: number): string {
+  return shiftMonthStart(`${month}-01`, months).slice(0, 7);
+}
+
+// The newest month already over, as `YYYY-MM`: the one «Revisar el mes» opens on (RF-155).
+export function lastClosedMonth(): string {
+  return shiftMonth(todayInBogota().slice(0, 7), -1);
+}
+
 // The current Bogotá day snapped back to its month's first day.
-function currentMonthStart(): string {
+export function currentMonthStart(): string {
   return `${todayInBogota().slice(0, 7)}-01`;
 }
 

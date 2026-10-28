@@ -23,11 +23,9 @@ import {
 } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { monthName } from "@/lib/plan/month-name";
-import { isTimeUnit, splitMinutes } from "@/lib/units/time";
+import { isTimeUnit, minutesFromFields, splitMinutes } from "@/lib/units/time";
 import { createOneOffSchema, editTaskSchema } from "@/lib/validation/one-off";
 import { todayInZone } from "@/lib/zone";
-
-const WHOLE = /^\d+$/;
 
 // A loose task's name refusals speak of «lo suelto»; a goal's task has its own.
 function own(key: MessageKey): MessageKey {
@@ -131,12 +129,11 @@ export function TaskSheet({
 
   // Minutes (or the unit's count) typed; null while blank; a key for a figure the sheet refuses.
   function typed(): number | null | MessageKey {
-    if (hours.trim() === "" && minutes.trim() === "") return null;
-    const h = hours.trim() === "" ? "0" : hours.trim();
-    const min = minutes.trim() === "" ? "0" : minutes.trim();
-    if (!WHOLE.test(h)) return "month.errors.estimateInvalid";
-    if (!WHOLE.test(min) || Number(min) > 59) return "month.errors.minutesInvalid";
-    return Number(h) * 60 + Number(min);
+    const read = minutesFromFields(hours, minutes);
+    if (read.kind === "blank") return null;
+    if (read.kind === "hoursInvalid") return "month.errors.estimateInvalid";
+    if (read.kind === "minutesInvalid") return "month.errors.minutesInvalid";
+    return read.minutes;
   }
 
   function refuse(raw: MessageKey) {

@@ -47,6 +47,8 @@ export type CreateTransactionArgs = {
   // is still what a person expects rather than what was billed (RF-122, RF-123).
   counterAmountCents?: number | null;
   counterIsEstimate?: boolean;
+  // Quick entry read the amount from words and the person kept it (RF-155); insert only.
+  amountFromWords?: boolean;
   occurredAt: string;
   description: string | null;
   externalRef: string | null;
@@ -217,6 +219,7 @@ export async function insertTransaction(
     currency = null,
     counterAmountCents = null,
     counterIsEstimate = false,
+    amountFromWords = false,
     occurredAt,
     description,
     externalRef,
@@ -232,6 +235,7 @@ export async function insertTransaction(
       currency,
       counter_amount_cents,
       counter_is_estimate,
+      amount_from_words,
       occurred_at,
       description,
       external_ref
@@ -242,6 +246,7 @@ export async function insertTransaction(
       ${currency},
       ${counterAmountCents},
       ${counterIsEstimate},
+      ${amountFromWords},
       ${occurredAt},
       ${description},
       ${externalRef}

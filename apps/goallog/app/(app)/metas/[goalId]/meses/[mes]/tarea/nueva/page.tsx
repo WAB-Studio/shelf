@@ -4,9 +4,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { TaskForm } from "@/components/month/task-form";
 import { loadGoalForm } from "@/lib/queries/goal";
+import { monthWord } from "@/lib/plan/month-name";
 import { getPerson } from "@/lib/session";
-
-const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 
 /**
  * `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (RP-30, RP-31): the auth gate
@@ -70,7 +69,7 @@ export default async function NewTaskPage({
       goalName={goal.name}
       unit={goal.measureUnit}
       month={mes}
-      monthName={monthFormat.format(new Date(`${mes}-01T12:00:00Z`))}
+      monthName={monthWord(mes)}
       parent={parent}
     />
   );

@@ -50,6 +50,9 @@ jobs:
         if: ${{ !cancelled() }}
       - run: npm run check:unit -w packages/harness-registry
         if: ${{ !cancelled() }}
+      # Pure functions: they pass with no `.env.local` and no stack.
+      - run: npm run check:unit -w apps/homefund
+        if: ${{ !cancelled() }}
 
   # Drives the policies on `reading` against the real database, DELETE included
   # — the only proof RNL-10 has. One transaction that always rolls back, so it
@@ -81,8 +84,9 @@ jobs:
       - run: npm run check:sign-in-code -w apps/wordbook
       # Model-free, localhost-only, run before 2026-10-22 under a blank key.
       # `check:thinness` is a measurement, not a check. `check:decoration` and
-      # `check:notes` need a running server and write today's `model_spend`,
-      # which the e2e shards read at the same time: they stay local.
+      # `check:notes` need a running server and write today's `model_spend`:
+      # they run in `voyager-e2e-shard` on shard 1, after its suite, on that
+      # shard's own stack, never beside a spec that reads the row.
       - run: npm run check:translate -w apps/wordbook
       - run: npm run check:translate-model -w apps/wordbook
       - run: npm run check:unlisted -w apps/wordbook
@@ -551,7 +555,6 @@ jobs:
       - run: npm run harness:token -w apps/homefund
 
       # Each check runs whatever the one before did, so a red names itself.
-      - run: npm run check:unit --if-present -w apps/homefund
       - run: npm run db:check-rls -w apps/homefund
 
       - run: npm run check:queries -w apps/homefund
@@ -774,6 +777,21 @@ jobs:
 
       - name: Run shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }}
         run: npm run check:e2e -w apps/wordbook -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
+
+      # Shard 1 alone, after the suite: `check:decoration` seeds and restores
+      # today's `model_spend` row, so it never runs beside a spec. A blank key
+      # keeps both model-free; they reach the shard's server on localhost only.
+      - name: Run check:decoration against the shard's server
+        if: ${{ !cancelled() && matrix.shard == 1 }}
+        env:
+          OPENAI_API_KEY: ""
+        run: npm run check:decoration -w apps/wordbook
+
+      - name: Run check:notes against the shard's server
+        if: ${{ !cancelled() && matrix.shard == 1 }}
+        env:
+          OPENAI_API_KEY: ""
+        run: npm run check:notes -w apps/wordbook
 
       - name: Upload the blob report
         if: always()

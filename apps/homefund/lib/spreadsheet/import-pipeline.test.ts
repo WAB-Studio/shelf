@@ -356,23 +356,25 @@ test("RF-51: an asset row opened at -100 is refused as accounts.errors.amountInv
 });
 
 // The cap a second amount is held to is the one its account's currency stores (RF-126): the card settles in pesos.
+// Every currency shares one cap in the stored scale, so the row guard refuses these before the pipeline's own
+// check runs: U4 and U5 on that check are equivalent while the caps stay equal.
 const CAP = maxAmountMinor("COP");
 const written = (minor: number) => `${Math.trunc(minor / 100)},${String(minor % 100).padStart(2, "0")}`;
 
-test("U4: a second amount of exactly the cap passes, read to the cap's own integer", async () => {
+test("RF-51: a second amount of exactly the cap passes, read to the cap's own integer", async () => {
   const rows = await run(await bookForeign([dollarPurchase({ counterAmount: written(CAP) })]));
   assert.deepEqual(rows[0].errors, []);
   const object = rows[0].object as Parsed;
   assert.equal(centsOf(object.counterAmountCents, object.counterAmount), CAP);
 });
 
-test("U4: a second amount one stored unit over the cap is refused on that row, amountTooLarge on counterAmount", async () => {
+test("RF-51: a second amount one stored unit over the cap is refused on that row, amountTooLarge on counterAmount", async () => {
   const rows = await run(await bookForeign([dollarPurchase({ counterAmount: written(CAP + 1) })]));
   assert.equal(rows[0].object, null);
   assert.deepEqual(rows[0].errors.map((e) => [e.key, e.column]), [["transactions.errors.amountTooLarge", "counterAmount"]]);
 });
 
-test("U5: a second amount far over the cap is refused on that row alone, amountTooLarge on counterAmount", async () => {
+test("RF-51: a second amount far over the cap is refused on that row alone, amountTooLarge on counterAmount", async () => {
   const rows = await run(
     await bookForeign([dollarPurchase({ counterAmount: written(CAP * 100), externalRef: "far" }), dollarPurchase({ externalRef: "fine" })]),
   );
