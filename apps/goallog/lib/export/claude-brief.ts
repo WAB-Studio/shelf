@@ -1,16 +1,14 @@
 import { createTranslator } from "next-intl";
 
 import goal from "../../messages/es/goal.json";
-import { monthOf } from "../plan/months";
-import { monthOfTask, type Task } from "../plan/carry";
-import { shiftDay } from "../validation/fact";
-import { civilDayMonthShort } from "../zone";
+import type { Task } from "../plan/carry";
+import { addDaysToCivilDate, civilDayMonthShort } from "../zone";
 
 // Read straight from the catalogue: the brief is built where the goal is drawn, outside any request.
 const translate = createTranslator({ locale: "es", messages: { goal } });
 
 // The days a brief looks back over, today included: the stretch a study plan's «día 1, día 2» lives in.
-export const BRIEF_DAYS = 7;
+const BRIEF_DAYS = 7;
 // Beyond this many open tasks, or done ones, a list stops being a reminder and becomes the plan again.
 export const BRIEF_NEXT = 10;
 export const BRIEF_DONE = 15;
@@ -20,8 +18,12 @@ export const BRIEF_NOTE = 280;
 export type BriefInput = {
   name: string;
   note: string | null;
-  phases: { name: string; startsOn: string; endsOn: string }[];
+  // The phase today falls in, as `phaseOn` finds it.
+  phase: { name: string; endsOn: string } | null;
+  // Every task of the goal: the done list is read from it.
   tasks: Task[];
+  // What is still open this month, in the order the screen lists it (`planMonthList`, carried ones first).
+  open: string[];
   // This month's line, its figures already worded in the goal's unit; null without a planned amount.
   month: { reached: string; planned: string } | null;
   today: string;
@@ -29,7 +31,8 @@ export type BriefInput = {
 
 // One line however the note was typed, cut on a whole character so an emoji never splits.
 function oneLine(text: string | null | undefined): string | null {
-  const flat = (text ?? "").replace(/\s+/g, " ").trim();
+  // A whole note can be 100 000 characters: the cut comes first, with room for the spaces it may fold.
+  const flat = (text ?? "").slice(0, BRIEF_NOTE * 4).replace(/\s+/g, " ").trim();
   if (flat === "") return null;
   const chars = Array.from(flat);
   return chars.length > BRIEF_NOTE ? `${chars.slice(0, BRIEF_NOTE).join("").trimEnd()}…` : flat;
@@ -37,27 +40,15 @@ function oneLine(text: string | null | undefined): string | null {
 
 /**
  * What a new Claude chat needs to pick a goal up where the person left it: the goal, its note and phase,
- * what was done over the last days with each task's note, and what is still open this month, carried ones included.
+ * what was done over the last days with each task's note, and what is still open this month.
  */
 export function claudeBrief(input: BriefInput): string {
-  const { name, note, phases, tasks, month, today } = input;
-  const from = shiftDay(today, -(BRIEF_DAYS - 1));
-  const byId = new Map(tasks.map((task) => [task.id, task]));
-  const parentOf = (task: Task) => (task.parentId === null ? null : (byId.get(task.parentId) ?? null));
-  const isParent = new Set(tasks.map((task) => task.parentId).filter((id): id is string => id !== null));
-
+  const { name, note, phase, tasks, open, month, today } = input;
+  const from = addDaysToCivilDate(today, -(BRIEF_DAYS - 1));
   const done = tasks
-    .filter((task) => task.doneOn !== null && task.doneOn >= from && task.doneOn <= today)
-    .sort((a, b) => (a.doneOn as string).localeCompare(b.doneOn as string));
-  const thisMonth = monthOf(today);
-  const next = tasks
-    .filter((task) => {
-      if (task.doneOn !== null || isParent.has(task.id)) return false;
-      const own = monthOfTask(task, parentOf(task));
-      return own !== null && own <= thisMonth;
-    })
-    .slice(0, BRIEF_NEXT);
-  const phase = phases.find((p) => p.startsOn <= today && today <= p.endsOn);
+    .filter((task): task is Task & { doneOn: string } => task.doneOn !== null && task.doneOn >= from && task.doneOn <= today)
+    .sort((a, b) => a.doneOn.localeCompare(b.doneOn));
+  const next = open.slice(0, BRIEF_NEXT);
 
   const lines = [translate("goal.claude.intro", { goal: name })];
   const goalNote = oneLine(note);
@@ -72,7 +63,7 @@ export function claudeBrief(input: BriefInput): string {
     const shown = done.slice(-BRIEF_DONE);
     if (done.length > shown.length) lines.push(translate("goal.claude.moreDone", { count: done.length - shown.length }));
     for (const task of shown) {
-      const values = { day: civilDayMonthShort(task.doneOn as string), task: task.name };
+      const values = { day: civilDayMonthShort(task.doneOn), task: task.name };
       const taskNote = oneLine(task.note);
       lines.push(
         taskNote
@@ -85,7 +76,7 @@ export function claudeBrief(input: BriefInput): string {
   if (next.length === 0) lines.push(translate("goal.claude.noneNext"));
   else {
     lines.push(translate("goal.claude.nextTitle"));
-    for (const task of next) lines.push(translate("goal.claude.nextLine", { task: task.name }));
+    for (const task of next) lines.push(translate("goal.claude.nextLine", { task }));
   }
   lines.push("", translate("goal.claude.ask", { today: civilDayMonthShort(today) }));
 
@@ -93,6 +84,8 @@ export function claudeBrief(input: BriefInput): string {
 }
 
 // A new claude.ai chat with the brief already typed in its box; the person reads it and sends it.
+export const CLAUDE_NEW_CHAT = "https://claude.ai/new?q=";
+
 export function claudeChatHref(brief: string): string {
-  return `https://claude.ai/new?q=${encodeURIComponent(brief)}`;
+  return `${CLAUDE_NEW_CHAT}${encodeURIComponent(brief)}`;
 }
