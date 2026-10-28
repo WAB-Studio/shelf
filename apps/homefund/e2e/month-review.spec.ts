@@ -170,6 +170,8 @@ for (const width of [360, 1280]) {
     await expect(back).toHaveAttribute("href", `/es/reports/review?month=${month}`);
     await back.click();
     await expect(page).toHaveURL(new RegExp(`/es/reports/review\\?month=${month}$`));
+    // Left without a change: the item still waits.
+    await expect(okButtons(page)).toHaveCount(4);
     // A review the page cannot read leads back to the movements.
     await page.goto(`/es/movements/${ids.big}?review=nada`);
     await expect(page.getByRole("link", { name: "Revisar el mes" })).toHaveCount(0);
@@ -225,3 +227,35 @@ test.describe("as a member who only reads the leader's account", () => {
   });
 });
 
+test("«Está bien» reads «Guardando…» and holds still while the server answers", async ({ page }) => {
+  await page.goto(`/es/reports/review?month=${month}`);
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`**/es/reports/review?month=${month}`, async (route) => {
+    const request = route.request();
+    if (request.method() !== "POST" || !("next-action" in request.headers())) return route.fallback();
+    await held;
+    await route.fallback();
+  });
+  await okButtons(page).first().click();
+  const saving = page.getByRole("button", { name: "Guardando…" });
+  await expect(saving).toBeVisible();
+  await expect(saving).toBeDisabled();
+  release();
+  await expect(okButtons(page)).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Revisados (1)" })).toBeVisible();
+});
+
+test("a mark the server refuses says so in a toast and leaves the item waiting", async ({ page }) => {
+  await page.goto(`/es/reports/review?month=${month}`);
+  await expect(okButtons(page)).toHaveCount(4);
+  // The account changes hands under the open page: the mark's policy now turns the caller away.
+  await fixtureSql`update accounts set owner_user_id = ${scope.memberUserId} where id = ${accountId}`;
+  await okButtons(page).first().click();
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "No puedes marcar este movimiento." })).toBeVisible();
+  const [{ marks }] = await fixtureSql<{ marks: number }[]>`
+    select count(*)::int as marks from transaction_reviews where transaction_id in ${fixtureSql(movements)}`;
+  expect(marks).toBe(0);
+  await expect(okButtons(page)).toHaveCount(4);
+  await expect(page.getByRole("button", { name: /^Revisados/ })).toHaveCount(0);
+});
