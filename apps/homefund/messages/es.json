@@ -1447,6 +1447,8 @@
     "errors": {
       "cannotMark": "No puedes marcar este movimiento."
     },
-    "back": "Volver a Reportes"
+    "back": "Volver a Reportes",
+    "readerOnly": "Lo corrige quien maneja {account}.",
+    "undo": "Deshacer"
   }
 }

@@ -1447,6 +1447,8 @@
     "errors": {
       "cannotMark": "You can't mark this movement."
     },
-    "back": "Back to Reports"
+    "back": "Back to Reports",
+    "readerOnly": "Whoever manages {account} fixes it.",
+    "undo": "Undo"
   }
 }

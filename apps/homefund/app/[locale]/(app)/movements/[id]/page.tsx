@@ -12,6 +12,8 @@ import {
 import { getTransactionById, listTransactions } from "@/db/queries/transactions";
 import { routing } from "@/i18n/routing";
 
+const REVIEW_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 export async function generateMetadata(
   props: PageProps<"/[locale]/movements/[id]">,
 ): Promise<Metadata> {
@@ -26,7 +28,7 @@ export async function generateMetadata(
 export default async function MovementPage(
   props: PageProps<"/[locale]/movements/[id]">,
 ) {
-  const { locale, id } = await props.params;
+  const [{ locale, id }, { review }] = await Promise.all([props.params, props.searchParams]);
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
@@ -34,11 +36,17 @@ export default async function MovementPage(
   // the form options ride the same fan-out for the edit dialog and the
   // account/category names the detail reads. The charges this movement caused
   // need no cause id to look up, so they ride this same round trip too (RF-132).
-  const [movement, options, causedCharges] = await Promise.all([
+  const [movement, options, causedCharges, tr] = await Promise.all([
     getTransactionById(id),
     getTransactionFormOptions(),
     listTransactions({ causedByTransactionId: id }),
+    getTranslations({ locale, namespace: "review" }),
   ]);
+  // «Corregir» in «Revisar el mes» opens the movement with `?review=YYYY-MM`: back leads there (RF-155).
+  const back =
+    typeof review === "string" && REVIEW_MONTH.test(review)
+      ? { href: `/reports/review?month=${review}`, label: tr("entry") }
+      : undefined;
 
   if (!movement) notFound();
 
@@ -62,6 +70,7 @@ export default async function MovementPage(
         creatorName={creatorNames.get(movement.createdBy) ?? null}
         cause={cause}
         causedCharges={causedCharges}
+        back={back}
       />
     </Page>
   );

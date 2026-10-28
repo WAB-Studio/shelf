@@ -65,6 +65,7 @@ export function MovementDetailDesktop({
   creatorName,
   cause = null,
   causedCharges = [],
+  back,
 }: {
   movement: TransactionListRow;
   options: TransactionFormOptions;
@@ -74,6 +75,8 @@ export function MovementDetailDesktop({
   cause?: TransactionListRow | null;
   // The charges this movement caused, newest first, as the caller ordered them.
   causedCharges?: TransactionListRow[];
+  // Where the back arrow leads: the movements list unless the caller came from elsewhere.
+  back?: { href: string; label: string };
 }) {
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
@@ -267,7 +270,7 @@ export function MovementDetailDesktop({
       <ScreenHeader
         title={isAdjustment ? t("kindAdjustment") : t("detailTitle")}
         meta={shortDate}
-        back={{ href: "/movements", label: t("listTitle") }}
+        back={back ?? { href: "/movements", label: t("listTitle") }}
       />
 
       <Flex align="start" gap="4" px="6" pb="6">

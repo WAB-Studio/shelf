@@ -29,7 +29,7 @@ import {
   listAccountReconciliations,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
-import { getMonthReview, getMonthReviewPending, markReviewed } from "@/db/queries/month-review";
+import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed } from "@/db/queries/month-review";
 import {
   getAccountStatementHistory,
   listAccountStatements,
@@ -13807,42 +13807,29 @@ async function o7m11bSurvivorsSuite(): Promise<void> {
   const settledId = settled.settled ? settled.transactionId : null;
   if (settledId) track("transactions", settledId);
   const payerClaims = JSON.stringify({ sub: payer.id, role: "authenticated", aud: "authenticated" });
-  const [secondPayment] = settledId
-    ? await fixtureSql.begin(async (tx) => {
-        await tx`select set_config('request.jwt.claims', ${payerClaims}, true)`;
-        return tx<{ id: string }[]>`
-          insert into planned_payments (from_account_id, amount_cents, due_date, description, status, settled_transaction_id)
-          values (${payerBank}, 123400, ${shiftDate(today, -1)}, ${`Harness o7m11b segundo pago ${tag}`}, 'done', ${settledId})
-          returning id`;
-      })
-    : [];
-  if (secondPayment) track("planned_payments", secondPayment.id);
-  const readOrError = async <T>(run: () => Promise<T>): Promise<{ value: T | null; error: string }> => {
-    try {
-      return { value: await asUser(payer, run), error: "" };
-    } catch (error) {
-      return { value: null, error: rootMessage(error) };
-    }
-  };
-  const doubleListed = await readOrError(() => listTransactions({}, { limit: 20 }));
-  const doubleById = settledId ? await readOrError(() => getTransactionById(settledId)) : { value: null, error: "no movement" };
-  const linkedRows = (doubleListed.value ?? []).filter((row) => row.id === settledId);
-  const both = new Set([plannedPaymentId, secondPayment?.id]);
-  const listedName = linkedRows[0]?.settledPlannedPayment?.id;
+  // One movement settles one payment (0073): a second payment naming it is refused, so no read meets two.
+  const secondPayment = settledId
+    ? await fixtureSql
+        .begin(async (tx) => {
+          await tx`select set_config('request.jwt.claims', ${payerClaims}, true)`;
+          return tx<{ id: string }[]>`
+            insert into planned_payments (from_account_id, amount_cents, due_date, description, status, settled_transaction_id)
+            values (${payerBank}, 123400, ${shiftDate(today, -1)}, ${`Harness o7m11b segundo pago ${tag}`}, 'done', ${settledId})
+            returning id`;
+        })
+        .then(
+          async (rows) => {
+            await fixtureSql`delete from planned_payments where id = ${rows[0].id}`;
+            return "stored";
+          },
+          (error: unknown) => (error as { code?: string }).code ?? rootMessage(error),
+        )
+    : "no movement";
   assert(
-    next("X3: a movement two planned payments point at lists once and reads by id, both naming the same one of the two payments"),
-    secondPayment !== undefined &&
-      doubleListed.error === "" &&
-      doubleById.error === "" &&
-      linkedRows.length === 1 &&
-      listedName !== undefined &&
-      both.has(listedName) &&
-      doubleById.value?.settledPlannedPayment?.id === listedName,
-    `second payment ${show(secondPayment)}; list ${doubleListed.error || `${linkedRows.length} rows naming ${show(listedName)}`}; by id ${doubleById.error || show(doubleById.value?.settledPlannedPayment)}`,
+    next("X3: a second planned payment settled by the movement one already settles is refused by the unique index"),
+    secondPayment === "23505",
+    `second payment ${secondPayment}`,
   );
-  // Dropped here: the purge deletes the movement it points at, and the scope trigger would hand the unlinked row to
-  // whoever deleted it, which then blocks that identity's own drop.
-  if (secondPayment) await fixtureSql`delete from planned_payments where id = ${secondPayment.id}`;
 
   // ---- G3, G4, G5, G7: an errored row in the members, recurring rules, categories or adjustments bucket.
   const HAS_ERRORS = "data.import.errors.hasErrors";
@@ -14568,7 +14555,7 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
   const nextFirst = await spend(plain, 1_200_000, day(1, 0), true);
   // A twin whose one half is also from words: two items, two movements.
   const pairA = await spend(plain, 1_300_000, day(9), true);
-  const pairB = await spend(plain, 1_300_000, day(9));
+  await spend(plain, 1_300_000, day(9));
 
   const read = await asUser(holder, () => getMonthReview(month));
   const ids = (rule: string) => read.items.filter((item) => item.rule === rule).flatMap((item) => item.transactionIds);
@@ -14628,6 +14615,38 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
     next("O7-M3 reader: a fellow sees the leader's from-words item as unmarkable, and their Inicio count stays where it was"),
     seen?.rule === "from_words" && seen.canMark === false && (pendingAfter?.count ?? 0) === (pendingBefore?.count ?? 0),
     `seen ${seen?.rule} canMark ${seen?.canMark}, pending ${pendingBefore?.count ?? 0} → ${pendingAfter?.count ?? 0}`,
+  );
+
+  // RF-163: «Deshacer» drops the mark for the one who may write it; a reader's delete reaches no row.
+  const reviewedOf = async (who: HarnessUser | null) =>
+    ((await (who ? asUser(who, () => getMonthReview(month)) : getMonthReview(month))).items.find((item) =>
+      item.transactionIds.includes(transactionId) && item.rule === "from_words",
+    ))?.reviewed;
+  await markReviewed({ transactionIds: [transactionId], rule: "from_words" });
+  await asUser(fellow, () => unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" }));
+  const afterReader = await reviewedOf(null);
+  await unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" });
+  const afterHolder = await reviewedOf(null);
+  assert(
+    next("O8 undo: a reader's «Deshacer» leaves the mark; the holder's drops it and the item waits again"),
+    afterReader === true && afterHolder === false,
+    `after the reader ${afterReader}, after the holder ${afterHolder}`,
+  );
+
+  // RF-164: an edit that keeps the amount keeps the mark; one that changes it clears it.
+  const edit = (amountCents: number, description: string) =>
+    updateTransaction({
+      transactionId, fromAccountId: accountId, toAccountId: null, amountCents, occurredAt: `${month}-14`,
+      description, splits: [{ categoryId, amountCents }], labelIds: [],
+    });
+  await edit(2_500_000, "Harness o7m3 ajena palabras, renombrada");
+  const kept = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
+  await edit(2_600_000, "Harness o7m3 ajena palabras, otro monto");
+  const cleared = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
+  assert(
+    next("O8 typed amount: an edit that keeps the amount keeps «read from words»; one that changes it clears it"),
+    String(kept) === "true" && String(cleared) === "false",
+    `kept ${kept}, cleared ${cleared}`,
   );
 }
 

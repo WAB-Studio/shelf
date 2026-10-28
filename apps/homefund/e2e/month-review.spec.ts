@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { asHarnessUser, readScope, test } from "./global-setup";
+import { MEMBER_STORAGE_STATE, asHarnessUser, clearGroup, readScope, seedGroup, test } from "./global-setup";
 import { addCivilMonths, currentMonthStart } from "@/lib/dates";
 
 const scope = readScope();
@@ -83,15 +83,17 @@ for (const width of [360, 1280]) {
     await expect(page.getByText("Monto leído de palabras")).toBeVisible();
     await expect(page.getByText("Diferencia al cuadrar")).toBeVisible();
     await expect(page.getByText("Contaste $ 1.010.000")).toBeVisible();
+    // The over-the-usual, the twin and the from-words item each name the movement they flag.
+    await expect(page.getByText(`Revisión ${stamp}`, { exact: true })).toHaveCount(3);
     await expect(okButtons(page)).toHaveCount(4);
     const fixes = page.getByRole("link", { name: "Corregir" });
     await expect(fixes).toHaveCount(4);
     const hrefs = await fixes.evaluateAll((links) => links.map((a) => a.getAttribute("href")));
     expect(hrefs.sort()).toEqual(
       [
-        `/es/movements/${ids.big}`,
-        `/es/movements/${[ids.twinA, ids.twinB].sort()[0]}`,
-        `/es/movements/${ids.words}`,
+        `/es/movements/${ids.big}?review=${month}`,
+        `/es/movements/${[ids.twinA, ids.twinB].sort()[0]}?review=${month}`,
+        `/es/movements/${ids.words}?review=${month}`,
         "/es/settings/accounts",
       ].sort(),
     );
@@ -145,3 +147,50 @@ test("‹ › step between the seeded month and its neighbours, and «Reportes»
     "/es/reports/review",
   );
 });
+
+test("«Deshacer» under «Revisados» drops the mark: the item waits again, after a reload too (RF-163)", async ({ page }) => {
+  await page.goto(`/es/reports/review?month=${month}`);
+  await okButtons(page).first().click();
+  await expect(okButtons(page)).toHaveCount(3);
+  await page.getByRole("button", { name: "Revisados (1)" }).click();
+  await page.getByRole("button", { name: "Deshacer" }).click();
+  await expect(okButtons(page)).toHaveCount(4);
+  await expect(page.getByRole("button", { name: /^Revisados/ })).toHaveCount(0);
+  await page.reload();
+  await expect(okButtons(page)).toHaveCount(4);
+});
+
+for (const width of [360, 1280]) {
+  test(`at ${width} «Corregir» opens the movement whose back arrow returns to the month under review`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/es/reports/review?month=${month}`);
+    await page.locator(`a[href="/es/movements/${ids.big}?review=${month}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/es/movements/${ids.big}\\?review=${month}$`));
+    const back = page.getByRole("link", { name: "Revisar el mes" }).locator("visible=true");
+    await expect(back).toHaveAttribute("href", `/es/reports/review?month=${month}`);
+    await back.click();
+    await expect(page).toHaveURL(new RegExp(`/es/reports/review\\?month=${month}$`));
+    // A review the page cannot read leads back to the movements.
+    await page.goto(`/es/movements/${ids.big}?review=nada`);
+    await expect(page.getByRole("link", { name: "Revisar el mes" })).toHaveCount(0);
+  });
+}
+
+test.describe("as a member who only reads the leader's account", () => {
+  test.use({ storageState: MEMBER_STORAGE_STATE });
+  test.beforeEach(async () => {
+    await seedGroup();
+  });
+  test.afterEach(async () => {
+    await clearGroup();
+  });
+
+  test("the items show with who fixes them, and no «Está bien» nor «Corregir»", async ({ page }) => {
+    await page.goto(`/es/reports/review?month=${month}`);
+    await expect(page.getByText("Muy por encima de lo usual")).toBeVisible();
+    await expect(page.getByText(`Lo corrige quien maneja ${accountName}.`)).toHaveCount(4);
+    await expect(okButtons(page)).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Corregir" })).toHaveCount(0);
+  });
+});
+

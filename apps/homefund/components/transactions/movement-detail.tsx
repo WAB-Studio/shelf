@@ -66,6 +66,7 @@ export function MovementDetail({
   creatorName,
   cause = null,
   causedCharges = [],
+  back,
 }: {
   movement: TransactionListRow;
   options: TransactionFormOptions;
@@ -75,6 +76,8 @@ export function MovementDetail({
   cause?: TransactionListRow | null;
   // The charges this movement caused, newest first, as the caller ordered them.
   causedCharges?: TransactionListRow[];
+  // Where the back arrow leads: the movements list unless the caller came from elsewhere.
+  back?: { href: string; label: string };
 }) {
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
@@ -240,6 +243,7 @@ export function MovementDetail({
           movement={movement}
           options={options}
           creatorName={creatorName}
+          back={back}
           cause={cause}
           causedCharges={causedCharges}
         />
@@ -247,8 +251,8 @@ export function MovementDetail({
 
       <Flex direction="column" gap="4" display={{ initial: "flex", md: "none" }}>
         <Flex align="center" gap="3">
-          <IconButton asChild tap variant="ghost" color="gray" aria-label={t("listTitle")}>
-            <LocaleLink href="/movements">
+          <IconButton asChild tap variant="ghost" color="gray" aria-label={back?.label ?? t("listTitle")}>
+            <LocaleLink href={back?.href ?? "/movements"}>
               <ChevronLeftIcon size={18} />
             </LocaleLink>
           </IconButton>
