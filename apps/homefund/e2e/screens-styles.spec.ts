@@ -16,6 +16,8 @@ import { ESLint } from "eslint";
 import { todayInBogota } from "@/lib/dates";
 import messages from "@/messages/es.json";
 
+import { nameLayout } from "./name-layout";
+
 import {
   asHarnessUser,
   clearGroup,
@@ -323,24 +325,7 @@ test.describe("debts", () => {
     expect(await computed(name, "word-break")).not.toBe("break-all");
 
     // No word is cut: every character of a word sits on the one line.
-    const split = await name.evaluate((el) => {
-      const cut: string[] = [];
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        for (const match of (node.textContent ?? "").matchAll(/\S+/g)) {
-          const tops: number[] = [];
-          for (let i = 0; i < match[0].length; i++) {
-            const range = document.createRange();
-            range.setStart(node, match.index + i);
-            range.setEnd(node, match.index + i + 1);
-            const rect = range.getClientRects()[0];
-            if (rect) tops.push(Math.round(rect.top));
-          }
-          if (tops.some((top) => Math.abs(top - tops[0]) > 2)) cut.push(match[0]);
-        }
-      }
-      return cut;
-    });
+    const { split } = await nameLayout(name);
     expect(split).toEqual([]);
 
     const card = page.locator(".rt-Card:visible").filter({ hasText: names.debt }).first();

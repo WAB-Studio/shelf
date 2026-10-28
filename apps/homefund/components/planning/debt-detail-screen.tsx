@@ -156,17 +156,18 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   // whose pesos are at zero while another pocket owes names it «Debes».
   const beside = owesBesideCredit(creditCents, otherOwed);
   const onlyForeign =
-    !beside &&
-    owedCents === 0 &&
-    creditCents === 0 &&
-    otherOwed.some((pocket) => pocket.owedCents > 0);
+    owedCents === 0 && creditCents === 0 && otherOwed.some((pocket) => pocket.owedCents > 0);
   // Every pocket the line does not already read, in its own currency and never
   // summed (RF-124).
-  const pockets = account.balances.filter((pocket) =>
-    beside
-      ? pocket.currency !== currency && pocket.balanceCents > 0
-      : !onlyForeign || pocket.currency !== currency,
-  );
+  const pockets = beside
+    ? otherOwed.filter((pocket) => pocket.creditCents > 0)
+    : onlyForeign
+      ? otherOwed
+      : account.balances.map((pocket) => ({
+          currency: pocket.currency,
+          owedCents: Math.max(0, -pocket.balanceCents),
+          creditCents: Math.max(0, pocket.balanceCents),
+        }));
 
   const tiles = [
     {
@@ -186,8 +187,8 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
           {pockets.map((pocket) => (
             <PocketFigure
               key={pocket.currency}
-              owedCents={Math.max(0, -pocket.balanceCents)}
-              creditCents={Math.max(0, pocket.balanceCents)}
+              owedCents={pocket.owedCents}
+              creditCents={pocket.creditCents}
               currency={pocket.currency}
               inherit
               named={onlyForeign}

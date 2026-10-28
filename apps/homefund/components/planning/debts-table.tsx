@@ -201,28 +201,18 @@ export function PocketFigure({
   const locale = useLocale() as Locale;
   const size = bold || inherit ? undefined : "1";
 
-  if (creditCents > 0) {
+  // «A favor $ 8.000», or with `named` «Debes US$ 20,00»: the amount in words.
+  const worded = creditCents > 0 ? "inFavour" : named && owedCents > 0 ? "owesForeign" : null;
+  if (worded !== null) {
     return (
       <Figure size={size} weight={bold ? "bold" : undefined}>
         <Money
-          minor={creditCents}
+          minor={worded === "inFavour" ? creditCents : owedCents}
           currency={currency}
-          tone="credit"
-          size="inherit"
-          words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
-        />
-      </Figure>
-    );
-  }
-  if (named && owedCents > 0) {
-    return (
-      <Figure size={size}>
-        <Money
-          minor={owedCents}
-          currency={currency}
+          tone={worded === "inFavour" ? "credit" : undefined}
           size="inherit"
           signed={false}
-          words={wordsAround(t("owesForeign", { amount: AMOUNT_SLOT }))}
+          words={wordsAround(t(worded, { amount: AMOUNT_SLOT }))}
         />
       </Figure>
     );
