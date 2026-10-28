@@ -20,6 +20,12 @@
   white-space: nowrap;
 }
 
+/* A datum of several lines or one long line (a debt's Q9 line) breaks between its words. */
+.metaWraps {
+  white-space: normal;
+  min-width: 0;
+}
+
 /* The square of DetalleMovimiento; border-box keeps the rule inside the 44px
    RNF-08 asks for. */
 .back {

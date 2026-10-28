@@ -458,7 +458,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const userId = session.user.id;
   const memberUserId = memberSession.user.id;
 
+  // The member too: a run that died before its own cleanup leaves the member's rows, and every spec that
+  // asserts what a member sees then reads them as the fund's.
   await purge(userId);
+  await purge(memberUserId);
   const scope = await seedScope(userId, memberUserId);
   // `private/` is gitignored, so a fresh clone reaches this write without it.
   mkdirSync(dirname(SCOPE_FILE), { recursive: true });
@@ -480,6 +483,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     try {
       await clearGroup();
       await purge(userId);
+      await purge(memberUserId);
       await purgeAuditTrail([userId, memberUserId]);
       await closeRun(fixtureSql);
     } finally {
