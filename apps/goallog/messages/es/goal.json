@@ -199,5 +199,22 @@
     "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520.",
     "horizonPast": "La semana {weeks} ya pasó. El final puede ser esta semana o una por venir.",
     "horizonBeforePhase": "La fase «{name}» llega hasta la semana {week} ({fromOpening} desde la apertura). El final no puede quedar antes."
+  },
+  "claude": {
+    "open": "Abrir en Claude",
+    "openLabel": "Abrir en Claude un chat nuevo con «{goal}»: lo que hiciste esta semana y lo que sigue",
+    "hint": "Abre un chat nuevo en claude.ai con tu plan y lo que hiciste estos días ya escrito.",
+    "intro": "Estoy siguiendo mi meta «{goal}» en GoalLog. Te resumo dónde voy para no repetir el plan entero.",
+    "note": "Nota de la meta: {note}",
+    "phase": "Fase actual: {phase}, hasta el {until}.",
+    "monthPlan": "Este mes llevo {reached} de {planned}.",
+    "doneTitle": "Lo que hice estos días:",
+    "doneLine": "- {day}: {task}",
+    "doneLineNote": "- {day}: {task} (nota: {note})",
+    "noneDone": "Estos días no anoté nada hecho.",
+    "nextTitle": "Lo que sigue:",
+    "nextLine": "- {task}",
+    "noneNext": "No tengo tareas pendientes este mes.",
+    "ask": "Hoy es {today}. Ayúdame con lo que sigue, partiendo de lo que ya hice."
   }
 }
