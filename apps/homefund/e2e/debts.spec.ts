@@ -2881,7 +2881,6 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
       test("Q9: the detail's header and Saldo tile read the row's whole line, and a card that only owes dollars reads «Debes»", async ({
         page,
       }) => {
-        test.skip(laptop, "the tile reads the same at every width");
         const credit: MemberCard = {
           id: randomUUID(),
           name: `Tarjeta Q9 saldo a favor ${bandLabel} ${stamp}`,
@@ -2912,6 +2911,11 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         await expect(header).toHaveText(
           /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
         );
+        // It wraps between its words rather than pushing the page sideways, and «A favor» keeps the accent.
+        const width = page.viewportSize()?.width ?? 0;
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        expect((await header.boundingBox())?.width ?? Infinity).toBeLessThanOrEqual(width);
+        for (const ink of await inkOfText(header, /A\sfavor/)) expect(ink).toBe(accent);
         const creditInks = await inkOfText(tile, /A\sfavor/);
         expect(creditInks.length).toBeGreaterThan(0);
         for (const ink of creditInks) expect(ink).toBe(accent);
