@@ -177,7 +177,7 @@ test("a week past the furthest goal's end lands on the last week; a malformed on
     const landed: string[] = [];
     for (const param of [shift(today, 400), shift(today, 2000)]) {
       await page.goto(`/semana?semana=${param}`);
-      // The redirect can come after the stream opens: wait for the address to leave the week asked for.
+      // `(app)/loading.tsx` streams first, so the redirect lands later; the pattern below matches the asked address too.
       await expect(page).not.toHaveURL(new RegExp(`semana=${param}$`));
       await expect(page).toHaveURL(/\/semana\?semana=\d{4}-\d{2}-\d{2}$/);
       await expect(next(page)).toHaveCount(0);

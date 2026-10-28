@@ -11,3 +11,8 @@ export function weekDayHref(day: string, today: string): string | null {
   if (day >= today || day < dateToCivilDate(floor)) return null;
   return `/dia/${day}`;
 }
+
+// «Semana» for the week starting on `monday`: this week is `/semana` itself.
+export function weekHref(monday: string, thisMonday: string): string {
+  return monday === thisMonday ? "/semana" : `/semana?semana=${monday}`;
+}

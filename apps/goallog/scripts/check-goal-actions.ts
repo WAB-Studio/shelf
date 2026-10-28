@@ -89,6 +89,7 @@ let completeOneOff: typeof import("@/app/actions/one-offs").completeOneOff;
 let loadWeek: typeof import("@/lib/queries/week").loadWeek;
 let loadMonthAcross: typeof import("@/lib/queries/month").loadMonthAcross;
 let TIME_ZONE: string;
+let weekOf: typeof import("@/lib/zone").weekOf;
 let loadGoal: typeof import("@/lib/queries/goal").loadGoal;
 let planMonthList: typeof import("@/lib/plan/roadmap-read").planMonthList;
 let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
@@ -158,7 +159,7 @@ before(async () => {
   ({ loadGoal } = await import("@/lib/queries/goal"));
   ({ planMonthList } = await import("@/lib/plan/roadmap-read"));
   ({ declareFact, undoFact } = await import("@/app/actions/facts"));
-  ({ todayInZone, TIME_ZONE } = await import("@/lib/zone"));
+  ({ todayInZone, TIME_ZONE, weekOf } = await import("@/lib/zone"));
   ({ PAST_DAY_LIMIT } = await import("@/lib/validation/fact"));
 
   const { getPerson } = await import("@/lib/session");
@@ -1344,7 +1345,7 @@ test("addCommitment: the first quantity commitment measures the goal in its unit
 test("a goal archived on a closed month's last day, or a past week's Sunday, still counts there; one archived the day before does not", async () => {
   // The last day at 23:00 in the person's zone: the instant lands on the next day in UTC, the day it counts by does not.
   const lastDay = shiftDay(`${today.slice(0, 7)}-01`, -1);
-  const monday = shiftDay(today, -((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7) - 7);
+  const monday = shiftDay(weekOf(today)[0], -7);
   const sunday = shiftDay(monday, 6);
   const goals = await sql<{ id: string; name: string }[]>`
     insert into goals.goals (user_id, name, created_at, archived_at)

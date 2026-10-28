@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { habitWeeks, weekMonthOf, weeksOfMonth } from "./habit-weeks";
+import { habitWeeks, mondaysTouching, weekMonthOf, weeksOfMonth } from "./habit-weeks";
 
 test("the Thursday decides the month of a week", () => {
   assert.equal(weekMonthOf("2025-09-29"), "2025-10-01");
@@ -158,4 +158,14 @@ test("an unmet retirement week stays in its Thursday's month, not the month of r
   const met = { ...input, daysDoneByWeek: new Map([["2026-07-27", 2]]) };
   assert.deepEqual(habitWeeks({ ...met, month: "2026-08-01" }), { met: 1, counted: 1 });
   assert.equal(habitWeeks({ ...met, month: "2026-07-01" }).counted, 4);
+});
+
+test("mondaysTouching: every week a month touches, from the one holding the 1st (RP-145)", () => {
+  // October 2026 starts on a Thursday and ends on a Saturday.
+  assert.deepEqual(mondaysTouching("2026-10-01"), ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"]);
+  // August 2026 starts on a Saturday: its first week is July's by Thursday, and still touches it.
+  assert.equal(mondaysTouching("2026-08-01")[0], "2026-07-27");
+  assert.equal(weeksOfMonth("2026-08-01")[0], "2026-08-03");
+  // February 2027 starts on a Monday and ends on a Sunday: four weeks, none outside it.
+  assert.deepEqual(mondaysTouching("2027-02-01"), ["2027-02-01", "2027-02-08", "2027-02-15", "2027-02-22"]);
 });

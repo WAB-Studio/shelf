@@ -1,8 +1,10 @@
 import "server-only";
 
+import { sql, type SQL } from "drizzle-orm";
+
 import type { EvidenceByCommitment } from "@/lib/day/derive";
 import type { Cadence, DeclaredFact, EvidenceDay, Phase, SatisfiedBy } from "@/lib/day/types";
-import { civilDateInZone } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE } from "@/lib/zone";
 
 // The columns `toCadence` and `toSatisfiedBy` read, common to every query's
 // own `CommitmentRow` — `lib/queries/day.ts` and `lib/queries/week.ts` widen
@@ -117,4 +119,10 @@ export function toEvidenceByCommitment(
   }
 
   return byCommitment;
+}
+
+// A goal a past day still saw: not archived, or archived that day or later (RP-24) — the last day of a closed
+// month or week included.
+export function livedThrough(alias: "g" | "a", day: string): SQL {
+  return sql`(${sql.raw(alias)}.archived_at is null or (${sql.raw(alias)}.archived_at at time zone ${TIME_ZONE})::date >= ${day}::date)`;
 }

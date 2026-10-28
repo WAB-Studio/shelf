@@ -30,7 +30,7 @@ import {
   type GoalRow,
   type TaskRow,
 } from "@/lib/queries/goal";
-import { toCadence, toDeclaredFact } from "@/lib/queries/rows";
+import { livedThrough, toCadence, toDeclaredFact } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { dayBefore } from "@/lib/day/weeks";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
@@ -144,7 +144,7 @@ async function queryRows(tx: Transaction, reading: Reading, today: string): Prom
   // A closed month keeps a goal archived on its last day or since; the current and coming ones read none that is archived.
   const archived = (alias: "g" | "a") =>
     view === "past"
-      ? sql`(${sql.raw(alias)}.archived_at is null or (${sql.raw(alias)}.archived_at at time zone ${TIME_ZONE})::date >= ${lastDay}::date)`
+      ? livedThrough(alias, lastDay)
       : sql`${sql.raw(alias)}.archived_at is null`;
   const archivedG = archived("g");
   const archivedA = archived("a");
