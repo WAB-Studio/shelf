@@ -14382,6 +14382,7 @@ async function o7m3MonthReviewSuite(): Promise<void> {
 
   const bank = await open("banco", 500_000_000);
   const counted = await open("cuadre", 50_000_000);
+  const other = await open("otra", 50_000_000);
   const usual = await category("mercado");
   const thin = await category("ropa");
   const plain = await category("varios");
@@ -14398,10 +14399,12 @@ async function o7m3MonthReviewSuite(): Promise<void> {
   await spend(bank, thin, 40_000_000, day(5));
   // Currency apart: a USD split against the COP history raises nothing.
   await spend(bank, usual, 40_000_000, day(12), { currency: "USD", counterAmountCents: 160_000_000, counterIsEstimate: true });
-  // Twins: two equal expenses on one account and day; the same amount on another day is not one.
+  // Twins: two equal expenses on one account and day; the same amount on another day, or on the
+  // same day from another account, is not one.
   const twinA = await spend(bank, plain, 5_000_000, day(15));
   const twinB = await spend(bank, plain, 5_000_000, day(15));
   await spend(bank, plain, 5_000_000, day(16));
+  await spend(other, plain, 5_000_000, day(15));
   // From words: quick entry's flag through the action; a form save without it stores false.
   const said = await asUser(holder, () => movements.createTransactionAction({
     fromAccountId: bank, toAccountId: null, amount: "25000", occurredAt: day(20), description: `Harness o7m3 palabras ${tag}`,
