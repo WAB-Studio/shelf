@@ -458,6 +458,9 @@ export const createTransactionSchema = z
     // Minted by the form when it opens: a submit sent again after a lost answer carries the same
     // one, and the server answers with the movement the first copy booked.
     requestRef: z.uuid({ error: "errors.unexpected" }).optional(),
+    // Quick entry's interpreter read the amount from words («25 mil») and the person did not
+    // retype it (RF-155). Absent is false; the form never sends it.
+    amountFromWords: z.boolean().optional(),
   })
   .superRefine(requireAnAccount)
   .superRefine(refineEstimate)

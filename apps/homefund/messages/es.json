@@ -1420,5 +1420,10 @@
       "merchantInvalid": "Elige un comercio válido.",
       "shapeInvalid": "Elige un mensaje silenciado válido."
     }
+  },
+  "review": {
+    "errors": {
+      "cannotMark": "No puedes marcar este movimiento."
+    }
   }
 }
