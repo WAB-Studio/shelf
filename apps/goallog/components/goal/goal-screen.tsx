@@ -713,7 +713,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <MoveGoalAction goalId={goal.id} name={goal.name} tree={goal.tree} today={today} />
       )}
       <GoalNote goalId={goal.id} name={goal.name} note={goal.note} />
-      {archived ? null : (
+      {archived || ended ? null : (
         <Flex direction="column" gap="2">
           <Button asChild variant="outline" block>
             <a

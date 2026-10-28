@@ -202,7 +202,7 @@
   },
   "claude": {
     "open": "Abrir en Claude",
-    "openLabel": "Abrir en Claude un chat nuevo con «{goal}»: lo que hiciste esta semana y lo que sigue",
+    "openLabel": "Abrir en Claude un chat nuevo con «{goal}»: lo que hiciste estos días y lo que sigue",
     "hint": "Abre un chat nuevo en claude.ai con tu plan y lo que hiciste estos días ya escrito.",
     "intro": "Estoy siguiendo mi meta «{goal}» en GoalLog. Te resumo dónde voy para no repetir el plan entero.",
     "note": "Nota de la meta: {note}",
@@ -215,6 +215,7 @@
     "nextTitle": "Lo que sigue:",
     "nextLine": "- {task}",
     "noneNext": "No tengo tareas pendientes este mes.",
+    "moreDone": "- … y {count} más antes",
     "ask": "Hoy es {today}. Ayúdame con lo que sigue, partiendo de lo que ya hice."
   }
 }

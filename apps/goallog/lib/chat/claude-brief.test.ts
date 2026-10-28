@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BRIEF_NEXT, claudeBrief, claudeChatHref, type BriefInput } from "./claude-brief";
+import { BRIEF_DONE, BRIEF_NEXT, BRIEF_NOTE, claudeBrief, claudeChatHref, type BriefInput } from "./claude-brief";
 
 const task = (id: string, name: string, extra: Partial<BriefInput["tasks"][number]> = {}) => ({
   id,
@@ -73,4 +73,36 @@ test("the link opens a new claude.ai chat with the brief in its box", () => {
   const href = claudeChatHref("Hola «meta»\n- uno");
   assert.ok(href.startsWith("https://claude.ai/new?q="));
   assert.equal(decodeURIComponent(href.slice("https://claude.ai/new?q=".length)), "Hola «meta»\n- uno");
+});
+
+test("a task left undone in an earlier month is still open: it carries into this one", () => {
+  const brief = claudeBrief({ ...base, tasks: [task("s", "Repaso de septiembre", { plannedMonth: "2026-09-01" })] });
+  assert.match(brief, /Lo que sigue:\n- Repaso de septiembre/);
+});
+
+test("a note reads on one line, cut whole at its cap, and a blank one is no note", () => {
+  const long = `${"a".repeat(BRIEF_NOTE - 1)}😀😀 resto`;
+  const brief = claudeBrief({
+    ...base,
+    note: "   ",
+    tasks: [
+      task("m", "Multilínea", { doneOn: "2026-10-27", note: "uno\n- falso ítem" }),
+      task("l", "Larga", { doneOn: "2026-10-28", note: long }),
+    ],
+  });
+  assert.doesNotMatch(brief, /Nota de la meta/);
+  assert.match(brief, /Multilínea \(nota: uno - falso ítem\)/);
+  assert.match(brief, new RegExp(`Larga \\(nota: a{${BRIEF_NOTE - 1}}😀…\\)`));
+  assert.doesNotThrow(() => claudeChatHref(brief));
+});
+
+test("a busy week keeps its latest days and says how many more came before", () => {
+  const many = Array.from({ length: BRIEF_DONE + 3 }, (_, i) =>
+    task(`d${i}`, `Hecha ${String(i).padStart(2, "0")}`, { doneOn: i < 3 ? "2026-10-22" : "2026-10-28" }),
+  );
+  const brief = claudeBrief({ ...base, tasks: many });
+  assert.equal(brief.match(/^- \d+ oct: Hecha /gm)?.length, BRIEF_DONE);
+  assert.match(brief, /- … y 3 más antes/);
+  assert.doesNotMatch(brief, /Hecha 00/);
+  assert.match(brief, /Hoy es 28 oct\./, "the closing question is never cut");
 });

@@ -17,7 +17,7 @@ export function earliestPastDay(today: string): string {
   return dateToCivilDate(date);
 }
 
-function shiftDay(day: string, days: number): string {
+export function shiftDay(day: string, days: number): string {
   const date = civilDateToDate(day);
   date.setUTCDate(date.getUTCDate() + days);
   return dateToCivilDate(date);
