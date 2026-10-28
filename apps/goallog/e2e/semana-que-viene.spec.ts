@@ -193,3 +193,28 @@ test("this week is no coming week: its marks act, it lists no «con día» and o
     await expect(page.getByText("con día", { exact: true })).toHaveCount(0);
   });
 });
+
+for (const width of [390, 1440]) {
+  test(`at ${width} a coming week tallies nothing: no «hechos» row, and a weekly habit says its cadence alone`, async ({
+    browser,
+    baseURL,
+    db,
+    person,
+  }) => {
+    await withComing(browser, baseURL, db, person, width, async (page) => {
+      const [goal] = await db<{ id: string }[]>`select id from goals.goals where user_id = ${person.id} and name = ${GOAL}`;
+      await db`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+        values (${person.id}, ${goal.id}, 'Nadar', 'times_per_week', 3, 'tap', ${noonOf(shift(today, -10))})
+      `;
+      await page.goto(`/semana?semana=${nextMonday}`);
+      await expect(page.getByText("3 veces por semana", { exact: true }).locator("visible=true")).toHaveCount(1);
+      await expect(page.getByText(/de 3 es[at]a semana/)).toHaveCount(0);
+      await expect(page.getByText(/^hechos/)).toHaveCount(0);
+      // This week still tallies.
+      await page.goto("/semana");
+      await expect(page.getByText(/de 3 esta semana/).locator("visible=true")).toHaveCount(1);
+      await expect(page.getByText(/^hechos/).locator("visible=true")).toHaveCount(1);
+    });
+  });
+}

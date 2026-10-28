@@ -68,6 +68,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   const past = across.view === "past";
   const markDay = past ? closedMonthMarkDay(across.month, today) : undefined;
   const after = nextMonth(across.month);
+  // Unarchived and lasting past the month: what it left undone moves to the next one.
+  const carriesOn = (goal: MonthAcrossGoal) => goal.open && (goal.plan.horizon === null || goal.plan.horizon > after);
   // A closed month counts a sub-task done only when it was done in it.
   const doneIn = (doneOn: string | null) => doneOn !== null && (!past || doneOn < after);
   const t = await getTranslations();
@@ -140,11 +142,12 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                   {row.name}
                 </Text>
                 <Text as="p" variant="meta">
-                  {t(
-                    (row.id === task.id ? entry.done : doneIn(row.doneOn))
-                      ? "month.across.pastDone"
-                      : "month.across.pastOpen",
-                  )}
+                  {(row.id === task.id ? entry.done : doneIn(row.doneOn))
+                    ? t("month.across.pastDone")
+                    : // A plain task of its own month carries on while its goal does, as the goal's month page says.
+                      row.id === task.id && children.length === 0 && entry.carriedFrom === null && carriesOn(goal)
+                      ? t("month.list.staysIn", { month: monthName(after) })
+                      : t("month.across.pastOpen")}
                 </Text>
               </Flex>
             ))}
@@ -222,6 +225,12 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           : collapsed
             ? t("month.across.measuresNothingCount", { done: doneTasks, total: leaves.length })
             : t("month.across.measuresNothing");
+    } else if (coming) {
+      // A month not yet lived has reached nothing: it says its plan alone.
+      meta =
+        goal.line.planned === null
+          ? t("month.across.comingNothingPlanned", { month: thisName })
+          : t.rich("month.across.comingPlanned", { planned: say(goal.line.planned), month: thisName, ...fig });
     } else if (goal.line.planned === null) {
       meta = t(goal.items.length === 0 ? "month.across.nothingPlanned" : "month.across.noAmount", {
         month: thisName,
@@ -255,7 +264,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               </Flex>
             </h2>
           </Text>
-          {goal.line ? (
+          {goal.line && !coming ? (
             <Flex align="baseline" gap="2">
               <Figure value={goal.line.reached} unit={unit ?? undefined} bare={goal.line.planned !== null} />
               {goal.line.planned !== null ? (
