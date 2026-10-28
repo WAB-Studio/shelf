@@ -218,6 +218,8 @@ function QuickEntryForm({
   // The amount the interpreter last wrote into the field, so a later reading
   // with no amount can take back its own figure and leave a typed one alone.
   const proposedAmount = useRef<string | null>(null);
+  // Whether that figure was read from words («25 mil»), which «Revisar el mes» asks about (RF-155).
+  const proposedFromWords = useRef(false);
 
   // The figure a pick wrote, so a changed token takes back that figure and
   // leaves one typed into Monto alone.
@@ -254,6 +256,7 @@ function QuickEntryForm({
         form.setValue("amount", proposal.amountPesos, { shouldValidate: true });
         proposedAmount.current = proposal.amountPesos;
       }
+      proposedFromWords.current = proposal.amountFromWords;
     } else if (
       proposedAmount.current !== null &&
       form.getValues("amount") === proposedAmount.current
@@ -344,7 +347,9 @@ function QuickEntryForm({
         : t("quickUnrecognized");
 
   function onSubmit(values: QuickEntryValues) {
-    create.execute({ ...values, requestRef });
+    // A figure typed over the proposal is the person's own, words or not.
+    const amountFromWords = proposedFromWords.current && values.amount === proposedAmount.current;
+    create.execute({ ...values, requestRef, amountFromWords });
   }
 
   return (
