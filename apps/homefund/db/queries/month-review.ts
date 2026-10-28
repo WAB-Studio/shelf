@@ -23,7 +23,8 @@ export type ReviewItem = {
   canMark: boolean;
 };
 
-export type MonthReview = { month: string; firstMonth: string | null; items: ReviewItem[] };
+// `noted`: the month holds a movement the caller can read, so an empty review is a checked one.
+export type MonthReview = { month: string; firstMonth: string | null; noted: boolean; items: ReviewItem[] };
 
 // The month's items by RF-155's four fixed rules (O7-Q2 a for «above usual»), as one CTE chain
 // the item read and the pending count share. RLS scopes every table it touches.
@@ -106,10 +107,11 @@ function reviewItemsSql(month: string): SQL {
  */
 export async function getMonthReview(month: string): Promise<MonthReview> {
   return withUserDb(async (tx) => {
-    const [row] = await tx.execute<{ first_month: string | null; items: ReviewItem[] | null }>(sql`
+    const [row] = await tx.execute<{ first_month: string | null; noted: boolean; items: ReviewItem[] | null }>(sql`
       ${reviewItemsSql(month)}
       select
         (select to_char(min(t.occurred_at), 'YYYY-MM') from transactions t) as first_month,
+        exists (select 1 from month_tx) as noted,
         (select json_agg(json_build_object(
           'rule', m.rule, 'transactionIds', m.ids, 'occurredAt', m.occurred_at,
           'amountCents', m.amount_cents, 'currency', m.currency, 'accountName', a.name,
@@ -123,6 +125,7 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
     return {
       month,
       firstMonth: row?.first_month ?? null,
+      noted: row?.noted ?? false,
       items: row?.items ?? [],
     };
   });

@@ -53,6 +53,14 @@ export function Panel({
 }
 
 /**
+ * A row of a stacked panel that is no link on tracks: its own content, held off the
+ * card's edge by the same inset as `PanelRow`.
+ */
+export function PanelBlock({ children }: { children: ReactNode }) {
+  return <div className={styles.block}>{children}</div>;
+}
+
+/**
  * One row of a stacked panel: a link the full width of the card, laid on the
  * grid tracks the caller names. `columns` is a grid template — "36px 1fr" — and
  * every row of a panel takes the same one, so the cells line up column-wise.

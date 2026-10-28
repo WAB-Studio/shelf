@@ -14704,7 +14704,8 @@ async function o8m5ReviewSurvivorsSuite(): Promise<void> {
   const home = await category("hogar");
   for (const back of [2, 3, 4]) {
     await spend([{ categoryId: food, amountCents: 10_000_000 }], day(5, back));
-    await spend([{ categoryId: home, amountCents: 10_000_000 }], day(5, back));
+    // A day apart from the other category's, or the pair would read as twins.
+    await spend([{ categoryId: home, amountCents: 10_000_000 }], day(6, back));
   }
   const both = await spend([{ categoryId: food, amountCents: 40_000_000 }, { categoryId: home, amountCents: 50_000_000 }], day(5));
 
@@ -14720,6 +14721,17 @@ async function o8m5ReviewSurvivorsSuite(): Promise<void> {
     next("O8-M5 above usual: a movement over the usual in two categories is one item, read from its largest split"),
     above.length === 1 && above[0].amountCents === 50_000_000,
     `items ${above.length}, amount ${above[0]?.amountCents}`,
+  );
+  // A month the caller noted nothing in reads apart from one whose movements raised nothing.
+  // Three months back holds only the usual's history: movements, nothing over a usual yet.
+  const [quiet, blank] = await Promise.all([
+    asUser(holder, () => getMonthReview(shiftMonth(today, -3))),
+    asUser(holder, () => getMonthReview(shiftMonth(today, -8))),
+  ]);
+  assert(
+    next("O8-M8 noted: a month whose movements raise nothing reads noted; one with none reads not"),
+    quiet.noted === true && quiet.items.length === 0 && blank.noted === false && blank.items.length === 0,
+    `quiet ${quiet.noted} with ${quiet.items.length} items, blank ${blank.noted} with ${blank.items.length} items`,
   );
 }
 

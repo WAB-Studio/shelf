@@ -98,6 +98,10 @@ for (const width of [360, 1280]) {
       ].sort(),
     );
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    // Each row stands off the panel's edge, as a panel's rows do.
+    const panel = page.getByText("Muy por encima de lo usual").locator("xpath=ancestor::*[@data-variant='stack'][1]");
+    const [edge, words] = await Promise.all([panel.boundingBox(), page.getByText("Muy por encima de lo usual").boundingBox()]);
+    expect((words?.x ?? 0) - (edge?.x ?? 0)).toBeGreaterThanOrEqual(16);
   });
 }
 
@@ -119,9 +123,13 @@ test("«Está bien» moves the item under «Revisados», a reload keeps it, and 
   await expect(page.getByRole("button", { name: "Revisados (4)" })).toBeVisible();
 });
 
-test("a month with nothing standing out says so; this month and a malformed one land on last month", async ({ page }) => {
-  await page.goto(`/es/reports/review?month=${before(1)}`);
+test("a month with nothing standing out says so, one with nothing noted says that; this month and a malformed one land on last month", async ({ page }) => {
+  // The usual's history: one movement, nothing over it.
+  await page.goto(`/es/reports/review?month=${before(2)}`);
   await expect(page.getByText(/^Nada sobresale en /)).toBeVisible();
+  await page.goto(`/es/reports/review?month=${before(1)}`);
+  await expect(page.getByText(/^No anotaste nada en /)).toBeVisible();
+  await expect(page.getByText(/^Nada sobresale en /)).toHaveCount(0);
   for (const param of [currentMonthStart().slice(0, 7), "nada"]) {
     await page.goto(`/es/reports/review?month=${param}`);
     await expect(page).toHaveURL(/\/es\/reports\/review$/);

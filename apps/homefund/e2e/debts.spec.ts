@@ -2733,9 +2733,9 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const line = lineOf(page, card);
         await expect(line).toHaveText(FULL_LINE);
 
-        // «A favor $ 8.000» is the accent's and the rest is the normal ink.
+        // «A favor $ 8.000 ·» is the accent's (the dot closes its figure) and the rest is the normal ink.
         const accent = await accentInk(page);
-        const holders = await holdersOf(line, "A favor $ 8.000");
+        const holders = await holdersOf(line, "A favor $ 8.000 ·");
         expect(holders).toHaveLength(1);
         expect(holders[0].ink).toBe(accent);
         for (const rest of [/Debes/, /por facturar/]) {
@@ -2840,7 +2840,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
 
           // «A favor» in the accent, «Debes» bold in the normal ink, the parenthesis muted.
           const accent = await accentInk(page);
-          const credit = await holdersOf(balance, "A favor $ 8.000");
+          const credit = await holdersOf(balance, "A favor $ 8.000 ·");
           expect(credit).toHaveLength(1);
           expect(credit[0].ink).toBe(accent);
           const owedInks = await inkOfText(balance, /Debes/);
@@ -2920,6 +2920,12 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         expect((await header.boundingBox())?.width ?? Infinity).toBeLessThanOrEqual(width);
         for (const ink of await inkOfText(header, /A\sfavor/)) expect(ink).toBe(accent);
+        // The dot closes the credit's figure: a wrapped line ends on it and the next starts on «Debes».
+        for (const scope of [tile, header]) {
+          const dots = await inkOfText(scope, /·/);
+          expect(dots).toHaveLength(1);
+          expect(dots[0]).toBe(accent);
+        }
         const creditInks = await inkOfText(tile, /A\sfavor/);
         expect(creditInks.length).toBeGreaterThan(0);
         for (const ink of creditInks) expect(ink).toBe(accent);
