@@ -16,6 +16,8 @@ import { ESLint } from "eslint";
 import { todayInBogota } from "@/lib/dates";
 import messages from "@/messages/es.json";
 
+import { nameLayout } from "./name-layout";
+
 import {
   asHarnessUser,
   clearGroup,
@@ -60,7 +62,7 @@ const names = {
   paused: `Regla en pausa ${stamp}`,
   payment: `Pago pendiente ${stamp}`,
   goal: `Meta ${stamp}`,
-  debt: `Tarjeta E3 ${stamp}`,
+  debt: `Mastercard Black Bancolombia ${stamp}`,
   usd: `Cuenta USD ${stamp}`,
 };
 
@@ -319,6 +321,12 @@ test.describe("debts", () => {
     await expect(name).toBeVisible();
     expect(await computed(name, "text-overflow")).not.toBe("ellipsis");
     expect(await computed(name, "white-space")).not.toBe("nowrap");
+    expect(await computed(name, "overflow-wrap")).not.toBe("anywhere");
+    expect(await computed(name, "word-break")).not.toBe("break-all");
+
+    // No word is cut: every character of a word sits on the one line.
+    const { split } = await nameLayout(name);
+    expect(split).toEqual([]);
 
     const card = page.locator(".rt-Card:visible").filter({ hasText: names.debt }).first();
     const disc = await squares(card, 42);

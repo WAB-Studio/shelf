@@ -26,6 +26,7 @@ import { addCivilDays, addCivilMonths, todayInBogota } from "@/lib/dates";
 import { TIME_ZONE } from "@/lib/locales";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { nameLayout } from "./name-layout";
 import {
   MEMBER_STORAGE_STATE,
   asHarnessUser,
@@ -2744,13 +2745,13 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         }
       });
 
-      test("Q9: at the phone the name reads whole and the line wraps only at its dots", async ({
+      test("Q9: at the phone the name reads whole under no ellipsis and the line sits under it, wrapping only at its dots", async ({
         page,
       }) => {
         test.skip(laptop, "the laptop table keeps M5's columns");
         const card: MemberCard = {
           id: randomUUID(),
-          name: `Tarjeta Q9 ancho ${stamp}`,
+          name: `Mastercard Black Bancolombia ${stamp}`,
           creditCents: Q9_CREDIT_CENTS,
           usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
         };
@@ -2763,13 +2764,20 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         // The locator waits; the measures read it once it is there.
         const name = rowOf(page, card.name, card.id).getByText(card.name, { exact: true });
         await expect(name).toBeVisible();
-        const fit = await name.evaluate((el) => ({
-          scroll: el.scrollWidth,
-          client: el.clientWidth,
-          ellipsis: getComputedStyle(el).textOverflow,
-        }));
-        expect(fit.scroll).toBeLessThanOrEqual(fit.client);
-        expect(fit.ellipsis).not.toBe("ellipsis");
+        const layout = await nameLayout(name);
+        expect(layout.split).toEqual([]);
+        expect(layout.lines).toBeLessThanOrEqual(2);
+        expect(layout.ellipsis).not.toBe("ellipsis");
+        expect(layout.overflowWrap).not.toBe("anywhere");
+        expect(layout.wordBreak).not.toBe("break-all");
+
+        // The line sits under the name, never beside it, and spans the card's width.
+        const nameBox = (await name.boundingBox())!;
+        const lineBox = (await line.boundingBox())!;
+        const cardBox = (await rowOf(page, card.name, card.id).boundingBox())!;
+        expect(lineBox.y).toBeGreaterThanOrEqual(layout.bottom - 1);
+        expect(lineBox.x).toBeLessThanOrEqual(nameBox.x);
+        expect(lineBox.width).toBeGreaterThan(cardBox.width / 2);
 
         // The board wraps the line at a dot or before the parenthesis, never inside a word or a figure.
         const breaks = await line.evaluate((el) => {
@@ -2868,6 +2876,54 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         await expect(page.getByRole("heading", { name: card.name, exact: true })).toBeVisible();
         await page.getByRole("button", { name: debts.rowPay, exact: true }).click();
         await checkDialog();
+      });
+
+      test("Q9: the detail's Saldo tile reads the row's whole line, and a card that only owes dollars reads «Debes»", async ({
+        page,
+      }) => {
+        test.skip(laptop, "the tile reads the same at every width");
+        const credit: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 saldo a favor ${bandLabel} ${stamp}`,
+          creditCents: Q9_CREDIT_CENTS,
+          usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
+        };
+        const dollars: MemberCard = {
+          id: randomUUID(),
+          name: `Tarjeta Q9 saldo dólares ${bandLabel} ${stamp}`,
+          usd: { cents: 2_000, estimateCents: 8_400_000 },
+        };
+        await seedFund([credit, dollars]);
+        const fontSize = (el: Locator) =>
+          el.evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+
+        await page.goto(`/es/planning/debts/${credit.id}`);
+        await expect(page.getByRole("heading", { name: credit.name, exact: true })).toBeVisible();
+        const accent = await accentInk(page);
+        const main = page.getByRole("main");
+        const label = main.getByText(debts.tableBalance, { exact: true }).first();
+        const tile = label.locator("xpath=following-sibling::*[1]");
+        await expect(tile).toHaveText(
+          /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
+        );
+        expect(await fontSize(tile)).toBeGreaterThanOrEqual(20);
+        const creditInks = await inkOfText(tile, /A\sfavor/);
+        expect(creditInks.length).toBeGreaterThan(0);
+        for (const ink of creditInks) expect(ink).toBe(accent);
+        const owedInks = await inkOfText(tile, /Debes/);
+        expect(owedInks.length).toBeGreaterThan(0);
+        for (const ink of owedInks) expect(ink).not.toBe(accent);
+        const muted = await inkOfText(tile, /por facturar/);
+        expect(muted.length).toBeGreaterThan(0);
+        for (const ink of muted) expect(ink).not.toBe(owedInks[0]);
+
+        await page.goto(`/es/planning/debts/${dollars.id}`);
+        await expect(page.getByRole("heading", { name: dollars.name, exact: true })).toBeVisible();
+        const owesLabel = page.getByRole("main").getByText(debts.tableBalance, { exact: true }).first();
+        const owes = owesLabel.locator("xpath=following-sibling::*[1]");
+        await expect(owes).toHaveText(/^Debes\sUS\$\s20([.,]00)?$/);
+        expect(await inkOf(owes)).not.toBe(accent);
+        expect(await fontSize(owes)).toBeGreaterThanOrEqual(20);
       });
 
       test("Q9: Abonar with a dollar refund beside the purchase reads the estimate net of it, on the row and the detail", async ({

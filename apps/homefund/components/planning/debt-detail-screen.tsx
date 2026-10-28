@@ -9,7 +9,11 @@ import { toast } from "sonner";
 
 import { deleteInstallmentPlanAction } from "@/app/actions/installment-plans";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
-import { PocketFigure } from "@/components/planning/debts-table";
+import {
+  CreditAndOwedLine,
+  owesBesideCredit,
+  PocketFigure,
+} from "@/components/planning/debts-table";
 import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
 import { SettlementRow } from "@/components/planning/settlement-row";
 import { StatementsSection } from "@/components/planning/statements-section";
@@ -148,21 +152,46 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     });
   }
 
+  // Credit with a pocket owed reads the row's whole Q9 line (Q18 a); a card
+  // whose pesos are at zero while another pocket owes names it «Debes».
+  const beside = owesBesideCredit(creditCents, otherOwed);
+  const onlyForeign =
+    owedCents === 0 && creditCents === 0 && otherOwed.some((pocket) => pocket.owedCents > 0);
+  // Every pocket the line does not already read, in its own currency and never
+  // summed (RF-124).
+  const pockets = beside
+    ? otherOwed.filter((pocket) => pocket.creditCents > 0)
+    : onlyForeign
+      ? otherOwed
+      : account.balances.map((pocket) => ({
+          currency: pocket.currency,
+          owedCents: Math.max(0, -pocket.balanceCents),
+          creditCents: Math.max(0, pocket.balanceCents),
+        }));
+
   const tiles = [
     {
       key: "balance",
       label: tDebts("tableBalance"),
-      // One figure per currency the card holds, never their sum (RF-124): what
-      // was spent in dollars sits beside what the issuer has already billed.
       value: (
         <Flex direction="column">
-          {account.balances.map((pocket) => (
+          {beside && (
+            <CreditAndOwedLine
+              creditCents={creditCents}
+              currency={currency}
+              otherOwed={otherOwed}
+              align="left"
+              inherit
+            />
+          )}
+          {pockets.map((pocket) => (
             <PocketFigure
               key={pocket.currency}
-              owedCents={Math.max(0, -pocket.balanceCents)}
-              creditCents={Math.max(0, pocket.balanceCents)}
+              owedCents={pocket.owedCents}
+              creditCents={pocket.creditCents}
               currency={pocket.currency}
               inherit
+              named={onlyForeign}
             />
           ))}
         </Flex>
