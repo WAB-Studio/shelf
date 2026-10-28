@@ -2878,7 +2878,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         await checkDialog();
       });
 
-      test("Q9: the detail's Saldo tile reads the row's whole line, and a card that only owes dollars reads «Debes»", async ({
+      test("Q9: the detail's header and Saldo tile read the row's whole line, and a card that only owes dollars reads «Debes»", async ({
         page,
       }) => {
         test.skip(laptop, "the tile reads the same at every width");
@@ -2907,6 +2907,11 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
           /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
         );
         expect(await fontSize(tile)).toBeGreaterThanOrEqual(20);
+        // The header under the card's name reads the same whole line.
+        const header = page.getByRole("heading", { name: credit.name, exact: true }).locator("xpath=following-sibling::*[1]");
+        await expect(header).toHaveText(
+          /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
+        );
         const creditInks = await inkOfText(tile, /A\sfavor/);
         expect(creditInks.length).toBeGreaterThan(0);
         for (const ink of creditInks) expect(ink).toBe(accent);
@@ -2922,6 +2927,9 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const owesLabel = page.getByRole("main").getByText(debts.tableBalance, { exact: true }).first();
         const owes = owesLabel.locator("xpath=following-sibling::*[1]");
         await expect(owes).toHaveText(/^Debes\sUS\$\s20([.,]00)?$/);
+        await expect(
+          page.getByRole("heading", { name: dollars.name, exact: true }).locator("xpath=following-sibling::*[1]"),
+        ).toHaveText(/^Debes\sUS\$\s20([.,]00)?$/);
         expect(await inkOf(owes)).not.toBe(accent);
         expect(await fontSize(owes)).toBeGreaterThanOrEqual(20);
       });

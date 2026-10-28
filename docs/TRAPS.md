@@ -3303,3 +3303,12 @@ sockets per file: pass 2 took 1927 s for 31 s of tests.
   statement's text, or from both.
 - Measured 2026-10-19: `pulsar-checks` red on CI 39346172548 (`2 connection(s): unknown, unknown`). Local
   `check:plan` never runs these checks; the train's first CI was cancelled before `pulsar-checks` finished.
+
+## The e2e setup purged the leader alone, so a dead run left the member's rows for every later run
+
+- `apps/homefund/e2e/global-setup.ts` purged `userId` and never `memberUserId`. A run that died before its own cleanup on
+  2026-10-23 left three personal accounts owned by lane 2's member («Cuenta de la bandeja», «Nómina», «Visa Oro»).
+- Every spec that reads what the member sees read them as the fund's: 12 `writable-accounts.spec.ts` tests offered one
+  account too many, and `debts.spec.ts` «Deuda total» read $ 1.290.000 where it seeds $ 40.000. Red on every lane 2
+  run from oleada-7 on, green on CI, so it looked like lane state.
+- Purge both identities at setup and teardown. Measured 2026-10-28: 170/0 on `debts` + `writable-accounts` after.

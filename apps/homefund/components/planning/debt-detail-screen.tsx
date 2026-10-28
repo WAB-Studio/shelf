@@ -169,33 +169,38 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
           creditCents: Math.max(0, pocket.balanceCents),
         }));
 
+  // The header and the «Saldo» tile read the same line.
+  const balanceLine = (
+    <Flex asChild direction="column">
+      <span>
+        {beside && (
+          <CreditAndOwedLine
+            creditCents={creditCents}
+            currency={currency}
+            otherOwed={otherOwed}
+            align="left"
+            inherit
+          />
+        )}
+        {pockets.map((pocket) => (
+          <PocketFigure
+            key={pocket.currency}
+            owedCents={pocket.owedCents}
+            creditCents={pocket.creditCents}
+            currency={pocket.currency}
+            inherit
+            named={onlyForeign}
+          />
+        ))}
+      </span>
+    </Flex>
+  );
+
   const tiles = [
     {
       key: "balance",
       label: tDebts("tableBalance"),
-      value: (
-        <Flex direction="column">
-          {beside && (
-            <CreditAndOwedLine
-              creditCents={creditCents}
-              currency={currency}
-              otherOwed={otherOwed}
-              align="left"
-              inherit
-            />
-          )}
-          {pockets.map((pocket) => (
-            <PocketFigure
-              key={pocket.currency}
-              owedCents={pocket.owedCents}
-              creditCents={pocket.creditCents}
-              currency={pocket.currency}
-              inherit
-              named={onlyForeign}
-            />
-          ))}
-        </Flex>
-      ),
+      value: balanceLine,
     },
     {
       key: "pending",
@@ -271,14 +276,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     <Flex direction="column" gap="4">
       <ScreenHeader
         title={account.name}
-        meta={
-          <PocketFigure
-            owedCents={owedCents}
-            creditCents={creditCents}
-            currency={currency}
-            inherit
-          />
-        }
+        meta={balanceLine}
         back={{ href: "/planning/debts", label: tDebts("title") }}
         actions={
           // Exactly what the policies would admit: a reader is offered neither
