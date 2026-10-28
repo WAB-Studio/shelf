@@ -1337,3 +1337,30 @@ test("addCommitment: the first quantity commitment measures the goal in its unit
     await sql`delete from goals.goals where id in ${sql([run, study, read, yesNo])}`;
   }
 });
+
+test("undoFact: a fact of a month closed past a fact's reach stays, monthClosed; one on this month's first day is taken back (RP-143)", async () => {
+  // 32 days before this month's first: always the month before last, never within seven days.
+  const closedDay = shiftDay(`${today.slice(0, 7)}-01`, -32);
+  const [closedTask, openTask] = await sql<{ id: string }[]>`
+    insert into goals.one_offs (user_id, name, created_at)
+    values (${personId}, 'RP-143 cerrada', ${closedDay}::date - 1), (${personId}, 'RP-143 abierta', ${closedDay}::date - 1)
+    returning id`;
+  const [closedFact, openFact] = await sql<{ id: string }[]>`
+    insert into goals.facts (user_id, one_off_id, day)
+    values (${personId}, ${closedTask.id}, ${closedDay}), (${personId}, ${openTask.id}, ${`${today.slice(0, 7)}-01`})
+    returning id`;
+  const exists = async (id: string) => {
+    const [row] = await sql<{ n: number }[]>`select count(*)::int as n from goals.facts where id = ${id}`;
+    return row.n === 1;
+  };
+  try {
+    const refused = await undoFact({ factId: closedFact.id });
+    assert.deepEqual(refused, { ok: false, error: "day.errors.monthClosed" });
+    assert.equal(await exists(closedFact.id), true);
+
+    assert.deepEqual(await undoFact({ factId: openFact.id }), { ok: true });
+    assert.equal(await exists(openFact.id), false);
+  } finally {
+    await sql`delete from goals.one_offs where id in (${closedTask.id}, ${openTask.id})`;
+  }
+});

@@ -11,7 +11,7 @@ export const PAST_DAY_LIMIT = 7;
 // The earliest civil day a fact may name, given today's. Goes through `Date`
 // and back rather than subtracting on the string: a civil date crosses
 // months and years, and a plain digit subtraction does not.
-function earliestPastDay(today: string): string {
+export function earliestPastDay(today: string): string {
   const date = civilDateToDate(today);
   date.setUTCDate(date.getUTCDate() - PAST_DAY_LIMIT);
   return dateToCivilDate(date);

@@ -42,6 +42,7 @@ export type MonthAcrossGoal = {
   // Null when the goal measures nothing: its tasks draw with no amount.
   line: MonthLine | null;
   items: MonthAcrossItem[];
+  // False for a goal archived since: a past month still draws it, and marks none of it (RP-143).
   open: boolean;
   // What the goal's tasks are placed from; the task sheet reads their plan month off it.
   // A goal that holds goals has no rhythm and no budgets of its own (RP-80).
@@ -378,7 +379,7 @@ export async function loadMonthAcross(
       unit: sum ? sum.unit : unit,
       line: sum ? lineOfSum(sum, month, today, plan) : line,
       items,
-      open: true,
+      open: row.goal.archived_at === null,
       plan,
       ...placeOf(tree, id),
       holdsGoals: sum !== undefined,

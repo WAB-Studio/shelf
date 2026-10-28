@@ -2,6 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
+import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthOf, nextMonth, previousMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
@@ -128,7 +129,7 @@ test("«Darle día» on a coming month proposes the month's first day (RP-142, R
   });
 });
 
-test("‹ leads to last month, the first one: its tasks as they stood, nothing to mark, no further ‹ (RP-142)", async ({
+test("‹ leads to last month, the first one: its tasks as they stood, marked only within a fact's reach, no further ‹ (RP-142, RP-143)", async ({
   browser,
   baseURL,
   db,
@@ -146,7 +147,9 @@ test("‹ leads to last month, the first one: its tasks as they stood, nothing t
     const english = page.locator("section", { has: page.getByRole("heading", { name: `Inglés ${stamp}` }) });
     await expect(english.getByText(`Hecha ${stamp}`, { exact: true })).toBeVisible();
     await expect(english.getByText("hecha", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^(Marcar hecha|Deshacer): / })).toHaveCount(0);
+    const marks = page.getByRole("button", { name: /^(Marcar hecha|Deshacer): / });
+    if (closedMonthMarkDay(lastMonth, today) === null) await expect(marks).toHaveCount(0);
+    else await expect(page.getByRole("button", { name: `Deshacer: Hecha ${stamp}` })).toBeVisible();
   });
 });
 

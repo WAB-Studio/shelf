@@ -22,6 +22,7 @@ import {
   TextLink,
 } from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
+import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
 import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
@@ -46,7 +47,8 @@ function monthHref(month: string | null, thisMonth: string): string | null {
  * `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio`, `MesTodasNada`,
  * `MesTodasHecho`, `MesTodasSinEvidencia` (RP-142, RP-31): a month of every
  * goal open in it, as `loadMonthAcross` reads it, stepped ‹ › one month at a
- * time. A past month reads as it was lived and marks nothing; a coming one
+ * time. A past month reads as it was lived, and marks its tasks on its last
+ * day only while that day is within a fact's reach (RP-143); a coming one
  * marks its tasks as this month does and lists after it what waits with no
  * day. Adding a task or an amount stays on the goal's own month page, which
  * each goal's name opens.
@@ -64,6 +66,10 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   // The page cannot know the bounds before the read: a month past them leaves for this one.
   if (parseMonthParam(seg, today, across.firstMonth, across.lastMonth).kind === "redirect") redirect("/mes");
   const past = across.view === "past";
+  const markDay = past ? closedMonthMarkDay(across.month, today) : undefined;
+  const after = nextMonth(across.month);
+  // A closed month counts a sub-task done only when it was done in it.
+  const doneIn = (doneOn: string | null) => doneOn !== null && (!past || doneOn < after);
   const t = await getTranslations();
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const monthNames = t.raw("day.monthLong") as string[];
@@ -85,6 +91,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
     const unit = goal.unit;
     const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
     const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: thisName });
+    // A goal archived since marks nothing, even within the reach.
+    const rowMarkDay = goal.open ? markDay : null;
 
     const openMonths = openMonthsOf(goal.plan);
     const sheetOf = (task: MonthAcrossItem["task"], kids: MonthAcrossItem["children"]) => ({
@@ -122,8 +130,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
 
       const placed =
         where === undefined ? sub : where === "" ? undefined : t("month.group.line", { goal: where, amount: say(owes) });
-      // A closed month says how each task stood and marks nothing (RP-142).
-      if (past) {
+      // A closed month past a fact's reach says how each task stood and marks nothing (RP-142, RP-143).
+      if (rowMarkDay === null) {
         return (
           <Flex key={task.id} direction="column" gap="3">
             {[task, ...children].map((row) => (
@@ -133,7 +141,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                 </Text>
                 <Text as="p" variant="meta">
                   {t(
-                    (row.id === task.id ? entry.done : row.doneOn !== null && row.doneOn < nextMonth(across.month))
+                    (row.id === task.id ? entry.done : doneIn(row.doneOn))
                       ? "month.across.pastDone"
                       : "month.across.pastOpen",
                   )}
@@ -167,6 +175,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                 : undefined
             }
             fixedMonth={goal.plan.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined}
+            markDay={rowMarkDay}
             sheet={sheetOf(task, children)}
           />
           {children.map((child) => (
@@ -175,12 +184,13 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               oneOffId={child.id}
               name={child.name}
               factId={child.factId ?? null}
-              done={child.doneOn !== null}
+              done={doneIn(child.doneOn)}
               child
               trailing={unit && child.estimate ? say(child.estimate) : undefined}
               markLabel={t("month.across.mark", { name: child.name })}
               note={child.note}
               noteEyebrow={noteEyebrow}
+              markDay={rowMarkDay}
               sheet={sheetOf(child, [])}
             />
           ))}

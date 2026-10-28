@@ -180,6 +180,7 @@
     "dayBeforeCommitment": "Ese día es anterior a cuando empezó este compromiso.",
     "dayAfterRetired": "Ese día es posterior a cuando se retiró este compromiso.",
     "dayBeforeOneOff": "Esa tarea todavía no existía ese día.",
-    "dayBeforeOneOffDay": "Esa tarea era para un día después."
+    "dayBeforeOneOffDay": "Esa tarea era para un día después.",
+    "monthClosed": "Ese mes ya cerró: lo hecho en él queda como está."
   }
 }
