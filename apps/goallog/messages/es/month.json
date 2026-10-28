@@ -143,6 +143,7 @@
       "title": "Todavía no tienes una meta abierta.",
       "create": "Crear una meta",
       "import": "Importar un plan"
-    }
+    },
+    "titleYear": "{month} {year}"
   }
 }

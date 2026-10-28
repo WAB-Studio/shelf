@@ -181,8 +181,8 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
       ) : null}
 
       {goals.length === 0 && week.loose.commitments.length === 0 ? (
-        // A coming week past every goal's end still has a goal open today.
-        coming ? (
+        // A coming week past every goal's end: a goal was opened, it asks nothing here.
+        coming && week.firstMonday !== null ? (
           <Text as="p" variant="sentence">
             {t("week.coming.nothingAsked")}
           </Text>
@@ -216,7 +216,11 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
               })
             )}
           </Section>
-          <GiveDayList tasks={[...goalDayless, ...looseDayless]} suggest={view.start} />
+          <GiveDayList
+            // One its plan holds in a month waits in that plan.
+            tasks={[...goalDayless.filter((task) => task.plannedMonth === null), ...looseDayless]}
+            suggest={view.start}
+          />
         </>
       ) : null}
     </Page>

@@ -112,6 +112,8 @@ for (const width of [390, 1280]) {
       await expect(page.getByRole("button", { name: `Deshacer: Clase ${stamp}` })).toBeVisible({ timeout: 5000 });
 
       await expect(page.getByRole("button", { name: `Darle día a Suelta ${stamp}` })).toBeVisible();
+      // The month's own task is drawn once, in its plan, never again under «Sin día».
+      await expect(page.getByRole("button", { name: `Darle día a Clase ${stamp}` })).toHaveCount(0);
     });
   });
 }

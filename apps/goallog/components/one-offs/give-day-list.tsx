@@ -17,7 +17,8 @@ export async function GiveDayList({ tasks, suggest }: { tasks: DaylessOneOff[]; 
     <Section as="div" label={t("oneOffs.daylessGroup")}>
       {tasks.map((task) => (
         <GiveDayRow
-          key={task.id}
+          // A step to another week keeps the row: the key carries the day it proposes.
+          key={`${task.id}:${suggest}`}
           oneOffId={task.id}
           name={task.name}
           suggest={suggest}

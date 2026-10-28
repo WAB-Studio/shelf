@@ -22,8 +22,8 @@ import {
   TextLink,
 } from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
-import { parseMonthParam } from "@/lib/plan/month-param";
-import { nextMonth, previousMonth } from "@/lib/plan/months";
+import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
+import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
@@ -133,7 +133,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                 </Text>
                 <Text as="p" variant="meta">
                   {t(
-                    (row.id === task.id ? entry.done : row.doneOn !== null)
+                    (row.id === task.id ? entry.done : row.doneOn !== null && row.doneOn < nextMonth(across.month))
                       ? "month.across.pastDone"
                       : "month.across.pastOpen",
                   )}
@@ -384,9 +384,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
       </Panel>
     ) : null;
 
-  const prev =
-    across.firstMonth !== null && seg > across.firstMonth ? previousMonth(across.month).slice(0, 7) : null;
-  const next = seg < across.lastMonth ? nextMonth(across.month).slice(0, 7) : null;
+  const { prev, next } = monthSteps({ month: seg, firstMonth: across.firstMonth, lastMonth: across.lastMonth });
   function step(href: string | null, label: string, icon: "prev" | "next") {
     if (href === null) return <Flex flexGrow="1" aria-hidden />;
     return (
@@ -416,13 +414,16 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   );
   const title = thisName.charAt(0).toUpperCase() + thisName.slice(1);
   const nothingOpen = across.goals.length === 0 && across.loose.length === 0;
+  const drawn = new Set(
+    across.goals.flatMap((goal) => goal.items.flatMap((entry) => [entry.task.id, ...entry.children.map((kid) => kid.id)])),
+  );
 
   return (
     <Page width="full">
       <ScreenHeader
         chat
         steps
-        title={seg.slice(0, 4) === thisMonth.slice(0, 4) ? title : `${title} ${seg.slice(0, 4)}`}
+        title={seg.slice(0, 4) === thisMonth.slice(0, 4) ? title : t("month.across.titleYear", { month: title, year: seg.slice(0, 4) })}
         meta={across.view === "this" ? dateLine : undefined}
         eyebrowFill
         eyebrow={
@@ -470,7 +471,13 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           </Grid>
         </>
       )}
-      {coming ? <GiveDayList tasks={[...goalDayless, ...looseDayless]} suggest={across.month} /> : null}
+      {coming ? (
+        <GiveDayList
+          // A task the month already draws, or one its plan holds in another month, waits in that plan.
+          tasks={[...goalDayless.filter((task) => task.plannedMonth === null && !drawn.has(task.id)), ...looseDayless]}
+          suggest={across.month}
+        />
+      ) : null}
     </Page>
   );
 }

@@ -1,4 +1,4 @@
-import { monthOf } from "./months";
+import { monthOf, nextMonth, previousMonth } from "./months";
 
 export type MonthParam =
   | { kind: "this" }
@@ -11,6 +11,23 @@ export type MonthParam =
 // forward limit leaves the screen for `/mes` itself (RP-142). Months are
 // "YYYY-MM" throughout and compare as strings; `firstMonth` is null while
 // nothing was opened, and then no past month exists.
+// The months either side of `month` ("YYYY-MM"): `prev` is null on the first
+// goal's month, `next` null on the forward limit.
+export function monthSteps({
+  month,
+  firstMonth,
+  lastMonth,
+}: {
+  month: string;
+  firstMonth: string | null;
+  lastMonth: string;
+}): { prev: string | null; next: string | null } {
+  return {
+    prev: firstMonth === null || month <= firstMonth ? null : previousMonth(`${month}-01`).slice(0, 7),
+    next: month >= lastMonth ? null : nextMonth(`${month}-01`).slice(0, 7),
+  };
+}
+
 export function parseMonthParam(
   raw: string | string[] | undefined,
   today: string,

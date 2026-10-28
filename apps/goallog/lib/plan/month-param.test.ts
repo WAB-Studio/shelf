@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseMonthParam } from "./month-param";
+import { monthSteps, parseMonthParam } from "./month-param";
 
 const TODAY = "2026-10-22";
 const FIRST = "2026-07";
@@ -40,4 +40,10 @@ test("a malformed value, a false month, a full date and an array redirect", () =
 test("a year boundary steps both ways", () => {
   assert.deepEqual(parseMonthParam("2026-12", "2027-01-05", "2026-11", "2027-02"), { kind: "past", month: "2026-12" });
   assert.deepEqual(parseMonthParam("2027-01", "2026-12-31", "2026-11", "2027-02"), { kind: "coming", month: "2027-01" });
+});
+
+test("monthSteps: no ‹ on the first goal's month, no › on the limit, across a year both ways", () => {
+  assert.deepEqual(monthSteps({ month: "2026-10", firstMonth: "2026-10", lastMonth: "2027-01" }), { prev: null, next: "2026-11" });
+  assert.deepEqual(monthSteps({ month: "2027-01", firstMonth: "2026-10", lastMonth: "2027-01" }), { prev: "2026-12", next: null });
+  assert.deepEqual(monthSteps({ month: "2026-11", firstMonth: null, lastMonth: "2026-11" }), { prev: null, next: null });
 });
