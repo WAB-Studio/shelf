@@ -52,11 +52,18 @@ test.beforeEach(async () => {
     ids.twinA = await spend(tx, 5_000_000, `${month}-15`, scope.categoryId);
     ids.twinB = await spend(tx, 5_000_000, `${month}-15`, scope.categoryId);
     ids.words = await spend(tx, 2_500_000, `${month}-20`, scope.categoryId, true);
+    // A count of 1.010.000 the trigger books against the balance the spends left.
+    const [count] = await tx<{ id: string }[]>`
+      insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents, created_by)
+      values (${accountId}, ${`${month}-25`}, 101_000_000, ${scope.userId}) returning id`;
+    const [gap] = await tx<{ id: string }[]>`select id from transactions where reconciliation_id = ${count.id}`;
+    movements.push(gap.id);
   });
 });
 
 test.afterEach(async () => {
   await fixtureSql`delete from transactions where id in ${fixtureSql(movements)}`;
+  await fixtureSql`delete from account_reconciliations where account_id = ${accountId}`;
   await fixtureSql`delete from categories where id = ${categoryId}`;
   await fixtureSql`delete from accounts where id = ${accountId}`;
   movements = [];
@@ -74,12 +81,19 @@ for (const width of [360, 1280]) {
     await expect(page.getByText("Dos iguales el mismo día")).toHaveCount(1);
     await expect(page.getByText("2 movimientos iguales")).toBeVisible();
     await expect(page.getByText("Monto leído de palabras")).toBeVisible();
-    await expect(okButtons(page)).toHaveCount(3);
+    await expect(page.getByText("Diferencia al cuadrar")).toBeVisible();
+    await expect(page.getByText("Contaste $ 1.010.000")).toBeVisible();
+    await expect(okButtons(page)).toHaveCount(4);
     const fixes = page.getByRole("link", { name: "Corregir" });
-    await expect(fixes).toHaveCount(3);
+    await expect(fixes).toHaveCount(4);
     const hrefs = await fixes.evaluateAll((links) => links.map((a) => a.getAttribute("href")));
     expect(hrefs.sort()).toEqual(
-      [`/es/movements/${ids.big}`, `/es/movements/${[ids.twinA, ids.twinB].sort()[0]}`, `/es/movements/${ids.words}`].sort(),
+      [
+        `/es/movements/${ids.big}`,
+        `/es/movements/${[ids.twinA, ids.twinB].sort()[0]}`,
+        `/es/movements/${ids.words}`,
+        "/es/settings/accounts",
+      ].sort(),
     );
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
@@ -87,19 +101,20 @@ for (const width of [360, 1280]) {
 
 test("«Está bien» moves the item under «Revisados», a reload keeps it, and the last one reads «Revisaste»", async ({ page }) => {
   await page.goto(`/es/reports/review?month=${month}`);
-  await expect(okButtons(page)).toHaveCount(3);
+  await expect(okButtons(page)).toHaveCount(4);
   await okButtons(page).first().click();
-  await expect(okButtons(page)).toHaveCount(2);
+  await expect(okButtons(page)).toHaveCount(3);
   await expect(page.getByRole("button", { name: "Revisados (1)" })).toBeVisible();
   await page.reload();
-  await expect(okButtons(page)).toHaveCount(2);
+  await expect(okButtons(page)).toHaveCount(3);
   await expect(page.getByRole("button", { name: "Revisados (1)" })).toBeVisible();
 
-  await okButtons(page).first().click();
-  await expect(okButtons(page)).toHaveCount(1);
-  await okButtons(page).first().click();
+  for (const left of [2, 1, 0]) {
+    await okButtons(page).first().click();
+    await expect(okButtons(page)).toHaveCount(left);
+  }
   await expect(page.getByText(/^Revisaste /)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Revisados (3)" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Revisados (4)" })).toBeVisible();
 });
 
 test("a month with nothing standing out says so; this month and a malformed one land on last month", async ({ page }) => {
@@ -121,6 +136,9 @@ test("‹ › step between the seeded month and its neighbours, and «Reportes»
     "href",
     `/es/reports/review?month=${addCivilMonths(`${month}-01`, 1).slice(0, 7)}`,
   );
+  // Last month is the newest closed one: no step into the open month.
+  await page.goto("/es/reports/review");
+  await expect(page.getByRole("link", { name: "mes siguiente ›" })).toHaveCount(0);
   await page.goto("/es/reports");
   await expect(page.getByRole("link", { name: "Revisar el mes" }).locator("visible=true")).toHaveAttribute(
     "href",

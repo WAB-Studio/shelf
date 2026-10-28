@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 
 import { markReviewedAction } from "@/app/actions/month-review";
@@ -9,6 +9,8 @@ import type { ReviewItem } from "@/db/queries/month-review";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import type { Locale } from "@/lib/locales";
+import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 /**
@@ -19,6 +21,7 @@ import { useActionErrorToast } from "@/lib/use-action-toast";
 export function MonthReviewRow({ item }: { item: ReviewItem }) {
   const t = useTranslations("review");
   const format = useFormatter();
+  const locale = useLocale() as Locale;
   const onError = useActionErrorToast();
   const mark = useAction(markReviewedAction, { onError });
   const currency = item.currency as CurrencyCode;
@@ -37,13 +40,7 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
       </Text>
       {item.rule === "above_usual" && item.usualCents !== null && (
         <Text size="2" color="gray">
-          <Money
-            minor={item.usualCents}
-            currency={currency}
-            size="inherit"
-            signed={false}
-            words={{ before: `${t("usual")} `, after: "" }}
-          />
+          {t("usual", { amount: formatMoney(item.usualCents, currency, locale) })}
         </Text>
       )}
       {item.rule === "twin" && (
@@ -53,13 +50,7 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
       )}
       {item.rule === "reconciliation_gap" && item.countedCents !== null && (
         <Text size="2" color="gray">
-          <Money
-            minor={item.countedCents}
-            currency={currency}
-            size="inherit"
-            signed={false}
-            words={{ before: `${t("counted")} `, after: "" }}
-          />
+          {t("counted", { amount: formatMoney(item.countedCents, currency, locale) })}
         </Text>
       )}
       <Flex gap="3" align="center" wrap="wrap">

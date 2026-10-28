@@ -32,20 +32,20 @@ export function MonthReviewScreen({ review, lastClosed }: { review: MonthReview;
     <Flex direction="column" gap="5">
       <Flex direction="column" gap="2">
         <Heading size="6">{t("title", { month: monthName })}</Heading>
-        <Flex justify="between" gap="3">
-          {hasPrev ? (
-            <Link asChild size="2" weight="medium">
-              <LocaleLink href={`/reports/review?month=${prev}`}>{t("prev")}</LocaleLink>
-            </Link>
-          ) : (
-            <span />
-          )}
-          {hasNext && (
-            <Link asChild size="2" weight="medium">
-              <LocaleLink href={`/reports/review?month=${next}`}>{t("next")}</LocaleLink>
-            </Link>
-          )}
-        </Flex>
+        {(hasPrev || hasNext) && (
+          <Flex justify={hasPrev ? "between" : "end"} gap="3">
+            {hasPrev && (
+              <Link asChild size="2" weight="medium">
+                <LocaleLink href={`/reports/review?month=${prev}`}>{t("prev")}</LocaleLink>
+              </Link>
+            )}
+            {hasNext && (
+              <Link asChild size="2" weight="medium">
+                <LocaleLink href={`/reports/review?month=${next}`}>{t("next")}</LocaleLink>
+              </Link>
+            )}
+          </Flex>
+        )}
       </Flex>
 
       {review.items.length === 0 ? (
