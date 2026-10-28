@@ -519,6 +519,13 @@
       "when": 1793217716798,
       "tag": "0073_a_review_mark_is_undone",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793229313729,
+      "tag": "0074_an_amount_edit_undoes_its_marks",
+      "breakpoints": true
     }
   ]
 }
