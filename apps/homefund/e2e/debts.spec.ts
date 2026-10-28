@@ -2893,6 +2893,10 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
           usd: { cents: 2_000, estimateCents: 8_400_000 },
         };
         await seedFund([credit, dollars]);
+        const q9Line = /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/;
+        // The datum ScreenHeader draws beside the card's name.
+        const headerMeta = (name: string) =>
+          page.getByRole("heading", { name, exact: true }).locator("xpath=following-sibling::*[1]");
         const fontSize = (el: Locator) =>
           el.evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
 
@@ -2903,13 +2907,13 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const label = main.getByText(debts.tableBalance, { exact: true }).first();
         const tile = label.locator("xpath=following-sibling::*[1]");
         await expect(tile).toHaveText(
-          /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
+          q9Line,
         );
         expect(await fontSize(tile)).toBeGreaterThanOrEqual(20);
         // The header under the card's name reads the same whole line.
-        const header = page.getByRole("heading", { name: credit.name, exact: true }).locator("xpath=following-sibling::*[1]");
+        const header = headerMeta(credit.name);
         await expect(header).toHaveText(
-          /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
+          q9Line,
         );
         // It wraps between its words rather than pushing the page sideways, and «A favor» keeps the accent.
         const width = page.viewportSize()?.width ?? 0;
@@ -2932,7 +2936,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const owes = owesLabel.locator("xpath=following-sibling::*[1]");
         await expect(owes).toHaveText(/^Debes\sUS\$\s20([.,]00)?$/);
         await expect(
-          page.getByRole("heading", { name: dollars.name, exact: true }).locator("xpath=following-sibling::*[1]"),
+          headerMeta(dollars.name),
         ).toHaveText(/^Debes\sUS\$\s20([.,]00)?$/);
         expect(await inkOf(owes)).not.toBe(accent);
         expect(await fontSize(owes)).toBeGreaterThanOrEqual(20);

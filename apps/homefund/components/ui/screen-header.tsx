@@ -42,12 +42,9 @@ export function ScreenHeader({
             <Heading size="5" className={styles.title}>
               {title}
             </Heading>
-            {meta &&
-              (metaWraps ? (
-                <div className={`${styles.meta} ${styles.metaWraps}`}>{meta}</div>
-              ) : (
-                <span className={styles.meta}>{meta}</span>
-              ))}
+            {meta && (
+              <div className={metaWraps ? `${styles.meta} ${styles.metaWraps}` : styles.meta}>{meta}</div>
+            )}
           </div>
         </Flex>
         {actions && (
