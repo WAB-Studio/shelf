@@ -23,9 +23,10 @@ export function monthSteps({
   };
 }
 
-// `?mes=YYYY-MM` names a month other than this one. A malformed value, an
-// array, a month before the one the first goal was opened in or past the
-// forward limit leaves the screen for `/mes` itself (RP-142). Months are
+// `?mes=YYYY-MM` names a month other than this one. A malformed value or an
+// array leaves the screen for `/mes` itself; a month before the one the first
+// goal was opened in or past the forward limit is "redirect" too, and the
+// screen sends it to the nearer bound (RP-142). Months are
 // "YYYY-MM" throughout and compare as strings; `firstMonth` is null while
 // nothing was opened, and then no past month exists.
 export function parseMonthParam(

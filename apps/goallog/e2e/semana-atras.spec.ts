@@ -169,13 +169,22 @@ test("the oldest week has no ‹, the one after it has; a goal archived since is
   });
 });
 
-test("a week past the furthest goal's end and a malformed one land on /semana (RP-142)", async ({ browser, baseURL, db, person }) => {
+test("a week past the furthest goal's end lands on the last week; a malformed one on /semana (RP-142)", async ({ browser, baseURL, db, person }) => {
   await withWeeks(browser, baseURL, db, person, 390, async (page) => {
-    for (const param of [shift(today, 120), "nada", shift(today, 400)]) {
+    await page.goto("/semana?semana=nada");
+    await expect(page).toHaveURL(/\/semana$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(thisMonday));
+    const landed: string[] = [];
+    for (const param of [shift(today, 400), shift(today, 2000)]) {
       await page.goto(`/semana?semana=${param}`);
-      await expect(page).toHaveURL(/\/semana$/);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(thisMonday));
+      // The redirect can come after the stream opens: wait for the address to leave the week asked for.
+      await expect(page).not.toHaveURL(new RegExp(`semana=${param}$`));
+      await expect(page).toHaveURL(/\/semana\?semana=\d{4}-\d{2}-\d{2}$/);
+      await expect(next(page)).toHaveCount(0);
+      landed.push(new URL(page.url()).searchParams.get("semana")!);
     }
+    expect(landed[0]).toBe(landed[1]);
+    expect(landed[0] < shift(today, 400)).toBe(true);
   });
 });
 

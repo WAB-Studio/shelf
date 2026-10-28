@@ -156,7 +156,7 @@ test("‹ leads to last month, the first one: its tasks as they stood, marked on
   });
 });
 
-test("the last month of the span has no ›; past it, before the first, or malformed lands on /mes (RP-142)", async ({
+test("the last month of the span has no ›; past it lands on it, before the first on the first, malformed on /mes (RP-142)", async ({
   browser,
   baseURL,
   db,
@@ -166,9 +166,16 @@ test("the last month of the span has no ›; past it, before the first, or malfo
     await page.goto(`/mes?mes=${key(limitMonth)}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title(limitMonth));
     await expect(next(page)).toHaveCount(0);
-    for (const param of [key(nextMonth(limitMonth)), key(previousMonth(lastMonth)), "nada"]) {
+    const lands: [string, RegExp][] = [
+      [key(nextMonth(limitMonth)), new RegExp(`/mes\\?mes=${key(limitMonth)}$`)],
+      [key(previousMonth(lastMonth)), new RegExp(`/mes\\?mes=${key(lastMonth)}$`)],
+      ["nada", /\/mes$/],
+    ];
+    for (const [param, url] of lands) {
       await page.goto(`/mes?mes=${param}`);
-      await expect(page).toHaveURL(/\/mes$/);
+      // The redirect can come after the stream opens: wait for the address to leave the month asked for.
+      await expect(page).not.toHaveURL(new RegExp(`mes=${param}$`));
+      await expect(page).toHaveURL(url);
     }
   });
 });
