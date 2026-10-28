@@ -398,3 +398,9 @@ test("an amount read through «mil», «M» or a bare word is from words; digits
   assert.equal(fromWords("25 m de cable"), false);
   assert.equal(fromWords("3 M arriendo"), false);
 });
+
+test("a bare «mil» or «un millón» is from words; «0 m» asks nothing, for there is nothing to choose", () => {
+  assert.equal(interpretQuickEntry("mil de pan", ctx).amountFromWords, true);
+  assert.equal(interpretQuickEntry("un millón arriendo", ctx).amountFromWords, true);
+  assert.equal(interpretQuickEntry("0 m de cable", ctx).ask, null);
+});
