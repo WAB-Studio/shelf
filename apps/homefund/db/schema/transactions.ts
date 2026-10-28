@@ -44,6 +44,9 @@ export const transactions = finances.table(
     // True while the counter amount is what a person expects, not what the issuer billed (RF-123).
     // The statement replaces the estimate and clears this, and the balance moves currency with it.
     counterIsEstimate: boolean().notNull().default(false),
+    // Quick entry read the amount from words («25 mil») and the person did not retype it (RF-155).
+    // Set on insert only; an edit never changes it.
+    amountFromWords: boolean().notNull().default(false),
     // The type is derived, never chosen (RF-18): a stored generated column no INSERT can target.
     kind: text().generatedAlwaysAs(
       sql`case when from_account_id is null then 'income' when to_account_id is null then 'expense' else 'transfer' end`,

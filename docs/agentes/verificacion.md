@@ -34,6 +34,8 @@ The why: `docs/agentes/historia.md` § Verification.
 
 ## Judging
 
+- Since 2026-10-24 the review is `/code-review` then `/simplify` on the branch (`AGENTS.md` § Modules). The
+  validator, mutator and critic below run only when the user asks for one.
 - The worker saves every check's output under the lane's `private/` and names the paths. The train's validator reads
   those logs, re-runs only the train's own tests, and asks of each assertion whether it can fail. It never re-runs a
   suite a worker logged green: it checks that log ran the right code.
