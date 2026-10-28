@@ -14428,6 +14428,10 @@ async function o7m3MonthReviewSuite(): Promise<void> {
   const gapRows = await fixtureSql<{ id: string }[]>`select id from transactions where from_account_id = ${counted} or to_account_id = ${counted}`;
   for (const row of gapRows) track("transactions", row.id);
 
+  // One statement costs what any one-statement read costs under the session's settle.
+  const unitBefore = roundTrips();
+  await asUser(holder, () => listDueReminders(3));
+  const unit = roundTrips() - unitBefore;
   const before = roundTrips();
   const read = await asUser(holder, () => getMonthReview(month));
   const readTrips = roundTrips() - before;
@@ -14451,7 +14455,7 @@ async function o7m3MonthReviewSuite(): Promise<void> {
     read.firstMonth === shiftMonth(today, -8),
     `firstMonth ${read.firstMonth}`,
   );
-  assert(next("O7-M3 one trip: getMonthReview costs one round trip"), readTrips === 1, `${readTrips} trips`);
+  assert(next("O7-M3 one trip: getMonthReview costs what one statement costs"), readTrips === unit, `${readTrips} trips, one statement ${unit}`);
 
   const empty = await asUser(holder, () => getMonthReview(shiftMonth(today, -5)));
   const strangers = await asUser(stranger, () => getMonthReview(month));
@@ -14471,9 +14475,9 @@ async function o7m3MonthReviewSuite(): Promise<void> {
   const pendingTrips = roundTrips() - tripsBefore;
   const reread = await asUser(holder, () => getMonthReview(month));
   assert(
-    next("O7-M3 mark: marking a twin twice stores one mark per id, the item reads reviewed, and the pending count drops from 4 to 3 in one round trip"),
+    next("O7-M3 mark: marking a twin twice stores one mark per id, the item reads reviewed, and the pending count drops from 4 to 3 in one statement's trips"),
     marks[0].n === 2 && reread.items.find((item) => item.rule === "twin")?.reviewed === true &&
-      pendingBefore?.count === 4 && pendingBefore.month === month && pendingAfter?.count === 3 && pendingTrips === 1,
+      pendingBefore?.count === 4 && pendingBefore.month === month && pendingAfter?.count === 3 && pendingTrips === unit,
     `marks ${marks[0].n}, pending ${pendingBefore?.count} → ${pendingAfter?.count} (${pendingTrips} trips)`,
   );
   const strangerPending = await asUser(stranger, () => getMonthReviewPending());

@@ -154,9 +154,10 @@ export async function markReviewed(input: {
 }): Promise<void> {
   // Only the two granted columns travel: `marked_by` is the trigger's, from `auth.uid()`.
   await withUserDb(async (tx) => {
+    const rows = input.transactionIds.map((id) => sql`(${id}::uuid, ${input.rule})`);
     await tx.execute(sql`
       insert into ${transactionReviews} (transaction_id, rule)
-      select unnest(${input.transactionIds}::uuid[]), ${input.rule}
+      values ${sql.join(rows, sql`, `)}
       on conflict do nothing`);
   });
 }
