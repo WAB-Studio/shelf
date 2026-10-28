@@ -179,3 +179,17 @@ test("the last week of the limit month has no ›, past the goal's end it asks n
     await expect(page).toHaveURL(/\/semana$/);
   });
 });
+
+test("this week is no coming week: its marks act, it lists no «con día» and offers no «Darle día» (RP-142)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  await withComing(browser, baseURL, db, person, 390, async (page) => {
+    await page.goto("/semana");
+    await expect(page.getByText("esta semana", { exact: true }).locator("visible=true")).toHaveCount(1);
+    await expect(giveDay(page, DAYLESS)).toHaveCount(0);
+    await expect(page.getByText("con día", { exact: true })).toHaveCount(0);
+  });
+});
