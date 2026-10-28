@@ -221,7 +221,7 @@ test("on paper the summary is a table: Meta | month | Semana del…, a row per o
     if (monday.getUTCMonth() === sunday.getUTCMonth()) {
       expect(head).toContain(`semana del ${monday.getUTCDate()} al ${sunday.getUTCDate()}`);
     } else {
-      expect(head).toContain(`semana del ${from} al ${to}`);
+      expect(head).toContain(`semana del ${from} al ${to} ${sunday.getUTCFullYear()}`);
     }
     const order = [n.general, n.big, n.small, n.empty, n.loose];
     const [g, big, small, empty, loose] = chunks(summary, order);
