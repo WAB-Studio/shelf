@@ -4260,6 +4260,7 @@ async function main(): Promise<void> {
   await o6m7OpeningRefusalsSuite();
   await detailPocketToBillSuite();
   await o7m3MonthReviewSuite();
+  await o7m3RuleEdgesSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -14512,6 +14513,93 @@ async function o7m3MonthReviewSuite(): Promise<void> {
 
 // RF-155, O7-Q1 a: a fellow who reads the leader's personal account sees its item on the screen,
 // unmarkable, and Inicio's count never names it: a line they could never clear.
+// RF-155, O7-Q2 a, the edges the mutator found unguarded: the median (not a higher percentile), the
+// six-month window, the strict «more than three times», the month's own first day and the next one's,
+// a movement under two rules counted once on Inicio, and a twin half marked still waiting.
+async function o7m3RuleEdgesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const month = shiftMonth(today, -1);
+  const day = (n: number, back = 1) => `${shiftMonth(today, -back)}-${String(n).padStart(2, "0")}`;
+  const holder = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(holder, () =>
+    createAccount({
+      name: `Harness o7m3e banco ${tag}`, kind: "asset", subtype: "bank", ownerUserId: holder.id, groupId: null,
+      isShared: false, institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 900_000_000, balanceOn: day(1, 9),
+    }),
+  );
+  track("accounts", bank);
+  const category = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness o7m3e ${name} ${tag}`, kind: "expense", parentId: null, color: "#B4542F" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const spend = async (categoryId: string, amountCents: number, occurredAt: string, amountFromWords = false) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents, occurredAt, description: `Harness o7m3e ${tag}`,
+        externalRef: null, splits: [{ categoryId, amountCents }], labelIds: [], amountFromWords,
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+
+  // A 900.000 outlier in the history: the median stays 100.000, so 350.000 is far above it; the 90th
+  // percentile would be 900.000 and flag nothing.
+  const median = await category("mediana");
+  for (const back of [2, 3, 4]) await spend(median, 10_000_000, day(3, back));
+  await spend(median, 90_000_000, day(3, 5));
+  const overMedian = await spend(median, 35_000_000, day(3));
+  // Three months of history, the oldest the window's first: a five-month window holds two and flags nothing.
+  const windowed = await category("ventana");
+  for (const back of [2, 3, 7]) await spend(windowed, 10_000_000, day(4, back));
+  const overWindow = await spend(windowed, 40_000_000, day(4));
+  // Exactly three times the usual is not «more than».
+  const edge = await category("borde");
+  for (const back of [2, 3, 4]) await spend(edge, 10_000_000, day(6, back));
+  const exactlyThrice = await spend(edge, 30_000_000, day(6));
+  // From words on the month's first day counts; on this month's first day it does not.
+  const plain = await category("varios");
+  const firstDay = await spend(plain, 1_100_000, day(1), true);
+  const nextFirst = await spend(plain, 1_200_000, day(1, 0), true);
+  // A twin whose one half is also from words: two items, two movements.
+  const pairA = await spend(plain, 1_300_000, day(9), true);
+  const pairB = await spend(plain, 1_300_000, day(9));
+
+  const read = await asUser(holder, () => getMonthReview(month));
+  const ids = (rule: string) => read.items.filter((item) => item.rule === rule).flatMap((item) => item.transactionIds);
+  const above = ids("above_usual");
+  assert(
+    next("O7-M3 edges: «above usual» reads the median of a six-month window and needs more than three times it"),
+    above.includes(overMedian) && above.includes(overWindow) && !above.includes(exactlyThrice) && above.length === 2,
+    `above ${above.length}: median ${above.includes(overMedian)}, window ${above.includes(overWindow)}, exactly thrice ${above.includes(exactlyThrice)}`,
+  );
+  const words = ids("from_words");
+  assert(
+    next("O7-M3 edges: the month holds its first day and stops before the next month's"),
+    words.includes(firstDay) && !words.includes(nextFirst),
+    `first day ${words.includes(firstDay)}, next month's ${words.includes(nextFirst)}`,
+  );
+  const pending = await asUser(holder, () => getMonthReviewPending());
+  // overMedian, overWindow, firstDay, pairA, pairB: pairA stands under two rules and counts once.
+  assert(
+    next("O7-M3 edges: Inicio counts each movement once, though it stands under two rules"),
+    pending?.count === 5,
+    `pending ${pending?.count}`,
+  );
+  await asUser(holder, () => markReviewed({ transactionIds: [pairA], rule: "twin" }));
+  const half = (await asUser(holder, () => getMonthReview(month))).items.find((item) => item.rule === "twin");
+  assert(
+    next("O7-M3 edges: a twin with one half marked still waits"),
+    half !== undefined && half.reviewed === false,
+    `twin reviewed ${half?.reviewed}`,
+  );
+}
+
 async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Promise<void> {
   const today = todayInBogota();
   const month = shiftMonth(today, -1);
