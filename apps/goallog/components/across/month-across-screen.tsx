@@ -67,6 +67,9 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   if (parseMonthParam(seg, today, across.firstMonth, across.lastMonth).kind === "redirect") redirect("/mes");
   const past = across.view === "past";
   const markDay = past ? closedMonthMarkDay(across.month, today) : undefined;
+  const after = nextMonth(across.month);
+  // A closed month counts a sub-task done only when it was done in it.
+  const doneIn = (doneOn: string | null) => doneOn !== null && (!past || doneOn < after);
   const t = await getTranslations();
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const monthNames = t.raw("day.monthLong") as string[];
@@ -138,7 +141,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                 </Text>
                 <Text as="p" variant="meta">
                   {t(
-                    (row.id === task.id ? entry.done : row.doneOn !== null && row.doneOn < nextMonth(across.month))
+                    (row.id === task.id ? entry.done : doneIn(row.doneOn))
                       ? "month.across.pastDone"
                       : "month.across.pastOpen",
                   )}
@@ -181,8 +184,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               oneOffId={child.id}
               name={child.name}
               factId={child.factId ?? null}
-              // Done in this month: a closed month does not count a sub-task finished after it.
-              done={child.doneOn !== null && (!past || child.doneOn < nextMonth(across.month))}
+              done={doneIn(child.doneOn)}
               child
               trailing={unit && child.estimate ? say(child.estimate) : undefined}
               markLabel={t("month.across.mark", { name: child.name })}

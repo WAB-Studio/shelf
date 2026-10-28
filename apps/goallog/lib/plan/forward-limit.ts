@@ -9,9 +9,10 @@ import { lastMonthOf, monthOf, nextMonth } from "./months";
 // horizon is today or before has ended and stretches nothing.
 export function forwardLimit({ horizons, today }: { horizons: (string | null)[]; today: string }): string {
   let limit = monthOf(today);
+  const endless = lastMonthOf(today, null, today);
   for (const horizon of horizons) {
     if (horizon !== null && horizon <= today) continue;
-    const last = horizon === null ? lastMonthOf(today, null, today) : monthOf(dayBefore(horizon));
+    const last = horizon === null ? endless : monthOf(dayBefore(horizon));
     if (last > limit) limit = last;
   }
   return limit.slice(0, 7);

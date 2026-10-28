@@ -151,8 +151,7 @@ export function TaskRow({
     </IconButton>
   );
   const locked = markDay === null;
-  const noteProps = parent ? {} : locked ? { preview: note } : { preview: note, end: noteButton };
-  const openSheet = locked ? undefined : () => setSheetOpen(true);
+  const noteProps = parent ? {} : { preview: note, end: noteButton };
 
   let row;
   if (parent) {
@@ -168,7 +167,7 @@ export function TaskRow({
         metaVariant="sentence"
         trailing={trail}
         data-done={done}
-        onClick={openSheet}
+        onClick={() => setSheetOpen(true)}
         still={locked}
         disabled={pending}
       />
@@ -187,8 +186,8 @@ export function TaskRow({
         metaVariant="sentence"
         trailing={trail}
         {...noteProps}
-        onLeadingClick={locked ? undefined : () => factId && run(() => undoFact({ factId }))}
-        onClick={openSheet}
+        onLeadingClick={() => factId && run(() => undoFact({ factId }))}
+        onClick={() => setSheetOpen(true)}
         still={locked}
         disabled={pending}
       />
@@ -203,8 +202,8 @@ export function TaskRow({
         metaVariant="sentence"
         trailing={trail}
         {...noteProps}
-        onLeadingClick={locked ? undefined : () => run(() => completeOneOff({ oneOffId, day: markDay }))}
-        onClick={openSheet}
+        onLeadingClick={() => run(() => completeOneOff({ oneOffId, day: markDay ?? undefined }))}
+        onClick={() => setSheetOpen(true)}
         still={locked}
         disabled={pending}
       />

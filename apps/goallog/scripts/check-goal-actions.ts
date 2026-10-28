@@ -1339,8 +1339,8 @@ test("addCommitment: the first quantity commitment measures the goal in its unit
 });
 
 test("undoFact: a fact of a month closed past a fact's reach stays, monthClosed; one on this month's first day is taken back (RP-143)", async () => {
-  // The day before last month's first: always the month before last, never within seven days.
-  const closedDay = shiftDay(`${shiftDay(`${today.slice(0, 7)}-01`, -1).slice(0, 7)}-01`, -1);
+  // 32 days before this month's first: always the month before last, never within seven days.
+  const closedDay = shiftDay(`${today.slice(0, 7)}-01`, -32);
   const [closedTask, openTask] = await sql<{ id: string }[]>`
     insert into goals.one_offs (user_id, name, created_at)
     values (${personId}, 'RP-143 cerrada', ${closedDay}::date - 1), (${personId}, 'RP-143 abierta', ${closedDay}::date - 1)

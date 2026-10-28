@@ -12,11 +12,11 @@ import {
   declareFactSchema,
   requireDayForSubject,
   requireQuantityFor,
-  earliestPastDay,
   undoFactSchema,
   type DeclareFactInput,
   type UndoFactInput,
 } from "@/lib/validation/fact";
+import { writableFrom } from "@/lib/plan/closed-month-marks";
 import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
@@ -294,9 +294,8 @@ export async function undoFact(input: UndoFactInput): Promise<UndoFactResult> {
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  // A closed month past a fact's reach reads only (RP-143): its facts stay. This month's stay undoable.
-  const today = todayInZone();
-  const floor = [earliestPastDay(today), `${today.slice(0, 7)}-01`].sort()[0];
+  // A closed month past a fact's reach reads only (RP-143): its facts stay, as its screens show them.
+  const floor = writableFrom(todayInZone());
   const outcome = await withGoalsDb(async (tx) => {
     const own = and(eq(facts.id, parsed.data.factId), eq(facts.userId, person.id));
     const deleted = await tx.delete(facts).where(and(own, gte(facts.day, floor))).returning({ id: facts.id });

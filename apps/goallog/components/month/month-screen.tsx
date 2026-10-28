@@ -63,12 +63,9 @@ export async function MonthDetail({
   month,
   from,
   heading,
-  today = todayInZone(),
 }: {
   goal: GoalView;
   month: string;
-  // The day the month is read on: «Mes» and this page close a past month on the same one (RP-143).
-  today?: string;
   // The path the sheet returns to; the month page itself by default.
   from?: string;
   heading?: boolean;
@@ -86,7 +83,10 @@ export async function MonthDetail({
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
-  const markDay = closed ? closedMonthMarkDay(month, today) : undefined;
+  // A goal archived since marks nothing, as on «Mes» (RP-143).
+  const markDay = closed ? (goal.archivedAt === null ? closedMonthMarkDay(month, todayInZone()) : null) : undefined;
+  // A closed month counts a sub-task done only when it was done in it.
+  const doneIn = (doneOn: string | null) => doneOn !== null && (!closed || doneOn < nextMonth(mes));
   const rowPlanned = screenPlanned(row.planned, goal.plan.budgets.some((budget) => budget.month === mes));
   const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
@@ -208,7 +208,7 @@ export async function MonthDetail({
             oneOffId={child.id}
             name={child.name}
             factId={child.factId ?? null}
-            done={child.doneOn !== null}
+            done={doneIn(child.doneOn)}
             child
             trailing={unit && child.estimate ? say(child.estimate) : undefined}
             note={child.note}

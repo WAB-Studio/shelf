@@ -11,7 +11,8 @@ import styles from "./row.module.css";
 // tall, ruled from the next by a hairline. A border box only as `card`, a link row the boards draw so.
 // Writing a fact costs one tap, so the whole row is the target (RNP-02).
 type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & {
-  // Nothing acts on the row (a closed month's task, RP-143): it draws as text, never as a control.
+  // Nothing acts on the row (a closed month's task, RP-143): it draws as text, never as a control, whatever
+  // handlers it is handed.
   still?: boolean;
   // What sits at the head of the row — usually the mark, sometimes a plain
   // label (`Semana.dc.html`'s own day row has no mark of its own to lead
@@ -112,7 +113,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     rule ? undefined : styles.flush,
     card ? styles.card : undefined,
     level === 1 ? styles.level1 : level === 2 ? styles.level2 : undefined,
-    onLeadingClick || end || (href && (fold || foldSlot)) ? styles.split : undefined,
+    !still && (onLeadingClick || end || (href && (fold || foldSlot))) ? styles.split : undefined,
     className,
   ]
     .filter(Boolean)
@@ -149,6 +150,15 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
     </span>
   );
+
+  if (still) {
+    return (
+      <div className={merged} {...(props as ComponentPropsWithoutRef<"div">)}>
+        {leading ? <span className={styles.leading}>{leading}</span> : null}
+        {body}
+      </div>
+    );
+  }
 
   if (href && (fold || foldSlot)) {
     const Arrow = fold?.expanded ? ChevronDown : ChevronRight;
@@ -225,14 +235,6 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     );
   }
 
-  if (still) {
-    return (
-      <div className={merged} {...(props as ComponentPropsWithoutRef<"div">)}>
-        {leading ? <span className={styles.leading}>{leading}</span> : null}
-        {body}
-      </div>
-    );
-  }
 
   return (
     <button ref={ref} type={type} className={merged} disabled={disabled} onClick={onClick} {...props}>
