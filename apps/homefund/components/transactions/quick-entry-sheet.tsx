@@ -331,9 +331,10 @@ function QuickEntryForm({
     if (!ask) return;
     setPickedChoice(index);
     proposedAmount.current = null;
-    const picked = amountToInput(ask.choices[Number(index)], accountCurrency);
+    const choice = ask.choices[Number(index)];
+    const picked = amountToInput(choice, accountCurrency);
     pickedAmount.current = picked;
-    setWordsAmount(ask.choices[Number(index)] === ask.bare ? null : picked);
+    setWordsAmount(choice === ask.bare ? null : picked);
     form.setValue("amount", picked, { shouldValidate: true });
   }
 
