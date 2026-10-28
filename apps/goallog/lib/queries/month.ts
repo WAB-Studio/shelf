@@ -141,10 +141,10 @@ function looseHabit({ id, name, daysDone, row, byWeek }: LooseRow, month: string
 
 async function queryRows(tx: Transaction, reading: Reading, today: string): Promise<Row[]> {
   const { month, until, lastDay, openAfter, view } = reading;
-  // A closed month keeps a goal archived since; the current and coming ones read none that is archived.
+  // A closed month keeps a goal archived on its last day or since; the current and coming ones read none that is archived.
   const archived = (alias: "g" | "a") =>
     view === "past"
-      ? sql`(${sql.raw(alias)}.archived_at is null or (${sql.raw(alias)}.archived_at at time zone ${TIME_ZONE})::date > ${lastDay}::date)`
+      ? sql`(${sql.raw(alias)}.archived_at is null or (${sql.raw(alias)}.archived_at at time zone ${TIME_ZONE})::date >= ${lastDay}::date)`
       : sql`${sql.raw(alias)}.archived_at is null`;
   const archivedG = archived("g");
   const archivedA = archived("a");
