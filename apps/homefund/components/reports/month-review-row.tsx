@@ -29,6 +29,7 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
   const currency = item.currency as CurrencyCode;
   const date = format.dateTime(civilDateToDate(item.occurredAt), { day: "numeric", month: "short" });
   const input = { transactionIds: item.transactionIds, rule: item.rule };
+  const toggle = item.reviewed ? unmark : mark;
 
   return (
     <Flex direction="column" gap="2" py="3">
@@ -59,15 +60,14 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
       )}
       {item.canMark ? (
         <Flex gap="3" align="center" wrap="wrap">
-          {item.reviewed ? (
-            <Button variant="soft" color="gray" disabled={unmark.isPending} onClick={() => unmark.execute(input)}>
-              {unmark.isPending ? t("saving") : t("undo")}
-            </Button>
-          ) : (
-            <Button variant="soft" disabled={mark.isPending} onClick={() => mark.execute(input)}>
-              {mark.isPending ? t("saving") : t("ok")}
-            </Button>
-          )}
+          <Button
+            variant="soft"
+            color={item.reviewed ? "gray" : undefined}
+            disabled={toggle.isPending}
+            onClick={() => toggle.execute(input)}
+          >
+            {toggle.isPending ? t("saving") : t(item.reviewed ? "undo" : "ok")}
+          </Button>
           <Link asChild size="2" weight="medium">
             <LocaleLink
               prefetch={false}

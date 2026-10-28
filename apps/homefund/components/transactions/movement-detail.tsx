@@ -76,8 +76,8 @@ export function MovementDetail({
   cause?: TransactionListRow | null;
   // The charges this movement caused, newest first, as the caller ordered them.
   causedCharges?: TransactionListRow[];
-  // Where the back arrow leads: the movements list unless the caller came from elsewhere.
-  back?: { href: string; label: string };
+  // Where the back arrow and a delete lead: the movements list unless the caller came from elsewhere.
+  back: { href: string; label: string };
 }) {
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
@@ -90,7 +90,7 @@ export function MovementDetail({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const remove = useAction(deleteTransactionAction, {
-    onSuccess: () => router.push(back?.href ?? "/movements"),
+    onSuccess: () => router.push(back.href),
     onError: onActionError,
   });
 
@@ -251,8 +251,8 @@ export function MovementDetail({
 
       <Flex direction="column" gap="4" display={{ initial: "flex", md: "none" }}>
         <Flex align="center" gap="3">
-          <IconButton asChild tap variant="ghost" color="gray" aria-label={back?.label ?? t("listTitle")}>
-            <LocaleLink href={back?.href ?? "/movements"}>
+          <IconButton asChild tap variant="ghost" color="gray" aria-label={back.label}>
+            <LocaleLink href={back.href}>
               <ChevronLeftIcon size={18} />
             </LocaleLink>
           </IconButton>

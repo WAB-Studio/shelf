@@ -11,8 +11,7 @@ import {
 } from "@/db/queries/transaction-form";
 import { getTransactionById, listTransactions } from "@/db/queries/transactions";
 import { routing } from "@/i18n/routing";
-
-const REVIEW_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+import { MONTH_PATTERN } from "@/lib/dates";
 
 export async function generateMetadata(
   props: PageProps<"/[locale]/movements/[id]">,
@@ -40,13 +39,13 @@ export default async function MovementPage(
     getTransactionById(id),
     getTransactionFormOptions(),
     listTransactions({ causedByTransactionId: id }),
-    getTranslations({ locale, namespace: "review" }),
+    getTranslations({ locale }),
   ]);
   // «Corregir» in «Revisar el mes» opens the movement with `?review=YYYY-MM`: back leads there (RF-155).
   const back =
-    typeof review === "string" && REVIEW_MONTH.test(review)
-      ? { href: `/reports/review?month=${review}`, label: tr("entry") }
-      : undefined;
+    typeof review === "string" && MONTH_PATTERN.test(review)
+      ? { href: `/reports/review?month=${review}`, label: tr("review.entry") }
+      : { href: "/movements", label: tr("transactions.listTitle") };
 
   if (!movement) notFound();
 

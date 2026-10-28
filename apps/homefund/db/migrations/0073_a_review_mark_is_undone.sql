@@ -29,8 +29,10 @@ CREATE OR REPLACE FUNCTION private.transactions_amount_typed()
 AS $function$
 begin
   if new.amount_cents is distinct from old.amount_cents then
-    new.amount_from_words := false;
-    delete from finances.transaction_reviews where transaction_id = new.id and rule = 'from_words';
+    if old.amount_from_words then
+      new.amount_from_words := false;
+      delete from finances.transaction_reviews where transaction_id = new.id and rule = 'from_words';
+    end if;
   end if;
   return new;
 end;

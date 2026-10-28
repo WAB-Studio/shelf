@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 
-import { UnmarkRefusedError, markReviewed, unmarkReviewed } from "@/db/queries/month-review";
+import { markReviewed, unmarkReviewed } from "@/db/queries/month-review";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
@@ -31,11 +31,6 @@ export const markReviewedAction = authActionClient
 export const unmarkReviewedAction = authActionClient
   .inputSchema(markReviewedSchema)
   .action(async ({ parsedInput }) => {
-    try {
-      await unmarkReviewed(parsedInput);
-    } catch (error) {
-      if (error instanceof UnmarkRefusedError) throw new ActionError("review.errors.cannotUndo");
-      throw error;
-    }
+    if (!(await unmarkReviewed(parsedInput))) throw new ActionError("review.errors.cannotUndo");
     refresh();
   });

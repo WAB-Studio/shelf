@@ -29,13 +29,7 @@ import {
   listAccountReconciliations,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
-import {
-  UnmarkRefusedError,
-  getMonthReview,
-  getMonthReviewPending,
-  markReviewed,
-  unmarkReviewed,
-} from "@/db/queries/month-review";
+import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed } from "@/db/queries/month-review";
 import {
   getAccountStatementHistory,
   listAccountStatements,
@@ -13828,7 +13822,7 @@ async function o7m11bSurvivorsSuite(): Promise<void> {
             await fixtureSql`delete from planned_payments where id = ${rows[0].id}`;
             return "stored";
           },
-          (error: unknown) => (error as { code?: string }).code ?? rootMessage(error),
+          (error: unknown) => pgErrorCode(error) ?? rootMessage(error),
         )
     : "no movement";
   assert(
@@ -14629,10 +14623,9 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
       item.transactionIds.includes(transactionId) && item.rule === "from_words",
     )?.reviewed;
   await markReviewed({ transactionIds: [transactionId], rule: "from_words" });
-  const readerUndo = await asUser(fellow, () => unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" })).then(
-    () => "undone",
-    (error: unknown) => (error instanceof UnmarkRefusedError ? "refused" : rootMessage(error)),
-  );
+  const readerUndo = (await asUser(fellow, () => unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" })))
+    ? "undone"
+    : "refused";
   const afterReader = await reviewedOf();
   await unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" });
   const afterHolder = await reviewedOf();

@@ -75,8 +75,8 @@ export function MovementDetailDesktop({
   cause?: TransactionListRow | null;
   // The charges this movement caused, newest first, as the caller ordered them.
   causedCharges?: TransactionListRow[];
-  // Where the back arrow leads: the movements list unless the caller came from elsewhere.
-  back?: { href: string; label: string };
+  // Where the back arrow and a delete lead: the movements list unless the caller came from elsewhere.
+  back: { href: string; label: string };
 }) {
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
@@ -89,7 +89,7 @@ export function MovementDetailDesktop({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const remove = useAction(deleteTransactionAction, {
-    onSuccess: () => router.push(back?.href ?? "/movements"),
+    onSuccess: () => router.push(back.href),
     onError: onActionError,
   });
 
@@ -270,7 +270,7 @@ export function MovementDetailDesktop({
       <ScreenHeader
         title={isAdjustment ? t("kindAdjustment") : t("detailTitle")}
         meta={shortDate}
-        back={back ?? { href: "/movements", label: t("listTitle") }}
+        back={back}
       />
 
       <Flex align="start" gap="4" px="6" pb="6">

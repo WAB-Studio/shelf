@@ -8,9 +8,8 @@ import { Page } from "@/components/ui";
 import { getMonthReview } from "@/db/queries/month-review";
 import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { lastClosedMonth } from "@/lib/dates";
+import { MONTH_PATTERN, lastClosedMonth } from "@/lib/dates";
 
-const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 type ReviewPageProps = {
   params: Promise<{ locale: string }>;
@@ -31,7 +30,7 @@ export default async function MonthReviewPage(props: ReviewPageProps) {
   if (!hasLocale(routing.locales, locale)) notFound();
 
   const lastClosed = lastClosedMonth();
-  if (raw !== undefined && (typeof raw !== "string" || !MONTH.test(raw) || raw > lastClosed)) {
+  if (raw !== undefined && (typeof raw !== "string" || !MONTH_PATTERN.test(raw) || raw > lastClosed)) {
     return redirect({ href: "/reports/review", locale });
   }
   const month = raw ?? lastClosed;
