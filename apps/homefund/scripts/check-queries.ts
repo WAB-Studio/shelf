@@ -14721,6 +14721,13 @@ async function o8m5ReviewSurvivorsSuite(): Promise<void> {
     above.length === 1 && above[0].amountCents === 50_000_000,
     `items ${above.length}, amount ${above[0]?.amountCents}`,
   );
+  // A month the caller noted nothing in reads apart from one whose movements raised nothing.
+  const blank = await asUser(holder, () => getMonthReview(shiftMonth(today, -8)));
+  assert(
+    next("O8-M8 noted: a month with movements reads noted; one with none reads not"),
+    read.noted === true && blank.noted === false && blank.items.length === 0,
+    `noted ${read.noted}, blank ${blank.noted} with ${blank.items.length} items`,
+  );
 }
 
 // `YYYY-MM` of the month `delta` months from `base`'s.

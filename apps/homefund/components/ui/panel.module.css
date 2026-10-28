@@ -54,6 +54,11 @@
   text-decoration: none;
 }
 
+/* A free-form row of a stack, kept off the card's edge as a row is. */
+.block {
+  padding: 0 18px;
+}
+
 /* A block box, so inline content is laid against the row's inherited strut and
    not against its own line box: a cell that must sit where a bare grid item sits
    takes block content. */

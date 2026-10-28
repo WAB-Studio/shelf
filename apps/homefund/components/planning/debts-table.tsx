@@ -74,13 +74,11 @@ function wordsAround(message: string): { before: string; after: string } {
   return { before, after };
 }
 
-function joined(words: { before: string; after: string }) {
-  return { before: SEPARATOR + words.before, after: words.after };
+// The dot closes the figure before it, so a wrapped line ends on «·» and the next
+// starts on a word, never inside a figure.
+function closed(words: { before: string; after: string }, more: boolean) {
+  return more ? { before: words.before, after: `${words.after} ·` } : words;
 }
-
-// The dot rides inside the figure that follows it, so a line wraps at the space
-// before the dot and never inside a figure.
-const SEPARATOR = "· ";
 
 /**
  * Whether a debt in credit also owes in another currency (Q9 a): the one case
@@ -120,6 +118,7 @@ export function CreditAndOwedLine({
   inherit?: boolean;
 }) {
   const t = useTranslations("debts");
+  const owed = otherOwed.filter((pocket) => pocket.owedCents > 0);
 
   return (
     <Figure as="div" size={inherit ? undefined : size} align={align}>
@@ -128,49 +127,46 @@ export function CreditAndOwedLine({
         currency={currency}
         tone="credit"
         size="inherit"
-        words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
+        words={closed(wordsAround(t("inFavour", { amount: AMOUNT_SLOT })), owed.length > 0)}
       />
-      {otherOwed
-        .filter((pocket) => pocket.owedCents > 0)
-        .map((pocket) => {
-          // `Money` writes the estimate mark itself, so the message's own is
-          // dropped from the words.
-          const toBill = wordsAround(t("toBill", { amount: AMOUNT_SLOT }));
-          return (
-            <Fragment key={pocket.currency}>
-              {" "}
-              <Text weight={owedBold ? "bold" : undefined}>
-                <Money
-                  minor={pocket.owedCents}
-                  currency={pocket.currency}
-                  size="inherit"
-                  signed={false}
-                  words={joined(
-                    wordsAround(t("owesForeign", { amount: AMOUNT_SLOT })),
-                  )}
-                />
-              </Text>
-              {pocket.toBillCents !== null && (
-                <>
-                  {" "}
-                  <Text color="gray">
-                    <Money
-                      minor={pocket.toBillCents}
-                      currency={currency}
-                      size="inherit"
-                      signed={false}
-                      estimate
-                      words={{
-                        before: toBill.before.replace("\u2248 ", ""),
-                        after: toBill.after,
-                      }}
-                    />
-                  </Text>
-                </>
-              )}
-            </Fragment>
-          );
-        })}
+      {owed.map((pocket, index) => {
+        // `Money` writes the estimate mark itself, so the message's own is
+        // dropped from the words.
+        const toBill = wordsAround(t("toBill", { amount: AMOUNT_SLOT }));
+        const more = index < owed.length - 1;
+        return (
+          <Fragment key={pocket.currency}>
+            {" "}
+            <Text weight={owedBold ? "bold" : undefined}>
+              <Money
+                minor={pocket.owedCents}
+                currency={pocket.currency}
+                size="inherit"
+                signed={false}
+                words={closed(
+                  wordsAround(t("owesForeign", { amount: AMOUNT_SLOT })),
+                  more && pocket.toBillCents === null,
+                )}
+              />
+            </Text>
+            {pocket.toBillCents !== null && (
+              <>
+                {" "}
+                <Text color="gray">
+                  <Money
+                    minor={pocket.toBillCents}
+                    currency={currency}
+                    size="inherit"
+                    signed={false}
+                    estimate
+                    words={closed({ before: toBill.before.replace("\u2248 ", ""), after: toBill.after }, more)}
+                  />
+                </Text>
+              </>
+            )}
+          </Fragment>
+        );
+      })}
     </Figure>
   );
 }

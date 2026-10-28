@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { Button, Flex, Link, Panel, ScreenHeader, Separator, Text } from "@/components/ui";
+import { Button, Flex, Link, Panel, PanelBlock, ScreenHeader, Separator, Text } from "@/components/ui";
 import type { MonthReview } from "@/db/queries/month-review";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { civilDateToDate, shiftMonth } from "@/lib/dates";
@@ -18,7 +18,9 @@ function ReviewList({ items }: { items: ReviewItem[] }) {
       {items.map((item, index) => (
         <Flex key={`${item.rule}:${item.transactionIds.join(",")}`} direction="column">
           {index > 0 && <Separator size="4" />}
-          <MonthReviewRow item={item} />
+          <PanelBlock>
+            <MonthReviewRow item={item} />
+          </PanelBlock>
         </Flex>
       ))}
     </Panel>
@@ -64,7 +66,7 @@ export function MonthReviewScreen({ review, lastClosed }: { review: MonthReview;
       </Flex>
 
       {review.items.length === 0 ? (
-        <Text as="p">{t("empty", { month: monthName })}</Text>
+        <Text as="p">{t(review.noted ? "empty" : "nothingNoted", { month: monthName })}</Text>
       ) : pending.length === 0 ? (
         <Text as="p">{t("allDone", { month: monthName })}</Text>
       ) : (
