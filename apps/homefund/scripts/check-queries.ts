@@ -14642,17 +14642,29 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
       transactionId, fromAccountId: accountId, toAccountId: null, amountCents, occurredAt: `${month}-14`,
       description, splits: [{ categoryId, amountCents }], labelIds: [],
     });
+  // RF-165: the same change drops «Está bien» on «Muy por encima de lo usual» and «Dos iguales»; a count's gap is no
+  // rule an amount edit answers, so its mark stays.
+  const marksOf = async () =>
+    (await fixtureSql<{ rule: string }[]>`
+      select rule from transaction_reviews where transaction_id = ${transactionId} order by rule`).map((m) => m.rule).join(",");
+  for (const rule of ["from_words", "above_usual", "twin", "reconciliation_gap"] as const) {
+    await markReviewed({ transactionIds: [transactionId], rule });
+  }
   await edit(2_500_000, "Harness o7m3 ajena palabras, renombrada");
   const kept = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
-  await markReviewed({ transactionIds: [transactionId], rule: "from_words" });
+  const keptMarks = await marksOf();
   await edit(2_600_000, "Harness o7m3 ajena palabras, otro monto");
-  const [{ marks }] = await fixtureSql<{ marks: number }[]>`
-    select count(*)::int as marks from transaction_reviews where transaction_id = ${transactionId}`;
+  const marks = await marksOf();
   const cleared = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
   assert(
-    next("O8 typed amount: an edit that keeps the amount keeps «read from words»; one that changes it clears it and its mark"),
-    String(kept) === "true" && String(cleared) === "false" && marks === 0,
-    `kept ${kept}, cleared ${cleared}, marks left ${marks}`,
+    next("O8 typed amount: an edit that keeps the amount keeps «read from words» and every mark; one that changes it clears it and its mark"),
+    String(kept) === "true" && keptMarks === "above_usual,from_words,reconciliation_gap,twin" && String(cleared) === "false" && !marks.includes("from_words"),
+    `kept ${kept} with ${keptMarks}, cleared ${cleared}, marks left ${marks}`,
+  );
+  assert(
+    next("O8-M11 amount edit: «Muy por encima de lo usual» and «Dos iguales» lose their «Está bien» with it; a count's gap keeps its own (RF-165)"),
+    marks === "reconciliation_gap",
+    `marks left ${marks}`,
   );
 }
 
