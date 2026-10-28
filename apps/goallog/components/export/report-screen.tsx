@@ -981,7 +981,8 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
   monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
   const sunday = new Date(monday);
   sunday.setUTCDate(sunday.getUTCDate() + 6);
-  // A week across two months names both, so «28 al 3» never reads without its months.
+  // A week across two months names both, so «28 al 3» never reads without its months, and the
+  // year after them, which every date on paper carries (RP-49).
   const crosses = monday.getUTCMonth() !== sunday.getUTCMonth();
   const shortMonth = (date: Date) => monthShort.format(date).replace(".", "").slice(0, 3);
   const weekHead = t("summary.weekHead", {
@@ -990,6 +991,7 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
     crosses: crosses ? "yes" : "no",
     fromMonth: shortMonth(monday),
     toMonth: shortMonth(sunday),
+    year: sunday.getUTCFullYear(),
   });
 
   const lines = report.goals

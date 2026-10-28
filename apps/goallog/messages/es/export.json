@@ -61,7 +61,7 @@
     "title": "resumen",
     "annex": "el detalle de cada meta",
     "goal": "Meta",
-    "weekHead": "Semana del {from}{crosses, select, yes { {fromMonth}} other {}} al {to}{crosses, select, yes { {toMonth}} other {}}",
+    "weekHead": "Semana del {from}{crosses, select, yes { {fromMonth}} other {}} al {to}{crosses, select, yes { {toMonth} {year}} other {}}",
     "of": "{done} de {planned}",
     "week": "semana {value}",
     "noAmount": "sin monto este mes"

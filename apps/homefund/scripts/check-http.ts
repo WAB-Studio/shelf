@@ -166,6 +166,7 @@ function renderCases({ transactionId, debtAccountId }: HttpScope): RenderCase[] 
       title: title("transactions.detailTitle"),
     },
     { path: `/${LOCALE}/reports`, status: 200, title: title("reports.title") },
+    { path: `/${LOCALE}/reports/review`, status: 200, title: title("review.entry") },
     { path: `/${LOCALE}/planning`, status: 200, title: title("planning.title") },
     {
       path: `/${LOCALE}/planning/budgets`,
