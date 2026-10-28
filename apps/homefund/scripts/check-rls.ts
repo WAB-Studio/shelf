@@ -36,6 +36,7 @@ import { todayInBogota } from "@/lib/dates";
 import { pgErrorCode } from "@/lib/db-error";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { GROUP_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
+import { REVIEW_RULES } from "@/lib/month-review-rules";
 
 // `application_name` names the suite and the lane in `pg_stat_activity`; Supabase's
 // pooler overwrites it to `Supavisor` on both endpoints (`docs/TRAPS.md`), so this
@@ -13323,7 +13324,6 @@ async function checkO7M11Survivors() {
 // O7M2_MIGRATION_FILE  a path to a SQL file; each row drops what 0072 made and installs that file instead, inside
 //                      its own transaction, so a mutant never outlives the ROLLBACK.
 // O7M2_ROW             runs only the row with that number, so a mutant meets the one row that kills it.
-const O7M2_RULES = ["above_usual", "twin", "from_words", "reconciliation_gap"] as const;
 const O7M2_PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"] as const;
 
 type O7m2Mark = { id: string; transaction_id: string; rule: string; marked_by: string; marked_at: string };
@@ -13379,7 +13379,7 @@ async function o7m2Mark(tx: M1Tx, movement: string, rule: string): Promise<strin
 
 // The sqlstate a mark is refused with, or null when it saved.
 async function o7m2Try(tx: M1Tx, movement: string, rule: string): Promise<string | null> {
-  return m1Refusal(tx, (sp) => sp`insert into transaction_reviews (transaction_id, rule) values (${movement}, ${rule})`);
+  return m1Refusal(tx, (sp) => o7m2Mark(sp, movement, rule));
 }
 
 // Read as the table owner, so no policy hides a mark.
@@ -13503,7 +13503,7 @@ async function checkTransactionReviews() {
     const f = await o7m2Fund(tx);
     await enterUserContext(tx, f.member);
     const known: string[] = [];
-    for (const rule of O7M2_RULES) known.push(`${rule} ${o7m2Code(await o7m2Try(tx, f.personalMovement, rule))}`);
+    for (const rule of REVIEW_RULES) known.push(`${rule} ${o7m2Code(await o7m2Try(tx, f.personalMovement, rule))}`);
     const other = await o7m2Try(tx, f.personalMovement, "other");
     const blank = await o7m2Try(tx, f.sharedMovement, "");
     await tx`reset role`;

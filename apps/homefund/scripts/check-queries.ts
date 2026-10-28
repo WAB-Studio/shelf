@@ -14540,10 +14540,8 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
   );
 }
 
-// `YYYY-MM` of the month `back` months before `base`'s, as civil months.
+// `YYYY-MM` of the month `delta` months from `base`'s.
 function shiftMonth(base: string, delta: number): string {
-  const date = new Date(`${base.slice(0, 7)}-01T12:00:00Z`);
-  date.setUTCMonth(date.getUTCMonth() + delta);
-  return date.toISOString().slice(0, 7);
+  return addCivilMonths(`${base.slice(0, 7)}-01`, delta).slice(0, 7);
 }
 

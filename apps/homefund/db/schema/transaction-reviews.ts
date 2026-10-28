@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import { check, index, pgPolicy, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
 
+import { REVIEW_RULES } from "@/lib/month-review-rules";
+
 import { finances } from "./_schema";
 import { appUsers } from "./app-users";
 import { transactions } from "./transactions";
@@ -27,7 +29,7 @@ export const transactionReviews = finances.table(
     index("transaction_reviews_marked_by_idx").on(table.markedBy),
     check(
       "transaction_reviews_rule",
-      sql`${table.rule} in ('above_usual', 'twin', 'from_words', 'reconciliation_gap')`,
+      sql`${table.rule} in (${sql.raw(REVIEW_RULES.map((rule) => `'${rule}'`).join(", "))})`,
     ),
     pgPolicy("transaction_reviews_select", {
       for: "select",

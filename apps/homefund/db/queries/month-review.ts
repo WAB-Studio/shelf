@@ -4,11 +4,9 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { transactionReviews } from "@/db/schema";
 import { withUserDb } from "@/db/session";
-import { addCivilMonths, monthRange, todayInBogota } from "@/lib/dates";
+import { addCivilMonths, currentMonthStart, monthRange } from "@/lib/dates";
 
 import type { ReviewRule } from "@/lib/month-review-rules";
-
-export type { ReviewRule };
 
 export type ReviewItem = {
   rule: ReviewRule;
@@ -32,75 +30,66 @@ function reviewItemsSql(month: string): SQL {
   const { start, endExclusive } = monthRange(`${month}-01`);
   const historyStart = addCivilMonths(start, -6);
   return sql`
-    with expense_splits as (
-      select t.id as transaction_id, t.occurred_at, t.currency, t.from_account_id as account_id,
-        s.category_id, s.amount_cents
+    with month_tx as materialized (
+      select t.id, t.occurred_at, t.amount_cents, t.currency, t.from_account_id, t.to_account_id,
+        coalesce(t.from_account_id, t.to_account_id) as account_id, t.reconciliation_id, t.amount_from_words
+      from transactions t
+      where t.occurred_at >= ${start}::date and t.occurred_at < ${endExclusive}::date
+    ),
+    expense_splits as (
+      select t.id as transaction_id, t.occurred_at, t.currency, s.category_id, s.amount_cents
       from transaction_splits s
       join transactions t on t.id = s.transaction_id
-      where t.from_account_id is not null and t.to_account_id is null
-        and t.reconciliation_id is null and s.category_id is not null
+      where t.kind = 'expense' and t.reconciliation_id is null and s.category_id is not null
         and t.occurred_at >= ${historyStart}::date and t.occurred_at < ${endExclusive}::date
     ),
-    -- One item per movement: its largest split over three times its category's median, with
-    -- at least three splits of history in the six months before the month, in its currency.
+    -- A category's usual in a currency: the median of its splits in the six months before the
+    -- month, once it has at least three.
+    usual as (
+      select category_id, currency,
+        percentile_disc(0.5) within group (order by amount_cents) as median_cents
+      from expense_splits
+      where occurred_at < ${start}::date
+      group by category_id, currency
+      having count(*) >= 3
+    ),
+    -- One item per movement: its largest split over three times its category's usual.
     above_usual as (
-      select distinct on (e.transaction_id)
-        e.transaction_id, e.occurred_at, e.currency, e.account_id, e.category_id, e.amount_cents,
-        h.median_cents
+      select distinct on (e.transaction_id) e.transaction_id, e.category_id, e.amount_cents, u.median_cents
       from expense_splits e
-      cross join lateral (
-        select percentile_disc(0.5) within group (order by p.amount_cents) as median_cents,
-          count(*) as splits
-        from expense_splits p
-        where p.category_id = e.category_id and p.currency = e.currency
-          and p.occurred_at >= ${historyStart}::date and p.occurred_at < ${start}::date
-      ) h
-      where e.occurred_at >= ${start}::date and e.occurred_at < ${endExclusive}::date
-        and h.splits >= 3 and e.amount_cents > 3 * h.median_cents
+      join usual u using (category_id, currency)
+      where e.occurred_at >= ${start}::date and e.amount_cents > 3 * u.median_cents
       order by e.transaction_id, e.amount_cents desc
     ),
-    twins as (
-      select array_agg(t.id order by t.id) as ids, t.occurred_at, t.amount_cents, t.currency,
-        coalesce(t.from_account_id, t.to_account_id) as account_id
-      from transactions t
-      where t.occurred_at >= ${start}::date and t.occurred_at < ${endExclusive}::date
-        and t.reconciliation_id is null
-      group by t.occurred_at, t.from_account_id, t.to_account_id, t.amount_cents, t.currency
-      having count(*) >= 2
-    ),
-    items as (
-      select 'above_usual'::text as rule, array[a.transaction_id] as ids, a.occurred_at,
-        a.amount_cents, a.currency, a.account_id, a.category_id,
-        a.median_cents::bigint as usual_cents, null::bigint as counted_cents
+    flagged as (
+      select 'above_usual'::text as rule, array[a.transaction_id] as ids, a.amount_cents,
+        a.category_id, a.median_cents::bigint as usual_cents, null::bigint as counted_cents
       from above_usual a
       union all
-      select 'twin', w.ids, w.occurred_at, w.amount_cents, w.currency, w.account_id,
-        (select s.category_id from transaction_splits s where s.transaction_id = w.ids[1] limit 1),
-        null, null
-      from twins w
+      select 'twin', array_agg(t.id order by t.id), t.amount_cents, null, null, null
+      from month_tx t
+      where t.reconciliation_id is null
+      group by t.occurred_at, t.from_account_id, t.to_account_id, t.amount_cents, t.currency
+      having count(*) >= 2
       union all
-      select 'from_words', array[t.id], t.occurred_at, t.amount_cents, t.currency,
-        coalesce(t.from_account_id, t.to_account_id),
-        (select s.category_id from transaction_splits s where s.transaction_id = t.id limit 1),
-        null, null
-      from transactions t
-      where t.amount_from_words
-        and t.occurred_at >= ${start}::date and t.occurred_at < ${endExclusive}::date
+      select 'from_words', array[t.id], t.amount_cents, null, null, null
+      from month_tx t where t.amount_from_words
       union all
-      select 'reconciliation_gap', array[t.id], t.occurred_at, t.amount_cents, t.currency,
-        coalesce(t.from_account_id, t.to_account_id), null, null, r.counted_balance_cents
-      from transactions t
-      join account_reconciliations r on r.id = t.reconciliation_id
-      where t.occurred_at >= ${start}::date and t.occurred_at < ${endExclusive}::date
+      select 'reconciliation_gap', array[t.id], t.amount_cents, null, null, r.counted_balance_cents
+      from month_tx t join account_reconciliations r on r.id = t.reconciliation_id
     ),
+    -- A twin's ids share their day and accounts, so its first movement speaks for all of them.
     marked as (
-      select i.*,
-        (select bool_and(exists (
-          select 1 from ${transactionReviews} m where m.transaction_id = u.tid and m.rule = i.rule
-        )) from unnest(i.ids) as u(tid)) as reviewed,
-        (select bool_and(coalesce(private.can_write_transaction_row(u.tid), false))
-          from unnest(i.ids) as u(tid)) as can_mark
-      from items i
+      select f.rule, f.ids, f.amount_cents, f.usual_cents, f.counted_cents, t.occurred_at, t.currency,
+        t.account_id,
+        case when f.rule = 'reconciliation_gap' then null else coalesce(f.category_id,
+          (select s.category_id from transaction_splits s where s.transaction_id = t.id limit 1)) end
+          as category_id,
+        (select count(*) from ${transactionReviews} m
+          where m.rule = f.rule and m.transaction_id = any(f.ids)) = cardinality(f.ids) as reviewed,
+        coalesce(private.can_write_transaction(t.from_account_id, t.to_account_id), false) as can_mark
+      from flagged f
+      join month_tx t on t.id = f.ids[1]
     )`;
 }
 
@@ -111,15 +100,15 @@ function reviewItemsSql(month: string): SQL {
  */
 export async function getMonthReview(month: string): Promise<MonthReview> {
   return withUserDb(async (tx) => {
-    const [row] = await tx.execute<{ first_month: string | null; items: RawItem[] | null }>(sql`
+    const [row] = await tx.execute<{ first_month: string | null; items: ReviewItem[] | null }>(sql`
       ${reviewItemsSql(month)}
       select
         (select to_char(min(t.occurred_at), 'YYYY-MM') from transactions t) as first_month,
         (select json_agg(json_build_object(
-          'rule', m.rule, 'ids', m.ids, 'occurred_at', m.occurred_at, 'amount_cents', m.amount_cents,
-          'currency', m.currency, 'account_name', a.name, 'category_name', c.name,
-          'usual_cents', m.usual_cents, 'counted_cents', m.counted_cents,
-          'reviewed', m.reviewed, 'can_mark', m.can_mark
+          'rule', m.rule, 'transactionIds', m.ids, 'occurredAt', m.occurred_at,
+          'amountCents', m.amount_cents, 'currency', m.currency, 'accountName', a.name,
+          'categoryName', c.name, 'usualCents', m.usual_cents, 'countedCents', m.counted_cents,
+          'reviewed', m.reviewed, 'canMark', m.can_mark
         ) order by m.occurred_at, m.rule, m.ids[1])
         from marked m
         join accounts a on a.id = m.account_id
@@ -128,7 +117,7 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
     return {
       month,
       firstMonth: row?.first_month ?? null,
-      items: (row?.items ?? []).map(toItem),
+      items: row?.items ?? [],
     };
   });
 }
@@ -138,7 +127,7 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
  * none stand out. The screen's rows and account join, so the count never names a row it hides.
  */
 export async function getMonthReviewPending(): Promise<{ month: string; count: number } | null> {
-  const month = addCivilMonths(`${todayInBogota().slice(0, 7)}-01`, -1).slice(0, 7);
+  const month = addCivilMonths(currentMonthStart(), -1).slice(0, 7);
   const count = await withUserDb(async (tx) => {
     const [row] = await tx.execute<{ count: number }>(sql`
       ${reviewItemsSql(month)}
@@ -164,34 +153,4 @@ export async function markReviewed(input: {
       values ${sql.join(rows, sql`, `)}
       on conflict do nothing`);
   });
-}
-
-type RawItem = {
-  rule: ReviewRule;
-  ids: string[];
-  occurred_at: string;
-  amount_cents: number;
-  currency: string;
-  account_name: string;
-  category_name: string | null;
-  usual_cents: number | null;
-  counted_cents: number | null;
-  reviewed: boolean;
-  can_mark: boolean;
-};
-
-function toItem(raw: RawItem): ReviewItem {
-  return {
-    rule: raw.rule,
-    transactionIds: raw.ids,
-    occurredAt: raw.occurred_at,
-    amountCents: Number(raw.amount_cents),
-    currency: raw.currency,
-    accountName: raw.account_name,
-    categoryName: raw.category_name,
-    usualCents: raw.usual_cents === null ? null : Number(raw.usual_cents),
-    countedCents: raw.counted_cents === null ? null : Number(raw.counted_cents),
-    reviewed: raw.reviewed,
-    canMark: raw.can_mark,
-  };
 }

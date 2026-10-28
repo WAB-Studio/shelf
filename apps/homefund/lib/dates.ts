@@ -49,7 +49,7 @@ function shiftMonthStart(monthStart: string, months: number): string {
 }
 
 // The current Bogotá day snapped back to its month's first day.
-function currentMonthStart(): string {
+export function currentMonthStart(): string {
   return `${todayInBogota().slice(0, 7)}-01`;
 }
 
