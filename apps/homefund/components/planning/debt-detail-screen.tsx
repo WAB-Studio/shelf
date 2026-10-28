@@ -152,59 +152,49 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     });
   }
 
-  // Credit with a pocket owed reads the row's whole line: the credit big, the
-  // rest under it. A card whose pesos are at zero while a pocket owes reads that
-  // pocket big, named «Debes». Anything else keeps one figure per currency.
+  // Credit with a pocket owed reads the row's whole Q9 line (Q18 a); a card
+  // whose pesos are at zero while another pocket owes names it «Debes».
   const beside = owesBesideCredit(creditCents, otherOwed);
   const onlyForeign =
     !beside &&
     owedCents === 0 &&
     creditCents === 0 &&
     otherOwed.some((pocket) => pocket.owedCents > 0);
+  // Every pocket the line does not already read, in its own currency and never
+  // summed (RF-124).
+  const pockets = account.balances.filter((pocket) =>
+    beside
+      ? pocket.currency !== currency && pocket.balanceCents > 0
+      : !onlyForeign || pocket.currency !== currency,
+  );
 
   const tiles = [
     {
       key: "balance",
       label: tDebts("tableBalance"),
-      // One figure per currency the card holds, never their sum (RF-124): what
-      // was spent in dollars sits beside what the issuer has already billed.
-      value: beside ? (
-        <PocketFigure
-          owedCents={0}
-          creditCents={creditCents}
-          currency={currency}
-          inherit
-        />
-      ) : (
+      value: (
         <Flex direction="column">
-          {account.balances
-            .filter(
-              (pocket) =>
-                !onlyForeign ||
-                (pocket.currency !== currency && pocket.balanceCents < 0),
-            )
-            .map((pocket) => (
-              <PocketFigure
-                key={pocket.currency}
-                owedCents={Math.max(0, -pocket.balanceCents)}
-                creditCents={Math.max(0, pocket.balanceCents)}
-                currency={pocket.currency}
-                inherit
-                named={onlyForeign}
-              />
-            ))}
+          {beside && (
+            <CreditAndOwedLine
+              creditCents={creditCents}
+              currency={currency}
+              otherOwed={otherOwed}
+              align="left"
+              inherit
+            />
+          )}
+          {pockets.map((pocket) => (
+            <PocketFigure
+              key={pocket.currency}
+              owedCents={Math.max(0, -pocket.balanceCents)}
+              creditCents={Math.max(0, pocket.balanceCents)}
+              currency={pocket.currency}
+              inherit
+              named={onlyForeign}
+            />
+          ))}
         </Flex>
       ),
-      note: beside ? (
-        <CreditAndOwedLine
-          creditCents={creditCents}
-          currency={currency}
-          otherOwed={otherOwed}
-          align="left"
-          size="1"
-          only="owed"
-        />
-      ) : undefined,
     },
     {
       key: "pending",

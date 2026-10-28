@@ -2788,7 +2788,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         test.skip(laptop, "the laptop table keeps M5's columns");
         const card: MemberCard = {
           id: randomUUID(),
-          name: "Mastercard Black Bancolombia",
+          name: `Mastercard Black Bancolombia ${stamp}`,
           creditCents: Q9_CREDIT_CENTS,
           usd: { cents: Q9_USD_CENTS, estimateCents: Q9_ESTIMATE_CENTS },
         };
@@ -2915,7 +2915,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         await checkDialog();
       });
 
-      test("Q9: the detail's Saldo tile reads the big figure and the rest of the line under it", async ({
+      test("Q9: the detail's Saldo tile reads the row's whole line, and a card that only owes dollars reads «Debes»", async ({
         page,
       }) => {
         const credit: MemberCard = {
@@ -2938,24 +2938,20 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const accent = await accentInk(page);
         const main = page.getByRole("main");
         const label = main.getByText(debts.tableBalance, { exact: true }).first();
-        const big = label.locator("xpath=following-sibling::*[1]");
-        const rest = label.locator("xpath=following-sibling::*[2]");
-        await expect(big).toHaveText(/^A\sfavor\s\$\s8\.000$/);
-        expect(await inkOf(big)).toBe(accent);
-        expect(await fontSize(big)).toBeGreaterThanOrEqual(20);
-        await expect(rest).toHaveText(
-          /^·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
+        const tile = label.locator("xpath=following-sibling::*[1]");
+        await expect(tile).toHaveText(
+          /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
         );
-        expect(await fontSize(rest)).toBeLessThan(await fontSize(big));
-        const owedInks = await inkOfText(rest, /Debes/);
+        expect(await fontSize(tile)).toBeGreaterThanOrEqual(20);
+        const creditInks = await inkOfText(tile, /A\sfavor/);
+        expect(creditInks.length).toBeGreaterThan(0);
+        for (const ink of creditInks) expect(ink).toBe(accent);
+        const owedInks = await inkOfText(tile, /Debes/);
         expect(owedInks.length).toBeGreaterThan(0);
         for (const ink of owedInks) expect(ink).not.toBe(accent);
-        const muted = await inkOfText(rest, /por facturar/);
+        const muted = await inkOfText(tile, /por facturar/);
         expect(muted.length).toBeGreaterThan(0);
         for (const ink of muted) expect(ink).not.toBe(owedInks[0]);
-        expect((await big.boundingBox())!.y + (await big.boundingBox())!.height).toBeLessThanOrEqual(
-          (await rest.boundingBox())!.y + 1,
-        );
 
         await page.goto(`/es/planning/debts/${dollars.id}`);
         await expect(page.getByRole("heading", { name: dollars.name, exact: true })).toBeVisible();

@@ -106,7 +106,7 @@ export function CreditAndOwedLine({
   align = "right",
   size = "2",
   owedBold = false,
-  only = "all",
+  inherit = false,
 }: {
   creditCents: number;
   currency: CurrencyCode;
@@ -116,23 +116,20 @@ export function CreditAndOwedLine({
   size?: "1" | "2" | "3";
   // What the other pockets owe in bold, as the abono dialog draws it.
   owedBold?: boolean;
-  // «owed» leaves the credit out: the detail's tile draws it big on its own and
-  // reads the rest of the line under it.
-  only?: "all" | "owed";
+  // Takes the type of the tile it sits in, as `PocketFigure` does.
+  inherit?: boolean;
 }) {
   const t = useTranslations("debts");
 
   return (
-    <Figure as="div" size={size} align={align}>
-      {only === "all" && (
-        <Money
-          minor={creditCents}
-          currency={currency}
-          tone="credit"
-          size="inherit"
-          words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
-        />
-      )}
+    <Figure as="div" size={inherit ? undefined : size} align={align}>
+      <Money
+        minor={creditCents}
+        currency={currency}
+        tone="credit"
+        size="inherit"
+        words={wordsAround(t("inFavour", { amount: AMOUNT_SLOT }))}
+      />
       {otherOwed
         .filter((pocket) => pocket.owedCents > 0)
         .map((pocket) => {
@@ -141,7 +138,7 @@ export function CreditAndOwedLine({
           const toBill = wordsAround(t("toBill", { amount: AMOUNT_SLOT }));
           return (
             <Fragment key={pocket.currency}>
-              {only === "all" && " "}
+              {" "}
               <Text weight={owedBold ? "bold" : undefined}>
                 <Money
                   minor={pocket.owedCents}
