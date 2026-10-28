@@ -550,13 +550,10 @@ export async function listTransactions(
   ), '[]'::jsonb)`;
 
   // Read under the caller's policies like the rest of the row, so a payment in another
-  // scope that points here reads as none. Nothing makes the link unique; the earliest
-  // due date answers, so two reads of the same row never name different payments.
+  // scope that points here reads as none. One movement settles one payment: the index is unique.
   const settledPlannedPaymentJson = sql<{ id: string; description: string | null } | null>`(
     select jsonb_build_object('id', p.id, 'description', p.description)
     from ${plannedPayments} p where p.settled_transaction_id = ${outerId}
-    order by p.due_date, p.id
-    limit 1
   )`;
 
   return withUserDbOrTx(options?.tx, async (tx) => {

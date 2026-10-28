@@ -8,8 +8,8 @@ import { finances } from "./_schema";
 import { appUsers } from "./app-users";
 import { transactions } from "./transactions";
 
-// «Está bien» on a movement «Revisar el mes» flagged (RF-155), once per rule. Final: no UPDATE, no
-// DELETE — a mark leaves only with its movement, down the cascade. The movement's scope gates it.
+// «Está bien» on a movement «Revisar el mes» flagged (RF-155), once per rule. No UPDATE; «Deshacer»
+// deletes it (RF-163) and the cascade drops it with its movement. The movement's scope gates both.
 export const transactionReviews = finances.table(
   "transaction_reviews",
   {
@@ -40,6 +40,11 @@ export const transactionReviews = finances.table(
       for: "insert",
       to: authenticatedRole,
       withCheck: sql`(select private.can_write_transaction_row(${table.transactionId}))`,
+    }),
+    pgPolicy("transaction_reviews_delete", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`(select private.can_write_transaction_row(${table.transactionId}))`,
     }),
   ],
 );

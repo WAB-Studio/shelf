@@ -94,19 +94,22 @@ export function BottomNav({
   const after = tabs.slice(split);
 
   return (
-    <Flex asChild align="center" justify="between" className={styles.bar}>
-      <nav>
-        {before.map((tab) => (
-          <Tab key={tab.key} tab={tab} />
-        ))}
-        <Flex align="center" justify="center" className={styles.center}>
-          {centerAction}
-        </Flex>
-        {after.map((tab) => (
-          <Tab key={tab.key} tab={tab} />
-        ))}
-        {moreTrigger}
-      </nav>
-    </Flex>
+    <>
+      <div aria-hidden className={styles.clearance} />
+      <Flex asChild align="center" justify="between" className={styles.bar}>
+        <nav>
+          {before.map((tab) => (
+            <Tab key={tab.key} tab={tab} />
+          ))}
+          <Flex align="center" justify="center" className={styles.center}>
+            {centerAction}
+          </Flex>
+          {after.map((tab) => (
+            <Tab key={tab.key} tab={tab} />
+          ))}
+          {moreTrigger}
+        </nav>
+      </Flex>
+    </>
   );
 }

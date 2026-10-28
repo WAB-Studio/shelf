@@ -9,7 +9,7 @@ import { Page } from "@/components/ui";
 import { listBudgetsWithStatus } from "@/db/queries/budgets";
 import { getUserGroup } from "@/db/queries/groups";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
-import { budgetAnchor, todayInBogota } from "@/lib/dates";
+import { MONTH_PATTERN, budgetAnchor, todayInBogota } from "@/lib/dates";
 import { routing } from "@/i18n/routing";
 
 // A malformed `?month` never reaches `periodRange`: anything but a real `YYYY-MM`
@@ -18,7 +18,7 @@ import { routing } from "@/i18n/routing";
 // on it before any bound reaches Postgres.
 const monthSchema = z
   .string()
-  .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+  .regex(MONTH_PATTERN)
   .catch(() => todayInBogota().slice(0, 7));
 
 const searchParamsSchema = z.object({ month: monthSchema });

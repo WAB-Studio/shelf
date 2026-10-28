@@ -53,6 +53,9 @@ export function shiftMonth(month: string, months: number): string {
   return shiftMonthStart(`${month}-01`, months).slice(0, 7);
 }
 
+// A real `YYYY-MM` month, as a query parameter names one.
+export const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 // The newest month already over, as `YYYY-MM`: the one «Revisar el mes» opens on (RF-155).
 export function lastClosedMonth(): string {
   return shiftMonth(todayInBogota().slice(0, 7), -1);
