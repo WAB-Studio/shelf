@@ -31,7 +31,7 @@ import { weekHref } from "@/lib/day/week-href";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
-import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
+import { listComingDayless } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
 import { civilDayMonthShort, weekOf } from "@/lib/zone";
@@ -60,11 +60,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   const thisMonth = today.slice(0, 7);
   const coming = month !== undefined && month > thisMonth;
   // A coming month also offers the tasks that wait with no day: read beside the month, never after it.
-  const [across, goalDayless, looseDayless] = await Promise.all([
-    loadMonthAcross({ month, today }),
-    coming ? listGoalOneOffs(today) : [],
-    coming ? listDaylessOneOffs() : [],
-  ]);
+  const [across, dayless] = await Promise.all([loadMonthAcross({ month, today }), coming ? listComingDayless(today) : []]);
   const seg = across.month.slice(0, 7);
   // The page cannot know the bounds before the read: a month past them lands on the nearer one; with no goal, on this one.
   const asked = parseMonthParam(seg, today, across.firstMonth, across.lastMonth);
@@ -503,7 +499,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
       {coming ? (
         <GiveDayList
           // A task the month already draws, or one its plan holds in another month, waits in that plan.
-          tasks={[...goalDayless.filter((task) => task.plannedMonth === null && !drawn.has(task.id)), ...looseDayless]}
+          tasks={dayless.filter((task) => !drawn.has(task.id))}
           suggest={across.month}
         />
       ) : null}

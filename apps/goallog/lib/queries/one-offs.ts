@@ -129,3 +129,10 @@ export async function listGoalOneOffs(today: string): Promise<GoalOneOff[]> {
     plannedMonth: row.planned_month,
   }));
 }
+
+// What a coming week or month offers under «Sin día»: a goal's task no month holds,
+// then the one-offs with no goal. Both reads go out at once.
+export async function listComingDayless(today: string): Promise<(GoalOneOff | DaylessOneOff)[]> {
+  const [inGoals, loose] = await Promise.all([listGoalOneOffs(today), listDaylessOneOffs()]);
+  return [...inGoals.filter((task) => task.plannedMonth === null), ...loose];
+}

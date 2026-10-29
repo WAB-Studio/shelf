@@ -7,7 +7,7 @@ import { endedOnPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref, weekHref } from "@/lib/day/week-href";
 import { daysBetween } from "@/lib/day/weeks";
 import { weekSteps } from "@/lib/day/week-param";
-import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
+import { listComingDayless } from "@/lib/queries/one-offs";
 import { loadWeek, type GoalSummary } from "@/lib/queries/week";
 import { civilDateToDate, weekOf } from "@/lib/zone";
 
@@ -68,11 +68,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
   const thisMonday = weekOf(today)[0];
   const coming = weekOf(day)[0] > thisMonday;
   // A coming week also offers the tasks that wait with no day: read beside the week, never after it.
-  const [week, goalDayless, looseDayless] = await Promise.all([
-    loadWeek(day, today),
-    coming ? listGoalOneOffs(today) : [],
-    coming ? listDaylessOneOffs() : [],
-  ]);
+  const [week, dayless] = await Promise.all([loadWeek(day, today), coming ? listComingDayless(today) : []]);
   const { view, evidence, goals } = week;
   // The page cannot know the limit before the read: a week past it lands on the last.
   if (view.start > week.lastMonday) redirect(weekHref(week.lastMonday, thisMonday));
@@ -195,7 +191,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
           </Section>
           <GiveDayList
             // One its plan holds in a month waits in that plan.
-            tasks={[...goalDayless.filter((task) => task.plannedMonth === null), ...looseDayless]}
+            tasks={dayless}
             suggest={view.start}
           />
         </>
