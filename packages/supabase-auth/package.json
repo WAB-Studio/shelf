@@ -3,7 +3,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./settle": "./src/settle.ts"
+    "./settle": "./src/settle.ts",
+    "./settled-transaction": "./src/settled-transaction.ts"
   },
   "peerDependencies": {
     "@supabase/ssr": "^0.12.5",

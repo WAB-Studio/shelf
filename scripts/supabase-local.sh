@@ -47,7 +47,7 @@ require_up() {
 cmd_migrate() {
   require_up
   local apps=("$@")
-  [ ${#apps[@]} -gt 0 ] || apps=(homefund wordbook goallog)
+  [ ${#apps[@]} -gt 0 ] || apps=(homefund wordbook goallog timelog)
   local app
   for app in "${apps[@]}"; do
     # drizzle-kit directly: db:migrate also demands the app's .env.local, which a fresh lane may lack.
