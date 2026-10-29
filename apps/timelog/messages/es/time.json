@@ -1,0 +1,54 @@
+{
+  "duration": { "hours": "h", "minutes": "min", "underMinute": "< 1 min" },
+  "nav": { "label": "Secciones", "today": "Hoy", "week": "Semana", "keys": "Llaves" },
+  "today": {
+    "title": "{weekday} {day} de {month}",
+    "total": "En la computadora",
+    "empty": "Sin datos de hoy",
+    "lastUpload": "Última subida: {when}",
+    "never": "Todavía no ha llegado ninguna subida. Crea una llave y corre el script en tu PC.",
+    "bar": "{app}: {duration}"
+  },
+  "week": {
+    "title": "Del {from} al {to}",
+    "prev": "Semana anterior",
+    "next": "Semana siguiente",
+    "days": "Días",
+    "apps": "Apps de la semana",
+    "noApps": "Nada esta semana.",
+    "none": "—",
+    "bar": "{day}: {duration}"
+  },
+  "keys": {
+    "title": "Llaves",
+    "intro": "Una llave deja que el script de tu PC suba el resumen del día y que Claude lo lea. Se muestra una sola vez.",
+    "name": "Nombre de la llave",
+    "namePlaceholder": "PC de la casa",
+    "create": "Crear llave",
+    "creating": "Creando…",
+    "nameInvalid": "Ponle un nombre de hasta 60 caracteres.",
+    "shown": "Cópiala ahora: no se vuelve a mostrar.",
+    "copy": "Copiar",
+    "copied": "Copiada",
+    "command": "En la PC, con ActivityWatch abierto:",
+    "used": "usada {when}",
+    "unused": "sin usar",
+    "revoked": "revocada",
+    "revoke": "Revocar",
+    "revokeLabel": "Revocar la llave {name}",
+    "none": "Todavía no hay llaves."
+  },
+  "signIn": {
+    "title": "Entrar",
+    "intro": "Te mandamos un enlace al correo.",
+    "email": "Correo",
+    "send": "Mandar enlace",
+    "sending": "Mandando…",
+    "sent": "Revisa tu correo: el enlace te trae de vuelta aquí.",
+    "emailInvalid": "Ese correo no se ve bien.",
+    "notInvited": "Ese correo no está invitado a TimeLog.",
+    "sendFailed": "No se pudo mandar el enlace. Prueba otra vez.",
+    "rateLimited": "Ya pediste varios enlaces. Espera unos minutos.",
+    "linkInvalid": "El enlace no sirvió o ya venció. Pide otro."
+  }
+}

@@ -54,10 +54,10 @@ export default defineConfig([
     rules: { "no-restricted-syntax": ["error", importSyntax, ...screenSyntax] },
   },
   { files: ["app/layout.tsx"], rules: { "no-restricted-syntax": ["error", importSyntax] } },
-  // `session.ts` settles every connection; `keys.ts` resolves a key before any person exists,
-  // through one definer function; `ingest.ts` writes as the person that key resolved.
+  // `session.ts` settles every connection; `keys.ts` and `ingest.ts` reach a key's definer functions
+  // before any person exists; `auth.ts` reads the invitation list before one does too.
   {
-    files: ["lib/session.ts", "lib/keys.ts", "lib/ingest.ts"],
+    files: ["lib/session.ts", "lib/keys.ts", "lib/ingest.ts", "lib/auth.ts"],
     rules: { "no-restricted-imports": "off", "no-restricted-syntax": "off" },
   },
   { files: ["scripts/**"], rules: { "no-restricted-imports": "off", "no-restricted-syntax": "off" } },
