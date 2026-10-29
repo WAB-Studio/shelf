@@ -42,6 +42,8 @@ This file is the core every agent loads. Read the file the index names before th
 ## Working here
 
 - Ask only what the user alone can decide, whole (options, costs, pick), in the chat; work on what does not wait for it.
+- Work the whole list through in one turn. Never stop to report a step or to ask «¿sigo?»; stop only when it is done
+  or every item left waits on the user. Decided by the user 2026-10-28: «no puede ser que a cada rato pares».
 - Use the credential the user hands you. Never tell the user to rotate, revoke or replace one.
 - Work in your own lane: its worktree, its port, its `HARNESS_LANE`. Ports: homefund :300<n-1>, wordbook :310<n-1>,
   goallog :320<n-1>. Wrap every suite and dev server in `scripts/supabase-local.sh exec`.
@@ -94,7 +96,10 @@ This file is the core every agent loads. Read the file the index names before th
 
 ## Verification
 - `npm run typecheck` is tsgo, `npm run lint` is eslint cached. Both take seconds. Run them freely.
-- Size the proof by what the change reaches:
+- Per module run `typecheck`, `lint`, `check:unit` and the module's own new tests. Run the `check:*` and specs below
+  once, after the last module of the list, over all of it. Decided by the user 2026-10-28: «deberíamos hacerlo al
+  final de todas las cosas que queremos hacer no en cada uno».
+- Size that final proof by what the list reaches:
   - A pure function, or a file nothing imports yet: `typecheck`, `lint`, `check:unit` and its own tests.
   - A query or a server action: add every `check:*` that imports it. Grep the importers; in doubt, run them all.
   - A screen: its own specs and the specs the plan names. The whole e2e suite runs in CI, never locally.

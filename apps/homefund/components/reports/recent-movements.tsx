@@ -5,15 +5,13 @@ import {
   CategoryTile,
   EmptyState,
   Flex,
-  Link,
-  TapTarget,
   Money,
   Panel,
   PanelRow,
   Text,
+  TextLink,
 } from "@/components/ui";
 import type { TransactionListRow } from "@/db/queries/transactions";
-import { Link as LocaleLink } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
 
 // A transfer carries neither category nor sign; an income and an expense read
@@ -55,15 +53,10 @@ export function RecentMovements({
     <Panel
       title={t("listTitle")}
       action={
-        <Link asChild size="2" weight="medium">
-          <LocaleLink href="/movements">
-            {/* A line of text has no control height of its own. */}
-            <TapTarget align="center" gap="1">
-              {t("seeAll")}
-              <ChevronRight size={13} strokeWidth={2.4} aria-hidden />
-            </TapTarget>
-          </LocaleLink>
-        </Link>
+        <TextLink href="/movements" size="2" weight="medium" gap="1">
+          {t("seeAll")}
+          <ChevronRight size={13} strokeWidth={2.4} aria-hidden />
+        </TextLink>
       }
     >
       {rows.length === 0 && (

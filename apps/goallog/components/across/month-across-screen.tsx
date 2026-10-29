@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { EvidenceNote } from "@/components/day/evidence-note";
@@ -18,6 +18,7 @@ import {
   ScreenHeader,
   Section,
   SectionLabel,
+  StepLinks,
   Text,
   TextLink,
 } from "@/components/ui";
@@ -30,7 +31,7 @@ import { weekHref } from "@/lib/day/week-href";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
-import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
+import { listComingDayless } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
 import { civilDayMonthShort, weekOf } from "@/lib/zone";
@@ -59,11 +60,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   const thisMonth = today.slice(0, 7);
   const coming = month !== undefined && month > thisMonth;
   // A coming month also offers the tasks that wait with no day: read beside the month, never after it.
-  const [across, goalDayless, looseDayless] = await Promise.all([
-    loadMonthAcross({ month, today }),
-    coming ? listGoalOneOffs(today) : [],
-    coming ? listDaylessOneOffs() : [],
-  ]);
+  const [across, dayless] = await Promise.all([loadMonthAcross({ month, today }), coming ? listComingDayless(today) : []]);
   const seg = across.month.slice(0, 7);
   // The page cannot know the bounds before the read: a month past them lands on the nearer one; with no goal, on this one.
   const asked = parseMonthParam(seg, today, across.firstMonth, across.lastMonth);
@@ -408,23 +405,11 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
     ) : null;
 
   const { prev, next } = monthSteps({ month: seg, firstMonth: across.firstMonth, lastMonth: across.lastMonth });
-  function step(href: string | null, label: string, icon: "prev" | "next") {
-    if (href === null) return <Flex flexGrow="1" aria-hidden />;
-    return (
-      <TextLink href={href} nowrap>
-        <Flex as="span" align="center" gap="1">
-          {icon === "prev" ? <ChevronLeft size={16} aria-hidden /> : null}
-          {label}
-          {icon === "next" ? <ChevronRight size={16} aria-hidden /> : null}
-        </Flex>
-      </TextLink>
-    );
-  }
   const stepLinks = (
-    <>
-      {step(monthHref(prev, thisMonth), t("month.across.nav.prev"), "prev")}
-      {step(monthHref(next, thisMonth), t("month.across.nav.next"), "next")}
-    </>
+    <StepLinks
+      prev={{ href: monthHref(prev, thisMonth), label: t("month.across.nav.prev") }}
+      next={{ href: monthHref(next, thisMonth), label: t("month.across.nav.next") }}
+    />
   );
   const eyebrow = t(
     across.view === "this"
@@ -513,8 +498,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
       )}
       {coming ? (
         <GiveDayList
-          // A task the month already draws, or one its plan holds in another month, waits in that plan.
-          tasks={[...goalDayless.filter((task) => task.plannedMonth === null && !drawn.has(task.id)), ...looseDayless]}
+          // A task the month already draws stays in its own row.
+          tasks={dayless.filter((task) => !drawn.has(task.id))}
           suggest={across.month}
         />
       ) : null}

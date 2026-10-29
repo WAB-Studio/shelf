@@ -1,8 +1,7 @@
 import { useFormatter, useTranslations } from "next-intl";
 
-import { Card, Flex, Heading, Link, Money, PlainLink, TapTarget, Text } from "@/components/ui";
+import { Card, Flex, Heading, Money, PlainLink, Text, TextLink } from "@/components/ui";
 import type { DueReminder } from "@/db/queries/due-reminders";
-import { Link as LocaleLink } from "@/i18n/navigation";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import type { CurrencyCode } from "@/lib/currency";
 
@@ -27,13 +26,9 @@ export function DueRemindersCard({
       <Flex direction="column" gap="2">
         <Flex justify="between" align="baseline" gap="3">
           <Heading as="h2" size="4">{t("dueTitle")}</Heading>
-          <Link asChild size="2" weight="medium">
-            <LocaleLink href="/planning/payments">
-              <TapTarget align="center">
-                {total > rows.length ? t("dueSeeAll", { count: total }) : t("dueSee")}
-              </TapTarget>
-            </LocaleLink>
-          </Link>
+          <TextLink href="/planning/payments" size="2" weight="medium">
+            {total > rows.length ? t("dueSeeAll", { count: total }) : t("dueSee")}
+          </TextLink>
         </Flex>
 
         {rows.map((row) => {

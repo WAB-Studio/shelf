@@ -1,14 +1,13 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
-import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, Text, TextLink } from "@/components/ui";
+import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, StepLinks, Text } from "@/components/ui";
 import { endedOnPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref, weekHref } from "@/lib/day/week-href";
 import { daysBetween } from "@/lib/day/weeks";
 import { weekSteps } from "@/lib/day/week-param";
-import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
+import { listComingDayless } from "@/lib/queries/one-offs";
 import { loadWeek, type GoalSummary } from "@/lib/queries/week";
 import { civilDateToDate, weekOf } from "@/lib/zone";
 
@@ -68,11 +67,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
   const thisMonday = weekOf(today)[0];
   const coming = weekOf(day)[0] > thisMonday;
   // A coming week also offers the tasks that wait with no day: read beside the week, never after it.
-  const [week, goalDayless, looseDayless] = await Promise.all([
-    loadWeek(day, today),
-    coming ? listGoalOneOffs(today) : [],
-    coming ? listDaylessOneOffs() : [],
-  ]);
+  const [week, dayless] = await Promise.all([loadWeek(day, today), coming ? listComingDayless(today) : []]);
   const { view, evidence, goals } = week;
   // The page cannot know the limit before the read: a week past it lands on the last.
   if (view.start > week.lastMonday) redirect(weekHref(week.lastMonday, thisMonday));
@@ -122,25 +117,9 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
     );
   }
 
-  function step(href: string | null, label: string, icon: "prev" | "next") {
-    if (href === null) return <Flex flexGrow="1" aria-hidden />;
-    return (
-      <TextLink href={href} nowrap>
-        <Flex as="span" align="center" gap="1">
-          {icon === "prev" ? <ChevronLeft size={16} aria-hidden /> : null}
-          {label}
-          {icon === "next" ? <ChevronRight size={16} aria-hidden /> : null}
-        </Flex>
-      </TextLink>
-    );
-  }
-
   const eyebrow = eyebrowFor(view.start, thisMonday, week.firstMonday, t);
   const stepLinks = (
-    <>
-      {step(prev, t("week.nav.prev"), "prev")}
-      {step(next, t("week.nav.next"), "next")}
-    </>
+    <StepLinks prev={{ href: prev, label: t("week.nav.prev") }} next={{ href: next, label: t("week.nav.next") }} />
   );
 
   return (
@@ -209,11 +188,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
               })
             )}
           </Section>
-          <GiveDayList
-            // One its plan holds in a month waits in that plan.
-            tasks={[...goalDayless.filter((task) => task.plannedMonth === null), ...looseDayless]}
-            suggest={view.start}
-          />
+          <GiveDayList tasks={dayless} suggest={view.start} />
         </>
       ) : null}
     </Page>
