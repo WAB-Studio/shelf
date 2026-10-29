@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
-import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, Text } from "@/components/ui";
+import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, StepLinks, Text } from "@/components/ui";
 import { endedOnPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref, weekHref } from "@/lib/day/week-href";
 import { daysBetween } from "@/lib/day/weeks";
@@ -16,7 +16,6 @@ import { GiveDayList } from "@/components/one-offs/give-day-list";
 import { GiveDayRow } from "@/components/one-offs/give-day-row";
 import { EmptyWeek } from "./empty-week";
 import { EndedLine } from "./ended-line";
-import { StepLinks } from "./step-links";
 import { endedLastDay } from "./week-progress";
 import { WeekTableFace } from "./week-table-face";
 
@@ -189,11 +188,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
               })
             )}
           </Section>
-          <GiveDayList
-            // One its plan holds in a month waits in that plan.
-            tasks={dayless}
-            suggest={view.start}
-          />
+          <GiveDayList tasks={dayless} suggest={view.start} />
         </>
       ) : null}
     </Page>

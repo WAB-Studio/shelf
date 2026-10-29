@@ -331,7 +331,9 @@ function QuickEntryForm({
     if (!ask) return;
     setPickedChoice(index);
     proposedAmount.current = null;
-    const choice = ask.choices[Number(index)];
+    const choice = ask.choices.at(Number(index));
+    // A stale index from an ask the text has since replaced picks nothing.
+    if (!choice) return;
     const picked = amountToInput(choice.cents, accountCurrency);
     pickedAmount.current = picked;
     setWordsAmount(choice.fromWords ? picked : null);

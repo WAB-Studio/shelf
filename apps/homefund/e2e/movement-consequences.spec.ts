@@ -5,7 +5,6 @@
  * out, and a movement that caused nothing draws no list. Each fact is read
  * from the links the page draws, by the id they point at.
  */
-
 import { expect, type Page } from "@playwright/test";
 
 import messages from "@/messages/es.json";

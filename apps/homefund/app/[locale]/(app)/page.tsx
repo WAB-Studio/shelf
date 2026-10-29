@@ -32,8 +32,8 @@ import {
   Page,
   PlainLink,
   ScreenHeader,
-  TapTarget,
   Text,
+  TextLink,
 } from "@/components/ui";
 import { resolveWithdrawalTarget } from "@/db/queries/cash";
 import { listDueReminders } from "@/db/queries/due-reminders";
@@ -162,13 +162,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
                   </LocaleLink>
                 </Button>
                 {!group && (
-                  <Link asChild>
-                    <LocaleLink href="/onboarding">
-                      <TapTarget align="center" justify="center" px="2">
-                        {td("createFund")}
-                      </TapTarget>
-                    </LocaleLink>
-                  </Link>
+                  <TextLink href="/onboarding" justify="center" px="2">
+                    {td("createFund")}
+                  </TextLink>
                 )}
               </Flex>
             }
@@ -301,12 +297,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
 
             <Flex justify="between" align="baseline" gap="3">
               <Heading as="h2" size="4">{t("listTitle")}</Heading>
-              <Link asChild size="2" weight="medium">
-                <LocaleLink href="/movements">
-                  {/* A line of text has no control height of its own. */}
-                  <TapTarget align="center">{t("seeAll")}</TapTarget>
-                </LocaleLink>
-              </Link>
+              <TextLink href="/movements" size="2" weight="medium">
+                {t("seeAll")}
+              </TextLink>
             </Flex>
 
             <Flex direction="column" gap="2">

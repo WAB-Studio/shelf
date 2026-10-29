@@ -38,6 +38,7 @@ export { Section } from "./section";
 export { Fold } from "./fold";
 
 export { TextLink } from "./text-link";
+export { StepLinks } from "./step-links";
 
 export { Figure } from "./figure";
 

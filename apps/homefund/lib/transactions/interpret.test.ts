@@ -249,6 +249,8 @@ type Ask = { token: string; choices: number[]; bare: number | null };
 function askOf(text: string): Ask | null {
   const ask = interpretQuickEntry(text, ctx).ask;
   if (!ask) return null;
+  // Only the first choice may be the digits as written; every other one is read from words.
+  assert.ok(ask.choices.slice(1).every((choice) => choice.fromWords), `${text}: a later choice is not from words`);
   return {
     token: ask.token,
     choices: ask.choices.map((choice) => choice.cents),

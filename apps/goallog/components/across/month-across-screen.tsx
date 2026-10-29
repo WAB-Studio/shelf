@@ -6,7 +6,6 @@ import { getTranslations } from "next-intl/server";
 
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
-import { StepLinks } from "@/components/week/step-links";
 import { GiveDayList } from "@/components/one-offs/give-day-list";
 import {
   Button,
@@ -19,6 +18,7 @@ import {
   ScreenHeader,
   Section,
   SectionLabel,
+  StepLinks,
   Text,
   TextLink,
 } from "@/components/ui";
@@ -498,7 +498,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
       )}
       {coming ? (
         <GiveDayList
-          // A task the month already draws, or one its plan holds in another month, waits in that plan.
+          // A task the month already draws stays in its own row.
           tasks={dayless.filter((task) => !drawn.has(task.id))}
           suggest={across.month}
         />

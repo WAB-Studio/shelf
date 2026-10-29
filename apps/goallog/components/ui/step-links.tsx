@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { Flex, TextLink } from "@/components/ui";
+import { Flex } from "@radix-ui/themes";
+import { TextLink } from "./text-link";
 
 function Step({ href, label, icon }: { href: string | null; label: string; icon: "prev" | "next" }) {
   // An empty slot keeps the other arrow on its own side of the row.
