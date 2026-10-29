@@ -1,14 +1,14 @@
 import { withMcpAuth } from "mcp-handler";
 
 import { resolveKey } from "@/lib/keys";
-import { bearerOf } from "@/lib/key-format";
+import { isKey } from "@/lib/key-format";
 import { buildHandler } from "@/lib/mcp/server";
 
 export const runtime = "nodejs";
 
 // The `tl_` key is the only way in (RT-07): no cookie is read, so a browser session alone reaches nothing.
 async function verify(_request: Request, bearer?: string) {
-  if (!bearer || bearerOf(`Bearer ${bearer}`) === null) return undefined;
+  if (!bearer || !isKey(bearer)) return undefined;
   const person = await resolveKey(bearer);
   if (person === null) return undefined;
 

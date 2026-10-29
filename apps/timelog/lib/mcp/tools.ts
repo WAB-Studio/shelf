@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { formatDuration } from "@/lib/duration";
+import { fill, sum } from "@/lib/totals";
 import { daysOfWeek, mondayOf } from "@/lib/week";
 import type { AppTime, DayTotal } from "@/lib/queries";
 import { addDays, isCivilDay } from "@/lib/zone";
@@ -23,21 +24,11 @@ export type ToolSpec = {
   run(reads: Reads, input: Record<string, unknown>, today: string): Promise<ToolOutcome>;
 };
 
-export const MAX_RANGE_DAYS = 366;
+const MAX_RANGE_DAYS = 366;
 
 const day = z.string().optional();
 
 const timed = <T extends { seconds: number }>(row: T) => ({ ...row, text: formatDuration(row.seconds, time.duration) });
-
-const sum = (rows: { seconds: number }[]) => rows.reduce((total, row) => total + row.seconds, 0);
-
-// Every day from `from` to `to`, a day with nothing at zero.
-function fill(from: string, to: string, totals: DayTotal[]): DayTotal[] {
-  const secondsOn = new Map(totals.map((total) => [total.day, total.seconds]));
-  const days: DayTotal[] = [];
-  for (let one = from; one <= to; one = addDays(one, 1)) days.push({ day: one, seconds: secondsOn.get(one) ?? 0 });
-  return days;
-}
 
 function dayOf(value: unknown, today: string): string | null {
   if (value === undefined) return today;

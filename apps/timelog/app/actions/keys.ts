@@ -17,7 +17,7 @@ export async function createKey(name: string): Promise<CreateKeyResult> {
   const person = await getPerson();
   if (person === null) return { ok: false, error: "signedOut" };
 
-  const { key } = await withTimeDb((tx) => issueKey(tx, person.id, parsed.data));
+  const key = await withTimeDb((tx) => issueKey(tx, person.id, parsed.data));
   revalidatePath("/llaves");
   return { ok: true, key };
 }

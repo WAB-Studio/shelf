@@ -19,3 +19,9 @@ export const env = createEnv({
   },
   emptyStringAsUndefined: true,
 });
+
+// What Supabase Auth reads: the project and its publishable key.
+export const supabaseConfig = {
+  url: env.NEXT_PUBLIC_SUPABASE_URL,
+  publishableKey: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+};

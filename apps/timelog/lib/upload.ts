@@ -6,7 +6,7 @@ import { addDays, civilDay, isCivilDay } from "@/lib/zone";
 const name = (max: number) => z.string().trim().min(1).max(max).regex(/^[^\p{Cc}]+$/u, "a control character");
 
 export const MAX_DAYS = 31;
-export const MAX_APPS = 500;
+const MAX_APPS = 500;
 const DAY_SECONDS = 86_400;
 
 const appDay = z.object({

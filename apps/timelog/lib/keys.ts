@@ -25,12 +25,11 @@ export async function resolveKey(key: string): Promise<ResolvedPerson | null> {
 }
 
 // Under the caller's settled transaction, so the policies check the person is the caller (RT-06).
-export async function issueKey(tx: Transaction, personId: string, name: string): Promise<{ id: string; key: string }> {
+export async function issueKey(tx: Transaction, personId: string, name: string): Promise<string> {
   const { key, hash, hint } = mintKey();
-  const rows = await tx.execute<{ id: string }>(sql`
+  await tx.execute(sql`
     insert into timelog.access_keys (user_id, name, key_hash, hint)
-    values (${personId}, ${name}, ${hash}, ${hint})
-    returning id`);
+    values (${personId}, ${name}, ${hash}, ${hint})`);
 
-  return { id: rows[0].id, key };
+  return key;
 }

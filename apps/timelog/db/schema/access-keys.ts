@@ -39,4 +39,3 @@ export const accessKeys = timeSchema.table(
   ],
 );
 
-export type AccessKey = typeof accessKeys.$inferSelect;

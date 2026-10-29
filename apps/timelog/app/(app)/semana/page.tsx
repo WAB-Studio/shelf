@@ -4,17 +4,17 @@ import { getTranslations } from "next-intl/server";
 import { BarRows } from "@/components/screens/app-rows";
 import { Between, Stack, Text, TextLink, Title } from "@/components/ui";
 import { appsBetween, dayTotals, uploadSpan } from "@/lib/queries";
-import { askedWeek, daysOfWeek, parseWeek, weekSteps } from "@/lib/week";
+import { fill } from "@/lib/totals";
+import { askedWeek, clampWeek, weekSteps } from "@/lib/week";
 import { calendarWords } from "@/lib/words";
-import { civilDay } from "@/lib/zone";
+import { addDays, civilDay } from "@/lib/zone";
 
 // «Semana» (RT-05). The span arrives with the week's reads, so a week past it redirects to its nearer end.
 export default async function WeekPage({ searchParams }: { searchParams: Promise<{ semana?: string }> }) {
   const today = civilDay();
   const { semana } = await searchParams;
   const asked = askedWeek(semana, today);
-  const days = daysOfWeek(asked);
-  const sunday = days[6];
+  const sunday = addDays(asked, 6);
   const [span, totals, apps, words, t] = await Promise.all([
     uploadSpan(),
     dayTotals(asked, sunday),
@@ -22,10 +22,9 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
     calendarWords(),
     getTranslations("time.week"),
   ]);
-  const monday = parseWeek(semana, span.firstDay, today);
+  const monday = clampWeek(asked, span.firstDay, today);
   if (monday !== asked) redirect(`/semana?semana=${monday}`);
   const steps = weekSteps(monday, span.firstDay, today);
-  const secondsOn = new Map(totals.map((total) => [total.day, total.seconds]));
 
   return (
     <Stack gap={4}>
@@ -39,9 +38,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
       <Stack gap={2}>
         <Text variant="meta">{t("days")}</Text>
         <BarRows
-          rows={days.map((day) => {
-            const seconds = secondsOn.get(day) ?? 0;
-            const name = `${words.weekdayShort(day)} ${Number(day.slice(8, 10))}`;
+          rows={fill(monday, sunday, totals).map(({ day, seconds }) => {
+            const name = `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`;
             const figure = seconds === 0 ? t("none") : words.duration(seconds);
             return { key: day, name, figure, seconds, label: t("bar", { day: name, duration: figure }) };
           })}

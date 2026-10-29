@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from "@repo/supabase-auth";
 
 import { isEmailAllowed } from "@/lib/auth";
 import { signInEmailSchema } from "@/lib/forms";
-import { env } from "@/lib/env";
+import { env, supabaseConfig } from "@/lib/env";
 
 export type SignInResult = { ok: true } | { ok: false; error: "emailInvalid" | "notInvited" | "sendFailed" | "rateLimited" };
 
@@ -14,10 +14,7 @@ export async function sendSignInLink(email: string): Promise<SignInResult> {
   if (!parsed.success) return { ok: false, error: "emailInvalid" };
   if (!(await isEmailAllowed(parsed.data))) return { ok: false, error: "notInvited" };
 
-  const supabase = await createSupabaseServerClient({
-    url: env.NEXT_PUBLIC_SUPABASE_URL,
-    publishableKey: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  });
+  const supabase = await createSupabaseServerClient(supabaseConfig);
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data,
     options: { shouldCreateUser: false, emailRedirectTo: `${env.NEXT_PUBLIC_SITE_URL}/auth/confirm` },

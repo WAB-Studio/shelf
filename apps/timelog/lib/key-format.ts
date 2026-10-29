@@ -13,8 +13,12 @@ export function mintKey(): { key: string; hash: Buffer; hint: string } {
   return { key, hash: fingerprint(key), hint: key.slice(-4) };
 }
 
+export function isKey(value: string): boolean {
+  return /^tl_[A-Za-z0-9_-]{43}$/.test(value);
+}
+
 // The bearer of `Authorization: Bearer tl_…`, or null for any other header.
 export function bearerOf(header: string | null): string | null {
-  const match = /^Bearer (tl_[A-Za-z0-9_-]{43})$/.exec(header ?? "");
-  return match ? match[1] : null;
+  const bearer = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : null;
+  return bearer !== null && isKey(bearer) ? bearer : null;
 }

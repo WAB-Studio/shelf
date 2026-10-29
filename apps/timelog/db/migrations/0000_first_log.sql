@@ -112,14 +112,11 @@ declare
   person uuid;
   written integer;
 begin
-  update timelog.access_keys k
-     set last_used_at = now()
-   where k.key_hash = hash and k.revoked_at is null
-  returning k.user_id into person;
+  select p.user_id into person from timelog.person_for_key(hash) p;
   if person is null then
     return null;
   end if;
-  -- Two keys of one person can upload the same device at once; the key's row lock covers only one key.
+  -- Two keys of one person can upload the same device at once.
   perform pg_advisory_xact_lock(hashtextextended(person::text || '/' || replace_days.device, 0));
 
   delete from timelog.app_seconds s

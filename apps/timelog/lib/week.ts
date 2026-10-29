@@ -1,9 +1,13 @@
 import { addDays, isCivilDay } from "@/lib/zone";
 
+// Monday 0 to Sunday 6.
+export function weekdayIndex(day: string): number {
+  return (new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7;
+}
+
 // The Monday of `day`'s Monday-to-Sunday week.
 export function mondayOf(day: string): string {
-  const weekday = (new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7;
-  return addDays(day, -weekday);
+  return addDays(day, -weekdayIndex(day));
 }
 
 export function daysOfWeek(monday: string): string[] {
@@ -33,8 +37,7 @@ export function askedWeek(value: string | undefined, today: string): string {
 }
 
 // The asked week inside the span: past either end, the nearer end.
-export function parseWeek(value: string | undefined, firstDay: string | null, today: string): string {
-  const monday = askedWeek(value, today);
+export function clampWeek(monday: string, firstDay: string | null, today: string): string {
   const { first, last } = span(firstDay, today);
   if (monday < first) return first;
   return monday > last ? last : monday;

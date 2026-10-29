@@ -47,19 +47,18 @@ export async function uploadSpan(): Promise<{ firstDay: string | null; lastRecei
   };
 }
 
-export type KeyRow = { id: string; name: string; hint: string; lastUsedAt: Date | null; revoked: boolean };
+type KeyRow = { id: string; name: string; lastUsedAt: Date | null; revoked: boolean };
 
 export async function listKeys(): Promise<KeyRow[]> {
   const rows = await withTimeDb((tx) =>
-    tx.execute<{ id: string; name: string; hint: string; last_used_at: string | null; revoked_at: string | null }>(sql`
-      select id, name, hint, last_used_at, revoked_at
+    tx.execute<{ id: string; name: string; last_used_at: string | null; revoked_at: string | null }>(sql`
+      select id, name, last_used_at, revoked_at
         from timelog.access_keys
        order by revoked_at is not null, created_at desc`),
   );
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
-    hint: row.hint,
     lastUsedAt: row.last_used_at ? new Date(row.last_used_at) : null,
     revoked: row.revoked_at !== null,
   }));

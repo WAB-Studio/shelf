@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { BarRows } from "@/components/screens/app-rows";
 import { Stack, Text, Title } from "@/components/ui";
 import { appsBetween, uploadSpan } from "@/lib/queries";
+import { sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
 import { civilDay } from "@/lib/zone";
 
@@ -10,12 +11,12 @@ import { civilDay } from "@/lib/zone";
 export default async function TodayPage() {
   const today = civilDay();
   const [apps, span, words, t] = await Promise.all([appsBetween(today, today), uploadSpan(), calendarWords(), getTranslations("time.today")]);
-  const total = apps.reduce((sum, one) => sum + one.seconds, 0);
+  const total = sum(apps);
 
   return (
     <Stack gap={4}>
       <Stack gap={1}>
-        <Title>{t("title", { weekday: words.weekday(today), day: Number(today.slice(8, 10)), month: words.month(today) })}</Title>
+        <Title>{t("title", { weekday: words.weekday(today), day: words.dayOfMonth(today), month: words.month(today) })}</Title>
         {apps.length > 0 ? (
           <Text variant="meta">
             {t("total")} <Text variant="total" mono>{words.duration(total)}</Text>
