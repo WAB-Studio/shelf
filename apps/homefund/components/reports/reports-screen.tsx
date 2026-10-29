@@ -9,12 +9,11 @@ import {
   Flex,
   Heading,
   Disc,
-  Link,
   Money,
   ReportCard,
   ReportRow,
-  TapTarget,
   Text,
+  TextLink,
 } from "@/components/ui";
 import type { BarChartDatum } from "@/components/ui";
 import type { CategoryExpense } from "@/db/queries/reports/expenses-by-category";
@@ -22,7 +21,6 @@ import type { MonthFlow } from "@/db/queries/reports/monthly-flow";
 import type { ReportsData } from "@/db/queries/reports/reports-screen";
 import type { MemberContributionNamed } from "@/db/queries/reports/reports-screen";
 import type { CurrencyCode } from "@/lib/currency";
-import { Link as LocaleLink } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 
@@ -39,11 +37,7 @@ function ReportsHead({ title }: { title: string }) {
   return (
     <Flex justify="between" align="center" gap="3" wrap="wrap">
       <Heading size="6">{title}</Heading>
-      <Link asChild size="2" weight="medium">
-        <LocaleLink href="/reports/review">
-          <TapTarget align="center">{t("entry")}</TapTarget>
-        </LocaleLink>
-      </Link>
+      <TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>
     </Flex>
   );
 }

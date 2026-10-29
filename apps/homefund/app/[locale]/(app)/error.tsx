@@ -2,8 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { Button, Flex, Heading, Link, Page, Panel, TapTarget } from "@/components/ui";
-import { Link as LocaleLink } from "@/i18n/navigation";
+import { Button, Flex, Heading, Page, Panel, TextLink } from "@/components/ui";
 
 /**
  * The signed-in shell's boundary. It replaces the screen and nothing else — the
@@ -38,13 +37,9 @@ export default function AppError({
         <Button size="3" onClick={() => retry()}>
           {t("common.retry")}
         </Button>
-        <Link asChild>
-          <LocaleLink href="/">
-            <TapTarget align="center" justify="center" px="2">
-              {t("common.backHome")}
-            </TapTarget>
-          </LocaleLink>
-        </Link>
+        <TextLink href="/" justify="center" px="2">
+          {t("common.backHome")}
+        </TextLink>
       </Flex>
 
       <Flex
@@ -60,13 +55,9 @@ export default function AppError({
           <Button size="3" onClick={() => retry()}>
             {t("common.retry")}
           </Button>
-          <Link asChild>
-            <LocaleLink href="/">
-              <TapTarget align="center" justify="center" px="2">
-                {t("common.backHome")}
-              </TapTarget>
-            </LocaleLink>
-          </Link>
+          <TextLink href="/" justify="center" px="2">
+            {t("common.backHome")}
+          </TextLink>
         </Panel>
       </Flex>
     </Page>

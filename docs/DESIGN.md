@@ -471,7 +471,8 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - `DeudasProximoPagoSinDeudaMovil` (M5): with only cards in credit or at zero, «Próximo pago» reads «—» and has no note.
   - `DeudasAFavorPorFacturar` (M5, Q9 a): «A favor $ 8.000» in the accent, then «· Debes US$ 25» in ink, then «(≈ $ 105.000 por
     facturar)» muted. At 360 it wraps only at « · » or before the parenthesis; at 1280 it sits right-aligned in «Saldo». A
-    billed purchase drops the parenthesis. Pesos that owe keep today's drawing.
+    billed purchase drops the parenthesis. Pesos that owe keep today's drawing. Each « · » closes the figure before it and
+    takes its ink, so a wrap never opens a line with it: accent after «A favor», muted after «por facturar».
 - **Decided by the user 2026-10-24, on oleada-7 and the short critic of oleada-6's fixes:**
   - «Revisar el mes» (O7-Q1 a): from the 1st, Inicio shows one line «Revisar septiembre · 4 movimientos» while last month
     has unmarked items; the screen opens from it and from «Reportes» for any closed month.

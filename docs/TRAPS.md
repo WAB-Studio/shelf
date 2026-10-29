@@ -3303,3 +3303,14 @@ sockets per file: pass 2 took 1927 s for 31 s of tests.
   statement's text, or from both.
 - Measured 2026-10-19: `pulsar-checks` red on CI 39346172548 (`2 connection(s): unknown, unknown`). Local
   `check:plan` never runs these checks; the train's first CI was cancelled before `pulsar-checks` finished.
+
+## A stale `.next/dev` reloads every page of `next dev` without end
+
+Measured 2026-10-28, lane 3: after `git checkout` of other commits under a running `next dev`, then a restart,
+every GoalLog page reloaded itself ~10 times a second (`[HMR] connected` → `[Fast Refresh] rebuilding` → reload;
+912 `✓ Compiled in 2ms` in the log). Specs failed with timeouts and `net::ERR_ABORTED`: 24 of 31 on
+`mes-que-viene`, `semana-que-viene` and `semana-atras`, the same on `origin/oleada-8`, so no code caused it.
+
+- Count main-frame navigations of one page for 4 s: more than 2 is this.
+- Stop the server, move `apps/<app>/.next/dev` into the lane's `private/`, start again. 31/31 green after.
+- Stop the dev server before checking out another commit in its worktree.

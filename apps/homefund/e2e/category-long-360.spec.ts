@@ -9,12 +9,11 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, type Locator, type Page } from "@playwright/test";
-import type { TransactionSql } from "postgres";
 
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { clearGroup, readScope, seedGroup, test } from "./global-setup";
+import { asHarnessUser, clearGroup, readScope, seedGroup, test } from "./global-setup";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -34,21 +33,10 @@ const ids = {
 
 let groupId = "";
 
-function claimsFor(userId: string): string {
-  return JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
-}
-
-async function asLeader(fn: (tx: TransactionSql) => Promise<void>) {
-  await fixtureSql.begin(async (tx) => {
-    await tx`select set_config('request.jwt.claims', ${claimsFor(scope.userId)}, true)`;
-    await fn(tx);
-  });
-}
-
 test.beforeAll(async () => {
   expect(LONG_CATEGORY).toHaveLength(60);
   ({ groupId } = await seedGroup());
-  await asLeader(async (tx) => {
+  await asHarnessUser(async (tx) => {
     await tx`
       insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (${ids.fundAccount}, ${groupId}, true, ${FUND_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;

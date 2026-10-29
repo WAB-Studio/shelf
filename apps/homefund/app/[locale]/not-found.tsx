@@ -1,7 +1,6 @@
 import { useTranslations } from "next-intl";
 
-import { Box, Flex, Heading, Link, TapTarget, Text } from "@/components/ui";
-import { Link as LocaleLink } from "@/i18n/navigation";
+import { Box, Flex, Heading, Text, TextLink } from "@/components/ui";
 
 export default function NotFound() {
   const t = useTranslations();
@@ -25,13 +24,9 @@ export default function NotFound() {
             {t("errors.notFoundDescription")}
           </Text>
         </Box>
-        <Link asChild>
-          <LocaleLink href="/">
-            <TapTarget align="center" justify="center" px="2">
-              {t("common.backHome")}
-            </TapTarget>
-          </LocaleLink>
-        </Link>
+        <TextLink href="/" justify="center" px="2">
+          {t("common.backHome")}
+        </TextLink>
       </main>
     </Flex>
   );

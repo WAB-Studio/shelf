@@ -13,7 +13,7 @@ import { expect, type Locator, type Page, type Route } from "@playwright/test";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { HARNESS_MEMBER_EMAIL } from "../scripts/harness/session";
-import { MEMBER_STORAGE_STATE, clearGroup, readScope, test } from "./global-setup";
+import { MEMBER_STORAGE_STATE, asUser, clearGroup, readScope, test } from "./global-setup";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -24,17 +24,12 @@ const OTHER_FUND = `Familia Ruiz ${stamp}`;
 let groupId = "";
 let pendingId = "";
 
-function claimsFor(userId: string): string {
-  return JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
-}
-
 // The first identity leads FUND; the second is invited to it by email and belongs to nothing yet.
 async function seedInvitation(email: string = HARNESS_MEMBER_EMAIL): Promise<void> {
   await clearGroup();
   groupId = randomUUID();
   pendingId = randomUUID();
-  await fixtureSql.begin(async (tx) => {
-    await tx`select set_config('request.jwt.claims', ${claimsFor(scope.userId)}, true)`;
+  await asUser(scope.userId, async (tx) => {
     await tx`insert into groups (id, name, cash_mode) values (${groupId}, ${FUND}, 'per_member')`;
     await tx`
       insert into group_members (group_id, user_id, name, role)
@@ -42,6 +37,22 @@ async function seedInvitation(email: string = HARNESS_MEMBER_EMAIL): Promise<voi
     await tx`
       insert into group_members (id, group_id, name, role, invite_email)
       values (${pendingId}, ${groupId}, ${`Invitada ${stamp}`}, 'member', ${email})`;
+  });
+}
+
+// The invitee already leads OTHER_FUND, alone in it or with one more member.
+async function seedInviteeFund(withCompany: boolean): Promise<void> {
+  const otherId = randomUUID();
+  await asUser(scope.memberUserId, async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${otherId}, ${OTHER_FUND}, 'per_member')`;
+    await tx`
+      insert into group_members (group_id, user_id, name, role)
+      values (${otherId}, ${scope.memberUserId}, ${`Ruiz ${stamp}`}, 'leader')`;
+    if (withCompany) {
+      await tx`
+        insert into group_members (group_id, name, role)
+        values (${otherId}, ${`Hermana ${stamp}`}, 'member')`;
+    }
   });
 }
 
@@ -214,14 +225,7 @@ test.describe("a person with an invitation", () => {
 
   test("alone in their own fund: the invitee still sees the normal pending card with Aceptar", async ({ page }) => {
     // Kills: refusing the card to anyone who already leads a fund (Q32: a lone leader may accept; M81 owns the outcome).
-    const aloneId = randomUUID();
-    await fixtureSql.begin(async (tx) => {
-      await tx`select set_config('request.jwt.claims', ${claimsFor(scope.memberUserId)}, true)`;
-      await tx`insert into groups (id, name, cash_mode) values (${aloneId}, ${OTHER_FUND}, 'per_member')`;
-      await tx`
-        insert into group_members (group_id, user_id, name, role)
-        values (${aloneId}, ${scope.memberUserId}, ${`Ruiz ${stamp}`}, 'leader')`;
-    });
+    await seedInviteeFund(false);
 
     await openCard(page);
     await expect(accept(page)).toBeEnabled();
@@ -232,18 +236,8 @@ test.describe("a person with an invitation", () => {
   test("already in another fund: the card names the other fund and joins nothing", async ({ page }) => {
     // Kills: an accept that moves the person; the refusal naming the wrong fund; no way out.
     await openCard(page);
-    const otherId = randomUUID();
-    await fixtureSql.begin(async (tx) => {
-      await tx`select set_config('request.jwt.claims', ${claimsFor(scope.memberUserId)}, true)`;
-      await tx`insert into groups (id, name, cash_mode) values (${otherId}, ${OTHER_FUND}, 'per_member')`;
-      await tx`
-        insert into group_members (group_id, user_id, name, role)
-        values (${otherId}, ${scope.memberUserId}, ${`Ruiz ${stamp}`}, 'leader')`;
-      // Someone else lives in it: a fund with company is not given up by an accept (Q32).
-      await tx`
-        insert into group_members (group_id, name, role)
-        values (${otherId}, ${`Hermana ${stamp}`}, 'member')`;
-    });
+    // Someone else lives in it: a fund with company is not given up by an accept (Q32).
+    await seedInviteeFund(true);
 
     await accept(page).click();
 

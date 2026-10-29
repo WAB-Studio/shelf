@@ -81,6 +81,7 @@ export { CopyField } from "./copy-field";
 export { StackedSegmentedControl } from "./stacked-segmented-control";
 
 export { TapTarget } from "./tap-target";
+export { TextLink } from "./text-link";
 
 export { Page } from "./page";
 

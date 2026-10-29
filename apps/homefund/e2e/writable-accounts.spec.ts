@@ -12,13 +12,12 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
-import type { TransactionSql } from "postgres";
 
 import { todayInBogota } from "@/lib/dates";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { MEMBER_STORAGE_STATE, clearGroup, readScope, seedGroup, test } from "./global-setup";
+import { MEMBER_STORAGE_STATE, asUser, clearGroup, readScope, seedGroup, test } from "./global-setup";
 
 const common = messages.common;
 const payments = messages.plannedPayments;
@@ -45,21 +44,9 @@ const ids = {
 
 let groupId = "";
 
-function claimsFor(userId: string): string {
-  return JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
-}
-
-// A fixture speaks for one identity so the stamping triggers see a caller.
-async function as(userId: string, fn: (tx: TransactionSql) => Promise<void>) {
-  await fixtureSql.begin(async (tx) => {
-    await tx`select set_config('request.jwt.claims', ${claimsFor(userId)}, true)`;
-    await fn(tx);
-  });
-}
-
 async function seedAccounts() {
   ({ groupId } = await seedGroup());
-  await as(scope.userId, async (tx) => {
+  await asUser(scope.userId, async (tx) => {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (${ids.leader}, ${scope.userId}, ${LEADER_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
@@ -69,7 +56,7 @@ async function seedAccounts() {
         (${ids.shared}, ${groupId}, true, ${SHARED_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01'),
         (${ids.unshared}, ${groupId}, false, ${UNSHARED_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
   });
-  await as(scope.memberUserId, async (tx) => {
+  await asUser(scope.memberUserId, async (tx) => {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values
@@ -80,7 +67,7 @@ async function seedAccounts() {
 
 async function dropRows() {
   const all = Object.values(ids);
-  await as(scope.userId, async (tx) => {
+  await asUser(scope.userId, async (tx) => {
     await tx`delete from transactions where from_account_id in ${tx(all)} or to_account_id in ${tx(all)}`;
     await tx`delete from recurring_rules where from_account_id in ${tx(all)} or to_account_id in ${tx(all)}`;
     await tx`delete from planned_payments where from_account_id in ${tx(all)} or to_account_id in ${tx(all)}`;
@@ -180,7 +167,7 @@ test.describe("as a plain member", () => {
   test("an edit keeps naming its account after sharing was turned off", async ({ page }) => {
     // Kills: the held account dropped from the list.
     const concept = `Pago fondo ${stamp}`;
-    await as(scope.memberUserId, async (tx) => {
+    await asUser(scope.memberUserId, async (tx) => {
       await tx`
         insert into planned_payments (
           group_id, from_account_id, amount_cents, due_date, description, created_by)
@@ -273,7 +260,7 @@ test.describe("as a plain member", () => {
 
   test("the form opens with no account once the last-used one is no longer on offer", async ({ page }, testInfo) => {
     // Kills: lastUsedAccountId applied unconditionally.
-    await as(scope.memberUserId, async (tx) => {
+    await asUser(scope.memberUserId, async (tx) => {
       await tx`set local session_replication_role = replica`;
       const [row] = await tx<{ id: string }[]>`
         insert into transactions (to_account_id, amount_cents, occurred_at, created_by, group_id, currency)

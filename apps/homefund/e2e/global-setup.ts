@@ -107,7 +107,7 @@ export async function asHarnessUser(
  * naming this actor, which is the column `purgeAuditTrail` reads them back by —
  * a delete run without claims stamps an actor nothing can name again.
  */
-async function asUser(
+export async function asUser(
   userId: string,
   fn: (tx: TransactionSql) => Promise<void>,
 ): Promise<void> {
