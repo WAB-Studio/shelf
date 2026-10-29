@@ -1,0 +1,48 @@
+{
+  "eyebrow": "GoalLog",
+  "title": "{client} quiere ver tus metas",
+  "mayLabel": "podrá",
+  "may": {
+    "read": "leer tus metas, meses, tareas, sueltas e informe",
+    "done": "marcar hecho y anotar cantidades",
+    "write": "abrir metas, escribir tareas y sus notas",
+    "rename": "renombrar una meta y mover su final",
+    "phases": "añadir fases y compromisos, y retirar un compromiso",
+    "plan": "darle mes o día a una tarea, devolverla al plan y cambiar el monto de un mes",
+    "measure": "poner la medida y el ritmo de una meta"
+  },
+  "neverLabel": "nunca",
+  "never": {
+    "delete": "borrar ni archivar nada",
+    "undo": "desmarcar lo que ya hiciste"
+  },
+  "consentLead": "Podrá leer tus metas y anotar lo que hagas.",
+  "returnsTo": "al permitir, vuelves a <host>{address}</host>",
+  "allow": "Permitir",
+  "deny": "No permitir",
+  "anonymousClient": "Una aplicación",
+  "working": "Un momento…",
+  "footer": "entraste como {email} · lo revocas cuando quieras en Metas › Conectar una IA",
+  "signedOut": {
+    "send": "Enviar código",
+    "lead": "Entra primero. Te mandamos un código a tu correo, lo escribes aquí y decides."
+  },
+  "invalid": {
+    "title": "Este pedido no es válido",
+    "body": "La aplicación que te trajo aquí no se identificó bien. No se dio ningún permiso. Vuelve a conectarla desde claude.ai.",
+    "home": "Ir a GoalLog"
+  },
+  "errors": {
+    "invalid": "La solicitud no es válida.",
+    "responseType": "La solicitud pide un tipo de respuesta que no admitimos.",
+    "clientId": "La IA que pide entrar no se identifica bien.",
+    "clientUnknown": "No conocemos a la IA que pide entrar.",
+    "redirectUri": "La dirección de regreso no es válida.",
+    "redirectMismatch": "La dirección de regreso no es la que esa IA registró.",
+    "codeChallenge": "Falta la prueba de seguridad de la solicitud.",
+    "codeChallengeMethod": "La prueba de seguridad de la solicitud no es de un tipo que admitimos.",
+    "state": "El estado de la solicitud es demasiado largo.",
+    "resource": "La solicitud apunta a otro servidor.",
+    "signedOut": "Entra para dar o negar el permiso."
+  }
+}

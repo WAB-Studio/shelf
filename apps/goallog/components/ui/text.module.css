@@ -1,0 +1,147 @@
+/* Every class is doubled to outrank `.rt-Text:where(.rt-r-size-N)`, which sets
+   the size and the family a screen would otherwise inherit from Radix. */
+
+/* docs/goallog/DESIGN.md "Type": the screen title on the phone. */
+.title.title {
+  font-size: var(--pulsar-text-title-size);
+  font-weight: var(--pulsar-text-title-weight);
+  letter-spacing: var(--pulsar-text-title-tracking);
+  line-height: 1.15;
+}
+
+/* The same title wide: a step up in size and weight, a shade tighter. */
+@media (min-width: 700px) {
+  .title.title {
+    font-size: var(--pulsar-text-title-size-wide);
+    font-weight: var(--pulsar-text-title-weight-wide);
+    letter-spacing: var(--pulsar-text-title-tracking-wide);
+  }
+}
+
+/* A group heading inside a screen: the sheet title's step, 21px. */
+.heading.heading {
+  font-size: var(--pulsar-text-sheet-title-size);
+  font-weight: var(--pulsar-text-title-weight);
+  letter-spacing: var(--pulsar-text-title-tracking);
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* A commitment name. */
+.name.name {
+  font-size: var(--pulsar-text-name-size);
+  font-weight: var(--pulsar-text-name-weight);
+  line-height: 1.35;
+}
+
+/* The metadata line under a name: mono, because it carries dates and counts. */
+.meta.meta {
+  font-family: var(--font-mono);
+  font-size: var(--pulsar-text-meta-size);
+  letter-spacing: var(--pulsar-text-measure-tracking);
+  line-height: 1.4;
+  color: var(--pulsar-muted);
+}
+
+/* The quiet sentence: Archivo 13 / 1.5 in muted. Mono is for figures and dates. */
+.sentence.sentence {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  line-height: 1.5;
+  color: var(--pulsar-muted);
+}
+
+/* A plain line in the main text colour at the body-line size (15 / 1.6). */
+.line.line {
+  font-family: var(--font-sans);
+  font-size: var(--pulsar-text-line-size);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  line-height: var(--pulsar-text-line-leading);
+  color: var(--pulsar-ink);
+}
+
+.ink.ink {
+  color: var(--pulsar-ink);
+}
+
+.secondary.secondary {
+  color: var(--pulsar-ink-secondary);
+}
+
+.muted.muted {
+  color: var(--pulsar-muted);
+}
+
+.accent.accent {
+  color: var(--pulsar-accent);
+}
+
+.end.end {
+  margin-inline-start: auto;
+}
+
+/* Body text from 1024: the size and weight a paragraph in a card reads at. */
+@media (min-width: 1024px) {
+  .plainWide.plainWide.title.title {
+    font-size: var(--pulsar-text-line-size);
+    font-weight: 400;
+    letter-spacing: normal;
+    line-height: var(--pulsar-text-line-leading);
+  }
+}
+
+.rule.rule {
+  margin: 0;
+  padding-block-start: 18px;
+  border-block-start: 2px solid var(--pulsar-ink);
+}
+
+@media (min-width: 1024px) {
+  .rule.rule {
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+}
+
+/* A task's note: 13px, whole, line breaks kept, a 2px hairline rule at its
+   left. Paper sets it at 12pt and wraps a long word rather than overflow. */
+.note.note {
+  margin: 0;
+  padding-inline-start: 10px;
+  border-inline-start: 2px solid var(--pulsar-line);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* A heading that is a link: the ink, no underline, the accent focus ring. */
+.link.link {
+  color: var(--pulsar-ink);
+  text-decoration: none;
+}
+
+.link.link:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 2px;
+}
+
+.strong.strong {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.breakWords.breakWords {
+  overflow-wrap: anywhere;
+}
+
+@media print {
+  .note.note {
+    font-size: 12pt;
+  }
+}

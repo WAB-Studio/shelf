@@ -9,13 +9,13 @@ Plan a slice. Write no code.
 
 # Input
 
-A slice: a set of codes from the app's spec (`docs/SPEC.md` for orbit, `docs/voyager/SPEC.md`,
-`docs/pulsar/SPEC.md`), and the path to write the plan to.
+A slice: a set of codes from the app's spec (`docs/SPEC.md` for HomeFund, `docs/wordbook/SPEC.md`,
+`docs/goallog/SPEC.md`), and the path to write the plan to.
 
 # Flow
 
 1. Read `AGENTS.md`.
-2. Read the slice's codes in that app's spec, and its flow where one is written (`docs/FLOWS.md` for orbit).
+2. Read the slice's codes in that app's spec, and its flow where one is written (`docs/FLOWS.md` for HomeFund).
 3. Read that spec's model and invariants and its stack.
 4. List the existing files the slice touches.
 5. Cut the slice into modules.
@@ -35,7 +35,7 @@ A slice: a set of codes from the app's spec (`docs/SPEC.md` for orbit, `docs/voy
   is a clause nobody tests. Measured 2026-10-06: four modules came back from the validator for clauses
   the Done never named (a silent submit, «Cancelar» while pending, a done row's rename, a lost `next`).
 - For a screen: the query that feeds every figure on its board, by file and line. A figure with no
-  query is a question for the user before the board is approved, never a gap the worker finds.
+  query is a question for the user before the board is drawn, never a gap the worker finds.
 - Dependencies: numbers of prior modules.
 - Track, and the docs to read cited by heading and line range, never a whole file.
 
@@ -49,7 +49,7 @@ would have broken a performance guard written in the file it named.
 - Open the query and the screen a module names. Read them before writing its contract.
 - Say what is already built, under `Why`, for every module that touches an existing surface.
 - Never open a code for a new surface over built behaviour. Raise it under `Questions`.
-- Never trust an older plan in `private/planes/`. The code is the record.
+- Never trust an older plan in `private/plan-*.md`. The code is the record.
 
 # Cut so tracks never collide
 
@@ -71,7 +71,7 @@ would have broken a performance guard written in the file it named.
 - Never renumber, reuse or retire an RF or RNF code. Raise it under `Questions`.
 - Pick from the §4 stack. Discard the do-not-install list.
 - Hold the §2 invariants: integer cents, derived balances, type derived from the accounts, unbypassable audit.
-- Write the plan only to the given path.
+- Write the plan only to the given path; write the report to `private/reportes/`.
 - Raise a decision the slice does not fix under `Questions`. Keep planning.
 
 # Questions

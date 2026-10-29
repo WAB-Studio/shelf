@@ -1,0 +1,43 @@
+{
+  "$schema": "../../node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "tap",
+  "tap": {
+    "nodeArgs": [
+      "--experimental-test-module-mocks",
+      "--import",
+      "tsx"
+    ],
+    "testFiles": [
+      "lib/**/*.test.ts"
+    ]
+  },
+  "mutate": [
+    "lib/chat/{conversation,prompt,seam}.ts",
+    "lib/dates/short-month.ts",
+    "lib/day/{cadence,day-words,derive,habit-months,habit-weeks,logged-fact,measure-inputs,period,review,tally,time-chips,week-href,week-param,weeks}.ts",
+    "lib/export/{measure,sections}.ts",
+    "lib/goals/{placement,tree}.ts",
+    "lib/import/{check,clean,coverage,created-store,draft-store,draft,line-tasks,model-seam,prompt,repeated,reshape,review,sections,template}.ts",
+    "lib/lists/{endless-cut,tail}.ts",
+    "lib/net/ipv6.ts",
+    "lib/plan/{carry,first-rhythm,month-name,months,moved-span,pace-line,return-to,roadmap-read,roadmap,screen-planned,week-planned}.ts",
+    "lib/units/{time-words,time}.ts",
+    "lib/validation/{budget,horizon,measure,one-off,plan,rhythm,token}.ts"
+  ],
+  "ignorePatterns": [
+    "private",
+    ".next",
+    "e2e",
+    "node_modules"
+  ],
+  "incremental": true,
+  "incrementalFile": "private/stryker-incremental.json",
+  "reporters": [
+    "clear-text",
+    "json"
+  ],
+  "coverageAnalysis": "off",
+  "disableTypeChecks": "{lib,app}/**/*.ts",
+  "concurrency": 1,
+  "timeoutMS": 20000
+}

@@ -1,0 +1,110 @@
+/* docs/goallog/DESIGN.md "Tokens": the ground. The column is a flex stack so a
+   screen spaces its groups with `gap` instead of a margin of its own. */
+.page {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  background: var(--pulsar-ground);
+  color: var(--pulsar-ink);
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  /* `app/theme.css`'s shell makes this the only route to filling the
+     viewport on a short screen: `flex-grow` against the nav's own fixed
+     height, not `min-height: 100%`, which measured against that same shell
+     claimed the whole height for itself and pushed `components/ui/
+     bottom-nav.tsx` below the fold — the two cannot both hold "the rest of
+     the height" at once. A no-op outside a flex parent, which nothing in
+     this app is any longer. */
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+/* Past the phone the column stops growing and centres, at the phone's 600px
+   until the rail arrives. */
+@media (min-width: 700px) {
+  .page {
+    max-width: 640px;
+    margin-inline: auto;
+    width: 100%;
+  }
+}
+
+/* RNP-17: beside the rail, `app/theme.css`'s row frame. The column fills what
+   the rail leaves and starts at its edge; the board's padding is 44 over 56. */
+@media (min-width: 1024px) {
+  .page {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    width: auto;
+    max-width: none;
+    margin-inline: 0;
+    padding: 44px 56px calc(44px + env(safe-area-inset-bottom, 0px));
+    gap: 40px;
+  }
+
+  /* `ArmazonFormularioEscritorio.dc.html`: a screen without `full` is a form.
+     Its header spans the frame; the fields sit under it in a 560px block, the
+     primary button at its own width. */
+  .page:not(.full):not(.alone) > :not(header) {
+    max-inline-size: 560px;
+  }
+
+  /* `SistemaEspacio.dc.html`: a screen of columns stops at 1200 (plus its two
+     gutters) and stays centred in what the rail leaves, so the header and the
+     content share one edge. */
+  .page.full {
+    flex: 0 1 calc(1200px + 112px);
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page.column > :not(header) {
+    max-inline-size: 640px;
+  }
+}
+
+/* A screen with no rail: the 700px centred column holds at every width. */
+@media (min-width: 1024px) {
+  .page.alone {
+    flex: 1 0 auto;
+    width: 100%;
+    max-width: 640px;
+    margin-inline: auto;
+    padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+    gap: 40px;
+  }
+}
+
+.page.middle {
+  justify-content: center;
+  min-block-size: 100dvh;
+}
+
+/* From 1024 a button or link-button standing alone in the column is as wide as
+   its text, 160 at least, at the column's start; below, the column's stretch. */
+@media (min-width: 1024px) {
+  .page.page > :is(a, button) {
+    align-self: flex-start;
+    inline-size: fit-content;
+    min-inline-size: 160px;
+  }
+}
+
+/* `print="full"`: paper is one column as wide as the sheet's margins leave;
+   the sheet's own `@page` margin is the gutter. */
+@media print {
+  .page.page.printFull {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page.alone.snug {
+    gap: 32px;
+  }
+}

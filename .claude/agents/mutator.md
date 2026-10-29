@@ -22,6 +22,8 @@ Only the files the branch itself changed:
 `git log $(git merge-base <base> HEAD)..HEAD --name-only --format=`.
 Never the whole repository. The risk is in the change.
 
+Run `npm run mutate:pure -- --changed <base>` in `apps/goallog` first on the pure `lib/` files the branch changed, and spend your own budget on screens, policies and actions, which Stryker cannot reach.
+
 Skip generated files, fixtures, migrations and anything under `e2e/` or `scripts/check-*`: you
 mutate the app, never the thing that judges it.
 
@@ -48,11 +50,12 @@ Count minutes before you start. Run each mutation against the one test that kill
 `-g`), never a suite. Wait for the server to answer, never a fixed `sleep`. Say in the report which test
 you ran, and name the mutants you did not run for cost.
 
-Run at most three suites at once. Nine GB of RAM holds three servers and three Chromiums.
+Run at most five suites at once: 15 GB holds five servers and five Chromiums.
 
+Build once for all the mutations; never rebuild per mutant.
 Drive pulsar's mutations against `next build` + `next start`, never `next dev`, never `rm -rf .next`.
 For orbit and voyager, start the dev server with `NODE_OPTIONS=--max-old-space-size=3072`. Restart it every eight mutants and
-whenever its RSS passes 3 GB. Each mutant is a recompile that `next dev` keeps in memory: one server
+whenever its RSS passes 3 GB. `next dev` keeps every recompile in memory: one server
 reached 7.2 GB on 2026-10-06 and left the machine 2 GB. Re-run any mutant whose run straddled a restart.
 
 # Method
@@ -80,7 +83,7 @@ A suite that errors before it asserts is neither. Fix the run or drop the mutant
 - Save every mutation as a patch under the lane's `private/mutants/<id>.patch`, and name the path in
   the report beside its id. `.claude/usage-log.tsv` cuts a command at ~427 characters: on 2026-10-06
   module 276 recovered one of six survivors from it and had to rebuild the other five by guess.
-- **Never type an address into `apps/voyager`'s `/cuenta`**, and never disable the deliverability
+- **Never type an address into `apps/wordbook`'s `/cuenta`**, and never disable the deliverability
   guard in `app/actions/account.ts`: both send a real email and mint a real `auth.users` row.
 - Never run `db:migrate`.
 

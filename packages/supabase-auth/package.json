@@ -3,12 +3,13 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./settle": "./src/settle.ts"
+    "./settle": "./src/settle.ts",
+    "./settled-transaction": "./src/settled-transaction.ts"
   },
   "peerDependencies": {
     "@supabase/ssr": "^0.12.5",
     "drizzle-orm": "^0.45.2",
-    "next": "16.3.3",
+    "next": "16.4.1",
     "react": "19.2.8"
   }
 }

@@ -1,0 +1,134 @@
+/* The phone keeps the page's gutter; the desktop pane holds the body's 32px. */
+.gutter {
+  padding: 0;
+}
+
+.container {
+  background-color: var(--color-panel-solid);
+  border: 1px solid var(--gray-a4);
+  border-radius: 14px;
+  /* A row narrower than its tracks scrolls to reach them; the axis that never
+     needs to (the vertical one, against the rounded corners) stays clipped. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* One template for the header and every row under it, so the columns line up
+   without a shared parent grid. */
+.grid {
+  display: grid;
+  grid-template-columns: var(--data-table-columns);
+  column-gap: var(--data-table-column-gap, 0);
+  align-items: center;
+  padding: 10px 18px;
+  /* Unset everywhere: a fixed track sum already forces the scroll a caller
+     wants. Set, it floors the row so a flexible track can't collapse to zero
+     under negative free space — it scrolls with the fixed tracks instead. */
+  min-width: var(--data-table-min-width, 0);
+}
+
+/* Panel's own head measures, so a table that names itself sits at the same
+   height as the card beside it. */
+.caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--gray-a4);
+}
+
+.head {
+  background-color: var(--gray-2);
+  border-bottom: 1px solid var(--gray-a4);
+}
+
+.headCell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--gray-11);
+}
+
+.headCell[data-align="end"] {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.headCell[data-sorted] {
+  color: var(--gray-12);
+}
+
+/* A sortable label reads as its column header, not as a control with chrome. */
+.sort {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.row {
+  min-height: 44px;
+  border-bottom: 1px solid var(--gray-a3);
+}
+
+.row[data-alt] {
+  background-color: var(--gray-a2);
+}
+
+/* The container's own rule closes the table; the last row does not draw one. */
+.group:last-child .row:last-child {
+  border-bottom: none;
+}
+
+.cell {
+  min-width: 0;
+}
+
+.cell[data-numeric] {
+  font-variant-numeric: tabular-nums;
+}
+
+.cell[data-align="end"] {
+  justify-self: end;
+  text-align: right;
+}
+
+/* The caps band a run of rows sits under, as in PagosPlanificados. */
+.band {
+  display: flex;
+  align-items: center;
+  padding: 8px 18px;
+  background-color: var(--gray-2);
+  border-bottom: 1px solid var(--gray-a3);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gray-11);
+}
+
+.total {
+  padding: 13px 18px;
+  background-color: var(--gray-2);
+  border-top: 1px solid var(--gray-a4);
+}
+
+@media (min-width: 1024px) {
+  .gutter {
+    padding: 0 32px;
+  }
+}

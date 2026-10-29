@@ -1,0 +1,135 @@
+/* Radix Themes scopes its reset to `.radix-themes`; the document itself still
+   needs to fill the viewport and lose the user-agent's default body margin. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+/* The shell every screen stands in: a column so `components/ui/bottom-nav
+   .tsx` — the last child `app/layout.tsx` renders — sits after a screen's
+   content and still reaches the viewport's own bottom when that content is
+   short, the way `.page`'s own `flex: 1 0 auto` (page.module.css) expects. */
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* docs/goallog/DESIGN.md "Tokens" — light is the primary face, dark is the
+   same design inverted. The class comes from the pre-paint script, never
+   from a media query, so a chosen face survives the device's own setting. */
+.light {
+  --pulsar-ground: #edeff2;
+  --pulsar-raised: #ffffff;
+  --pulsar-line: #dce1e7;
+  --pulsar-border: #c7ced7;
+  --pulsar-ink: #12171c;
+  --pulsar-ink-secondary: #333c45;
+  --pulsar-muted: #5e6874;
+  --pulsar-quiet: #8a939e;
+  --pulsar-control-edge: #8a939e;
+  --pulsar-accent: #1c6e5a;
+  --pulsar-accent-soft: #dceae5;
+  --pulsar-today: #e3e8ee;
+  --pulsar-on-accent: #ffffff;
+  --pulsar-scrim: rgba(18, 23, 28, 0.34);
+}
+
+.dark {
+  --pulsar-ground: #0f1317;
+  --pulsar-raised: #161b20;
+  --pulsar-line: #222930;
+  --pulsar-border: #2b333b;
+  --pulsar-ink: #e7ecf1;
+  --pulsar-ink-secondary: #c3cbd3;
+  --pulsar-muted: #949ea9;
+  --pulsar-quiet: #5c666f;
+  --pulsar-control-edge: #626c77;
+  --pulsar-accent: #4fbea0;
+  --pulsar-accent-soft: #17332c;
+  --pulsar-today: #1e252c;
+  --pulsar-on-accent: #0f1317;
+  /* Darker than the dark ground on purpose: a sheet is raised, and it has to
+     lift off what is behind it on both faces. */
+  --pulsar-scrim: rgba(5, 7, 9, 0.62);
+}
+
+/* docs/goallog/DESIGN.md "Type" — a figure is set in mono, a sentence in
+   Archivo; the section label, screen title, commitment name and measure
+   each carry their own size so no screen invents one. */
+:root {
+  --pulsar-text-label-size: 11px;
+  --pulsar-text-label-tracking: 0.14em;
+  --pulsar-text-title-size: 27px;
+  --pulsar-text-title-weight: 600;
+  --pulsar-text-title-tracking: -0.02em;
+  --pulsar-text-title-size-wide: 41px;
+  --pulsar-text-title-weight-wide: 650;
+  --pulsar-text-title-tracking-wide: -0.03em;
+  --pulsar-text-name-size: 16px;
+  --pulsar-text-name-weight: 500;
+  --pulsar-text-meta-size: 12px;
+  --pulsar-text-measure-size: 26px;
+  --pulsar-text-measure-weight: 500;
+  --pulsar-text-unit-size: 11px;
+  --pulsar-text-measure-tracking: 0.02em;
+  --pulsar-text-sheet-title-size: 21px;
+  --pulsar-text-sheet-title-size-wide: 24px;
+  --pulsar-text-line-size: 15px;
+  --pulsar-text-line-leading: 1.6;
+}
+
+body {
+  background: var(--pulsar-ground);
+  color: var(--pulsar-ink);
+  font-family: var(--font-sans);
+}
+
+/* Radix Themes pins `--default-font-family` to its own system stack on the
+   theme root, and every control it draws reads that variable rather than the
+   family the body sets: without this line Archivo draws nowhere. It lives here
+   and not in a component because a surface Radix sends through a portal — a
+   sheet, a popover, a tooltip — inherits nothing from the page that opened it.
+   Loaded after `@radix-ui/themes/styles.css`, so at equal weight this wins;
+   `--heading-font-family` follows, since Radix defines it from this one. */
+.radix-themes {
+  --default-font-family: var(--font-sans);
+  /* The theme root carries its own ink and its own ground, from Radix's grey
+     scale: on the light face they land close to the tokens by coincidence, on
+     the dark face they do not. `--color-overlay` is the black alpha every
+     overlay Radix draws reaches for, and the scrim is a decision of the
+     design, not of the library. */
+  color: var(--pulsar-ink);
+  background-color: var(--pulsar-ground);
+  --color-overlay: var(--pulsar-scrim);
+  /* Fills `body`'s own flex column so its two children — a screen's `.page`
+     and the nav after it — share its height rather than `body`'s auto one. */
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* RNP-16, `ArmazonPestanas.dc.html`: below 1024px the tabs are fixed over the
+   foot of the viewport (components/ui/bottom-nav), so the shell keeps their
+   height clear under the content: 56px of tab, the nav's 1px rule, and the
+   home-area inset the nav pads itself with. Print draws no tabs and no gap. */
+@media screen and (max-width: 1023.98px) {
+  body > .radix-themes {
+    /* Grows with its content, so the reserved padding is scrollable height
+       and not an overflow the root's flex shrink clips short. */
+    flex: 1 0 auto;
+    padding-block-end: calc(57px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* RNP-17, `HoyEscritorio.dc.html`: from 1024px the shell is a row. The rail
+   (`components/ui/bottom-nav`) stands first and sticks to the viewport; the
+   screen takes the rest. The root grows with its content so the rail has the
+   whole scroll to stick through. */
+@media (min-width: 1024px) {
+  body > .radix-themes {
+    flex-direction: row;
+    flex: 1 0 auto;
+  }
+}

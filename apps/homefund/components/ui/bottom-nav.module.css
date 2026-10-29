@@ -1,0 +1,33 @@
+/* The mobile navigation bar: pinned to the bottom edge, its own safe-area gutter
+   below the row so the tabs never sit under the home indicator. */
+.bar {
+  position: fixed;
+  inset: auto 0 0 0;
+  background-color: var(--color-panel-solid);
+  border-top: 1px solid var(--gray-a4);
+  padding: var(--space-2) var(--space-5);
+  padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+}
+
+/* The bar's height kept in the flow beneath the screen: a tab is the 44px tap floor, plus the bar's
+   padding and top border, so a screen's last control scrolls clear of the fixed bar. */
+.clearance {
+  height: calc(2 * var(--space-2) + 44px + 1px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Lets the center action ride above the bar's top edge without pushing the row. */
+.center {
+  margin-top: calc(-1 * var(--space-6));
+}
+
+/* The "more" slot is a real button; strip the user-agent chrome so it reads as a
+   tab, and let it drive its own hit area through the TapTarget it wraps. */
+.trigger {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

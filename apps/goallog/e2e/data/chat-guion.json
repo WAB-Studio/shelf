@@ -1,0 +1,54 @@
+{
+  "hola": { "reply": "Hola, dime qué quieres ver o cambiar en tu plan." },
+  "hola marca-conversacion-estable": { "reply": "Respuesta marca-respuesta-estable." },
+  "¿Cómo voy este mes?": { "reply": "Octubre va en 12 h 30 min de 37 h, el 34 %. Van 12 días de 31." },
+  "palabra larga": { "reply": "supercalifragilisticoespialidosoextraordinariamentelargosinningunespacioquerompaelrenglonenunatarjetadetrescientossesentapixeles y fin." },
+  "falla": { "fail": true },
+  "crea la meta Ahorro": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [{ "name": "create_goal", "arguments": { "name": "Ahorro reenvío" } }]
+  },
+  "crea dos metas": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [
+      { "name": "create_goal", "arguments": { "name": "Reenvío uno" } },
+      { "name": "create_goal", "arguments": { "name": "Reenvío dos" } }
+    ]
+  },
+  "pasa Maze a marzo de 2030": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [{ "name": "fix_task", "arguments": { "one_off_id": "{{task:Maze}}", "month": "2030-03" } }]
+  },
+  "cambia la nota de Maze": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [{ "name": "set_task_note", "arguments": { "one_off_id": "{{task:Maze}}", "note": "Revisar las pistas del laberinto antes del viernes" } }]
+  },
+  "pon 4 h de inglés": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [{ "name": "set_month_amount", "arguments": { "goal_id": "{{goal:Inglés B1}}", "month": "2030-03", "amount": 240 } }]
+  },
+  "organiza marzo": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [
+      { "name": "fix_task", "arguments": { "one_off_id": "{{task:Maze}}", "month": "2030-03" } },
+      { "name": "fix_task", "arguments": { "one_off_id": "{{task:Línea base}}", "month": "2030-03" } },
+      { "name": "set_month_amount", "arguments": { "goal_id": "{{goal:Inglés B1}}", "month": "2030-03", "amount": 240 } }
+    ]
+  },
+  "organiza con un error": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [
+      { "name": "fix_task", "arguments": { "one_off_id": "{{task:Maze}}", "month": "2030-03" } },
+      { "name": "fix_task", "arguments": { "one_off_id": "{{task:Línea base}}", "month": "2020-01" } },
+      { "name": "set_month_amount", "arguments": { "goal_id": "{{goal:Inglés B1}}", "month": "2030-03", "amount": 240 } }
+    ]
+  },
+  "pasa Maze al pasado": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [{ "name": "fix_task", "arguments": { "one_off_id": "{{task:Maze}}", "month": "2020-01" } }]
+  },
+  "pasa la que no existe": {
+    "reply": "Esto cambiaría tu plan:",
+    "calls": [{ "name": "fix_task", "arguments": { "one_off_id": "00000000-0000-4000-8000-0000000000aa", "month": "2030-03" } }]
+  }
+}

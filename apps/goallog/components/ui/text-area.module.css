@@ -1,0 +1,58 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  inline-size: 100%;
+}
+
+.label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--pulsar-ink-secondary);
+  margin-block-end: 8px;
+}
+
+.control {
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding: 12px 14px;
+  background: var(--pulsar-raised);
+  color: var(--pulsar-ink);
+  border: 1.5px solid var(--pulsar-control-edge);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.control::placeholder {
+  color: var(--pulsar-muted);
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 1px;
+}
+
+.control[aria-invalid="true"] {
+  border-color: var(--pulsar-ink);
+}
+
+/* Disabled reads as «this does not move»: muted ink, a line ring. */
+.control:disabled {
+  color: var(--pulsar-muted);
+  -webkit-text-fill-color: var(--pulsar-muted);
+  border-color: var(--pulsar-line);
+}
+
+/* The refusal's sentence, in ink at 14/500: this design has no colour for failure. */
+.refusal {
+  margin-block-start: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--pulsar-ink);
+}

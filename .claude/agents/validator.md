@@ -20,7 +20,7 @@ mutations nobody logged red. Never re-run a suite the worker logged green. Prove
 
 1. `npm run typecheck` (tsgo).
 2. `npm run lint` (eslint cache).
-3. The done criterion. For an orbit RLS assignment, `npm run db:check-rls -w apps/orbit` and read that every named assertion is PASS.
+3. The done criterion. For an orbit RLS assignment, `npm run db:check-rls -w apps/homefund` and read that every named assertion is PASS.
 Report the real output. A skipped check is a FAIL.
 
 # Inspect
@@ -41,7 +41,7 @@ Against the hard rules (`AGENTS.md`, `docs/SPEC.md` §2):
 - Balances derive from movements. No stored balance column.
 - Transaction type derives from the accounts.
 - Every migration that creates a table `REVOKE ALL` from `anon`, `authenticated`, `service_role`.
-- A policy is proven in `apps/orbit/scripts/check-rls.ts`, never asserted from the migration.
+- A policy is proven in `apps/homefund/scripts/check-rls.ts`, never asserted from the migration.
 - Server validation uses the same Zod schema as the form.
 - Every interface string is in next-intl. No hardcoded copy.
 - Code and identifiers in English.
@@ -52,7 +52,7 @@ Take a mutation the tester logged red from its log: check the log ran the mutate
 (the patch, the build after it, the one test that killed it). Name each Done-table mutation that
 nobody logged under `Fixes`. New mutations of the train's lines are the `mutator`'s, running beside you.
 Run the `check:*` that import what the branch changed, sized as `AGENTS.md` § Verification says.
-Never run the whole e2e suite: CI runs it on the pull request.
+Never run the whole e2e suite: CI runs it on push, never on the pull request.
 
 A mutation that reddens nothing means the assertion **cannot fail**, not that the code is right.
 Never fabricate one that fakes a red. Two that measure nothing: feeding a total from the per-row

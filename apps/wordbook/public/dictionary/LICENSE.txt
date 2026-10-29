@@ -1,0 +1,50 @@
+FreeDict eng-spa dictionary, edition 2025.11.23
+Source: https://download.freedict.org/dictionaries/eng-spa/2025.11.23/freedict-eng-spa-2025.11.23.src.tar.xz
+
+Licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported
+license (CC BY-SA 3.0): https://creativecommons.org/licenses/by-sa/3.0/legalcode
+
+Creative Commons Attribution-ShareAlike 3.0 Unported
+
+THE WORK (AS DEFINED BELOW) IS PROVIDED UNDER THE TERMS OF THIS CREATIVE
+COMMONS PUBLIC LICENSE ("CCPL" OR "LICENSE"). THE WORK IS PROTECTED BY
+COPYRIGHT AND/OR OTHER APPLICABLE LAW. ANY USE OF THE WORK OTHER THAN AS
+AUTHORIZED UNDER THIS LICENSE OR COPYRIGHT LAW IS PROHIBITED.
+
+BY EXERCISING ANY RIGHTS TO THE WORK PROVIDED HERE, YOU ACCEPT AND AGREE TO
+BE BOUND BY THE TERMS OF THIS LICENSE. TO THE EXTENT THIS LICENSE MAY BE
+CONSIDERED TO BE A CONTRACT, THE LICENSOR GRANTS YOU THE RIGHTS CONTAINED
+HERE IN CONSIDERATION OF YOUR ACCEPTANCE OF SUCH TERMS AND CONDITIONS.
+
+You are free to Share (copy, distribute and transmit the work) and to Remix
+(adapt the work), under the following conditions:
+
+  Attribution — You must attribute the work in the manner specified by the
+  author or licensor (but not in any way that suggests that they endorse you
+  or your use of the work).
+
+  Share Alike — If you alter, transform, or build upon this work, you may
+  distribute the resulting work only under the same, similar or a compatible
+  license.
+
+The full legal code of this license is available at:
+https://creativecommons.org/licenses/by-sa/3.0/legalcode
+
+Attribution: English–Spanish data from the FreeDict eng-spa dictionary, edition 2025.11.23, built by the FreeDict project from WikDict and Wiktionary.org data via DBnary, licensed under CC BY-SA 3.0.
+
+Modifications:
+This script (apps/wordbook/scripts/build-dictionary.ts) parsed the source TEI
+XML and extracted, per entry carrying a Spanish translation, its headword,
+part of speech, IPA, Spanish translations and definition into a JSON array.
+It dropped every entry without a Spanish translation. Of the extracted
+fields: IPA is the entry's first pronunciation where the source lists more
+than one, with a trailing source annotation cut from about 223 of those
+pronunciations where the source stored one as literal text following the
+transcription (for example "/ænˈtiːɡʌn/<ref:<<name:OED>>>" becomes
+"/ænˈtiːɡʌn/"); definition is the first sentence of the entry's first sense,
+and is left empty for entries with more than one sense, so distinct meanings
+are never run together into one string; part of speech is folded onto the
+six values apps/wordbook/lib/dictionary/format.ts declares, mapping the
+source's thirteen further categories and its unlabelled entries onto the
+closest of the six. It changed nothing else: no headword, translation or
+definition text was altered beyond those two cuts.

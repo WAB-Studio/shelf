@@ -40,6 +40,22 @@ accounting exports, native apps. None of this gets built or left
 #### Authentication and fund
 
 - [x] **RF-01** — Passwordless email login.
+- [ ] **RF-143** — Signing in by email refuses an address whose domain cannot receive mail, before any email is sent, and caps the sign-in links sent per address, as `apps/wordbook` does. Decided by the user 2026-10-15.
+- [ ] **RF-145** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
+- [x] **RF-146** — Signing in by email also sends a six-digit code: the person types it on the screen where they asked for it, in the browser or the installed app, and lands where the link would have landed them. A wrong or expired code says so; nothing verifies a code twice on the person's behalf. The invitation list, the deliverability guard and the daily caps (RF-145, RF-143) stand before the code is sent. Decided by the user 2026-10-16.
+- [x] **RF-147** — On the code step, «Pedir otro código» sends a new code to the same address without typing it again, once a countdown of Auth's wait between sends has run out; the new code replaces the last. A send Auth refuses does not count against the daily caps (RF-143). Decided by the user 2026-10-17.
+- [x] **RF-148** — Inviting a member by email sends the invitee a mail of its own that names HomeFund and tells them to sign in at `/login` with that address; it carries no code and no link that signs in. The address is on the invitation list (RF-145) from the moment the member is created. Decided by the user 2026-10-17.
+- [x] **RF-149** — The leader adds a member from «Miembros» with an optional email; with one, the member is invited as RF-148 says. Inviting, from «Miembros» or from onboarding, an address that already has a pending invitation in the group is refused with «Ese correo ya tiene una invitación en este grupo.» and sends nothing. Decided by the user 2026-10-17.
+- [x] **RF-150** — Inviting, from «Miembros» or from onboarding, an address that is a live member of the group, the leader's own included, is refused with «Esa persona ya está en este grupo.» and sends nothing. Another group is never looked at. When the invitation mail cannot be sent, the notice no longer says the person can enter this group. Decided by the user 2026-10-17.
+- [x] **RF-151** — An archived invitation is not a pending one: inviting its address again adds a new pending member, and the archived row stays as history. Restoring an archived invitation whose address has a newer pending one is refused with «Ese correo ya tiene una invitación en este grupo.». Decided by the user 2026-10-17.
+- [x] **RF-152** — Inviting an address whose domain takes no mail is refused with the words `/login` uses (RF-146's deliverability guard), from «Miembros» and from onboarding; nothing is written or sent. Decided by the user 2026-10-17.
+- [x] **RF-153** — The leader gives an email to a member who has no login and no pending invitation, from «Editar miembro» («Correo (opcional)»); saving it invites them as RF-148 says, and refuses as RF-149, RF-150 and RF-152 do. The person who then signs in with that address becomes that member, under the name the group already gave them. Decided by the user 2026-10-18.
+- [ ] **RF-154** — Adding an address to a fund never puts its person in that fund on their own: the next time they sign in they see «X te invitó a su fondo · Aceptar / Rechazar», and only «Aceptar» joins them; until then the fund reads nothing of theirs. A member leaves a fund from «Salir del fondo»; what they wrote in it stays with the fund. Decided by the user 2026-10-18 (map Q2), from the 2026-10-15 decision.
+- [ ] **RF-155** — When a month closes, HomeFund shows «Revisar el mes»: the movements that stand out (an amount far above what is usual in its category; two equal movements on the same day in the same account; an amount quick entry read from words such as «m» or «mil»; a gap after a reconciliation). The person marks each «Está bien» or corrects it. The same list is a tool of the MCP server (RF-144), so Claude can review it in a conversation. The app calls no paid model: the rules are fixed. Decided by the user 2026-10-18.
+- [ ] **RF-156** — Saving an edit from a form opened before its row changed (another form, another device, or the 00:15 run) is refused with «Esto cambió mientras lo editabas. Vuelve a abrirlo.» and nothing is saved. Decided by the user 2026-10-18 (map Q1, Q24).
+- [ ] **RF-157** — A recurring rule the nightly run pauses says why on its row: «Pausada: no se pudo generar el movimiento. Revisa la regla y reanúdala.» A rule's next run can be set no earlier than 12 months before today. Decided by the user 2026-10-18 (Q16, Q17, Q24).
+- [ ] **RF-158** — A movement sent again after its answer was lost, with a different amount, is refused with «Ya guardamos este movimiento con otro monto; ábrelo para corregirlo.» and nothing is saved; sent again unchanged, it answers the movement already saved. Decided by the user 2026-10-18 (Q25 b).
+- [ ] **RF-159** — From a planned payment's reminder date (RF-74) until it is paid or archived, it shows on Inicio with its name and due date («Matrícula colegio vence el 15 dic»). Decided by the user 2026-10-18 (Q28 a).
 - [x] **RF-57** — Only the group `leader` invites members, edits the group and manages the group's categories.
 - [x] **RF-58** — Every member of a group can read all of its accounts (universal read); write is bounded per account — a personal account by its owner, a shared account by any member.
 - [x] **RF-59** — Whoever creates a group becomes its `leader`. The role is transferable, but a group is never left without a leader.
@@ -70,7 +86,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-80** — A revolving card exposes its available credit — its limit less its derived balance — its statement cut-off and payment due day, and its minimum payment for the period. Interest, when charged, is a real movement, so the balance stays derived.
 - [x] **RF-83** — Consolidated debt view: total owed across all debts, each card's available credit, the summed estimated monthly interest, and the next payment due — each debt's minimum.
 - [x] **RF-117** — The consolidated debt view shows the summed available credit across the liability accounts that carry a credit limit.
-- [ ] **RF-129** — Every account, asset or liability, keeps a statement history: one immutable record per period with its bounds, the closing balance the statement printed and the opening balance, credits and debits it printed. The difference between that closing balance and the balance derived from the account's own movements, in its own settlement currency, is derived on read and shown, never stored.
+- [x] **RF-129** — Every account, asset or liability, keeps a statement history: one immutable record per period with its bounds, the closing balance the statement printed and the opening balance, credits and debits it printed. The difference between that closing balance and the balance derived from the account's own movements, in its own settlement currency, is derived on read and shown, never stored.
 - [x] **RF-130** — A liability's statement record also carries what the statement charged for that period: interest, fees and the minimum, as printed. A closed period's statement history shows this charged figure, or that none was recorded; it never estimates a closed period. This does not change how the app estimates the current, still-open period's interest (RF-79).
 - [x] **RF-131** — A liability's next payment due derives from its latest statement's cut-off and due dates when one exists; the cut-off and due days on its terms are used only until a statement exists.
 - [ ] **RF-136** — A purchase may be deferred into a number of instalments. Its whole amount joins the balance the month it is billed, never fractioned; what the instalment fractions is that line's contribution to the minimum payment. A payment covering the balance extinguishes the plan without penalty, and the statement publishes it already extinguished. The app never concludes on its own that a purchase was deferred: it proposes it and a person confirms.
@@ -90,14 +106,19 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-24** — Edit and delete transactions.
 - [x] **RF-25** — Every transaction records which user created it.
 - [x] **RF-69** — Every income or expense splits into one or more (category, amount_cents) rows summing to its amount; a single-category income or expense is one split. A transfer has no splits and no category.
-- [ ] **RF-132** — A movement may name the movement that caused it. A caused charge is shown with its cause and is removed with it.
+- [x] **RF-132** — A movement may name the movement that caused it. A caused charge is shown with its cause and is removed with it.
 - [ ] **RF-133** — A movement whose counterparty is not known is recorded with the side that is known and waits for review; it counts in every balance, and a person completes it later by naming the other account.
+- [x] **RF-162** — A movement dated before the opening day of an account it names is refused, wherever it comes from (a form, the import, the nightly recurring run, a connected AI's import), with «La fecha es anterior a la apertura de la cuenta. Cambia la fecha o la apertura de la cuenta.»; an account's opening day cannot move later than a movement it already has. Movements already stored before their account's opening stay as they are. Decided by the user 2026-10-22 (Q5 a, Q11 a, Q12 a, Q13 b).
+- [ ] **RF-163** — An item marked «Está bien» in «Revisar el mes» can be taken back: under «Revisados» it offers «Deshacer», which drops its mark, so it waits again and counts again on Inicio's line. Only a person who may write the movement takes the mark back. Decided by the user 2026-10-28.
+- [ ] **RF-164** — An edit that changes a movement's amount makes the amount the person's own: «Revisar el mes» no longer lists it as an amount quick entry read from words. Decided by the user 2026-10-28.
+- [ ] **RF-165** — An edit that changes a movement's amount also undoes «Está bien» on it for «Muy por encima de lo usual» and «Dos iguales»: the item waits again in «Revisar el mes». A twin pair waits again when either of its movements changes amount. Decided by the user 2026-10-28.
 
 #### Categories
 
 - [x] **RF-63** — CRUD for categories with one level of subcategories, scoped to a user (personal) or a group; a subcategory shares its parent's scope.
 - [x] **RF-27** — Each category is either expense or income.
 - [x] **RF-64** — Creating a personal space or a group seeds an initial category set in the active language.
+- [x] **RF-140** — Every screen that names a category shows its scope — «Mercado · fondo» for a fund category, with no mark for a personal one — and the importer resolves a category name by the scope of the account the movement lands in. Both seeded sets (RF-64), personal and fund, stay. Decided by the user 2026-10-15.
 - [x] **RF-70** — Labels, independent of category, attach to transactions through a transaction_labels join; a group's labels are managed by its leader, a user's by their owner.
 
 #### Recurring
@@ -110,10 +131,11 @@ accounting exports, native apps. None of this gets built or left
 #### Budgets, planned payments and goals
 
 - [x] **RF-71** — CRUD for budgets: a spending limit on a category for a repeating period (monthly, weekly or yearly), scoped to a user or a group, optionally narrowed to one account and/or one label.
-- [x] **RF-72** — A budget's spent and remaining amounts derive from the transaction splits that fall in the current period and match its category and any account or label narrowing; they are never stored.
+- [ ] **RF-160** *(successor of RF-72)* — A budget's spent and remaining amounts derive from the transaction splits that fall in the current period and match its category or any of that category's subcategories, and any account or label narrowing; they are never stored. Filtering movements by a parent category shows its subcategories' movements too. Decided by the user 2026-10-18.
 - [x] **RF-73** — A budget carries an overspend alert threshold as a percentage of its limit; a budget is flagged once its derived spending crosses that threshold.
 - [x] **RF-74** — CRUD for one-off planned payments: a future movement — its accounts, amount, category and due date — with an optional reminder date, kept distinct from recurring rules.
-- [x] **RF-75** — Settling a planned payment records the transaction it planned, links the two, and marks the planned payment done; a settled or cancelled planned payment cannot be settled again.
+- [ ] **RF-141** — A planned payment's reminder (RF-74) notifies the person by email on its reminder date. Decided by the user 2026-10-15.
+- [x] **RF-161** *(successor of RF-75)* — Settling a planned payment records the transaction it planned, links the two, and marks the planned payment done; while that movement exists the payment cannot be settled again, and a cancelled one is never settled. Deleting the movement that settled a planned payment returns the payment to «Por pagar», unlinked, so it can be settled again. Decided by the user 2026-10-22 (Q4 b).
 - [x] **RF-76** — CRUD for savings goals: a target amount and an optional target date, scoped to a user or a group.
 - [x] **RF-87** — A savings goal's progress — amount saved and amount remaining — derives from its contributions (`goal_contributions`), each an amount set aside virtually with no movement required; it is never stored.
 - [x] **RF-119** — A savings goal's contributions are listed with their amounts and dates and one is removed from that list; the goal's progress re-derives from what remains.
@@ -123,9 +145,12 @@ accounting exports, native apps. None of this gets built or left
 
 - [x] **RF-88** — Dashboard: net worth per owner (personal and group), and income, expense and net for the current month.
 - [x] **RF-34** — This month's expenses by category, largest first.
+- [ ] **RF-139** *(successor of RF-66)* — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member, plus the movements paid from that member's personal accounts that the person marked «del hogar» — a household bill paid from a personal card. The mark is on the movement and can be set and cleared. Decided by the user 2026-10-15.
 - [x] **RF-35** — Six-month comparison of income and expense.
-- [x] **RF-66** — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member.
 - [x] **RF-67** — In every report grouped by member, the group's shared accounts appear as their own group. Shared accounts are not split across people.
+
+- [x] **RF-137** — A person reconciles one account at a time: they enter the money it really holds on a day, and the app shows the balance it derives for that day, the real one and the gap between them. On confirm, the gap is recorded as one adjustment movement on that account, dated that day, so the derived balance equals the real one from then on; no balance is stored (RF-114). Each account lists its reconciliations: the day, what the app derived, what was real and the gap. Decided by the user 2026-10-14.
+- [x] **RF-138** — A reconciliation's adjustment reports as its own line, «Descuadre», apart from expenses and income: it counts in no expense or income total and in no budget. Decided by the user 2026-10-14.
 
 #### Cash
 
@@ -154,8 +179,8 @@ accounting exports, native apps. None of this gets built or left
 #### Import, export and visible audit (phase 2)
 
 - [x] **RF-49** — Download a spreadsheet template with the expected columns and the existing accounts and categories as valid options.
-- [x] **RF-50** — Export accounts, members, categories, recurring rules and transactions, in the same shape the import accepts.
 - [x] **RF-118** — The transaction listing exports exactly the rows its active filters select, in the same shape the import accepts.
+- [ ] **RF-142** *(successor of RF-50)* — The backup exports, and the import restores, accounts, members, categories, recurring rules, transactions, budgets (RF-71), goals and their contributions (RF-87, RF-119), debts and statements (RF-78, RF-129), and labels (RF-70), in one shape. A purchase made in dollars on a peso card (RF-123) is exported and re-imported in dollars, never converted to pesos. Decided by the user 2026-10-15.
 - [x] **RF-51** — Import with preview: everything is validated before anything is written, errors are reported per row, and the user confirms. All or nothing.
 - [x] **RF-52** — Re-importing the same file does not duplicate: every row carries a stable external reference and, if it already exists in the fund, it is updated.
 - [x] **RF-53** — Read-only audit log viewer, filterable by entity, user and date range.
@@ -174,6 +199,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-98** — Webhook ingest proposes the date the bank message carries, written with a two- or four-digit year and interpreted in `America/Bogota`; a caller-supplied date still overrides it, and a message whose date is unreadable or later than the day of delivery falls back to that day.
 - [x] **RF-99** — A person sees the message shapes they have silenced, each with the message that silenced it, and returns one to the queue: later messages of that shape wait for review again, and every message of that shape the silence discarded on its own comes back to the queue with it, indistinguishable from one never silenced. A message a person discarded stays discarded.
 - [ ] **RF-134** — A movement keeps one source reference per account leg — the statement it came from, the reference that statement gave that leg, and the line within it — so a transfer read from either side's statement is recognised as the movement already recorded, and re-importing a statement replaces exactly that statement's rows.
+- [ ] **RF-144** — Bank statements are imported through an MCP server that Claude drives: the person hands the file to Claude in a conversation, Claude reads it and calls a preview tool, the person confirms, and then an import tool writes. No paid model runs inside the app. The preview is mandatory, and re-importing the same statement never duplicates a movement (RF-134, RF-52). Earlier statements serve as examples, never as a template. Decided by the user 2026-10-15.
 - [ ] **RF-135** — A counterparty is remembered per user: a description pattern earns an account and a side after two consecutive agreeing completions, and a completion naming a different account marks the pattern ambiguous, which no later agreement undoes. A remembered pattern prefills the missing side and never fills it on its own.
 
 The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no write bypasses audit) unchanged: the same interpreter reads the payload text and the same insert path records the movement, so the created-by stamp and the audit hold as on any manual write. RF-52's idempotency shape is mirrored, not reused — RF-52 stays a spreadsheet-import requirement; the webhook applies the same stable-external-reference rule to its own deliveries. The review queue keeps that reuse: it runs RF-22's interpreter to propose rather than to decide, and RF-25 and RF-45 hold unchanged because an accepted proposal is still written through the same insert path.
@@ -202,6 +228,10 @@ The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no
 
 Dead codes. The number stays burned and the tick stays as it was.
 
+- [x] **RF-75** — Settling a planned payment records the transaction it planned, links the two, and marks the planned payment done; a settled or cancelled planned payment cannot be settled again. _Retired 2026-10-22, by the user. Successor: RF-161 (deleting the movement that settled a planned payment returns the payment to «Por pagar»)._
+- [x] **RF-72** — A budget's spent and remaining amounts derive from the transaction splits that fall in the current period and match its category and any account or label narrowing; they are never stored. _Retired 2026-10-18, by the user. Successor: RF-160 (a parent category's budget and its movement filter count its subcategories)._
+- [x] **RF-50** — Export accounts, members, categories, recurring rules and transactions, in the same shape the import accepts. _Retired 2026-10-15, by the user. Successor: RF-142 (the backup restores everything: budgets, goals, debts, statements, labels, and a dollar purchase in dollars)._
+- [x] **RF-66** — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member. _Retired 2026-10-15, by the user. Successor: RF-139 (a household bill paid from a personal card, marked «del hogar», counts as a contribution)._
 - [x] **RF-84** — A liability account keeps a statement history: one record per statement period with its bounds, its payment due date and the balance, minimum and interest captured at the cut-off. A statement is an immutable historical snapshot, materialised for past periods, never rewritten. _Retired 2026-09-07. Successor: RF-129._
 
   Retired because the built behaviour changed, not the wording. "Materialised for past periods" named
@@ -280,6 +310,9 @@ erDiagram
     accounts ||--o| debt_terms : "if liability"
     accounts ||--o{ installment_plans : "schedules"
     accounts ||--o{ account_statements : "closes"
+    accounts ||--o{ account_reconciliations : "reconciles"
+    account_reconciliations ||--o| transactions : "adjusts (one-legged, when the gap is not zero)"
+    app_users ||--o{ account_reconciliations : "counts"
     transactions ||--o{ transaction_sources : "references"
     account_statements ||--o{ transaction_sources : "names"
     installment_plans ||--o{ installment_lines : "generates"
@@ -346,6 +379,7 @@ erDiagram
         boolean is_shared "group account any member may write"
         text name
         text kind "asset | liability"
+        text subtype "bank | cash | card"
         text institution
         text last_four "nullable; exactly four digits"
         text settlement_currency "ISO 4217 shape; default COP"
@@ -413,6 +447,15 @@ erDiagram
         timestamptz closed_at
     }
 
+    account_reconciliations {
+        uuid id PK
+        uuid account_id FK
+        date reconciled_on
+        bigint counted_balance_cents "a person's input, signed like the account"
+        uuid created_by FK
+        timestamptz created_at
+    }
+
     categories {
         uuid id PK
         uuid owner_user_id FK "null = group category"
@@ -443,6 +486,7 @@ erDiagram
         boolean awaiting_counterparty "true until the ingest-unknown side is named"
         text external_ref "import reference"
         uuid caused_by_transaction_id FK "null unless another movement caused this one"
+        uuid reconciliation_id FK "null unless it is a reconciliation's adjustment"
         uuid created_by FK
     }
 
@@ -660,6 +704,8 @@ Rules the model must always guarantee, regardless of how they are implemented:
 - A debt is a liability account, not a separate entity. Its balance comes from
   the same calculation as a savings account's.
 - A balance is never stored: it derives from the opening balance plus movements.
+- A movement is never dated before the opening day of an account it names, and an
+  account's opening day never moves past one of its movements. The database refuses both.
 - An account's opening balance is signed the way the account is worth: an asset's is zero or
   positive, a liability's is zero or negative. The sign comes from `kind`, never from the
   user.
@@ -670,7 +716,8 @@ Rules the model must always guarantee, regardless of how they are implemented:
   accounts it touches, never chosen by the user.
 - Every income or expense has at least one split, whose amounts sum to the
   transaction's amount and whose category shares the transaction's scope and
-  kind. A transfer has no splits and no category.
+  kind, except a reconciliation's adjustment. A transfer and an adjustment have
+  no splits and no category.
 - A movement may name the movement that caused it; deleting the cause deletes
   the charge, and a movement is never its own cause.
 - A category belongs to exactly one of a user or a group (XOR), mirroring an
@@ -685,7 +732,8 @@ Rules the model must always guarantee, regardless of how they are implemented:
   category and any account or label narrowing; they are never stored.
 - A planned payment's scope derives from the accounts it touches, never chosen by
   the user. A settled planned payment links the transaction it recorded and is
-  never re-settled; a cancelled one is never settled.
+  never re-settled while that transaction exists; deleting the transaction
+  returns the payment to pending, unlinked. A cancelled one is never settled.
 - A recurring rule belongs to exactly one of a user or a group (XOR), derived
   from the accounts it touches, never chosen by the user — mirroring transactions.
 - A recurring rule names exactly one account and exactly one category and is
@@ -713,6 +761,10 @@ Rules the model must always guarantee, regardless of how they are implemented:
   computed on read and never stored.
 - A movement carries at most one source reference per account leg; a
   statement's rows are replaced as a unit.
+- A reconciliation is immutable; its adjustment is the one movement marked with
+  it, one-legged, in the settlement currency, with no split, and counts in no
+  income or expense total and no budget.
+- The counted figure is a person's input; the derived balance is never stored.
 - A group's `cash_mode` is `shared` (a single group cash account) or
   `per_member` (one cash account per member).
 - Money is an integer number of cents.
@@ -777,26 +829,37 @@ Principles, not recipes:
 
 | Need | Choice | What it saves |
 |---|---|---|
-| ORM and migrations | **Drizzle** | Schema, access policies and types declared once in TypeScript. |
+| ORM and migrations | **Drizzle** (`drizzle-orm ^0.45.2`) | Schema, access policies and types declared once in TypeScript. |
 | Auth | **Supabase Auth** | Passwordless login, email delivery, sessions, and the identity the access policies read. |
-| Components | **Radix Themes** | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |
-| Validation | **Zod** | One schema serves the form, the server and the types. |
-| Server actions | **next-safe-action** | Validation, typed errors and loading state on every mutation. |
-| Forms | **React Hook Form**, with **@hookform/resolvers** | State, errors and submission wired to the validation schema; the resolver binds Zod to React Hook Form. |
-| Table | **TanStack Table** | Sorting, filtering, pagination and selection for the transaction list. |
-| Charts | **Recharts** | Declarative React charts with full React 19 and App Router SSR support. |
+| Components | **Radix Themes** (`@radix-ui/themes ^3.3.0`) | Layout, typography, controls and theming as components with props, one stylesheet, no build step. |
+| Validation | **Zod** (`^4.4.3`) | One schema serves the form, the server and the types. |
+| Server actions | **next-safe-action** (`^8.6.1`) | Validation, typed errors and loading state on every mutation. |
+| Forms | **React Hook Form** (`^7.86.0`), with **@hookform/resolvers** (`^5.9.1`) | State, errors and submission wired to the validation schema; the resolver binds Zod to React Hook Form. |
+| Table | **TanStack Table** (`@tanstack/react-table ^9.2.4`) | Sorting, filtering, pagination and selection for the transaction list. |
+| Charts | **Recharts** (`~3.10.0`) | Declarative React charts with full React 19 and App Router SSR support. |
 | Dates | **date-fns** | Date arithmetic and time zones, tree-shakeable. |
-| Toasts | **sonner** | Notifications; Radix Themes ships no toast. |
-| Icons | **lucide-react** | An icon set, chosen independently of the component library. |
-| Environment | **@t3-oss/env-nextjs** | Fails at build time on a missing variable, not in production. |
-| Language | **next-intl** | Locale routing, server-side translations, date and number formatting. |
-| Spreadsheets (phase 2) | **ExcelJS** | Reading and writing `.xlsx` with valid options in the template. |
-| Browser verification | **Playwright** | Drives a real browser for the interface facts no server-side check reaches: clicks, dialogs, the mobile sheet, tap-target size and the narrow viewport. |
+| Toasts | **sonner** (`^2.0.8`) | Notifications; Radix Themes ships no toast. |
+| Icons | **lucide-react** (`^1.34.0`) | An icon set, chosen independently of the component library. |
+| Environment | **@t3-oss/env-nextjs** (`^0.13.11`) | Fails at build time on a missing variable, not in production. |
+| Language | **next-intl** (`^4.13.7`) | Locale routing, server-side translations, date and number formatting. |
+| Spreadsheets (phase 2) | **ExcelJS** (`exceljs ^4.4.0`) | Reading and writing `.xlsx` with valid options in the template. |
+| Framework | **Next 16.4.1** and **React 19.2.8** (`next`, `react`, `react-dom`, pinned) | Routing, server actions and rendering; the versions the three apps share. |
+| Postgres client | **postgres** (`^3.4.9`) | The driver Drizzle runs on, over the Supabase pooler. |
+| Supabase clients | **@supabase/supabase-js** (`^2.112.4`) and **@supabase/ssr** (`^0.12.5`) | The cookie session and the one-time-code check against Auth; `supabase-js` also gives the retryable-error test sign-in uses. |
+| Shared auth | **@repo/supabase-auth** (workspace `*`) | The cookie session and claim verification the apps share, already written and proved. |
+| Spreadsheet guard | **@repo/zip-guard** (workspace `*`) | Refuses a zip bomb before ExcelJS inflates an import. |
+| Harness registry | **@repo/harness-registry** (workspace `*`, dev) | Records every identity and run a suite creates, so a purge names only its own rows. |
+| Types and lint | **TypeScript** (`^5`), **@typescript/native-preview** (`^7.0.0-dev.20260707.2`), **eslint** (`^9`), **eslint-config-next** (`16.4.1`), **@types/node**, **@types/react**, **@types/react-dom** (dev) | `tsgo` checks the project in seconds; the lint rules are the framework's own. |
+| Migrations | **drizzle-kit** (`^0.31.10`, dev) | The schema versioned in the repository, with a journal of its own. |
+| Script runner | **tsx** (`^4.23.12`, dev) | Runs the TypeScript checks and harness scripts under `node --import tsx`. |
+| Browser verification | **Playwright** (`@playwright/test ^1.62.1`, dev) | Drives a real browser for the interface facts no server-side check reaches: clicks, dialogs, the mobile sheet, tap-target size and the narrow viewport. |
 | Local database and Auth for the suites | **Supabase CLI `2.119.0`** | The same Postgres image and GoTrue the project runs, on each machine and each CI runner, so no suite shares the remote. |
 
 Playwright is a development dependency: it never reaches the bundle, ships in no deployment and costs nothing to run, so RNF-01 and RNF-02 hold.
 
 The Supabase CLI is invoked as `npx --yes supabase@2.119.0` from `scripts/supabase-local.sh` alone. It is in no `package.json`, never reaches a bundle or a deployment, needs Docker and costs nothing to run, so RNF-01 and RNF-02 hold.
+
+StrykerJS (`@stryker-mutator/core`, `@stryker-mutator/tap-runner`) is a development dependency of `apps/goallog` alone. Decided by the user 2026-10-14: it mutates the pure `lib/` files a train changed (`npm run mutate:pure`), through the command-style `tap` runner because the repo tests with `node --test`. It never reaches a bundle or a deployment and costs nothing to run, so RNF-01 and RNF-02 hold.
 
 ### Do not install
 

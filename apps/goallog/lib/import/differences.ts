@@ -1,0 +1,200 @@
+import type { ImportDraftV1 } from "./draft";
+import { nameKey } from "./review";
+
+type DraftGoal = ImportDraftV1["goals"][number];
+type DraftCommitment = DraftGoal["commitments"][number];
+
+export type Cadence = { kind: DraftCommitment["cadenceKind"]; weekdays: number[] | null; n: number | null };
+
+// What 1020 reads of an open goal: all the import compares, nothing it writes.
+export type GoalSnapshot = {
+  id: string;
+  name: string;
+  horizon: string | null;
+  note: string | null;
+  measure: { name: string; unit: string } | null;
+  measureFed: boolean;
+  rhythm: number | null;
+  months: { month: string; amount: number }[];
+  phases: { id: string; aim: string; startsOn: string; endsOn: string }[];
+  commitments: {
+    id: string;
+    name: string;
+    cadence: Cadence;
+    satisfaction: "tap" | "quantity";
+    target: number | null;
+    unit: string | null;
+    hasFacts: boolean;
+  }[];
+  tasks: {
+    id: string;
+    name: string;
+    estimate: number | null;
+    month: string;
+    done: boolean;
+    children: { id: string; name: string; done: boolean }[];
+  }[];
+};
+
+// Nothing here removes: a part the plan omits is only named in `stays`. A phase that crosses another is never written.
+export type Difference =
+  | { kind: "horizon"; to: string }
+  | { kind: "note"; from: string | null; to: string }
+  | { kind: "measure"; name: string; unit: string; kept: "fed" | null }
+  | { kind: "rhythm"; to: number }
+  | { kind: "month"; month: string; amount: number; from: number | null }
+  | { kind: "phaseAdded"; aim: string; startsOn: string; endsOn: string }
+  | { kind: "phaseChanged"; aim: string; startsOn: string; endsOn: string }
+  | { kind: "phaseOverlaps"; aim: string; startsOn: string; endsOn: string; with: string }
+  | { kind: "commitmentAdded"; name: string }
+  | { kind: "commitmentChanged"; name: string; from: Cadence; to: Cadence }
+  | { kind: "commitmentReplaced"; name: string }
+  | { kind: "taskAdded"; name: string }
+  | { kind: "taskMoved"; name: string; from: string; to: string }
+  | { kind: "taskResized"; name: string; from: number | null; to: number | null }
+  | { kind: "subTaskAdded"; name: string; task: string }
+  | { kind: "stays"; part: "phase" | "commitment" | "task"; name: string };
+
+export type GoalMatch = { g: number; match: GoalSnapshot | "ambiguous" | null };
+
+// One open goal of the name is the one to update; two are not guessed between.
+export function matchGoals(draft: ImportDraftV1, snapshots: GoalSnapshot[]): GoalMatch[] {
+  const byName = new Map<string, GoalSnapshot[]>();
+  for (const snapshot of snapshots) {
+    const key = nameKey(snapshot.name);
+    byName.set(key, [...(byName.get(key) ?? []), snapshot]);
+  }
+  return draft.goals.map((goal, g) => {
+    const same = byName.get(nameKey(goal.name)) ?? [];
+    return { g, match: same.length === 0 ? null : same.length === 1 ? same[0] : "ambiguous" };
+  });
+}
+
+function sameCadence(a: Cadence, b: Cadence): boolean {
+  const days = (c: Cadence) => [...(c.weekdays ?? [])].sort((x, y) => x - y).join(",");
+  return a.kind === b.kind && a.n === b.n && days(a) === days(b);
+}
+
+const monthKey = (month: string) => month.slice(0, 7);
+
+/**
+ * The existing phase a plan phase crosses, judged on dates: phases may share a calendar week. A phase the plan
+ * names is compared by its own name, never against itself; a phase that ends before `today` is dropped and
+ * crosses nothing, and one that starts before it begins that day.
+ */
+export function phaseCrossing(
+  phase: { aim: string; startsOn: string; endsOn: string },
+  planned: { aim: string }[],
+  existing: { aim: string; startsOn: string; endsOn: string }[],
+  today: string,
+): string | null {
+  if (phase.endsOn < today) return null;
+  const startsOn = phase.startsOn < today ? today : phase.startsOn;
+  const named = new Set(planned.map((p) => nameKey(p.aim)));
+  const crossed = existing
+    .filter((have) => !named.has(nameKey(have.aim)) && have.startsOn <= phase.endsOn && startsOn <= have.endsOn)
+    .sort((a, b) => (a.startsOn < b.startsOn ? -1 : a.startsOn > b.startsOn ? 1 : 0));
+  return crossed[0]?.aim ?? null;
+}
+
+// Every change the import would apply to `snapshot`. A part the plan leaves alone is no difference.
+export function differences(draftGoal: DraftGoal, snapshot: GoalSnapshot, today: string): Difference[] {
+  const out: Difference[] = [];
+
+  if (draftGoal.horizon !== null && draftGoal.horizon !== snapshot.horizon) {
+    out.push({ kind: "horizon", to: draftGoal.horizon });
+  }
+
+  const note = (draftGoal as { note?: string | null }).note;
+  if (typeof note === "string" && note !== (snapshot.note ?? "")) out.push({ kind: "note", from: snapshot.note === null || snapshot.note === "" ? null : snapshot.note, to: note });
+
+  const measure = draftGoal.measure;
+  if (measure !== null && (snapshot.measure?.name !== measure.name || snapshot.measure?.unit !== measure.unit)) {
+    out.push({ kind: "measure", name: measure.name, unit: measure.unit, kept: snapshot.measureFed ? "fed" : null });
+  }
+
+  if (draftGoal.rhythm !== null && draftGoal.rhythm !== snapshot.rhythm) {
+    out.push({ kind: "rhythm", to: draftGoal.rhythm });
+  }
+
+  const current = monthKey(today);
+  for (const entry of draftGoal.months) {
+    if (monthKey(entry.month) < current) continue;
+    const have = snapshot.months.find((m) => monthKey(m.month) === monthKey(entry.month));
+    if (have?.amount !== entry.amount) out.push({ kind: "month", month: monthKey(entry.month), amount: entry.amount, from: have?.amount ?? null });
+  }
+
+  for (const phase of draftGoal.phases) {
+    const have = snapshot.phases.find((p) => nameKey(p.aim) === nameKey(phase.aim));
+    if (have && have.startsOn === phase.startsOn && have.endsOn === phase.endsOn) continue;
+    const span = { aim: phase.aim, startsOn: phase.startsOn, endsOn: phase.endsOn };
+    const crossed = phaseCrossing(phase, draftGoal.phases, snapshot.phases, today);
+    if (crossed !== null) out.push({ kind: "phaseOverlaps", ...span, with: crossed });
+    else out.push({ kind: have ? "phaseChanged" : "phaseAdded", ...span });
+  }
+
+  for (const commitment of draftGoal.commitments) {
+    const have = snapshot.commitments.find((c) => nameKey(c.name) === nameKey(commitment.name));
+    if (!have) {
+      out.push({ kind: "commitmentAdded", name: commitment.name });
+      continue;
+    }
+    const cadence: Cadence = {
+      kind: commitment.cadenceKind,
+      weekdays: commitment.cadenceWeekdays,
+      n: commitment.cadenceN,
+    };
+    if (sameCadence(cadence, have.cadence)) continue;
+    if (have.hasFacts) out.push({ kind: "commitmentReplaced", name: commitment.name });
+    else out.push({ kind: "commitmentChanged", name: commitment.name, from: have.cadence, to: cadence });
+  }
+
+  for (const task of draftGoal.tasks) {
+    const have = snapshot.tasks.find((t) => nameKey(t.name) === nameKey(task.name));
+    if (!have) {
+      out.push({ kind: "taskAdded", name: task.name });
+      continue;
+    }
+    if (have.done) continue;
+    if (monthKey(have.month) !== monthKey(task.month)) {
+      out.push({ kind: "taskMoved", name: task.name, from: monthKey(have.month), to: monthKey(task.month) });
+    }
+    if (have.estimate !== task.estimate) {
+      out.push({ kind: "taskResized", name: task.name, from: have.estimate, to: task.estimate });
+    }
+    for (const child of task.children) {
+      if (!have.children.some((c) => nameKey(c.name) === nameKey(child.name))) {
+        out.push({ kind: "subTaskAdded", name: child.name, task: task.name });
+      }
+    }
+  }
+
+  const planned = <T>(items: T[], pick: (item: T) => string) => new Set(items.map((item) => nameKey(pick(item))));
+  const plan = {
+    phases: planned(draftGoal.phases, (p) => p.aim),
+    commitments: planned(draftGoal.commitments, (c) => c.name),
+    tasks: planned(draftGoal.tasks, (t) => t.name),
+  };
+  for (const p of snapshot.phases) if (!plan.phases.has(nameKey(p.aim))) out.push({ kind: "stays", part: "phase", name: p.aim });
+  for (const c of snapshot.commitments) if (!plan.commitments.has(nameKey(c.name))) out.push({ kind: "stays", part: "commitment", name: c.name });
+  for (const t of snapshot.tasks) if (!plan.tasks.has(nameKey(t.name))) out.push({ kind: "stays", part: "task", name: t.name });
+
+  return out;
+}
+
+// Whether the import writes anything: `stays` and a phase that crosses write nothing.
+export function changesAnything(list: Difference[]): boolean {
+  return list.some((d) => d.kind !== "stays" && d.kind !== "phaseOverlaps");
+}
+
+function stable(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stable(v)}`).join(",")}}`;
+}
+
+// The same differences in any order give the same string: the server compares it with the review's.
+export function fingerprint(list: Difference[]): string {
+  return list.map(stable).sort().join("\n");
+}

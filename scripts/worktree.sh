@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One parallel track: a worktree, its own lane, its own port.
 #
-#   scripts/worktree.sh 2 mi-rama [base] [--app orbit]
+#   scripts/worktree.sh 2 mi-rama [base] [--app homefund]
 #
 # Lane N lands beside this checkout as <checkout>-lN on its app's port base plus
 # N-1, with its own Playwright artefacts. A lane's app decides whether it has a
@@ -13,14 +13,16 @@
 # the RNF-09 timing; every printed command goes through the wrapper.
 set -euo pipefail
 
-# app       port base  .env.local  harness identities
+# The base-URL variable is the one the app's playwright.config.ts reads; it keeps
+# its old name, so it is a column and never derived from the app's name.
+# app       port base  .env.local  harness identities  base-URL variable
 APPS=(
-  "orbit    3000       yes         yes"
-  "voyager  3100       yes         no"
-  "pulsar   3200       yes         no"
+  "homefund 3000       yes         yes                 HARNESS_BASE_URL"
+  "wordbook 3100       yes         no                  VOYAGER_BASE_URL"
+  "goallog  3200       yes         no                  PULSAR_BASE_URL"
 )
 
-APP_NAME=orbit
+APP_NAME=homefund
 ARGS=()
 while (($#)); do
   case $1 in
@@ -36,11 +38,12 @@ BASE=${ARGS[2]:-integracion}
 
 PORT_BASE=
 for row in "${APPS[@]}"; do
-  read -r name port_base copies_env has_harness <<<"$row"
+  read -r name port_base copies_env has_harness base_url_var <<<"$row"
   if [[ $name == "$APP_NAME" ]]; then
     PORT_BASE=$port_base
     COPIES_ENV=$copies_env
     HAS_HARNESS=$has_harness
+    BASE_URL_VAR=$base_url_var
   fi
 done
 if [[ -z $PORT_BASE ]]; then
@@ -112,27 +115,27 @@ fi
 W=$DIR/scripts/supabase-local.sh
 
 case $APP_NAME in
-  orbit)
+  homefund)
     COMMANDS="  cd $APP
   PORT=$PORT $W exec npm run dev
-  HARNESS_LANE=$LANE HARNESS_BASE_URL=http://localhost:$PORT $W exec npm run check:e2e" ;;
+  HARNESS_LANE=$LANE $BASE_URL_VAR=http://localhost:$PORT $W exec npm run check:e2e" ;;
   # Voyager's suite counts effects, and `next dev` runs them twice under
   # StrictMode, so `dev` hands back 13 red specs that a build passes. Its
   # config says so at the top; printing `dev` here next to the suite line is
   # what made two lanes believe it. Build, serve, and rebuild after every edit
   # — `start` serves the build, not the tree. The build is local-only: it
   # inlines the stack's public values, so it never serves the remote project.
-  voyager)
+  wordbook)
     COMMANDS="  cd $DIR
   $W exec npm run build -w apps/$APP_NAME   # local-only build
   PORT=$PORT $W exec npm run start -w apps/$APP_NAME
-  ${APP_NAME^^}_BASE_URL=http://localhost:$PORT $W exec npm run check:e2e -w apps/$APP_NAME" ;;
+  $BASE_URL_VAR=http://localhost:$PORT $W exec npm run check:e2e -w apps/$APP_NAME" ;;
   # An app with no harness has no lane to name, so its suite takes the port alone.
   *)
     COMMANDS="  cd $DIR
   $W exec npm run build -w apps/$APP_NAME   # local-only build
   PORT=$PORT $W exec npm run start -w apps/$APP_NAME
-  ${APP_NAME^^}_BASE_URL=http://localhost:$PORT $W exec npm run check:e2e -w apps/$APP_NAME" ;;
+  $BASE_URL_VAR=http://localhost:$PORT $W exec npm run check:e2e -w apps/$APP_NAME" ;;
 esac
 
 cat <<EOF

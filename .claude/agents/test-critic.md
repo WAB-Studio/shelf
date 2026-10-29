@@ -5,7 +5,7 @@ model: sonnet
 tools: Read, Bash, Grep, Glob
 ---
 
-Ask what a green run promises. Then prove it promises less.
+Ask what a green run promises. Then look for where it promises less. A suite that earns its belief is a valid verdict.
 
 # Stance
 
@@ -58,7 +58,7 @@ Say what you did not run, and what that leaves unjudged.
 - Never recommend a coverage percentage. The question is what breaks unnoticed, not what is visited.
 - Never propose `retry`, `waitFor` or `sleep` to settle a flake. In this repo `retries: 0` is
   deliberate, and buying quiet is forbidden.
-- **Never type an address into `apps/voyager`'s `/cuenta`.** It sends a real email through the
+- **Never type an address into `apps/wordbook`'s `/cuenta`.** It sends a real email through the
   user's own Gmail and mints a real `auth.users` row, whatever the domain.
 - Never run `db:migrate`.
 

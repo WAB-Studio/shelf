@@ -1,0 +1,79 @@
+/* A plain `<button>` sits outside Radix's `.rt-reset`, so the user agent's own
+   background, border and font are cleared here, as in row.module.css. */
+.chip {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  border: 1px solid var(--pulsar-control-edge);
+  border-radius: 10px;
+  background: var(--pulsar-raised);
+  color: var(--pulsar-ink-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--pulsar-text-name-size);
+  font-weight: var(--pulsar-text-name-weight);
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pill {
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  padding: 0 16px;
+}
+
+/* A choice among a few, set in mono (`HoySueltaDia.dc.html`): a pill 40px tall
+   with a full radius. */
+.choice {
+  min-block-size: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  border-width: 1.5px;
+  border-color: var(--pulsar-control-edge);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+/* One of seven in a row. At 360px the page leaves a 320px column, so seven of
+   these take 280 and the row that holds them has 40px to spend on gaps. Never
+   shrinks below its floor — a row with a wider gap overflows visibly rather
+   than handing back a 38px target. */
+.day {
+  flex: 1 0 40px;
+  min-inline-size: 40px;
+  block-size: 40px;
+  padding: 0;
+}
+
+/* Selected is the soft accent fill with a 1px accent ring, never the solid
+   fill a primary button wears (docs/goallog/DESIGN.md "SistemaPiezas"). */
+.chip.selected {
+  background: var(--pulsar-accent-soft);
+  border-color: var(--pulsar-accent);
+  color: var(--pulsar-ink);
+  font-weight: 500;
+}
+
+/* docs/goallog/DESIGN.md "Type": a quantity offered in a chip is still a figure. */
+.mono {
+  font-family: var(--font-mono);
+  letter-spacing: var(--pulsar-text-measure-tracking);
+}
+
+/* docs/goallog/DESIGN.md "The controls": disabled drops the fill, in every
+   variant — a selected chip included — and keeps muted ink and a `line` ring. */
+.chip:disabled {
+  cursor: default;
+  background: transparent;
+  color: var(--pulsar-muted);
+  border-color: var(--pulsar-line);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 2px;
+}

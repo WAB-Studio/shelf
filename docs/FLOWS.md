@@ -9,7 +9,7 @@ This describes what happens and in what order, not how it is built.
 
 ```mermaid
 flowchart TD
-    Login["Login"] -->|email link| Check{"Belongs to<br/>a fund?"}
+    Login["Login"] -->|email code or link| Check{"Belongs to<br/>a fund?"}
     Check -->|no| Onboarding["Create fund"]
     Check -->|yes| Dash["Dashboard"]
     Onboarding --> Dash

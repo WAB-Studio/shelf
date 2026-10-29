@@ -1,0 +1,395 @@
+import "server-only";
+
+import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
+
+import { insertRow } from "@/db/insert-row";
+import { callerGroupId, callerGroupInfo } from "@/db/queries/groups";
+import { groupMembers } from "@/db/schema";
+import type { GroupMember } from "@/db/schema";
+import type { Transaction } from "@/db/session";
+import { getSessionUser, requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
+
+type GroupMemberRole = GroupMember["role"];
+
+export type MemberRow = {
+  id: string;
+  name: string;
+  role: GroupMemberRole;
+  userId: string | null;
+  inviteEmail: string | null;
+  archivedAt: Date | null;
+};
+
+// Ordered for a roster, not a ledger: `name` is the only order a user compares by.
+export async function listMembers(
+  groupId: string,
+  options: { archived: boolean },
+): Promise<MemberRow[]> {
+  return withUserDb(async (tx) =>
+    tx
+      .select({
+        id: groupMembers.id,
+        name: groupMembers.name,
+        role: groupMembers.role,
+        userId: groupMembers.userId,
+        inviteEmail: groupMembers.inviteEmail,
+        archivedAt: groupMembers.archivedAt,
+      })
+      .from(groupMembers)
+      .where(
+        and(
+          eq(groupMembers.groupId, groupId),
+          options.archived
+            ? isNotNull(groupMembers.archivedAt)
+            : isNull(groupMembers.archivedAt),
+        ),
+      )
+      .orderBy(asc(groupMembers.name)),
+  );
+}
+
+/**
+ * The caller's own roster, with no group id to pass: the membership rides as a
+ * subselect. `archived: "all"`
+ * reads both rosters at once — a movement or an audit row outlives the member who
+ * caused it, so naming one needs the archived names too.
+ */
+export async function listCallerMembers(
+  userId: string,
+  options: { archived: boolean | "all" },
+  outerTx?: Transaction,
+): Promise<MemberRow[]> {
+  const archivedFilter =
+    options.archived === "all"
+      ? undefined
+      : options.archived
+        ? isNotNull(groupMembers.archivedAt)
+        : isNull(groupMembers.archivedAt);
+
+  return withUserDbOrTx(outerTx, async (tx) =>
+    tx
+      .select({
+        id: groupMembers.id,
+        name: groupMembers.name,
+        role: groupMembers.role,
+        userId: groupMembers.userId,
+        inviteEmail: groupMembers.inviteEmail,
+        archivedAt: groupMembers.archivedAt,
+      })
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, callerGroupId(userId)), archivedFilter))
+      .orderBy(asc(groupMembers.name)),
+  );
+}
+
+// RF-154: whether another live row (a member, with a login or not) shares the caller's fund.
+// A leader with company is told to hand the fund over; a leader alone is not offered leaving.
+export async function callerFundHasCompany(): Promise<boolean> {
+  const user = await getSessionUser();
+  if (!user) return false;
+
+  return withUserDb(async (tx) => {
+    const [row] = await tx
+      .select({ n: count() })
+      .from(groupMembers)
+      .where(
+        and(eq(groupMembers.groupId, callerGroupId(user.id)), isNull(groupMembers.archivedAt)),
+      );
+
+    return (row?.n ?? 0) > 1;
+  });
+}
+
+/**
+ * The members screen in one transaction: the roster and the caller's role read
+ * together, the group resolved in SQL by `callerGroupId` (RF-100). `null` when the
+ * caller has no group.
+ */
+export async function getMembersScreenData({
+  archived,
+}: {
+  archived: boolean;
+}): Promise<{ members: MemberRow[]; isLeader: boolean } | null> {
+  const user = await requireUser();
+
+  return withUserDb(async (tx) => {
+    const [group, members] = await Promise.all([
+      callerGroupInfo(tx, user.id),
+      listCallerMembers(user.id, { archived }, tx),
+    ]);
+    if (!group) return null;
+
+    return { members, isLeader: group.role === "leader" };
+  });
+}
+
+// `user_id` stays null and `role` stays at its default — the only shape
+// `group_members_insert_member` accepts (RF-07: a member need not have a login),
+// and it accepts it from the leader alone (RF-100), who is the only caller whose
+// insert lands rather than raising 42501. An `inviteEmail` pends on the row until
+// the invited person signs in (RF-06).
+export async function createMember({
+  groupId,
+  name,
+  inviteEmail,
+}: {
+  groupId: string;
+  name: string;
+  inviteEmail?: string;
+}): Promise<{ memberId: string }> {
+  return withUserDb(async (tx) => {
+    const [row] = await insertRow(
+      tx,
+      groupMembers,
+      { groupId, name, inviteEmail: inviteEmail ?? null },
+      { returning: { id: groupMembers.id } },
+    );
+
+    return { memberId: row.id };
+  });
+}
+
+// RF-150: whether the address belongs to a live member of the caller's own fund, the
+// caller included. The function answers false to anyone who does not lead the fund.
+export async function inviteEmailIsMember(email: string): Promise<boolean> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ member: boolean }>(
+      sql`select private.invite_email_is_member(${email}) as member`,
+    );
+
+    return rows[0]?.member === true;
+  });
+}
+
+export type PendingInvitation = {
+  memberId: string;
+  inviterName: string;
+  fundName: string;
+  // The fund the caller already lives in, and whether someone else lives or waits there:
+  // a person alone in their own fund may still accept (Q32).
+  currentFundName: string | null;
+  currentFundHasCompany: boolean;
+};
+
+// RF-154: the signed-in person's pending invitation, matched by the verified address inside the
+// function (no id or address crosses the boundary). One round trip; null when nothing waits.
+export async function getPendingInvitation(): Promise<PendingInvitation | null> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{
+      member_id: string;
+      inviter_name: string;
+      fund_name: string;
+      current_fund_name: string | null;
+      current_fund_has_company: boolean;
+    }>(sql`select member_id, inviter_name, fund_name, current_fund_name, current_fund_has_company from private.pending_invitation()`);
+    const row = rows[0];
+    if (!row) return null;
+
+    return {
+      memberId: row.member_id,
+      inviterName: row.inviter_name,
+      fundName: row.fund_name,
+      currentFundName: row.current_fund_name,
+      currentFundHasCompany: row.current_fund_has_company,
+    };
+  });
+}
+
+// RF-154: the invited person's own tap. No user id and no address cross the boundary:
+// the functions read auth.uid() and auth.email() from the verified session, so a call
+// cannot be aimed at a row addressed to someone else — that row answers "gone", as a
+// withdrawn one does. The answers are text the function returns, never an error to catch.
+export async function acceptInvitation({
+  memberId,
+}: {
+  memberId: string;
+}): Promise<"accepted" | "gone" | "otherFund"> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ result: string }>(
+      sql`select private.accept_group_invitation(${memberId}::uuid) as result`,
+    );
+    const result = rows[0]?.result;
+
+    return result === "accepted" || result === "otherFund" ? result : "gone";
+  });
+}
+
+export async function declineInvitation({
+  memberId,
+}: {
+  memberId: string;
+}): Promise<"declined" | "gone"> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ result: string }>(
+      sql`select private.decline_group_invitation(${memberId}::uuid) as result`,
+    );
+
+    return rows[0]?.result === "declined" ? "declined" : "gone";
+  });
+}
+
+// The caller's membership is archived, never deleted; a leader stays (alone or not).
+export async function leaveFund(): Promise<"left" | "leaderStays" | "notInFund"> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ result: string }>(
+      sql`select private.leave_group() as result`,
+    );
+    const result = rows[0]?.result;
+
+    return result === "left" || result === "leaderStays" ? result : "notInFund";
+  });
+}
+
+// RF-59: the role moves in one statement. No group id and no source member cross
+// the boundary — `private.transfer_group_leadership` reads auth.uid() and demotes
+// the caller as it promotes the target, so the group is never left with two
+// leaders or none. A refusal is a 23514 the action layer reads; nothing is caught
+// here, and a catch would have to sit outside `withUserDb` anyway.
+export async function transferLeadership({
+  memberId,
+}: {
+  memberId: string;
+}): Promise<boolean> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ ok: boolean }>(
+      sql`select private.transfer_group_leadership(${memberId}) as ok`,
+    );
+
+    return rows[0]?.ok === true;
+  });
+}
+
+export type UpdateMemberStatus = "updated" | "notLeader" | "gone" | "hasUser" | "hasInvite";
+
+// RF-100: the leader renames anyone, everyone else their own row — the policy
+// filters the rest out, so a refused rename returns no row rather than raising.
+// RF-153: with an address the row must be a live placeholder, and a refusal is
+// told apart in the same transaction so it can name its reason.
+export async function updateMember(input: {
+  groupId: string;
+  memberId: string;
+  name: string;
+  inviteEmail: string;
+}): Promise<UpdateMemberStatus>;
+export async function updateMember(input: {
+  groupId: string;
+  memberId: string;
+  name: string;
+  inviteEmail?: undefined;
+}): Promise<boolean>;
+export async function updateMember({
+  groupId,
+  memberId,
+  name,
+  inviteEmail,
+}: {
+  groupId: string;
+  memberId: string;
+  name: string;
+  inviteEmail?: string;
+}): Promise<boolean | UpdateMemberStatus> {
+  return withUserDb(async (tx) => {
+    if (inviteEmail === undefined) {
+      const rows = await tx
+        .update(groupMembers)
+        .set({ name })
+        .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.id, memberId)))
+        .returning({ id: groupMembers.id });
+
+      return rows.length > 0;
+    }
+
+    const rows = await tx
+      .update(groupMembers)
+      .set({ name, inviteEmail })
+      .where(
+        and(
+          eq(groupMembers.groupId, groupId),
+          eq(groupMembers.id, memberId),
+          isNull(groupMembers.userId),
+          isNull(groupMembers.inviteEmail),
+          isNull(groupMembers.archivedAt),
+        ),
+      )
+      .returning({ id: groupMembers.id });
+    if (rows.length > 0) return "updated";
+
+    // Leadership comes from the function, not from whether the row is visible.
+    const [state] = await tx.execute<{
+      leader: boolean;
+      found: boolean;
+      user_id: string | null;
+      invite_email: string | null;
+      archived_at: string | null;
+    }>(
+      sql`select private.is_group_leader(${groupId}::uuid) as leader,
+            m.id is not null as found, m.user_id, m.invite_email, m.archived_at
+          from (select 1) as one
+          left join group_members m on m.group_id = ${groupId}::uuid and m.id = ${memberId}::uuid`,
+    );
+    if (!state?.leader) return "notLeader";
+    if (!state.found || state.archived_at) return "gone";
+    if (state.user_id) return "hasUser";
+    if (state.invite_email) return "hasInvite";
+    return "gone";
+  });
+}
+
+// Accounts name a user or the group, never a member, so archiving one only sets
+// its own flag. The leader alone archives (RF-100), and the policy raises 42501
+// on one row only: the caller's own.
+export async function archiveMember({
+  groupId,
+  memberId,
+}: {
+  groupId: string;
+  memberId: string;
+}): Promise<boolean> {
+  return withUserDb(async (tx) => {
+    const rows = await tx
+      .update(groupMembers)
+      .set({ archivedAt: sql`now()` })
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.id, memberId)))
+      .returning({ id: groupMembers.id });
+
+    return rows.length > 0;
+  });
+}
+
+// RF-100: restoring is the leader's, and the archived row is outside the update
+// policy's USING, so the person she archived cannot bring themselves back.
+export async function restoreMember({
+  groupId,
+  memberId,
+}: {
+  groupId: string;
+  memberId: string;
+}): Promise<boolean> {
+  return withUserDb(async (tx) => {
+    const rows = await tx
+      .update(groupMembers)
+      .set({ archivedAt: null })
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.id, memberId)))
+      .returning({ id: groupMembers.id });
+
+    return rows.length > 0;
+  });
+}
+
+// The delete policy takes the leader alone (RF-100) and refuses even her own row (RF-11).
+export async function deleteMember({
+  groupId,
+  memberId,
+}: {
+  groupId: string;
+  memberId: string;
+}): Promise<boolean> {
+  return withUserDb(async (tx) => {
+    const rows = await tx
+      .delete(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.id, memberId)))
+      .returning({ id: groupMembers.id });
+
+    return rows.length > 0;
+  });
+}

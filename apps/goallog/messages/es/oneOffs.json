@@ -1,0 +1,53 @@
+{
+  "title": "Lo que espera",
+  "daylessGroup": "sin día",
+  "scheduledGroupOne": "con día",
+  "scheduledGroupMany": "con día",
+  "fromGoal": "de {goal}",
+  "whenWithGoal": "<fig>{when}</fig> · de {goal}",
+  "when": "{weekday} {day}",
+  "whenFar": "{weekday} {day} de {month}",
+  "markLabel": "Dar por hecha: {name}",
+  "markDone": "Marcar como hecho: {name}",
+  "empty": "Nada espera, ni sin día ni para otro día.",
+  "emptyToToday": "Volver a hoy",
+  "done": "«{name}» quedó en «hechas hoy».",
+  "seeToday": "ver hoy",
+  "sheet": {
+    "eyebrow": "suelta",
+    "eyebrowDone": "suelta · hecha",
+    "doneHint": "Hecha hoy. Para deshacerla toca su marca.",
+    "giveDay": "Darle un día",
+    "giveOtherDay": "Darle otro día"
+  },
+  "giveDay": {
+    "give": "Darle día",
+    "move": "Moverla",
+    "giveLabel": "Darle día a {name}",
+    "moveLabel": "Mover {name} a otro día",
+    "goal": "de {goal}"
+  },
+  "schedule": {
+    "title": "¿Para cuándo?",
+    "now": "ahora: {when}",
+    "confirm": "Ponerle ese día",
+    "keep": "Dejarla sin día",
+    "move": "Moverla",
+    "stay": "Dejarla como está"
+  },
+  "note": {
+    "open": "Escribir una nota en «{name}»",
+    "view": "Ver la nota de «{name}»",
+    "eyebrowFull": "nota · {goal} · {month}",
+    "eyebrowGoal": "nota · {goal}",
+    "eyebrowLoose": "nota",
+    "label": "nota",
+    "placeholder": "Lo que quieras recordar de esta tarea",
+    "count": "{count} de 2000",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "cancel": "Cancelar",
+    "remove": "quitar la nota",
+    "failed": "No se pudo guardar. Tu texto sigue aquí; inténtalo otra vez."
+  }
+}

@@ -58,7 +58,7 @@ completions_usage_*.csv
 .claude/usage-log.tsv
 
 # the dictionary build's downloaded tarball and extracted TEI source
-apps/voyager/.cache/
+apps/wordbook/.cache/
 
 # The reader's own production screenshots, kept out of the repo.
 SS app/
@@ -69,3 +69,4 @@ testmodelsphoto/
 supabase/.temp/
 supabase/.branches/
 supabase/signing_keys.json
+.stryker-tmp/

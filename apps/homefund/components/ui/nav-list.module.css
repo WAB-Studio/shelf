@@ -1,0 +1,56 @@
+/* A sidebar row, sized from SPEC-A3: the pill the current destination fills.
+   The 44px floor is RNF-08's; border-box keeps the padding inside it, because
+   Radix Themes resets the box only on its own elements. */
+.row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 44px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  color: var(--gray-11);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.row:hover {
+  background-color: var(--gray-a3);
+}
+
+.row[data-current] {
+  background-color: var(--accent-3);
+  color: var(--accent-11);
+  font-weight: 600;
+}
+
+/* The label carries no Text: a row's height has to be its icon's, and Radix's own
+   line-height would set it instead. */
+.label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The count sits at the row's end whatever the label measures, and reads in
+   tabular numerals like every other figure (SPEC-A3). */
+.badge {
+  margin-left: auto;
+  display: flex;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A row that is a real button; strip the user-agent chrome so it reads as one.
+   Only the family is inherited — the `font` shorthand would drag the ambient
+   line-height in with it and leave this row taller than the links above it. */
+.trigger {
+  appearance: none;
+  width: 100%;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}

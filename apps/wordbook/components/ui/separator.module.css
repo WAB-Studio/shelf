@@ -1,0 +1,15 @@
+/* docs/wordbook/DESIGN.md "PalabraConFlexion": 2px of `--rl-border`, 4px of
+   margin above it — thicker than the 1px hairline `.rt-Separator` already
+   draws between senses, so the boundary between a word's own entry and its
+   offer reads apart from an ordinary rule. Doubled to outrank
+   `.rt-Separator:where(.rt-r-orientation-horizontal)`'s own `height`. */
+.heavy.heavy {
+  height: 2px;
+  background-color: var(--rl-border);
+  margin-top: 4px;
+}
+
+/* A grid item that takes the whole row, whatever the grid's track count. */
+.spanTracks {
+  grid-column: 1 / -1;
+}

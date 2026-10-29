@@ -1,0 +1,392 @@
+// RL-24's contract on `lookups`: a copy never edits a row, copying it twice
+// never duplicates it, and what one device sends never overwrites what
+// another wrote. Node has no IndexedDB, so `./record`'s `openLogDatabase`
+// is mocked with a hand-rolled stand-in that implements only the two calls
+// `readSince` and `mergeForeign` actually make against it — nothing about
+// `record.ts` itself is under test here.
+//
+// Requires --experimental-test-module-mocks (see package.json's check:unit).
+import assert from "node:assert/strict";
+import { mock, test } from "node:test";
+
+type Row = Record<string, unknown>;
+
+class FakeStore {
+  rows = new Map<number, Row>();
+  seq = 0;
+}
+
+type KeyRange = { lower: number; lowerOpen: boolean };
+
+type FakeRequest<T> = {
+  onsuccess: (() => void) | null;
+  onerror: ((event: { preventDefault(): void }) => void) | null;
+  error: Error | null;
+  result: T;
+};
+
+function makeRequest<T>(initial: T): FakeRequest<T> {
+  return { onsuccess: null, onerror: null, error: null, result: initial };
+}
+
+type FakeStoreHandle = {
+  add(value: Row): FakeRequest<number | undefined>;
+  getAll(query?: KeyRange, limit?: number): FakeRequest<Row[]>;
+};
+
+function makeStoreHandle(
+  store: FakeStore,
+  begin: () => void,
+  end: () => void,
+  abort: (error: Error) => void,
+): FakeStoreHandle {
+  return {
+    add(value) {
+      const request = makeRequest<number | undefined>(undefined);
+      begin();
+      queueMicrotask(() => {
+        const record: Row = { ...value };
+        const device = record.device;
+        const deviceSeq = record.deviceSeq;
+        // Mirrors the real "foreign" compound index: a key with either half
+        // missing never enters it, so a local row never collides on it.
+        if (device != null && deviceSeq != null) {
+          for (const existing of store.rows.values()) {
+            if (existing.device === device && existing.deviceSeq === deviceSeq) {
+              const error = new Error("constraint");
+              error.name = "ConstraintError";
+              request.error = error;
+              let prevented = false;
+              request.onerror?.({
+                preventDefault: () => {
+                  prevented = true;
+                },
+              });
+              if (prevented) end();
+              else abort(error);
+              return;
+            }
+          }
+        }
+        store.seq += 1;
+        record.id = store.seq;
+        store.rows.set(store.seq, record);
+        request.result = store.seq;
+        request.onsuccess?.();
+        end();
+      });
+      return request;
+    },
+    getAll(query, limit) {
+      const request = makeRequest<Row[]>([]);
+      begin();
+      queueMicrotask(() => {
+        let rows = [...store.rows.entries()].sort((a, b) => a[0] - b[0]).map(([, row]) => row);
+        if (query) {
+          rows = rows.filter((row) => {
+            const id = row.id as number;
+            return query.lowerOpen ? id > query.lower : id >= query.lower;
+          });
+        }
+        if (typeof limit === "number") rows = rows.slice(0, limit);
+        request.result = rows;
+        request.onsuccess?.();
+        end();
+      });
+      return request;
+    },
+  };
+}
+
+type FakeTransaction = {
+  oncomplete: (() => void) | null;
+  onabort: (() => void) | null;
+  error: Error | null;
+  objectStore(): FakeStoreHandle;
+};
+
+// One transaction per call, like the real thing: it completes once every
+// request opened on it has settled, never before and never twice.
+function makeTransaction(store: FakeStore): FakeTransaction {
+  let pending = 0;
+  let settled = false;
+
+  function begin(): void {
+    pending += 1;
+  }
+  function end(): void {
+    pending -= 1;
+    if (pending === 0 && !settled) {
+      queueMicrotask(() => {
+        if (!settled) {
+          settled = true;
+          transaction.oncomplete?.();
+        }
+      });
+    }
+  }
+  function abort(error: Error): void {
+    if (settled) return;
+    settled = true;
+    transaction.error = error;
+    queueMicrotask(() => transaction.onabort?.());
+  }
+
+  const transaction: FakeTransaction = {
+    oncomplete: null,
+    onabort: null,
+    error: null,
+    objectStore: () => makeStoreHandle(store, begin, end, abort),
+  };
+  return transaction;
+}
+
+// `readSince` calls this global directly, never through `./record`.
+(globalThis as unknown as { IDBKeyRange: { lowerBound(lower: number, open?: boolean): KeyRange } }).IDBKeyRange = {
+  lowerBound: (lower, open) => ({ lower, lowerOpen: !!open }),
+};
+
+// Reassigned between tests, never mutated in place: `openLogDatabase`
+// below reads it fresh on every call, so a new store takes effect on the
+// very next call either function makes.
+let currentStore = new FakeStore();
+
+// Mocked and imported lazily, inside the first test that needs it: this
+// file has no "type": "module" to grant it top-level await, and the mock
+// must land before `merge.ts` — via `record.ts` — is ever imported.
+let merge: typeof import("./merge") | null = null;
+
+async function getMerge(): Promise<typeof import("./merge")> {
+  if (merge) return merge;
+  mock.module("./record", {
+    namedExports: {
+      openLogDatabase: () => Promise.resolve({ transaction: () => makeTransaction(currentStore) }),
+    },
+  });
+  merge = await import("./merge");
+  return merge;
+}
+
+function foreignRow(device: string, deviceSeq: number, overrides: Partial<Row> = {}) {
+  return {
+    schema: 2,
+    at: 1_700_000_000_000 + deviceSeq,
+    text: `word-${deviceSeq}`,
+    normalised: `word-${deviceSeq}`,
+    kind: "word" as const,
+    outcome: "exact" as const,
+    headword: `word-${deviceSeq}`,
+    rule: null,
+    senses: 1,
+    translation: "x",
+    dictionaryReady: true,
+    origin: null,
+    device,
+    deviceSeq,
+    ...overrides,
+  };
+}
+
+test("readSince: a foreign row never goes back up — only local rows come back", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(1, { id: 1, text: "a" });
+  currentStore.rows.set(2, { id: 2, text: "b", device: "other", deviceSeq: 1 });
+  currentStore.rows.set(3, { id: 3, text: "c" });
+  const { own: rows } = await readSince(0, 10);
+  assert.deepEqual(rows.map((r) => r.id), [1, 3]);
+});
+
+test("readSince: only rows above afterLocalId, exclusive", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  for (const id of [1, 2, 3, 4]) currentStore.rows.set(id, { id, text: `row-${id}` });
+  const { own: rows } = await readSince(2, 10);
+  assert.deepEqual(rows.map((r) => r.id), [3, 4]);
+});
+
+test("readSince: at most limit rows", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  for (const id of [1, 2, 3, 4, 5]) currentStore.rows.set(id, { id, text: `row-${id}` });
+  const { own: rows } = await readSince(0, 2);
+  assert.deepEqual(rows.map((r) => r.id), [1, 2]);
+});
+
+test("readSince: rows come back in key order, whatever order they were stored in", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  for (const id of [3, 1, 2]) currentStore.rows.set(id, { id, text: `row-${id}` });
+  const { own: rows } = await readSince(0, 10);
+  assert.deepEqual(rows.map((r) => r.id), [1, 2, 3]);
+});
+
+test("mergeForeign: a fresh batch lands whole, and reports how many rows entered", async () => {
+  const { mergeForeign } = await getMerge();
+  currentStore = new FakeStore();
+  const rows = Array.from({ length: 10 }, (_, i) => foreignRow("dev-a", i));
+  const inserted = await mergeForeign(rows);
+  assert.equal(inserted, 10);
+  assert.equal(currentStore.rows.size, 10);
+});
+
+test("RL-24: copying the same rows twice does not duplicate them", async () => {
+  const { mergeForeign } = await getMerge();
+  currentStore = new FakeStore();
+  const rows = Array.from({ length: 5 }, (_, i) => foreignRow("dev-b", i));
+  await mergeForeign(rows);
+  const second = await mergeForeign(rows);
+  assert.equal(second, 0);
+  assert.equal(currentStore.rows.size, 5);
+});
+
+test("mergeForeign is order-independent: the same set merged in a different order lands the same final rows", async () => {
+  const { mergeForeign } = await getMerge();
+  const rows = Array.from({ length: 12 }, (_, i) => foreignRow("dev-c", i));
+  const shuffled = [...rows].reverse();
+
+  currentStore = new FakeStore();
+  await mergeForeign(rows);
+  const inOrder = [...currentStore.rows.values()].map((r) => `${r.device}:${r.deviceSeq}`).sort();
+
+  currentStore = new FakeStore();
+  await mergeForeign(shuffled);
+  const reversed = [...currentStore.rows.values()].map((r) => `${r.device}:${r.deviceSeq}`).sort();
+
+  assert.deepEqual(inOrder, reversed);
+});
+
+test("mergeForeign: a merge larger than one batch still lands every row, none lost and none doubled", async () => {
+  const { mergeForeign } = await getMerge();
+  currentStore = new FakeStore();
+  const rows = Array.from({ length: 1200 }, (_, i) => foreignRow("dev-d", i));
+  const inserted = await mergeForeign(rows);
+  assert.equal(inserted, 1200);
+  assert.equal(currentStore.rows.size, 1200);
+  const seqs = [...currentStore.rows.values()].map((r) => r.deviceSeq as number).sort((a, b) => a - b);
+  assert.deepEqual(seqs, rows.map((_, i) => i));
+});
+
+test("RL-24: what one device copied is never overwritten by a later resend of the same row", async () => {
+  const { mergeForeign } = await getMerge();
+  currentStore = new FakeStore();
+  const original = foreignRow("dev-e", 0, { text: "first" });
+  await mergeForeign([original]);
+  const resend = foreignRow("dev-e", 0, { text: "second, stale" });
+  const inserted = await mergeForeign([resend]);
+  assert.equal(inserted, 0);
+  const stored = [...currentStore.rows.values()].find((r) => r.device === "dev-e" && r.deviceSeq === 0);
+  assert.equal(stored?.text, "first");
+});
+
+test("mergeForeign never touches a pre-existing local row", async () => {
+  const { mergeForeign } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(1, { id: 1, text: "local", normalised: "local" });
+  currentStore.seq = 1; // the local row already claimed key 1
+  await mergeForeign([foreignRow("dev-f", 0)]);
+  assert.deepEqual(currentStore.rows.get(1), { id: 1, text: "local", normalised: "local" });
+});
+
+test("readSince: 10 own, 1200 foreign, 1 own — rounds that follow scannedThrough reach row 1211", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  for (let id = 1; id <= 10; id++) currentStore.rows.set(id, { id, text: `own-${id}` });
+  for (let id = 11; id <= 1210; id++) {
+    currentStore.rows.set(id, { id, text: `foreign-${id}`, device: "other", deviceSeq: id });
+  }
+  currentStore.rows.set(1211, { id: 1211, text: "late" });
+  let cursor = 0;
+  const sent: number[] = [];
+  for (let round = 0; round < 10; round++) {
+    const { own, scannedThrough } = await readSince(cursor, 500);
+    sent.push(...own.map((r) => r.id as number));
+    if (scannedThrough !== null) cursor = scannedThrough;
+  }
+  assert.equal(sent.includes(1211), true);
+  assert.equal(sent.length, 11);
+});
+
+test("readSince: a page of 500 foreign rows has no own rows and names the last id scanned", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  for (let id = 1; id <= 500; id++) {
+    currentStore.rows.set(id, { id, text: `f-${id}`, device: "other", deviceSeq: id });
+  }
+  const page = await readSince(0, 500);
+  assert.deepEqual(page.own, []);
+  assert.equal(page.scannedThrough, 500);
+});
+
+test("readSince: an empty page names no id", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  const page = await readSince(7, 500);
+  assert.equal(page.scannedThrough, null);
+  assert.equal(page.scanned, 0);
+});
+
+// RL-76: a pending row stays on its device. The upload skips it and still
+// moves its cursor past it; a legacy `miss` (schema 3 or older) is not
+// pending and goes up as it always did.
+function ownRow(id: number, overrides: Partial<Row> = {}): Row {
+  return {
+    id,
+    schema: 4,
+    at: 1_700_000_000_000 + id,
+    text: `w${id}`,
+    normalised: `w${id}`,
+    kind: "word",
+    outcome: "exact",
+    headword: `w${id}`,
+    rule: null,
+    senses: 1,
+    translation: "t",
+    dictionaryReady: true,
+    origin: null,
+    ...overrides,
+  };
+}
+
+const pendingWord = { outcome: "miss", kind: "word", headword: null, senses: 0, translation: null };
+const pendingPhrase = { outcome: "untranslated", kind: "phrase", headword: null, senses: 0, translation: null };
+
+test("readSince: [respondida, pendiente, respondida] sube las dos respondidas y el cursor pasa las tres", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(1, ownRow(1));
+  currentStore.rows.set(2, ownRow(2, pendingWord));
+  currentStore.rows.set(3, ownRow(3));
+  const { own, scannedThrough } = await readSince(0, 10);
+  assert.deepEqual(own.map((r) => r.id), [1, 3]);
+  assert.equal(scannedThrough, 3);
+});
+
+test("readSince: una frase pendiente tampoco sube", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(1, ownRow(1, pendingPhrase));
+  currentStore.rows.set(2, ownRow(2, { kind: "phrase", outcome: "translated", headword: null }));
+  const { own, scannedThrough } = await readSince(0, 10);
+  assert.deepEqual(own.map((r) => r.id), [2]);
+  assert.equal(scannedThrough, 2);
+});
+
+test("readSince: una página solo de pendientes no sube nada y aun así avanza el cursor", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(5, ownRow(5, pendingWord));
+  currentStore.rows.set(6, ownRow(6, pendingPhrase));
+  const { own, scannedThrough } = await readSince(4, 10);
+  assert.deepEqual(own, []);
+  assert.equal(scannedThrough, 6);
+});
+
+test("readSince: un «miss» de esquema 3 no es pendiente y sube como siempre", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  currentStore.rows.set(1, ownRow(1, { ...pendingWord, schema: 3 }));
+  currentStore.rows.set(2, ownRow(2, { ...pendingWord, schema: 1 }));
+  const { own } = await readSince(0, 10);
+  assert.deepEqual(own.map((r) => r.id), [1, 2]);
+});

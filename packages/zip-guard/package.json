@@ -1,0 +1,10 @@
+{
+  "name": "@repo/zip-guard",
+  "private": true,
+  "scripts": {
+    "check:unit": "node --import tsx --test src/index.test.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

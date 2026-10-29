@@ -1,0 +1,33 @@
+{
+  "changeCadence": "Cambiar la frecuencia",
+  "delete": "Borrar el hábito",
+  "deleteBody": "Nadie lo ha hecho todavía: se borra sin dejar rastro. Retirarlo, en cambio, lo deja en «Retirados».",
+  "deleteConfirm": "Borrarlo",
+  "keep": "Dejarlo como está",
+  "title": "Hábito",
+  "overline": "hábito · desde el {date}",
+  "retiredOn": "retirado el {date}",
+  "edit": "Editar",
+  "retire": "Retirarlo",
+  "months": {
+    "title": "Por mes",
+    "columns": { "month": "mes", "days": "días" },
+    "caption": "{count, plural, one {# mes} other {# meses}}",
+    "captionOf": "{shown} de {count, plural, one {# mes} other {# meses}}",
+    "earlier": "{count, plural, one {# mes anterior} other {# meses anteriores}}",
+    "current": "en curso",
+    "line": "{count, plural, one {# día} other {# días}}",
+    "lineOf": "{done} de {asked, plural, one {# día} other {# días}}",
+    "lineWeeks": "{met} de {counted, plural, one {# semana} other {# semanas}}",
+    "noWeeks": "aún sin semanas cerradas",
+    "seeAll": "ver todo"
+  },
+  "sheet": {
+    "title": "Editarlo",
+    "nameLabel": "nombre",
+    "noteLabel": "nota, si quieres",
+    "save": "Guardarlo",
+    "saving": "Guardando…",
+    "cancel": "Cancelar"
+  }
+}

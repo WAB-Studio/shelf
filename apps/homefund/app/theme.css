@@ -1,0 +1,66 @@
+/* Radix Themes scopes its reset to `.radix-themes`; the document itself still
+   needs to fill the viewport and lose the user-agent's default body margin. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+/* Every portalled surface (menu, listbox, dialog) wraps in its own nested
+   `Theme`, another `.radix-themes` node that re-declares these variables from
+   Radix's own stylesheet: doubled to outrank that same-specificity rule
+   whichever sheet loads last. */
+.radix-themes.radix-themes {
+  --default-font-family: var(--font-sans);
+  --heading-font-family: var(--font-sans);
+  --code-font-family: var(--font-geist-mono);
+}
+
+/* The page sits on a warm off-white so white cards read as raised, not flush.
+   Keyed off the class the pre-paint script already wrote, so the tone lands on
+   first paint with no flash. The doubled class outranks Radix's own token. */
+.light .radix-themes.radix-themes {
+  --color-background: #f5f3ef;
+  --gray-12: #1b1a16;
+  /* Radix's focus step meets the ground at 1.9:1; jade-11 rings at 4.20:1. */
+  --focus-8: var(--jade-11);
+}
+
+/* A control with its own colour (gray «Cancelar», red «Eliminar») re-declares
+   --focus-8 from its own step 8, 1.9:1 on white. Its step 11 clears 3:1 on the
+   white panel and on the ground. */
+.light [data-accent-color][data-accent-color] {
+  --focus-8: var(--accent-11);
+}
+
+/* The soft variants draw their ring from step 8 directly, not --focus-8. */
+.light .rt-BaseButton.rt-variant-soft:focus-visible,
+.light .rt-SelectTrigger.rt-variant-soft:focus-visible {
+  outline-color: var(--accent-11);
+}
+
+.dark .radix-themes.radix-themes {
+  --color-background: #141310;
+}
+
+/* Dark: a control with its own colour rings at step 8, 2.80:1 on the dialog
+   panel (gray «Cancelar»). Step 11 measures 8.39:1 (gray) and 8.35:1 (red) on
+   the panel #191918, 8.86:1 and 8.82:1 on the ground #141310. */
+.dark [data-accent-color][data-accent-color] {
+  --focus-8: var(--accent-11);
+}
+
+.dark .rt-BaseButton.rt-variant-soft:focus-visible,
+.dark .rt-SelectTrigger.rt-variant-soft:focus-visible {
+  outline-color: var(--accent-11);
+}
+
+/* The solid button's white label: Radix's jade-9 and red-9 carry it at 3.15:1
+   and 3.91:1. These steps reach 5.23:1 and 6.15:1 (jade), 4.79:1 and 5.65:1
+   (red), in both appearances. */
+.radix-themes.radix-themes {
+  --accent-9: #1f7a62;
+  --accent-10: #1b6e57;
+  --red-9: #d13a3f;
+  --red-10: #c42a2f;
+}

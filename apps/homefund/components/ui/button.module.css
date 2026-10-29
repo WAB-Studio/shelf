@@ -1,0 +1,13 @@
+/* The 44px floor SPEC-A3 holds every control to on its short side. A ghost
+   variant is sized by its glyph and its padding, never by a control height, so
+   the floor is pinned rather than inherited.
+
+   The class is doubled to outrank `.rt-reset:where(button)`, whose `all: unset`
+   wipes a same-specificity declaration from whichever sheet loads first — and
+   takes the box back to `content-box`, which would make the floor 44px plus the
+   padding rather than 44px in all. */
+.tap.tap {
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+}

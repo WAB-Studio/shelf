@@ -1,0 +1,14 @@
+{
+  "instructions": "TimeLog es el tiempo que una persona pasó en cada app de su computadora, por día, sumando todos sus equipos. Solo lee: nunca cambia nada. Los días van como AAAA-MM-DD en hora de Bogotá; el tiempo va en segundos y, al lado, en texto. Un día sin datos no aparece o vale cero.",
+  "tools": {
+    "get_day": "Lee un día: cada app con su tiempo, de la más larga a la más corta, y el total. day va como AAAA-MM-DD; sin él, hoy. No cambia nada.",
+    "get_week": "Lee la semana de lunes a domingo que contiene day (AAAA-MM-DD; sin él, la de hoy): el total de cada uno de los siete días y las apps de la semana, de la más larga a la más corta. No cambia nada.",
+    "get_range": "Lee el total de cada día entre from y to, ambos incluidos y como AAAA-MM-DD, hasta 366 días, y las apps de todo el rango con su tiempo. No cambia nada."
+  },
+  "errors": {
+    "unauthorized": "La llave no sirve o fue revocada.",
+    "day": "El día no es una fecha real AAAA-MM-DD.",
+    "range": "from va antes o igual que to, y el rango tiene hasta 366 días.",
+    "unknown": "Algo falló al leer. Prueba otra vez."
+  }
+}

@@ -6,26 +6,30 @@ set -euo pipefail
 SUPABASE_VERSION="2.119.0"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXCLUDED="studio,postgres-meta,postgrest,realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor"
-DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-API_URL="http://127.0.0.1:54321"
+DB_URL="postgresql://postgres:postgres@127.0.0.1:44322/postgres"
+API_URL="http://127.0.0.1:44321"
 
 cli() { (cd "$ROOT" && npx --yes "supabase@${SUPABASE_VERSION}" "$@"); }
 
-is_up() { docker ps --format '{{.Names}}' | grep -q '^supabase_db_universo$'; }
+is_up() { docker ps --format '{{.Names}}' | grep -q '^supabase_db_shelf$'; }
 
-publishable_key() {
-  cli status -o env 2>/dev/null | sed -n 's/^PUBLISHABLE_KEY="\(.*\)"$/\1/p' | head -1
-}
+# Reads one KEY="value" line out of `status -o env` text on stdin.
+status_value() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" | head -1; }
 
 print_env() {
-  local key
-  key="$(publishable_key)"
+  local status key secret
+  # One status call for both keys: each costs an npx round.
+  status="$(cli status -o env 2>/dev/null)"
+  key="$(status_value PUBLISHABLE_KEY <<<"$status")"
+  secret="$(status_value SECRET_KEY <<<"$status")"
   [ -n "$key" ] || { echo "supabase-local: no publishable key from the stack" >&2; return 1; }
+  [ -n "$secret" ] || { echo "supabase-local: no secret key from the stack" >&2; return 1; }
   cat <<EOF
 export DATABASE_URL='${DB_URL}'
 export MIGRATION_DATABASE_URL='${DB_URL}'
 export NEXT_PUBLIC_SUPABASE_URL='${API_URL}'
 export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY='${key}'
+export SUPABASE_SECRET_KEY='${secret}'
 export OPENAI_API_KEY=
 export GEMINI_API_KEY=
 export SUPABASE_STORAGE_S3_ENDPOINT=
@@ -43,7 +47,7 @@ require_up() {
 cmd_migrate() {
   require_up
   local apps=("$@")
-  [ ${#apps[@]} -gt 0 ] || apps=(orbit voyager pulsar)
+  [ ${#apps[@]} -gt 0 ] || apps=(homefund wordbook goallog timelog)
   local app
   for app in "${apps[@]}"; do
     # drizzle-kit directly: db:migrate also demands the app's .env.local, which a fresh lane may lack.
@@ -80,7 +84,7 @@ case "${1:-}" in
     # A failed print_env must stop here: an empty env falls back to .env.local, the remote project.
     env_lines="$(print_env)" || exit 1
     eval "$env_lines"
-    echo "supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322" >&2
+    echo "supabase-local: API 127.0.0.1:44321, DB 127.0.0.1:44322" >&2
     exec "$@"
     ;;
   status) cli status ;;

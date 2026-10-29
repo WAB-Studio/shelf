@@ -1,0 +1,51 @@
+{
+  "seeAll": "ver todo",
+  "seeLess": "ver menos",
+  "appName": "GoalLog",
+  "brand": "GoalLog",
+  "nav": {
+    "today": "Hoy",
+    "week": "Semana",
+    "goals": "Metas",
+    "month": "Mes",
+    "goalsSection": "metas abiertas"
+  },
+  "header": {
+    "back": "Volver a {place}"
+  },
+  "notFound": {
+    "title": "Esta página no existe",
+    "body": "Si era una meta, puede que esté archivada: la encuentras en Metas.",
+    "primaryAction": "Ir a hoy",
+    "secondaryAction": "Ver las metas"
+  },
+  "error": {
+    "title": "No se pudo abrir",
+    "body": "Lo que ya anotaste está guardado.",
+    "retry": "Intentar otra vez",
+    "secondaryAction": "Ir a hoy"
+  },
+  "titles": {
+    "today": "Hoy",
+    "entrar": "Entrar",
+    "connections": "Conectar una IA",
+    "oneOffs": "Sueltas",
+    "goals": "Metas",
+    "week": "Semana",
+    "month": "Mes",
+    "authorize": "Permiso",
+    "import": "Importar un plan",
+    "importReview": "Revisar el plan",
+    "newGoal": "Meta nueva",
+    "goal": "Meta",
+    "months": "Meses",
+    "review": "Revisión",
+    "goalMonth": "Mes",
+    "newPhase": "Fase nueva",
+    "editPhase": "Cambiar la fase",
+    "newCommitment": "Compromiso nuevo",
+    "newHabit": "Hábito nuevo",
+    "newTask": "Tarea nueva",
+    "cadence": "Frecuencia"
+  }
+}

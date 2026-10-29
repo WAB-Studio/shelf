@@ -1,0 +1,40 @@
+import "server-only";
+
+import { sql } from "drizzle-orm";
+
+import { json } from "@/lib/http/responses";
+import { getReader, withReaderDb } from "@/lib/session";
+
+/**
+ * «Vaciar aquí y en mi cuenta» (`RegistroVaciarConfirmar`): empties this
+ * reader's whole account copy of `lookups`, every device's rows at once —
+ * the confirm screen names no device of its own, unlike `retireDevice`
+ * (`lib/sync/devices.ts`), which only ever drops one. `reading.devices`
+ * stays: RL-25's list still answers who copied here, now with nothing left
+ * to count — `listDevices`'s own `left join lateral` derives that count
+ * from `lookups` itself, never stores it, so an emptied copy reads as zero
+ * with no row to fix up.
+ *
+ * No body, no Zod schema: the only input this route reads is the session
+ * itself, so there is nothing a form could get wrong for a schema to catch.
+ *
+ * Two round trips past the session's own settle statement: the reader's
+ * `:sync-quota` lock in a statement of its own, then the delete, whose
+ * snapshot is taken after the grant, so an upload in flight lands first and
+ * is emptied with the rest, and one that arrives later queues behind this
+ * transaction and lands after the emptying, not inside it. The `where`
+ * narrows the index; the policy — `lookups_delete_self` — is what actually
+ * keeps this off another reader's rows (RNL-10), proven driving it with two
+ * identities in `e2e/registro.spec.ts`, never asserted from the migration.
+ */
+export async function DELETE(): Promise<Response> {
+  const reader = await getReader();
+  if (!reader) return json({ error: "unauthorized" }, 401);
+
+  await withReaderDb(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${reader.id}::text || ':sync-quota', 0))`);
+    await tx.execute(sql`delete from reading.lookups where user_id = ${reader.id}`);
+  });
+
+  return json({}, 200);
+}

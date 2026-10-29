@@ -1,0 +1,186 @@
+{
+  "title": "Hoy",
+  "pastTitle": "Día pasado",
+  "date": "{weekday} {day} de {month}",
+  "dateYear": "{day} de {month} de {year}",
+  "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
+  "monthLong": [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+  ],
+  "nav": {
+    "yesterday": "ayer",
+    "dayBefore": "día anterior",
+    "today": "volver a hoy",
+    "dayAfter": "día siguiente"
+  },
+  "past": {
+    "writtenOn": "anotado el {weekday} {day}",
+    "nothingTitle": "Ese día no pedía nada",
+    "writtenOnFar": "anotado el {weekday} {day} de {month}",
+    "startedOn": "{goal} empezó el {weekday} {day}",
+    "startedOnFar": "{goal} empezó el {weekday} {day} de {month}",
+    "asked": "{goal} · ese día pedía {count}",
+    "askedWords": ["ninguno", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"],
+    "limit": "Siete días atrás es lo más lejos que se anota."
+  },
+  "weekFigure": {
+    "caption": "esta semana"
+  },
+  "ended": {
+    "yesterday": "{goal} terminó ayer",
+    "on": "{goal} terminó el {weekday} {day} de {month} de {year}",
+    "see": "ver",
+    "seeLabel": "Abrir {goal}"
+  },
+  "allEnded": {
+    "title": "Hoy no pide nada.",
+    "body": "{goal} terminó el {date} de {year}. Puedes moverle el final o abrir otra.",
+    "toGoals": "Ver las metas",
+    "newGoal": "Abrir otra meta"
+  },
+  "unreadableTitle": "No pudimos leer una fuente.",
+  "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
+  "theme": {
+    "toLight": "Cambiar a modo claro",
+    "toDark": "Cambiar a modo oscuro"
+  },
+  "habits": {
+    "title": "Hábitos"
+  },
+  "empty": {
+    "title": "Todavía no hay nada que anotar.",
+    "body": "Una meta dice qué cuenta y cada cuánto. Lo que pase después lo anotas tocando su marca, o lo anota sola la app que ya lo sabe.",
+    "action": "Abrir una meta",
+    "import": "Importar un plan"
+  },
+  "oneOffs": {
+    "title": "Sueltas",
+    "delete": {
+      "title": "¿Borrarla?",
+      "description": "No llegó a pasar nada, así que no queda nada de ella. Si ya la hiciste, márcala hecha en vez de borrarla: eso sí deja constancia.",
+      "confirm": "Borrarla",
+      "cancel": "Dejarla"
+    },
+    "carriedFrom": "del {weekday} {day}",
+    "carriedFromFar": "del {weekday} {day} de {month}",
+    "daylessLink": "{count, plural, one {# espera} other {# esperan}}"
+  },
+  "doneOneOffs": {
+    "title": "Hechas hoy",
+    "titlePast": "Hechas ese día",
+    "undoLabel": "Deshacer: {name}"
+  },
+  "choice": {
+    "label": "Para cuándo",
+    "today": "hoy",
+    "tomorrow": "mañana",
+    "other": "otro día",
+    "none": "sin día",
+    "dateLabel": "qué día"
+  },
+  "newOneOff": {
+    "label": "Algo suelto",
+    "placeholder": "Escribe algo suelto...",
+    "labelForGoal": "Una tarea de {goal}",
+    "placeholderForGoal": "Una tarea de {goal}…",
+    "placeholderForGoalShort": "Una tarea de {goal}…",
+    "placeholderOne": "Escribe una tarea…",
+    "nameEmptyOne": "Escribe el nombre de la tarea.",
+    "when": "para cuándo",
+    "whichGoal": "de qué meta",
+    "loose": "Suelta",
+    "savedGoalToday": "Anotada en {goal}.",
+    "savedPlanChosen": "Quedó en el plan de {goal}.",
+    "submit": "Anotar",
+    "savedNone": "Anotada sin día: espera en «{count} sin día».",
+    "savedPlan": "Anotada en el plan de {goal}.",
+    "seePlan": "ver el plan",
+    "savedTomorrow": "Anotada para mañana, {weekday} {day}.",
+    "savedTomorrowFar": "Anotada para mañana, {weekday} {day} de {month}.",
+    "savedOther": "Anotada para el {weekday} {day}.",
+    "savedOtherFar": "Anotada para el {weekday} {day} de {month}."
+  },
+  "quantitySheet": {
+    "question": "¿Cuánto hiciste hoy?",
+    "questionPast": "¿Cuánto hiciste ese día?",
+    "otherAmount": "Escribir otra cantidad",
+    "customLabel": "Otra cantidad",
+    "customLabelMinutes": "otro número, en minutos",
+    "noteLabel": "Una línea, si quieres",
+    "notePlaceholder": "¿Qué pasó?",
+    "accept": "Anotar",
+    "change": "Cambiar",
+    "undo": "Deshacer"
+  },
+  "cadence": {
+    "weekdayShort": ["L", "M", "X", "J", "V", "S", "D"],
+    "weekdayFull": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
+    "weekdayName": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
+    "everyDay": "todos los días",
+    "daysJoin": "{list} y {last}",
+    "weekdayPlural": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"],
+    "onlyWeekday": "solo los {weekday}",
+    "timesPerWeek": "{count, plural, one {# vez por semana} other {# veces por semana}}",
+    "everyNDays": "cada {n} días",
+    "timesPerMonth": "{count, plural, one {# vez al mes} other {# veces al mes}}"
+  },
+  "phase": {
+    "of": "fase {ordinal} de {total} · {name}"
+  },
+  "row": {
+    "saidByYou": "lo dijiste tú",
+    "partialAmount": "{logged} de {target}",
+    "evidenceAmount": "{count} {unit}",
+    "unreadSourceAsks": "sin leer la fuente · pide {asks}"
+  },
+  "monthLine": {
+    "title": "este mes",
+    "markTask": "Marcar hecha: {name}",
+    "of": "de",
+    "tasksOf": "{total, plural, one {de # tarea} other {de # tareas}}",
+    "tasksAfterFigure": "· {done} de {total, plural, one {# tarea} other {# tareas}}",
+    "parent": "de {name}",
+    "next": "Siguiente del plan",
+    "nextMonth": "Siguiente del mes",
+    "nextPart": "Siguiente del plan · <fig>{hours}</fig> este mes",
+    "pace": "día {day} ·",
+    "paceUnder": ", bajo el {threshold} %"
+  },
+  "tally": "hechos <fig>{done}</fig> de <fig>{total}</fig>",
+  "tallyPartial": "hechos <fig>{done}</fig> de <fig>{total}</fig> · <fig>{partial}</fig> en parte",
+  "met": {
+    "week": "cumplida esta semana · {done} de {total}",
+    "month": "cumplida este mes · {done} de {total}",
+    "weekOver": "cumplida esta semana · {done} veces",
+    "monthOver": "cumplida este mes · {done} veces"
+  },
+  "errors": {
+    "alreadyNoted": "Ya anotaste {quantity} hoy en otro lado. Ábrelo para cambiarlo.",
+    "notFound": "Eso ya no existe. Recarga la página.",
+    "dayBeforeGoal": "Ese día es anterior a cuando abriste esta meta.",
+    "evidenceOnly": "Eso se marca solo con lo que anota otra app.",
+    "quantityRequired": "Ese compromiso pide una cantidad.",
+    "subjectInvalid": "Falta decir a qué compromiso o suelta pertenece esto.",
+    "noteEmpty": "La nota no puede quedar en blanco.",
+    "oneOffNoteTooLong": "Es muy larga. Escribe máximo 2000 caracteres.",
+    "noteTooLong": "La nota es muy larga. Escribe máximo 280 caracteres.",
+    "quantityInvalid": "Escribe un número entero entre 1 y 1 000 000.",
+    "invalid": "Eso no es válido.",
+    "signedOut": "Tu sesión terminó. Entra otra vez.",
+    "oneOffNameEmpty": "Escribe qué es lo suelto.",
+    "oneOffNameTooLong": "Es muy largo. Escribe máximo 120 caracteres.",
+    "oneOffDayInvalid": "Ese día no es válido.",
+    "oneOffDayPast": "Ese día ya pasó. Elige hoy o uno por venir.",
+    "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra.",
+    "dayInvalid": "Ese día no es válido.",
+    "dayFuture": "Ese día todavía no llega.",
+    "dayStale": "La pantalla quedó de otro día. Recárgala.",
+    "dayTooOld": "Eso ya pasó hace más de una semana.",
+    "dayBeforeCommitment": "Ese día es anterior a cuando empezó este compromiso.",
+    "dayAfterRetired": "Ese día es posterior a cuando se retiró este compromiso.",
+    "dayBeforeOneOff": "Esa tarea todavía no existía ese día.",
+    "dayBeforeOneOffDay": "Esa tarea era para un día después.",
+    "monthClosed": "Ese mes ya cerró: lo hecho en él queda como está."
+  }
+}

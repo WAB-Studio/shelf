@@ -3,7 +3,7 @@ description: Start the local Supabase stack on the runner, migrate it and point 
 
 inputs:
   apps:
-    description: Space-separated apps that get an .env.local (pulsar, orbit, voyager).
+    description: Space-separated apps that get an .env.local (goallog, homefund, timelog, wordbook).
     required: true
 
 runs:
@@ -51,12 +51,14 @@ runs:
         # print_env emits `export K='v'`; a dotenv file and $GITHUB_ENV take `K=v`.
         scripts/supabase-local.sh env | sed -e 's/^export //' -e "s/='\(.*\)'$/=\1/" > /tmp/supabase-local.env
         echo "NEXT_PUBLIC_SITE_URL=http://localhost:3000" >> /tmp/supabase-local.env
+        # The secret key bypasses every policy; keep it out of the log even on a throwaway stack.
+        echo "::add-mask::$(sed -n 's/^SUPABASE_SECRET_KEY=//p' /tmp/supabase-local.env)"
         cron_secret="$(openssl rand -hex 16)"
         echo "::add-mask::$cron_secret"
         for app in $APPS; do
           cp /tmp/supabase-local.env "apps/$app/.env.local"
-          if [ "$app" = orbit ]; then echo "CRON_SECRET=$cron_secret" >> "apps/$app/.env.local"; fi
+          if [ "$app" = homefund ]; then echo "CRON_SECRET=$cron_secret" >> "apps/$app/.env.local"; fi
         done
-        # The publishable key is public by design; the others are fixed local URLs.
+        # The publishable key is public by design, the secret key is masked above; the others are fixed local URLs.
         cat /tmp/supabase-local.env >> "$GITHUB_ENV"
         echo "env names:" && cut -d= -f1 /tmp/supabase-local.env | tr '\n' ' '

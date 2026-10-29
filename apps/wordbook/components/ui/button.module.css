@@ -1,0 +1,32 @@
+/* The 44px floor DESIGN.md holds every control to on its short side. A ghost
+   variant is sized by its glyph and its padding, never by a control height, so
+   the floor is pinned rather than inherited.
+
+   The class is doubled to outrank `.rt-reset:where(button)`, whose `all: unset`
+   wipes a same-specificity declaration from whichever sheet loads first — and
+   takes the box back to `content-box`, which would make the floor 44px plus the
+   padding rather than 44px in all. */
+.tap.tap {
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* `CuentaSinRed`'s retry, the one button this app runs to the row's full
+   width. Doubled for the same reason as `.tap` above: `all: unset` resets
+   `width` too, and load order alone would otherwise decide the winner. */
+.block.block {
+  width: 100%;
+}
+
+/* `IconButton`'s `quiet`: doubled to outrank `.rt-variant-ghost`'s own
+   single-class colour. */
+.quiet.quiet {
+  color: var(--rl-muted-quiet);
+}
+
+/* `heavy`: the outline variant's rule at 1.5px in the accent, over Radix's
+   1px inset shadow. Doubled for the same reason as `.tap`. */
+.heavy.heavy {
+  box-shadow: inset 0 0 0 1.5px var(--accent-9);
+}

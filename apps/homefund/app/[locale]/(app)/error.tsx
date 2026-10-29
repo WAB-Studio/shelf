@@ -1,0 +1,65 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
+import { Button, Flex, Heading, Page, Panel, TextLink } from "@/components/ui";
+
+/**
+ * The signed-in shell's boundary. It replaces the screen and nothing else — the
+ * layout above it survives, so the header and the tab bar stay on and every
+ * destination is still one tap away. Neither `error.message` nor `error.digest`
+ * reaches the screen: a server component's message is an internal, and the digest
+ * is a handle for the server's own log, not something a person acts on. From
+ * `md` up the same message, retry and way home sit on the artboard's centred
+ * card instead of loose on the page.
+ */
+export default function AppError({
+  retry,
+}: {
+  error: Error & { digest?: string };
+  retry: () => void;
+}) {
+  const t = useTranslations();
+
+  return (
+    <Page>
+      <Flex
+        display={{ initial: "flex", md: "none" }}
+        direction="column"
+        align="center"
+        justify="center"
+        gap="4"
+        flexGrow="1"
+      >
+        <Heading size="6" align="center">
+          {t("errors.unexpected")}
+        </Heading>
+        <Button size="3" onClick={() => retry()}>
+          {t("common.retry")}
+        </Button>
+        <TextLink href="/" justify="center" px="2">
+          {t("common.backHome")}
+        </TextLink>
+      </Flex>
+
+      <Flex
+        display={{ initial: "none", md: "flex" }}
+        align="center"
+        justify="center"
+        flexGrow="1"
+      >
+        <Panel variant="notice">
+          <Heading size="6" align="center">
+            {t("errors.unexpected")}
+          </Heading>
+          <Button size="3" onClick={() => retry()}>
+            {t("common.retry")}
+          </Button>
+          <TextLink href="/" justify="center" px="2">
+            {t("common.backHome")}
+          </TextLink>
+        </Panel>
+      </Flex>
+    </Page>
+  );
+}

@@ -1,0 +1,116 @@
+/* Radix Themes scopes its reset to `.radix-themes`; the document itself still
+   needs to fill the viewport and lose the user-agent's default body margin. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+/* The app is one column read at arm's length: the theme fills the viewport so a
+   short answer still sits against a full page rather than a white band. */
+.radix-themes {
+  min-height: 100%;
+}
+
+/* docs/wordbook/DESIGN.md: light is the base, dark is the primary look. No
+   toggle lives here yet (RNL-07 is a separate module) — the OS preference
+   alone picks the mode. */
+:root {
+  --rl-ground: #faf8f2;
+  --rl-raised: #ffffff;
+  --rl-line: #e4dfd2;
+  --rl-border: #ded8c8;
+  --rl-control-edge: #a08e60;
+  --rl-ink: #17160f;
+  --rl-ink-secondary: #17160f;
+  --rl-muted: #6b675a;
+  --rl-muted-quiet: #787263;
+  --rl-accent: #9a3b24;
+  --rl-accent-contrast: #faf8f2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --rl-ground: #14130f;
+    --rl-raised: #1c1b16;
+    --rl-line: #2a2820;
+    --rl-border: #302e25;
+    --rl-control-edge: #6b6753;
+    --rl-ink: #f0ebdd;
+    --rl-ink-secondary: #e6e0d0;
+    --rl-muted: #9a9484;
+    --rl-muted-quiet: #898271;
+    --rl-accent: #d9805f;
+    --rl-accent-contrast: #14130f;
+  }
+}
+
+/* Retints the two ramps every Radix Themes primitive already reads through —
+   "gray" for muted, line and border roles, "indigo" for whatever AppTheme
+   picked as the accent — so no component needs its own colour override.
+   Doubled to outrank a nested `Theme`'s own `.radix-themes` re-declaration. */
+.radix-themes.radix-themes {
+  --color-background: var(--rl-ground);
+  --color-panel-solid: var(--rl-raised);
+  --color-panel-translucent: var(--rl-raised);
+  --color-surface: var(--rl-raised);
+  --color-overlay: var(--rl-border);
+
+  --gray-1: var(--rl-ground);
+  --gray-2: var(--rl-raised);
+  --gray-3: var(--rl-raised);
+  --gray-4: var(--rl-border);
+  --gray-5: var(--rl-border);
+  --gray-6: var(--rl-line);
+  --gray-7: var(--rl-border);
+  --gray-8: var(--rl-border);
+  --gray-9: var(--rl-muted-quiet);
+  --gray-10: var(--rl-muted);
+  --gray-11: var(--rl-muted);
+  --gray-12: var(--rl-ink);
+  --gray-a1: var(--rl-ground);
+  --gray-a2: var(--rl-raised);
+  --gray-a3: var(--rl-raised);
+  --gray-a4: var(--rl-border);
+  --gray-a5: var(--rl-border);
+  --gray-a6: var(--rl-line);
+  --gray-a7: var(--rl-border);
+  --gray-a8: var(--rl-border);
+  --gray-a9: var(--rl-muted-quiet);
+  --gray-a10: var(--rl-muted);
+  --gray-a11: var(--rl-muted);
+  --gray-a12: var(--rl-ink);
+
+  --indigo-1: var(--rl-raised);
+  --indigo-2: var(--rl-raised);
+  --indigo-3: var(--rl-raised);
+  --indigo-4: var(--rl-border);
+  --indigo-5: var(--rl-border);
+  --indigo-6: var(--rl-border);
+  --indigo-7: var(--rl-border);
+  --indigo-8: var(--rl-accent);
+  --indigo-9: var(--rl-accent);
+  --indigo-10: var(--rl-accent);
+  --indigo-11: var(--rl-accent);
+  --indigo-12: var(--rl-accent);
+  --indigo-a1: var(--rl-raised);
+  --indigo-a2: var(--rl-raised);
+  --indigo-a3: var(--rl-raised);
+  --indigo-a4: var(--rl-border);
+  --indigo-a5: var(--rl-border);
+  --indigo-a6: var(--rl-border);
+  --indigo-a7: var(--rl-border);
+  --indigo-a8: var(--rl-accent);
+  --indigo-a9: var(--rl-accent);
+  --indigo-a10: var(--rl-accent);
+  --indigo-a11: var(--rl-accent);
+  --indigo-a12: var(--rl-accent);
+  --indigo-contrast: var(--rl-accent-contrast);
+  --indigo-surface: var(--rl-raised);
+  --indigo-indicator: var(--rl-accent);
+  --indigo-track: var(--rl-accent);
+
+  /* Interface copy stays sans by default; Headword and the serif Text variant
+     opt into Newsreader for headwords, translations and definitions. */
+  --default-font-family: var(--font-sans);
+}
