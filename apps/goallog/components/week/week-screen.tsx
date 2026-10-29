@@ -1,9 +1,8 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
-import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, Text, TextLink } from "@/components/ui";
+import { Face, Flex, Page, ScreenHeader, Section, SectionLabel, Text } from "@/components/ui";
 import { endedOnPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref, weekHref } from "@/lib/day/week-href";
 import { daysBetween } from "@/lib/day/weeks";
@@ -17,6 +16,7 @@ import { GiveDayList } from "@/components/one-offs/give-day-list";
 import { GiveDayRow } from "@/components/one-offs/give-day-row";
 import { EmptyWeek } from "./empty-week";
 import { EndedLine } from "./ended-line";
+import { StepLinks } from "./step-links";
 import { endedLastDay } from "./week-progress";
 import { WeekTableFace } from "./week-table-face";
 
@@ -122,25 +122,9 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
     );
   }
 
-  function step(href: string | null, label: string, icon: "prev" | "next") {
-    if (href === null) return <Flex flexGrow="1" aria-hidden />;
-    return (
-      <TextLink href={href} nowrap>
-        <Flex as="span" align="center" gap="1">
-          {icon === "prev" ? <ChevronLeft size={16} aria-hidden /> : null}
-          {label}
-          {icon === "next" ? <ChevronRight size={16} aria-hidden /> : null}
-        </Flex>
-      </TextLink>
-    );
-  }
-
   const eyebrow = eyebrowFor(view.start, thisMonday, week.firstMonday, t);
   const stepLinks = (
-    <>
-      {step(prev, t("week.nav.prev"), "prev")}
-      {step(next, t("week.nav.next"), "next")}
-    </>
+    <StepLinks prev={{ href: prev, label: t("week.nav.prev") }} next={{ href: next, label: t("week.nav.next") }} />
   );
 
   return (

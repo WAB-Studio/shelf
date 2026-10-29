@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
+import { StepLinks } from "@/components/week/step-links";
 import { GiveDayList } from "@/components/one-offs/give-day-list";
 import {
   Button,
@@ -408,23 +409,11 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
     ) : null;
 
   const { prev, next } = monthSteps({ month: seg, firstMonth: across.firstMonth, lastMonth: across.lastMonth });
-  function step(href: string | null, label: string, icon: "prev" | "next") {
-    if (href === null) return <Flex flexGrow="1" aria-hidden />;
-    return (
-      <TextLink href={href} nowrap>
-        <Flex as="span" align="center" gap="1">
-          {icon === "prev" ? <ChevronLeft size={16} aria-hidden /> : null}
-          {label}
-          {icon === "next" ? <ChevronRight size={16} aria-hidden /> : null}
-        </Flex>
-      </TextLink>
-    );
-  }
   const stepLinks = (
-    <>
-      {step(monthHref(prev, thisMonth), t("month.across.nav.prev"), "prev")}
-      {step(monthHref(next, thisMonth), t("month.across.nav.next"), "next")}
-    </>
+    <StepLinks
+      prev={{ href: monthHref(prev, thisMonth), label: t("month.across.nav.prev") }}
+      next={{ href: monthHref(next, thisMonth), label: t("month.across.nav.next") }}
+    />
   );
   const eyebrow = t(
     across.view === "this"
