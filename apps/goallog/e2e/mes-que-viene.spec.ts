@@ -201,6 +201,7 @@ test("«Semanas» under the month's header opens each week it touches; this week
     await page.goto(`/mes?mes=${key(comingMonth)}`);
     // Its second week: the first may still be this one.
     const second = mondaysTouching(comingMonth)[1];
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title(comingMonth));
     await noOverflow(page, 390);
     await page.getByRole("link", { name: `Semana del ${civilDayMonthShort(second)}`, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/semana\\?semana=${second}$`));
