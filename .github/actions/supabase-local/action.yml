@@ -3,7 +3,7 @@ description: Start the local Supabase stack on the runner, migrate it and point 
 
 inputs:
   apps:
-    description: Space-separated apps that get an .env.local (goallog, homefund, wordbook).
+    description: Space-separated apps that get an .env.local (goallog, homefund, timelog, wordbook).
     required: true
 
 runs:

@@ -1,0 +1,27 @@
+/* docs/timelog/DESIGN.md "Tokens": dark is the primary face. */
+:root {
+  --tl-bg: #14120f;
+  --tl-raised: #1d1a16;
+  --tl-text: #efe9df;
+  --tl-muted: #9a9184;
+  --tl-bar: #d9a441;
+  --tl-track: #2a2620;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --tl-bg: #f7f3ec;
+    --tl-raised: #efe9df;
+    --tl-text: #1d1a16;
+    --tl-muted: #6f675b;
+    --tl-bar: #a8761a;
+    --tl-track: #e4ddd1;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--tl-bg);
+  color: var(--tl-text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
