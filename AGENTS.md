@@ -8,17 +8,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Shelf: HomeFund, WordBook, GoalLog
+# Shelf: HomeFund, WordBook, GoalLog, TimeLog
 
 This file is the core every agent loads. Read the file the index names before the work it names.
 
 ## Apps and contracts
 
-- Call the apps by their names: `apps/homefund` is **HomeFund**, `apps/wordbook` **WordBook**, `apps/goallog` **GoalLog**,
-  `apps/portal` «Shelf». Vercel projects: `homefund`, `wordbook`, `goallog`; the repo is `WAB-Studio/shelf`. Production deploys the
+- Call the apps by their names: `apps/homefund` is **HomeFund**, `apps/wordbook` **WordBook**, `apps/goallog` **GoalLog**, `apps/timelog` **TimeLog**,
+  `apps/portal` «Shelf». Vercel projects: `homefund`, `wordbook`, `goallog`, `timelog`; the repo is `WAB-Studio/shelf`. Production deploys the
   old folders until the final merge moves each to `<app>app.vercel.app`; `our-piggy-bank`, `reading-neon`, `pulsar-psi-six` keep answering.
 - HomeFund: contract `docs/SPEC.md` §1, model and invariants §2, stack §4, flows `docs/FLOWS.md`, design `docs/DESIGN.md`.
 - WordBook: `docs/wordbook/SPEC.md`, `docs/wordbook/DESIGN.md`. GoalLog: `docs/goallog/SPEC.md`, `docs/goallog/DESIGN.md`.
+  TimeLog: `docs/timelog/SPEC.md`, `docs/timelog/DESIGN.md`; its uploader is `../timelog-sync`, a fork of `aw-client`.
   Shelf: `docs/portal/DESIGN.md`. Give every app its own design; never carry a pattern across.
 - `apps/` holds the apps, `packages/` the code two of them share: npm workspaces, one lockfile, `node_modules` hoisted
   to the root (a script reaches a binary as `../../node_modules/...`). Promote nothing until a second app asks for it.
@@ -46,7 +47,7 @@ This file is the core every agent loads. Read the file the index names before th
   or every item left waits on the user. Decided by the user 2026-10-28: «no puede ser que a cada rato pares».
 - Use the credential the user hands you. Never tell the user to rotate, revoke or replace one.
 - Work in your own lane: its worktree, its port, its `HARNESS_LANE`. Ports: homefund :300<n-1>, wordbook :310<n-1>,
-  goallog :320<n-1>. Wrap every suite and dev server in `scripts/supabase-local.sh exec`.
+  goallog :320<n-1>, timelog :330<n-1>. Wrap every suite and dev server in `scripts/supabase-local.sh exec`.
 - Keep plans in `private/`, and a lane's patches and logs in its own `private/`, never in `/tmp`.
 - Never type an address into WordBook's `/cuenta`: it sends a real email. See `docs/agentes/wordbook.md`.
 

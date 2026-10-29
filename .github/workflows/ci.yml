@@ -38,6 +38,8 @@ jobs:
         working-directory: apps/wordbook
       - run: npx next typegen
         working-directory: apps/goallog
+      - run: npx next typegen
+        working-directory: apps/timelog
       - run: npm run typecheck
         if: ${{ !cancelled() }}
       - run: npm run lint
@@ -47,6 +49,8 @@ jobs:
       - run: npm run check:unit -w apps/wordbook
         if: ${{ !cancelled() }}
       - run: npm run check:unit -w apps/goallog
+        if: ${{ !cancelled() }}
+      - run: npm run check:unit -w apps/timelog
         if: ${{ !cancelled() }}
       - run: npm run check:unit -w packages/harness-registry
         if: ${{ !cancelled() }}
@@ -115,6 +119,23 @@ jobs:
       - run: npm run check:policies -w apps/goallog
       - run: npm run check:allow-email -w apps/goallog
       - run: npm run check:sign-in -w apps/goallog
+
+  # TimeLog's policies, its key functions and the upload, driven against the real
+  # database (RNT-01, RNT-02). Every row it writes belongs to users it makes and drops.
+  timelog-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: ./.github/actions/supabase-local
+        with:
+          apps: timelog
+      - run: npm run check:db -w apps/timelog
 
   # The 12-minute suite runs here so a laptop is not holding a dev server and a
   # Chromium for it. Every job runs on its own stack, so runs never contend.
