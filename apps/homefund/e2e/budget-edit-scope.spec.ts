@@ -20,6 +20,7 @@ import messages from "@/messages/es.json";
 import { fixtureSql } from "../scripts/harness/fixtures";
 import {
   MEMBER_STORAGE_STATE,
+  claimsFor,
   clearGroup,
   readScope,
   seedGroup,
@@ -75,10 +76,6 @@ const ids = {
 const BUDGET_IDS = [ids.personalBudget, ids.heldBudget, ids.strayBudget, ids.fundBudget, ids.memberBudget];
 
 let groupId = "";
-
-function claimsFor(userId: string): string {
-  return JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
-}
 
 async function as(userId: string, fn: (tx: TransactionSql) => Promise<void>) {
   await fixtureSql.begin(async (tx) => {

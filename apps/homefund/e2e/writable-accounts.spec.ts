@@ -18,7 +18,7 @@ import { todayInBogota } from "@/lib/dates";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { MEMBER_STORAGE_STATE, clearGroup, readScope, seedGroup, test } from "./global-setup";
+import { MEMBER_STORAGE_STATE, claimsFor, clearGroup, readScope, seedGroup, test } from "./global-setup";
 
 const common = messages.common;
 const payments = messages.plannedPayments;
@@ -44,10 +44,6 @@ const ids = {
 };
 
 let groupId = "";
-
-function claimsFor(userId: string): string {
-  return JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
-}
 
 // A fixture speaks for one identity so the stamping triggers see a caller.
 async function as(userId: string, fn: (tx: TransactionSql) => Promise<void>) {

@@ -14,7 +14,7 @@ import type { TransactionSql } from "postgres";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { clearGroup, readScope, seedGroup, test } from "./global-setup";
+import { claimsFor, clearGroup, readScope, seedGroup, test } from "./global-setup";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -33,10 +33,6 @@ const ids = {
 };
 
 let groupId = "";
-
-function claimsFor(userId: string): string {
-  return JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
-}
 
 async function asLeader(fn: (tx: TransactionSql) => Promise<void>) {
   await fixtureSql.begin(async (tx) => {

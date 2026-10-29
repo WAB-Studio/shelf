@@ -81,7 +81,7 @@ export function readScope(): E2eScope {
 
 // The claims the stamping triggers read: a fixture writes as the owner role but
 // speaks for the harness user, so `auth.uid()` resolves inside every trigger.
-function claimsFor(userId: string): string {
+export function claimsFor(userId: string): string {
   return JSON.stringify({
     sub: userId,
     role: "authenticated",
