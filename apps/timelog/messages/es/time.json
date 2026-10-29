@@ -22,6 +22,8 @@
   "keys": {
     "title": "Llaves",
     "intro": "Una llave deja que el script de tu PC suba el resumen del día y que Claude lo lea. Se muestra una sola vez.",
+    "install": "En Windows, instala ActivityWatch + TimeLog y pega la llave en su ícono, junto al reloj: «TimeLog: pegar llave…». Sube solo cada hora.",
+    "download": "Descargar para Windows",
     "name": "Nombre de la llave",
     "namePlaceholder": "PC de la casa",
     "create": "Crear llave",
@@ -32,7 +34,7 @@
     "shown": "Cópiala ahora: no se vuelve a mostrar.",
     "copy": "Copiar",
     "copied": "Copiada",
-    "command": "En la PC, con ActivityWatch abierto:",
+    "command": "Sin el instalador, en la PC con ActivityWatch abierto:",
     "used": "usada {when}",
     "unused": "sin usar",
     "revoked": "revocada",
