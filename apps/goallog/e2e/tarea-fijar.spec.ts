@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect } from "./fixtures";
+import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
@@ -306,7 +307,9 @@ for (const width of [390, 1440]) {
       }
     });
 
-    test("a task fixed to a closed month shows that month as the selected chip, and saving unchanged keeps it", async ({ person, browser, baseURL, db }) => {
+    // RP-143: last month opens a task's sheet only while its last day is within a fact's reach; the nightly
+    // calendar pins a day inside it, and every other day proves the read-only side.
+    test("a task fixed to a closed month shows that month as the selected chip within reach, and reads only past it", async ({ person, browser, baseURL, db }) => {
       const stamp = Date.now();
       const { goalId } = await seedGoal(db, person.id, stamp, 600);
       const name = `Tarea mes cerrado ${stamp}`;
@@ -319,6 +322,11 @@ for (const width of [390, 1440]) {
       const taskId = await seedTask(db, person.id, goalId, name, 60, closedMonth);
       const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${goalId}/meses/${seg(closedMonth)}`);
       try {
+        if (closedMonthMarkDay(closedMonth, today) === null) {
+          await expect(page.getByText(name, { exact: true })).toBeVisible();
+          await expect(nameButton(page, name)).toHaveCount(0);
+          return;
+        }
         await nameButton(page, name).click();
         const sheet = page.getByRole("dialog");
         await expect(sheet.getByRole("radio", { name: "Fijarla en" })).toHaveAttribute("aria-checked", "true");
